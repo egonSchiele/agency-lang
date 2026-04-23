@@ -45,142 +45,6 @@ describe("TypescriptPreprocessor Core Functionality", () => {
     });
   });
 
-  // TODO: collectTools and collectSkills preprocessor methods are now stubbed out
-  // (their bodies are commented out). These tests are skipped until the new
-  // tool/skill handling via FunctionCall with functionName "llm" is fully wired up.
-  describe("collectTools", () => {
-    it("should attach tools to llm call nodes", () => {
-      const program: AgencyProgram = {
-        type: "agencyProgram",
-        nodes: [
-          {
-            type: "graphNode",
-            nodeName: "main",
-            parameters: [],
-            body: [
-              {
-                type: "usesTool",
-                toolNames: ["myTool"],
-              },
-              {
-                type: "assignment",
-                variableName: "result",
-                value: {
-                  type: "functionCall",
-                  functionName: "llm",
-                  arguments: [{ type: "string", segments: [{ type: "text", value: "Hello" }] }],
-                },
-              },
-            ],
-          },
-        ],
-      };
-
-      const preprocessor = new TypescriptPreprocessor(program);
-      preprocessor.preprocess();
-
-      const node = program.nodes[0];
-      if (node.type === "graphNode") {
-        const assignment = node.body.find((n) => n.type === "assignment");
-        if (assignment && assignment.type === "assignment" && assignment.value.type === "functionCall") {
-          expect(assignment.value.tools).toBeDefined();
-          expect(assignment.value.tools?.toolNames).toEqual(["myTool"]);
-        }
-      }
-    });
-
-    it("should remove usesTool nodes after attaching to llm calls", () => {
-      const program: AgencyProgram = {
-        type: "agencyProgram",
-        nodes: [
-          {
-            type: "graphNode",
-            nodeName: "main",
-            parameters: [],
-            body: [
-              {
-                type: "usesTool",
-                toolNames: ["myTool"],
-              },
-              {
-                type: "assignment",
-                variableName: "result",
-                value: {
-                  type: "functionCall",
-                  functionName: "llm",
-                  arguments: [{ type: "string", segments: [{ type: "text", value: "Hello" }] }],
-                },
-              },
-            ],
-          },
-        ],
-      };
-
-      const preprocessor = new TypescriptPreprocessor(program);
-      preprocessor.preprocess();
-
-      const node = program.nodes[0];
-      if (node.type === "graphNode") {
-        const usesToolNodes = node.body.filter((n) => n.type === "usesTool");
-        expect(usesToolNodes.length).toBe(0);
-      }
-    });
-
-    it("should handle multiple llm calls with different tool sets", () => {
-      const program: AgencyProgram = {
-        type: "agencyProgram",
-        nodes: [
-          {
-            type: "graphNode",
-            nodeName: "main",
-            parameters: [],
-            body: [
-              {
-                type: "usesTool",
-                toolNames: ["toolA"],
-              },
-              {
-                type: "assignment",
-                variableName: "result1",
-                value: {
-                  type: "functionCall",
-                  functionName: "llm",
-                  arguments: [{ type: "string", segments: [{ type: "text", value: "First" }] }],
-                },
-              },
-              {
-                type: "usesTool",
-                toolNames: ["toolB"],
-              },
-              {
-                type: "assignment",
-                variableName: "result2",
-                value: {
-                  type: "functionCall",
-                  functionName: "llm",
-                  arguments: [{ type: "string", segments: [{ type: "text", value: "Second" }] }],
-                },
-              },
-            ],
-          },
-        ],
-      };
-
-      const preprocessor = new TypescriptPreprocessor(program);
-      preprocessor.preprocess();
-
-      const node = program.nodes[0];
-      if (node.type === "graphNode") {
-        const assignments = node.body.filter((n) => n.type === "assignment");
-        if (assignments[0]?.type === "assignment" && assignments[0].value.type === "functionCall") {
-          expect(assignments[0].value.tools?.toolNames).toEqual(["toolA"]);
-        }
-        if (assignments[1]?.type === "assignment" && assignments[1].value.type === "functionCall") {
-          expect(assignments[1].value.tools?.toolNames).toEqual(["toolB"]);
-        }
-      }
-    });
-  });
 
   describe.skip("containsInterrupt", () => {
     it("should detect direct interrupt calls", () => {
@@ -252,53 +116,6 @@ describe("TypescriptPreprocessor Core Functionality", () => {
       );
     });
 
-    it("should detect interrupt through tool usage", () => {
-      const program: AgencyProgram = {
-        type: "agencyProgram",
-        nodes: [
-          {
-            type: "function",
-            functionName: "toolFunc",
-            parameters: [],
-            body: [
-              {
-                type: "functionCall",
-                functionName: "interrupt",
-                arguments: [],
-              },
-            ],
-          },
-          {
-            type: "graphNode",
-            nodeName: "mainNode",
-            parameters: [],
-            body: [
-              {
-                type: "usesTool",
-                toolNames: ["toolFunc"],
-              },
-              {
-                type: "assignment",
-                variableName: "result",
-                value: {
-                  type: "functionCall",
-                  functionName: "llm",
-                  arguments: [{ type: "string", segments: [{ type: "text", value: "Test" }] }],
-                },
-              },
-            ],
-          },
-        ],
-      };
-
-      const preprocessor = new TypescriptPreprocessor(program);
-      preprocessor.preprocess();
-
-      expect(preprocessor["functionNameToUsesInterrupt"]["toolFunc"]).toBe(
-        true,
-      );
-      // mainNode won't be checked for interrupt because it's a graph node, not in the containsInterrupt map
-    });
   });
 
   describe.skip("markFunctionsAsync", () => {
@@ -399,61 +216,6 @@ describe("TypescriptPreprocessor Core Functionality", () => {
       }
     });
 
-    it("should mark prompts with interrupt-using tools as sync", () => {
-      const program: AgencyProgram = {
-        type: "agencyProgram",
-        nodes: [
-          {
-            type: "function",
-            functionName: "toolWithInterrupt",
-            parameters: [],
-            body: [
-              {
-                type: "functionCall",
-                functionName: "interrupt",
-                arguments: [],
-              },
-            ],
-          },
-          {
-            type: "function",
-            functionName: "mainFunc",
-            parameters: [],
-            body: [
-              {
-                type: "usesTool",
-                toolNames: ["toolWithInterrupt"],
-              },
-              {
-                type: "assignment",
-                variableName: "result",
-                value: {
-                  type: "functionCall",
-                  functionName: "llm",
-                  arguments: [{ type: "string", segments: [{ type: "text", value: "Test" }] }],
-                },
-              },
-            ],
-          },
-        ],
-      };
-
-      const preprocessor = new TypescriptPreprocessor(program);
-      preprocessor.preprocess();
-
-      const mainNode = preprocessor.program.nodes[1];
-      if (mainNode.type === "function") {
-        const assignment = mainNode.body.find((n) => n.type === "assignment");
-        if (
-          assignment &&
-          assignment.type === "assignment" &&
-          assignment.value.type === "functionCall" &&
-          assignment.value.functionName === "llm"
-        ) {
-          expect(assignment.value.async).toBe(false);
-        }
-      }
-    });
   });
 
   // TODO: removeUnusedLlmCalls is disabled pending rewrite for llm() as FunctionCall
@@ -522,10 +284,6 @@ describe("TypescriptPreprocessor Core Functionality", () => {
             functionName: "testFunc",
             parameters: [],
             body: [
-              {
-                type: "usesTool",
-                toolNames: ["syncTool"],
-              },
               {
                 type: "functionCall",
                 functionName: "llm",
@@ -1195,10 +953,6 @@ describe("TypescriptPreprocessor Core Functionality", () => {
             functionName: "testFunc",
             parameters: [],
             body: [
-              {
-                type: "usesTool",
-                toolNames: ["tool1"],
-              },
               {
                 type: "functionCall",
                 functionName: "llm",

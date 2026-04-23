@@ -107,9 +107,9 @@ import { ClassDefinition, ClassField, ClassMethod, NewExpression } from "../type
 import { SchemaExpression } from "../types/schemaExpression.js";
 import { ReturnStatement } from "../types/returnStatement.js";
 import { DebuggerStatement } from "../types/debuggerStatement.js";
+import { isAgencyImport } from "../importPaths.js";
 import { Keyword, keywords, createKeyword } from "@/types/keyword.js";
 import { Skill } from "@/types/skill.js";
-import { UsesTool } from "../types/tools.js";
 import {
   AgencyArray,
   AgencyObject,
@@ -121,7 +121,6 @@ import {
   ImportNameType,
   ImportNodeStatement,
   ImportStatement,
-  ImportToolStatement,
   NamedImport,
   NamespaceImport,
 } from "../types/importStatement.js";
@@ -1117,21 +1116,6 @@ export const agencyObjectParser: Parser<AgencyObject> = seqC(
 );
 
 // =============================================================================
-// tools.ts
-// =============================================================================
-
-export const usesToolParser: Parser<UsesTool> = seqC(
-  set("type", "usesTool"),
-  or(str("uses "), str("use "), char("+")),
-  captureCaptures(
-    parseError(
-      "expected one or more variable names separated by commas",
-      capture(sepBy1(comma, many1WithJoin(varNameChar)), "toolNames"),
-    ),
-  ),
-);
-
-// =============================================================================
 // functionCall.ts
 // =============================================================================
 
@@ -1827,53 +1811,6 @@ const safeNameItem = or(
   ),
 );
 
-export const importToolStatmentParser: Parser<ImportToolStatement> = trace(
-  "importToolStatement",
-  map(
-    seqC(
-      set("type", "importToolStatement"),
-      str("import"),
-      spaces,
-      or(str("tools"), str("tool")),
-      captureCaptures(
-        parseError(
-          "expected a statement of the form `import tools { x, y } from 'filename.agency'`",
-          spaces,
-          char("{"),
-          optionalSpaces,
-          capture(sepBy1(comma, safeNameItem), "items"),
-          optionalSpaces,
-          char("}"),
-          spaces,
-          str("from"),
-          spaces,
-          capture(quotedPath, "agencyFile"),
-          optionalSemicolon,
-          optional(newline),
-        ),
-      ),
-    ),
-    (result) => {
-      const importedNames: string[] = [];
-      const safeNames: string[] = [];
-      const aliases: Record<string, string> = {};
-      for (const item of result.items) {
-        importedNames.push(item.name);
-        if (item.alias) {
-          aliases[item.name] = item.alias;
-        }
-        if (item.isSafe) {
-          safeNames.push(item.name);
-        }
-      }
-      return {
-        type: "importToolStatement" as const,
-        importedTools: [{ type: "namedImport" as const, importedNames, safeNames, aliases }],
-        agencyFile: result.agencyFile,
-      };
-    },
-  ),
-);
 
 const namedImportParser: Parser<NamedImport> = trace(
   "namedImportParser",
@@ -1928,27 +1865,30 @@ const importNameTypeParser: Parser<ImportNameType[]> = sepBy(
   or(namedImportParser, namespaceImportParser, defaultImportParser),
 );
 
-export const importStatmentParser: Parser<ImportStatement> = trace(
-  "importStatement",
-  seqC(
-    set("type", "importStatement"),
-    str("import"),
-    captureCaptures(
-      parseError(
-        "expected a statement of the form `import { x, y } from 'filename'`",
-        spaces,
-        capture(importNameTypeParser, "importedNames"),
-        spaces,
-        str("from"),
-        spaces,
-        oneOf(`'"`),
-        capture(many1Till(oneOf(`'"`)), "modulePath"),
-        oneOf(`'"`),
-        optionalSemicolon,
-        optional(newline),
+export const importStatmentParser: Parser<ImportStatement> = map(
+  trace(
+    "importStatement",
+    seqC(
+      set("type", "importStatement"),
+      str("import"),
+      captureCaptures(
+        parseError(
+          "expected a statement of the form `import { x, y } from 'filename'`",
+          spaces,
+          capture(importNameTypeParser, "importedNames"),
+          spaces,
+          str("from"),
+          spaces,
+          oneOf(`'"`),
+          capture(many1Till(oneOf(`'"`)), "modulePath"),
+          oneOf(`'"`),
+          optionalSemicolon,
+          optional(newline),
+        ),
       ),
     ),
   ),
+  (result) => ({ ...result, isAgencyImport: isAgencyImport(result.modulePath) }),
 );
 
 // =============================================================================
@@ -2052,7 +1992,6 @@ export const docStringParser: Parser<DocString> = trace(
 export const bodyParser = (input: string): ParserResult<AgencyNode[]> => {
   const bodyNodeParser = or(
     keywordParser,
-    usesToolParser,
     debug(typeAliasParser, "error in typeAliasParser"),
     tagParser,
     returnStatementParser,

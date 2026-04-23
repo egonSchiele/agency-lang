@@ -88,6 +88,12 @@ export const __getCheckpoints = () => __globalCtx.checkpoints;
 
 const __toolRegistry: Record<string, any> = {};
 
+function __registerTool(value: unknown, name?: string) {
+  if (__AgencyFunction.isAgencyFunction(value)) {
+    __toolRegistry[name ?? value.name] = value;
+  }
+}
+
 // Wrap stateful runtime functions as AgencyFunction instances
 const checkpoint = __AgencyFunction.create({ name: "checkpoint", module: "__runtime", fn: __checkpoint_impl, params: [], toolDefinition: null }, __toolRegistry);
 const getCheckpoint = __AgencyFunction.create({ name: "getCheckpoint", module: "__runtime", fn: __getCheckpoint_impl, params: [{ name: "checkpointId", hasDefault: false, defaultValue: undefined, variadic: false }], toolDefinition: null }, __toolRegistry);
@@ -335,7 +341,9 @@ __stack.locals.result = await runPrompt({
         ctx: __ctx,
         prompt: `Use the tools`,
         messages: __threads.getOrCreateActive(),
-        clientConfig: {},
+        clientConfig: {
+          "tools": [safeLookup, unsafeSave]
+        },
         maxToolCallRounds: 10,
         interruptData: __state?.interruptData,
         removedTools: __self.__removedTools,
@@ -406,4 +414,4 @@ if (__process.argv[1] === fileURLToPath(import.meta.url)) {
   }
 }
 export default graph
-export const __sourceMap = {"safe-function.agency:safeLookup":{"0":{"line":1,"col":2}},"safe-function.agency:unsafeSave":{"0":{"line":5,"col":2},"1":{"line":6,"col":2}},"safe-function.agency:main":{"0":{"line":11,"col":2},"1":{"line":12,"col":2}}};
+export const __sourceMap = {"safe-function.agency:safeLookup":{"0":{"line":1,"col":2}},"safe-function.agency:unsafeSave":{"0":{"line":5,"col":2},"1":{"line":6,"col":2}},"safe-function.agency:main":{"0":{"line":10,"col":2},"1":{"line":11,"col":2}}};

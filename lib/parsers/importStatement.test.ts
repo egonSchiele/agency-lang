@@ -2,7 +2,6 @@ import { describe, it, expect } from "vitest";
 import {
   importStatmentParser,
   importNodeStatmentParser,
-  importToolStatmentParser,
 } from "./parsers.js";
 
 describe("importStatmentParser", () => {
@@ -15,6 +14,7 @@ describe("importStatmentParser", () => {
         type: "importStatement",
         importedNames: [{ type: "defaultImport", importedNames: "foo" }],
         modulePath: "./foo.ts",
+        isAgencyImport: false,
       });
     }
   });
@@ -30,6 +30,7 @@ describe("importStatmentParser", () => {
           { type: "namedImport", importedNames: ["foo"], safeNames: [], aliases: {} },
         ],
         modulePath: "./foo.ts",
+        isAgencyImport: false,
       });
     }
   });
@@ -46,6 +47,7 @@ describe("importStatmentParser", () => {
           { type: "namedImport", importedNames: ["bar"], safeNames: [], aliases: {} },
         ],
         modulePath: "./foo.ts",
+        isAgencyImport: false,
       });
     }
   });
@@ -59,6 +61,7 @@ describe("importStatmentParser", () => {
         type: "importStatement",
         importedNames: [{ type: "namespaceImport", importedNames: "foo" }],
         modulePath: "./foo.ts",
+        isAgencyImport: false,
       });
     }
   });
@@ -77,6 +80,7 @@ describe("importStatmentParser", () => {
           { type: "namespaceImport", importedNames: "bar" },
         ],
         modulePath: "./foo.ts",
+        isAgencyImport: false,
       });
     }
   });
@@ -90,6 +94,7 @@ describe("importStatmentParser", () => {
         type: "importStatement",
         importedNames: [{ type: "defaultImport", importedNames: "foo" }],
         modulePath: "./foo.agency",
+        isAgencyImport: true,
       });
     }
   });
@@ -104,6 +109,7 @@ describe("importStatmentParser", () => {
           { type: "namedImport", importedNames: ["foo"], safeNames: [], aliases: {} },
         ],
         modulePath: "./foo.agency",
+        isAgencyImport: true,
       });
     }
   });
@@ -139,6 +145,7 @@ describe("importStatmentParser", () => {
           },
         ],
         modulePath: "myModule",
+        isAgencyImport: false,
       });
     }
   });
@@ -161,6 +168,7 @@ describe("importStatmentParser", () => {
           },
         ],
         modulePath: "./tools.js",
+        isAgencyImport: false,
       });
     }
   });
@@ -182,6 +190,7 @@ describe("importStatmentParser", () => {
           },
         ],
         modulePath: "./tools.js",
+        isAgencyImport: false,
       });
     }
   });
@@ -203,6 +212,7 @@ describe("importStatmentParser", () => {
           },
         ],
         modulePath: "./tools.js",
+        isAgencyImport: false,
       });
     }
   });
@@ -225,6 +235,7 @@ describe("importStatmentParser", () => {
           },
         ],
         modulePath: "./foo.ts",
+        isAgencyImport: false,
       });
     }
   });
@@ -246,6 +257,7 @@ describe("importStatmentParser", () => {
           },
         ],
         modulePath: "./mod.js",
+        isAgencyImport: false,
       });
     }
   });
@@ -267,6 +279,7 @@ describe("importStatmentParser", () => {
           },
         ],
         modulePath: "./tools.js",
+        isAgencyImport: false,
       });
     }
   });
@@ -580,273 +593,3 @@ describe("importNodeStatmentParser", () => {
   });
 });
 
-describe("importToolStatmentParser", () => {
-  const testCases = [
-    // Basic syntax with "tools" keyword
-    {
-      input: 'import tools { myTool } from "file.agency";',
-      expected: {
-        success: true,
-        result: {
-          type: "importToolStatement",
-          importedTools: [{ type: "namedImport", importedNames: ["myTool"], safeNames: [], aliases: {} }],
-          agencyFile: "file.agency",
-        },
-      },
-    },
-    {
-      input: 'import tools { tool1 } from "./path/to/file.agency";',
-      expected: {
-        success: true,
-        result: {
-          type: "importToolStatement",
-          importedTools: [{ type: "namedImport", importedNames: ["tool1"], safeNames: [], aliases: {} }],
-          agencyFile: "./path/to/file.agency",
-        },
-      },
-    },
-
-    // Basic syntax with "tool" keyword (singular)
-    {
-      input: 'import tool { myTool } from "file.agency";',
-      expected: {
-        success: true,
-        result: {
-          type: "importToolStatement",
-          importedTools: [{ type: "namedImport", importedNames: ["myTool"], safeNames: [], aliases: {} }],
-          agencyFile: "file.agency",
-        },
-      },
-    },
-
-    // Multiple tools
-    {
-      input: 'import tools { tool1, tool2 } from "file.agency";',
-      expected: {
-        success: true,
-        result: {
-          type: "importToolStatement",
-          importedTools: [{ type: "namedImport", importedNames: ["tool1", "tool2"], safeNames: [], aliases: {} }],
-          agencyFile: "file.agency",
-        },
-      },
-    },
-    {
-      input: 'import tools { tool1, tool2, tool3 } from "multi.agency";',
-      expected: {
-        success: true,
-        result: {
-          type: "importToolStatement",
-          importedTools: [{ type: "namedImport", importedNames: ["tool1", "tool2", "tool3"], safeNames: [], aliases: {} }],
-          agencyFile: "multi.agency",
-        },
-      },
-    },
-
-    // Single quotes
-    {
-      input: "import tools { myTool } from 'file.agency';",
-      expected: {
-        success: true,
-        result: {
-          type: "importToolStatement",
-          importedTools: [{ type: "namedImport", importedNames: ["myTool"], safeNames: [], aliases: {} }],
-          agencyFile: "file.agency",
-        },
-      },
-    },
-    {
-      input: "import tool { tool1, tool2 } from '../other.agency';",
-      expected: {
-        success: true,
-        result: {
-          type: "importToolStatement",
-          importedTools: [{ type: "namedImport", importedNames: ["tool1", "tool2"], safeNames: [], aliases: {} }],
-          agencyFile: "../other.agency",
-        },
-      },
-    },
-
-    // Without semicolon
-    {
-      input: 'import tools { myTool } from "file.agency"',
-      expected: {
-        success: true,
-        result: {
-          type: "importToolStatement",
-          importedTools: [{ type: "namedImport", importedNames: ["myTool"], safeNames: [], aliases: {} }],
-          agencyFile: "file.agency",
-        },
-      },
-    },
-
-    // No spaces in braces
-    {
-      input: 'import tools {tool1} from "file.agency";',
-      expected: {
-        success: true,
-        result: {
-          type: "importToolStatement",
-          importedTools: [{ type: "namedImport", importedNames: ["tool1"], safeNames: [], aliases: {} }],
-          agencyFile: "file.agency",
-        },
-      },
-    },
-    {
-      input: 'import tools {tool1,tool2,tool3} from "file.agency";',
-      expected: {
-        success: true,
-        result: {
-          type: "importToolStatement",
-          importedTools: [{ type: "namedImport", importedNames: ["tool1", "tool2", "tool3"], safeNames: [], aliases: {} }],
-          agencyFile: "file.agency",
-        },
-      },
-    },
-
-    // Extra spaces
-    {
-      input: 'import tools {  tool1  ,  tool2  } from "file.agency";',
-      expected: {
-        success: true,
-        result: {
-          type: "importToolStatement",
-          importedTools: [{ type: "namedImport", importedNames: ["tool1", "tool2"], safeNames: [], aliases: {} }],
-          agencyFile: "file.agency",
-        },
-      },
-    },
-
-    // Different file paths
-    {
-      input: 'import tools { tool1 } from "../../../utils/tools.agency";',
-      expected: {
-        success: true,
-        result: {
-          type: "importToolStatement",
-          importedTools: [{ type: "namedImport", importedNames: ["tool1"], safeNames: [], aliases: {} }],
-          agencyFile: "../../../utils/tools.agency",
-        },
-      },
-    },
-    {
-      input: 'import tools { tool1 } from "/absolute/path/file.agency";',
-      expected: {
-        success: true,
-        result: {
-          type: "importToolStatement",
-          importedTools: [{ type: "namedImport", importedNames: ["tool1"], safeNames: [], aliases: {} }],
-          agencyFile: "/absolute/path/file.agency",
-        },
-      },
-    },
-
-    // Alphanumeric tool names
-    {
-      input: 'import tools { tool1, tool2abc, test123 } from "file.agency";',
-      expected: {
-        success: true,
-        result: {
-          type: "importToolStatement",
-          importedTools: [{ type: "namedImport", importedNames: ["tool1", "tool2abc", "test123"], safeNames: [], aliases: {} }],
-          agencyFile: "file.agency",
-        },
-      },
-    },
-
-    // Failure cases - wrong keyword (doesn't match "import tools/tool" -> don't throw)
-    {
-      input: 'import nodes { myTool } from "file.agency";',
-      expected: { success: false },
-      throws: false,
-    },
-    {
-      input: 'import { myTool } from "file.agency";',
-      expected: { success: false },
-      throws: false,
-    },
-
-    // Failure cases - missing parts (matches "import tools/tool" -> throws)
-    {
-      input: 'import tools from "file.agency";',
-      expected: { success: false },
-      throws: true,
-    },
-    {
-      input: 'import tools { myTool } from;',
-      expected: { success: false },
-      throws: true,
-    },
-    {
-      input: 'import tools { myTool };',
-      expected: { success: false },
-      throws: true,
-    },
-    {
-      input: 'tools { myTool } from "file.agency";',
-      expected: { success: false },
-      throws: false,
-    },
-
-    // Failure cases - empty braces (matches "import tools/tool {" -> throws)
-    {
-      input: 'import tools {} from "file.agency";',
-      expected: { success: false },
-      throws: true,
-    },
-    {
-      input: 'import tools { } from "file.agency";',
-      expected: { success: false },
-      throws: true,
-    },
-
-    // Failure cases - missing quotes (matches "import tools/tool { ... }" -> throws)
-    {
-      input: "import tools { myTool } from file.agency;",
-      expected: { success: false },
-      throws: true,
-    },
-
-    // Failure cases - mismatched quotes (matches "import tools/tool { ... }" -> throws)
-    {
-      input: 'import tools { myTool } from "file.agency\';',
-      expected: { success: false },
-      throws: true,
-    },
-
-    // Failure cases - missing braces (matches "import tools/tool" -> throws)
-    {
-      input: 'import tools myTool from "file.agency";',
-      expected: { success: false },
-      throws: true,
-    },
-
-    // Failure cases - empty input (doesn't match "import" -> doesn't throw)
-    {
-      input: "",
-      expected: { success: false },
-      throws: false,
-    },
-  ];
-
-  testCases.forEach(({ input, expected, throws }) => {
-    if (expected.success) {
-      it(`should parse "${input}" successfully`, () => {
-        const result = importToolStatmentParser(input);
-        expect(result.success).toBe(true);
-        if (result.success) {
-          expect(result.result).toEqualWithoutLoc(expected.result);
-        }
-      });
-    } else if (throws) {
-      it(`should fail to parse "${input}"`, () => {
-        expect(() => importToolStatmentParser(input)).toThrow();
-      });
-    } else {
-      it(`should fail to parse "${input}"`, () => {
-        const result = importToolStatmentParser(input);
-        expect(result.success).toBe(false);
-      });
-    }
-  });
-});

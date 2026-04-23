@@ -13,7 +13,6 @@ node testImplicitRound() {
 }
 
 node testRoundAsTool() {
-  uses round
-  const result: number = llm("Use the round tool to round the number 2.71828 to 3 decimal places. Return only the rounded number.")
+  const result: number = llm("Use the round tool to round the number 2.71828 to 3 decimal places. Return only the rounded number.", { tools: [round] })
   return result
 }

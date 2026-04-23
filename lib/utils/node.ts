@@ -8,7 +8,6 @@ import {
   VariableNameLiteral,
   functionScope,
   getImportedNames,
-  getImportedToolNames,
   globalScope,
   nodeScope,
   Scope,
@@ -168,10 +167,6 @@ export function* getAllVariablesInBody(
       }
     } else if (node.type === "importNodeStatement") {
       for (const name of node.importedNodes) {
-        yield { name, node };
-      }
-    } else if (node.type === "importToolStatement") {
-      for (const name of getImportedToolNames(node)) {
         yield { name, node };
       }
     } else if (node.type === "matchBlock") {

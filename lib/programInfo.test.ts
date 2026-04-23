@@ -119,11 +119,6 @@ describe("collectProgramInfo", () => {
           importedNodes: ["nodeA"],
         },
         {
-          type: "importToolStatement",
-          agencyFile: "./tools.ts",
-          importedTools: [{ type: "namedImport", importedNames: ["myTool"], safeNames: [], aliases: {} }],
-        },
-        {
           type: "importStatement",
           modulePath: "./utils.ts",
           importedNames: [
@@ -134,12 +129,12 @@ describe("collectProgramInfo", () => {
               aliases: {},
             },
           ],
+          isAgencyImport: false,
         },
       ],
     };
     const info = collectProgramInfo(program);
     expect(info.importedNodes).toHaveLength(1);
-    expect(info.importedTools).toHaveLength(1);
     expect(info.importStatements).toHaveLength(1);
   });
 

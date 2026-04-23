@@ -39,10 +39,6 @@
               "start": 92,
               "end": 120
             },
-            "tools": {
-              "type": "usesTool",
-              "toolNames": []
-            },
             "scope": "imported"
           },
           "loc": {
@@ -109,10 +105,6 @@
               "start": 222,
               "end": 251
             },
-            "tools": {
-              "type": "usesTool",
-              "toolNames": []
-            },
             "scope": "imported"
           },
           "loc": {
@@ -148,10 +140,6 @@
               "col": 9,
               "start": 304,
               "end": 324
-            },
-            "tools": {
-              "type": "usesTool",
-              "toolNames": []
             },
             "scope": "imported"
           },

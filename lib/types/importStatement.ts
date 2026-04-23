@@ -4,6 +4,7 @@ export type ImportStatement = BaseNode & {
   type: "importStatement";
   importedNames: ImportNameType[];
   modulePath: string;
+  isAgencyImport: boolean;
 };
 
 export type ImportNameType = NamedImport | NamespaceImport | DefaultImport;

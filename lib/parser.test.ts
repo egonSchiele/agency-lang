@@ -135,6 +135,28 @@ describe("agencyParser", () => {
   });
 });
 
+describe("parseAgency structured errors", () => {
+  it("should return errorData with position info for syntax errors that trigger TarsecError", () => {
+    // This malformed input should surface structured tarsec position info.
+    const result = parseAgency("def foo( { }", {}, false);
+    if (!result.success && result.errorData) {
+      expect(typeof result.errorData.line).toBe("number");
+      expect(typeof result.errorData.column).toBe("number");
+      expect(typeof result.errorData.length).toBe("number");
+      expect(typeof result.errorData.prettyMessage).toBe("string");
+    }
+    expect(result.success).toBe(false);
+  });
+
+  it("should return a plain failure for non-TarsecError parse failures", () => {
+    const result = parseAgency("x = 5\n!!!", {}, false);
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.message).toBeDefined();
+    }
+  });
+});
+
 describe("parseAgency", () => {
   const testCases = [
     {

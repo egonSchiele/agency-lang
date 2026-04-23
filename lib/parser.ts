@@ -134,11 +134,23 @@ export function _parseAgency(
   return result;
 }
 
+export type ParseAgencyErrorData = {
+  line: number;
+  column: number;
+  length: number;
+  message: string;
+  prettyMessage: string;
+};
+
+export type ParseAgencyResult =
+  | { success: true; result: AgencyProgram; rest: string }
+  | { success: false; message?: string; rest: string; errorData?: ParseAgencyErrorData };
+
 export function parseAgency(
   input: string,
   config: AgencyConfig = {},
   applyTemplate: boolean = true,
-): ParserResult<AgencyProgram> {
+): ParseAgencyResult {
   if (applyTemplate) {
     input = render({ body: input });
   }
@@ -146,8 +158,18 @@ export function parseAgency(
     return _parseAgency(input, config);
   } catch (error) {
     if (error instanceof TarsecError) {
-      console.log(error.data.prettyMessage);
-      return failure(error.message, input);
+      return {
+        success: false,
+        message: error.message,
+        rest: input,
+        errorData: {
+          line: error.data.line,
+          column: error.data.column,
+          length: error.data.length,
+          message: error.data.message,
+          prettyMessage: error.data.prettyMessage,
+        },
+      };
     } else {
       throw error;
     }

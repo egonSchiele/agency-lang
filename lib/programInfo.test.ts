@@ -129,6 +129,7 @@ describe("collectProgramInfo", () => {
               aliases: {},
             },
           ],
+          isAgencyImport: false,
         },
       ],
     };

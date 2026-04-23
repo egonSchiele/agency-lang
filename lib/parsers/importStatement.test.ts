@@ -14,6 +14,7 @@ describe("importStatmentParser", () => {
         type: "importStatement",
         importedNames: [{ type: "defaultImport", importedNames: "foo" }],
         modulePath: "./foo.ts",
+        isAgencyImport: false,
       });
     }
   });
@@ -29,6 +30,7 @@ describe("importStatmentParser", () => {
           { type: "namedImport", importedNames: ["foo"], safeNames: [], aliases: {} },
         ],
         modulePath: "./foo.ts",
+        isAgencyImport: false,
       });
     }
   });
@@ -45,6 +47,7 @@ describe("importStatmentParser", () => {
           { type: "namedImport", importedNames: ["bar"], safeNames: [], aliases: {} },
         ],
         modulePath: "./foo.ts",
+        isAgencyImport: false,
       });
     }
   });
@@ -58,6 +61,7 @@ describe("importStatmentParser", () => {
         type: "importStatement",
         importedNames: [{ type: "namespaceImport", importedNames: "foo" }],
         modulePath: "./foo.ts",
+        isAgencyImport: false,
       });
     }
   });
@@ -76,6 +80,7 @@ describe("importStatmentParser", () => {
           { type: "namespaceImport", importedNames: "bar" },
         ],
         modulePath: "./foo.ts",
+        isAgencyImport: false,
       });
     }
   });
@@ -89,6 +94,7 @@ describe("importStatmentParser", () => {
         type: "importStatement",
         importedNames: [{ type: "defaultImport", importedNames: "foo" }],
         modulePath: "./foo.agency",
+        isAgencyImport: true,
       });
     }
   });
@@ -103,6 +109,7 @@ describe("importStatmentParser", () => {
           { type: "namedImport", importedNames: ["foo"], safeNames: [], aliases: {} },
         ],
         modulePath: "./foo.agency",
+        isAgencyImport: true,
       });
     }
   });
@@ -138,6 +145,7 @@ describe("importStatmentParser", () => {
           },
         ],
         modulePath: "myModule",
+        isAgencyImport: false,
       });
     }
   });
@@ -160,6 +168,7 @@ describe("importStatmentParser", () => {
           },
         ],
         modulePath: "./tools.js",
+        isAgencyImport: false,
       });
     }
   });
@@ -181,6 +190,7 @@ describe("importStatmentParser", () => {
           },
         ],
         modulePath: "./tools.js",
+        isAgencyImport: false,
       });
     }
   });
@@ -202,6 +212,7 @@ describe("importStatmentParser", () => {
           },
         ],
         modulePath: "./tools.js",
+        isAgencyImport: false,
       });
     }
   });
@@ -224,6 +235,7 @@ describe("importStatmentParser", () => {
           },
         ],
         modulePath: "./foo.ts",
+        isAgencyImport: false,
       });
     }
   });
@@ -245,6 +257,7 @@ describe("importStatmentParser", () => {
           },
         ],
         modulePath: "./mod.js",
+        isAgencyImport: false,
       });
     }
   });
@@ -266,6 +279,7 @@ describe("importStatmentParser", () => {
           },
         ],
         modulePath: "./tools.js",
+        isAgencyImport: false,
       });
     }
   });

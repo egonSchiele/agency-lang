@@ -109,6 +109,7 @@ export function resolveImports(
           { type: "namedImport", importedNames: allNames, safeNames: safeFunctionNames, aliases: allAliases },
         ],
         modulePath: node.modulePath,
+        isAgencyImport: true,
       };
       newNodes.push(importStmt);
     }

@@ -107,6 +107,7 @@ import { ClassDefinition, ClassField, ClassMethod, NewExpression } from "../type
 import { SchemaExpression } from "../types/schemaExpression.js";
 import { ReturnStatement } from "../types/returnStatement.js";
 import { DebuggerStatement } from "../types/debuggerStatement.js";
+import { isAgencyImport } from "../importPaths.js";
 import { Keyword, keywords, createKeyword } from "@/types/keyword.js";
 import { Skill } from "@/types/skill.js";
 import {
@@ -1864,27 +1865,30 @@ const importNameTypeParser: Parser<ImportNameType[]> = sepBy(
   or(namedImportParser, namespaceImportParser, defaultImportParser),
 );
 
-export const importStatmentParser: Parser<ImportStatement> = trace(
-  "importStatement",
-  seqC(
-    set("type", "importStatement"),
-    str("import"),
-    captureCaptures(
-      parseError(
-        "expected a statement of the form `import { x, y } from 'filename'`",
-        spaces,
-        capture(importNameTypeParser, "importedNames"),
-        spaces,
-        str("from"),
-        spaces,
-        oneOf(`'"`),
-        capture(many1Till(oneOf(`'"`)), "modulePath"),
-        oneOf(`'"`),
-        optionalSemicolon,
-        optional(newline),
+export const importStatmentParser: Parser<ImportStatement> = map(
+  trace(
+    "importStatement",
+    seqC(
+      set("type", "importStatement"),
+      str("import"),
+      captureCaptures(
+        parseError(
+          "expected a statement of the form `import { x, y } from 'filename'`",
+          spaces,
+          capture(importNameTypeParser, "importedNames"),
+          spaces,
+          str("from"),
+          spaces,
+          oneOf(`'"`),
+          capture(many1Till(oneOf(`'"`)), "modulePath"),
+          oneOf(`'"`),
+          optionalSemicolon,
+          optional(newline),
+        ),
       ),
     ),
   ),
+  (result) => ({ ...result, isAgencyImport: isAgencyImport(result.modulePath) }),
 );
 
 // =============================================================================

@@ -28,7 +28,7 @@ import type { SourceLocationOpts } from "@/runtime/state/checkpointStore.js";
 import { DebuggerStatement } from "@/types/debuggerStatement.js";
 import { SchemaExpression } from "@/types/schemaExpression.js";
 import { expressionToString } from "@/utils/node.js";
-import { toCompiledImportPath, isAgencyImport } from "../importPaths.js";
+import { toCompiledImportPath } from "../importPaths.js";
 import * as renderDebugger from "../templates/backends/typescriptGenerator/debugger.js";
 import * as renderImports from "../templates/backends/typescriptGenerator/imports.js";
 import * as renderInterruptAssignment from "../templates/backends/typescriptGenerator/interruptAssignment.js";
@@ -366,24 +366,35 @@ export class TypeScriptBuilder {
 
   private _plainTsImportNames: Set<string> | null = null;
 
+  private _agencyImportNames: Set<string> | null = null;
+
   private isImportedAgencyFunction(functionName: string): boolean {
-    return !!this.programInfo.importedFunctions[functionName];
+    if (!this._agencyImportNames) {
+      this._buildImportNameSets();
+    }
+    return this._agencyImportNames!.has(functionName);
   }
 
   private isPlainTsImport(functionName: string): boolean {
     if (!this._plainTsImportNames) {
-      this._plainTsImportNames = new Set<string>();
-      for (const stmt of this.programInfo.importStatements) {
-        for (const nameType of stmt.importedNames) {
-          for (const name of getImportedNames(nameType)) {
-            if (!this.isImportedAgencyFunction(name)) {
-              this._plainTsImportNames.add(name);
-            }
-          }
+      this._buildImportNameSets();
+    }
+    return this._plainTsImportNames!.has(functionName);
+  }
+
+  private _buildImportNameSets(): void {
+    this._plainTsImportNames = new Set<string>();
+    this._agencyImportNames = new Set<string>();
+    for (const stmt of this.programInfo.importStatements) {
+      const targetSet = stmt.isAgencyImport
+        ? this._agencyImportNames
+        : this._plainTsImportNames;
+      for (const nameType of stmt.importedNames) {
+        for (const name of getImportedNames(nameType)) {
+          targetSet.add(name);
         }
       }
     }
-    return this._plainTsImportNames.has(functionName);
   }
 
   private isGraphNode(functionName: string): boolean {
@@ -398,9 +409,21 @@ export class TypeScriptBuilder {
     );
   }
 
+  private _allImportedNames: Set<string> | null = null;
+
   private isImpureImportedFunction(functionName: string): boolean {
+    if (!this._allImportedNames) {
+      this._allImportedNames = new Set<string>();
+      for (const stmt of this.programInfo.importStatements) {
+        for (const nameType of stmt.importedNames) {
+          for (const name of getImportedNames(nameType)) {
+            this._allImportedNames.add(name);
+          }
+        }
+      }
+    }
     return (
-      !!this.programInfo.importedFunctions[functionName] &&
+      this._allImportedNames.has(functionName) &&
       !this.programInfo.safeFunctions[functionName]
     );
   }
@@ -1346,7 +1369,6 @@ export class TypeScriptBuilder {
   }
 
   private processImportStatement(node: ImportStatement): TsNode {
-    console.log("processImportStatement:", node.modulePath, JSON.stringify(node.importedNames.map(n => n.type)));
     const from = toCompiledImportPath(node.modulePath, this.outputFile ?? path.resolve(this.moduleId));
     const imports = node.importedNames.map((nameType) => {
       switch (nameType.type) {
@@ -1376,29 +1398,23 @@ export class TypeScriptBuilder {
     const importNode = imports.length === 1 ? imports[0] : ts.statements(imports);
 
     // Auto-register any AgencyFunction instances imported from .agency files.
-    // We check isImportedAgencyFunction() rather than isAgencyImport() because
-    // import paths may have been rewritten (e.g., ./bar.agency → ./bar.js) before
-    // the builder runs.
-    for (const nameType of node.importedNames) {
-      switch (nameType.type) {
-        case "namedImport":
-          for (const name of nameType.importedNames) {
-            const localName = nameType.aliases[name] ?? name;
-            if (this.isImportedAgencyFunction(localName)) {
+    if (node.isAgencyImport) {
+      for (const nameType of node.importedNames) {
+        switch (nameType.type) {
+          case "namedImport":
+            for (const name of nameType.importedNames) {
+              const localName = nameType.aliases[name] ?? name;
               this.toolRegistrations.push(ts.raw(`__registerTool(${localName});`));
             }
-          }
-          break;
-        case "namespaceImport":
-          // Namespace imports from .agency files — register all AgencyFunction members.
-          // We can't check individual names, so use isAgencyImport on the original path.
-          if (isAgencyImport(node.modulePath)) {
+            break;
+          case "namespaceImport": {
             const ns = nameType.importedNames;
             this.toolRegistrations.push(ts.raw(
               `for (const [__k, __v] of Object.entries(${ns})) { __registerTool(__v, __k); }`
             ));
+            break;
           }
-          break;
+        }
       }
     }
     return importNode;

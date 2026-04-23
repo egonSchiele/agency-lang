@@ -17,6 +17,7 @@ function makeImportStatement(
       { type: "namedImport", importedNames: names, safeNames: [], aliases: {} },
     ],
     modulePath,
+    isAgencyImport: modulePath.endsWith(".agency"),
   };
 }
 
@@ -123,6 +124,7 @@ describe("resolveImports", () => {
             },
           ],
           modulePath: "./utils.agency",
+          isAgencyImport: true,
         },
       ],
     };
@@ -155,6 +157,7 @@ describe("resolveImports", () => {
             },
           ],
           modulePath: "./types.agency",
+          isAgencyImport: true,
         },
       ],
     };
@@ -190,6 +193,7 @@ describe("resolveImports", () => {
             },
           ],
           modulePath: "./mixed.agency",
+          isAgencyImport: true,
         },
       ],
     };
@@ -246,6 +250,7 @@ describe("resolveImports", () => {
         { type: "namedImport", importedNames: ["foo"], safeNames: [], aliases: {} },
       ],
       modulePath: "./utils.js",
+      isAgencyImport: false,
     };
     const program: AgencyProgram = {
       type: "agencyProgram",

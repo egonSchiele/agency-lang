@@ -106,9 +106,11 @@ export function collectProgramInfo(
         info.importStatements.push(node);
         for (const nameType of node.importedNames) {
           if (nameType.type === "namedImport") {
-            for (const name of nameType.importedNames) {
-              const localName = nameType.aliases[name] ?? name;
-              info.importedFunctions[localName] = { parameters: [] };
+            if (node.isAgencyImport) {
+              for (const name of nameType.importedNames) {
+                const localName = nameType.aliases[name] ?? name;
+                info.importedFunctions[localName] = { parameters: [] };
+              }
             }
             for (const safeName of nameType.safeNames) {
               const localSafe = nameType.aliases[safeName] ?? safeName;

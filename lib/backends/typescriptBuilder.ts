@@ -409,21 +409,12 @@ export class TypeScriptBuilder {
     );
   }
 
-  private _allImportedNames: Set<string> | null = null;
-
   private isImpureImportedFunction(functionName: string): boolean {
-    if (!this._allImportedNames) {
-      this._allImportedNames = new Set<string>();
-      for (const stmt of this.programInfo.importStatements) {
-        for (const nameType of stmt.importedNames) {
-          for (const name of getImportedNames(nameType)) {
-            this._allImportedNames.add(name);
-          }
-        }
-      }
+    if (!this._plainTsImportNames) {
+      this._buildImportNameSets();
     }
     return (
-      this._allImportedNames.has(functionName) &&
+      (this._plainTsImportNames!.has(functionName) || this._agencyImportNames!.has(functionName)) &&
       !this.programInfo.safeFunctions[functionName]
     );
   }

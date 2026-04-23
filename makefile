@@ -21,5 +21,5 @@ doc:
 	rm -rf docs-new/stdlib/ && pnpm run agency doc stdlib -o docs-new/stdlib/
 
 test-log:
-	rm test-output
+	rm -f test-output
 	pnpm run test:agency | tee test-output

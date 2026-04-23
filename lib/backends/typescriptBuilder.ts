@@ -368,13 +368,6 @@ export class TypeScriptBuilder {
 
   private _agencyImportNames: Set<string> | null = null;
 
-  private isImportedAgencyFunction(functionName: string): boolean {
-    if (!this._agencyImportNames) {
-      this._buildImportNameSets();
-    }
-    return this._agencyImportNames!.has(functionName);
-  }
-
   private isPlainTsImport(functionName: string): boolean {
     if (!this._plainTsImportNames) {
       this._buildImportNameSets();

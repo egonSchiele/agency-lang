@@ -42,6 +42,6 @@ export async function __callMethod(
       `Named arguments are not supported for non-Agency function '${String(prop)}'`,
     );
   }
-  // Call as obj[prop](...) to preserve `this` binding
-  return (obj as any)[prop](...descriptor.args);
+  // Reuse the single property lookup while preserving `this` binding.
+  return Reflect.apply(target, obj, descriptor.args);
 }

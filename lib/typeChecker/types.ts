@@ -5,14 +5,12 @@ import {
   GraphNodeDefinition,
   VariableType,
 } from "../types.js";
-import { SourceLocation } from "../types/base.js";
 
 export type TypeCheckError = {
   message: string;
   variableName?: string;
   expectedType?: string;
   actualType?: string;
-  loc?: SourceLocation;
 };
 
 export type TypeCheckResult = {
@@ -30,7 +28,6 @@ export type ScopeInfo = {
 export type BuiltinSignature = {
   params: (VariableType | "any")[];
   returnType: VariableType | "any";
-  minParams?: number; // if set, arity is [minParams, params.length]; otherwise exact
 };
 
 export type TypeCheckerContext = {

@@ -107,7 +107,7 @@ export class TypeChecker {
   private deduplicateErrors(): TypeCheckError[] {
     const seen = new Set<string>();
     return this.errors.filter((err) => {
-      const key = `${err.message}:${err.loc?.start ?? -1}`;
+      const key = err.message;
       if (seen.has(key)) return false;
       seen.add(key);
       return true;

@@ -49,8 +49,7 @@ export const BUILTIN_FUNCTION_TYPES: Record<string, BuiltinSignature> = {
     returnType: { type: "primitiveType", value: "number" },
   },
   llm: {
-    params: ["any", "any"],
-    minParams: 1,
+    params: ["any"],
     returnType: { type: "primitiveType", value: "string" },
   },
 };

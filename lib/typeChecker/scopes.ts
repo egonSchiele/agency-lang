@@ -88,10 +88,9 @@ export function collectVariableTypes(
     if (node.type === "assignment") {
       const existingType = vars[node.variableName];
       const newType = node.typeHint;
-      const loc = node.loc;
 
       if (newType) {
-        validateTypeReferences(newType, node.variableName, typeAliases, ctx.errors, loc);
+        validateTypeReferences(newType, node.variableName, typeAliases, ctx.errors);
         // Check reassignment consistency
         if (
           existingType &&
@@ -103,7 +102,6 @@ export function collectVariableTypes(
             variableName: node.variableName,
             expectedType: formatTypeHint(existingType),
             actualType: formatTypeHint(newType),
-            loc,
           });
         }
         // Check that the assigned value is compatible with the annotation
@@ -124,7 +122,6 @@ export function collectVariableTypes(
               typeof valueType === "string"
                 ? valueType
                 : formatTypeHint(valueType),
-            loc,
           });
         }
       } else {
@@ -133,7 +130,6 @@ export function collectVariableTypes(
           ctx.errors.push({
             message: `Variable '${node.variableName}' has no type annotation (strict mode).`,
             variableName: node.variableName,
-            loc,
           });
         }
         const inferred = synthType(node.value, vars, ctx);

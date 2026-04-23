@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "JS built-in array methods preserve this binding through __callMethod",
+      "input": "",
+      "expectedOutput": "\"1,2,3,4,5\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

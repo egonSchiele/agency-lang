@@ -1,0 +1,7 @@
+node main() {
+  const arr = [1, 2, 3]
+  arr.push(4)
+  arr.push(5)
+  const joined = arr.join(",")
+  return joined
+}

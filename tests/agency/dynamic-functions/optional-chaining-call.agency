@@ -1,0 +1,16 @@
+def greet(name: string): string {
+  return "hello ${name}"
+}
+
+node main() {
+  const obj = { fn: greet }
+  const nothing = null
+
+  // optional property access then call on non-null — should work
+  const r1 = obj?.fn("Alice")
+
+  // optional property access on null — should return undefined
+  const r2 = nothing?.fn
+
+  return { r1: r1, r2: r2 }
+}

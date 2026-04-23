@@ -1,0 +1,9 @@
+node main() {
+  const data = [
+    { name: "  Alice  " },
+    { name: "  Bob  " }
+  ]
+  const r1 = data[0].name.trim()
+  const r2 = data[1].name.trim()
+  return { r1: r1, r2: r2 }
+}

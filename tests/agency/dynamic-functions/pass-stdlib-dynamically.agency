@@ -1,0 +1,12 @@
+def applyFn(fn: (number) => number, x: number): number {
+  return fn(x)
+}
+
+safe def addOne(x: number): number {
+  return x + 1
+}
+
+node main() {
+  const result = applyFn(addOne, 10)
+  return result
+}

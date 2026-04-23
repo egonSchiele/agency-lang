@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Optional chaining on method calls via __callMethod with optional flag",
+      "input": "",
+      "expectedOutput": "{\"r1\":\"hello Alice\"}",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

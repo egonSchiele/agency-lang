@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Agency functions called directly from array index without extracting to variable",
+      "input": "",
+      "expectedOutput": "{\"r1\":10,\"r2\":15}",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

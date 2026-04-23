@@ -1,0 +1,9 @@
+{
+  "greeting": "hello Bob",
+  "log": [
+    "start",
+    "got-name",
+    "deleted",
+    "end"
+  ]
+}

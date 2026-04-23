@@ -1,0 +1,27 @@
+const log: number[] = []
+
+def riskyOperation(item: number) {
+  return interrupt("confirm ${item}")
+  return item * 10
+}
+
+def process(items: number[], block: (number) => number): number[] {
+  const results: number[] = []
+  for (item in items) {
+    let result = block(item)
+    results.push(result)
+  }
+  return results
+}
+
+node main() {
+  let result = process([1, 2, 3]) as item {
+    log.push(item)
+    const check = riskyOperation(item)
+    if (isFailure(check)) {
+      return null
+    }
+    return check
+  }
+  return { result: result, log: log }
+}

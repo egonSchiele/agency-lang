@@ -1,0 +1,54 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Function ref called in loop, interrupts each iteration, approve all — no duplicate execution",
+      "input": "",
+      "expectedOutput": "{\"results\":[10,20,30],\"log\":[1,2,3]}",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "interruptHandlers": [
+        {
+          "action": "approve",
+          "expectedMessage": "confirm 1"
+        },
+        {
+          "action": "approve",
+          "expectedMessage": "confirm 2"
+        },
+        {
+          "action": "approve",
+          "expectedMessage": "confirm 3"
+        }
+      ]
+    },
+    {
+      "nodeName": "main",
+      "description": "Function ref called in loop, reject middle iteration — no duplicate execution",
+      "input": "",
+      "expectedOutput": "{\"results\":[10,0,30],\"log\":[1,2,3]}",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "interruptHandlers": [
+        {
+          "action": "approve",
+          "expectedMessage": "confirm 1"
+        },
+        {
+          "action": "reject",
+          "expectedMessage": "confirm 2"
+        },
+        {
+          "action": "approve",
+          "expectedMessage": "confirm 3"
+        }
+      ]
+    }
+  ]
+}

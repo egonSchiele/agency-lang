@@ -1,0 +1,7 @@
+{
+  "result": "hello Alice",
+  "log": [
+    "step1",
+    "step2"
+  ]
+}

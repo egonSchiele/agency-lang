@@ -1,0 +1,21 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Function reference itself throws interrupt when called — no duplicate execution",
+      "input": "",
+      "expectedOutput": "{\"result\":\"approved test\",\"log\":[\"before\",\"assigned\",\"after\"]}",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "interruptHandlers": [
+        {
+          "action": "approve",
+          "expectedMessage": "confirm test"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,27 @@
+const log: string[] = []
+
+def check(label: string): string {
+  return interrupt("confirm ${label}")
+  return "approved ${label}"
+}
+
+def inner(fn: (string) => string): string {
+  log.push("inner-start")
+  const result = fn("deep")
+  log.push("inner-end")
+  return result
+}
+
+def outer(fn: (string) => string): string {
+  log.push("outer-start")
+  const result = inner(fn)
+  log.push("outer-end")
+  return result
+}
+
+node main() {
+  log.push("main-start")
+  const result = outer(check)
+  log.push("main-end")
+  return { result: result, log: log }
+}

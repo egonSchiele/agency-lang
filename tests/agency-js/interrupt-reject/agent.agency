@@ -1,0 +1,17 @@
+const log: string[] = []
+
+def doWork(): string {
+  return interrupt("Do you approve?")
+  return "done"
+}
+
+node main() {
+  log.push("step1")
+  const check = doWork()
+  if (isFailure(check)) {
+    log.push("rejected")
+    return { result: "rejected", log: log }
+  }
+  log.push("step2")
+  return { result: "approved", log: log }
+}

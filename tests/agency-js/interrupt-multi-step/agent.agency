@@ -1,0 +1,15 @@
+const log: string[] = []
+
+def deleteFiles(count: number) {
+  return interrupt("Delete ${count} files?")
+  log.push("deleted")
+}
+
+node main() {
+  log.push("start")
+  const name = interrupt("What is your name?")
+  log.push("got-name")
+  deleteFiles(42)
+  log.push("end")
+  return { greeting: "hello ${name}", log: log }
+}

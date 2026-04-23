@@ -1,0 +1,21 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Function ref passed as argument to another function, the ref itself throws interrupt — no duplicate execution",
+      "input": "",
+      "expectedOutput": "{\"result\":\"done\",\"log\":[\"start\",\"before-call\",\"after-call\",\"end\"]}",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "interruptHandlers": [
+        {
+          "action": "approve",
+          "expectedMessage": "confirm test"
+        }
+      ]
+    }
+  ]
+}

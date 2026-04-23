@@ -1,7 +1,16 @@
+def double(x: number): number {
+  return x * 2
+}
+
 node main() {
-  const arr = [1, 2, 3]
-  arr.push(4)
-  arr.push(5)
-  const joined = arr.join(",")
-  return joined
+  // Store an Agency function in an object alongside plain data
+  const obj = { transform: double, values: [10, 20] }
+
+  // Call the Agency function through value access — tests __callMethod dispatch
+  const r1 = obj.transform(5)
+
+  // Also call a JS method on the same object — tests this binding preserved
+  const r2 = obj.values.join("-")
+
+  return { r1: r1, r2: r2 }
 }

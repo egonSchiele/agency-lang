@@ -17,5 +17,4 @@ There are also some other functions that are built into the language itself:
 - `getCheckpoint`: Takes a checkpoint ID and returns the checkpoint object.
 - `restore`: Restore a checkpoint. Note that this will completely replace the current execution state with what was saved in the checkpoint. It takes either a checkpoint or a checkpoint ID, along with additional options like overwrites. [See here for more details](/guide/checkpointing).
 - `debugger`: No op while running the agent, but when running through a debugger, the debugger statement will pause execution.
-
-isSuccess, isFailure, and unwrap are also built in but not documented since they're pretty self-explanatory.
+- `isSuccess`, `isFailure`: To be used with a [Result type](/guide/error-handling) to check whether it is a failure or success.

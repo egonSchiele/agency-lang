@@ -6,11 +6,11 @@ node main() {
   const obj = { fn: greet }
   const nothing = null
 
-  // optional property access then call on non-null — should work
+  // optional method call on non-null — should call the function
   const r1 = obj?.fn("Alice")
 
-  // optional property access on null — should return undefined
-  const r2 = nothing?.fn
+  // optional method call on null — should return undefined (not crash)
+  const r2 = nothing?.fn("Alice")
 
   return { r1: r1, r2: r2 }
 }

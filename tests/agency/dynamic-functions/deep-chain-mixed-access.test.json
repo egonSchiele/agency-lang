@@ -2,9 +2,9 @@
   "tests": [
     {
       "nodeName": "main",
-      "description": "Deep chain with mixed index and property access followed by method call",
+      "description": "Agency function called through deep nested property chain via __callMethod",
       "input": "",
-      "expectedOutput": "{\"r1\":\"Alice\",\"r2\":\"Bob\"}",
+      "expectedOutput": "\"PREFIX_hello\"",
       "evaluationCriteria": [{ "type": "exact" }]
     }
   ]

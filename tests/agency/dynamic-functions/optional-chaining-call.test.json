@@ -2,7 +2,7 @@
   "tests": [
     {
       "nodeName": "main",
-      "description": "Optional chaining on method calls via __callMethod with optional flag",
+      "description": "Optional chaining — calls method on non-null, returns undefined on null",
       "input": "",
       "expectedOutput": "{\"r1\":\"hello Alice\"}",
       "evaluationCriteria": [{ "type": "exact" }]

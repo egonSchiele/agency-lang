@@ -2,9 +2,9 @@
   "tests": [
     {
       "nodeName": "main",
-      "description": "JS built-in array methods preserve this binding through __callMethod",
+      "description": "Agency function called through value access and JS method this binding both work",
       "input": "",
-      "expectedOutput": "\"1,2,3,4,5\"",
+      "expectedOutput": "{\"r1\":10,\"r2\":\"10-20\"}",
       "evaluationCriteria": [{ "type": "exact" }]
     }
   ]

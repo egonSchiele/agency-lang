@@ -963,13 +963,7 @@ export class TypeScriptBuilder {
 
           // Build descriptor from the method call's arguments
           const descriptor = this.buildCallDescriptor(fnCall);
-          const configObj = this.insideGlobalInit
-            ? ts.functionCallConfig({ ctx: ts.runtime.ctx })
-            : ts.functionCallConfig({
-                ctx: ts.runtime.ctx,
-                threads: ts.runtime.threads,
-                interruptData: ts.raw("__state?.interruptData"),
-              });
+          const configObj = this.buildStateConfig();
 
           const propArg = ts.str(fnCall.functionName);
           const callArgs: TsNode[] = [result, propArg, descriptor, configObj];
@@ -1090,16 +1084,26 @@ export class TypeScriptBuilder {
   }
 
   /**
-   * Build the __state config object for method calls on Agency class instances.
+   * Build the standard state config for __call/__callMethod dispatch.
+   * During global init, only ctx is available; otherwise includes threads
+   * and interruptData.
    */
-  private buildMethodCallConfig(): TsNode {
-    return this.insideGlobalInit
-      ? ts.functionCallConfig({ ctx: ts.runtime.ctx })
-      : ts.functionCallConfig({
-        ctx: ts.runtime.ctx,
-        threads: ts.runtime.threads,
-        interruptData: ts.raw("__state?.interruptData"),
-      });
+  private buildStateConfig(opts?: {
+    stateStack?: TsNode;
+    isForked?: boolean;
+    extra?: Record<string, TsNode>;
+  }): TsNode {
+    if (this.insideGlobalInit) {
+      return ts.functionCallConfig({ ctx: ts.runtime.ctx });
+    }
+    return ts.functionCallConfig({
+      ctx: ts.runtime.ctx,
+      threads: ts.runtime.threads,
+      interruptData: ts.raw("__state?.interruptData"),
+      stateStack: opts?.stateStack,
+      isForked: opts?.isForked,
+      ...opts?.extra,
+    });
   }
 
   /**
@@ -1987,19 +1991,12 @@ export class TypeScriptBuilder {
       moduleId: ts.str(this.moduleId),
       scopeName: ts.str(this.currentScopeName()),
       stepPath: ts.str(this._subStepPath.join(".")),
-    } : {};
-    const configObj = this.insideGlobalInit
-      ? ts.functionCallConfig({
-        ctx: ts.runtime.ctx,
-      })
-      : ts.functionCallConfig({
-        ctx: ts.runtime.ctx,
-        threads: ts.runtime.threads,
-        interruptData: ts.raw("__state?.interruptData"),
-        stateStack: options?.stateStack,
-        isForked: node.async,
-        ...locationOpts,
-      });
+    } : undefined;
+    const configObj = this.buildStateConfig({
+      stateStack: options?.stateStack,
+      isForked: node.async,
+      extra: locationOpts,
+    });
 
     const callee = node.scope
       ? ts.scopedVar(functionName, node.scope, this.moduleId)
@@ -2518,13 +2515,7 @@ export class TypeScriptBuilder {
         case "methodCall": {
           const fnCall = el.functionCall;
           const descriptor = this.buildCallDescriptor(fnCall);
-          const configObj = this.insideGlobalInit
-            ? ts.functionCallConfig({ ctx: ts.runtime.ctx })
-            : ts.functionCallConfig({
-                ctx: ts.runtime.ctx,
-                threads: ts.runtime.threads,
-                interruptData: ts.raw("__state?.interruptData"),
-              });
+          const configObj = this.buildStateConfig();
 
           const callExpr = ts.call(
             ts.id("__callMethod"),
@@ -2828,12 +2819,7 @@ export class TypeScriptBuilder {
       type: ts.str("positional"),
       args: ts.arr(args),
     });
-    const stateConfig = ts.functionCallConfig({
-      ctx: ts.runtime.ctx,
-      threads: ts.runtime.threads,
-      interruptData: ts.raw("__state?.interruptData"),
-    });
-    const callExpr = ts.call(ts.id("__call"), [ts.id(handlerName), descriptor, stateConfig]);
+    const callExpr = ts.call(ts.id("__call"), [ts.id(handlerName), descriptor, this.buildStateConfig()]);
     return ts.arrowFn(
       [{ name: "__data", typeAnnotation: "any" }],
       ts.await(callExpr),
@@ -3018,22 +3004,12 @@ export class TypeScriptBuilder {
             a.type === "placeholder" ? pipeArg : this.processNode(a as AgencyNode),
           );
           const methodName = lastElement.functionCall.functionName;
-          const descriptor = ts.obj({
-            type: ts.str("positional"),
-            args: ts.arr(argNodes),
-          });
-          const stateConfig = ts.functionCallConfig({
-            ctx: ts.runtime.ctx,
-            threads: ts.runtime.threads,
-            interruptData: ts.raw("__state?.interruptData"),
-          });
+          const descriptor = ts.obj({ type: ts.str("positional"), args: ts.arr(argNodes) });
           const callExpr = ts.call(
             ts.id("__callMethod"),
-            [receiver, ts.str(methodName), descriptor, stateConfig],
+            [receiver, ts.str(methodName), descriptor, this.buildStateConfig()],
           );
-          return ts.arrowFn([{ name: "__pipeArg" }], ts.await(callExpr), {
-            async: true,
-          });
+          return ts.arrowFn([{ name: "__pipeArg" }], ts.await(callExpr), { async: true });
         }
       }
 
@@ -3044,52 +3020,24 @@ export class TypeScriptBuilder {
         : lastEl.kind === "methodCall" ? lastEl.functionCall.functionName
         : null;
       if (propName) {
-        const descriptor = ts.obj({
-          type: ts.str("positional"),
-          args: ts.arr([pipeArg]),
-        });
-        const stateConfig = ts.functionCallConfig({
-          ctx: ts.runtime.ctx,
-          threads: ts.runtime.threads,
-          interruptData: ts.raw("__state?.interruptData"),
-        });
+        const descriptor = ts.obj({ type: ts.str("positional"), args: ts.arr([pipeArg]) });
         const callExpr = ts.call(
           ts.id("__callMethod"),
-          [receiver, ts.str(propName), descriptor, stateConfig],
+          [receiver, ts.str(propName), descriptor, this.buildStateConfig()],
         );
-        return ts.arrowFn([{ name: "__pipeArg" }], ts.await(callExpr), {
-          async: true,
-        });
+        return ts.arrowFn([{ name: "__pipeArg" }], ts.await(callExpr), { async: true });
       }
       // Fallback for non-property access (e.g. index): use __call
       const callee = this.processNode(stage);
-      const descriptor = ts.obj({
-        type: ts.str("positional"),
-        args: ts.arr([pipeArg]),
-      });
-      const stateConfig = ts.functionCallConfig({
-        ctx: ts.runtime.ctx,
-        threads: ts.runtime.threads,
-        interruptData: ts.raw("__state?.interruptData"),
-      });
-      const callExpr = ts.call(ts.id("__call"), [callee, descriptor, stateConfig]);
-      return ts.arrowFn([{ name: "__pipeArg" }], ts.await(callExpr), {
-        async: true,
-      });
+      const descriptor = ts.obj({ type: ts.str("positional"), args: ts.arr([pipeArg]) });
+      const callExpr = ts.call(ts.id("__call"), [callee, descriptor, this.buildStateConfig()]);
+      return ts.arrowFn([{ name: "__pipeArg" }], ts.await(callExpr), { async: true });
     }
 
     if (stage.type === "variableName") {
       const callee = this.processNode(stage);
-      const descriptor = ts.obj({
-        type: ts.str("positional"),
-        args: ts.arr([pipeArg]),
-      });
-      const stateConfig = ts.functionCallConfig({
-        ctx: ts.runtime.ctx,
-        threads: ts.runtime.threads,
-        interruptData: ts.raw("__state?.interruptData"),
-      });
-      const callExpr = ts.call(ts.id("__call"), [callee, descriptor, stateConfig]);
+      const descriptor = ts.obj({ type: ts.str("positional"), args: ts.arr([pipeArg]) });
+      const callExpr = ts.call(ts.id("__call"), [callee, descriptor, this.buildStateConfig()]);
       return ts.arrowFn([{ name: "__pipeArg" }], ts.await(callExpr), { async: true });
     }
 
@@ -3109,16 +3057,8 @@ export class TypeScriptBuilder {
       const callee = stage.scope
         ? ts.scopedVar(mapFunctionName(stage.functionName), stage.scope, this.moduleId)
         : ts.raw(mapFunctionName(stage.functionName));
-      const descriptor = ts.obj({
-        type: ts.str("positional"),
-        args: ts.arr(argNodes),
-      });
-      const stateConfig = ts.functionCallConfig({
-        ctx: ts.runtime.ctx,
-        threads: ts.runtime.threads,
-        interruptData: ts.raw("__state?.interruptData"),
-      });
-      const callExpr = ts.call(ts.id("__call"), [callee, descriptor, stateConfig]);
+      const descriptor = ts.obj({ type: ts.str("positional"), args: ts.arr(argNodes) });
+      const callExpr = ts.call(ts.id("__call"), [callee, descriptor, this.buildStateConfig()]);
       return ts.arrowFn([{ name: "__pipeArg" }], ts.await(callExpr), { async: true });
     }
 

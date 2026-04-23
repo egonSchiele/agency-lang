@@ -209,7 +209,7 @@ export function compile(
   }
 
   // Rewrite import paths in the AST using the import strategy
-  const strategy = options?.importStrategy ?? new CompileStrategy({ targetExt: ext as ".js" | ".ts" });
+  const strategy = options?.importStrategy ?? new CompileStrategy({ targetExt: ".js" });
   const nonAgencyImports: string[] = [];
 
   resolvedProgram.nodes.forEach((node) => {

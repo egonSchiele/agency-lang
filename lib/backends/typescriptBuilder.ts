@@ -959,34 +959,28 @@ export class TypeScriptBuilder {
         }
         case "methodCall": {
           const isLastInChain = element === node.chain[node.chain.length - 1];
-          const callNode = this.generateFunctionCallExpression(
-            element.functionCall,
-            "valueAccess",
-          );
-          // The call node is ts.call(ts.id(name), args) — extract callee name and args
-          if (
-            callNode.kind === "call" &&
-            callNode.callee.kind === "identifier"
-          ) {
-            const isClassMethod = this.isKnownClassMethod(callNode.callee.name);
-            const args = isClassMethod
-              ? [...callNode.arguments, this.buildMethodCallConfig()]
-              : callNode.arguments;
-            const propNode = ts.prop(result, callNode.callee.name, { optional: element.optional });
-            const callExpr = ts.call(propNode, args);
-            // Parenthesize awaited calls when more chain elements follow,
-            // so .next() runs on the resolved value, not the Promise.
-            result = isLastInChain
-              ? ts.await(callExpr)
-              : ts.raw(`(${this.str(ts.await(callExpr))})`);
-          } else {
-            // Fallback for complex cases (e.g. await-wrapped)
-            const dot = element.optional ? "?." : ".";
-            const awaited = `await ${this.str(result)}${dot}${this.str(callNode)}`;
-            result = isLastInChain
-              ? ts.raw(awaited)
-              : ts.raw(`(${awaited})`);
+          const fnCall = element.functionCall;
+
+          // Build descriptor from the method call's arguments
+          const descriptor = this.buildCallDescriptor(fnCall);
+          const configObj = this.insideGlobalInit
+            ? ts.functionCallConfig({ ctx: ts.runtime.ctx })
+            : ts.functionCallConfig({
+                ctx: ts.runtime.ctx,
+                threads: ts.runtime.threads,
+                interruptData: ts.raw("__state?.interruptData"),
+              });
+
+          const propArg = ts.str(fnCall.functionName);
+          const callArgs: TsNode[] = [result, propArg, descriptor, configObj];
+          if (element.optional) {
+            callArgs.push(ts.bool(true));
           }
+          const callExpr = ts.call(ts.id("__callMethod"), callArgs);
+
+          result = isLastInChain
+            ? ts.await(callExpr)
+            : ts.raw(`(${this.str(ts.await(callExpr))})`);
           break;
         }
       }
@@ -2522,26 +2516,21 @@ export class TypeScriptBuilder {
           result = ts.index(result, this.processNode(el.index));
           break;
         case "methodCall": {
-          const callNode = this.generateFunctionCallExpression(
-            el.functionCall,
-            "valueAccess",
+          const fnCall = el.functionCall;
+          const descriptor = this.buildCallDescriptor(fnCall);
+          const configObj = this.insideGlobalInit
+            ? ts.functionCallConfig({ ctx: ts.runtime.ctx })
+            : ts.functionCallConfig({
+                ctx: ts.runtime.ctx,
+                threads: ts.runtime.threads,
+                interruptData: ts.raw("__state?.interruptData"),
+              });
+
+          const callExpr = ts.call(
+            ts.id("__callMethod"),
+            [result, ts.str(fnCall.functionName), descriptor, configObj],
           );
-          if (
-            callNode.kind === "call" &&
-            callNode.callee.kind === "identifier"
-          ) {
-            const isClassMethod = this.isKnownClassMethod(callNode.callee.name);
-            const args = isClassMethod
-              ? [...callNode.arguments, this.buildMethodCallConfig()]
-              : callNode.arguments;
-            const call2 = $(result)
-              .prop(callNode.callee.name)
-              .call(args)
-              .done();
-            result = isClassMethod ? ts.await(call2) : call2;
-          } else {
-            result = ts.raw(`${this.str(result)}.${this.str(callNode)}`);
-          }
+          result = ts.await(callExpr);
           break;
         }
       }

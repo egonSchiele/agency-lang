@@ -10,6 +10,7 @@ import { getDocumentSymbols } from "../lsp/documentSymbol.js";
 import { handleFormatting } from "../lsp/formatting.js";
 import { getCompletions } from "../lsp/completion.js";
 import { CompletionItemKind, DiagnosticSeverity, SymbolKind } from "vscode-languageserver-protocol";
+import { fileURLToPath, pathToFileURL } from "url";
 
 type DocumentInput = {
   file_path: string;
@@ -26,8 +27,16 @@ function createDocument(input: DocumentInput): {
   doc: TextDocument;
 } {
   const fsPath = path.resolve(input.file_path);
-  const text = input.text ?? fs.readFileSync(fsPath, "utf-8");
-  const doc = TextDocument.create(`file://${fsPath}`, "agency", 1, text);
+  let text = input.text;
+  if (text === undefined) {
+    try {
+      text = fs.readFileSync(fsPath, "utf-8");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      throw new Error(`Failed to read '${fsPath}': ${message}`);
+    }
+  }
+  const doc = TextDocument.create(pathToFileURL(fsPath).href, "agency", 1, text);
   return { fsPath, doc };
 }
 
@@ -118,7 +127,7 @@ export function agencyDefinition(input: PositionInput) {
 
   return {
     definition: {
-      file_path: new URL(location.uri).pathname,
+      file_path: fileURLToPath(location.uri),
       start: location.range.start,
       end: location.range.end,
     },

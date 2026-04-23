@@ -74,7 +74,7 @@ export function runDiagnostics(
   for (const err of errors) {
     const range = err.loc
       ? {
-          start: { line: err.loc.line + TEMPLATE_OFFSET, character: err.loc.col },
+          start: doc.positionAt(err.loc.start + TEMPLATE_OFFSET),
           end: doc.positionAt(err.loc.end),
         }
       : { start: { line: 0, character: 0 }, end: { line: 0, character: 1 } };

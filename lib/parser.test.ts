@@ -137,7 +137,7 @@ describe("agencyParser", () => {
 
 describe("parseAgency structured errors", () => {
   it("should return errorData with position info for syntax errors that trigger TarsecError", () => {
-    // This input triggers the template path which can surface TarsecError
+    // This malformed input should surface structured tarsec position info.
     const result = parseAgency("def foo( { }", {}, false);
     if (!result.success && result.errorData) {
       expect(typeof result.errorData.line).toBe("number");

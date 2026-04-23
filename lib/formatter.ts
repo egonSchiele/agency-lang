@@ -7,7 +7,7 @@ import { parseAgency } from "./parser.js";
  * Returns null if parsing fails.
  */
 export function formatSource(source: string, config: AgencyConfig = {}): string | null {
-  const result = parseAgency(source, config);
+  const result = parseAgency(source, config, false);
   if (!result.success) return null;
   return generateAgency(result.result);
 }

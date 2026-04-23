@@ -225,7 +225,7 @@ export async function format(
   contents: string,
   config: AgencyConfig = {},
 ): Promise<string> {
-  const program = parse(contents, config);
+  const program = parse(contents, config, false);
   return generateAgency(program);
 }
 

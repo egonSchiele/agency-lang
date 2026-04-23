@@ -1,9 +1,9 @@
-import { URL } from "url";
+import { fileURLToPath, pathToFileURL } from "url";
 
 export function uriToPath(uri: string): string {
-  return new URL(uri).pathname;
+  return fileURLToPath(uri);
 }
 
 export function pathToUri(fsPath: string): string {
-  return `file://${fsPath}`;
+  return pathToFileURL(fsPath).href;
 }

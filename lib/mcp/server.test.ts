@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
+import pkg from "../../package.json" with { type: "json" };
 import { handleMcpMessage } from "./server.js";
 
 let tmpDir: string;
@@ -37,6 +38,7 @@ describe("handleMcpMessage", () => {
 
     expect(response?.result?.protocolVersion).toBe("2025-06-18");
     expect(response?.result?.capabilities?.tools?.listChanged).toBe(false);
+    expect(response?.result?.serverInfo?.version).toBe(pkg.version);
   });
 
   it("lists Agency MCP tools", () => {
@@ -142,5 +144,15 @@ describe("handleMcpMessage", () => {
 
     expect(hoverResponse?.result?.structuredContent?.hover).toContain("Imported from `./helpers.agency` as `greet`");
     expect(definitionResponse?.result?.structuredContent?.definition?.file_path).toBe(helperFile);
+  });
+
+  it("returns an MCP error response for invalid json input", () => {
+    const response = handleMcpMessage({
+      jsonrpc: "1.0",
+      id: 1,
+      method: "initialize",
+    });
+
+    expect(response?.error?.code).toBe(-32600);
   });
 });

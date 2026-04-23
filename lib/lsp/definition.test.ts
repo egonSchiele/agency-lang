@@ -39,7 +39,7 @@ describe("handleDefinition", () => {
       semanticIndex,
     );
     expect(result?.uri).toBe("file:///test.agency");
-    expect(result?.range.start.line).toBe(1);
+    expect(result?.range.start.line).toBe(0);
   });
 
   it("returns the imported definition location for aliased symbols", () => {

@@ -7,6 +7,7 @@ import {
   agencyFormat,
   agencyHover,
 } from "./tools.js";
+import pkg from "../../package.json" with { type: "json" };
 
 const MCP_PROTOCOL_VERSION = "2025-06-18";
 
@@ -153,7 +154,7 @@ export function handleMcpMessage(message: JsonRpcMessage): JsonRpcMessage | null
         },
         serverInfo: {
           name: "agency-mcp",
-          version: "0.0.92",
+          version: pkg.version,
         },
       });
     case "notifications/initialized":
@@ -208,9 +209,16 @@ export function startMcpServer(): void {
       const line = buffer.slice(0, newlineIndex).trim();
       buffer = buffer.slice(newlineIndex + 1);
       if (line.length > 0) {
-        const response = handleMcpMessage(JSON.parse(line));
-        if (response) {
-          process.stdout.write(`${JSON.stringify(response)}\n`);
+        try {
+          const response = handleMcpMessage(JSON.parse(line));
+          if (response) {
+            process.stdout.write(`${JSON.stringify(response)}\n`);
+          }
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          process.stdout.write(
+            `${JSON.stringify(error(null, -32700, `Invalid JSON input: ${message}`))}\n`,
+          );
         }
       }
       newlineIndex = buffer.indexOf("\n");

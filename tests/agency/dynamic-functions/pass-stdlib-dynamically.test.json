@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Agency function passed as argument and called dynamically via __call",
+      "input": "",
+      "expectedOutput": "11",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

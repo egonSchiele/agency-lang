@@ -1,0 +1,17 @@
+def addPrefix(s: string): string {
+  return "PREFIX_${s}"
+}
+
+node main() {
+  // Agency function stored deep in a nested structure
+  const registry = {
+    transforms: {
+      prefix: addPrefix
+    }
+  }
+
+  // Call through a deep property chain — tests __callMethod on nested access
+  const r1 = registry.transforms.prefix("hello")
+
+  return r1
+}

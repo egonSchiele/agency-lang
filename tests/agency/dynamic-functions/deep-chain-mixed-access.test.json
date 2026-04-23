@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Agency function called through deep nested property chain via __callMethod",
+      "input": "",
+      "expectedOutput": "\"PREFIX_hello\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

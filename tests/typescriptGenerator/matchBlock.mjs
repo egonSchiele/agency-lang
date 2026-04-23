@@ -27,6 +27,7 @@ import {
   readSkillTool as __readSkillTool,
   readSkillToolParams as __readSkillToolParams,
   AgencyFunction as __AgencyFunction, UNSET as __UNSET,
+  __call, __callMethod,
   functionRefReviver as __functionRefReviver,
 } from "agency-lang/runtime";
 
@@ -145,7 +146,7 @@ __stack.locals.action = `start`;
   {
     condition: async () => __stack.locals.action === `start`,
     body: async (runner) => {
-await print.invoke({
+await __call(print, {
             type: "positional",
             args: [`Starting...`]
           }, {
@@ -159,7 +160,7 @@ await print.invoke({
   {
     condition: async () => __stack.locals.action === `stop`,
     body: async (runner) => {
-await print.invoke({
+await __call(print, {
             type: "positional",
             args: [`Stopping...`]
           }, {
@@ -173,7 +174,7 @@ await print.invoke({
   {
     condition: async () => __stack.locals.action === `restart`,
     body: async (runner) => {
-await print.invoke({
+await __call(print, {
             type: "positional",
             args: [`Restarting...`]
           }, {
@@ -185,7 +186,7 @@ await print.invoke({
   },
 
 ], async (runner) => {
-await print.invoke({
+await __call(print, {
           type: "positional",
           args: [`Unknown action`]
         }, {
@@ -205,7 +206,7 @@ __stack.locals.statusCode = 200;
   {
     condition: async () => __stack.locals.statusCode === 200,
     body: async (runner) => {
-await print.invoke({
+await __call(print, {
             type: "positional",
             args: [`OK`]
           }, {
@@ -219,7 +220,7 @@ await print.invoke({
   {
     condition: async () => __stack.locals.statusCode === 404,
     body: async (runner) => {
-await print.invoke({
+await __call(print, {
             type: "positional",
             args: [`Not Found`]
           }, {
@@ -233,7 +234,7 @@ await print.invoke({
   {
     condition: async () => __stack.locals.statusCode === 500,
     body: async (runner) => {
-await print.invoke({
+await __call(print, {
             type: "positional",
             args: [`Internal Server Error`]
           }, {
@@ -245,7 +246,7 @@ await print.invoke({
   },
 
 ], async (runner) => {
-await print.invoke({
+await __call(print, {
           type: "positional",
           args: [`Unknown status`]
         }, {
@@ -307,7 +308,7 @@ __stack.locals.level = `debug`;
   {
     condition: async () => __stack.locals.level === `debug`,
     body: async (runner) => {
-await print.invoke({
+await __call(print, {
             type: "positional",
             args: [`Debug mode enabled`]
           }, {
@@ -321,7 +322,7 @@ await print.invoke({
   {
     condition: async () => __stack.locals.level === `info`,
     body: async (runner) => {
-await print.invoke({
+await __call(print, {
             type: "positional",
             args: [`Info level logging`]
           }, {
@@ -335,7 +336,7 @@ await print.invoke({
   {
     condition: async () => __stack.locals.level === `warn`,
     body: async (runner) => {
-await print.invoke({
+await __call(print, {
             type: "positional",
             args: [`Warning level`]
           }, {
@@ -349,7 +350,7 @@ await print.invoke({
   {
     condition: async () => __stack.locals.level === `error`,
     body: async (runner) => {
-await print.invoke({
+await __call(print, {
             type: "positional",
             args: [`Error level`]
           }, {

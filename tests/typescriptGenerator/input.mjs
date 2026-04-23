@@ -27,6 +27,7 @@ import {
   readSkillTool as __readSkillTool,
   readSkillToolParams as __readSkillToolParams,
   AgencyFunction as __AgencyFunction, UNSET as __UNSET,
+  __call, __callMethod,
   functionRefReviver as __functionRefReviver,
 } from "agency-lang/runtime";
 
@@ -134,7 +135,7 @@ let __functionCompleted = false;
   const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "input.agency", scopeName: "main" });
   try {
     await runner.step(0, async (runner) => {
-__stack.locals.message = await input.invoke({
+__stack.locals.message = await __call(input, {
         type: "positional",
         args: [`Please enter a message: `]
       }, {
@@ -177,7 +178,7 @@ if (isInterrupt(__stack.locals.sentiment)) {
       }
     });
     await runner.step(2, async (runner) => {
-const __funcResult = await print.invoke({
+const __funcResult = await __call(print, {
         type: "positional",
         args: [__stack.locals.sentiment]
       }, {

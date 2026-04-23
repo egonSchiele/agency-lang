@@ -1,0 +1,14 @@
+def double(x: number): number {
+  return x * 2
+}
+
+def triple(x: number): number {
+  return x * 3
+}
+
+node main() {
+  const fns = [double, triple]
+  const r1 = fns[0](5)
+  const r2 = fns[1](5)
+  return { r1: r1, r2: r2 }
+}

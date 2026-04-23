@@ -27,6 +27,7 @@ import {
   readSkillTool as __readSkillTool,
   readSkillToolParams as __readSkillToolParams,
   AgencyFunction as __AgencyFunction, UNSET as __UNSET,
+  __call, __callMethod,
   functionRefReviver as __functionRefReviver,
 } from "agency-lang/runtime";
 
@@ -250,7 +251,10 @@ let __functionCompleted = false;
 __stack.locals.c = new Counter(0);
     });
     await runner.step(1, async (runner) => {
-await __stack.locals.c.increment({
+await __callMethod(__stack.locals.c, "increment", {
+        type: "positional",
+        args: []
+      }, {
         ctx: __ctx,
         threads: __threads,
         interruptData: __state?.interruptData
@@ -259,7 +263,10 @@ await __stack.locals.c.increment({
     await runner.step(2, async (runner) => {
 runner.halt({
         messages: __threads,
-        data: await __stack.locals.c.increment({
+        data: await __callMethod(__stack.locals.c, "increment", {
+          type: "positional",
+          args: []
+        }, {
           ctx: __ctx,
           threads: __threads,
           interruptData: __state?.interruptData

@@ -27,6 +27,7 @@ import {
   readSkillTool as __readSkillTool,
   readSkillToolParams as __readSkillToolParams,
   AgencyFunction as __AgencyFunction, UNSET as __UNSET,
+  __call, __callMethod,
   functionRefReviver as __functionRefReviver,
 } from "agency-lang/runtime";
 
@@ -325,9 +326,9 @@ let __functionCompleted = false;
   const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "function.agency", scopeName: "main" });
   try {
     await runner.step(0, async (runner) => {
-const __funcResult = await print.invoke({
+const __funcResult = await __call(print, {
         type: "positional",
-        args: [await test.invoke({
+        args: [await __call(test, {
           type: "positional",
           args: []
         }, {

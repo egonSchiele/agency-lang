@@ -27,6 +27,7 @@ import {
   readSkillTool as __readSkillTool,
   readSkillToolParams as __readSkillToolParams,
   AgencyFunction as __AgencyFunction, UNSET as __UNSET,
+  __call, __callMethod,
   functionRefReviver as __functionRefReviver,
 } from "agency-lang/runtime";
 
@@ -160,7 +161,7 @@ if (__ctx._pendingArgOverrides) {
 
   try {
     await runner.step(0, async (runner) => {
-__stack.locals.a = await __stack.args.block.invoke({
+__stack.locals.a = await __call(__stack.args.block, {
         type: "positional",
         args: []
       }, {
@@ -175,7 +176,7 @@ if (isInterrupt(__stack.locals.a)) {
       }
     });
     await runner.step(1, async (runner) => {
-__stack.locals.b = await __stack.args.block.invoke({
+__stack.locals.b = await __call(__stack.args.block, {
         type: "positional",
         args: []
       }, {
@@ -257,7 +258,7 @@ let __functionCompleted = false;
   const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "blockBasic.agency", scopeName: "main" });
   try {
     await runner.step(0, async (runner) => {
-__stack.locals.results = await twice.invoke({
+__stack.locals.results = await __call(twice, {
         type: "positional",
         args: [__AgencyFunction.create({ name: "__block_0", module: "blockBasic.agency", fn: async () => {
           const __bsetup = setupFunction({ state: { ctx: __ctx, threads: __threads } });
@@ -290,7 +291,7 @@ if (isInterrupt(__stack.locals.results)) {
       }
     });
     await runner.step(1, async (runner) => {
-const __funcResult = await print.invoke({
+const __funcResult = await __call(print, {
         type: "positional",
         args: [__stack.locals.results]
       }, {

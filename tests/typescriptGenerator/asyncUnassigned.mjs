@@ -27,6 +27,7 @@ import {
   readSkillTool as __readSkillTool,
   readSkillToolParams as __readSkillToolParams,
   AgencyFunction as __AgencyFunction, UNSET as __UNSET,
+  __call, __callMethod,
   functionRefReviver as __functionRefReviver,
 } from "agency-lang/runtime";
 
@@ -166,7 +167,7 @@ if (__ctx._pendingArgOverrides) {
 
   try {
     await runner.step(0, async (runner) => {
-const __funcResult = await sleep.invoke({
+const __funcResult = await __call(sleep, {
         type: "positional",
         args: [__stack.args.sleepTime]
       }, {
@@ -263,7 +264,7 @@ __stack.branches = (__stack.branches || {});
 __stack.branches["0"] = {
         stack: __forked
       };
-__ctx.pendingPromises.add(append.invoke({
+__ctx.pendingPromises.add(__call(append, {
   type: "positional",
   args: [1, `hello`]
 }, {
@@ -285,7 +286,7 @@ __stack.branches = (__stack.branches || {});
 __stack.branches["1"] = {
         stack: __forked
       };
-__ctx.pendingPromises.add(append.invoke({
+__ctx.pendingPromises.add(__call(append, {
   type: "positional",
   args: [0.5, `world`]
 }, {

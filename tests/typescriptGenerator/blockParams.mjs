@@ -27,6 +27,7 @@ import {
   readSkillTool as __readSkillTool,
   readSkillToolParams as __readSkillToolParams,
   AgencyFunction as __AgencyFunction, UNSET as __UNSET,
+  __call, __callMethod,
   functionRefReviver as __functionRefReviver,
 } from "agency-lang/runtime";
 
@@ -170,7 +171,7 @@ __stack.locals.results = [];
     });
     await runner.loop(1, __stack.args.items, async (item, _, runner) => {
 await runner.step(0, async (runner) => {
-__stack.locals.result = await __stack.args.block.invoke({
+__stack.locals.result = await __call(__stack.args.block, {
           type: "positional",
           args: [item]
         }, {
@@ -185,7 +186,7 @@ if (isInterrupt(__stack.locals.result)) {
         }
       });
 await runner.step(1, async (runner) => {
-__stack.locals.results = await append.invoke({
+__stack.locals.results = await __call(append, {
           type: "positional",
           args: [__stack.locals.results, __stack.locals.result]
         }, {
@@ -276,7 +277,7 @@ let __functionCompleted = false;
 __stack.locals.items = [1, 2, 3];
     });
     await runner.step(1, async (runner) => {
-__stack.locals.doubled = await mapItems.invoke({
+__stack.locals.doubled = await __call(mapItems, {
         type: "positional",
         args: [__stack.locals.items, __AgencyFunction.create({ name: "__block_0", module: "blockParams.agency", fn: async (x: any) => {
           const __bsetup = setupFunction({ state: { ctx: __ctx, threads: __threads } });
@@ -311,7 +312,7 @@ if (isInterrupt(__stack.locals.doubled)) {
       }
     });
     await runner.step(2, async (runner) => {
-const __funcResult = await print.invoke({
+const __funcResult = await __call(print, {
         type: "positional",
         args: [__stack.locals.doubled]
       }, {

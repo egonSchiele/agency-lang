@@ -27,6 +27,7 @@ import {
   readSkillTool as __readSkillTool,
   readSkillToolParams as __readSkillToolParams,
   AgencyFunction as __AgencyFunction, UNSET as __UNSET,
+  __call, __callMethod,
   functionRefReviver as __functionRefReviver,
 } from "agency-lang/runtime";
 
@@ -257,7 +258,7 @@ let __functionCompleted = false;
 //  Reordered named args
     });
     await runner.step(1, async (runner) => {
-__stack.locals.a = await greet.invoke({
+__stack.locals.a = await __call(greet, {
         type: "named",
         positionalArgs: [],
         namedArgs: {
@@ -280,7 +281,7 @@ if (isInterrupt(__stack.locals.a)) {
 //  Skip middle param with named args
     });
     await runner.step(2, async (runner) => {
-__stack.locals.b = await greet.invoke({
+__stack.locals.b = await __call(greet, {
         type: "named",
         positionalArgs: [],
         namedArgs: {
@@ -303,7 +304,7 @@ if (isInterrupt(__stack.locals.b)) {
 //  Mixed positional + named
     });
     await runner.step(3, async (runner) => {
-__stack.locals.c = await greet.invoke({
+__stack.locals.c = await __call(greet, {
         type: "named",
         positionalArgs: [`world`],
         namedArgs: {

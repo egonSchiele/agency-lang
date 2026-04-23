@@ -27,6 +27,7 @@ import {
   readSkillTool as __readSkillTool,
   readSkillToolParams as __readSkillToolParams,
   AgencyFunction as __AgencyFunction, UNSET as __UNSET,
+  __call, __callMethod,
   functionRefReviver as __functionRefReviver,
 } from "agency-lang/runtime";
 
@@ -264,7 +265,7 @@ let __functionCompleted = false;
   try {
     await runner.handle(0, async (__data: any) => approve(__data), async (runner) => {
 await runner.step(0, async (runner) => {
-__stack.locals.result = await foo.invoke({
+__stack.locals.result = await __call(foo, {
           type: "positional",
           args: []
         }, {

@@ -6,5 +6,8 @@ node main() {
   const fn = greet
   const withDefault = fn("Alice")
   const withOverride = fn("Bob", "Hey")
-  return { withDefault: withDefault, withOverride: withOverride }
+  return { 
+    withDefault: withDefault,
+    withOverride: withOverride
+  }
 }

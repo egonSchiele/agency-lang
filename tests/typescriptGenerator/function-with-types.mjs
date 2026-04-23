@@ -27,6 +27,7 @@ import {
   readSkillTool as __readSkillTool,
   readSkillToolParams as __readSkillToolParams,
   AgencyFunction as __AgencyFunction, UNSET as __UNSET,
+  __call, __callMethod,
   functionRefReviver as __functionRefReviver,
 } from "agency-lang/runtime";
 
@@ -741,7 +742,7 @@ let __functionCompleted = false;
   const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "function-with-types.agency", scopeName: "foo" });
   try {
     await runner.step(0, async (runner) => {
-const __funcResult = await print.invoke({
+const __funcResult = await __call(print, {
         type: "positional",
         args: [`This is a node with a return type`]
       }, {
@@ -815,7 +816,7 @@ let __functionCompleted = false;
 //  Call the functions
     });
     await runner.step(1, async (runner) => {
-__stack.locals.sum = await add.invoke({
+__stack.locals.sum = await __call(add, {
         type: "positional",
         args: [5, 10]
       }, {
@@ -833,7 +834,7 @@ if (isInterrupt(__stack.locals.sum)) {
       }
     });
     await runner.step(2, async (runner) => {
-__stack.locals.greeting = await greet.invoke({
+__stack.locals.greeting = await __call(greet, {
         type: "positional",
         args: [`Alice`]
       }, {
@@ -851,7 +852,7 @@ if (isInterrupt(__stack.locals.greeting)) {
       }
     });
     await runner.step(3, async (runner) => {
-__stack.locals.labeled = await mixed.invoke({
+__stack.locals.labeled = await __call(mixed, {
         type: "positional",
         args: [42, `Answer`]
       }, {
@@ -869,7 +870,7 @@ if (isInterrupt(__stack.locals.labeled)) {
       }
     });
     await runner.step(4, async (runner) => {
-__stack.locals.processed = await processArray.invoke({
+__stack.locals.processed = await __call(processArray, {
         type: "positional",
         args: [[1, 2, 3, 4, 5]]
       }, {
@@ -887,7 +888,7 @@ if (isInterrupt(__stack.locals.processed)) {
       }
     });
     await runner.step(5, async (runner) => {
-__stack.locals.flexResult = await flexible.invoke({
+__stack.locals.flexResult = await __call(flexible, {
         type: "positional",
         args: [`test`]
       }, {

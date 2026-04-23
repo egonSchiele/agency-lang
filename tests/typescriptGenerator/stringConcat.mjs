@@ -27,6 +27,7 @@ import {
   readSkillTool as __readSkillTool,
   readSkillToolParams as __readSkillToolParams,
   AgencyFunction as __AgencyFunction, UNSET as __UNSET,
+  __call, __callMethod,
   functionRefReviver as __functionRefReviver,
 } from "agency-lang/runtime";
 
@@ -134,7 +135,7 @@ let __functionCompleted = false;
   const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "stringConcat.agency", scopeName: "foo" });
   try {
     await runner.step(0, async (runner) => {
-const __funcResult = await print.invoke({
+const __funcResult = await __call(print, {
         type: "positional",
         args: [`What is your name?`]
       }, {
@@ -152,7 +153,7 @@ if (isInterrupt(__funcResult)) {
       }
     });
     await runner.step(1, async (runner) => {
-__stack.locals.name = await input.invoke({
+__stack.locals.name = await __call(input, {
         type: "positional",
         args: [`> `]
       }, {
@@ -170,7 +171,7 @@ if (isInterrupt(__stack.locals.name)) {
       }
     });
     await runner.step(2, async (runner) => {
-const __funcResult = await print.invoke({
+const __funcResult = await __call(print, {
         type: "positional",
         args: [`Hello, ${__stack.locals.name}!`]
       }, {

@@ -1,0 +1,16 @@
+def greet(name: string): string {
+  return "hello ${name}"
+}
+
+node main() {
+  const obj = { fn: greet }
+  const nothing = null
+
+  // optional method call on non-null — should call the function
+  const r1 = obj?.fn("Alice")
+
+  // optional method call on null — should return undefined (not crash)
+  const r2 = nothing?.fn("Alice")
+
+  return { r1: r1, r2: r2 }
+}

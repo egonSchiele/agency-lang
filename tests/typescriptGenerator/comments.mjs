@@ -27,6 +27,7 @@ import {
   readSkillTool as __readSkillTool,
   readSkillToolParams as __readSkillToolParams,
   AgencyFunction as __AgencyFunction, UNSET as __UNSET,
+  __call, __callMethod,
   functionRefReviver as __functionRefReviver,
 } from "agency-lang/runtime";
 
@@ -238,7 +239,7 @@ let __functionCompleted = false;
 //  Comment before function call
     });
     await runner.step(1, async (runner) => {
-__stack.locals.result = await greet.invoke({
+__stack.locals.result = await __call(greet, {
         type: "positional",
         args: []
       }, {
@@ -256,7 +257,7 @@ if (isInterrupt(__stack.locals.result)) {
       }
     });
     await runner.step(2, async (runner) => {
-const __funcResult = await print.invoke({
+const __funcResult = await __call(print, {
         type: "positional",
         args: [__stack.locals.result]
       }, {
@@ -286,7 +287,7 @@ __stack.locals.status = `active`;
   {
     condition: async () => __stack.locals.status === `inactive`,
     body: async (runner) => {
-await print.invoke({
+await __call(print, {
             type: "positional",
             args: [`Stopped`]
           }, {

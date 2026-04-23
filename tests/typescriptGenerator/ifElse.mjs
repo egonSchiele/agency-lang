@@ -27,6 +27,7 @@ import {
   readSkillTool as __readSkillTool,
   readSkillToolParams as __readSkillToolParams,
   AgencyFunction as __AgencyFunction, UNSET as __UNSET,
+  __call, __callMethod,
   functionRefReviver as __functionRefReviver,
 } from "agency-lang/runtime";
 
@@ -154,7 +155,7 @@ __stack.locals.result = `condition was true`;
     await runner.ifElse(3, [
 
   {
-    condition: async () => await isReady.invoke({
+    condition: async () => await __call(isReady, {
           type: "positional",
           args: []
         }, {

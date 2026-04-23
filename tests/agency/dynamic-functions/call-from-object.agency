@@ -1,0 +1,9 @@
+def greet(name: string): string {
+  return "hello ${name}"
+}
+
+node main() {
+  const handlers = { onGreet: greet }
+  const result = handlers.onGreet("Alice")
+  return result
+}

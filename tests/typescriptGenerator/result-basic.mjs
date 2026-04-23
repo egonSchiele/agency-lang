@@ -19,7 +19,6 @@ import {
   rewindFrom as _rewindFrom,
   RestoreSignal,
   deepClone as __deepClone,
-  not, eq, neq, lt, lte, gt, gte, and, or,
   head, tail, empty,
   success, failure, isSuccess, isFailure, __pipeBind, __tryCall, __catchResult,
   Schema, __validateType,

@@ -34,15 +34,6 @@ export { callHook } from "./hooks.js";
 export type { AgencyCallbacks, CallbackMap, CallbackReturn } from "./hooks.js";
 
 export {
-  not,
-  eq,
-  neq,
-  lt,
-  lte,
-  gt,
-  gte,
-  and,
-  or,
   head,
   tail,
   empty,

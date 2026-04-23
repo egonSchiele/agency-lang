@@ -1,15 +1,6 @@
 import fs from "fs";
 import path from "path";
 
-export const not = (val: any): boolean => !val;
-export const eq = (a: any, b: any): boolean => a === b;
-export const neq = (a: any, b: any): boolean => a !== b;
-export const lt = (a: any, b: any): boolean => a < b;
-export const lte = (a: any, b: any): boolean => a <= b;
-export const gt = (a: any, b: any): boolean => a > b;
-export const gte = (a: any, b: any): boolean => a >= b;
-export const and = (a: any, b: any): any => a && b;
-export const or = (a: any, b: any): any => a || b;
 export const head = (arr: any[]): any => arr[0];
 export const tail = (arr: any[]): any[] => arr.slice(1);
 export const empty = (arr: any[]): boolean => arr.length === 0;

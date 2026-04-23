@@ -1,7 +1,7 @@
 {
   "tests": [
     {
-      "skip": true,
+            "skip": true,
       "nodeName": "main",
       "input": "",
       "expectedOutput": "\"test got hello\"",

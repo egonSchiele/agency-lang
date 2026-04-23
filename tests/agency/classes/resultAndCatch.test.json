@@ -1,7 +1,6 @@
 {
   "tests": [
     {
-      "skip": true,
       "nodeName": "main",
       "input": "",
       "expectedOutput": "{\"a\":15,\"b\":-1}",

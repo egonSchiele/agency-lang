@@ -28,6 +28,7 @@ import {
   readSkillTool as __readSkillTool,
   readSkillToolParams as __readSkillToolParams,
   AgencyFunction as __AgencyFunction, UNSET as __UNSET,
+  __call, __callMethod,
   functionRefReviver as __functionRefReviver,
 } from "agency-lang/runtime";
 
@@ -163,7 +164,14 @@ if (__ctx._pendingArgOverrides) {
   try {
     await runner.step(0, async (runner) => {
 __functionCompleted = true;
-runner.halt(await lookupItem(__stack.args.id))
+runner.halt(await __call(lookupItem, {
+        type: "positional",
+        args: [__stack.args.id]
+      }, {
+        ctx: __ctx,
+        threads: __threads,
+        interruptData: __state?.interruptData
+      }))
 return;
     });
     if (runner.halted) { if (isFailure(runner.haltResult)) { runner.haltResult.retryable = runner.haltResult.retryable && __self.__retryable; } return runner.haltResult; }
@@ -261,11 +269,30 @@ if (__ctx._pendingArgOverrides) {
   try {
     await runner.step(0, async (runner) => {
 __self.__retryable = false;
-await saveItem(__stack.args.id)
+const __funcResult = await __call(saveItem, {
+        type: "positional",
+        args: [__stack.args.id]
+      }, {
+        ctx: __ctx,
+        threads: __threads,
+        interruptData: __state?.interruptData
+      });
+if (isInterrupt(__funcResult)) {
+        await __ctx.pendingPromises.awaitAll()
+        runner.halt(__funcResult)
+        return;
+      }
     });
     await runner.step(1, async (runner) => {
 __functionCompleted = true;
-runner.halt(await lookupItem(__stack.args.id))
+runner.halt(await __call(lookupItem, {
+        type: "positional",
+        args: [__stack.args.id]
+      }, {
+        ctx: __ctx,
+        threads: __threads,
+        interruptData: __state?.interruptData
+      }))
 return;
     });
     if (runner.halted) { if (isFailure(runner.haltResult)) { runner.haltResult.retryable = runner.haltResult.retryable && __self.__retryable; } return runner.haltResult; }

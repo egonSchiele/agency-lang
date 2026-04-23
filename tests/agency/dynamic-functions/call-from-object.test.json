@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Agency function stored in object property, called via value access",
+      "input": "",
+      "expectedOutput": "\"hello Alice\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

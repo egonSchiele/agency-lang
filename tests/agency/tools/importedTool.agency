@@ -1,4 +1,4 @@
-import tool { mogrify } from "./useTools.agency"
+import { mogrify } from "./useTools.agency"
 
 // test an imported tool being used in a thread.
 node test() {

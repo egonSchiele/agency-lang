@@ -102,6 +102,12 @@ export const __getCheckpoints = () => __globalCtx.checkpoints;
 
 const __toolRegistry: Record<string, any> = {};
 
+function __registerTool(value: unknown, name?: string) {
+  if (__AgencyFunction.isAgencyFunction(value)) {
+    __toolRegistry[name ?? value.name] = value;
+  }
+}
+
 // Wrap stateful runtime functions as AgencyFunction instances
 const checkpoint = __AgencyFunction.create({ name: "checkpoint", module: "__runtime", fn: __checkpoint_impl, params: [], toolDefinition: null }, __toolRegistry);
 const getCheckpoint = __AgencyFunction.create({ name: "getCheckpoint", module: "__runtime", fn: __getCheckpoint_impl, params: [{ name: "checkpointId", hasDefault: false, defaultValue: undefined, variadic: false }], toolDefinition: null }, __toolRegistry);
@@ -109,10 +115,11 @@ const restore = __AgencyFunction.create({ name: "restore", module: "__runtime", 
 async function mcp(serverName: string) {
   return __globalCtx.mcpManager.getTools(serverName);
 }
+__registerTool(foo);
+__registerTool(foo);
 async function __initializeGlobals(__ctx) {
   __ctx.globals.markInitialized("imports.agency")
 }
-__toolRegistry["foo"] = foo;
 __toolRegistry["readSkill"] = __AgencyFunction.create({
   name: "readSkill",
   module: "imports.agency",

@@ -29,12 +29,9 @@ import {
   ImportNameType,
   ImportNodeStatement,
   ImportStatement,
-  ImportToolStatement,
-  getImportedToolNames,
 } from "../types/importStatement.js";
 import { MatchBlock } from "../types/matchBlock.js";
 import { ReturnStatement } from "../types/returnStatement.js";
-import { UsesTool } from "../types/tools.js";
 import { ForLoop } from "../types/forLoop.js";
 import { WhileLoop } from "../types/whileLoop.js";
 import { variableTypeToString } from "./typescriptGenerator/typeToString.js";
@@ -62,7 +59,6 @@ export class AgencyGenerator {
   protected functionsUsed: Set<string> = new Set();
   protected importStatements: string[] = [];
   protected importedNodes: ImportNodeStatement[] = [];
-  protected importedTools: ImportToolStatement[] = [];
   protected functionDefinitions: Record<string, FunctionDefinition> = {};
   protected currentScope: Scope[] = [{ type: "global" }];
   protected program: AgencyProgram | null = null;
@@ -100,12 +96,10 @@ export class AgencyGenerator {
       }
     }
 
-    // Pass 3: Collect all node and tool imports
+    // Pass 3: Collect all node imports
     for (const node of program.nodes) {
       if (node.type === "importNodeStatement") {
         this.importedNodes.push(node);
-      } else if (node.type === "importToolStatement") {
-        this.importedTools.push(node);
       }
     }
 
@@ -228,16 +222,11 @@ export class AgencyGenerator {
         return this.processAgencyObject(node);
       case "graphNode":
         return this.processGraphNode(node);
-      case "usesTool":
-        return this.processUsesTool(node);
       case "importStatement":
         this.importStatements.push(this.processImportStatement(node));
         return "";
       case "importNodeStatement":
         this.importStatements.push(this.processImportNodeStatement(node));
-        return "";
-      case "importToolStatement":
-        this.importStatements.push(this.processImportToolStatement(node));
         return "";
       case "forLoop":
         return this.processForLoop(node);
@@ -308,12 +297,6 @@ export class AgencyGenerator {
     return this.currentScope[this.currentScope.length - 1];
   }
 
-  protected isImportedTool(functionName: string): boolean {
-    return this.importedTools
-      .flatMap(getImportedToolNames)
-      .includes(functionName);
-  }
-
   protected isAgencyFunction(
     functionName: string,
     context: "valueAccess" | "functionArg" | "topLevelStatement",
@@ -321,10 +304,7 @@ export class AgencyGenerator {
     if (context === "valueAccess") {
       return false;
     }
-    return (
-      !!this.functionDefinitions[functionName] ||
-      this.isImportedTool(functionName)
-    );
+    return !!this.functionDefinitions[functionName];
   }
 
   // Indent helpers
@@ -838,15 +818,6 @@ export class AgencyGenerator {
     return `import node { ${node.importedNodes.join(", ")} } from "${node.agencyFile}"`;
   }
 
-  protected processImportToolStatement(node: ImportToolStatement): string {
-    const toolNames = node.importedTools.flatMap((n) =>
-      n.importedNames.map((name) => {
-        const alias = n.aliases[name];
-        return alias ? `${name} as ${alias}` : name;
-      }),
-    );
-    return `import tool { ${toolNames.join(", ")} } from "${node.agencyFile}"`;
-  }
 
   protected visibilityToString(vis: Visibility): string {
     switch (vis) {
@@ -959,9 +930,6 @@ export class AgencyGenerator {
     return "";
   }
 
-  protected processUsesTool(node: UsesTool): string {
-    return this.indentStr(`uses ${node.toolNames.join(", ")}`);
-  }
 
   protected processNewLine(_node: NewLine): string {
     return "";

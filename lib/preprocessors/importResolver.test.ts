@@ -5,7 +5,6 @@ import type { SymbolTable } from "../symbolTable.js";
 import type {
   ImportStatement,
   ImportNodeStatement,
-  ImportToolStatement,
 } from "../types/importStatement.js";
 
 function makeImportStatement(
@@ -40,7 +39,7 @@ describe("resolveImports", () => {
     expect(node.agencyFile).toBe("./other.agency");
   });
 
-  it("rewrites function imports to ImportToolStatement", () => {
+  it("rewrites function imports to ImportStatement", () => {
     const program: AgencyProgram = {
       type: "agencyProgram",
       nodes: [makeImportStatement(["add"], "./utils.agency")],
@@ -52,9 +51,12 @@ describe("resolveImports", () => {
     };
     const result = resolveImports(program, symbolTable, "/project/main.agency");
     expect(result.nodes).toHaveLength(1);
-    const node = result.nodes[0] as ImportToolStatement;
-    expect(node.type).toBe("importToolStatement");
-    expect(node.importedTools).toEqual([{ type: "namedImport", importedNames: ["add"], safeNames: [], aliases: {} }]);
+    const node = result.nodes[0] as ImportStatement;
+    expect(node.type).toBe("importStatement");
+    expect(node.importedNames[0].type).toBe("namedImport");
+    if (node.importedNames[0].type === "namedImport") {
+      expect(node.importedNames[0].importedNames).toEqual(["add"]);
+    }
   });
 
   it("keeps type imports as ImportStatement", () => {
@@ -77,7 +79,7 @@ describe("resolveImports", () => {
     }
   });
 
-  it("splits mixed imports into separate nodes", () => {
+  it("splits mixed imports: nodes separate, functions+types combined", () => {
     const program: AgencyProgram = {
       type: "agencyProgram",
       nodes: [
@@ -92,21 +94,21 @@ describe("resolveImports", () => {
       },
     };
     const result = resolveImports(program, symbolTable, "/project/main.agency");
-    expect(result.nodes).toHaveLength(3);
+    // Nodes get a separate ImportNodeStatement, functions+types share an ImportStatement
+    expect(result.nodes).toHaveLength(2);
 
     const nodeImport = result.nodes[0] as ImportNodeStatement;
     expect(nodeImport.type).toBe("importNodeStatement");
     expect(nodeImport.importedNodes).toEqual(["greet"]);
 
-    const toolImport = result.nodes[1] as ImportToolStatement;
-    expect(toolImport.type).toBe("importToolStatement");
-    expect(toolImport.importedTools).toEqual([{ type: "namedImport", importedNames: ["add"], safeNames: [], aliases: {} }]);
-
-    const typeImport = result.nodes[2] as ImportStatement;
-    expect(typeImport.type).toBe("importStatement");
+    const importStmt = result.nodes[1] as ImportStatement;
+    expect(importStmt.type).toBe("importStatement");
+    if (importStmt.importedNames[0].type === "namedImport") {
+      expect(importStmt.importedNames[0].importedNames).toEqual(["add", "Config"]);
+    }
   });
 
-  it("carries aliases through to ImportToolStatement for functions", () => {
+  it("carries aliases through to ImportStatement for functions", () => {
     const program: AgencyProgram = {
       type: "agencyProgram",
       nodes: [
@@ -131,16 +133,11 @@ describe("resolveImports", () => {
     };
     const result = resolveImports(program, symbolTable, "/project/main.agency");
     expect(result.nodes).toHaveLength(1);
-    const node = result.nodes[0] as ImportToolStatement;
-    expect(node.type).toBe("importToolStatement");
-    expect(node.importedTools).toEqual([
-      {
-        type: "namedImport",
-        importedNames: ["add"],
-        safeNames: [],
-        aliases: { add: "plus" },
-      },
-    ]);
+    const node = result.nodes[0] as ImportStatement;
+    expect(node.type).toBe("importStatement");
+    if (node.importedNames[0].type === "namedImport") {
+      expect(node.importedNames[0].aliases).toEqual({ add: "plus" });
+    }
   });
 
   it("carries aliases through to ImportStatement for types", () => {
@@ -203,16 +200,14 @@ describe("resolveImports", () => {
       },
     };
     const result = resolveImports(program, symbolTable, "/project/main.agency");
-    expect(result.nodes).toHaveLength(2);
+    // Functions and types are now combined in a single ImportStatement
+    expect(result.nodes).toHaveLength(1);
 
-    const toolImport = result.nodes[0] as ImportToolStatement;
-    expect(toolImport.type).toBe("importToolStatement");
-    expect(toolImport.importedTools[0].aliases).toEqual({ add: "plus" });
-
-    const typeImport = result.nodes[1] as ImportStatement;
-    expect(typeImport.type).toBe("importStatement");
-    if (typeImport.importedNames[0].type === "namedImport") {
-      expect(typeImport.importedNames[0].aliases).toEqual({ Config: "AppConfig" });
+    const importStmt = result.nodes[0] as ImportStatement;
+    expect(importStmt.type).toBe("importStatement");
+    if (importStmt.importedNames[0].type === "namedImport") {
+      expect(importStmt.importedNames[0].importedNames).toEqual(["add", "Config"]);
+      expect(importStmt.importedNames[0].aliases).toEqual({ add: "plus", Config: "AppConfig" });
     }
   });
 
@@ -260,27 +255,17 @@ describe("resolveImports", () => {
     expect(result.nodes).toEqual([tsImport]);
   });
 
-  it("leaves import node / import tool statements untouched", () => {
+  it("leaves import node statements untouched", () => {
     const nodeImport: ImportNodeStatement = {
       type: "importNodeStatement",
       importedNodes: ["greet"],
       agencyFile: "./other.agency",
     };
-    const toolImport: ImportToolStatement = {
-      type: "importToolStatement",
-      importedTools: [{ type: "namedImport", importedNames: ["add"], safeNames: [], aliases: {} }],
-      agencyFile: "./utils.agency",
-    };
     const program: AgencyProgram = {
       type: "agencyProgram",
-      nodes: [nodeImport, toolImport],
+      nodes: [nodeImport],
     };
-    const symbolTable: SymbolTable = {
-      "/project/utils.agency": {
-        add: { kind: "function", name: "add", exported: true },
-      },
-    };
-    const result = resolveImports(program, symbolTable, "/project/main.agency");
-    expect(result.nodes).toEqual([nodeImport, toolImport]);
+    const result = resolveImports(program, {}, "/project/main.agency");
+    expect(result.nodes).toEqual([nodeImport]);
   });
 });

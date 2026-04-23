@@ -419,8 +419,7 @@ export function getImports(program: AgencyProgram): string[] {
   const toolAndNodeImports = program.nodes
     .filter(
       (node) =>
-        node.type === "importNodeStatement" ||
-        node.type === "importToolStatement",
+        node.type === "importNodeStatement",
     )
     .map((node) => node.agencyFile.trim());
   // this makes compile() try to parse non-agency files

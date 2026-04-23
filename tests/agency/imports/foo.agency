@@ -1,5 +1,5 @@
-import tool { increment, getGlobal } from "./bar.agency"
-import tool { ascii } from "./bar.agency"
+import { increment, getGlobal } from "./bar.agency"
+import { ascii } from "./bar.agency"
 import { bestSong } from "./funcs.js"
 import node { bar } from "./bar.agency"
 

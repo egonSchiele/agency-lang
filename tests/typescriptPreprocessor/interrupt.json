@@ -188,28 +188,56 @@
                     "value": "Do something risky and something safe"
                   }
                 ]
+              },
+              {
+                "type": "agencyObject",
+                "entries": [
+                  {
+                    "key": "tools",
+                    "value": {
+                      "type": "agencyArray",
+                      "items": [
+                        {
+                          "type": "variableName",
+                          "value": "riskyAction",
+                          "loc": {
+                            "line": 8,
+                            "col": 80,
+                            "start": 287,
+                            "end": 298
+                          },
+                          "scope": "functionRef"
+                        },
+                        {
+                          "type": "variableName",
+                          "value": "safeAction",
+                          "loc": {
+                            "line": 8,
+                            "col": 93,
+                            "start": 300,
+                            "end": 310
+                          },
+                          "scope": "functionRef"
+                        }
+                      ]
+                    }
+                  }
+                ]
               }
             ],
             "loc": {
-              "line": 9,
+              "line": 8,
               "col": 25,
-              "start": 263,
-              "end": 310
-            },
-            "tools": {
-              "type": "usesTool",
-              "toolNames": [
-                "riskyAction",
-                "safeAction"
-              ]
+              "start": 232,
+              "end": 317
             },
             "scope": "imported"
           },
           "loc": {
-            "line": 9,
+            "line": 8,
             "col": 2,
-            "start": 240,
-            "end": 310
+            "start": 209,
+            "end": 317
           },
           "scope": "local"
         },
@@ -221,19 +249,19 @@
               "type": "variableName",
               "value": "result",
               "loc": {
-                "line": 10,
+                "line": 9,
                 "col": 8,
-                "start": 316,
-                "end": 322
+                "start": 323,
+                "end": 329
               },
               "scope": "local"
             }
           ],
           "loc": {
-            "line": 10,
+            "line": 9,
             "col": 2,
-            "start": 310,
-            "end": 324
+            "start": 317,
+            "end": 331
           },
           "scope": "imported"
         }
@@ -242,7 +270,7 @@
         "line": 7,
         "col": 0,
         "start": 193,
-        "end": 325
+        "end": 332
       }
     }
   ]

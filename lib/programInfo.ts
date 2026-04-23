@@ -10,7 +10,6 @@ import type {
 import type {
   ImportNodeStatement,
   ImportStatement,
-  ImportToolStatement,
 } from "./types/importStatement.js";
 import type { SymbolTable } from "./symbolTable.js";
 import { walkNodes } from "./utils/node.js";
@@ -24,7 +23,6 @@ export type ProgramInfo = {
   typeAliases: ScopedTypeMap;
   graphNodes: GraphNodeDefinition[];
   importedNodes: ImportNodeStatement[];
-  importedTools: ImportToolStatement[];
   importStatements: ImportStatement[];
   safeFunctions: Record<string, boolean>;
   importedFunctions: Record<string, { parameters: FunctionParameter[] }>;
@@ -75,7 +73,6 @@ export function collectProgramInfo(
     typeAliases: { [GLOBAL_SCOPE_KEY]: {} },
     graphNodes: [],
     importedNodes: [],
-    importedTools: [],
     importStatements: [],
     safeFunctions: {},
     importedFunctions: {},
@@ -96,19 +93,6 @@ export function collectProgramInfo(
         break;
       case "importNodeStatement":
         info.importedNodes.push(node);
-        break;
-      case "importToolStatement":
-        info.importedTools.push(node);
-        for (const namedImport of node.importedTools) {
-          for (const name of namedImport.importedNames) {
-            const localName = namedImport.aliases[name] ?? name;
-            info.importedFunctions[localName] = { parameters: [] };
-          }
-          for (const safeName of namedImport.safeNames) {
-            const localSafe = namedImport.aliases[safeName] ?? safeName;
-            info.safeFunctions[localSafe] = true;
-          }
-        }
         break;
       case "classDefinition":
         info.classDefinitions[node.className] = node;
@@ -140,13 +124,6 @@ export function collectProgramInfo(
   if (symbolTable) {
     // Build a reverse map: originalName → localName for aliased imports
     const originalToLocal: Record<string, string> = {};
-    for (const toolImport of info.importedTools) {
-      for (const ni of toolImport.importedTools) {
-        for (const [orig, alias] of Object.entries(ni.aliases)) {
-          originalToLocal[orig] = alias;
-        }
-      }
-    }
     for (const importStmt of info.importStatements) {
       for (const nameType of importStmt.importedNames) {
         if (nameType.type === "namedImport") {

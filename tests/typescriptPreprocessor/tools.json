@@ -156,28 +156,56 @@
                     "value": "What is the weather in NYC?"
                   }
                 ]
+              },
+              {
+                "type": "agencyObject",
+                "entries": [
+                  {
+                    "key": "tools",
+                    "value": {
+                      "type": "agencyArray",
+                      "items": [
+                        {
+                          "type": "variableName",
+                          "value": "getWeather",
+                          "loc": {
+                            "line": 7,
+                            "col": 72,
+                            "start": 251,
+                            "end": 261
+                          },
+                          "scope": "functionRef"
+                        },
+                        {
+                          "type": "variableName",
+                          "value": "formatTemp",
+                          "loc": {
+                            "line": 7,
+                            "col": 84,
+                            "start": 263,
+                            "end": 273
+                          },
+                          "scope": "functionRef"
+                        }
+                      ]
+                    }
+                  }
+                ]
               }
             ],
             "loc": {
-              "line": 8,
+              "line": 7,
               "col": 27,
-              "start": 236,
-              "end": 272
-            },
-            "tools": {
-              "type": "usesTool",
-              "toolNames": [
-                "getWeather",
-                "formatTemp"
-              ]
+              "start": 206,
+              "end": 280
             },
             "scope": "imported"
           },
           "loc": {
-            "line": 8,
+            "line": 7,
             "col": 2,
-            "start": 211,
-            "end": 272
+            "start": 181,
+            "end": 280
           },
           "scope": "local"
         },
@@ -205,21 +233,17 @@
             ],
             "loc": {
               "line": 8,
-              "col": 87,
-              "start": 296,
-              "end": 326
-            },
-            "tools": {
-              "type": "usesTool",
-              "toolNames": []
+              "col": 26,
+              "start": 304,
+              "end": 334
             },
             "scope": "imported"
           },
           "loc": {
             "line": 8,
-            "col": 63,
-            "start": 272,
-            "end": 326
+            "col": 2,
+            "start": 280,
+            "end": 334
           },
           "scope": "local"
         }
@@ -228,7 +252,7 @@
         "line": 6,
         "col": 0,
         "start": 165,
-        "end": 327
+        "end": 335
       }
     }
   ]

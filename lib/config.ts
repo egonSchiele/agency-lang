@@ -4,12 +4,10 @@ import type { McpServerConfig } from "./runtime/mcp/types.js";
 
 export const TYPES_THAT_DONT_TRIGGER_NEW_PART: AgencyNode["type"][] = [
   "typeAlias",
-  "usesTool",
   "comment",
   "newLine",
   "importStatement",
   "importNodeStatement",
-  "importToolStatement",
 ];
 
 /**

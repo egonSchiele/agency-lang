@@ -88,6 +88,12 @@ export const __getCheckpoints = () => __globalCtx.checkpoints;
 
 const __toolRegistry: Record<string, any> = {};
 
+function __registerTool(value: unknown, name?: string) {
+  if (__AgencyFunction.isAgencyFunction(value)) {
+    __toolRegistry[name ?? value.name] = value;
+  }
+}
+
 // Wrap stateful runtime functions as AgencyFunction instances
 const checkpoint = __AgencyFunction.create({ name: "checkpoint", module: "__runtime", fn: __checkpoint_impl, params: [], toolDefinition: null }, __toolRegistry);
 const getCheckpoint = __AgencyFunction.create({ name: "getCheckpoint", module: "__runtime", fn: __getCheckpoint_impl, params: [{ name: "checkpointId", hasDefault: false, defaultValue: undefined, variadic: false }], toolDefinition: null }, __toolRegistry);

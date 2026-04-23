@@ -28,7 +28,7 @@ import type { SourceLocationOpts } from "@/runtime/state/checkpointStore.js";
 import { DebuggerStatement } from "@/types/debuggerStatement.js";
 import { SchemaExpression } from "@/types/schemaExpression.js";
 import { expressionToString } from "@/utils/node.js";
-import { toCompiledImportPath } from "../importPaths.js";
+import { toCompiledImportPath, isAgencyImport } from "../importPaths.js";
 import * as renderDebugger from "../templates/backends/typescriptGenerator/debugger.js";
 import * as renderImports from "../templates/backends/typescriptGenerator/imports.js";
 import * as renderInterruptAssignment from "../templates/backends/typescriptGenerator/interruptAssignment.js";
@@ -70,13 +70,10 @@ import { IfElse } from "../types/ifElse.js";
 import {
   ImportNodeStatement,
   ImportStatement,
-  ImportToolStatement,
-  getImportedToolNames,
   getImportedNames,
 } from "../types/importStatement.js";
 import { MatchBlock, MatchBlockCase } from "../types/matchBlock.js";
 import { ReturnStatement } from "../types/returnStatement.js";
-import { UsesTool } from "../types/tools.js";
 import { WhileLoop } from "../types/whileLoop.js";
 import { ClassDefinition, ClassField, ClassMethod, NewExpression, isClassKeyword } from "../types/classDefinition.js";
 import { escape, mergeDeep } from "../utils.js";
@@ -121,6 +118,7 @@ export class TypeScriptBuilder {
 
   // Import tracking
   private importStatements: TsNode[] = [];
+  private toolRegistrations: TsNode[] = [];
 
   // Function tracking
   private functionsUsed: Set<string> = new Set();
@@ -334,12 +332,6 @@ export class TypeScriptBuilder {
     ];
   }
 
-  private isImportedTool(functionName: string): boolean {
-    return this.programInfo.importedTools
-      .flatMap(getImportedToolNames)
-      .includes(functionName);
-  }
-
 
   // Plain JS functions defined in the imports template or runtime that are NOT
   // AgencyFunction instances. Keep this list small — prefer wrapping as AgencyFunction.
@@ -374,13 +366,19 @@ export class TypeScriptBuilder {
 
   private _plainTsImportNames: Set<string> | null = null;
 
+  private isImportedAgencyFunction(functionName: string): boolean {
+    return !!this.programInfo.importedFunctions[functionName];
+  }
+
   private isPlainTsImport(functionName: string): boolean {
     if (!this._plainTsImportNames) {
       this._plainTsImportNames = new Set<string>();
       for (const stmt of this.programInfo.importStatements) {
         for (const nameType of stmt.importedNames) {
           for (const name of getImportedNames(nameType)) {
-            this._plainTsImportNames.add(name);
+            if (!this.isImportedAgencyFunction(name)) {
+              this._plainTsImportNames.add(name);
+            }
           }
         }
       }
@@ -547,6 +545,11 @@ export class TypeScriptBuilder {
     const builtinsResult = this.generateBuiltins();
     if (builtinsResult.trim() !== "") {
       sections.push(ts.raw(builtinsResult));
+    }
+
+    // Register imported AgencyFunction instances (after __toolRegistry is declared)
+    if (this.toolRegistrations.length > 0) {
+      sections.push(ts.statements(this.toolRegistrations));
     }
 
     for (const alias of this.generatedTypeAliases) {
@@ -771,16 +774,11 @@ export class TypeScriptBuilder {
         return this.processAgencyObject(node);
       case "graphNode":
         return this.processGraphNode(node);
-      case "usesTool":
-        return this.processUsesTool(node);
       case "importStatement":
         this.importStatements.push(this.processImportStatement(node));
         return ts.empty();
       case "importNodeStatement":
         this.importStatements.push(this.processImportNodeStatement(node));
-        return ts.empty();
-      case "importToolStatement":
-        this.importStatements.push(this.processImportToolStatement(node));
         return ts.empty();
       case "forLoop":
         return this.insideHandlerBody
@@ -1348,6 +1346,7 @@ export class TypeScriptBuilder {
   }
 
   private processImportStatement(node: ImportStatement): TsNode {
+    console.log("processImportStatement:", node.modulePath, JSON.stringify(node.importedNames.map(n => n.type)));
     const from = toCompiledImportPath(node.modulePath, this.outputFile ?? path.resolve(this.moduleId));
     const imports = node.importedNames.map((nameType) => {
       switch (nameType.type) {
@@ -1374,39 +1373,44 @@ export class TypeScriptBuilder {
           });
       }
     });
-    return imports.length === 1 ? imports[0] : ts.statements(imports);
+    const importNode = imports.length === 1 ? imports[0] : ts.statements(imports);
+
+    // Auto-register any AgencyFunction instances imported from .agency files.
+    // We check isImportedAgencyFunction() rather than isAgencyImport() because
+    // import paths may have been rewritten (e.g., ./bar.agency → ./bar.js) before
+    // the builder runs.
+    for (const nameType of node.importedNames) {
+      switch (nameType.type) {
+        case "namedImport":
+          for (const name of nameType.importedNames) {
+            const localName = nameType.aliases[name] ?? name;
+            if (this.isImportedAgencyFunction(localName)) {
+              this.toolRegistrations.push(ts.raw(`__registerTool(${localName});`));
+            }
+          }
+          break;
+        case "namespaceImport":
+          // Namespace imports from .agency files — register all AgencyFunction members.
+          // We can't check individual names, so use isAgencyImport on the original path.
+          if (isAgencyImport(node.modulePath)) {
+            const ns = nameType.importedNames;
+            this.toolRegistrations.push(ts.raw(
+              `for (const [__k, __v] of Object.entries(${ns})) { __registerTool(__v, __k); }`
+            ));
+          }
+          break;
+      }
+    }
+    return importNode;
   }
 
   private processImportNodeStatement(_node: ImportNodeStatement): TsNode {
     return ts.empty(); // handled in preprocess
   }
 
-  private processImportToolStatement(node: ImportToolStatement): TsNode {
-    const importNames: (string | { name: string; alias: string })[] = [];
-    for (const namedImport of node.importedTools) {
-      for (const toolName of namedImport.importedNames) {
-        const alias = namedImport.aliases[toolName];
-        if (alias) {
-          importNames.push({ name: toolName, alias });
-        } else {
-          importNames.push(toolName);
-        }
-      }
-    }
-    return ts.importDecl({
-      importKind: "named",
-      names: importNames,
-      from: toCompiledImportPath(node.agencyFile, this.outputFile ?? path.resolve(this.moduleId)),
-    });
-  }
 
   // ------- TsRaw wrapper methods (template-heavy) -------
 
-  private processUsesTool(_node: UsesTool): TsNode {
-    // `uses` is deprecated — tools are passed directly via config.tools.
-    // The statement is still parsed for backwards compat but emits nothing.
-    return ts.empty();
-  }
 
   /**
    * Process a block argument into a wrapped AgencyFunction TsNode.
@@ -1518,16 +1522,6 @@ export class TypeScriptBuilder {
   private generateToolRegistry(): TsNode {
     // __toolRegistry is declared in the imports template (before checkpoint wrappers).
     const stmts: TsNode[] = [];
-
-    // Imported tools: register imported AgencyFunction instances
-    for (const toolImport of this.programInfo.importedTools) {
-      for (const namedImport of toolImport.importedTools) {
-        for (const originalName of namedImport.importedNames) {
-          const localName = namedImport.aliases[originalName] ?? originalName;
-          stmts.push(ts.raw(`__toolRegistry[${JSON.stringify(localName)}] = ${localName};`));
-        }
-      }
-    }
 
     // Builtin tools: wrap as AgencyFunction instances
     for (const toolName of BUILTIN_TOOLS) {

@@ -1,4 +1,4 @@
-import tool { mogrify } from "../tools/useTools.agency"
+import { mogrify } from "../tools/useTools.agency"
 
 node main() {
   const myTools = [mogrify]

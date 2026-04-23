@@ -2,6 +2,8 @@
 
 The Agency MCP server exposes Agency code intelligence to MCP-capable coding agents such as Codex.
 
+For native editor/LSP setup and non-Codex agent integrations such as OpenCode and Claude Code, see [docs/lsp.md](lsp.md).
+
 ## Start the server
 
 ```bash

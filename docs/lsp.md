@@ -15,6 +15,8 @@ Codex is handled through MCP instead of native LSP config:
 agency mcp setup codex
 ```
 
+For Codex MCP setup details, see [docs/mcp.md](mcp.md).
+
 ## Prerequisites
 
 Build the project so the server binary is available:
@@ -30,6 +32,8 @@ agency lsp
 ```
 
 ## Coding Agents
+
+Use this page for native editor/LSP integrations and agent clients that accept LSP server configuration. For Codex, use the MCP setup flow in [docs/mcp.md](mcp.md).
 
 ### OpenCode
 

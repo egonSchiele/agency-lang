@@ -1,0 +1,15 @@
+const log: string[] = []
+
+def check(label: string): string {
+  return interrupt("confirm ${label}")
+  return "approved ${label}"
+}
+
+node main() {
+  log.push("before")
+  const fn = check
+  log.push("assigned")
+  const result = fn("test")
+  log.push("after")
+  return { result: result, log: log }
+}

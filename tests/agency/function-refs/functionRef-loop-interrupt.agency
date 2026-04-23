@@ -1,0 +1,21 @@
+const log: number[] = []
+
+def check(n: number): number {
+  return interrupt("confirm ${n}")
+  return n * 10
+}
+
+node main() {
+  const fn = check
+  const results: number[] = []
+  for (i in [1, 2, 3]) {
+    log.push(i)
+    const r = fn(i)
+    if (isFailure(r)) {
+      results.push(0)
+    } else {
+      results.push(r)
+    }
+  }
+  return { results: results, log: log }
+}

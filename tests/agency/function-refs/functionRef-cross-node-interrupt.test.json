@@ -1,0 +1,21 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Function ref passed through multiple function calls, interrupts deep in chain — no duplicate execution",
+      "input": "",
+      "expectedOutput": "{\"result\":\"approved deep\",\"log\":[\"main-start\",\"outer-start\",\"inner-start\",\"inner-end\",\"outer-end\",\"main-end\"]}",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "interruptHandlers": [
+        {
+          "action": "approve",
+          "expectedMessage": "confirm deep"
+        }
+      ]
+    }
+  ]
+}

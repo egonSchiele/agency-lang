@@ -32,3 +32,30 @@ Now use it:
   }
   print(greetings)
 ```
+
+## Blocks and interrupts
+
+Blocks work correctly with [interrupts](./interrupts). If a block throws an interrupt (or calls a function that throws one), Agency can serialize the execution state, and when the user responds, resume from the exact point the block left off. Blocks can also close over variables from their enclosing scope, and this works correctly across interrupts too.
+
+However, there is one limitation. If a function receives a block parameter and copies it to a local variable, and then calls it from a later step, the block will not resume correctly after an interrupt. For example:
+
+```ts
+def foo(block: () => any) {
+  let saved = block       // copies block to a local variable
+  doSomething()           // some other work
+  let result = saved()    // calls the copy — if this interrupts, resume will break
+}
+```
+
+The issue is that when Agency resumes from an interrupt, it replays execution from the beginning of each function, skipping past already-completed steps. The step that copied `block` to `saved` already completed, so it's skipped. The deserialized `saved` has lost its connection to the enclosing scope.
+
+This works fine if the block doesn't throw an interrupt, since no serialization/deserialization happens. It also works fine if you use the block parameter directly instead of copying it:
+
+```ts
+def foo(block: () => any) {
+  doSomething()
+  let result = block()    // uses the parameter directly — this is fine
+}
+```
+
+The reason the parameter works is that on resume, the calling function re-executes (since its step didn't complete), re-creates the block inline, and passes the fresh block as an argument — overwriting the deserialized value.

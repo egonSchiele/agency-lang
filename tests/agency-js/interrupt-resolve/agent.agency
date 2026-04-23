@@ -1,0 +1,8 @@
+const log: string[] = []
+
+node main() {
+  log.push("step1")
+  const name = interrupt("What is your name?")
+  log.push("step2")
+  return { result: "hello ${name}", log: log }
+}

@@ -1,0 +1,54 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Block calls a function that throws interrupt, approve all — no duplicate execution",
+      "input": "",
+      "expectedOutput": "{\"result\":[10,20,30],\"log\":[1,2,3]}",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "interruptHandlers": [
+        {
+          "action": "approve",
+          "expectedMessage": "confirm 1"
+        },
+        {
+          "action": "approve",
+          "expectedMessage": "confirm 2"
+        },
+        {
+          "action": "approve",
+          "expectedMessage": "confirm 3"
+        }
+      ]
+    },
+    {
+      "nodeName": "main",
+      "description": "Block calls a function that throws interrupt, reject second — no duplicate execution",
+      "input": "",
+      "expectedOutput": "{\"result\":[10,null,30],\"log\":[1,2,3]}",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "interruptHandlers": [
+        {
+          "action": "approve",
+          "expectedMessage": "confirm 1"
+        },
+        {
+          "action": "reject",
+          "expectedMessage": "confirm 2"
+        },
+        {
+          "action": "approve",
+          "expectedMessage": "confirm 3"
+        }
+      ]
+    }
+  ]
+}

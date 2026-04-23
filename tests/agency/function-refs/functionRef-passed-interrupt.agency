@@ -1,0 +1,20 @@
+const log: string[] = []
+
+def check(label: string): string {
+  return interrupt("confirm ${label}")
+  return "done"
+}
+
+def callIt(fn: (string) => string, label: string): string {
+  log.push("before-call")
+  const result = fn(label)
+  log.push("after-call")
+  return result
+}
+
+node main() {
+  log.push("start")
+  const result = callIt(check, "test")
+  log.push("end")
+  return { result: result, log: log }
+}

@@ -3037,7 +3037,31 @@ export class TypeScriptBuilder {
         }
       }
 
-      // No placeholder: bare method/property reference — use __call
+      // No placeholder: bare method/property reference — use __callMethod to preserve `this`
+      const receiver = this.processValueAccessPartial(stage);
+      const lastEl = stage.chain[stage.chain.length - 1];
+      const propName = lastEl.kind === "property" ? lastEl.name
+        : lastEl.kind === "methodCall" ? lastEl.functionCall.functionName
+        : null;
+      if (propName) {
+        const descriptor = ts.obj({
+          type: ts.str("positional"),
+          args: ts.arr([pipeArg]),
+        });
+        const stateConfig = ts.functionCallConfig({
+          ctx: ts.runtime.ctx,
+          threads: ts.runtime.threads,
+          interruptData: ts.raw("__state?.interruptData"),
+        });
+        const callExpr = ts.call(
+          ts.id("__callMethod"),
+          [receiver, ts.str(propName), descriptor, stateConfig],
+        );
+        return ts.arrowFn([{ name: "__pipeArg" }], ts.await(callExpr), {
+          async: true,
+        });
+      }
+      // Fallback for non-property access (e.g. index): use __call
       const callee = this.processNode(stage);
       const descriptor = ts.obj({
         type: ts.str("positional"),

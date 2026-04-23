@@ -333,9 +333,9 @@ export class TypeScriptBuilder {
   }
 
 
-  // Plain JS functions defined in the imports template or runtime that are NOT
-  // AgencyFunction instances. Keep this list small — prefer wrapping as AgencyFunction.
-  private static TEMPLATE_FUNCTIONS = new Set([
+  // Plain JS functions that bypass __call dispatch and are called directly.
+  // These are NOT AgencyFunction instances.
+  private static DIRECT_CALL_FUNCTIONS = new Set([
     "approve", "reject", "propagate",
     "success", "failure",
     "isInterrupt", "isDebugger", "isRejected", "isApproved",
@@ -343,37 +343,19 @@ export class TypeScriptBuilder {
   ]);
 
   /**
-   * Returns true if the function should be called via .invoke() (AgencyFunction).
-   * The default is true — everything goes through .invoke() UNLESS it's a known
-   * non-Agency function (TS import, internal __ prefixed helper, or template function).
+   * Returns true if a function call should have interrupt-checking boilerplate.
+   * Everything gets interrupt handling UNLESS it's a known non-Agency function.
    */
-  private isAgencyFunction(
-    functionName: string,
-    context: "valueAccess" | "functionArg" | "topLevelStatement",
-  ): boolean {
-    if (context === "valueAccess") {
-      return false;
-    }
-    // Internal machinery (builder-emitted helpers like __deepClone, __validateType, etc.)
+  private shouldHandleInterrupts(functionName: string): boolean {
     if (functionName.startsWith("__")) return false;
-    // Template-defined plain JS functions
-    if (TypeScriptBuilder.TEMPLATE_FUNCTIONS.has(functionName)) return false;
-    // Plain TS imports (not from .agency files)
-    if (this.isPlainTsImport(functionName)) return false;
-    // Everything else is (or might be) an AgencyFunction
+    if (TypeScriptBuilder.DIRECT_CALL_FUNCTIONS.has(functionName)) return false;
+    if (this.isGraphNode(functionName)) return false;
     return true;
   }
 
   private _plainTsImportNames: Set<string> | null = null;
 
   private _agencyImportNames: Set<string> | null = null;
-
-  private isPlainTsImport(functionName: string): boolean {
-    if (!this._plainTsImportNames) {
-      this._buildImportNameSets();
-    }
-    return this._plainTsImportNames!.has(functionName);
-  }
 
   private _buildImportNameSets(): void {
     this._plainTsImportNames = new Set<string>();
@@ -1834,17 +1816,13 @@ export class TypeScriptBuilder {
     const scope = this.getCurrentScope();
 
     if (
-      this.isAgencyFunction(node.functionName, "topLevelStatement") &&
-      !this.isGraphNode(node.functionName) &&
+      this.shouldHandleInterrupts(node.functionName) &&
       scope.type !== "global"
     ) {
       // Async unassigned calls: register with pending promise store, no interrupt check
       if (node.async) {
-        // For agency functions, fork the stack for per-thread isolation
-        if (
-          this.isAgencyFunction(node.functionName, "topLevelStatement") &&
-          !this.isGraphNode(node.functionName)
-        ) {
+        // Fork the stack for per-thread isolation
+        if (this.shouldHandleInterrupts(node.functionName)) {
           this._asyncBranchCheckNeeded = true;
           const branchKey = this._subStepPath.join(".");
           let statements = ts.statements(this.forkBranchSetup(branchKey));
@@ -1980,24 +1958,30 @@ export class TypeScriptBuilder {
         ? node.functionName
         : mapFunctionName(node.functionName);
 
-    const isAgency = this.isAgencyFunction(node.functionName, context);
-
     const shouldAwait = !node.async && context !== "valueAccess";
 
-    if (isAgency) {
-      return this.emitAgencyFunctionCall(node, functionName, shouldAwait, options);
-    } else if (node.functionName === "system") {
+    // system() is a builder macro — not a real function call
+    if (node.functionName === "system") {
       const argNodes = node.arguments.map((a) => this.processCallArg(a));
       return $(ts.threads.active())
         .prop("push")
         .call([ts.smoltalkSystemMessage(argNodes)])
         .done();
-    } else {
+    }
+
+    // __-prefixed helpers and DIRECT_CALL_FUNCTIONS: emit plain direct call
+    if (
+      functionName.startsWith("__") ||
+      TypeScriptBuilder.DIRECT_CALL_FUNCTIONS.has(node.functionName)
+    ) {
       return this.emitDirectFunctionCall(node, functionName, shouldAwait);
     }
+
+    // Everything else goes through __call runtime dispatch
+    return this.emitRuntimeDispatchCall(node, functionName, shouldAwait, options);
   }
 
-  private emitAgencyFunctionCall(
+  private emitRuntimeDispatchCall(
     node: FunctionCall,
     functionName: string,
     shouldAwait: boolean,
@@ -2026,11 +2010,9 @@ export class TypeScriptBuilder {
     const callee = node.scope
       ? ts.scopedVar(functionName, node.scope, this.moduleId)
       : ts.id(functionName);
-    const invokeCall = $(callee)
-      .prop("invoke")
-      .call([descriptor, configObj])
-      .done();
-    return shouldAwait ? ts.await(invokeCall) : invokeCall;
+
+    const callExpr = ts.call(ts.id("__call"), [callee, descriptor, configObj]);
+    return shouldAwait ? ts.await(callExpr) : callExpr;
   }
 
   private emitDirectFunctionCall(
@@ -2462,11 +2444,8 @@ export class TypeScriptBuilder {
       ];
 
       if (value.async) {
-        // For agency functions, fork the stack for per-thread isolation
-        if (
-          this.isAgencyFunction(value.functionName, "topLevelStatement") &&
-          !this.isGraphNode(value.functionName)
-        ) {
+        // Fork the stack for per-thread isolation
+        if (this.shouldHandleInterrupts(value.functionName)) {
           this._asyncBranchCheckNeeded = true;
           const branchKey = this._subStepPath.join(".");
           stmts.unshift(...this.forkBranchSetup(branchKey));
@@ -2846,7 +2825,7 @@ export class TypeScriptBuilder {
   private buildHandlerArrow(handlerName: string): TsNode {
     const args = handlerName === "propagate" ? [] : [ts.id("__data")];
 
-    if (TypeScriptBuilder.TEMPLATE_FUNCTIONS.has(handlerName)) {
+    if (TypeScriptBuilder.DIRECT_CALL_FUNCTIONS.has(handlerName)) {
       // Built-in handler (approve/reject/propagate): plain JS function, call directly
       return ts.arrowFn(
         [{ name: "__data", typeAnnotation: "any" }],
@@ -2855,18 +2834,20 @@ export class TypeScriptBuilder {
       );
     }
 
-    // User-defined Agency function handler: use .invoke()
+    // User-defined function handler: use __call
     const descriptor = ts.obj({
       type: ts.str("positional"),
       args: ts.arr(args),
     });
-    const invokeCall = $(ts.id(handlerName))
-      .prop("invoke")
-      .call([descriptor])
-      .done();
+    const stateConfig = ts.functionCallConfig({
+      ctx: ts.runtime.ctx,
+      threads: ts.runtime.threads,
+      interruptData: ts.raw("__state?.interruptData"),
+    });
+    const callExpr = ts.call(ts.id("__call"), [ts.id(handlerName), descriptor, stateConfig]);
     return ts.arrowFn(
       [{ name: "__data", typeAnnotation: "any" }],
-      ts.await(invokeCall),
+      ts.await(callExpr),
       { async: true },
     );
   }
@@ -3043,51 +3024,60 @@ export class TypeScriptBuilder {
               `Method call on right side of |> must contain exactly one ? placeholder, got ${placeholderCount}`,
             );
           }
-          // Build the receiver: base + all chain elements except the last method call
           const receiver = this.processValueAccessPartial(stage);
-          const args = methodArgs.map((a) =>
+          const argNodes = methodArgs.map((a) =>
             a.type === "placeholder" ? pipeArg : this.processNode(a as AgencyNode),
           );
           const methodName = lastElement.functionCall.functionName;
-          const callExpr = $(receiver).prop(methodName).call(args).done();
-          return ts.arrowFn([{ name: "__pipeArg" }], callExpr, {
+          const descriptor = ts.obj({
+            type: ts.str("positional"),
+            args: ts.arr(argNodes),
+          });
+          const stateConfig = ts.functionCallConfig({
+            ctx: ts.runtime.ctx,
+            threads: ts.runtime.threads,
+            interruptData: ts.raw("__state?.interruptData"),
+          });
+          const callExpr = ts.call(
+            ts.id("__callMethod"),
+            [receiver, ts.str(methodName), descriptor, stateConfig],
+          );
+          return ts.arrowFn([{ name: "__pipeArg" }], ts.await(callExpr), {
             async: true,
           });
         }
       }
 
-      // No placeholder: treat as a bare method/property reference
+      // No placeholder: bare method/property reference — use __call
       const callee = this.processNode(stage);
-      const args = [pipeArg];
-      return ts.arrowFn([{ name: "__pipeArg" }], ts.call(callee, args), {
+      const descriptor = ts.obj({
+        type: ts.str("positional"),
+        args: ts.arr([pipeArg]),
+      });
+      const stateConfig = ts.functionCallConfig({
+        ctx: ts.runtime.ctx,
+        threads: ts.runtime.threads,
+        interruptData: ts.raw("__state?.interruptData"),
+      });
+      const callExpr = ts.call(ts.id("__call"), [callee, descriptor, stateConfig]);
+      return ts.arrowFn([{ name: "__pipeArg" }], ts.await(callExpr), {
         async: true,
       });
     }
 
     if (stage.type === "variableName") {
-      const isAgency = this.isAgencyFunction(stage.value, "topLevelStatement");
-      if (isAgency) {
-        // value |> fn → async (__pipeArg) => await fn.invoke({ type: "positional", args: [__pipeArg] }, __state)
-        const callee = this.processNode(stage);
-        const descriptor = ts.obj({
-          type: ts.str("positional"),
-          args: ts.arr([pipeArg]),
-        });
-        const stateConfig = ts.functionCallConfig({
-          ctx: ts.runtime.ctx,
-          threads: ts.runtime.threads,
-          interruptData: ts.raw("__state?.interruptData"),
-        });
-        const invokeCall = $(callee).prop("invoke").call([descriptor, stateConfig]).done();
-        return ts.arrowFn([{ name: "__pipeArg" }], ts.await(invokeCall), {
-          async: true,
-        });
-      }
-      // Non-agency: direct call
       const callee = this.processNode(stage);
-      return ts.arrowFn([{ name: "__pipeArg" }], ts.call(callee, [pipeArg]), {
-        async: true,
+      const descriptor = ts.obj({
+        type: ts.str("positional"),
+        args: ts.arr([pipeArg]),
       });
+      const stateConfig = ts.functionCallConfig({
+        ctx: ts.runtime.ctx,
+        threads: ts.runtime.threads,
+        interruptData: ts.raw("__state?.interruptData"),
+      });
+      const callExpr = ts.call(ts.id("__call"), [callee, descriptor, stateConfig]);
+      return ts.arrowFn([{ name: "__pipeArg" }], ts.await(callExpr), { async: true });
     }
 
     if (stage.type === "functionCall") {
@@ -3100,40 +3090,23 @@ export class TypeScriptBuilder {
         );
       }
 
-      const isAgency = this.isAgencyFunction(stage.functionName, "topLevelStatement");
-      if (isAgency) {
-        // value |> fn(10, ?) → async (__pipeArg) => await fn.invoke({ type: "positional", args: [10, __pipeArg] }, __state)
-        const argNodes = stage.arguments.map((a) =>
-          a.type === "placeholder" ? pipeArg : this.processNode(a as AgencyNode),
-        );
-        const callee = stage.scope
-          ? ts.scopedVar(mapFunctionName(stage.functionName), stage.scope, this.moduleId)
-          : ts.raw(mapFunctionName(stage.functionName));
-        const descriptor = ts.obj({
-          type: ts.str("positional"),
-          args: ts.arr(argNodes),
-        });
-        const stateConfig = ts.functionCallConfig({
-          ctx: ts.runtime.ctx,
-          threads: ts.runtime.threads,
-          interruptData: ts.raw("__state?.interruptData"),
-        });
-        const invokeCall = $(callee).prop("invoke").call([descriptor, stateConfig]).done();
-        return ts.arrowFn([{ name: "__pipeArg" }], ts.await(invokeCall), {
-          async: true,
-        });
-      }
-
-      // Non-agency: direct call
-      const rawArgs = stage.arguments.map((a) =>
+      const argNodes = stage.arguments.map((a) =>
         a.type === "placeholder" ? pipeArg : this.processNode(a as AgencyNode),
       );
-      const callee = ts.raw(mapFunctionName(stage.functionName));
-      return ts.arrowFn(
-        [{ name: "__pipeArg" }],
-        ts.call(callee, rawArgs),
-        { async: true },
-      );
+      const callee = stage.scope
+        ? ts.scopedVar(mapFunctionName(stage.functionName), stage.scope, this.moduleId)
+        : ts.raw(mapFunctionName(stage.functionName));
+      const descriptor = ts.obj({
+        type: ts.str("positional"),
+        args: ts.arr(argNodes),
+      });
+      const stateConfig = ts.functionCallConfig({
+        ctx: ts.runtime.ctx,
+        threads: ts.runtime.threads,
+        interruptData: ts.raw("__state?.interruptData"),
+      });
+      const callExpr = ts.call(ts.id("__call"), [callee, descriptor, stateConfig]);
+      return ts.arrowFn([{ name: "__pipeArg" }], ts.await(callExpr), { async: true });
     }
 
     throw new Error(`Invalid pipe stage type: ${stage.type}`);

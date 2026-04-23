@@ -27,6 +27,7 @@ import {
   readSkillTool as __readSkillTool,
   readSkillToolParams as __readSkillToolParams,
   AgencyFunction as __AgencyFunction, UNSET as __UNSET,
+  __call, __callMethod,
   functionRefReviver as __functionRefReviver,
 } from "agency-lang/runtime";
 
@@ -366,14 +367,21 @@ __stack.locals.result = [];
     });
     await runner.loop(1, __stack.args.items, async (item, _, runner) => {
 await runner.step(0, async (runner) => {
-await __stack.locals.result.push(await __stack.args.transform.invoke({
+await __callMethod(__stack.locals.result, "push", {
           type: "positional",
-          args: [item]
+          args: [await __call(__stack.args.transform, {
+            type: "positional",
+            args: [item]
+          }, {
+            ctx: __ctx,
+            threads: __threads,
+            interruptData: __state?.interruptData
+          })]
         }, {
           ctx: __ctx,
           threads: __threads,
           interruptData: __state?.interruptData
-        }))
+        })
       });
     });
     await runner.step(2, async (runner) => {
@@ -452,7 +460,7 @@ let __functionCompleted = false;
 __stack.locals.fn = greet;
     });
     await runner.step(1, async (runner) => {
-__stack.locals.result = await __stack.locals.fn.invoke({
+__stack.locals.result = await __call(__stack.locals.fn, {
         type: "positional",
         args: [`Bob`]
       }, {
@@ -470,7 +478,7 @@ if (isInterrupt(__stack.locals.result)) {
       }
     });
     await runner.step(2, async (runner) => {
-__stack.locals.doubled = await applyToAll.invoke({
+__stack.locals.doubled = await __call(applyToAll, {
         type: "positional",
         args: [[1, 2, 3], double]
       }, {

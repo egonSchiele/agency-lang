@@ -27,6 +27,7 @@ import {
   readSkillTool as __readSkillTool,
   readSkillToolParams as __readSkillToolParams,
   AgencyFunction as __AgencyFunction, UNSET as __UNSET,
+  __call, __callMethod,
   functionRefReviver as __functionRefReviver,
 } from "agency-lang/runtime";
 
@@ -145,7 +146,7 @@ __toolRegistry["readSkill"] = __AgencyFunction.create({
 __functionRefReviver.registry = __toolRegistry;
 //  Test arrays and objects
 //  Simple array
-await print.invoke({
+await __call(print, {
   type: "positional",
   args: [__ctx.globals.get("arrayAndObject.agency", "nums")]
 }, {
@@ -154,7 +155,7 @@ await print.invoke({
   interruptData: __state?.interruptData
 })
 //  Array with strings
-await print.invoke({
+await __call(print, {
   type: "positional",
   args: [__ctx.globals.get("arrayAndObject.agency", "names")]
 }, {
@@ -163,7 +164,7 @@ await print.invoke({
   interruptData: __state?.interruptData
 })
 //  Nested arrays
-await print.invoke({
+await __call(print, {
   type: "positional",
   args: [__ctx.globals.get("arrayAndObject.agency", "matrix")]
 }, {
@@ -172,7 +173,7 @@ await print.invoke({
   interruptData: __state?.interruptData
 })
 //  Simple object
-await print.invoke({
+await __call(print, {
   type: "positional",
   args: [__ctx.globals.get("arrayAndObject.agency", "person")]
 }, {
@@ -181,7 +182,7 @@ await print.invoke({
   interruptData: __state?.interruptData
 })
 //  Object with nested structure
-await print.invoke({
+await __call(print, {
   type: "positional",
   args: [__ctx.globals.get("arrayAndObject.agency", "address")]
 }, {
@@ -190,7 +191,7 @@ await print.invoke({
   interruptData: __state?.interruptData
 })
 //  Object with array property
-await print.invoke({
+await __call(print, {
   type: "positional",
   args: [__ctx.globals.get("arrayAndObject.agency", "user")]
 }, {
@@ -199,7 +200,7 @@ await print.invoke({
   interruptData: __state?.interruptData
 })
 //  Array of objects
-await print.invoke({
+await __call(print, {
   type: "positional",
   args: [__ctx.globals.get("arrayAndObject.agency", "users")]
 }, {
@@ -208,7 +209,7 @@ await print.invoke({
   interruptData: __state?.interruptData
 })
 //  Nested object
-await print.invoke({
+await __call(print, {
   type: "positional",
   args: [__ctx.globals.get("arrayAndObject.agency", "config")]
 }, {
@@ -217,7 +218,7 @@ await print.invoke({
   interruptData: __state?.interruptData
 })
 //  Array access
-await print.invoke({
+await __call(print, {
   type: "positional",
   args: [__ctx.globals.get("arrayAndObject.agency", "firstNum")]
 }, {
@@ -226,7 +227,7 @@ await print.invoke({
   interruptData: __state?.interruptData
 })
 //  Object property access
-await print.invoke({
+await __call(print, {
   type: "positional",
   args: [__ctx.globals.get("arrayAndObject.agency", "personName")]
 }, {

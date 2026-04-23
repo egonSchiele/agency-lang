@@ -27,6 +27,7 @@ import {
   readSkillTool as __readSkillTool,
   readSkillToolParams as __readSkillToolParams,
   AgencyFunction as __AgencyFunction, UNSET as __UNSET,
+  __call, __callMethod,
   functionRefReviver as __functionRefReviver,
 } from "agency-lang/runtime";
 
@@ -138,10 +139,17 @@ let __functionCompleted = false;
 __stack.locals.s = new Schema(z.union([z.literal("bug"), z.literal("feature"), z.literal("docs")]));
     });
     await runner.step(1, async (runner) => {
-__stack.locals.result = await __stack.locals.s.parse(`bug`);
+__stack.locals.result = await __callMethod(__stack.locals.s, "parse", {
+        type: "positional",
+        args: [`bug`]
+      }, {
+        ctx: __ctx,
+        threads: __threads,
+        interruptData: __state?.interruptData
+      });
     });
     await runner.step(2, async (runner) => {
-const __funcResult = await print.invoke({
+const __funcResult = await __call(print, {
         type: "positional",
         args: [__stack.locals.result]
       }, {

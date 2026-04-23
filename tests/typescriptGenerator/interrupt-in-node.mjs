@@ -27,6 +27,7 @@ import {
   readSkillTool as __readSkillTool,
   readSkillToolParams as __readSkillToolParams,
   AgencyFunction as __AgencyFunction, UNSET as __UNSET,
+  __call, __callMethod,
   functionRefReviver as __functionRefReviver,
 } from "agency-lang/runtime";
 
@@ -295,7 +296,7 @@ let __functionCompleted = false;
   }
   try {
     await runner.step(0, async (runner) => {
-await print.invoke({
+await __call(print, {
         type: "positional",
         args: [`In foo2, name is ${__stack.args.name} and age is ${__stack.args.age}, this message should only print once...`]
       }, {
@@ -327,7 +328,7 @@ if (isInterrupt(__stack.locals.response)) {
       }
     });
     await runner.step(2, async (runner) => {
-const __funcResult = await print.invoke({
+const __funcResult = await __call(print, {
         type: "positional",
         args: [`Greeted, age is still ${__stack.args.age}...`]
       }, {
@@ -401,7 +402,7 @@ let __functionCompleted = false;
   }
   try {
     await runner.step(0, async (runner) => {
-const __funcResult = await print.invoke({
+const __funcResult = await __call(print, {
         type: "positional",
         args: [`Saying hi to ${__stack.args.name}...`]
       }, {

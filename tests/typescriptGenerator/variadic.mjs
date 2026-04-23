@@ -27,6 +27,7 @@ import {
   readSkillTool as __readSkillTool,
   readSkillToolParams as __readSkillToolParams,
   AgencyFunction as __AgencyFunction, UNSET as __UNSET,
+  __call, __callMethod,
   functionRefReviver as __functionRefReviver,
 } from "agency-lang/runtime";
 
@@ -166,7 +167,7 @@ if (__ctx._pendingArgOverrides) {
 
   try {
     await runner.step(0, async (runner) => {
-const __funcResult = await print.invoke({
+const __funcResult = await __call(print, {
         type: "positional",
         args: [__stack.args.prefix, ...__stack.args.messages]
       }, {
@@ -230,7 +231,7 @@ const log = __AgencyFunction.create({
     schema: z.object({"prefix": z.string(), "messages": z.array(z.string()), })
   }
 }, __toolRegistry);
-await log.invoke({
+await __call(log, {
   type: "positional",
   args: [`INFO`, `hello`, `world`]
 }, {

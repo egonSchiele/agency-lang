@@ -27,6 +27,7 @@ import {
   readSkillTool as __readSkillTool,
   readSkillToolParams as __readSkillToolParams,
   AgencyFunction as __AgencyFunction, UNSET as __UNSET,
+  __call, __callMethod,
   functionRefReviver as __functionRefReviver,
 } from "agency-lang/runtime";
 
@@ -134,7 +135,7 @@ let __functionCompleted = false;
   const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "checkpoint-restore.agency", scopeName: "main" });
   try {
     await runner.step(0, async (runner) => {
-__stack.locals.cp = await checkpoint.invoke({
+__stack.locals.cp = await __call(checkpoint, {
         type: "positional",
         args: []
       }, {
@@ -158,7 +159,7 @@ if (isInterrupt(__stack.locals.cp)) {
 __stack.locals.x = 1;
     });
     await runner.step(2, async (runner) => {
-const __funcResult = await restore.invoke({
+const __funcResult = await __call(restore, {
         type: "positional",
         args: [__stack.locals.cp, {}]
       }, {

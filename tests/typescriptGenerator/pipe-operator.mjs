@@ -27,6 +27,7 @@ import {
   readSkillTool as __readSkillTool,
   readSkillToolParams as __readSkillToolParams,
   AgencyFunction as __AgencyFunction, UNSET as __UNSET,
+  __call, __callMethod,
   functionRefReviver as __functionRefReviver,
 } from "agency-lang/runtime";
 
@@ -466,7 +467,7 @@ let __functionCompleted = false;
     await runner.step(0, async (runner) => {
 __stack.locals.__pipe_0 = await success(5);
     });
-    __stack.locals.r1 = await runner.pipe(1, __stack.locals.__pipe_0, async (__pipeArg) => await double.invoke({
+    __stack.locals.r1 = await runner.pipe(1, __stack.locals.__pipe_0, async (__pipeArg) => await __call(double, {
       type: "positional",
       args: [__pipeArg]
     }, {
@@ -477,7 +478,7 @@ __stack.locals.__pipe_0 = await success(5);
     await runner.step(2, async (runner) => {
 __stack.locals.__pipe_1 = await success(5);
     });
-    __stack.locals.r2 = await runner.pipe(3, __stack.locals.__pipe_1, async (__pipeArg) => await multiply.invoke({
+    __stack.locals.r2 = await runner.pipe(3, __stack.locals.__pipe_1, async (__pipeArg) => await __call(multiply, {
       type: "positional",
       args: [10, __pipeArg]
     }, {
@@ -488,7 +489,7 @@ __stack.locals.__pipe_1 = await success(5);
     await runner.step(4, async (runner) => {
 __stack.locals.__pipe_2 = await success(10);
     });
-    __stack.locals.__pipe_2 = await runner.pipe(5, __stack.locals.__pipe_2, async (__pipeArg) => await double.invoke({
+    __stack.locals.__pipe_2 = await runner.pipe(5, __stack.locals.__pipe_2, async (__pipeArg) => await __call(double, {
       type: "positional",
       args: [__pipeArg]
     }, {
@@ -496,7 +497,7 @@ __stack.locals.__pipe_2 = await success(10);
       threads: __threads,
       interruptData: __state?.interruptData
     }));
-    __stack.locals.r3 = await runner.pipe(6, __stack.locals.__pipe_2, async (__pipeArg) => await multiply.invoke({
+    __stack.locals.r3 = await runner.pipe(6, __stack.locals.__pipe_2, async (__pipeArg) => await __call(multiply, {
       type: "positional",
       args: [3, __pipeArg]
     }, {
@@ -507,7 +508,7 @@ __stack.locals.__pipe_2 = await success(10);
     await runner.step(7, async (runner) => {
 __stack.locals.__pipe_3 = await failure(`nope`);
     });
-    __stack.locals.r4 = await runner.pipe(8, __stack.locals.__pipe_3, async (__pipeArg) => await double.invoke({
+    __stack.locals.r4 = await runner.pipe(8, __stack.locals.__pipe_3, async (__pipeArg) => await __call(double, {
       type: "positional",
       args: [__pipeArg]
     }, {
@@ -518,7 +519,7 @@ __stack.locals.__pipe_3 = await failure(`nope`);
     await runner.step(9, async (runner) => {
 __stack.locals.__pipe_4 = await success(10);
     });
-    __stack.locals.r5 = await runner.pipe(10, __stack.locals.__pipe_4, async (__pipeArg) => await safeDivide.invoke({
+    __stack.locals.r5 = await runner.pipe(10, __stack.locals.__pipe_4, async (__pipeArg) => await __call(safeDivide, {
       type: "positional",
       args: [__pipeArg, 2]
     }, {

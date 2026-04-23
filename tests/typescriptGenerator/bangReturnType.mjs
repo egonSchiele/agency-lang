@@ -27,6 +27,7 @@ import {
   readSkillTool as __readSkillTool,
   readSkillToolParams as __readSkillToolParams,
   AgencyFunction as __AgencyFunction, UNSET as __UNSET,
+  __call, __callMethod,
   functionRefReviver as __functionRefReviver,
 } from "agency-lang/runtime";
 
@@ -232,7 +233,7 @@ let __functionCompleted = false;
   const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "bangReturnType.agency", scopeName: "main" });
   try {
     await runner.step(0, async (runner) => {
-__stack.locals.result = await process.invoke({
+__stack.locals.result = await __call(process, {
         type: "positional",
         args: [42]
       }, {
@@ -250,7 +251,7 @@ if (isInterrupt(__stack.locals.result)) {
       }
     });
     await runner.step(1, async (runner) => {
-const __funcResult = await print.invoke({
+const __funcResult = await __call(print, {
         type: "positional",
         args: [__stack.locals.result]
       }, {

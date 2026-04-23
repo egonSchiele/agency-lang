@@ -27,6 +27,7 @@ import {
   readSkillTool as __readSkillTool,
   readSkillToolParams as __readSkillToolParams,
   AgencyFunction as __AgencyFunction, UNSET as __UNSET,
+  __call, __callMethod,
   functionRefReviver as __functionRefReviver,
 } from "agency-lang/runtime";
 
@@ -369,7 +370,10 @@ let __functionCompleted = false;
 __stack.locals.dog = new Dog(`Rex`, `Labrador`);
     });
     await runner.step(1, async (runner) => {
-__stack.locals.result = await __stack.locals.dog.speak({
+__stack.locals.result = await __callMethod(__stack.locals.dog, "speak", {
+        type: "positional",
+        args: []
+      }, {
         ctx: __ctx,
         threads: __threads,
         interruptData: __state?.interruptData

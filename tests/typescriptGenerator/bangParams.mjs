@@ -27,6 +27,7 @@ import {
   readSkillTool as __readSkillTool,
   readSkillToolParams as __readSkillToolParams,
   AgencyFunction as __AgencyFunction, UNSET as __UNSET,
+  __call, __callMethod,
   functionRefReviver as __functionRefReviver,
 } from "agency-lang/runtime";
 
@@ -165,7 +166,7 @@ if (__ctx._pendingArgOverrides) {
     }
     __stack.args["data"] = __vr_data.value;
     await runner.step(0, async (runner) => {
-const __funcResult = await print.invoke({
+const __funcResult = await __call(print, {
         type: "positional",
         args: [__stack.args.data]
       }, {
@@ -252,7 +253,7 @@ let __functionCompleted = false;
   const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "bangParams.agency", scopeName: "main" });
   try {
     await runner.step(0, async (runner) => {
-__stack.locals.result = await process.invoke({
+__stack.locals.result = await __call(process, {
         type: "positional",
         args: [`not a number`]
       }, {
@@ -270,7 +271,7 @@ if (isInterrupt(__stack.locals.result)) {
       }
     });
     await runner.step(1, async (runner) => {
-const __funcResult = await print.invoke({
+const __funcResult = await __call(print, {
         type: "positional",
         args: [__stack.locals.result]
       }, {

@@ -27,6 +27,7 @@ import {
   readSkillTool as __readSkillTool,
   readSkillToolParams as __readSkillToolParams,
   AgencyFunction as __AgencyFunction, UNSET as __UNSET,
+  __call, __callMethod,
   functionRefReviver as __functionRefReviver,
 } from "agency-lang/runtime";
 
@@ -273,7 +274,7 @@ if (isInterrupt(__stack.locals.res4)) {
       });
     });
     await runner.step(1, async (runner) => {
-const __funcResult = await print.invoke({
+const __funcResult = await __call(print, {
         type: "positional",
         args: [`res1`, __stack.locals.res1]
       }, {
@@ -288,7 +289,7 @@ if (isInterrupt(__funcResult)) {
       }
     });
     await runner.step(2, async (runner) => {
-const __funcResult = await print.invoke({
+const __funcResult = await __call(print, {
         type: "positional",
         args: [`res2`, __stack.locals.res2]
       }, {
@@ -303,7 +304,7 @@ if (isInterrupt(__funcResult)) {
       }
     });
     await runner.step(3, async (runner) => {
-const __funcResult = await print.invoke({
+const __funcResult = await __call(print, {
         type: "positional",
         args: [`res3`, __stack.locals.res3]
       }, {
@@ -318,7 +319,7 @@ if (isInterrupt(__funcResult)) {
       }
     });
     await runner.step(4, async (runner) => {
-const __funcResult = await print.invoke({
+const __funcResult = await __call(print, {
         type: "positional",
         args: [`res4`, __stack.locals.res4]
       }, {
@@ -333,7 +334,7 @@ if (isInterrupt(__funcResult)) {
       }
     });
     await runner.step(5, async (runner) => {
-const __funcResult = await print.invoke({
+const __funcResult = await __call(print, {
         type: "positional",
         args: [`res5`, __stack.locals.res5]
       }, {
@@ -545,7 +546,7 @@ if (isInterrupt(__stack.locals.res4)) {
       });
     });
     await runner.step(1, async (runner) => {
-const __funcResult = await print.invoke({
+const __funcResult = await __call(print, {
         type: "positional",
         args: [`res1`, __stack.locals.res1]
       }, {
@@ -563,7 +564,7 @@ if (isInterrupt(__funcResult)) {
       }
     });
     await runner.step(2, async (runner) => {
-const __funcResult = await print.invoke({
+const __funcResult = await __call(print, {
         type: "positional",
         args: [`res2`, __stack.locals.res2]
       }, {
@@ -581,7 +582,7 @@ if (isInterrupt(__funcResult)) {
       }
     });
     await runner.step(3, async (runner) => {
-const __funcResult = await print.invoke({
+const __funcResult = await __call(print, {
         type: "positional",
         args: [`res3`, __stack.locals.res3]
       }, {
@@ -599,7 +600,7 @@ if (isInterrupt(__funcResult)) {
       }
     });
     await runner.step(4, async (runner) => {
-const __funcResult = await print.invoke({
+const __funcResult = await __call(print, {
         type: "positional",
         args: [`res4`, __stack.locals.res4]
       }, {
@@ -617,7 +618,7 @@ if (isInterrupt(__funcResult)) {
       }
     });
     await runner.step(5, async (runner) => {
-const __funcResult = await print.invoke({
+const __funcResult = await __call(print, {
         type: "positional",
         args: [`res5`, __stack.locals.res5]
       }, {

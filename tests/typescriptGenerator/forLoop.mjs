@@ -27,6 +27,7 @@ import {
   readSkillTool as __readSkillTool,
   readSkillToolParams as __readSkillToolParams,
   AgencyFunction as __AgencyFunction, UNSET as __UNSET,
+  __call, __callMethod,
   functionRefReviver as __functionRefReviver,
 } from "agency-lang/runtime";
 
@@ -141,7 +142,7 @@ __stack.locals.items = [`a`, `b`, `c`];
     });
     await runner.loop(2, __stack.locals.items, async (item, _, runner) => {
 await runner.step(0, async (runner) => {
-const __funcResult = await print.invoke({
+const __funcResult = await __call(print, {
           type: "positional",
           args: [item]
         }, {
@@ -164,7 +165,7 @@ if (isInterrupt(__funcResult)) {
     });
     await runner.loop(4, Array.from({length: 5 - 0}, (_, __i) => __i + 0), async (i, _, runner) => {
 await runner.step(0, async (runner) => {
-const __funcResult = await print.invoke({
+const __funcResult = await __call(print, {
           type: "positional",
           args: [i]
         }, {
@@ -190,7 +191,7 @@ __stack.locals.names = [`alice`, `bob`];
     });
     await runner.loop(7, __stack.locals.names, async (name, index, runner) => {
 await runner.step(0, async (runner) => {
-const __funcResult = await print.invoke({
+const __funcResult = await __call(print, {
           type: "positional",
           args: [name]
         }, {
@@ -208,7 +209,7 @@ if (isInterrupt(__funcResult)) {
         }
       });
 await runner.step(1, async (runner) => {
-const __funcResult = await print.invoke({
+const __funcResult = await __call(print, {
           type: "positional",
           args: [index]
         }, {

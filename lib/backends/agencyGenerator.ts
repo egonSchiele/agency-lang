@@ -922,7 +922,7 @@ export class AgencyGenerator {
   }
 
   protected processNewExpression(node: NewExpression): string {
-    const args = node.arguments.map((a) => expressionToString(a)).join(", ");
+    const args = node.arguments.map((a) => this.processNode(a)).join(", ");
     return `new ${node.className}(${args})`;
   }
 

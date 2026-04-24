@@ -105,12 +105,10 @@ A thin wrapper that converts `PromptConfig` to `SmolPromptConfig` and delegates 
 ```typescript
 class SmoltalkClient implements LLMClient {
   text(config: PromptConfig): Promise<Result<PromptResult>> {
-    const smolConfig = this.toSmolConfig(config);
-    return smoltalk.text(smolConfig);
+    return smoltalk.text({ ...this.toSmolConfig(config), stream: false });
   }
   textStream(config: PromptConfig): AsyncGenerator<StreamChunk> {
-    const smolConfig = this.toSmolConfig(config);
-    return smoltalk.textStream(smolConfig);
+    return smoltalk.text({ ...this.toSmolConfig(config), stream: true });
   }
   private toSmolConfig(config: PromptConfig): SmolPromptConfig {
     // Map PromptConfig fields to SmolPromptConfig fields

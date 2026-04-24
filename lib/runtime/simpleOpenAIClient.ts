@@ -77,13 +77,16 @@ export class SimpleOpenAIClient implements LLMClient {
 
     const body: any = { model, messages };
 
+    if (config.maxTokens) body.max_tokens = config.maxTokens;
+    if (config.temperature !== undefined) body.temperature = config.temperature;
+
     if (config.tools && config.tools.length > 0) {
       body.tools = config.tools.map((t: any) => ({
         type: "function",
         function: {
           name: t.name,
           description: t.description || "",
-          parameters: t.inputSchema || t.schema,
+          parameters: t.schema.toJSONSchema(),
         },
       }));
     }
@@ -93,9 +96,7 @@ export class SimpleOpenAIClient implements LLMClient {
         type: "json_schema",
         json_schema: {
           name: "response",
-          schema: typeof config.responseFormat.jsonSchema === "function"
-            ? config.responseFormat.jsonSchema()
-            : config.responseFormat,
+          schema: config.responseFormat.toJSONSchema(),
           strict: true,
         },
       };

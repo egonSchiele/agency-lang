@@ -1,10 +1,10 @@
-let emitted = false
+let emittedData = null
 
 callback onEmit(data) {
-  emitted = true
+  emittedData = data
 }
 
 node main() {
   emit("hello")
-  return emitted
+  return emittedData == "hello"
 }

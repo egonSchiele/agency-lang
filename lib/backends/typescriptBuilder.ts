@@ -1810,6 +1810,10 @@ export class TypeScriptBuilder {
       return this.buildInterruptReturn(node.arguments);
     }
 
+    if (node.functionName === "emit") {
+      return this.processFunctionCall(node);
+    }
+
     const callNode = this.processFunctionCall(node);
     const scope = this.getCurrentScope();
 

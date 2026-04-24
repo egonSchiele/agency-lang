@@ -448,13 +448,14 @@ export const ts = {
     return ts.raw(`__process.env[${JSON.stringify(varName)}]`);
   },
 
-  callHook(hookName: string, data: Record<string, TsNode>): TsNode {
+  callHook(hookName: string, data: Record<string, TsNode> | TsNode): TsNode {
+    const dataNode = "kind" in data ? data as TsNode : ts.obj(data as Record<string, TsNode>);
     return $(ts.id("callHook"))
       .call([
         ts.obj({
           callbacks: $(ts.runtime.ctx).prop("callbacks").done(),
           name: ts.str(hookName),
-          data: ts.obj(data),
+          data: dataNode,
         }),
       ])
       .await()

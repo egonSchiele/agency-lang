@@ -1810,6 +1810,10 @@ export class TypeScriptBuilder {
       return this.buildInterruptReturn(node.arguments);
     }
 
+    if (node.functionName === "emit") {
+      return this.processFunctionCall(node);
+    }
+
     const callNode = this.processFunctionCall(node);
     const scope = this.getCurrentScope();
 
@@ -1908,6 +1912,14 @@ export class TypeScriptBuilder {
       );
       const arg = argNodes.length > 0 ? argNodes[0] : ts.str("");
       return ts.throw(`new Error(${this.str(arg)})`);
+    }
+
+    if (node.functionName === "emit") {
+      const argNodes: TsNode[] = node.arguments.map((arg) =>
+        this.processCallArg(arg),
+      );
+      const data = argNodes.length > 0 ? argNodes[0] : ts.id("undefined");
+      return ts.callHook("onEmit", data);
     }
 
     if (node.functionName === "llm") {

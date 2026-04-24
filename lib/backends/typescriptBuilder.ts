@@ -83,7 +83,6 @@ import {
 } from "./typescriptGenerator/builtins.js";
 import {
   DEFAULT_SCHEMA,
-  mapTypeToZodSchema,
   mapTypeToValidationSchema,
 } from "./typescriptGenerator/typeToZodSchema.js";
 
@@ -839,7 +838,7 @@ export class TypeScriptBuilder {
 
   private processTypeAlias(node: TypeAlias): TsNode {
     const exportPrefix = node.exported ? "export " : "";
-    const zodSchema = mapTypeToZodSchema(node.aliasedType, this.getVisibleTypeAliases());
+    const zodSchema = mapTypeToValidationSchema(node.aliasedType, this.getVisibleTypeAliases());
     return ts.statements([
       ts.raw(`${exportPrefix}const ${node.aliasName} = ${zodSchema};`),
       ts.raw(`${exportPrefix}type ${node.aliasName} = z.infer<typeof ${node.aliasName}>;`),
@@ -1471,7 +1470,7 @@ export class TypeScriptBuilder {
         type: "primitiveType" as const,
         value: "string",
       };
-      let tsType = mapTypeToZodSchema(typeHint, this.getVisibleTypeAliases());
+      let tsType = mapTypeToValidationSchema(typeHint, this.getVisibleTypeAliases());
       if (param.defaultValue) {
         const defaultStr = expressionToString(param.defaultValue);
         tsType += `.nullable().describe(${JSON.stringify("Default: " + defaultStr)})`;
@@ -2558,7 +2557,7 @@ export class TypeScriptBuilder {
       value: "string",
     };
 
-    const zodSchema = mapTypeToZodSchema(
+    const zodSchema = mapTypeToValidationSchema(
       _variableType,
       this.getVisibleTypeAliases(),
     );

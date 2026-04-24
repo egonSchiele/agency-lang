@@ -48,7 +48,21 @@ Created automatically. Zero-config backward compatibility — if a user never ca
 
 Everything else in `prompt.ts` stays the same — tool call loop, message construction, interrupt handling, token tracking, abort signals. The client only handles the actual LLM request/response.
 
-### 4. `setLLMClient` Builtin Function
+### 4. Simple Reference Client
+
+A minimal `LLMClient` implementation that hits the OpenAI API directly using `fetch` — no additional packages. Serves as a reference implementation for client authors, a test target for the abstraction, and a lightweight alternative to smoltalk for users who don't need its features.
+
+Lives in `lib/runtime/` alongside the interface definition. Reads `OPENAI_API_KEY` from `process.env`.
+
+Key properties:
+- **`text`:** Makes a `fetch` call to `https://api.openai.com/v1/chat/completions` with the messages, tools, and response format from the config. Parses the response into a `PromptResult` (extracting `output`, `toolCalls`, `usage`, `cost`, `model`).
+- **`textStream`:** Falls back to calling `text` and yields a single `"done"` chunk with the result. No actual streaming — keeps the implementation simple.
+- **Model:** Uses `config.model` if provided, otherwise defaults to `"gpt-4o-mini"`.
+- **Structured output:** Passes `response_format` with the Zod schema's JSON schema representation when `responseFormat` is provided in the config.
+
+This client intentionally does not support every feature smoltalk supports (e.g., multiple providers, retries, caching). It is a minimal working implementation.
+
+### 5. `setLLMClient` Builtin Function
 
 A new builtin function available in Agency code:
 
@@ -68,7 +82,7 @@ node main() {
 
 Applies globally — all `llm()` calls in all nodes use the set client.
 
-### 5. Implementation Phases
+### 6. Implementation Phases
 
 **Phase 1: Define the interface and refactor `prompt.ts`**
 - Define `LLMClient` type in `lib/runtime/`
@@ -77,12 +91,16 @@ Applies globally — all `llm()` calls in all nodes use the set client.
 - Change `prompt.ts` to use `ctx.llmClient` instead of `smoltalk` directly
 - Zero user-facing behavior change
 
-**Phase 2: Add `setLLMClient` builtin**
+**Phase 2: Simple reference client**
+- Implement the simple OpenAI-only client using `fetch`
+- Add tests that use the simple client to verify the abstraction works end-to-end
+
+**Phase 3: Add `setLLMClient` builtin**
 - Add `setLLMClient` as a builtin function (similar to `checkpoint`, `restore`)
 - Generated code wires it to set `__globalCtx.llmClient`
 - Users can now swap in alternative clients
 
-### 6. What Doesn't Change
+### 7. What Doesn't Change
 
 - **Parser** — no new syntax
 - **Message format** — still smoltalk types everywhere

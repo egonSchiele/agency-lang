@@ -2297,6 +2297,16 @@ export class TypeScriptBuilder {
   }
 
   private processGotoStatement(node: GotoStatement): TsNode {
+    if (!this.isInsideGraphNode) {
+      throw new Error(
+        `goto can only be used inside a node body`,
+      );
+    }
+    if (!this.isGraphNode(node.nodeCall.functionName)) {
+      throw new Error(
+        `goto target '${node.nodeCall.functionName}' is not a node`,
+      );
+    }
     this.currentAdjacentNodes.push(node.nodeCall.functionName);
     this.functionsUsed.add(node.nodeCall.functionName);
     return this.generateNodeCallExpression(node.nodeCall);

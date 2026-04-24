@@ -74,6 +74,7 @@ import {
 } from "../types/importStatement.js";
 import { MatchBlock, MatchBlockCase } from "../types/matchBlock.js";
 import { ReturnStatement } from "../types/returnStatement.js";
+import { GotoStatement } from "../types/gotoStatement.js";
 import { WhileLoop } from "../types/whileLoop.js";
 import { ClassDefinition, ClassField, ClassMethod, NewExpression, isClassKeyword } from "../types/classDefinition.js";
 import { escape, mergeDeep } from "../utils.js";
@@ -756,6 +757,8 @@ export class TypeScriptBuilder {
         return this.generateLiteral(node);
       case "returnStatement":
         return this.processReturnStatement(node);
+      case "gotoStatement":
+        return this.processGotoStatement(node);
       case "agencyArray":
         return this.processAgencyArray(node);
       case "agencyObject":
@@ -2180,7 +2183,7 @@ export class TypeScriptBuilder {
     for (const stmt of body) {
       if (stmt.type === "functionCall" && this.isGraphNode(stmt.functionName)) {
         throw new Error(
-          `Call to graph node '${stmt.functionName}' inside graph node '${nodeName}' was not returned. All calls to graph nodes must be returned, eg (return ${stmt.functionName}(...)).`,
+          `Call to graph node '${stmt.functionName}' inside graph node '${nodeName}' must use goto or return, eg: goto ${stmt.functionName}(...)`,
         );
       }
     }
@@ -2291,6 +2294,12 @@ export class TypeScriptBuilder {
     if (!returnType) return valueNode;
     const zodSchema = mapTypeToValidationSchema(returnType, this.getVisibleTypeAliases());
     return ts.validateType(valueNode, ts.raw(zodSchema));
+  }
+
+  private processGotoStatement(node: GotoStatement): TsNode {
+    this.currentAdjacentNodes.push(node.nodeCall.functionName);
+    this.functionsUsed.add(node.nodeCall.functionName);
+    return this.generateNodeCallExpression(node.nodeCall);
   }
 
   private processReturnStatement(node: ReturnStatement): TsNode {

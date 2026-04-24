@@ -384,6 +384,18 @@ export class TypeScriptBuilder {
     );
   }
 
+  private static TOP_LEVEL_DECLARATION_TYPES = new Set([
+    "graphNode", "function", "typeAlias", "classDefinition",
+    "importStatement", "importNodeStatement",
+    "comment", "multiLineComment", "newLine",
+  ]);
+
+  private isTopLevelDeclaration(node: AgencyNode): boolean {
+    if (TypeScriptBuilder.TOP_LEVEL_DECLARATION_TYPES.has(node.type)) return true;
+    if (node.type === "assignment" && (node as any).scope === "shared") return true;
+    return false;
+  }
+
   private isImpureImportedFunction(functionName: string): boolean {
     if (!this._plainTsImportNames) {
       this._buildImportNameSets();
@@ -511,9 +523,14 @@ export class TypeScriptBuilder {
         const handler = this.buildHandlerArrow(node.handlerName);
 
         globalInitStatements.push(ts.withHandler(handler, setNode));
-      } else {
+      } else if (this.isTopLevelDeclaration(node)) {
         const result = this.processNode(node);
         this.generatedStatements.push(result);
+      } else {
+        // Top-level statements (function calls, etc.) go into __initializeGlobals
+        // so they can access the execution context and global variables.
+        const result = this.processNodeInGlobalInit(node);
+        globalInitStatements.push(result);
       }
     }
 

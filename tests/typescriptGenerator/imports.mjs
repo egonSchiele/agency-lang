@@ -115,6 +115,11 @@ const restore = __AgencyFunction.create({ name: "restore", module: "__runtime", 
 async function mcp(serverName: string) {
   return __globalCtx.mcpManager.getTools(serverName);
 }
+
+function setLLMClient(client) {
+  __globalCtx.setLLMClient(client);
+}
+
 __registerTool(foo);
 __registerTool(foo);
 async function __initializeGlobals(__ctx) {

@@ -114,6 +114,7 @@ async function __initializeGlobals(__ctx) {
   }, {
     ctx: __ctx
   }))
+  await setLLMClient(__ctx.globals.get("setLLMClient.agency", "client"))
 }
 __toolRegistry["readSkill"] = __AgencyFunction.create({
   name: "readSkill",
@@ -124,7 +125,6 @@ __toolRegistry["readSkill"] = __AgencyFunction.create({
 }, __toolRegistry);
 __functionRefReviver.registry = __toolRegistry;
 
-await setLLMClient(__ctx.globals.get("setLLMClient.agency", "client"))
 graph.node("main", async (__state: GraphState) => {
   const __setupData = setupNode({
     state: __state

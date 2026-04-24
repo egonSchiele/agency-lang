@@ -1,0 +1,17 @@
+{
+  "tests": [
+    {
+      "nodeName": "testSetLLMClient",
+      "input": "",
+      "expectedOutput": "",
+      "evaluationCriteria": [
+        {
+          "type": "llmJudge",
+          "judgePrompt": "Does the output contain the number 4?",
+          "desiredAccuracy": 80
+        }
+      ],
+      "description": "setLLMClient with SimpleOpenAIClient makes a real LLM call"
+    }
+  ]
+}

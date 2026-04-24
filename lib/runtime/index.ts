@@ -63,7 +63,7 @@ export { isGenerator, handleStreamingResponse } from "./streaming.js";
 export { runPrompt } from "./prompt.js";
 
 export { SmoltalkClient } from "./llmClient.js";
-export type { LLMClient, PromptConfig, ToolDefinition, ToolCall } from "./llmClient.js";
+export type { LLMClient, PromptConfig, ToolCall } from "./llmClient.js";
 
 export {
   ConcurrentInterruptError,

@@ -12,6 +12,7 @@ import { updateTokenStats, extractResponse } from "./utils.js";
 import { callHook } from "./hooks.js";
 import { handleStreamingResponse, isGenerator } from "./streaming.js";
 import type { RuntimeContext } from "./state/context.js";
+import type { PromptConfig } from "./llmClient.js";
 import type { SourceLocationOpts } from "./state/checkpointStore.js";
 import { color } from "@/utils/termcolors.js";
 import { GraphState } from "./types.js";
@@ -71,15 +72,24 @@ async function _runPrompt({
     throw new AgencyCancelledError();
   }
 
-  let _completion: AsyncGenerator<StreamChunk> | Promise<Result<PromptResult>> =
-    await (smoltalk.text as Function)({
-      messages: messages.getMessages(),
-      tools,
-      responseFormat,
-      stream,
-      abortSignal: ctx.abortController.signal,
-      ...clientConfig,
-    });
+  const promptConfig: PromptConfig = {
+    messages: messages.getMessages(),
+    tools,
+    responseFormat,
+    abortSignal: ctx.abortController.signal,
+    model: (clientConfig as any)?.model,
+    apiKey: (clientConfig as any)?.openAiApiKey,
+    maxTokens: (clientConfig as any)?.maxTokens,
+    temperature: (clientConfig as any)?.temperature,
+    metadata: clientConfig,
+  };
+
+  let _completion: AsyncGenerator<StreamChunk> | Promise<Result<PromptResult>>;
+  if (stream) {
+    _completion = ctx.llmClient.textStream(promptConfig);
+  } else {
+    _completion = ctx.llmClient.text(promptConfig);
+  }
 
   const endTime = performance.now();
   let completion: PromptResult;

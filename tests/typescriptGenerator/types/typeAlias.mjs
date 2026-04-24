@@ -111,7 +111,8 @@ __toolRegistry["readSkill"] = __AgencyFunction.create({
   toolDefinition: __readSkillTool,
 }, __toolRegistry);
 __functionRefReviver.registry = __toolRegistry;
-type Coords = { x: number, y: number };
+const Coords = z.object({ "x": z.number(), "y": z.number() });
+type Coords = z.infer<typeof Coords>;
 graph.node("main", async (__state: GraphState) => {
   const __setupData = setupNode({
     state: __state
@@ -141,7 +142,7 @@ __stack.locals.foo = await runPrompt({
         prompt: `a set of coordinates`,
         messages: __threads.getOrCreateActive(),
         responseFormat: z.object({
-          response: z.object({ "x": z.number(), "y": z.number() })
+          response: Coords
         }),
         clientConfig: {},
         maxToolCallRounds: 10,

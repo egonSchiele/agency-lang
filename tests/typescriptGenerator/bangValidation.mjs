@@ -111,7 +111,8 @@ __toolRegistry["readSkill"] = __AgencyFunction.create({
   toolDefinition: __readSkillTool,
 }, __toolRegistry);
 __functionRefReviver.registry = __toolRegistry;
-type Category = "bug" | "feature" | "docs";
+const Category = z.union([z.literal("bug"), z.literal("feature"), z.literal("docs")]);
+type Category = z.infer<typeof Category>;
 graph.node("main", async (__state: GraphState) => {
   const __setupData = setupNode({
     state: __state
@@ -136,7 +137,7 @@ let __functionCompleted = false;
   try {
     await runner.step(0, async (runner) => {
 __stack.locals.result = `bug`;
-__stack.locals.result = __validateType(__stack.locals.result, z.union([z.literal("bug"), z.literal("feature"), z.literal("docs")]));
+__stack.locals.result = __validateType(__stack.locals.result, Category);
     });
     await runner.step(1, async (runner) => {
 const __funcResult = await __call(print, {

@@ -17,6 +17,7 @@ import type { TraceConfig } from "../trace/types.js";
 import { reviveWithClasses, type ClassRegistry } from "../classReviver.js";
 import { AgencyCancelledError } from "../errors.js";
 import { McpManager } from "../mcp/mcpManager.js";
+import { LLMClient, SmoltalkClient } from "../llmClient.js";
 
 /* bunch of stuff that every node/function in the runtime needs access to,
 that we don't want to pass as individual arguments everywhere */
@@ -53,6 +54,10 @@ export class RuntimeContext<T> {
   // so that all the logs share the same traceId, so they all show up in the same trace in the Statelog dashboard.
   statelogClient: StatelogClient;
   smoltalkDefaults: Partial<SmolPromptConfig>;
+  private _llmClient: LLMClient;
+
+  get llmClient(): LLMClient { return this._llmClient; }
+  setLLMClient(client: LLMClient): void { this._llmClient = client; }
 
   // this is the directory that the runtime is running in. We need this to be able to read files relative to the runtime.
   dirname: string;
@@ -128,6 +133,7 @@ export class RuntimeContext<T> {
     this.graph = new SimpleMachine<T>(graphConfig);
 
     this.smoltalkDefaults = args.smoltalkDefaults;
+    this._llmClient = new SmoltalkClient();
     this.classRegistry = {};
     this.abortController = new AbortController();
     this._mcpManager = new McpManager({});
@@ -146,6 +152,7 @@ export class RuntimeContext<T> {
     ) as RuntimeContext<T>;
     execCtx.graph = this.graph;
     execCtx.smoltalkDefaults = this.smoltalkDefaults;
+    execCtx._llmClient = this._llmClient;
     execCtx.dirname = this.dirname;
     execCtx.statelogConfig = this.statelogConfig;
     execCtx.stateStack = new StateStack();

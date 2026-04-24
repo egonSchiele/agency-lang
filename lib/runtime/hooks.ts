@@ -78,7 +78,8 @@ export type AgencyCallbacks = {
 
 // Tracks which hooks are currently executing to prevent infinite recursion
 // when a callback calls a helper function that would re-trigger the same hook.
-const _activeHooks = new Set<string>();
+// Keyed by callbacks object so concurrent executions don't block each other.
+const _activeHooks = new WeakMap<AgencyCallbacks, Set<string>>();
 
 export async function callHook<K extends keyof CallbackMap>(args: {
   callbacks: AgencyCallbacks;
@@ -87,14 +88,20 @@ export async function callHook<K extends keyof CallbackMap>(args: {
 }): Promise<CallbackReturn<K> | undefined> {
   const { callbacks, name, data } = args;
   const hook = callbacks[name];
-  if (hook && !_activeHooks.has(name)) {
-    _activeHooks.add(name);
+  if (!hook) return undefined;
+  let active = _activeHooks.get(callbacks);
+  if (!active) {
+    active = new Set();
+    _activeHooks.set(callbacks, active);
+  }
+  if (!active.has(name)) {
+    active.add(name);
     try {
       return (await hook(data)) as CallbackReturn<K>;
     } catch (error) {
       console.error(`[agency] ${name} callback error:`, error);
     } finally {
-      _activeHooks.delete(name);
+      active.delete(name);
     }
   }
   return undefined;

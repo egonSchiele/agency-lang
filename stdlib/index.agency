@@ -145,3 +145,10 @@ export safe def entries(obj: any): any[] {
   """
   return _entries(obj)
 }
+
+export safe def emit(data) {
+  """
+  Emit a custom event to the calling TypeScript code via the onEmit callback.
+  """
+  _emit(data)
+}

@@ -1811,7 +1811,7 @@ export class TypeScriptBuilder {
       return this.buildInterruptReturn(node.arguments);
     }
 
-    if (node.functionName === "emit") {
+    if (node.functionName === "_emit") {
       return this.processFunctionCall(node);
     }
 
@@ -1915,7 +1915,7 @@ export class TypeScriptBuilder {
       return ts.throw(`new Error(${this.str(arg)})`);
     }
 
-    if (node.functionName === "emit") {
+    if (node.functionName === "_emit") {
       const argNodes: TsNode[] = node.arguments.map((arg) =>
         this.processCallArg(arg),
       );

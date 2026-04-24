@@ -283,3 +283,19 @@ Return an array of an object's own enumerable entries, each as { key, value }.
 **Returns:** any[]
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L141))
+
+### emit
+
+```ts
+emit(data)
+```
+
+Emit a custom event to the calling TypeScript code via the onEmit callback.
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| data |  |  |
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L148))

@@ -5,5 +5,5 @@ There are some [syntactical differences](/guide/basic-syntax). For example, Agen
 
 - No destructuring syntax
 - Agency's type system is not as powerful as the TypeScript type system. In particular, it doesn't have generics right now
--  You can define a [class](/guide/classes) in Agency, but you cannot create a custom constructor; instead, one is defined for you.
-- Agency does not have first-class functions or lambdas. Instead, it has [blocks](/guide/blocks).
+- No classes
+- Agency has first-class functions, but it does not have lambdas. Instead, it has [blocks](/guide/blocks).

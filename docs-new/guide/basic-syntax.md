@@ -102,4 +102,4 @@ arr[:3] = [10, 20, 30] // arr is now [10, 20, 30, 4, 5]
 ### JavaScript features that don't exist in Agency
 - lambdas
 - async/await. Everything is awaited by default, and there are specific constructs for async, such as [fork](/guide/fork)
-- custom constructors for [classes](/guide/classes). A default constructor is generated for you.
+- classes.

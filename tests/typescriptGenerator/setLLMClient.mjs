@@ -6,7 +6,7 @@ import { z } from "zod";
 import { goToNode, color, nanoid } from "agency-lang";
 import { smoltalk } from "agency-lang";
 import path from "path";
-import type { GraphState, InternalFunctionState, Interrupt, InterruptResponse, RewindCheckpoint } from "agency-lang/runtime";
+import type { GraphState, InternalFunctionState, Interrupt, InterruptResponse, RewindCheckpoint, LLMClient } from "agency-lang/runtime";
 import {
   RuntimeContext, MessageThread, ThreadStore, Runner, McpManager,
   setupNode, setupFunction, runNode, runPrompt, callHook,
@@ -102,7 +102,7 @@ async function mcp(serverName: string) {
   return __globalCtx.mcpManager.getTools(serverName);
 }
 
-function setLLMClient(client) {
+function setLLMClient(client: LLMClient) {
   __globalCtx.setLLMClient(client);
 }
 

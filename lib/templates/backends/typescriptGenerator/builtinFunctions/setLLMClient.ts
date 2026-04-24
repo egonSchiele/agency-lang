@@ -3,7 +3,7 @@
 // Any manual changes will be lost.
 import { apply } from "typestache";
 
-export const template = `function setLLMClient(client) {
+export const template = `function setLLMClient(client: LLMClient) {
   __globalCtx.setLLMClient(client);
 }
 `;

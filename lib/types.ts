@@ -42,6 +42,7 @@ export * from "./types/importStatement.js";
 export * from "./types/literals.js";
 export * from "./types/matchBlock.js";
 export * from "./types/returnStatement.js";
+export * from "./types/gotoStatement.js";
 export * from "./types/typeHints.js";
 export * from "./types/whileLoop.js";
 export * from "./types/forLoop.js";

@@ -19,6 +19,7 @@ import { Literal, RawCode, RegexLiteral } from "./types/literals.js";
 import { MatchBlock } from "./types/matchBlock.js";
 import { MessageThread } from "./types/messageThread.js";
 import { ReturnStatement } from "./types/returnStatement.js";
+import { GotoStatement } from "./types/gotoStatement.js";
 import { Skill } from "./types/skill.js";
 import { TypeAlias, VariableType } from "./types/typeHints.js";
 import { WhileLoop } from "./types/whileLoop.js";
@@ -41,6 +42,7 @@ export * from "./types/importStatement.js";
 export * from "./types/literals.js";
 export * from "./types/matchBlock.js";
 export * from "./types/returnStatement.js";
+export * from "./types/gotoStatement.js";
 export * from "./types/typeHints.js";
 export * from "./types/whileLoop.js";
 export * from "./types/forLoop.js";
@@ -212,6 +214,7 @@ export type AgencyNode =
   | FunctionCall
   | MatchBlock
   | ReturnStatement
+  | GotoStatement
   | ValueAccess
   | AgencyComment
   | AgencyMultiLineComment

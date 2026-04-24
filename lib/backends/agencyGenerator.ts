@@ -32,6 +32,7 @@ import {
 } from "../types/importStatement.js";
 import { MatchBlock } from "../types/matchBlock.js";
 import { ReturnStatement } from "../types/returnStatement.js";
+import { GotoStatement } from "../types/gotoStatement.js";
 import { ForLoop } from "../types/forLoop.js";
 import { WhileLoop } from "../types/whileLoop.js";
 import { variableTypeToString } from "./typescriptGenerator/typeToString.js";
@@ -214,6 +215,8 @@ export class AgencyGenerator {
         return this.generateLiteral(node);
       case "returnStatement":
         return this.processReturnStatement(node);
+      case "gotoStatement":
+        return this.processGotoStatement(node);
       case "debuggerStatement":
         return this.processDebuggerStatement(node);
       case "agencyArray":
@@ -758,6 +761,11 @@ export class AgencyGenerator {
     if (!node.value) return this.indentStr("return");
     const valueCode = this.processNode(node.value).trim();
     return this.indentStr(`return ${valueCode}`);
+  }
+
+  protected processGotoStatement(node: GotoStatement): string {
+    const callCode = this.processNode(node.nodeCall).trim();
+    return this.indentStr(`goto ${callCode}`);
   }
 
   protected processDebuggerStatement(node: DebuggerStatement): string {

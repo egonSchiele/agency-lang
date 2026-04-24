@@ -1,0 +1,15 @@
+{
+  "tests": [
+    {
+      "nodeName": "testGoto",
+      "input": "",
+      "expectedOutput": "\"arrived at second\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "description": "goto transitions to another node"
+    }
+  ]
+}

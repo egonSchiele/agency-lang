@@ -34,7 +34,6 @@ export default defineConfig({
           { text: "Execution Model", link: "/guide/execution-model" },
           { text: "Imports and Packages", link: "/guide/imports-and-packages" },
           { text: "Schemas", link: "/guide/schemas" },
-          { text: "Classes", link: "/guide/classes" },
           { text: "Checkpointing", link: "/guide/checkpointing" },
           { text: "MCP", link: "/guide/mcp" },
         ],

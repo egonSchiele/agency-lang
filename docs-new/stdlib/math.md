@@ -12,10 +12,10 @@ add(a: number, b: number): number
 
 | Name | Type | Default |
 |---|---|---|
-| a | number |  |
-| b | number |  |
+| a | `number` |  |
+| b | `number` |  |
 
-**Returns:** number
+**Returns:** `number`
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/math.agency#L0))
 
@@ -29,10 +29,10 @@ subtract(a: number, b: number): number
 
 | Name | Type | Default |
 |---|---|---|
-| a | number |  |
-| b | number |  |
+| a | `number` |  |
+| b | `number` |  |
 
-**Returns:** number
+**Returns:** `number`
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/math.agency#L4))
 
@@ -46,10 +46,10 @@ multiply(a: number, b: number): number
 
 | Name | Type | Default |
 |---|---|---|
-| a | number |  |
-| b | number |  |
+| a | `number` |  |
+| b | `number` |  |
 
-**Returns:** number
+**Returns:** `number`
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/math.agency#L8))
 
@@ -63,9 +63,9 @@ divide(a: number, b: number): Result<number>
 
 | Name | Type | Default |
 |---|---|---|
-| a | number |  |
-| b | number |  |
+| a | `number` |  |
+| b | `number` |  |
 
-**Returns:** Result<number>
+**Returns:** `Result<number>`
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/math.agency#L12))

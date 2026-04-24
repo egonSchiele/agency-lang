@@ -53,10 +53,10 @@ Search Wikipedia for articles matching the given query. Returns up to limit resu
 
 | Name | Type | Default |
 |---|---|---|
-| query | string |  |
-| limit | number | 5 |
+| query | `string` |  |
+| limit | `number` | 5 |
 
-**Returns:** WikiSearchResult[]
+**Returns:** `WikiSearchResult[]`
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/wikipedia.agency#L21))
 
@@ -72,7 +72,7 @@ Get a summary of a Wikipedia article by its title. Returns the title, descriptio
 
 | Name | Type | Default |
 |---|---|---|
-| title | string |  |
+| title | `string` |  |
 
 **Returns:** [WikiSummary](#wikisummary)
 
@@ -90,7 +90,7 @@ Get the full text of a Wikipedia article by its title. Returns the title, full p
 
 | Name | Type | Default |
 |---|---|---|
-| title | string |  |
+| title | `string` |  |
 
 **Returns:** [WikiArticle](#wikiarticle)
 

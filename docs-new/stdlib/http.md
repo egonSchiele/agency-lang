@@ -14,9 +14,9 @@ Fetch a URL and return the response body as text. Fails on network errors or if 
 
 | Name | Type | Default |
 |---|---|---|
-| url | string |  |
+| url | `string` |  |
 
-**Returns:** Result
+**Returns:** `Result`
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/http.agency#L2))
 
@@ -32,9 +32,9 @@ Fetch a URL and parse the response body as JSON. Fails on network errors, invali
 
 | Name | Type | Default |
 |---|---|---|
-| url | string |  |
+| url | `string` |  |
 
-**Returns:** Result
+**Returns:** `Result`
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/http.agency#L14))
 
@@ -50,8 +50,8 @@ Fetch a URL and return the body as readable markdown when the response is HTML, 
 
 | Name | Type | Default |
 |---|---|---|
-| url | string |  |
+| url | `string` |  |
 
-**Returns:** Result
+**Returns:** `Result`
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/http.agency#L26))

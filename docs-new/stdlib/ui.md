@@ -14,7 +14,7 @@ Initialize a terminal UI with a scrollable output area and a fixed input bar at 
 
 | Name | Type | Default |
 |---|---|---|
-| title | string |  |
+| title | `string` |  |
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L1))
 
@@ -40,7 +40,7 @@ Print a message to the scrollable output area. Supports ANSI colors.
 
 | Name | Type | Default |
 |---|---|---|
-| message | string |  |
+| message | `string` |  |
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L15))
 
@@ -56,8 +56,8 @@ Update the status bar. The left text appears on the left side, the right text on
 
 | Name | Type | Default |
 |---|---|---|
-| left | string |  |
-| right | string | "" |
+| left | `string` |  |
+| right | `string` | "" |
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L22))
 
@@ -73,8 +73,8 @@ Print a chat message with a colored role prefix. Built-in colors: "user" (cyan),
 
 | Name | Type | Default |
 |---|---|---|
-| role | string | "" |
-| message | string | "" |
+| role | `string` | "" |
+| message | `string` | "" |
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L29))
 
@@ -90,8 +90,8 @@ Display a code block with a filename header and line numbers, inside a bordered 
 
 | Name | Type | Default |
 |---|---|---|
-| filename | string |  |
-| content | string |  |
+| filename | `string` |  |
+| content | `string` |  |
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L36))
 
@@ -107,8 +107,8 @@ Display a diff with colored +/- lines, inside a bordered box with the filename a
 
 | Name | Type | Default |
 |---|---|---|
-| filename | string |  |
-| content | string |  |
+| filename | `string` |  |
+| content | `string` |  |
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L43))
 
@@ -124,7 +124,7 @@ Print a horizontal line with an optional label. Useful for visually grouping out
 
 | Name | Type | Default |
 |---|---|---|
-| label | string | "" |
+| label | `string` | "" |
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L50))
 
@@ -140,7 +140,7 @@ Show an animated spinner in the input bar with a label. Useful while the agent i
 
 | Name | Type | Default |
 |---|---|---|
-| text | string | "working" |
+| text | `string` | "working" |
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L57))
 
@@ -166,9 +166,9 @@ Prompt the user for text input in the fixed input bar at the bottom of the scree
 
 | Name | Type | Default |
 |---|---|---|
-| question | string |  |
+| question | `string` |  |
 
-**Returns:** string
+**Returns:** `string`
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L71))
 
@@ -184,9 +184,9 @@ Ask the user a yes/no question in the input bar. Returns true if the user answer
 
 | Name | Type | Default |
 |---|---|---|
-| question | string |  |
+| question | `string` |  |
 
-**Returns:** boolean
+**Returns:** `boolean`
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L78))
 

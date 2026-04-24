@@ -66,10 +66,10 @@ Run a shell command and return its stdout, stderr, and exit code. Pass cwd to ch
 
 | Name | Type | Default |
 |---|---|---|
-| command | string |  |
-| cwd | string | "" |
-| timeout | number | 0 |
-| stdin | string | "" |
+| command | `string` |  |
+| cwd | `string` | "" |
+| timeout | `number` | 0 |
+| stdin | `string` | "" |
 
 **Returns:** [BashResult](#bashresult)
 
@@ -87,10 +87,10 @@ List entries in a directory. Each entry includes name, path, type ("file", "dir"
 
 | Name | Type | Default |
 |---|---|---|
-| dir | string | "." |
-| recursive | boolean | false |
+| dir | `string` | "." |
+| recursive | `boolean` | false |
 
-**Returns:** Result
+**Returns:** `Result`
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/shell.agency#L31))
 
@@ -106,12 +106,12 @@ Search for a regex pattern in files under a directory. Returns matches with file
 
 | Name | Type | Default |
 |---|---|---|
-| pattern | string |  |
-| dir | string | "." |
-| flags | string | "" |
-| maxResults | number | 200 |
+| pattern | `string` |  |
+| dir | `string` | "." |
+| flags | `string` | "" |
+| maxResults | `number` | 200 |
 
-**Returns:** Result
+**Returns:** `Result`
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/shell.agency#L51))
 
@@ -127,11 +127,11 @@ Find files whose paths match a glob pattern (e.g. "src/**/*.ts"). Returns paths 
 
 | Name | Type | Default |
 |---|---|---|
-| pattern | string |  |
-| dir | string | "." |
-| maxResults | number | 500 |
+| pattern | `string` |  |
+| dir | `string` | "." |
+| maxResults | `number` | 500 |
 
-**Returns:** Result
+**Returns:** `Result`
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/shell.agency#L67))
 
@@ -147,7 +147,7 @@ Return metadata about a filesystem entry: whether it exists, its type ("file", "
 
 | Name | Type | Default |
 |---|---|---|
-| filename | string |  |
+| filename | `string` |  |
 
 **Returns:** [StatInfo](#statinfo)
 
@@ -165,9 +165,9 @@ Return true if a file or directory exists at the given path.
 
 | Name | Type | Default |
 |---|---|---|
-| filename | string |  |
+| filename | `string` |  |
 
-**Returns:** boolean
+**Returns:** `boolean`
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/shell.agency#L96))
 
@@ -183,8 +183,8 @@ Locate an executable in PATH and return its absolute path. Returns an empty stri
 
 | Name | Type | Default |
 |---|---|---|
-| command | string |  |
+| command | `string` |  |
 
-**Returns:** string
+**Returns:** `string`
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/shell.agency#L103))

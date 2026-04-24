@@ -46,9 +46,9 @@ A tool for prompting the user for input and returning their response.
 
 | Name | Type | Default |
 |---|---|---|
-| prompt | string |  |
+| prompt | `string` |  |
 
-**Returns:** string
+**Returns:** `string`
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L15))
 
@@ -64,7 +64,7 @@ A tool for pausing execution for a specified number of seconds.
 
 | Name | Type | Default |
 |---|---|---|
-| seconds | number |  |
+| seconds | `number` |  |
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L22))
 
@@ -80,10 +80,10 @@ A tool for rounding a number to a specified number of decimal places.
 
 | Name | Type | Default |
 |---|---|---|
-| num | number |  |
-| precision | number |  |
+| num | `number` |  |
+| precision | `number` |  |
 
-**Returns:** number
+**Returns:** `number`
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L29))
 
@@ -99,9 +99,9 @@ A tool for fetching a URL and returning the response as text.
 
 | Name | Type | Default |
 |---|---|---|
-| url | string |  |
+| url | `string` |  |
 
-**Returns:** string
+**Returns:** `string`
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L36))
 
@@ -117,7 +117,7 @@ A tool for fetching a URL and returning the response as parsed JSON.
 
 | Name | Type | Default |
 |---|---|---|
-| url | string |  |
+| url | `string` |  |
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L48))
 
@@ -133,9 +133,9 @@ A tool for reading the contents of a file and returning it as a string.
 
 | Name | Type | Default |
 |---|---|---|
-| filename | string |  |
+| filename | `string` |  |
 
-**Returns:** string
+**Returns:** `string`
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L60))
 
@@ -151,8 +151,8 @@ A tool for writing content to a file.
 
 | Name | Type | Default |
 |---|---|---|
-| filename | string |  |
-| content | string |  |
+| filename | `string` |  |
+| content | `string` |  |
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L72))
 
@@ -168,9 +168,9 @@ A tool for reading an image file and returning its contents as a Base64-encoded 
 
 | Name | Type | Default |
 |---|---|---|
-| filename | string |  |
+| filename | `string` |  |
 
-**Returns:** string
+**Returns:** `string`
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L85))
 
@@ -186,10 +186,10 @@ A tool for showing a native OS notification with a title and message. Returns tr
 
 | Name | Type | Default |
 |---|---|---|
-| title | string |  |
-| message | string |  |
+| title | `string` |  |
+| message | `string` |  |
 
-**Returns:** boolean
+**Returns:** `boolean`
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L97))
 
@@ -205,10 +205,10 @@ Generate an array of numbers. With one argument, generates from 0 to start-1. Wi
 
 | Name | Type | Default |
 |---|---|---|
-| start | number |  |
-| end | number | -1 |
+| start | `number` |  |
+| end | `number` | -1 |
 
-**Returns:** number[]
+**Returns:** `number[]`
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L110))
 
@@ -224,9 +224,9 @@ Return the most common element in an array. Uses JSON serialization for comparis
 
 | Name | Type | Default |
 |---|---|---|
-| items | any[] |  |
+| items | `any[]` |  |
 
-**Returns:** any
+**Returns:** `any`
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L120))
 
@@ -242,9 +242,9 @@ Return an array of an object's own enumerable property names.
 
 | Name | Type | Default |
 |---|---|---|
-| obj | any |  |
+| obj | `any` |  |
 
-**Returns:** string[]
+**Returns:** `string[]`
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L127))
 
@@ -260,9 +260,9 @@ Return an array of an object's own enumerable property values.
 
 | Name | Type | Default |
 |---|---|---|
-| obj | any |  |
+| obj | `any` |  |
 
-**Returns:** any[]
+**Returns:** `any[]`
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L134))
 
@@ -278,9 +278,9 @@ Return an array of an object's own enumerable entries, each as { key, value }.
 
 | Name | Type | Default |
 |---|---|---|
-| obj | any |  |
+| obj | `any` |  |
 
-**Returns:** any[]
+**Returns:** `any[]`
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L141))
 

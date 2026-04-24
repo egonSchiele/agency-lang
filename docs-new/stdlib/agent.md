@@ -28,9 +28,9 @@ Replace the current todo list. Each todo has an id, text, and status (one of 'pe
 
 | Name | Type | Default |
 |---|---|---|
-| todos | Todo[] |  |
+| todos | `Todo[]` |  |
 
-**Returns:** Todo[]
+**Returns:** `Todo[]`
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/agent.agency#L8))
 
@@ -42,7 +42,7 @@ todoList(): Todo[]
 
 Return the current todo list.
 
-**Returns:** Todo[]
+**Returns:** `Todo[]`
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/agent.agency#L16))
 
@@ -58,8 +58,8 @@ Ask the user a question and wait for their reply. Unlike input(), this raises an
 
 | Name | Type | Default |
 |---|---|---|
-| prompt | string |  |
+| prompt | `string` |  |
 
-**Returns:** string
+**Returns:** `string`
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/agent.agency#L23))

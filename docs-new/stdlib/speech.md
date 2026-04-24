@@ -14,10 +14,10 @@ A tool for speaking text aloud using text-to-speech. Optionally specify a voice 
 
 | Name | Type | Default |
 |---|---|---|
-| text | string |  |
-| voice | string | "" |
-| rate | number | 0 |
-| outputFile | string | "" |
+| text | `string` |  |
+| voice | `string` | "" |
+| rate | `number` | 0 |
+| outputFile | `string` | "" |
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/speech.agency#L2))
 
@@ -33,9 +33,9 @@ A tool for transcribing an audio file to text using OpenAI's Whisper API. Option
 
 | Name | Type | Default |
 |---|---|---|
-| filepath | string |  |
-| language | string | "" |
+| filepath | `string` |  |
+| language | `string` | "" |
 
-**Returns:** string
+**Returns:** `string`
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/speech.agency#L9))

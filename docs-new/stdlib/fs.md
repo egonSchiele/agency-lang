@@ -62,12 +62,12 @@ Edit a file by replacing oldText with newText. By default oldText must match exa
 
 | Name | Type | Default |
 |---|---|---|
-| filename | string |  |
-| oldText | string |  |
-| newText | string |  |
-| replaceAll | boolean | false |
+| filename | `string` |  |
+| oldText | `string` |  |
+| newText | `string` |  |
+| replaceAll | `boolean` | false |
 
-**Returns:** Result
+**Returns:** `Result`
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L7))
 
@@ -83,10 +83,10 @@ Apply a sequence of edits to a single file atomically. Each edit has oldText, ne
 
 | Name | Type | Default |
 |---|---|---|
-| filename | string |  |
-| edits | Edit[] |  |
+| filename | `string` |  |
+| edits | `Edit[]` |  |
 
-**Returns:** Result
+**Returns:** `Result`
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L35))
 
@@ -102,9 +102,9 @@ Apply a unified diff to the working tree. Supports file creation (--- /dev/null)
 
 | Name | Type | Default |
 |---|---|---|
-| patch | string |  |
+| patch | `string` |  |
 
-**Returns:** Result
+**Returns:** `Result`
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L54))
 
@@ -120,9 +120,9 @@ Create a directory, including any missing parent directories. Idempotent: succee
 
 | Name | Type | Default |
 |---|---|---|
-| dir | string |  |
+| dir | `string` |  |
 
-**Returns:** Result
+**Returns:** `Result`
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L67))
 
@@ -138,10 +138,10 @@ Copy a file or directory. Directories are copied recursively. Fails if src does 
 
 | Name | Type | Default |
 |---|---|---|
-| src | string |  |
-| dest | string |  |
+| src | `string` |  |
+| dest | `string` |  |
 
-**Returns:** Result
+**Returns:** `Result`
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L80))
 
@@ -157,10 +157,10 @@ Move or rename a file or directory. Falls back to copy+remove if src and dest ar
 
 | Name | Type | Default |
 |---|---|---|
-| src | string |  |
-| dest | string |  |
+| src | `string` |  |
+| dest | `string` |  |
 
-**Returns:** Result
+**Returns:** `Result`
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L94))
 
@@ -176,8 +176,8 @@ Delete a file or directory. Directories are removed recursively. Does not fail i
 
 | Name | Type | Default |
 |---|---|---|
-| target | string |  |
+| target | `string` |  |
 
-**Returns:** Result
+**Returns:** `Result`
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L108))

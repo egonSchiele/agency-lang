@@ -40,7 +40,10 @@ export function generateDoc(
     // First pass: parse and preprocess all files, build symbol registry
     const symbolRegistry: SymbolRegistry = {};
     const files = [...findRecursively(inputPath)];
-    const parsedPrograms = new Map<string, { program: AgencyProgram; relativePath: string; mdRelPath: string }>();
+    const parsedPrograms = new Map<
+      string,
+      { program: AgencyProgram; relativePath: string; mdRelPath: string }
+    >();
 
     for (const { path: filePath } of files) {
       const relativePath = path.relative(inputPath, filePath);
@@ -57,36 +60,57 @@ export function generateDoc(
       for (const node of info.graphNodes) {
         symbolRegistry[node.nodeName] = mdRelPath;
       }
-      for (const name of Object.keys(info.typeAliases[GLOBAL_SCOPE_KEY] || {})) {
+      for (const name of Object.keys(
+        info.typeAliases[GLOBAL_SCOPE_KEY] || {},
+      )) {
         symbolRegistry[name] = mdRelPath;
       }
     }
 
     // Second pass: generate docs (reusing parsed programs)
-    for (const [filePath, { program, relativePath, mdRelPath }] of parsedPrograms) {
+    for (const [
+      filePath,
+      { program, relativePath, mdRelPath },
+    ] of parsedPrograms) {
       const outputPath = path.join(outputDir, mdRelPath);
       fs.mkdirSync(path.dirname(outputPath), { recursive: true });
-      generateDocForFile(filePath, outputPath, {
-        baseUrl,
-        sourceRelPath: relativePath,
-        symbolRegistry,
-        currentMdPath: mdRelPath,
-      }, program);
+      generateDocForFile(
+        filePath,
+        outputPath,
+        {
+          baseUrl,
+          sourceRelPath: relativePath,
+          symbolRegistry,
+          currentMdPath: mdRelPath,
+        },
+        program,
+      );
     }
   } else {
     const baseName = path.basename(inputPath).replace(/\.agency$/, ".md");
     const outputPath = path.join(outputDir, baseName);
     fs.mkdirSync(outputDir, { recursive: true });
-    const program = preprocessProgram(parse(readFile(inputPath), config), config);
-    generateDocForFile(inputPath, outputPath, {
-      baseUrl,
-      sourceRelPath: path.basename(inputPath),
-      symbolRegistry: {},
-    }, program);
+    const program = preprocessProgram(
+      parse(readFile(inputPath), config),
+      config,
+    );
+    generateDocForFile(
+      inputPath,
+      outputPath,
+      {
+        baseUrl,
+        sourceRelPath: path.basename(inputPath),
+        symbolRegistry: {},
+      },
+      program,
+    );
   }
 }
 
-function preprocessProgram(program: AgencyProgram, config: AgencyConfig): AgencyProgram {
+function preprocessProgram(
+  program: AgencyProgram,
+  config: AgencyConfig,
+): AgencyProgram {
   const preprocessor = new TypescriptPreprocessor(program, config);
   preprocessor.attachDocComments();
   return program;
@@ -132,14 +156,15 @@ function generateDocForFile(
   fs.writeFileSync(outputPath, sections.join("\n\n") + "\n");
 }
 
-
 function toPosixPath(p: string): string {
   return p.split(path.sep).join("/");
 }
 
 function formatType(type: VariableType | undefined | null): string {
   if (!type) return "";
-  return variableTypeToString(type, {}).replace(/\s*\r?\n\s*/g, " ").trim();
+  return variableTypeToString(type, {})
+    .replace(/\s*\r?\n\s*/g, " ")
+    .trim();
 }
 
 function formatTypeLinked(
@@ -148,11 +173,11 @@ function formatTypeLinked(
 ): string {
   if (!type) return "";
   const plain = formatType(type);
-  if (type.type !== "typeAliasVariable") return plain;
+  if (type.type !== "typeAliasVariable") return "`" + plain + "`";
 
   const name = type.aliasName;
   const targetMdPath = ctx.symbolRegistry[name];
-  if (!targetMdPath) return plain;
+  if (!targetMdPath) return "`" + plain + "`";
 
   if (targetMdPath === ctx.currentMdPath) {
     return `[${name}](#${name.toLowerCase()})`;
@@ -163,7 +188,10 @@ function formatTypeLinked(
   return `[${name}](${toPosixPath(rel)}#${name.toLowerCase()})`;
 }
 
-function sourceLink(loc: { line: number } | undefined, ctx: DocContext): string {
+function sourceLink(
+  loc: { line: number } | undefined,
+  ctx: DocContext,
+): string {
   if (!ctx.baseUrl || !ctx.sourceRelPath || !loc) return "";
   return `([source](${ctx.baseUrl}/${toPosixPath(ctx.sourceRelPath)}#L${loc.line}))`;
 }
@@ -221,9 +249,15 @@ function formatTypeAlias(alias: TypeAlias, ctx: DocContext): string {
   );
 }
 
-function generateTypeSection(aliases: TypeAlias[], ctx: DocContext): string | null {
+function generateTypeSection(
+  aliases: TypeAlias[],
+  ctx: DocContext,
+): string | null {
   if (aliases.length === 0) return null;
-  return section(heading(2, "Types"), ...aliases.map((a) => formatTypeAlias(a, ctx)));
+  return section(
+    heading(2, "Types"),
+    ...aliases.map((a) => formatTypeAlias(a, ctx)),
+  );
 }
 
 function generateFunctionSection(
@@ -239,7 +273,9 @@ function generateFunctionSection(
       fn.docString ? fn.docString.value : null,
       fn.docComment ? formatDocComment(fn.docComment) : null,
       generateParamTable(fn.parameters, ctx),
-      fn.returnType ? `${bold("Returns:")} ${formatTypeLinked(fn.returnType, ctx)}` : null,
+      fn.returnType
+        ? `${bold("Returns:")} ${formatTypeLinked(fn.returnType, ctx)}`
+        : null,
       sourceLink(fn.loc, ctx),
     );
   });
@@ -252,15 +288,21 @@ function generateNodeSection(
 ): string | null {
   if (nodes.length === 0) return null;
   const parts = nodes.map((node) => {
-    const sig = formatSignature(node.nodeName, node.parameters, node.returnType);
+    const sig = formatSignature(
+      node.nodeName,
+      node.parameters,
+      node.returnType,
+    );
     return section(
       heading(3, node.nodeName),
       codeFence(sig),
       node.docString ? node.docString.value : null,
       node.docComment ? formatDocComment(node.docComment) : null,
       generateParamTable(node.parameters, ctx),
-      node.returnType ? `${bold("Returns:")} ${formatTypeLinked(node.returnType, ctx)}` : null,
-      sourceLink(node.loc, ctx)
+      node.returnType
+        ? `${bold("Returns:")} ${formatTypeLinked(node.returnType, ctx)}`
+        : null,
+      sourceLink(node.loc, ctx),
     );
   });
   return section(heading(2, "Nodes"), ...parts);

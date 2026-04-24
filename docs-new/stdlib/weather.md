@@ -38,10 +38,10 @@ Get current weather for a city name or zip code. Returns temperature, feels-like
 
 | Name | Type | Default |
 |---|---|---|
-| location | string |  |
-| units | string | "imperial" |
+| location | `string` |  |
+| units | `string` | "imperial" |
 
-**Returns:** Result
+**Returns:** `Result`
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/weather.agency#L26))
 
@@ -55,9 +55,9 @@ celsiusToFahrenheit(celsius: number): number
 
 | Name | Type | Default |
 |---|---|---|
-| celsius | number |  |
+| celsius | `number` |  |
 
-**Returns:** number
+**Returns:** `number`
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/weather.agency#L33))
 
@@ -71,8 +71,8 @@ fahrenheitToCelsius(fahrenheit: number): number
 
 | Name | Type | Default |
 |---|---|---|
-| fahrenheit | number |  |
+| fahrenheit | `number` |  |
 
-**Returns:** number
+**Returns:** `number`
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/weather.agency#L37))

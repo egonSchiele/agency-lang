@@ -14,10 +14,10 @@ Map a function over an array, returning a new array of results.
 
 | Name | Type | Default |
 |---|---|---|
-| arr | any[] |  |
-| func | (any) => any |  |
+| arr | `any[]` |  |
+| func | `(any) => any` |  |
 
-**Returns:** any[]
+**Returns:** `any[]`
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/array.agency#L0))
 
@@ -33,10 +33,10 @@ Return a new array containing only the elements for which the function returns t
 
 | Name | Type | Default |
 |---|---|---|
-| arr | any[] |  |
-| func | (any) => any |  |
+| arr | `any[]` |  |
+| func | `(any) => any` |  |
 
-**Returns:** any[]
+**Returns:** `any[]`
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/array.agency#L11))
 
@@ -52,10 +52,10 @@ Return a new array excluding elements for which the function returns true. Inver
 
 | Name | Type | Default |
 |---|---|---|
-| arr | any[] |  |
-| func | (any) => any |  |
+| arr | `any[]` |  |
+| func | `(any) => any` |  |
 
-**Returns:** any[]
+**Returns:** `any[]`
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/array.agency#L24))
 
@@ -71,10 +71,10 @@ Return the first element for which the function returns true, or null if none ma
 
 | Name | Type | Default |
 |---|---|---|
-| arr | any[] |  |
-| func | (any) => any |  |
+| arr | `any[]` |  |
+| func | `(any) => any` |  |
 
-**Returns:** any
+**Returns:** `any`
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/array.agency#L37))
 
@@ -90,10 +90,10 @@ Return the index of the first element for which the function returns true, or -1
 
 | Name | Type | Default |
 |---|---|---|
-| arr | any[] |  |
-| func | (any) => any |  |
+| arr | `any[]` |  |
+| func | `(any) => any` |  |
 
-**Returns:** number
+**Returns:** `number`
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/array.agency#L49))
 
@@ -109,11 +109,11 @@ Reduce an array to a single value by applying a function to an accumulator and e
 
 | Name | Type | Default |
 |---|---|---|
-| arr | any[] |  |
-| initial | any |  |
-| func | (any, any) => any |  |
+| arr | `any[]` |  |
+| initial | `any` |  |
+| func | `(any, any) => any` |  |
 
-**Returns:** any
+**Returns:** `any`
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/array.agency#L61))
 
@@ -129,10 +129,10 @@ Map a function over an array and flatten the results by one level.
 
 | Name | Type | Default |
 |---|---|---|
-| arr | any[] |  |
-| func | (any) => any |  |
+| arr | `any[]` |  |
+| func | `(any) => any` |  |
 
-**Returns:** any[]
+**Returns:** `any[]`
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/array.agency#L72))
 
@@ -148,10 +148,10 @@ Return true if the function returns true for every element in the array.
 
 | Name | Type | Default |
 |---|---|---|
-| arr | any[] |  |
-| func | (any) => any |  |
+| arr | `any[]` |  |
+| func | `(any) => any` |  |
 
-**Returns:** boolean
+**Returns:** `boolean`
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/array.agency#L86))
 
@@ -167,10 +167,10 @@ Return true if the function returns true for at least one element in the array.
 
 | Name | Type | Default |
 |---|---|---|
-| arr | any[] |  |
-| func | (any) => any |  |
+| arr | `any[]` |  |
+| func | `(any) => any` |  |
 
-**Returns:** boolean
+**Returns:** `boolean`
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/array.agency#L98))
 
@@ -186,10 +186,10 @@ Count the number of elements in the array for which the function returns true.
 
 | Name | Type | Default |
 |---|---|---|
-| arr | any[] |  |
-| func | (any) => any |  |
+| arr | `any[]` |  |
+| func | `(any) => any` |  |
 
-**Returns:** number
+**Returns:** `number`
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/array.agency#L110))
 
@@ -205,10 +205,10 @@ Return a new array sorted by the values returned by the function, in ascending o
 
 | Name | Type | Default |
 |---|---|---|
-| arr | any[] |  |
-| func | (any) => any |  |
+| arr | `any[]` |  |
+| func | `(any) => any` |  |
 
-**Returns:** any[]
+**Returns:** `any[]`
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/array.agency#L123))
 
@@ -224,10 +224,10 @@ Return a new array with duplicate elements removed, using the function to determ
 
 | Name | Type | Default |
 |---|---|---|
-| arr | any[] |  |
-| func | (any) => any |  |
+| arr | `any[]` |  |
+| func | `(any) => any` |  |
 
-**Returns:** any[]
+**Returns:** `any[]`
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/array.agency#L147))
 
@@ -243,9 +243,9 @@ Group elements of an array by the value returned by the function. Returns an obj
 
 | Name | Type | Default |
 |---|---|---|
-| arr | any[] |  |
-| func | (any) => any |  |
+| arr | `any[]` |  |
+| func | `(any) => any` |  |
 
-**Returns:** any
+**Returns:** `any`
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/array.agency#L169))

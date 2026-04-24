@@ -14,9 +14,9 @@ Join path segments using the platform separator, normalizing the result.
 
 | Name | Type | Default |
 |---|---|---|
-| parts | string[] |  |
+| parts | `string[]` |  |
 
-**Returns:** string
+**Returns:** `string`
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/path.agency#L2))
 
@@ -32,9 +32,9 @@ Resolve path segments into an absolute path, relative to the current working dir
 
 | Name | Type | Default |
 |---|---|---|
-| parts | string[] |  |
+| parts | `string[]` |  |
 
-**Returns:** string
+**Returns:** `string`
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/path.agency#L9))
 
@@ -50,10 +50,10 @@ Return the last portion of a path. If ext is given and the path ends with it, ex
 
 | Name | Type | Default |
 |---|---|---|
-| p | string |  |
-| ext | string | "" |
+| p | `string` |  |
+| ext | `string` | "" |
 
-**Returns:** string
+**Returns:** `string`
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/path.agency#L16))
 
@@ -69,9 +69,9 @@ Return the directory portion of a path.
 
 | Name | Type | Default |
 |---|---|---|
-| p | string |  |
+| p | `string` |  |
 
-**Returns:** string
+**Returns:** `string`
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/path.agency#L23))
 
@@ -87,9 +87,9 @@ Return the extension of a path (including the leading dot), or an empty string i
 
 | Name | Type | Default |
 |---|---|---|
-| p | string |  |
+| p | `string` |  |
 
-**Returns:** string
+**Returns:** `string`
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/path.agency#L30))
 
@@ -105,10 +105,10 @@ Return the relative path from 'from' to 'to'.
 
 | Name | Type | Default |
 |---|---|---|
-| from | string |  |
-| to | string |  |
+| from | `string` |  |
+| to | `string` |  |
 
-**Returns:** string
+**Returns:** `string`
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/path.agency#L37))
 
@@ -124,8 +124,8 @@ Return true if the path is absolute.
 
 | Name | Type | Default |
 |---|---|---|
-| p | string |  |
+| p | `string` |  |
 
-**Returns:** boolean
+**Returns:** `boolean`
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/path.agency#L44))

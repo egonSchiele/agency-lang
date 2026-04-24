@@ -14,10 +14,10 @@ Return a new object with the same keys, but with each value transformed by the f
 
 | Name | Type | Default |
 |---|---|---|
-| obj | any |  |
-| func | (any, string) => any |  |
+| obj | `any` |  |
+| func | `(any, string) => any` |  |
 
-**Returns:** any
+**Returns:** `any`
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/object.agency#L0))
 
@@ -33,10 +33,10 @@ Return a new object by applying the function to each entry. The function receive
 
 | Name | Type | Default |
 |---|---|---|
-| obj | any |  |
-| func | (any, string) => any |  |
+| obj | `any` |  |
+| func | `(any, string) => any` |  |
 
-**Returns:** any
+**Returns:** `any`
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/object.agency#L11))
 
@@ -52,10 +52,10 @@ Return a new object containing only the entries for which the function returns t
 
 | Name | Type | Default |
 |---|---|---|
-| obj | any |  |
-| func | (any, string) => boolean |  |
+| obj | `any` |  |
+| func | `(any, string) => boolean` |  |
 
-**Returns:** any
+**Returns:** `any`
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/object.agency#L23))
 
@@ -71,10 +71,10 @@ Return true if the function returns true for every entry in the object. The func
 
 | Name | Type | Default |
 |---|---|---|
-| obj | any |  |
-| func | (any, string) => boolean |  |
+| obj | `any` |  |
+| func | `(any, string) => boolean` |  |
 
-**Returns:** boolean
+**Returns:** `boolean`
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/object.agency#L36))
 
@@ -90,9 +90,9 @@ Return true if the function returns true for at least one entry in the object. T
 
 | Name | Type | Default |
 |---|---|---|
-| obj | any |  |
-| func | (any, string) => boolean |  |
+| obj | `any` |  |
+| func | `(any, string) => boolean` |  |
 
-**Returns:** boolean
+**Returns:** `boolean`
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/object.agency#L48))

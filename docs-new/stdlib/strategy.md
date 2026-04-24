@@ -14,10 +14,10 @@ Run a block n times in parallel. Returns an array of all results.
 
 | Name | Type | Default |
 |---|---|---|
-| n | number |  |
-| block | () => any |  |
+| n | `number` |  |
+| block | `() => any` |  |
 
-**Returns:** any[]
+**Returns:** `any[]`
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/strategy.agency#L0))
 
@@ -33,10 +33,10 @@ Run a block n times in parallel and return the most common result (majority vote
 
 | Name | Type | Default |
 |---|---|---|
-| n | number |  |
-| block | () => any |  |
+| n | `number` |  |
+| block | `() => any` |  |
 
-**Returns:** any
+**Returns:** `any`
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/strategy.agency#L9))
 
@@ -52,11 +52,11 @@ Run a block up to n times. Returns the first result that passes the test functio
 
 | Name | Type | Default |
 |---|---|---|
-| n | number |  |
-| test | (any) => boolean |  |
-| block | () => any |  |
+| n | `number` |  |
+| test | `(any) => boolean` |  |
+| block | `() => any` |  |
 
-**Returns:** any
+**Returns:** `any`
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/strategy.agency#L17))
 
@@ -72,11 +72,11 @@ Run a block up to n times. Each attempt receives the previous result and the att
 
 | Name | Type | Default |
 |---|---|---|
-| n | number |  |
-| test | (any) => boolean |  |
-| block | (any, number) => any |  |
+| n | `number` |  |
+| test | `(any) => boolean` |  |
+| block | `(any, number) => any` |  |
 
-**Returns:** any
+**Returns:** `any`
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/strategy.agency#L31))
 
@@ -92,10 +92,10 @@ Run a block for each variant in parallel, then return the first result that pass
 
 | Name | Type | Default |
 |---|---|---|
-| variants | any[] |  |
-| test | (any) => boolean |  |
-| block | (any) => any |  |
+| variants | `any[]` |  |
+| test | `(any) => boolean` |  |
+| block | `(any) => any` |  |
 
-**Returns:** any
+**Returns:** `any`
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/strategy.agency#L47))

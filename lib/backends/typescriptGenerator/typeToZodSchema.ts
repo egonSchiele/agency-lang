@@ -68,12 +68,7 @@ function mapTypeToSchema(
   } else if (variableType.type === "resultType") {
     return resultHandler(variableType, typeAliases);
   } else if (variableType.type === "typeAliasVariable") {
-    if (!typeAliases || !typeAliases[variableType.aliasName]) {
-      throw new Error(
-        `Type alias '${variableType.aliasName}' not found in provided type aliases: ${JSON.stringify(typeAliases)}`,
-      );
-    }
-    return recurse(typeAliases[variableType.aliasName]);
+    return variableType.aliasName;
   }
 
   return "z.string()";

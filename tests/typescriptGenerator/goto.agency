@@ -1,0 +1,7 @@
+node foo() {
+  print("in foo")
+}
+
+node main() {
+  goto foo()
+}

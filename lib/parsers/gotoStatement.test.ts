@@ -5,33 +5,39 @@ describe("gotoStatementParser", () => {
   it("should parse goto with a function call", () => {
     const result = gotoStatementParser("goto foo()");
     expect(result.success).toBe(true);
-    expect(result.result).toMatchObject({
-      type: "gotoStatement",
-      nodeCall: {
-        type: "functionCall",
-        functionName: "foo",
-        arguments: [],
-      },
-    });
+    if (result.success) {
+      expect(result.result).toMatchObject({
+        type: "gotoStatement",
+        nodeCall: {
+          type: "functionCall",
+          functionName: "foo",
+          arguments: [],
+        },
+      });
+    }
   });
 
   it("should parse goto with arguments", () => {
     const result = gotoStatementParser("goto categorize(msg, 42)");
     expect(result.success).toBe(true);
-    expect(result.result).toMatchObject({
-      type: "gotoStatement",
-      nodeCall: {
-        type: "functionCall",
-        functionName: "categorize",
-      },
-    });
-    expect(result.result.nodeCall.arguments).toHaveLength(2);
+    if (result.success) {
+      expect(result.result).toMatchObject({
+        type: "gotoStatement",
+        nodeCall: {
+          type: "functionCall",
+          functionName: "categorize",
+        },
+      });
+      expect(result.result.nodeCall.arguments).toHaveLength(2);
+    }
   });
 
   it("should parse goto with optional semicolon", () => {
     const result = gotoStatementParser("goto foo();");
     expect(result.success).toBe(true);
-    expect(result.result.type).toBe("gotoStatement");
+    if (result.success) {
+      expect(result.result.type).toBe("gotoStatement");
+    }
   });
 
   it("should fail on goto without a function call", () => {

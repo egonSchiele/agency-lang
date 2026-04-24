@@ -1,0 +1,7 @@
+node greet(name: string) {
+  print("hello " + name)
+}
+
+node main() {
+  goto greet("world")
+}

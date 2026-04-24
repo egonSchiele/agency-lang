@@ -14,40 +14,103 @@
 
 ## Phase 1: Define interface and refactor prompt.ts
 
-### Task 1: Define LLMClient type and default smoltalk client
+### Task 1: Define PromptConfig, LLMClient types, and default SmoltalkClient
 
 **Files:**
 - Create: `lib/runtime/llmClient.ts`
 - Modify: `lib/runtime/index.ts`
 
-- [ ] **Step 1: Create the LLMClient type and default client**
+- [ ] **Step 1: Create the types and default client**
 
 Create `lib/runtime/llmClient.ts`:
 
 ```typescript
 import * as smoltalk from "smoltalk";
-import type { SmolPromptConfig, PromptResult, StreamChunk, Result } from "smoltalk";
+import type { SmolPromptConfig, PromptResult, StreamChunk, Result, Message } from "smoltalk";
+import type { ZodType } from "zod";
 
-export type LLMClient = {
-  text(config: SmolPromptConfig): Promise<Result<PromptResult>>;
-  textStream(config: SmolPromptConfig): AsyncGenerator<StreamChunk>;
+export type ToolDefinition = {
+  name: string;
+  description?: string;
+  schema: ZodType;
 };
 
-export function createDefaultClient(): LLMClient {
-  return {
-    text: (config) => smoltalk.text(config),
-    textStream: (config) => smoltalk.textStream(config),
+export type ToolCall = {
+  id: string;
+  name: string;
+  arguments: Record<string, any>;
+};
+
+export type PromptConfig = {
+  messages: Message[];
+  tools?: ToolDefinition[];
+  maxTokens?: number;
+  temperature?: number;
+  responseFormat?: ZodType;
+  thinking?: {
+    enabled: boolean;
+    budgetTokens?: number;
   };
+  reasoningEffort?: "low" | "medium" | "high";
+  apiKey?: string;
+  model?: string;
+  provider?: string;
+  metadata?: Record<string, any>;
+  abortSignal?: AbortSignal;
+  hooks?: Partial<{
+    onStart: (config: PromptConfig) => void;
+    onToolCall: (toolCall: ToolCall) => void;
+    onEnd: (result: PromptResult) => void;
+    onError: (error: Error) => void;
+  }>;
+};
+
+export type LLMClient = {
+  text(config: PromptConfig): Promise<Result<PromptResult>>;
+  textStream(config: PromptConfig): AsyncGenerator<StreamChunk>;
+};
+
+export class SmoltalkClient implements LLMClient {
+  async text(config: PromptConfig): Promise<Result<PromptResult>> {
+    const smolConfig = this.toSmolConfig(config);
+    return smoltalk.text(smolConfig);
+  }
+
+  async *textStream(config: PromptConfig): AsyncGenerator<StreamChunk> {
+    const smolConfig = this.toSmolConfig(config);
+    yield* smoltalk.textStream(smolConfig);
+  }
+
+  private toSmolConfig(config: PromptConfig): SmolPromptConfig {
+    const smolConfig: any = {
+      messages: config.messages,
+      tools: config.tools,
+      responseFormat: config.responseFormat,
+      abortSignal: config.abortSignal,
+    };
+    if (config.model) smolConfig.model = config.model;
+    if (config.apiKey) smolConfig.openAiApiKey = config.apiKey;
+    if (config.maxTokens) smolConfig.maxTokens = config.maxTokens;
+    if (config.temperature !== undefined) smolConfig.temperature = config.temperature;
+    if (config.provider) smolConfig.provider = config.provider;
+    if (config.thinking) smolConfig.thinking = config.thinking;
+    if (config.reasoningEffort) smolConfig.reasoningEffort = config.reasoningEffort;
+    // Pass through client-specific options from metadata
+    if (config.metadata) Object.assign(smolConfig, config.metadata);
+    return smolConfig as SmolPromptConfig;
+  }
 }
 ```
+
+Note: The `toSmolConfig` mapping may need adjustment based on exact `SmolPromptConfig` field names. Verify during implementation by checking smoltalk's types.
 
 - [ ] **Step 2: Export from runtime index**
 
 In `lib/runtime/index.ts`, add:
 
 ```typescript
-export { createDefaultClient } from "./llmClient.js";
-export type { LLMClient } from "./llmClient.js";
+export { SmoltalkClient } from "./llmClient.js";
+export type { LLMClient, PromptConfig, ToolDefinition, ToolCall } from "./llmClient.js";
 ```
 
 - [ ] **Step 3: Run tests**
@@ -60,7 +123,7 @@ Expected: All tests pass (no behavioral change).
 
 ```bash
 git add lib/runtime/llmClient.ts lib/runtime/index.ts
-git commit -m "feat: define LLMClient type and default smoltalk client"
+git commit -m "feat: define PromptConfig, LLMClient types, and SmoltalkClient"
 ```
 
 ---
@@ -75,7 +138,7 @@ git commit -m "feat: define LLMClient type and default smoltalk client"
 In `lib/runtime/state/context.ts`, add import:
 
 ```typescript
-import { LLMClient, createDefaultClient } from "../llmClient.js";
+import { LLMClient, SmoltalkClient } from "../llmClient.js";
 ```
 
 Add the field to the class (near the `smoltalkDefaults` field):
@@ -89,7 +152,7 @@ llmClient: LLMClient;
 In the constructor body, after `this.smoltalkDefaults = args.smoltalkDefaults;`, add:
 
 ```typescript
-this.llmClient = createDefaultClient();
+this.llmClient = new SmoltalkClient();
 ```
 
 - [ ] **Step 3: Copy in createExecutionContext**
@@ -139,23 +202,30 @@ let _completion: AsyncGenerator<StreamChunk> | Promise<Result<PromptResult>> =
 Replace with:
 
 ```typescript
-const llmConfig = {
+import type { PromptConfig } from "./llmClient.js";
+
+// ... in the function body:
+const promptConfig: PromptConfig = {
   messages: messages.getMessages(),
   tools,
   responseFormat,
   abortSignal: ctx.abortController.signal,
-  ...clientConfig,
+  model: (clientConfig as any)?.model,
+  apiKey: (clientConfig as any)?.openAiApiKey,
+  maxTokens: (clientConfig as any)?.maxTokens,
+  temperature: (clientConfig as any)?.temperature,
+  metadata: clientConfig,
 };
 
 let _completion: AsyncGenerator<StreamChunk> | Promise<Result<PromptResult>>;
 if (stream) {
-  _completion = ctx.llmClient.textStream(llmConfig);
+  _completion = ctx.llmClient.textStream(promptConfig);
 } else {
-  _completion = ctx.llmClient.text(llmConfig);
+  _completion = ctx.llmClient.text(promptConfig);
 }
 ```
 
-Note: `stream` is intentionally omitted from `llmConfig` — the caller branches on it and calls the appropriate method. Passing `stream` in the config would confuse custom clients.
+Note: `stream` is intentionally omitted from `promptConfig` — the caller branches on it and calls the appropriate method. The full `clientConfig` is passed as `metadata` so the default SmoltalkClient can forward smoltalk-specific options. The explicit fields (`model`, `apiKey`, etc.) are extracted so that alternative clients can use them without parsing metadata.
 
 This removes the `(smoltalk.text as Function)` type cast and uses the explicit two-method interface.
 
@@ -198,8 +268,8 @@ git commit -m "refactor: prompt.ts uses ctx.llmClient instead of smoltalk direct
 Create `lib/runtime/simpleOpenAIClient.ts`:
 
 ```typescript
-import type { SmolPromptConfig, PromptResult, StreamChunk, ToolCallJSON, Result, TokenUsage, CostEstimate } from "smoltalk";
-import type { LLMClient } from "./llmClient.js";
+import type { PromptResult, StreamChunk, TokenUsage, CostEstimate, Result } from "smoltalk";
+import type { LLMClient, PromptConfig, ToolCall } from "./llmClient.js";
 
 export class SimpleOpenAIClient implements LLMClient {
   private apiKey: string;
@@ -214,8 +284,8 @@ export class SimpleOpenAIClient implements LLMClient {
     this.defaultModel = opts?.model ?? "gpt-4o-mini";
   }
 
-  async text(config: SmolPromptConfig): Promise<Result<PromptResult>> {
-    const model = (config as any).model || this.defaultModel;
+  async text(config: PromptConfig): Promise<Result<PromptResult>> {
+    const model = config.model || this.defaultModel;
     const body = this.buildRequestBody(config, model);
 
     try {
@@ -226,7 +296,7 @@ export class SimpleOpenAIClient implements LLMClient {
           "Authorization": `Bearer ${this.apiKey}`,
         },
         body: JSON.stringify(body),
-        signal: config.abortSignal as AbortSignal | undefined,
+        signal: config.abortSignal,
       });
 
       if (!response.ok) {
@@ -254,7 +324,7 @@ export class SimpleOpenAIClient implements LLMClient {
     }
   }
 
-  async *textStream(config: SmolPromptConfig): AsyncGenerator<StreamChunk> {
+  async *textStream(config: PromptConfig): AsyncGenerator<StreamChunk> {
     const result = await this.text(config);
     if (result.success) {
       yield { type: "done", result: result.value } as StreamChunk;
@@ -263,7 +333,7 @@ export class SimpleOpenAIClient implements LLMClient {
     }
   }
 
-  private buildRequestBody(config: SmolPromptConfig, model: string): any {
+  private buildRequestBody(config: PromptConfig, model: string): any {
     const messages = (config.messages || []).map((m: any) => {
       const json = typeof m.toJSON === "function" ? m.toJSON() : m;
       return {
@@ -303,7 +373,7 @@ export class SimpleOpenAIClient implements LLMClient {
     return body;
   }
 
-  private extractToolCalls(choice: any): ToolCallJSON[] {
+  private extractToolCalls(choice: any): ToolCall[] {
     return (choice?.message?.tool_calls || []).map((tc: any) => ({
       id: tc.id,
       name: tc.function.name,

@@ -73,16 +73,13 @@ async function _runPrompt({
   }
 
   const promptConfig: PromptConfig = {
+    ...clientConfig,
     messages: messages.getMessages(),
     tools,
     responseFormat,
     abortSignal: ctx.abortController.signal,
-    model: (clientConfig as any)?.model,
-    apiKey: (clientConfig as any)?.openAiApiKey,
-    maxTokens: (clientConfig as any)?.maxTokens,
-    temperature: (clientConfig as any)?.temperature,
     metadata: clientConfig,
-  };
+  } as any;
 
   let _completion: AsyncGenerator<StreamChunk> | Promise<Result<PromptResult>>;
   if (stream) {

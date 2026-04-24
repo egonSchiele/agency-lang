@@ -76,6 +76,7 @@ export class RuntimeContext<T> {
 
   traceConfig: TraceConfig;
   runId: string | null;
+  verbose: boolean;
 
   // stored so createExecutionContext can create new StatelogClients
   private statelogConfig: StatelogConfig;
@@ -87,6 +88,7 @@ export class RuntimeContext<T> {
     dirname: string;
     maxRestores?: number;
     traceConfig?: TraceConfig;
+    verbose?: boolean;
   }) {
     const statelogConfig = {
       ...args.statelogConfig,
@@ -113,6 +115,7 @@ export class RuntimeContext<T> {
     this.traceWriter = null;
     this.traceConfig = args.traceConfig || {};
     this.runId = null;
+    this.verbose = args.verbose ?? false;
     this.dirname = args.dirname;
 
     const graphConfig = {
@@ -163,6 +166,7 @@ export class RuntimeContext<T> {
     });
     execCtx.traceConfig = this.traceConfig;
     execCtx.runId = runId;
+    execCtx.verbose = this.verbose;
     execCtx.pendingPromises = new PendingPromiseStore();
     execCtx.classRegistry = this.classRegistry;
     execCtx.abortController = new AbortController();

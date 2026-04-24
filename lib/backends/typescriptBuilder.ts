@@ -3250,6 +3250,9 @@ export class TypeScriptBuilder {
       smoltalkDefaults,
       dirname: ts.id("__dirname"),
     };
+    if (this.agencyConfig.verbose) {
+      runtimeCtxArgs.verbose = ts.raw("true");
+    }
     if (this.agencyConfig.checkpoints?.maxRestores !== undefined) {
       runtimeCtxArgs.maxRestores = ts.raw(
         String(this.agencyConfig.checkpoints.maxRestores),

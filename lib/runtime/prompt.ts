@@ -269,6 +269,7 @@ async function executeToolCalls({
         const retryable = false;
         const errorMessage =
           error instanceof Error ? error.message : String(error);
+        console.error(`Tool call "${handler.name}" crashed: ${errorMessage}`);
         toolErrorCounts[handler.name] =
           (toolErrorCounts[handler.name] || 0) + 1;
 

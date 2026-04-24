@@ -1,0 +1,10 @@
+let emitted = false
+
+callback onEmit(data) {
+  emitted = true
+}
+
+node main() {
+  emit("hello")
+  return emitted
+}

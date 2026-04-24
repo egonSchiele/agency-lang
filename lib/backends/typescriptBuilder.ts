@@ -1910,6 +1910,23 @@ export class TypeScriptBuilder {
       return ts.throw(`new Error(${this.str(arg)})`);
     }
 
+    if (node.functionName === "emit") {
+      const argNodes: TsNode[] = node.arguments.map((arg) =>
+        this.processCallArg(arg),
+      );
+      const data = argNodes.length > 0 ? argNodes[0] : ts.id("undefined");
+      return $(ts.id("callHook"))
+        .call([
+          ts.obj({
+            callbacks: $(ts.runtime.ctx).prop("callbacks").done(),
+            name: ts.str("onEmit"),
+            data,
+          }),
+        ])
+        .await()
+        .done();
+    }
+
     if (node.functionName === "llm") {
       // Standalone llm() call (not assigned to variable)
       return this.processLlmCall(

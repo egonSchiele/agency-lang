@@ -57,6 +57,7 @@ export type CallbackMap = {
     complete: Promise<void>;
     cancel: () => void;
   };
+  onEmit: any;
 };
 
 // Compile-time guard: ensures VALID_CALLBACK_NAMES stays in sync with CallbackMap.

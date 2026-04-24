@@ -34,6 +34,7 @@ export const VALID_CALLBACK_NAMES = [
   "onStream",
   "onTrace",
   "onOAuthRequired",
+  "onEmit",
 ] as const;
 
 export type CallbackName = (typeof VALID_CALLBACK_NAMES)[number];

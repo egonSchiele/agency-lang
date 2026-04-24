@@ -1,0 +1,11 @@
+type Name = string
+
+type User = {
+  name: Name;
+  age: number
+}
+
+node main() {
+  const user: User = llm("give me a user")
+  print(user)
+}

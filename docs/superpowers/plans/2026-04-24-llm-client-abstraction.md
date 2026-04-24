@@ -82,22 +82,16 @@ export class SmoltalkClient implements LLMClient {
   }
 
   private toSmolConfig(config: PromptConfig): SmolPromptConfig {
-    const smolConfig: any = {
-      messages: config.messages,
-      tools: config.tools,
-      responseFormat: config.responseFormat,
-      abortSignal: config.abortSignal,
-    };
-    if (config.model) smolConfig.model = config.model;
-    if (config.apiKey) smolConfig.openAiApiKey = config.apiKey;
-    if (config.maxTokens) smolConfig.maxTokens = config.maxTokens;
-    if (config.temperature !== undefined) smolConfig.temperature = config.temperature;
-    if (config.provider) smolConfig.provider = config.provider;
-    if (config.thinking) smolConfig.thinking = config.thinking;
-    if (config.reasoningEffort) smolConfig.reasoningEffort = config.reasoningEffort;
-    // Pass through client-specific options from metadata
-    if (config.metadata) Object.assign(smolConfig, config.metadata);
-    return smolConfig as SmolPromptConfig;
+    const { messages, tools, responseFormat, abortSignal,
+            model, apiKey, maxTokens, temperature, provider,
+            thinking, reasoningEffort, metadata } = config;
+
+    return {
+      messages, tools, responseFormat, abortSignal,
+      model, maxTokens, temperature, provider, thinking, reasoningEffort,
+      openAiApiKey: apiKey,
+      ...metadata,
+    } as SmolPromptConfig;
   }
 }
 ```
@@ -141,10 +135,14 @@ In `lib/runtime/state/context.ts`, add import:
 import { LLMClient, SmoltalkClient } from "../llmClient.js";
 ```
 
-Add the field to the class (near the `smoltalkDefaults` field):
+Add the private field, getter, and setter to the class (near the `smoltalkDefaults` field):
 
 ```typescript
-llmClient: LLMClient;
+private _llmClient: LLMClient;
+
+get llmClient(): LLMClient { return this._llmClient; }
+
+setLLMClient(client: LLMClient): void { this._llmClient = client; }
 ```
 
 - [ ] **Step 2: Set default in constructor**
@@ -152,7 +150,7 @@ llmClient: LLMClient;
 In the constructor body, after `this.smoltalkDefaults = args.smoltalkDefaults;`, add:
 
 ```typescript
-this.llmClient = new SmoltalkClient();
+this._llmClient = new SmoltalkClient();
 ```
 
 - [ ] **Step 3: Copy in createExecutionContext**
@@ -160,8 +158,10 @@ this.llmClient = new SmoltalkClient();
 In `createExecutionContext`, after `execCtx.smoltalkDefaults = this.smoltalkDefaults;`, add:
 
 ```typescript
-execCtx.llmClient = this.llmClient;
+execCtx._llmClient = this._llmClient;
 ```
+
+Note: `createExecutionContext` uses `Object.create` and sets fields directly, so it accesses the private field. This is an existing pattern in the codebase (e.g., `execCtx._mcpManager`).
 
 - [ ] **Step 4: Run tests**
 
@@ -468,7 +468,7 @@ Create `lib/templates/backends/typescriptGenerator/builtinFunctions/setLLMClient
 
 ```
 function setLLMClient(client) {
-  __globalCtx.llmClient = client;
+  __globalCtx.setLLMClient(client);
 }
 ```
 

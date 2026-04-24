@@ -57,7 +57,7 @@ const __globalCtx = new RuntimeContext({
   },
   dirname: __dirname,
   traceConfig: {
-    program: "typeAlias.agency"
+    program: "nestedTypeAlias.agency"
   }
 });
 const graph = __globalCtx.graph;
@@ -101,18 +101,20 @@ async function mcp(serverName: string) {
   return __globalCtx.mcpManager.getTools(serverName);
 }
 async function __initializeGlobals(__ctx) {
-  __ctx.globals.markInitialized("typeAlias.agency")
+  __ctx.globals.markInitialized("nestedTypeAlias.agency")
 }
 __toolRegistry["readSkill"] = __AgencyFunction.create({
   name: "readSkill",
-  module: "typeAlias.agency",
+  module: "nestedTypeAlias.agency",
   fn: readSkill,
   params: __readSkillToolParams.map(p => ({ name: p, hasDefault: false, defaultValue: undefined, variadic: false })),
   toolDefinition: __readSkillTool,
 }, __toolRegistry);
 __functionRefReviver.registry = __toolRegistry;
-const Coords = z.object({ "x": z.number(), "y": z.number() });
-type Coords = z.infer<typeof Coords>;
+const Name = z.string();
+type Name = z.infer<typeof Name>;
+const User = z.object({ "name": Name, "age": z.number() });
+type User = z.infer<typeof User>;
 graph.node("main", async (__state: GraphState) => {
   const __setupData = setupNode({
     state: __state
@@ -133,16 +135,16 @@ let __functionCompleted = false;
       nodeName: "main"
     }
   })
-  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "typeAlias.agency", scopeName: "main" });
+  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "nestedTypeAlias.agency", scopeName: "main" });
   try {
     await runner.step(0, async (runner) => {
 __self.__removedTools = __self.__removedTools || [];
-__stack.locals.foo = await runPrompt({
+__stack.locals.user = await runPrompt({
         ctx: __ctx,
-        prompt: `a set of coordinates`,
+        prompt: `give me a user`,
         messages: __threads.getOrCreateActive(),
         responseFormat: z.object({
-          response: Coords
+          response: User
         }),
         clientConfig: {},
         maxToolCallRounds: 10,
@@ -151,11 +153,11 @@ __stack.locals.foo = await runPrompt({
         checkpointInfo: runner.getCheckpointInfo()
       });
 // halt if this is an interrupt
-if (isInterrupt(__stack.locals.foo)) {
+if (isInterrupt(__stack.locals.user)) {
         await __ctx.pendingPromises.awaitAll()
         runner.halt({
           messages: __threads,
-          data: __stack.locals.foo
+          data: __stack.locals.user
         })
         return;
       }
@@ -163,7 +165,7 @@ if (isInterrupt(__stack.locals.foo)) {
     await runner.step(1, async (runner) => {
 const __funcResult = await __call(print, {
         type: "positional",
-        args: [__stack.locals.foo]
+        args: [__stack.locals.user]
       }, {
         ctx: __ctx,
         threads: __threads,
@@ -226,4 +228,4 @@ if (__process.argv[1] === fileURLToPath(import.meta.url)) {
   }
 }
 export default graph
-export const __sourceMap = {"typeAlias.agency:main":{"0":{"line":3,"col":2},"1":{"line":4,"col":2}}};
+export const __sourceMap = {"nestedTypeAlias.agency:main":{"0":{"line":6,"col":2},"1":{"line":7,"col":2}}};

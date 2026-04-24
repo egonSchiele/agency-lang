@@ -1,0 +1,6 @@
+export type Color = "red" | "green" | "blue"
+
+node main() {
+  const c: Color = llm("pick a color")
+  print(c)
+}

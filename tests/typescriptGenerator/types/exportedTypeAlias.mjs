@@ -57,7 +57,7 @@ const __globalCtx = new RuntimeContext({
   },
   dirname: __dirname,
   traceConfig: {
-    program: "typeAlias.agency"
+    program: "exportedTypeAlias.agency"
   }
 });
 const graph = __globalCtx.graph;
@@ -101,18 +101,18 @@ async function mcp(serverName: string) {
   return __globalCtx.mcpManager.getTools(serverName);
 }
 async function __initializeGlobals(__ctx) {
-  __ctx.globals.markInitialized("typeAlias.agency")
+  __ctx.globals.markInitialized("exportedTypeAlias.agency")
 }
 __toolRegistry["readSkill"] = __AgencyFunction.create({
   name: "readSkill",
-  module: "typeAlias.agency",
+  module: "exportedTypeAlias.agency",
   fn: readSkill,
   params: __readSkillToolParams.map(p => ({ name: p, hasDefault: false, defaultValue: undefined, variadic: false })),
   toolDefinition: __readSkillTool,
 }, __toolRegistry);
 __functionRefReviver.registry = __toolRegistry;
-const Coords = z.object({ "x": z.number(), "y": z.number() });
-type Coords = z.infer<typeof Coords>;
+export const Color = z.union([z.literal("red"), z.literal("green"), z.literal("blue")]);
+export type Color = z.infer<typeof Color>;
 graph.node("main", async (__state: GraphState) => {
   const __setupData = setupNode({
     state: __state
@@ -133,16 +133,16 @@ let __functionCompleted = false;
       nodeName: "main"
     }
   })
-  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "typeAlias.agency", scopeName: "main" });
+  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "exportedTypeAlias.agency", scopeName: "main" });
   try {
     await runner.step(0, async (runner) => {
 __self.__removedTools = __self.__removedTools || [];
-__stack.locals.foo = await runPrompt({
+__stack.locals.c = await runPrompt({
         ctx: __ctx,
-        prompt: `a set of coordinates`,
+        prompt: `pick a color`,
         messages: __threads.getOrCreateActive(),
         responseFormat: z.object({
-          response: Coords
+          response: Color
         }),
         clientConfig: {},
         maxToolCallRounds: 10,
@@ -151,11 +151,11 @@ __stack.locals.foo = await runPrompt({
         checkpointInfo: runner.getCheckpointInfo()
       });
 // halt if this is an interrupt
-if (isInterrupt(__stack.locals.foo)) {
+if (isInterrupt(__stack.locals.c)) {
         await __ctx.pendingPromises.awaitAll()
         runner.halt({
           messages: __threads,
-          data: __stack.locals.foo
+          data: __stack.locals.c
         })
         return;
       }
@@ -163,7 +163,7 @@ if (isInterrupt(__stack.locals.foo)) {
     await runner.step(1, async (runner) => {
 const __funcResult = await __call(print, {
         type: "positional",
-        args: [__stack.locals.foo]
+        args: [__stack.locals.c]
       }, {
         ctx: __ctx,
         threads: __threads,
@@ -226,4 +226,4 @@ if (__process.argv[1] === fileURLToPath(import.meta.url)) {
   }
 }
 export default graph
-export const __sourceMap = {"typeAlias.agency:main":{"0":{"line":3,"col":2},"1":{"line":4,"col":2}}};
+export const __sourceMap = {"exportedTypeAlias.agency:main":{"0":{"line":1,"col":2},"1":{"line":2,"col":2}}};

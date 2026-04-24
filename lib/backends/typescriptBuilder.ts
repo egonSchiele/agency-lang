@@ -839,9 +839,11 @@ export class TypeScriptBuilder {
 
   private processTypeAlias(node: TypeAlias): TsNode {
     const exportPrefix = node.exported ? "export " : "";
-    return ts.raw(
-      `${exportPrefix}type ${node.aliasName} = ${formatTypeHint(node.aliasedType)};`,
-    );
+    const zodSchema = mapTypeToZodSchema(node.aliasedType, this.getVisibleTypeAliases());
+    return ts.statements([
+      ts.raw(`${exportPrefix}const ${node.aliasName} = ${zodSchema};`),
+      ts.raw(`${exportPrefix}type ${node.aliasName} = z.infer<typeof ${node.aliasName}>;`),
+    ]);
   }
 
   // ------- Proper IR node methods -------

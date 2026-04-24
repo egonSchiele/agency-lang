@@ -62,6 +62,10 @@ export { isGenerator, handleStreamingResponse } from "./streaming.js";
 
 export { runPrompt } from "./prompt.js";
 
+export { SmoltalkClient } from "./llmClient.js";
+export { SimpleOpenAIClient } from "./simpleOpenAIClient.js";
+export type { LLMClient, PromptConfig, ToolCall } from "./llmClient.js";
+
 export {
   ConcurrentInterruptError,
   CheckpointError,

@@ -1,0 +1,7 @@
+node second() {
+  return "arrived at second"
+}
+
+node testGoto() {
+  goto second()
+}

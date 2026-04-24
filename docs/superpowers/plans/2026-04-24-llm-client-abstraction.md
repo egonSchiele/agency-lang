@@ -198,22 +198,80 @@ git commit -m "refactor: prompt.ts uses ctx.llmClient instead of smoltalk direct
 Create `lib/runtime/simpleOpenAIClient.ts`:
 
 ```typescript
-import type { SmolPromptConfig, PromptResult, StreamChunk, ToolCallJSON, Result } from "smoltalk";
+import type { SmolPromptConfig, PromptResult, StreamChunk, ToolCallJSON, Result, TokenUsage, CostEstimate } from "smoltalk";
 import type { LLMClient } from "./llmClient.js";
 
-export function createSimpleOpenAIClient(opts?: { apiKey?: string; model?: string }): LLMClient {
-  const apiKey = opts?.apiKey ?? process.env.OPENAI_API_KEY;
-  const defaultModel = opts?.model ?? "gpt-4o-mini";
+export class SimpleOpenAIClient implements LLMClient {
+  private apiKey: string;
+  private defaultModel: string;
 
-  if (!apiKey) {
-    throw new Error("OPENAI_API_KEY not found. Pass apiKey option or set OPENAI_API_KEY environment variable.");
+  constructor(opts?: { apiKey?: string; model?: string }) {
+    const apiKey = opts?.apiKey ?? process.env.OPENAI_API_KEY;
+    if (!apiKey) {
+      throw new Error("OPENAI_API_KEY not found. Pass apiKey option or set OPENAI_API_KEY environment variable.");
+    }
+    this.apiKey = apiKey;
+    this.defaultModel = opts?.model ?? "gpt-4o-mini";
   }
 
-  async function text(config: SmolPromptConfig): Promise<Result<PromptResult>> {
-    const model = (config as any).model || defaultModel;
+  async text(config: SmolPromptConfig): Promise<Result<PromptResult>> {
+    const model = (config as any).model || this.defaultModel;
+    const body = this.buildRequestBody(config, model);
+
+    try {
+      const response = await fetch("https://api.openai.com/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${this.apiKey}`,
+        },
+        body: JSON.stringify(body),
+        signal: config.abortSignal as AbortSignal | undefined,
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        return { success: false, error: `OpenAI API error (${response.status}): ${errorText}` };
+      }
+
+      const data = await response.json();
+      const choice = data.choices?.[0];
+      const output = choice?.message?.content || "";
+
+      return {
+        success: true,
+        value: {
+          output,
+          toolCalls: this.extractToolCalls(choice),
+          usage: this.extractUsage(data),
+          cost: { inputCost: 0, outputCost: 0, totalCost: 0, currency: "USD" } as CostEstimate,
+          model,
+        } as PromptResult,
+      };
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      return { success: false, error: message };
+    }
+  }
+
+  async *textStream(config: SmolPromptConfig): AsyncGenerator<StreamChunk> {
+    const result = await this.text(config);
+    if (result.success) {
+      yield { type: "done", result: result.value } as StreamChunk;
+    } else {
+      yield { type: "error", error: result.error } as StreamChunk;
+    }
+  }
+
+  private buildRequestBody(config: SmolPromptConfig, model: string): any {
     const messages = (config.messages || []).map((m: any) => {
       const json = typeof m.toJSON === "function" ? m.toJSON() : m;
-      return { role: json.role, content: json.content, ...(json.tool_calls ? { tool_calls: json.tool_calls } : {}), ...(json.tool_call_id ? { tool_call_id: json.tool_call_id } : {}) };
+      return {
+        role: json.role,
+        content: json.content,
+        ...(json.tool_calls ? { tool_calls: json.tool_calls } : {}),
+        ...(json.tool_call_id ? { tool_call_id: json.tool_call_id } : {}),
+      };
     });
 
     const body: any = { model, messages };
@@ -221,7 +279,11 @@ export function createSimpleOpenAIClient(opts?: { apiKey?: string; model?: strin
     if (config.tools && config.tools.length > 0) {
       body.tools = config.tools.map((t: any) => ({
         type: "function",
-        function: { name: t.name, description: t.description || "", parameters: t.inputSchema || t.schema },
+        function: {
+          name: t.name,
+          description: t.description || "",
+          parameters: t.inputSchema || t.schema,
+        },
       }));
     }
 
@@ -238,64 +300,28 @@ export function createSimpleOpenAIClient(opts?: { apiKey?: string; model?: strin
       };
     }
 
-    try {
-      const response = await fetch("https://api.openai.com/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${apiKey}`,
-        },
-        body: JSON.stringify(body),
-        signal: config.abortSignal as AbortSignal | undefined,
-      });
+    return body;
+  }
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        return { success: false, error: `OpenAI API error (${response.status}): ${errorText}` };
-      }
+  private extractToolCalls(choice: any): ToolCallJSON[] {
+    return (choice?.message?.tool_calls || []).map((tc: any) => ({
+      id: tc.id,
+      name: tc.function.name,
+      arguments: JSON.parse(tc.function.arguments),
+    }));
+  }
 
-      const data = await response.json();
-      const choice = data.choices?.[0];
-      const output = choice?.message?.content || "";
-      const toolCalls: ToolCallJSON[] = (choice?.message?.tool_calls || []).map((tc: any) => ({
-        id: tc.id,
-        name: tc.function.name,
-        arguments: JSON.parse(tc.function.arguments),
-      }));
-
-      const usage = data.usage ? {
+  private extractUsage(data: any): TokenUsage {
+    if (data.usage) {
+      return {
         inputTokens: data.usage.prompt_tokens || 0,
         outputTokens: data.usage.completion_tokens || 0,
         cachedInputTokens: 0,
         totalTokens: data.usage.total_tokens || 0,
-      } : { inputTokens: 0, outputTokens: 0, cachedInputTokens: 0, totalTokens: 0 };
-
-      return {
-        success: true,
-        value: {
-          output,
-          toolCalls,
-          usage,
-          cost: { inputCost: 0, outputCost: 0, totalCost: 0, currency: "USD" },
-          model,
-        } as PromptResult,
       };
-    } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : String(error);
-      return { success: false, error: message };
     }
+    return { inputTokens: 0, outputTokens: 0, cachedInputTokens: 0, totalTokens: 0 };
   }
-
-  async function* textStream(config: SmolPromptConfig): AsyncGenerator<StreamChunk> {
-    const result = await text(config);
-    if (result.success) {
-      yield { type: "done", result: result.value } as StreamChunk;
-    } else {
-      yield { type: "error", error: result.error } as StreamChunk;
-    }
-  }
-
-  return { text, textStream };
 }
 ```
 
@@ -304,7 +330,7 @@ export function createSimpleOpenAIClient(opts?: { apiKey?: string; model?: strin
 In `lib/runtime/index.ts`, add:
 
 ```typescript
-export { createSimpleOpenAIClient } from "./simpleOpenAIClient.js";
+export { SimpleOpenAIClient } from "./simpleOpenAIClient.js";
 ```
 
 - [ ] **Step 3: Write a unit test**
@@ -313,29 +339,29 @@ Create `lib/runtime/simpleOpenAIClient.test.ts`:
 
 ```typescript
 import { describe, it, expect } from "vitest";
-import { createSimpleOpenAIClient } from "./simpleOpenAIClient.js";
+import { SimpleOpenAIClient } from "./simpleOpenAIClient.js";
 
-describe("createSimpleOpenAIClient", () => {
+describe("SimpleOpenAIClient", () => {
   it("should throw if no API key is available", () => {
     const origKey = process.env.OPENAI_API_KEY;
     delete process.env.OPENAI_API_KEY;
     try {
-      expect(() => createSimpleOpenAIClient()).toThrow("OPENAI_API_KEY not found");
+      expect(() => new SimpleOpenAIClient()).toThrow("OPENAI_API_KEY not found");
     } finally {
       if (origKey) process.env.OPENAI_API_KEY = origKey;
     }
   });
 
   it("should create a client with a provided API key", () => {
-    const client = createSimpleOpenAIClient({ apiKey: "test-key" });
+    const client = new SimpleOpenAIClient({ apiKey: "test-key" });
     expect(client).toHaveProperty("text");
     expect(client).toHaveProperty("textStream");
     expect(typeof client.text).toBe("function");
     expect(typeof client.textStream).toBe("function");
   });
 
-  it("should return the LLMClient interface", () => {
-    const client = createSimpleOpenAIClient({ apiKey: "test-key" });
+  it("should satisfy the LLMClient type", () => {
+    const client = new SimpleOpenAIClient({ apiKey: "test-key" });
     expect(client.text).toBeDefined();
     expect(client.textStream).toBeDefined();
   });
@@ -444,9 +470,9 @@ git commit -m "feat: add setLLMClient builtin function"
 Create `tests/typescriptGenerator/setLLMClient.agency`:
 
 ```
-import { createSimpleOpenAIClient } from "agency-lang/runtime"
+import { SimpleOpenAIClient } from "agency-lang/runtime"
 
-const client = createSimpleOpenAIClient()
+const client = SimpleOpenAIClient()
 setLLMClient(client)
 
 node main() {

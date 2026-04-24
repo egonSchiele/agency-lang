@@ -218,6 +218,8 @@ export function* getAllVariablesInBody(
       }
     } else if (node.type === "returnStatement") {
       if (node.value) yield* getAllVariablesInBody([node.value]);
+    } else if (node.type === "gotoStatement") {
+      yield* getAllVariablesInBody([node.nodeCall]);
     } else if (node.type === "forLoop") {
       yield* getAllVariablesInBody([node.iterable]);
       yield* getAllVariablesInBody(node.body);
@@ -312,6 +314,8 @@ export function* walkNodes(
       yield* walkNodes([node.statement], [...ancestors, node], scopes);
     } else if (node.type === "returnStatement") {
       if (node.value) yield* walkNodes([node.value], [...ancestors, node], scopes);
+    } else if (node.type === "gotoStatement") {
+      yield* walkNodes([node.nodeCall], [...ancestors, node], scopes);
     } else if (node.type === "assignment") {
       /* console.log(
         color.red(

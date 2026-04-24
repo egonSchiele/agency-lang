@@ -106,6 +106,7 @@ import { TryExpression } from "../types/tryExpression.js";
 import { ClassDefinition, ClassField, ClassMethod, NewExpression } from "../types/classDefinition.js";
 import { SchemaExpression } from "../types/schemaExpression.js";
 import { ReturnStatement } from "../types/returnStatement.js";
+import { GotoStatement } from "../types/gotoStatement.js";
 import { DebuggerStatement } from "../types/debuggerStatement.js";
 import { isAgencyImport } from "../importPaths.js";
 import { Keyword, keywords, createKeyword } from "@/types/keyword.js";
@@ -1603,6 +1604,17 @@ export const returnStatementParser: Parser<ReturnStatement> = label("a return st
   optionalSpacesOrNewline,
 )));
 
+export const gotoStatementParser: Parser<GotoStatement> = label("a goto statement", withLoc(seqC(
+  set("type", "gotoStatement"),
+  str("goto"),
+  not(varNameChar),
+  optionalSpaces,
+  capture(functionCallParser, "nodeCall"),
+  optionalSpaces,
+  optionalSemicolon,
+  optionalSpacesOrNewline,
+)));
+
 // =============================================================================
 // binop.ts
 // =============================================================================
@@ -1995,6 +2007,7 @@ export const bodyParser = (input: string): ParserResult<AgencyNode[]> => {
     debug(typeAliasParser, "error in typeAliasParser"),
     tagParser,
     returnStatementParser,
+    gotoStatementParser,
     forLoopParser,
     whileLoopParser,
     matchBlockParser,

@@ -51,16 +51,14 @@ export type LLMClient = {
 
 export class SmoltalkClient implements LLMClient {
   async text(config: PromptConfig): Promise<Result<PromptResult>> {
-    const smolConfig = this.toSmolConfig(config);
-    return smoltalk.text({ ...smolConfig, stream: false });
+    return smoltalk.text({ ...this.toSmolConfig(config), stream: false });
   }
 
   async *textStream(config: PromptConfig): AsyncGenerator<StreamChunk> {
-    const smolConfig = this.toSmolConfig(config);
-    yield* smoltalk.text({ ...smolConfig, stream: true });
+    yield* smoltalk.text({ ...this.toSmolConfig(config), stream: true });
   }
 
-  private toSmolConfig(config: PromptConfig): SmolPromptConfig {
+  private toSmolConfig(config: PromptConfig): Omit<SmolPromptConfig, "stream"> {
     const {
       messages, tools, responseFormat, abortSignal,
       model, apiKey, maxTokens, temperature, provider,
@@ -72,6 +70,6 @@ export class SmoltalkClient implements LLMClient {
       messages, tools, responseFormat, abortSignal,
       model, maxTokens, temperature, provider, thinking, reasoningEffort,
       openAiApiKey: apiKey,
-    } as SmolPromptConfig;
+    } as Omit<SmolPromptConfig, "stream">;
   }
 }

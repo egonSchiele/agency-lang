@@ -105,11 +105,13 @@ export class SimpleOpenAIClient implements LLMClient {
   }
 
   private extractToolCalls(choice: any): ToolCall[] {
-    return (choice?.message?.tool_calls || []).map((tc: any) => ({
-      id: tc.id,
-      name: tc.function.name,
-      arguments: JSON.parse(tc.function.arguments),
-    }));
+    return (choice?.message?.tool_calls || []).map((tc: any) => {
+      let args: Record<string, any> = {};
+      try {
+        args = JSON.parse(tc.function.arguments);
+      } catch {}
+      return { id: tc.id, name: tc.function.name, arguments: args };
+    });
   }
 
   private extractUsage(data: any): TokenUsage {

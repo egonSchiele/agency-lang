@@ -1915,16 +1915,7 @@ export class TypeScriptBuilder {
         this.processCallArg(arg),
       );
       const data = argNodes.length > 0 ? argNodes[0] : ts.id("undefined");
-      return $(ts.id("callHook"))
-        .call([
-          ts.obj({
-            callbacks: $(ts.runtime.ctx).prop("callbacks").done(),
-            name: ts.str("onEmit"),
-            data,
-          }),
-        ])
-        .await()
-        .done();
+      return ts.callHook("onEmit", data);
     }
 
     if (node.functionName === "llm") {

@@ -556,26 +556,41 @@ export class AgencyGenerator {
 
     if (node.block) {
       const block = node.block;
-      let asClause = "as ";
-      if (block.params.length === 1) {
-        asClause = `as ${block.params[0].name} `;
-      } else if (block.params.length > 1) {
-        asClause = `as (${block.params.map((p) => p.name).join(", ")}) `;
-      }
 
-      this.increaseIndent();
-      const bodyLines: string[] = [];
-      for (const stmt of block.body) {
-        bodyLines.push(this.processNode(stmt));
-      }
-      this.decreaseIndent();
-      const bodyStr =
-        bodyLines
-          .filter((s) => s !== "")
-          .join("\n")
-          .trimEnd() + "\n";
+      if (block.inline) {
+        // Inline block: \params -> expr
+        const returnStmt = block.body[0] as ReturnStatement;
+        const exprStr = this.processNode(returnStmt.value!).trim();
+        let params = "";
+        if (block.params.length === 1) {
+          params = block.params[0].name;
+        } else if (block.params.length > 1) {
+          params = `(${block.params.map((p) => p.name).join(", ")})`;
+        }
+        // Rewrite result to include inline block as an argument
+        result = `${asyncPrefix}${node.functionName}(${[...args, `\\${params} -> ${exprStr}`].join(", ")})`;
+      } else {
+        let asClause = "as ";
+        if (block.params.length === 1) {
+          asClause = `as ${block.params[0].name} `;
+        } else if (block.params.length > 1) {
+          asClause = `as (${block.params.map((p) => p.name).join(", ")}) `;
+        }
 
-      result += ` ${asClause}{\n${bodyStr}${this.indentStr("}")}`;
+        this.increaseIndent();
+        const bodyLines: string[] = [];
+        for (const stmt of block.body) {
+          bodyLines.push(this.processNode(stmt));
+        }
+        this.decreaseIndent();
+        const bodyStr =
+          bodyLines
+            .filter((s) => s !== "")
+            .join("\n")
+            .trimEnd() + "\n";
+
+        result += ` ${asClause}{\n${bodyStr}${this.indentStr("}")}`;
+      }
     }
 
     return result;

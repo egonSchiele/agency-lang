@@ -1725,30 +1725,25 @@ export const blockArgumentParser: Parser<BlockArgument> = trace(
 //   \(x, i) -> x + i      — multiple params
 //   \ -> "hello"           — no params
 // Expression-only: the expression is wrapped in a synthetic return statement.
-const _inlineBlockInner = seqC(
-  char("\\"),
-  optionalSpaces,
-  capture(blockParamsParser, "params"),
-  optionalSpaces,
-  str("->"),
-  optionalSpaces,
-  capture(lazy(() => exprParser), "expr"),
-);
-
 export const inlineBlockParser: Parser<BlockArgument> = trace(
   "inlineBlockParser",
-  (input: string): ParserResult<BlockArgument> => {
-    const result = _inlineBlockInner(input);
-    if (!result.success) return result;
-
-    const returnNode: ReturnStatement = { type: "returnStatement", value: result.result.expr };
-    return success({
-      type: "blockArgument",
+  map(
+    seqC(
+      char("\\"),
+      optionalSpaces,
+      capture(blockParamsParser, "params"),
+      optionalSpaces,
+      str("->"),
+      optionalSpaces,
+      capture(lazy(() => exprParser), "expr"),
+    ),
+    (result) => ({
+      type: "blockArgument" as const,
       inline: true,
-      params: result.result.params,
-      body: [returnNode],
-    } as BlockArgument, result.rest);
-  },
+      params: result.params,
+      body: [{ type: "returnStatement", value: result.expr } as ReturnStatement],
+    }),
+  ),
 );
 
 // =============================================================================

@@ -1,0 +1,37 @@
+{
+  "name": "@agency-lang/mcp",
+  "version": "0.0.1",
+  "description": "MCP (Model Context Protocol) support for the Agency language",
+  "type": "module",
+  "agency": "./index.agency",
+  "main": "./dist/src/mcp.js",
+  "exports": {
+    ".": {
+      "types": "./dist/src/mcp.d.ts",
+      "import": "./dist/src/mcp.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "bin": {
+    "@agency-lang/mcp": "./dist/src/cli.js"
+  },
+  "files": [
+    "dist/",
+    "index.agency"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "zod": "^4.3.5"
+  },
+  "peerDependencies": {
+    "agency-lang": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.0.0",
+    "vitest": "^3.0.0"
+  }
+}

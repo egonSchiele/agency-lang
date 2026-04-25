@@ -1,3 +1,24 @@
+## Apr 25 2026 — v0.0.107
+- Add inline blocks syntax
+- Add support for `arr[0]()` and `arr[0]?.()` call syntax
+- Add LSP implementation
+- Add `setLLMClient` function for supporting other LLM clients
+- Add `goto` keyword for state machine transitions
+- Add `emit` function to emit arbitrary events that can be listened to through the `onEmit` hook
+- Add support for importing types (`import type`)
+- Add runtime call dispatch (checks at runtime whether to use `.invoke` or regular call)
+- Use WeakMap so parallel callbacks don't block each other
+- Print when a tool call crashes
+- Fix `.agency` imports to always become `.js` imports, even when building `.ts`
+- Fix docs to use backticks for return types (prevents Vue parsing errors with `Result<T>`)
+- Delete old unused utility functions (`not`, `eq`, `and`, etc.)
+- New interrupt tests
+
+## Apr 22 2026 — v0.0.104
+- First-class functions: `AgencyFunction` runtime class, better support
+- Remove `uses` statement, `tool()` function, and `import tool` syntax
+- Fix stdlib imports to not use relative paths
+
 ## Apr 21 2026 — v0.0.102
 - Add mcp support with auth, docs
 ## Apr 21 2026 — v0.0.101

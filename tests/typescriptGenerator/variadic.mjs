@@ -5,7 +5,7 @@ import { z } from "zod";
 import { goToNode, color, nanoid } from "agency-lang";
 import { smoltalk } from "agency-lang";
 import path from "path";
-import type { GraphState, InternalFunctionState, Interrupt, InterruptResponse, RewindCheckpoint } from "agency-lang/runtime";
+import type { GraphState, InternalFunctionState, Interrupt, InterruptResponse, RewindCheckpoint, LLMClient } from "agency-lang/runtime";
 import {
   RuntimeContext, MessageThread, ThreadStore, Runner, McpManager,
   setupNode, setupFunction, runNode, runPrompt, callHook,
@@ -100,8 +100,19 @@ const restore = __AgencyFunction.create({ name: "restore", module: "__runtime", 
 async function mcp(serverName: string) {
   return __globalCtx.mcpManager.getTools(serverName);
 }
+
+function setLLMClient(client: LLMClient) {
+  __globalCtx.setLLMClient(client);
+}
+
 async function __initializeGlobals(__ctx) {
   __ctx.globals.markInitialized("variadic.agency")
+  await __call(log, {
+    type: "positional",
+    args: [`INFO`, `hello`, `world`]
+  }, {
+    ctx: __ctx
+  })
 }
 __toolRegistry["readSkill"] = __AgencyFunction.create({
   name: "readSkill",
@@ -230,13 +241,5 @@ const log = __AgencyFunction.create({
     schema: z.object({"prefix": z.string(), "messages": z.array(z.string()), })
   }
 }, __toolRegistry);
-await __call(log, {
-  type: "positional",
-  args: [`INFO`, `hello`, `world`]
-}, {
-  ctx: __ctx,
-  threads: __threads,
-  interruptData: __state?.interruptData
-})
 export default graph
 export const __sourceMap = {"variadic.agency:log":{"0":{"line":-1,"col":2}}};

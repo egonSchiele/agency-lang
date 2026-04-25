@@ -1,0 +1,9 @@
+import { SimpleOpenAIClient } from "agency-lang/runtime"
+
+const client = new SimpleOpenAIClient()
+setLLMClient(client)
+
+node testSetLLMClient() {
+  const result = llm("What is 2 + 2? Reply with just the number.")
+  return result
+}

@@ -1,0 +1,9 @@
+import { SimpleOpenAIClient } from "agency-lang/runtime"
+
+const client = SimpleOpenAIClient()
+setLLMClient(client)
+
+node main() {
+  const result = llm("Hello")
+  print(result)
+}

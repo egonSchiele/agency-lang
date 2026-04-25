@@ -5,7 +5,7 @@ import { z } from "zod";
 import { goToNode, color, nanoid } from "agency-lang";
 import { smoltalk } from "agency-lang";
 import path from "path";
-import type { GraphState, InternalFunctionState, Interrupt, InterruptResponse, RewindCheckpoint } from "agency-lang/runtime";
+import type { GraphState, InternalFunctionState, Interrupt, InterruptResponse, RewindCheckpoint, LLMClient } from "agency-lang/runtime";
 import {
   RuntimeContext, MessageThread, ThreadStore, Runner, McpManager,
   setupNode, setupFunction, runNode, runPrompt, callHook,
@@ -100,8 +100,25 @@ const restore = __AgencyFunction.create({ name: "restore", module: "__runtime", 
 async function mcp(serverName: string) {
   return __globalCtx.mcpManager.getTools(serverName);
 }
+
+function setLLMClient(client: LLMClient) {
+  __globalCtx.setLLMClient(client);
+}
+
 async function __initializeGlobals(__ctx) {
   __ctx.globals.markInitialized("defaultValues.agency")
+  await __call(greet, {
+    type: "positional",
+    args: [`world`]
+  }, {
+    ctx: __ctx
+  })
+  await __call(greet, {
+    type: "positional",
+    args: [`world`, `Hi`]
+  }, {
+    ctx: __ctx
+  })
 }
 __toolRegistry["readSkill"] = __AgencyFunction.create({
   name: "readSkill",
@@ -230,21 +247,5 @@ const greet = __AgencyFunction.create({
     schema: z.object({"name": z.string(), "greeting": z.string().nullable().describe("Default: Hello"), })
   }
 }, __toolRegistry);
-await __call(greet, {
-  type: "positional",
-  args: [`world`]
-}, {
-  ctx: __ctx,
-  threads: __threads,
-  interruptData: __state?.interruptData
-})
-await __call(greet, {
-  type: "positional",
-  args: [`world`, `Hi`]
-}, {
-  ctx: __ctx,
-  threads: __threads,
-  interruptData: __state?.interruptData
-})
 export default graph
 export const __sourceMap = {"defaultValues.agency:greet":{"0":{"line":-1,"col":2}}};

@@ -5,7 +5,7 @@ import { z } from "zod";
 import { goToNode, color, nanoid } from "agency-lang";
 import { smoltalk } from "agency-lang";
 import path from "path";
-import type { GraphState, InternalFunctionState, Interrupt, InterruptResponse, RewindCheckpoint } from "agency-lang/runtime";
+import type { GraphState, InternalFunctionState, Interrupt, InterruptResponse, RewindCheckpoint, LLMClient } from "agency-lang/runtime";
 import {
   RuntimeContext, MessageThread, ThreadStore, Runner, McpManager,
   setupNode, setupFunction, runNode, runPrompt, callHook,
@@ -100,23 +100,64 @@ const restore = __AgencyFunction.create({ name: "restore", module: "__runtime", 
 async function mcp(serverName: string) {
   return __globalCtx.mcpManager.getTools(serverName);
 }
+
+function setLLMClient(client: LLMClient) {
+  __globalCtx.setLLMClient(client);
+}
+
 async function __initializeGlobals(__ctx) {
   __ctx.globals.markInitialized("arrayAndObject.agency")
   __ctx.globals.set("arrayAndObject.agency", "nums", [1, 2, 3, 4, 5])
+  await __call(print, {
+    type: "positional",
+    args: [__ctx.globals.get("arrayAndObject.agency", "nums")]
+  }, {
+    ctx: __ctx
+  })
   __ctx.globals.set("arrayAndObject.agency", "names", [`Alice`, `Bob`, `Charlie`])
+  await __call(print, {
+    type: "positional",
+    args: [__ctx.globals.get("arrayAndObject.agency", "names")]
+  }, {
+    ctx: __ctx
+  })
   __ctx.globals.set("arrayAndObject.agency", "matrix", [[1, 2], [3, 4], [5, 6]])
+  await __call(print, {
+    type: "positional",
+    args: [__ctx.globals.get("arrayAndObject.agency", "matrix")]
+  }, {
+    ctx: __ctx
+  })
   __ctx.globals.set("arrayAndObject.agency", "person", {
     "name": `Alice`,
     "age": 30
+  })
+  await __call(print, {
+    type: "positional",
+    args: [__ctx.globals.get("arrayAndObject.agency", "person")]
+  }, {
+    ctx: __ctx
   })
   __ctx.globals.set("arrayAndObject.agency", "address", {
     "street": `123 Main St`,
     "city": `NYC`,
     "zip": `10001`
   })
+  await __call(print, {
+    type: "positional",
+    args: [__ctx.globals.get("arrayAndObject.agency", "address")]
+  }, {
+    ctx: __ctx
+  })
   __ctx.globals.set("arrayAndObject.agency", "user", {
     "name": `Bob`,
     "tags": [`admin`, `developer`]
+  })
+  await __call(print, {
+    type: "positional",
+    args: [__ctx.globals.get("arrayAndObject.agency", "user")]
+  }, {
+    ctx: __ctx
   })
   __ctx.globals.set("arrayAndObject.agency", "users", [{
     "name": `Alice`,
@@ -125,6 +166,12 @@ async function __initializeGlobals(__ctx) {
     "name": `Bob`,
     "age": 25
   }])
+  await __call(print, {
+    type: "positional",
+    args: [__ctx.globals.get("arrayAndObject.agency", "users")]
+  }, {
+    ctx: __ctx
+  })
   __ctx.globals.set("arrayAndObject.agency", "config", {
     "server": {
       "host": `localhost`,
@@ -132,8 +179,26 @@ async function __initializeGlobals(__ctx) {
     },
     "debug": true
   })
+  await __call(print, {
+    type: "positional",
+    args: [__ctx.globals.get("arrayAndObject.agency", "config")]
+  }, {
+    ctx: __ctx
+  })
   __ctx.globals.set("arrayAndObject.agency", "firstNum", __ctx.globals.get("arrayAndObject.agency", "nums")[0])
+  await __call(print, {
+    type: "positional",
+    args: [__ctx.globals.get("arrayAndObject.agency", "firstNum")]
+  }, {
+    ctx: __ctx
+  })
   __ctx.globals.set("arrayAndObject.agency", "personName", __ctx.globals.get("arrayAndObject.agency", "person").name)
+  await __call(print, {
+    type: "positional",
+    args: [__ctx.globals.get("arrayAndObject.agency", "personName")]
+  }, {
+    ctx: __ctx
+  })
 }
 __toolRegistry["readSkill"] = __AgencyFunction.create({
   name: "readSkill",
@@ -145,94 +210,14 @@ __toolRegistry["readSkill"] = __AgencyFunction.create({
 __functionRefReviver.registry = __toolRegistry;
 //  Test arrays and objects
 //  Simple array
-await __call(print, {
-  type: "positional",
-  args: [__ctx.globals.get("arrayAndObject.agency", "nums")]
-}, {
-  ctx: __ctx,
-  threads: __threads,
-  interruptData: __state?.interruptData
-})
 //  Array with strings
-await __call(print, {
-  type: "positional",
-  args: [__ctx.globals.get("arrayAndObject.agency", "names")]
-}, {
-  ctx: __ctx,
-  threads: __threads,
-  interruptData: __state?.interruptData
-})
 //  Nested arrays
-await __call(print, {
-  type: "positional",
-  args: [__ctx.globals.get("arrayAndObject.agency", "matrix")]
-}, {
-  ctx: __ctx,
-  threads: __threads,
-  interruptData: __state?.interruptData
-})
 //  Simple object
-await __call(print, {
-  type: "positional",
-  args: [__ctx.globals.get("arrayAndObject.agency", "person")]
-}, {
-  ctx: __ctx,
-  threads: __threads,
-  interruptData: __state?.interruptData
-})
 //  Object with nested structure
-await __call(print, {
-  type: "positional",
-  args: [__ctx.globals.get("arrayAndObject.agency", "address")]
-}, {
-  ctx: __ctx,
-  threads: __threads,
-  interruptData: __state?.interruptData
-})
 //  Object with array property
-await __call(print, {
-  type: "positional",
-  args: [__ctx.globals.get("arrayAndObject.agency", "user")]
-}, {
-  ctx: __ctx,
-  threads: __threads,
-  interruptData: __state?.interruptData
-})
 //  Array of objects
-await __call(print, {
-  type: "positional",
-  args: [__ctx.globals.get("arrayAndObject.agency", "users")]
-}, {
-  ctx: __ctx,
-  threads: __threads,
-  interruptData: __state?.interruptData
-})
 //  Nested object
-await __call(print, {
-  type: "positional",
-  args: [__ctx.globals.get("arrayAndObject.agency", "config")]
-}, {
-  ctx: __ctx,
-  threads: __threads,
-  interruptData: __state?.interruptData
-})
 //  Array access
-await __call(print, {
-  type: "positional",
-  args: [__ctx.globals.get("arrayAndObject.agency", "firstNum")]
-}, {
-  ctx: __ctx,
-  threads: __threads,
-  interruptData: __state?.interruptData
-})
 //  Object property access
-await __call(print, {
-  type: "positional",
-  args: [__ctx.globals.get("arrayAndObject.agency", "personName")]
-}, {
-  ctx: __ctx,
-  threads: __threads,
-  interruptData: __state?.interruptData
-})
 export default graph
 export const __sourceMap = {};

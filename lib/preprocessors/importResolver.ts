@@ -15,7 +15,12 @@ import { resolveAgencyImportPath, isAgencyImport } from "../importPaths.js";
  * (.agency files, std:: imports, or pkg:: imports).
  * Leaves import node / import tool statements and non-Agency imports untouched.
  */
-function assertExported(name: string, modulePath: string, exported?: boolean, symbolKind = "Function"): void {
+function assertExported(
+  name: string,
+  modulePath: string,
+  exported?: boolean,
+  symbolKind = "Function",
+): void {
   if (!exported) {
     throw new Error(
       `${symbolKind} '${name}' in '${modulePath}' is not exported. Add the 'export' keyword to its definition.`,
@@ -31,15 +36,15 @@ export function resolveImports(
   const newNodes: AgencyNode[] = [];
 
   for (const node of program.nodes) {
-    if (
-      node.type !== "importStatement" ||
-      !isAgencyImport(node.modulePath)
-    ) {
+    if (node.type !== "importStatement" || !isAgencyImport(node.modulePath)) {
       newNodes.push(node);
       continue;
     }
 
-    const importedFilePath = resolveAgencyImportPath(node.modulePath, currentFile);
+    const importedFilePath = resolveAgencyImportPath(
+      node.modulePath,
+      currentFile,
+    );
     const fileSymbols = symbolTable[importedFilePath] ?? {};
 
     const nodeNames: string[] = [];
@@ -106,7 +111,12 @@ export function resolveImports(
       const importStmt: ImportStatement = {
         type: "importStatement",
         importedNames: [
-          { type: "namedImport", importedNames: allNames, safeNames: safeFunctionNames, aliases: allAliases },
+          {
+            type: "namedImport",
+            importedNames: allNames,
+            safeNames: safeFunctionNames,
+            aliases: allAliases,
+          },
         ],
         modulePath: node.modulePath,
         isAgencyImport: true,

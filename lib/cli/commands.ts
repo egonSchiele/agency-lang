@@ -145,6 +145,7 @@ export function compile(
 
   const symbolTable =
     options?.symbolTable ?? buildSymbolTable(absoluteInputFile, config);
+
   const resolvedProgram = resolveImports(
     parsedProgram,
     symbolTable,
@@ -231,11 +232,6 @@ export function compile(
   }
 
   console.log(`${inputFile} → ${outputFile}`);
-  if (verbose) {
-    console.log(`compiled input file: ${inputFile}`);
-    console.log(generatedCode);
-  }
-
   return outputFile;
 }
 
@@ -247,11 +243,11 @@ export async function format(
   return generateAgency(program);
 }
 
-export function formatFile(
+export async function formatFile(
   inputFile: string,
   inPlace: boolean = false,
   config: AgencyConfig = {},
-): void {
+): Promise<void> {
   const stats = fs.statSync(inputFile);
   if (stats.isDirectory()) {
     for (const { path } of findRecursively(inputFile)) {
@@ -261,14 +257,14 @@ export function formatFile(
   }
 
   const contents = readFile(inputFile);
-  format(contents, config).then((formatted) => {
-    if (inPlace) {
-      fs.writeFileSync(inputFile, formatted, "utf-8");
-      console.log(`Formatted: ${inputFile}`);
-    } else {
-      console.log(formatted);
-    }
-  });
+
+  const formatted = await format(contents, config);
+  if (inPlace) {
+    fs.writeFileSync(inputFile, formatted, "utf-8");
+    console.log(`Formatted: ${inputFile}`);
+  } else {
+    console.log(formatted);
+  }
 }
 
 export function run(

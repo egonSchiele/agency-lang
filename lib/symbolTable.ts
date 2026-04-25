@@ -2,10 +2,18 @@ import * as fs from "fs";
 import * as path from "path";
 import { parseAgency } from "./parser.js";
 import type { AgencyConfig } from "./config.js";
-import type { AgencyProgram, FunctionParameter, VariableType } from "./types.js";
+import type {
+  AgencyProgram,
+  FunctionParameter,
+  VariableType,
+} from "./types.js";
 import type { SourceLocation } from "./types/base.js";
 import { walkNodes } from "./utils/node.js";
-import { resolveAgencyImportPath, isAgencyImport, getStdlibDir } from "./importPaths.js";
+import {
+  resolveAgencyImportPath,
+  isAgencyImport,
+  getStdlibDir,
+} from "./importPaths.js";
 
 export type SymbolKind = "node" | "function" | "type" | "class";
 
@@ -99,6 +107,7 @@ export function buildSymbolTable(
     if (!parseResult.success) return;
 
     const program = parseResult.result;
+
     table[absPath] = classifySymbols(program);
 
     // Follow imports to other .agency files

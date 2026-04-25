@@ -36,6 +36,8 @@ import {
   type AgentLspTarget,
 } from "@/lsp/setup.js";
 import { setupCodexMcp, codexConfigPath } from "@/mcp/setup.js";
+import { startServer } from "@/lsp/index.js";
+import { startMcpServer } from "@/mcp/server.js";
 import { authServer, listAuth, revokeAuth } from "@/cli/auth.js";
 import { pathToFileURL } from "url";
 
@@ -52,20 +54,18 @@ function defaultResolveMcpCommand(): string[] {
 }
 
 async function defaultLoadLspStartServer(): Promise<() => void> {
-  const { startServer } = await import("@/lsp/index.js");
   return startServer;
 }
 
 async function defaultLoadMcpStartServer(): Promise<() => void> {
-  const { startMcpServer } = await import("@/mcp/server.js");
   return startMcpServer;
 }
 
-export function createProgram(
-  deps: CliDependencies = {},
-): Command {
-  const loadLspStartServer = deps.loadLspStartServer ?? defaultLoadLspStartServer;
-  const loadMcpStartServer = deps.loadMcpStartServer ?? defaultLoadMcpStartServer;
+export function createProgram(deps: CliDependencies = {}): Command {
+  const loadLspStartServer =
+    deps.loadLspStartServer ?? defaultLoadLspStartServer;
+  const loadMcpStartServer =
+    deps.loadMcpStartServer ?? defaultLoadMcpStartServer;
   const resolveMcpCommand = deps.resolveMcpCommand ?? defaultResolveMcpCommand;
   const program = new Command();
 
@@ -89,9 +89,10 @@ export function createProgram(
     const config = getConfig();
     if (options.trace) {
       config.trace = true;
-      config.traceFile = typeof options.trace === "string"
-        ? options.trace
-        : input.replace(/\.agency$/, ".trace");
+      config.traceFile =
+        typeof options.trace === "string"
+          ? options.trace
+          : input.replace(/\.agency$/, ".trace");
     }
     run(config, input, undefined, options.resume);
   }
@@ -103,25 +104,33 @@ export function createProgram(
     .argument("<inputs...>", "Paths to .agency input files or directories")
     .option("--ts", "Output .ts files with // @no-check header")
     .option("-w, --watch", "Watch for changes and recompile")
-    .action(async (inputs: string[], opts: { ts?: boolean; watch?: boolean }) => {
-      const config = getConfig();
-      if (opts.watch) {
-        const close = await watchAndCompile(config, inputs, { ts: opts.ts });
-        process.once("SIGINT", async () => {
-          await close();
-          process.exit(0);
-        });
-      } else {
-        for (const input of inputs) {
-          compile(config, input, undefined, { ts: opts.ts });
+    .action(
+      async (inputs: string[], opts: { ts?: boolean; watch?: boolean }) => {
+        const config = getConfig();
+        if (opts.watch) {
+          const close = await watchAndCompile(config, inputs, { ts: opts.ts });
+          process.once("SIGINT", async () => {
+            await close();
+            process.exit(0);
+          });
+        } else {
+          for (const input of inputs) {
+            compile(config, input, undefined, { ts: opts.ts });
+          }
         }
-      }
-    });
+      },
+    );
 
   function addRunOptions(cmd: Command) {
     return cmd
-      .option("--resume <statefile>", "Resume execution from a saved state file")
-      .option("--trace [file]", "Write execution trace to file (default: <input>.trace)");
+      .option(
+        "--resume <statefile>",
+        "Resume execution from a saved state file",
+      )
+      .option(
+        "--trace [file]",
+        "Write execution trace to file (default: <input>.trace)",
+      );
   }
 
   addRunOptions(
@@ -141,7 +150,10 @@ export function createProgram(
     .command("run", { isDefault: true })
     .description("Compile and run .agency file, generating a trace")
     .argument("<input>", "Path to .agency input file")
-    .option("-o, --output <file>", "Output trace file path (default: <input>.trace)")
+    .option(
+      "-o, --output <file>",
+      "Output trace file path (default: <input>.trace)",
+    )
     .option("--resume <statefile>", "Resume execution from a saved state file")
     .action((input: string, options: { output?: string; resume?: string }) => {
       const traceFile = options.output || input.replace(/\.agency$/, ".trace");
@@ -241,9 +253,13 @@ export function createProgram(
     if (slowTests.length === 0) return;
     const sorted = [...slowTests].sort((a, b) => b.durationMs - a.durationMs);
     const top = sorted.slice(0, count);
-    console.log(color.yellow(`\n Slowest ${Math.min(count, top.length)} tests:`));
+    console.log(
+      color.yellow(`\n Slowest ${Math.min(count, top.length)} tests:`),
+    );
     for (const t of top) {
-      console.log(`   ${color.yellow(formatDuration(t.durationMs))}  ${t.name}`);
+      console.log(
+        `   ${color.yellow(formatDuration(t.durationMs))}  ${t.name}`,
+      );
     }
   }
 
@@ -255,52 +271,55 @@ export function createProgram(
     .command("run", { isDefault: true })
     .description("Run Agency test files")
     .argument("[inputs...]", "Paths to .test.json files or directories")
-    .option("-p, --parallel <number>", "Number of test files to run in parallel", parseInt)
-    .action(
-      async (
-        testFile: string[],
-        opts: { parallel?: number },
-      ) => {
-        const config = getConfig();
-        const parallel = opts.parallel ?? config.test?.parallel ?? 1;
-        const totals = await test(config, testFile, parallel);
-        const totalFiles = totals.filesPassed + totals.filesFailed;
-        const totalTests = totals.passed + totals.failed;
-        if (totalFiles > 0) {
-          const filesStatus = [
-            totals.filesFailed > 0 ? `${totals.filesFailed} failed` : "",
-            `${totals.filesPassed} passed`,
-          ]
-            .filter(Boolean)
-            .join(" | ");
-          const testsStatus = [
-            totals.failed > 0 ? `${totals.failed} failed` : "",
-            `${totals.passed} passed`,
-          ]
-            .filter(Boolean)
-            .join(" | ");
-          if (totals.failedFiles.length > 0) {
-            console.log("");
-            for (const file of totals.failedFiles) {
-              console.log(color.red(` FAIL  ${file}`));
-            }
+    .option(
+      "-p, --parallel <number>",
+      "Number of test files to run in parallel",
+      parseInt,
+    )
+    .action(async (testFile: string[], opts: { parallel?: number }) => {
+      const config = getConfig();
+      const parallel = opts.parallel ?? config.test?.parallel ?? 1;
+      const totals = await test(config, testFile, parallel);
+      const totalFiles = totals.filesPassed + totals.filesFailed;
+      const totalTests = totals.passed + totals.failed;
+      if (totalFiles > 0) {
+        const filesStatus = [
+          totals.filesFailed > 0 ? `${totals.filesFailed} failed` : "",
+          `${totals.filesPassed} passed`,
+        ]
+          .filter(Boolean)
+          .join(" | ");
+        const testsStatus = [
+          totals.failed > 0 ? `${totals.failed} failed` : "",
+          `${totals.passed} passed`,
+        ]
+          .filter(Boolean)
+          .join(" | ");
+        if (totals.failedFiles.length > 0) {
+          console.log("");
+          for (const file of totals.failedFiles) {
+            console.log(color.red(` FAIL  ${file}`));
           }
-          const colorFn = totals.failed > 0 ? color.red : color.green;
-          console.log(colorFn(`\n Test Files  ${filesStatus} (${totalFiles})`));
-          console.log(colorFn(`      Tests  ${testsStatus} (${totalTests})`));
         }
-        printSlowestTests(totals.slowTests);
-        if (totals.failed > 0) {
-          process.exit(1);
-        }
-      },
-    );
+        const colorFn = totals.failed > 0 ? color.red : color.green;
+        console.log(colorFn(`\n Test Files  ${filesStatus} (${totalFiles})`));
+        console.log(colorFn(`      Tests  ${testsStatus} (${totalTests})`));
+      }
+      printSlowestTests(totals.slowTests);
+      if (totals.failed > 0) {
+        process.exit(1);
+      }
+    });
 
   testCmd
     .command("js")
     .description("Run JavaScript integration tests")
     .argument("[inputs...]", "Paths to test directories")
-    .option("-p, --parallel <number>", "Number of test dirs to run in parallel", parseInt)
+    .option(
+      "-p, --parallel <number>",
+      "Number of test dirs to run in parallel",
+      parseInt,
+    )
     .action(async (testFile: string[], opts: { parallel?: number }) => {
       const config = getConfig();
       const parallel = opts.parallel ?? config.test?.parallel ?? 1;
@@ -332,9 +351,14 @@ export function createProgram(
 
   program
     .command("definition")
-    .description("Find the definition of the symbol at the given cursor position")
+    .description(
+      "Find the definition of the symbol at the given cursor position",
+    )
     .requiredOption("--line <line>", "0-indexed line number of the cursor")
-    .requiredOption("--column <column>", "0-indexed column number of the cursor")
+    .requiredOption(
+      "--column <column>",
+      "0-indexed column number of the cursor",
+    )
     .option("--file <file>", "Filename to report in output", "")
     .action(async (opts: { line: string; column: string; file: string }) => {
       const { findDefinition } = await import("@/cli/definition.js");
@@ -421,7 +445,10 @@ export function createProgram(
     .option("--rewind-size <n>", "Rolling checkpoint window size", "30")
     .option("--trace <file>", "Load and inspect a trace file")
     .option("--checkpoint <file>", "Load and inspect a checkpoint file")
-    .option("--dist-dir <dir>", "Import pre-compiled JS from this directory instead of compiling on the fly")
+    .option(
+      "--dist-dir <dir>",
+      "Import pre-compiled JS from this directory instead of compiling on the fly",
+    )
     .action(
       async (
         file: string,
@@ -452,7 +479,8 @@ export function createProgram(
     .option("-o, --output <file>", "Output bundle file path")
     .action((source: string, trace: string, options: { output?: string }) => {
       const parsed = path.parse(source);
-      const output = options.output || path.join(parsed.dir, parsed.name + ".bundle");
+      const output =
+        options.output || path.join(parsed.dir, parsed.name + ".bundle");
       createBundle(source, trace, output);
       console.log(`Bundle created: ${output}`);
     });
@@ -487,7 +515,8 @@ export function createProgram(
     .action(async (target: string, opts: any) => {
       const config = getConfig();
       const optimizeOpts: Record<string, any> = {};
-      if (opts.iterations !== undefined) optimizeOpts.iterations = opts.iterations;
+      if (opts.iterations !== undefined)
+        optimizeOpts.iterations = opts.iterations;
       await optimize(config, target, optimizeOpts);
     });
 
@@ -510,11 +539,16 @@ export function createProgram(
   lspCmd
     .command("setup")
     .description("Scaffold coding-agent LSP configuration for this project")
-    .argument("<targets...>", `One or more targets: ${SUPPORTED_AGENT_LSP_TARGETS.join(", ")}`)
+    .argument(
+      "<targets...>",
+      `One or more targets: ${SUPPORTED_AGENT_LSP_TARGETS.join(", ")}`,
+    )
     .action((targets: string[]) => {
       let failed = false;
       for (const rawTarget of targets) {
-        if (!SUPPORTED_AGENT_LSP_TARGETS.includes(rawTarget as AgentLspTarget)) {
+        if (
+          !SUPPORTED_AGENT_LSP_TARGETS.includes(rawTarget as AgentLspTarget)
+        ) {
           console.error(
             `Unsupported target '${rawTarget}'. Expected one of: ${SUPPORTED_AGENT_LSP_TARGETS.join(", ")}`,
           );
@@ -569,19 +603,26 @@ export function createProgram(
     .description("Manage OAuth tokens for MCP servers")
     .option("--list", "List all stored OAuth tokens")
     .option("--revoke <server>", "Remove stored OAuth token for a server")
-    .action(async (serverName: string | undefined, opts: { list?: boolean; revoke?: string }) => {
-      if (opts.list) {
-        await listAuth();
-      } else if (opts.revoke) {
-        await revokeAuth(opts.revoke);
-      } else if (serverName) {
-        const config = getConfig();
-        await authServer(serverName, config);
-      } else {
-        console.error("Usage: agency auth <server-name> | --list | --revoke <server-name>");
-        process.exit(1);
-      }
-    });
+    .action(
+      async (
+        serverName: string | undefined,
+        opts: { list?: boolean; revoke?: string },
+      ) => {
+        if (opts.list) {
+          await listAuth();
+        } else if (opts.revoke) {
+          await revokeAuth(opts.revoke);
+        } else if (serverName) {
+          const config = getConfig();
+          await authServer(serverName, config);
+        } else {
+          console.error(
+            "Usage: agency auth <server-name> | --list | --revoke <server-name>",
+          );
+          process.exit(1);
+        }
+      },
+    );
 
   addRunOptions(
     program
@@ -612,7 +653,8 @@ export async function runCli(
   await program.parseAsync(argv);
 }
 
-const isMain = process.argv[1] !== undefined &&
+const isMain =
+  process.argv[1] !== undefined &&
   import.meta.url === pathToFileURL(process.argv[1]).href;
 
 if (isMain) {

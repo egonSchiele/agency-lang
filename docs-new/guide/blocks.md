@@ -55,7 +55,7 @@ For no parameters:
   const results = twice(\ -> "hello")
 ```
 
-Inline blocks are expression-only — the expression is implicitly returned. For multi-line blocks with multiple statements, use the trailing `as` syntax shown above.
+Inline blocks are single-line only, and the expression is implicitly returned. For multi-line blocks with multiple statements, use the trailing `as` syntax shown above.
 
 ## Blocks and interrupts
 

@@ -7,7 +7,7 @@ import {
   agencyFormat,
   agencyHover,
 } from "./tools.js";
-import pkg from "../../package.json" with { type: "json" };
+import { VERSION } from "../version.js";
 
 const MCP_PROTOCOL_VERSION = "2025-06-18";
 
@@ -154,7 +154,7 @@ export function handleMcpMessage(message: JsonRpcMessage): JsonRpcMessage | null
         },
         serverInfo: {
           name: "agency-mcp",
-          version: pkg.version,
+          version: VERSION,
         },
       });
     case "notifications/initialized":

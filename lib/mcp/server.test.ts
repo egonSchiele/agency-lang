@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
-import pkg from "../../package.json" with { type: "json" };
+import { VERSION } from "../version.js";
 import { handleMcpMessage } from "./server.js";
 
 let tmpDir: string;
@@ -38,7 +38,7 @@ describe("handleMcpMessage", () => {
 
     expect(response?.result?.protocolVersion).toBe("2025-06-18");
     expect(response?.result?.capabilities?.tools?.listChanged).toBe(false);
-    expect(response?.result?.serverInfo?.version).toBe(pkg.version);
+    expect(response?.result?.serverInfo?.version).toBe(VERSION);
   });
 
   it("lists Agency MCP tools", () => {

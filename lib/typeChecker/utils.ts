@@ -27,6 +27,7 @@ export function checkType(
       message: `Type '${formatTypeHint(actualType)}' is not assignable to type '${formatTypeHint(expectedType)}' (${context}).`,
       expectedType: formatTypeHint(expectedType),
       actualType: formatTypeHint(actualType),
+      loc: expr.loc,
     });
   }
 }

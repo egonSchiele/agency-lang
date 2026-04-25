@@ -5,7 +5,11 @@ export async function __call(
   target: unknown,
   descriptor: CallType,
   state?: unknown,
+  optional?: boolean,
 ): Promise<unknown> {
+  if (optional && (target === null || target === undefined)) {
+    return undefined;
+  }
   if (AgencyFunction.isAgencyFunction(target)) {
     return target.invoke(descriptor, state);
   }

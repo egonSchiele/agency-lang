@@ -979,28 +979,29 @@ export class TypeScriptBuilder {
           break;
         }
         case "methodCall": {
-          const isLastInChain = element === node.chain[node.chain.length - 1];
           const fnCall = element.functionCall;
-
-          // Build descriptor from the method call's arguments
           const descriptor = this.buildCallDescriptor(fnCall);
           const configObj = this.buildStateConfig();
-
-          const propArg = ts.str(fnCall.functionName);
-          const callArgs: TsNode[] = [result, propArg, descriptor, configObj];
-          if (element.optional) {
-            callArgs.push(ts.bool(true));
-          }
-          const callExpr = ts.call(ts.id("__callMethod"), callArgs);
-
-          result = isLastInChain
-            ? ts.await(callExpr)
-            : ts.raw(`(${this.str(ts.await(callExpr))})`);
+          const callArgs: TsNode[] = [result, ts.str(fnCall.functionName), descriptor, configObj];
+          if (element.optional) callArgs.push(ts.bool(true));
+          result = this.awaitChainCall(ts.call(ts.id("__callMethod"), callArgs), element === node.chain[node.chain.length - 1]);
+          break;
+        }
+        case "call": {
+          const descriptor = this.buildCallDescriptor(element);
+          const configObj = this.buildStateConfig();
+          const callArgs: TsNode[] = [result, descriptor, configObj];
+          if (element.optional) callArgs.push(ts.bool(true));
+          result = this.awaitChainCall(ts.call(ts.id("__call"), callArgs), element === node.chain[node.chain.length - 1]);
           break;
         }
       }
     }
     return result;
+  }
+
+  private awaitChainCall(callExpr: TsNode, isLast: boolean): TsNode {
+    return isLast ? ts.await(callExpr) : ts.raw(`(${this.str(ts.await(callExpr))})`);
   }
 
   private processBinOpExpression(node: BinOpExpression): TsNode {
@@ -1417,10 +1418,10 @@ export class TypeScriptBuilder {
    * Process a block argument into a wrapped AgencyFunction TsNode.
    * Shared by generateFunctionCallExpression and buildCallDescriptor.
    */
-  private processBlockArgument(node: FunctionCall): TsNode {
+  private processBlockArgument(node: Pick<FunctionCall, "block"> & { functionName?: string }): TsNode {
     const block = node.block!;
-    const fnDef = this.programInfo.functionDefinitions[node.functionName];
-    const imported = this.programInfo.importedFunctions[node.functionName];
+    const fnDef = node.functionName ? this.programInfo.functionDefinitions[node.functionName] : undefined;
+    const imported = node.functionName ? this.programInfo.importedFunctions[node.functionName] : undefined;
     const paramList = fnDef?.parameters ?? imported?.parameters;
     const blockType = paramList
       ?.map((p) => p.typeHint)
@@ -2058,7 +2059,7 @@ export class TypeScriptBuilder {
    * Build a CallType descriptor TsNode for an Agency function call.
    * Determines whether to emit positional or named call type based on arguments.
    */
-  private buildCallDescriptor(node: FunctionCall): TsNode {
+  private buildCallDescriptor(node: Pick<FunctionCall, "arguments" | "block">): TsNode {
     const args = node.arguments;
     const hasNamedArgs = args.some((a) => a.type === "namedArgument");
 

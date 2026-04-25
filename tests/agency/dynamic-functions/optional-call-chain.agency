@@ -1,0 +1,15 @@
+def double(x: number): number {
+  return x * 2
+}
+
+node main() {
+  const fns: any[] = [double, null]
+
+  // optional call on non-null — should call the function
+  const r1 = fns[0]?.(5)
+
+  // optional call on null — should return undefined (not crash)
+  const r2 = fns[1]?.(5)
+
+  return { r1: r1, r2: r2 }
+}

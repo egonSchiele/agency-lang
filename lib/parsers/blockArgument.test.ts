@@ -243,6 +243,20 @@ describe("function call with block argument", () => {
     }
   });
 
+  it("fails when function call has two inline blocks", () => {
+    const input = String.raw`foo(\x -> x + 1, \y -> y * 2)`;
+    const result = functionCallParser(input);
+    expect(result.success).toBe(false);
+  });
+
+  it("fails when function call has inline block and trailing as block", () => {
+    const input = `map(arr, \\x -> x + 1) as y {
+  return y
+}`;
+    const result = functionCallParser(input);
+    expect(result.success).toBe(false);
+  });
+
   it("parses function call without block (no block field)", () => {
     const result = functionCallParser("foo(1, 2)");
     expect(result.success).toBe(true);

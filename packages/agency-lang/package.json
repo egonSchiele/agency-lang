@@ -1,0 +1,96 @@
+{
+  "name": "agency-lang",
+  "version": "0.0.107",
+  "description": "The Agency language",
+  "main": "lib/index.js",
+  "scripts": {
+    "test": "vitest --test-timeout=1000",
+    "test:run": "vitest run",
+    "test:agency": "time node ./dist/scripts/agency.js test tests/agency -p 12",
+    "test:agency-js": "time node ./dist/scripts/agency.js test js tests/agency-js -p 12",
+    "build": "rm -rf dist/ && tsc && tsc-alias && cp -r lib/agents dist/lib",
+    "start": "node dist/index.js",
+    "templates": "typestache ./lib/templates",
+    "typecheck": "tsc --noEmit",
+    "agency": "node ./dist/scripts/agency.js",
+    "a": "node ./dist/scripts/agency.js",
+    "compile": "node ./dist/scripts/agency.js compile",
+    "ast": "node ./dist/scripts/agency.js ast",
+    "fmt": "node ./dist/scripts/agency.js fmt",
+    "eval": "node ./dist/scripts/agency.js test eval",
+    "fixtures": "node ./dist/scripts/agency.js test fixtures",
+    "trace": "node ./dist/scripts/agency.js trace",
+    "unbundle": "node ./dist/scripts/agency.js unbundle",
+    "rr": "node ./dist/scripts/agency.js rr",
+    "agent": "node ./dist/scripts/agency.js agent",
+    "diagnostics": "node ./dist/scripts/agency.js diagnostics",
+    "preprocess": "node ./dist/scripts/agency.js preprocess",
+    "debug": "node ./dist/scripts/agency.js debug",
+    "bundle": "node ./dist/scripts/agency.js bundle",
+    "circular-deps": "npx dpdm --circular lib/parser.ts"
+  },
+  "bin": {
+    "agency": "./dist/scripts/agency.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/egonSchiele/agency-lang.git"
+  },
+  "files": [
+    "./dist",
+    "./stdlib/**/*.agency",
+    "./stdlib/**/*.js",
+    "./scripts/hooks/postinstall.js"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/lib/index.d.ts",
+      "import": "./dist/lib/index.js",
+      "require": "./dist/lib/index.js"
+    },
+    "./runtime": {
+      "types": "./dist/lib/runtime/index.d.ts",
+      "import": "./dist/lib/runtime/index.js",
+      "require": "./dist/lib/runtime/index.js"
+    },
+    "./stdlib/*": "./stdlib/*"
+  },
+  "type": "module",
+  "types": "./dist/lib/index.d.ts",
+  "keywords": [],
+  "author": "Aditya Bhargava",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/egonSchiele/agency-lang/issues"
+  },
+  "homepage": "https://github.com/egonSchiele/agency-lang#readme",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "blessed": "^0.1.81",
+    "chalk": "^5.6.2",
+    "chokidar": "^4",
+    "cli-highlight": "^2.1.11",
+    "commander": "^14.0.3",
+    "diff-match-patch": "^1.0.5",
+    "esbuild": "^0.27.4",
+    "nanoid": "^5.1.6",
+    "prompts": "^2.4.2",
+    "smoltalk": "^0.0.67",
+    "tarsec": "^0.2.2",
+    "termcolors": "github:egonSchiele/termcolors",
+    "typestache": "^0.5.0",
+    "vscode-languageserver": "^9.0.1",
+    "vscode-languageserver-protocol": "^3.17.5",
+    "vscode-languageserver-textdocument": "^1.0.12",
+    "zod": "^4.3.5"
+  },
+  "devDependencies": {
+    "@types/blessed": "^0.1.27",
+    "@types/diff-match-patch": "^1.0.36",
+    "@types/node": "^25.0.3",
+    "@types/prompts": "^2.4.9",
+    "tsc-alias": "^1.8.16",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.16"
+  }
+}

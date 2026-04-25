@@ -998,6 +998,16 @@ export class TypeScriptBuilder {
             : ts.raw(`(${this.str(ts.await(callExpr))})`);
           break;
         }
+        case "call": {
+          const isLastInChain = element === node.chain[node.chain.length - 1];
+          const descriptor = this.buildCallDescriptor(element as unknown as FunctionCall);
+          const configObj = this.buildStateConfig();
+          const callExpr = ts.call(ts.id("__call"), [result, descriptor, configObj]);
+          result = isLastInChain
+            ? ts.await(callExpr)
+            : ts.raw(`(${this.str(ts.await(callExpr))})`);
+          break;
+        }
       }
     }
     return result;

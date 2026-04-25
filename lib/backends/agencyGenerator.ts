@@ -17,6 +17,7 @@ import {
 } from "../types.js";
 
 import { AccessChainElement, ValueAccess } from "../types/access.js";
+import { BlockArgument } from "../types/blockArgument.js";
 import {
   AgencyArray,
   AgencyObject,
@@ -532,11 +533,9 @@ export class AgencyGenerator {
     return tags + this.indentStr(`${expr}`);
   }
 
-  protected generateFunctionCallExpression(
-    node: FunctionCall,
-    context: "valueAccess" | "functionArg" | "topLevelStatement",
-  ): string {
-    const args = node.arguments.map((arg) => {
+  // Render arguments (and optional inline block) into a parenthesized string: (arg1, arg2, \x -> expr)
+  protected renderArgList(args: FunctionCall["arguments"], block?: BlockArgument): string {
+    const rendered = args.map((arg) => {
       if (arg.type === "namedArgument") {
         return `${arg.name}: ${this.processNode(arg.value).trim()}`;
       }
@@ -545,6 +544,24 @@ export class AgencyGenerator {
       }
       return this.processNode(arg).trim();
     });
+    if (block?.inline) {
+      const returnStmt = block.body[0] as ReturnStatement;
+      const exprStr = this.processNode(returnStmt.value!).trim();
+      let params = "";
+      if (block.params.length === 1) {
+        params = block.params[0].name;
+      } else if (block.params.length > 1) {
+        params = `(${block.params.map((p) => p.name).join(", ")})`;
+      }
+      rendered.push(`\\${params} -> ${exprStr}`);
+    }
+    return `(${rendered.join(", ")})`;
+  }
+
+  protected generateFunctionCallExpression(
+    node: FunctionCall,
+    context: "valueAccess" | "functionArg" | "topLevelStatement",
+  ): string {
     let asyncPrefix = "";
     if (node.async === true) {
       asyncPrefix = "async ";
@@ -552,45 +569,30 @@ export class AgencyGenerator {
       asyncPrefix = "await ";
     }
 
-    let result = `${asyncPrefix}${node.functionName}(${args.join(", ")})`;
+    const block = node.block;
+    let result = `${asyncPrefix}${node.functionName}${this.renderArgList(node.arguments, block?.inline ? block : undefined)}`;
 
-    if (node.block) {
-      const block = node.block;
-
-      if (block.inline) {
-        // Inline block: \params -> expr
-        const returnStmt = block.body[0] as ReturnStatement;
-        const exprStr = this.processNode(returnStmt.value!).trim();
-        let params = "";
-        if (block.params.length === 1) {
-          params = block.params[0].name;
-        } else if (block.params.length > 1) {
-          params = `(${block.params.map((p) => p.name).join(", ")})`;
-        }
-        // Rewrite result to include inline block as an argument
-        result = `${asyncPrefix}${node.functionName}(${[...args, `\\${params} -> ${exprStr}`].join(", ")})`;
-      } else {
-        let asClause = "as ";
-        if (block.params.length === 1) {
-          asClause = `as ${block.params[0].name} `;
-        } else if (block.params.length > 1) {
-          asClause = `as (${block.params.map((p) => p.name).join(", ")}) `;
-        }
-
-        this.increaseIndent();
-        const bodyLines: string[] = [];
-        for (const stmt of block.body) {
-          bodyLines.push(this.processNode(stmt));
-        }
-        this.decreaseIndent();
-        const bodyStr =
-          bodyLines
-            .filter((s) => s !== "")
-            .join("\n")
-            .trimEnd() + "\n";
-
-        result += ` ${asClause}{\n${bodyStr}${this.indentStr("}")}`;
+    if (block && !block.inline) {
+      let asClause = "as ";
+      if (block.params.length === 1) {
+        asClause = `as ${block.params[0].name} `;
+      } else if (block.params.length > 1) {
+        asClause = `as (${block.params.map((p) => p.name).join(", ")}) `;
       }
+
+      this.increaseIndent();
+      const bodyLines: string[] = [];
+      for (const stmt of block.body) {
+        bodyLines.push(this.processNode(stmt));
+      }
+      this.decreaseIndent();
+      const bodyStr =
+        bodyLines
+          .filter((s) => s !== "")
+          .join("\n")
+          .trimEnd() + "\n";
+
+      result += ` ${asClause}{\n${bodyStr}${this.indentStr("}")}`;
     }
 
     return result;
@@ -1066,6 +1068,8 @@ export class AgencyGenerator {
       }
       case "methodCall":
         return `${dot}${this.generateFunctionCallExpression(node.functionCall, "valueAccess")}`;
+      case "call":
+        return this.renderArgList(node.arguments, node.block);
       default:
         throw new Error(
           `Unknown access chain element kind: ${(node as any).kind}`,

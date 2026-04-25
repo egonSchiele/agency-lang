@@ -1132,6 +1132,52 @@ const namedArgumentParser: Parser<NamedArgument> = trace(
   ),
 );
 
+// Shared argument list parser: (arg1, arg2, \x -> expr, ...)
+// Used by both _functionCallParser and callChainParser.
+const argumentListParser = seqC(
+  char("("),
+  optionalSpaces,
+  capture(
+    sepBy(
+      comma,
+      or(
+        namedArgumentParser,
+        splatParser,
+        lazy(() => inlineBlockParser),
+        lazy(() => exprParser),
+      ),
+    ),
+    "arguments",
+  ),
+  optionalSpaces,
+  char(")"),
+);
+
+// Extract inline block from parsed arguments into a separate block field.
+// Returns { arguments, block } or a failure if there are multiple inline blocks,
+// or if an inline block conflicts with an existing trailing block.
+function extractInlineBlock(
+  args: any[],
+  existingBlock: BlockArgument | undefined,
+  input: string,
+): { success: true; arguments: any[]; block?: BlockArgument } | { success: false; error: ParserResult<any> } {
+  const inlineBlocks = args.filter((a) => a.type === "blockArgument") as BlockArgument[];
+  if (inlineBlocks.length > 1) {
+    return { success: false, error: failure("A function call cannot have more than one block argument", input) };
+  }
+  if (inlineBlocks.length === 1) {
+    if (existingBlock) {
+      return { success: false, error: failure("A function call cannot have both an inline block and a trailing 'as' block", input) };
+    }
+    return {
+      success: true,
+      arguments: args.filter((a) => a.type !== "blockArgument"),
+      block: inlineBlocks[0],
+    };
+  }
+  return { success: true, arguments: args, block: existingBlock };
+}
+
 type FunctionCallWithBlock = Omit<FunctionCall, "arguments"> & {
   arguments: (Expression | SplatExpression | NamedArgument | BlockArgument)[]
 }
@@ -1140,22 +1186,7 @@ export const _functionCallParser: Parser<FunctionCall> = (input: string) => {
   const parser: Parser<FunctionCallWithBlock> = seqC(
     set("type", "functionCall"),
     capture(many1WithJoin(varNameChar), "functionName"),
-    char("("),
-    optionalSpaces,
-    capture(
-      sepBy(
-        comma,
-        or(
-          namedArgumentParser,
-          splatParser,
-          lazy(() => inlineBlockParser),
-          lazy(() => exprParser),
-        ),
-      ),
-      "arguments",
-    ),
-    optionalSpaces,
-    char(")"),
+    captureCaptures(argumentListParser),
     optionalSpaces,
     optional(
       captureCaptures(
@@ -1170,19 +1201,11 @@ export const _functionCallParser: Parser<FunctionCall> = (input: string) => {
   const result = parser(input);
   if (!result.success) return result;
 
-  // Post-process: move inline block from arguments to block field
   const funcCall = result.result;
-  const inlineBlocks = funcCall.arguments.filter((a) => a.type === "blockArgument") as BlockArgument[];
-  if (inlineBlocks.length > 1) {
-    return failure("A function call cannot have more than one block argument", input);
-  }
-  if (inlineBlocks.length === 1) {
-    if (funcCall.block) {
-      return failure("A function call cannot have both an inline block and a trailing 'as' block", input);
-    }
-    funcCall.block = inlineBlocks[0];
-    funcCall.arguments = funcCall.arguments.filter((a) => a.type !== "blockArgument");
-  }
+  const extracted = extractInlineBlock(funcCall.arguments, funcCall.block, input);
+  if (!extracted.success) return extracted.error;
+  funcCall.arguments = extracted.arguments;
+  funcCall.block = extracted.block;
 
   return result as ParserResult<FunctionCall>;
 };
@@ -1273,8 +1296,24 @@ const indexChainParser: Parser<AccessChainElement> = (input: string) => {
   );
 };
 
+// Parse a call chain element: (args) — calling the result of a previous chain element
+// e.g. arr[0](arg1, arg2), getHandlers()[0]()
+const callChainParser: Parser<AccessChainElement> = (input: string) => {
+  const result = argumentListParser(input);
+  if (!result.success) return result;
+
+  const extracted = extractInlineBlock(result.result.arguments, undefined, input);
+  if (!extracted.success) return extracted.error;
+
+  return success(
+    { kind: "call" as const, arguments: extracted.arguments, ...(extracted.block && { block: extracted.block }) },
+    result.rest,
+  );
+};
+
 const chainElementParser: Parser<AccessChainElement> = or(
   dotMethodCallParser,
+  callChainParser,
   sliceChainParser,
   indexChainParser,
 );

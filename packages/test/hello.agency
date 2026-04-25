@@ -1,0 +1,3 @@
+node main() {
+  print("Hello, Agency!")
+}

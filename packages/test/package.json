@@ -1,0 +1,13 @@
+{
+  "name": "agency-test",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "agency": "agency"
+  },
+  "dependencies": {
+    "agency-lang": "workspace:*",
+    "zod": "^4.3.5"
+  }
+}

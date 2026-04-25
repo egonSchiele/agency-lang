@@ -1,0 +1,6 @@
+import { map } from "std::array"
+node main() {
+  const arr = range(10)
+  const result = map(arr, \x -> x * 2)
+  print(result)
+}

@@ -1,3 +1,0 @@
-import { add } from "std::math"
-import { greet } from "./bar.agency"
-import * as bar from "./bar.agency"

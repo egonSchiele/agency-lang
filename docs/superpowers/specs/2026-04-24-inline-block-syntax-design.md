@@ -58,7 +58,7 @@ sample(5) as {
 1. **Inline blocks can only appear as function call arguments.** They are parsed only inside function call argument lists. They cannot be assigned to variables or used as standalone expressions.
 2. **Expression-only with implicit return.** `\x -> x + 1` wraps the expression in a synthetic return node. There is no statement body form — use the trailing `as` syntax for multi-line blocks.
 3. **Parens required for multiple params.** Single param: `\x -> ...`. Multiple params: `\(x, i) -> ...`. No params: `\ -> ...`.
-4. **Both syntaxes produce the same AST node** (`BlockArgument`), so the builder, type checker, and runtime require no changes.
+4. **Both syntaxes produce the same AST node** (`BlockArgument`), with a new `inline: boolean` field to distinguish them. The builder, type checker, and runtime don't need changes (they don't care about the distinction), but the formatter (`AgencyGenerator`) will use `inline` to know which syntax to emit.
 
 ## Implementation
 
@@ -88,7 +88,7 @@ When an inline block is parsed as an argument within `sepBy`, the function call 
 
 ### AST changes
 
-None. `BlockArgument` already has `params: FunctionParameter[]` and `body: AgencyNode[]`. The expression body becomes a single-element `body` array containing a synthetic `return` statement node wrapping the parsed expression.
+Add an `inline: boolean` field to `BlockArgument` in `lib/types/blockArgument.ts`. Set to `true` for inline blocks (`\x -> expr`), `false` for trailing `as` blocks. The body representation is unchanged — `params: FunctionParameter[]` and `body: AgencyNode[]`. The expression body becomes a single-element `body` array containing a synthetic `return` statement node wrapping the parsed expression.
 
 ### Builder changes
 

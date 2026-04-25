@@ -21,7 +21,7 @@ export function findPackageRoot(startDir: string): string {
   return dir;
 }
 
-const PACKAGE_ROOT = path.join(__dirname, "..", "..");
+const PACKAGE_ROOT = findPackageRoot(__dirname);
 const STDLIB_DIR = path.join(PACKAGE_ROOT, "stdlib");
 const TEST_DIR = path.join(PACKAGE_ROOT, "tests");
 

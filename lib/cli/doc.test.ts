@@ -69,7 +69,7 @@ node main() {
     expect(output).toContain("### add");
     expect(output).toContain("```ts\nadd(a: number, b: number): number\n```");
     expect(output).toContain("Add two numbers together.");
-    expect(output).toContain("**Returns:** number");
+    expect(output).toContain("**Returns:** `number`");
 
     // Nodes section — heading is name only, signature in code fence
     expect(output).toContain("## Nodes");
@@ -171,7 +171,7 @@ def greet(name: string = "world"): string {
       "utf-8",
     );
 
-    expect(output).toContain('| name | string | "world" |');
+    expect(output).toContain('| name | `string` | "world" |');
   });
 
   it("renders file-level doc comment after title", () => {

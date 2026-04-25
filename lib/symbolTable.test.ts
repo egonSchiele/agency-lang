@@ -15,7 +15,16 @@ node greet(name: string) {
   return "hi"
 }
 `);
-    expect(symbols.greet).toEqual({ kind: "node", name: "greet" });
+    expect(symbols.greet).toEqual({
+      kind: "node",
+      loc: {
+        col: 0,
+        end: 43,
+        line: -1,
+        start: 1,
+      },
+      name: "greet",
+    });
   });
 
   it("classifies functions", () => {
@@ -49,7 +58,16 @@ node main() {
 `);
     expect(symbols.Config).toMatchObject({ kind: "type", name: "Config" });
     expect(symbols.helper).toMatchObject({ kind: "function", name: "helper" });
-    expect(symbols.main).toEqual({ kind: "node", name: "main" });
+    expect(symbols.main).toEqual({
+      kind: "node",
+      loc: {
+        col: 0,
+        end: 96,
+        line: 5,
+        start: 63,
+      },
+      name: "main",
+    });
   });
 
   it("finds type aliases nested inside functions", () => {

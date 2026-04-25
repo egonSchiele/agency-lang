@@ -1069,7 +1069,7 @@ export class AgencyGenerator {
       case "methodCall":
         return `${dot}${this.generateFunctionCallExpression(node.functionCall, "valueAccess")}`;
       case "call":
-        return this.renderArgList(node.arguments, node.block);
+        return `${node.optional ? "?." : ""}${this.renderArgList(node.arguments, node.block)}`;
       default:
         throw new Error(
           `Unknown access chain element kind: ${(node as any).kind}`,

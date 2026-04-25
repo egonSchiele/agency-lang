@@ -1296,17 +1296,20 @@ const indexChainParser: Parser<AccessChainElement> = (input: string) => {
   );
 };
 
-// Parse a call chain element: (args) — calling the result of a previous chain element
-// e.g. arr[0](arg1, arg2), getHandlers()[0]()
+// Parse a call chain element: (args) or ?.(args) — calling the result of a previous chain element
+// e.g. arr[0](arg1, arg2), getHandlers()[0](), fns[0]?.(5)
 const callChainParser: Parser<AccessChainElement> = (input: string) => {
-  const result = argumentListParser(input);
-  if (!result.success) return result;
+  const optResult = str("?.")(input);
+  const isOptional = optResult.success;
+
+  const result = argumentListParser(isOptional ? optResult.rest : input);
+  if (!result.success) return failure("expected call arguments", input);
 
   const extracted = extractInlineBlock(result.result.arguments, undefined, input);
   if (!extracted.success) return extracted.error;
 
   return success(
-    { kind: "call" as const, arguments: extracted.arguments, ...(extracted.block && { block: extracted.block }) },
+    { kind: "call" as const, arguments: extracted.arguments, ...(extracted.block && { block: extracted.block }), ...(isOptional && { optional: true }) },
     result.rest,
   );
 };

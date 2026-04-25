@@ -1002,7 +1002,11 @@ export class TypeScriptBuilder {
           const isLastInChain = element === node.chain[node.chain.length - 1];
           const descriptor = this.buildCallDescriptor(element as unknown as FunctionCall);
           const configObj = this.buildStateConfig();
-          const callExpr = ts.call(ts.id("__call"), [result, descriptor, configObj]);
+          const callArgs: TsNode[] = [result, descriptor, configObj];
+          if (element.optional) {
+            callArgs.push(ts.bool(true));
+          }
+          const callExpr = ts.call(ts.id("__call"), callArgs);
           result = isLastInChain
             ? ts.await(callExpr)
             : ts.raw(`(${this.str(ts.await(callExpr))})`);

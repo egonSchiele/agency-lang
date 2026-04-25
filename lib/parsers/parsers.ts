@@ -1172,22 +1172,16 @@ export const _functionCallParser: Parser<FunctionCall> = (input: string) => {
 
   // Post-process: move inline block from arguments to block field
   const funcCall = result.result;
-  const args = funcCall.arguments;
-  const blockIndex = args.findIndex((a) => a.type === "blockArgument");
-  if (blockIndex !== -1) {
+  const inlineBlocks = funcCall.arguments.filter((a) => a.type === "blockArgument") as BlockArgument[];
+  if (inlineBlocks.length > 1) {
+    return failure("A function call cannot have more than one block argument", input);
+  }
+  if (inlineBlocks.length === 1) {
     if (funcCall.block) {
       return failure("A function call cannot have both an inline block and a trailing 'as' block", input);
     }
-
-    const inlineBlock = args[blockIndex] as BlockArgument;
-    args.splice(blockIndex, 1);
-    funcCall.block = inlineBlock;
-
-    // Check for multiple inline blocks
-    const secondBlock = args.findIndex((a: any) => a.type === "blockArgument");
-    if (secondBlock !== -1) {
-      return failure("A function call cannot have more than one block argument", input);
-    }
+    funcCall.block = inlineBlocks[0];
+    funcCall.arguments = funcCall.arguments.filter((a) => a.type !== "blockArgument");
   }
 
   return result as ParserResult<FunctionCall>;
@@ -1731,26 +1725,23 @@ export const blockArgumentParser: Parser<BlockArgument> = trace(
 //   \(x, i) -> x + i      — multiple params
 //   \ -> "hello"           — no params
 // Expression-only: the expression is wrapped in a synthetic return statement.
+const _inlineBlockInner = seqC(
+  char("\\"),
+  optionalSpaces,
+  capture(blockParamsParser, "params"),
+  optionalSpaces,
+  str("->"),
+  optionalSpaces,
+  capture(lazy(() => exprParser), "expr"),
+);
+
 export const inlineBlockParser: Parser<BlockArgument> = trace(
   "inlineBlockParser",
   (input: string): ParserResult<BlockArgument> => {
-    const parser = seqC(
-      set("type", "blockArgument"),
-      set("inline", true),
-      char("\\"),
-      optionalSpaces,
-      capture(blockParamsParser, "params"),
-      optionalSpaces,
-      str("->"),
-      optionalSpaces,
-      capture(lazy(() => exprParser), "__expr"),
-    );
-    const result = parser(input);
+    const result = _inlineBlockInner(input);
     if (!result.success) return result;
 
-    // Wrap the expression in a synthetic return statement
-    const expr = result.result.__expr;
-    const returnNode: ReturnStatement = { type: "returnStatement", value: expr };
+    const returnNode: ReturnStatement = { type: "returnStatement", value: result.result.expr };
     return success({
       type: "blockArgument",
       inline: true,

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { blockArgumentParser } from "./parsers.js";
+import { blockArgumentParser, inlineBlockParser } from "./parsers.js";
 import { functionCallParser } from "./parsers.js";
 
 describe("blockArgumentParser", () => {
@@ -59,6 +59,70 @@ describe("blockArgumentParser", () => {
 }`;
     const result = blockArgumentParser(input);
     expect(result.success).toBe(false);
+  });
+});
+
+describe("inlineBlockParser", () => {
+  it("parses single param with expression body", () => {
+    const input = String.raw`\x -> x + 1`;
+    const result = inlineBlockParser(input);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.result.type).toBe("blockArgument");
+      expect(result.result.inline).toBe(true);
+      expect(result.result.params).toHaveLength(1);
+      expect(result.result.params[0].name).toBe("x");
+      // Body should be a single return statement wrapping the expression
+      expect(result.result.body).toHaveLength(1);
+      expect(result.result.body[0].type).toBe("returnStatement");
+    }
+  });
+
+  it("parses multi param with expression body", () => {
+    const input = String.raw`\(x, i) -> x + i`;
+    const result = inlineBlockParser(input);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.result.inline).toBe(true);
+      expect(result.result.params).toHaveLength(2);
+      expect(result.result.params[0].name).toBe("x");
+      expect(result.result.params[1].name).toBe("i");
+      expect(result.result.body).toHaveLength(1);
+      expect(result.result.body[0].type).toBe("returnStatement");
+    }
+  });
+
+  it("parses no params with expression body", () => {
+    const input = String.raw`\ -> "hello"`;
+    const result = inlineBlockParser(input);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.result.inline).toBe(true);
+      expect(result.result.params).toHaveLength(0);
+      expect(result.result.body).toHaveLength(1);
+      expect(result.result.body[0].type).toBe("returnStatement");
+    }
+  });
+
+  it("stops expression body at comma", () => {
+    const input = String.raw`\x -> x + 1, 42`;
+    const result = inlineBlockParser(input);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.result.body).toHaveLength(1);
+      // The rest should contain ", 42"
+      expect(result.rest.trim()).toBe(", 42");
+    }
+  });
+
+  it("stops expression body at closing paren", () => {
+    const input = String.raw`\x -> x + 1)`;
+    const result = inlineBlockParser(input);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.result.body).toHaveLength(1);
+      expect(result.rest).toBe(")");
+    }
   });
 });
 

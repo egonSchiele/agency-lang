@@ -1698,6 +1698,40 @@ export const blockArgumentParser: Parser<BlockArgument> = trace(
   ),
 );
 
+// Parse an inline block argument: \params -> expression
+//   \x -> x + 1           — single param
+//   \(x, i) -> x + i      — multiple params
+//   \ -> "hello"           — no params
+// Expression-only: the expression is wrapped in a synthetic return statement.
+export const inlineBlockParser: Parser<BlockArgument> = trace(
+  "inlineBlockParser",
+  (input: string): ParserResult<BlockArgument> => {
+    const parser = seqC(
+      set("type", "blockArgument"),
+      set("inline", true),
+      char("\\"),
+      optionalSpaces,
+      capture(blockParamsParser, "params"),
+      optionalSpaces,
+      str("->"),
+      optionalSpaces,
+      capture(lazy(() => exprParser), "__expr"),
+    );
+    const result = parser(input);
+    if (!result.success) return result;
+
+    // Wrap the expression in a synthetic return statement
+    const expr = result.result.__expr;
+    const returnNode: ReturnStatement = { type: "returnStatement", value: expr };
+    return success({
+      type: "blockArgument",
+      inline: true,
+      params: result.result.params,
+      body: [returnNode],
+    } as BlockArgument, result.rest);
+  },
+);
+
 // =============================================================================
 // matchBlock.ts
 // =============================================================================

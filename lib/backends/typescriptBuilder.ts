@@ -979,42 +979,29 @@ export class TypeScriptBuilder {
           break;
         }
         case "methodCall": {
-          const isLastInChain = element === node.chain[node.chain.length - 1];
           const fnCall = element.functionCall;
-
-          // Build descriptor from the method call's arguments
           const descriptor = this.buildCallDescriptor(fnCall);
           const configObj = this.buildStateConfig();
-
-          const propArg = ts.str(fnCall.functionName);
-          const callArgs: TsNode[] = [result, propArg, descriptor, configObj];
-          if (element.optional) {
-            callArgs.push(ts.bool(true));
-          }
-          const callExpr = ts.call(ts.id("__callMethod"), callArgs);
-
-          result = isLastInChain
-            ? ts.await(callExpr)
-            : ts.raw(`(${this.str(ts.await(callExpr))})`);
+          const callArgs: TsNode[] = [result, ts.str(fnCall.functionName), descriptor, configObj];
+          if (element.optional) callArgs.push(ts.bool(true));
+          result = this.awaitChainCall(ts.call(ts.id("__callMethod"), callArgs), element === node.chain[node.chain.length - 1]);
           break;
         }
         case "call": {
-          const isLastInChain = element === node.chain[node.chain.length - 1];
           const descriptor = this.buildCallDescriptor(element);
           const configObj = this.buildStateConfig();
           const callArgs: TsNode[] = [result, descriptor, configObj];
-          if (element.optional) {
-            callArgs.push(ts.bool(true));
-          }
-          const callExpr = ts.call(ts.id("__call"), callArgs);
-          result = isLastInChain
-            ? ts.await(callExpr)
-            : ts.raw(`(${this.str(ts.await(callExpr))})`);
+          if (element.optional) callArgs.push(ts.bool(true));
+          result = this.awaitChainCall(ts.call(ts.id("__call"), callArgs), element === node.chain[node.chain.length - 1]);
           break;
         }
       }
     }
     return result;
+  }
+
+  private awaitChainCall(callExpr: TsNode, isLast: boolean): TsNode {
+    return isLast ? ts.await(callExpr) : ts.raw(`(${this.str(ts.await(callExpr))})`);
   }
 
   private processBinOpExpression(node: BinOpExpression): TsNode {

@@ -1157,11 +1157,11 @@ const argumentListParser = seqC(
 // Returns { arguments, block } or a failure if there are multiple inline blocks,
 // or if an inline block conflicts with an existing trailing block.
 function extractInlineBlock(
-  args: any[],
+  args: ArgWithBlock[],
   existingBlock: BlockArgument | undefined,
   input: string,
-): { success: true; arguments: any[]; block?: BlockArgument } | { success: false; error: ParserResult<any> } {
-  const inlineBlocks = args.filter((a) => a.type === "blockArgument") as BlockArgument[];
+): { success: true; arguments: FunctionCall["arguments"]; block?: BlockArgument } | { success: false; error: ParserResult<any> } {
+  const inlineBlocks = args.filter((a): a is BlockArgument => a.type === "blockArgument");
   if (inlineBlocks.length > 1) {
     return { success: false, error: failure("A function call cannot have more than one block argument", input) };
   }
@@ -1171,15 +1171,17 @@ function extractInlineBlock(
     }
     return {
       success: true,
-      arguments: args.filter((a) => a.type !== "blockArgument"),
+      arguments: args.filter((a): a is Exclude<ArgWithBlock, BlockArgument> => a.type !== "blockArgument"),
       block: inlineBlocks[0],
     };
   }
-  return { success: true, arguments: args, block: existingBlock };
+  return { success: true, arguments: args as FunctionCall["arguments"], block: existingBlock };
 }
 
+type ArgWithBlock = Expression | SplatExpression | NamedArgument | BlockArgument;
+
 type FunctionCallWithBlock = Omit<FunctionCall, "arguments"> & {
-  arguments: (Expression | SplatExpression | NamedArgument | BlockArgument)[]
+  arguments: ArgWithBlock[]
 }
 
 export const _functionCallParser: Parser<FunctionCall> = (input: string) => {

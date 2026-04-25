@@ -33,6 +33,30 @@ Now use it:
   print(greetings)
 ```
 
+## Inline blocks
+
+For simple one-liner blocks, you can use the inline block syntax. Instead of writing the block after the function call, you write it as an argument using `\`:
+
+```typescript
+  const names: string[] = ["Alice", "Bob", "Charlie"]
+  const greetings = map(names, \name -> "Hi, ${name}!")
+  print(greetings)
+```
+
+For multiple parameters, wrap them in parentheses:
+
+```typescript
+  const greetings = mapWithIndex(names, \(name, index) -> "${index}: ${name}")
+```
+
+For no parameters:
+
+```typescript
+  const results = twice(\ -> "hello")
+```
+
+Inline blocks are expression-only — the expression is implicitly returned. For multi-line blocks with multiple statements, use the trailing `as` syntax shown above.
+
 ## Blocks and interrupts
 
 Blocks work correctly with [interrupts](./interrupts). If a block throws an interrupt (or calls a function that throws one), Agency can serialize the execution state, and when the user responds, resume from the exact point the block left off. Blocks can also close over variables from their enclosing scope, and this works correctly across interrupts too.

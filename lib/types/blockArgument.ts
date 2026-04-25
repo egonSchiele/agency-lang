@@ -6,4 +6,5 @@ export type BlockArgument = BaseNode & {
   type: "blockArgument";
   params: FunctionParameter[];
   body: AgencyNode[];
+  inline?: boolean;
 };

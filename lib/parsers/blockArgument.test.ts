@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { blockArgumentParser } from "./parsers.js";
+import { blockArgumentParser, inlineBlockParser } from "./parsers.js";
 import { functionCallParser } from "./parsers.js";
 
 describe("blockArgumentParser", () => {
@@ -62,6 +62,76 @@ describe("blockArgumentParser", () => {
   });
 });
 
+describe("inlineBlockParser", () => {
+  it("parses single param with expression body", () => {
+    const input = String.raw`\x -> x + 1`;
+    const result = inlineBlockParser(input);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.result.type).toBe("blockArgument");
+      expect(result.result.inline).toBe(true);
+      expect(result.result.params).toHaveLength(1);
+      expect(result.result.params[0].name).toBe("x");
+      // Body should be a single return statement wrapping the expression
+      expect(result.result.body).toHaveLength(1);
+      expect(result.result.body[0].type).toBe("returnStatement");
+    }
+  });
+
+  it("parses multi param with expression body", () => {
+    const input = String.raw`\(x, i) -> x + i`;
+    const result = inlineBlockParser(input);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.result.inline).toBe(true);
+      expect(result.result.params).toHaveLength(2);
+      expect(result.result.params[0].name).toBe("x");
+      expect(result.result.params[1].name).toBe("i");
+      expect(result.result.body).toHaveLength(1);
+      expect(result.result.body[0].type).toBe("returnStatement");
+    }
+  });
+
+  it("parses no params with expression body", () => {
+    const input = String.raw`\ -> "hello"`;
+    const result = inlineBlockParser(input);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.result.inline).toBe(true);
+      expect(result.result.params).toHaveLength(0);
+      expect(result.result.body).toHaveLength(1);
+      expect(result.result.body[0].type).toBe("returnStatement");
+    }
+  });
+
+  it("stops expression body at comma", () => {
+    const input = String.raw`\x -> x + 1, 42`;
+    const result = inlineBlockParser(input);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.result.body).toHaveLength(1);
+      // Verify the expression is x + 1 (a binop), not just x
+      const returnStmt = result.result.body[0] as any;
+      expect(returnStmt.value.type).toBe("binOpExpression");
+      // The rest should contain ", 42"
+      expect(result.rest.trim()).toBe(", 42");
+    }
+  });
+
+  it("stops expression body at closing paren", () => {
+    const input = String.raw`\x -> x + 1)`;
+    const result = inlineBlockParser(input);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.result.body).toHaveLength(1);
+      // Verify the expression is x + 1 (a binop), not just x
+      const returnStmt = result.result.body[0] as any;
+      expect(returnStmt.value.type).toBe("binOpExpression");
+      expect(result.rest).toBe(")");
+    }
+  });
+});
+
 describe("function call with block argument", () => {
   it("parses function call with no-param block", () => {
     const input = `sample(5) as {
@@ -103,6 +173,103 @@ describe("function call with block argument", () => {
       expect(result.result.block).toBeDefined();
       expect(result.result.block!.params).toHaveLength(2);
     }
+  });
+
+  it("parses function call with inline block as last arg", () => {
+    const input = String.raw`map(arr, \x -> x + 1)`;
+    const result = functionCallParser(input);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.result.functionName).toBe("map");
+      expect(result.result.arguments).toHaveLength(1); // just 'arr'
+      expect(result.result.block).toBeDefined();
+      expect(result.result.block!.inline).toBe(true);
+      expect(result.result.block!.params).toHaveLength(1);
+      expect(result.result.block!.params[0].name).toBe("x");
+    }
+  });
+
+  it("parses function call with inline block and multiple regular args", () => {
+    const input = String.raw`foo(1, "bar", \x -> x + 1)`;
+    const result = functionCallParser(input);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.result.functionName).toBe("foo");
+      expect(result.result.arguments).toHaveLength(2); // 1 and "bar"
+      expect(result.result.block).toBeDefined();
+      expect(result.result.block!.inline).toBe(true);
+    }
+  });
+
+  it("parses function call with inline block as non-last arg", () => {
+    const input = String.raw`foo(\x -> x + 1, 42)`;
+    const result = functionCallParser(input);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.result.functionName).toBe("foo");
+      expect(result.result.arguments).toHaveLength(1); // just 42
+      expect(result.result.block).toBeDefined();
+      expect(result.result.block!.inline).toBe(true);
+    }
+  });
+
+  it("parses function call with multi-param inline block", () => {
+    const input = String.raw`mapWithIndex(arr, \(x, i) -> x + i)`;
+    const result = functionCallParser(input);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.result.arguments).toHaveLength(1); // just 'arr'
+      expect(result.result.block).toBeDefined();
+      expect(result.result.block!.params).toHaveLength(2);
+      expect(result.result.block!.params[0].name).toBe("x");
+      expect(result.result.block!.params[1].name).toBe("i");
+    }
+  });
+
+  it("parses function call with no-param inline block", () => {
+    const input = String.raw`sample(5, \ -> "hello")`;
+    const result = functionCallParser(input);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.result.arguments).toHaveLength(1); // just 5
+      expect(result.result.block).toBeDefined();
+      expect(result.result.block!.params).toHaveLength(0);
+    }
+  });
+
+  it("parses nested inline blocks in nested function calls", () => {
+    const input = String.raw`map(arr, \x -> filter(x, \y -> y > 0))`;
+    const result = functionCallParser(input);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.result.functionName).toBe("map");
+      expect(result.result.block).toBeDefined();
+      const returnStmt = result.result.block!.body[0] as any;
+      expect(returnStmt.type).toBe("returnStatement");
+      // The return value should be the inner function call to filter
+      const innerCall = returnStmt.value;
+      expect(innerCall.type).toBe("functionCall");
+      expect(innerCall.functionName).toBe("filter");
+      // filter should have its own inline block
+      expect(innerCall.block).toBeDefined();
+      expect(innerCall.block.inline).toBe(true);
+      expect(innerCall.block.params).toHaveLength(1);
+      expect(innerCall.block.params[0].name).toBe("y");
+    }
+  });
+
+  it("fails when function call has two inline blocks", () => {
+    const input = String.raw`foo(\x -> x + 1, \y -> y * 2)`;
+    const result = functionCallParser(input);
+    expect(result.success).toBe(false);
+  });
+
+  it("fails when function call has inline block and trailing as block", () => {
+    const input = `map(arr, \\x -> x + 1) as y {
+  return y
+}`;
+    const result = functionCallParser(input);
+    expect(result.success).toBe(false);
   });
 
   it("parses function call without block (no block field)", () => {

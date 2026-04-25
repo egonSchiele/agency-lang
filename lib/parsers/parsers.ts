@@ -1132,8 +1132,12 @@ const namedArgumentParser: Parser<NamedArgument> = trace(
   ),
 );
 
+type FunctionCallWithBlock = Omit<FunctionCall, "arguments"> & {
+  arguments: (Expression | SplatExpression | NamedArgument | BlockArgument)[]
+}
+
 export const _functionCallParser: Parser<FunctionCall> = (input: string) => {
-  const parser = seqC(
+  const parser: Parser<FunctionCallWithBlock> = seqC(
     set("type", "functionCall"),
     capture(many1WithJoin(varNameChar), "functionName"),
     char("("),
@@ -1144,6 +1148,7 @@ export const _functionCallParser: Parser<FunctionCall> = (input: string) => {
         or(
           namedArgumentParser,
           splatParser,
+          lazy(() => inlineBlockParser),
           lazy(() => exprParser),
         ),
       ),
@@ -1162,7 +1167,24 @@ export const _functionCallParser: Parser<FunctionCall> = (input: string) => {
     optionalSemicolon,
     optionalSpacesOrNewline
   );
-  return parser(input);
+  const result = parser(input);
+  if (!result.success) return result;
+
+  // Post-process: move inline block from arguments to block field
+  const funcCall = result.result;
+  const inlineBlocks = funcCall.arguments.filter((a) => a.type === "blockArgument") as BlockArgument[];
+  if (inlineBlocks.length > 1) {
+    return failure("A function call cannot have more than one block argument", input);
+  }
+  if (inlineBlocks.length === 1) {
+    if (funcCall.block) {
+      return failure("A function call cannot have both an inline block and a trailing 'as' block", input);
+    }
+    funcCall.block = inlineBlocks[0];
+    funcCall.arguments = funcCall.arguments.filter((a) => a.type !== "blockArgument");
+  }
+
+  return result as ParserResult<FunctionCall>;
 };
 
 // functionCallParser is now just _functionCallParser (no async/sync wrappers - handled by valueAccessParser)
@@ -1685,6 +1707,7 @@ export const blockArgumentParser: Parser<BlockArgument> = trace(
   "blockArgumentParser",
   seqC(
     set("type", "blockArgument"),
+    set("inline", false),
     str("as"),
     spaces,
     capture(blockParamsParser, "params"),
@@ -1694,6 +1717,32 @@ export const blockArgumentParser: Parser<BlockArgument> = trace(
     capture(lazy(() => bodyParser), "body"),
     optionalSpacesOrNewline,
     char("}"),
+  ),
+);
+
+// Parse an inline block argument: \params -> expression
+//   \x -> x + 1           — single param
+//   \(x, i) -> x + i      — multiple params
+//   \ -> "hello"           — no params
+// Expression-only: the expression is wrapped in a synthetic return statement.
+export const inlineBlockParser: Parser<BlockArgument> = trace(
+  "inlineBlockParser",
+  map(
+    seqC(
+      char("\\"),
+      optionalSpaces,
+      capture(blockParamsParser, "params"),
+      optionalSpaces,
+      str("->"),
+      optionalSpaces,
+      capture(lazy(() => exprParser), "expr"),
+    ),
+    (result) => ({
+      type: "blockArgument" as const,
+      inline: true,
+      params: result.params,
+      body: [{ type: "returnStatement", value: result.expr } as ReturnStatement],
+    }),
   ),
 );
 

@@ -1685,6 +1685,7 @@ export const blockArgumentParser: Parser<BlockArgument> = trace(
   "blockArgumentParser",
   seqC(
     set("type", "blockArgument"),
+    set("inline", false),
     str("as"),
     spaces,
     capture(blockParamsParser, "params"),

@@ -1132,8 +1132,12 @@ const namedArgumentParser: Parser<NamedArgument> = trace(
   ),
 );
 
+type FunctionCallWithBlock = Omit<FunctionCall, "arguments"> & {
+  arguments: (Expression | SplatExpression | NamedArgument | BlockArgument)[]
+}
+
 export const _functionCallParser: Parser<FunctionCall> = (input: string) => {
-  const parser = seqC(
+  const parser: Parser<FunctionCallWithBlock> = seqC(
     set("type", "functionCall"),
     capture(many1WithJoin(varNameChar), "functionName"),
     char("("),
@@ -1144,6 +1148,7 @@ export const _functionCallParser: Parser<FunctionCall> = (input: string) => {
         or(
           namedArgumentParser,
           splatParser,
+          lazy(() => inlineBlockParser),
           lazy(() => exprParser),
         ),
       ),
@@ -1162,7 +1167,30 @@ export const _functionCallParser: Parser<FunctionCall> = (input: string) => {
     optionalSemicolon,
     optionalSpacesOrNewline
   );
-  return parser(input);
+  const result = parser(input);
+  if (!result.success) return result;
+
+  // Post-process: move inline block from arguments to block field
+  const funcCall = result.result;
+  const args = funcCall.arguments;
+  const blockIndex = args.findIndex((a) => a.type === "blockArgument");
+  if (blockIndex !== -1) {
+    if (funcCall.block) {
+      return failure("A function call cannot have both an inline block and a trailing 'as' block", input);
+    }
+
+    const inlineBlock = args[blockIndex] as BlockArgument;
+    args.splice(blockIndex, 1);
+    funcCall.block = inlineBlock;
+
+    // Check for multiple inline blocks
+    const secondBlock = args.findIndex((a: any) => a.type === "blockArgument");
+    if (secondBlock !== -1) {
+      return failure("A function call cannot have more than one block argument", input);
+    }
+  }
+
+  return result as ParserResult<FunctionCall>;
 };
 
 // functionCallParser is now just _functionCallParser (no async/sync wrappers - handled by valueAccessParser)

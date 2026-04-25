@@ -1,0 +1,14 @@
+def withApproval(block: () => string): string {
+  let result = block()
+  return result
+}
+
+def getApproval(): string {
+  interrupt("please approve")
+  return "approved"
+}
+
+node main() {
+  let result = withApproval(\ -> getApproval())
+  return result
+}

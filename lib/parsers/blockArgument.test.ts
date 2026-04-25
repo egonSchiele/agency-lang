@@ -110,6 +110,9 @@ describe("inlineBlockParser", () => {
     expect(result.success).toBe(true);
     if (result.success) {
       expect(result.result.body).toHaveLength(1);
+      // Verify the expression is x + 1 (a binop), not just x
+      const returnStmt = result.result.body[0] as any;
+      expect(returnStmt.value.type).toBe("binOpExpression");
       // The rest should contain ", 42"
       expect(result.rest.trim()).toBe(", 42");
     }
@@ -121,6 +124,9 @@ describe("inlineBlockParser", () => {
     expect(result.success).toBe(true);
     if (result.success) {
       expect(result.result.body).toHaveLength(1);
+      // Verify the expression is x + 1 (a binop), not just x
+      const returnStmt = result.result.body[0] as any;
+      expect(returnStmt.value.type).toBe("binOpExpression");
       expect(result.rest).toBe(")");
     }
   });
@@ -238,8 +244,17 @@ describe("function call with block argument", () => {
     if (result.success) {
       expect(result.result.functionName).toBe("map");
       expect(result.result.block).toBeDefined();
-      const returnStmt = result.result.block!.body[0];
+      const returnStmt = result.result.block!.body[0] as any;
       expect(returnStmt.type).toBe("returnStatement");
+      // The return value should be the inner function call to filter
+      const innerCall = returnStmt.value;
+      expect(innerCall.type).toBe("functionCall");
+      expect(innerCall.functionName).toBe("filter");
+      // filter should have its own inline block
+      expect(innerCall.block).toBeDefined();
+      expect(innerCall.block.inline).toBe(true);
+      expect(innerCall.block.params).toHaveLength(1);
+      expect(innerCall.block.params[0].name).toBe("y");
     }
   });
 

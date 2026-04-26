@@ -2,8 +2,8 @@
   "name": "agency-lang-workspace",
   "private": true,
   "scripts": {
-    "build": "pnpm -C packages/agency-lang run build",
+    "build": "pnpm -r run build",
     "test": "pnpm -C packages/agency-lang run test",
-    "test:run": "pnpm -C packages/agency-lang run test:run"
+    "test:run": "pnpm -r run test:run"
   }
 }

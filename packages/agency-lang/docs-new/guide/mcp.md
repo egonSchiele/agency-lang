@@ -32,12 +32,15 @@ import { mcp } from "pkg::@agency-lang/mcp"
 
 node main() {
   const tools = mcp("filesystem") catch []
+  registerTools(tools)
   const result = llm("List the files in /tmp", { tools: [...tools] })
   print(result)
 }
 ```
 
 That's it. The `mcp()` function connects to the server, fetches its tools, and returns them as an array. You pass them to `llm()` via the `tools` option.
+
+> Important: Make sure you register the tools with `registerTools()` so Agency recognizes them!
 
 ## How it works
 

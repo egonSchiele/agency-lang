@@ -38,7 +38,6 @@ import {
 import { setupCodexMcp, codexConfigPath } from "@/mcp/setup.js";
 import { startServer } from "@/lsp/index.js";
 import { startMcpServer } from "@/mcp/server.js";
-import { authServer, listAuth, revokeAuth } from "@/cli/auth.js";
 import { pathToFileURL } from "url";
 
 type RunOptions = { resume?: string; trace?: string | true };
@@ -597,32 +596,6 @@ export function createProgram(deps: CliDependencies = {}): Command {
       console.log(result.message);
       console.log(`  command: ${resolveMcpCommand().join(" ")}`);
     });
-
-  program
-    .command("auth [server-name]")
-    .description("Manage OAuth tokens for MCP servers")
-    .option("--list", "List all stored OAuth tokens")
-    .option("--revoke <server>", "Remove stored OAuth token for a server")
-    .action(
-      async (
-        serverName: string | undefined,
-        opts: { list?: boolean; revoke?: string },
-      ) => {
-        if (opts.list) {
-          await listAuth();
-        } else if (opts.revoke) {
-          await revokeAuth(opts.revoke);
-        } else if (serverName) {
-          const config = getConfig();
-          await authServer(serverName, config);
-        } else {
-          console.error(
-            "Usage: agency auth <server-name> | --list | --revoke <server-name>",
-          );
-          process.exit(1);
-        }
-      },
-    );
 
   addRunOptions(
     program

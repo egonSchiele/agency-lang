@@ -20,7 +20,6 @@ import { PromptResult, Result, StreamChunk, ToolCallJSON } from "smoltalk";
 import { ZodType } from "zod/v3";
 import { ThreadStore } from "./state/threadStore.js";
 import { isFailure } from "./result.js";
-import { isMcpTool, mcpToolToAgencyFunction } from "./mcp/toolAdapter.js";
 import { AgencyCancelledError, isAbortError } from "./errors.js";
 import { AgencyFunction } from "./agencyFunction.js";
 
@@ -431,19 +430,13 @@ export async function runPrompt(args: {
     checkpointInfo,
   } = args;
 
-  // Tools array contains AgencyFunction instances and/or MCP tool objects.
-  // Normalize MCP tools to AgencyFunction, then extract definitions and handlers.
+  // Tools array contains AgencyFunction instances only.
   const rawTools: any[] = args.clientConfig?.tools || [];
   const agencyFunctions: AgencyFunction[] = rawTools.map((entry: any) => {
-    if (isMcpTool(entry)) {
-      return mcpToolToAgencyFunction(entry, (serverName, toolName, toolArgs) =>
-        ctx.mcpManager.callTool(serverName, toolName, toolArgs),
-      );
-    }
     if (!AgencyFunction.isAgencyFunction(entry)) {
       const receivedType = entry === null ? "null" : Array.isArray(entry) ? "array" : typeof entry;
       throw new TypeError(
-        `Invalid tool in clientConfig.tools. Expected an AgencyFunction instance or an MCP tool, but received ${receivedType}.`,
+        `Invalid tool in clientConfig.tools. Expected an AgencyFunction instance, but received ${receivedType}.`,
       );
     }
     return entry;

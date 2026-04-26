@@ -24,11 +24,11 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.29.0",
-    "zod": "^4.3.5"
+    "@modelcontextprotocol/sdk": "^1.29.0"
   },
   "peerDependencies": {
-    "agency-lang": "workspace:*"
+    "agency-lang": "workspace:*",
+    "zod": "^4.0.0"
   },
   "devDependencies": {
     "typescript": "^5.0.0",

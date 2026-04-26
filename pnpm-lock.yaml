@@ -105,7 +105,7 @@ importers:
         specifier: workspace:*
         version: link:../agency-lang
       zod:
-        specifier: ^4.3.5
+        specifier: ^4.0.0
         version: 4.3.6
     devDependencies:
       typescript:

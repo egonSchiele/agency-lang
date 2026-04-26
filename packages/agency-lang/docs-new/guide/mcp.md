@@ -245,6 +245,8 @@ The callback receives:
 
 If you don't provide `onOAuthRequired`, the package opens the browser automatically (the default behavior).
 
+**Note:** The `onOAuthRequired` callback is set once, on the first `mcp()` call that provides one. If you pass a different callback on a subsequent call, a warning is printed and the new callback is ignored. This is because all MCP servers share a single connection manager. The callback receives `serverName`, so you can branch on it to handle different servers differently within a single callback.
+
 ### Managing tokens with the CLI
 
 You can manage OAuth tokens from the command line:

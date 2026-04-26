@@ -95,13 +95,19 @@ function readAgencyJson(startDir: string): Record<string, any> | null {
   while (true) {
     const candidate = path.join(dir, "agency.json");
     try {
-      return JSON.parse(fs.readFileSync(candidate, "utf-8"));
-    } catch {
-      // File doesn't exist or isn't valid JSON — try parent
+      const contents = fs.readFileSync(candidate, "utf-8");
+      // File exists — parse it (let parse errors propagate)
+      return JSON.parse(contents);
+    } catch (error: any) {
+      if (error?.code === "ENOENT") {
+        // File doesn't exist — try parent directory
+        const parent = path.dirname(dir);
+        if (parent === dir) return null;
+        dir = parent;
+        continue;
+      }
+      throw error;
     }
-    const parent = path.dirname(dir);
-    if (parent === dir) return null;
-    dir = parent;
   }
 }
 

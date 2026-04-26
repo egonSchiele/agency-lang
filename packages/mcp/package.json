@@ -5,6 +5,13 @@
   "type": "module",
   "agency": "./index.agency",
   "main": "./dist/src/mcp.js",
+  "keywords": [],
+  "author": "Aditya Bhargava",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/egonSchiele/agency-lang/issues"
+  },
+  "homepage": "https://github.com/egonSchiele/agency-lang",
   "exports": {
     ".": {
       "types": "./dist/src/mcp.d.ts",

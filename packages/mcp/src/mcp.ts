@@ -6,10 +6,12 @@ import { success, type ResultValue } from "agency-lang/runtime";
 
 let singleton: McpManager | null = null;
 let cleanupRegistered = false;
+let registeredCallback: ((data: any) => void | Promise<void>) | undefined;
 
 function getManager(onOAuthRequired?: (data: any) => void | Promise<void>): McpManager {
   if (!singleton) {
     const config = readMcpConfig();
+    registeredCallback = onOAuthRequired;
     singleton = new McpManager(config, { onOAuthRequired });
     if (!cleanupRegistered) {
       cleanupRegistered = true;
@@ -20,6 +22,10 @@ function getManager(onOAuthRequired?: (data: any) => void | Promise<void>): McpM
         }
       });
     }
+  } else if (onOAuthRequired && onOAuthRequired !== registeredCallback) {
+    console.warn(
+      "[mcp] onOAuthRequired callback was already set on the first mcp() call and cannot be changed. The callback passed here will be ignored.",
+    );
   }
   return singleton;
 }

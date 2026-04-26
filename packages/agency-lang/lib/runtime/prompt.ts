@@ -430,7 +430,6 @@ export async function runPrompt(args: {
     checkpointInfo,
   } = args;
 
-  // Tools array contains AgencyFunction instances only.
   const rawTools: any[] = args.clientConfig?.tools || [];
   const agencyFunctions: AgencyFunction[] = rawTools.map((entry: any) => {
     if (!AgencyFunction.isAgencyFunction(entry)) {

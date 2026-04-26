@@ -90,11 +90,15 @@ const McpServersSchema = z
     }
   });
 
-function findAgencyJson(startDir: string): string | null {
+function readAgencyJson(startDir: string): Record<string, any> | null {
   let dir = startDir;
   while (true) {
     const candidate = path.join(dir, "agency.json");
-    if (fs.existsSync(candidate)) return candidate;
+    try {
+      return JSON.parse(fs.readFileSync(candidate, "utf-8"));
+    } catch {
+      // File doesn't exist or isn't valid JSON — try parent
+    }
     const parent = path.dirname(dir);
     if (parent === dir) return null;
     dir = parent;
@@ -102,11 +106,8 @@ function findAgencyJson(startDir: string): string | null {
 }
 
 export function readMcpConfig(cwd?: string): Record<string, McpServerConfig> {
-  const jsonPath = findAgencyJson(cwd || process.cwd());
-  if (!jsonPath) return {};
-
-  const raw = JSON.parse(fs.readFileSync(jsonPath, "utf-8"));
-  if (!raw.mcpServers) return {};
+  const raw = readAgencyJson(cwd || process.cwd());
+  if (!raw || !raw.mcpServers) return {};
 
   const result = McpServersSchema.parse(raw.mcpServers);
   return result as Record<string, McpServerConfig>;

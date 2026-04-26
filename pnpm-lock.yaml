@@ -84,6 +84,18 @@ importers:
         specifier: ^4.0.16
         version: 4.0.17(@types/node@25.0.6)
 
+  packages/examples:
+    dependencies:
+      '@agency-lang/mcp':
+        specifier: workspace:*
+        version: link:../mcp
+      agency-lang:
+        specifier: workspace:*
+        version: link:../agency-lang
+      zod:
+        specifier: ^4.3.5
+        version: 4.3.6
+
   packages/mcp:
     dependencies:
       '@modelcontextprotocol/sdk':
@@ -102,15 +114,6 @@ importers:
       vitest:
         specifier: ^3.0.0
         version: 3.2.4(@types/node@25.0.6)
-
-  packages/test:
-    dependencies:
-      agency-lang:
-        specifier: workspace:*
-        version: link:../agency-lang
-      zod:
-        specifier: ^4.3.5
-        version: 4.3.6
 
 packages:
 

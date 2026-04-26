@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "test": {
+      "command": "npx",
+      "args": ["tsx", "../mcp/tests/__tests__/testServer.ts"]
+    }
+  }
+}

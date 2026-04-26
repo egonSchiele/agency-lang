@@ -1,5 +1,5 @@
 {
-  "name": "agency-test",
+  "name": "agency-examples",
   "version": "0.0.1",
   "private": true,
   "type": "module",
@@ -8,6 +8,7 @@
   },
   "dependencies": {
     "agency-lang": "workspace:*",
+    "@agency-lang/mcp": "workspace:*",
     "zod": "^4.3.5"
   }
 }

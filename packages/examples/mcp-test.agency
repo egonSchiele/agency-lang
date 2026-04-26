@@ -1,0 +1,10 @@
+import { mcp } from "pkg::@agency-lang/mcp"
+
+node main() {
+  const tools = mcp("test") catch []
+  print("Got ${tools.length} tools")
+  for (tool in tools) {
+    print("  - ${tool.name}")
+  }
+  return tools
+}

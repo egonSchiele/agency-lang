@@ -30,7 +30,7 @@ export { AgencyFunction, UNSET } from "./agencyFunction.js";
 export type { FuncParam, CallType, ToolDefinition, AgencyFunctionOpts } from "./agencyFunction.js";
 export { __call, __callMethod } from "./call.js";
 
-export { callHook } from "./hooks.js";
+export { callHook, registerGlobalHook } from "./hooks.js";
 export type { AgencyCallbacks, CallbackMap, CallbackReturn } from "./hooks.js";
 
 export {
@@ -103,6 +103,3 @@ export {
 } from "./result.js";
 export type { ResultValue, ResultSuccess, ResultFailure } from "./result.js";
 export { Schema, __validateType } from "./schema.js";
-
-export { McpManager } from "./mcp/mcpManager.js";
-export type { McpServerConfig, McpTool } from "./mcp/types.js";

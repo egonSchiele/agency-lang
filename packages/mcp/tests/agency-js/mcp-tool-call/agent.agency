@@ -1,0 +1,8 @@
+import { mcp } from "pkg::@agency-lang/mcp"
+
+node main() {
+  const tools = mcp("test") catch []
+  registerTools(tools)
+  const result: number = llm("You MUST use the test__add tool to add 3 and 4. Do not answer without calling the tool.", { tools: [...tools] })
+  return result
+}

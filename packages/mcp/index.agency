@@ -1,0 +1,5 @@
+import { mcp as mcpImpl } from "./dist/src/mcp.js"
+
+export def mcp(serverName: string, onOAuthRequired?) {
+  return mcpImpl(serverName, onOAuthRequired)
+}

@@ -1,0 +1,7 @@
+import { mcp } from "pkg::@agency-lang/mcp"
+
+node main() {
+  const tools = mcp("test") catch []
+  registerTools(tools)
+  return tools
+}

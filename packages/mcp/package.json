@@ -1,0 +1,48 @@
+{
+  "name": "@agency-lang/mcp",
+  "version": "0.0.1",
+  "description": "MCP (Model Context Protocol) support for the Agency language",
+  "type": "module",
+  "agency": "./index.agency",
+  "main": "./dist/src/mcp.js",
+  "keywords": [],
+  "author": "Aditya Bhargava",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/egonSchiele/agency-lang/issues"
+  },
+  "homepage": "https://github.com/egonSchiele/agency-lang",
+  "exports": {
+    ".": {
+      "types": "./dist/src/mcp.d.ts",
+      "import": "./dist/src/mcp.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "bin": {
+    "@agency-lang/mcp": "./dist/src/cli.js"
+  },
+  "files": [
+    "dist/",
+    "index.agency"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "agency": "agency",
+    "test": "vitest",
+    "test:run": "vitest run",
+    "test:agency": "agency tests/agency -p 8",
+    "test:agency-js": "agency test js tests/agency-js -p 8"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0"
+  },
+  "peerDependencies": {
+    "agency-lang": "workspace:*",
+    "zod": "^4.0.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.0.0",
+    "vitest": "^3.0.0"
+  }
+}

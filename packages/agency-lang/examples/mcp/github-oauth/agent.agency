@@ -1,3 +1,4 @@
+import { mcp } from "pkg::@agency-lang/mcp"
 // Example: Using an MCP server with OAuth authentication
 //
 // This example connects to GitHub's MCP server, which requires OAuth.

@@ -5,8 +5,8 @@ import * as builtinFunctionsFetchJSON from "../../templates/backends/typescriptG
 import * as builtinFunctionsFetch from "../../templates/backends/typescriptGenerator/builtinFunctions/fetch.js";
 import * as builtinFunctionsSleep from "../../templates/backends/typescriptGenerator/builtinFunctions/sleep.js";
 import * as builtinFunctionsSystem from "../../templates/backends/typescriptGenerator/builtinFunctions/system.js";
-import * as builtinFunctionsMcp from "../../templates/backends/typescriptGenerator/builtinFunctions/mcp.js";
 import * as builtinFunctionsSetLLMClient from "../../templates/backends/typescriptGenerator/builtinFunctions/setLLMClient.js";
+import * as builtinFunctionsRegisterTools from "../../templates/backends/typescriptGenerator/builtinFunctions/registerTools.js";
 import { BUILTIN_FUNCTIONS } from "@/config.js";
 
 /**
@@ -56,11 +56,11 @@ export function generateBuiltinHelpers(functionsUsed: Set<string>): string {
       helpers.push(sleepFunc);
     }
    */
-  const mcpFunc = builtinFunctionsMcp.default({});
-  helpers.push(mcpFunc);
-
   const setLLMClientFunc = builtinFunctionsSetLLMClient.default({});
   helpers.push(setLLMClientFunc);
+
+  const registerToolsFunc = builtinFunctionsRegisterTools.default({});
+  helpers.push(registerToolsFunc);
 
   return helpers.join("\n\n");
 }

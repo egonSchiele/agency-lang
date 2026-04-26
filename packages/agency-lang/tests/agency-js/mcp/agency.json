@@ -1,8 +1,0 @@
-{
-  "mcpServers": {
-    "test": {
-      "command": "npx",
-      "args": ["tsx", "../../../lib/runtime/mcp/__tests__/testServer.ts"]
-    }
-  }
-}

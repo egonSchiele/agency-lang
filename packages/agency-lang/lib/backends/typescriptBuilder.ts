@@ -339,7 +339,7 @@ export class TypeScriptBuilder {
     "approve", "reject", "propagate",
     "success", "failure",
     "isInterrupt", "isDebugger", "isRejected", "isApproved",
-    "isSuccess", "isFailure", "mcp", "setLLMClient"
+    "isSuccess", "isFailure", "setLLMClient", "registerTools"
   ]);
 
   /**
@@ -3314,23 +3314,6 @@ export class TypeScriptBuilder {
       ),
       ts.constDecl("graph", $(ts.runtime.globalCtx).prop("graph").done()),
     ];
-
-    if (this.agencyConfig.mcpServers) {
-      // Strip secrets from the config before embedding in generated code.
-      // clientId and clientSecret are resolved at runtime from env vars.
-      const sanitizedServers = Object.fromEntries(
-        Object.entries(this.agencyConfig.mcpServers).map(([name, cfg]) => {
-          if ("type" in cfg && cfg.type === "http") {
-            const { clientSecret, clientId, ...rest } = cfg as Record<string, any>;
-            return [name, rest];
-          }
-          return [name, cfg];
-        }),
-      );
-      runtimeCtxStatements.push(
-        ts.raw(`__globalCtx.createMcpManager(${JSON.stringify(sanitizedServers)});`),
-      );
-    }
 
     let runtimeCtx: TsNode = ts.statements(runtimeCtxStatements);
 

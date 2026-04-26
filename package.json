@@ -3,7 +3,9 @@
   "private": true,
   "scripts": {
     "build": "pnpm -r run build",
-    "test": "pnpm -C packages/agency-lang run test",
-    "test:run": "pnpm -r run test:run"
+    "test": "pnpm -r run test",
+    "test:run": "pnpm -r run test:run",
+    "test:agency": "pnpm -r run test:agency",
+    "test:agency-js": "pnpm -r run test:agency-js"
   }
 }

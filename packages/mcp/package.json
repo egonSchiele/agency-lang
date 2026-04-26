@@ -24,8 +24,8 @@
     "agency": "agency",
     "test": "vitest",
     "test:run": "vitest run",
-    "test:agency": "agency tests/agency",
-    "test:agency-js": "agency tests/agency-js"
+    "test:agency": "agency tests/agency -p 8",
+    "test:agency-js": "agency test js tests/agency-js -p 8"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0"

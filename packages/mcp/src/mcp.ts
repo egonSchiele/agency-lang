@@ -2,7 +2,7 @@ import { McpManager } from "./mcpManager.js";
 import { mcpToolToAgencyFunction } from "./toolAdapter.js";
 import { readMcpConfig } from "./configReader.js";
 import type { McpServerConfig } from "./types.js";
-import { success, registerGlobalHook, type ResultValue } from "agency-lang/runtime";
+import { success, failure, registerGlobalHook, type ResultValue } from "agency-lang/runtime";
 
 let singleton: McpManager | null = null;
 let cleanupRegistered = false;
@@ -34,8 +34,21 @@ export async function mcp(
   serverName: string,
   onOAuthRequired?: (data: any) => void | Promise<void>,
 ): Promise<ResultValue> {
-  const manager = getManager(onOAuthRequired);
-  const result = await manager.getTools(serverName);
+  let manager: McpManager;
+  try {
+    manager = getManager(onOAuthRequired);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return failure(message);
+  }
+
+  let result: ResultValue;
+  try {
+    result = await manager.getTools(serverName);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return failure(message);
+  }
 
   if (!result.success) {
     return result;

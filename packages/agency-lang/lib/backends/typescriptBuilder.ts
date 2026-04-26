@@ -3084,11 +3084,36 @@ export class TypeScriptBuilder {
       return ts.arrowFn([{ name: "__pipeArg" }], ts.await(callExpr), { async: true });
     }
 
+    if (stage.type === "variableName" || stage.type === "functionCall") {
+      return ts.arrowFn([{ name: "__pipeArg" }], this.buildPipeStageBody(stage), { async: true });
+    }
+
+    if (stage.type === "binOpExpression" && stage.operator === "catch") {
+      const innerBody = this.buildPipeStageBody(stage.left);
+      const fallback = this.processNode(stage.right as AgencyNode);
+      const wrapped = ts.await(
+        ts.call(ts.id("__catchResult"), [
+          innerBody,
+          ts.arrowFn([], ts.statements([ts.return(fallback)]), { async: true }),
+        ]),
+      );
+      return ts.arrowFn([{ name: "__pipeArg" }], wrapped, { async: true });
+    }
+
+    throw new Error(`Invalid pipe stage type: ${stage.type}`);
+  }
+
+  /**
+   * Build the body expression for a pipe stage (without the outer arrow function wrapper).
+   * Returns `await __call(...)` — the caller wraps this in an arrow function.
+   */
+  private buildPipeStageBody(stage: Expression): TsNode {
+    const pipeArg = ts.raw("__pipeArg");
+
     if (stage.type === "variableName") {
       const callee = this.processNode(stage);
       const descriptor = ts.obj({ type: ts.str("positional"), args: ts.arr([pipeArg]) });
-      const callExpr = ts.call(ts.id("__call"), [callee, descriptor, this.buildStateConfig()]);
-      return ts.arrowFn([{ name: "__pipeArg" }], ts.await(callExpr), { async: true });
+      return ts.await(ts.call(ts.id("__call"), [callee, descriptor, this.buildStateConfig()]));
     }
 
     if (stage.type === "functionCall") {
@@ -3100,7 +3125,6 @@ export class TypeScriptBuilder {
           `Function call on right side of |> must contain exactly one ? placeholder, got ${placeholderCount}`,
         );
       }
-
       const argNodes = stage.arguments.map((a) =>
         a.type === "placeholder" ? pipeArg : this.processNode(a as AgencyNode),
       );
@@ -3111,11 +3135,10 @@ export class TypeScriptBuilder {
         ? ts.scopedVar(mapFunctionName(stage.functionName), stage.scope, this.moduleId)
         : ts.raw(mapFunctionName(stage.functionName));
       const descriptor = ts.obj({ type: ts.str("positional"), args: ts.arr(argNodes) });
-      const callExpr = ts.call(ts.id("__call"), [callee, descriptor, this.buildStateConfig()]);
-      return ts.arrowFn([{ name: "__pipeArg" }], ts.await(callExpr), { async: true });
+      return ts.await(ts.call(ts.id("__call"), [callee, descriptor, this.buildStateConfig()]));
     }
 
-    throw new Error(`Invalid pipe stage type: ${stage.type}`);
+    throw new Error(`Unsupported pipe stage type in catch: ${stage.type}`);
   }
 
   /**

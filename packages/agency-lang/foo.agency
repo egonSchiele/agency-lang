@@ -1,9 +1,6 @@
 import { map } from "std::array"
 node main() {
   const arr = range(10)
-  const result = map(arr, \x -> x * 2)
-    |> map(?, \x -> x * 10)
-    |> map(?, \x -> x * 10)
-    |> map(?, \x -> x * 10)
+  const result = arr |> map(?, \x -> x * 2) |> map(?, \x -> x * 10) |> map(?, \x -> x * 10) |> map(?, \x -> failure(null)) catch []
   print(result)
 }

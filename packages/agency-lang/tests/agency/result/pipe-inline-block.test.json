@@ -1,0 +1,15 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "{\"r1\":{\"__type\":\"resultType\",\"success\":true,\"value\":[10,20,30]},\"r2\":{\"__type\":\"resultType\",\"success\":true,\"value\":[4,6,8]},\"r3\":{\"__type\":\"resultType\",\"success\":false,\"error\":\"nope\",\"checkpoint\":null,\"retryable\":false,\"functionName\":null,\"args\":null}}",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "description": "Inline blocks work with the pipe operator"
+    }
+  ]
+}

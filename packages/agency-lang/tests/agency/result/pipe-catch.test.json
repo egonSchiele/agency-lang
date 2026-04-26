@@ -1,0 +1,15 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "{\"r1\":{\"__type\":\"resultType\",\"success\":true,\"value\":5},\"r2\":{\"__type\":\"resultType\",\"success\":true,\"value\":-1},\"r3\":{\"__type\":\"resultType\",\"success\":true,\"value\":[2,4,6]},\"r4\":{\"__type\":\"resultType\",\"success\":true,\"value\":[16,31,46]}}",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "description": "Catch works with the pipe operator"
+    }
+  ]
+}

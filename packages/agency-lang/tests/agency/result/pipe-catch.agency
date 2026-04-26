@@ -1,0 +1,24 @@
+import { map } from "std::array"
+
+def half(x: number): Result {
+  if (x % 2 != 0) {
+    return failure("not even")
+  }
+  return success(x / 2)
+}
+
+node main() {
+  // catch on last stage: stage succeeds, catch not triggered
+  let r1 = success(10) |> half catch -1
+
+  // catch on last stage: stage fails, catch triggers
+  let r2 = success(5) |> half catch -1
+
+  // catch with inline block, success case
+  let r3 = [1, 2, 3] |> map(?, \x -> x * 2) catch []
+
+  // catch with chained pipes and inline blocks
+  let r4 = [5, 10, 15] |> map(?, \x -> x * 3) |> map(?, \x -> x + 1) catch []
+
+  return { r1: r1, r2: r2, r3: r3, r4: r4 }
+}

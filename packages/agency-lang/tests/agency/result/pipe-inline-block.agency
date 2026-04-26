@@ -1,0 +1,14 @@
+import { map } from "std::array"
+
+node main() {
+  // inline block with pipe and Result input
+  let r1 = success([1, 2, 3]) |> map(?, \x -> x * 10)
+
+  // chained pipes with inline blocks and plain value input
+  let r2 = [1, 2, 3] |> map(?, \x -> x + 1) |> map(?, \x -> x * 2)
+
+  // failure short-circuits even with inline blocks
+  let r3 = failure("nope") |> map(?, \x -> x * 10)
+
+  return { r1: r1, r2: r2, r3: r3 }
+}

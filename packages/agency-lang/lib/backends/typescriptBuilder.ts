@@ -339,7 +339,7 @@ export class TypeScriptBuilder {
     "approve", "reject", "propagate",
     "success", "failure",
     "isInterrupt", "isDebugger", "isRejected", "isApproved",
-    "isSuccess", "isFailure", "setLLMClient"
+    "isSuccess", "isFailure", "setLLMClient", "registerTools"
   ]);
 
   /**

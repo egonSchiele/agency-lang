@@ -101,6 +101,15 @@ function setLLMClient(client: LLMClient) {
   __globalCtx.setLLMClient(client);
 }
 
+
+function registerTools(tools: any[]) {
+  for (const tool of tools) {
+    if (__AgencyFunction.isAgencyFunction(tool)) {
+      __toolRegistry[tool.name] = tool;
+    }
+  }
+}
+
 async function __initializeGlobals(__ctx) {
   __ctx.globals.markInitialized("bangReturnType.agency")
 }

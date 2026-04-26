@@ -2,7 +2,7 @@ import { McpManager } from "./mcpManager.js";
 import { mcpToolToAgencyFunction } from "./toolAdapter.js";
 import { readMcpConfig } from "./configReader.js";
 import type { McpServerConfig } from "./types.js";
-import { success, type ResultValue } from "agency-lang/runtime";
+import { success, functionRefReviver, type ResultValue } from "agency-lang/runtime";
 
 let singleton: McpManager | null = null;
 

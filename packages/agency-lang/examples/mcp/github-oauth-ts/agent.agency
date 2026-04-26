@@ -1,3 +1,4 @@
+import { mcp } from "pkg::@agency-lang/mcp"
 // The Agency agent — same as the regular OAuth example.
 // The TypeScript wrapper in run.ts shows how to customize the OAuth flow.
 //

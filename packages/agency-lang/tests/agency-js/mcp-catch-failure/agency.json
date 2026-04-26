@@ -1,7 +1,0 @@
-{
-  "mcpServers": {
-    "bad": {
-      "command": "nonexistent-command-that-does-not-exist-xyz"
-    }
-  }
-}

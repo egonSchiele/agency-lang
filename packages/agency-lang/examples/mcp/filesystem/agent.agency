@@ -1,3 +1,4 @@
+import { mcp } from "pkg::@agency-lang/mcp"
 // Example: Using an MCP server (no authentication required)
 //
 // This example connects to the filesystem MCP server and uses its tools

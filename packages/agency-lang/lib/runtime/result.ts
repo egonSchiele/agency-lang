@@ -77,9 +77,10 @@ export function __catchResult(result: any, fallback: () => any): any {
   return fallback();
 }
 
-export async function __pipeBind(result: ResultValue, fn: (value: any) => any): Promise<any> {
-  if (!result.success) return result;
-  const output = await fn(result.value);
+export async function __pipeBind(result: any, fn: (value: any) => any): Promise<any> {
+  if (isFailure(result)) return result;
+  const value = isSuccess(result) ? result.value : result;
+  const output = await fn(value);
   // Propagate interrupts directly — they must bubble up to the node runner
   if (output != null && typeof output === "object" && output.type === "interrupt") {
     return output;

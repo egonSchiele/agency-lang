@@ -1,2 +1,3 @@
 packages:
   - "packages/*"
+  - "packages/agency-lang/docs-new"

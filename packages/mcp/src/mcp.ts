@@ -2,7 +2,7 @@ import { McpManager } from "./mcpManager.js";
 import { mcpToolToAgencyFunction } from "./toolAdapter.js";
 import { readMcpConfig } from "./configReader.js";
 import type { McpServerConfig } from "./types.js";
-import { success, type ResultValue } from "agency-lang/runtime";
+import { success, registerGlobalHook, type ResultValue } from "agency-lang/runtime";
 
 let singleton: McpManager | null = null;
 let cleanupRegistered = false;
@@ -15,7 +15,7 @@ function getManager(onOAuthRequired?: (data: any) => void | Promise<void>): McpM
     singleton = new McpManager(config, { onOAuthRequired });
     if (!cleanupRegistered) {
       cleanupRegistered = true;
-      process.once("beforeExit", async () => {
+      registerGlobalHook("onAgentEnd", async () => {
         if (singleton) {
           await singleton.disconnectAll();
           singleton = null;

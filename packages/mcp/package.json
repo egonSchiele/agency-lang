@@ -21,7 +21,11 @@
   ],
   "scripts": {
     "build": "tsc",
-    "test": "vitest run"
+    "agency": "agency",
+    "test": "vitest",
+    "test:run": "vitest run",
+    "test:agency": "agency tests/agency",
+    "test:agency-js": "agency tests/agency-js"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0"

@@ -81,12 +81,39 @@ export type AgencyCallbacks = {
 // Keyed by callbacks object so concurrent executions don't block each other.
 const _activeHooks = new WeakMap<AgencyCallbacks, Set<string>>();
 
+// Global hook registry: allows external packages (e.g., @agency-lang/mcp) to
+// register callbacks that fire alongside user-provided callbacks.
+const _globalHooks: Partial<Record<keyof CallbackMap, Array<(data: any) => any>>> = {};
+
+export function registerGlobalHook<K extends keyof CallbackMap>(
+  name: K,
+  fn: (data: CallbackMap[K]) => void | Promise<void>,
+): void {
+  if (!_globalHooks[name]) {
+    _globalHooks[name] = [];
+  }
+  _globalHooks[name]!.push(fn);
+}
+
 export async function callHook<K extends keyof CallbackMap>(args: {
   callbacks: AgencyCallbacks;
   name: K;
   data: CallbackMap[K];
 }): Promise<CallbackReturn<K> | undefined> {
   const { callbacks, name, data } = args;
+
+  // Fire global hooks (from external packages)
+  const globalFns = _globalHooks[name];
+  if (globalFns) {
+    for (const fn of globalFns) {
+      try {
+        await fn(data);
+      } catch (error) {
+        console.error(`[agency] global ${name} hook error:`, error);
+      }
+    }
+  }
+
   const hook = callbacks[name];
   if (!hook) return undefined;
   let active = _activeHooks.get(callbacks);

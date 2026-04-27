@@ -17,6 +17,7 @@ import type { TraceConfig } from "../trace/types.js";
 import { reviveWithClasses, type ClassRegistry } from "../classReviver.js";
 import { AgencyCancelledError } from "../errors.js";
 import { LLMClient, SmoltalkClient } from "../llmClient.js";
+import type { InterruptResponse } from "../interrupts.js";
 
 /* bunch of stuff that every node/function in the runtime needs access to,
 that we don't want to pass as individual arguments everywhere */
@@ -54,9 +55,18 @@ export class RuntimeContext<T> {
   statelogClient: StatelogClient;
   smoltalkDefaults: Partial<SmolPromptConfig>;
   private _llmClient: LLMClient;
+  private _interruptResponses: Record<string, InterruptResponse> = {};
 
   get llmClient(): LLMClient { return this._llmClient; }
   setLLMClient(client: LLMClient): void { this._llmClient = client; }
+
+  setInterruptResponses(responses: Record<string, InterruptResponse>): void {
+    this._interruptResponses = responses;
+  }
+
+  getInterruptResponse(interruptId: string): InterruptResponse | undefined {
+    return this._interruptResponses[interruptId];
+  }
 
   // this is the directory that the runtime is running in. We need this to be able to read files relative to the runtime.
   dirname: string;

@@ -173,6 +173,7 @@ export class RuntimeContext<T> {
     execCtx._skipNextCheckpoint = false;
     execCtx._restoreCount = 0;
     execCtx._toolCallDepth = 0;
+    execCtx._interruptResponses = {};
     execCtx.debuggerState = this.debuggerState;
     execCtx.traceWriter = await TraceWriter.create({
       runId,

@@ -3,7 +3,7 @@ import { StateStack } from "./state/stateStack.js";
 import type { RuntimeContext } from "./state/context.js";
 import type { SourceLocationOpts } from "./state/checkpointStore.js";
 import type { HandlerFn } from "./types.js";
-import { isInterrupt } from "./interrupts.js";
+import { isInterrupt, hasInterrupts } from "./interrupts.js";
 import { __pipeBind } from "./result.js";
 import { debugStep } from "./debugger.js";
 import { color } from "termcolors";
@@ -577,6 +577,9 @@ export class Runner {
           const branchKey = this.forkBranchKey(id, i);
           if (s.status === "fulfilled" && isInterrupt(s.value)) {
             interrupts.push(s.value);
+          } else if (s.status === "fulfilled" && hasInterrupts(s.value)) {
+            // Nested fork returned multiple interrupts — flatten into our batch
+            interrupts.push(...s.value);
           } else if (s.status === "fulfilled") {
             // Cache the completed result on the branch so it survives interrupt cycles
             if (this.frame.branches![branchKey]) {
@@ -592,7 +595,7 @@ export class Runner {
           const cpId = this.ctx.checkpoints.create(this.ctx, {
             moduleId: this.moduleId,
             scopeName: this.scopeName,
-            stepPath: String(id),
+            stepPath: this.stepPath(id),
           });
           const cp = this.ctx.checkpoints.get(cpId);
           for (const intr of interrupts) {

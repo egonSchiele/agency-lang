@@ -103,7 +103,7 @@ export function isInterrupt(obj: any): obj is Interrupt {
 }
 
 export function hasInterrupts(data: any): data is Interrupt[] {
-  return Array.isArray(data) && data.length > 0 && isInterrupt(data[0]);
+  return Array.isArray(data) && data.length > 0 && data.every(isInterrupt);
 }
 
 export function isDebugger(obj: any): obj is Interrupt {

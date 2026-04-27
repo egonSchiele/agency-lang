@@ -92,14 +92,14 @@ Everything internal (runners, handlers, `interruptWithHandlers`) continues worki
 
 All interrupts in the array share a single checkpoint that captures the full state tree (all fork branches, completed thread results in `BranchState`). This checkpoint is duplicated by reference onto each `Interrupt` in the array, so the array is self-contained — no wrapper type needed. `respondToInterrupts` grabs the checkpoint from `interrupts[0]`.
 
-The checkpoint is created at the `runNode` boundary after fork returns the interrupt array, ensuring it captures the complete state including all branch stacks and cached results.
+The checkpoint is created inside `Runner.fork()` after collecting all interrupts, ensuring it captures the complete state including all branch stacks and cached results.
 
 ### RuntimeContext additions
 
 Two additions to `RuntimeContext` are needed for routing responses. Both must be **private** instance variables with public accessor methods:
 
 - `private interruptResponses: Record<string, InterruptResponse>` — maps `interruptId` to the caller's response. Set via `setInterruptResponses()` by `respondToInterrupts` before re-execution. Not serialized (set fresh on each resume).
-- `getInterruptData(interruptId: string): InterruptResponse | undefined` — public accessor that looks up the response for a given interrupt ID. Called by generated code in the interrupt template on resume.
+- `getInterruptResponse(interruptId: string): InterruptResponse | undefined` — public accessor that looks up the response for a given interrupt ID. Called by generated code in the interrupt template on resume.
 
 These may partially exist from the concurrent interrupts work but need to be verified and completed.
 

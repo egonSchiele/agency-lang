@@ -131,7 +131,9 @@ graph.node("main", async (__state: GraphState) => {
   const __setupData = setupNode({
     state: __state
   });
-  const __stack = __setupData.stack;
+  const __stateStack = __state.ctx.stateStack;
+const __isForked = false;
+const __stack = __setupData.stack;
 const __step = __setupData.step;
 const __self = __setupData.self;
 const __threads = __setupData.threads;

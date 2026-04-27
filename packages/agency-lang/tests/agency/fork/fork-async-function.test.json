@@ -1,0 +1,18 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Fork calling a function with an LLM call — each thread gets its own result without state corruption",
+      "input": "",
+      "expectedOutput": "",
+      "evaluationCriteria": [
+        {
+          "type": "llmJudge",
+          "judgePrompt": "The output should be an array of exactly three strings. Each string should be a one-sentence summary about a different animal: one about cats, one about dogs, and one about birds. The summaries should be distinct from each other.",
+          "desiredAccuracy": 80
+        }
+      ],
+      "retry": 1
+    }
+  ]
+}

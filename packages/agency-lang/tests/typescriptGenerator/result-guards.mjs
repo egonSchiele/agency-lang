@@ -132,7 +132,9 @@ async function __checkValue_impl(r: Result, __state: InternalFunctionState | und
     state: __state
   });
   // __state will be undefined if this function is being called as a tool by an llm
-  const __stack = __setupData.stack;
+  const __stateStack = __setupData.stateStack;
+const __isForked = __state?.isForked ?? false;
+const __stack = __setupData.stack;
 const __step = __setupData.step;
 const __self = __setupData.self;
 const __threads = __setupData.threads;
@@ -210,7 +212,7 @@ return failure(
 );
 
   } finally {
-    if (!__state?.isForked) { __ctx.stateStack.pop() }
+    if (!__isForked) { __stateStack.pop() }
     if (__functionCompleted) {
       await callHook({
         callbacks: __ctx.callbacks,

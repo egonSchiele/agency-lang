@@ -145,6 +145,8 @@ const __setupData = setupFunction({
       state: __state
     });
 // __state will be undefined if this function is being called as a tool by an llm
+const __stateStack = __setupData.stateStack;
+const __isForked = __state?.isForked ?? false;
 const __stack = __setupData.stack;
 const __step = __setupData.step;
 const __self = __setupData.self;
@@ -205,7 +207,7 @@ return failure(
 );
 
     } finally {
-      if (!__state?.isForked) { __ctx.stateStack.pop() }
+      if (!__isForked) { __stateStack.pop() }
       if (__functionCompleted) {
         await callHook({
           callbacks: __ctx.callbacks,
@@ -244,7 +246,9 @@ graph.node("main", async (__state: GraphState) => {
   const __setupData = setupNode({
     state: __state
   });
-  const __stack = __setupData.stack;
+  const __stateStack = __state.ctx.stateStack;
+const __isForked = false;
+const __stack = __setupData.stack;
 const __step = __setupData.step;
 const __self = __setupData.self;
 const __threads = __setupData.threads;
@@ -272,7 +276,9 @@ await __callMethod(__stack.locals.c, "increment", {
       }, {
         ctx: __ctx,
         threads: __threads,
-        interruptData: __state?.interruptData
+        interruptData: __state?.interruptData,
+        stateStack: __stateStack,
+        isForked: __isForked
       })
     });
     await runner.step(2, async (runner) => {
@@ -284,7 +290,9 @@ runner.halt({
         }, {
           ctx: __ctx,
           threads: __threads,
-          interruptData: __state?.interruptData
+          interruptData: __state?.interruptData,
+          stateStack: __stateStack,
+          isForked: __isForked
         })
       })
 return;

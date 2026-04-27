@@ -46,6 +46,7 @@ export function setupNode(args: { state: GraphState }): {
 }
 
 export function setupFunction(args: { state?: InternalFunctionState }): {
+  stateStack: StateStack;
   stack: State;
   step: number;
   self: Record<string, any>;
@@ -57,6 +58,7 @@ export function setupFunction(args: { state?: InternalFunctionState }): {
     const stateStack = new StateStack();
     const stack = stateStack.getNewState();
     return {
+      stateStack,
       stack,
       step: 0,
       self: stack.locals,
@@ -73,7 +75,7 @@ export function setupFunction(args: { state?: InternalFunctionState }): {
   // if being called as a tool, we won't have threads, but we'll create an empty ThreadStore here.
   const threads = state.threads || new ThreadStore();
 
-  return { stack, step, self, threads };
+  return { stateStack, stack, step, self, threads };
 }
 
 export async function runNode({

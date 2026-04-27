@@ -132,7 +132,9 @@ async function __double_impl(x: number, __state: InternalFunctionState | undefin
     state: __state
   });
   // __state will be undefined if this function is being called as a tool by an llm
-  const __stack = __setupData.stack;
+  const __stateStack = __setupData.stateStack;
+const __isForked = __state?.isForked ?? false;
+const __stack = __setupData.stack;
 const __step = __setupData.step;
 const __self = __setupData.self;
 const __threads = __setupData.threads;
@@ -196,7 +198,7 @@ return failure(
 );
 
   } finally {
-    if (!__state?.isForked) { __ctx.stateStack.pop() }
+    if (!__isForked) { __stateStack.pop() }
     if (__functionCompleted) {
       await callHook({
         callbacks: __ctx.callbacks,
@@ -230,7 +232,9 @@ async function __multiply_impl(a: number, b: number, __state: InternalFunctionSt
     state: __state
   });
   // __state will be undefined if this function is being called as a tool by an llm
-  const __stack = __setupData.stack;
+  const __stateStack = __setupData.stateStack;
+const __isForked = __state?.isForked ?? false;
+const __stack = __setupData.stack;
 const __step = __setupData.step;
 const __self = __setupData.self;
 const __threads = __setupData.threads;
@@ -300,7 +304,7 @@ return failure(
 );
 
   } finally {
-    if (!__state?.isForked) { __ctx.stateStack.pop() }
+    if (!__isForked) { __stateStack.pop() }
     if (__functionCompleted) {
       await callHook({
         callbacks: __ctx.callbacks,
@@ -339,7 +343,9 @@ async function __safeDivide_impl(a: number, b: number, __state: InternalFunction
     state: __state
   });
   // __state will be undefined if this function is being called as a tool by an llm
-  const __stack = __setupData.stack;
+  const __stateStack = __setupData.stateStack;
+const __isForked = __state?.isForked ?? false;
+const __stack = __setupData.stack;
 const __step = __setupData.step;
 const __self = __setupData.self;
 const __threads = __setupData.threads;
@@ -423,7 +429,7 @@ return failure(
 );
 
   } finally {
-    if (!__state?.isForked) { __ctx.stateStack.pop() }
+    if (!__isForked) { __stateStack.pop() }
     if (__functionCompleted) {
       await callHook({
         callbacks: __ctx.callbacks,
@@ -461,7 +467,9 @@ graph.node("main", async (__state: GraphState) => {
   const __setupData = setupNode({
     state: __state
   });
-  const __stack = __setupData.stack;
+  const __stateStack = __state.ctx.stateStack;
+const __isForked = false;
+const __stack = __setupData.stack;
 const __step = __setupData.step;
 const __self = __setupData.self;
 const __threads = __setupData.threads;
@@ -488,7 +496,9 @@ __stack.locals.__pipe_0 = await success(5);
     }, {
       ctx: __ctx,
       threads: __threads,
-      interruptData: __state?.interruptData
+      interruptData: __state?.interruptData,
+      stateStack: __stateStack,
+      isForked: __isForked
     }));
     await runner.step(2, async (runner) => {
 __stack.locals.__pipe_1 = await success(5);
@@ -499,7 +509,9 @@ __stack.locals.__pipe_1 = await success(5);
     }, {
       ctx: __ctx,
       threads: __threads,
-      interruptData: __state?.interruptData
+      interruptData: __state?.interruptData,
+      stateStack: __stateStack,
+      isForked: __isForked
     }));
     await runner.step(4, async (runner) => {
 __stack.locals.__pipe_2 = await success(10);
@@ -510,7 +522,9 @@ __stack.locals.__pipe_2 = await success(10);
     }, {
       ctx: __ctx,
       threads: __threads,
-      interruptData: __state?.interruptData
+      interruptData: __state?.interruptData,
+      stateStack: __stateStack,
+      isForked: __isForked
     }));
     __stack.locals.r3 = await runner.pipe(6, __stack.locals.__pipe_2, async (__pipeArg) => await __call(multiply, {
       type: "positional",
@@ -518,7 +532,9 @@ __stack.locals.__pipe_2 = await success(10);
     }, {
       ctx: __ctx,
       threads: __threads,
-      interruptData: __state?.interruptData
+      interruptData: __state?.interruptData,
+      stateStack: __stateStack,
+      isForked: __isForked
     }));
     await runner.step(7, async (runner) => {
 __stack.locals.__pipe_3 = await failure(`nope`);
@@ -529,7 +545,9 @@ __stack.locals.__pipe_3 = await failure(`nope`);
     }, {
       ctx: __ctx,
       threads: __threads,
-      interruptData: __state?.interruptData
+      interruptData: __state?.interruptData,
+      stateStack: __stateStack,
+      isForked: __isForked
     }));
     await runner.step(9, async (runner) => {
 __stack.locals.__pipe_4 = await success(10);
@@ -540,7 +558,9 @@ __stack.locals.__pipe_4 = await success(10);
     }, {
       ctx: __ctx,
       threads: __threads,
-      interruptData: __state?.interruptData
+      interruptData: __state?.interruptData,
+      stateStack: __stateStack,
+      isForked: __isForked
     }));
     if (runner.halted) return runner.haltResult;
     await callHook({

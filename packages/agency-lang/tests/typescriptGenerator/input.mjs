@@ -131,7 +131,9 @@ graph.node("main", async (__state: GraphState) => {
   const __setupData = setupNode({
     state: __state
   });
-  const __stack = __setupData.stack;
+  const __stateStack = __state.ctx.stateStack;
+const __isForked = false;
+const __stack = __setupData.stack;
 const __step = __setupData.step;
 const __self = __setupData.self;
 const __threads = __setupData.threads;
@@ -156,7 +158,9 @@ __stack.locals.message = await __call(input, {
       }, {
         ctx: __ctx,
         threads: __threads,
-        interruptData: __state?.interruptData
+        interruptData: __state?.interruptData,
+        stateStack: __stateStack,
+        isForked: __isForked
       });
 if ((isInterrupt(__stack.locals.message) || hasInterrupts(__stack.locals.message))) {
         await __ctx.pendingPromises.awaitAll()
@@ -199,7 +203,9 @@ const __funcResult = await __call(print, {
       }, {
         ctx: __ctx,
         threads: __threads,
-        interruptData: __state?.interruptData
+        interruptData: __state?.interruptData,
+        stateStack: __stateStack,
+        isForked: __isForked
       });
 if ((isInterrupt(__funcResult) || hasInterrupts(__funcResult))) {
         await __ctx.pendingPromises.awaitAll()

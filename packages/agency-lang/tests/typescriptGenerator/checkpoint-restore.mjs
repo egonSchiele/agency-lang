@@ -131,7 +131,9 @@ graph.node("main", async (__state: GraphState) => {
   const __setupData = setupNode({
     state: __state
   });
-  const __stack = __setupData.stack;
+  const __stateStack = __state.ctx.stateStack;
+const __isForked = false;
+const __stack = __setupData.stack;
 const __step = __setupData.step;
 const __self = __setupData.self;
 const __threads = __setupData.threads;
@@ -157,6 +159,8 @@ __stack.locals.cp = await __call(checkpoint, {
         ctx: __ctx,
         threads: __threads,
         interruptData: __state?.interruptData,
+        stateStack: __stateStack,
+        isForked: __isForked,
         moduleId: "checkpoint-restore.agency",
         scopeName: "main",
         stepPath: "0"
@@ -180,7 +184,9 @@ const __funcResult = await __call(restore, {
       }, {
         ctx: __ctx,
         threads: __threads,
-        interruptData: __state?.interruptData
+        interruptData: __state?.interruptData,
+        stateStack: __stateStack,
+        isForked: __isForked
       });
 if ((isInterrupt(__funcResult) || hasInterrupts(__funcResult))) {
         await __ctx.pendingPromises.awaitAll()

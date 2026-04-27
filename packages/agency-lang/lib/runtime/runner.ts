@@ -577,6 +577,10 @@ export class Runner {
           const branchKey = this.forkBranchKey(id, i);
           if (s.status === "fulfilled" && isInterrupt(s.value)) {
             interrupts.push(s.value);
+            // Store interruptId on the branch so it survives checkpoint restore
+            if (this.frame.branches![branchKey]) {
+              this.frame.branches![branchKey].interruptId = s.value.interruptId;
+            }
           } else if (s.status === "fulfilled" && hasInterrupts(s.value)) {
             // Nested fork returned multiple interrupts — flatten into our batch
             interrupts.push(...s.value);

@@ -132,7 +132,9 @@ async function __add_impl(x: number, y: number, __state: InternalFunctionState |
     state: __state
   });
   // __state will be undefined if this function is being called as a tool by an llm
-  const __stack = __setupData.stack;
+  const __stateStack = __setupData.stateStack;
+const __isForked = __state?.isForked ?? false;
+const __stack = __setupData.stack;
 const __step = __setupData.step;
 const __self = __setupData.self;
 const __threads = __setupData.threads;
@@ -221,7 +223,7 @@ return failure(
 );
 
   } finally {
-    if (!__state?.isForked) { __ctx.stateStack.pop() }
+    if (!__isForked) { __stateStack.pop() }
     if (__functionCompleted) {
       await callHook({
         callbacks: __ctx.callbacks,
@@ -260,7 +262,9 @@ async function __greet_impl(name: string, __state: InternalFunctionState | undef
     state: __state
   });
   // __state will be undefined if this function is being called as a tool by an llm
-  const __stack = __setupData.stack;
+  const __stateStack = __setupData.stateStack;
+const __isForked = __state?.isForked ?? false;
+const __stack = __setupData.stack;
 const __step = __setupData.step;
 const __self = __setupData.self;
 const __threads = __setupData.threads;
@@ -343,7 +347,7 @@ return failure(
 );
 
   } finally {
-    if (!__state?.isForked) { __ctx.stateStack.pop() }
+    if (!__isForked) { __stateStack.pop() }
     if (__functionCompleted) {
       await callHook({
         callbacks: __ctx.callbacks,
@@ -377,7 +381,9 @@ async function __mixed_impl(count: number, label: any, __state: InternalFunction
     state: __state
   });
   // __state will be undefined if this function is being called as a tool by an llm
-  const __stack = __setupData.stack;
+  const __stateStack = __setupData.stateStack;
+const __isForked = __state?.isForked ?? false;
+const __stack = __setupData.stack;
 const __step = __setupData.step;
 const __self = __setupData.self;
 const __threads = __setupData.threads;
@@ -466,7 +472,7 @@ return failure(
 );
 
   } finally {
-    if (!__state?.isForked) { __ctx.stateStack.pop() }
+    if (!__isForked) { __stateStack.pop() }
     if (__functionCompleted) {
       await callHook({
         callbacks: __ctx.callbacks,
@@ -505,7 +511,9 @@ async function __processArray_impl(items: number[], __state: InternalFunctionSta
     state: __state
   });
   // __state will be undefined if this function is being called as a tool by an llm
-  const __stack = __setupData.stack;
+  const __stateStack = __setupData.stateStack;
+const __isForked = __state?.isForked ?? false;
+const __stack = __setupData.stack;
 const __step = __setupData.step;
 const __self = __setupData.self;
 const __threads = __setupData.threads;
@@ -588,7 +596,7 @@ return failure(
 );
 
   } finally {
-    if (!__state?.isForked) { __ctx.stateStack.pop() }
+    if (!__isForked) { __stateStack.pop() }
     if (__functionCompleted) {
       await callHook({
         callbacks: __ctx.callbacks,
@@ -622,7 +630,9 @@ async function __flexible_impl(value: string | number, __state: InternalFunction
     state: __state
   });
   // __state will be undefined if this function is being called as a tool by an llm
-  const __stack = __setupData.stack;
+  const __stateStack = __setupData.stateStack;
+const __isForked = __state?.isForked ?? false;
+const __stack = __setupData.stack;
 const __step = __setupData.step;
 const __self = __setupData.self;
 const __threads = __setupData.threads;
@@ -705,7 +715,7 @@ return failure(
 );
 
   } finally {
-    if (!__state?.isForked) { __ctx.stateStack.pop() }
+    if (!__isForked) { __stateStack.pop() }
     if (__functionCompleted) {
       await callHook({
         callbacks: __ctx.callbacks,
@@ -738,7 +748,9 @@ graph.node("foo", async (__state: GraphState) => {
   const __setupData = setupNode({
     state: __state
   });
-  const __stack = __setupData.stack;
+  const __stateStack = __state.ctx.stateStack;
+const __isForked = false;
+const __stack = __setupData.stack;
 const __step = __setupData.step;
 const __self = __setupData.self;
 const __threads = __setupData.threads;
@@ -763,7 +775,9 @@ const __funcResult = await __call(print, {
       }, {
         ctx: __ctx,
         threads: __threads,
-        interruptData: __state?.interruptData
+        interruptData: __state?.interruptData,
+        stateStack: __stateStack,
+        isForked: __isForked
       });
 if ((isInterrupt(__funcResult) || hasInterrupts(__funcResult))) {
         await __ctx.pendingPromises.awaitAll()
@@ -809,7 +823,9 @@ graph.node("main", async (__state: GraphState) => {
   const __setupData = setupNode({
     state: __state
   });
-  const __stack = __setupData.stack;
+  const __stateStack = __state.ctx.stateStack;
+const __isForked = false;
+const __stack = __setupData.stack;
 const __step = __setupData.step;
 const __self = __setupData.self;
 const __threads = __setupData.threads;
@@ -837,7 +853,9 @@ __stack.locals.sum = await __call(add, {
       }, {
         ctx: __ctx,
         threads: __threads,
-        interruptData: __state?.interruptData
+        interruptData: __state?.interruptData,
+        stateStack: __stateStack,
+        isForked: __isForked
       });
 if ((isInterrupt(__stack.locals.sum) || hasInterrupts(__stack.locals.sum))) {
         await __ctx.pendingPromises.awaitAll()
@@ -855,7 +873,9 @@ __stack.locals.greeting = await __call(greet, {
       }, {
         ctx: __ctx,
         threads: __threads,
-        interruptData: __state?.interruptData
+        interruptData: __state?.interruptData,
+        stateStack: __stateStack,
+        isForked: __isForked
       });
 if ((isInterrupt(__stack.locals.greeting) || hasInterrupts(__stack.locals.greeting))) {
         await __ctx.pendingPromises.awaitAll()
@@ -873,7 +893,9 @@ __stack.locals.labeled = await __call(mixed, {
       }, {
         ctx: __ctx,
         threads: __threads,
-        interruptData: __state?.interruptData
+        interruptData: __state?.interruptData,
+        stateStack: __stateStack,
+        isForked: __isForked
       });
 if ((isInterrupt(__stack.locals.labeled) || hasInterrupts(__stack.locals.labeled))) {
         await __ctx.pendingPromises.awaitAll()
@@ -891,7 +913,9 @@ __stack.locals.processed = await __call(processArray, {
       }, {
         ctx: __ctx,
         threads: __threads,
-        interruptData: __state?.interruptData
+        interruptData: __state?.interruptData,
+        stateStack: __stateStack,
+        isForked: __isForked
       });
 if ((isInterrupt(__stack.locals.processed) || hasInterrupts(__stack.locals.processed))) {
         await __ctx.pendingPromises.awaitAll()
@@ -909,7 +933,9 @@ __stack.locals.flexResult = await __call(flexible, {
       }, {
         ctx: __ctx,
         threads: __threads,
-        interruptData: __state?.interruptData
+        interruptData: __state?.interruptData,
+        stateStack: __stateStack,
+        isForked: __isForked
       });
 if ((isInterrupt(__stack.locals.flexResult) || hasInterrupts(__stack.locals.flexResult))) {
         await __ctx.pendingPromises.awaitAll()

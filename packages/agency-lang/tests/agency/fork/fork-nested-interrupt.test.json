@@ -1,0 +1,31 @@
+{
+  "skip": true,
+  "skipReason": "Nested fork interrupts work with handlers but respondToInterrupts checkpoint restore needs investigation",
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Nested forks with interrupts — inner fork interrupts are flattened into one batch",
+      "input": "",
+      "expectedOutput": "[[\"confirmed: x-1\",\"confirmed: x-2\"],[\"confirmed: y-1\",\"confirmed: y-2\"]]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "interruptHandlers": [
+        {
+          "action": "approve"
+        },
+        {
+          "action": "approve"
+        },
+        {
+          "action": "approve"
+        },
+        {
+          "action": "approve"
+        }
+      ]
+    }
+  ]
+}

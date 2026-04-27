@@ -1126,7 +1126,7 @@ export class TypeScriptBuilder {
    */
   private buildStateConfig(opts?: {
     stateStack?: TsNode;
-    isForked?: boolean;
+    isForked?: TsNode;
     extra?: Record<string, TsNode>;
   }): TsNode {
     if (this.insideGlobalInit) {
@@ -1136,8 +1136,8 @@ export class TypeScriptBuilder {
       ctx: ts.runtime.ctx,
       threads: ts.runtime.threads,
       interruptData: ts.raw("__state?.interruptData"),
-      stateStack: opts?.stateStack,
-      isForked: opts?.isForked,
+      stateStack: opts?.stateStack ?? ts.id("__stateStack"),
+      isForked: opts?.isForked ?? ts.id("__isForked"),
       ...opts?.extra,
     });
   }
@@ -1615,6 +1615,8 @@ export class TypeScriptBuilder {
         "__state will be undefined if this function is being called as a tool by an llm",
       ),
       ts.setupEnv({
+        stateStack: $(ts.id("__setupData")).prop("stateStack").done(),
+        isForked: ts.raw("__state?.isForked ?? false"),
         stack: $(ts.id("__setupData")).prop("stack").done(),
         step: $(ts.id("__setupData")).prop("step").done(),
         self: $(ts.id("__setupData")).prop("self").done(),
@@ -1719,7 +1721,7 @@ export class TypeScriptBuilder {
         "__error",
         // finally block: pop state stack and conditionally fire onFunctionEnd.
         ts.statements([
-          ts.raw("if (!__state?.isForked) { __ctx.stateStack.pop() }"),
+          ts.raw("if (!__isForked) { __stateStack.pop() }"),
           ...(skipHooks ? [] : [
             ts.if(
               ts.id("__functionCompleted"),
@@ -2049,7 +2051,7 @@ export class TypeScriptBuilder {
     } : undefined;
     const configObj = this.buildStateConfig({
       stateStack: options?.stateStack,
-      isForked: node.async,
+      isForked: node.async ? ts.bool(true) : undefined,
       extra: locationOpts,
     });
 
@@ -2242,6 +2244,8 @@ export class TypeScriptBuilder {
       ),
 
       ts.setupEnv({
+        stateStack: ts.raw("__state.ctx.stateStack"),
+        isForked: ts.bool(false),
         stack: $(ts.id("__setupData")).prop("stack").done(),
         step: $(ts.id("__setupData")).prop("step").done(),
         self: $(ts.id("__setupData")).prop("self").done(),

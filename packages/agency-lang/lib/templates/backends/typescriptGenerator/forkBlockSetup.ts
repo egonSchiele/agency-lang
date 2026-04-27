@@ -5,6 +5,8 @@ import { apply } from "typestache";
 
 export const template = `const __bstack = __forkBranchStack.getNewState();
 const __self = __bstack.locals;
+const __stateStack = __forkBranchStack;
+const __isForked = true;
 const {{{paramName:string}}} = __forkItem;
 __bstack.args[{{{paramNameQuoted}}}] = __forkItem;
 const runner = new Runner(__ctx, __bstack, { state: __bstack, moduleId: {{{moduleId}}}, scopeName: {{{scopeName}}} });
@@ -12,8 +14,12 @@ try {
 {{{body}}}
 return runner.halted ? runner.haltResult : undefined;
 } finally {
-__forkBranchStack.pop();
-}`;
+// Don't pop the frame if this thread interrupted — preserve it for the fork checkpoint
+if (!(runner.halted && isInterrupt(runner.haltResult))) {
+  __forkBranchStack.pop();
+}
+}
+`;
 
 export type TemplateType = {
   paramName: string;

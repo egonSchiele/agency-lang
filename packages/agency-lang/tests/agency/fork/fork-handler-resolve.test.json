@@ -1,0 +1,12 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Fork with handler that auto-approves — no interrupts reach the caller",
+      "input": "",
+      "expectedOutput": "[\"confirmed: a\",\"confirmed: b\"]",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "interruptHandlers": []
+    }
+  ]
+}

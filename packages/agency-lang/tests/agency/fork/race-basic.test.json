@@ -4,8 +4,12 @@
       "nodeName": "main",
       "description": "Race returns first result to complete",
       "input": "",
-      "expectedOutput": "20",
-      "evaluationCriteria": [{ "type": "exact" }]
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
     }
   ]
 }

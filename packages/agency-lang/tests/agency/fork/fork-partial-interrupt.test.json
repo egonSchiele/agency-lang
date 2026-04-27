@@ -1,0 +1,14 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Fork where only one thread interrupts — completed threads cached, interrupted thread resumes",
+      "input": "",
+      "expectedOutput": "[\"done: a\",\"done: b\",\"done: c\"]",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "interruptHandlers": [
+        { "action": "approve" }
+      ]
+    }
+  ]
+}

@@ -231,6 +231,7 @@ export async function respondToInterrupts(args: {
     );
   }
 
+
   if (args.overrides) {
     applyOverrides(checkpoint, args.overrides);
   }

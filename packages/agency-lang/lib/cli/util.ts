@@ -226,12 +226,12 @@ export async function executeNodeAsync({
     const results = readFileSync(resultsFile, "utf-8");
     return { data: JSON.parse(results).data, stdout, stderr };
   } finally {
-    try { fs.unlinkSync(evaluateFile); } catch {}
-    try { fs.unlinkSync(resultsFile); } catch {}
+    // try { fs.unlinkSync(evaluateFile); } catch {}
+    // try { fs.unlinkSync(resultsFile); } catch {}
   }
 }
 
-export function executeNode(args: ExecuteNodeArgs): { data: any; [key: string]: any } {
+export function executeNode(args: ExecuteNodeArgs): { data: any;[key: string]: any } {
   const distDir = args.config.distDir;
   let compiledPath: string;
 
@@ -291,7 +291,7 @@ export function formatTypeHint(vt: VariableType): string {
     case "resultType": {
       const { successType, failureType } = vt;
       if (successType.type === "primitiveType" && successType.value === "any" &&
-          failureType.type === "primitiveType" && failureType.value === "any") {
+        failureType.type === "primitiveType" && failureType.value === "any") {
         return "Result";
       }
       return `Result<${formatTypeHint(successType)}, ${formatTypeHint(failureType)}>`;
@@ -351,8 +351,8 @@ export async function executeJudgeAsync(
     const parsed = JSON.parse(results).data;
     return { score: parsed.score, reasoning: parsed.reasoning, stdout, stderr };
   } finally {
-    try { fs.unlinkSync(judgeEvaluateFile); } catch {}
-    try { fs.unlinkSync(judgeResultsFile); } catch {}
+    try { fs.unlinkSync(judgeEvaluateFile); } catch { }
+    try { fs.unlinkSync(judgeResultsFile); } catch { }
   }
 }
 

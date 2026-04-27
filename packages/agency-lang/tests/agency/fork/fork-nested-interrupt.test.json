@@ -1,6 +1,4 @@
 {
-  "skip": true,
-  "skipReason": "Nested fork interrupts work with handlers but respondToInterrupts checkpoint restore needs investigation",
   "tests": [
     {
       "nodeName": "main",

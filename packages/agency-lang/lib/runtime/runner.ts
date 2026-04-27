@@ -546,6 +546,10 @@ export class Runner {
         const branchKey = this.forkBranchKey(id, i);
         const existing = this.frame.branches![branchKey];
         if (existing) {
+          // If this thread already completed, return null — we'll use cached result
+          if (existing.result !== undefined) {
+            return null;
+          }
           existing.stack.deserializeMode();
           return existing.stack;
         }
@@ -554,28 +558,54 @@ export class Runner {
         return stack;
       });
 
-      const promises = items.map((item, i) =>
-        blockFn(item, i, branchStacks[i]),
-      );
+      const promises = items.map((item, i) => {
+        const branchKey = this.forkBranchKey(id, i);
+        const existing = this.frame.branches![branchKey];
+        // Skip re-execution for completed threads
+        if (existing?.result !== undefined) {
+          return Promise.resolve(existing.result.result);
+        }
+        return blockFn(item, i, branchStacks[i]!);
+      });
 
       if (mode === "all") {
         const settled = await Promise.allSettled(promises);
+        const interrupts: any[] = [];
 
-        // Return first interrupt found — caller handles halt
-        for (const s of settled) {
+        for (let i = 0; i < settled.length; i++) {
+          const s = settled[i];
+          const branchKey = this.forkBranchKey(id, i);
           if (s.status === "fulfilled" && isInterrupt(s.value)) {
-            return s.value;
+            interrupts.push(s.value);
+          } else if (s.status === "fulfilled") {
+            // Cache the completed result on the branch so it survives interrupt cycles
+            if (this.frame.branches![branchKey]) {
+              this.frame.branches![branchKey].result = { result: s.value };
+            }
+          } else {
+            throw s.reason;
           }
         }
 
-        for (const s of settled) {
-          if (s.status === "rejected") throw s.reason;
+        if (interrupts.length > 0) {
+          // Create a shared checkpoint capturing full state tree (including cached results)
+          const cpId = this.ctx.checkpoints.create(this.ctx, {
+            moduleId: this.moduleId,
+            scopeName: this.scopeName,
+            stepPath: String(id),
+          });
+          const cp = this.ctx.checkpoints.get(cpId);
+          for (const intr of interrupts) {
+            intr.checkpoint = cp;
+            intr.checkpointId = cpId;
+          }
+          return interrupts;
         }
 
         result = settled.map((s) => (s as PromiseFulfilledResult<any>).value);
       } else {
         result = await Promise.race(promises);
-        if (isInterrupt(result)) return result;
+        if (isInterrupt(result)) return [result];
       }
 
       // Clean up branch state after successful completion

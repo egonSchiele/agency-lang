@@ -1,3 +1,5 @@
+// @ts-nocheck
+import { print, printJSON, input, sleep, round, fetch, fetchJSON, read, write, readImage, notify, range, mostCommon, keys, values, entries, emit } from "agency-lang/stdlib/index.js";
 import { fileURLToPath } from "url";
 import __process from "process";
 import { readFileSync, writeFileSync } from "fs";
@@ -58,7 +60,7 @@ const __globalCtx = new RuntimeContext({
   },
   dirname: __dirname,
   traceConfig: {
-    program: "interrupt-in-node.agency"
+    program: "tests/debugger/function-call-test.agency"
   }
 });
 const graph = __globalCtx.graph;
@@ -116,18 +118,36 @@ function registerTools(tools: any[]) {
   }
 }
 
+__registerTool(print);
+__registerTool(printJSON);
+__registerTool(input);
+__registerTool(sleep);
+__registerTool(round);
+__registerTool(fetch);
+__registerTool(fetchJSON);
+__registerTool(read);
+__registerTool(write);
+__registerTool(readImage);
+__registerTool(notify);
+__registerTool(range);
+__registerTool(mostCommon);
+__registerTool(keys);
+__registerTool(values);
+__registerTool(entries);
+__registerTool(emit);
 async function __initializeGlobals(__ctx) {
-  __ctx.globals.markInitialized("interrupt-in-node.agency")
+  __ctx.globals.markInitialized("tests/debugger/function-call-test.agency")
 }
 __toolRegistry["readSkill"] = __AgencyFunction.create({
   name: "readSkill",
-  module: "interrupt-in-node.agency",
+  module: "tests/debugger/function-call-test.agency",
   fn: readSkill,
   params: __readSkillToolParams.map(p => ({ name: p, hasDefault: false, defaultValue: undefined, variadic: false })),
   toolDefinition: __readSkillTool,
 }, __toolRegistry);
 __functionRefReviver.registry = __toolRegistry;
-async function __greet_impl(name: string, age: number, __state: InternalFunctionState | undefined = undefined) {
+
+async function __add_impl(a: any, b: number, __state: InternalFunctionState | undefined = undefined) {
   const __setupData = setupFunction({
     state: __state
   });
@@ -141,7 +161,7 @@ const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
 let __forked;
 let __functionCompleted = false;
-  if (!__ctx.globals.isInitialized("interrupt-in-node.agency")) {
+  if (!__ctx.globals.isInitialized("tests/debugger/function-call-test.agency")) {
     await __initializeGlobals(__ctx)
   }
   let __funcStartTime: number = performance.now();
@@ -149,83 +169,47 @@ let __functionCompleted = false;
     callbacks: __ctx.callbacks,
     name: "onFunctionStart",
     data: {
-      functionName: "greet",
+      functionName: "add",
       args: {
-        name: name,
-        age: age
+        a: a,
+        b: b
       },
       isBuiltin: false,
-      moduleId: "interrupt-in-node.agency"
+      moduleId: "tests/debugger/function-call-test.agency"
     }
   })
-  __stack.args["name"] = name;
-  __stack.args["age"] = age;
+  __stack.args["a"] = a;
+  __stack.args["b"] = b;
   __self.__retryable = __self.__retryable ?? true;
-  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "interrupt-in-node.agency", scopeName: "greet" });
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "tests/debugger/function-call-test.agency", scopeName: "add" });
   let __resultCheckpointId = -1;
 if (__ctx.stateStack.currentNodeId()) {
-  __resultCheckpointId = __ctx.checkpoints.createPinned(__ctx, { moduleId: "interrupt-in-node.agency", scopeName: "greet", stepPath: "", label: "result-entry" });
+  __resultCheckpointId = __ctx.checkpoints.createPinned(__ctx, { moduleId: "tests/debugger/function-call-test.agency", scopeName: "add", stepPath: "", label: "result-entry" });
 }
 if (__ctx._pendingArgOverrides) {
   const __overrides = __ctx._pendingArgOverrides;
   __ctx._pendingArgOverrides = undefined;
-  if ("name" in __overrides) {
-    name = __overrides["name"];
-    __stack.args["name"] = name;
+  if ("a" in __overrides) {
+    a = __overrides["a"];
+    __stack.args["a"] = a;
   }
-  if ("age" in __overrides) {
-    age = __overrides["age"];
-    __stack.args["age"] = age;
+  if ("b" in __overrides) {
+    b = __overrides["b"];
+    __stack.args["b"] = b;
   }
 
 }
 
   try {
     await runner.step(0, async (runner) => {
-// Resume path: check for a response by interruptId
-const __response = __ctx.getInterruptResponse(__self.__interruptId_0);
-if (__response) {
-  if (__response.type === "approve") {
-    // approved, continue execution
-  } else if (__response.type === "reject" && !__state.isToolCall) {
-    // rejected, halt
-    // tool calls will instead tell the llm that the call was rejected
-    
-    
-    runner.halt(failure("interrupt rejected", { retryable: false, checkpoint: __ctx.getResultCheckpoint() }));
-    
-    return;
-  }
-} else {
-  // First run: call handlers, then propagate if unhandled
-  const __handlerResult = await interruptWithHandlers(`Agent wants to call the greet function with name: ${__stack.args.name} and age: ${__stack.args.age}`, __ctx);
-  if (isRejected(__handlerResult)) {
-    
-    
-    runner.halt(failure(__handlerResult.value ?? "interrupt rejected", { retryable: false, checkpoint: __ctx.checkpoints.get(__resultCheckpointId) }));
-    
-    return;
-  }
-  if (!isApproved(__handlerResult)) {
-    // No handler — propagate interrupt to TypeScript caller
-    const __checkpointId = __ctx.checkpoints.create(__ctx, { moduleId: "interrupt-in-node.agency", scopeName: "greet", stepPath: "0" });
-    __handlerResult.checkpointId = __checkpointId;
-    __handlerResult.checkpoint = __ctx.checkpoints.get(__checkpointId);
-    // Store interruptId on frame for response lookup on resume
-    __self.__interruptId_0 = __handlerResult.interruptId;
-    
-    
-    runner.halt(__handlerResult);
-    
-    return;
-  }
-  // Approved — continue execution past interrupt
-}
-
+__stack.locals.result = __stack.args.a + __stack.args.b;
     });
     await runner.step(1, async (runner) => {
+__stack.locals.doubled = __stack.locals.result * 2;
+    });
+    await runner.step(2, async (runner) => {
 __functionCompleted = true;
-runner.halt(`Kya chal raha jai, ${__stack.args.name}! You are ${__stack.args.age} years old.`)
+runner.halt(__stack.locals.doubled)
 return;
     });
     if (runner.halted) { if (isFailure(runner.haltResult)) { runner.haltResult.retryable = runner.haltResult.retryable && __self.__retryable; } return runner.haltResult; }
@@ -238,7 +222,7 @@ return failure(
   {
     checkpoint: __ctx.getResultCheckpoint(),
     retryable: __self.__retryable,
-    functionName: "greet",
+    functionName: "add",
     args: __stack.args,
   }
 );
@@ -250,35 +234,35 @@ return failure(
         callbacks: __ctx.callbacks,
         name: "onFunctionEnd",
         data: {
-          functionName: "greet",
+          functionName: "add",
           timeTaken: performance.now() - __funcStartTime
         }
       })
     }
   }
 }
-const greet = __AgencyFunction.create({
-  name: "greet",
-  module: "interrupt-in-node.agency",
-  fn: __greet_impl,
+const add = __AgencyFunction.create({
+  name: "add",
+  module: "tests/debugger/function-call-test.agency",
+  fn: __add_impl,
   params: [{
-    name: "name",
+    name: "a",
     hasDefault: false,
     defaultValue: undefined,
     variadic: false
   }, {
-    name: "age",
+    name: "b",
     hasDefault: false,
     defaultValue: undefined,
     variadic: false
   }],
   toolDefinition: {
-    name: "greet",
+    name: "add",
     description: `No description provided.`,
-    schema: z.object({"name": z.string(), "age": z.number(), })
+    schema: z.object({"a": z.string(), "b": z.number(), })
   }
 }, __toolRegistry);
-graph.node("foo2", async (__state: GraphState) => {
+graph.node("main", async (__state: GraphState) => {
   const __setupData = setupNode({
     state: __state
   });
@@ -295,69 +279,42 @@ let __functionCompleted = false;
     callbacks: __ctx.callbacks,
     name: "onNodeStart",
     data: {
-      nodeName: "foo2"
+      nodeName: "main"
     }
   })
-  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "interrupt-in-node.agency", scopeName: "foo2" });
-  if (!__state.isResume) {
-    __stack.args["name"] = __state.data.name;
-    __stack.args["age"] = __state.data.age;
-  }
+  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "tests/debugger/function-call-test.agency", scopeName: "main" });
   try {
     await runner.step(0, async (runner) => {
-await __call(print, {
+__stack.locals.x = 1;
+    });
+    await runner.step(1, async (runner) => {
+__stack.locals.y = await __call(add, {
         type: "positional",
-        args: [`In foo2, name is ${__stack.args.name} and age is ${__stack.args.age}, this message should only print once...`]
+        args: [__stack.locals.x, 2]
       }, {
         ctx: __ctx,
         threads: __threads,
         interruptData: __state?.interruptData
-      }) + greet
-    });
-    await runner.step(1, async (runner) => {
-__self.__removedTools = __self.__removedTools || [];
-__stack.locals.response = await runPrompt({
-        ctx: __ctx,
-        prompt: `Greet the user with their name: ${__stack.args.name} and age ${__stack.args.age} using the greet function.`,
-        messages: __threads.getOrCreateActive(),
-        clientConfig: {},
-        maxToolCallRounds: 10,
-        interruptData: __state?.interruptData,
-        removedTools: __self.__removedTools,
-        checkpointInfo: runner.getCheckpointInfo()
       });
-// halt if this is an interrupt
-if ((isInterrupt(__stack.locals.response) || hasInterrupts(__stack.locals.response))) {
+if ((isInterrupt(__stack.locals.y) || hasInterrupts(__stack.locals.y))) {
         await __ctx.pendingPromises.awaitAll()
         runner.halt({
-          messages: __threads,
-          data: __stack.locals.response
+          ...__state,
+          data: __stack.locals.y
         })
         return;
       }
     });
     await runner.step(2, async (runner) => {
-const __funcResult = await __call(print, {
-        type: "positional",
-        args: [`Greeted, age is still ${__stack.args.age}...`]
-      }, {
-        ctx: __ctx,
-        threads: __threads,
-        interruptData: __state?.interruptData
-      });
-if ((isInterrupt(__funcResult) || hasInterrupts(__funcResult))) {
-        await __ctx.pendingPromises.awaitAll()
-        runner.halt({
-          ...__state,
-          data: __funcResult
-        })
-        return;
-      }
+__stack.locals.z = __stack.locals.y + 10;
     });
     await runner.step(3, async (runner) => {
+__stack.locals.w = __stack.locals.z + 1;
+    });
+    await runner.step(4, async (runner) => {
 runner.halt({
         messages: __threads,
-        data: __stack.locals.response
+        data: __stack.locals.w
       })
 return;
     });
@@ -366,7 +323,7 @@ return;
       callbacks: __ctx.callbacks,
       name: "onNodeEnd",
       data: {
-        nodeName: "foo2",
+        nodeName: "main",
         data: undefined
       }
     })
@@ -381,119 +338,32 @@ return;
     console.error(`\nAgent crashed: ${__error.message}`)
     return {
       messages: __threads,
-      data: failure(__error instanceof Error ? __error.message : String(__error), { functionName: "foo2" })
+      data: failure(__error instanceof Error ? __error.message : String(__error), { functionName: "main" })
     };
   }
 })
-graph.node("sayHi", async (__state: GraphState) => {
-  const __setupData = setupNode({
-    state: __state
+export async function main({ messages, callbacks }: { messages?: any; callbacks?: any } = {}): Promise<RunNodeResult<any>> {
+  return runNode({
+    ctx: __globalCtx,
+    nodeName: "main",
+    data: {},
+    messages: messages,
+    callbacks: callbacks,
+    initializeGlobals: __initializeGlobals
   });
-  const __stack = __setupData.stack;
-const __step = __setupData.step;
-const __self = __setupData.self;
-const __threads = __setupData.threads;
-const __ctx = __state.ctx;
-const statelogClient = __ctx.statelogClient;
-const __graph = __ctx.graph;
-let __forked;
-let __functionCompleted = false;
-  await callHook({
-    callbacks: __ctx.callbacks,
-    name: "onNodeStart",
-    data: {
-      nodeName: "sayHi"
-    }
-  })
-  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "interrupt-in-node.agency", scopeName: "sayHi" });
-  if (!__state.isResume) {
-    __stack.args["name"] = __state.data.name;
-  }
+}
+export const __mainNodeParams = [];
+if (__process.argv[1] === fileURLToPath(import.meta.url)) {
   try {
-    await runner.step(0, async (runner) => {
-const __funcResult = await __call(print, {
-        type: "positional",
-        args: [`Saying hi to ${__stack.args.name}...`]
-      }, {
-        ctx: __ctx,
-        threads: __threads,
-        interruptData: __state?.interruptData
-      });
-if ((isInterrupt(__funcResult) || hasInterrupts(__funcResult))) {
-        await __ctx.pendingPromises.awaitAll()
-        runner.halt({
-          ...__state,
-          data: __funcResult
-        })
-        return;
-      }
-    });
-    await runner.step(1, async (runner) => {
-__stack.locals.age = 30;
-    });
-    await runner.step(2, async (runner) => {
-__functionCompleted = true;
-runner.halt(goToNode("foo2", {
-        messages: __threads,
-        ctx: __ctx,
-        data: {
-          name: __stack.args.name,
-          age: __stack.locals.age
-        }
-      }))
-return;
-    });
-    if (runner.halted) return runner.haltResult;
-    await callHook({
-      callbacks: __ctx.callbacks,
-      name: "onNodeEnd",
-      data: {
-        nodeName: "sayHi",
-        data: undefined
-      }
-    })
-    return {
-      messages: __threads,
-      data: undefined
+    const initialState = {
+      messages: new ThreadStore(),
+      data: {}
     };
-  } catch (__error) {
-    if (__error instanceof RestoreSignal) {
-      throw __error
-    }
+    await main(initialState)
+  } catch (__error: any) {
     console.error(`\nAgent crashed: ${__error.message}`)
-    return {
-      messages: __threads,
-      data: failure(__error instanceof Error ? __error.message : String(__error), { functionName: "sayHi" })
-    };
+    throw __error
   }
-})
-graph.conditionalEdge("sayHi", ["foo2"])
-export async function foo2(name: string, age: number, { messages, callbacks }: { messages?: any; callbacks?: any } = {}): Promise<RunNodeResult<any>> {
-  return runNode({
-    ctx: __globalCtx,
-    nodeName: "foo2",
-    data: {
-      name: name,
-      age: age
-    },
-    messages: messages,
-    callbacks: callbacks,
-    initializeGlobals: __initializeGlobals
-  });
 }
-export const __foo2NodeParams = ["name", "age"];
-export async function sayHi(name: any, { messages, callbacks }: { messages?: any; callbacks?: any } = {}): Promise<RunNodeResult<any>> {
-  return runNode({
-    ctx: __globalCtx,
-    nodeName: "sayHi",
-    data: {
-      name: name
-    },
-    messages: messages,
-    callbacks: callbacks,
-    initializeGlobals: __initializeGlobals
-  });
-}
-export const __sayHiNodeParams = ["name"];
 export default graph
-export const __sourceMap = {"interrupt-in-node.agency:greet":{"0":{"line":-1,"col":2},"1":{"line":0,"col":2}},"interrupt-in-node.agency:foo2":{"1":{"line":6,"col":2},"2":{"line":7,"col":2},"3":{"line":8,"col":2}},"interrupt-in-node.agency:sayHi":{"0":{"line":12,"col":2},"1":{"line":13,"col":2},"2":{"line":14,"col":2}}};
+export const __sourceMap = {"tests/debugger/function-call-test.agency:add":{"0":{"line":1,"col":2},"1":{"line":2,"col":2},"2":{"line":3,"col":2}},"tests/debugger/function-call-test.agency:main":{"0":{"line":7,"col":2},"1":{"line":8,"col":2},"2":{"line":9,"col":2},"3":{"line":10,"col":2},"4":{"line":11,"col":2}}};

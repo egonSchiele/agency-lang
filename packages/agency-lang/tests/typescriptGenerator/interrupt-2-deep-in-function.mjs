@@ -182,30 +182,22 @@ if (__ctx._pendingArgOverrides) {
 
   try {
     await runner.step(0, async (runner) => {
-// Remember this will be called both in a tool call context
-// and when the user is simply calling a function.
-
-if (__state.interruptData?.interruptResponse?.type === "approve") {
-  // approved, clear interrupt response and continue execution
-  __state.interruptData.interruptResponse = null;
-} else if (__state.interruptData?.interruptResponse?.type === "reject" && !__state.isToolCall) {
-  // rejected, clear interrupt response and halt
-  // tool calls will instead tell the llm that the call was rejected
-  __state.interruptData.interruptResponse = null;
-  
-  
-  runner.halt(failure("interrupt rejected", { retryable: false, checkpoint: __ctx.getResultCheckpoint() }));
-  
-  return;
-} else if (__state.interruptData?.interruptResponse?.type === "modify") {
-  if (__state.isToolCall) {
-    // continue, args will get modified in the tool call handler
-  } else {
-    throw new Error("Interrupt response of type 'modify' is not supported outside of tool calls yet.");
+// Resume path: check for a response by interruptId
+const __response = __ctx.getInterruptResponse(__self.__interruptId_0);
+if (__response) {
+  if (__response.type === "approve") {
+    // approved, continue execution
+  } else if (__response.type === "reject" && !__state.isToolCall) {
+    // rejected, halt
+    // tool calls will instead tell the llm that the call was rejected
+    
+    
+    runner.halt(failure("interrupt rejected", { retryable: false, checkpoint: __ctx.getResultCheckpoint() }));
+    
+    return;
   }
-} else if (__state.interruptData?.interruptResponse?.type === "resolve") {
-  throw new Error("Interrupt response of type 'resolve' cannot be returned from an interrupt call. It can only be assigned to a variable.");
 } else {
+  // First run: call handlers, then propagate if unhandled
   const __handlerResult = await interruptWithHandlers(`Agent wants to call the greet function with name: ${__stack.args.name} and age: ${__stack.args.age}`, __ctx);
   if (isRejected(__handlerResult)) {
     
@@ -219,6 +211,8 @@ if (__state.interruptData?.interruptResponse?.type === "approve") {
     const __checkpointId = __ctx.checkpoints.create(__ctx, { moduleId: "interrupt-2-deep-in-function.agency", scopeName: "greet", stepPath: "0" });
     __handlerResult.checkpointId = __checkpointId;
     __handlerResult.checkpoint = __ctx.checkpoints.get(__checkpointId);
+    // Store interruptId on frame for response lookup on resume
+    __self.__interruptId_0 = __handlerResult.interruptId;
     
     
     runner.halt(__handlerResult);

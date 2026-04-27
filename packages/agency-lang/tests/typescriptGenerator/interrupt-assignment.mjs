@@ -150,26 +150,25 @@ let __functionCompleted = false;
   const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "interrupt-assignment.agency", scopeName: "main" });
   try {
     await runner.step(0, async (runner) => {
-// Remember this will be called both in a tool call context
-// and when the user is simply calling a function.
-
-if (__state.interruptData?.interruptResponse?.type === "resolve") {
-  __stack.locals.name = __state.interruptData.interruptResponse.value;;
-  __state.interruptData.interruptResponse = null;
-} else if (__state.interruptData?.interruptResponse?.type === "approve") {
-  __stack.locals.name = true;;
-  __state.interruptData.interruptResponse = null;
-} else if (__state.interruptData?.interruptResponse?.type === "reject") {
-  // reject for tool calls handled separately
-  __state.interruptData.interruptResponse = null;
-  
-  runner.halt({ messages: __threads, data: failure("interrupt rejected", { retryable: false }) });
-  
-  
-  return;
-} else if (__state.interruptData?.interruptResponse?.type === "modify") {
-  throw new Error("Interrupt response of type 'modify' is used for modifying tool call args. Use resolve instead.");
+// Resume path: check for a response by interruptId
+const __response = __ctx.getInterruptResponse(__self.__interruptId_0);
+if (__response) {
+  if (__response.type === "approve") {
+    if (__response.value !== undefined) {
+      __stack.locals.name = __response.value;;
+    } else {
+      __stack.locals.name = true;;
+    }
+  } else if (__response.type === "reject") {
+    // reject for tool calls handled separately
+    
+    runner.halt({ messages: __threads, data: failure("interrupt rejected", { retryable: false }) });
+    
+    
+    return;
+  }
 } else {
+  // First run: call handlers, then propagate if unhandled
   const __handlerResult = await interruptWithHandlers(`What is your name?`, __ctx);
   if (isRejected(__handlerResult)) {
     
@@ -185,6 +184,8 @@ if (__state.interruptData?.interruptResponse?.type === "resolve") {
     const __checkpointId = __ctx.checkpoints.create(__ctx, { moduleId: "interrupt-assignment.agency", scopeName: "main", stepPath: "0" });
     __handlerResult.checkpointId = __checkpointId;
     __handlerResult.checkpoint = __ctx.checkpoints.get(__checkpointId);
+    // Store interruptId on frame for response lookup on resume
+    __self.__interruptId_0 = __handlerResult.interruptId;
     
     runner.halt({ messages: __threads, data: __handlerResult });
     

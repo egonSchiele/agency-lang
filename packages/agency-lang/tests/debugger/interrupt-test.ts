@@ -1,3 +1,5 @@
+// @ts-nocheck
+import { print, printJSON, input, sleep, round, fetch, fetchJSON, read, write, readImage, notify, range, mostCommon, keys, values, entries, emit } from "agency-lang/stdlib/index.js";
 import { fileURLToPath } from "url";
 import __process from "process";
 import { readFileSync, writeFileSync } from "fs";
@@ -58,7 +60,7 @@ const __globalCtx = new RuntimeContext({
   },
   dirname: __dirname,
   traceConfig: {
-    program: "withModifier.agency"
+    program: "tests/debugger/interrupt-test.agency"
   }
 });
 const graph = __globalCtx.graph;
@@ -116,140 +118,35 @@ function registerTools(tools: any[]) {
   }
 }
 
+__registerTool(print);
+__registerTool(printJSON);
+__registerTool(input);
+__registerTool(sleep);
+__registerTool(round);
+__registerTool(fetch);
+__registerTool(fetchJSON);
+__registerTool(read);
+__registerTool(write);
+__registerTool(readImage);
+__registerTool(notify);
+__registerTool(range);
+__registerTool(mostCommon);
+__registerTool(keys);
+__registerTool(values);
+__registerTool(entries);
+__registerTool(emit);
 async function __initializeGlobals(__ctx) {
-  __ctx.globals.markInitialized("withModifier.agency")
+  __ctx.globals.markInitialized("tests/debugger/interrupt-test.agency")
 }
 __toolRegistry["readSkill"] = __AgencyFunction.create({
   name: "readSkill",
-  module: "withModifier.agency",
+  module: "tests/debugger/interrupt-test.agency",
   fn: readSkill,
   params: __readSkillToolParams.map(p => ({ name: p, hasDefault: false, defaultValue: undefined, variadic: false })),
   toolDefinition: __readSkillTool,
 }, __toolRegistry);
 __functionRefReviver.registry = __toolRegistry;
-async function __foo_impl(__state: InternalFunctionState | undefined = undefined) {
-  const __setupData = setupFunction({
-    state: __state
-  });
-  // __state will be undefined if this function is being called as a tool by an llm
-  const __stack = __setupData.stack;
-const __step = __setupData.step;
-const __self = __setupData.self;
-const __threads = __setupData.threads;
-const __ctx = __state?.ctx || __globalCtx;
-const statelogClient = __ctx.statelogClient;
-const __graph = __ctx.graph;
-let __forked;
-let __functionCompleted = false;
-  if (!__ctx.globals.isInitialized("withModifier.agency")) {
-    await __initializeGlobals(__ctx)
-  }
-  let __funcStartTime: number = performance.now();
-  await callHook({
-    callbacks: __ctx.callbacks,
-    name: "onFunctionStart",
-    data: {
-      functionName: "foo",
-      args: {},
-      isBuiltin: false,
-      moduleId: "withModifier.agency"
-    }
-  })
-  __self.__retryable = __self.__retryable ?? true;
-  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "withModifier.agency", scopeName: "foo" });
-  let __resultCheckpointId = -1;
-if (__ctx.stateStack.currentNodeId()) {
-  __resultCheckpointId = __ctx.checkpoints.createPinned(__ctx, { moduleId: "withModifier.agency", scopeName: "foo", stepPath: "", label: "result-entry" });
-}
-if (__ctx._pendingArgOverrides) {
-  const __overrides = __ctx._pendingArgOverrides;
-  __ctx._pendingArgOverrides = undefined;
 
-}
-
-  try {
-    await runner.step(0, async (runner) => {
-// Resume path: check for a response by interruptId
-const __response = __ctx.getInterruptResponse(__self.__interruptId_0);
-if (__response) {
-  if (__response.type === "approve") {
-    // approved, continue execution
-  } else if (__response.type === "reject" && !__state.isToolCall) {
-    // rejected, halt
-    // tool calls will instead tell the llm that the call was rejected
-    
-    
-    runner.halt(failure("interrupt rejected", { retryable: false, checkpoint: __ctx.getResultCheckpoint() }));
-    
-    return;
-  }
-} else {
-  // First run: call handlers, then propagate if unhandled
-  const __handlerResult = await interruptWithHandlers(`check`, __ctx);
-  if (isRejected(__handlerResult)) {
-    
-    
-    runner.halt(failure(__handlerResult.value ?? "interrupt rejected", { retryable: false, checkpoint: __ctx.checkpoints.get(__resultCheckpointId) }));
-    
-    return;
-  }
-  if (!isApproved(__handlerResult)) {
-    // No handler — propagate interrupt to TypeScript caller
-    const __checkpointId = __ctx.checkpoints.create(__ctx, { moduleId: "withModifier.agency", scopeName: "foo", stepPath: "0" });
-    __handlerResult.checkpointId = __checkpointId;
-    __handlerResult.checkpoint = __ctx.checkpoints.get(__checkpointId);
-    // Store interruptId on frame for response lookup on resume
-    __self.__interruptId_0 = __handlerResult.interruptId;
-    
-    
-    runner.halt(__handlerResult);
-    
-    return;
-  }
-  // Approved — continue execution past interrupt
-}
-
-    });
-    if (runner.halted) { if (isFailure(runner.haltResult)) { runner.haltResult.retryable = runner.haltResult.retryable && __self.__retryable; } return runner.haltResult; }
-  } catch (__error) {
-    if (__error instanceof RestoreSignal) {
-  throw __error;
-}
-return failure(
-  __error instanceof Error ? __error.message : String(__error),
-  {
-    checkpoint: __ctx.getResultCheckpoint(),
-    retryable: __self.__retryable,
-    functionName: "foo",
-    args: __stack.args,
-  }
-);
-
-  } finally {
-    if (!__state?.isForked) { __ctx.stateStack.pop() }
-    if (__functionCompleted) {
-      await callHook({
-        callbacks: __ctx.callbacks,
-        name: "onFunctionEnd",
-        data: {
-          functionName: "foo",
-          timeTaken: performance.now() - __funcStartTime
-        }
-      })
-    }
-  }
-}
-const foo = __AgencyFunction.create({
-  name: "foo",
-  module: "withModifier.agency",
-  fn: __foo_impl,
-  params: [],
-  toolDefinition: {
-    name: "foo",
-    description: `No description provided.`,
-    schema: z.object({})
-  }
-}, __toolRegistry);
 graph.node("main", async (__state: GraphState) => {
   const __setupData = setupNode({
     state: __state
@@ -270,32 +167,64 @@ let __functionCompleted = false;
       nodeName: "main"
     }
   })
-  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "withModifier.agency", scopeName: "main" });
+  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "tests/debugger/interrupt-test.agency", scopeName: "main" });
   try {
-    await runner.handle(0, async (__data: any) => __handlerApprove(__data), async (runner) => {
-await runner.step(0, async (runner) => {
-__stack.locals.result = await __call(foo, {
-          type: "positional",
-          args: []
-        }, {
-          ctx: __ctx,
-          threads: __threads,
-          interruptData: __state?.interruptData
-        });
-if ((isInterrupt(__stack.locals.result) || hasInterrupts(__stack.locals.result))) {
-          await __ctx.pendingPromises.awaitAll()
-          runner.halt({
-            ...__state,
-            data: __stack.locals.result
-          })
-          return;
-        }
-      });
+    await runner.step(0, async (runner) => {
+__stack.locals.x = 1;
     });
     await runner.step(1, async (runner) => {
+// Resume path: check for a response by interruptId
+const __response = __ctx.getInterruptResponse(__self.__interruptId_1);
+if (__response) {
+  if (__response.type === "approve") {
+    if (__response.value !== undefined) {
+      __stack.locals.y = __response.value;;
+    } else {
+      __stack.locals.y = true;;
+    }
+  } else if (__response.type === "reject") {
+    // reject for tool calls handled separately
+    
+    runner.halt({ messages: __threads, data: failure("interrupt rejected", { retryable: false }) });
+    
+    
+    return;
+  }
+} else {
+  // First run: call handlers, then propagate if unhandled
+  const __handlerResult = await interruptWithHandlers(`check value`, __ctx);
+  if (isRejected(__handlerResult)) {
+    
+    runner.halt({ messages: __threads, data: failure(__handlerResult.value ?? "interrupt rejected", { retryable: false }) });
+    
+    
+    return;
+  }
+  if (isApproved(__handlerResult)) {
+    __stack.locals.y = __handlerResult.value;;
+  } else {
+    // No handler — propagate interrupt to TypeScript caller
+    const __checkpointId = __ctx.checkpoints.create(__ctx, { moduleId: "tests/debugger/interrupt-test.agency", scopeName: "main", stepPath: "1" });
+    __handlerResult.checkpointId = __checkpointId;
+    __handlerResult.checkpoint = __ctx.checkpoints.get(__checkpointId);
+    // Store interruptId on frame for response lookup on resume
+    __self.__interruptId_1 = __handlerResult.interruptId;
+    
+    runner.halt({ messages: __threads, data: __handlerResult });
+    
+    
+    return;
+  }
+}
+
+    });
+    await runner.step(2, async (runner) => {
+__stack.locals.z = __stack.locals.x + __stack.locals.y;
+    });
+    await runner.step(3, async (runner) => {
 runner.halt({
         messages: __threads,
-        data: __stack.locals.result
+        data: __stack.locals.z
       })
 return;
     });
@@ -347,4 +276,4 @@ if (__process.argv[1] === fileURLToPath(import.meta.url)) {
   }
 }
 export default graph
-export const __sourceMap = {"withModifier.agency:foo":{"0":{"line":-1,"col":2}},"withModifier.agency:main":{"0":{"line":3,"col":2},"1":{"line":4,"col":2},"0.0":{"line":3,"col":2}}};
+export const __sourceMap = {"tests/debugger/interrupt-test.agency:main":{"0":{"line":1,"col":2},"1":{"line":2,"col":2},"2":{"line":3,"col":2},"3":{"line":4,"col":2}}};

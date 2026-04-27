@@ -1832,11 +1832,13 @@ export class TypeScriptBuilder {
     const interruptArgs = args
       .map((arg) => this.str(this.processCallArg(arg)))
       .join(", ");
+    const opts = this.checkpointOpts();
     return ts.raw(
       renderInterruptReturn.default({
         interruptArgs,
         nodeContext: this.getCurrentScope().type === "node",
-        ...this.checkpointOpts(),
+        interruptIdKey: `__interruptId_${this._subStepPath.join("_")}`,
+        ...opts,
       }),
     );
   }
@@ -2476,16 +2478,16 @@ export class TypeScriptBuilder {
             node.accessChain,
           ),
         );
+      const opts = this.checkpointOpts();
       return ts.raw(
         renderInterruptAssignment.default({
-          assignResolve: makeAssign(
-            "__state.interruptData.interruptResponse.value",
-          ),
+          assignResolve: makeAssign("__response.value"),
           assignApprove: makeAssign("true"),
           handlerApprove: makeAssign("__handlerResult.value"),
           interruptArgs,
           nodeContext: this.getCurrentScope().type === "node",
-          ...this.checkpointOpts(),
+          interruptIdKey: `__interruptId_${this._subStepPath.join("_")}`,
+          ...opts,
         }),
       );
     } else if (value.type === "functionCall") {

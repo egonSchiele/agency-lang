@@ -209,10 +209,13 @@ export async function respondToInterrupts(args: {
     );
   }
 
-  // Build ID-keyed response map
-  const responseMap: Record<string, InterruptResponse> = {};
+  // Build ID-keyed response map (includes interruptData for tool call resume)
+  const responseMap: Record<string, { response: InterruptResponse; interruptData?: InterruptData }> = {};
   for (let i = 0; i < interrupts.length; i++) {
-    responseMap[interrupts[i].interruptId] = deepClone(responses[i]);
+    responseMap[interrupts[i].interruptId] = {
+      response: deepClone(responses[i]),
+      interruptData: interrupts[i].interruptData ? deepClone(interrupts[i].interruptData) : undefined,
+    };
   }
 
   // All interrupts share the same checkpoint — grab from first
@@ -320,6 +323,16 @@ export async function respondToInterrupt(args: {
   const execCtx = await ctx.createExecutionContext(interrupt.runId);
   execCtx.restoreState(checkpoint);
 
+  // Set response on context so the new interrupt templates can look it up by interruptId
+  if (interrupt.interruptId) {
+    execCtx.setInterruptResponses({
+      [interrupt.interruptId]: {
+        response: interruptResponse,
+        interruptData: interrupt.interruptData ? deepClone(interrupt.interruptData) : undefined,
+      },
+    });
+  }
+
   execCtx.installRegisteredCallbacks(ctx);
   if (metadata.callbacks) {
     Object.assign(execCtx.callbacks, metadata.callbacks);
@@ -366,7 +379,11 @@ export async function respondToInterrupt(args: {
           result,
           globals: execCtx.globals,
         });
+        // Normalize single interrupts to array
         if (isInterrupt(returnObject.data)) {
+          returnObject.data = [returnObject.data];
+        }
+        if (hasInterrupts(returnObject.data)) {
           await execCtx.pauseTraceWriter();
         } else {
           await execCtx.closeTraceWriter();

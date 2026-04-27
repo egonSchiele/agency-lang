@@ -47,6 +47,7 @@ export { readSkillTool, readSkillToolParams } from "./builtinTools.js";
 export {
   interrupt,
   isInterrupt,
+  hasInterrupts,
   isDebugger,
   isRejected,
   isApproved,

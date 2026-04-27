@@ -102,6 +102,10 @@ export function isInterrupt(obj: any): obj is Interrupt {
   return obj && obj.type === "interrupt";
 }
 
+export function hasInterrupts(data: any): data is Interrupt[] {
+  return Array.isArray(data) && data.length > 0 && isInterrupt(data[0]);
+}
+
 export function isDebugger(obj: any): obj is Interrupt {
   return isInterrupt(obj) === true && obj.debugger === true;
 }

@@ -10,7 +10,7 @@ import {
   RuntimeContext, MessageThread, ThreadStore, Runner, McpManager,
   setupNode, setupFunction, runNode, runPrompt, callHook,
   checkpoint as __checkpoint_impl, getCheckpoint as __getCheckpoint_impl, restore as __restore_impl,
-  interrupt, isInterrupt, isDebugger, isRejected, isApproved, interruptWithHandlers, debugStep,
+  interrupt, isInterrupt, hasInterrupts, isDebugger, isRejected, isApproved, interruptWithHandlers, debugStep,
   respondToInterrupt as _respondToInterrupt,
   approveInterrupt as _approveInterrupt,
   rejectInterrupt as _rejectInterrupt,
@@ -77,7 +77,7 @@ export function approve(value?: any) { return { type: "approve" as const, value 
 export function reject(value?: any) { return { type: "reject" as const, value }; }
 
 // Interrupt and rewind re-exports bound to this module's context
-export { interrupt, isInterrupt, isDebugger };
+export { interrupt, isInterrupt, hasInterrupts, isDebugger };
 export const respondToInterrupt = (interrupt: Interrupt, response: InterruptResponse, opts?: { overrides?: Record<string, unknown>; metadata?: Record<string, any> }) => _respondToInterrupt({ ctx: __globalCtx, interrupt, interruptResponse: response, overrides: opts?.overrides, metadata: opts?.metadata });
 export const approveInterrupt = (interrupt: Interrupt, opts?: { overrides?: Record<string, unknown>; metadata?: Record<string, any> }) => _approveInterrupt({ ctx: __globalCtx, interrupt, overrides: opts?.overrides, metadata: opts?.metadata });
 export const rejectInterrupt = (interrupt: Interrupt, opts?: { overrides?: Record<string, unknown>; metadata?: Record<string, any> }) => _rejectInterrupt({ ctx: __globalCtx, interrupt, overrides: opts?.overrides, metadata: opts?.metadata });
@@ -283,7 +283,7 @@ __stack.locals.a = await __call(greet, {
         threads: __threads,
         interruptData: __state?.interruptData
       });
-if (isInterrupt(__stack.locals.a)) {
+if ((isInterrupt(__stack.locals.a) || hasInterrupts(__stack.locals.a))) {
         await __ctx.pendingPromises.awaitAll()
         runner.halt({
           ...__state,
@@ -306,7 +306,7 @@ __stack.locals.b = await __call(greet, {
         threads: __threads,
         interruptData: __state?.interruptData
       });
-if (isInterrupt(__stack.locals.b)) {
+if ((isInterrupt(__stack.locals.b) || hasInterrupts(__stack.locals.b))) {
         await __ctx.pendingPromises.awaitAll()
         runner.halt({
           ...__state,
@@ -328,7 +328,7 @@ __stack.locals.c = await __call(greet, {
         threads: __threads,
         interruptData: __state?.interruptData
       });
-if (isInterrupt(__stack.locals.c)) {
+if ((isInterrupt(__stack.locals.c) || hasInterrupts(__stack.locals.c))) {
         await __ctx.pendingPromises.awaitAll()
         runner.halt({
           ...__state,

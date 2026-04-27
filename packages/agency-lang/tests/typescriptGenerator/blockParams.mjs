@@ -10,7 +10,7 @@ import {
   RuntimeContext, MessageThread, ThreadStore, Runner, McpManager,
   setupNode, setupFunction, runNode, runPrompt, callHook,
   checkpoint as __checkpoint_impl, getCheckpoint as __getCheckpoint_impl, restore as __restore_impl,
-  interrupt, isInterrupt, isDebugger, isRejected, isApproved, interruptWithHandlers, debugStep,
+  interrupt, isInterrupt, hasInterrupts, isDebugger, isRejected, isApproved, interruptWithHandlers, debugStep,
   respondToInterrupt as _respondToInterrupt,
   approveInterrupt as _approveInterrupt,
   rejectInterrupt as _rejectInterrupt,
@@ -77,7 +77,7 @@ export function approve(value?: any) { return { type: "approve" as const, value 
 export function reject(value?: any) { return { type: "reject" as const, value }; }
 
 // Interrupt and rewind re-exports bound to this module's context
-export { interrupt, isInterrupt, isDebugger };
+export { interrupt, isInterrupt, hasInterrupts, isDebugger };
 export const respondToInterrupt = (interrupt: Interrupt, response: InterruptResponse, opts?: { overrides?: Record<string, unknown>; metadata?: Record<string, any> }) => _respondToInterrupt({ ctx: __globalCtx, interrupt, interruptResponse: response, overrides: opts?.overrides, metadata: opts?.metadata });
 export const approveInterrupt = (interrupt: Interrupt, opts?: { overrides?: Record<string, unknown>; metadata?: Record<string, any> }) => _approveInterrupt({ ctx: __globalCtx, interrupt, overrides: opts?.overrides, metadata: opts?.metadata });
 export const rejectInterrupt = (interrupt: Interrupt, opts?: { overrides?: Record<string, unknown>; metadata?: Record<string, any> }) => _rejectInterrupt({ ctx: __globalCtx, interrupt, overrides: opts?.overrides, metadata: opts?.metadata });
@@ -192,7 +192,7 @@ __stack.locals.result = await __call(__stack.args.block, {
           threads: __threads,
           interruptData: __state?.interruptData
         });
-if (isInterrupt(__stack.locals.result)) {
+if ((isInterrupt(__stack.locals.result) || hasInterrupts(__stack.locals.result))) {
           await __ctx.pendingPromises.awaitAll()
           runner.halt(__stack.locals.result)
           return;
@@ -207,7 +207,7 @@ __stack.locals.results = await __call(append, {
           threads: __threads,
           interruptData: __state?.interruptData
         });
-if (isInterrupt(__stack.locals.results)) {
+if ((isInterrupt(__stack.locals.results) || hasInterrupts(__stack.locals.results))) {
           await __ctx.pendingPromises.awaitAll()
           runner.halt(__stack.locals.results)
           return;
@@ -315,7 +315,7 @@ __ctx.stateStack.pop();
         threads: __threads,
         interruptData: __state?.interruptData
       });
-if (isInterrupt(__stack.locals.doubled)) {
+if ((isInterrupt(__stack.locals.doubled) || hasInterrupts(__stack.locals.doubled))) {
         await __ctx.pendingPromises.awaitAll()
         runner.halt({
           ...__state,
@@ -333,7 +333,7 @@ const __funcResult = await __call(print, {
         threads: __threads,
         interruptData: __state?.interruptData
       });
-if (isInterrupt(__funcResult)) {
+if ((isInterrupt(__funcResult) || hasInterrupts(__funcResult))) {
         await __ctx.pendingPromises.awaitAll()
         runner.halt({
           ...__state,

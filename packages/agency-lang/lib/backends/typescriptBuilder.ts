@@ -339,7 +339,7 @@ export class TypeScriptBuilder {
     "approve", "reject", "propagate",
     "__handlerApprove", "__handlerReject", "__handlerPropagate",
     "success", "failure",
-    "isInterrupt", "isDebugger", "isRejected", "isApproved",
+    "isInterrupt", "hasInterrupts", "isDebugger", "isRejected", "isApproved",
     "isSuccess", "isFailure", "setLLMClient", "registerTools"
   ]);
 
@@ -352,6 +352,19 @@ export class TypeScriptBuilder {
     if (TypeScriptBuilder.DIRECT_CALL_FUNCTIONS.has(functionName)) return false;
     if (this.isGraphNode(functionName)) return false;
     return true;
+  }
+
+  /** Generate a TsNode for `isInterrupt(x) || hasInterrupts(x)` */
+  private interruptCheck(expr: TsNode): TsNode {
+    return ts.or(
+      ts.call(ts.id("isInterrupt"), [expr]),
+      ts.call(ts.id("hasInterrupts"), [expr]),
+    );
+  }
+
+  /** Generate a raw string for `isInterrupt(x) || hasInterrupts(x)` */
+  private interruptCheckRaw(exprStr: string): TsNode {
+    return ts.raw(`isInterrupt(${exprStr}) || hasInterrupts(${exprStr})`);
   }
 
   private _plainTsImportNames: Set<string> | null = null;
@@ -1872,7 +1885,7 @@ export class TypeScriptBuilder {
         return ts.statements([
           ts.constDecl(tempVar, callNode),
           ts.if(
-            ts.raw(`isInterrupt(${tempVar})`),
+            this.interruptCheckRaw(tempVar),
             ts.throw(`new Error("Cannot throw an interrupt inside a handler body")`),
           ),
         ]);
@@ -1890,7 +1903,7 @@ export class TypeScriptBuilder {
       return ts.statements([
         ts.constDecl(tempVar, callNode),
         ts.if(
-          ts.call(ts.id("isInterrupt"), [ts.id(tempVar)]),
+          this.interruptCheck(ts.id(tempVar)),
           ts.statements([
             ts.raw("await __ctx.pendingPromises.awaitAll()"),
             $(ts.id("runner")).prop("halt").call([haltValue]).done(),
@@ -2520,7 +2533,7 @@ export class TypeScriptBuilder {
         if (this.insideHandlerBody) {
           stmts.push(
             ts.if(
-              ts.raw(`isInterrupt(${this.str(varRef)})`),
+              this.interruptCheckRaw(this.str(varRef)),
               ts.throw(`new Error("Cannot throw an interrupt inside a handler body")`),
             ),
           );
@@ -2534,7 +2547,7 @@ export class TypeScriptBuilder {
               : varRef;
           stmts.push(
             ts.if(
-              $(ts.id("isInterrupt")).call([varRef]).done(),
+              this.interruptCheck(varRef),
               ts.statements([
                 ts.raw("await __ctx.pendingPromises.awaitAll()"),
                 $(ts.id("runner")).prop("halt").call([haltValue]).done(),
@@ -2693,7 +2706,7 @@ export class TypeScriptBuilder {
       if (this.insideHandlerBody) {
         stmts.push(
           ts.if(
-            ts.raw(`isInterrupt(${this.str(varRef)})`),
+            this.interruptCheckRaw(this.str(varRef)),
             ts.throw(`new Error("Cannot throw an interrupt inside a handler body")`),
           ),
         );
@@ -2705,7 +2718,7 @@ export class TypeScriptBuilder {
           : varRef;
         stmts.push(
           ts.if(
-            $(ts.id("isInterrupt")).call([varRef]).done(),
+            this.interruptCheck(varRef),
             ts.statements([
               ts.raw("await __ctx.pendingPromises.awaitAll()"),
               $(ts.id("runner")).prop("halt").call([haltValue]).done(),

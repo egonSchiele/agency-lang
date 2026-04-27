@@ -10,12 +10,17 @@ export type BranchState = {
   // we save its info here
   interruptId?: string;
   interruptData?: any;
+
+  // cached result for completed fork threads.
+  // wrapped in an object to distinguish "no result" from "result is undefined".
+  result?: { result: any };
 };
 
 export type BranchStateJSON = {
   stack: StateStackJSON;
   interruptId?: string;
   interruptData?: any;
+  result?: { result: any };
 };
 
 // the state for each frame (a node, or a function call)
@@ -84,6 +89,9 @@ export class State {
           ...(branch.interruptData
             ? { interruptData: branch.interruptData }
             : {}),
+          ...(branch.result !== undefined
+            ? { result: deepClone(branch.result) }
+            : {}),
         };
       }
     }
@@ -106,6 +114,7 @@ export class State {
           ...(branch.interruptData
             ? { interruptData: branch.interruptData }
             : {}),
+          ...(branch.result !== undefined ? { result: branch.result } : {}),
         };
       }
     }

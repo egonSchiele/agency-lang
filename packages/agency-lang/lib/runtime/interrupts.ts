@@ -1,4 +1,5 @@
 import * as smoltalk from "smoltalk";
+import { nanoid } from "nanoid";
 import { AgencyCancelledError, RestoreSignal } from "./errors.js";
 import { applyOverrides } from "./rewind.js";
 import { Checkpoint } from "./state/checkpointStore.js";
@@ -61,7 +62,7 @@ export type InterruptState = {
 
 export type Interrupt<T = any> = {
   type: "interrupt";
-  //interruptId: string; // nanoid — globally unique
+  interruptId: string; // nanoid — globally unique
   data: T;
   debugger?: boolean;
   interruptData?: InterruptData;
@@ -74,7 +75,7 @@ export type Interrupt<T = any> = {
 export function interrupt<T = any>(data: T, runId: string): Interrupt<T> {
   return {
     type: "interrupt",
-    //interruptId: nanoid(),
+    interruptId: nanoid(),
     data,
     runId,
   };
@@ -88,6 +89,7 @@ export function createDebugInterrupt<T = any>(
 ): Interrupt<T> {
   return {
     type: "interrupt",
+    interruptId: nanoid(),
     data,
     debugger: true,
     checkpointId,

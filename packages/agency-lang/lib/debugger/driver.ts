@@ -7,7 +7,7 @@ import type { AgencyCallbacks } from "../runtime/hooks.js";
 import type { RewindCheckpoint } from "../runtime/rewind.js";
 import { Checkpoint } from "../runtime/state/checkpointStore.js";
 import type { CheckpointStore } from "../runtime/state/checkpointStore.js";
-import { isDebugger, isInterrupt } from "../runtime/interrupts.js";
+import { isDebugger, isInterrupt, hasInterrupts } from "../runtime/interrupts.js";
 import { StateStack } from "../runtime/state/stateStack.js";
 import type { DebuggerCommand, DebuggerIO } from "./types.js";
 import type { FunctionParameter } from "../types.js";
@@ -180,6 +180,11 @@ export class DebuggerDriver {
       let finalResult: any = undefined;
       // eslint-disable-next-line no-constant-condition
       while (true) {
+        // Unwrap interrupt array (runNode always returns arrays now)
+        if (hasInterrupts(result?.data)) {
+          result = { ...result, data: result.data[0] };
+        }
+
         if (!isInterrupt(result?.data)) {
           if (!lastInterrupt) {
             throw new Error("Program finished without any interrupts. This shouldn't happen with the debugger enabled.");

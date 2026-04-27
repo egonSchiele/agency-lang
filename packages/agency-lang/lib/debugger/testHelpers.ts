@@ -6,7 +6,7 @@ import type { DebuggerCommand, DebuggerIO } from "./types.js";
 import { Checkpoint, resetGlobalCheckpointCounter } from "../runtime/state/checkpointStore.js";
 import type { FunctionParameter } from "../types.js";
 import { getTestDir } from "../importPaths.js";
-import { isInterrupt } from "@/runtime/interrupts.js";
+import { isInterrupt, hasInterrupts } from "@/runtime/interrupts.js";
 import { color } from "termcolors";
 
 export const fixtureDir = path.join(getTestDir(), "debugger");
@@ -108,6 +108,6 @@ export async function getInitialResult(mod: any, driver: DebuggerDriver, ...args
   const initialResult = await mod.main(...args, { callbacks });
 
   expect(initialResult?.data).toBeDefined();
-  expect(isInterrupt(initialResult.data)).toBe(true);
+  expect(hasInterrupts(initialResult.data)).toBe(true);
   return initialResult;
 }

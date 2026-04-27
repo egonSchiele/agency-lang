@@ -13,7 +13,7 @@ import { GraphState, InternalFunctionState, RunNodeResult } from "./types.js";
 import { createReturnObject } from "./utils.js";
 import { color } from "termcolors";
 import { nanoid } from "nanoid";
-import { isInterrupt } from "./interrupts.js";
+import { isInterrupt, hasInterrupts } from "./interrupts.js";
 
 export function setupNode(args: { state: GraphState }): {
   stack: State;
@@ -154,10 +154,17 @@ export async function runNode({
           result,
           globals: execCtx.globals,
         });
+        // Normalize: always return interrupt array
         if (isInterrupt(returnObject.data)) {
-          // Interrupt: attach runId and pause (no footer)
+          returnObject.data = [returnObject.data];
+        }
+
+        if (hasInterrupts(returnObject.data)) {
+          // Interrupt(s): attach runId and pause (no footer)
           if (execCtx.runId) {
-            returnObject.data.runId = execCtx.runId;
+            for (const intr of returnObject.data) {
+              intr.runId = execCtx.runId;
+            }
           }
           await execCtx.pauseTraceWriter();
         } else {

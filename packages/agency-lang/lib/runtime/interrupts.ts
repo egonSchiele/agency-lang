@@ -194,6 +194,103 @@ function interruptBatch(
   };
 }
  */
+export async function respondToInterrupts(args: {
+  ctx: RuntimeContext<GraphState>;
+  interrupts: Interrupt[];
+  responses: InterruptResponse[];
+  overrides?: Record<string, unknown>;
+  metadata?: Record<string, any>;
+}): Promise<any> {
+  const { ctx, interrupts, responses, metadata = {} } = args;
+
+  if (responses.length !== interrupts.length) {
+    throw new Error(
+      `respondToInterrupts: expected ${interrupts.length} responses but got ${responses.length}`,
+    );
+  }
+
+  // Build ID-keyed response map
+  const responseMap: Record<string, InterruptResponse> = {};
+  for (let i = 0; i < interrupts.length; i++) {
+    responseMap[interrupts[i].interruptId] = deepClone(responses[i]);
+  }
+
+  // All interrupts share the same checkpoint — grab from first
+  const interrupt = deepClone(interrupts[0]);
+  const checkpoint =
+    interrupt.checkpoint ??
+    (interrupt.checkpointId !== undefined
+      ? ctx.checkpoints?.get(interrupt.checkpointId)
+      : undefined);
+  if (!checkpoint) {
+    throw new Error(
+      "No checkpoint found for interrupt. The interrupt may have been created with an older format.",
+    );
+  }
+
+  if (args.overrides) {
+    applyOverrides(checkpoint, args.overrides);
+  }
+
+  const execCtx = await ctx.createExecutionContext(interrupt.runId);
+  execCtx.restoreState(checkpoint);
+  execCtx.setInterruptResponses(responseMap);
+
+  execCtx.installRegisteredCallbacks(ctx);
+  if (metadata.callbacks) {
+    Object.assign(execCtx.callbacks, metadata.callbacks);
+  }
+
+  if (metadata.debugger) {
+    execCtx.debuggerState = metadata.debugger;
+  }
+
+  let nodeName = checkpoint.nodeId;
+  try {
+    while (true) {
+      try {
+        const result = await execCtx.graph.run(
+          nodeName,
+          {
+            data: {},
+            ctx: execCtx,
+            isResume: true,
+          },
+          { onNodeEnter: (id) => execCtx.stateStack.nodesTraversed.push(id) },
+        );
+        await execCtx.pendingPromises.awaitAll();
+        const returnObject = createReturnObject({
+          result,
+          globals: execCtx.globals,
+        });
+
+        // Normalize single interrupts to array
+        if (isInterrupt(returnObject.data)) {
+          returnObject.data = [returnObject.data];
+        }
+
+        if (hasInterrupts(returnObject.data)) {
+          await execCtx.pauseTraceWriter();
+        } else {
+          await execCtx.closeTraceWriter();
+        }
+        return returnObject;
+      } catch (e) {
+        if (e instanceof RestoreSignal) {
+          const cp = e.checkpoint;
+          execCtx.restoreState(cp);
+          nodeName = cp.nodeId;
+          execCtx.stateStack.nodesTraversed = [cp.nodeId];
+          continue;
+        }
+        throw e;
+      }
+    }
+  } finally {
+    execCtx.cleanup();
+  }
+}
+
 export async function respondToInterrupt(args: {
   ctx: RuntimeContext<GraphState>;
   interrupt: Interrupt;

@@ -52,6 +52,7 @@ export {
   isRejected,
   isApproved,
   interruptWithHandlers,
+  respondToInterrupts,
   respondToInterrupt,
   approveInterrupt,
   rejectInterrupt,

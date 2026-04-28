@@ -38,6 +38,8 @@ export async function runEvaluation() {
         responses.push(approve(handler.value));
       } else if (handler.action === "reject") {
         responses.push(reject(handler.value));
+      } else if (handler.action === "resolve") {
+        responses.push(approve(handler.resolvedValue));
       } else {
         throw new Error("Unknown interrupt action: " + handler.action);
       }

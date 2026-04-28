@@ -197,11 +197,11 @@ if (__response) {
   }
   if (!isApproved(__handlerResult)) {
     // No handler — propagate interrupt to TypeScript caller
+    // Store interruptId on frame BEFORE checkpoint so it's captured in the snapshot
+    __self.__interruptId_0 = __handlerResult.interruptId;
     const __checkpointId = __ctx.checkpoints.create(__ctx, { moduleId: "withModifier.agency", scopeName: "foo", stepPath: "0" });
     __handlerResult.checkpointId = __checkpointId;
     __handlerResult.checkpoint = __ctx.checkpoints.get(__checkpointId);
-    // Store interruptId on frame for response lookup on resume
-    __self.__interruptId_0 = __handlerResult.interruptId;
     
     
     runner.halt(__handlerResult);

@@ -1,4 +1,4 @@
-import { main, approveInterrupt, isInterrupt, __setDebugger } from "./agent.js";
+import { main, hasInterrupts, approve, respondToInterrupts, __setDebugger } from "./agent.js";
 import { DebuggerState } from "agency-lang/runtime";
 import { writeFileSync } from "fs";
 
@@ -7,10 +7,10 @@ dbg.running();
 __setDebugger(dbg);
 
 let result = await main();
-const hitDebugger = isInterrupt(result.data) && result.data.debugger === true;
-result = await approveInterrupt(result.data);
+const hitDebugger = hasInterrupts(result.data) && result.data[0].debugger === true;
+const resumed = await respondToInterrupts(result.data, [approve()]);
 
 writeFileSync(
   "__result.json",
-  JSON.stringify({ hitDebugger, finalResult: result.data }, null, 2),
+  JSON.stringify({ hitDebugger, finalResult: resumed.data }, null, 2),
 );

@@ -35,10 +35,10 @@ if (JSON.stringify(messages) !== JSON.stringify(expected)) {
   throw new Error("Unexpected interrupt messages: " + JSON.stringify(messages));
 }
 
-// Test 6: all interrupts share the same checkpoint
-const checkpoints = interrupts.map(i => i.checkpoint);
-if (!checkpoints.every(cp => cp === checkpoints[0])) {
-  throw new Error("Interrupts don't share a checkpoint");
+// Test 6: all interrupts share the same checkpoint (compare by ID)
+const checkpointIds = interrupts.map(i => i.checkpointId);
+if (!checkpointIds.every(id => id === checkpointIds[0])) {
+  throw new Error("Interrupts don't share a checkpoint: " + JSON.stringify(checkpointIds));
 }
 
 // Test 7: approve all, verify results in correct order

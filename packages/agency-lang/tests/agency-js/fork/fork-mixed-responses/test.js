@@ -41,8 +41,15 @@ if (data[0] !== "confirmed: a") {
 }
 
 // data[1] should be a failure result (from the rejected interrupt)
-if (!data[1] || !data[1].success === false) {
-  // The rejected interrupt returns a failure Result
+if (!data[1] || data[1].success !== false) {
+  throw new Error("Expected failure for rejected item, got: " + JSON.stringify(data[1]));
 }
 
-writeFileSync("__result.json", JSON.stringify({ approved: data[0], rejected: data[1] }, null, 2));
+if (!data[1].error.includes("interrupt rejected")) {
+  throw new Error("Expected 'interrupt rejected' error, got: " + data[1].error);
+}
+
+writeFileSync("__result.json", JSON.stringify({
+  approved: data[0],
+  rejected: { success: data[1].success, error: data[1].error }
+}, null, 2));

@@ -38,11 +38,11 @@ if (__response) {
     {{{handlerApprove}}};
   } else {
     // No handler — propagate interrupt to TypeScript caller
+    // Store interruptId on frame BEFORE checkpoint so it's captured in the snapshot
+    __self.{{{interruptIdKey:string}}} = __handlerResult.interruptId;
     const __checkpointId = __ctx.checkpoints.create(__ctx, { moduleId: {{{moduleId}}}, scopeName: {{{scopeName}}}, stepPath: {{{stepPath}}} });
     __handlerResult.checkpointId = __checkpointId;
     __handlerResult.checkpoint = __ctx.checkpoints.get(__checkpointId);
-    // Store interruptId on frame for response lookup on resume
-    __self.{{{interruptIdKey:string}}} = __handlerResult.interruptId;
     {{#nodeContext}}
     runner.halt({ messages: __threads, data: __handlerResult });
     {{/nodeContext}}

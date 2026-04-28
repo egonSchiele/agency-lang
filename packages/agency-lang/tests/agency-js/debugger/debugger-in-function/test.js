@@ -1,6 +1,6 @@
-import { DebuggerState, hasInterrupts, approve, respondToInterrupts } from "agency-lang/runtime";
+import { DebuggerState, hasInterrupts, approve } from "agency-lang/runtime";
 import { writeFileSync } from "fs";
-import { __setDebugger, main } from "./agent.js";
+import { __setDebugger, main, respondToInterrupts } from "./agent.js";
 
 const dbg = new DebuggerState(10);
 dbg.running();

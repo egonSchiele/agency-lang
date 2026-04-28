@@ -273,7 +273,6 @@ __stack.locals.a = await __call(greet, {
       }, {
         ctx: __ctx,
         threads: __threads,
-        interruptData: __state?.interruptData,
         stateStack: __stateStack,
         isForked: __isForked
       });
@@ -298,7 +297,6 @@ __stack.locals.b = await __call(greet, {
       }, {
         ctx: __ctx,
         threads: __threads,
-        interruptData: __state?.interruptData,
         stateStack: __stateStack,
         isForked: __isForked
       });
@@ -322,7 +320,6 @@ __stack.locals.c = await __call(greet, {
       }, {
         ctx: __ctx,
         threads: __threads,
-        interruptData: __state?.interruptData,
         stateStack: __stateStack,
         isForked: __isForked
       });

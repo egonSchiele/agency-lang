@@ -170,7 +170,6 @@ __stack.locals.a = await __call(__stack.args.block, {
       }, {
         ctx: __ctx,
         threads: __threads,
-        interruptData: __state?.interruptData,
         stateStack: __stateStack,
         isForked: __isForked
       });
@@ -187,7 +186,6 @@ __stack.locals.b = await __call(__stack.args.block, {
       }, {
         ctx: __ctx,
         threads: __threads,
-        interruptData: __state?.interruptData,
         stateStack: __stateStack,
         isForked: __isForked
       });
@@ -288,7 +286,6 @@ __ctx.stateStack.pop();
       }, {
         ctx: __ctx,
         threads: __threads,
-        interruptData: __state?.interruptData,
         stateStack: __stateStack,
         isForked: __isForked
       });
@@ -308,7 +305,6 @@ const __funcResult = await __call(print, {
       }, {
         ctx: __ctx,
         threads: __threads,
-        interruptData: __state?.interruptData,
         stateStack: __stateStack,
         isForked: __isForked
       });

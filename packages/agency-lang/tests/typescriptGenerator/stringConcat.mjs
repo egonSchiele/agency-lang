@@ -144,7 +144,6 @@ const __funcResult = await __call(print, {
       }, {
         ctx: __ctx,
         threads: __threads,
-        interruptData: __state?.interruptData,
         stateStack: __stateStack,
         isForked: __isForked
       });
@@ -164,7 +163,6 @@ __stack.locals.name = await __call(input, {
       }, {
         ctx: __ctx,
         threads: __threads,
-        interruptData: __state?.interruptData,
         stateStack: __stateStack,
         isForked: __isForked
       });
@@ -184,7 +182,6 @@ const __funcResult = await __call(print, {
       }, {
         ctx: __ctx,
         threads: __threads,
-        interruptData: __state?.interruptData,
         stateStack: __stateStack,
         isForked: __isForked
       });

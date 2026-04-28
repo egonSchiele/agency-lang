@@ -482,7 +482,6 @@ __stack.locals.__pipe_0 = await success(5);
     }, {
       ctx: __ctx,
       threads: __threads,
-      interruptData: __state?.interruptData,
       stateStack: __stateStack,
       isForked: __isForked
     }));
@@ -495,7 +494,6 @@ __stack.locals.__pipe_1 = await success(5);
     }, {
       ctx: __ctx,
       threads: __threads,
-      interruptData: __state?.interruptData,
       stateStack: __stateStack,
       isForked: __isForked
     }));
@@ -508,7 +506,6 @@ __stack.locals.__pipe_2 = await success(10);
     }, {
       ctx: __ctx,
       threads: __threads,
-      interruptData: __state?.interruptData,
       stateStack: __stateStack,
       isForked: __isForked
     }));
@@ -518,7 +515,6 @@ __stack.locals.__pipe_2 = await success(10);
     }, {
       ctx: __ctx,
       threads: __threads,
-      interruptData: __state?.interruptData,
       stateStack: __stateStack,
       isForked: __isForked
     }));
@@ -531,7 +527,6 @@ __stack.locals.__pipe_3 = await failure(`nope`);
     }, {
       ctx: __ctx,
       threads: __threads,
-      interruptData: __state?.interruptData,
       stateStack: __stateStack,
       isForked: __isForked
     }));
@@ -544,7 +539,6 @@ __stack.locals.__pipe_4 = await success(10);
     }, {
       ctx: __ctx,
       threads: __threads,
-      interruptData: __state?.interruptData,
       stateStack: __stateStack,
       isForked: __isForked
     }));

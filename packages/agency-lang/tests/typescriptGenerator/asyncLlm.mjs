@@ -145,7 +145,7 @@ __stack.locals.x = runPrompt({
         messages: __threads.createAndReturnSubthread(),
         clientConfig: {},
         maxToolCallRounds: 10,
-        interruptData: __state?.interruptData,
+        stateStack: __stateStack,
         removedTools: __self.__removedTools,
         checkpointInfo: runner.getCheckpointInfo()
       });
@@ -159,7 +159,7 @@ __stack.locals.y = runPrompt({
         messages: __threads.createAndReturnSubthread(),
         clientConfig: {},
         maxToolCallRounds: 10,
-        interruptData: __state?.interruptData,
+        stateStack: __stateStack,
         removedTools: __self.__removedTools,
         checkpointInfo: runner.getCheckpointInfo()
       });

@@ -177,7 +177,7 @@ __stack.locals.result = await runPrompt({
         messages: __threads.getOrCreateActive(),
         clientConfig: {},
         maxToolCallRounds: 10,
-        interruptData: __state?.interruptData,
+        stateStack: __stateStack,
         removedTools: __self.__removedTools,
         checkpointInfo: runner.getCheckpointInfo()
       });
@@ -301,7 +301,7 @@ __stack.locals.message = await runPrompt({
         messages: __threads.getOrCreateActive(),
         clientConfig: {},
         maxToolCallRounds: 10,
-        interruptData: __state?.interruptData,
+        stateStack: __stateStack,
         removedTools: __self.__removedTools,
         checkpointInfo: runner.getCheckpointInfo()
       });
@@ -426,7 +426,7 @@ __stack.locals.output = await runPrompt({
         messages: __threads.getOrCreateActive(),
         clientConfig: {},
         maxToolCallRounds: 10,
-        interruptData: __state?.interruptData,
+        stateStack: __stateStack,
         removedTools: __self.__removedTools,
         checkpointInfo: runner.getCheckpointInfo()
       });
@@ -550,7 +550,7 @@ __stack.locals.result = await runPrompt({
         messages: __threads.getOrCreateActive(),
         clientConfig: {},
         maxToolCallRounds: 10,
-        interruptData: __state?.interruptData,
+        stateStack: __stateStack,
         removedTools: __self.__removedTools,
         checkpointInfo: runner.getCheckpointInfo()
       });
@@ -669,7 +669,7 @@ __stack.locals.result = await runPrompt({
         messages: __threads.getOrCreateActive(),
         clientConfig: {},
         maxToolCallRounds: 10,
-        interruptData: __state?.interruptData,
+        stateStack: __stateStack,
         removedTools: __self.__removedTools,
         checkpointInfo: runner.getCheckpointInfo()
       });
@@ -761,7 +761,6 @@ const __funcResult = await __call(print, {
       }, {
         ctx: __ctx,
         threads: __threads,
-        interruptData: __state?.interruptData,
         stateStack: __stateStack,
         isForked: __isForked
       });
@@ -839,7 +838,6 @@ __stack.locals.sum = await __call(add, {
       }, {
         ctx: __ctx,
         threads: __threads,
-        interruptData: __state?.interruptData,
         stateStack: __stateStack,
         isForked: __isForked
       });
@@ -859,7 +857,6 @@ __stack.locals.greeting = await __call(greet, {
       }, {
         ctx: __ctx,
         threads: __threads,
-        interruptData: __state?.interruptData,
         stateStack: __stateStack,
         isForked: __isForked
       });
@@ -879,7 +876,6 @@ __stack.locals.labeled = await __call(mixed, {
       }, {
         ctx: __ctx,
         threads: __threads,
-        interruptData: __state?.interruptData,
         stateStack: __stateStack,
         isForked: __isForked
       });
@@ -899,7 +895,6 @@ __stack.locals.processed = await __call(processArray, {
       }, {
         ctx: __ctx,
         threads: __threads,
-        interruptData: __state?.interruptData,
         stateStack: __stateStack,
         isForked: __isForked
       });
@@ -919,7 +914,6 @@ __stack.locals.flexResult = await __call(flexible, {
       }, {
         ctx: __ctx,
         threads: __threads,
-        interruptData: __state?.interruptData,
         stateStack: __stateStack,
         isForked: __isForked
       });

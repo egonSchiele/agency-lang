@@ -544,7 +544,6 @@ export const ts = {
   functionCallConfig({
     ctx,
     threads,
-    interruptData,
     stateStack,
     isForked,
     moduleId,
@@ -553,7 +552,6 @@ export const ts = {
   }: {
     ctx: TsNode;
     threads?: TsNode;
-    interruptData?: TsNode;
     stateStack?: TsNode;
     isForked?: TsNode;
     moduleId?: TsNode;
@@ -565,9 +563,6 @@ export const ts = {
     };
     if (threads) {
       entries.threads = threads;
-    }
-    if (interruptData) {
-      entries.interruptData = interruptData;
     }
     if (stateStack) {
       entries.stateStack = stateStack;

@@ -270,7 +270,6 @@ __stack.locals.result = await __call(foo, {
         }, {
           ctx: __ctx,
           threads: __threads,
-          interruptData: __state?.interruptData,
           stateStack: __stateStack,
           isForked: __isForked
         });

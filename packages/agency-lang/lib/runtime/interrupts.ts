@@ -19,29 +19,13 @@ export type InterruptApprove = {
   type: "approve";
 };
 
-// modify = modify the args for a tool call
-export type InterruptModify = {
-  type: "modify";
-  newArguments: Record<string, any>;
-};
-
 export type InterruptReject = {
   type: "reject";
 };
 
-// resolve = assign a specific value to a variable
-// eg
-// x = interrupt("What value should x have?")
-export type InterruptResolve = {
-  type: "resolve";
-  value: any;
-};
-
 export type InterruptResponse =
   | InterruptApprove
-  | InterruptModify
-  | InterruptReject
-  | InterruptResolve;
+  | InterruptReject;
 
 export function approve(value?: any): InterruptResponse {
   return { type: "approve", value } as any;
@@ -129,9 +113,9 @@ export function isApproved(obj: any): obj is Approved {
 export async function interruptWithHandlers<T = any>(
   data: T,
   ctx: RuntimeContext<any>,
-): Promise<Interrupt<T> | Approved | Rejected> {
+): Promise<Interrupt<T>[] | Approved | Rejected> {
   if (ctx.handlers.length === 0) {
-    return interrupt(data, ctx.getRunId());
+    return [interrupt(data, ctx.getRunId())];
   }
   let approvedValue: any = undefined;
   let hasApproval = false;
@@ -170,38 +154,14 @@ export async function interruptWithHandlers<T = any>(
     );
   }
   if (hasPropagation) {
-    return interrupt(data, ctx.getRunId());
+    return [interrupt(data, ctx.getRunId())];
   }
   if (hasApproval) {
     return { type: "approve", value: approvedValue };
   }
-  return interrupt(data, ctx.getRunId());
+  return [interrupt(data, ctx.getRunId())];
 }
 
-// if we ever end up supporting multiple interrupts at once
-/* export type InterruptBatch = {
-  type: "interrupt_batch";
-  interrupts: Interrupt[];
-  checkpoint: Checkpoint;
-};
-
-export function isInterruptBatch(obj: any): obj is InterruptBatch {
-  return obj && obj.type === "interrupt_batch";
-}
-
-function interruptBatch(
-  interrupts: Interrupt[],
-  execCtx: RuntimeContext<any>,
-): InterruptBatch {
-  const cpId = execCtx.checkpoints.create(execCtx, { moduleId: "", scopeName: "", stepPath: "" });
-  const cp = execCtx.checkpoints.get(cpId);
-  return {
-    type: "interrupt_batch",
-    interrupts,
-    checkpoint: cp,
-  };
-}
- */
 export async function respondToInterrupts(args: {
   ctx: RuntimeContext<GraphState>;
   interrupts: Interrupt[];
@@ -257,20 +217,6 @@ export async function respondToInterrupts(args: {
     execCtx.debuggerState = metadata.debugger;
   }
 
-  // For single-interrupt cases, pass interruptData to graph.run for node transitions
-  // and tool call resume. For multi-interrupt (fork) cases, each thread handles its own
-  // resume via the branch stack and ctx.getInterruptResponse().
-  let interruptData: InterruptData | undefined;
-  if (interrupts.length === 1) {
-    const intr = interrupts[0];
-    interruptData = intr.interruptData ? deepClone(intr.interruptData) : {};
-    if (intr.debugger && !intr.interruptData?.toolCall) {
-      interruptData = undefined;
-    } else if (interruptData) {
-      interruptData.interruptResponse = responses[0];
-    }
-  }
-
   let nodeName = checkpoint.nodeId;
   try {
     while (true) {
@@ -281,7 +227,6 @@ export async function respondToInterrupts(args: {
             data: {},
             ctx: execCtx,
             isResume: true,
-            interruptData,
           },
           { onNodeEnter: (id) => execCtx.stateStack.nodesTraversed.push(id) },
         );
@@ -290,11 +235,6 @@ export async function respondToInterrupts(args: {
           result,
           globals: execCtx.globals,
         });
-
-        // Normalize single interrupts to array
-        if (isInterrupt(returnObject.data)) {
-          returnObject.data = [returnObject.data];
-        }
 
         if (hasInterrupts(returnObject.data)) {
           await execCtx.pauseTraceWriter();
@@ -318,197 +258,3 @@ export async function respondToInterrupts(args: {
   }
 }
 
-export async function respondToInterrupt(args: {
-  ctx: RuntimeContext<GraphState>;
-  interrupt: Interrupt;
-  interruptResponse: InterruptResponse;
-  overrides?: Record<string, unknown>;
-  metadata?: Record<string, any>;
-}): Promise<any> {
-  const interrupt = deepClone(args.interrupt);
-  const interruptResponse = deepClone(args.interruptResponse);
-  const { ctx, metadata = {} } = args;
-
-  const checkpoint =
-    interrupt.checkpoint ??
-    (interrupt.checkpointId !== undefined
-      ? ctx.checkpoints?.get(interrupt.checkpointId)
-      : undefined);
-  if (!checkpoint) {
-    throw new Error(
-      "No checkpoint found for interrupt. The interrupt may have been created with an older format.",
-    );
-  }
-
-  if (args.overrides) {
-    applyOverrides(checkpoint, args.overrides);
-  }
-
-  const execCtx = await ctx.createExecutionContext(interrupt.runId);
-  execCtx.restoreState(checkpoint);
-
-  // Set response on context so the new interrupt templates can look it up by interruptId
-  if (interrupt.interruptId) {
-    execCtx.setInterruptResponses({
-      [interrupt.interruptId]: {
-        response: interruptResponse,
-        interruptData: interrupt.interruptData ? deepClone(interrupt.interruptData) : undefined,
-      },
-    });
-  }
-
-  execCtx.installRegisteredCallbacks(ctx);
-  if (metadata.callbacks) {
-    Object.assign(execCtx.callbacks, metadata.callbacks);
-  }
-
-  if (metadata.debugger) {
-    execCtx.debuggerState = metadata.debugger;
-  }
-
-  let interruptData: InterruptData | undefined = interrupt.interruptData || {};
-
-  if (interrupt.debugger && !interrupt.interruptData?.toolCall) {
-    // Debugger-generated interrupts don't carry tool-call data,
-    // unless the debug pause happened inside a tool call during an LLM call —
-    // in that case, keep interruptData so runPrompt can resume mid-conversation.
-    interruptData = undefined;
-  } else {
-    interruptData.interruptResponse = interruptResponse;
-
-    if (interruptResponse.type === "modify") {
-      interruptData.toolCall!.arguments = {
-        ...interruptData.toolCall!.arguments,
-        ...interruptResponse.newArguments,
-      };
-    }
-  }
-
-  let nodeName = checkpoint.nodeId;
-  try {
-    while (true) {
-      try {
-        const result = await execCtx.graph.run(
-          nodeName,
-          {
-            data: {},
-            ctx: execCtx,
-            isResume: true,
-            interruptData,
-          },
-          { onNodeEnter: (id) => execCtx.stateStack.nodesTraversed.push(id) },
-        );
-        await execCtx.pendingPromises.awaitAll();
-        const returnObject = createReturnObject({
-          result,
-          globals: execCtx.globals,
-        });
-        // Normalize single interrupts to array
-        if (isInterrupt(returnObject.data)) {
-          returnObject.data = [returnObject.data];
-        }
-        if (hasInterrupts(returnObject.data)) {
-          await execCtx.pauseTraceWriter();
-        } else {
-          await execCtx.closeTraceWriter();
-        }
-        return returnObject;
-      } catch (e) {
-        if (e instanceof RestoreSignal) {
-          const cp = e.checkpoint;
-          execCtx.restoreState(cp);
-          nodeName = cp.nodeId;
-          execCtx.stateStack.nodesTraversed = [cp.nodeId];
-          continue;
-        }
-        throw e;
-      }
-    }
-  } finally {
-    execCtx.cleanup();
-  }
-}
-
-export async function approveInterrupt({
-  ctx,
-  interrupt,
-  overrides,
-  metadata,
-}: {
-  ctx: RuntimeContext<GraphState>;
-  interrupt: Interrupt;
-  overrides?: Record<string, unknown>;
-  metadata?: Record<string, any>;
-}): Promise<any> {
-  return await respondToInterrupt({
-    ctx,
-    interrupt,
-    interruptResponse: { type: "approve" },
-    overrides,
-    metadata,
-  });
-}
-
-export async function modifyInterrupt({
-  ctx,
-  interrupt,
-  newArguments,
-  overrides,
-  metadata,
-}: {
-  ctx: RuntimeContext<GraphState>;
-  interrupt: Interrupt;
-  newArguments: Record<string, any>;
-  overrides?: Record<string, unknown>;
-  metadata?: Record<string, any>;
-}): Promise<any> {
-  return await respondToInterrupt({
-    ctx,
-    interrupt,
-    interruptResponse: { type: "modify", newArguments },
-    overrides,
-    metadata,
-  });
-}
-
-export async function rejectInterrupt({
-  ctx,
-  interrupt,
-  overrides,
-  metadata,
-}: {
-  ctx: RuntimeContext<GraphState>;
-  interrupt: Interrupt;
-  overrides?: Record<string, unknown>;
-  metadata?: Record<string, any>;
-}): Promise<any> {
-  return await respondToInterrupt({
-    ctx,
-    interrupt,
-    interruptResponse: { type: "reject" },
-    overrides,
-    metadata,
-  });
-}
-
-export async function resolveInterrupt({
-  ctx,
-  interrupt,
-  value,
-  overrides,
-  metadata,
-}: {
-  ctx: RuntimeContext<GraphState>;
-  interrupt: Interrupt;
-  value: any;
-  overrides?: Record<string, unknown>;
-  metadata?: Record<string, any>;
-}): Promise<any> {
-  return await respondToInterrupt({
-    ctx,
-    interrupt,
-    interruptResponse: { type: "resolve", value },
-    overrides,
-    metadata,
-  });
-}

@@ -164,7 +164,6 @@ __stack.locals.result = `condition was true`;
         }, {
           ctx: __ctx,
           threads: __threads,
-          interruptData: __state?.interruptData,
           stateStack: __stateStack,
           isForked: __isForked
         }),

@@ -170,7 +170,6 @@ const __funcResult = await __call(sleep, {
       }, {
         ctx: __ctx,
         threads: __threads,
-        interruptData: __state?.interruptData,
         stateStack: __stateStack,
         isForked: __isForked
       });
@@ -271,7 +270,6 @@ __stack.locals.x = __call(compute, {
       }, {
         ctx: __ctx,
         threads: __threads,
-        interruptData: __state?.interruptData,
         stateStack: __forked,
         isForked: true
       });
@@ -294,7 +292,6 @@ __stack.locals.y = __call(compute, {
       }, {
         ctx: __ctx,
         threads: __threads,
-        interruptData: __state?.interruptData,
         stateStack: __forked,
         isForked: true
       });

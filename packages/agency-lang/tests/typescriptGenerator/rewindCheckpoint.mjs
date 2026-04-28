@@ -151,7 +151,7 @@ __stack.locals.mood = await runPrompt({
         }),
         clientConfig: {},
         maxToolCallRounds: 10,
-        interruptData: __state?.interruptData,
+        stateStack: __stateStack,
         removedTools: __self.__removedTools,
         checkpointInfo: runner.getCheckpointInfo()
       });

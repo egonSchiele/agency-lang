@@ -383,7 +383,6 @@ __stack.locals.result = await __callMethod(__stack.locals.dog, "speak", {
       }, {
         ctx: __ctx,
         threads: __threads,
-        interruptData: __state?.interruptData,
         stateStack: __stateStack,
         isForked: __isForked
       });

@@ -180,7 +180,6 @@ __stack.locals.result = await __call(__stack.args.block, {
         }, {
           ctx: __ctx,
           threads: __threads,
-          interruptData: __state?.interruptData,
           stateStack: __stateStack,
           isForked: __isForked
         });
@@ -197,7 +196,6 @@ __stack.locals.results = await __callMethod(__stack.locals.results, "concat", {
         }, {
           ctx: __ctx,
           threads: __threads,
-          interruptData: __state?.interruptData,
           stateStack: __stateStack,
           isForked: __isForked
         });
@@ -304,7 +302,6 @@ __ctx.stateStack.pop();
       }, {
         ctx: __ctx,
         threads: __threads,
-        interruptData: __state?.interruptData,
         stateStack: __stateStack,
         isForked: __isForked
       });

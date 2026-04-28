@@ -262,7 +262,6 @@ await __callMethod(__stack.locals.c, "increment", {
       }, {
         ctx: __ctx,
         threads: __threads,
-        interruptData: __state?.interruptData,
         stateStack: __stateStack,
         isForked: __isForked
       })
@@ -276,7 +275,6 @@ runner.halt({
         }, {
           ctx: __ctx,
           threads: __threads,
-          interruptData: __state?.interruptData,
           stateStack: __stateStack,
           isForked: __isForked
         })

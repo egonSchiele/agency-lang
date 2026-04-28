@@ -176,7 +176,6 @@ const __funcResult = await __call(sleep, {
       }, {
         ctx: __ctx,
         threads: __threads,
-        interruptData: __state?.interruptData,
         stateStack: __stateStack,
         isForked: __isForked
       });
@@ -277,7 +276,6 @@ __ctx.pendingPromises.add(__call(append, {
 }, {
   ctx: __ctx,
   threads: __threads,
-  interruptData: __state?.interruptData,
   stateStack: __forked,
   isForked: true
 }))
@@ -299,7 +297,6 @@ __ctx.pendingPromises.add(__call(append, {
 }, {
   ctx: __ctx,
   threads: __threads,
-  interruptData: __state?.interruptData,
   stateStack: __forked,
   isForked: true
 }))

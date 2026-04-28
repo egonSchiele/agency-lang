@@ -173,7 +173,6 @@ runner.halt(await __call(lookupItem, {
       }, {
         ctx: __ctx,
         threads: __threads,
-        interruptData: __state?.interruptData,
         stateStack: __stateStack,
         isForked: __isForked
       }))
@@ -282,7 +281,6 @@ const __funcResult = await __call(saveItem, {
       }, {
         ctx: __ctx,
         threads: __threads,
-        interruptData: __state?.interruptData,
         stateStack: __stateStack,
         isForked: __isForked
       });
@@ -300,7 +298,6 @@ runner.halt(await __call(lookupItem, {
       }, {
         ctx: __ctx,
         threads: __threads,
-        interruptData: __state?.interruptData,
         stateStack: __stateStack,
         isForked: __isForked
       }))
@@ -385,7 +382,7 @@ __stack.locals.result = await runPrompt({
           "tools": [safeLookup, unsafeSave]
         },
         maxToolCallRounds: 10,
-        interruptData: __state?.interruptData,
+        stateStack: __stateStack,
         removedTools: __self.__removedTools,
         checkpointInfo: runner.getCheckpointInfo()
       });

@@ -154,7 +154,7 @@ __stack.locals.result = await runPrompt({
         messages: __threads.getOrCreateActive(),
         clientConfig: {},
         maxToolCallRounds: 10,
-        interruptData: __state?.interruptData,
+        stateStack: __stateStack,
         removedTools: __self.__removedTools,
         checkpointInfo: runner.getCheckpointInfo()
       });
@@ -175,7 +175,6 @@ const __funcResult = await __call(print, {
       }, {
         ctx: __ctx,
         threads: __threads,
-        interruptData: __state?.interruptData,
         stateStack: __stateStack,
         isForked: __isForked
       });

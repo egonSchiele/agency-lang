@@ -382,14 +382,12 @@ await __callMethod(__stack.locals.result, "push", {
           }, {
             ctx: __ctx,
             threads: __threads,
-            interruptData: __state?.interruptData,
             stateStack: __stateStack,
             isForked: __isForked
           })]
         }, {
           ctx: __ctx,
           threads: __threads,
-          interruptData: __state?.interruptData,
           stateStack: __stateStack,
           isForked: __isForked
         })
@@ -479,7 +477,6 @@ __stack.locals.result = await __call(__stack.locals.fn, {
       }, {
         ctx: __ctx,
         threads: __threads,
-        interruptData: __state?.interruptData,
         stateStack: __stateStack,
         isForked: __isForked
       });
@@ -499,7 +496,6 @@ __stack.locals.doubled = await __call(applyToAll, {
       }, {
         ctx: __ctx,
         threads: __threads,
-        interruptData: __state?.interruptData,
         stateStack: __stateStack,
         isForked: __isForked
       });

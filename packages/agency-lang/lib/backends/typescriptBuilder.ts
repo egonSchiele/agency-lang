@@ -353,17 +353,14 @@ export class TypeScriptBuilder {
     return true;
   }
 
-  /** Generate a TsNode for `isInterrupt(x) || hasInterrupts(x)` */
+  /** Generate a TsNode for `hasInterrupts(x)` */
   private interruptCheck(expr: TsNode): TsNode {
-    return ts.or(
-      ts.call(ts.id("isInterrupt"), [expr]),
-      ts.call(ts.id("hasInterrupts"), [expr]),
-    );
+    return ts.call(ts.id("hasInterrupts"), [expr]);
   }
 
-  /** Generate a raw string for `isInterrupt(x) || hasInterrupts(x)` */
+  /** Generate a raw string for `hasInterrupts(x)` */
   private interruptCheckRaw(exprStr: string): TsNode {
-    return ts.raw(`isInterrupt(${exprStr}) || hasInterrupts(${exprStr})`);
+    return ts.raw(`hasInterrupts(${exprStr})`);
   }
 
   private _plainTsImportNames: Set<string> | null = null;
@@ -1134,7 +1131,6 @@ export class TypeScriptBuilder {
     return ts.functionCallConfig({
       ctx: ts.runtime.ctx,
       threads: ts.runtime.threads,
-      interruptData: ts.raw("__state?.interruptData"),
       stateStack: opts?.stateStack ?? ts.id("__stateStack"),
       isForked: opts?.isForked ?? ts.id("__isForked"),
       ...opts?.extra,
@@ -2672,7 +2668,7 @@ export class TypeScriptBuilder {
     runPromptEntries.maxToolCallRounds = ts.num(
       this.agencyConfig.maxToolCallRounds || 10,
     );
-    runPromptEntries.interruptData = ts.raw("__state?.interruptData");
+    runPromptEntries.stateStack = ts.id("__stateStack");
     runPromptEntries.removedTools = ts.self("__removedTools");
     runPromptEntries.checkpointInfo = ts.raw("runner.getCheckpointInfo()");
 

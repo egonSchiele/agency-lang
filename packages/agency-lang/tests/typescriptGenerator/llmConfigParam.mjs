@@ -151,7 +151,7 @@ __stack.locals.foo = await runPrompt({
         }),
         clientConfig: __ctx.globals.get("llmConfigParam.agency", "config"),
         maxToolCallRounds: 10,
-        interruptData: __state?.interruptData,
+        stateStack: __stateStack,
         removedTools: __self.__removedTools,
         checkpointInfo: runner.getCheckpointInfo()
       });
@@ -178,7 +178,7 @@ __stack.locals.foo2 = await runPrompt({
           "maxTokens": 100
         },
         maxToolCallRounds: 10,
-        interruptData: __state?.interruptData,
+        stateStack: __stateStack,
         removedTools: __self.__removedTools,
         checkpointInfo: runner.getCheckpointInfo()
       });
@@ -199,7 +199,6 @@ const __funcResult = await __call(print, {
       }, {
         ctx: __ctx,
         threads: __threads,
-        interruptData: __state?.interruptData,
         stateStack: __stateStack,
         isForked: __isForked
       });

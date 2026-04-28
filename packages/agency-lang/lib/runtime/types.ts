@@ -3,7 +3,7 @@ import { RuntimeContext, StateStack, ThreadStore } from "./index.js";
 import { ThreadStoreJSON } from "./state/threadStore.js";
 import { SimpleMachine } from "@/simplemachine/graph.js";
 import { StatelogClient } from "@/statelogClient.js";
-import { InterruptData } from "./interrupts.js";
+
 
 export type GraphState = {
   messages?: ThreadStore;
@@ -16,18 +16,12 @@ export type GraphState = {
 
   // if true, restore the state from the state stack in ctx.
   isResume?: boolean;
-
-  // response to the interrupt,
-  // as well as the tool call that caused the interrupt,
-  // and the messages at the time of the interrupt,
-  interruptData?: InterruptData;
 };
 
 export type InternalFunctionState = {
   threads: ThreadStore;
   ctx: RuntimeContext<GraphState>;
-  interruptData?: InterruptData;
-  isToolCall?: boolean;
+  isForked?: boolean;
   stateStack?: StateStack;  // per-thread stack for async calls
   moduleId?: string;
   scopeName?: string;

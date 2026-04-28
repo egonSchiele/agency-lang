@@ -203,6 +203,16 @@ export async function respondToInterrupts(args: {
 
   const execCtx = await ctx.createExecutionContext(interrupt.runId);
   execCtx.restoreState(checkpoint);
+
+  // If a node transition occurred before the interrupt (e.g., bar → foo → greet interrupts),
+  // the checkpoint stateStack has frames for ancestor nodes that won't be re-entered on resume.
+  // Strip those extra frames so setupNode gets the correct frame for the resume node.
+  const traversed = execCtx.stateStack.nodesTraversed;
+  const resumeIdx = traversed.lastIndexOf(checkpoint.nodeId);
+  if (resumeIdx > 0) {
+    execCtx.stateStack.dropFrames(resumeIdx);
+  }
+
   execCtx.setInterruptResponses(responseMap);
 
   execCtx.installRegisteredCallbacks(ctx);

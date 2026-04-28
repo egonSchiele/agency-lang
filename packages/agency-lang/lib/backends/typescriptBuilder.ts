@@ -2199,6 +2199,8 @@ export class TypeScriptBuilder {
     });
 
     return ts.statements([
+      // Pop the current node's frame before transitioning — it won't be re-entered on resume
+      ts.raw("__stateStack.pop()"),
       ts.functionReturn(ts.goToNode(functionName, goToArgs)),
     ]);
   }
@@ -2294,6 +2296,7 @@ export class TypeScriptBuilder {
               },
             ]),
           ),
+          ts.consoleError($(ts.id("__error")).prop("stack").done()),
           ts.return(
             ts.obj({
               messages: ts.runtime.threads,
@@ -3083,7 +3086,7 @@ export class TypeScriptBuilder {
       const lastEl = stage.chain[stage.chain.length - 1];
       const propName = lastEl.kind === "property" ? lastEl.name
         : lastEl.kind === "methodCall" ? lastEl.functionCall.functionName
-        : null;
+          : null;
       if (propName) {
         const descriptor = ts.obj({ type: ts.str("positional"), args: ts.arr([pipeArg]) });
         const callExpr = ts.call(

@@ -43,6 +43,14 @@ export type InterruptResponse =
   | InterruptReject
   | InterruptResolve;
 
+export function approve(value?: any): InterruptResponse {
+  return { type: "approve", value } as any;
+}
+
+export function reject(value?: any): InterruptResponse {
+  return { type: "reject", value } as any;
+}
+
 export type InterruptData = {
   // messages that have been exchanged in the prompt function
   // up till this interrupt was triggered. This is needed to restore

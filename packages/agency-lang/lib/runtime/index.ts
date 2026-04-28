@@ -51,6 +51,8 @@ export {
   isDebugger,
   isRejected,
   isApproved,
+  approve,
+  reject,
   interruptWithHandlers,
   respondToInterrupts,
   respondToInterrupt,

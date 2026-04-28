@@ -1,0 +1,34 @@
+def confirmItem(item: string): string {
+  interrupt("approve ${item}?")
+  return "confirmed: ${item}"
+}
+
+/** Process a batch of items. Returns an array of confirmed strings. */
+def processBatch(items: string[]): string[] {
+  let results = fork(items) as item {
+    return confirmItem(item)
+  }
+  return results
+}
+
+/** Generate a list of items for a given category. Returns an array of strings like "category-1", "category-2". */
+def generateItems(category: string): string[] {
+  type ItemList = {
+    items: string[]
+  }
+  const result: ItemList = llm("Generate exactly 2 items for the category '${category}'. Each item should be formatted as '${category}-1' and '${category}-2'. Return them in the items field.")
+  return result.items
+}
+
+node main() {
+  const categories = ["alpha", "beta"]
+  let allResults: string[] = []
+  for (cat in categories) {
+    const items = generateItems(cat)
+    const confirmed = processBatch(items)
+    for (c in confirmed) {
+      allResults.push(c)
+    }
+  }
+  return allResults
+}

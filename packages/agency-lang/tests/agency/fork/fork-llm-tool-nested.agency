@@ -1,0 +1,21 @@
+def confirmItem(item: string): string {
+  interrupt("approve ${item}?")
+  return "confirmed: ${item}"
+}
+
+/** Search for items matching a query. Returns an array of result strings. */
+def search(query: string): string[] {
+  let results = fork(["${query}-1", "${query}-2"]) as item {
+    return confirmItem(item)
+  }
+  return results
+}
+
+node main() {
+  type Result = {
+    searches: string[]
+  }
+  uses search
+  const result: Result = llm("Please search for both 'cats' and 'dogs'. Return the searches field with all the search results combined into a single flat array.")
+  return result.searches
+}

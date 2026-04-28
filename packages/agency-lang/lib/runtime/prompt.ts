@@ -6,6 +6,7 @@ import {
   InterruptData,
   isDebugger,
   isInterrupt,
+  hasInterrupts,
   isRejected,
 } from "./interrupts.js";
 import { updateTokenStats, extractResponse } from "./utils.js";
@@ -398,6 +399,15 @@ async function executeToolCalls({
         };
       }
 
+      if (hasInterrupts(result)) {
+        // Fork inside a tool call returned multiple interrupts — propagate the array
+        return {
+          isInterrupt: true,
+          interrupt: result,
+          messages,
+        };
+      }
+
       messages.push(
         smoltalk.toolMessage(result, {
           tool_call_id: toolCall.id,
@@ -533,6 +543,12 @@ export async function runPrompt(args: {
           messages: messages.getMessages(),
           model: clientConfig.model,
         });
+
+        // Fork inside a tool call returns an interrupt array — propagate as-is
+        // (the fork already created a shared checkpoint for the array)
+        if (Array.isArray(interrupt)) {
+          return interrupt;
+        }
 
         if (interrupt.debugger === false) {
           // For real user interrupts, create a checkpoint at the LLM call site

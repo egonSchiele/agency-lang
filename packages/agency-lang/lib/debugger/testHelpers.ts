@@ -88,8 +88,7 @@ export async function freshImport(compiledFile: string): Promise<any> {
 export function makeDriver(mod: any, ui: DebuggerIO, opts: { checkpoints?: Checkpoint[] } = {}) {
   const driver = new DebuggerDriver({
     mod: {
-      approveInterrupt: mod.approveInterrupt,
-      respondToInterrupt: mod.respondToInterrupt,
+      respondToInterrupts: mod.respondToInterrupts,
       rewindFrom: mod.rewindFrom,
       __setDebugger: mod.__setDebugger,
       __getCheckpoints: mod.__getCheckpoints,

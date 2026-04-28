@@ -3,7 +3,7 @@ import { StateStack } from "./state/stateStack.js";
 import type { RuntimeContext } from "./state/context.js";
 import type { SourceLocationOpts } from "./state/checkpointStore.js";
 import type { HandlerFn } from "./types.js";
-import { isInterrupt, hasInterrupts } from "./interrupts.js";
+import { hasInterrupts } from "./interrupts.js";
 import { __pipeBind } from "./result.js";
 import { debugStep } from "./debugger.js";
 import { color } from "termcolors";
@@ -231,7 +231,7 @@ export class Runner {
     const result = await __pipeBind(input, fn);
     this.frame.locals[`__pipe_result_${this.stepPath(id)}`] = result;
 
-    if (isInterrupt(result)) {
+    if (hasInterrupts(result)) {
       await this.ctx.pendingPromises.awaitAll();
       if (this.nodeContext) {
         this.halt({ ...this.state, data: result });
@@ -575,15 +575,12 @@ export class Runner {
         for (let i = 0; i < settled.length; i++) {
           const s = settled[i];
           const branchKey = this.forkBranchKey(id, i);
-          if (s.status === "fulfilled" && isInterrupt(s.value)) {
-            interrupts.push(s.value);
-            // Store interruptId on the branch so it survives checkpoint restore
-            if (this.frame.branches![branchKey]) {
-              this.frame.branches![branchKey].interruptId = s.value.interruptId;
-            }
-          } else if (s.status === "fulfilled" && hasInterrupts(s.value)) {
-            // Nested fork returned multiple interrupts — flatten into our batch
+          if (s.status === "fulfilled" && hasInterrupts(s.value)) {
             interrupts.push(...s.value);
+            // Store interruptId on the branch so it survives checkpoint restore
+            if (this.frame.branches![branchKey] && s.value.length === 1) {
+              this.frame.branches![branchKey].interruptId = s.value[0].interruptId;
+            }
           } else if (s.status === "fulfilled") {
             // Cache the completed result on the branch so it survives interrupt cycles
             if (this.frame.branches![branchKey]) {
@@ -612,7 +609,7 @@ export class Runner {
         result = settled.map((s) => (s as PromiseFulfilledResult<any>).value);
       } else {
         result = await Promise.race(promises);
-        if (isInterrupt(result)) return [result];
+        if (hasInterrupts(result)) return result;
       }
 
       // Clean up branch state after successful completion

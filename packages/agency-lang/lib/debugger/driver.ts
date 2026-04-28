@@ -19,16 +19,9 @@ import { round } from "@/utils.js";
 
 // Functions from the compiled module that are bound to __globalCtx
 type ModuleFunctions = {
-  approveInterrupt: (
-    interrupt: Interrupt,
-    opts?: {
-      overrides?: Record<string, unknown>;
-      metadata?: Record<string, any>;
-    },
-  ) => Promise<any>;
-  respondToInterrupt: (
-    interrupt: Interrupt,
-    response: InterruptResponse,
+  respondToInterrupts: (
+    interrupts: Interrupt[],
+    responses: InterruptResponse[],
     opts?: {
       overrides?: Record<string, unknown>;
       metadata?: Record<string, any>;
@@ -245,7 +238,7 @@ export class DebuggerDriver {
 
   private async handleInterrupt(interrupt: Interrupt): Promise<any> {
     const input = await this.ui.promptForInput(
-      "approve / reject / resolve <value> / modify key=value",
+      "approve / reject / resolve <value>",
     );
     const trimmed = input.trim();
 
@@ -254,7 +247,7 @@ export class DebuggerDriver {
       this.debuggerState.resetCallDepth();
       this.ui.state.resetCallStack();
       return await this.resumeInterrupt(() =>
-        this.mod.approveInterrupt(interrupt, {
+        this.mod.respondToInterrupts([interrupt], [{ type: "approve" }], {
           metadata: {
             callbacks: this.getCallbacks(),
             debugger: this.debuggerState,
@@ -268,16 +261,12 @@ export class DebuggerDriver {
       this.debuggerState.resetCallDepth();
       this.ui.state.resetCallStack();
       return await this.resumeInterrupt(() =>
-        this.mod.respondToInterrupt(
-          interrupt,
-          { type: "reject" },
-          {
-            metadata: {
-              callbacks: this.getCallbacks(),
-              debugger: this.debuggerState,
-            },
+        this.mod.respondToInterrupts([interrupt], [{ type: "reject" }], {
+          metadata: {
+            callbacks: this.getCallbacks(),
+            debugger: this.debuggerState,
           },
-        ),
+        }),
       );
     }
 
@@ -293,53 +282,16 @@ export class DebuggerDriver {
       this.debuggerState.resetCallDepth();
       this.ui.state.resetCallStack();
       return await this.resumeInterrupt(() =>
-        this.mod.respondToInterrupt(
-          interrupt,
-          { type: "resolve", value },
-          {
-            metadata: {
-              callbacks: this.getCallbacks(),
-              debugger: this.debuggerState,
-            },
+        this.mod.respondToInterrupts([interrupt], [{ type: "approve", value } as any], {
+          metadata: {
+            callbacks: this.getCallbacks(),
+            debugger: this.debuggerState,
           },
-        ),
+        }),
       );
     }
 
-    if (trimmed.startsWith("modify ")) {
-      const rest = trimmed.slice("modify ".length).trim();
-      const overrides: Record<string, unknown> = {};
-      for (const pair of rest.split(/\s+/)) {
-        const eqIdx = pair.indexOf("=");
-        if (eqIdx === -1) continue;
-        const key = pair.slice(0, eqIdx);
-        const valStr = pair.slice(eqIdx + 1);
-        try {
-          overrides[key] = JSON.parse(valStr);
-        } catch {
-          overrides[key] = valStr;
-        }
-      }
-      this.ui.state.log(
-        `Modified interrupt args: ${JSON.stringify(overrides)}`,
-      );
-      this.debuggerState.resetCallDepth();
-      this.ui.state.resetCallStack();
-      return await this.resumeInterrupt(() =>
-        this.mod.respondToInterrupt(
-          interrupt,
-          { type: "modify", newArguments: overrides },
-          {
-            metadata: {
-              callbacks: this.getCallbacks(),
-              debugger: this.debuggerState,
-            },
-          },
-        ),
-      );
-    }
-
-    this.ui.state.log(`Unknown response: "${trimmed}". Try: approve, reject, resolve <value>, modify key=value`);
+    this.ui.state.log(`Unknown response: "${trimmed}". Try: approve, reject, resolve <value>`);
     return { data: interrupt };
   }
 
@@ -460,16 +412,12 @@ export class DebuggerDriver {
         this.debuggerState.resetCallDepth();
         this.ui.state.resetCallStack();
         return await this.resumeInterrupt(() =>
-          this.mod.respondToInterrupt(
-            interrupt,
-            { type: "reject" },
-            {
-              metadata: {
-                callbacks: this.getCallbacks(),
-                debugger: this.debuggerState,
-              },
+          this.mod.respondToInterrupts([interrupt], [{ type: "reject" }], {
+            metadata: {
+              callbacks: this.getCallbacks(),
+              debugger: this.debuggerState,
             },
-          ),
+          }),
         );
       }
       case "resolve": {
@@ -479,35 +427,12 @@ export class DebuggerDriver {
         this.debuggerState.resetCallDepth();
         this.ui.state.resetCallStack();
         return await this.resumeInterrupt(() =>
-          this.mod.respondToInterrupt(
-            interrupt,
-            { type: "resolve", value: command.value },
-            {
-              metadata: {
-                callbacks: this.getCallbacks(),
-                debugger: this.debuggerState,
-              },
+          this.mod.respondToInterrupts([interrupt], [{ type: "approve", value: command.value } as any], {
+            metadata: {
+              callbacks: this.getCallbacks(),
+              debugger: this.debuggerState,
             },
-          ),
-        );
-      }
-      case "modify": {
-        this.ui.state.log(
-          `Modified interrupt args: ${JSON.stringify(command.overrides)}`,
-        );
-        this.debuggerState.resetCallDepth();
-        this.ui.state.resetCallStack();
-        return await this.resumeInterrupt(() =>
-          this.mod.respondToInterrupt(
-            interrupt,
-            { type: "modify", newArguments: command.overrides },
-            {
-              metadata: {
-                callbacks: this.getCallbacks(),
-                debugger: this.debuggerState,
-              },
-            },
-          ),
+          }),
         );
       }
       case "showCheckpoints": {
@@ -585,7 +510,7 @@ export class DebuggerDriver {
     this.ui.state.resetCallStack();
 
     return await this.resumeInterrupt(() =>
-      this.mod.approveInterrupt(interrupt, {
+      this.mod.respondToInterrupts([interrupt], [{ type: "approve" }], {
         overrides,
         metadata: {
           callbacks: this.getCallbacks(),

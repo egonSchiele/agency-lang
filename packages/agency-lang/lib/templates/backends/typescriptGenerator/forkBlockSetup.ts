@@ -15,7 +15,7 @@ try {
 return runner.halted ? runner.haltResult : undefined;
 } finally {
 // Don't pop the frame if this thread interrupted — preserve it for the fork checkpoint
-if (!(runner.halted && (isInterrupt(runner.haltResult) || hasInterrupts(runner.haltResult)))) {
+if (!(runner.halted && hasInterrupts(runner.haltResult))) {
   __forkBranchStack.pop();
 }
 }

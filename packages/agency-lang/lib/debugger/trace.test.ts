@@ -55,8 +55,7 @@ describe("Trace integration with debugger", () => {
       console.log("[trace-test] Step 4: Creating DebuggerDriver");
       const driver = new DebuggerDriver({
         mod: {
-          approveInterrupt: mod.approveInterrupt,
-          respondToInterrupt: mod.respondToInterrupt,
+          respondToInterrupts: mod.respondToInterrupts,
           rewindFrom: mod.rewindFrom,
           __setDebugger: mod.__setDebugger,
           __getCheckpoints: mod.__getCheckpoints,

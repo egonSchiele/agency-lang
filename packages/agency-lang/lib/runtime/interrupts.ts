@@ -43,8 +43,6 @@ export type InterruptData = {
 
   // which tool call caused the interrupt?
   toolCall?: smoltalk.ToolCallJSON;
-
-  interruptResponse?: InterruptResponse;
 };
 
 export type InterruptState = {
@@ -177,12 +175,11 @@ export async function respondToInterrupts(args: {
     );
   }
 
-  // Build ID-keyed response map (includes interruptData for tool call resume)
-  const responseMap: Record<string, { response: InterruptResponse; interruptData?: InterruptData }> = {};
+  // Build ID-keyed response map
+  const responseMap: Record<string, { response: InterruptResponse }> = {};
   for (let i = 0; i < interrupts.length; i++) {
     responseMap[interrupts[i].interruptId] = {
       response: deepClone(responses[i]),
-      interruptData: interrupts[i].interruptData ? deepClone(interrupts[i].interruptData) : undefined,
     };
   }
 

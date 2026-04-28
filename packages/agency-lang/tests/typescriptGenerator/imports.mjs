@@ -83,14 +83,10 @@ export function readSkill({filepath}: {filepath: string}): string {
   return _readSkillRaw({ filepath, dirname: __dirname });
 }
 
-// Handler result builtins (used in generated 'with' blocks)
-function __handlerApprove(value?: any) { return { type: "approved" as const, value }; }
-function __handlerReject(value?: any) { return { type: "rejected" as const, value }; }
-function __handlerPropagate() { return { type: "propagated" as const }; }
-
-// Interrupt response constructors (exported for TypeScript callers)
+// Handler result builtins and interrupt response constructors (unified types)
 export function approve(value?: any) { return { type: "approve" as const, value }; }
 export function reject(value?: any) { return { type: "reject" as const, value }; }
+function propagate() { return { type: "propagate" as const }; }
 
 // Interrupt and rewind re-exports bound to this module's context
 export { interrupt, isInterrupt, hasInterrupts, isDebugger };

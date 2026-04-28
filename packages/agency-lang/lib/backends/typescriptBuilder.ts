@@ -337,7 +337,6 @@ export class TypeScriptBuilder {
   // These are NOT AgencyFunction instances.
   private static DIRECT_CALL_FUNCTIONS = new Set([
     "approve", "reject", "propagate",
-    "__handlerApprove", "__handlerReject", "__handlerPropagate",
     "success", "failure",
     "isInterrupt", "hasInterrupts", "isDebugger", "isRejected", "isApproved",
     "isSuccess", "isFailure", "setLLMClient", "registerTools"
@@ -2019,17 +2018,12 @@ export class TypeScriptBuilder {
         .done();
     }
 
-    // Inside handler bodies, approve/reject/propagate map to handler builtins
-    const resolvedName = (this.insideHandlerBody && TypeScriptBuilder.HANDLER_BUILTIN_MAP[functionName])
-      ? TypeScriptBuilder.HANDLER_BUILTIN_MAP[functionName]
-      : functionName;
-
     // __-prefixed helpers and DIRECT_CALL_FUNCTIONS: emit plain direct call
     if (
-      resolvedName.startsWith("__") ||
-      TypeScriptBuilder.DIRECT_CALL_FUNCTIONS.has(resolvedName)
+      functionName.startsWith("__") ||
+      TypeScriptBuilder.DIRECT_CALL_FUNCTIONS.has(functionName)
     ) {
-      return this.emitDirectFunctionCall(node, resolvedName, shouldAwait);
+      return this.emitDirectFunctionCall(node, functionName, shouldAwait);
     }
 
     // Everything else goes through __call runtime dispatch
@@ -2877,21 +2871,14 @@ export class TypeScriptBuilder {
     }
   }
 
-  private static HANDLER_BUILTIN_MAP: Record<string, string> = {
-    approve: "__handlerApprove",
-    reject: "__handlerReject",
-    propagate: "__handlerPropagate",
-  };
-
   private buildHandlerArrow(handlerName: string): TsNode {
-    const internalName = TypeScriptBuilder.HANDLER_BUILTIN_MAP[handlerName] ?? handlerName;
     const args = handlerName === "propagate" ? [] : [ts.id("__data")];
 
-    if (TypeScriptBuilder.DIRECT_CALL_FUNCTIONS.has(internalName)) {
+    if (TypeScriptBuilder.DIRECT_CALL_FUNCTIONS.has(handlerName)) {
       // Built-in handler (approve/reject/propagate): plain JS function, call directly
       return ts.arrowFn(
         [{ name: "__data", typeAnnotation: "any" }],
-        ts.call(ts.id(internalName), args),
+        ts.call(ts.id(handlerName), args),
         { async: true },
       );
     }

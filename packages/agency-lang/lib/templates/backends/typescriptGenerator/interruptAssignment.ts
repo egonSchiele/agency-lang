@@ -3,9 +3,10 @@
 // Any manual changes will be lost.
 import { apply } from "typestache";
 
-export const template = `// Resume path: check for a response by interruptId
-const __response = __ctx.getInterruptResponse(__self.{{{interruptIdKey:string}}});
+export const template = `// Resume path: check for a response by interruptId, fall back to interruptData for legacy path
+const __response = __ctx.getInterruptResponse(__self.{{{interruptIdKey:string}}}) ?? __state?.interruptData?.interruptResponse;
 if (__response) {
+  if (__state?.interruptData) __state.interruptData.interruptResponse = null;
   if (__response.type === "approve") {
     if (__response.value !== undefined) {
       {{{assignResolve}}};

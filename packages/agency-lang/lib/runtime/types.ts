@@ -50,9 +50,9 @@ export type TokenStats = {
   cost: CostEstimate;
 };
 
-export type Rejected = { type: "rejected"; value?: any };
-export type Approved = { type: "approved"; value?: any };
-export type Propagated = { type: "propagated" };
+export type Rejected = { type: "reject"; value?: any };
+export type Approved = { type: "approve"; value?: any };
+export type Propagated = { type: "propagate" };
 
 export type HandlerFn = (data: any) => Promise<Approved | Rejected | Propagated | undefined>;
 

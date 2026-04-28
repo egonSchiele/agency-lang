@@ -68,14 +68,10 @@ export function readSkill({filepath}: {filepath: string}): string {
   return _readSkillRaw({ filepath, dirname: __dirname });
 }
 
-// Handler result builtins (used in generated 'with' blocks)
-function __handlerApprove(value?: any) { return { type: "approved" as const, value }; }
-function __handlerReject(value?: any) { return { type: "rejected" as const, value }; }
-function __handlerPropagate() { return { type: "propagated" as const }; }
-
-// Interrupt response constructors (exported for TypeScript callers)
+// Handler result builtins and interrupt response constructors (unified types)
 export function approve(value?: any) { return { type: "approve" as const, value }; }
 export function reject(value?: any) { return { type: "reject" as const, value }; }
+function propagate() { return { type: "propagate" as const }; }
 
 // Interrupt and rewind re-exports bound to this module's context
 export { interrupt, isInterrupt, hasInterrupts, isDebugger };
@@ -171,9 +167,10 @@ if (__ctx._pendingArgOverrides) {
 
   try {
     await runner.step(0, async (runner) => {
-// Resume path: check for a response by interruptId
-const __response = __ctx.getInterruptResponse(__self.__interruptId_0);
+// Resume path: check for a response by interruptId, fall back to interruptData for legacy path
+const __response = __ctx.getInterruptResponse(__self.__interruptId_0) ?? __state?.interruptData?.interruptResponse;
 if (__response) {
+  if (__state?.interruptData) __state.interruptData.interruptResponse = null;
   if (__response.type === "approve") {
     // approved, continue execution
   } else if (__response.type === "reject" && !__state.isToolCall) {
@@ -276,7 +273,7 @@ let __functionCompleted = false;
   })
   const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "withModifier.agency", scopeName: "main" });
   try {
-    await runner.handle(0, async (__data: any) => __handlerApprove(__data), async (runner) => {
+    await runner.handle(0, async (__data: any) => approve(__data), async (runner) => {
 await runner.step(0, async (runner) => {
 __stack.locals.result = await __call(foo, {
           type: "positional",

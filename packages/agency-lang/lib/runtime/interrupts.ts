@@ -111,11 +111,11 @@ export function isDebugger(obj: any): obj is Interrupt {
 }
 
 export function isRejected(obj: any): obj is Rejected {
-  return obj && obj.type === "rejected";
+  return obj && obj.type === "reject";
 }
 
 export function isApproved(obj: any): obj is Approved {
-  return obj && obj.type === "approved";
+  return obj && obj.type === "approve";
 }
 
 export async function interruptWithHandlers<T = any>(
@@ -145,27 +145,27 @@ export async function interruptWithHandlers<T = any>(
     if (result === undefined) {
       continue;
     }
-    if (result.type === "rejected") {
-      return { type: "rejected", value: result.value };
+    if (result.type === "reject") {
+      return { type: "reject", value: result.value };
     }
-    if (result.type === "propagated") {
+    if (result.type === "propagate") {
       hasPropagation = true;
       continue;
     }
-    if (result.type === "approved") {
+    if (result.type === "approve") {
       hasApproval = true;
       approvedValue = result.value;
       continue;
     }
     throw new Error(
-      `Handler returned invalid result type: ${JSON.stringify(result)}. Expected "approved", "rejected", "propagated", or undefined.`,
+      `Handler returned invalid result type: ${JSON.stringify(result)}. Expected "approve", "reject", "propagate", or undefined.`,
     );
   }
   if (hasPropagation) {
     return interrupt(data, ctx.getRunId());
   }
   if (hasApproval) {
-    return { type: "approved", value: approvedValue };
+    return { type: "approve", value: approvedValue };
   }
   return interrupt(data, ctx.getRunId());
 }
@@ -249,6 +249,20 @@ export async function respondToInterrupts(args: {
     execCtx.debuggerState = metadata.debugger;
   }
 
+  // For single-interrupt cases, pass interruptData to graph.run for node transitions
+  // and tool call resume. For multi-interrupt (fork) cases, each thread handles its own
+  // resume via the branch stack and ctx.getInterruptResponse().
+  let interruptData: InterruptData | undefined;
+  if (interrupts.length === 1) {
+    const intr = interrupts[0];
+    interruptData = intr.interruptData ? deepClone(intr.interruptData) : {};
+    if (intr.debugger && !intr.interruptData?.toolCall) {
+      interruptData = undefined;
+    } else if (interruptData) {
+      interruptData.interruptResponse = responses[0];
+    }
+  }
+
   let nodeName = checkpoint.nodeId;
   try {
     while (true) {
@@ -259,6 +273,7 @@ export async function respondToInterrupts(args: {
             data: {},
             ctx: execCtx,
             isResume: true,
+            interruptData,
           },
           { onNodeEnter: (id) => execCtx.stateStack.nodesTraversed.push(id) },
         );

@@ -1,0 +1,15 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Fork where interrupt is two function calls deep — stateStack propagates through the call chain",
+      "input": "",
+      "expectedOutput": "[\"inner: a\",\"inner: b\"]",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "interruptHandlers": [
+        { "action": "approve" },
+        { "action": "approve" }
+      ]
+    }
+  ]
+}

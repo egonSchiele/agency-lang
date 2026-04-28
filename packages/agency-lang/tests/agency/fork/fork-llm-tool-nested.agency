@@ -15,7 +15,6 @@ node main() {
   type Result = {
     searches: string[]
   }
-  uses search
-  const result: Result = llm("Please search for both 'cats' and 'dogs'. Return the searches field with all the search results combined into a single flat array.")
+  const result: Result = llm("Please search for both 'cats' and 'dogs'. Return the searches field with all the search results combined into a single flat array.", { tools: [search] })
   return result.searches
 }

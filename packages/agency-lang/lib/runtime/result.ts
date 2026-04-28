@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { hasInterrupts } from "./interrupts.js";
 
 export type ResultValue = ResultSuccess | ResultFailure;
 
@@ -82,7 +83,7 @@ export async function __pipeBind(result: any, fn: (value: any) => any): Promise<
   const value = isSuccess(result) ? result.value : result;
   const output = await fn(value);
   // Propagate interrupts directly — they must bubble up to the node runner
-  if (output != null && typeof output === "object" && output.type === "interrupt") {
+  if (hasInterrupts(output)) {
     return output;
   }
   // Smart bind/fmap: if fn returns a Result, use it directly

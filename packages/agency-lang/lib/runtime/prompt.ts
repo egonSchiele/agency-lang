@@ -314,6 +314,8 @@ export async function runPrompt(args: {
               tool_call_id: toolCall.id,
               name: toolCall.name,
             });
+            // Remove the tool so the LLM can't retry it
+            removedTools.push(handler.name);
             delete stack.branches[branchKey];
             continue;
           }

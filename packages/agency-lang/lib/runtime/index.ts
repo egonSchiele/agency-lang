@@ -55,11 +55,6 @@ export {
   reject,
   interruptWithHandlers,
   respondToInterrupts,
-  respondToInterrupt,
-  approveInterrupt,
-  rejectInterrupt,
-  modifyInterrupt,
-  resolveInterrupt,
 } from "./interrupts.js";
 
 export { isGenerator, handleStreamingResponse } from "./streaming.js";

@@ -3,13 +3,12 @@
 // Any manual changes will be lost.
 import { apply } from "typestache";
 
-export const template = `// Resume path: check for a response by interruptId, fall back to interruptData for legacy path
-const __response = __ctx.getInterruptResponse(__self.{{{interruptIdKey:string}}}) ?? __state?.interruptData?.interruptResponse;
+export const template = `// Resume path: check for a response by interruptId
+const __response = __ctx.getInterruptResponse(__self.{{{interruptIdKey:string}}});
 if (__response) {
-  if (__state?.interruptData) __state.interruptData.interruptResponse = null;
   if (__response.type === "approve") {
     // approved, continue execution
-  } else if (__response.type === "reject" && !__state.isToolCall) {
+  } else if (__response.type === "reject" && !__isForked) {
     // rejected, halt
     // tool calls will instead tell the llm that the call was rejected
     {{#nodeContext}}
@@ -33,12 +32,12 @@ if (__response) {
     return;
   }
   if (!isApproved(__handlerResult)) {
-    // No handler — propagate interrupt to TypeScript caller
+    // No handler — propagate interrupt array to TypeScript caller
     // Store interruptId on frame BEFORE checkpoint so it's captured in the snapshot
-    __self.{{{interruptIdKey:string}}} = __handlerResult.interruptId;
+    __self.{{{interruptIdKey:string}}} = __handlerResult[0].interruptId;
     const __checkpointId = __ctx.checkpoints.create(__ctx, { moduleId: {{{moduleId}}}, scopeName: {{{scopeName}}}, stepPath: {{{stepPath}}} });
-    __handlerResult.checkpointId = __checkpointId;
-    __handlerResult.checkpoint = __ctx.checkpoints.get(__checkpointId);
+    __handlerResult[0].checkpointId = __checkpointId;
+    __handlerResult[0].checkpoint = __ctx.checkpoints.get(__checkpointId);
     {{#nodeContext}}
     runner.halt({ messages: __threads, data: __handlerResult });
     {{/nodeContext}}

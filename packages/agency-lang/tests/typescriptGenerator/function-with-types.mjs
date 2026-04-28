@@ -12,11 +12,6 @@ import {
   checkpoint as __checkpoint_impl, getCheckpoint as __getCheckpoint_impl, restore as __restore_impl,
   interrupt, isInterrupt, hasInterrupts, isDebugger, isRejected, isApproved, interruptWithHandlers, debugStep,
   respondToInterrupts as _respondToInterrupts,
-  respondToInterrupt as _respondToInterrupt,
-  approveInterrupt as _approveInterrupt,
-  rejectInterrupt as _rejectInterrupt,
-  resolveInterrupt as _resolveInterrupt,
-  modifyInterrupt as _modifyInterrupt,
   rewindFrom as _rewindFrom,
   RestoreSignal,
   deepClone as __deepClone,
@@ -76,11 +71,6 @@ function propagate() { return { type: "propagate" as const }; }
 // Interrupt and rewind re-exports bound to this module's context
 export { interrupt, isInterrupt, hasInterrupts, isDebugger };
 export const respondToInterrupts = (interrupts: Interrupt[], responses: InterruptResponse[], opts?: { overrides?: Record<string, unknown>; metadata?: Record<string, any> }) => _respondToInterrupts({ ctx: __globalCtx, interrupts, responses, overrides: opts?.overrides, metadata: opts?.metadata });
-export const respondToInterrupt = (interrupt: Interrupt, response: InterruptResponse, opts?: { overrides?: Record<string, unknown>; metadata?: Record<string, any> }) => _respondToInterrupt({ ctx: __globalCtx, interrupt, interruptResponse: response, overrides: opts?.overrides, metadata: opts?.metadata });
-export const approveInterrupt = (interrupt: Interrupt, opts?: { overrides?: Record<string, unknown>; metadata?: Record<string, any> }) => _approveInterrupt({ ctx: __globalCtx, interrupt, overrides: opts?.overrides, metadata: opts?.metadata });
-export const rejectInterrupt = (interrupt: Interrupt, opts?: { overrides?: Record<string, unknown>; metadata?: Record<string, any> }) => _rejectInterrupt({ ctx: __globalCtx, interrupt, overrides: opts?.overrides, metadata: opts?.metadata });
-export const modifyInterrupt = (interrupt: Interrupt, newArguments: Record<string, any>, opts?: { overrides?: Record<string, unknown>; metadata?: Record<string, any> }) => _modifyInterrupt({ ctx: __globalCtx, interrupt, newArguments, overrides: opts?.overrides, metadata: opts?.metadata });
-export const resolveInterrupt = (interrupt: Interrupt, value: any, opts?: { overrides?: Record<string, unknown>; metadata?: Record<string, any> }) => _resolveInterrupt({ ctx: __globalCtx, interrupt, value, overrides: opts?.overrides, metadata: opts?.metadata });
 export const rewindFrom = (checkpoint: RewindCheckpoint, overrides: Record<string, unknown>, opts?: { metadata?: Record<string, any> }) => _rewindFrom({ ctx: __globalCtx, checkpoint, overrides, metadata: opts?.metadata });
 
 export const __setDebugger = (dbg: any) => { __globalCtx.debuggerState = dbg; };
@@ -192,7 +182,7 @@ __stack.locals.result = await runPrompt({
         checkpointInfo: runner.getCheckpointInfo()
       });
 // halt if this is an interrupt
-if ((isInterrupt(__stack.locals.result) || hasInterrupts(__stack.locals.result))) {
+if (hasInterrupts(__stack.locals.result)) {
         await __ctx.pendingPromises.awaitAll()
         runner.halt(__stack.locals.result)
         return;
@@ -316,7 +306,7 @@ __stack.locals.message = await runPrompt({
         checkpointInfo: runner.getCheckpointInfo()
       });
 // halt if this is an interrupt
-if ((isInterrupt(__stack.locals.message) || hasInterrupts(__stack.locals.message))) {
+if (hasInterrupts(__stack.locals.message)) {
         await __ctx.pendingPromises.awaitAll()
         runner.halt(__stack.locals.message)
         return;
@@ -441,7 +431,7 @@ __stack.locals.output = await runPrompt({
         checkpointInfo: runner.getCheckpointInfo()
       });
 // halt if this is an interrupt
-if ((isInterrupt(__stack.locals.output) || hasInterrupts(__stack.locals.output))) {
+if (hasInterrupts(__stack.locals.output)) {
         await __ctx.pendingPromises.awaitAll()
         runner.halt(__stack.locals.output)
         return;
@@ -565,7 +555,7 @@ __stack.locals.result = await runPrompt({
         checkpointInfo: runner.getCheckpointInfo()
       });
 // halt if this is an interrupt
-if ((isInterrupt(__stack.locals.result) || hasInterrupts(__stack.locals.result))) {
+if (hasInterrupts(__stack.locals.result)) {
         await __ctx.pendingPromises.awaitAll()
         runner.halt(__stack.locals.result)
         return;
@@ -684,7 +674,7 @@ __stack.locals.result = await runPrompt({
         checkpointInfo: runner.getCheckpointInfo()
       });
 // halt if this is an interrupt
-if ((isInterrupt(__stack.locals.result) || hasInterrupts(__stack.locals.result))) {
+if (hasInterrupts(__stack.locals.result)) {
         await __ctx.pendingPromises.awaitAll()
         runner.halt(__stack.locals.result)
         return;
@@ -775,7 +765,7 @@ const __funcResult = await __call(print, {
         stateStack: __stateStack,
         isForked: __isForked
       });
-if ((isInterrupt(__funcResult) || hasInterrupts(__funcResult))) {
+if (hasInterrupts(__funcResult)) {
         await __ctx.pendingPromises.awaitAll()
         runner.halt({
           ...__state,
@@ -853,7 +843,7 @@ __stack.locals.sum = await __call(add, {
         stateStack: __stateStack,
         isForked: __isForked
       });
-if ((isInterrupt(__stack.locals.sum) || hasInterrupts(__stack.locals.sum))) {
+if (hasInterrupts(__stack.locals.sum)) {
         await __ctx.pendingPromises.awaitAll()
         runner.halt({
           ...__state,
@@ -873,7 +863,7 @@ __stack.locals.greeting = await __call(greet, {
         stateStack: __stateStack,
         isForked: __isForked
       });
-if ((isInterrupt(__stack.locals.greeting) || hasInterrupts(__stack.locals.greeting))) {
+if (hasInterrupts(__stack.locals.greeting)) {
         await __ctx.pendingPromises.awaitAll()
         runner.halt({
           ...__state,
@@ -893,7 +883,7 @@ __stack.locals.labeled = await __call(mixed, {
         stateStack: __stateStack,
         isForked: __isForked
       });
-if ((isInterrupt(__stack.locals.labeled) || hasInterrupts(__stack.locals.labeled))) {
+if (hasInterrupts(__stack.locals.labeled)) {
         await __ctx.pendingPromises.awaitAll()
         runner.halt({
           ...__state,
@@ -913,7 +903,7 @@ __stack.locals.processed = await __call(processArray, {
         stateStack: __stateStack,
         isForked: __isForked
       });
-if ((isInterrupt(__stack.locals.processed) || hasInterrupts(__stack.locals.processed))) {
+if (hasInterrupts(__stack.locals.processed)) {
         await __ctx.pendingPromises.awaitAll()
         runner.halt({
           ...__state,
@@ -933,7 +923,7 @@ __stack.locals.flexResult = await __call(flexible, {
         stateStack: __stateStack,
         isForked: __isForked
       });
-if ((isInterrupt(__stack.locals.flexResult) || hasInterrupts(__stack.locals.flexResult))) {
+if (hasInterrupts(__stack.locals.flexResult)) {
         await __ctx.pendingPromises.awaitAll()
         runner.halt({
           ...__state,

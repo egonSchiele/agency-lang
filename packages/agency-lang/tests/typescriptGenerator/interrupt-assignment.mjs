@@ -12,11 +12,6 @@ import {
   checkpoint as __checkpoint_impl, getCheckpoint as __getCheckpoint_impl, restore as __restore_impl,
   interrupt, isInterrupt, hasInterrupts, isDebugger, isRejected, isApproved, interruptWithHandlers, debugStep,
   respondToInterrupts as _respondToInterrupts,
-  respondToInterrupt as _respondToInterrupt,
-  approveInterrupt as _approveInterrupt,
-  rejectInterrupt as _rejectInterrupt,
-  resolveInterrupt as _resolveInterrupt,
-  modifyInterrupt as _modifyInterrupt,
   rewindFrom as _rewindFrom,
   RestoreSignal,
   deepClone as __deepClone,
@@ -76,11 +71,6 @@ function propagate() { return { type: "propagate" as const }; }
 // Interrupt and rewind re-exports bound to this module's context
 export { interrupt, isInterrupt, hasInterrupts, isDebugger };
 export const respondToInterrupts = (interrupts: Interrupt[], responses: InterruptResponse[], opts?: { overrides?: Record<string, unknown>; metadata?: Record<string, any> }) => _respondToInterrupts({ ctx: __globalCtx, interrupts, responses, overrides: opts?.overrides, metadata: opts?.metadata });
-export const respondToInterrupt = (interrupt: Interrupt, response: InterruptResponse, opts?: { overrides?: Record<string, unknown>; metadata?: Record<string, any> }) => _respondToInterrupt({ ctx: __globalCtx, interrupt, interruptResponse: response, overrides: opts?.overrides, metadata: opts?.metadata });
-export const approveInterrupt = (interrupt: Interrupt, opts?: { overrides?: Record<string, unknown>; metadata?: Record<string, any> }) => _approveInterrupt({ ctx: __globalCtx, interrupt, overrides: opts?.overrides, metadata: opts?.metadata });
-export const rejectInterrupt = (interrupt: Interrupt, opts?: { overrides?: Record<string, unknown>; metadata?: Record<string, any> }) => _rejectInterrupt({ ctx: __globalCtx, interrupt, overrides: opts?.overrides, metadata: opts?.metadata });
-export const modifyInterrupt = (interrupt: Interrupt, newArguments: Record<string, any>, opts?: { overrides?: Record<string, unknown>; metadata?: Record<string, any> }) => _modifyInterrupt({ ctx: __globalCtx, interrupt, newArguments, overrides: opts?.overrides, metadata: opts?.metadata });
-export const resolveInterrupt = (interrupt: Interrupt, value: any, opts?: { overrides?: Record<string, unknown>; metadata?: Record<string, any> }) => _resolveInterrupt({ ctx: __globalCtx, interrupt, value, overrides: opts?.overrides, metadata: opts?.metadata });
 export const rewindFrom = (checkpoint: RewindCheckpoint, overrides: Record<string, unknown>, opts?: { metadata?: Record<string, any> }) => _rewindFrom({ ctx: __globalCtx, checkpoint, overrides, metadata: opts?.metadata });
 
 export const __setDebugger = (dbg: any) => { __globalCtx.debuggerState = dbg; };
@@ -148,10 +138,9 @@ let __functionCompleted = false;
   const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "interrupt-assignment.agency", scopeName: "main" });
   try {
     await runner.step(0, async (runner) => {
-// Resume path: check for a response by interruptId, fall back to interruptData for legacy path
-const __response = __ctx.getInterruptResponse(__self.__interruptId_0) ?? __state?.interruptData?.interruptResponse;
+// Resume path: check for a response by interruptId
+const __response = __ctx.getInterruptResponse(__self.__interruptId_0);
 if (__response) {
-  if (__state?.interruptData) __state.interruptData.interruptResponse = null;
   if (__response.type === "approve") {
     if (__response.value !== undefined) {
       __stack.locals.name = __response.value;;
@@ -179,12 +168,12 @@ if (__response) {
   if (isApproved(__handlerResult)) {
     __stack.locals.name = __handlerResult.value;;
   } else {
-    // No handler — propagate interrupt to TypeScript caller
+    // No handler — propagate interrupt array to TypeScript caller
     // Store interruptId on frame BEFORE checkpoint so it's captured in the snapshot
-    __self.__interruptId_0 = __handlerResult.interruptId;
+    __self.__interruptId_0 = __handlerResult[0].interruptId;
     const __checkpointId = __ctx.checkpoints.create(__ctx, { moduleId: "interrupt-assignment.agency", scopeName: "main", stepPath: "0" });
-    __handlerResult.checkpointId = __checkpointId;
-    __handlerResult.checkpoint = __ctx.checkpoints.get(__checkpointId);
+    __handlerResult[0].checkpointId = __checkpointId;
+    __handlerResult[0].checkpoint = __ctx.checkpoints.get(__checkpointId);
     
     runner.halt({ messages: __threads, data: __handlerResult });
     
@@ -207,7 +196,7 @@ __stack.locals.greeting = await runPrompt({
         checkpointInfo: runner.getCheckpointInfo()
       });
 // halt if this is an interrupt
-if ((isInterrupt(__stack.locals.greeting) || hasInterrupts(__stack.locals.greeting))) {
+if (hasInterrupts(__stack.locals.greeting)) {
         await __ctx.pendingPromises.awaitAll()
         runner.halt({
           messages: __threads,

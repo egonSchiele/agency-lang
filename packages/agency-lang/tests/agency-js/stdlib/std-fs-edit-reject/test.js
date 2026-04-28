@@ -1,14 +1,14 @@
 import { mkdtempSync, writeFileSync, readFileSync } from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
-import { runEdit, rejectInterrupt } from "./agent.js";
+import { runEdit, rejectInterrupt, respondToInterrupts, reject } from "./agent.js";
 
 const TMP = mkdtempSync(join(tmpdir(), "agency-edit-reject-"));
 
 const path = join(TMP, "reject.txt");
 writeFileSync(path, "alpha\n");
 const r = await runEdit(path, "alpha", "OMEGA", false);
-const rejected = await rejectInterrupt(r.data);
+const rejected = await respondToInterrupts(r.data, [reject()]);
 const contents = readFileSync(path, "utf8");
 
 writeFileSync(

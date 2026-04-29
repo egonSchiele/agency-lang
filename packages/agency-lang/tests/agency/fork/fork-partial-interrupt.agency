@@ -1,0 +1,13 @@
+def maybeInterrupt(item: string): string {
+  if (item == "b") {
+    interrupt("approve ${item}?")
+  }
+  return "done: ${item}"
+}
+
+node main() {
+  let results = fork(["a", "b", "c"]) as item {
+    return maybeInterrupt(item)
+  }
+  return results
+}

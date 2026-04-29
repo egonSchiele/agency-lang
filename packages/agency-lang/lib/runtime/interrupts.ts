@@ -1,4 +1,5 @@
 import * as smoltalk from "smoltalk";
+import { nanoid } from "nanoid";
 import { AgencyCancelledError, RestoreSignal } from "./errors.js";
 import { applyOverrides } from "./rewind.js";
 import { Checkpoint } from "./state/checkpointStore.js";
@@ -18,29 +19,21 @@ export type InterruptApprove = {
   type: "approve";
 };
 
-// modify = modify the args for a tool call
-export type InterruptModify = {
-  type: "modify";
-  newArguments: Record<string, any>;
-};
-
 export type InterruptReject = {
   type: "reject";
 };
 
-// resolve = assign a specific value to a variable
-// eg
-// x = interrupt("What value should x have?")
-export type InterruptResolve = {
-  type: "resolve";
-  value: any;
-};
-
 export type InterruptResponse =
   | InterruptApprove
-  | InterruptModify
-  | InterruptReject
-  | InterruptResolve;
+  | InterruptReject;
+
+export function approve(value?: any): InterruptResponse {
+  return { type: "approve", value } as any;
+}
+
+export function reject(value?: any): InterruptResponse {
+  return { type: "reject", value } as any;
+}
 
 export type InterruptData = {
   // messages that have been exchanged in the prompt function
@@ -50,8 +43,6 @@ export type InterruptData = {
 
   // which tool call caused the interrupt?
   toolCall?: smoltalk.ToolCallJSON;
-
-  interruptResponse?: InterruptResponse;
 };
 
 export type InterruptState = {
@@ -61,7 +52,7 @@ export type InterruptState = {
 
 export type Interrupt<T = any> = {
   type: "interrupt";
-  //interruptId: string; // nanoid — globally unique
+  interruptId: string; // nanoid — globally unique
   data: T;
   debugger?: boolean;
   interruptData?: InterruptData;
@@ -74,7 +65,7 @@ export type Interrupt<T = any> = {
 export function interrupt<T = any>(data: T, runId: string): Interrupt<T> {
   return {
     type: "interrupt",
-    //interruptId: nanoid(),
+    interruptId: nanoid(),
     data,
     runId,
   };
@@ -88,6 +79,7 @@ export function createDebugInterrupt<T = any>(
 ): Interrupt<T> {
   return {
     type: "interrupt",
+    interruptId: nanoid(),
     data,
     debugger: true,
     checkpointId,
@@ -100,24 +92,28 @@ export function isInterrupt(obj: any): obj is Interrupt {
   return obj && obj.type === "interrupt";
 }
 
+export function hasInterrupts(data: any): data is Interrupt[] {
+  return Array.isArray(data) && data.length > 0 && data.every(isInterrupt);
+}
+
 export function isDebugger(obj: any): obj is Interrupt {
   return isInterrupt(obj) === true && obj.debugger === true;
 }
 
 export function isRejected(obj: any): obj is Rejected {
-  return obj && obj.type === "rejected";
+  return obj && obj.type === "reject";
 }
 
 export function isApproved(obj: any): obj is Approved {
-  return obj && obj.type === "approved";
+  return obj && obj.type === "approve";
 }
 
 export async function interruptWithHandlers<T = any>(
   data: T,
   ctx: RuntimeContext<any>,
-): Promise<Interrupt<T> | Approved | Rejected> {
+): Promise<Interrupt<T>[] | Approved | Rejected> {
   if (ctx.handlers.length === 0) {
-    return interrupt(data, ctx.getRunId());
+    return [interrupt(data, ctx.getRunId())];
   }
   let approvedValue: any = undefined;
   let hasApproval = false;
@@ -139,66 +135,56 @@ export async function interruptWithHandlers<T = any>(
     if (result === undefined) {
       continue;
     }
-    if (result.type === "rejected") {
-      return { type: "rejected", value: result.value };
+    if (result.type === "reject") {
+      return { type: "reject", value: result.value };
     }
-    if (result.type === "propagated") {
+    if (result.type === "propagate") {
       hasPropagation = true;
       continue;
     }
-    if (result.type === "approved") {
+    if (result.type === "approve") {
       hasApproval = true;
       approvedValue = result.value;
       continue;
     }
     throw new Error(
-      `Handler returned invalid result type: ${JSON.stringify(result)}. Expected "approved", "rejected", "propagated", or undefined.`,
+      `Handler returned invalid result type: ${JSON.stringify(result)}. Expected "approve", "reject", "propagate", or undefined.`,
     );
   }
   if (hasPropagation) {
-    return interrupt(data, ctx.getRunId());
+    return [interrupt(data, ctx.getRunId())];
   }
   if (hasApproval) {
-    return { type: "approved", value: approvedValue };
+    return { type: "approve", value: approvedValue };
   }
-  return interrupt(data, ctx.getRunId());
+  return [interrupt(data, ctx.getRunId())];
 }
 
-// if we ever end up supporting multiple interrupts at once
-/* export type InterruptBatch = {
-  type: "interrupt_batch";
-  interrupts: Interrupt[];
-  checkpoint: Checkpoint;
-};
-
-export function isInterruptBatch(obj: any): obj is InterruptBatch {
-  return obj && obj.type === "interrupt_batch";
-}
-
-function interruptBatch(
-  interrupts: Interrupt[],
-  execCtx: RuntimeContext<any>,
-): InterruptBatch {
-  const cpId = execCtx.checkpoints.create(execCtx, { moduleId: "", scopeName: "", stepPath: "" });
-  const cp = execCtx.checkpoints.get(cpId);
-  return {
-    type: "interrupt_batch",
-    interrupts,
-    checkpoint: cp,
-  };
-}
- */
-export async function respondToInterrupt(args: {
+export async function respondToInterrupts(args: {
   ctx: RuntimeContext<GraphState>;
-  interrupt: Interrupt;
-  interruptResponse: InterruptResponse;
+  interrupts: Interrupt[];
+  responses: InterruptResponse[];
   overrides?: Record<string, unknown>;
   metadata?: Record<string, any>;
 }): Promise<any> {
-  const interrupt = deepClone(args.interrupt);
-  const interruptResponse = deepClone(args.interruptResponse);
-  const { ctx, metadata = {} } = args;
+  const { ctx, interrupts, responses, metadata = {} } = args;
 
+  if (responses.length !== interrupts.length) {
+    throw new Error(
+      `respondToInterrupts: expected ${interrupts.length} responses but got ${responses.length}`,
+    );
+  }
+
+  // Build ID-keyed response map
+  const responseMap: Record<string, { response: InterruptResponse }> = {};
+  for (let i = 0; i < interrupts.length; i++) {
+    responseMap[interrupts[i].interruptId] = {
+      response: deepClone(responses[i]),
+    };
+  }
+
+  // All interrupts share the same checkpoint — grab from first
+  const interrupt = deepClone(interrupts[0]);
   const checkpoint =
     interrupt.checkpoint ??
     (interrupt.checkpointId !== undefined
@@ -210,12 +196,15 @@ export async function respondToInterrupt(args: {
     );
   }
 
+
   if (args.overrides) {
     applyOverrides(checkpoint, args.overrides);
   }
 
   const execCtx = await ctx.createExecutionContext(interrupt.runId);
   execCtx.restoreState(checkpoint);
+
+  execCtx.setInterruptResponses(responseMap);
 
   execCtx.installRegisteredCallbacks(ctx);
   if (metadata.callbacks) {
@@ -224,24 +213,6 @@ export async function respondToInterrupt(args: {
 
   if (metadata.debugger) {
     execCtx.debuggerState = metadata.debugger;
-  }
-
-  let interruptData: InterruptData | undefined = interrupt.interruptData || {};
-
-  if (interrupt.debugger && !interrupt.interruptData?.toolCall) {
-    // Debugger-generated interrupts don't carry tool-call data,
-    // unless the debug pause happened inside a tool call during an LLM call —
-    // in that case, keep interruptData so runPrompt can resume mid-conversation.
-    interruptData = undefined;
-  } else {
-    interruptData.interruptResponse = interruptResponse;
-
-    if (interruptResponse.type === "modify") {
-      interruptData.toolCall!.arguments = {
-        ...interruptData.toolCall!.arguments,
-        ...interruptResponse.newArguments,
-      };
-    }
   }
 
   let nodeName = checkpoint.nodeId;
@@ -254,7 +225,6 @@ export async function respondToInterrupt(args: {
             data: {},
             ctx: execCtx,
             isResume: true,
-            interruptData,
           },
           { onNodeEnter: (id) => execCtx.stateStack.nodesTraversed.push(id) },
         );
@@ -263,7 +233,8 @@ export async function respondToInterrupt(args: {
           result,
           globals: execCtx.globals,
         });
-        if (isInterrupt(returnObject.data)) {
+
+        if (hasInterrupts(returnObject.data)) {
           await execCtx.pauseTraceWriter();
         } else {
           await execCtx.closeTraceWriter();
@@ -285,86 +256,3 @@ export async function respondToInterrupt(args: {
   }
 }
 
-export async function approveInterrupt({
-  ctx,
-  interrupt,
-  overrides,
-  metadata,
-}: {
-  ctx: RuntimeContext<GraphState>;
-  interrupt: Interrupt;
-  overrides?: Record<string, unknown>;
-  metadata?: Record<string, any>;
-}): Promise<any> {
-  return await respondToInterrupt({
-    ctx,
-    interrupt,
-    interruptResponse: { type: "approve" },
-    overrides,
-    metadata,
-  });
-}
-
-export async function modifyInterrupt({
-  ctx,
-  interrupt,
-  newArguments,
-  overrides,
-  metadata,
-}: {
-  ctx: RuntimeContext<GraphState>;
-  interrupt: Interrupt;
-  newArguments: Record<string, any>;
-  overrides?: Record<string, unknown>;
-  metadata?: Record<string, any>;
-}): Promise<any> {
-  return await respondToInterrupt({
-    ctx,
-    interrupt,
-    interruptResponse: { type: "modify", newArguments },
-    overrides,
-    metadata,
-  });
-}
-
-export async function rejectInterrupt({
-  ctx,
-  interrupt,
-  overrides,
-  metadata,
-}: {
-  ctx: RuntimeContext<GraphState>;
-  interrupt: Interrupt;
-  overrides?: Record<string, unknown>;
-  metadata?: Record<string, any>;
-}): Promise<any> {
-  return await respondToInterrupt({
-    ctx,
-    interrupt,
-    interruptResponse: { type: "reject" },
-    overrides,
-    metadata,
-  });
-}
-
-export async function resolveInterrupt({
-  ctx,
-  interrupt,
-  value,
-  overrides,
-  metadata,
-}: {
-  ctx: RuntimeContext<GraphState>;
-  interrupt: Interrupt;
-  value: any;
-  overrides?: Record<string, unknown>;
-  metadata?: Record<string, any>;
-}): Promise<any> {
-  return await respondToInterrupt({
-    ctx,
-    interrupt,
-    interruptResponse: { type: "resolve", value },
-    overrides,
-    metadata,
-  });
-}

@@ -10,12 +10,17 @@ export type BranchState = {
   // we save its info here
   interruptId?: string;
   interruptData?: any;
+
+  // cached result for completed fork threads.
+  // wrapped in an object to distinguish "no result" from "result is undefined".
+  result?: { result: any };
 };
 
 export type BranchStateJSON = {
   stack: StateStackJSON;
   interruptId?: string;
   interruptData?: any;
+  result?: { result: any };
 };
 
 // the state for each frame (a node, or a function call)
@@ -78,13 +83,11 @@ export class State {
     if (this.branches) {
       json.branches = {};
       for (const [key, branch] of Object.entries(this.branches)) {
-        json.branches[key] = {
-          stack: branch.stack.toJSON(),
-          ...(branch.interruptId ? { interruptId: branch.interruptId } : {}),
-          ...(branch.interruptData
-            ? { interruptData: branch.interruptData }
-            : {}),
-        };
+        const branchJson: BranchStateJSON = { stack: branch.stack.toJSON() };
+        if (branch.interruptId) branchJson.interruptId = branch.interruptId;
+        if (branch.interruptData) branchJson.interruptData = branch.interruptData;
+        if (branch.result !== undefined) branchJson.result = deepClone(branch.result);
+        json.branches[key] = branchJson;
       }
     }
     return json;
@@ -100,13 +103,11 @@ export class State {
     if (json.branches) {
       state.branches = {};
       for (const [key, branch] of Object.entries(json.branches)) {
-        state.branches[key] = {
-          stack: StateStack.fromJSON(branch.stack),
-          ...(branch.interruptId ? { interruptId: branch.interruptId } : {}),
-          ...(branch.interruptData
-            ? { interruptData: branch.interruptData }
-            : {}),
-        };
+        const branchState: BranchState = { stack: StateStack.fromJSON(branch.stack) };
+        if (branch.interruptId) branchState.interruptId = branch.interruptId;
+        if (branch.interruptData) branchState.interruptData = branch.interruptData;
+        if (branch.result !== undefined) branchState.result = branch.result;
+        state.branches[key] = branchState;
       }
     }
     return state;

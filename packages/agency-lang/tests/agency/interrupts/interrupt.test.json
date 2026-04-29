@@ -48,26 +48,6 @@
           "expectedMessage": "Agent wants to call the greet function with name: Adit"
         }
       ]
-    },
-    {
-      "nodeName": "foo",
-      "description": "Test the greet function with name Adit and modify the interrupt to use name Steve",
-      "input": "",
-      "expectedOutput": "\"Kya chal raha jai, Steve!\"",
-      "evaluationCriteria": [
-        {
-          "type": "exact"
-        }
-      ],
-      "interruptHandlers": [
-        {
-          "action": "modify",
-          "expectedMessage": "Agent wants to call the greet function with name: Adit",
-          "modifiedArgs": {
-            "name": "Steve"
-          }
-        }
-      ]
     }
   ]
 }

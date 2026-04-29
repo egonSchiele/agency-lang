@@ -1,0 +1,15 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Fork with interrupt assignment — approve(value) sets the variable",
+      "input": "",
+      "expectedOutput": "[\"a: Alice\",\"b: Bob\"]",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "interruptHandlers": [
+        { "action": "resolve", "resolvedValue": "Alice" },
+        { "action": "resolve", "resolvedValue": "Bob" }
+      ]
+    }
+  ]
+}

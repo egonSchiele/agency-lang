@@ -370,7 +370,7 @@ describe("Runner", () => {
       const frame = makeFrame();
       const ctx = makeMockCtx();
       const runner = new Runner(ctx, frame);
-      const handler = async () => ({ type: "approved" as const });
+      const handler = async () => ({ type: "approve" as const });
 
       expect(ctx.handlers.length).toBe(0);
       await runner.handle(0, handler, async () => {
@@ -383,7 +383,7 @@ describe("Runner", () => {
       const frame = makeFrame();
       const ctx = makeMockCtx();
       const runner = new Runner(ctx, frame);
-      const handler = async () => ({ type: "approved" as const });
+      const handler = async () => ({ type: "approve" as const });
 
       await runner.handle(0, handler, async (runner) => {
         runner.halt("interrupt");
@@ -440,7 +440,7 @@ describe("Runner", () => {
       const frame = makeFrame();
       const ctx = makeMockCtx();
       const runner = new Runner(ctx, frame);
-      const handler = async () => ({ type: "approved" as const });
+      const handler = async () => ({ type: "approve" as const });
       const trace: string[] = [];
 
       await runner.handle(0, handler, async (runner) => {

@@ -47,15 +47,14 @@ export { readSkillTool, readSkillToolParams } from "./builtinTools.js";
 export {
   interrupt,
   isInterrupt,
+  hasInterrupts,
   isDebugger,
   isRejected,
   isApproved,
+  approve,
+  reject,
   interruptWithHandlers,
-  respondToInterrupt,
-  approveInterrupt,
-  rejectInterrupt,
-  modifyInterrupt,
-  resolveInterrupt,
+  respondToInterrupts,
 } from "./interrupts.js";
 
 export { isGenerator, handleStreamingResponse } from "./streaming.js";

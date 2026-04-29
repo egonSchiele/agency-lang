@@ -1,0 +1,11 @@
+def confirm(item: number): number {
+  interrupt("approve ${item}?")
+  return item
+}
+
+node main() {
+  let result = race([10, 20, 30]) as item {
+    return confirm(item)
+  }
+  return result
+}

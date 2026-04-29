@@ -1,0 +1,19 @@
+def confirmItem(item: string): string {
+  print("confirm ${item}")
+  interrupt("approve ${item}?")
+  return "confirmed: ${item}"
+}
+
+def innerFork(prefix: string): string[] {
+  let inner = fork(["1", "2"]) as num {
+    return confirmItem("${prefix}-${num}")
+  }
+  return inner
+}
+
+node main() {
+  let results = fork(["x", "y"]) as outer {
+    return innerFork(outer)
+  }
+  return results
+}

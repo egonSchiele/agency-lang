@@ -1,10 +1,10 @@
 import { writeFileSync } from "fs";
-import { ask, isInterrupt, resolveInterrupt } from "./agent.js";
+import { ask, hasInterrupts, approve, respondToInterrupts } from "./agent.js";
 
 const r = await ask("What is your favorite color?");
-const interrupted = isInterrupt(r.data);
+const interrupted = hasInterrupts(r.data);
 const resumed = interrupted
-  ? await resolveInterrupt(r.data, "blue")
+  ? await respondToInterrupts(r.data, [approve("blue")], { overrides: { color: "blue" } })
   : { data: undefined };
 
 writeFileSync(

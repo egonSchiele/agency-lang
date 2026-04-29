@@ -1,16 +1,22 @@
 {
-  "skip": true,
-  "skipReason": "Fork interrupts after node transition need checkpoint handling work",
   "tests": [
     {
       "nodeName": "main",
       "description": "Node transition then fork with interrupts — checkpoint survives the transition",
       "input": "",
       "expectedOutput": "[\"confirmed: x\",\"confirmed: y\"]",
-      "evaluationCriteria": [{ "type": "exact" }],
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
       "interruptHandlers": [
-        { "action": "approve" },
-        { "action": "approve" }
+        {
+          "action": "approve"
+        },
+        {
+          "action": "approve"
+        }
       ]
     }
   ]

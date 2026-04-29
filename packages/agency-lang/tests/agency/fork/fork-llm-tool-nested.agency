@@ -11,10 +11,12 @@ def search(query: string): string[] {
   return results
 }
 
+type Response = {
+  searches: string[]
+}
+
 node main() {
-  type Result = {
-    searches: string[]
-  }
-  const result: Result = llm("Please search for both 'cats' and 'dogs'. Return the searches field with all the search results combined into a single flat array.", { tools: [search] })
+  const result: Response = llm("Please search for both 'cats' and 'dogs'. Return the searches field with all the search results combined into a single flat array.", { tools: [search] })
+  print("Final result:", JSON.stringify(result, null, 2))
   return result.searches
 }

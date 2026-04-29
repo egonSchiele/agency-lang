@@ -103,3 +103,8 @@ make llm() work with pipe operator
   - allow for tool call etc hooks from llm lib
 
 need to make method calls on objects work in the following places: with the try keyword, with the pipe operator, and as a tool.
+
+---
+
+users should not be able to create a type named `Result`, that is a builtin type.
+type defined in a node doesn't work

@@ -436,7 +436,7 @@ async function runSingleTest(
         testPassed = false;
       }
     } else if (criterion.type === "llmJudge") {
-      const actual = JSON.stringify(result.data);
+      const actual = JSON.stringify(result.data) || "undefined";
       try {
         const judgeResult = await executeJudgeAsync(baseName, {
           actualOutput: actual,
@@ -678,7 +678,7 @@ async function runTsTestDir(
 
     // Remove stale result file from previous runs
     const resultFile = path.join(dir, "__result.json");
-    try { fs.unlinkSync(resultFile); } catch {}
+    try { fs.unlinkSync(resultFile); } catch { }
 
     const testFile = "test.js";
     try {

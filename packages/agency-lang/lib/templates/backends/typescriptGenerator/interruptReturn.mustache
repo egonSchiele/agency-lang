@@ -3,9 +3,8 @@ const __response = __ctx.getInterruptResponse(__self.{{{interruptIdKey:string}}}
 if (__response) {
   if (__response.type === "approve") {
     // approved, continue execution
-  } else if (__response.type === "reject" && !__isForked) {
+  } else if (__response.type === "reject") {
     // rejected, halt
-    // tool calls will instead tell the llm that the call was rejected
     {{#nodeContext}}
     runner.halt({ messages: __threads, data: failure("interrupt rejected", { retryable: false }) });
     {{/nodeContext}}

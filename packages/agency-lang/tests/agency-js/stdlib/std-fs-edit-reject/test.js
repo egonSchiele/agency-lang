@@ -1,7 +1,7 @@
 import { mkdtempSync, writeFileSync, readFileSync } from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
-import { runEdit, rejectInterrupt, respondToInterrupts, reject } from "./agent.js";
+import { runEdit, respondToInterrupts, reject } from "./agent.js";
 
 const TMP = mkdtempSync(join(tmpdir(), "agency-edit-reject-"));
 

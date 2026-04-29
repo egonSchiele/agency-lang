@@ -203,22 +203,13 @@ export async function respondToInterrupts(args: {
 
   const execCtx = await ctx.createExecutionContext(interrupt.runId);
   execCtx.restoreState(checkpoint);
-  const _cpId = interrupt.checkpointId;
-  const _rawLen = (execCtx.stateStack as any).stack.length;
-  const _restoredJSON = execCtx.stateStack.toJSON();
-  console.log(`[respondToInterrupts] cpId=${_cpId} restored rawLen=${_rawLen} jsonLen=${_restoredJSON.stack.length} frames: ${_restoredJSON.stack.map((f: any, i: number) => `[${i}]:iter2=${f.locals.__iteration_2}`).join(" ")}`);
 
-
-  console.log(`[respondToInterrupts] cpId=${_cpId} before setResponses: frames=${(execCtx.stateStack as any).stack.length}`);
   execCtx.setInterruptResponses(responseMap);
 
-  console.log(`[respondToInterrupts] cpId=${_cpId} after setResponses: frames=${(execCtx.stateStack as any).stack.length} deserializeLen=${(execCtx.stateStack as any).deserializeStackLength} mode=${(execCtx.stateStack as any).mode}`);
   execCtx.installRegisteredCallbacks(ctx);
-  console.log(`[respondToInterrupts] cpId=${_cpId} after installCallbacks: frames=${execCtx.stateStack.toJSON().stack.length}`);
   if (metadata.callbacks) {
     Object.assign(execCtx.callbacks, metadata.callbacks);
   }
-  console.log(`[respondToInterrupts] cpId=${_cpId} after metadata: frames=${execCtx.stateStack.toJSON().stack.length}`);
 
   if (metadata.debugger) {
     execCtx.debuggerState = metadata.debugger;
@@ -228,8 +219,6 @@ export async function respondToInterrupts(args: {
   try {
     while (true) {
       try {
-        const _preRun = execCtx.stateStack.toJSON();
-        console.log(`[respondToInterrupts] cpId=${_cpId} pre-graph.run: ${_preRun.stack.map((f: any, i: number) => `[${i}]:step=${f.step},iter2=${f.locals.__iteration_2}`).join(" ")}`);
         const result = await execCtx.graph.run(
           nodeName,
           {

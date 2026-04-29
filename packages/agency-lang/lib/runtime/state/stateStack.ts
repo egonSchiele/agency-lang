@@ -178,15 +178,6 @@ export class StateStack {
     this.deserializeStackLength = this.stack.length;
   }
 
-  /** Remove `count` frames from the front of the stack.
-   *  Used to strip ancestor node frames after a node transition on resume. */
-  dropFrames(count: number): void {
-    this.stack.splice(0, count);
-    if (this.deserializeStackLength > 0) {
-      this.deserializeStackLength = Math.max(0, this.deserializeStackLength - count);
-    }
-  }
-
   pop(): State | undefined {
     return this.stack.pop();
   }

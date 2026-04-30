@@ -2159,7 +2159,7 @@ export class TypeScriptBuilder {
 
     return $(ts.id("runner"))
       .prop("fork")
-      .call([ts.num(id), itemsNode, blockFn, ts.str(mode)])
+      .call([ts.num(id), itemsNode, blockFn, ts.str(mode), ts.id("__stateStack")])
       .await()
       .done();
   }

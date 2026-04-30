@@ -531,6 +531,7 @@ export class Runner {
       branchStack: StateStack,
     ) => Promise<any>,
     mode: "all" | "race",
+    stateStack: StateStack,
   ): Promise<any> {
     if (this.shouldSkip()) return undefined;
     if (this.getCounter() > id) {
@@ -611,7 +612,7 @@ export class Runner {
           }
 
           // Create the fork checkpoint — branch stacks are now correct
-          const cpId = this.ctx.checkpoints.create(this.ctx.stateStack, this.ctx, {
+          const cpId = this.ctx.checkpoints.create(stateStack, this.ctx, {
             moduleId: this.moduleId,
             scopeName: this.scopeName,
             stepPath: this.stepPath(id),

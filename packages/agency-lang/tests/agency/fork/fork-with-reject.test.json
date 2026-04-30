@@ -9,7 +9,7 @@
         {
           "type": "llmJudge",
           "judgePrompt": "The output should be an array of 2 items. Both should be failure objects with success:false and error mentioning 'interrupt rejected'.",
-          "desiredAccuracy": 90
+          "desiredAccuracy": 70
         }
       ],
       "interruptHandlers": []

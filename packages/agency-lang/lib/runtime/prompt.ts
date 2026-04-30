@@ -397,6 +397,11 @@ export async function runPrompt(args: {
         if (hasInterrupts(result)) {
           interrupts.push(...result);
           stack.branches[branchKey].interruptId = result[0]?.interruptId;
+          // Transplant the branch stack from the interrupt's checkpoint
+          const branchCp = result[0]?.checkpoint;
+          if (branchCp) {
+            stack.branches[branchKey].stack = StateStack.fromJSON(branchCp.stack);
+          }
           continue;
         }
 

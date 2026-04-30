@@ -3,6 +3,8 @@ def fastNoInterrupt(item: number): number {
 }
 
 def slowWithInterrupt(item: number): number {
+  // Sleep first so this branch can't possibly win the race against fastNoInterrupt
+  sleep(1)
   interrupt("approve ${item}?")
   return item
 }

@@ -17,6 +17,11 @@ export type BranchState = {
   // cached result for completed fork threads.
   // wrapped in an object to distinguish "no result" from "result is undefined".
   result?: { result: any };
+
+  // Live AbortController for per-branch cancellation (used by race mode to
+  // abort losing branches when the winner resolves). NOT serialized — only
+  // meaningful within a single execution.
+  abortController?: AbortController;
 };
 
 export type BranchStateJSON = {

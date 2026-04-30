@@ -2,8 +2,7 @@
   "tests": [
     {
       "nodeName": "main",
-      "skip": true,
-      "description": "[SKIPPED — race+interrupts not yet supported, punted with race-interrupt] Race where each branch contains a fork that interrupts — should batch all interrupts and produce the result of one of the race branches",
+      "description": "Race where each branch contains a fork that interrupts — only the winner's interrupts surface; on resume only the winner's branch re-runs",
       "input": "",
       "expectedOutput": "",
       "evaluationCriteria": [
@@ -14,8 +13,6 @@
         }
       ],
       "interruptHandlers": [
-        { "action": "approve" },
-        { "action": "approve" },
         { "action": "approve" },
         { "action": "approve" }
       ]

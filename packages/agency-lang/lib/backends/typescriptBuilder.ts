@@ -2152,6 +2152,7 @@ export class TypeScriptBuilder {
         { name: "__forkItem" },
         { name: "__forkIndex" },
         { name: "__forkBranchStack" },
+        { name: "__forkSignal" },
       ],
       ts.statements([ts.raw(blockSetupCode)]),
       { async: true },

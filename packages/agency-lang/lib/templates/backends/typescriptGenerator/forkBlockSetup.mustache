@@ -4,7 +4,7 @@ const __stateStack = __forkBranchStack;
 const __isForked = true;
 const {{{paramName:string}}} = __forkItem;
 __bstack.args[{{{paramNameQuoted}}}] = __forkItem;
-const runner = new Runner(__ctx, __bstack, { state: __bstack, moduleId: {{{moduleId}}}, scopeName: {{{scopeName}}} });
+const runner = new Runner(__ctx, __bstack, { state: __bstack, moduleId: {{{moduleId}}}, scopeName: {{{scopeName}}}, abortSignal: __forkSignal });
 try {
 {{{body}}}
 return runner.halted ? runner.haltResult : undefined;

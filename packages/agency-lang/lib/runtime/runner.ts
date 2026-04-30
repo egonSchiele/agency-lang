@@ -32,6 +32,8 @@ export class Runner {
   private state: any;
   private moduleId: string;
   private scopeName: string;
+  /** Per-branch cancellation signal (race losers). Checked between steps. */
+  private abortSignal?: AbortSignal;
 
   constructor(
     ctx: RuntimeContext<any>,
@@ -41,6 +43,7 @@ export class Runner {
       state?: any;
       moduleId?: string;
       scopeName?: string;
+      abortSignal?: AbortSignal;
     },
   ) {
     this.ctx = ctx;
@@ -49,6 +52,7 @@ export class Runner {
     this.state = opts?.state ?? {};
     this.moduleId = opts?.moduleId ?? "";
     this.scopeName = opts?.scopeName ?? "";
+    this.abortSignal = opts?.abortSignal;
   }
 
   // ── Path and counter management ──
@@ -99,8 +103,12 @@ export class Runner {
     this._continue = true;
   }
 
-  /** Check if execution should skip (halted, breaking, or continuing) */
+  /** Check if execution should skip (halted, breaking, or continuing).
+   * Also halts if the per-branch abort signal has fired (race loser). */
   private shouldSkip(): boolean {
+    if (this.abortSignal?.aborted && !this.halted) {
+      this.halt(undefined);
+    }
     return this.halted || this._break || this._continue;
   }
 
@@ -367,7 +375,7 @@ export class Runner {
     items: any[],
     callback: (item: any, index: number, runner: Runner) => Promise<void>,
   ): Promise<void> {
-    if (this.halted) return;
+    if (this.shouldSkip()) return;
     if (this.getCounter() > id) return;
 
     if (await this.maybeDebugHook(id)) return;
@@ -423,7 +431,7 @@ export class Runner {
     condition: () => boolean,
     callback: (runner: Runner) => Promise<void>,
   ): Promise<void> {
-    if (this.halted) return;
+    if (this.shouldSkip()) return;
     if (this.getCounter() > id) return;
 
     if (await this.maybeDebugHook(id)) return;
@@ -525,6 +533,7 @@ export class Runner {
       item: any,
       index: number,
       branchStack: StateStack,
+      signal: AbortSignal,
     ) => Promise<any>,
     mode: "all" | "race",
     stateStack: StateStack,
@@ -539,74 +548,23 @@ export class Runner {
     this.path.push(id);
     let result: any;
     try {
-      const promises = items.map((item, i) => {
-        const branchKey = this.forkBranchKey(id, i);
-        const existing = this.frame.getOrCreateBranch(branchKey);
-        if (existing?.result !== undefined) {
-          return Promise.resolve(existing.result.result);
-        }
-        return blockFn(item, i, existing?.stack);
-
-        /*         if (existing) {
-          // If this thread already completed, return null — we'll use cached result
-          if (existing.result !== undefined) {
-            return null;
-          }
-          // existing.stack.deserializeMode();
-          return existing.stack;
-        }
-        const branchState = this.frame.newBranch(branchKey);
-        return branchState.stack; */
-      });
-
-      if (mode === "all") {
-        const settled = await Promise.allSettled(promises);
-        const interrupts: any[] = [];
-
-        for (let i = 0; i < settled.length; i++) {
-          const s = settled[i];
-          const branchKey = this.forkBranchKey(id, i);
-          if (s.status === "rejected") {
-            throw s.reason;
-          }
-          if (hasInterrupts(s.value)) {
-            /* console.log(JSON.stringify(s.value, null, 2));
-            exit(1); */
-            interrupts.push(...s.value);
-            this.frame.setInterruptOnBranch(
-              branchKey,
-              s.value[0].interruptId,
-              s.value[0].interruptData,
-              s.value[0].checkpoint,
-            );
-            // console.log(color.yellow(JSON.stringify(s.value, null, 2)));
-            // The interrupt's checkpoint captured the branch stack at the right moment.
-            // Save it so we can transplant it onto the branch in the fork checkpoint.
-          } else {
-            this.frame.setResultOnBranch(branchKey, s.value);
-          }
-        }
-
-        if (interrupts.length > 0) {
-          // Create the fork checkpoint — branch stacks are now correct
-          const cpId = this.ctx.checkpoints.create(stateStack, this.ctx, {
-            moduleId: this.moduleId,
-            scopeName: this.scopeName,
-            stepPath: this.stepPath(id),
-          });
-          const cp = this.ctx.checkpoints.get(cpId);
-          // console.log(JSON.stringify(cp, null, 2));
-          // exit(1);
-          for (const intr of interrupts) {
-            intr.checkpoint = cp;
-            intr.checkpointId = cpId;
-          }
-          return interrupts;
-        }
-
-        result = settled.map((s) => (s as PromiseFulfilledResult<any>).value);
+      // Race resume: if a winner was already chosen on a previous run,
+      // resume only that branch — skip the race entirely.
+      const raceWinnerKey = this.raceWinnerKey(id);
+      if (mode === "race" && this.frame.locals[raceWinnerKey] !== undefined) {
+        result = await this.resumeRaceWinner(
+          id,
+          items,
+          blockFn,
+          stateStack,
+          this.frame.locals[raceWinnerKey] as number,
+        );
+        if (hasInterrupts(result)) return result;
+      } else if (mode === "all") {
+        result = await this.runForkAll(id, items, blockFn, stateStack);
+        if (hasInterrupts(result)) return result;
       } else {
-        result = await Promise.race(promises);
+        result = await this.runRace(id, items, blockFn, stateStack);
         if (hasInterrupts(result)) return result;
       }
 
@@ -622,6 +580,234 @@ export class Runner {
     this.clearDebugFlag(id);
     this.setCounter(id + 1);
     return result;
+  }
+
+  /** Run all branches in parallel (fork mode). Returns an array of values,
+   * or an Interrupt[] if any branch interrupted. */
+  private async runForkAll(
+    id: number,
+    items: any[],
+    blockFn: (
+      item: any,
+      index: number,
+      branchStack: StateStack,
+      signal: AbortSignal,
+    ) => Promise<any>,
+    stateStack: StateStack,
+  ): Promise<any> {
+    const promises = items.map((item, i) => {
+      const branchKey = this.forkBranchKey(id, i);
+      const existing = this.frame.getOrCreateBranch(branchKey);
+      if (existing.result !== undefined) {
+        return Promise.resolve(existing.result.result);
+      }
+      // Each fork branch gets its own AbortController. For fork-all this is
+      // mainly there for parity with race; we don't currently abort fork-all
+      // branches, but having a signal in place lets generated code use it.
+      if (!existing.abortController) {
+        existing.abortController = new AbortController();
+      }
+      return blockFn(item, i, existing.stack, existing.abortController.signal);
+    });
+
+    const settled = await Promise.allSettled(promises);
+    const interrupts: any[] = [];
+
+    for (let i = 0; i < settled.length; i++) {
+      const s = settled[i];
+      const branchKey = this.forkBranchKey(id, i);
+      if (s.status === "rejected") {
+        throw s.reason;
+      }
+      if (hasInterrupts(s.value)) {
+        interrupts.push(...s.value);
+        this.frame.setInterruptOnBranch(
+          branchKey,
+          s.value[0].interruptId,
+          s.value[0].interruptData,
+          s.value[0].checkpoint,
+        );
+      } else {
+        this.frame.setResultOnBranch(branchKey, s.value);
+      }
+    }
+
+    if (interrupts.length > 0) {
+      const cpId = this.ctx.checkpoints.create(stateStack, this.ctx, {
+        moduleId: this.moduleId,
+        scopeName: this.scopeName,
+        stepPath: this.stepPath(id),
+      });
+      const cp = this.ctx.checkpoints.get(cpId);
+      for (const intr of interrupts) {
+        intr.checkpoint = cp;
+        intr.checkpointId = cpId;
+      }
+      return interrupts;
+    }
+
+    return settled.map((s) => (s as PromiseFulfilledResult<any>).value);
+  }
+
+  /** Run all branches concurrently but return as soon as one settles.
+   * On interrupt: record the winner, abort the losers, clear loser branches,
+   * stamp a checkpoint, and return the interrupt array.
+   * On value: return the value (losers' work is discarded). */
+  private async runRace(
+    id: number,
+    items: any[],
+    blockFn: (
+      item: any,
+      index: number,
+      branchStack: StateStack,
+      signal: AbortSignal,
+    ) => Promise<any>,
+    stateStack: StateStack,
+  ): Promise<any> {
+    // Build the per-branch promises, each tagged with its index so we know
+    // who won the race.
+    const taggedPromises: Promise<{ index: number; value: any }>[] = items.map(
+      (item, i) => {
+        const branchKey = this.forkBranchKey(id, i);
+        const existing = this.frame.getOrCreateBranch(branchKey);
+        if (existing.result !== undefined) {
+          return Promise.resolve({ index: i, value: existing.result.result });
+        }
+        if (!existing.abortController) {
+          existing.abortController = new AbortController();
+        }
+        const signal = existing.abortController.signal;
+        return blockFn(item, i, existing.stack, signal).then((value) => ({
+          index: i,
+          value,
+        }));
+      },
+    );
+
+    // Promise.race resolves with whichever finishes first.
+    const { index: winnerIndex, value: winnerValue } =
+      await Promise.race(taggedPromises);
+
+    // Abort the losing branches so any in-flight work (LLM calls, tool calls)
+    // can stop. Note: synchronous code that has already reached an
+    // interrupt() call before we get here will still resolve its orphan
+    // promise — we discard those resolutions below.
+    for (let i = 0; i < items.length; i++) {
+      if (i === winnerIndex) continue;
+      const branchKey = this.forkBranchKey(id, i);
+      const branch = this.frame.getBranch(branchKey);
+      branch?.abortController?.abort();
+    }
+
+    // Record the winner so a resume on the same race step replays only this
+    // branch (not the abandoned losers).
+    this.frame.locals[this.raceWinnerKey(id)] = winnerIndex;
+
+    const winnerBranchKey = this.forkBranchKey(id, winnerIndex);
+
+    if (hasInterrupts(winnerValue)) {
+      // Save the winner's interrupt info on its branch so resume can find it.
+      this.frame.setInterruptOnBranch(
+        winnerBranchKey,
+        winnerValue[0].interruptId,
+        winnerValue[0].interruptData,
+        winnerValue[0].checkpoint,
+      );
+      // Drop the loser branches before serializing — they hold partial state
+      // we never want to revisit.
+      for (let i = 0; i < items.length; i++) {
+        if (i === winnerIndex) continue;
+        this.frame.deleteBranch(this.forkBranchKey(id, i));
+      }
+      // Stamp a checkpoint capturing only the winner's slice.
+      const cpId = this.ctx.checkpoints.create(stateStack, this.ctx, {
+        moduleId: this.moduleId,
+        scopeName: this.scopeName,
+        stepPath: this.stepPath(id),
+      });
+      const cp = this.ctx.checkpoints.get(cpId);
+      for (const intr of winnerValue) {
+        intr.checkpoint = cp;
+        intr.checkpointId = cpId;
+      }
+      return winnerValue;
+    }
+
+    // Winner produced a value. Cache it on the winner branch and drop losers.
+    this.frame.setResultOnBranch(winnerBranchKey, winnerValue);
+    for (let i = 0; i < items.length; i++) {
+      if (i === winnerIndex) continue;
+      this.frame.deleteBranch(this.forkBranchKey(id, i));
+    }
+    return winnerValue;
+  }
+
+  /** Race resume: only the recorded winner is re-executed. */
+  private async resumeRaceWinner(
+    id: number,
+    items: any[],
+    blockFn: (
+      item: any,
+      index: number,
+      branchStack: StateStack,
+      signal: AbortSignal,
+    ) => Promise<any>,
+    stateStack: StateStack,
+    winnerIndex: number,
+  ): Promise<any> {
+    const branchKey = this.forkBranchKey(id, winnerIndex);
+    const existing = this.frame.getBranch(branchKey);
+    if (!existing) {
+      throw new Error(
+        `Race resume: winner branch ${branchKey} (index ${winnerIndex}) is missing — state may be corrupted.`,
+      );
+    }
+
+    // Already-completed winner: return cached result.
+    if (existing.result !== undefined) {
+      return existing.result.result;
+    }
+
+    // Pending winner: re-run blockFn with the existing branch stack and a
+    // fresh AbortController (the resume is a brand-new execution).
+    if (!existing.abortController) {
+      existing.abortController = new AbortController();
+    }
+    const value = await blockFn(
+      items[winnerIndex],
+      winnerIndex,
+      existing.stack,
+      existing.abortController.signal,
+    );
+
+    if (hasInterrupts(value)) {
+      this.frame.setInterruptOnBranch(
+        branchKey,
+        value[0].interruptId,
+        value[0].interruptData,
+        value[0].checkpoint,
+      );
+      const cpId = this.ctx.checkpoints.create(stateStack, this.ctx, {
+        moduleId: this.moduleId,
+        scopeName: this.scopeName,
+        stepPath: this.stepPath(id),
+      });
+      const cp = this.ctx.checkpoints.get(cpId);
+      for (const intr of value) {
+        intr.checkpoint = cp;
+        intr.checkpointId = cpId;
+      }
+      return value;
+    }
+
+    this.frame.setResultOnBranch(branchKey, value);
+    return value;
+  }
+
+  private raceWinnerKey(id: number): string {
+    return this.path.length === 0
+      ? `__race_winner_${id}`
+      : `__race_winner_${this.key()}_${id}`;
   }
 
   private forkBranchKey(id: number, index: number): string {

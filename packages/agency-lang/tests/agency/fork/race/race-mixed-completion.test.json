@@ -2,8 +2,7 @@
   "tests": [
     {
       "nodeName": "main",
-      "skip": true,
-      "description": "[SKIPPED — race+interrupts not yet supported, punted with race-interrupt] Race between a fast non-interrupting branch and a slow interrupting branch — fast branch should win without surfacing the slow branch's interrupt",
+      "description": "Race between a fast non-interrupting branch and a slow interrupting branch — fast branch should win without surfacing the slow branch's interrupt",
       "input": "",
       "expectedOutput": "70",
       "evaluationCriteria": [{ "type": "exact" }],

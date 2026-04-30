@@ -1,0 +1,12 @@
+// Each branch reads `multiplier` from the enclosing scope. By overriding
+// `multiplier` at resume time via respondToInterrupts({overrides}), we
+// can verify the override is applied across all the resumed branches in
+// a single batched-interrupt resume.
+node main() {
+  const multiplier = 1
+  let results = fork([10, 20, 30]) as item {
+    interrupt("approve ${item}?")
+    return item * multiplier
+  }
+  return results
+}

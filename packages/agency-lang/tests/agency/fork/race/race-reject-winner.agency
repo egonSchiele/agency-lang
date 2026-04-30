@@ -1,0 +1,18 @@
+def confirm(item: number): number {
+  interrupt("approve ${item}?")
+  return item
+}
+
+node main() {
+  let result = race([10, 20, 30]) as item {
+    return confirm(item)
+  }
+  if (isSuccess(result)) {
+    return result.value
+  } else {
+    return { 
+      success: false,
+      error: result.error
+    }
+  }
+}

@@ -1,0 +1,21 @@
+def confirmIfBig(item: number): string {
+  if (item > 5) {
+    interrupt("approve big ${item}?")
+    return "big: ${item}"
+  }
+  return "small: ${item}"
+}
+
+def processGroup(items: number[]): string[] {
+  let results = fork(items) as item {
+    return confirmIfBig(item)
+  }
+  return results
+}
+
+node main() {
+  let groups = fork([[1, 2, 3], [10, 20, 30]]) as group {
+    return processGroup(group)
+  }
+  return groups
+}

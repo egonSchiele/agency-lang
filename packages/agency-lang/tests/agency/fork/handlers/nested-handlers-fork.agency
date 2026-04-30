@@ -1,0 +1,22 @@
+def innerInterrupt(item: string): string {
+  interrupt("approve ${item}?")
+  return "done: ${item}"
+}
+
+node main() {
+  handle {
+    handle {
+      let results = fork(["a", "b"]) as item {
+        return innerInterrupt(item)
+      }
+      return results
+    } with (data) {
+      if (data == "approve a?") {
+        return approve()
+      }
+      return propagate()
+    }
+  } with (data) {
+    return approve()
+  }
+}

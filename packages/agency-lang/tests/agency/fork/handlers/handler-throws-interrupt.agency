@@ -1,0 +1,16 @@
+def innerInterrupt(item: string): string {
+  interrupt("inner approve ${item}?")
+  return "inner done: ${item}"
+}
+
+node main() {
+  handle {
+    let results = fork(["a", "b"]) as item {
+      return innerInterrupt(item)
+    }
+    return results
+  } with (data) {
+    interrupt("handler approve relay: ${data}")
+    return approve()
+  }
+}

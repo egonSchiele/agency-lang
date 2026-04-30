@@ -1,0 +1,25 @@
+def confirmA(): string {
+  interrupt("approve A?")
+  return "A done"
+}
+
+def confirmB(): string {
+  interrupt("approve B?")
+  return "B done"
+}
+
+def confirmC(): string {
+  interrupt("approve C?")
+  return "C done"
+}
+
+type Response = {
+  results: string[]
+}
+
+node main() {
+  const result: Response = llm("You must call all three tools (confirmA, confirmB, confirmC) in a SINGLE response in parallel. Then return a 'results' field that is an array containing the three return values.", {
+    tools: [confirmA, confirmB, confirmC]
+  })
+  return result.results
+}

@@ -1,0 +1,22 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "skip": true,
+      "description": "[SKIPPED — known bug] LLM with one tool that succeeds and one tool that interrupts in the same round. On resume the OpenAI client rejects with `Duplicate value for 'tool_call_id'`. The cached completed-tool message and a re-emitted message for the same tool both end up in messages[]. Investigate prompt.ts:307-314 (cached-result short-circuit) and self.messagesJSON accumulation.",
+      "input": "",
+      "expectedOutput": "",
+      "evaluationCriteria": [
+        {
+          "type": "llmJudge",
+          "judgePrompt": "The output should be an object with a 'fact' field containing some text about cats, and a 'confirmation' field containing 'delete-files confirmed' or similar.",
+          "desiredAccuracy": 70
+        }
+      ],
+      "interruptHandlers": [
+        { "action": "approve" }
+      ],
+      "retry": 2
+    }
+  ]
+}

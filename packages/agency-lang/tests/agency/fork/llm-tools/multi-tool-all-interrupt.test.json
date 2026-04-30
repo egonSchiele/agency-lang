@@ -1,0 +1,23 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "LLM call with three distinct tools, all called in parallel in one round, all interrupt — tests that all tool-call interrupts batch together",
+      "input": "",
+      "expectedOutput": "",
+      "evaluationCriteria": [
+        {
+          "type": "llmJudge",
+          "judgePrompt": "The output should be an array containing 'A done', 'B done', and 'C done' in some order. All three values must be present.",
+          "desiredAccuracy": 70
+        }
+      ],
+      "interruptHandlers": [
+        { "action": "approve" },
+        { "action": "approve" },
+        { "action": "approve" }
+      ],
+      "retry": 2
+    }
+  ]
+}

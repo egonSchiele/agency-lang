@@ -1,0 +1,24 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "LLM tool that interrupts twice per call, called in parallel for two items — tests multi-cycle interrupts inside tool-call branches",
+      "input": "",
+      "expectedOutput": "",
+      "evaluationCriteria": [
+        {
+          "type": "llmJudge",
+          "judgePrompt": "The output should be an array of 2 strings. Each string should look like 'double done: a' or 'double done: b' (one for each item).",
+          "desiredAccuracy": 70
+        }
+      ],
+      "interruptHandlers": [
+        { "action": "approve" },
+        { "action": "approve" },
+        { "action": "approve" },
+        { "action": "approve" }
+      ],
+      "retry": 2
+    }
+  ]
+}

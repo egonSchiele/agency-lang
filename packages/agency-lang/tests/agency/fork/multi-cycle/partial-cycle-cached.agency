@@ -1,0 +1,20 @@
+def maybeMultiInterrupt(item: string, count: number): string {
+  if (count > 0) {
+    interrupt("interrupt 1 for ${item}?")
+  }
+  if (count > 1) {
+    interrupt("interrupt 2 for ${item}?")
+  }
+  return "done: ${item}"
+}
+
+node main() {
+  let results = fork([
+    { item: "a", count: 0 },
+    { item: "b", count: 1 },
+    { item: "c", count: 2 }
+  ]) as entry {
+    return maybeMultiInterrupt(entry.item, entry.count)
+  }
+  return results
+}

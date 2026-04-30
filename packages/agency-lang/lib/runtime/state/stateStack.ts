@@ -1,3 +1,4 @@
+import { Checkpoint } from "../index.js";
 import { deepClone } from "../utils.js";
 import { ThreadStoreJSON } from "./threadStore.js";
 
@@ -10,6 +11,8 @@ export type BranchState = {
   // we save its info here
   interruptId?: string;
   interruptData?: any;
+
+  checkpoint?: Checkpoint;
 
   // cached result for completed fork threads.
   // wrapped in an object to distinguish "no result" from "result is undefined".
@@ -29,7 +32,8 @@ export class State {
   locals: Record<string, any>;
   threads: ThreadStoreJSON | null;
   step: number;
-  branches?: Record<string, BranchState>;
+  private branches?: Record<string, BranchState>;
+  private deletedBranches?: Set<string>;
 
   constructor(
     opts: {
@@ -73,6 +77,80 @@ export class State {
     this.clearLocalsWithPrefix("__dbg_");
   }
 
+  newBranch(key: string): BranchState {
+    if (!this.branches) this.branches = {};
+    if (this.branches[key]) {
+      throw new Error(`Branch with key ${key} already exists`);
+    }
+    const branch: BranchState = { stack: new StateStack() };
+    this.branches[key] = branch;
+    return branch;
+  }
+
+  getBranch(key: string): BranchState | undefined {
+    if (!this.branches) return undefined;
+    if (this.deletedBranches?.has(key)) {
+      throw new Error(
+        `Tried to access branch with key ${key}, but it has been deleted`,
+      );
+    }
+    return this.branches[key];
+  }
+
+  getOrCreateBranch(key: string): BranchState {
+    const existing = this.getBranch(key);
+    if (existing) return existing;
+    return this.newBranch(key);
+  }
+
+  getBranchOrThrow(key: string): BranchState {
+    const branch = this.getBranch(key);
+    if (!branch) {
+      throw new Error(`Branch with key ${key} does not exist`);
+    }
+    return branch;
+  }
+
+  deleteBranch(key: string): void {
+    if (this.branches) {
+      this.deletedBranches = this.deletedBranches || new Set<string>();
+      this.deletedBranches.add(key);
+      delete this.branches[key];
+    }
+  }
+
+  setResultOnBranch(key: string, result: any): void {
+    const branch = this.getBranchOrThrow(key);
+    branch.result = { result };
+  }
+
+  setInterruptOnBranch(
+    key: string,
+    interruptId: string,
+    interruptData: any,
+    checkpoint?: Checkpoint,
+  ): void {
+    const branch = this.getBranchOrThrow(key);
+    branch.interruptId = interruptId;
+    branch.interruptData = interruptData;
+    if (checkpoint) {
+      branch.checkpoint = checkpoint;
+    }
+  }
+
+  popBranches(): void {
+    this.branches = {};
+    this.deletedBranches = new Set<string>();
+  }
+
+  deserializeMode(): void {
+    if (this.branches) {
+      for (const branch of Object.values(this.branches)) {
+        branch.stack.deserializeMode();
+      }
+    }
+  }
+
   toJSON(): StateJSON {
     const json: StateJSON = {
       args: deepClone(this.args),
@@ -83,11 +161,20 @@ export class State {
     if (this.branches) {
       json.branches = {};
       for (const [key, branch] of Object.entries(this.branches)) {
-        const branchJson: BranchStateJSON = { stack: branch.stack.toJSON() };
+        const branchJson: Partial<BranchStateJSON> = {};
+
+        if (branch.checkpoint) {
+          branchJson.stack = branch.checkpoint.stack;
+        } else {
+          branchJson.stack = branch.stack.toJSON();
+        }
+
         if (branch.interruptId) branchJson.interruptId = branch.interruptId;
-        if (branch.interruptData) branchJson.interruptData = branch.interruptData;
-        if (branch.result !== undefined) branchJson.result = deepClone(branch.result);
-        json.branches[key] = branchJson;
+        if (branch.interruptData)
+          branchJson.interruptData = branch.interruptData;
+        if (branch.result !== undefined)
+          branchJson.result = deepClone(branch.result);
+        json.branches[key] = branchJson as BranchStateJSON;
       }
     }
     return json;
@@ -103,9 +190,12 @@ export class State {
     if (json.branches) {
       state.branches = {};
       for (const [key, branch] of Object.entries(json.branches)) {
-        const branchState: BranchState = { stack: StateStack.fromJSON(branch.stack) };
+        const branchState: BranchState = {
+          stack: StateStack.fromJSON(branch.stack),
+        };
         if (branch.interruptId) branchState.interruptId = branch.interruptId;
-        if (branch.interruptData) branchState.interruptData = branch.interruptData;
+        if (branch.interruptData)
+          branchState.interruptData = branch.interruptData;
         if (branch.result !== undefined) branchState.result = branch.result;
         state.branches[key] = branchState;
       }
@@ -176,6 +266,7 @@ export class StateStack {
   deserializeMode(): void {
     this.mode = "deserialize";
     this.deserializeStackLength = this.stack.length;
+    this.stack.forEach((frame) => frame.deserializeMode());
   }
 
   pop(): State | undefined {
@@ -225,7 +316,7 @@ export class StateStack {
 
   toJSON(): StateStackJSON {
     return {
-      stack: this.stack.map((frame) => this.stackToJSON(frame)),
+      stack: this.stack.map((frame) => frame.toJSON()),
       other: deepClone(this.other),
       mode: this.mode,
       deserializeStackLength: this.deserializeStackLength,
@@ -244,10 +335,6 @@ export class StateStack {
       json.interruptData = deepClone(branch.interruptData);
     }
     return json;
-  }
-
-  private stackToJSON(state: State): StateJSON {
-    return state.toJSON();
   }
 
   static fromJSON(json: StateStackJSON): StateStack {

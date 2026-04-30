@@ -1,28 +1,21 @@
-def confirmItem(item: string): string {
-  print("Confirming item:", item)
-  interrupt("approve ${item}?")
-  print("Approved item:", item)
-  return "confirmed: ${item}"
+def add(a: number, b: number): number {
+  return a + b
 }
 
-/** Search for items matching a query. Returns an array of result strings. */
-def search(query: string): string[] {
-  print("Searching for '${query}'...")
-  let results = fork(["${query}-1", "${query}-2"]) as item {
-    print("Got search result:", item)
-    return confirmItem(item)
-  }
-  return results
+node testUnknownArg() {
+  const fn = add
+  const result = fn(a: 1, z: 99)
+  return result
 }
 
-type Response = {
-  searches: string[]
+node testMissingRequired() {
+  const fn = add
+  const result = fn(a: 1)
+  return result
 }
 
 node main() {
-  const result: Response = llm("Please search for both 'cats' and 'dogs'. Return the searches field with all the search results combined into a single flat array.", { 
-    tools: [search]
-  })
-  print("Final result:", JSON.stringify(result, null, 2))
-  return result.searches
+  const fn = add
+  const result = fn(1, a: 2)
+  return result
 }

@@ -8,6 +8,7 @@ import { __pipeBind } from "./result.js";
 import { debugStep } from "./debugger.js";
 import { color } from "termcolors";
 import { id } from "smoltalk";
+import { exit } from "process";
 
 /**
  * Runner centralizes step execution logic for generated Agency code.
@@ -157,25 +158,20 @@ export class Runner {
         // Function context: halt with raw interrupt so caller's isInterrupt check works.
         this.halt(dbg);
       }
-      //console.log(`[Runner] Debug hook triggered at step ${this.stepPath(id)}, halting execution. node context: ${this.nodeContext}`);
       return true;
     }
 
     // debugStep didn't pause — clear the flag
     this.clearDebugFlag(id);
-    //console.log(`[Runner] no dbg interrupt at step ${this.stepPath(id)}, continuing execution. node context: ${this.nodeContext}`);
     return false;
   }
 
   /** Clean up the debug flag for a step after it completes without halting. */
   private clearDebugFlag(id: number): void {
-    //console.log(color.green(`[Runner] Clearing debug flag for step ${this.stepPath(id)}. node context: ${this.nodeContext}. locals before cleanup: ${JSON.stringify(this.frame.locals)}`));
     if (!this.ctx.hasDebugger() && !this.ctx.hasTraceWriter()) {
-      //console.log(`[Runner] No debugger or trace writer in context, skipping debug flag cleanup for step ${this.stepPath(id)}.`);
       return;
     }
     delete this.frame.locals[this.debugFlagKey(id)];
-    //console.log(color.green(`[Runner] Debug flag cleared for step ${this.stepPath(id)}. locals after cleanup: ${JSON.stringify(this.frame.locals)}`));
   }
 
   private stepPath(id: number): string {
@@ -489,7 +485,7 @@ export class Runner {
     if (this.shouldSkip()) return;
 
     // Enter if: counter hasn't passed this OR branch data exists (resuming async)
-    const hasExistingBranch = this.frame.branches?.[branchKey];
+    const hasExistingBranch = this.frame.getBranch(branchKey) !== undefined;
     if (this.getCounter() > id && !hasExistingBranch) return;
 
     if (await this.maybeDebugHook(id)) return;
@@ -543,74 +539,55 @@ export class Runner {
     this.path.push(id);
     let result: any;
     try {
-      if (!this.frame.branches) this.frame.branches = {};
-
-      const branchStacks = items.map((_item, i) => {
+      const promises = items.map((item, i) => {
         const branchKey = this.forkBranchKey(id, i);
-        const existing = this.frame.branches![branchKey];
-        if (existing) {
+        const existing = this.frame.getOrCreateBranch(branchKey);
+        if (existing?.result !== undefined) {
+          return Promise.resolve(existing.result.result);
+        }
+        return blockFn(item, i, existing?.stack);
+
+        /*         if (existing) {
           // If this thread already completed, return null — we'll use cached result
           if (existing.result !== undefined) {
             return null;
           }
-          existing.stack.deserializeMode();
+          // existing.stack.deserializeMode();
           return existing.stack;
         }
-        const stack = new StateStack();
-        this.frame.branches![branchKey] = { stack };
-        return stack;
-      });
-
-      const promises = items.map((item, i) => {
-        const branchKey = this.forkBranchKey(id, i);
-        const existing = this.frame.branches![branchKey];
-        // Skip re-execution for completed threads
-        if (existing?.result !== undefined) {
-          return Promise.resolve(existing.result.result);
-        }
-        return blockFn(item, i, branchStacks[i]!);
+        const branchState = this.frame.newBranch(branchKey);
+        return branchState.stack; */
       });
 
       if (mode === "all") {
         const settled = await Promise.allSettled(promises);
         const interrupts: any[] = [];
 
-        // Track per-branch checkpoint stacks for interrupted threads
-        const branchCheckpoints: Record<string, StateStackJSON> = {};
-
         for (let i = 0; i < settled.length; i++) {
           const s = settled[i];
           const branchKey = this.forkBranchKey(id, i);
-          if (s.status === "fulfilled" && hasInterrupts(s.value)) {
+          if (s.status === "rejected") {
+            throw s.reason;
+          }
+          if (hasInterrupts(s.value)) {
+            /* console.log(JSON.stringify(s.value, null, 2));
+            exit(1); */
             interrupts.push(...s.value);
-            if (this.frame.branches![branchKey] && s.value.length === 1) {
-              this.frame.branches![branchKey].interruptId = s.value[0].interruptId;
-            }
+            this.frame.setInterruptOnBranch(
+              branchKey,
+              s.value[0].interruptId,
+              s.value[0].interruptData,
+              s.value[0].checkpoint,
+            );
+            // console.log(color.yellow(JSON.stringify(s.value, null, 2)));
             // The interrupt's checkpoint captured the branch stack at the right moment.
             // Save it so we can transplant it onto the branch in the fork checkpoint.
-            const branchCp = s.value[0]?.checkpoint;
-            if (branchCp) {
-              branchCheckpoints[branchKey] = branchCp.stack;
-            }
-          } else if (s.status === "fulfilled") {
-            if (this.frame.branches![branchKey]) {
-              this.frame.branches![branchKey].result = { result: s.value };
-            }
           } else {
-            throw s.reason;
+            this.frame.setResultOnBranch(branchKey, s.value);
           }
         }
 
         if (interrupts.length > 0) {
-          // Transplant each interrupted branch's stack from its per-branch checkpoint.
-          // The branch stacks are now empty (functions popped normally), so we restore
-          // them from the checkpoints that captured them at the right moment.
-          for (const [branchKey, stackJSON] of Object.entries(branchCheckpoints)) {
-            if (this.frame.branches![branchKey]) {
-              this.frame.branches![branchKey].stack = StateStack.fromJSON(stackJSON);
-            }
-          }
-
           // Create the fork checkpoint — branch stacks are now correct
           const cpId = this.ctx.checkpoints.create(stateStack, this.ctx, {
             moduleId: this.moduleId,
@@ -618,6 +595,8 @@ export class Runner {
             stepPath: this.stepPath(id),
           });
           const cp = this.ctx.checkpoints.get(cpId);
+          // console.log(JSON.stringify(cp, null, 2));
+          // exit(1);
           for (const intr of interrupts) {
             intr.checkpoint = cp;
             intr.checkpointId = cpId;
@@ -632,9 +611,7 @@ export class Runner {
       }
 
       // Clean up branch state after successful completion
-      for (let i = 0; i < items.length; i++) {
-        delete this.frame.branches![this.forkBranchKey(id, i)];
-      }
+      this.frame.popBranches();
     } finally {
       this.path.pop();
     }

@@ -302,14 +302,10 @@ export async function runPrompt(args: {
         const branchKey = `tool_${toolCall.id}`;
         const existing = stack.getBranch(branchKey);
 
-        // Skip completed branches (cached result from previous interrupt cycle)
+        // Skip completed branches (cached result from previous interrupt cycle).
+        // The toolMessage was already pushed in the original run and restored
+        // via messagesJSON, so we don't push it again here.
         if (existing?.result !== undefined) {
-          messages.push(
-            smoltalk.toolMessage(existing.result.result, {
-              tool_call_id: toolCall.id,
-              name: toolCall.name,
-            }),
-          );
           continue;
         }
 
@@ -479,7 +475,11 @@ export async function runPrompt(args: {
             name: toolCall.name,
           }),
         );
-        stack.deleteBranch(branchKey);
+        // Don't deleteBranch here. If a sibling tool in this same round
+        // interrupts, the saved messagesJSON already contains this success's
+        // toolMessage; on resume, the cached-result short-circuit relies on
+        // `existing.result` being present to avoid re-invoking the tool.
+        // popBranches() at the end of a successful round handles cleanup.
       }
 
       // If any tool calls interrupted, create checkpoint and return

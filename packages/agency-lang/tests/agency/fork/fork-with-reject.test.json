@@ -2,17 +2,13 @@
   "tests": [
     {
       "nodeName": "main",
-      "description": "Fork with 'with reject' modifier — interrupts auto-rejected, both threads return failure",
       "input": "",
-      "expectedOutput": "[{\"__type\":\"resultType\",\"success\":false},{\"__type\":\"resultType\",\"success\":false}]",
+      "expectedOutput": "[{\"success\":false,\"error\":\"approve a?\"},{\"success\":false,\"error\":\"approve b?\"}]",
       "evaluationCriteria": [
         {
-          "type": "llmJudge",
-          "judgePrompt": "The output should be an array of 2 items. Both should be failure objects with success:false and error mentioning 'interrupt rejected'.",
-          "desiredAccuracy": 70
+          "type": "exact"
         }
-      ],
-      "interruptHandlers": []
+      ]
     }
   ]
 }

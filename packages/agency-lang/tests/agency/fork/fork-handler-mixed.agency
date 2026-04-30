@@ -1,3 +1,4 @@
+import { map } from "std::array"
 def riskyOp(label: string): string {
   interrupt("approve ${label}?")
   return "confirmed: ${label}"
@@ -8,7 +9,16 @@ node main() {
     let results = fork(["allow", "deny"]) as item {
       return riskyOp(item)
     }
-    return results
+    const results2 = map(results) as result {
+      if (isFailure(result)) {
+        return { 
+          success: false,
+          error: result.error
+        }
+      }
+      return result
+    }
+    return results2
   } with (data) {
     if (data == "approve deny?") {
       return reject()

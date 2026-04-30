@@ -1,21 +1,29 @@
-def add(a: number, b: number): number {
-  return a + b
-}
-
-node testUnknownArg() {
-  const fn = add
-  const result = fn(a: 1, z: 99)
-  return result
-}
-
-node testMissingRequired() {
-  const fn = add
-  const result = fn(a: 1)
-  return result
+import { map } from "std::array"
+def riskyOp(label: string): string {
+  interrupt("approve ${label}?")
+  return "confirmed: ${label}"
 }
 
 node main() {
-  const fn = add
-  const result = fn(1, a: 2)
-  return result
+  handle {
+    let results = fork(["allow", "deny"]) as item {
+      return riskyOp(item)
+    }
+    print(results)
+    const results2 = map(results) as result {
+      if (isFailure(result)) {
+        return { 
+          success: false,
+          error: result.error
+        }
+      }
+      return result
+    }
+    print(results2)
+  } with (data) {
+    if (data == "approve deny?") {
+      return reject()
+    }
+    return approve()
+  }
 }

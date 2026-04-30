@@ -428,7 +428,7 @@ export async function runPrompt(args: {
       // If any tool calls interrupted, create checkpoint and return
       if (interrupts.length > 0) {
         self.messagesJSON = messages.toJSON().messages;
-        const cpId = ctx.checkpoints.create(ctx, {
+        const cpId = ctx.checkpoints.create(stateStack, ctx, {
           moduleId: checkpointInfo?.moduleId ?? "",
           scopeName: checkpointInfo?.scopeName ?? "",
           stepPath: checkpointInfo?.stepPath ?? "",

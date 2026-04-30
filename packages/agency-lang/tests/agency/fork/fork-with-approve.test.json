@@ -1,0 +1,12 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Fork with 'with approve' modifier — interrupts auto-approved, no interrupts reach caller",
+      "input": "",
+      "expectedOutput": "[\"confirmed: a\",\"confirmed: b\"]",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "interruptHandlers": []
+    }
+  ]
+}

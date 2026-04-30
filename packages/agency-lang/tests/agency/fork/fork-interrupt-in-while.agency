@@ -1,0 +1,15 @@
+def countdown(start: number): number {
+  let n = start
+  while (n > 0) {
+    interrupt("tick ${n}")
+    n = n - 1
+  }
+  return n
+}
+
+node main() {
+  let results = fork([2, 3]) as start {
+    return countdown(start)
+  }
+  return results
+}

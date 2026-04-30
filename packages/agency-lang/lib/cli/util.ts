@@ -226,8 +226,8 @@ export async function executeNodeAsync({
     const results = readFileSync(resultsFile, "utf-8");
     return { data: JSON.parse(results).data, stdout, stderr };
   } finally {
-    // try { fs.unlinkSync(evaluateFile); } catch {}
-    // try { fs.unlinkSync(resultsFile); } catch {}
+    try { fs.unlinkSync(evaluateFile); } catch { }
+    try { fs.unlinkSync(resultsFile); } catch { }
   }
 }
 

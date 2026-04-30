@@ -1,0 +1,21 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Fork threads each modify a global — after interrupt/resume, each thread sees its own copy of the global, not the other thread's modifications",
+      "input": "",
+      "expectedOutput": "",
+      "evaluationCriteria": [
+        {
+          "type": "llmJudge",
+          "judgePrompt": "Each fork thread increments a shared counter then interrupts. After resume, each adds 10 to its own copy. The key test: each thread should see its OWN counter value (before=1 for first thread, before=2 for second), and after adding 10, each should have its own independent result (11 and 12). The threads should NOT share the counter across the interrupt boundary. If both threads show the same 'before' value or the counter values are mixed between threads, that's a failure.",
+          "desiredAccuracy": 80
+        }
+      ],
+      "interruptHandlers": [
+        { "action": "approve" },
+        { "action": "approve" }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,18 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Fork with interrupt inside for loop — each thread loops and interrupts per item, all approved across multiple cycles",
+      "input": "",
+      "expectedOutput": "[[\"done: x\",\"done: y\"],[\"done: a\",\"done: b\"]]",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "interruptHandlers": [
+        { "action": "approve" },
+        { "action": "approve" },
+        { "action": "approve" },
+        { "action": "approve" }
+      ],
+      "retry": 1
+    }
+  ]
+}

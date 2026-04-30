@@ -1,0 +1,16 @@
+let counter = 0
+
+def incrementAndInterrupt(label: string): string {
+  counter = counter + 1
+  let myCount = counter
+  interrupt("approve ${label}? counter=${myCount}")
+  counter = counter + 10
+  return "${label}: before=${myCount}, after=${counter}"
+}
+
+node main() {
+  let results = fork(["a", "b"]) as item {
+    return incrementAndInterrupt(item)
+  }
+  return { results: results, finalCounter: counter }
+}

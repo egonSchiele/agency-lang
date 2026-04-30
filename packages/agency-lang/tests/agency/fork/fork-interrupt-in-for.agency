@@ -1,0 +1,15 @@
+def processItems(items: string[]): string[] {
+  let results: string[] = []
+  for (item in items) {
+    interrupt("approve ${item}?")
+    results.push("done: ${item}")
+  }
+  return results
+}
+
+node main() {
+  let results = fork([["x", "y"], ["a", "b"]]) as items {
+    return processItems(items)
+  }
+  return results
+}

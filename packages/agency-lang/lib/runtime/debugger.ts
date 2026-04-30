@@ -90,7 +90,7 @@ export async function debugStep(
     
    */
 
-  const checkpointId = ctx.checkpoints.create(ctx, {
+  const checkpointId = ctx.checkpoints.create(ctx.stateStack, ctx, {
     moduleId: info.moduleId,
     scopeName: info.scopeName,
     stepPath: info.stepPath,

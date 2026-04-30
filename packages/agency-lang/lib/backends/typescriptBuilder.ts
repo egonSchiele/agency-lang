@@ -1716,7 +1716,7 @@ export class TypeScriptBuilder {
         "__error",
         // finally block: pop state stack and conditionally fire onFunctionEnd.
         ts.statements([
-          ts.raw("if (!__isForked) { __stateStack.pop() }"),
+          ts.raw("__stateStack.pop()"),
           ...(skipHooks ? [] : [
             ts.if(
               ts.id("__functionCompleted"),

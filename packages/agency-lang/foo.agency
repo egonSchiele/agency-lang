@@ -1,21 +1,32 @@
-def confirmItem(item: string): string {
-  print("confirm ${item}")
-  interrupt("approve ${item}?")
-  return "confirmed: ${item}"
+def userInputHandler(data: any) {
+  return propagate()
+  print("interrupt received")
+  printJSON(data)
+  const msg = input("approve? (y/n)")
+  if (msg.toLowerCase() === "y" || msg.toLowerCase() === "yes") {
+    return approve()
+  } else {
+    return reject()
+  }
 }
 
-def innerFork(prefix: string): string[] {
-  let inner = fork(["1", "2"]) as num {
-    return confirmItem("${prefix}-${num}")
+def processItems(items: string[]): string[] {
+  let results: string[] = []
+  print(color.blue("Processing items:", items))
+  for (item in items) {
+    print(color.yellow("Processing item:", item))
+    interrupt("approve ${item}?")
+    print(color.green("Approved item:", item))
+    results.push("done: ${item}")
   }
-  return inner
+  return results
 }
 
 node main() {
   handle {
-  let results = fork(["x", "y"]) as outer {
-    return innerFork(outer)
-  }
-  } with approve
+    let results = fork([["x", "y"], ["a", "b"]]) as items {
+      return processItems(items)
+    }
+  } with userInputHandler
   return results
 }

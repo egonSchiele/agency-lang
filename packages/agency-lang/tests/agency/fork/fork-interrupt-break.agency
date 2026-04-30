@@ -1,0 +1,18 @@
+def processUntilStop(items: string[]): string[] {
+  let results: string[] = []
+  for (item in items) {
+    if (item == "stop") {
+      interrupt("hit stop, approve to break?")
+      break
+    }
+    results.push(item)
+  }
+  return results
+}
+
+node main() {
+  let results = fork([["a", "stop", "c"], ["x", "y", "stop", "z"]]) as items {
+    return processUntilStop(items)
+  }
+  return results
+}

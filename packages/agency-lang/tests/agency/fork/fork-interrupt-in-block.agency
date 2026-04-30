@@ -1,0 +1,18 @@
+def riskyOp(label: string): string {
+  interrupt("approve ${label}?")
+  return "done: ${label}"
+}
+
+def processInThread(item: string): string {
+  thread {
+    let result = riskyOp(item)
+    return result
+  }
+}
+
+node main() {
+  let results = fork(["x", "y"]) as item {
+    return processInThread(item)
+  }
+  return results
+}

@@ -1,0 +1,18 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Fork with handler that approves one thread and rejects the other based on interrupt data",
+      "input": "",
+      "expectedOutput": "[\"confirmed: allow\",{\"__type\":\"resultType\",\"success\":false}]",
+      "evaluationCriteria": [
+        {
+          "type": "llmJudge",
+          "judgePrompt": "The output should be an array of 2 items. The first should be 'confirmed: allow'. The second should be a failure object with success:false.",
+          "desiredAccuracy": 90
+        }
+      ],
+      "interruptHandlers": []
+    }
+  ]
+}

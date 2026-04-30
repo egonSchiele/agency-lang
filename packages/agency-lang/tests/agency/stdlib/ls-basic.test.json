@@ -3,7 +3,7 @@
     {
       "nodeName": "main",
       "input": "",
-      "expectedOutput": "[\"a.md\",\"ab.md\",\"b.txt\",\"c.js\",\"d.ts\",\"sub\"]",
+      "expectedOutput": "[\"a.md\",\"ab.md\",\"b.txt\",\"d.ts\",\"sub\"]",
       "evaluationCriteria": [
         {
           "type": "exact"

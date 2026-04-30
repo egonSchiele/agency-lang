@@ -1,3 +1,4 @@
+import { map } from "std::array"
 def confirmItem(item: string): string {
   interrupt("approve ${item}?")
   return "confirmed: ${item}"
@@ -7,5 +8,15 @@ node main() {
   let results = fork(["a", "b"]) as item {
     return confirmItem(item)
   }
-  return results
+  const results2 = map(results) as result {
+    if (isSuccess(result)) {
+      return result.value
+    } else {
+      return { 
+        success: false,
+        error: result.error
+      }
+    }
+  }
+  return results2
 }

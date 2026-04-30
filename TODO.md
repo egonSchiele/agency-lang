@@ -93,7 +93,8 @@ evals
 probabilistic exec
 better typechecker / better typing
 llm func general interface
-  
+
+
   - also capture tokens/cost in trace?
 
   cant seem to step after tabbing around
@@ -115,3 +116,13 @@ better debugger test harness
 make race work with interrupts
 async keyword and interrupts?
 `with reject` cant be used in a return statement?
+
+
+tool-retry test failure:
+```
+Running JS test: tool-retry
+Tool call "unsafeChainTool" crashed: Unknown named argument 'action' in call to 'unsafeChainTool'
+Tool call "unsafeMethodTool" crashed: Unknown named argument 'action' in call to 'unsafeMethodTool'
+```
+
+import * from std::array into every file

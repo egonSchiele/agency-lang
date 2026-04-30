@@ -1,6 +1,4 @@
 {
-  "skip": true,
-  "skipReason": "Race with interrupts needs investigation — resume after interrupt re-triggers other threads",
   "tests": [
     {
       "nodeName": "main",

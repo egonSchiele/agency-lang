@@ -237,6 +237,13 @@ export class StateStack {
   interrupted: boolean = false;
   hasChildInterrupts: boolean = false;
 
+  // Per-branch abort signal. Set by Runner.runRace / Runner.runForkAll on each
+  // branch's stack. When the parent fork/race aborts a losing branch, this
+  // signal fires; runtime checks (ctx.isCancelled, smoltalk's HTTP signal)
+  // observe it and stop work in the affected branch only.
+  // NOT serialized — purely a live execution concept.
+  abortSignal?: AbortSignal;
+
   constructor(
     stack: State[] = [],
     mode: "serialize" | "deserialize" = "serialize",

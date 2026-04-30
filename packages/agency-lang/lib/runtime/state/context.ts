@@ -263,6 +263,35 @@ export class RuntimeContext<T> {
     return this.abortController.signal.aborted;
   }
 
+  /**
+   * Branch-aware cancellation check. Returns true if either:
+   *   - the global ctx is aborted (e.g., user pressed Ctrl-C), OR
+   *   - the given branch stack's per-branch abort signal has fired (e.g.,
+   *     this branch is a race loser).
+   *
+   * Pass the local stateStack at any call site that lives inside a fork/race
+   * branch so the check sees that branch's signal. Without a stack arg, this
+   * is equivalent to `ctx.aborted`.
+   */
+  isCancelled(stack?: StateStack): boolean {
+    if (this.abortController.signal.aborted) return true;
+    return !!stack?.abortSignal?.aborted;
+  }
+
+  /**
+   * Branch-aware AbortSignal for HTTP/fetch/streaming calls. Returns a
+   * composite signal that fires on either global ctx abort OR the given
+   * branch stack's abort. Pass to smoltalk's `abortSignal` so per-branch
+   * cancellation actually tears down in-flight network requests.
+   *
+   * If no stack is given (or the stack has no branch signal), returns the
+   * global ctx signal — same behavior as before.
+   */
+  getAbortSignal(stack?: StateStack): AbortSignal {
+    if (!stack?.abortSignal) return this.abortController.signal;
+    return AbortSignal.any([this.abortController.signal, stack.abortSignal]);
+  }
+
   cancel(reason?: string): void {
     if (!this.abortController.signal.aborted) {
       this.abortController.abort(new AgencyCancelledError(reason));

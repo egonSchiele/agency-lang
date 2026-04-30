@@ -32,6 +32,7 @@ async function _runPrompt({
   prompt,
   responseFormat,
   clientConfig,
+  stateStack,
 }: {
   ctx: RuntimeContext<GraphState>;
   messages: MessageThread;
@@ -39,8 +40,12 @@ async function _runPrompt({
   prompt: string;
   responseFormat?: any;
   clientConfig: Partial<smoltalk.SmolPromptConfig>;
+  /** The branch-local stack, if this _runPrompt call is running inside a
+   * fork/race branch. Used for branch-aware cancellation checks and for
+   * scoping the LLM HTTP abort signal to the current branch. */
+  stateStack?: StateStack;
 }): Promise<{ messages: MessageThread; toolCalls: smoltalk.ToolCallJSON[] }> {
-  if (ctx.aborted) {
+  if (ctx.isCancelled(stateStack)) {
     throw new AgencyCancelledError();
   }
 
@@ -62,7 +67,7 @@ async function _runPrompt({
   }
 
   // Re-check after hook — cancellation may have occurred during the callback
-  if (ctx.aborted) {
+  if (ctx.isCancelled(stateStack)) {
     throw new AgencyCancelledError();
   }
 
@@ -71,7 +76,7 @@ async function _runPrompt({
     messages: messages.getMessages(),
     tools,
     responseFormat,
-    abortSignal: ctx.abortController.signal,
+    abortSignal: ctx.getAbortSignal(stateStack),
     metadata: clientConfig,
   } as any;
 
@@ -251,6 +256,7 @@ export async function runPrompt(args: {
       prompt,
       responseFormat,
       clientConfig,
+      stateStack,
     });
     messages = result.messages;
     toolCalls = result.toolCalls;
@@ -263,7 +269,7 @@ export async function runPrompt(args: {
   try {
     // Handle tool calls
     while (toolCalls.length > 0) {
-      if (ctx.aborted) throw new AgencyCancelledError();
+      if (ctx.isCancelled(stateStack)) throw new AgencyCancelledError();
       if (self.toolCallRound++ >= maxToolCallRounds) {
         throw new Error(
           `Exceeded maximum tool call rounds (${maxToolCallRounds})`,
@@ -273,7 +279,7 @@ export async function runPrompt(args: {
       const interrupts: Interrupt[] = [];
 
       for (const toolCall of toolCalls) {
-        if (ctx.aborted) throw new AgencyCancelledError();
+        if (ctx.isCancelled(stateStack)) throw new AgencyCancelledError();
 
         const handler = toolFunctions.find((fn) => fn.name === toolCall.name);
         if (!handler) {
@@ -519,6 +525,7 @@ export async function runPrompt(args: {
         prompt,
         responseFormat,
         clientConfig,
+        stateStack,
       });
       messages = nextResult.messages;
       toolCalls = nextResult.toolCalls;

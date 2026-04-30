@@ -32,8 +32,11 @@ export class Runner {
   private state: any;
   private moduleId: string;
   private scopeName: string;
-  /** Per-branch cancellation signal (race losers). Checked between steps. */
-  private abortSignal?: AbortSignal;
+  /** The StateStack this Runner is operating on. When the Runner is running
+   * inside a fork/race branch, this is the branch's stack — and reading
+   * `stack.abortSignal` lets us notice if the branch has been cancelled
+   * (e.g., a race loser whose winner already resolved). */
+  private stack?: StateStack;
 
   constructor(
     ctx: RuntimeContext<any>,
@@ -43,7 +46,7 @@ export class Runner {
       state?: any;
       moduleId?: string;
       scopeName?: string;
-      abortSignal?: AbortSignal;
+      stack?: StateStack;
     },
   ) {
     this.ctx = ctx;
@@ -52,7 +55,7 @@ export class Runner {
     this.state = opts?.state ?? {};
     this.moduleId = opts?.moduleId ?? "";
     this.scopeName = opts?.scopeName ?? "";
-    this.abortSignal = opts?.abortSignal;
+    this.stack = opts?.stack;
   }
 
   // ── Path and counter management ──
@@ -104,9 +107,9 @@ export class Runner {
   }
 
   /** Check if execution should skip (halted, breaking, or continuing).
-   * Also halts if the per-branch abort signal has fired (race loser). */
+   * Also halts if the runner's branch stack has been aborted (race loser). */
   private shouldSkip(): boolean {
-    if (this.abortSignal?.aborted && !this.halted) {
+    if (this.stack?.abortSignal?.aborted && !this.halted) {
       this.halt(undefined);
     }
     return this.halted || this._break || this._continue;
@@ -533,7 +536,6 @@ export class Runner {
       item: any,
       index: number,
       branchStack: StateStack,
-      signal: AbortSignal,
     ) => Promise<any>,
     mode: "all" | "race",
     stateStack: StateStack,
@@ -591,7 +593,6 @@ export class Runner {
       item: any,
       index: number,
       branchStack: StateStack,
-      signal: AbortSignal,
     ) => Promise<any>,
     stateStack: StateStack,
   ): Promise<any> {
@@ -606,8 +607,14 @@ export class Runner {
       // branches, but having a signal in place lets generated code use it.
       if (!existing.abortController) {
         existing.abortController = new AbortController();
+        // Compose with the parent stack's signal so nested fork/race aborts
+        // propagate down through every level.
+        const parentSignal = stateStack.abortSignal;
+        existing.stack.abortSignal = parentSignal
+          ? AbortSignal.any([parentSignal, existing.abortController.signal])
+          : existing.abortController.signal;
       }
-      return blockFn(item, i, existing.stack, existing.abortController.signal);
+      return blockFn(item, i, existing.stack);
     });
 
     const settled = await Promise.allSettled(promises);
@@ -660,7 +667,6 @@ export class Runner {
       item: any,
       index: number,
       branchStack: StateStack,
-      signal: AbortSignal,
     ) => Promise<any>,
     stateStack: StateStack,
   ): Promise<any> {
@@ -675,9 +681,16 @@ export class Runner {
         }
         if (!existing.abortController) {
           existing.abortController = new AbortController();
+          // Compose with the parent stack's signal so nested race aborts
+          // propagate down through every level. The branch's signal is
+          // attached to its stack so any code holding the stack (runPrompt,
+          // ctx.isCancelled checks, etc.) observes a branch-only abort.
+          const parentSignal = stateStack.abortSignal;
+          existing.stack.abortSignal = parentSignal
+            ? AbortSignal.any([parentSignal, existing.abortController.signal])
+            : existing.abortController.signal;
         }
-        const signal = existing.abortController.signal;
-        return blockFn(item, i, existing.stack, signal).then((value) => ({
+        return blockFn(item, i, existing.stack).then((value) => ({
           index: i,
           value,
         }));
@@ -750,7 +763,6 @@ export class Runner {
       item: any,
       index: number,
       branchStack: StateStack,
-      signal: AbortSignal,
     ) => Promise<any>,
     stateStack: StateStack,
     winnerIndex: number,
@@ -768,17 +780,16 @@ export class Runner {
       return existing.result.result;
     }
 
-    // Pending winner: re-run blockFn with the existing branch stack and a
-    // fresh AbortController (the resume is a brand-new execution).
+    // Pending winner: re-run blockFn with the existing branch stack. We
+    // start a fresh AbortController for the resumed run; the branch stack
+    // hasn't been re-attached to a stack signal yet, but resume only re-runs
+    // the winner so there are no losers to abort. (If the winner itself
+    // contains nested fork/race, those will install their own signals.)
     if (!existing.abortController) {
       existing.abortController = new AbortController();
+      existing.stack.abortSignal = existing.abortController.signal;
     }
-    const value = await blockFn(
-      items[winnerIndex],
-      winnerIndex,
-      existing.stack,
-      existing.abortController.signal,
-    );
+    const value = await blockFn(items[winnerIndex], winnerIndex, existing.stack);
 
     if (hasInterrupts(value)) {
       this.frame.setInterruptOnBranch(

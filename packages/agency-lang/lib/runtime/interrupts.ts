@@ -111,6 +111,7 @@ export function isApproved(obj: any): obj is Approved {
 export async function interruptWithHandlers<T = any>(
   data: T,
   ctx: RuntimeContext<any>,
+  stack?: StateStack,
 ): Promise<Interrupt<T>[] | Approved | Rejected> {
   if (ctx.handlers.length === 0) {
     return [interrupt(data, ctx.getRunId())];
@@ -119,7 +120,7 @@ export async function interruptWithHandlers<T = any>(
   let hasApproval = false;
   let hasPropagation = false;
   for (let i = ctx.handlers.length - 1; i >= 0; i--) {
-    if (ctx.aborted) {
+    if (ctx.isCancelled(stack)) {
       throw new AgencyCancelledError();
     }
     // Enter tool call context so that the debugger treats handler execution

@@ -1,0 +1,87 @@
+// Stress test combining: for loop, handler with data-driven logic,
+// LLM call with tool, fork inside the tool, race inside the fork (with
+// abort-signal cancellation of the slow branch), conditional interrupt
+// (only one item interrupts), multi-cycle resume across rounds, and
+// mixed approve/reject responses producing a Result<string> per branch.
+
+const auditLog: string[] = []
+
+// Race between a fast branch (returns immediately) and a slow multi-step
+// branch (sleeps 0.5s repeatedly). Each iteration of the for loop is a
+// runner step, so the abort check fires between iterations. With
+// branch-aware abort signals, the slow branch bails out after at most one
+// sleep — without that, every fork branch's slow path would run all three.
+def quickCheck(item: string): string {
+  let result = race([
+    { id: "fast" },
+    { id: "slow" }
+  ]) as entry {
+    if (entry.id == "slow") {
+      for (n in [1, 2, 3]) {
+        sleep(0.5)
+      }
+    }
+    return "${entry.id}: ${item}"
+  }
+  return result
+}
+
+def confirmDelete(item: string): string {
+  auditLog.push("processing ${item}")
+  let checked = quickCheck(item)
+  if (item == "important") {
+    interrupt("really delete '${item}'?")
+  }
+  return "deleted: ${item} (${checked})"
+}
+
+// Tool the LLM will call. Forks across the file list in parallel; each
+// branch races, then conditionally interrupts.
+def cleanup(files: string[]): string[] {
+  let results = fork(files) as f {
+    return confirmDelete(f)
+  }
+  return results
+}
+
+// Flattens Result<string> into a uniform string so the test can use exact
+// match. If the branch's interrupt was approved, r is the success string.
+// If the branch's interrupt was rejected, r is a failure Result; we extract
+// the error message and prefix with "FAILED:" so it's easy to read in the
+// expected output.
+def extract(r: any): string {
+  if (isFailure(r)) {
+    return "FAILED: ${r.error}"
+  }
+  return r
+}
+
+type CleanupResponse = {
+  results: string[]
+}
+
+node main() {
+  let allResults: string[] = []
+  for (round in ["round1", "round2"]) {
+    auditLog.push("starting ${round}")
+    handle {
+      // Handler intercepts every interrupt fired in this block.
+      // 'safe' and 'safe2' don't interrupt — handler is never called for them.
+      // 'important' interrupts — handler propagates to the user, who responds
+      // differently per round (approve in round1, reject in round2).
+      const prompt = "Call the cleanup tool with the parameter files set to an array containing the three strings safe, important, safe2 in that order. Then return a results field set to the array that cleanup returned."
+      const result: CleanupResponse = llm(prompt, {
+        tools: [cleanup]
+      })
+      for (r in result.results) {
+        allResults.push(extract(r))
+      }
+    } with (data) {
+      if (data == "really delete 'important'?") {
+        return propagate()
+      }
+      return approve()
+    }
+  }
+  return allResults
+}

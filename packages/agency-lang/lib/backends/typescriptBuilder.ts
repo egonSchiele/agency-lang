@@ -402,7 +402,7 @@ export class TypeScriptBuilder {
 
   private isTopLevelDeclaration(node: AgencyNode): boolean {
     if (TypeScriptBuilder.TOP_LEVEL_DECLARATION_TYPES.has(node.type)) return true;
-    if (node.type === "assignment" && (node as any).scope === "shared") return true;
+    if (node.type === "assignment" && (node as any).scope === "static") return true;
     return false;
   }
 
@@ -498,15 +498,15 @@ export class TypeScriptBuilder {
     this.generatedStatements.push(this.generateToolRegistry());
 
     // Collect shared variable names and emit top-level `let` declarations
-    const sharedVarNames = new Set<string>();
+    const staticVarNames = new Set<string>();
     for (const node of program.nodes) {
-      if (node.type === "assignment" && node.scope === "shared") {
-        sharedVarNames.add(node.variableName);
+      if (node.type === "assignment" && node.scope === "static") {
+        staticVarNames.add(node.variableName);
       }
     }
-    const sharedDeclarations: TsNode[] = [];
-    for (const name of sharedVarNames) {
-      sharedDeclarations.push(ts.letDecl(name));
+    const staticDeclarations: TsNode[] = [];
+    for (const name of staticVarNames) {
+      staticDeclarations.push(ts.letDecl(name));
     }
 
     // Pass 7: Process all nodes and generate code
@@ -573,8 +573,8 @@ export class TypeScriptBuilder {
     }
 
     // Emit shared variable declarations at module level
-    if (sharedDeclarations.length > 0) {
-      sections.push(ts.statements(sharedDeclarations));
+    if (staticDeclarations.length > 0) {
+      sections.push(ts.statements(staticDeclarations));
     }
 
     // Generate __initializeGlobals function for per-execution global variable initialization

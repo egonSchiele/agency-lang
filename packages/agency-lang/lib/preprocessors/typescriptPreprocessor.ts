@@ -1350,12 +1350,12 @@ export class TypescriptPreprocessor {
    */
   protected resolveVariableScopes(): void {
     const globalVars = new Set<string>();
-    const sharedVars = new Set<string>();
+    const staticVars = new Set<string>();
     const importedVars = new Set<string>();
     const funcArgs: Record<string, string[]> = {};
     const localVarsInFunction: Record<string, Set<string>> = {};
 
-    // First, we collect all global and shared variables
+    // First, we collect all global and static variables
     for (const { node, scopes } of walkNodesArray(this.program.nodes)) {
       if (scopes.length === 0) {
         throw new Error(
@@ -1364,8 +1364,8 @@ export class TypescriptPreprocessor {
       }
       if (scopes.at(-1)?.type !== "global") continue;
       if (node.type === "assignment") {
-        if (node.shared) {
-          sharedVars.add(node.variableName);
+        if (node.static) {
+          staticVars.add(node.variableName);
         } else {
           globalVars.add(node.variableName);
         }
@@ -1403,8 +1403,8 @@ export class TypescriptPreprocessor {
       if (importedVars.has(varName)) {
         return "imported";
       }
-      if (sharedVars.has(varName)) {
-        return "shared";
+      if (staticVars.has(varName)) {
+        return "static";
       }
       if (globalVars.has(varName)) {
         return "global";

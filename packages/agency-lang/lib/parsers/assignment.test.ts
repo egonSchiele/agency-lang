@@ -593,7 +593,7 @@ describe("sharedAssignmentParser", () => {
     if (result.success) {
       expect(result.result.type).toBe("assignment");
       expect(result.result.variableName).toBe("x");
-      expect(result.result.shared).toBe(true);
+      expect(result.result.static).toBe(true);
       expect(result.result.declKind).toBe("let");
       expect(result.result.value).toEqualWithoutLoc({ type: "number", value: "42" });
     }
@@ -603,7 +603,7 @@ describe("sharedAssignmentParser", () => {
     const result = sharedAssignmentParser('shared const name = "Alice"');
     expect(result.success).toBe(true);
     if (result.success) {
-      expect(result.result.shared).toBe(true);
+      expect(result.result.static).toBe(true);
       expect(result.result.declKind).toBe("const");
       expect(result.result.variableName).toBe("name");
     }
@@ -613,7 +613,7 @@ describe("sharedAssignmentParser", () => {
     const result = sharedAssignmentParser('shared const myPrompt = read("prompt.md")');
     expect(result.success).toBe(true);
     if (result.success) {
-      expect(result.result.shared).toBe(true);
+      expect(result.result.static).toBe(true);
       expect(result.result.declKind).toBe("const");
       expect(result.result.variableName).toBe("myPrompt");
       expect(result.result.value.type).toBe("functionCall");
@@ -639,7 +639,7 @@ describe("sharedAssignmentParser", () => {
     const result = assignmentParser("x = 42");
     expect(result.success).toBe(true);
     if (result.success) {
-      expect(result.result.shared).toBeUndefined();
+      expect(result.result.static).toBeUndefined();
     }
   });
 

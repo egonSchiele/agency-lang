@@ -2080,7 +2080,7 @@ export const sharedAssignmentParser: Parser<Assignment> = (input: string) => {
   if (!result.result.declKind) {
     return failure("shared requires 'let' or 'const' (e.g., 'shared let x = 1')", input);
   }
-  return success({ ...result.result, shared: true }, result.rest);
+  return success({ ...result.result, static: true }, result.rest);
 };
 
 const trim = (s: string) => s.trim();

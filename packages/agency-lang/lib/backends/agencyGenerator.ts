@@ -404,7 +404,7 @@ export class AgencyGenerator {
     const varName = node.typeHint
       ? `${node.variableName}${chainStr}: ${variableTypeToString(node.typeHint, this.typeAliases)}${bangSuffix}`
       : `${node.variableName}${chainStr}`;
-    const sharedPrefix = node.shared ? "shared " : "";
+    const staticPrefix = node.static ? "static " : "";
     const declPrefix = node.declKind ? `${node.declKind} ` : "";
     let valueCode =
       node.value.type === "binOpExpression"
@@ -412,7 +412,7 @@ export class AgencyGenerator {
         : this.processNode(node.value).trim();
     return (
       tags +
-      this.indentStr(`${sharedPrefix}${declPrefix}${varName} = ${valueCode}`)
+      this.indentStr(`${staticPrefix}${declPrefix}${varName} = ${valueCode}`)
     );
   }
 

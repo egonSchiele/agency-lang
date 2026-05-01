@@ -41,8 +41,8 @@ export function scopeKey(scope: Scope): string {
       return `local`;
     case "imported":
       return "imported";
-    case "shared":
-      return "shared";
+    case "static":
+      return "static";
     case "block":
       return `block:${scope.blockName}`;
   }

@@ -84,7 +84,7 @@ each call will get its own copy of `globalVar`.
  * - "node"     — graph node execution scope
  * - "args"     — function/node parameters
  * - "imported" — variable from an import statement
- * - "shared"   — shared across all calls to an agent
+ * - "static"   — initialized once, immutable, shared across all runs
  * - "local"    — a variable declared inside a function or node body (not including parameters)
  * 
  * ## Function vs Node Scope
@@ -95,30 +95,15 @@ each call will get its own copy of `globalVar`.
  * This is because some things work differently in functions versus nodes. For example, when returning from a node,
  * we wrap the result in an object and attach messages to the object as well.
  * 
- * ## Shared
- * Shared variables are global variables that are shared across all calls to an agency node function.
- * These are the only types of variables that don't get isolated execution context. If you have
- * a shared variable named `sharedVar`, that variable will be shared across all calls happening
- * now and in the future.
- * Agency has a feature to save and restore state between interrupts. All state gets saved and restored,
- * *except* shared variables. Because shared variables are shared across all calls there's no need
- * to save or restore them.
- * 
- * Shared variables are great for caching or for expensive operations like reading the contents of a file.
- * Because each call gets its own copy of a global variable, that means that global variables are initialized
- * fresh for each call. If the initialization is an expensive operation, such as making an HTTP call,
- * you will pay that cost on every invocation of your agent:
- * 
- * ```agency
- * // this will be called on every invocation of the agent
- * let globalVar = fetch("https://example.com/api/data");
- * ```
+ * ## Static
+ * Static variables are initialized once at module load time, deeply frozen (immutable),
+ * and shared across all runs of an agent. They are not serialized into checkpoints or
+ * restored during interrupt replay — their value is always the original init value.
  *
- * You can instead use a shared variable, and the variable will only be initialized once and used for all requests:
+ * Static variables are great for expensive one-time operations like reading prompt files:
  *
  * ```agency
- * // this will only be called once, and the result will be shared across all invocations of the agent
- * shared const foo = fetch("https://example.com/api/data");
+ * static const prompt = read("prompt.txt")
  * ```
  */
 export type BlockScope = {
@@ -131,7 +116,7 @@ export type Scope =
   | FunctionScope
   | NodeScope
   | ImportedScope
-  | SharedScope
+  | StaticScope
   | LocalScope
   | BlockScope;
 export type ScopeType = Scope["type"] | "args" | "blockArgs" | "functionRef";
@@ -160,9 +145,9 @@ export type ImportedScope = {
   type: "imported";
 };
 
-// shared across all calls — lives in module namespace, not on execution context
-export type SharedScope = {
-  type: "shared";
+// static — initialized once, immutable, shared across all runs
+export type StaticScope = {
+  type: "static";
 };
 
 export type Assignment = BaseNode & {
@@ -172,7 +157,7 @@ export type Assignment = BaseNode & {
   typeHint?: VariableType;
   validated?: boolean;
   scope?: ScopeType;
-  shared?: boolean;
+  static?: boolean;
   declKind?: "let" | "const";
   value: Expression | MessageThread;
   tags?: Tag[];

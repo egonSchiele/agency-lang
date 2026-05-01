@@ -4,7 +4,6 @@ import type { SourceMap } from "../backends/sourceMap.js";
 import { DebuggerState } from "./debuggerState.js";
 import type { Interrupt } from "../runtime/interrupts.js";
 import type { AgencyCallbacks } from "../runtime/hooks.js";
-import type { RewindCheckpoint } from "../runtime/rewind.js";
 import { Checkpoint } from "../runtime/state/checkpointStore.js";
 import type { CheckpointStore } from "../runtime/state/checkpointStore.js";
 import { isDebugger, isInterrupt, hasInterrupts } from "../runtime/interrupts.js";
@@ -28,7 +27,7 @@ type ModuleFunctions = {
     },
   ) => Promise<any>;
   rewindFrom: (
-    checkpoint: RewindCheckpoint,
+    checkpoint: Checkpoint,
     overrides: Record<string, unknown>,
     opts?: { metadata?: Record<string, any> },
   ) => Promise<any>;
@@ -538,23 +537,10 @@ export class DebuggerDriver {
       this.ui.state.resetOverrides();
     }
 
-    // rewindFrom expects a RewindCheckpoint with llmCall data.
-    // For debugger rewinds, pass empty values.
-    const rewindCp: RewindCheckpoint = {
-      checkpoint,
-      llmCall: {
-        step: 0,
-        targetVariable: "",
-        prompt: "",
-        response: "",
-        model: "",
-      },
-    };
-
     this.debuggerState.deleteAfterCheckpoint(checkpoint.id);
 
     return await this.resumeInterrupt(() =>
-      this.mod.rewindFrom(rewindCp, overrides, {
+      this.mod.rewindFrom(checkpoint, overrides, {
         metadata: {
           callbacks: this.getCallbacks(),
           debugger: this.debuggerState,

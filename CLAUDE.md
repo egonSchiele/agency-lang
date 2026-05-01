@@ -210,7 +210,6 @@ There are plenty of files that dive into implementation details on specific feat
 - `docs/dev/interrupts.md` — how interrupts resume inside blocks using step counters (substeps)
 - `docs/dev/message-thread-tests.md` — test cases for message threads and thread behavior
 - `docs/dev/pkg-imports.md` — importing Agency code from npm packages using `pkg::` prefix
-- `docs/dev/rewind.md` — overriding LLM call results and replaying execution from checkpoints
 - `docs/dev/simplemachine.md` — graph execution engine that runs compiled Agency programs
 - `docs/dev/smoltalk.md` — external LLM client library for structured output requests
 - `docs/dev/statelog.md` — observability and tracing system for execution events

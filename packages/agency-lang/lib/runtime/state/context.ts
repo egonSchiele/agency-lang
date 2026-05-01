@@ -117,9 +117,9 @@ export class RuntimeContext<T> {
     this.handlers = [];
     this.callbacks = {};
     this.onStreamLock = false;
-    // When rewinding, the checkpoint lives in a sentinel step right after the LLM call.
-    // On restore, the sentinel re-runs and would emit a duplicate checkpoint.
-    // rewindFrom sets this flag so the first sentinel skips, then clears it.
+    // After a debugger rewind, the first debug step would write a duplicate
+    // checkpoint to the trace (the user already saw the rewound checkpoint).
+    // rewindFrom sets this flag so the first debugStep trace-write is skipped.
     this._skipNextCheckpoint = false;
     this._restoreCount = 0;
     this._toolCallDepth = 0;

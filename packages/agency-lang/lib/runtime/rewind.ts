@@ -7,17 +7,6 @@ import { createReturnObject, deepClone } from "./utils.js";
 import { isInterrupt } from "./interrupts.js";
 import { color } from "termcolors";
 
-export type RewindCheckpoint = {
-  checkpoint: Checkpoint;
-  llmCall: {
-    step: number;
-    targetVariable: string;
-    prompt: string;
-    response: unknown;
-    model: string;
-  };
-};
-
 export function applyOverrides(
   checkpoint: Checkpoint,
   overrides: Record<string, unknown>,
@@ -30,17 +19,17 @@ export function applyOverrides(
 
 export async function rewindFrom(args: {
   ctx: RuntimeContext<GraphState>;
-  checkpoint: RewindCheckpoint;
+  checkpoint: Checkpoint;
   overrides: Record<string, unknown>;
   metadata?: Record<string, any>;
 }): Promise<any> {
   const { ctx, overrides, metadata = {} } = args;
   const checkpoint = deepClone(args.checkpoint);
 
-  applyOverrides(checkpoint.checkpoint, overrides);
+  applyOverrides(checkpoint, overrides);
 
   const execCtx = await ctx.createExecutionContext(ctx.getRunId());
-  execCtx.restoreState(checkpoint.checkpoint);
+  execCtx.restoreState(checkpoint);
   execCtx._skipNextCheckpoint = true;
 
   execCtx.installRegisteredCallbacks(ctx);
@@ -52,7 +41,7 @@ export async function rewindFrom(args: {
     execCtx.debuggerState = metadata.debugger;
   }
 
-  let nodeName = checkpoint.checkpoint.nodeId;
+  let nodeName = checkpoint.nodeId;
 
   try {
     while (true) {

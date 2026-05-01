@@ -90,6 +90,7 @@ export class RuntimeContext<T> {
   traceConfig: TraceConfig;
   runId: string | null;
   verbose: boolean;
+  getStaticVars?: () => Record<string, unknown>;
 
   // stored so createExecutionContext can create new StatelogClients
   private statelogConfig: StatelogConfig;

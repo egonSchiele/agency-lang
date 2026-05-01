@@ -576,9 +576,18 @@ export class TypeScriptBuilder {
       sections.push(alias);
     }
 
-    // Emit shared variable declarations at module level
+    // Emit static variable declarations at module level
     if (staticDeclarations.length > 0) {
       sections.push(ts.statements(staticDeclarations));
+
+      // Generate __getStaticVars function and wire it to __globalCtx
+      const staticVarEntries = [...staticVarNames].map(name =>
+        ts.raw(`${JSON.stringify(name)}: ${name}`)
+      );
+      sections.push(ts.statements([
+        ts.functionDecl("__getStaticVars", [], ts.return(ts.raw(`{ ${[...staticVarNames].map(n => `${JSON.stringify(n)}: ${n}`).join(", ")} }`))),
+        ts.raw("__globalCtx.getStaticVars = __getStaticVars;"),
+      ]));
     }
 
     // Generate __initializeGlobals function for per-execution global variable initialization

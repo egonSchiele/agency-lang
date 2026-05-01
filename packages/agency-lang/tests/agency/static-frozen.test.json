@@ -1,0 +1,15 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "description": "Static objects are deeply frozen — mutation via external function throws TypeError",
+      "expectedOutput": "{\"topFrozen\":true,\"nestedFrozen\":true,\"xStillOriginal\":true,\"yStillOriginal\":true}",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    }
+  ]
+}

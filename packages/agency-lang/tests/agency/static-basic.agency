@@ -1,0 +1,6 @@
+static const greeting = "hello"
+static const config = { retries: 3, timeout: 5000 }
+
+node main() {
+  return { greeting: greeting, retries: config.retries, timeout: config.timeout }
+}

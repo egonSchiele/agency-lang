@@ -1,0 +1,15 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "description": "Static variables are accessible with correct values",
+      "expectedOutput": "{\"greeting\":\"hello\",\"retries\":3,\"timeout\":5000}",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    }
+  ]
+}

@@ -2073,12 +2073,12 @@ const _assignmentParserInner: Parser<Assignment> = (input: string) => {
 };
 export const assignmentParser: Parser<Assignment> = label("an assignment", withLoc(_assignmentParserInner));
 
-export const sharedAssignmentParser: Parser<Assignment> = (input: string) => {
-  const parser = seqC(str("shared"), spaces, captureCaptures(assignmentParser));
+export const staticAssignmentParser: Parser<Assignment> = (input: string) => {
+  const parser = seqC(str("static"), spaces, captureCaptures(assignmentParser));
   const result = parser(input);
   if (!result.success) return result;
-  if (!result.result.declKind) {
-    return failure("shared requires 'let' or 'const' (e.g., 'shared let x = 1')", input);
+  if (result.result.declKind !== "const") {
+    return failure("static requires 'const' (e.g., 'static const x = 1'). Static variables are immutable.", input);
   }
   return success({ ...result.result, static: true }, result.rest);
 };

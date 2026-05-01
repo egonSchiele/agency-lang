@@ -4,7 +4,7 @@
   "description": "Brave Search integration for Agency",
   "type": "module",
   "agency": "./index.agency",
-  "main": "./dist/src/braveSearch.js",
+  "main": "./index.js",
   "exports": {
     ".": {
       "types": "./dist/src/braveSearch.d.ts",
@@ -14,7 +14,8 @@
   },
   "files": [
     "dist/",
-    "index.agency"
+    "index.agency",
+    "index.js"
   ],
   "author": "Aditya Bhargava",
   "license": "ISC",

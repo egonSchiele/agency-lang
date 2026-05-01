@@ -1,0 +1,4 @@
+static const foo = 1
+node main() {
+  return foo
+}

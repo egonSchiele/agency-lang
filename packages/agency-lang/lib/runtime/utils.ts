@@ -8,14 +8,23 @@ export function deepClone<T>(obj: T): T {
   return JSON.parse(JSON.stringify(obj, nativeTypeReplacer), nativeTypeReviver);
 }
 
-export function deepFreeze<T>(obj: T): T {
+export function deepFreeze<T>(obj: T, seen: WeakSet<object> = new WeakSet()): T {
   if (obj === null || obj === undefined || typeof obj !== "object") {
     return obj;
   }
+  if (seen.has(obj)) {
+    return obj;
+  }
+  seen.add(obj);
   Object.freeze(obj);
-  for (const value of Object.values(obj)) {
-    if (typeof value === "object" && value !== null && !Object.isFrozen(value)) {
-      deepFreeze(value);
+  // Only recurse into plain objects and arrays — class instances get
+  // top-level freeze only (their internal state via methods like .add()
+  // may still be mutable, which is a known limitation).
+  if (Array.isArray(obj) || Object.getPrototypeOf(obj) === Object.prototype) {
+    for (const value of Object.values(obj)) {
+      if (typeof value === "object" && value !== null && !Object.isFrozen(value)) {
+        deepFreeze(value, seen);
+      }
     }
   }
   return obj;

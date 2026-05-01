@@ -39,4 +39,26 @@ describe("deepFreeze", () => {
     expect(() => deepFreeze(obj)).not.toThrow();
     expect(Object.isFrozen(deepFreeze(obj))).toBe(true);
   });
+
+  it("handles cyclic references without infinite recursion", () => {
+    const obj: any = { a: 1 };
+    obj.self = obj;
+    expect(() => deepFreeze(obj)).not.toThrow();
+    expect(Object.isFrozen(obj)).toBe(true);
+  });
+
+  it("freezes class instances at top level only", () => {
+    const s = deepFreeze(new Set([1, 2, 3]));
+    expect(Object.isFrozen(s)).toBe(true);
+    // Internal state is still mutable (known limitation)
+    expect(() => s.add(4)).not.toThrow();
+  });
+
+  it("does not recurse into class instance properties", () => {
+    const obj = deepFreeze({ data: new Map([["a", 1]]) });
+    expect(Object.isFrozen(obj)).toBe(true);
+    expect(Object.isFrozen(obj.data)).toBe(true);
+    // Map internal state still mutable (known limitation)
+    expect(() => obj.data.set("b", 2)).not.toThrow();
+  });
 });

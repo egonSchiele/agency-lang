@@ -138,6 +138,7 @@ export class TypeScriptBuilder {
   private loopVars: string[] = [];
   private insideHandlerBody: boolean = false;
   private insideGlobalInit: boolean = false;
+  private insideStaticInit: boolean = false;
   private _isInSafeFunction: boolean = false;
   private _blockCounter: number = 0;
 
@@ -504,7 +505,9 @@ export class TypeScriptBuilder {
     for (const node of program.nodes) {
       if (node.type === "assignment" && node.scope === "static") {
         staticVarNames.add(node.variableName);
-        const valueNode = this.processNodeInGlobalInit(node.value);
+        this.insideStaticInit = true;
+        const valueNode = this.processNode(node.value);
+        this.insideStaticInit = false;
         staticDeclarations.push(
           ts.constDecl(node.variableName, ts.call(ts.id("__deepFreeze"), [valueNode]))
         );
@@ -1134,6 +1137,9 @@ export class TypeScriptBuilder {
     stateStack?: TsNode;
     extra?: Record<string, TsNode>;
   }): TsNode {
+    if (this.insideStaticInit) {
+      return ts.functionCallConfig({ ctx: ts.runtime.globalCtx });
+    }
     if (this.insideGlobalInit) {
       return ts.functionCallConfig({ ctx: ts.runtime.ctx });
     }

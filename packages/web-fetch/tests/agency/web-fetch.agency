@@ -1,7 +1,7 @@
 import { fetchPage } from "../../index.agency"
 
 node main() {
-  let result = fetchPage("https://example.com")
+  let result = fetchPage("https://s.adit.io/agency-webfetch-test.html")
   if (length(result.content) > 0) {
     print(result.title)
     print(result.url)

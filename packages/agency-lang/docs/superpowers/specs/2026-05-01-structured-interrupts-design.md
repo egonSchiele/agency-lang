@@ -295,9 +295,235 @@ The existing stdlib interrupts already manually include `type` and `message` ins
 - Exports: `checkPolicy(policy, interrupt)`, optionally `validatePolicy(policy)`
 - Glob matching implementation (can use an existing library like `minimatch` or `picomatch`)
 
+### Origin derivation
+
+The `origin` value is derived from the builder's existing `this.moduleId` field (a relative path like `"foo.agency"` or `"stdlib/fs.agency"`). A mapping function converts it to namespace format:
+
+- `"stdlib/fs.agency"` → `"std::fs"`
+- `"stdlib/shell.agency"` → `"std::shell"`
+- `"node_modules/pkg-name/foo.agency"` → `"pkg::pkg-name"` (or `"pkg::pkg-name/foo"` for subpaths)
+- `"foo.agency"` → `"./foo.agency"` (local files use relative paths)
+- `"src/agents/deploy.agency"` → `"./src/agents/deploy.agency"`
+
+The builder already has `moduleId` and injects it as a string literal in other places (checkpoint metadata, global store namespacing). We add one more injection site in the interrupt creation code.
+
 ---
 
-## 8. Future Work (Post-V1)
+## 8. Test Plan
+
+### Parser tests (unit, `lib/parsers/`)
+
+- Parse `interrupt std::read("msg", { filename: "foo" })` — typed interrupt with data
+- Parse `interrupt std::read("msg")` — typed interrupt without data
+- Parse `interrupt myapp::deploy("msg", { env: "prod" })` — user-defined namespace
+- Parse `interrupt("msg")` — bare interrupt still works
+- Parse `const x = interrupt std::question("msg")` — assignment form
+- Reject `interrupt someVar("msg")` — variable as type should fail
+
+### Builder tests (integration, `tests/typescriptGenerator/`)
+
+- Typed interrupt generates code with `kind`, `message`, `data`, `origin` fields
+- Bare interrupt generates `kind: "unknown"`, `data: {}`
+- `origin` is injected as the correct module identifier
+
+### Runtime tests (agency execution, `tests/agency/`)
+
+- Handler receives `{ kind, message, data, origin }` structure
+- `interrupt.kind` is accessible and matches the identifier
+- `interrupt.data` contains only the user-supplied data
+- `interrupt.origin` is present and correct
+- Bare interrupt has `kind: "unknown"` and `data: {}`
+- Handler can match on `interrupt.kind == std::read`
+- Nested handlers work with structured interrupts
+- Interrupts inside tool calls work with structured data
+- Serialization/deserialization preserves the new fields across interrupt resume
+
+### Policy end-to-end tests (agency execution, `tests/agency/`)
+
+These tests wire up `checkPolicy` inside a handler and verify the full approve/reject/propagate flow.
+
+**Test helper — a harmless function with an interrupt:**
+
+```ts
+// test-helpers.agency
+def greet(name: string): string {
+  return interrupt mytest::greet("May I greet this person?", { name: name })
+  return "Hello, ${name}!"
+}
+
+def writeLog(message: string, relPath: string): string {
+  const absPath = resolvePath(relPath)
+  return interrupt mytest::log("May I write this log?", { message: message, relPath: relPath, absPath: absPath })
+  return "Logged: ${message} to ${relPath}"
+}
+```
+
+**Test 1: Policy allows by exact match on data field**
+
+```ts
+import { checkPolicy } from "std::policy"
+
+node main() {
+  const policy = {
+    "mytest::greet": [
+      { "match": { "name": "Alice" }, "action": "allow" },
+      { "action": "deny" }
+    ]
+  }
+  handle {
+    const r1 = greet("Alice")
+    const r2 = greet("Bob")
+    return { r1: r1, r2: r2 }
+  } with (interrupt) {
+    return checkPolicy(policy, interrupt)
+  }
+}
+```
+Expected: `r1` is `"Hello, Alice!"`, `r2` is a failure (rejected).
+
+**Test 2: Policy allows by glob match on path fields**
+
+```ts
+import { checkPolicy } from "std::policy"
+
+node main() {
+  const policy = {
+    "mytest::log": [
+      { "match": { "relPath": "logs/*" }, "action": "allow" },
+      { "match": { "relPath": "secrets/*" }, "action": "deny" },
+      { "action": "propagate" }
+    ]
+  }
+  handle {
+    const r1 = writeLog("info", "logs/app.log")
+    const r2 = writeLog("secret", "secrets/keys.txt")
+    return { r1: r1, r2: r2 }
+  } with (interrupt) {
+    return checkPolicy(policy, interrupt)
+  }
+}
+```
+Expected: `r1` is `"Logged: info to logs/app.log"`, `r2` is a failure (rejected).
+
+**Test 3: Policy matches on origin — stdlib vs local file**
+
+```ts
+import { checkPolicy } from "std::policy"
+import { read } from "std::fs"
+
+def localRead(filename: string): string {
+  return interrupt std::read("Local read", { relPath: filename, absPath: resolvePath(filename) })
+  return "read: ${filename}"
+}
+
+node main() {
+  const policy = {
+    "std::read": [
+      { "match": { "origin": "std::*" }, "action": "allow" },
+      { "action": "deny" }
+    ]
+  }
+  handle {
+    // stdlib read — origin is "std::fs", should be allowed
+    const r1 = read("package.json")
+    // local read — origin is "./test-file.agency", should be denied
+    const r2 = localRead("package.json")
+    return { r1: r1, r2: r2 }
+  } with (interrupt) {
+    return checkPolicy(policy, interrupt)
+  }
+}
+```
+Expected: `r1` succeeds (origin matches `"std::*"`), `r2` is a failure (origin is local, doesn't match).
+
+**Test 4: Unknown kind — bare interrupt defaults to propagate**
+
+```ts
+import { checkPolicy } from "std::policy"
+
+def confirm() {
+  return interrupt("Are you sure?")
+  return "confirmed"
+}
+
+node main() {
+  const policy = {
+    "mytest::greet": [
+      { "action": "allow" }
+    ]
+  }
+  handle {
+    // no policy for "unknown" kind → propagate
+    return confirm()
+  } with (interrupt) {
+    return checkPolicy(policy, interrupt)
+  }
+}
+```
+Expected: `checkPolicy` returns `propagate()` (no rules for `"unknown"` kind). Since no handler approves or rejects, the interrupt propagates to the user.
+
+**Test 5: First-match-wins ordering**
+
+```ts
+import { checkPolicy } from "std::policy"
+
+node main() {
+  const policy = {
+    "mytest::greet": [
+      { "match": { "name": "Alice" }, "action": "deny" },
+      { "match": { "name": "Ali*" }, "action": "allow" },
+      { "action": "deny" }
+    ]
+  }
+  handle {
+    // "Alice" matches the first rule (deny), even though it also matches "Ali*" (allow)
+    const r1 = greet("Alice")
+    return r1
+  } with (interrupt) {
+    return checkPolicy(policy, interrupt)
+  }
+}
+```
+Expected: `r1` is a failure (first rule denies "Alice" before the glob rule can allow it).
+
+**Test 6: Missing field in match — rule skipped**
+
+```ts
+import { checkPolicy } from "std::policy"
+
+node main() {
+  const policy = {
+    "mytest::greet": [
+      { "match": { "email": "alice@*" }, "action": "deny" },
+      { "action": "allow" }
+    ]
+  }
+  handle {
+    // greet interrupt data has "name" but not "email" → first rule skipped → catch-all allows
+    return greet("Alice")
+  } with (interrupt) {
+    return checkPolicy(policy, interrupt)
+  }
+}
+```
+Expected: succeeds with `"Hello, Alice!"` — the `email` rule doesn't match (field missing), falls through to catch-all allow.
+
+### Policy unit tests (TypeScript, for the policy module)
+
+- `checkPolicy` with empty policy object → propagate
+- Glob matching edge cases: `*`, `**`, `?`, character classes
+- `validatePolicy` rejects invalid action strings
+- `validatePolicy` rejects non-array rule values
+- `validatePolicy` accepts valid policies
+
+### Backward compatibility tests
+
+- Existing bare `interrupt("msg")` still works end-to-end
+- Handler shorthand (`with approve`) still works with structured interrupts
+
+---
+
+## 9. Future Work (Post-V1)
 
 These are natural extensions enabled by the structured format:
 

@@ -6,11 +6,12 @@ Agency is a domain-specific language for defining AI agent workflows. It compile
 
 Please read the guide at docs-new/guide/ to get up to speed on the language.
 
+NOTE! Most of the file paths you'll see in this CLAUDE.md are relative to the packages/agency-lang directory, as that is the main package and contains all the code for agency lang.
+
 ## Key Commands
 
 ```bash
-pnpm run build          # Compile TypeScript to dist/ (rm -rf dist/ && tsc && tsc-alias)
-pnpm run templates      # Compile mustache templates to TypeScript via typestache
+make                    # build everything
 pnpm test               # Run vitest in watch mode
 pnpm test:run           # Run vitest once
 pnpm run agency <file>  # Compile and run an .agency file
@@ -18,7 +19,6 @@ pnpm run compile <file> # Compile .agency to .ts
 pnpm run ast <file>     # Parse .agency and print AST as JSON
 pnpm run preprocess <file>     # Parse .agency, run preprocessor, and print the resulting AST as JSON
 pnpm run fmt <file>     # Format .agency file using the AgencyGenerator
-make all                # Run templates + build
 make fixtures           # Rebuild all integration test fixtures
 ```
 
@@ -96,6 +96,11 @@ See `docs/TESTING.md` for the full testing guide.
 
 Agency execution tests (`tests/agency/`) do NOT require LLM calls. They can test pure logic, interrupts, async calls, etc. without any LLM involvement. Use them for any runtime behavior test.
 
+Agency-js tests (`tests/agency/`) are similar, but let you test how agency code interacts with js code.
+
+Note that although agency and agency-js tests don't *require* LLM calls, they can support them if needed. Don't make any extra LLM calls because they are slow and expensive, but if you are writing a test and you *need* to make an LLM call, please feel free to make one.
+
+IMPORTANT! When you run tests, save the output to a file so that if the tests fail, you don't need to rerun them to see what failed. The tests in this repo are very expensive and slow to rerun, so if you keep rerunning tests to see what failed, you're going to waste a lot of time. So for God's sake, just run the test and save the output in a file once so you can examine the output at your leisure!!
 
 ## Typechecker
 See docs/dev/typechecker.md and docs/typeChecker.md for more information. Code it at lib/typeChecker.ts.
@@ -205,7 +210,6 @@ There are plenty of files that dive into implementation details on specific feat
 - `docs/dev/interrupts.md` — how interrupts resume inside blocks using step counters (substeps)
 - `docs/dev/message-thread-tests.md` — test cases for message threads and thread behavior
 - `docs/dev/pkg-imports.md` — importing Agency code from npm packages using `pkg::` prefix
-- `docs/dev/rewind.md` — overriding LLM call results and replaying execution from checkpoints
 - `docs/dev/simplemachine.md` — graph execution engine that runs compiled Agency programs
 - `docs/dev/smoltalk.md` — external LLM client library for structured output requests
 - `docs/dev/statelog.md` — observability and tracing system for execution events

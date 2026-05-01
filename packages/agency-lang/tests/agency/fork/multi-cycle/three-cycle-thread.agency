@@ -1,0 +1,13 @@
+def threeInterrupts(item: string): string {
+  interrupt("first approve ${item}?")
+  interrupt("second approve ${item}?")
+  interrupt("third approve ${item}?")
+  return "all done: ${item}"
+}
+
+node main() {
+  let results = fork(["a", "b"]) as item {
+    return threeInterrupts(item)
+  }
+  return results
+}

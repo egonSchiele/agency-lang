@@ -1,0 +1,29 @@
+// Tests runPrompt's tool-retry path: a tool that returns a retryable
+// failure should let the LLM retry up to 5 times. Each failure pushes an
+// "Error: ${msg}. You may retry this tool call with corrected arguments."
+// message. After the 5th retryable failure, the tool is removed.
+//
+// Here, the tool ALWAYS returns retryable failure when given the wrong
+// argument. The LLM's prompt nudges it toward the wrong argument first,
+// then it should call again with the corrected one after seeing the error.
+
+const callLog: string[] = []
+
+def divideBy(divisor: number): number {
+  callLog.push("called with ${divisor}")
+  if (divisor == 0) {
+    return failure("cannot divide by zero", { retryable: true })
+  }
+  return 100 / divisor
+}
+
+type Resp = {
+  value: number
+}
+
+node main() {
+  const result: Resp = llm("Call divideBy with divisor=0 first. If that fails, retry with divisor=4. Return the final number in the value field.", {
+    tools: [divideBy]
+  })
+  return result.value
+}

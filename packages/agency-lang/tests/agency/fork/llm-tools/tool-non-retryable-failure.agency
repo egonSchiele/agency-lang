@@ -1,0 +1,19 @@
+// Tool returns failure(..., { retryable: false }). runPrompt's isFailure
+// path should push "Error: ${msg}. This operation failed and cannot be
+// retried." and remove the tool. The LLM's next round runs without the
+// tool available and produces structured output directly.
+
+def alwaysFail(): string {
+  return failure("permanent failure", { retryable: false })
+}
+
+type Resp = {
+  msg: string
+}
+
+node main() {
+  const result: Resp = llm("Try calling alwaysFail. If it returns an error that says it cannot be retried, output exactly the string 'tool-removed' in the msg field. Do not retry.", {
+    tools: [alwaysFail]
+  })
+  return result.msg
+}

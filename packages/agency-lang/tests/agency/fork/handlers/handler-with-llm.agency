@@ -1,0 +1,29 @@
+// Handler that makes its own llm() call to decide whether to approve or
+// reject. The handler runs synchronously inside interruptWithHandlers; if
+// it calls llm(), that llm has its own runPrompt, message thread, and
+// state machinery. The user should never see the inner interrupt — the
+// handler's llm-driven decision intercepts it.
+
+def riskyOp(): string {
+  interrupt("this operation is benign and safe")
+  return "operation completed"
+}
+
+type SafetyResp = {
+  is_safe: boolean
+}
+
+node main() {
+  handle {
+    return riskyOp()
+  } with (data) {
+    // Have the LLM decide based on the interrupt's message. The prompt
+    // makes the answer deterministic — the message explicitly says the
+    // operation is benign.
+    const safety: SafetyResp = llm("Is the following operation safe? Operation: '${data}'. Return is_safe field as a boolean. Only return true if the operation is clearly benign.")
+    if (safety.is_safe) {
+      return approve()
+    }
+    return reject()
+  }
+}

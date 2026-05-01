@@ -130,8 +130,8 @@ describe("Runner", () => {
       const runner = new Runner(makeMockCtx(), frame);
 
       await runner.step(0, async (runner) => {
-        await runner.step(0, async () => { });
-        await runner.step(1, async () => { });
+        await runner.step(0, async () => {});
+        await runner.step(1, async () => {});
       });
 
       expect(frame.step).toBe(1);
@@ -166,7 +166,7 @@ describe("Runner", () => {
 
       await runner.step(2, async (runner) => {
         await runner.step(1, async (runner) => {
-          await runner.step(3, async () => { });
+          await runner.step(3, async () => {});
         });
       });
 
@@ -182,8 +182,18 @@ describe("Runner", () => {
       let result = "";
 
       await runner.ifElse(0, [
-        { condition: () => false, body: async () => { result = "a"; } },
-        { condition: () => true, body: async () => { result = "b"; } },
+        {
+          condition: () => false,
+          body: async () => {
+            result = "a";
+          },
+        },
+        {
+          condition: () => true,
+          body: async () => {
+            result = "b";
+          },
+        },
       ]);
 
       expect(result).toBe("b");
@@ -197,8 +207,17 @@ describe("Runner", () => {
 
       await runner.ifElse(
         0,
-        [{ condition: () => false, body: async () => { result = "if"; } }],
-        async () => { result = "else"; },
+        [
+          {
+            condition: () => false,
+            body: async () => {
+              result = "if";
+            },
+          },
+        ],
+        async () => {
+          result = "else";
+        },
       );
 
       expect(result).toBe("else");
@@ -214,12 +233,22 @@ describe("Runner", () => {
 
       await runner.ifElse(0, [
         {
-          condition: () => { evalCount++; return true; },
-          body: async () => { result = "a"; },
+          condition: () => {
+            evalCount++;
+            return true;
+          },
+          body: async () => {
+            result = "a";
+          },
         },
         {
-          condition: () => { evalCount++; return true; },
-          body: async () => { result = "b"; },
+          condition: () => {
+            evalCount++;
+            return true;
+          },
+          body: async () => {
+            result = "b";
+          },
         },
       ]);
 
@@ -233,7 +262,7 @@ describe("Runner", () => {
 
       await runner.step(3, async (runner) => {
         await runner.ifElse(0, [
-          { condition: () => true, body: async () => { } },
+          { condition: () => true, body: async () => {} },
         ]);
       });
 
@@ -289,7 +318,7 @@ describe("Runner", () => {
       const runner = new Runner(makeMockCtx(), frame);
 
       await runner.loop(0, ["a", "b"], async (item, i, runner) => {
-        await runner.step(0, async () => { });
+        await runner.step(0, async () => {});
       });
 
       // After completion, the iteration counter should reflect 2 iterations
@@ -303,9 +332,13 @@ describe("Runner", () => {
       const runner = new Runner(makeMockCtx(), frame);
       let count = 0;
 
-      await runner.whileLoop(0, () => count < 3, async () => {
-        count++;
-      });
+      await runner.whileLoop(
+        0,
+        () => count < 3,
+        async () => {
+          count++;
+        },
+      );
 
       expect(count).toBe(3);
       expect(frame.step).toBe(1);
@@ -318,9 +351,13 @@ describe("Runner", () => {
       let count = 0;
 
       // condition must account for iterations already done
-      await runner.whileLoop(0, () => count + 2 < 3, async () => {
-        count++;
-      });
+      await runner.whileLoop(
+        0,
+        () => count + 2 < 3,
+        async () => {
+          count++;
+        },
+      );
 
       expect(count).toBe(1); // only 1 more iteration (iteration 2)
     });
@@ -336,8 +373,12 @@ describe("Runner", () => {
         calls.push("create");
         return "tid";
       };
-      ctx.threads.pushActive = () => { calls.push("push"); };
-      ctx.threads.popActive = () => { calls.push("pop"); };
+      ctx.threads.pushActive = () => {
+        calls.push("push");
+      };
+      ctx.threads.popActive = () => {
+        calls.push("pop");
+      };
 
       const runner = new Runner(ctx, frame);
 
@@ -352,7 +393,9 @@ describe("Runner", () => {
       const frame = makeFrame();
       const ctx = makeMockCtx();
       let popped = false;
-      ctx.threads.popActive = () => { popped = true; };
+      ctx.threads.popActive = () => {
+        popped = true;
+      };
 
       const runner = new Runner(ctx, frame);
 
@@ -370,7 +413,7 @@ describe("Runner", () => {
       const frame = makeFrame();
       const ctx = makeMockCtx();
       const runner = new Runner(ctx, frame);
-      const handler = async () => ({ type: "approved" as const });
+      const handler = async () => ({ type: "approve" as const });
 
       expect(ctx.handlers.length).toBe(0);
       await runner.handle(0, handler, async () => {
@@ -383,7 +426,7 @@ describe("Runner", () => {
       const frame = makeFrame();
       const ctx = makeMockCtx();
       const runner = new Runner(ctx, frame);
-      const handler = async () => ({ type: "approved" as const });
+      const handler = async () => ({ type: "approve" as const });
 
       await runner.handle(0, handler, async (runner) => {
         runner.halt("interrupt");
@@ -410,7 +453,7 @@ describe("Runner", () => {
     it("executes when counter past but branch data exists", async () => {
       const frame = makeFrame();
       frame.step = 5;
-      frame.branches = { "0_1": { stack: {} as any } };
+      frame.newBranch("0_1"); // simulate that branch data was created in a previous run
       const runner = new Runner(makeMockCtx(), frame);
       let executed = false;
 
@@ -440,25 +483,29 @@ describe("Runner", () => {
       const frame = makeFrame();
       const ctx = makeMockCtx();
       const runner = new Runner(ctx, frame);
-      const handler = async () => ({ type: "approved" as const });
+      const handler = async () => ({ type: "approve" as const });
       const trace: string[] = [];
 
       await runner.handle(0, handler, async (runner) => {
         await runner.loop(0, ["a", "b"], async (item, i, runner) => {
-          await runner.ifElse(0, [
-            {
-              condition: () => item === "a",
-              body: async (runner) => {
-                await runner.step(0, async () => {
-                  trace.push(`${item}-if`);
-                });
+          await runner.ifElse(
+            0,
+            [
+              {
+                condition: () => item === "a",
+                body: async (runner) => {
+                  await runner.step(0, async () => {
+                    trace.push(`${item}-if`);
+                  });
+                },
               },
+            ],
+            async (runner) => {
+              await runner.step(0, async () => {
+                trace.push(`${item}-else`);
+              });
             },
-          ], async (runner) => {
-            await runner.step(0, async () => {
-              trace.push(`${item}-else`);
-            });
-          });
+          );
         });
       });
 
@@ -473,22 +520,22 @@ describe("Runner", () => {
       const runner = new Runner(makeMockCtx(), frame);
 
       // Step 0: simple
-      await runner.step(0, async () => { });
+      await runner.step(0, async () => {});
 
       // Step 1: ifElse
       await runner.ifElse(1, [
         {
           condition: () => true,
           body: async (runner) => {
-            await runner.step(0, async () => { });
-            await runner.step(1, async () => { });
+            await runner.step(0, async () => {});
+            await runner.step(1, async () => {});
           },
         },
       ]);
 
       // Step 2: loop
       await runner.loop(2, ["a", "b"], async (item, i, runner) => {
-        await runner.step(0, async () => { });
+        await runner.step(0, async () => {});
       });
 
       expect(frame.step).toBe(3);

@@ -1,0 +1,18 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Fork calling a function with an LLM call — each thread returns a result without crashing",
+      "input": "",
+      "expectedOutput": "",
+      "evaluationCriteria": [
+        {
+          "type": "llmJudge",
+          "judgePrompt": "The output should be an array of exactly three strings. Each string should contain text about at least one animal (cats, dogs, or birds). It is acceptable if the strings contain overlapping content.",
+          "desiredAccuracy": 50
+        }
+      ],
+      "retry": 1
+    }
+  ]
+}

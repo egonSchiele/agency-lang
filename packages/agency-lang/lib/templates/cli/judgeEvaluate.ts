@@ -3,7 +3,7 @@
 // Any manual changes will be lost.
 import { apply } from "typestache";
 
-export const template = `import { judge, isInterrupt, approveInterrupt, rejectInterrupt, modifyInterrupt } from "./{{{judgeFilename:string}}}";
+export const template = `import { judge, hasInterrupts, approve, reject, respondToInterrupts } from "./{{{judgeFilename:string}}}";
 import { writeFileSync } from "fs";
 
 async function runJudge() {
@@ -17,35 +17,41 @@ async function runJudge() {
   const interruptHandlers = {{{interruptHandlersJSON?:string}}};
   let handlerIndex = 0;
 
-  while (isInterrupt(result.data)) {
-    if (handlerIndex >= interruptHandlers.length) {
-      throw new Error("Unexpected interrupt #" + (handlerIndex + 1) + ": \\"" + result.data.data + "\\". No handler provided.");
+  while (hasInterrupts(result.data)) {
+    const interrupts = result.data;
+    const responses = [];
+
+    for (const interruptItem of interrupts) {
+      if (handlerIndex >= interruptHandlers.length) {
+        throw new Error("Unexpected interrupt #" + (handlerIndex + 1) + ": \\"" + interruptItem.data + "\\". No handler provided.");
+      }
+
+      const handler = interruptHandlers[handlerIndex];
+
+      // Validate expected message if provided
+      if (handler.expectedMessage !== undefined && interruptItem.data !== handler.expectedMessage) {
+        throw new Error(
+          "Interrupt #" + (handlerIndex + 1) + " message mismatch.\\n" +
+          "  Expected: \\"" + handler.expectedMessage + "\\"\\n" +
+          "  Actual: \\"" + interruptItem.data + "\\""
+        );
+      }
+
+      // Build response based on action
+      if (handler.action === "approve") {
+        responses.push(approve(handler.value));
+      } else if (handler.action === "reject") {
+        responses.push(reject(handler.value));
+      } else if (handler.action === "resolve") {
+        responses.push(approve(handler.resolvedValue));
+      } else {
+        throw new Error("Unknown interrupt action: " + handler.action);
+      }
+
+      handlerIndex++;
     }
 
-    const handler = interruptHandlers[handlerIndex];
-    const interruptData = result.data;
-
-    // Validate expected message if provided
-    if (handler.expectedMessage !== undefined && interruptData.data !== handler.expectedMessage) {
-      throw new Error(
-        "Interrupt #" + (handlerIndex + 1) + " message mismatch.\\n" +
-        "  Expected: \\"" + handler.expectedMessage + "\\"\\n" +
-        "  Actual: \\"" + interruptData.data + "\\""
-      );
-    }
-
-    // Handle interrupt based on action
-    if (handler.action === "approve") {
-      result = await approveInterrupt(interruptData);
-    } else if (handler.action === "reject") {
-      result = await rejectInterrupt(interruptData);
-    } else if (handler.action === "modify") {
-      result = await modifyInterrupt(interruptData, handler.modifiedArgs);
-    } else {
-      throw new Error("Unknown interrupt action: " + handler.action);
-    }
-
-    handlerIndex++;
+    result = await respondToInterrupts(interrupts, responses);
   }
 
   // Check if we provided more handlers than interrupts that occurred

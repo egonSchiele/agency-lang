@@ -1,0 +1,16 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Fork with multiple interrupts — all are collected and approved in batch",
+      "input": "",
+      "expectedOutput": "[\"confirmed: a\",\"confirmed: b\",\"confirmed: c\"]",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "interruptHandlers": [
+        { "action": "approve" },
+        { "action": "approve" },
+        { "action": "approve" }
+      ]
+    }
+  ]
+}

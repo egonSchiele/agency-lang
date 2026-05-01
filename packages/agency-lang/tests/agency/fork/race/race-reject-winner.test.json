@@ -1,0 +1,16 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Race winner interrupts and the user rejects — the rejection bubbles up as the race result (a failure Result), no other branches surface",
+      "input": "",
+      "expectedOutput": "{\"success\":false,\"error\":\"interrupt rejected\"}",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "interruptHandlers": [{ "action": "reject" }]
+    }
+  ]
+}

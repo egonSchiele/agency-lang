@@ -1,0 +1,15 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Fork with interrupt then break in for loop — after resume, break exits the loop, items after 'stop' are not processed",
+      "input": "",
+      "expectedOutput": "[[\"a\"],[\"x\",\"y\"]]",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "interruptHandlers": [
+        { "action": "approve" },
+        { "action": "approve" }
+      ]
+    }
+  ]
+}

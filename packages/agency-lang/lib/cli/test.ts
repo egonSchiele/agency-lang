@@ -37,7 +37,16 @@ type TestCase = {
   retry?: number;
   skip?: boolean;
 };
-type Tests = { sourceFile?: string; tests: TestCase[] };
+type Tests = {
+  sourceFile?: string;
+  tests: TestCase[];
+  // If true, skip every test in this file. Equivalent to setting `skip: true`
+  // on each test case individually.
+  skip?: boolean;
+  // Optional human-readable reason for the skip; printed when the file is
+  // skipped. No semantic effect.
+  skipReason?: string;
+};
 
 function readFile(filename: string): string {
   console.log("Trying to read file", filename, "...");
@@ -436,7 +445,7 @@ async function runSingleTest(
         testPassed = false;
       }
     } else if (criterion.type === "llmJudge") {
-      const actual = JSON.stringify(result.data);
+      const actual = JSON.stringify(result.data) || "undefined";
       try {
         const judgeResult = await executeJudgeAsync(baseName, {
           actualOutput: actual,
@@ -503,8 +512,26 @@ async function runTestFile(
     log(color.yellow(`Running tests for ${testFile}...`));
 
     const tests: Tests = JSON.parse(fs.readFileSync(testFile, "utf-8"));
+
     let passed = 0;
     const total = tests.tests.length;
+
+    // File-level skip: if the .test.json has `"skip": true` at the top
+    // level, skip every test in the file. This makes top-level skip work
+    // the way authors typically expect (skip the whole file). The same
+    // `skip` field can also be set per test case for finer-grained control.
+    if (tests.skip) {
+      const reasonStr = tests.skipReason ? ` (${tests.skipReason})` : "";
+      log(color.yellow(`  ⊘ Skipped ${total} test(s) in ${testFile}${reasonStr}`));
+      return {
+        passed: 0,
+        failed: 0,
+        filesPassed: 1,
+        filesFailed: 0,
+        failedFiles: [],
+        slowTests: [],
+      };
+    }
 
     let skipped = 0;
     const slowTests: SlowTest[] = [];
@@ -678,7 +705,7 @@ async function runTsTestDir(
 
     // Remove stale result file from previous runs
     const resultFile = path.join(dir, "__result.json");
-    try { fs.unlinkSync(resultFile); } catch {}
+    try { fs.unlinkSync(resultFile); } catch { }
 
     const testFile = "test.js";
     try {

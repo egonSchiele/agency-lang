@@ -1,0 +1,11 @@
+def confirmItem(item: string): string {
+  interrupt("approve ${item}?")
+  return "confirmed: ${item}"
+}
+
+node main() {
+  let results = fork(["a", "b", "c"]) as item {
+    return confirmItem(item)
+  }
+  return results
+}

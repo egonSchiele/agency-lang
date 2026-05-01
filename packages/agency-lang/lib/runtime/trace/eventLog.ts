@@ -68,7 +68,7 @@ export type InterruptThrownEvent = BaseEvent & {
 
 export type InterruptResolvedEvent = BaseEvent & {
   type: "interrupt-resolved";
-  outcome: "approved" | "rejected" | "resolved";
+  outcome: "approve" | "reject" | "resolve";
   data?: any;
 };
 

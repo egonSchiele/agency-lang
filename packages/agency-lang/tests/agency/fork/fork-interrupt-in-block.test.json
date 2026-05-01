@@ -1,0 +1,15 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Fork calling function that interrupts inside a block — block state serializes correctly through fork checkpoint",
+      "input": "",
+      "expectedOutput": "[\"done: x\",\"done: y\"]",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "interruptHandlers": [
+        { "action": "approve" },
+        { "action": "approve" }
+      ]
+    }
+  ]
+}

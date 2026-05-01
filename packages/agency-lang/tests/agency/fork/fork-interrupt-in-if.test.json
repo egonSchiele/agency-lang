@@ -1,0 +1,14 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Fork with interrupt inside if branch — only the thread where condition is true interrupts, other completes immediately",
+      "input": "",
+      "expectedOutput": "[\"small: 3\",\"large: 8\"]",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "interruptHandlers": [
+        { "action": "approve" }
+      ]
+    }
+  ]
+}

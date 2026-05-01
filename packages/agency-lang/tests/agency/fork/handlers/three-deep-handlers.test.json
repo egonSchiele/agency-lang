@@ -1,0 +1,28 @@
+{
+  "tests": [
+    {
+      "nodeName": "testAllApprove",
+      "description": "Three handlers all approve. Chain runs innermost-first; foo continues past the interrupt with the last approve's value.",
+      "input": "",
+      "expectedOutput": "[\"inner-app\",\"mid-app\",\"outer-app\",\"got\"]",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "interruptHandlers": []
+    },
+    {
+      "nodeName": "testInnerRejectShortCircuits",
+      "description": "Inner handler rejects — mid and outer handlers never run; foo halts with failure.",
+      "input": "",
+      "expectedOutput": "[\"inner-rej\"]",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "interruptHandlers": []
+    },
+    {
+      "nodeName": "testOuterRejectWinsAcrossPropagateAndApprove",
+      "description": "Inner propagate, mid approve, outer reject. All three run; outer's reject wins despite the others.",
+      "input": "",
+      "expectedOutput": "[\"inner-prop\",\"mid-app\",\"outer-rej\"]",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "interruptHandlers": []
+    }
+  ]
+}

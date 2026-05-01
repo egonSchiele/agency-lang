@@ -93,7 +93,8 @@ evals
 probabilistic exec
 better typechecker / better typing
 llm func general interface
-  
+
+
   - also capture tokens/cost in trace?
 
   cant seem to step after tabbing around
@@ -103,3 +104,25 @@ make llm() work with pipe operator
   - allow for tool call etc hooks from llm lib
 
 need to make method calls on objects work in the following places: with the try keyword, with the pipe operator, and as a tool.
+
+---
+
+users should not be able to create a type named `Result`, that is a builtin type.
+type defined in a node doesn't work
+
+parallel tool calls
+handle multiple interrupts in debugger
+better debugger test harness
+make race work with interrupts
+async keyword and interrupts?
+`with reject` cant be used in a return statement?
+
+
+tool-retry test failure:
+```
+Running JS test: tool-retry
+Tool call "unsafeChainTool" crashed: Unknown named argument 'action' in call to 'unsafeChainTool'
+Tool call "unsafeMethodTool" crashed: Unknown named argument 'action' in call to 'unsafeMethodTool'
+```
+
+import * from std::array into every file

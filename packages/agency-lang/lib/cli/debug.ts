@@ -197,8 +197,7 @@ export async function debug(
       : defaultRewindSize;
     const driver = new DebuggerDriver({
       mod: {
-        approveInterrupt: mod.approveInterrupt,
-        respondToInterrupt: mod.respondToInterrupt,
+        respondToInterrupts: mod.respondToInterrupts,
         rewindFrom: mod.rewindFrom,
         __setDebugger: mod.__setDebugger,
         __getCheckpoints: mod.__getCheckpoints,

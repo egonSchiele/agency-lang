@@ -1,4 +1,4 @@
-import { isInterrupt } from "../interrupts.js";
+import { hasInterrupts, isInterrupt } from "../interrupts.js";
 import { ConcurrentInterruptError } from "../errors.js";
 
 type PendingPromiseEntry = {
@@ -47,7 +47,11 @@ export class PendingPromiseStore {
       const { entry } = entries[i];
       const result = results[i];
 
-      if (isInterrupt(result)) {
+      // Catch both shapes: a single Interrupt object (legacy) and an
+      // Interrupt[] (current model). Either form here means an async
+      // function paused via interrupt while we were awaiting it, which
+      // isn't supported on this code path.
+      if (hasInterrupts(result) || isInterrupt(result)) {
         throw new ConcurrentInterruptError(
           "An async function returned an interrupt while awaiting pending promises. " +
           "Async interrupts from pending promises are not yet supported. " +

@@ -1,0 +1,14 @@
+{
+  "tooFew": {
+    "mentionsExpected": true,
+    "mentionsCount": true
+  },
+  "tooMany": {
+    "mentionsExpected": true,
+    "mentionsCount": true
+  },
+  "empty": {
+    "mentionsExpected": true,
+    "mentionsCount": true
+  }
+}

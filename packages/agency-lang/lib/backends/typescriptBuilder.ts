@@ -338,7 +338,7 @@ export class TypeScriptBuilder {
   private static DIRECT_CALL_FUNCTIONS = new Set([
     "approve", "reject", "propagate",
     "success", "failure",
-    "isInterrupt", "isDebugger", "isRejected", "isApproved",
+    "isInterrupt", "hasInterrupts", "isDebugger", "isRejected", "isApproved",
     "isSuccess", "isFailure", "setLLMClient", "registerTools"
   ]);
 
@@ -351,6 +351,16 @@ export class TypeScriptBuilder {
     if (TypeScriptBuilder.DIRECT_CALL_FUNCTIONS.has(functionName)) return false;
     if (this.isGraphNode(functionName)) return false;
     return true;
+  }
+
+  /** Generate a TsNode for `hasInterrupts(x)` */
+  private interruptCheck(expr: TsNode): TsNode {
+    return ts.call(ts.id("hasInterrupts"), [expr]);
+  }
+
+  /** Generate a raw string for `hasInterrupts(x)` */
+  private interruptCheckRaw(exprStr: string): TsNode {
+    return ts.raw(`hasInterrupts(${exprStr})`);
   }
 
   private _plainTsImportNames: Set<string> | null = null;
@@ -1108,11 +1118,10 @@ export class TypeScriptBuilder {
   /**
    * Build the standard state config for __call/__callMethod dispatch.
    * During global init, only ctx is available; otherwise includes threads
-   * and interruptData.
+   * and stateStack.
    */
   private buildStateConfig(opts?: {
     stateStack?: TsNode;
-    isForked?: boolean;
     extra?: Record<string, TsNode>;
   }): TsNode {
     if (this.insideGlobalInit) {
@@ -1121,9 +1130,7 @@ export class TypeScriptBuilder {
     return ts.functionCallConfig({
       ctx: ts.runtime.ctx,
       threads: ts.runtime.threads,
-      interruptData: ts.raw("__state?.interruptData"),
-      stateStack: opts?.stateStack,
-      isForked: opts?.isForked,
+      stateStack: opts?.stateStack ?? ts.id("__stateStack"),
       ...opts?.extra,
     });
   }
@@ -1601,6 +1608,7 @@ export class TypeScriptBuilder {
         "__state will be undefined if this function is being called as a tool by an llm",
       ),
       ts.setupEnv({
+        stateStack: $(ts.id("__setupData")).prop("stateStack").done(),
         stack: $(ts.id("__setupData")).prop("stack").done(),
         step: $(ts.id("__setupData")).prop("step").done(),
         self: $(ts.id("__setupData")).prop("self").done(),
@@ -1705,7 +1713,7 @@ export class TypeScriptBuilder {
         "__error",
         // finally block: pop state stack and conditionally fire onFunctionEnd.
         ts.statements([
-          ts.raw("if (!__state?.isForked) { __ctx.stateStack.pop() }"),
+          ts.raw("__stateStack.pop()"),
           ...(skipHooks ? [] : [
             ts.if(
               ts.id("__functionCompleted"),
@@ -1818,11 +1826,13 @@ export class TypeScriptBuilder {
     const interruptArgs = args
       .map((arg) => this.str(this.processCallArg(arg)))
       .join(", ");
+    const opts = this.checkpointOpts();
     return ts.raw(
       renderInterruptReturn.default({
         interruptArgs,
         nodeContext: this.getCurrentScope().type === "node",
-        ...this.checkpointOpts(),
+        interruptIdKey: `__interruptId_${this._subStepPath.join("_")}`,
+        ...opts,
       }),
     );
   }
@@ -1871,15 +1881,15 @@ export class TypeScriptBuilder {
         return ts.statements([
           ts.constDecl(tempVar, callNode),
           ts.if(
-            ts.raw(`isInterrupt(${tempVar})`),
+            this.interruptCheckRaw(tempVar),
             ts.throw(`new Error("Cannot throw an interrupt inside a handler body")`),
           ),
         ]);
       }
       const nodeContext = scope.type === "node";
       // In node context, wrap with state for the driver.
-      // In function context, halt with the interrupt directly so the caller's
-      // isInterrupt check can detect it.
+      // In function context, halt with the interrupt array directly so the
+      // caller's hasInterrupts check can detect it.
       const haltValue = nodeContext
         ? ts.obj([
           ts.setSpread(ts.runtime.state),
@@ -1889,7 +1899,7 @@ export class TypeScriptBuilder {
       return ts.statements([
         ts.constDecl(tempVar, callNode),
         ts.if(
-          ts.call(ts.id("isInterrupt"), [ts.id(tempVar)]),
+          this.interruptCheck(ts.id(tempVar)),
           ts.statements([
             ts.raw("await __ctx.pendingPromises.awaitAll()"),
             $(ts.id("runner")).prop("halt").call([haltValue]).done(),
@@ -2004,7 +2014,7 @@ export class TypeScriptBuilder {
     // __-prefixed helpers and DIRECT_CALL_FUNCTIONS: emit plain direct call
     if (
       functionName.startsWith("__") ||
-      TypeScriptBuilder.DIRECT_CALL_FUNCTIONS.has(node.functionName)
+      TypeScriptBuilder.DIRECT_CALL_FUNCTIONS.has(functionName)
     ) {
       return this.emitDirectFunctionCall(node, functionName, shouldAwait);
     }
@@ -2028,7 +2038,6 @@ export class TypeScriptBuilder {
     } : undefined;
     const configObj = this.buildStateConfig({
       stateStack: options?.stateStack,
-      isForked: node.async,
       extra: locationOpts,
     });
 
@@ -2146,7 +2155,7 @@ export class TypeScriptBuilder {
 
     return $(ts.id("runner"))
       .prop("fork")
-      .call([ts.num(id), itemsNode, blockFn, ts.str(mode)])
+      .call([ts.num(id), itemsNode, blockFn, ts.str(mode), ts.id("__stateStack")])
       .await()
       .done();
   }
@@ -2186,6 +2195,8 @@ export class TypeScriptBuilder {
     });
 
     return ts.statements([
+      // Pop the current node's frame before transitioning — it won't be re-entered on resume
+      ts.raw("__stateStack.pop()"),
       ts.functionReturn(ts.goToNode(functionName, goToArgs)),
     ]);
   }
@@ -2221,6 +2232,7 @@ export class TypeScriptBuilder {
       ),
 
       ts.setupEnv({
+        stateStack: ts.raw("__state.ctx.stateStack"),
         stack: $(ts.id("__setupData")).prop("stack").done(),
         step: $(ts.id("__setupData")).prop("step").done(),
         self: $(ts.id("__setupData")).prop("self").done(),
@@ -2279,6 +2291,7 @@ export class TypeScriptBuilder {
               },
             ]),
           ),
+          ts.consoleError($(ts.id("__error")).prop("stack").done()),
           ts.return(
             ts.obj({
               messages: ts.runtime.threads,
@@ -2457,16 +2470,16 @@ export class TypeScriptBuilder {
             node.accessChain,
           ),
         );
+      const opts = this.checkpointOpts();
       return ts.raw(
         renderInterruptAssignment.default({
-          assignResolve: makeAssign(
-            "__state.interruptData.interruptResponse.value",
-          ),
+          assignResolve: makeAssign("__response.value"),
           assignApprove: makeAssign("true"),
           handlerApprove: makeAssign("__handlerResult.value"),
           interruptArgs,
           nodeContext: this.getCurrentScope().type === "node",
-          ...this.checkpointOpts(),
+          interruptIdKey: `__interruptId_${this._subStepPath.join("_")}`,
+          ...opts,
         }),
       );
     } else if (value.type === "functionCall") {
@@ -2514,21 +2527,21 @@ export class TypeScriptBuilder {
         if (this.insideHandlerBody) {
           stmts.push(
             ts.if(
-              ts.raw(`isInterrupt(${this.str(varRef)})`),
+              this.interruptCheckRaw(this.str(varRef)),
               ts.throw(`new Error("Cannot throw an interrupt inside a handler body")`),
             ),
           );
         } else {
           // Sync: interrupt check with awaitAll before halt.
-          // In function context, halt with the interrupt directly so the caller's
-          // isInterrupt check can detect it.
+          // In function context, halt with the interrupt array directly so
+          // the caller's hasInterrupts check can detect it.
           const haltValue =
             this.getCurrentScope().type === "node"
               ? ts.obj([ts.setSpread(ts.runtime.state), ts.set("data", varRef)])
               : varRef;
           stmts.push(
             ts.if(
-              $(ts.id("isInterrupt")).call([varRef]).done(),
+              this.interruptCheck(varRef),
               ts.statements([
                 ts.raw("await __ctx.pendingPromises.awaitAll()"),
                 $(ts.id("runner")).prop("halt").call([haltValue]).done(),
@@ -2653,7 +2666,7 @@ export class TypeScriptBuilder {
     runPromptEntries.maxToolCallRounds = ts.num(
       this.agencyConfig.maxToolCallRounds || 10,
     );
-    runPromptEntries.interruptData = ts.raw("__state?.interruptData");
+    runPromptEntries.stateStack = ts.id("__stateStack");
     runPromptEntries.removedTools = ts.self("__removedTools");
     runPromptEntries.checkpointInfo = ts.raw("runner.getCheckpointInfo()");
 
@@ -2687,7 +2700,7 @@ export class TypeScriptBuilder {
       if (this.insideHandlerBody) {
         stmts.push(
           ts.if(
-            ts.raw(`isInterrupt(${this.str(varRef)})`),
+            this.interruptCheckRaw(this.str(varRef)),
             ts.throw(`new Error("Cannot throw an interrupt inside a handler body")`),
           ),
         );
@@ -2699,7 +2712,7 @@ export class TypeScriptBuilder {
           : varRef;
         stmts.push(
           ts.if(
-            $(ts.id("isInterrupt")).call([varRef]).done(),
+            this.interruptCheck(varRef),
             ts.statements([
               ts.raw("await __ctx.pendingPromises.awaitAll()"),
               $(ts.id("runner")).prop("halt").call([haltValue]).done(),
@@ -3068,7 +3081,7 @@ export class TypeScriptBuilder {
       const lastEl = stage.chain[stage.chain.length - 1];
       const propName = lastEl.kind === "property" ? lastEl.name
         : lastEl.kind === "methodCall" ? lastEl.functionCall.functionName
-        : null;
+          : null;
       if (propName) {
         const descriptor = ts.obj({ type: ts.str("positional"), args: ts.arr([pipeArg]) });
         const callExpr = ts.call(

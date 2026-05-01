@@ -1,0 +1,15 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Fork inside if-branch — verify branch-index storage survives resume so we re-enter the same if branch",
+      "input": "",
+      "expectedOutput": "[\"confirmed: a\",\"confirmed: b\"]",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "interruptHandlers": [
+        { "action": "approve" },
+        { "action": "approve" }
+      ]
+    }
+  ]
+}

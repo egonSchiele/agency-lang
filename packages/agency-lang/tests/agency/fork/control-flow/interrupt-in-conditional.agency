@@ -1,0 +1,19 @@
+// Tests resume mechanics when the interrupt is inside a conditional and
+// there's code after it that also needs to run on resume. Specifically:
+//   - x is assigned the result of an interrupt inside an if-branch
+//     (assignment form, so the user's approve(value) becomes x).
+//   - y is declared AFTER the interrupt site.
+// On resume, the runner must re-enter the if-branch (cond is captured
+// via __condbranch_), restore x from the user's response, and execute
+// the y declaration as a new (post-resume) step.
+
+node main() {
+  const cond = true
+  let x: string = "default"
+  if (cond) {
+    x = interrupt("answer?")
+  }
+  // y is declared AFTER the interrupt. Must execute fresh on resume.
+  let y: number = 100
+  return "x=${x},y=${y}"
+}

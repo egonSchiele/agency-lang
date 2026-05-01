@@ -1,0 +1,20 @@
+def quickFact(topic: string): string {
+  return "fact about ${topic}: it is interesting"
+}
+
+def confirmAction(action: string): string {
+  interrupt("approve ${action}?")
+  return "${action} confirmed"
+}
+
+type Response = {
+  fact: string
+  confirmation: string
+}
+
+node main() {
+  const result: Response = llm("Call quickFact with topic='cats' AND confirmAction with action='delete-files' in the SAME response in parallel. Then return a fact field with the quickFact return value and a confirmation field with the confirmAction return value.", {
+    tools: [quickFact, confirmAction]
+  })
+  return result
+}

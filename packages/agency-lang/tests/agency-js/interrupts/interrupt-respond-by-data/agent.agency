@@ -1,0 +1,11 @@
+def maybeConfirm(item: string): string {
+  const allowed = interrupt("approve ${item}?")
+  return "${item}: handled"
+}
+
+node main() {
+  let results = fork(["alpha", "beta", "gamma"]) as item {
+    return maybeConfirm(item)
+  }
+  return results
+}

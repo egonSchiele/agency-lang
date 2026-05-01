@@ -1,0 +1,14 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Function imported from another module interrupts; resume must re-enter the helper module to execute its post-interrupt code (prefix concatenation). Tests module-id restoration via the checkpoint's source location.",
+      "input": "",
+      "expectedOutput": "\"helper-yes: widget\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "interruptHandlers": [
+        { "action": "approve", "value": "yes", "expectedMessage": "approve widget from helper?" }
+      ]
+    }
+  ]
+}

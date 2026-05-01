@@ -1,0 +1,82 @@
+// Three nested handlers exercising the per-handler chain order and the
+// reject/propagate/approve precedence rules in interruptWithHandlers:
+//   - reject from any handler short-circuits the chain → reject wins.
+//   - propagate from any handler beats approve → interrupt goes to user.
+//   - if all handlers approve, last approve's value wins.
+//
+// Iteration order is INNERMOST first (most recently pushed handler runs
+// first). All handlers run unless one rejects.
+
+def foo(): string {
+  return interrupt("check")
+}
+
+// 1. All three approve. The chain runs in order; foo's interrupt
+//    resolves to the last approve()'s value (undefined here, no value
+//    passed). foo returns undefined as its resolved value.
+node testAllApprove() {
+  let log: string[] = []
+  handle {
+    handle {
+      handle {
+        let r = foo()
+        log.push("got")
+      } with (data) {
+        log.push("inner-app")
+        return approve()
+      }
+    } with (data) {
+      log.push("mid-app")
+      return approve()
+    }
+  } with (data) {
+    log.push("outer-app")
+    return approve()
+  }
+  return log
+}
+
+// 2. Inner reject short-circuits — mid and outer never run.
+node testInnerRejectShortCircuits() {
+  let log: string[] = []
+  handle {
+    handle {
+      handle {
+        foo()
+      } with (data) {
+        log.push("inner-rej")
+        return reject()
+      }
+    } with (data) {
+      log.push("mid-app (should not run)")
+      return approve()
+    }
+  } with (data) {
+    log.push("outer-app (should not run)")
+    return approve()
+  }
+  return log
+}
+
+// 3. Inner propagate, mid approve, outer reject. All three run; outer's
+//    reject wins despite mid's approve and inner's propagate.
+node testOuterRejectWinsAcrossPropagateAndApprove() {
+  let log: string[] = []
+  handle {
+    handle {
+      handle {
+        foo()
+      } with (data) {
+        log.push("inner-prop")
+        return propagate()
+      }
+    } with (data) {
+      log.push("mid-app")
+      return approve()
+    }
+  } with (data) {
+    log.push("outer-rej")
+    return reject()
+  }
+  return log
+}

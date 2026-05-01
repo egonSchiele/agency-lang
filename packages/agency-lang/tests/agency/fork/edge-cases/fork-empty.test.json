@@ -1,0 +1,12 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "fork() with an empty input array completes immediately with an empty result array.",
+      "input": "",
+      "expectedOutput": "[]",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "interruptHandlers": []
+    }
+  ]
+}

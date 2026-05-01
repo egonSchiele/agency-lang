@@ -47,15 +47,14 @@ export { readSkillTool, readSkillToolParams } from "./builtinTools.js";
 export {
   interrupt,
   isInterrupt,
+  hasInterrupts,
   isDebugger,
   isRejected,
   isApproved,
+  approve,
+  reject,
   interruptWithHandlers,
-  respondToInterrupt,
-  approveInterrupt,
-  rejectInterrupt,
-  modifyInterrupt,
-  resolveInterrupt,
+  respondToInterrupts,
 } from "./interrupts.js";
 
 export { isGenerator, handleStreamingResponse } from "./streaming.js";
@@ -87,7 +86,6 @@ export { setupNode, setupFunction, runNode } from "./node.js";
 export { Runner } from "./runner.js";
 
 export { rewindFrom, applyOverrides } from "./rewind.js";
-export type { RewindCheckpoint } from "./rewind.js";
 
 export { debugStep } from "./debugger.js";
 export { DebuggerState } from "../debugger/debuggerState.js";

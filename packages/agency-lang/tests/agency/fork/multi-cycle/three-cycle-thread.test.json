@@ -1,0 +1,19 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Fork where each thread interrupts THREE times — exercises multi-cycle resume across more than two cycles, ensuring cached results survive multiple rounds",
+      "input": "",
+      "expectedOutput": "[\"all done: a\",\"all done: b\"]",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "interruptHandlers": [
+        { "action": "approve" },
+        { "action": "approve" },
+        { "action": "approve" },
+        { "action": "approve" },
+        { "action": "approve" },
+        { "action": "approve" }
+      ]
+    }
+  ]
+}

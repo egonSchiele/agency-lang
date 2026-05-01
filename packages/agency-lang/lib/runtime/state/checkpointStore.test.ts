@@ -395,7 +395,7 @@ describe("CheckpointStore", () => {
     it("should create a checkpoint and return an id", () => {
       const store = new CheckpointStore();
       const ctx = makeMockCtx();
-      const id = store.create(ctx, {
+      const id = store.create(ctx.stateStack, ctx, {
         moduleId: "",
         scopeName: "",
         stepPath: "",
@@ -406,12 +406,12 @@ describe("CheckpointStore", () => {
     it("should increment ids for successive checkpoints", () => {
       const store = new CheckpointStore();
       const ctx = makeMockCtx();
-      const id1 = store.create(ctx, {
+      const id1 = store.create(ctx.stateStack, ctx, {
         moduleId: "",
         scopeName: "",
         stepPath: "",
       });
-      const id2 = store.create(ctx, {
+      const id2 = store.create(ctx.stateStack, ctx, {
         moduleId: "",
         scopeName: "",
         stepPath: "",
@@ -422,7 +422,7 @@ describe("CheckpointStore", () => {
     it("should deep-clone the state (mutations don't affect checkpoint)", () => {
       const store = new CheckpointStore();
       const ctx = makeMockCtx();
-      const id = store.create(ctx, {
+      const id = store.create(ctx.stateStack, ctx, {
         moduleId: "",
         scopeName: "",
         stepPath: "",
@@ -442,7 +442,7 @@ describe("CheckpointStore", () => {
     it("should capture the current nodeId", () => {
       const store = new CheckpointStore();
       const ctx = makeMockCtx();
-      const id = store.create(ctx, {
+      const id = store.create(ctx.stateStack, ctx, {
         moduleId: "",
         scopeName: "",
         stepPath: "",
@@ -454,7 +454,7 @@ describe("CheckpointStore", () => {
     it("should store moduleId, scopeName, stepPath, label, and pinned from opts", () => {
       const store = new CheckpointStore();
       const ctx = makeMockCtx();
-      const id = store.create(ctx, {
+      const id = store.create(ctx.stateStack, ctx, {
         moduleId: "myModule.agency",
         scopeName: "myNode",
         stepPath: "1.2.3",
@@ -472,7 +472,7 @@ describe("CheckpointStore", () => {
     it("should default label to null and pinned to false when not provided", () => {
       const store = new CheckpointStore();
       const ctx = makeMockCtx();
-      const id = store.create(ctx, {
+      const id = store.create(ctx.stateStack, ctx, {
         moduleId: "mod.agency",
         scopeName: "fn",
         stepPath: "0",
@@ -485,7 +485,7 @@ describe("CheckpointStore", () => {
     it("should store moduleId, scopeName, stepPath, label, and pinned when provided via ctx.checkpoints", () => {
       const store = new CheckpointStore();
       const ctx = { ...makeMockCtx(), checkpoints: store };
-      const id = ctx.checkpoints.create(ctx, {
+      const id = ctx.checkpoints.create(ctx.stateStack, ctx, {
         moduleId: "foo.agency",
         scopeName: "main",
         stepPath: "3",
@@ -510,7 +510,7 @@ describe("CheckpointStore", () => {
     it("should return the checkpoint for a valid id", () => {
       const store = new CheckpointStore();
       const ctx = makeMockCtx();
-      const id = store.create(ctx, {
+      const id = store.create(ctx.stateStack, ctx, {
         moduleId: "",
         scopeName: "",
         stepPath: "",
@@ -525,7 +525,7 @@ describe("CheckpointStore", () => {
     it("should remove a checkpoint", () => {
       const store = new CheckpointStore();
       const ctx = makeMockCtx();
-      const id = store.create(ctx, {
+      const id = store.create(ctx.stateStack, ctx, {
         moduleId: "",
         scopeName: "",
         stepPath: "",
@@ -545,22 +545,22 @@ describe("CheckpointStore", () => {
     it("should remove all checkpoints with id > the given id", () => {
       const store = new CheckpointStore();
       const ctx = makeMockCtx();
-      const id0 = store.create(ctx, {
+      const id0 = store.create(ctx.stateStack, ctx, {
         moduleId: "",
         scopeName: "",
         stepPath: "",
       });
-      const id1 = store.create(ctx, {
+      const id1 = store.create(ctx.stateStack, ctx, {
         moduleId: "",
         scopeName: "",
         stepPath: "",
       });
-      const id2 = store.create(ctx, {
+      const id2 = store.create(ctx.stateStack, ctx, {
         moduleId: "",
         scopeName: "",
         stepPath: "",
       });
-      const id3 = store.create(ctx, {
+      const id3 = store.create(ctx.stateStack, ctx, {
         moduleId: "",
         scopeName: "",
         stepPath: "",
@@ -577,12 +577,12 @@ describe("CheckpointStore", () => {
     it("should not remove any if all ids are <= the given id", () => {
       const store = new CheckpointStore();
       const ctx = makeMockCtx();
-      const id0 = store.create(ctx, {
+      const id0 = store.create(ctx.stateStack, ctx, {
         moduleId: "",
         scopeName: "",
         stepPath: "",
       });
-      const id1 = store.create(ctx, {
+      const id1 = store.create(ctx.stateStack, ctx, {
         moduleId: "",
         scopeName: "",
         stepPath: "",
@@ -599,7 +599,7 @@ describe("CheckpointStore", () => {
     it("should track restore count without error for counts within limit", () => {
       const store = new CheckpointStore(5);
       const ctx = makeMockCtx();
-      const id = store.create(ctx, {
+      const id = store.create(ctx.stateStack, ctx, {
         moduleId: "",
         scopeName: "",
         stepPath: "",
@@ -613,7 +613,7 @@ describe("CheckpointStore", () => {
     it("should throw CheckpointError when max restores exceeded", () => {
       const store = new CheckpointStore(3);
       const ctx = makeMockCtx();
-      const id = store.create(ctx, {
+      const id = store.create(ctx.stateStack, ctx, {
         moduleId: "",
         scopeName: "",
         stepPath: "",
@@ -632,12 +632,12 @@ describe("CheckpointStore", () => {
     it("should serialize and deserialize correctly", () => {
       const store = new CheckpointStore();
       const ctx = makeMockCtx();
-      const id0 = store.create(ctx, {
+      const id0 = store.create(ctx.stateStack, ctx, {
         moduleId: "",
         scopeName: "",
         stepPath: "",
       });
-      const id1 = store.create(ctx, {
+      const id1 = store.create(ctx.stateStack, ctx, {
         moduleId: "",
         scopeName: "",
         stepPath: "",
@@ -655,14 +655,14 @@ describe("CheckpointStore", () => {
     it("should preserve counter across serialization", () => {
       const store = new CheckpointStore();
       const ctx = makeMockCtx();
-      const id1 = store.create(ctx, { moduleId: "", scopeName: "", stepPath: "" });
-      const id2 = store.create(ctx, { moduleId: "", scopeName: "", stepPath: "" });
+      const id1 = store.create(ctx.stateStack, ctx, { moduleId: "", scopeName: "", stepPath: "" });
+      const id2 = store.create(ctx.stateStack, ctx, { moduleId: "", scopeName: "", stepPath: "" });
 
       const json = store.toJSON();
       const restored = CheckpointStore.fromJSON(json);
 
       // Next id should continue from where we left off
-      const id = restored.create(ctx, {
+      const id = restored.create(ctx.stateStack, ctx, {
         moduleId: "",
         scopeName: "",
         stepPath: "",
@@ -673,12 +673,12 @@ describe("CheckpointStore", () => {
     it("toJSON should deep-clone so mutations don't affect serialized data", () => {
       const store = new CheckpointStore();
       const ctx = makeMockCtx();
-      store.create(ctx, { moduleId: "", scopeName: "", stepPath: "" });
+      store.create(ctx.stateStack, ctx, { moduleId: "", scopeName: "", stepPath: "" });
 
       const json = store.toJSON();
 
       // Mutate the original store
-      store.create(ctx, { moduleId: "", scopeName: "", stepPath: "" });
+      store.create(ctx.stateStack, ctx, { moduleId: "", scopeName: "", stepPath: "" });
 
       // The JSON should only have 1 checkpoint
       expect(Object.keys(json.checkpoints)).toHaveLength(1);

@@ -3,33 +3,24 @@
 // Any manual changes will be lost.
 import { apply } from "typestache";
 
-export const template = `// Remember this will be called both in a tool call context
-// and when the user is simply calling a function.
-
-if (__state.interruptData?.interruptResponse?.type === "approve") {
-  // approved, clear interrupt response and continue execution
-  __state.interruptData.interruptResponse = null;
-} else if (__state.interruptData?.interruptResponse?.type === "reject" && !__state.isToolCall) {
-  // rejected, clear interrupt response and halt
-  // tool calls will instead tell the llm that the call was rejected
-  __state.interruptData.interruptResponse = null;
-  {{#nodeContext}}
-  runner.halt({ messages: __threads, data: failure("interrupt rejected", { retryable: false }) });
-  {{/nodeContext}}
-  {{^nodeContext}}
-  runner.halt(failure("interrupt rejected", { retryable: false, checkpoint: __ctx.getResultCheckpoint() }));
-  {{/nodeContext}}
-  return;
-} else if (__state.interruptData?.interruptResponse?.type === "modify") {
-  if (__state.isToolCall) {
-    // continue, args will get modified in the tool call handler
-  } else {
-    throw new Error("Interrupt response of type 'modify' is not supported outside of tool calls yet.");
+export const template = `// Resume path: check for a response by interruptId
+const __response = __ctx.getInterruptResponse(__self.{{{interruptIdKey:string}}});
+if (__response) {
+  if (__response.type === "approve") {
+    // approved, continue execution
+  } else if (__response.type === "reject") {
+    // rejected, halt
+    {{#nodeContext}}
+    runner.halt({ messages: __threads, data: failure("interrupt rejected", { retryable: false }) });
+    {{/nodeContext}}
+    {{^nodeContext}}
+    runner.halt(failure("interrupt rejected", { retryable: false, checkpoint: __ctx.getResultCheckpoint() }));
+    {{/nodeContext}}
+    return;
   }
-} else if (__state.interruptData?.interruptResponse?.type === "resolve") {
-  throw new Error("Interrupt response of type 'resolve' cannot be returned from an interrupt call. It can only be assigned to a variable.");
 } else {
-  const __handlerResult = await interruptWithHandlers({{{interruptArgs}}}, __ctx);
+  // First run: call handlers, then propagate if unhandled
+  const __handlerResult = await interruptWithHandlers({{{interruptArgs}}}, __ctx, __stateStack);
   if (isRejected(__handlerResult)) {
     {{#nodeContext}}
     runner.halt({ messages: __threads, data: failure(__handlerResult.value ?? "interrupt rejected", { retryable: false }) });
@@ -40,10 +31,12 @@ if (__state.interruptData?.interruptResponse?.type === "approve") {
     return;
   }
   if (!isApproved(__handlerResult)) {
-    // No handler — propagate interrupt to TypeScript caller
-    const __checkpointId = __ctx.checkpoints.create(__ctx, { moduleId: {{{moduleId}}}, scopeName: {{{scopeName}}}, stepPath: {{{stepPath}}} });
-    __handlerResult.checkpointId = __checkpointId;
-    __handlerResult.checkpoint = __ctx.checkpoints.get(__checkpointId);
+    // No handler — propagate interrupt array to TypeScript caller
+    // Store interruptId on frame BEFORE checkpoint so it's captured in the snapshot
+    __self.{{{interruptIdKey:string}}} = __handlerResult[0].interruptId;
+    const __checkpointId = __ctx.checkpoints.create(__stateStack, __ctx, { moduleId: {{{moduleId}}}, scopeName: {{{scopeName}}}, stepPath: {{{stepPath}}} });
+    __handlerResult[0].checkpointId = __checkpointId;
+    __handlerResult[0].checkpoint = __ctx.checkpoints.get(__checkpointId);
     {{#nodeContext}}
     runner.halt({ messages: __threads, data: __handlerResult });
     {{/nodeContext}}
@@ -57,6 +50,7 @@ if (__state.interruptData?.interruptResponse?.type === "approve") {
 `;
 
 export type TemplateType = {
+  interruptIdKey: string;
   nodeContext: boolean;
   interruptArgs: string | boolean | number;
   moduleId: string | boolean | number;

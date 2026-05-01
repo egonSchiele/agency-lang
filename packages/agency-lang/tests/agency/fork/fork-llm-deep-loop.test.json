@@ -1,0 +1,24 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Loop with LLM calls generating items then fork with interrupts per batch — tests deep nesting of LLM, tool, fork, and interrupt",
+      "input": "",
+      "expectedOutput": "",
+      "evaluationCriteria": [
+        {
+          "type": "llmJudge",
+          "judgePrompt": "The output should be an array of 4 strings. Each string should start with 'confirmed:' and contain items from two categories (alpha and beta), each with two items (like alpha-1, alpha-2, beta-1, beta-2). The exact format may vary but there should be 4 confirmed items covering both categories.",
+          "desiredAccuracy": 70
+        }
+      ],
+      "interruptHandlers": [
+        { "action": "approve" },
+        { "action": "approve" },
+        { "action": "approve" },
+        { "action": "approve" }
+      ],
+      "retry": 1
+    }
+  ]
+}

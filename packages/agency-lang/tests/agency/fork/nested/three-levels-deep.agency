@@ -1,0 +1,25 @@
+def confirmItem(item: string): string {
+  interrupt("approve ${item}?")
+  return "ok ${item}"
+}
+
+def innermost(label: string): string[] {
+  let r = fork(["x", "y"]) as i {
+    return confirmItem("${label}-${i}")
+  }
+  return r
+}
+
+def middle(label: string): string[][] {
+  let r = fork(["1", "2"]) as i {
+    return innermost("${label}-${i}")
+  }
+  return r
+}
+
+node main() {
+  let results = fork(["a", "b"]) as outer {
+    return middle(outer)
+  }
+  return results
+}

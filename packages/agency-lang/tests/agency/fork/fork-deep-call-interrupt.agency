@@ -1,0 +1,15 @@
+def inner(item: string): string {
+  interrupt("approve ${item}?")
+  return "inner: ${item}"
+}
+
+def outer(item: string): string {
+  return inner(item)
+}
+
+node main() {
+  let results = fork(["a", "b"]) as item {
+    return outer(item)
+  }
+  return results
+}

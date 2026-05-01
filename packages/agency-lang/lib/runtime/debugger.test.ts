@@ -29,7 +29,7 @@ describe("debugStep()", () => {
     const ctx = makeMockCtx({ debuggerState: dbg });
     const result = await debugStep(ctx, makeState(ctx), baseInfo);
     expect(result).toBeDefined();
-    expect(result!.type).toBe("interrupt");
+    expect(result![0].type).toBe("interrupt");
   });
 
   it("returns undefined when mode is 'running' and no label", async () => {
@@ -53,7 +53,7 @@ describe("debugStep()", () => {
       isUserAdded: true,
     });
     expect(result).toBeDefined();
-    expect(result!.type).toBe("interrupt");
+    expect(result![0].type).toBe("interrupt");
   });
 
   it("always creates a rolling checkpoint", async () => {
@@ -96,7 +96,7 @@ describe("debugStep()", () => {
     const ctx = makeMockCtx({ debuggerState: dbg });
     const result = await debugStep(ctx, makeState(ctx), baseInfo);
     expect(result).toBeDefined();
-    expect(result!.type).toBe("interrupt");
+    expect(result![0].type).toBe("interrupt");
   });
 
   it("respects stepTarget: DOES pause when callDepth === targetDepth", async () => {
@@ -106,7 +106,7 @@ describe("debugStep()", () => {
     const ctx = makeMockCtx({ debuggerState: dbg });
     const result = await debugStep(ctx, makeState(ctx), baseInfo);
     expect(result).toBeDefined();
-    expect(result!.type).toBe("interrupt");
+    expect(result![0].type).toBe("interrupt");
   });
 
   it("the returned interrupt has debugger: true", async () => {
@@ -115,7 +115,7 @@ describe("debugStep()", () => {
     const ctx = makeMockCtx({ debuggerState: dbg });
     const result = await debugStep(ctx, makeState(ctx), baseInfo);
     expect(result).toBeDefined();
-    expect(result!.debugger).toBe(true);
+    expect(result![0].debugger).toBe(true);
   });
 
   it("the returned interrupt has checkpointId and checkpoint set", async () => {
@@ -124,9 +124,9 @@ describe("debugStep()", () => {
     const ctx = makeMockCtx({ debuggerState: dbg });
     const result = await debugStep(ctx, makeState(ctx), baseInfo);
     expect(result).toBeDefined();
-    expect(typeof result!.checkpointId).toBe("number");
-    expect(result!.checkpoint).toBeDefined();
-    expect(result!.checkpoint!.pinned).toBe(false);
+    expect(typeof result![0].checkpointId).toBe("number");
+    expect(result![0].checkpoint).toBeDefined();
+    expect(result![0].checkpoint!.pinned).toBe(false);
   });
 
   it("the interrupt data is the label when label is set", async () => {
@@ -139,7 +139,7 @@ describe("debugStep()", () => {
       isUserAdded: true,
     });
     expect(result).toBeDefined();
-    expect(result!.data).toBe("my-label");
+    expect(result![0].data).toBe("my-label");
   });
 
   it("the interrupt data is undefined when no label (stepping mode)", async () => {
@@ -151,6 +151,6 @@ describe("debugStep()", () => {
       label: null,
     });
     expect(result).toBeDefined();
-    expect(result!.data).toBeUndefined();
+    expect(result![0].data).toBeUndefined();
   });
 });

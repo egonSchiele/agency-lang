@@ -1,0 +1,16 @@
+// Two interrupts in sequence. The user can pass different `overrides` at
+// each respondToInterrupts call to verify how multi-cycle overrides
+// behave: do they accumulate, or does each cycle's override apply to the
+// state at THAT cycle's checkpoint?
+node main() {
+  let multiplier = 1
+  interrupt("first?")
+  // First override sets multiplier to 100; if it works, multiplier is 100 here.
+  let snapshot1 = multiplier
+  interrupt("second?")
+  // Second override sets multiplier to 5; if applied to this cycle's
+  // checkpoint, multiplier is now 5. snapshot1 should still be 100 from
+  // the first cycle's override (overrides apply at-checkpoint, not retroactively).
+  let snapshot2 = multiplier
+  return { snapshot1: snapshot1, snapshot2: snapshot2, final: 10 * multiplier }
+}

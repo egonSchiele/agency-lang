@@ -1,0 +1,29 @@
+// Tool A is registered with the LLM. Tool A's body invokes Tool B as a
+// regular function call (NOT via the LLM). When Tool B interrupts, the
+// interrupt bubbles UP through Tool A's call stack to the runPrompt
+// tool-call branch, where it gets the standard treatment. This tests
+// that handler chains, branch state, and checkpoint composition all
+// work when interrupts cross a tool/function boundary inside a tool.
+
+def innerHelper(x: number): number {
+  interrupt("approve helper for ${x}?")
+  return x * 2
+}
+
+def outerTool(x: number): number {
+  // outerTool calls innerHelper synchronously, like any function.
+  // innerHelper's interrupt should propagate cleanly through this
+  // function boundary, up to runPrompt's tool branch.
+  return innerHelper(x)
+}
+
+type Resp = {
+  value: number
+}
+
+node main() {
+  const result: Resp = llm("Call outerTool with x=5. Return the value field with the number outerTool returned.", {
+    tools: [outerTool]
+  })
+  return result.value
+}

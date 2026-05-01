@@ -3,8 +3,12 @@ def identity(n: number): number {
 }
 
 node main() {
-  let result = race([10, 20, 30]) as item {
+  const arr = [10, 20, 30]
+  let result = race(arr) as item {
     return identity(item)
   }
-  return result
+  if (arr.includes(result)) {
+    return true
+  }
+  return false
 }

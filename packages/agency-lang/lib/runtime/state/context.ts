@@ -17,6 +17,7 @@ import type { TraceConfig } from "../trace/types.js";
 import { reviveWithClasses, type ClassRegistry } from "../classReviver.js";
 import { AgencyCancelledError } from "../errors.js";
 import { LLMClient, SmoltalkClient } from "../llmClient.js";
+import type { InterruptResponse } from "../interrupts.js";
 
 /* bunch of stuff that every node/function in the runtime needs access to,
 that we don't want to pass as individual arguments everywhere */
@@ -54,9 +55,18 @@ export class RuntimeContext<T> {
   statelogClient: StatelogClient;
   smoltalkDefaults: Partial<SmolPromptConfig>;
   private _llmClient: LLMClient;
+  private _interruptResponses: Record<string, { response: InterruptResponse }> = {};
 
   get llmClient(): LLMClient { return this._llmClient; }
   setLLMClient(client: LLMClient): void { this._llmClient = client; }
+
+  setInterruptResponses(responses: Record<string, { response: InterruptResponse }>): void {
+    this._interruptResponses = responses;
+  }
+
+  getInterruptResponse(interruptId: string): InterruptResponse | undefined {
+    return this._interruptResponses[interruptId]?.response;
+  }
 
   // this is the directory that the runtime is running in. We need this to be able to read files relative to the runtime.
   dirname: string;
@@ -107,9 +117,9 @@ export class RuntimeContext<T> {
     this.handlers = [];
     this.callbacks = {};
     this.onStreamLock = false;
-    // When rewinding, the checkpoint lives in a sentinel step right after the LLM call.
-    // On restore, the sentinel re-runs and would emit a duplicate checkpoint.
-    // rewindFrom sets this flag so the first sentinel skips, then clears it.
+    // After a debugger rewind, the first debug step would write a duplicate
+    // checkpoint to the trace (the user already saw the rewound checkpoint).
+    // rewindFrom sets this flag so the first debugStep trace-write is skipped.
     this._skipNextCheckpoint = false;
     this._restoreCount = 0;
     this._toolCallDepth = 0;
@@ -163,6 +173,7 @@ export class RuntimeContext<T> {
     execCtx._skipNextCheckpoint = false;
     execCtx._restoreCount = 0;
     execCtx._toolCallDepth = 0;
+    execCtx._interruptResponses = {};
     execCtx.debuggerState = this.debuggerState;
     execCtx.traceWriter = await TraceWriter.create({
       runId,
@@ -250,6 +261,35 @@ export class RuntimeContext<T> {
 
   get aborted(): boolean {
     return this.abortController.signal.aborted;
+  }
+
+  /**
+   * Branch-aware cancellation check. Returns true if either:
+   *   - the global ctx is aborted (e.g., user pressed Ctrl-C), OR
+   *   - the given branch stack's per-branch abort signal has fired (e.g.,
+   *     this branch is a race loser).
+   *
+   * Pass the local stateStack at any call site that lives inside a fork/race
+   * branch so the check sees that branch's signal. Without a stack arg, this
+   * is equivalent to `ctx.aborted`.
+   */
+  isCancelled(stack?: StateStack): boolean {
+    if (this.abortController.signal.aborted) return true;
+    return !!stack?.abortSignal?.aborted;
+  }
+
+  /**
+   * Branch-aware AbortSignal for HTTP/fetch/streaming calls. Returns a
+   * composite signal that fires on either global ctx abort OR the given
+   * branch stack's abort. Pass to smoltalk's `abortSignal` so per-branch
+   * cancellation actually tears down in-flight network requests.
+   *
+   * If no stack is given (or the stack has no branch signal), returns the
+   * global ctx signal — same behavior as before.
+   */
+  getAbortSignal(stack?: StateStack): AbortSignal {
+    if (!stack?.abortSignal) return this.abortController.signal;
+    return AbortSignal.any([this.abortController.signal, stack.abortSignal]);
   }
 
   cancel(reason?: string): void {

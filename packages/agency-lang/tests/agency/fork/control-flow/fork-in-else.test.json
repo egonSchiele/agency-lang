@@ -1,0 +1,15 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Fork inside else-branch — same as fork-in-if but on the else side, verifying branch-index restoration",
+      "input": "",
+      "expectedOutput": "[\"confirmed: x\",\"confirmed: y\"]",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "interruptHandlers": [
+        { "action": "approve" },
+        { "action": "approve" }
+      ]
+    }
+  ]
+}

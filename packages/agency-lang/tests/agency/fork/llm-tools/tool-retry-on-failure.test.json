@@ -1,0 +1,13 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Tool returns a retryable failure on bad input. The LLM should retry with corrected input after seeing the 'Error: ... You may retry' tool message. Tests runPrompt's currently-uncovered retry path.",
+      "input": "",
+      "expectedOutput": "25",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "interruptHandlers": [],
+      "retry": 2
+    }
+  ]
+}

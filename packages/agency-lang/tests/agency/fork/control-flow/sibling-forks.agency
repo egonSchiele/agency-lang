@@ -1,0 +1,29 @@
+// Two consecutive forks in the same scope. The first one interrupts and
+// is resumed; the second one starts AFTER the first finished. Tests that
+// frame.branches from the first fork doesn't leak into the second, and
+// that branchKey collisions don't happen even though both forks live on
+// the same parent frame.
+
+def confirmItem(label: string): string {
+  interrupt("approve ${label}?")
+  return "ok ${label}"
+}
+
+node main() {
+  let firstResults = fork(["a", "b"]) as item {
+    return confirmItem(item)
+  }
+  // Second fork runs only after the first has completed. Its branches
+  // should be created cleanly with no carryover from the first fork's state.
+  let secondResults = fork(["x", "y"]) as item {
+    return confirmItem(item)
+  }
+  let combined: string[] = []
+  for (r in firstResults) {
+    combined.push(r)
+  }
+  for (r in secondResults) {
+    combined.push(r)
+  }
+  return combined
+}

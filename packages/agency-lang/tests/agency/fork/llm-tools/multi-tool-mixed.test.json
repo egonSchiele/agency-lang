@@ -1,0 +1,21 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "LLM with one tool that succeeds and one tool that interrupts called in parallel — tests that completed tool branches survive interrupt cycle without re-execution",
+      "input": "",
+      "expectedOutput": "",
+      "evaluationCriteria": [
+        {
+          "type": "llmJudge",
+          "judgePrompt": "The output should be an object with a 'fact' field containing some text about cats, and a 'confirmation' field containing 'delete-files confirmed' or similar.",
+          "desiredAccuracy": 70
+        }
+      ],
+      "interruptHandlers": [
+        { "action": "approve" }
+      ],
+      "retry": 2
+    }
+  ]
+}

@@ -1,0 +1,17 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Two fork branches each maintain a function-local `count` that is mutated before, between, and after two interrupts. After both cycles, each branch's final count should be 6 (1+2+3), proving that frame-local variable mutations made BEFORE each interrupt are correctly preserved through the checkpoint/resume cycle.",
+      "input": "",
+      "expectedOutput": "[6,6]",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "interruptHandlers": [
+        { "action": "approve", "expectedMessage": "first a?" },
+        { "action": "approve", "expectedMessage": "first b?" },
+        { "action": "approve", "expectedMessage": "second a?" },
+        { "action": "approve", "expectedMessage": "second b?" }
+      ]
+    }
+  ]
+}

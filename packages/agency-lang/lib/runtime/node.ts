@@ -13,7 +13,7 @@ import { GraphState, InternalFunctionState, RunNodeResult } from "./types.js";
 import { createReturnObject } from "./utils.js";
 import { color } from "termcolors";
 import { nanoid } from "nanoid";
-import { isInterrupt } from "./interrupts.js";
+import { hasInterrupts } from "./interrupts.js";
 
 export function setupNode(args: { state: GraphState }): {
   stack: State;
@@ -46,6 +46,7 @@ export function setupNode(args: { state: GraphState }): {
 }
 
 export function setupFunction(args: { state?: InternalFunctionState }): {
+  stateStack: StateStack;
   stack: State;
   step: number;
   self: Record<string, any>;
@@ -57,6 +58,7 @@ export function setupFunction(args: { state?: InternalFunctionState }): {
     const stateStack = new StateStack();
     const stack = stateStack.getNewState();
     return {
+      stateStack,
       stack,
       step: 0,
       self: stack.locals,
@@ -73,7 +75,7 @@ export function setupFunction(args: { state?: InternalFunctionState }): {
   // if being called as a tool, we won't have threads, but we'll create an empty ThreadStore here.
   const threads = state.threads || new ThreadStore();
 
-  return { stack, step, self, threads };
+  return { stateStack, stack, step, self, threads };
 }
 
 export async function runNode({
@@ -154,10 +156,13 @@ export async function runNode({
           result,
           globals: execCtx.globals,
         });
-        if (isInterrupt(returnObject.data)) {
-          // Interrupt: attach runId and pause (no footer)
+
+        if (hasInterrupts(returnObject.data)) {
+          // Interrupt(s): attach runId and pause (no footer)
           if (execCtx.runId) {
-            returnObject.data.runId = execCtx.runId;
+            for (const intr of returnObject.data) {
+              intr.runId = execCtx.runId;
+            }
           }
           await execCtx.pauseTraceWriter();
         } else {

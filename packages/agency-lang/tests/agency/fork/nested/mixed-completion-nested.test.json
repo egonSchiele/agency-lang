@@ -1,0 +1,16 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Outer fork with two inner forks: one inner fork has all small items (no interrupts), the other has all big items (3 interrupts) — tests that the no-interrupt inner fork completes cleanly while the other interrupts and resumes",
+      "input": "",
+      "expectedOutput": "[[\"small: 1\",\"small: 2\",\"small: 3\"],[\"big: 10\",\"big: 20\",\"big: 30\"]]",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "interruptHandlers": [
+        { "action": "approve" },
+        { "action": "approve" },
+        { "action": "approve" }
+      ]
+    }
+  ]
+}

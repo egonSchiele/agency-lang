@@ -1,0 +1,12 @@
+def summarize(topic: string): string {
+  const result: string = llm("Summarize ${topic} in one sentence")
+  return result
+}
+
+node main() {
+  let results = fork(["cats", "dogs", "birds"]) as topic {
+    return summarize(topic)
+  }
+  print(results)
+  return results
+}

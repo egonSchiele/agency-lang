@@ -1,0 +1,16 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Stress test: for loop × (handler + LLM call + fork-tool + race-with-abort + conditional interrupt) × 2 rounds. Round 1 approves the 'important' interrupt; round 2 rejects it. Mix of success and failure across branches gets flattened to uniform strings via the extract() helper for exact matching.",
+      "input": "",
+      "expectedOutput": "[\"deleted: safe (fast: safe)\",\"deleted: important (fast: important)\",\"deleted: safe2 (fast: safe2)\",\"deleted: safe (fast: safe)\",\"FAILED: interrupt rejected\",\"deleted: safe2 (fast: safe2)\"]",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "interruptHandlers": [
+        { "action": "approve", "expectedMessage": "really delete 'important'?" },
+        { "action": "reject", "expectedMessage": "really delete 'important'?" }
+      ],
+      "retry": 2
+    }
+  ]
+}

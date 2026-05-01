@@ -1,0 +1,16 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Fork over 3 items: one never interrupts (a), one interrupts once (b), one interrupts twice (c). The interrupt-handler list has exactly 3 entries (one for b, two for c). If branches 'b' or 'c' re-execute on resume — i.e., caching is broken — they would mint additional interrupt IDs and the test runner would fail with 'Unexpected interrupt #N: no handler provided'. Note: this test does NOT directly catch re-execution of 'a' (which has no interrupts), since 'a' produces the same string output regardless of invocation count. Detecting 'a' re-execution would require side-effect tracking in shared state that's hard to coordinate across parallel branches that share ctx.globals; tests like fork-stress (which has end-to-end exact-match output) cover that space indirectly.",
+      "input": "",
+      "expectedOutput": "[\"done: a\",\"done: b\",\"done: c\"]",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "interruptHandlers": [
+        { "action": "approve" },
+        { "action": "approve" },
+        { "action": "approve" }
+      ]
+    }
+  ]
+}

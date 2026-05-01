@@ -21,7 +21,6 @@ export type GraphState = {
 export type InternalFunctionState = {
   threads: ThreadStore;
   ctx: RuntimeContext<GraphState>;
-  isForked?: boolean;
   stateStack?: StateStack;  // per-thread stack for async calls
   moduleId?: string;
   scopeName?: string;

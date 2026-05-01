@@ -375,7 +375,6 @@ export async function runPrompt(args: {
               ctx,
               threads: new ThreadStore(),
               stateStack: branchStack,
-              isForked: true,
             },
           );
         } catch (error: unknown) {

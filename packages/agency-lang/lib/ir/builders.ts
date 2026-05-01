@@ -464,7 +464,6 @@ export const ts = {
 
   setupEnv({
     stateStack,
-    isForked,
     stack,
     step,
     self,
@@ -474,7 +473,6 @@ export const ts = {
     graph,
   }: {
     stateStack?: TsNode;
-    isForked?: TsNode;
     stack: TsNode;
     step: TsNode;
     self: TsNode;
@@ -485,7 +483,6 @@ export const ts = {
   }): TsStatements {
     return ts.statements([
       ...(stateStack ? [ts.constDecl("__stateStack", stateStack)] : []),
-      ...(isForked ? [ts.constDecl("__isForked", isForked)] : []),
       ts.constDeclId(ts.runtime.stack, stack),
       ts.constDeclId(ts.runtime.step, step),
       ts.constDeclId(ts.runtime.self, self),
@@ -545,7 +542,6 @@ export const ts = {
     ctx,
     threads,
     stateStack,
-    isForked,
     moduleId,
     scopeName,
     stepPath,
@@ -553,7 +549,6 @@ export const ts = {
     ctx: TsNode;
     threads?: TsNode;
     stateStack?: TsNode;
-    isForked?: TsNode;
     moduleId?: TsNode;
     scopeName?: TsNode;
     stepPath?: TsNode;
@@ -566,9 +561,6 @@ export const ts = {
     }
     if (stateStack) {
       entries.stateStack = stateStack;
-    }
-    if (isForked) {
-      entries.isForked = isForked;
     }
     if (moduleId) {
       entries.moduleId = moduleId;

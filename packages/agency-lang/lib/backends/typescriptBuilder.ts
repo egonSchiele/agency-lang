@@ -1118,11 +1118,10 @@ export class TypeScriptBuilder {
   /**
    * Build the standard state config for __call/__callMethod dispatch.
    * During global init, only ctx is available; otherwise includes threads
-   * and interruptData.
+   * and stateStack.
    */
   private buildStateConfig(opts?: {
     stateStack?: TsNode;
-    isForked?: TsNode;
     extra?: Record<string, TsNode>;
   }): TsNode {
     if (this.insideGlobalInit) {
@@ -1132,7 +1131,6 @@ export class TypeScriptBuilder {
       ctx: ts.runtime.ctx,
       threads: ts.runtime.threads,
       stateStack: opts?.stateStack ?? ts.id("__stateStack"),
-      isForked: opts?.isForked ?? ts.id("__isForked"),
       ...opts?.extra,
     });
   }
@@ -1611,7 +1609,6 @@ export class TypeScriptBuilder {
       ),
       ts.setupEnv({
         stateStack: $(ts.id("__setupData")).prop("stateStack").done(),
-        isForked: ts.raw("__state?.isForked ?? false"),
         stack: $(ts.id("__setupData")).prop("stack").done(),
         step: $(ts.id("__setupData")).prop("step").done(),
         self: $(ts.id("__setupData")).prop("self").done(),
@@ -2041,7 +2038,6 @@ export class TypeScriptBuilder {
     } : undefined;
     const configObj = this.buildStateConfig({
       stateStack: options?.stateStack,
-      isForked: node.async ? ts.bool(true) : undefined,
       extra: locationOpts,
     });
 
@@ -2237,7 +2233,6 @@ export class TypeScriptBuilder {
 
       ts.setupEnv({
         stateStack: ts.raw("__state.ctx.stateStack"),
-        isForked: ts.bool(false),
         stack: $(ts.id("__setupData")).prop("stack").done(),
         step: $(ts.id("__setupData")).prop("step").done(),
         self: $(ts.id("__setupData")).prop("self").done(),

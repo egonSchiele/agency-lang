@@ -6,7 +6,6 @@ import { apply } from "typestache";
 export const template = `const __bstack = __forkBranchStack.getNewState();
 const __self = __bstack.locals;
 const __stateStack = __forkBranchStack;
-const __isForked = true;
 const {{{paramName:string}}} = __forkItem;
 __bstack.args[{{{paramNameQuoted}}}] = __forkItem;
 const runner = new Runner(__ctx, __bstack, { state: __bstack, moduleId: {{{moduleId}}}, scopeName: {{{scopeName}}}, stack: __forkBranchStack });

@@ -4,18 +4,24 @@
 
 An Agency package that provides web search via the [Brave Search API](https://brave.com/search/api/). Exposes a single `braveSearch` function that agents can use as an LLM tool to search the web and get back structured results.
 
-No third-party wrapper libraries — calls the Brave REST API directly (~40 lines of TypeScript). Requires a `BRAVE_API_KEY` environment variable (free tier: 1,000 searches/month).
+No third-party wrapper libraries — calls the Brave REST API directly (~40 lines of TypeScript). Uses the `BRAVE_API_KEY` environment variable by default, or accepts the key directly via the `apiKey` parameter (free tier: 1,000 searches/month).
 
 ## Configuration
 
-Set the `BRAVE_API_KEY` environment variable. You can do this in a `.env` file in your project root or in your shell environment:
+Get a free API key at https://api.search.brave.com/app/keys. No `agency.json` configuration is needed.
+
+**Option 1: Environment variable** (recommended). Set `BRAVE_API_KEY` in a `.env` file or your shell:
 
 ```
 # .env
 BRAVE_API_KEY=your-key-here
 ```
 
-Get a free API key at https://api.search.brave.com/app/keys. No `agency.json` configuration is needed.
+**Option 2: Pass directly.** Use the `apiKey` named parameter if you can't set an env var:
+
+```
+braveSearch("my query", apiKey: myApiKey)
+```
 
 ## Usage
 
@@ -27,7 +33,7 @@ node main() {
 }
 ```
 
-The LLM calls `braveSearch(query, count)` as a tool. Results come back as an array of `{ title, url, description }` objects.
+The LLM calls `braveSearch(query)` as a tool. Results come back as an array of `{ title, url, description }` objects.
 
 ## Package Structure
 
@@ -63,9 +69,10 @@ type BraveSearchResult = {
 }
 
 type BraveSearchOptions = {
+  apiKey?: string             // override BRAVE_API_KEY env var
   count?: number              // 1-20, default 5
   country?: string            // 2-char code, e.g. "US"
-  search_lang?: string        // ISO 639-1, e.g. "en"
+  searchLang?: string         // ISO 639-1, e.g. "en"
   safesearch?: "off" | "moderate" | "strict"  // default "moderate"
   freshness?: string          // "pd" (24h), "pw" (7d), "pm" (31d), "py" (1y)
 }
@@ -77,8 +84,8 @@ export async function braveSearch(
 ```
 
 **Behavior:**
-- Reads `BRAVE_API_KEY` from `process.env`
-- Throws if key is missing
+- Uses `options.apiKey` if provided, otherwise reads `BRAVE_API_KEY` from `process.env`
+- Throws if neither is set
 - Builds URL with query params, makes GET request with auth header
 - Extracts `response.web.results`, maps each to `{ title, url, description }`
 - Throws on non-200 HTTP responses with status code and response body (e.g., "Brave Search API error (429): Rate limit exceeded")
@@ -89,12 +96,29 @@ export async function braveSearch(
 import { braveSearch as braveSearchImpl } from "./dist/src/braveSearch.js"
 
 /// Search the web using Brave Search. Returns titles, URLs, and descriptions.
-export def braveSearch(query: string, count: number = 5) {
-  return braveSearchImpl(query, { count })
+export def braveSearch(query: string, count: number = 5, apiKey: string = "", country: string = "", searchLang: string = "", safesearch: string = "moderate", freshness: string = "") {
+  return braveSearchImpl(query, {
+    count: count,
+    apiKey: apiKey,
+    country: country,
+    searchLang: searchLang,
+    safesearch: safesearch,
+    freshness: freshness
+  })
 }
 ```
 
-The Agency wrapper keeps the tool interface simple for the LLM: just `query` and `count`. The docstring becomes the tool description. Advanced options (country, language, freshness) are available in the TypeScript API for programmatic use but not exposed as tool parameters.
+All options are exposed with sensible defaults. Users can pass them positionally or with named parameters:
+
+```
+// Simple — LLM will typically call it this way
+braveSearch("climate change")
+
+// With named parameters for advanced use
+braveSearch("climate change", count: 10, country: "US", apiKey: myKey)
+```
+
+The TS core ignores empty-string options (treats them as unset), so the defaults work cleanly.
 
 ## Testing
 
@@ -158,6 +182,6 @@ No runtime dependencies — uses native `fetch`.
 ## Decisions
 
 - **No wrapper library:** The Brave API is a single GET endpoint. Calling it directly avoids dependency risk, license issues (the existing `brave-search` npm package is GPL v3), and keeps the package minimal.
-- **Simple tool interface:** The LLM only sees `query` and `count`. Advanced options are available in the TS API for programmatic use.
+- **All options exposed with defaults:** All Brave API options are available via named parameters with sensible defaults. The TS core treats empty strings as unset, so default values don't generate unnecessary query params.
 - **No caching:** Kept out of v1 for simplicity. Users can add their own caching layer.
 - **No Result types in the TS core:** The core throws on errors. The Agency wrapper can use try/catch to convert to Result types if needed, but for a tool function, throwing is fine — Agency's tool execution catches errors and reports them to the LLM.

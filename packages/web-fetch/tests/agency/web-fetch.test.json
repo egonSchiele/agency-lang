@@ -1,0 +1,14 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "{\"title\":\"A Calvin and Hobbes fan site\",\"content\":\"## Welcome to the Calvin and Hobbes Fan Site\\n\\n    \\n        Calvin and Hobbes are two beloved comic strip characters created by Bill\\n        Watterson.\",\"excerpt\":\"Calvin and Hobbes are two beloved comic strip characters created by Bill\\n        Watterson.\",\"siteName\":\"Site name is a Calvin and Hobbes fan site\",\"url\":\"https://s.adit.io/agency-webfetch-test.html\"}",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    }
+  ]
+}

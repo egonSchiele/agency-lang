@@ -18,10 +18,13 @@
   ],
   "author": "Aditya Bhargava",
   "license": "ISC",
-  "bugs": { "url": "https://github.com/egonSchiele/agency-lang/issues" },
+  "bugs": {
+    "url": "https://github.com/egonSchiele/agency-lang/issues"
+  },
   "homepage": "https://github.com/egonSchiele/agency-lang",
   "scripts": {
     "build": "tsc",
+    "agency": "agency",
     "test": "vitest",
     "test:run": "vitest run",
     "test:agency": "agency tests/agency"
@@ -36,6 +39,7 @@
   "devDependencies": {
     "@types/node": "^25.0.0",
     "typescript": "^5.0.0",
-    "vitest": "^3.0.0"
+    "vitest": "^3.0.0",
+    "zod": "^4.3.5"
   }
 }

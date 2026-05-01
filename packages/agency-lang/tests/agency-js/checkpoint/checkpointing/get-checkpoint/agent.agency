@@ -1,8 +1,7 @@
-shared let sharedVar = 0
+static const staticVal = 0
 let globalVar = 0
 
 def increment(amount: number) {
-  sharedVar = sharedVar + amount
   globalVar = globalVar + amount
   return amount
 }

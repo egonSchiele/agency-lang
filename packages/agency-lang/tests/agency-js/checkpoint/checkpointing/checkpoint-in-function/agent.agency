@@ -1,12 +1,12 @@
-shared let attempts = 0
+import { getMutable, setMutable } from "../../../../helpers/mutableVar.js"
 
 def retryUntil(maxAttempts: number) {
   const cp = checkpoint()
-  attempts = attempts + 1
-  if (attempts < maxAttempts) {
+  setMutable("attempts", getMutable("attempts", 0) + 1)
+  if (getMutable("attempts", 0) < maxAttempts) {
     restore(cp, {})
   }
-  return attempts
+  return getMutable("attempts", 0)
 }
 
 node main() {

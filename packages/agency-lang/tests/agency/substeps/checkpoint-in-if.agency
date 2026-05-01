@@ -1,14 +1,14 @@
-shared let log = ""
+import { getMutable, setMutable } from "../../helpers/mutableVar.js"
 
 node main(x: number) {
   const cp = checkpoint()
-  log = log + "before,"
+  setMutable("log", getMutable("log", "") + "before,")
   if (x > 5) {
-    log = log + "branch,"
-    if (log == "before,branch,") {
+    setMutable("log", getMutable("log", "") + "branch,")
+    if (getMutable("log", "") == "before,branch,") {
       restore(cp, {})
     }
-    log = log + "done,"
+    setMutable("log", getMutable("log", "") + "done,")
   }
-  return log
+  return getMutable("log", "")
 }

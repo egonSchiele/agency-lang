@@ -1,8 +1,8 @@
-shared let attempts = 0
+import { getMutable, setMutable } from "../helpers/mutableVar.js"
 
 node main() {
   const cp = checkpoint()
-  attempts = attempts + 1
+  setMutable("attempts", getMutable("attempts", 0) + 1)
   restore(cp, { maxRestores: 3 })
-  return attempts
+  return getMutable("attempts", 0)
 }

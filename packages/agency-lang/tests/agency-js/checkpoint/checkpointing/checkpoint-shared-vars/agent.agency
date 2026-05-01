@@ -1,12 +1,9 @@
-shared let sharedCounter = 0
+static const staticVal = 42
 let counter = 0
 
 node main() {
   const cp = checkpoint()
-  sharedCounter = sharedCounter + 1
   counter = counter + 1
-  if (sharedCounter < 3) {
-    restore(cp, {})
-  }
-  return { sharedCounter: sharedCounter, counter: counter }
+  restore(cp, { maxRestores: 2 })
+  return { staticVal: staticVal, counter: counter }
 }

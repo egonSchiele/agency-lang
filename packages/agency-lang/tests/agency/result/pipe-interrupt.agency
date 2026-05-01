@@ -1,7 +1,7 @@
-shared let callCount = 0
+import { getMutable, setMutable } from "../../helpers/mutableVar.js"
 
 def countAndDouble(x: number): number {
-  callCount = callCount + 1
+  setMutable("callCount", getMutable("callCount", 0) + 1)
   return x * 2
 }
 
@@ -14,5 +14,5 @@ node main() {
   // Chain: countAndDouble runs first, then interruptingAdd pauses.
   // On resume, countAndDouble should NOT re-run (callCount stays 1).
   let r = success(5) |> countAndDouble |> interruptingAdd(?, 10)
-  return { value: r, callCount: callCount }
+  return { value: r, callCount: getMutable("callCount", 0) }
 }

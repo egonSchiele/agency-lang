@@ -1,7 +1,7 @@
-shared let attempt = 0
+import { getMutable, setMutable } from "../../helpers/mutableVar.js"
 
 def validate(input: string): Result {
-  attempt = attempt + 1
+  setMutable("attempt", getMutable("attempt", 0) + 1)
   if (input == "bad") {
     return failure("invalid input")
   }
@@ -13,5 +13,5 @@ node main() {
   if (isFailure(result)) {
     restore(result.checkpoint, { args: { input: "good" } })
   }
-  return { value: result.value, attempts: attempt }
+  return { value: result.value, attempts: getMutable("attempt", 0) }
 }

@@ -1,4 +1,4 @@
 {
-  "sharedCounter": 3,
+  "staticVal": 42,
   "counter": 1
 }

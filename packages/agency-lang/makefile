@@ -23,7 +23,3 @@ doc:
 test-log:
 	rm -f test-output
 	pnpm run test:agency | tee test-output
-
-fuck:
-	pnpm run compile foo.agency && \
-	node index.js

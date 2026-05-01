@@ -28,8 +28,6 @@ export function _write(filename, content) {
 
 async function run() {
   let result = await main();
-  // console.log(JSON.stringify(result.data, null, 2));
-  _write("/Users/adit/result.json", JSON.stringify(result.data, null, 2));
   while (hasInterrupts(result.data)) {
     console.log("This result has interrupts!");
     console.log(JSON.stringify(result.data, null, 2));

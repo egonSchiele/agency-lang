@@ -2,7 +2,7 @@
   "tests": [
     {
       "nodeName": "main",
-      "description": "Two fork branches each mutate `counter` (their own per-branch copy) before, between, and after two interrupts. After both cycles, each branch's final counter should be 6 (1+2+3), proving global mutations from earlier in the branch survive multiple resume cycles.",
+      "description": "Two fork branches each maintain a function-local `count` that is mutated before, between, and after two interrupts. After both cycles, each branch's final count should be 6 (1+2+3), proving that frame-local variable mutations made BEFORE each interrupt are correctly preserved through the checkpoint/resume cycle.",
       "input": "",
       "expectedOutput": "[6,6]",
       "evaluationCriteria": [{ "type": "exact" }],

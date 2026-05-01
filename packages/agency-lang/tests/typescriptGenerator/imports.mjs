@@ -30,6 +30,7 @@ import {
   rewindFrom as _rewindFrom,
   RestoreSignal,
   deepClone as __deepClone,
+  deepFreeze as __deepFreeze,
   head, tail, empty,
   success, failure, isSuccess, isFailure, __pipeBind, __tryCall, __catchResult,
   Schema, __validateType,

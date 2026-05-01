@@ -1490,6 +1490,11 @@ export class TypescriptPreprocessor {
               localVarsInFunction[nodeName].add(varNode.variableName);
             } else {
               scope = lookupScope(nodeName, varNode.variableName) ?? "local";
+              if (scope === "static") {
+                throw new Error(
+                  `Cannot reassign static variable '${varNode.variableName}'. Static variables are immutable after initialization.`
+                );
+              }
               if (scope === "local") {
                 localVarsInFunction[nodeName].add(varNode.variableName);
               }

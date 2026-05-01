@@ -1,0 +1,6 @@
+import { fetchPage } from "../../index.agency"
+
+node main() {
+  let result = fetchPage("https://s.adit.io/agency-webfetch-test.html")
+  return result
+}

@@ -4,7 +4,7 @@
   "description": "MCP (Model Context Protocol) support for the Agency language",
   "type": "module",
   "agency": "./index.agency",
-  "main": "./dist/src/mcp.js",
+  "main": "./index.js",
   "keywords": [],
   "author": "Aditya Bhargava",
   "license": "ISC",
@@ -24,7 +24,8 @@
   },
   "files": [
     "dist/",
-    "index.agency"
+    "index.agency",
+    "index.js"
   ],
   "scripts": {
     "build": "tsc",

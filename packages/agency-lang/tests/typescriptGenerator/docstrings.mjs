@@ -5,17 +5,13 @@ import { z } from "zod";
 import { goToNode, color, nanoid } from "agency-lang";
 import { smoltalk } from "agency-lang";
 import path from "path";
-import type { GraphState, InternalFunctionState, Interrupt, InterruptResponse, RewindCheckpoint, LLMClient } from "agency-lang/runtime";
+import type { GraphState, InternalFunctionState, Interrupt, InterruptResponse, Checkpoint, LLMClient } from "agency-lang/runtime";
 import {
   RuntimeContext, MessageThread, ThreadStore, Runner, McpManager,
   setupNode, setupFunction, runNode, runPrompt, callHook,
   checkpoint as __checkpoint_impl, getCheckpoint as __getCheckpoint_impl, restore as __restore_impl,
-  interrupt, isInterrupt, isDebugger, isRejected, isApproved, interruptWithHandlers, debugStep,
-  respondToInterrupt as _respondToInterrupt,
-  approveInterrupt as _approveInterrupt,
-  rejectInterrupt as _rejectInterrupt,
-  resolveInterrupt as _resolveInterrupt,
-  modifyInterrupt as _modifyInterrupt,
+  interrupt, isInterrupt, hasInterrupts, isDebugger, isRejected, isApproved, interruptWithHandlers, debugStep,
+  respondToInterrupts as _respondToInterrupts,
   rewindFrom as _rewindFrom,
   RestoreSignal,
   deepClone as __deepClone,
@@ -67,19 +63,15 @@ export function readSkill({filepath}: {filepath: string}): string {
   return _readSkillRaw({ filepath, dirname: __dirname });
 }
 
-// Handler result builtins
-function approve(value?: any) { return { type: "approved" as const, value }; }
-function reject(value?: any) { return { type: "rejected" as const, value }; }
-function propagate() { return { type: "propagated" as const }; }
+// Handler result builtins and interrupt response constructors (unified types)
+export function approve(value?: any) { return { type: "approve" as const, value }; }
+export function reject(value?: any) { return { type: "reject" as const, value }; }
+function propagate() { return { type: "propagate" as const }; }
 
 // Interrupt and rewind re-exports bound to this module's context
-export { interrupt, isInterrupt, isDebugger };
-export const respondToInterrupt = (interrupt: Interrupt, response: InterruptResponse, opts?: { overrides?: Record<string, unknown>; metadata?: Record<string, any> }) => _respondToInterrupt({ ctx: __globalCtx, interrupt, interruptResponse: response, overrides: opts?.overrides, metadata: opts?.metadata });
-export const approveInterrupt = (interrupt: Interrupt, opts?: { overrides?: Record<string, unknown>; metadata?: Record<string, any> }) => _approveInterrupt({ ctx: __globalCtx, interrupt, overrides: opts?.overrides, metadata: opts?.metadata });
-export const rejectInterrupt = (interrupt: Interrupt, opts?: { overrides?: Record<string, unknown>; metadata?: Record<string, any> }) => _rejectInterrupt({ ctx: __globalCtx, interrupt, overrides: opts?.overrides, metadata: opts?.metadata });
-export const modifyInterrupt = (interrupt: Interrupt, newArguments: Record<string, any>, opts?: { overrides?: Record<string, unknown>; metadata?: Record<string, any> }) => _modifyInterrupt({ ctx: __globalCtx, interrupt, newArguments, overrides: opts?.overrides, metadata: opts?.metadata });
-export const resolveInterrupt = (interrupt: Interrupt, value: any, opts?: { overrides?: Record<string, unknown>; metadata?: Record<string, any> }) => _resolveInterrupt({ ctx: __globalCtx, interrupt, value, overrides: opts?.overrides, metadata: opts?.metadata });
-export const rewindFrom = (checkpoint: RewindCheckpoint, overrides: Record<string, unknown>, opts?: { metadata?: Record<string, any> }) => _rewindFrom({ ctx: __globalCtx, checkpoint, overrides, metadata: opts?.metadata });
+export { interrupt, isInterrupt, hasInterrupts, isDebugger };
+export const respondToInterrupts = (interrupts: Interrupt[], responses: InterruptResponse[], opts?: { overrides?: Record<string, unknown>; metadata?: Record<string, any> }) => _respondToInterrupts({ ctx: __globalCtx, interrupts, responses, overrides: opts?.overrides, metadata: opts?.metadata });
+export const rewindFrom = (checkpoint: Checkpoint, overrides: Record<string, unknown>, opts?: { metadata?: Record<string, any> }) => _rewindFrom({ ctx: __globalCtx, checkpoint, overrides, metadata: opts?.metadata });
 
 export const __setDebugger = (dbg: any) => { __globalCtx.debuggerState = dbg; };
 export const __setTraceWriter = (tw: any) => { __globalCtx.traceWriter = tw; };
@@ -127,7 +119,8 @@ async function __add_impl(a: any, b: any, __state: InternalFunctionState | undef
     state: __state
   });
   // __state will be undefined if this function is being called as a tool by an llm
-  const __stack = __setupData.stack;
+  const __stateStack = __setupData.stateStack;
+const __stack = __setupData.stack;
 const __step = __setupData.step;
 const __self = __setupData.self;
 const __threads = __setupData.threads;
@@ -159,7 +152,7 @@ let __functionCompleted = false;
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "docstrings.agency", scopeName: "add" });
   let __resultCheckpointId = -1;
 if (__ctx.stateStack.currentNodeId()) {
-  __resultCheckpointId = __ctx.checkpoints.createPinned(__ctx, { moduleId: "docstrings.agency", scopeName: "add", stepPath: "", label: "result-entry" });
+  __resultCheckpointId = __ctx.checkpoints.createPinned(__stateStack, __ctx, { moduleId: "docstrings.agency", scopeName: "add", stepPath: "", label: "result-entry" });
 }
 if (__ctx._pendingArgOverrides) {
   const __overrides = __ctx._pendingArgOverrides;
@@ -192,7 +185,7 @@ return failure(
 );
 
   } finally {
-    if (!__state?.isForked) { __ctx.stateStack.pop() }
+    __stateStack.pop()
     if (__functionCompleted) {
       await callHook({
         callbacks: __ctx.callbacks,
@@ -232,7 +225,8 @@ async function __greet_impl(name: any, __state: InternalFunctionState | undefine
     state: __state
   });
   // __state will be undefined if this function is being called as a tool by an llm
-  const __stack = __setupData.stack;
+  const __stateStack = __setupData.stateStack;
+const __stack = __setupData.stack;
 const __step = __setupData.step;
 const __self = __setupData.self;
 const __threads = __setupData.threads;
@@ -262,7 +256,7 @@ let __functionCompleted = false;
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "docstrings.agency", scopeName: "greet" });
   let __resultCheckpointId = -1;
 if (__ctx.stateStack.currentNodeId()) {
-  __resultCheckpointId = __ctx.checkpoints.createPinned(__ctx, { moduleId: "docstrings.agency", scopeName: "greet", stepPath: "", label: "result-entry" });
+  __resultCheckpointId = __ctx.checkpoints.createPinned(__stateStack, __ctx, { moduleId: "docstrings.agency", scopeName: "greet", stepPath: "", label: "result-entry" });
 }
 if (__ctx._pendingArgOverrides) {
   const __overrides = __ctx._pendingArgOverrides;
@@ -291,7 +285,7 @@ return failure(
 );
 
   } finally {
-    if (!__state?.isForked) { __ctx.stateStack.pop() }
+    __stateStack.pop()
     if (__functionCompleted) {
       await callHook({
         callbacks: __ctx.callbacks,
@@ -325,7 +319,8 @@ async function __calculateArea_impl(width: any, height: any, __state: InternalFu
     state: __state
   });
   // __state will be undefined if this function is being called as a tool by an llm
-  const __stack = __setupData.stack;
+  const __stateStack = __setupData.stateStack;
+const __stack = __setupData.stack;
 const __step = __setupData.step;
 const __self = __setupData.self;
 const __threads = __setupData.threads;
@@ -357,7 +352,7 @@ let __functionCompleted = false;
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "docstrings.agency", scopeName: "calculateArea" });
   let __resultCheckpointId = -1;
 if (__ctx.stateStack.currentNodeId()) {
-  __resultCheckpointId = __ctx.checkpoints.createPinned(__ctx, { moduleId: "docstrings.agency", scopeName: "calculateArea", stepPath: "", label: "result-entry" });
+  __resultCheckpointId = __ctx.checkpoints.createPinned(__stateStack, __ctx, { moduleId: "docstrings.agency", scopeName: "calculateArea", stepPath: "", label: "result-entry" });
 }
 if (__ctx._pendingArgOverrides) {
   const __overrides = __ctx._pendingArgOverrides;
@@ -390,7 +385,7 @@ return failure(
 );
 
   } finally {
-    if (!__state?.isForked) { __ctx.stateStack.pop() }
+    __stateStack.pop()
     if (__functionCompleted) {
       await callHook({
         callbacks: __ctx.callbacks,
@@ -435,7 +430,8 @@ async function __processData_impl(__state: InternalFunctionState | undefined = u
     state: __state
   });
   // __state will be undefined if this function is being called as a tool by an llm
-  const __stack = __setupData.stack;
+  const __stateStack = __setupData.stateStack;
+const __stack = __setupData.stack;
 const __step = __setupData.step;
 const __self = __setupData.self;
 const __threads = __setupData.threads;
@@ -462,7 +458,7 @@ let __functionCompleted = false;
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "docstrings.agency", scopeName: "processData" });
   let __resultCheckpointId = -1;
 if (__ctx.stateStack.currentNodeId()) {
-  __resultCheckpointId = __ctx.checkpoints.createPinned(__ctx, { moduleId: "docstrings.agency", scopeName: "processData", stepPath: "", label: "result-entry" });
+  __resultCheckpointId = __ctx.checkpoints.createPinned(__stateStack, __ctx, { moduleId: "docstrings.agency", scopeName: "processData", stepPath: "", label: "result-entry" });
 }
 if (__ctx._pendingArgOverrides) {
   const __overrides = __ctx._pendingArgOverrides;
@@ -487,7 +483,7 @@ return failure(
 );
 
   } finally {
-    if (!__state?.isForked) { __ctx.stateStack.pop() }
+    __stateStack.pop()
     if (__functionCompleted) {
       await callHook({
         callbacks: __ctx.callbacks,

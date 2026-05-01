@@ -5,17 +5,13 @@ import { z } from "zod";
 import { goToNode, color, nanoid } from "agency-lang";
 import { smoltalk } from "agency-lang";
 import path from "path";
-import type { GraphState, InternalFunctionState, Interrupt, InterruptResponse, RewindCheckpoint, LLMClient } from "agency-lang/runtime";
+import type { GraphState, InternalFunctionState, Interrupt, InterruptResponse, Checkpoint, LLMClient } from "agency-lang/runtime";
 import {
   RuntimeContext, MessageThread, ThreadStore, Runner, McpManager,
   setupNode, setupFunction, runNode, runPrompt, callHook,
   checkpoint as __checkpoint_impl, getCheckpoint as __getCheckpoint_impl, restore as __restore_impl,
-  interrupt, isInterrupt, isDebugger, isRejected, isApproved, interruptWithHandlers, debugStep,
-  respondToInterrupt as _respondToInterrupt,
-  approveInterrupt as _approveInterrupt,
-  rejectInterrupt as _rejectInterrupt,
-  resolveInterrupt as _resolveInterrupt,
-  modifyInterrupt as _modifyInterrupt,
+  interrupt, isInterrupt, hasInterrupts, isDebugger, isRejected, isApproved, interruptWithHandlers, debugStep,
+  respondToInterrupts as _respondToInterrupts,
   rewindFrom as _rewindFrom,
   RestoreSignal,
   deepClone as __deepClone,
@@ -67,19 +63,15 @@ export function readSkill({filepath}: {filepath: string}): string {
   return _readSkillRaw({ filepath, dirname: __dirname });
 }
 
-// Handler result builtins
-function approve(value?: any) { return { type: "approved" as const, value }; }
-function reject(value?: any) { return { type: "rejected" as const, value }; }
-function propagate() { return { type: "propagated" as const }; }
+// Handler result builtins and interrupt response constructors (unified types)
+export function approve(value?: any) { return { type: "approve" as const, value }; }
+export function reject(value?: any) { return { type: "reject" as const, value }; }
+function propagate() { return { type: "propagate" as const }; }
 
 // Interrupt and rewind re-exports bound to this module's context
-export { interrupt, isInterrupt, isDebugger };
-export const respondToInterrupt = (interrupt: Interrupt, response: InterruptResponse, opts?: { overrides?: Record<string, unknown>; metadata?: Record<string, any> }) => _respondToInterrupt({ ctx: __globalCtx, interrupt, interruptResponse: response, overrides: opts?.overrides, metadata: opts?.metadata });
-export const approveInterrupt = (interrupt: Interrupt, opts?: { overrides?: Record<string, unknown>; metadata?: Record<string, any> }) => _approveInterrupt({ ctx: __globalCtx, interrupt, overrides: opts?.overrides, metadata: opts?.metadata });
-export const rejectInterrupt = (interrupt: Interrupt, opts?: { overrides?: Record<string, unknown>; metadata?: Record<string, any> }) => _rejectInterrupt({ ctx: __globalCtx, interrupt, overrides: opts?.overrides, metadata: opts?.metadata });
-export const modifyInterrupt = (interrupt: Interrupt, newArguments: Record<string, any>, opts?: { overrides?: Record<string, unknown>; metadata?: Record<string, any> }) => _modifyInterrupt({ ctx: __globalCtx, interrupt, newArguments, overrides: opts?.overrides, metadata: opts?.metadata });
-export const resolveInterrupt = (interrupt: Interrupt, value: any, opts?: { overrides?: Record<string, unknown>; metadata?: Record<string, any> }) => _resolveInterrupt({ ctx: __globalCtx, interrupt, value, overrides: opts?.overrides, metadata: opts?.metadata });
-export const rewindFrom = (checkpoint: RewindCheckpoint, overrides: Record<string, unknown>, opts?: { metadata?: Record<string, any> }) => _rewindFrom({ ctx: __globalCtx, checkpoint, overrides, metadata: opts?.metadata });
+export { interrupt, isInterrupt, hasInterrupts, isDebugger };
+export const respondToInterrupts = (interrupts: Interrupt[], responses: InterruptResponse[], opts?: { overrides?: Record<string, unknown>; metadata?: Record<string, any> }) => _respondToInterrupts({ ctx: __globalCtx, interrupts, responses, overrides: opts?.overrides, metadata: opts?.metadata });
+export const rewindFrom = (checkpoint: Checkpoint, overrides: Record<string, unknown>, opts?: { metadata?: Record<string, any> }) => _rewindFrom({ ctx: __globalCtx, checkpoint, overrides, metadata: opts?.metadata });
 
 export const __setDebugger = (dbg: any) => { __globalCtx.debuggerState = dbg; };
 export const __setTraceWriter = (tw: any) => { __globalCtx.traceWriter = tw; };
@@ -126,7 +118,8 @@ async function __add_impl(x: number, y: number, __state: InternalFunctionState |
     state: __state
   });
   // __state will be undefined if this function is being called as a tool by an llm
-  const __stack = __setupData.stack;
+  const __stateStack = __setupData.stateStack;
+const __stack = __setupData.stack;
 const __step = __setupData.step;
 const __self = __setupData.self;
 const __threads = __setupData.threads;
@@ -158,7 +151,7 @@ let __functionCompleted = false;
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "function-with-types.agency", scopeName: "add" });
   let __resultCheckpointId = -1;
 if (__ctx.stateStack.currentNodeId()) {
-  __resultCheckpointId = __ctx.checkpoints.createPinned(__ctx, { moduleId: "function-with-types.agency", scopeName: "add", stepPath: "", label: "result-entry" });
+  __resultCheckpointId = __ctx.checkpoints.createPinned(__stateStack, __ctx, { moduleId: "function-with-types.agency", scopeName: "add", stepPath: "", label: "result-entry" });
 }
 if (__ctx._pendingArgOverrides) {
   const __overrides = __ctx._pendingArgOverrides;
@@ -183,12 +176,12 @@ __stack.locals.result = await runPrompt({
         messages: __threads.getOrCreateActive(),
         clientConfig: {},
         maxToolCallRounds: 10,
-        interruptData: __state?.interruptData,
+        stateStack: __stateStack,
         removedTools: __self.__removedTools,
         checkpointInfo: runner.getCheckpointInfo()
       });
 // halt if this is an interrupt
-if (isInterrupt(__stack.locals.result)) {
+if (hasInterrupts(__stack.locals.result)) {
         await __ctx.pendingPromises.awaitAll()
         runner.halt(__stack.locals.result)
         return;
@@ -215,7 +208,7 @@ return failure(
 );
 
   } finally {
-    if (!__state?.isForked) { __ctx.stateStack.pop() }
+    __stateStack.pop()
     if (__functionCompleted) {
       await callHook({
         callbacks: __ctx.callbacks,
@@ -254,7 +247,8 @@ async function __greet_impl(name: string, __state: InternalFunctionState | undef
     state: __state
   });
   // __state will be undefined if this function is being called as a tool by an llm
-  const __stack = __setupData.stack;
+  const __stateStack = __setupData.stateStack;
+const __stack = __setupData.stack;
 const __step = __setupData.step;
 const __self = __setupData.self;
 const __threads = __setupData.threads;
@@ -284,7 +278,7 @@ let __functionCompleted = false;
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "function-with-types.agency", scopeName: "greet" });
   let __resultCheckpointId = -1;
 if (__ctx.stateStack.currentNodeId()) {
-  __resultCheckpointId = __ctx.checkpoints.createPinned(__ctx, { moduleId: "function-with-types.agency", scopeName: "greet", stepPath: "", label: "result-entry" });
+  __resultCheckpointId = __ctx.checkpoints.createPinned(__stateStack, __ctx, { moduleId: "function-with-types.agency", scopeName: "greet", stepPath: "", label: "result-entry" });
 }
 if (__ctx._pendingArgOverrides) {
   const __overrides = __ctx._pendingArgOverrides;
@@ -305,12 +299,12 @@ __stack.locals.message = await runPrompt({
         messages: __threads.getOrCreateActive(),
         clientConfig: {},
         maxToolCallRounds: 10,
-        interruptData: __state?.interruptData,
+        stateStack: __stateStack,
         removedTools: __self.__removedTools,
         checkpointInfo: runner.getCheckpointInfo()
       });
 // halt if this is an interrupt
-if (isInterrupt(__stack.locals.message)) {
+if (hasInterrupts(__stack.locals.message)) {
         await __ctx.pendingPromises.awaitAll()
         runner.halt(__stack.locals.message)
         return;
@@ -337,7 +331,7 @@ return failure(
 );
 
   } finally {
-    if (!__state?.isForked) { __ctx.stateStack.pop() }
+    __stateStack.pop()
     if (__functionCompleted) {
       await callHook({
         callbacks: __ctx.callbacks,
@@ -371,7 +365,8 @@ async function __mixed_impl(count: number, label: any, __state: InternalFunction
     state: __state
   });
   // __state will be undefined if this function is being called as a tool by an llm
-  const __stack = __setupData.stack;
+  const __stateStack = __setupData.stateStack;
+const __stack = __setupData.stack;
 const __step = __setupData.step;
 const __self = __setupData.self;
 const __threads = __setupData.threads;
@@ -403,7 +398,7 @@ let __functionCompleted = false;
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "function-with-types.agency", scopeName: "mixed" });
   let __resultCheckpointId = -1;
 if (__ctx.stateStack.currentNodeId()) {
-  __resultCheckpointId = __ctx.checkpoints.createPinned(__ctx, { moduleId: "function-with-types.agency", scopeName: "mixed", stepPath: "", label: "result-entry" });
+  __resultCheckpointId = __ctx.checkpoints.createPinned(__stateStack, __ctx, { moduleId: "function-with-types.agency", scopeName: "mixed", stepPath: "", label: "result-entry" });
 }
 if (__ctx._pendingArgOverrides) {
   const __overrides = __ctx._pendingArgOverrides;
@@ -428,12 +423,12 @@ __stack.locals.output = await runPrompt({
         messages: __threads.getOrCreateActive(),
         clientConfig: {},
         maxToolCallRounds: 10,
-        interruptData: __state?.interruptData,
+        stateStack: __stateStack,
         removedTools: __self.__removedTools,
         checkpointInfo: runner.getCheckpointInfo()
       });
 // halt if this is an interrupt
-if (isInterrupt(__stack.locals.output)) {
+if (hasInterrupts(__stack.locals.output)) {
         await __ctx.pendingPromises.awaitAll()
         runner.halt(__stack.locals.output)
         return;
@@ -460,7 +455,7 @@ return failure(
 );
 
   } finally {
-    if (!__state?.isForked) { __ctx.stateStack.pop() }
+    __stateStack.pop()
     if (__functionCompleted) {
       await callHook({
         callbacks: __ctx.callbacks,
@@ -499,7 +494,8 @@ async function __processArray_impl(items: number[], __state: InternalFunctionSta
     state: __state
   });
   // __state will be undefined if this function is being called as a tool by an llm
-  const __stack = __setupData.stack;
+  const __stateStack = __setupData.stateStack;
+const __stack = __setupData.stack;
 const __step = __setupData.step;
 const __self = __setupData.self;
 const __threads = __setupData.threads;
@@ -529,7 +525,7 @@ let __functionCompleted = false;
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "function-with-types.agency", scopeName: "processArray" });
   let __resultCheckpointId = -1;
 if (__ctx.stateStack.currentNodeId()) {
-  __resultCheckpointId = __ctx.checkpoints.createPinned(__ctx, { moduleId: "function-with-types.agency", scopeName: "processArray", stepPath: "", label: "result-entry" });
+  __resultCheckpointId = __ctx.checkpoints.createPinned(__stateStack, __ctx, { moduleId: "function-with-types.agency", scopeName: "processArray", stepPath: "", label: "result-entry" });
 }
 if (__ctx._pendingArgOverrides) {
   const __overrides = __ctx._pendingArgOverrides;
@@ -550,12 +546,12 @@ __stack.locals.result = await runPrompt({
         messages: __threads.getOrCreateActive(),
         clientConfig: {},
         maxToolCallRounds: 10,
-        interruptData: __state?.interruptData,
+        stateStack: __stateStack,
         removedTools: __self.__removedTools,
         checkpointInfo: runner.getCheckpointInfo()
       });
 // halt if this is an interrupt
-if (isInterrupt(__stack.locals.result)) {
+if (hasInterrupts(__stack.locals.result)) {
         await __ctx.pendingPromises.awaitAll()
         runner.halt(__stack.locals.result)
         return;
@@ -582,7 +578,7 @@ return failure(
 );
 
   } finally {
-    if (!__state?.isForked) { __ctx.stateStack.pop() }
+    __stateStack.pop()
     if (__functionCompleted) {
       await callHook({
         callbacks: __ctx.callbacks,
@@ -616,7 +612,8 @@ async function __flexible_impl(value: string | number, __state: InternalFunction
     state: __state
   });
   // __state will be undefined if this function is being called as a tool by an llm
-  const __stack = __setupData.stack;
+  const __stateStack = __setupData.stateStack;
+const __stack = __setupData.stack;
 const __step = __setupData.step;
 const __self = __setupData.self;
 const __threads = __setupData.threads;
@@ -646,7 +643,7 @@ let __functionCompleted = false;
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "function-with-types.agency", scopeName: "flexible" });
   let __resultCheckpointId = -1;
 if (__ctx.stateStack.currentNodeId()) {
-  __resultCheckpointId = __ctx.checkpoints.createPinned(__ctx, { moduleId: "function-with-types.agency", scopeName: "flexible", stepPath: "", label: "result-entry" });
+  __resultCheckpointId = __ctx.checkpoints.createPinned(__stateStack, __ctx, { moduleId: "function-with-types.agency", scopeName: "flexible", stepPath: "", label: "result-entry" });
 }
 if (__ctx._pendingArgOverrides) {
   const __overrides = __ctx._pendingArgOverrides;
@@ -667,12 +664,12 @@ __stack.locals.result = await runPrompt({
         messages: __threads.getOrCreateActive(),
         clientConfig: {},
         maxToolCallRounds: 10,
-        interruptData: __state?.interruptData,
+        stateStack: __stateStack,
         removedTools: __self.__removedTools,
         checkpointInfo: runner.getCheckpointInfo()
       });
 // halt if this is an interrupt
-if (isInterrupt(__stack.locals.result)) {
+if (hasInterrupts(__stack.locals.result)) {
         await __ctx.pendingPromises.awaitAll()
         runner.halt(__stack.locals.result)
         return;
@@ -699,7 +696,7 @@ return failure(
 );
 
   } finally {
-    if (!__state?.isForked) { __ctx.stateStack.pop() }
+    __stateStack.pop()
     if (__functionCompleted) {
       await callHook({
         callbacks: __ctx.callbacks,
@@ -732,7 +729,8 @@ graph.node("foo", async (__state: GraphState) => {
   const __setupData = setupNode({
     state: __state
   });
-  const __stack = __setupData.stack;
+  const __stateStack = __state.ctx.stateStack;
+const __stack = __setupData.stack;
 const __step = __setupData.step;
 const __self = __setupData.self;
 const __threads = __setupData.threads;
@@ -757,9 +755,9 @@ const __funcResult = await __call(print, {
       }, {
         ctx: __ctx,
         threads: __threads,
-        interruptData: __state?.interruptData
+        stateStack: __stateStack
       });
-if (isInterrupt(__funcResult)) {
+if (hasInterrupts(__funcResult)) {
         await __ctx.pendingPromises.awaitAll()
         runner.halt({
           ...__state,
@@ -793,6 +791,7 @@ return;
       throw __error
     }
     console.error(`\nAgent crashed: ${__error.message}`)
+    console.error(__error.stack)
     return {
       messages: __threads,
       data: failure(__error instanceof Error ? __error.message : String(__error), { functionName: "foo" })
@@ -803,7 +802,8 @@ graph.node("main", async (__state: GraphState) => {
   const __setupData = setupNode({
     state: __state
   });
-  const __stack = __setupData.stack;
+  const __stateStack = __state.ctx.stateStack;
+const __stack = __setupData.stack;
 const __step = __setupData.step;
 const __self = __setupData.self;
 const __threads = __setupData.threads;
@@ -831,9 +831,9 @@ __stack.locals.sum = await __call(add, {
       }, {
         ctx: __ctx,
         threads: __threads,
-        interruptData: __state?.interruptData
+        stateStack: __stateStack
       });
-if (isInterrupt(__stack.locals.sum)) {
+if (hasInterrupts(__stack.locals.sum)) {
         await __ctx.pendingPromises.awaitAll()
         runner.halt({
           ...__state,
@@ -849,9 +849,9 @@ __stack.locals.greeting = await __call(greet, {
       }, {
         ctx: __ctx,
         threads: __threads,
-        interruptData: __state?.interruptData
+        stateStack: __stateStack
       });
-if (isInterrupt(__stack.locals.greeting)) {
+if (hasInterrupts(__stack.locals.greeting)) {
         await __ctx.pendingPromises.awaitAll()
         runner.halt({
           ...__state,
@@ -867,9 +867,9 @@ __stack.locals.labeled = await __call(mixed, {
       }, {
         ctx: __ctx,
         threads: __threads,
-        interruptData: __state?.interruptData
+        stateStack: __stateStack
       });
-if (isInterrupt(__stack.locals.labeled)) {
+if (hasInterrupts(__stack.locals.labeled)) {
         await __ctx.pendingPromises.awaitAll()
         runner.halt({
           ...__state,
@@ -885,9 +885,9 @@ __stack.locals.processed = await __call(processArray, {
       }, {
         ctx: __ctx,
         threads: __threads,
-        interruptData: __state?.interruptData
+        stateStack: __stateStack
       });
-if (isInterrupt(__stack.locals.processed)) {
+if (hasInterrupts(__stack.locals.processed)) {
         await __ctx.pendingPromises.awaitAll()
         runner.halt({
           ...__state,
@@ -903,9 +903,9 @@ __stack.locals.flexResult = await __call(flexible, {
       }, {
         ctx: __ctx,
         threads: __threads,
-        interruptData: __state?.interruptData
+        stateStack: __stateStack
       });
-if (isInterrupt(__stack.locals.flexResult)) {
+if (hasInterrupts(__stack.locals.flexResult)) {
         await __ctx.pendingPromises.awaitAll()
         runner.halt({
           ...__state,
@@ -932,6 +932,7 @@ if (isInterrupt(__stack.locals.flexResult)) {
       throw __error
     }
     console.error(`\nAgent crashed: ${__error.message}`)
+    console.error(__error.stack)
     return {
       messages: __threads,
       data: failure(__error instanceof Error ? __error.message : String(__error), { functionName: "main" })

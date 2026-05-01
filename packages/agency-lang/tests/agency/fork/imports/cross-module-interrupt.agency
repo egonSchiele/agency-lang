@@ -1,0 +1,11 @@
+// Imports a function from another module. The function interrupts; the
+// interrupt's checkpoint is anchored to the helper module's id. On
+// resume, the runtime must re-enter the helper module's compiled code
+// to execute the post-interrupt code (the prefix-and-answer concat).
+
+import { riskyOp } from "./cross-module-helper.agency"
+
+node main() {
+  let result = riskyOp("widget")
+  return result
+}

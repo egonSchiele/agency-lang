@@ -1,0 +1,20 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Race with interrupt — first thread to interrupt gets approved, returns its value",
+      "input": "",
+      "expectedOutput": "",
+      "evaluationCriteria": [
+        {
+          "type": "llmJudge",
+          "judgePrompt": "The output should be a single number that is either 10, 20, or 30.",
+          "desiredAccuracy": 80
+        }
+      ],
+      "interruptHandlers": [
+        { "action": "approve" }
+      ]
+    }
+  ]
+}

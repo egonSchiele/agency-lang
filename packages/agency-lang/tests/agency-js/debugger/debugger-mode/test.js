@@ -1,4 +1,4 @@
-import { main, approveInterrupt, isInterrupt, __setDebugger } from "./agent.js";
+import { main, hasInterrupts, approve, respondToInterrupts, __setDebugger } from "./agent.js";
 import { DebuggerState } from "agency-lang/runtime";
 import { writeFileSync } from "fs";
 
@@ -9,9 +9,9 @@ let breakpointCount = 0;
 let result = await main();
 
 // Loop through all debugger breakpoints, approving each
-while (isInterrupt(result.data) && result.data.debugger === true) {
+while (hasInterrupts(result.data) && result.data[0].debugger === true) {
   breakpointCount++;
-  result = await approveInterrupt(result.data);
+  result = await respondToInterrupts(result.data, [approve()]);
 }
 
 writeFileSync(

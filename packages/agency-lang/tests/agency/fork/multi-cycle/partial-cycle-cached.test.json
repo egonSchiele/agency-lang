@@ -1,0 +1,16 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Fork over 3 items: one never interrupts (a), one interrupts once (b), one interrupts twice (c) — verifies completed branches stay cached across cycles while incomplete ones continue",
+      "input": "",
+      "expectedOutput": "[\"done: a\",\"done: b\",\"done: c\"]",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "interruptHandlers": [
+        { "action": "approve" },
+        { "action": "approve" },
+        { "action": "approve" }
+      ]
+    }
+  ]
+}

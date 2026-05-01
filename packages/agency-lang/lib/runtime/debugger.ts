@@ -13,18 +13,11 @@ export async function debugStep(
     nodeContext: boolean;
     isUserAdded: boolean;
   },
-): Promise<Interrupt | undefined> {
+): Promise<Interrupt[] | undefined> {
   // Global initialization runs outside any graph node, so there's no node
   // context to create checkpoints against. Skip debugging entirely.
   if (!ctx.stateStack.currentNodeId()) {
     return undefined;
-  }
-
-  // If resuming from a previous debug pause, the interrupt system sets
-  // interruptData.interruptResponse on the state. Clear it so downstream
-  // code (e.g., runPrompt) doesn't mistake it for a tool call response.
-  if (state.interruptData?.interruptResponse) {
-    state.interruptData.interruptResponse = undefined;
   }
 
   // Trace write path — independent of debugger
@@ -97,7 +90,7 @@ export async function debugStep(
     
    */
 
-  const checkpointId = ctx.checkpoints.create(ctx, {
+  const checkpointId = ctx.checkpoints.create(ctx.stateStack, ctx, {
     moduleId: info.moduleId,
     scopeName: info.scopeName,
     stepPath: info.stepPath,
@@ -121,5 +114,5 @@ export async function debugStep(
     ctx.getRunId(),
   );
 
-  return debugInterrupt;
+  return [debugInterrupt];
 }

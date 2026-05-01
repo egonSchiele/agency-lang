@@ -182,7 +182,7 @@ describe("restore()", () => {
   it("should track restores (infinite loop protection)", async () => {
     const ctx = makeMockCtx();
     ctx.checkpoints = new CheckpointStore(2); // max 2 restores
-    const id = ctx.checkpoints.create(ctx, { moduleId: "", scopeName: "", stepPath: "" });
+    const id = ctx.checkpoints.create(ctx.stateStack, ctx, { moduleId: "", scopeName: "", stepPath: "" });
     const state = makeState(ctx);
 
     try {

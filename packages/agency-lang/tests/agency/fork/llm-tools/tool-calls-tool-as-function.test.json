@@ -1,0 +1,15 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Tool exposed to LLM (outerTool) calls a helper function (innerHelper) synchronously inside its body. The helper interrupts. Tests that interrupts cross function/tool boundaries inside an LLM tool call without losing state.",
+      "input": "",
+      "expectedOutput": "10",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "interruptHandlers": [
+        { "action": "approve", "expectedMessage": "approve helper for 5?" }
+      ],
+      "retry": 2
+    }
+  ]
+}

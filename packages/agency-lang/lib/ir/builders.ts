@@ -463,6 +463,8 @@ export const ts = {
   },
 
   setupEnv({
+    stateStack,
+    isForked,
     stack,
     step,
     self,
@@ -471,6 +473,8 @@ export const ts = {
     statelogClient,
     graph,
   }: {
+    stateStack?: TsNode;
+    isForked?: TsNode;
     stack: TsNode;
     step: TsNode;
     self: TsNode;
@@ -480,6 +484,8 @@ export const ts = {
     graph: TsNode;
   }): TsStatements {
     return ts.statements([
+      ...(stateStack ? [ts.constDecl("__stateStack", stateStack)] : []),
+      ...(isForked ? [ts.constDecl("__isForked", isForked)] : []),
       ts.constDeclId(ts.runtime.stack, stack),
       ts.constDeclId(ts.runtime.step, step),
       ts.constDeclId(ts.runtime.self, self),
@@ -538,7 +544,6 @@ export const ts = {
   functionCallConfig({
     ctx,
     threads,
-    interruptData,
     stateStack,
     isForked,
     moduleId,
@@ -547,9 +552,8 @@ export const ts = {
   }: {
     ctx: TsNode;
     threads?: TsNode;
-    interruptData?: TsNode;
     stateStack?: TsNode;
-    isForked?: boolean;
+    isForked?: TsNode;
     moduleId?: TsNode;
     scopeName?: TsNode;
     stepPath?: TsNode;
@@ -560,14 +564,11 @@ export const ts = {
     if (threads) {
       entries.threads = threads;
     }
-    if (interruptData) {
-      entries.interruptData = interruptData;
-    }
     if (stateStack) {
       entries.stateStack = stateStack;
     }
     if (isForked) {
-      entries.isForked = ts.bool(true);
+      entries.isForked = isForked;
     }
     if (moduleId) {
       entries.moduleId = moduleId;

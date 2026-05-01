@@ -1,0 +1,23 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Node transition then fork with interrupts — checkpoint survives the transition",
+      "input": "",
+      "expectedOutput": "[\"confirmed: x\",\"confirmed: y\"]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "interruptHandlers": [
+        {
+          "action": "approve"
+        },
+        {
+          "action": "approve"
+        }
+      ]
+    }
+  ]
+}

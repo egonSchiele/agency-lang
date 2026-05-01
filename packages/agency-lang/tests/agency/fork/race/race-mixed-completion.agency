@@ -1,0 +1,23 @@
+def fastNoInterrupt(item: number): number {
+  return item * 10
+}
+
+def slowWithInterrupt(item: number): number {
+  // Sleep first so this branch can't possibly win the race against fastNoInterrupt
+  sleep(1)
+  interrupt("approve ${item}?")
+  return item
+}
+
+node main() {
+  let result = race([
+    { mode: "fast", value: 7 },
+    { mode: "slow", value: 99 }
+  ]) as entry {
+    if (entry.mode == "fast") {
+      return fastNoInterrupt(entry.value)
+    }
+    return slowWithInterrupt(entry.value)
+  }
+  return result
+}

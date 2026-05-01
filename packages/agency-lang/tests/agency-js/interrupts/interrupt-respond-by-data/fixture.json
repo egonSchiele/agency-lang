@@ -1,0 +1,14 @@
+{
+  "alpha": {
+    "kind": "ok",
+    "value": "alpha: handled"
+  },
+  "beta": {
+    "kind": "rejected",
+    "hasRejectionMessage": true
+  },
+  "gamma": {
+    "kind": "ok",
+    "value": "gamma: handled"
+  }
+}

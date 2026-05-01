@@ -1,0 +1,10 @@
+// Helper module for cross-module-interrupt test. The function is defined
+// here, imported and called from the main module. Its interrupt site
+// captures a checkpoint anchored to THIS module's id; the resume must
+// re-enter this module to find the function.
+
+export def riskyOp(item: string): string {
+  let prefix = "helper-"
+  let answer: string = interrupt("approve ${item} from helper?")
+  return "${prefix}${answer}: ${item}"
+}

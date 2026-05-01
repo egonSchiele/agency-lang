@@ -1,0 +1,12 @@
+def doubleConfirm(item: number): number {
+  interrupt("first approve ${item}?")
+  interrupt("second approve ${item}?")
+  return item
+}
+
+node main() {
+  let result = race([10, 20, 30]) as item {
+    return doubleConfirm(item)
+  }
+  return result
+}

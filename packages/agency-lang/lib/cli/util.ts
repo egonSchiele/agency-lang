@@ -15,7 +15,11 @@ import {
   ImportStatement,
   VariableType,
 } from "@/types.js";
-import { isAgencyImport, resolveAgencyImportPath, getStdlibDir } from "../importPaths.js";
+import {
+  isAgencyImport,
+  resolveAgencyImportPath,
+  getStdlibDir,
+} from "../importPaths.js";
 import renderEvaluate from "@/templates/cli/evaluate.js";
 import renderJudgeEvaluate from "@/templates/cli/judgeEvaluate.js";
 import { compile } from "./commands.js";
@@ -162,13 +166,16 @@ export type InterruptHandler = {
  * Resolve the compiled .js file for an .agency file from a distDir.
  * Throws if the compiled file doesn't exist.
  */
-export function resolveCompiledFile(distDir: string, agencyFile: string): string {
+export function resolveCompiledFile(
+  distDir: string,
+  agencyFile: string,
+): string {
   const basename = path.basename(agencyFile, ".agency") + ".js";
   const compiledPath = path.resolve(distDir, basename);
   if (!fs.existsSync(compiledPath)) {
     throw new Error(
       `Compiled file not found: ${compiledPath}\n` +
-      `Make sure you have compiled your Agency files and that distDir is correct.`,
+        `Make sure you have compiled your Agency files and that distDir is correct.`,
     );
   }
   return compiledPath;
@@ -191,60 +198,85 @@ export async function executeNodeAsync({
   argsString,
   interruptHandlers,
 }: ExecuteNodeArgs): Promise<{ data: any; stdout: string; stderr: string }> {
-  const distDir = config.distDir;
-  let compiledPath: string;
-
-  if (distDir) {
-    compiledPath = resolveCompiledFile(distDir, agencyFile);
-  } else {
-    compiledPath = compile(config, agencyFile, undefined, { importStrategy: new RunStrategy() })!;
-  }
-
-  const baseName = agencyFile.replace(".agency", "");
-  const evaluateFile = `${baseName}.evaluate.js`;
-  const resultsFile = `${baseName}.evaluate.json`;
-  // The template imports via "./${filename}", so compute a relative path
-  // from the evaluate script's directory to the compiled module.
-  let importSpecifier = path.relative(path.dirname(evaluateFile), compiledPath).replace(/\\/g, "/");
-  if (!importSpecifier.startsWith(".")) {
-    importSpecifier = `./${importSpecifier}`;
-  }
-  const evaluateScript = renderEvaluate({
-    filename: importSpecifier,
-    nodeName,
-    hasArgs,
-    args: argsString,
-    hasInterruptHandlers: !!interruptHandlers,
-    interruptHandlersJSON: interruptHandlers
-      ? JSON.stringify(interruptHandlers)
-      : undefined,
-    resultsFilename: resultsFile,
-  });
-  fs.writeFileSync(evaluateFile, evaluateScript);
+  let evaluateFile = "";
+  let resultsFile = "";
   try {
-    const { stdout, stderr } = await execFileAsync("node", [evaluateFile], { maxBuffer: 10 * 1024 * 1024 });
+    const distDir = config.distDir;
+    let compiledPath: string;
+
+    if (distDir) {
+      compiledPath = resolveCompiledFile(distDir, agencyFile);
+    } else {
+      compiledPath = compile(config, agencyFile, undefined, {
+        importStrategy: new RunStrategy(),
+      })!;
+    }
+
+    const baseName = agencyFile.replace(".agency", "");
+    evaluateFile = `${baseName}.evaluate.js`;
+    resultsFile = `${baseName}.evaluate.json`;
+    // The template imports via "./${filename}", so compute a relative path
+    // from the evaluate script's directory to the compiled module.
+    let importSpecifier = path
+      .relative(path.dirname(evaluateFile), compiledPath)
+      .replace(/\\/g, "/");
+    if (!importSpecifier.startsWith(".")) {
+      importSpecifier = `./${importSpecifier}`;
+    }
+    const evaluateScript = renderEvaluate({
+      filename: importSpecifier,
+      nodeName,
+      hasArgs,
+      args: argsString,
+      hasInterruptHandlers: !!interruptHandlers,
+      interruptHandlersJSON: interruptHandlers
+        ? JSON.stringify(interruptHandlers)
+        : undefined,
+      resultsFilename: resultsFile,
+    });
+    fs.writeFileSync(evaluateFile, evaluateScript);
+    const { stdout, stderr } = await execFileAsync("node", [evaluateFile], {
+      maxBuffer: 10 * 1024 * 1024,
+    });
     const results = readFileSync(resultsFile, "utf-8");
     return { data: JSON.parse(results).data, stdout, stderr };
   } finally {
-    try { fs.unlinkSync(evaluateFile); } catch {}
-    try { fs.unlinkSync(resultsFile); } catch {}
+    safeUnlink(evaluateFile);
+    safeUnlink(resultsFile);
   }
 }
 
-export function executeNode(args: ExecuteNodeArgs): { data: any; [key: string]: any } {
+export function safeUnlink(filePath: string) {
+  try {
+    if (fs.existsSync(filePath) && !fs.lstatSync(filePath).isDirectory()) {
+      fs.unlinkSync(filePath);
+    }
+  } catch (err) {
+    console.warn(`Warning: Failed to delete file ${filePath}:`, err);
+  }
+}
+
+export function executeNode(args: ExecuteNodeArgs): {
+  data: any;
+  [key: string]: any;
+} {
   const distDir = args.config.distDir;
   let compiledPath: string;
 
   if (distDir) {
     compiledPath = resolveCompiledFile(distDir, args.agencyFile);
   } else {
-    compiledPath = compile(args.config, args.agencyFile, undefined, { importStrategy: new RunStrategy() })!;
+    compiledPath = compile(args.config, args.agencyFile, undefined, {
+      importStrategy: new RunStrategy(),
+    })!;
   }
 
   const evaluateFile = "__evaluate.js";
   // The template imports via "./${filename}", so compute a relative path
   // from the evaluate script's directory to the compiled module.
-  let importSpecifier = path.relative(path.dirname(evaluateFile), compiledPath).replace(/\\/g, "/");
+  let importSpecifier = path
+    .relative(path.dirname(evaluateFile), compiledPath)
+    .replace(/\\/g, "/");
   if (!importSpecifier.startsWith(".")) {
     importSpecifier = `./${importSpecifier}`;
   }
@@ -284,14 +316,20 @@ export function formatTypeHint(vt: VariableType): string {
     case "typeAliasVariable":
       return vt.aliasName;
     case "blockType": {
-      const params = vt.params.map((p) => formatTypeHint(p.typeAnnotation)).join(", ");
+      const params = vt.params
+        .map((p) => formatTypeHint(p.typeAnnotation))
+        .join(", ");
       const ret = formatTypeHint(vt.returnType);
       return `(${params}) => ${ret}`;
     }
     case "resultType": {
       const { successType, failureType } = vt;
-      if (successType.type === "primitiveType" && successType.value === "any" &&
-          failureType.type === "primitiveType" && failureType.value === "any") {
+      if (
+        successType.type === "primitiveType" &&
+        successType.value === "any" &&
+        failureType.type === "primitiveType" &&
+        failureType.value === "any"
+      ) {
         return "Result";
       }
       return `Result<${formatTypeHint(successType)}, ${formatTypeHint(failureType)}>`;
@@ -317,8 +355,18 @@ type ExecuteJudgeArgs = {
 
 export async function executeJudgeAsync(
   agencyFileBaseName: string,
-  { actualOutput, expectedOutput, judgePrompt, interruptHandlers }: ExecuteJudgeArgs,
-): Promise<{ score: number; reasoning: string; stdout: string; stderr: string }> {
+  {
+    actualOutput,
+    expectedOutput,
+    judgePrompt,
+    interruptHandlers,
+  }: ExecuteJudgeArgs,
+): Promise<{
+  score: number;
+  reasoning: string;
+  stdout: string;
+  stderr: string;
+}> {
   const currentDir = path.dirname(new URL(import.meta.url).pathname);
   const judgeAgencyFile = path.resolve(currentDir, "../agents/judge.agency");
 
@@ -331,7 +379,10 @@ export async function executeJudgeAsync(
   const judgeEvaluateFile = `${agencyFileBaseName}.judge_evaluate.js`;
   const judgeResultsFile = `${agencyFileBaseName}.judge_evaluate.json`;
   const judgeEvaluateDir = path.dirname(path.resolve(judgeEvaluateFile));
-  const judgeRelativePath = path.relative(judgeEvaluateDir, judgeCompiledFile).split(path.sep).join("/");
+  const judgeRelativePath = path
+    .relative(judgeEvaluateDir, judgeCompiledFile)
+    .split(path.sep)
+    .join("/");
   const judgeScript = renderJudgeEvaluate({
     judgeFilename: judgeRelativePath,
     actualOutput: JSON.stringify(actualOutput),
@@ -346,13 +397,21 @@ export async function executeJudgeAsync(
 
   fs.writeFileSync(judgeEvaluateFile, judgeScript);
   try {
-    const { stdout, stderr } = await execFileAsync("node", [judgeEvaluateFile], { maxBuffer: 10 * 1024 * 1024 });
+    const { stdout, stderr } = await execFileAsync(
+      "node",
+      [judgeEvaluateFile],
+      { maxBuffer: 10 * 1024 * 1024 },
+    );
     const results = readFileSync(judgeResultsFile, "utf-8");
     const parsed = JSON.parse(results).data;
     return { score: parsed.score, reasoning: parsed.reasoning, stdout, stderr };
   } finally {
-    try { fs.unlinkSync(judgeEvaluateFile); } catch {}
-    try { fs.unlinkSync(judgeResultsFile); } catch {}
+    try {
+      fs.unlinkSync(judgeEvaluateFile);
+    } catch {}
+    try {
+      fs.unlinkSync(judgeResultsFile);
+    } catch {}
   }
 }
 
@@ -417,17 +476,13 @@ export function getImportsRecursively(
 
 export function getImports(program: AgencyProgram): string[] {
   const toolAndNodeImports = program.nodes
-    .filter(
-      (node) =>
-        node.type === "importNodeStatement",
-    )
+    .filter((node) => node.type === "importNodeStatement")
     .map((node) => node.agencyFile.trim());
   // this makes compile() try to parse non-agency files
   const importStatements = program.nodes
     .filter(
       (node) =>
-        node.type === "importStatement" &&
-        isAgencyImport(node.modulePath),
+        node.type === "importStatement" && isAgencyImport(node.modulePath),
     )
     .map((node) => (node as ImportStatement).modulePath.trim());
 

@@ -1,0 +1,17 @@
+def confirmItem(item: string): string {
+  interrupt("approve ${item}?")
+  return "confirmed: ${item}"
+}
+
+node main() {
+  const flag = true
+  let results: string[] = []
+  if (flag) {
+    results = fork(["a", "b"]) as item {
+      return confirmItem(item)
+    }
+  } else {
+    results = ["never"]
+  }
+  return results
+}

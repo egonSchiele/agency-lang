@@ -1,0 +1,21 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Three levels of nested fork (2x2x2 = 8 interrupts) — verifies the slice-only checkpoint composition holds at depth 3",
+      "input": "",
+      "expectedOutput": "[[[\"ok a-1-x\",\"ok a-1-y\"],[\"ok a-2-x\",\"ok a-2-y\"]],[[\"ok b-1-x\",\"ok b-1-y\"],[\"ok b-2-x\",\"ok b-2-y\"]]]",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "interruptHandlers": [
+        { "action": "approve" },
+        { "action": "approve" },
+        { "action": "approve" },
+        { "action": "approve" },
+        { "action": "approve" },
+        { "action": "approve" },
+        { "action": "approve" },
+        { "action": "approve" }
+      ]
+    }
+  ]
+}

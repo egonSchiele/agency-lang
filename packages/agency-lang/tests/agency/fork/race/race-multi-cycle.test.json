@@ -1,0 +1,21 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Race winner interrupts twice in a row — verifies the resumed-only-winner path loops correctly across multiple resume cycles for the same winner",
+      "input": "",
+      "expectedOutput": "",
+      "evaluationCriteria": [
+        {
+          "type": "llmJudge",
+          "judgePrompt": "The output should be a single number that is one of 10, 20, or 30. Not a failure, not an array.",
+          "desiredAccuracy": 90
+        }
+      ],
+      "interruptHandlers": [
+        { "action": "approve" },
+        { "action": "approve" }
+      ]
+    }
+  ]
+}

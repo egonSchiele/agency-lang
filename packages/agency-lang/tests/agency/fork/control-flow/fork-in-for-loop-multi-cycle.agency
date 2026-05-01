@@ -1,0 +1,17 @@
+def confirmItem(label: string): string {
+  interrupt("approve ${label}?")
+  return "ok ${label}"
+}
+
+node main() {
+  let allResults: string[] = []
+  for (round in ["A", "B"]) {
+    let results = fork([1, 2]) as i {
+      return confirmItem("${round}-${i}")
+    }
+    for (r in results) {
+      allResults.push(r)
+    }
+  }
+  return allResults
+}

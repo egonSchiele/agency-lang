@@ -1,13 +1,6 @@
 import * as smoltalk from "smoltalk";
 import { MessageThread } from "./state/messageThread.js";
-import {
-  interrupt,
-  Interrupt,
-  InterruptData,
-  isDebugger,
-  isInterrupt,
-  isRejected,
-} from "./interrupts.js";
+import { Interrupt, hasInterrupts, isRejected } from "./interrupts.js";
 import { updateTokenStats, extractResponse } from "./utils.js";
 import { callHook } from "./hooks.js";
 import { handleStreamingResponse, isGenerator } from "./streaming.js";
@@ -18,11 +11,13 @@ import { color } from "@/utils/termcolors.js";
 import { GraphState } from "./types.js";
 import { PromptResult, Result, StreamChunk, ToolCallJSON } from "smoltalk";
 import { ZodType } from "zod/v3";
+import { StateStack } from "./state/stateStack.js";
 import { ThreadStore } from "./state/threadStore.js";
 import { isFailure } from "./result.js";
 import { AgencyCancelledError, isAbortError } from "./errors.js";
 import { AgencyFunction } from "./agencyFunction.js";
-
+import { setupFunction } from "./node.js";
+import { exit } from "node:process";
 
 type Tool = {
   name: string;
@@ -37,6 +32,7 @@ async function _runPrompt({
   prompt,
   responseFormat,
   clientConfig,
+  stateStack,
 }: {
   ctx: RuntimeContext<GraphState>;
   messages: MessageThread;
@@ -44,8 +40,12 @@ async function _runPrompt({
   prompt: string;
   responseFormat?: any;
   clientConfig: Partial<smoltalk.SmolPromptConfig>;
+  /** The branch-local stack, if this _runPrompt call is running inside a
+   * fork/race branch. Used for branch-aware cancellation checks and for
+   * scoping the LLM HTTP abort signal to the current branch. */
+  stateStack?: StateStack;
 }): Promise<{ messages: MessageThread; toolCalls: smoltalk.ToolCallJSON[] }> {
-  if (ctx.aborted) {
+  if (ctx.isCancelled(stateStack)) {
     throw new AgencyCancelledError();
   }
 
@@ -67,7 +67,7 @@ async function _runPrompt({
   }
 
   // Re-check after hook — cancellation may have occurred during the callback
-  if (ctx.aborted) {
+  if (ctx.isCancelled(stateStack)) {
     throw new AgencyCancelledError();
   }
 
@@ -76,7 +76,7 @@ async function _runPrompt({
     messages: messages.getMessages(),
     tools,
     responseFormat,
-    abortSignal: ctx.abortController.signal,
+    abortSignal: ctx.getAbortSignal(stateStack),
     metadata: clientConfig,
   } as any;
 
@@ -163,253 +163,6 @@ async function _runPrompt({
   return { messages, toolCalls };
 }
 
-type ExecuteToolCallsResult =
-  | {
-    isInterrupt: true;
-    interrupt: Interrupt;
-    messages: MessageThread;
-  }
-  | { isInterrupt: false; messages: MessageThread };
-
-async function executeToolCalls({
-  toolCalls,
-  toolFunctions,
-  messages,
-  ctx,
-  clientConfig,
-  interruptData,
-  removedTools,
-  toolErrorCounts,
-}: {
-  toolCalls: smoltalk.ToolCallJSON[];
-  toolFunctions: AgencyFunction[];
-  messages: MessageThread;
-  ctx: RuntimeContext<GraphState>;
-  clientConfig: Partial<smoltalk.SmolPromptConfig>;
-  interruptData?: InterruptData;
-  removedTools: string[];
-  toolErrorCounts: Record<string, number>;
-}): Promise<ExecuteToolCallsResult> {
-  for (const toolCall of toolCalls) {
-    if (ctx.aborted) {
-      throw new AgencyCancelledError();
-    }
-
-    const handler = toolFunctions.find((fn) => fn.name === toolCall.name);
-    if (!handler) {
-      console.error(
-        `No handler found for tool call: ${toolCall.name}. This error will be sent back to the LLM.`,
-      );
-      messages.push(
-        smoltalk.toolMessage(
-          `Error: No handler found for tool call ${toolCall.name}`,
-          {
-            tool_call_id: toolCall.id,
-            name: toolCall.name,
-          },
-        ),
-      );
-      continue;
-    }
-
-    // Without this, if the LLM makes multiple tool calls to the same tool in the same message,
-    // we keep calling the tool even though it's been removed
-    if (removedTools.includes(handler.name)) {
-      messages.push(
-        smoltalk.toolMessage(
-          `Error: Handler for tool call ${handler.name} has been removed already due to previous errors, and will not be executed.`,
-          {
-            tool_call_id: toolCall.id,
-            name: toolCall.name,
-          },
-        ),
-      );
-      continue;
-    }
-
-    // Build named args from tool call arguments, applying any modify overrides
-    let namedArgs = { ...toolCall.arguments };
-
-    let result: any;
-    if (
-      interruptData &&
-      interruptData.interruptResponse &&
-      interruptData.interruptResponse.type === "reject"
-    ) {
-      const toolCallData = {
-        tool_call_id: toolCall.id,
-        name: toolCall.name,
-      };
-      messages.push(smoltalk.toolMessage("tool call rejected", toolCallData));
-      ctx.statelogClient.debug(`Tool call rejected`, toolCallData);
-    } else {
-      if (
-        interruptData &&
-        interruptData.interruptResponse &&
-        interruptData.interruptResponse.type === "modify"
-      ) {
-        const iResponse = interruptData.interruptResponse;
-        Object.assign(namedArgs, iResponse.newArguments);
-      }
-      await callHook({
-        callbacks: ctx.callbacks,
-        name: "onToolCallStart",
-        data: { toolName: handler.name, args: namedArgs },
-      });
-
-      const state = {
-        ctx,
-        threads: new ThreadStore(),
-        interruptData,
-        isToolCall: true,
-      };
-
-      const toolCallStartTime = performance.now();
-      ctx.enterToolCall();
-      try {
-        result = await handler.invoke(
-          { type: "named", positionalArgs: [], namedArgs },
-          state,
-        );
-      } catch (error: unknown) {
-        const retryable = false;
-        const errorMessage =
-          error instanceof Error ? error.message : String(error);
-        console.error(`Tool call "${handler.name}" crashed: ${errorMessage}`);
-        toolErrorCounts[handler.name] =
-          (toolErrorCounts[handler.name] || 0) + 1;
-
-        if (retryable && toolErrorCounts[handler.name] < 5) {
-          messages.push(
-            smoltalk.toolMessage(
-              `Error: ${errorMessage}. You may retry this tool call with corrected arguments.`,
-              {
-                tool_call_id: toolCall.id,
-                name: toolCall.name,
-              },
-            ),
-          );
-        } else if (retryable) {
-          messages.push(
-            smoltalk.toolMessage(
-              `Error: ${errorMessage}. This tool has failed too many times and can no longer be called.`,
-              {
-                tool_call_id: toolCall.id,
-                name: toolCall.name,
-              },
-            ),
-          );
-          removedTools.push(handler.name);
-        } else {
-          messages.push(
-            smoltalk.toolMessage(
-              `Error: ${errorMessage}. This tool failed after performing side effects and cannot be retried.`,
-              {
-                tool_call_id: toolCall.id,
-                name: toolCall.name,
-              },
-            ),
-          );
-          removedTools.push(handler.name);
-        }
-        continue;
-      } finally {
-        ctx.exitToolCall();
-      }
-      // Tool returned a failure Result — handle retry logic
-      if (isFailure(result)) {
-        const errorMessage = typeof result.error === "string" ? result.error : String(result.error);
-        toolErrorCounts[handler.name] = (toolErrorCounts[handler.name] || 0) + 1;
-
-        if (result.retryable && toolErrorCounts[handler.name] < 5) {
-          messages.push(
-            smoltalk.toolMessage(
-              `Error: ${errorMessage}. You may retry this tool call with corrected arguments.`,
-              { tool_call_id: toolCall.id, name: toolCall.name },
-            ),
-          );
-        } else if (result.retryable) {
-          messages.push(
-            smoltalk.toolMessage(
-              `Error: ${errorMessage}. This tool has failed too many times and can no longer be called.`,
-              { tool_call_id: toolCall.id, name: toolCall.name },
-            ),
-          );
-          removedTools.push(handler.name);
-        } else {
-          messages.push(
-            smoltalk.toolMessage(
-              `Error: ${errorMessage}. This operation failed and cannot be retried.`,
-              { tool_call_id: toolCall.id, name: toolCall.name },
-            ),
-          );
-          removedTools.push(handler.name);
-        }
-        continue;
-      }
-
-      if (isRejected(result)) {
-        const message =
-          typeof result.value === "string"
-            ? result.value
-            : "Tool call rejected by policy";
-        messages.push(
-          smoltalk.toolMessage(message, {
-            tool_call_id: toolCall.id,
-            name: toolCall.name,
-          }),
-        );
-        continue;
-      }
-
-      result =
-        result || `${handler.name} ran successfully but did not return a value`;
-
-      const toolCallEndTime = performance.now();
-      await callHook({
-        callbacks: ctx.callbacks,
-        name: "onToolCallEnd",
-        data: {
-          toolName: handler.name,
-          result,
-          timeTaken: toolCallEndTime - toolCallStartTime,
-        },
-      });
-
-      ctx.statelogClient.toolCall({
-        toolName: handler.name,
-        args: namedArgs,
-        output: result,
-        model: JSON.stringify(clientConfig.model),
-        timeTaken: toolCallEndTime - toolCallStartTime,
-      });
-
-      if (isInterrupt(result)) {
-        return {
-          isInterrupt: true,
-          interrupt: {
-            ...result,
-            interruptData: {
-              messages: messages.toJSON().messages,
-              toolCall,
-            },
-          },
-          messages,
-        };
-      }
-
-      messages.push(
-        smoltalk.toolMessage(result, {
-          tool_call_id: toolCall.id,
-          name: toolCall.name,
-        }),
-      );
-    }
-  }
-
-  return { isInterrupt: false, messages };
-}
-
 export async function runPrompt(args: {
   ctx: RuntimeContext<GraphState>;
   prompt: string;
@@ -417,7 +170,7 @@ export async function runPrompt(args: {
   responseFormat?: any;
   clientConfig: Partial<smoltalk.SmolPromptConfig> & { tools?: any[] };
   maxToolCallRounds?: number;
-  interruptData?: InterruptData;
+  stateStack?: StateStack;
   removedTools?: string[];
   checkpointInfo?: SourceLocationOpts;
 }): Promise<any> {
@@ -426,14 +179,39 @@ export async function runPrompt(args: {
     prompt,
     responseFormat,
     maxToolCallRounds = 10,
-    removedTools = [],
     checkpointInfo,
   } = args;
+
+  // Push a frame onto the state stack — runPrompt participates like any other function
+  const { stateStack, stack } = setupFunction({
+    state: args.stateStack
+      ? {
+          stateStack: args.stateStack,
+          ctx: args.ctx,
+          threads: new ThreadStore(),
+        }
+      : undefined,
+  });
+  const self = stack.locals;
+
+  // Frame-backed locals (survive checkpoint/restore)
+  if (self.__initialized === undefined) {
+    self.__initialized = true;
+    self.removedTools = args.removedTools || [];
+    self.toolErrorCounts = {};
+    self.toolCallRound = 0;
+    self.messagesJSON = null;
+    self.pendingToolCalls = null;
+  }
+
+  const removedTools: string[] = self.removedTools;
+  const toolErrorCounts: Record<string, number> = self.toolErrorCounts;
 
   const rawTools: any[] = args.clientConfig?.tools || [];
   const agencyFunctions: AgencyFunction[] = rawTools.map((entry: any) => {
     if (!AgencyFunction.isAgencyFunction(entry)) {
-      const receivedType = entry === null ? "null" : Array.isArray(entry) ? "array" : typeof entry;
+      const receivedType =
+        entry === null ? "null" : Array.isArray(entry) ? "array" : typeof entry;
       throw new TypeError(
         `Invalid tool in clientConfig.tools. Expected an AgencyFunction instance, but received ${receivedType}.`,
       );
@@ -444,22 +222,39 @@ export async function runPrompt(args: {
     .filter((fn) => fn.toolDefinition)
     .map((fn) => fn.toolDefinition!)
     .filter((t) => !removedTools.includes(t.name));
-  let toolFunctions = agencyFunctions
-    .filter((fn) => !removedTools.includes(fn.name));
+  let toolFunctions = agencyFunctions.filter(
+    (fn) => !removedTools.includes(fn.name),
+  );
 
   // Remove tools key from clientConfig before passing to smoltalk
   const { tools: _extractedTools, ...restClientConfig } =
     args.clientConfig || {};
   const clientConfig = ctx.getSmoltalkConfig(restClientConfig);
-  /* in order, either:
-  1. restore messages from interruptData if present (resuming after an interrupt)
-  2. use messages passed in as argument (add onto message thread)
-  3. create an empty message thread just for this prompt
-  */
-  let messages: MessageThread;
 
-  if (args.interruptData?.messages) {
-    messages = MessageThread.fromJSON(args.interruptData.messages);
+  // Restore or initialize messages.
+  //
+  // On resume we need `messages` to stay aliased to `args.messages` (the
+  // caller's shared thread). Otherwise, mutations during the resumed run
+  // (pushing tool responses, the final assistant message) won't propagate
+  // back to the caller's thread. Then any subsequent reader — another
+  // `llm()` call in a loop, a `thread {}` block, a debug hook — sees a
+  // stale snapshot from the original interrupt time, missing everything
+  // that was appended after resume.
+  //
+  // To keep the alias on resume, we write the saved JSON contents INTO
+  // args.messages rather than constructing a fresh MessageThread. The
+  // saved JSON and args.messages are equivalent on resume (both were
+  // captured in the same checkpoint), so this is effectively a no-op
+  // overwrite — but it preserves the alias for the rest of the run.
+  let messages: MessageThread;
+  if (self.messagesJSON) {
+    const restored = MessageThread.fromJSON(self.messagesJSON);
+    if (args.messages) {
+      args.messages.setMessages(restored.getMessages());
+      messages = args.messages;
+    } else {
+      messages = restored;
+    }
   } else if (clientConfig.messages) {
     messages = MessageThread.fromJSON(clientConfig.messages);
   } else if (args.messages) {
@@ -467,107 +262,302 @@ export async function runPrompt(args: {
   } else {
     messages = new MessageThread();
   }
-  // Restore state after interrupt
-  let toolCalls: smoltalk.ToolCallJSON[] = [];
 
+  // Tool calls: restore from frame or make initial LLM call
+  let toolCalls: smoltalk.ToolCallJSON[];
+  if (self.pendingToolCalls) {
+    toolCalls = self.pendingToolCalls;
+  } else {
+    messages.push(smoltalk.userMessage(prompt));
+    const result = await _runPrompt({
+      ctx,
+      messages,
+      tools: tools || [],
+      prompt,
+      responseFormat,
+      clientConfig,
+      stateStack,
+    });
+    messages = result.messages;
+    toolCalls = result.toolCalls;
+    // Save to frame
+    self.messagesJSON = messages.toJSON().messages;
+    self.pendingToolCalls = toolCalls.length > 0 ? toolCalls : null;
+  }
+
+  let shouldPop = true;
   try {
-    if (args.interruptData === undefined) {
-      // not resuming after an interrupt
-      messages.push(smoltalk.userMessage(prompt));
-
-      const result = await _runPrompt({
-        ctx,
-        messages,
-        tools: tools || [],
-        prompt,
-        responseFormat,
-        clientConfig,
-      });
-      messages = result.messages;
-      toolCalls = result.toolCalls;
-    } else {
-      if (!args.interruptData.toolCall) {
-        throw new Error(
-          `Interrupt data is present but no tool call found. This shouldn't happen: ${JSON.stringify(args.interruptData)}`,
-        );
-      }
-      toolCalls = [args.interruptData.toolCall];
-    }
-
     // Handle tool calls
-    const toolErrorCounts: Record<string, number> = {};
-    let toolCallRound = 0;
     while (toolCalls.length > 0) {
-      if (ctx.aborted) {
-        throw new AgencyCancelledError();
-      }
-      if (toolCallRound++ >= maxToolCallRounds) {
+      if (ctx.isCancelled(stateStack)) throw new AgencyCancelledError();
+      if (self.toolCallRound++ >= maxToolCallRounds) {
         throw new Error(
           `Exceeded maximum tool call rounds (${maxToolCallRounds})`,
         );
       }
 
-      const executeToolCallsResult = await executeToolCalls({
-        toolCalls,
-        toolFunctions,
-        messages,
-        ctx,
-        clientConfig,
-        interruptData: args.interruptData,
-        removedTools,
-        toolErrorCounts,
-      });
+      const interrupts: Interrupt[] = [];
 
-      messages = executeToolCallsResult.messages;
+      for (const toolCall of toolCalls) {
+        if (ctx.isCancelled(stateStack)) throw new AgencyCancelledError();
 
-      // Filter out tools that failed after side effects
-      tools = tools.filter((t) => !removedTools.includes(t.name));
-      toolFunctions = toolFunctions.filter(
-        (fn) => !removedTools.includes(fn.name),
-      );
+        const handler = toolFunctions.find((fn) => fn.name === toolCall.name);
+        if (!handler) {
+          console.error(
+            `No handler found for tool call: ${toolCall.name}. This error will be sent back to the LLM.`,
+          );
+          messages.push(
+            smoltalk.toolMessage(
+              `Error: No handler found for tool call ${toolCall.name}`,
+              { tool_call_id: toolCall.id, name: toolCall.name },
+            ),
+          );
+          continue;
+        }
 
-      if (executeToolCallsResult.isInterrupt) {
-        const { interrupt } = executeToolCallsResult;
+        if (removedTools.includes(handler.name)) {
+          messages.push(
+            smoltalk.toolMessage(
+              `Error: Handler for tool call ${handler.name} has been removed already due to previous errors, and will not be executed.`,
+              { tool_call_id: toolCall.id, name: toolCall.name },
+            ),
+          );
+          continue;
+        }
+
+        const branchKey = `tool_${toolCall.id}`;
+        const existing = stack.getBranch(branchKey);
+
+        // Skip completed branches (cached result from previous interrupt cycle).
+        // The toolMessage was already pushed in the original run and restored
+        // via messagesJSON, so we don't push it again here.
+        if (existing?.result !== undefined) {
+          continue;
+        }
+
+        // Note: there used to be a coarse short-circuit here that, when
+        // existing.interruptId was set and the user's response was "reject",
+        // pushed "tool call rejected" and removed the tool without
+        // re-invoking it. That broke fork-in-tool: the tool branch only
+        // tracks `result[0].interruptId`, so a reject of the first interrupt
+        // ignored every per-interrupt response on sibling fork branches.
+        //
+        // Instead, we always re-invoke the tool on resume. Each inner
+        // interrupt site reads its own response via ctx.getInterruptResponse
+        // and either continues or halts with `failure("interrupt rejected")`.
+        // - Simple tool, user rejected → tool returns the failure Result;
+        //   the isFailure path below pushes "Error: interrupt rejected ..."
+        //   and removes the tool. Same observable outcome as the old
+        //   short-circuit, just routed through the failure path.
+        // - Fork-in-tool with rejects → each branch produces success or
+        //   failure independently; fork returns a mixed array; the tool
+        //   returns it as a regular value. It's the agency author's job to
+        //   detect embedded failures (e.g. with isFailure / isSuccess) and
+        //   surface them to the LLM however they want.
+
+        // Create or restore branch stack
+        const branchStack = stack.getOrCreateBranch(branchKey).stack;
+
+        const namedArgs = { ...toolCall.arguments };
+        await callHook({
+          callbacks: ctx.callbacks,
+          name: "onToolCallStart",
+          data: { toolName: handler.name, args: namedArgs },
+        });
+
+        const toolCallStartTime = performance.now();
+        let result: any;
+        ctx.enterToolCall();
+        try {
+          result = await handler.invoke(
+            { type: "named", positionalArgs: [], namedArgs },
+            {
+              ctx,
+              threads: new ThreadStore(),
+              stateStack: branchStack,
+              isForked: true,
+            },
+          );
+        } catch (error: unknown) {
+          const errorMessage =
+            error instanceof Error ? error.message : String(error);
+          console.error(`Tool call "${handler.name}" crashed: ${errorMessage}`);
+          toolErrorCounts[handler.name] =
+            (toolErrorCounts[handler.name] || 0) + 1;
+          messages.push(
+            smoltalk.toolMessage(
+              `Error: ${errorMessage}. This tool failed after performing side effects and cannot be retried.`,
+              { tool_call_id: toolCall.id, name: toolCall.name },
+            ),
+          );
+          removedTools.push(handler.name);
+          stack.deleteBranch(branchKey);
+          continue;
+        } finally {
+          ctx.exitToolCall();
+        }
+
+        // Tool returned a failure Result — handle retry logic
+        if (isFailure(result)) {
+          const errorMessage =
+            typeof result.error === "string"
+              ? result.error
+              : String(result.error);
+          toolErrorCounts[handler.name] =
+            (toolErrorCounts[handler.name] || 0) + 1;
+
+          if (result.retryable && toolErrorCounts[handler.name] < 5) {
+            messages.push(
+              smoltalk.toolMessage(
+                `Error: ${errorMessage}. You may retry this tool call with corrected arguments.`,
+                { tool_call_id: toolCall.id, name: toolCall.name },
+              ),
+            );
+          } else if (result.retryable) {
+            messages.push(
+              smoltalk.toolMessage(
+                `Error: ${errorMessage}. This tool has failed too many times and can no longer be called.`,
+                { tool_call_id: toolCall.id, name: toolCall.name },
+              ),
+            );
+            removedTools.push(handler.name);
+          } else {
+            messages.push(
+              smoltalk.toolMessage(
+                `Error: ${errorMessage}. This operation failed and cannot be retried.`,
+                { tool_call_id: toolCall.id, name: toolCall.name },
+              ),
+            );
+            removedTools.push(handler.name);
+          }
+          stack.deleteBranch(branchKey);
+          continue;
+        }
+
+        if (isRejected(result)) {
+          const message =
+            typeof result.value === "string"
+              ? result.value
+              : "Tool call rejected by policy";
+          messages.push(
+            smoltalk.toolMessage(message, {
+              tool_call_id: toolCall.id,
+              name: toolCall.name,
+            }),
+          );
+          stack.deleteBranch(branchKey);
+          continue;
+        }
+
+        // Check for interrupts
+        if (hasInterrupts(result)) {
+          interrupts.push(...result);
+          stack.setInterruptOnBranch(
+            branchKey,
+            result[0].interruptId,
+            result[0].interruptData,
+            result[0].checkpoint,
+          );
+          //console.log(color.green(JSON.stringify(result, null, 2)));
+          // exit(1);
+          // Transplant the branch stack from the interrupt's checkpoint
+          // const branchCp = result[0]?.checkpoint;
+          // if (branchCp) {
+          //   stack.branches[branchKey].stack = StateStack.fromJSON(
+          //     branchCp.stack,
+          //   );
+          // }
+          continue;
+        }
+
+        // Success — cache result and add tool message
+        result =
+          result ||
+          `${handler.name} ran successfully but did not return a value`;
+        stack.setResultOnBranch(branchKey, result);
+
+        const toolCallEndTime = performance.now();
+        await callHook({
+          callbacks: ctx.callbacks,
+          name: "onToolCallEnd",
+          data: {
+            toolName: handler.name,
+            result,
+            timeTaken: toolCallEndTime - toolCallStartTime,
+          },
+        });
+        ctx.statelogClient.toolCall({
+          toolName: handler.name,
+          args: namedArgs,
+          output: result,
+          model: JSON.stringify(clientConfig.model),
+          timeTaken: toolCallEndTime - toolCallStartTime,
+        });
+
+        messages.push(
+          smoltalk.toolMessage(result, {
+            tool_call_id: toolCall.id,
+            name: toolCall.name,
+          }),
+        );
+        // Don't deleteBranch here. If a sibling tool in this same round
+        // interrupts, the saved messagesJSON already contains this success's
+        // toolMessage; on resume, the cached-result short-circuit relies on
+        // `existing.result` being present to avoid re-invoking the tool.
+        // popBranches() at the end of a successful round handles cleanup.
+      }
+
+      // If any tool calls interrupted, create checkpoint and return
+      if (interrupts.length > 0) {
+        self.messagesJSON = messages.toJSON().messages;
+        const cpId = ctx.checkpoints.create(stateStack, ctx, {
+          moduleId: checkpointInfo?.moduleId ?? "",
+          scopeName: checkpointInfo?.scopeName ?? "",
+          stepPath: checkpointInfo?.stepPath ?? "",
+        });
+        const cp = ctx.checkpoints.get(cpId);
+        for (const intr of interrupts) {
+          intr.checkpoint = cp;
+          intr.checkpointId = cpId;
+        }
 
         ctx.statelogClient.debug(`Tool call interrupted execution.`, {
           messages: messages.getMessages(),
           model: clientConfig.model,
         });
 
-        if (interrupt.debugger === false) {
-          // For real user interrupts, create a checkpoint at the LLM call site
-          // so we can resume the conversation. Debug interrupts keep their
-          // original checkpoint from debugStep (pointing to the tool's source).
-          const checkpointId = ctx.checkpoints.create(ctx, {
-            moduleId: checkpointInfo?.moduleId ?? "",
-            scopeName: checkpointInfo?.scopeName ?? "",
-            stepPath: checkpointInfo?.stepPath ?? "",
-          });
-          interrupt.checkpointId = checkpointId;
-          interrupt.checkpoint = ctx.checkpoints.get(checkpointId);
-        }
-        return interrupt;
+        shouldPop = false;
+        return interrupts;
       }
 
-      const result = await _runPrompt({
+      // All tool calls complete — clean up branches, next LLM round
+      stack.popBranches();
+      tools = tools.filter((t) => !removedTools.includes(t.name));
+      toolFunctions = toolFunctions.filter(
+        (fn) => !removedTools.includes(fn.name),
+      );
+
+      const nextResult = await _runPrompt({
         ctx,
         messages,
         tools: tools || [],
         prompt,
         responseFormat,
         clientConfig,
+        stateStack,
       });
-      messages = result.messages;
-      toolCalls = result.toolCalls;
+      messages = nextResult.messages;
+      toolCalls = nextResult.toolCalls;
+
+      // Save to frame
+      self.messagesJSON = messages.toJSON().messages;
+      self.pendingToolCalls = toolCalls.length > 0 ? toolCalls : null;
     }
   } catch (error) {
-    if (isAbortError(error)) {
-      // Abort errors propagate as-is — the context is already cancelled.
-      throw error;
-    }
-    // Non-abort errors (network issues, malformed responses, etc.) propagate
-    // without cancelling the context. The caller may want to retry.
+    if (isAbortError(error)) throw error;
     throw error;
+  } finally {
+    if (shouldPop) stateStack.pop();
   }
 
   const responseMessage = messages.getMessages().at(-1);

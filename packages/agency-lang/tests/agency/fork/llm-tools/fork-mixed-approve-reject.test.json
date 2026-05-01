@@ -1,0 +1,17 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Three fork branches each fire an interrupt; the user approves the first and third, rejects the middle one. Locks in the new fork-in-tool semantics where the user's per-interrupt responses (matched by interruptId) survive the runPrompt resume path and produce a mixed success/failure array.",
+      "input": "",
+      "expectedOutput": "[\"deleted: a\",\"FAILED: interrupt rejected\",\"deleted: c\"]",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "interruptHandlers": [
+        { "action": "approve", "expectedMessage": "approve a?" },
+        { "action": "reject", "expectedMessage": "approve b?" },
+        { "action": "approve", "expectedMessage": "approve c?" }
+      ],
+      "retry": 2
+    }
+  ]
+}

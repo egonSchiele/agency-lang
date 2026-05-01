@@ -29,7 +29,7 @@ export const template = `  async {{{methodName}}}({{{params}}}__state: any = und
       if (__error instanceof RestoreSignal) { throw __error; }
       throw __error;
     } finally {
-      if (!__state?.isForked) { __ctx.stateStack.pop() }
+      if (!__isForked) { __stateStack.pop() }
     }
   }`;
 

@@ -8,7 +8,8 @@ export async function checkpoint(
 ): Promise<number> {
   const ctx = __state.ctx;
   await ctx.pendingPromises.awaitAll();
-  return ctx.checkpoints.create(ctx, {
+  const stateStack = __state.stateStack ?? ctx.stateStack;
+  return ctx.checkpoints.create(stateStack, ctx, {
     moduleId: __state.moduleId ?? "",
     scopeName: __state.scopeName ?? "",
     stepPath: __state.stepPath ?? "",

@@ -1,0 +1,21 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Tool succeeds on round 1 (LLM call), then interrupts on round 2 (next LLM call after seeing round-1 result). Tests that runPrompt's per-round branches stay isolated.",
+      "input": "",
+      "expectedOutput": "",
+      "evaluationCriteria": [
+        {
+          "type": "llmJudge",
+          "judgePrompt": "The output should be an array of 2 strings. The first should mention 'first-call-ok' (or contain the words first call ok). The second should be exactly 'second-call-ok' or contain that text. Pass if both calls' results are present in the array.",
+          "desiredAccuracy": 70
+        }
+      ],
+      "interruptHandlers": [
+        { "action": "approve", "expectedMessage": "approve second call?" }
+      ],
+      "retry": 2
+    }
+  ]
+}

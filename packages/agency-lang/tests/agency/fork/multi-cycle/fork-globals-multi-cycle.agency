@@ -1,0 +1,22 @@
+// Tests local-variable mutation across multiple interrupt cycles. Each
+// fork branch's stepFn maintains a local `count` that is mutated before
+// each interrupt and after both. Mutations made BEFORE an interrupt
+// must be preserved across the resume cycle for the final value to be
+// correct.
+
+def stepFn(label: string): number {
+  let count: number = 0
+  count = count + 1
+  interrupt("first ${label}?")
+  count = count + 2
+  interrupt("second ${label}?")
+  count = count + 3
+  return count
+}
+
+node main() {
+  let results = fork(["a", "b"]) as item {
+    return stepFn(item)
+  }
+  return results
+}

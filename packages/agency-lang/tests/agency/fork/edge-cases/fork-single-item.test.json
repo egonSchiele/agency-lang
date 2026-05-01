@@ -1,0 +1,14 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "fork() with a single-item array still goes through full branch + interrupt + resume machinery.",
+      "input": "",
+      "expectedOutput": "[\"done: only\"]",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "interruptHandlers": [
+        { "action": "approve", "expectedMessage": "approve only?" }
+      ]
+    }
+  ]
+}

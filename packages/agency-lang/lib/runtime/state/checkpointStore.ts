@@ -6,6 +6,7 @@ import type { GlobalStoreJSON } from "./globalStore.js";
 import { checkpointSchema } from "./schemas.js";
 import type { SourceLocation } from "./sourceLocation.js";
 import type { StateStackJSON } from "./stateStack.js";
+import type { StateStack } from "./stateStack.js";
 
 /** Label used for pinned checkpoints created at function entry for Result error handling. */
 export const RESULT_ENTRY_LABEL = "result-entry";
@@ -169,7 +170,8 @@ export class Checkpoint implements SourceLocation {
     return `${this.moduleId}:${this.scopeName}#${this.stepPath}`;
   }
 
-  static fromContext(
+  static fromStateStack(
+    stateStack: StateStack,
     ctx: RuntimeContext<any>,
     opts: SourceLocationOpts & { label?: string | null; pinned?: boolean },
   ): Checkpoint {
@@ -180,11 +182,18 @@ export class Checkpoint implements SourceLocation {
       );
     }
     return new Checkpoint({
-      stack: ctx.stateStack.toJSON(),
+      stack: stateStack.toJSON(),
       globals: ctx.globals.toJSON(),
       nodeId,
       ...opts,
     });
+  }
+
+  static fromContext(
+    ctx: RuntimeContext<any>,
+    opts: SourceLocationOpts & { label?: string | null; pinned?: boolean },
+  ): Checkpoint {
+    return Checkpoint.fromStateStack(ctx.stateStack, ctx, opts);
   }
 
   static fromJSON(json: any): Checkpoint | null {
@@ -217,6 +226,7 @@ export class CheckpointStore {
   }
 
   create(
+    stateStack: StateStack,
     ctx: RuntimeContext<any>,
     opts: SourceLocationOpts & {
       label?: string | null;
@@ -228,7 +238,7 @@ export class CheckpointStore {
       this.removeDuplicate(opts);
     }
 
-    const checkpoint = Checkpoint.fromContext(ctx, opts);
+    const checkpoint = Checkpoint.fromStateStack(stateStack, ctx, opts);
     this.checkpoints[checkpoint.id] = checkpoint;
     return checkpoint.id;
   }
@@ -283,7 +293,7 @@ export class CheckpointStore {
     opts: SourceLocationOpts,
   ): number {
     // Remove existing unpinned checkpoint at the same location to avoid duplicates
-    const id = this.create(ctx, {
+    const id = this.create(ctx.stateStack, ctx, {
       ...opts,
       label: null,
       pinned: false,
@@ -321,12 +331,13 @@ export class CheckpointStore {
   }
 
   createPinned(
+    stateStack: StateStack,
     ctx: RuntimeContext<any>,
     opts: SourceLocationOpts & {
       label: string | null;
     },
   ): number {
-    return this.create(ctx, { ...opts, pinned: true });
+    return this.create(stateStack, ctx, { ...opts, pinned: true });
   }
 
   pin(id: number, label?: string): void {

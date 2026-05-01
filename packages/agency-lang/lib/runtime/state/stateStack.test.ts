@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { describe, it, expect } from "vitest";
 import { StateStack, State, BranchState } from "./stateStack.js";
 
@@ -187,6 +188,37 @@ describe("StateStack branches serialization", () => {
     const branch = (json.stack[0] as any).branches["0"];
     expect(branch.interruptId).toBeUndefined();
     expect(branch.interruptData).toBeUndefined();
+  });
+
+  it("serializes and deserializes BranchState.result", () => {
+    const stack = new StateStack();
+    const frame = stack.getNewState();
+    frame.branches = {
+      fork_0_0: {
+        stack: new StateStack(),
+        result: { result: "hello" },
+      },
+      fork_0_1: {
+        stack: new StateStack(),
+        // no result — thread still interrupted
+      },
+      fork_0_2: {
+        stack: new StateStack(),
+        result: { result: undefined }, // thread returned undefined
+      },
+    };
+
+    const json = stack.toJSON();
+    const restored = StateStack.fromJSON(json);
+    const restoredFrame = restored.stack[0];
+
+    expect(restoredFrame.branches!["fork_0_0"].result).toEqual({
+      result: "hello",
+    });
+    expect(restoredFrame.branches!["fork_0_1"].result).toBeUndefined();
+    expect(restoredFrame.branches!["fork_0_2"].result).toEqual({
+      result: undefined,
+    });
   });
 });
 

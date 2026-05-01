@@ -1,0 +1,17 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "For loop where each iteration runs a fork that interrupts. Round A's fork batches 2 interrupts → user approves both → loop advances to round B → round B's fork batches 2 interrupts → user approves both. Verifies that iteration counters and per-iteration fork branches survive multi-cycle resume.",
+      "input": "",
+      "expectedOutput": "[\"ok A-1\",\"ok A-2\",\"ok B-1\",\"ok B-2\"]",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "interruptHandlers": [
+        { "action": "approve" },
+        { "action": "approve" },
+        { "action": "approve" },
+        { "action": "approve" }
+      ]
+    }
+  ]
+}

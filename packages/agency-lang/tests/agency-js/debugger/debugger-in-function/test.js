@@ -1,17 +1,18 @@
-import { main, approveInterrupt, isInterrupt, __setDebugger } from "./agent.js";
-import { DebuggerState } from "agency-lang/runtime";
+import { DebuggerState, hasInterrupts, approve } from "agency-lang/runtime";
 import { writeFileSync } from "fs";
+import { __setDebugger, main, respondToInterrupts } from "./agent.js";
 
 const dbg = new DebuggerState(10);
 dbg.running();
 __setDebugger(dbg);
 
 let result = await main();
-const hitDebugger = isInterrupt(result.data) && result.data.debugger === true;
-const label = result.data.data;
-result = await approveInterrupt(result.data);
+const hitDebugger = hasInterrupts(result.data) && result.data[0].debugger === true;
+const label = result.data[0].data;
+const resumed = await respondToInterrupts(result.data, [approve()]);
+
 
 writeFileSync(
   "__result.json",
-  JSON.stringify({ hitDebugger, label, finalResult: result.data }, null, 2),
+  JSON.stringify({ hitDebugger, label, finalResult: resumed.data }, null, 2),
 );

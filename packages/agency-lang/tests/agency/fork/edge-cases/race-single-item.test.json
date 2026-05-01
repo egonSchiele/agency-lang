@@ -1,0 +1,14 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "race() with a single-item array — the only branch is automatically the winner. Verifies runRace handles N=1 (no losers to abort, no Promise.race weirdness).",
+      "input": "",
+      "expectedOutput": "\"won: only\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "interruptHandlers": [
+        { "action": "approve", "expectedMessage": "approve only?" }
+      ]
+    }
+  ]
+}

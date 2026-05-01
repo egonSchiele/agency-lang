@@ -1,0 +1,13 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Tool returns failure(..., { retryable: false }). runPrompt's isFailure path pushes a 'cannot be retried' tool message and removes the tool. The LLM should not retry the call.",
+      "input": "",
+      "expectedOutput": "\"tool-removed\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "interruptHandlers": [],
+      "retry": 2
+    }
+  ]
+}

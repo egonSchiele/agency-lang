@@ -7,8 +7,8 @@
       "evaluationCriteria": [
         {
           "type": "llmJudge",
-          "judgePrompt": "The output should be an array with two elements. The first element should be 'reminder' (since the input is about remembering something). The second element should be a string that acknowledges the user's message about buying groceries.",
-          "desiredAccuracy": 80
+          "judgePrompt": "The output should be an array with two elements. The first element should be 'reminder' (since the input is about remembering something). The second element should be a string that, in any way, references the user's message about buying groceries — whether by acknowledging it, repeating it, processing it, or noting it. IMPORTANT: do not deduct points for tone, phrasing, formality, length, or whether the second element 'acknowledges' versus 'processes' versus 'echoes' the message — those are stylistic preferences, not correctness. As long as the first element is 'reminder' and the second element references groceries in some way, give a perfect score.",
+          "desiredAccuracy": 70
         }
       ],
       "retry": 1

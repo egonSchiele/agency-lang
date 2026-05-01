@@ -1,0 +1,19 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Fork with interrupt inside while loop — each thread counts down with interrupts at each step, all approved across multiple cycles",
+      "input": "",
+      "expectedOutput": "[0,0]",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "interruptHandlers": [
+        { "action": "approve" },
+        { "action": "approve" },
+        { "action": "approve" },
+        { "action": "approve" },
+        { "action": "approve" }
+      ],
+      "retry": 1
+    }
+  ]
+}

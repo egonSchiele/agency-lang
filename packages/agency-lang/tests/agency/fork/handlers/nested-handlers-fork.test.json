@@ -1,0 +1,14 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Fork wrapped in two handlers: inner approves 'a' and propagates 'b'. Per Agency semantics, propagate bypasses all outer handlers and goes to the user — so the user sees one interrupt (for 'b') and approves it.",
+      "input": "",
+      "expectedOutput": "[\"done: a\",\"done: b\"]",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "interruptHandlers": [
+        { "action": "approve", "expectedMessage": "approve b?" }
+      ]
+    }
+  ]
+}

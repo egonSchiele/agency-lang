@@ -1,0 +1,17 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Two sequential forks at the same scope, both interrupting. After the first fork resumes and completes, the second fork should run cleanly with fresh branches. Verifies no leakage from the first fork's branches map.",
+      "input": "",
+      "expectedOutput": "[\"ok a\",\"ok b\",\"ok x\",\"ok y\"]",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "interruptHandlers": [
+        { "action": "approve", "expectedMessage": "approve a?" },
+        { "action": "approve", "expectedMessage": "approve b?" },
+        { "action": "approve", "expectedMessage": "approve x?" },
+        { "action": "approve", "expectedMessage": "approve y?" }
+      ]
+    }
+  ]
+}

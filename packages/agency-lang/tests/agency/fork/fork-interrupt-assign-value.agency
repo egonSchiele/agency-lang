@@ -1,0 +1,11 @@
+def askName(item: string): string {
+  const name = interrupt("What name for ${item}?")
+  return "${item}: ${name}"
+}
+
+node main() {
+  let results = fork(["a", "b"]) as item {
+    return askName(item)
+  }
+  return results
+}

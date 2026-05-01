@@ -1,0 +1,15 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "thread {} block with a fork inside. Fork branches interrupt; on resume, results are pushed to the outer-scope `summaries` variable. Verifies thread-frame + fork-branch composition.",
+      "input": "",
+      "expectedOutput": "[\"ok a\",\"ok b\"]",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "interruptHandlers": [
+        { "action": "approve", "expectedMessage": "approve a?" },
+        { "action": "approve", "expectedMessage": "approve b?" }
+      ]
+    }
+  ]
+}

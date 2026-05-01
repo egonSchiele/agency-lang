@@ -1,0 +1,22 @@
+// thread {} block with a fork inside it. The thread block creates an
+// isolated message thread (irrelevant for this test since no llm call,
+// but exercises the thread-frame setup). The fork inside should still
+// see the outer scope's `summaries` variable and push results to it.
+
+def confirmItem(item: string): string {
+  interrupt("approve ${item}?")
+  return "ok ${item}"
+}
+
+node main() {
+  let summaries: string[] = []
+  thread {
+    let results = fork(["a", "b"]) as item {
+      return confirmItem(item)
+    }
+    for (r in results) {
+      summaries.push(r)
+    }
+  }
+  return summaries
+}

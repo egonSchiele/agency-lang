@@ -1,0 +1,15 @@
+def checkItem(item: number): string {
+  if (item > 5) {
+    interrupt("${item} is large, approve?")
+    return "large: ${item}"
+  } else {
+    return "small: ${item}"
+  }
+}
+
+node main() {
+  let results = fork([3, 8]) as item {
+    return checkItem(item)
+  }
+  return results
+}

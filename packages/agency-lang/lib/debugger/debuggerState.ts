@@ -122,7 +122,7 @@ export class DebuggerState {
     ctx: RuntimeContext<any>,
     opts: SourceLocationOpts & { label: string | null },
   ): number {
-    return this.checkpoints.createPinned(ctx, opts);
+    return this.checkpoints.createPinned(ctx.stateStack, ctx, opts);
   }
 
   getCheckpoint(id: number) {

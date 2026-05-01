@@ -1,6 +1,29 @@
 import { map } from "std::array"
+def riskyOp(label: string): string {
+  interrupt("approve ${label}?")
+  return "confirmed: ${label}"
+}
+
 node main() {
-  const arr = range(10)
-  const result = arr |> map(?, \x -> x * 2) |> map(?, \x -> x * 10) |> map(?, \x -> x * 10) |> map(?, \x -> failure(null)) catch []
-  print(result)
+  handle {
+    let results = fork(["allow", "deny"]) as item {
+      return riskyOp(item)
+    }
+    print(results)
+    const results2 = map(results) as result {
+      if (isFailure(result)) {
+        return { 
+          success: false,
+          error: result.error
+        }
+      }
+      return result
+    }
+    print(results2)
+  } with (data) {
+    if (data == "approve deny?") {
+      return reject()
+    }
+    return approve()
+  }
 }

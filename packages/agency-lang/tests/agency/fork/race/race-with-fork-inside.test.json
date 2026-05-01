@@ -1,0 +1,21 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Race where each branch contains a fork that interrupts — only the winner's interrupts surface; on resume only the winner's branch re-runs",
+      "input": "",
+      "expectedOutput": "",
+      "evaluationCriteria": [
+        {
+          "type": "llmJudge",
+          "judgePrompt": "The output should be an array of 2 strings. Each looks like 'ok a-1', 'ok a-2', 'ok b-1', or 'ok b-2'. Both strings in the array share the same prefix letter (either both 'a' or both 'b').",
+          "desiredAccuracy": 80
+        }
+      ],
+      "interruptHandlers": [
+        { "action": "approve" },
+        { "action": "approve" }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,38 @@
+// Tests that a subthread block reads the post-resume parent thread state
+// correctly. subthread() inherits the parent's message history; if the
+// parent thread is left stale by the runPrompt resume bug, the subthread's
+// llm() sees an inconsistent history and OpenAI rejects the call.
+
+def confirmNumber(): number {
+  interrupt("approve number?")
+  return 42
+}
+
+type NumResp = {
+  value: number
+}
+
+type StrResp = {
+  value: string
+}
+
+node main() {
+  // First LLM call: uses an interrupting tool. After resume, the parent
+  // thread should have the tool-call assistant message paired with the
+  // tool response and the final assistant message.
+  const a: NumResp = llm("Call confirmNumber and return its result in the value field.", {
+    tools: [confirmNumber]
+  })
+
+  // Subthread inherits parent's history but isolates further additions.
+  // The llm() inside this subthread sees [user_a, asst_tool_calls, tool_msg, asst_final]
+  // from the parent — if any of those are missing or out of order (the
+  // bug), OpenAI rejects with a malformed-messages error.
+  let summary: string = ""
+  subthread {
+    const s: StrResp = llm("Output exactly the string 'subthread-ok' in the value field.")
+    summary = s.value
+  }
+
+  return "${a.value}-${summary}"
+}

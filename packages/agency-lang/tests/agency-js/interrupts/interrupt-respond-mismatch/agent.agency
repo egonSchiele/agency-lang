@@ -1,0 +1,11 @@
+def doInterrupt(item: string): string {
+  interrupt("approve ${item}?")
+  return "ok ${item}"
+}
+
+node main() {
+  let results = fork(["a", "b"]) as item {
+    return doInterrupt(item)
+  }
+  return results
+}

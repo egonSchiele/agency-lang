@@ -1,0 +1,16 @@
+def doubleInterrupt(item: string): string {
+  interrupt("first approve ${item}?")
+  interrupt("second approve ${item}?")
+  return "double done: ${item}"
+}
+
+type Response = {
+  results: string[]
+}
+
+node main() {
+  const result: Response = llm("Call doubleInterrupt twice in parallel: once with item='a' and once with item='b'. Return the results field with both return values combined as an array.", {
+    tools: [doubleInterrupt]
+  })
+  return result.results
+}

@@ -1,0 +1,28 @@
+// Tool succeeds on the first call (LLM round 1) and interrupts on the
+// second call (LLM round 2). Verifies that runPrompt's per-round branches
+// stay isolated — the round-1 cached result doesn't interfere with the
+// round-2 interrupt-and-resume cycle.
+//
+// We use a single-element array as a mutable counter since `let x; x +=
+// 1` at the top level is an invalid assignment target in agency.
+const callCount: number[] = [0]
+
+def maybeInterrupt(): string {
+  callCount[0] = callCount[0] + 1
+  if (callCount[0] == 1) {
+    return "first-call-ok. Now please call this same tool one more time to complete the task."
+  }
+  interrupt("approve second call?")
+  return "second-call-ok"
+}
+
+type Resp = {
+  results: string[]
+}
+
+node main() {
+  const result: Resp = llm("Call maybeInterrupt. Read the tool's response carefully — if it instructs you to call the tool again, do so. Aggregate both call results in the results field as an array of two strings.", {
+    tools: [maybeInterrupt]
+  })
+  return result.results
+}

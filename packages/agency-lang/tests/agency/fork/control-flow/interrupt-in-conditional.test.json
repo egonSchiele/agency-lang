@@ -1,0 +1,14 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Interrupt inside an if-branch, with code (a let declaration) after the if. Verifies the conditional-branch index restores correctly on resume and that post-interrupt code runs.",
+      "input": "",
+      "expectedOutput": "\"x=yes,y=100\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "interruptHandlers": [
+        { "action": "approve", "value": "yes", "expectedMessage": "answer?" }
+      ]
+    }
+  ]
+}

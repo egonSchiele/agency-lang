@@ -1,26 +1,25 @@
-// Remember this will be called both in a tool call context
-// and when the user is simply calling a function.
-
-if (__state.interruptData?.interruptResponse?.type === "resolve") {
-  {{{assignResolve}}};
-  __state.interruptData.interruptResponse = null;
-} else if (__state.interruptData?.interruptResponse?.type === "approve") {
-  {{{assignApprove}}};
-  __state.interruptData.interruptResponse = null;
-} else if (__state.interruptData?.interruptResponse?.type === "reject") {
-  // reject for tool calls handled separately
-  __state.interruptData.interruptResponse = null;
-  {{#nodeContext}}
-  runner.halt({ messages: __threads, data: failure("interrupt rejected", { retryable: false }) });
-  {{/nodeContext}}
-  {{^nodeContext}}
-  runner.halt(failure("interrupt rejected", { retryable: false, checkpoint: __ctx.getResultCheckpoint() }));
-  {{/nodeContext}}
-  return;
-} else if (__state.interruptData?.interruptResponse?.type === "modify") {
-  throw new Error("Interrupt response of type 'modify' is used for modifying tool call args. Use resolve instead.");
+// Resume path: check for a response by interruptId
+const __response = __ctx.getInterruptResponse(__self.{{{interruptIdKey:string}}});
+if (__response) {
+  if (__response.type === "approve") {
+    if (__response.value !== undefined) {
+      {{{assignResolve}}};
+    } else {
+      {{{assignApprove}}};
+    }
+  } else if (__response.type === "reject") {
+    // reject for tool calls handled separately
+    {{#nodeContext}}
+    runner.halt({ messages: __threads, data: failure("interrupt rejected", { retryable: false }) });
+    {{/nodeContext}}
+    {{^nodeContext}}
+    runner.halt(failure("interrupt rejected", { retryable: false, checkpoint: __ctx.getResultCheckpoint() }));
+    {{/nodeContext}}
+    return;
+  }
 } else {
-  const __handlerResult = await interruptWithHandlers({{{interruptArgs}}}, __ctx);
+  // First run: call handlers, then propagate if unhandled
+  const __handlerResult = await interruptWithHandlers({{{interruptArgs}}}, __ctx, __stateStack);
   if (isRejected(__handlerResult)) {
     {{#nodeContext}}
     runner.halt({ messages: __threads, data: failure(__handlerResult.value ?? "interrupt rejected", { retryable: false }) });
@@ -33,10 +32,12 @@ if (__state.interruptData?.interruptResponse?.type === "resolve") {
   if (isApproved(__handlerResult)) {
     {{{handlerApprove}}};
   } else {
-    // No handler — propagate interrupt to TypeScript caller
-    const __checkpointId = __ctx.checkpoints.create(__ctx, { moduleId: {{{moduleId}}}, scopeName: {{{scopeName}}}, stepPath: {{{stepPath}}} });
-    __handlerResult.checkpointId = __checkpointId;
-    __handlerResult.checkpoint = __ctx.checkpoints.get(__checkpointId);
+    // No handler — propagate interrupt array to TypeScript caller
+    // Store interruptId on frame BEFORE checkpoint so it's captured in the snapshot
+    __self.{{{interruptIdKey:string}}} = __handlerResult[0].interruptId;
+    const __checkpointId = __ctx.checkpoints.create(__stateStack, __ctx, { moduleId: {{{moduleId}}}, scopeName: {{{scopeName}}}, stepPath: {{{stepPath}}} });
+    __handlerResult[0].checkpointId = __checkpointId;
+    __handlerResult[0].checkpoint = __ctx.checkpoints.get(__checkpointId);
     {{#nodeContext}}
     runner.halt({ messages: __threads, data: __handlerResult });
     {{/nodeContext}}

@@ -1,8 +1,15 @@
-// @ts-nocheck
 import { describe, it, expect } from "vitest";
 import { StateStack, State, BranchState } from "./stateStack.js";
 
-function makeFrame(overrides: Partial<State> = {}): State {
+type FrameOpts = {
+  args?: Record<string, any>;
+  locals?: Record<string, any>;
+  threads?: any;
+  step?: number;
+  branches?: Record<string, BranchState>;
+};
+
+function makeFrame(overrides: FrameOpts = {}): State {
   return new State(overrides);
 }
 
@@ -75,12 +82,12 @@ describe("StateStack branches serialization", () => {
     expect(restored.nodesTraversed).toEqual(["nodeA"]);
 
     const frame = restored.stack[0];
-    expect(frame.branches).toBeDefined();
-    expect(frame.branches![0]).toBeDefined();
-    expect(frame.branches![0].interruptId).toBe("int-1");
+    const branch = frame.getBranch("0");
+    expect(branch).toBeDefined();
+    expect(branch!.interruptId).toBe("int-1");
 
     // The branch stack should be a live StateStack instance
-    const childStack = frame.branches![0].stack;
+    const childStack = branch!.stack;
     expect(childStack).toBeInstanceOf(StateStack);
     expect(childStack.stack).toHaveLength(1);
     expect(childStack.stack[0].args).toEqual({ x: 1 });
@@ -124,13 +131,13 @@ describe("StateStack branches serialization", () => {
     expect(restored.nodesTraversed).toEqual(["A", "B"]);
 
     // Verify child
-    const childBranch = restored.stack[0].branches![0];
+    const childBranch = restored.stack[0].getBranch("0")!;
     expect(childBranch.interruptId).toBe("top-interrupt");
     expect(childBranch.stack).toBeInstanceOf(StateStack);
     expect(childBranch.stack.stack[0].args).toEqual({ level: "child" });
 
     // Verify grandchild
-    const grandchildBranch = childBranch.stack.stack[0].branches![0];
+    const grandchildBranch = childBranch.stack.stack[0].getBranch("0")!;
     expect(grandchildBranch.stack).toBeInstanceOf(StateStack);
     expect(grandchildBranch.stack.stack[0].args).toEqual({
       level: "grandchild",
@@ -193,30 +200,24 @@ describe("StateStack branches serialization", () => {
   it("serializes and deserializes BranchState.result", () => {
     const stack = new StateStack();
     const frame = stack.getNewState();
-    frame.branches = {
-      fork_0_0: {
-        stack: new StateStack(),
-        result: { result: "hello" },
-      },
-      fork_0_1: {
-        stack: new StateStack(),
-        // no result — thread still interrupted
-      },
-      fork_0_2: {
-        stack: new StateStack(),
-        result: { result: undefined }, // thread returned undefined
-      },
-    };
+    // Use the public branch helpers to set up the test fixture so we don't
+    // have to poke at the private `branches` field directly.
+    frame.newBranch("fork_0_0");
+    frame.setResultOnBranch("fork_0_0", "hello");
+    frame.newBranch("fork_0_1");
+    // fork_0_1: no result — thread still interrupted
+    frame.newBranch("fork_0_2");
+    frame.setResultOnBranch("fork_0_2", undefined); // thread returned undefined
 
     const json = stack.toJSON();
     const restored = StateStack.fromJSON(json);
     const restoredFrame = restored.stack[0];
 
-    expect(restoredFrame.branches!["fork_0_0"].result).toEqual({
+    expect(restoredFrame.getBranch("fork_0_0")!.result).toEqual({
       result: "hello",
     });
-    expect(restoredFrame.branches!["fork_0_1"].result).toBeUndefined();
-    expect(restoredFrame.branches!["fork_0_2"].result).toEqual({
+    expect(restoredFrame.getBranch("fork_0_1")!.result).toBeUndefined();
+    expect(restoredFrame.getBranch("fork_0_2")!.result).toEqual({
       result: undefined,
     });
   });

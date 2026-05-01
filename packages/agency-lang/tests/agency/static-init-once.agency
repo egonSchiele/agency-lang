@@ -1,0 +1,17 @@
+import { getMutable, setMutable } from "../helpers/mutableVar.js"
+
+def expensiveInit(): string {
+  setMutable("initCount", getMutable("initCount", 0) + 1)
+  return "initialized"
+}
+
+static const value = expensiveInit()
+
+node main() {
+  const cp = checkpoint()
+  setMutable("runs", getMutable("runs", 0) + 1)
+  if (getMutable("runs", 0) < 3) {
+    restore(cp, {})
+  }
+  return { value: value, initCount: getMutable("initCount", 0), runs: getMutable("runs", 0) }
+}

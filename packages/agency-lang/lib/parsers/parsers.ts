@@ -2233,8 +2233,8 @@ export const handleBlockParser: Parser<HandleBlock> = withLoc(trace(
 ));
 
 export const withModifierParser: Parser<WithModifier> = withLoc((input: string) => {
-  // Try to parse an assignment or a bare function call as the inner statement.
-  const stmtResult = or(assignmentParser, functionCallParser)(input);
+  // Try to parse a static assignment, regular assignment, or bare function call as the inner statement.
+  const stmtResult = or(staticAssignmentParser, assignmentParser, functionCallParser)(input);
   if (!stmtResult.success) return failure("expected statement before 'with'", input);
 
   // Look for "with <builtin>" on remaining input.

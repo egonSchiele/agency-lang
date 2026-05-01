@@ -1,0 +1,15 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "static const with handler auto-approves interrupt during static init",
+      "input": "",
+      "expectedOutput": "\"prompt.txt\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    }
+  ]
+}

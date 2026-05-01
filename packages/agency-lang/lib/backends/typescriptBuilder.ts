@@ -138,7 +138,6 @@ export class TypeScriptBuilder {
   private loopVars: string[] = [];
   private insideHandlerBody: boolean = false;
   private insideGlobalInit: boolean = false;
-  private insideStaticInit: boolean = false;
   private _isInSafeFunction: boolean = false;
   private _blockCounter: number = 0;
 
@@ -498,18 +497,30 @@ export class TypeScriptBuilder {
     // Generate tool registry (empty — AgencyFunction.create() populates it)
     this.generatedStatements.push(this.generateToolRegistry());
 
-    // Collect static variable declarations with their init values.
-    // Static vars are emitted as `const x = __deepFreeze(value);` at module level.
+    // Collect static variable names and their init statements.
+    // Static vars are declared as `let` at module level and initialized inside
+    // a separate `__initializeStatic(__ctx)` function (called once from __initializeGlobals).
+    // This gives them access to __ctx for handlers and function dispatch.
     const staticVarNames = new Set<string>();
-    const staticDeclarations: TsNode[] = [];
+    const staticInitStatements: TsNode[] = [];
     for (const node of program.nodes) {
       if (node.type === "assignment" && node.scope === "static") {
         staticVarNames.add(node.variableName);
-        this.insideStaticInit = true;
-        const valueNode = this.processNode(node.value);
-        this.insideStaticInit = false;
-        staticDeclarations.push(
-          ts.constDecl(node.variableName, ts.call(ts.id("__deepFreeze"), [valueNode]))
+        const valueNode = this.processNodeInGlobalInit(node.value);
+        staticInitStatements.push(
+          ts.assign(ts.id(node.variableName), ts.call(ts.id("__deepFreeze"), [valueNode]))
+        );
+      } else if (
+        node.type === "withModifier" &&
+        node.statement.type === "assignment" &&
+        node.statement.scope === "static"
+      ) {
+        const stmt = node.statement;
+        staticVarNames.add(stmt.variableName);
+        const valueNode = this.processNodeInGlobalInit(stmt.value);
+        const handler = this.buildHandlerArrow(node.handlerName);
+        staticInitStatements.push(
+          ts.withHandler(handler, ts.assign(ts.id(stmt.variableName), ts.call(ts.id("__deepFreeze"), [valueNode])))
         );
       }
     }
@@ -539,6 +550,12 @@ export class TypeScriptBuilder {
 
         globalInitStatements.push(ts.withHandler(handler, setNode));
       } else if (node.type === "assignment" && node.scope === "static") {
+        // Already handled above in staticDeclarations — skip
+      } else if (
+        node.type === "withModifier" &&
+        node.statement.type === "assignment" &&
+        node.statement.scope === "static"
+      ) {
         // Already handled above in staticDeclarations — skip
       } else if (this.isTopLevelDeclaration(node)) {
         const result = this.processNode(node);
@@ -579,9 +596,26 @@ export class TypeScriptBuilder {
       sections.push(alias);
     }
 
-    // Emit static variable declarations at module level
-    if (staticDeclarations.length > 0) {
-      sections.push(ts.statements(staticDeclarations));
+    // Emit static variable `let` declarations at module level + __initializeStatic function
+    if (staticVarNames.size > 0) {
+      const staticLetDecls = [...staticVarNames].map(name => ts.letDecl(name));
+      sections.push(ts.statements([
+        ts.raw("let __staticInitialized = false"),
+        ...staticLetDecls,
+      ]));
+
+      sections.push(
+        ts.functionDecl(
+          "__initializeStatic",
+          [{ name: "__ctx" }],
+          ts.statements([
+            ts.raw("if (__staticInitialized) return"),
+            ts.raw("__staticInitialized = true"),
+            ...staticInitStatements,
+          ]),
+          { async: true },
+        ),
+      );
 
       const staticVarObj = ts.obj([...staticVarNames].map(n => ts.set(n, ts.id(n))));
       sections.push(ts.statements([
@@ -604,6 +638,7 @@ export class TypeScriptBuilder {
             $(ts.runtime.ctx).prop("globals").prop("markInitialized").done(),
             [ts.str(this.moduleId)],
           ),
+          ...(staticVarNames.size > 0 ? [ts.raw("await __initializeStatic(__ctx)")] : []),
           ...globalInitStatements,
         ]),
         { async: true },
@@ -1137,9 +1172,6 @@ export class TypeScriptBuilder {
     stateStack?: TsNode;
     extra?: Record<string, TsNode>;
   }): TsNode {
-    if (this.insideStaticInit) {
-      return ts.functionCallConfig({ ctx: ts.runtime.globalCtx });
-    }
     if (this.insideGlobalInit) {
       return ts.functionCallConfig({ ctx: ts.runtime.ctx });
     }

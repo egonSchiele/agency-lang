@@ -1,7 +1,4 @@
-shared let attempts = 0
-
 def alwaysFails(input: string): Result {
-  attempts = attempts + 1
   return failure("nope")
 }
 

@@ -227,4 +227,39 @@ describe("TraceReader", () => {
       fs.readFileSync(path.join(outDir, "lib/helpers.agency"), "utf-8"),
     ).toBe("function add(a, b) {}");
   });
+
+  it("reads static-state line into staticState property", async () => {
+    const writer = new TraceWriter(RUN_ID, "test.agency", [
+      new FileSink(tracePath),
+    ]);
+    await writer.writeHeader();
+    await writer.writeStaticState({ prompt: "hello world", maxRetries: 3 });
+    await writer.writeCheckpoint(
+      new Checkpoint({
+        id: 0,
+        nodeId: "start",
+        moduleId: "test.agency",
+        scopeName: "main",
+        stepPath: "0",
+        stack: {
+          stack: [{ args: {}, locals: {}, threads: null, step: 0 }],
+          mode: "serialize",
+          other: {},
+          deserializeStackLength: 0,
+          nodesTraversed: ["start"],
+        },
+        globals: { store: {}, initializedModules: [] },
+      }),
+    );
+    await writer.close();
+
+    const reader = TraceReader.fromFile(tracePath);
+    expect(reader.staticState).toEqual({ prompt: "hello world", maxRetries: 3 });
+  });
+
+  it("returns null staticState when no static-state line exists", async () => {
+    await writeSimpleTrace(1);
+    const reader = TraceReader.fromFile(tracePath);
+    expect(reader.staticState).toBeNull();
+  });
 });

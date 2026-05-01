@@ -26,7 +26,7 @@ function scopeToPrefix(scope: TsScopedVar["scope"]): string {
     case "blockArgs":
       return "__bstack.args";
     case "imported":
-    case "shared":
+    case "static":
     case "functionRef":
       return "";
   }

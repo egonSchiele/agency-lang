@@ -1,11 +1,11 @@
-shared let runs = 0
+import { getMutable, setMutable } from "../helpers/mutableVar.js"
 
 node main() {
   const s = new Set([1, 2, 3])
   const cp = checkpoint()
-  runs = runs + 1
-  s.add(runs + 3)
-  if (runs == 1) {
+  setMutable("runs", getMutable("runs", 0) + 1)
+  s.add(getMutable("runs", 0) + 3)
+  if (getMutable("runs", 0) == 1) {
     restore(cp, {})
   }
   return Array.from(s)

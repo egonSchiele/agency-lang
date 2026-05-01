@@ -1,8 +1,8 @@
-shared let attempt = 0
+import { getMutable, setMutable } from "../../helpers/mutableVar.js"
 
 def flaky(input: string): Result {
-  attempt = attempt + 1
-  if (attempt < 3) {
+  setMutable("attempt", getMutable("attempt", 0) + 1)
+  if (getMutable("attempt", 0) < 3) {
     return failure("not yet")
   }
   return success(input)
@@ -13,5 +13,5 @@ node main() {
   if (isFailure(result)) {
     restore(result.checkpoint, { args: { input: "hello" } })
   }
-  return { value: result.value, attempts: attempt }
+  return { value: result.value, attempts: getMutable("attempt", 0) }
 }

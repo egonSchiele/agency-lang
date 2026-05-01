@@ -110,10 +110,8 @@ need to make method calls on objects work in the following places: with the try 
 users should not be able to create a type named `Result`, that is a builtin type.
 type defined in a node doesn't work
 
-parallel tool calls
 handle multiple interrupts in debugger
 better debugger test harness
-make race work with interrupts
 async keyword and interrupts?
 `with reject` cant be used in a return statement?
 

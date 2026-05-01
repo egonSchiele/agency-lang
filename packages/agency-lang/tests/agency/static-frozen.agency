@@ -1,0 +1,15 @@
+import { tryMutateProperty } from "../helpers/tryMutate.js"
+
+static const obj = { x: 1, nested: { y: 2 } }
+
+node main() {
+  const topFrozen = tryMutateProperty(obj, "x", 99)
+  const nestedFrozen = tryMutateProperty(obj.nested, "y", 99)
+
+  return {
+    topFrozen: topFrozen,
+    nestedFrozen: nestedFrozen,
+    xStillOriginal: obj.x == 1,
+    yStillOriginal: obj.nested.y == 2
+  }
+}

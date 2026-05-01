@@ -1,0 +1,15 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "description": "Static variable value persists unchanged across checkpoint restores",
+      "expectedOutput": "{\"config\":{\"name\":\"agency\",\"version\":1},\"runs\":3}",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    }
+  ]
+}

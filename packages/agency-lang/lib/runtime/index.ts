@@ -20,6 +20,7 @@ export type { TraceLine, TraceEvent } from "./trace/types.js";
 
 export {
   deepClone,
+  deepFreeze,
   extractResponse,
   createReturnObject,
   updateTokenStats,

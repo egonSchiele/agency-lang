@@ -9,15 +9,18 @@ export class TraceReader {
   readonly header: TraceHeader;
   readonly checkpoints: Checkpoint[];
   readonly sources: Record<string, string>;
+  readonly staticState: Record<string, unknown> | null;
 
   private constructor(
     header: TraceHeader,
     checkpoints: Checkpoint[],
     sources: Record<string, string>,
+    staticState: Record<string, unknown> | null,
   ) {
     this.header = header;
     this.checkpoints = checkpoints;
     this.sources = sources;
+    this.staticState = staticState;
   }
 
   static fromFile(filePath: string): TraceReader {
@@ -36,6 +39,7 @@ export class TraceReader {
     const store = new ContentAddressableStore();
     const manifests: TraceManifest[] = [];
     const sources: Record<string, string> = {};
+    let staticState: Record<string, unknown> | null = null;
 
     for (let i = 1; i < lines.length; i++) {
       const line = lines[i];
@@ -48,6 +52,9 @@ export class TraceReader {
           break;
         case "source":
           sources[line.path] = line.content;
+          break;
+        case "static-state":
+          staticState = line.values;
           break;
       }
     }
@@ -64,7 +71,7 @@ export class TraceReader {
       return checkpoint;
     });
 
-    return new TraceReader(header, checkpoints, sources);
+    return new TraceReader(header, checkpoints, sources, staticState);
   }
 
   writeSourcesToDisk(dir: string): void {

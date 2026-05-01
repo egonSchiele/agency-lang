@@ -90,6 +90,7 @@ export class RuntimeContext<T> {
   traceConfig: TraceConfig;
   runId: string | null;
   verbose: boolean;
+  getStaticVars?: () => Record<string, unknown>;
 
   // stored so createExecutionContext can create new StatelogClients
   private statelogConfig: StatelogConfig;
@@ -393,6 +394,13 @@ export class RuntimeContext<T> {
       return;
     }
     await this.traceWriter.writeCheckpoint(checkpoint);
+  }
+
+  async writeStaticStateToTrace(values: Record<string, unknown>): Promise<void> {
+    if (!this.traceWriter) {
+      return;
+    }
+    await this.traceWriter.writeStaticState(values);
   }
 
   hasDebugger(): boolean {

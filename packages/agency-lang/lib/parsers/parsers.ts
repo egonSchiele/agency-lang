@@ -2073,14 +2073,14 @@ const _assignmentParserInner: Parser<Assignment> = (input: string) => {
 };
 export const assignmentParser: Parser<Assignment> = label("an assignment", withLoc(_assignmentParserInner));
 
-export const sharedAssignmentParser: Parser<Assignment> = (input: string) => {
-  const parser = seqC(str("shared"), spaces, captureCaptures(assignmentParser));
+export const staticAssignmentParser: Parser<Assignment> = (input: string) => {
+  const parser = seqC(str("static"), spaces, captureCaptures(assignmentParser));
   const result = parser(input);
   if (!result.success) return result;
-  if (!result.result.declKind) {
-    return failure("shared requires 'let' or 'const' (e.g., 'shared let x = 1')", input);
+  if (result.result.declKind !== "const") {
+    return failure("static requires 'const' (e.g., 'static const x = 1'). Static variables are immutable.", input);
   }
-  return success({ ...result.result, shared: true }, result.rest);
+  return success({ ...result.result, static: true }, result.rest);
 };
 
 const trim = (s: string) => s.trim();
@@ -2233,8 +2233,8 @@ export const handleBlockParser: Parser<HandleBlock> = withLoc(trace(
 ));
 
 export const withModifierParser: Parser<WithModifier> = withLoc((input: string) => {
-  // Try to parse an assignment or a bare function call as the inner statement.
-  const stmtResult = or(assignmentParser, functionCallParser)(input);
+  // Try to parse a static assignment, regular assignment, or bare function call as the inner statement.
+  const stmtResult = or(staticAssignmentParser, assignmentParser, functionCallParser)(input);
   if (!stmtResult.success) return failure("expected statement before 'with'", input);
 
   // Look for "with <builtin>" on remaining input.

@@ -46,18 +46,13 @@ Limit the number of times you restore a checkpoint. This is useful if you are re
 
 ## Example usage
 
-Retry loop with 3 attempts:
+Retry loop with up to 3 restores:
 
 ```ts
-shared attempts = 0
-
 node main() {
-  cp = checkpoint()
-  attempts = attempts + 1
-  if (attempts < 3) {
-    restore(cp, {})
-  }
-  return attempts  // returns 3
+  const cp = checkpoint()
+  // do some work...
+  restore(cp, { maxRestores: 3 })
 }
 ```
 

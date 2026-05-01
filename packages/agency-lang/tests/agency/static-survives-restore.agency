@@ -1,0 +1,12 @@
+import { getMutable, setMutable } from "../helpers/mutableVar.js"
+
+static const config = { name: "agency", version: 1 }
+
+node main() {
+  const cp = checkpoint()
+  setMutable("runs", getMutable("runs", 0) + 1)
+  if (getMutable("runs", 0) < 3) {
+    restore(cp, {})
+  }
+  return { config: config, runs: getMutable("runs", 0) }
+}

@@ -280,7 +280,7 @@ export interface TsScopedVar {
   name: string;
   scope:
   | "global"
-  | "shared"
+  | "static"
   | "function"
   | "node"
   | "args"

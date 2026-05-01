@@ -39,6 +39,13 @@ export class TraceWriter {
     });
   }
 
+  async writeStaticState(values: Record<string, unknown>): Promise<void> {
+    await this.writeLine({
+      type: "static-state",
+      values,
+    });
+  }
+
   async writeCheckpoint(checkpoint: Checkpoint): Promise<void> {
     await this.writeHeader();
     const json = checkpoint.toJSON();

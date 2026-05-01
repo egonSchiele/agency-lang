@@ -31,32 +31,26 @@ You can see it's got a global variable. Now suppose you have two different calls
 
 Nope. Both threads get isolated state, so that global variable is unique to each call.
 
-This makes it much easier to write agents as you don't have to pass every bit of shared state into every single function call. You can just put it in the global state instead. 
+This makes it much easier to write agents as you don't have to pass every bit of shared state into every single function call. You can just put it in the global state instead.
 
-## Shared variables
+## Static variables
 
-Now you might be thinking that's fine, but it looks like that code was about logging. What if you do want to log every single call to an agent from inside agency? How would you do that? Right now this `log` variable is useless because it just logs a single call!
+Global variables are unique to each run. That means that each time you call the main node, you will re-instantiate any global variables. This is great for cheap operations, but what if one of your global variables is a file that you read, maybe one containing a big prompt? Then that file will be re-read for every call to the main node.
 
-If you do want state that is shared across all runs of an agent in Agency, you can mark it `shared`.
+If you have an expensive one-time operation like reading a file, you can mark the variable `static`. Static variables are initialized once at module load time, immutable after that, and shared across all runs:
 
 ```ts
-// now log is shared across all calls to main
-shared const log = []
-node main(name:string) {
-  const result = llm(`What is a nice greeting for ${name}?`)
-  log.push(result)
-  return log
+// initialized once, shared across all runs, immutable
+static const prompt = read("prompt.txt")
+node main(name: string) {
+  const result = llm(`${prompt}. Greet ${name}.`)
+  return result
 }
 ```
 
-Shared variables are special. They are shared across all calls. Their state is not serialized when Agency serializes execution state due to an interrupt or a failure or some other reason. Its state is not restored when you restore a checkpoint using the `restore` function.
+Static variables:
+- Are initialized when when the module loads
+- Are **immutable** — you cannot reassign them or modify their contents
+- Are **shared across all runs** — every call to the agent sees the same value
 
-Shared state is great for things like building a cache or reading prompt files.
-
-## Important point about Agency's execution model!
-
-As you have just learned, global variables are unique to each run. That means that each time you call the main node, you will re-instantiate a `log` variable to an empty array. This is great for cheap operations, but what if one of your global variables is a file that you read, maybe one containing a big prompt? Then that file will be re-read for every call to the main node. If the only thing you're doing with that file is reading a prompt, and its contents are never going to change, mark it `shared` instead. Then you will only read that file once:
-
-```ts
-shared const prompt = read("prompt.txt")
-```
+If you need mutable state that is shared across runs, implement it in TypeScript and import the functions into your Agency code.

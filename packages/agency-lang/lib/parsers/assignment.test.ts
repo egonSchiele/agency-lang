@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { assignmentParser, sharedAssignmentParser } from "./parsers.js";
+import { assignmentParser, staticAssignmentParser } from "./parsers.js";
 
 describe("assignmentParser", () => {
   const testCases = [
@@ -586,60 +586,65 @@ describe("assignmentParser", () => {
   });
 });
 
-describe("sharedAssignmentParser", () => {
-  it("should parse shared let with a number", () => {
-    const result = sharedAssignmentParser("shared let x = 42");
+describe("staticAssignmentParser", () => {
+  it("should parse static const with a number", () => {
+    const result = staticAssignmentParser("static const x = 42");
     expect(result.success).toBe(true);
     if (result.success) {
       expect(result.result.type).toBe("assignment");
       expect(result.result.variableName).toBe("x");
-      expect(result.result.shared).toBe(true);
-      expect(result.result.declKind).toBe("let");
+      expect(result.result.static).toBe(true);
+      expect(result.result.declKind).toBe("const");
       expect(result.result.value).toEqualWithoutLoc({ type: "number", value: "42" });
     }
   });
 
-  it("should parse shared const with a string", () => {
-    const result = sharedAssignmentParser('shared const name = "Alice"');
+  it("should parse static const with a string", () => {
+    const result = staticAssignmentParser('static const name = "Alice"');
     expect(result.success).toBe(true);
     if (result.success) {
-      expect(result.result.shared).toBe(true);
+      expect(result.result.static).toBe(true);
       expect(result.result.declKind).toBe("const");
       expect(result.result.variableName).toBe("name");
     }
   });
 
-  it("should parse shared const with a function call", () => {
-    const result = sharedAssignmentParser('shared const myPrompt = read("prompt.md")');
+  it("should parse static const with a function call", () => {
+    const result = staticAssignmentParser('static const myPrompt = read("prompt.md")');
     expect(result.success).toBe(true);
     if (result.success) {
-      expect(result.result.shared).toBe(true);
+      expect(result.result.static).toBe(true);
       expect(result.result.declKind).toBe("const");
       expect(result.result.variableName).toBe("myPrompt");
       expect(result.result.value.type).toBe("functionCall");
     }
   });
 
-  it("should reject shared without let/const", () => {
-    const result = sharedAssignmentParser("shared x = 42");
+  it("should reject static let", () => {
+    const result = staticAssignmentParser("static let x = 42");
+    expect(result.success).toBe(false);
+  });
+
+  it("should reject static without const", () => {
+    const result = staticAssignmentParser("static x = 42");
     expect(result.success).toBe(false);
   });
 
   it("should not parse a regular assignment", () => {
-    const result = sharedAssignmentParser("x = 42");
+    const result = staticAssignmentParser("x = 42");
     expect(result.success).toBe(false);
   });
 
-  it("should not parse let without shared", () => {
-    const result = sharedAssignmentParser("let x = 42");
+  it("should not parse const without static", () => {
+    const result = staticAssignmentParser("const x = 42");
     expect(result.success).toBe(false);
   });
 
-  it("regular assignmentParser should not set shared", () => {
+  it("regular assignmentParser should not set static", () => {
     const result = assignmentParser("x = 42");
     expect(result.success).toBe(true);
     if (result.success) {
-      expect(result.result.shared).toBeUndefined();
+      expect(result.result.static).toBeUndefined();
     }
   });
 

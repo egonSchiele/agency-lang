@@ -402,7 +402,7 @@ export class TypeScriptBuilder {
 
   private isTopLevelDeclaration(node: AgencyNode): boolean {
     if (TypeScriptBuilder.TOP_LEVEL_DECLARATION_TYPES.has(node.type)) return true;
-    if (node.type === "assignment" && (node as any).scope === "shared") return true;
+    if (node.type === "assignment" && (node as any).scope === "static") return true;
     return false;
   }
 
@@ -497,16 +497,32 @@ export class TypeScriptBuilder {
     // Generate tool registry (empty — AgencyFunction.create() populates it)
     this.generatedStatements.push(this.generateToolRegistry());
 
-    // Collect shared variable names and emit top-level `let` declarations
-    const sharedVarNames = new Set<string>();
+    // Collect static variable names and their init statements.
+    // Static vars are declared as `let` at module level and initialized inside
+    // a separate `__initializeStatic(__ctx)` function (called once from __initializeGlobals).
+    // This gives them access to __ctx for handlers and function dispatch.
+    const staticVarNames = new Set<string>();
+    const staticInitStatements: TsNode[] = [];
     for (const node of program.nodes) {
-      if (node.type === "assignment" && node.scope === "shared") {
-        sharedVarNames.add(node.variableName);
+      if (node.type === "assignment" && node.scope === "static") {
+        staticVarNames.add(node.variableName);
+        const valueNode = this.processNodeInGlobalInit(node.value);
+        staticInitStatements.push(
+          ts.assign(ts.id(node.variableName), ts.call(ts.id("__deepFreeze"), [valueNode]))
+        );
+      } else if (
+        node.type === "withModifier" &&
+        node.statement.type === "assignment" &&
+        node.statement.scope === "static"
+      ) {
+        const stmt = node.statement;
+        staticVarNames.add(stmt.variableName);
+        const valueNode = this.processNodeInGlobalInit(stmt.value);
+        const handler = this.buildHandlerArrow(node.handlerName);
+        staticInitStatements.push(
+          ts.withHandler(handler, ts.assign(ts.id(stmt.variableName), ts.call(ts.id("__deepFreeze"), [valueNode])))
+        );
       }
-    }
-    const sharedDeclarations: TsNode[] = [];
-    for (const name of sharedVarNames) {
-      sharedDeclarations.push(ts.letDecl(name));
     }
 
     // Pass 7: Process all nodes and generate code
@@ -533,6 +549,14 @@ export class TypeScriptBuilder {
         const handler = this.buildHandlerArrow(node.handlerName);
 
         globalInitStatements.push(ts.withHandler(handler, setNode));
+      } else if (node.type === "assignment" && node.scope === "static") {
+        // Already handled above in staticDeclarations — skip
+      } else if (
+        node.type === "withModifier" &&
+        node.statement.type === "assignment" &&
+        node.statement.scope === "static"
+      ) {
+        // Already handled above in staticDeclarations — skip
       } else if (this.isTopLevelDeclaration(node)) {
         const result = this.processNode(node);
         this.generatedStatements.push(result);
@@ -572,9 +596,35 @@ export class TypeScriptBuilder {
       sections.push(alias);
     }
 
-    // Emit shared variable declarations at module level
-    if (sharedDeclarations.length > 0) {
-      sections.push(ts.statements(sharedDeclarations));
+    // Emit static variable `let` declarations at module level + __initializeStatic function
+    if (staticVarNames.size > 0) {
+      const staticLetDecls = [...staticVarNames].map(name => ts.letDecl(name));
+      sections.push(ts.statements([
+        ts.raw("let __staticInitPromise = null"),
+        ...staticLetDecls,
+      ]));
+
+      // Use a Promise-based guard: concurrent callers await the same init promise.
+      sections.push(
+        ts.functionDecl(
+          "__initializeStatic",
+          [{ name: "__ctx" }],
+          ts.statements([
+            ts.raw("if (__staticInitPromise) return __staticInitPromise"),
+            ts.raw(`__staticInitPromise = (async () => {`),
+            ...staticInitStatements,
+            ts.raw(`})()`),
+            ts.raw("return __staticInitPromise"),
+          ]),
+          { async: true },
+        ),
+      );
+
+      const staticVarObj = ts.obj([...staticVarNames].map(n => ts.set(n, ts.id(n))));
+      sections.push(ts.statements([
+        ts.functionDecl("__getStaticVars", [], ts.return(staticVarObj)),
+        ts.raw("__globalCtx.getStaticVars = __getStaticVars;"),
+      ]));
     }
 
     // Generate __initializeGlobals function for per-execution global variable initialization
@@ -591,6 +641,10 @@ export class TypeScriptBuilder {
             $(ts.runtime.ctx).prop("globals").prop("markInitialized").done(),
             [ts.str(this.moduleId)],
           ),
+          ...(staticVarNames.size > 0 ? [
+            ts.raw("await __initializeStatic(__ctx)"),
+            ts.raw("await __ctx.writeStaticStateToTrace(__globalCtx.getStaticVars())"),
+          ] : []),
           ...globalInitStatements,
         ]),
         { async: true },

@@ -580,12 +580,9 @@ export class TypeScriptBuilder {
     if (staticDeclarations.length > 0) {
       sections.push(ts.statements(staticDeclarations));
 
-      // Generate __getStaticVars function and wire it to __globalCtx
-      const staticVarEntries = [...staticVarNames].map(name =>
-        ts.raw(`${JSON.stringify(name)}: ${name}`)
-      );
+      const staticVarObj = ts.obj([...staticVarNames].map(n => ts.set(n, ts.id(n))));
       sections.push(ts.statements([
-        ts.functionDecl("__getStaticVars", [], ts.return(ts.raw(`{ ${[...staticVarNames].map(n => `${JSON.stringify(n)}: ${n}`).join(", ")} }`))),
+        ts.functionDecl("__getStaticVars", [], ts.return(staticVarObj)),
         ts.raw("__globalCtx.getStaticVars = __getStaticVars;"),
       ]));
     }

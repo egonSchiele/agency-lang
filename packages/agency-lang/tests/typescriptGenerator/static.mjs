@@ -105,7 +105,9 @@ function registerTools(tools: any[]) {
 
 const foo = __deepFreeze(1);
 function __getStaticVars() {
-  return { "foo": foo };
+  return {
+    foo: foo
+  };
 }
 __globalCtx.getStaticVars = __getStaticVars;
 async function __initializeGlobals(__ctx) {

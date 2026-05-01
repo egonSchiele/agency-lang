@@ -3,6 +3,7 @@ import { parseHTML } from "linkedom";
 
 const DEFAULT_MAX_CHARS = 20_000;
 const DEFAULT_TIMEOUT_MS = 15_000;
+const MAX_HTML_BYTES = 5_000_000;
 const USER_AGENT =
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_7_2) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36";
 
@@ -36,7 +37,7 @@ export async function fetchPage(
 
   if (!response.ok) {
     const body = await response.text().catch(() => response.statusText);
-    throw new Error(`Fetch error (${response.status}): ${body}`);
+    throw new Error(`Fetch error (${response.status}): ${body.slice(0, 500)}`);
   }
 
   const contentType = response.headers.get("content-type") ?? "";
@@ -45,6 +46,9 @@ export async function fetchPage(
   }
 
   const html = await response.text();
+  if (html.length > MAX_HTML_BYTES) {
+    throw new Error(`Page too large (${html.length} bytes, max ${MAX_HTML_BYTES})`);
+  }
   const { document } = parseHTML(html);
 
   const reader = new Readability(document as unknown as Document);

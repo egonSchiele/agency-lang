@@ -600,18 +600,21 @@ export class TypeScriptBuilder {
     if (staticVarNames.size > 0) {
       const staticLetDecls = [...staticVarNames].map(name => ts.letDecl(name));
       sections.push(ts.statements([
-        ts.raw("let __staticInitialized = false"),
+        ts.raw("let __staticInitPromise = null"),
         ...staticLetDecls,
       ]));
 
+      // Use a Promise-based guard: concurrent callers await the same init promise.
       sections.push(
         ts.functionDecl(
           "__initializeStatic",
           [{ name: "__ctx" }],
           ts.statements([
-            ts.raw("if (__staticInitialized) return"),
-            ts.raw("__staticInitialized = true"),
+            ts.raw("if (__staticInitPromise) return __staticInitPromise"),
+            ts.raw(`__staticInitPromise = (async () => {`),
             ...staticInitStatements,
+            ts.raw(`})()`),
+            ts.raw("return __staticInitPromise"),
           ]),
           { async: true },
         ),
@@ -638,7 +641,10 @@ export class TypeScriptBuilder {
             $(ts.runtime.ctx).prop("globals").prop("markInitialized").done(),
             [ts.str(this.moduleId)],
           ),
-          ...(staticVarNames.size > 0 ? [ts.raw("await __initializeStatic(__ctx)")] : []),
+          ...(staticVarNames.size > 0 ? [
+            ts.raw("await __initializeStatic(__ctx)"),
+            ts.raw("await __ctx.writeStaticStateToTrace(__globalCtx.getStaticVars())"),
+          ] : []),
           ...globalInitStatements,
         ]),
         { async: true },

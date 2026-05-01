@@ -180,9 +180,6 @@ export class RuntimeContext<T> {
       runId,
       traceConfig: this.traceConfig,
     });
-    if (execCtx.traceWriter && this.getStaticVars) {
-      await execCtx.traceWriter.writeStaticState(this.getStaticVars());
-    }
     execCtx.traceConfig = this.traceConfig;
     execCtx.runId = runId;
     execCtx.verbose = this.verbose;
@@ -397,6 +394,13 @@ export class RuntimeContext<T> {
       return;
     }
     await this.traceWriter.writeCheckpoint(checkpoint);
+  }
+
+  async writeStaticStateToTrace(values: Record<string, unknown>): Promise<void> {
+    if (!this.traceWriter) {
+      return;
+    }
+    await this.traceWriter.writeStaticState(values);
   }
 
   hasDebugger(): boolean {

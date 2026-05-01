@@ -73,7 +73,7 @@ type BraveSearchOptions = {
   count?: number              // 1-20, default 5
   country?: string            // 2-char code, e.g. "US"
   searchLang?: string         // ISO 639-1, e.g. "en"
-  safesearch?: "off" | "moderate" | "strict"  // default "moderate"
+  safesearch?: string              // "off", "moderate", or "strict"; default "moderate"
   freshness?: string          // "pd" (24h), "pw" (7d), "pm" (31d), "py" (1y)
 }
 

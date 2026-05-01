@@ -75,6 +75,11 @@ export async function fetchPage(
 function htmlToMarkdown(html: string): string {
   let s = html;
 
+  s = s.replace(/<script[\s\S]*?<\/script>/gi, "");
+  s = s.replace(/<style[\s\S]*?<\/style>/gi, "");
+  s = s.replace(/<noscript[\s\S]*?<\/noscript>/gi, "");
+  s = s.replace(/<!--[\s\S]*?-->/g, "");
+
   s = s.replace(/<h([1-6])[^>]*>([\s\S]*?)<\/h\1>/gi, (_m, n, inner) => {
     const hashes = "#".repeat(parseInt(n, 10));
     return `\n\n${hashes} ${stripTags(inner).trim()}\n\n`;

@@ -497,16 +497,18 @@ export class TypeScriptBuilder {
     // Generate tool registry (empty — AgencyFunction.create() populates it)
     this.generatedStatements.push(this.generateToolRegistry());
 
-    // Collect shared variable names and emit top-level `let` declarations
+    // Collect static variable declarations with their init values.
+    // Static vars are emitted as `const x = __deepFreeze(value);` at module level.
     const staticVarNames = new Set<string>();
+    const staticDeclarations: TsNode[] = [];
     for (const node of program.nodes) {
       if (node.type === "assignment" && node.scope === "static") {
         staticVarNames.add(node.variableName);
+        const valueNode = this.processNodeInGlobalInit(node.value);
+        staticDeclarations.push(
+          ts.constDecl(node.variableName, ts.call(ts.id("__deepFreeze"), [valueNode]))
+        );
       }
-    }
-    const staticDeclarations: TsNode[] = [];
-    for (const name of staticVarNames) {
-      staticDeclarations.push(ts.letDecl(name));
     }
 
     // Pass 7: Process all nodes and generate code
@@ -533,6 +535,8 @@ export class TypeScriptBuilder {
         const handler = this.buildHandlerArrow(node.handlerName);
 
         globalInitStatements.push(ts.withHandler(handler, setNode));
+      } else if (node.type === "assignment" && node.scope === "static") {
+        // Already handled above in staticDeclarations — skip
       } else if (this.isTopLevelDeclaration(node)) {
         const result = this.processNode(node);
         this.generatedStatements.push(result);

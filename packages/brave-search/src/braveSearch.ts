@@ -36,7 +36,7 @@ export async function braveSearch(
   if (options?.safesearch) url.searchParams.set("safesearch", options.safesearch);
   if (options?.freshness) url.searchParams.set("freshness", options.freshness);
 
-  const response = await fetch(url.toString(), {
+  const response = await fetch(url, {
     headers: {
       "Accept": "application/json",
       "X-Subscription-Token": apiKey,
@@ -52,8 +52,8 @@ export async function braveSearch(
   const results = data?.web?.results ?? [];
 
   return results.map((r: Record<string, unknown>) => ({
-    title: r.title as string,
-    url: r.url as string,
-    description: r.description as string,
+    title: (r.title as string) ?? "",
+    url: (r.url as string) ?? "",
+    description: (r.description as string) ?? "",
   }));
 }

@@ -1,7 +1,7 @@
 import { braveSearch as braveSearchImpl } from "./dist/src/braveSearch.js"
 
 /// Search the web using Brave Search. Returns titles, URLs, and descriptions.
-export def braveSearch(query: string, count: number = 5, apiKey: string = "", country: string = "", searchLang: string = "", safesearch: string = "moderate", freshness: string = "") {
+export def braveSearch(query: string, count: number = 5, apiKey: string = "", country: string = "", searchLang: string = "", safesearch: string = "", freshness: string = "") {
   return braveSearchImpl(query, {
     count: count,
     apiKey: apiKey,

@@ -8,6 +8,19 @@ export function deepClone<T>(obj: T): T {
   return JSON.parse(JSON.stringify(obj, nativeTypeReplacer), nativeTypeReviver);
 }
 
+export function deepFreeze<T>(obj: T): T {
+  if (obj === null || obj === undefined || typeof obj !== "object") {
+    return obj;
+  }
+  Object.freeze(obj);
+  for (const value of Object.values(obj)) {
+    if (typeof value === "object" && value !== null && !Object.isFrozen(value)) {
+      deepFreeze(value);
+    }
+  }
+  return obj;
+}
+
 // not as necessary, smoltalk does this, though only when strict = true
 export function extractResponse(rawValue: any, schema: any): any {
   // 1. Direct match — try parsing as-is

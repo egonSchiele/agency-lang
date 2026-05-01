@@ -103,7 +103,15 @@ function registerTools(tools: any[]) {
   }
 }
 
-const foo = __deepFreeze(1);
+let __staticInitPromise = null
+let foo;
+async function __initializeStatic(__ctx) {
+  if (__staticInitPromise) return __staticInitPromise
+  __staticInitPromise = (async () => {
+  foo = __deepFreeze(1);
+  })()
+  return __staticInitPromise
+}
 function __getStaticVars() {
   return {
     foo: foo
@@ -112,6 +120,8 @@ function __getStaticVars() {
 __globalCtx.getStaticVars = __getStaticVars;
 async function __initializeGlobals(__ctx) {
   __ctx.globals.markInitialized("static.agency")
+  await __initializeStatic(__ctx)
+  await __ctx.writeStaticStateToTrace(__globalCtx.getStaticVars())
 }
 __toolRegistry["readSkill"] = __AgencyFunction.create({
   name: "readSkill",

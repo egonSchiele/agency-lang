@@ -137,7 +137,7 @@ A new stdlib module providing policy-based interrupt evaluation. This is a libra
 import { checkPolicy } from "std::policy"
 ```
 
-- **`checkPolicy(policy, interrupt)`** — Takes a plain JSON policy object and an interrupt object. Returns `approve()`, `deny()`, or `propagate()`.
+- **`checkPolicy(policy, interrupt)`** — Takes a plain JSON policy object and an interrupt object. Returns `approve()`, `reject()`, or `propagate()`. The policy JSON uses `allow`/`deny`/`propagate` as action names (which read naturally in config files); `checkPolicy` maps these to the existing runtime functions (`allow` → `approve()`, `deny` → `reject()`, `propagate` → `propagate()`).
 - **`validatePolicy(policy)`** (optional) — Returns a `Result` indicating whether the policy object is well-formed.
 
 ### Usage in Agency (inside a handler)
@@ -279,9 +279,11 @@ def read(filename: string) {
 
 ### Runtime changes
 
-- The `Interrupt<T>` type gains `kind: string`, `message: string`, and `origin: string` fields. The existing `type: "interrupt"` discriminant is unchanged.
-- `interruptWithHandlers()` passes the full structured object to handlers.
-- Handler functions receive `{ kind, message, data, origin }` instead of raw data.
+- The `Interrupt<T>` type gains `kind: string`, `message: string`, and `origin: string` as **top-level fields**. The existing `type: "interrupt"` discriminant is unchanged. The `data: T` field now holds only the user-supplied data object (not the full structured payload). In V1, `T` defaults to `any`.
+- The `interrupt()` factory function is updated to accept `kind`, `message`, `data`, and `origin` as separate arguments and place them at the top level of the `Interrupt` object. The builder passes these as separate arguments, not as a single wrapped object.
+- `interruptWithHandlers()` is updated accordingly — it receives the individual fields and constructs the `Interrupt` with them at the top level.
+- Handler functions receive the full `Interrupt` object (with `kind`, `message`, `data`, `origin` as top-level fields) instead of raw data.
+- External TypeScript consumers using `onInterrupt` callbacks will also receive this new shape. Existing code that accessed raw interrupt data will need updating.
 
 ### Stdlib migration
 

@@ -1,0 +1,33 @@
+// Minimal regression test for the runPrompt-resume thread-alias bug.
+//
+// Round 1's llm() interrupts and is resumed; round 2's llm() reuses the
+// same shared message thread. Without the fix, after the resumed runPrompt
+// completes, the shared thread still has [user, assistant_with_tool_calls]
+// (missing the tool response and the final assistant message). The second
+// llm() call then fails with OpenAI's "tool_call_id had no response
+// messages" error.
+
+def confirmNumber(): number {
+  interrupt("approve number?")
+  return 7
+}
+
+type NumResponse = {
+  value: number
+}
+
+type StrResponse = {
+  value: string
+}
+
+node main() {
+  // First LLM call: uses a tool that interrupts.
+  const a: NumResponse = llm("Call confirmNumber to get a number. Return the result in the value field.", {
+    tools: [confirmNumber]
+  })
+  // Second LLM call: same shared thread, no tools. Just produces a fixed
+  // string. If the thread is in a malformed state from a botched resume,
+  // OpenAI rejects this call before the LLM can respond.
+  const b: StrResponse = llm("Output exactly the string 'second-ok' in the value field. Do not call any tools.")
+  return "${a.value}-${b.value}"
+}

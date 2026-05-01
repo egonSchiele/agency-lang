@@ -1,0 +1,14 @@
+// fork() over an empty array should return an empty array immediately.
+// Tests that runForkAll's items.map / Promise.allSettled / final array
+// path all handle the N=0 case without crashing or hanging.
+def confirmItem(item: string): string {
+  return "should never run: ${item}"
+}
+
+node main() {
+  let items: string[] = []
+  let results = fork(items) as item {
+    return confirmItem(item)
+  }
+  return results
+}

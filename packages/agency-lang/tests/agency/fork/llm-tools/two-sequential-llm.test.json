@@ -1,0 +1,15 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Two sequential llm() calls in a single node, the first using a tool that interrupts. After resume, the second call must see a coherent shared thread (no malformed assistant-tool_call sequences). Regression test for the runPrompt resume thread-alias bug.",
+      "input": "",
+      "expectedOutput": "\"7-second-ok\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "interruptHandlers": [
+        { "action": "approve", "expectedMessage": "approve number?" }
+      ],
+      "retry": 2
+    }
+  ]
+}

@@ -1,0 +1,15 @@
+// fork() with a single item should still go through the full branch
+// machinery (creating a branch, running blockFn, collecting result) — just
+// with N=1. Verifies the runForkAll path doesn't have an off-by-one for
+// the trivial case.
+def confirmItem(item: string): string {
+  interrupt("approve ${item}?")
+  return "done: ${item}"
+}
+
+node main() {
+  let results = fork(["only"]) as item {
+    return confirmItem(item)
+  }
+  return results
+}

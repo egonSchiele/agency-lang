@@ -1,0 +1,21 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Three-layer LLM/tool nesting with interrupt at the deepest layer. Tests that runPrompt's message-thread alias survives a resume even when the resumed runPrompt is an inner one (i.e., its shared thread is a per-tool-branch thread, not the global node thread).",
+      "input": "",
+      "expectedOutput": "",
+      "evaluationCriteria": [
+        {
+          "type": "llmJudge",
+          "judgePrompt": "The output should be the string 'inner-ok' (with or without quotes; case-insensitive). Pass if the output contains 'inner-ok'.",
+          "desiredAccuracy": 80
+        }
+      ],
+      "interruptHandlers": [
+        { "action": "approve", "expectedMessage": "approve inner?" }
+      ],
+      "retry": 2
+    }
+  ]
+}

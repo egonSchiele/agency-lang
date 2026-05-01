@@ -1,0 +1,13 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Handler makes its own llm() call to decide whether to approve. The handler runs synchronously when an interrupt fires; the inner llm has its own runPrompt and shouldn't leak state into or out of the outer execution.",
+      "input": "",
+      "expectedOutput": "\"operation completed\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "interruptHandlers": [],
+      "retry": 2
+    }
+  ]
+}

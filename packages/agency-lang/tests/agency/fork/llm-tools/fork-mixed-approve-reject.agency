@@ -1,0 +1,38 @@
+// Tests that the user can mix approve and reject responses across the
+// interrupts in a single batched-interrupt cycle inside a tool call. With
+// the old runPrompt reject short-circuit, the FIRST interrupt's response
+// determined the outcome of the whole tool — every other per-interrupt
+// response was ignored. With the new behavior, each fork branch's interrupt
+// is matched to its own response by interruptId, and the tool returns a
+// mixed array of successes and failures.
+
+def confirmDelete(item: string): string {
+  interrupt("approve ${item}?")
+  return "deleted: ${item}"
+}
+
+def extract(r: any): string {
+  if (isFailure(r)) {
+    return "FAILED: ${r.error}"
+  }
+  return r
+}
+
+def cleanup(files: string[]): string[] {
+  let results = fork(files) as f {
+    let r = confirmDelete(f)
+    return extract(r)
+  }
+  return results
+}
+
+type CleanupResponse = {
+  results: string[]
+}
+
+node main() {
+  const result: CleanupResponse = llm("Call cleanup with files set to an array containing the three strings a, b, c in that order. Then return a results field set to the array that cleanup returned.", {
+    tools: [cleanup]
+  })
+  return result.results
+}

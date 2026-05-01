@@ -37,9 +37,16 @@ def confirmDelete(item: string): string {
 
 // Tool the LLM will call. Forks across the file list in parallel; each
 // branch races, then conditionally interrupts.
+//
+// We apply extract() INSIDE the fork block so the tool returns a uniformly
+// typed string[] — including failure cases as "FAILED: <reason>" strings.
+// If we returned the raw mixed array instead, the LLM's structured output
+// schema (string[]) would silently drop the failure objects when it
+// constructs the response, hiding the rejection from the caller.
 def cleanup(files: string[]): string[] {
   let results = fork(files) as f {
-    return confirmDelete(f)
+    let r = confirmDelete(f)
+    return extract(r)
   }
   return results
 }

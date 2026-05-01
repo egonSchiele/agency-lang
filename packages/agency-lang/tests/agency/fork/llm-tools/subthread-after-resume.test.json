@@ -1,0 +1,15 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "subthread block after a resumed llm() — subthread inherits parent thread's post-resume messages and runs its own llm. Catches any thread-state inconsistency produced by the resume path.",
+      "input": "",
+      "expectedOutput": "\"42-subthread-ok\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "interruptHandlers": [
+        { "action": "approve", "expectedMessage": "approve number?" }
+      ],
+      "retry": 2
+    }
+  ]
+}

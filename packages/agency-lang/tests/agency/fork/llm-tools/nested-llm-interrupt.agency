@@ -1,0 +1,36 @@
+// Three layers of LLM nesting:
+//   main → llm → outerTool → llm → innerTool (interrupts)
+//
+// The middle layer (outerTool's llm call) runs inside a tool-call branch
+// of the outer runPrompt, so its caller's "shared thread" is actually the
+// per-tool-call branch's thread store, not the global node-level one. After
+// the inner interrupt is approved, the middle llm's runPrompt must sync
+// its messages back to the right thread (the one inside the tool branch),
+// or the middle llm's continuation breaks.
+
+def innerTool(): string {
+  interrupt("approve inner?")
+  return "inner-ok"
+}
+
+type InnerResp = {
+  value: string
+}
+
+type OuterResp = {
+  value: string
+}
+
+def outerTool(): string {
+  const result: InnerResp = llm("Call innerTool. Return the result in the value field.", {
+    tools: [innerTool]
+  })
+  return result.value
+}
+
+node main() {
+  const result: OuterResp = llm("Call outerTool with no arguments. Return the result in the value field.", {
+    tools: [outerTool]
+  })
+  return result.value
+}

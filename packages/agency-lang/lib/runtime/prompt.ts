@@ -231,10 +231,30 @@ export async function runPrompt(args: {
     args.clientConfig || {};
   const clientConfig = ctx.getSmoltalkConfig(restClientConfig);
 
-  // Restore or initialize messages
+  // Restore or initialize messages.
+  //
+  // On resume we need `messages` to stay aliased to `args.messages` (the
+  // caller's shared thread). Otherwise, mutations during the resumed run
+  // (pushing tool responses, the final assistant message) won't propagate
+  // back to the caller's thread. Then any subsequent reader — another
+  // `llm()` call in a loop, a `thread {}` block, a debug hook — sees a
+  // stale snapshot from the original interrupt time, missing everything
+  // that was appended after resume.
+  //
+  // To keep the alias on resume, we write the saved JSON contents INTO
+  // args.messages rather than constructing a fresh MessageThread. The
+  // saved JSON and args.messages are equivalent on resume (both were
+  // captured in the same checkpoint), so this is effectively a no-op
+  // overwrite — but it preserves the alias for the rest of the run.
   let messages: MessageThread;
   if (self.messagesJSON) {
-    messages = MessageThread.fromJSON(self.messagesJSON);
+    const restored = MessageThread.fromJSON(self.messagesJSON);
+    if (args.messages) {
+      args.messages.setMessages(restored.getMessages());
+      messages = args.messages;
+    } else {
+      messages = restored;
+    }
   } else if (clientConfig.messages) {
     messages = MessageThread.fromJSON(clientConfig.messages);
   } else if (args.messages) {
@@ -315,26 +335,25 @@ export async function runPrompt(args: {
           continue;
         }
 
-        // Check if this branch was interrupted and user rejected
-        if (existing?.interruptId) {
-          const response = ctx.getInterruptResponse(existing.interruptId);
-          if (response?.type === "reject") {
-            messages.push(
-              smoltalk.toolMessage("tool call rejected", {
-                tool_call_id: toolCall.id,
-                name: toolCall.name,
-              }),
-            );
-            ctx.statelogClient.debug(`Tool call rejected`, {
-              tool_call_id: toolCall.id,
-              name: toolCall.name,
-            });
-            // Remove the tool so the LLM can't retry it
-            removedTools.push(handler.name);
-            // stack.deleteBranch(branchKey);
-            continue;
-          }
-        }
+        // Note: there used to be a coarse short-circuit here that, when
+        // existing.interruptId was set and the user's response was "reject",
+        // pushed "tool call rejected" and removed the tool without
+        // re-invoking it. That broke fork-in-tool: the tool branch only
+        // tracks `result[0].interruptId`, so a reject of the first interrupt
+        // ignored every per-interrupt response on sibling fork branches.
+        //
+        // Instead, we always re-invoke the tool on resume. Each inner
+        // interrupt site reads its own response via ctx.getInterruptResponse
+        // and either continues or halts with `failure("interrupt rejected")`.
+        // - Simple tool, user rejected → tool returns the failure Result;
+        //   the isFailure path below pushes "Error: interrupt rejected ..."
+        //   and removes the tool. Same observable outcome as the old
+        //   short-circuit, just routed through the failure path.
+        // - Fork-in-tool with rejects → each branch produces success or
+        //   failure independently; fork returns a mixed array; the tool
+        //   returns it as a regular value. It's the agency author's job to
+        //   detect embedded failures (e.g. with isFailure / isSuccess) and
+        //   surface them to the LLM however they want.
 
         // Create or restore branch stack
         const branchStack = stack.getOrCreateBranch(branchKey).stack;

@@ -1,0 +1,13 @@
+// race() with a single item — the only branch is automatically the winner.
+// Verifies runRace handles N=1 without confusion.
+def confirmItem(item: string): string {
+  interrupt("approve ${item}?")
+  return "won: ${item}"
+}
+
+node main() {
+  let result = race(["only"]) as item {
+    return confirmItem(item)
+  }
+  return result
+}

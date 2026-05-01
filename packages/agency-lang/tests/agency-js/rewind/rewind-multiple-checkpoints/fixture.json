@@ -1,7 +1,0 @@
-{
-  "checkpointCount": 2,
-  "targetVariables": [
-    "mood",
-    "confidence"
-  ]
-}

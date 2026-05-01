@@ -1,0 +1,12 @@
+import { fetchPage } from "../../index.agency"
+
+node main() {
+  let result = fetchPage("https://example.com")
+  if (length(result.content) > 0) {
+    print(result.title)
+    print(result.url)
+    print(result.excerpt)
+    print(result.siteName)
+  }
+  print(result)
+}

@@ -1,0 +1,41 @@
+{
+  "name": "@agency-lang/web-fetch",
+  "version": "0.0.1",
+  "description": "Web page fetching and content extraction for Agency",
+  "type": "module",
+  "agency": "./index.agency",
+  "main": "./dist/src/fetchPage.js",
+  "exports": {
+    ".": {
+      "types": "./dist/src/fetchPage.d.ts",
+      "import": "./dist/src/fetchPage.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist/",
+    "index.agency"
+  ],
+  "author": "Aditya Bhargava",
+  "license": "ISC",
+  "bugs": { "url": "https://github.com/egonSchiele/agency-lang/issues" },
+  "homepage": "https://github.com/egonSchiele/agency-lang",
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest",
+    "test:run": "vitest run",
+    "test:agency": "agency tests/agency"
+  },
+  "dependencies": {
+    "@mozilla/readability": "^0.5.0",
+    "linkedom": "^0.18.0"
+  },
+  "peerDependencies": {
+    "agency-lang": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^25.0.0",
+    "typescript": "^5.0.0",
+    "vitest": "^3.0.0"
+  }
+}

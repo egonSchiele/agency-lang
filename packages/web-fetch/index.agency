@@ -1,0 +1,6 @@
+import { fetchPage as fetchPageImpl } from "./dist/src/fetchPage.js"
+
+/// Fetch a web page and extract its readable content as markdown. Returns title, content, excerpt, siteName, and url.
+export def fetchPage(url: string, maxChars: number = 20000, timeout: number = 15000) {
+  return fetchPageImpl(url, { maxChars: maxChars, timeout: timeout })
+}

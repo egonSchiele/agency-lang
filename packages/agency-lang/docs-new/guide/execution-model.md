@@ -49,9 +49,8 @@ node main(name: string) {
 ```
 
 Static variables:
-- Are initialized **once** when the module loads
+- Are initialized when when the module loads
 - Are **immutable** — you cannot reassign them or modify their contents
 - Are **shared across all runs** — every call to the agent sees the same value
-- Are **not serialized** into checkpoints — since they never change, there's no need
 
 If you need mutable state that is shared across runs, implement it in TypeScript and import the functions into your Agency code.

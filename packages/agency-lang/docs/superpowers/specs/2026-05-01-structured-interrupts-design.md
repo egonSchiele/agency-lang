@@ -6,7 +6,7 @@ Agency's interrupt system is powerful but unstructured. Interrupts carry arbitra
 
 ## Goals (V1)
 
-1. Give every interrupt a standard shape: `type`, `message`, `data`
+1. Give every interrupt a standard shape: `kind`, `message`, `data`
 2. Add a compiler-injected `origin` field for security
 3. Provide a standard library permission checker (`std::policy`)
 4. Keep interrupts easy to create — no declarations or ceremony required
@@ -61,7 +61,8 @@ At runtime, every interrupt has this shape:
 
 ```json
 {
-  "type": "std::read",
+  "type": "interrupt",
+  "kind": "std::read",
   "message": "Are you sure you want to read this file?",
   "data": { "relPath": "foo.md", "absPath": "/home/user/foo.md" },
   "origin": "std::fs",
@@ -72,7 +73,8 @@ At runtime, every interrupt has this shape:
 
 ### Fields
 
-- **`type`** — The identifier from the interrupt call, stored as a string at runtime. E.g. `"std::read"`, `"myapp::deploy"`, `"unknown"` (for bare interrupts).
+- **`type`** — Always `"interrupt"`. This is the existing discriminant used by `isInterrupt()` and must not change.
+- **`kind`** — The identifier from the interrupt call, stored as a string at runtime. E.g. `"std::read"`, `"myapp::deploy"`, `"unknown"` (for bare interrupts).
 - **`message`** — Human-readable description of what the interrupt is asking.
 - **`data`** — Arbitrary structured data. Typed as `any` in V1.
 - **`origin`** — Compiler-injected, unforgeable. The module that threw the interrupt. Uses the same namespace convention as imports: `"std::fs"` for stdlib, `"pkg::my-package"` for packages, `"./path/to/file"` for local files.
@@ -89,7 +91,7 @@ At runtime, every interrupt has this shape:
 
 ## 3. Handler Changes (Breaking)
 
-Handler parameter now always has the structured shape `{ type, message, data, origin }`.
+Handler parameter now always has the structured shape `{ kind, message, data, origin }`.
 
 ### Before
 
@@ -110,8 +112,8 @@ handle {
 handle {
   read("foo.md")
 } with (interrupt) {
-  // interrupt.type, interrupt.message, interrupt.data, interrupt.origin
-  if (interrupt.type == std::read) {
+  // interrupt.kind, interrupt.message, interrupt.data, interrupt.origin
+  if (interrupt.kind == std::read) {
     return approve()
   }
 }
@@ -119,7 +121,7 @@ handle {
 
 Existing handlers that accessed raw data fields (e.g. `data.filename`) need to update to `interrupt.data.filename`.
 
-### Matching on type
+### Matching on kind
 
 `std::read` in handler conditions is an identifier, not a string. The compiler resolves it to a string comparison at runtime.
 
@@ -171,7 +173,7 @@ const result = await main("input", {
 
 ## 5. Policy Format
 
-Policies are plain JSON objects keyed by interrupt type. Each type maps to an ordered array of rules.
+Policies are plain JSON objects keyed by interrupt kind. Each kind maps to an ordered array of rules.
 
 ### Example
 
@@ -187,7 +189,7 @@ Policies are plain JSON objects keyed by interrupt type. Each type maps to an or
     { "match": { "origin": "std::*", "relPath": "src/**" }, "action": "allow" },
     { "action": "propagate" }
   ],
-  "std::http.fetch": [
+  "std::http::fetch": [
     { "match": { "url": "https://api.mycompany.com/*" }, "action": "allow" },
     { "action": "deny" }
   ]
@@ -196,18 +198,23 @@ Policies are plain JSON objects keyed by interrupt type. Each type maps to an or
 
 ### Evaluation rules
 
-1. Look up rules by `interrupt.type`. If no rules exist for this type, **propagate** (ask the user). This is the safe default.
+1. Look up rules by `interrupt.kind`. If no rules exist for this kind, **propagate** (ask the user). This is the safe default.
 2. Walk the rules array in order. **First match wins.**
-3. For each rule with a `match` object: glob-match every field in `match` against the corresponding field in `interrupt.data` (or `interrupt.origin` for the `origin` key). All fields must match (AND logic).
-4. A rule with no `match` object is a catch-all for that type.
+3. For each rule with a `match` object: glob-match every field in `match` against the corresponding field in `interrupt.data`. Two special keys reach outside `data`: `origin` matches against `interrupt.origin`, and `message` matches against `interrupt.message`. All fields in `match` must match (AND logic).
+4. A rule with no `match` object is a catch-all for that kind.
 5. Fields in the interrupt data not mentioned in `match` are ignored.
-6. All matching is glob-based (V1).
+6. If a field in `match` does not exist in the interrupt data (or the relevant top-level field), the rule does not match. This is not an error — the rule is simply skipped.
+7. All matching is glob-based (V1). For path fields, `**` matches nested directories (e.g., `src/**`). For non-path fields, `*` matches any substring.
 
 ### Actions
 
 - **`allow`** — auto-approve the interrupt
 - **`deny`** — auto-reject the interrupt
 - **`propagate`** — pass to the user for a decision
+
+### The `unknown` kind
+
+Bare `interrupt("msg")` calls desugar to kind `"unknown"`. Policy rules can match on `"unknown"`, but be cautious: any interrupt that forgets to specify a kind silently falls into this bucket. In production, it's recommended to either (a) avoid bare interrupts and always specify a kind, or (b) ensure `"unknown"` rules only propagate, never auto-approve.
 
 ---
 
@@ -227,6 +234,8 @@ def read(filename: string) {
 }
 ```
 
+> Note: The `return interrupt` followed by `return try _read(...)` is Agency's interrupt-gate idiom. The first `return` pauses execution — if the interrupt is approved, execution continues to the next statement. It is not a true return.
+
 ### Full interrupt inventory
 
 | Module | Function | Type | Data Fields |
@@ -245,11 +254,11 @@ def read(filename: string) {
 | `std::shell` | `ls` | `std::ls` | `relPath`, `absPath`, `recursive` |
 | `std::shell` | `grep` | `std::grep` | `pattern`, `relPath`, `absPath`, `flags`, `maxResults` |
 | `std::shell` | `glob` | `std::glob` | `pattern`, `relPath`, `absPath`, `maxResults` |
-| `std::http` | `fetch` | `std::http.fetch` | `url` |
-| `std::http` | `fetchJSON` | `std::http.fetchJSON` | `url` |
-| `std::http` | `webfetch` | `std::http.webfetch` | `url` |
-| `std::system` | `setEnv` | `std::system.setEnv` | `name`, `value` |
-| `std::agent` | `question` | `std::question` | `message`, `prompt` |
+| `std::http` | `fetch` | `std::http::fetch` | `url` |
+| `std::http` | `fetchJSON` | `std::http::fetchJSON` | `url` |
+| `std::http` | `webfetch` | `std::http::webfetch` | `url` |
+| `std::system` | `setEnv` | `std::system::setEnv` | `name`, `value` |
+| `std::agent` | `question` | `std::question` | `prompt` |
 | `std::agent` | `notify` | `std::notify` | `title`, `body` |
 
 ---
@@ -264,15 +273,19 @@ def read(filename: string) {
 
 ### Builder changes
 
-- The interrupt creation in generated code changes to include `type`, `message`, `data`, and `origin` fields.
+- The builder constructs the full structured object (`{ kind, message, data, origin }`) and passes it as-is to `interruptWithHandlers()`. This keeps the runtime simpler and makes origin injection purely a compile-time concern.
 - `origin` is determined at compile time from the module being compiled and injected as a string literal.
-- Bare `interrupt("msg")` desugars to `type: "unknown"`, `message: "msg"`, `data: {}`.
+- Bare `interrupt("msg")` desugars to `kind: "unknown"`, `message: "msg"`, `data: {}`.
 
 ### Runtime changes
 
-- The `Interrupt<T>` type gains `type: string`, `message: string`, and `origin: string` fields alongside the existing `data: T`.
+- The `Interrupt<T>` type gains `kind: string`, `message: string`, and `origin: string` fields. The existing `type: "interrupt"` discriminant is unchanged.
 - `interruptWithHandlers()` passes the full structured object to handlers.
-- Handler functions receive `{ type, message, data, origin }` instead of raw data.
+- Handler functions receive `{ kind, message, data, origin }` instead of raw data.
+
+### Stdlib migration
+
+The existing stdlib interrupts already manually include `type` and `message` inside the data object they pass to `interrupt()`. These must be rewritten to use the new typed syntax. For example, `interrupt({ type: "std::read", message: "...", filename: f })` becomes `interrupt std::read("...", { relPath: f, absPath: resolvePath(f) })`. This touches every stdlib file that throws interrupts.
 
 ### Standard library additions
 

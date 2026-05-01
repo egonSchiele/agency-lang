@@ -6,10 +6,21 @@ An Agency package that provides web search via the [Brave Search API](https://br
 
 No third-party wrapper libraries — calls the Brave REST API directly (~40 lines of TypeScript). Requires a `BRAVE_API_KEY` environment variable (free tier: 1,000 searches/month).
 
+## Configuration
+
+Set the `BRAVE_API_KEY` environment variable. You can do this in a `.env` file in your project root or in your shell environment:
+
+```
+# .env
+BRAVE_API_KEY=your-key-here
+```
+
+Get a free API key at https://api.search.brave.com/app/keys. No `agency.json` configuration is needed.
+
 ## Usage
 
 ```
-import { braveSearch } from "pkg::brave-search"
+import { braveSearch } from "pkg::@agency-lang/brave-search"
 
 node main() {
   let answer = llm("What's the latest news on AI regulation?") uses braveSearch
@@ -70,7 +81,7 @@ export async function braveSearch(
 - Throws if key is missing
 - Builds URL with query params, makes GET request with auth header
 - Extracts `response.web.results`, maps each to `{ title, url, description }`
-- Throws on non-200 HTTP responses
+- Throws on non-200 HTTP responses with status code and response body (e.g., "Brave Search API error (429): Rate limit exceeded")
 
 ### Agency Wrapper (`index.agency`)
 
@@ -99,7 +110,7 @@ Mock `global.fetch` and test:
 
 ### Integration Test (`tests/agency/brave-search.agency`)
 
-A simple Agency program that uses `braveSearch` as a tool to verify end-to-end wiring.
+An Agency program that calls `braveSearch` directly (not via LLM) to verify the wiring works. The test requires a real `BRAVE_API_KEY` env var and makes a live API call. It should be skipped in CI unless secrets are configured. The test verifies that calling `braveSearch("test query")` returns an array of results with `title`, `url`, and `description` fields.
 
 ## package.json
 
@@ -122,10 +133,15 @@ A simple Agency program that uses `braveSearch` as a tool to verify end-to-end w
     "dist/",
     "index.agency"
   ],
+  "author": "Aditya Bhargava",
+  "license": "ISC",
+  "bugs": { "url": "https://github.com/egonSchiele/agency-lang/issues" },
+  "homepage": "https://github.com/egonSchiele/agency-lang",
   "scripts": {
     "build": "tsc",
     "test": "vitest",
-    "test:run": "vitest run"
+    "test:run": "vitest run",
+    "test:agency": "agency tests/agency"
   },
   "peerDependencies": {
     "agency-lang": "workspace:*"

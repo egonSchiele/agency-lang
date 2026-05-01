@@ -1,0 +1,36 @@
+{
+  "name": "@agency-lang/brave-search",
+  "version": "0.0.1",
+  "description": "Brave Search integration for Agency",
+  "type": "module",
+  "agency": "./index.agency",
+  "main": "./dist/src/braveSearch.js",
+  "exports": {
+    ".": {
+      "types": "./dist/src/braveSearch.d.ts",
+      "import": "./dist/src/braveSearch.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist/",
+    "index.agency"
+  ],
+  "author": "Aditya Bhargava",
+  "license": "ISC",
+  "bugs": { "url": "https://github.com/egonSchiele/agency-lang/issues" },
+  "homepage": "https://github.com/egonSchiele/agency-lang",
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest",
+    "test:run": "vitest run",
+    "test:agency": "agency tests/agency"
+  },
+  "peerDependencies": {
+    "agency-lang": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.0.0",
+    "vitest": "^3.0.0"
+  }
+}

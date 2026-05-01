@@ -189,4 +189,18 @@ describe("TraceWriter", () => {
     // Good sink should still have received data despite error sink
     expect(callbackLines.length).toBeGreaterThan(0);
   });
+
+  it("writes static-state line", async () => {
+    const writer = new TraceWriter(RUN_ID, "test.agency", [
+      new FileSink(tracePath),
+    ]);
+    await writer.writeStaticState({ prompt: "hello", count: 42 });
+    await writer.writeCheckpoint(makeCheckpoint());
+    await writer.close();
+
+    const lines = readTrace(tracePath);
+    const staticLine = lines.find((l: any) => l.type === "static-state");
+    expect(staticLine).toBeDefined();
+    expect(staticLine.values).toEqual({ prompt: "hello", count: 42 });
+  });
 });

@@ -180,6 +180,9 @@ export class RuntimeContext<T> {
       runId,
       traceConfig: this.traceConfig,
     });
+    if (execCtx.traceWriter && this.getStaticVars) {
+      await execCtx.traceWriter.writeStaticState(this.getStaticVars());
+    }
     execCtx.traceConfig = this.traceConfig;
     execCtx.runId = runId;
     execCtx.verbose = this.verbose;

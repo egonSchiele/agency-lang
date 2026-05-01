@@ -42,8 +42,14 @@ export type TraceFooter = {
   timestamp: string;
 };
 
+export type TraceStaticState = {
+  type: "static-state";
+  values: Record<string, unknown>;
+};
+
 export type TraceLine =
   | TraceHeader
+  | TraceStaticState
   | TraceSource
   | TraceChunk
   | TraceManifest

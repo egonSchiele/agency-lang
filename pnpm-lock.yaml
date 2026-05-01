@@ -100,6 +100,22 @@ importers:
         specifier: ^3.5.13
         version: 3.5.33(typescript@5.9.3)
 
+  packages/brave-search:
+    dependencies:
+      agency-lang:
+        specifier: workspace:*
+        version: link:../agency-lang
+    devDependencies:
+      '@types/node':
+        specifier: ^25.0.0
+        version: 25.0.6
+      typescript:
+        specifier: ^5.0.0
+        version: 5.9.3
+      vitest:
+        specifier: ^3.0.0
+        version: 3.2.4(@types/node@25.0.6)
+
   packages/examples:
     dependencies:
       '@agency-lang/mcp':

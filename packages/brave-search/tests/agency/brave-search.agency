@@ -1,0 +1,12 @@
+import { braveSearch } from "../../index.agency"
+
+node main() {
+  let results = braveSearch("TypeScript programming language")
+  if (length(results) > 0) {
+    let first = results[0]
+    print(first.title)
+    print(first.url)
+    print(first.description)
+  }
+  print(results)
+}

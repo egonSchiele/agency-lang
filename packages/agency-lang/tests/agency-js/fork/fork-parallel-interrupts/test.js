@@ -29,7 +29,7 @@ if (new Set(ids).size !== ids.length) {
 }
 
 // Test 5: interrupts have correct data payloads
-const messages = interrupts.map(i => i.data).sort();
+const messages = interrupts.map(i => i.message).sort();
 const expected = ["approve a?", "approve b?", "approve c?"];
 if (JSON.stringify(messages) !== JSON.stringify(expected)) {
   throw new Error("Unexpected interrupt messages: " + JSON.stringify(messages));

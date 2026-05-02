@@ -1,4 +1,4 @@
-.PHONY: all test stdlib
+.PHONY: all test stdlib doc packages-doc
 
 all:
 	pnpm run templates && pnpm run build && $(MAKE) stdlib && $(MAKE) doc
@@ -19,6 +19,12 @@ fixtures:
 
 doc:
 	rm -rf docs-new/stdlib/ && pnpm run agency doc stdlib -o docs-new/stdlib/
+
+packages-doc:
+	rm -rf docs-new/packages/
+	pnpm run agency doc ../brave-search -o docs-new/packages/brave-search/ --ignore tests
+	pnpm run agency doc ../web-fetch -o docs-new/packages/web-fetch/ --ignore tests
+	pnpm run agency doc ../mcp -o docs-new/packages/mcp/ --ignore tests
 
 test-log:
 	rm -f test-output

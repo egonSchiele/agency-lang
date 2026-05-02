@@ -76,6 +76,14 @@ export default defineConfig({
           { text: "wikipedia", link: "/stdlib/wikipedia" },
         ],
       },
+      {
+        text: "Packages",
+        items: [
+          { text: "brave-search", link: "/packages/brave-search/" },
+          { text: "web-fetch", link: "/packages/web-fetch/" },
+          { text: "mcp", link: "/packages/mcp/" },
+        ],
+      },
     ],
     socialLinks: [
       { icon: "github", link: "https://github.com/egonSchiele/agency-lang" },

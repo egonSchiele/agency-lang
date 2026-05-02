@@ -500,10 +500,11 @@ export function createProgram(deps: CliDependencies = {}): Command {
     .description("Generate Markdown documentation for .agency file(s)")
     .argument("<input>", "Path to .agency file or directory")
     .option("-o, --output <dir>", "Output directory for generated docs")
-    .action((input: string, opts: { output?: string }) => {
+    .option("--ignore <dirs...>", "Directory names to ignore when scanning recursively")
+    .action((input: string, opts: { output?: string; ignore?: string[] }) => {
       const config = getConfig();
       const outputDir = opts.output || config.doc?.outDir || "docs";
-      generateDoc(config, input, outputDir);
+      generateDoc(config, input, outputDir, opts.ignore || []);
     });
 
   program

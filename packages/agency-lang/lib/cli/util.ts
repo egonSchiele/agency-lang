@@ -419,15 +419,17 @@ export function* findRecursively(
   dirName: string,
   ext: string = ".agency",
   searched: string[] = [],
+  ignoreDirs: string[] = [],
 ): Generator<{ path: string }> {
   searched.push(path.resolve(dirName));
   // Find all .agency files in the directory
   const files = fs.readdirSync(dirName);
   const filesToProcess = files.filter((file) => {
+    if (file.startsWith(".")) return false;
+    if (ignoreDirs.includes(file)) return false;
     return (
-      (file.endsWith(ext) ||
-        fs.statSync(path.join(dirName, file)).isDirectory()) &&
-      !file.startsWith(".")
+      file.endsWith(ext) ||
+      fs.statSync(path.join(dirName, file)).isDirectory()
     );
   });
 
@@ -438,7 +440,7 @@ export function* findRecursively(
     }
     if (fs.statSync(fullPath).isDirectory()) {
       if (!searched.includes(path.resolve(fullPath))) {
-        yield* findRecursively(fullPath, ext, searched);
+        yield* findRecursively(fullPath, ext, searched, ignoreDirs);
       }
     } else {
       yield { path: fullPath };

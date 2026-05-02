@@ -4,5 +4,6 @@ def interruptingRead(filename: string) {
 }
 
 node main() {
-  return interruptingRead("data.txt") with approve
+  const result = interruptingRead("data.txt") with approve
+  return result
 }

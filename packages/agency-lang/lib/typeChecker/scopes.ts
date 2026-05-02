@@ -12,6 +12,7 @@ import { synthType, SynthContext } from "./synthesizer.js";
 import { validateTypeReferences } from "./validate.js";
 import { ScopeInfo, TypeCheckerContext } from "./types.js";
 import { checkType } from "./utils.js";
+import { Scope } from "./scope.js";
 
 export function buildScopes(
   ctx: TypeCheckerContext,
@@ -20,12 +21,12 @@ export function buildScopes(
   const scopes: ScopeInfo[] = [];
 
   // Top-level scope
-  const topLevelVars: Record<string, VariableType | "any"> = {};
+  const topLevelScope = new Scope(GLOBAL_SCOPE_KEY);
   ctx.withScope(GLOBAL_SCOPE_KEY, () => {
-    collectVariableTypes(ctx.programNodes, topLevelVars, "top-level", synthCtx);
+    collectVariableTypes(ctx.programNodes, topLevelScope, "top-level", synthCtx);
   });
   scopes.push({
-    variableTypes: topLevelVars,
+    variableTypes: topLevelScope.toRecord(),
     body: ctx.programNodes,
     name: "top-level",
     scopeKey: GLOBAL_SCOPE_KEY,
@@ -33,16 +34,16 @@ export function buildScopes(
 
   // Function scopes
   for (const fn of Object.values(ctx.functionDefs)) {
-    const vars: Record<string, VariableType | "any"> = {};
-    for (const param of fn.parameters) {
-      vars[param.name] = param.typeHint ?? "any";
-    }
     const sk = scopeKey(functionScope(fn.functionName));
+    const fnScope = new Scope(sk);
+    for (const param of fn.parameters) {
+      fnScope.declare(param.name, param.typeHint ?? "any");
+    }
     ctx.withScope(sk, () => {
-      collectVariableTypes(fn.body, vars, fn.functionName, synthCtx);
+      collectVariableTypes(fn.body, fnScope, fn.functionName, synthCtx);
     });
     scopes.push({
-      variableTypes: vars,
+      variableTypes: fnScope.toRecord(),
       body: fn.body,
       name: fn.functionName,
       scopeKey: sk,
@@ -52,16 +53,16 @@ export function buildScopes(
 
   // Graph node scopes
   for (const node of Object.values(ctx.nodeDefs)) {
-    const vars: Record<string, VariableType | "any"> = {};
-    for (const param of node.parameters) {
-      vars[param.name] = param.typeHint ?? "any";
-    }
     const sk = scopeKey(nodeScope(node.nodeName));
+    const nodeScope_ = new Scope(sk);
+    for (const param of node.parameters) {
+      nodeScope_.declare(param.name, param.typeHint ?? "any");
+    }
     ctx.withScope(sk, () => {
-      collectVariableTypes(node.body, vars, node.nodeName, synthCtx);
+      collectVariableTypes(node.body, nodeScope_, node.nodeName, synthCtx);
     });
     scopes.push({
-      variableTypes: vars,
+      variableTypes: nodeScope_.toRecord(),
       body: node.body,
       name: node.nodeName,
       scopeKey: sk,
@@ -78,7 +79,7 @@ export function buildScopes(
  */
 export function collectVariableTypes(
   nodes: AgencyNode[],
-  vars: Record<string, VariableType | "any">,
+  scope: Scope,
   scopeName: string,
   ctx: SynthContext,
 ): void {
@@ -86,7 +87,7 @@ export function collectVariableTypes(
 
   for (const node of nodes) {
     if (node.type === "assignment") {
-      const existingType = vars[node.variableName];
+      const existingType = scope.lookup(node.variableName);
       const newType = node.typeHint;
       const loc = node.loc;
 
@@ -107,10 +108,10 @@ export function collectVariableTypes(
           });
         }
         // Check that the assigned value is compatible with the annotation
-        checkType(node.value, newType, vars, `assignment to '${node.variableName}'`, ctx);
-        vars[node.variableName] = newType;
+        checkType(node.value, newType, scope.toRecord(), `assignment to '${node.variableName}'`, ctx);
+        scope.declare(node.variableName, newType);
       } else if (existingType) {
-        const valueType = synthType(node.value, vars, ctx);
+        const valueType = synthType(node.value, scope.toRecord(), ctx);
         if (
           valueType !== "any" &&
           existingType !== "any" &&
@@ -136,40 +137,40 @@ export function collectVariableTypes(
             loc,
           });
         }
-        const inferred = synthType(node.value, vars, ctx);
-        vars[node.variableName] = widenType(inferred);
+        const inferred = synthType(node.value, scope.toRecord(), ctx);
+        scope.declare(node.variableName, widenType(inferred));
       }
     } else if (node.type === "importStatement") {
       for (const importName of node.importedNames) {
         for (const name of getImportedNames(importName)) {
-          vars[name] = "any";
+          scope.declare(name, "any");
         }
       }
     } else if (node.type === "forLoop") {
-      const iterableType = synthType(node.iterable, vars, ctx);
+      const iterableType = synthType(node.iterable, scope.toRecord(), ctx);
       if (iterableType !== "any" && iterableType.type === "arrayType") {
-        vars[node.itemVar] = iterableType.elementType;
+        scope.declare(node.itemVar, iterableType.elementType);
       } else {
-        vars[node.itemVar] = "any";
+        scope.declare(node.itemVar, "any");
       }
       if (node.indexVar) {
-        vars[node.indexVar] = { type: "primitiveType", value: "number" };
+        scope.declare(node.indexVar, { type: "primitiveType", value: "number" });
       }
-      collectVariableTypes(node.body, vars, scopeName, ctx);
+      collectVariableTypes(node.body, scope, scopeName, ctx);
     }
   }
 
   // Walk into nested blocks
   for (const node of nodes) {
     if (node.type === "ifElse") {
-      collectVariableTypes(node.thenBody, vars, scopeName, ctx);
+      collectVariableTypes(node.thenBody, scope, scopeName, ctx);
       if (node.elseBody) {
-        collectVariableTypes(node.elseBody, vars, scopeName, ctx);
+        collectVariableTypes(node.elseBody, scope, scopeName, ctx);
       }
     } else if (node.type === "whileLoop") {
-      collectVariableTypes(node.body, vars, scopeName, ctx);
+      collectVariableTypes(node.body, scope, scopeName, ctx);
     } else if (node.type === "messageThread") {
-      collectVariableTypes(node.body, vars, scopeName, ctx);
+      collectVariableTypes(node.body, scope, scopeName, ctx);
     }
   }
 }

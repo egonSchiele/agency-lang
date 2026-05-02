@@ -12,6 +12,7 @@ import { isAssignable, widenType } from "./assignability.js";
 import { synthType, SynthContext } from "./synthesizer.js";
 import { collectVariableTypes } from "./scopes.js";
 import { TypeCheckerContext } from "./types.js";
+import { Scope } from "./scope.js";
 
 export function inferReturnTypes(
   ctx: TypeCheckerContext,
@@ -51,11 +52,11 @@ export function inferReturnTypeFor(
     : scopeKey(nodeScope(def.nodeName));
 
   return ctx.withScope(defScopeKey, () => {
-    const vars: Record<string, VariableType | "any"> = {};
+    const scope = new Scope(defScopeKey);
     for (const param of def.parameters) {
-      vars[param.name] = param.typeHint ?? "any";
+      scope.declare(param.name, param.typeHint ?? "any");
     }
-    collectVariableTypes(def.body, vars, name, synthCtx);
+    collectVariableTypes(def.body, scope, name, synthCtx);
 
     const returnValues: AgencyNode[] = [];
     for (const { node, ancestors } of walkNodes(def.body)) {
@@ -74,7 +75,7 @@ export function inferReturnTypeFor(
       inferred = { type: "primitiveType", value: "void" };
     } else {
       const typeAliases = ctx.getTypeAliases();
-      const types = returnValues.map((v) => synthType(v, vars, synthCtx));
+      const types = returnValues.map((v) => synthType(v, scope.toRecord(), synthCtx));
       if (types.some((t) => t === "any")) {
         inferred = "any";
       } else {

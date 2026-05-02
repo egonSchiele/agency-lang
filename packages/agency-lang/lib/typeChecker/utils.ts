@@ -3,6 +3,7 @@ import { formatTypeHint } from "../cli/util.js";
 import { isAssignable } from "./assignability.js";
 import { synthType } from "./synthesizer.js";
 import { TypeCheckerContext } from "./types.js";
+import { Scope } from "./scope.js";
 
 /**
  * Check mode (top-down): verify that an expression is compatible with expectedType.
@@ -11,13 +12,13 @@ import { TypeCheckerContext } from "./types.js";
 export function checkType(
   expr: AgencyNode,
   expectedType: VariableType,
-  scopeVars: Record<string, VariableType | "any">,
+  scope: Scope,
   context: string,
   ctx: TypeCheckerContext,
 ): void {
   if (expr.type === "functionCall" && expr.functionName === "llm") return;
 
-  const actualType = synthType(expr, scopeVars, ctx);
+  const actualType = synthType(expr, scope, ctx);
   if (actualType === "any") return;
 
   const typeAliases = ctx.getTypeAliases();

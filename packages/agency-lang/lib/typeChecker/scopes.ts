@@ -15,19 +15,17 @@ import { formatTypeHint } from "../cli/util.js";
 export function buildScopes(ctx: TypeCheckerContext): ScopeInfo[] {
   const scopes: ScopeInfo[] = [];
 
-  // Top-level scope
   const topLevelScope = new Scope(GLOBAL_SCOPE_KEY);
   ctx.withScope(GLOBAL_SCOPE_KEY, () => {
-    populateScope(ctx.programNodes, topLevelScope, ctx);
+    walkScopeBody(ctx.programNodes, topLevelScope, ctx);
   });
   scopes.push({
-    variableTypes: topLevelScope.toRecord(),
+    scope: topLevelScope,
     body: ctx.programNodes,
     name: "top-level",
     scopeKey: GLOBAL_SCOPE_KEY,
   });
 
-  // Function scopes
   for (const fn of Object.values(ctx.functionDefs)) {
     const sk = scopeKey(functionScope(fn.functionName));
     const fnScope = new Scope(sk);
@@ -35,10 +33,10 @@ export function buildScopes(ctx: TypeCheckerContext): ScopeInfo[] {
       fnScope.declare(param.name, param.typeHint ?? "any");
     }
     ctx.withScope(sk, () => {
-      populateScope(fn.body, fnScope, ctx);
+      walkScopeBody(fn.body, fnScope, ctx);
     });
     scopes.push({
-      variableTypes: fnScope.toRecord(),
+      scope: fnScope,
       body: fn.body,
       name: fn.functionName,
       scopeKey: sk,
@@ -46,18 +44,17 @@ export function buildScopes(ctx: TypeCheckerContext): ScopeInfo[] {
     });
   }
 
-  // Graph node scopes
   for (const node of Object.values(ctx.nodeDefs)) {
     const sk = scopeKey(nodeScope(node.nodeName));
-    const nodeScope_ = new Scope(sk);
+    const ns = new Scope(sk);
     for (const param of node.parameters) {
-      nodeScope_.declare(param.name, param.typeHint ?? "any");
+      ns.declare(param.name, param.typeHint ?? "any");
     }
     ctx.withScope(sk, () => {
-      populateScope(node.body, nodeScope_, ctx);
+      walkScopeBody(node.body, ns, ctx);
     });
     scopes.push({
-      variableTypes: nodeScope_.toRecord(),
+      scope: ns,
       body: node.body,
       name: node.nodeName,
       scopeKey: sk,
@@ -91,8 +88,7 @@ export function declareVariable(
       node.loc,
     );
     // Re-declaration with an incompatible annotation is a declaration-time
-    // error, so we report it during the declaration walk (when the order
-    // of declarations is meaningful).
+    // error, reported here while statement order is still meaningful.
     const existingType = scope.lookup(node.variableName);
     if (
       existingType &&
@@ -116,11 +112,9 @@ export function declareVariable(
         loc: node.loc,
       });
     }
-    const inferred = synthType(node.value, scope.toRecord(), ctx);
+    const inferred = synthType(node.value, scope, ctx);
     scope.declare(node.variableName, widenType(inferred));
   }
-  // Reassignment to an already-declared name with no annotation: no-op here;
-  // checkAssignmentsInScope verifies compatibility.
 }
 
 /**
@@ -143,7 +137,7 @@ export function walkScopeBody(
         }
       }
     } else if (node.type === "forLoop") {
-      const iterableType = synthType(node.iterable, scope.toRecord(), ctx);
+      const iterableType = synthType(node.iterable, scope, ctx);
       if (iterableType !== "any" && iterableType.type === "arrayType") {
         scope.declare(node.itemVar, iterableType.elementType);
       } else {
@@ -170,15 +164,3 @@ export function walkScopeBody(
     }
   }
 }
-
-/**
- * Public entry: populate a scope from a body of statements.
- */
-export function populateScope(
-  nodes: AgencyNode[],
-  scope: Scope,
-  ctx: TypeCheckerContext,
-): void {
-  walkScopeBody(nodes, scope, ctx);
-}
-

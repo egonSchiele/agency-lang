@@ -1,6 +1,5 @@
 import {
   FunctionCall,
-  VariableType,
 } from "../types.js";
 import { walkNodes } from "../utils/node.js";
 import { formatTypeHint } from "../cli/util.js";
@@ -10,6 +9,7 @@ import { synthType } from "./synthesizer.js";
 import { ScopeInfo } from "./types.js";
 import type { TypeCheckerContext } from "./types.js";
 import { checkType } from "./utils.js";
+import { Scope } from "./scope.js";
 
 export function checkScopes(
   scopes: ScopeInfo[],
@@ -33,13 +33,13 @@ export function checkScopes(
  * is reported earlier in declareVariable, where statement order is preserved.
  */
 function checkAssignmentsInScope(
-  scope: ScopeInfo,
+  info: ScopeInfo,
   ctx: TypeCheckerContext,
 ): void {
   const typeAliases = ctx.getTypeAliases();
-  for (const { node } of walkNodes(scope.body)) {
+  for (const { node } of walkNodes(info.body)) {
     if (node.type !== "assignment") continue;
-    const existingType = scope.variableTypes[node.variableName];
+    const existingType = info.scope.lookup(node.variableName);
     const newType = node.typeHint;
     const loc = node.loc;
 
@@ -47,12 +47,12 @@ function checkAssignmentsInScope(
       checkType(
         node.value,
         newType,
-        scope.variableTypes,
+        info.scope,
         `assignment to '${node.variableName}'`,
         ctx,
       );
     } else if (existingType) {
-      const valueType = synthType(node.value, scope.variableTypes, ctx);
+      const valueType = synthType(node.value, info.scope, ctx);
       if (
         valueType !== "any" &&
         existingType !== "any" &&
@@ -74,24 +74,23 @@ function checkAssignmentsInScope(
 }
 
 function checkFunctionCallsInScope(
-  scope: ScopeInfo,
+  info: ScopeInfo,
   ctx: TypeCheckerContext,
 ): void {
-  for (const { node } of walkNodes(scope.body)) {
+  for (const { node } of walkNodes(info.body)) {
     if (node.type === "functionCall") {
-      checkSingleFunctionCall(node, scope.variableTypes, ctx);
+      checkSingleFunctionCall(node, info.scope, ctx);
     }
   }
 }
 
 function checkSingleFunctionCall(
   call: FunctionCall,
-  scopeVars: Record<string, VariableType | "any">,
+  scope: Scope,
   ctx: TypeCheckerContext,
 ): void {
   const typeAliases = ctx.getTypeAliases();
 
-  // Check builtins using their type signatures
   if (call.functionName in BUILTIN_FUNCTION_TYPES) {
     const sig = BUILTIN_FUNCTION_TYPES[call.functionName];
 
@@ -109,7 +108,7 @@ function checkSingleFunctionCall(
       const arg = call.arguments[i];
       if (arg.type === "splat") continue;
       const innerArg = arg.type === "namedArgument" ? arg.value : arg;
-      const argType = synthType(innerArg, scopeVars, ctx);
+      const argType = synthType(innerArg, scope, ctx);
       const paramType = sig.params[i];
       if (paramType === "any") continue;
       if (argType === "any") continue;
@@ -143,7 +142,7 @@ function checkSingleFunctionCall(
     const arg = call.arguments[i];
     if (arg.type === "splat") continue;
     const innerArg = arg.type === "namedArgument" ? arg.value : arg;
-    const argType = synthType(innerArg, scopeVars, ctx);
+    const argType = synthType(innerArg, scope, ctx);
     const paramType = params[i].typeHint;
     if (!paramType) continue;
     if (argType === "any") continue;
@@ -159,18 +158,18 @@ function checkSingleFunctionCall(
 }
 
 function checkReturnTypesInScope(
-  scope: ScopeInfo,
+  info: ScopeInfo,
   ctx: TypeCheckerContext,
 ): void {
-  if (!scope.returnType) return;
+  if (!info.returnType) return;
 
-  for (const { node } of walkNodes(scope.body)) {
+  for (const { node } of walkNodes(info.body)) {
     if (node.type === "returnStatement" && node.value) {
       checkType(
         node.value,
-        scope.returnType,
-        scope.variableTypes,
-        `return in '${scope.name}'`,
+        info.returnType,
+        info.scope,
+        `return in '${info.name}'`,
         ctx,
       );
     }
@@ -178,14 +177,14 @@ function checkReturnTypesInScope(
 }
 
 function checkExpressionsInScope(
-  scope: ScopeInfo,
+  info: ScopeInfo,
   ctx: TypeCheckerContext,
 ): void {
-  for (const { node } of walkNodes(scope.body)) {
+  for (const { node } of walkNodes(info.body)) {
     if (node.type === "valueAccess") {
-      synthType(node, scope.variableTypes, ctx);
+      synthType(node, info.scope, ctx);
     } else if (node.type === "returnStatement" && node.value) {
-      synthType(node.value, scope.variableTypes, ctx);
+      synthType(node.value, info.scope, ctx);
     }
   }
 }

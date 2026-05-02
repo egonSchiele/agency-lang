@@ -19,8 +19,10 @@ export type TypeCheckResult = {
   errors: TypeCheckError[];
 };
 
+import type { Scope } from "./scope.js";
+
 export type ScopeInfo = {
-  variableTypes: Record<string, VariableType | "any">;
+  scope: Scope;
   body: AgencyNode[];
   name: string;
   scopeKey: string;

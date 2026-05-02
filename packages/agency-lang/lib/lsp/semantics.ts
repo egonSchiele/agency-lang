@@ -1,6 +1,5 @@
 import { getWordAtPosition } from "../cli/definition.js";
 import { formatTypeHint } from "../cli/util.js";
-import { resolveAgencyImportPath, isAgencyImport } from "../importPaths.js";
 import type { SymbolInfo, SymbolKind, SymbolTable } from "../symbolTable.js";
 import type {
   AgencyProgram,
@@ -112,18 +111,6 @@ function addImportedSymbol(
   });
 }
 
-function resolveImportedFile(
-  fsPath: string,
-  importPath: string,
-): string | null {
-  if (!isAgencyImport(importPath)) return null;
-  try {
-    return resolveAgencyImportPath(importPath, fsPath);
-  } catch {
-    return null;
-  }
-}
-
 function collectImportedSymbols(
   program: AgencyProgram,
   fsPath: string,
@@ -133,38 +120,35 @@ function collectImportedSymbols(
 
   for (const node of program.nodes) {
     if (node.type === "importNodeStatement") {
-      const importedFile = resolveImportedFile(fsPath, node.agencyFile);
-      if (!importedFile) continue;
-      const fileSymbols = symbolTable.getFile(importedFile) ?? {};
-      for (const name of node.importedNodes) {
-        const symbol = fileSymbols[name];
-        if (!symbol) continue;
+      let resolved;
+      try {
+        resolved = symbolTable.resolveImportedNodes(node, fsPath);
+      } catch {
+        continue;
+      }
+      for (const r of resolved) {
         addImportedSymbol(index, {
-          filePath: importedFile,
+          filePath: r.file,
           importPath: node.agencyFile,
-          originalName: name,
-          localName: name,
-          symbol,
+          originalName: r.originalName,
+          localName: r.localName,
+          symbol: r.symbol,
         });
       }
-      continue;
-    }
-
-    if (node.type !== "importStatement") continue;
-    const importedFile = resolveImportedFile(fsPath, node.modulePath);
-    if (!importedFile) continue;
-    const fileSymbols = symbolTable.getFile(importedFile) ?? {};
-    for (const importedName of node.importedNames) {
-      if (importedName.type !== "namedImport") continue;
-      for (const name of importedName.importedNames) {
-        const symbol = fileSymbols[name];
-        if (!symbol) continue;
+    } else if (node.type === "importStatement") {
+      let resolved;
+      try {
+        resolved = symbolTable.resolveImport(node, fsPath);
+      } catch {
+        continue;
+      }
+      for (const r of resolved) {
         addImportedSymbol(index, {
-          filePath: importedFile,
+          filePath: r.file,
           importPath: node.modulePath,
-          originalName: name,
-          localName: importedName.aliases[name] ?? name,
-          symbol,
+          originalName: r.originalName,
+          localName: r.localName,
+          symbol: r.symbol,
         });
       }
     }

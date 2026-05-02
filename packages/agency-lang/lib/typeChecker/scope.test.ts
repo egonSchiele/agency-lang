@@ -47,11 +47,4 @@ describe("Scope", () => {
     expect(child.key).toBe("block:if");
   });
 
-  it("toRecord() returns the merged record for legacy callers", () => {
-    const parent = new Scope("function:foo");
-    parent.declare("x", numberType);
-    const child = parent.child();
-    child.declare("y", stringType);
-    expect(child.toRecord()).toEqual({ x: numberType, y: stringType });
-  });
 });

@@ -15,10 +15,10 @@ export function generateTypeScript(
   if (!moduleId) {
     throw new Error("moduleId is required for generateTypeScript");
   }
-  const programInfo = info ?? buildCompilationUnit(program);
-  const preprocessor = new TypescriptPreprocessor(program, config, programInfo);
+  const compilationUnit = info ?? buildCompilationUnit(program);
+  const preprocessor = new TypescriptPreprocessor(program, config, compilationUnit);
   const preprocessedProgram = preprocessor.preprocess();
-  const builder = new TypeScriptBuilder(config, programInfo, moduleId, outputFile);
+  const builder = new TypeScriptBuilder(config, compilationUnit, moduleId, outputFile);
   const ir = builder.build(preprocessedProgram);
   return printTs(ir);
 }

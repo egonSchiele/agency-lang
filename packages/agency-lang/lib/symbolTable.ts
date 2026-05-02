@@ -125,26 +125,8 @@ export class SymbolTable {
     return this.files[absPath];
   }
 
-  /** Iterate over every (absolute path, file symbols) pair. */
-  allFiles(): [string, FileSymbols][] {
-    return Object.entries(this.files);
-  }
-
   filePaths(): string[] {
     return Object.keys(this.files);
-  }
-
-  fileCount(): number {
-    return this.filePaths().length;
-  }
-
-  /**
-   * Return a symbol from the given file by name, or undefined. Does not
-   * verify that the symbol is exported — callers that need that check
-   * should look at `symbol.exported`.
-   */
-  findExportedSymbol(absPath: string, name: string): SymbolInfo | undefined {
-    return this.files[absPath]?.[name];
   }
 
   /**

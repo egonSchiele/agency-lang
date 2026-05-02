@@ -10,7 +10,7 @@ import { scopeKey } from "../compilationUnit.js";
 import { walkNodes } from "../utils/node.js";
 import { isAssignable, widenType } from "./assignability.js";
 import { synthType } from "./synthesizer.js";
-import { populateScope } from "./scopes.js";
+import { walkScopeBody } from "./scopes.js";
 import { TypeCheckerContext } from "./types.js";
 import { Scope } from "./scope.js";
 
@@ -52,7 +52,7 @@ export function inferReturnTypeFor(
     for (const param of def.parameters) {
       scope.declare(param.name, param.typeHint ?? "any");
     }
-    populateScope(def.body, scope, ctx);
+    walkScopeBody(def.body, scope, ctx);
 
     const returnValues: AgencyNode[] = [];
     for (const { node, ancestors } of walkNodes(def.body)) {
@@ -71,7 +71,7 @@ export function inferReturnTypeFor(
       inferred = { type: "primitiveType", value: "void" };
     } else {
       const typeAliases = ctx.getTypeAliases();
-      const types = returnValues.map((v) => synthType(v, scope.toRecord(), ctx));
+      const types = returnValues.map((v) => synthType(v, scope, ctx));
       if (types.some((t) => t === "any")) {
         inferred = "any";
       } else {

@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Failures-as-values invariant: one parallel arm returns a failure value, siblings continue and produce their normal results. The block does NOT auto-cancel on the first failure (per spec — that behavior is reserved for `race`). After the block, the failing arm's binding holds the failure object and `isFailure()` resolves it.",
+      "input": "",
+      "expectedOutput": "\"ok-ok1,boom,ok-ok2\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

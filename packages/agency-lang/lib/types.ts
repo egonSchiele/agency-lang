@@ -23,6 +23,7 @@ import { GotoStatement } from "./types/gotoStatement.js";
 import { Skill } from "./types/skill.js";
 import { TypeAlias, VariableType } from "./types/typeHints.js";
 import { WhileLoop } from "./types/whileLoop.js";
+import { ParallelBlock, SeqBlock } from "./types/parallelBlock.js";
 import { AwaitPending } from "./types/awaitPending.js";
 import { HandleBlock } from "./types/handleBlock.js";
 import { DebuggerStatement } from "./types/debuggerStatement.js";
@@ -45,6 +46,7 @@ export * from "./types/returnStatement.js";
 export * from "./types/gotoStatement.js";
 export * from "./types/typeHints.js";
 export * from "./types/whileLoop.js";
+export * from "./types/parallelBlock.js";
 export * from "./types/forLoop.js";
 export * from "./types/handleBlock.js";
 export * from "./types/keyword.js";
@@ -208,6 +210,8 @@ export type AgencyNode =
   | ImportStatement
   | ImportNodeStatement
   | WhileLoop
+  | ParallelBlock
+  | SeqBlock
   | IfElse
   | NewLine
   | RawCode

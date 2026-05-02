@@ -1,0 +1,16 @@
+def fetchA(prefix: string): string {
+  return "${prefix}-a"
+}
+
+def fetchB(prefix: string): string {
+  return "${prefix}-b"
+}
+
+node main() {
+  let prefix = "outer"
+  parallel {
+    let a = fetchA(prefix)
+    let b = fetchB(prefix)
+  }
+  return "${a},${b}"
+}

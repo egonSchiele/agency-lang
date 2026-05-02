@@ -1,0 +1,12 @@
+def f(label: string): string {
+  return "v-${label}"
+}
+
+node main() {
+  parallel {
+    let a = f("a")
+    let b = f("b")
+    let c = f("c")
+  }
+  return "${a},${b},${c}"
+}

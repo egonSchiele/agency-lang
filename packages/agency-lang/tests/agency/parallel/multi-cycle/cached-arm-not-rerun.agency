@@ -1,0 +1,29 @@
+// Detects a bug where a non-interrupting arm gets re-executed on resume.
+// The "cached" arm increments a global counter and produces its return
+// value from that counter. The "interrupting" arm interrupts once. After
+// the resume cycle, the counter must be exactly 1 — if the cached arm
+// ran again, the counter would be 2 and the test fails.
+//
+// This is the gap noted in tests/agency/fork/multi-cycle/partial-cycle-cached:
+// re-execution of a non-interrupting branch is invisible if the branch
+// is pure. Adding a side effect (counter increment) lets us see it.
+
+let counter = 0
+
+def cachedArm(): string {
+  counter = counter + 1
+  return "n${counter}"
+}
+
+def interruptingArm(): string {
+  const v = interrupt("approve?")
+  return "ok"
+}
+
+node main() {
+  parallel {
+    let a = cachedArm()
+    let b = interruptingArm()
+  }
+  return "${a},${b},counter:${counter}"
+}

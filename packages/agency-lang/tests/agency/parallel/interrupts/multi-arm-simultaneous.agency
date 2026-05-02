@@ -1,0 +1,23 @@
+def fetchA(): string {
+  let approved = interrupt("approve a?")
+  return "a-result"
+}
+
+def fetchB(): string {
+  let approved = interrupt("approve b?")
+  return "b-result"
+}
+
+def fetchC(): string {
+  let approved = interrupt("approve c?")
+  return "c-result"
+}
+
+node main() {
+  parallel {
+    let a = fetchA()
+    let b = fetchB()
+    let c = fetchC()
+  }
+  return "${a},${b},${c}"
+}

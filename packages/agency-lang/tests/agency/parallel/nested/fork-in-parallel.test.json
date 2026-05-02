@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "A `fork(...) as item { ... }` call inside a `seq` arm of a parallel block. After desugar, this is a fork (the parallel's outer fork) whose second arm body contains another fork (the inner one). Confirms the existing fork-inside-fork pathway handles parallel-introduced forks correctly. The inner fork's `forked` binding is hoisted out via the seq-arm's return shape.",
+      "input": "",
+      "expectedOutput": "\"v-oa|v-x,v-y,v-z\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

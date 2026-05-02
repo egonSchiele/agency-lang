@@ -1,3 +1,26 @@
+/**
+## Installation
+
+```
+npm install @agency-lang/brave-search
+```
+
+## Environment Variables
+
+Set `BRAVE_API_KEY` to your Brave Search API key. Alternatively, you can pass the key directly via the `apiKey` parameter.
+
+## Usage
+
+```ts
+import { braveSearch } from "pkg::@agency-lang/brave-search"
+
+node main() {
+  const results = braveSearch("agency language programming")
+  print(results)
+}
+```
+*/
+
 import { braveSearch as braveSearchImpl } from "./dist/src/braveSearch.js"
 
 /// Search the web using Brave Search. Returns titles, URLs, and descriptions.

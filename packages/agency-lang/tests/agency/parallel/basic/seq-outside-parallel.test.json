@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "A `seq { ... }` block at the top level of a node body (no enclosing `parallel`). Per the v1 spec, seq has no runtime effect outside parallel — its body is inlined into the enclosing scope, and bindings declared inside leak out. Exact-match output proves both `a` and `b` are visible after the seq block.",
+      "input": "",
+      "expectedOutput": "\"F,B-F\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

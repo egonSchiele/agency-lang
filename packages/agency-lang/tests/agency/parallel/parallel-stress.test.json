@@ -1,0 +1,16 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Parallel-blocks stress test: 4 arms (a, b, seq{c, d}, e) running concurrently with mixed interrupt patterns. Arm a runs to completion (cycle 1), arm b interrupts once (cycle 1) and finishes after one resume (cycle 2), the seq arm's first call interrupts twice (cycles 1 and 2) before its second call fires (cycle 3), arm e runs to completion (cycle 1). Three resume cycles total, three distinct interrupts (i1b, i2c-1, i2c-2) with three distinct resolved values, exact-match output proves all arms produce the right value with the right resolved data routed to the right site. If caching is broken, arms a/d/e re-execute and the test does NOT directly catch that for these pure arms — but cached-arm-not-rerun.{agency,test.json} provides side-effect-tracked coverage of that case. This fixture covers the combinatorial surface (multi-cycle × mixed-arm-types × seq-internal-multi-interrupt × distinct-response-routing) that simpler fixtures don't.",
+      "input": "",
+      "expectedOutput": "\"na|i1b-vB|i2c-vC1-vC2|nd-after-c|ne\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "interruptHandlers": [
+        { "action": "resolve", "expectedMessage": "i1b?", "resolvedValue": "vB" },
+        { "action": "resolve", "expectedMessage": "i2c-1?", "resolvedValue": "vC1" },
+        { "action": "resolve", "expectedMessage": "i2c-2?", "resolvedValue": "vC2" }
+      ]
+    }
+  ]
+}

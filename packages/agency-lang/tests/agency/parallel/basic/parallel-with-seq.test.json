@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Basic parallel block with two arms: a bare let-binding and a seq block. Verifies that (1) parallel desugars correctly through the preprocessor; (2) seq-as-arm acts as one arm whose body is the seq's contents (so b and c stay in the same arm and the data dependency is allowed); (3) bindings (a, b, c) hoist out of the parallel block and are visible in the enclosing scope. The exact-match output proves all three bindings round-trip correctly through the desugared fork's per-arm result objects.",
+      "input": "",
+      "expectedOutput": "\"foo-result,bar-result,baz-bar-result\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

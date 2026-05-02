@@ -1,0 +1,16 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Three-arm parallel where every arm interrupts simultaneously. Exercises Interrupt[] aggregation through the desugared fork: the test harness sees an array of three pending interrupts and responds to each. Confirms the parallel block's interrupt path uses the same `hasInterrupts` aggregation machinery as fork.",
+      "input": "",
+      "expectedOutput": "\"a-result,b-result,c-result\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "interruptHandlers": [
+        { "action": "approve" },
+        { "action": "approve" },
+        { "action": "approve" }
+      ]
+    }
+  ]
+}

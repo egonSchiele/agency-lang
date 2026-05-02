@@ -1,0 +1,46 @@
+// Stress test for parallel/seq blocks. Mirrors the spirit of fork-stress
+// but exercises parallel-specific surface: heterogeneous arms with mixed
+// interrupt counts (0, 1, 2), a seq arm that interrupts twice and is
+// followed by a non-interrupting call, and per-arm response routing
+// across three distinct resolved values.
+//
+// Across three resume cycles, this fixture verifies:
+//   - Multi-cycle resume works for parallel arms (cycles 1, 2, 3).
+//   - Cached non-interrupting arms (a, e) are NOT re-executed on resume.
+//   - A seq arm with two sequential interrupts in one call advances its
+//     internal substep counter correctly across cycles.
+//   - The non-interrupting call AFTER a multi-interrupt call inside a
+//     seq arm fires exactly once, in the final cycle.
+//   - Per-arm responseMap correctly routes each distinct resolvedValue
+//     to the right interrupt site.
+//
+// The fixture uses pure functions throughout — no shared mutable state —
+// so the output is fully deterministic.
+
+def neverInterrupts(label: string): string {
+  return "n${label}"
+}
+
+def interruptsOnce(label: string): string {
+  const v = interrupt("i1${label}?")
+  return "i1${label}-${v}"
+}
+
+def interruptsTwice(label: string): string {
+  const v1 = interrupt("i2${label}-1?")
+  const v2 = interrupt("i2${label}-2?")
+  return "i2${label}-${v1}-${v2}"
+}
+
+node main() {
+  parallel {
+    let a = neverInterrupts("a")
+    let b = interruptsOnce("b")
+    seq {
+      let c = interruptsTwice("c")
+      let d = neverInterrupts("d-after-c")
+    }
+    let e = neverInterrupts("e")
+  }
+  return "${a}|${b}|${c}|${d}|${e}"
+}

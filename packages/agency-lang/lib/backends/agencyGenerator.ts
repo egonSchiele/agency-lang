@@ -10,8 +10,10 @@ import {
   MultiLineStringLiteral,
   NewLine,
   ObjectProperty,
+  ParallelBlock,
   Scope,
   ScopeType,
+  SeqBlock,
   StringLiteral,
   TypeAlias,
   VariableType,
@@ -272,6 +274,10 @@ export class AgencyGenerator {
         return `re/${node.pattern}/${node.flags}`;
       case "interruptStatement":
         return this.processInterruptStatement(node);
+      case "parallelBlock":
+        return this.processParallelBlock(node);
+      case "seqBlock":
+        return this.processSeqBlock(node);
       default:
         throw new Error(`Unhandled Agency node type: ${(node as any).type}`);
     }
@@ -990,6 +996,40 @@ export class AgencyGenerator {
     const threadType = node.threadType;
     return this.indentStr(
       `${threadType} {\n${bodyCodeStr}${this.indentStr("}")}`,
+    );
+  }
+
+  protected processParallelBlock(node: ParallelBlock): string {
+    this.increaseIndent();
+    const bodyCodes: string[] = [];
+    for (const stmt of node.body) {
+      bodyCodes.push(this.processNode(stmt));
+    }
+    this.decreaseIndent();
+    const bodyCodeStr =
+      bodyCodes
+        .filter((s) => s !== "")
+        .join("\n")
+        .trimEnd() + "\n";
+    return this.indentStr(
+      `parallel {\n${bodyCodeStr}${this.indentStr("}")}`,
+    );
+  }
+
+  protected processSeqBlock(node: SeqBlock): string {
+    this.increaseIndent();
+    const bodyCodes: string[] = [];
+    for (const stmt of node.body) {
+      bodyCodes.push(this.processNode(stmt));
+    }
+    this.decreaseIndent();
+    const bodyCodeStr =
+      bodyCodes
+        .filter((s) => s !== "")
+        .join("\n")
+        .trimEnd() + "\n";
+    return this.indentStr(
+      `seq {\n${bodyCodeStr}${this.indentStr("}")}`,
     );
   }
 

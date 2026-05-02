@@ -12,7 +12,7 @@ Set `BRAVE_API_KEY` to your Brave Search API key. Alternatively, you can pass th
 
 ## Usage
 
-```
+```ts
 import { braveSearch } from "pkg::@agency-lang/brave-search"
 
 node main() {

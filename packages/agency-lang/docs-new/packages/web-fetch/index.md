@@ -8,7 +8,7 @@ npm install @agency-lang/web-fetch
 
 ## Usage
 
-```
+```ts
 import { fetchPage } from "pkg::@agency-lang/web-fetch"
 
 node main() {

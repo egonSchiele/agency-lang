@@ -23,7 +23,7 @@ Configure MCP servers in your `agency.json`:
 
 Then use `mcp()` to get tools from a configured server:
 
-```
+```ts
 import { mcp } from "pkg::@agency-lang/mcp"
 
 node main() {

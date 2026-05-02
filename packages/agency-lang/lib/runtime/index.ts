@@ -58,6 +58,8 @@ export {
   respondToInterrupts,
 } from "./interrupts.js";
 
+export { checkPolicy, validatePolicy } from "./policy.js";
+
 export { isGenerator, handleStreamingResponse } from "./streaming.js";
 
 export { runPrompt } from "./prompt.js";

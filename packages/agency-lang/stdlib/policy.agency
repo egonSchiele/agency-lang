@@ -1,0 +1,9 @@
+import { _checkPolicy, _validatePolicy } from "./lib/policy.js"
+
+export def checkPolicy(policy: object, interrupt: object) {
+  return _checkPolicy(policy, interrupt)
+}
+
+export def validatePolicy(policy: object) {
+  return _validatePolicy(policy)
+}

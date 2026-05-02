@@ -3,7 +3,7 @@ import { AgencyConfig, loadConfigSafe } from "@/config.js";
 import { AgencyProgram, generateTypeScript } from "@/index.js";
 import { resolveImports } from "@/preprocessors/importResolver.js";
 import { collectProgramInfo } from "@/programInfo.js";
-import { buildSymbolTable, type SymbolTable } from "@/symbolTable.js";
+import { SymbolTable } from "@/symbolTable.js";
 import { formatErrors, typeCheck } from "@/typeChecker/index.js";
 import { spawn } from "child_process";
 import { transformSync } from "esbuild";
@@ -144,7 +144,7 @@ export function compile(
   const parsedProgram = parse(contents, config, !isStdlibIndex);
 
   const symbolTable =
-    options?.symbolTable ?? buildSymbolTable(absoluteInputFile, config);
+    options?.symbolTable ?? SymbolTable.build(absoluteInputFile, config);
 
   const resolvedProgram = resolveImports(
     parsedProgram,

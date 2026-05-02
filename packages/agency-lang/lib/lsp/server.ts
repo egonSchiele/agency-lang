@@ -10,7 +10,7 @@ import {
 } from "vscode-languageserver/node.js";
 import { TextDocument } from "vscode-languageserver-textdocument";
 import { AgencyProgram } from "../types.js";
-import { buildSymbolTable } from "../symbolTable.js";
+import { SymbolTable } from "../symbolTable.js";
 import { uriToPath } from "./uri.js";
 import { getWorkspaceForFile, invalidateWorkspace } from "./workspace.js";
 import { runDiagnostics } from "./diagnostics.js";
@@ -54,9 +54,9 @@ export function startServer(): void {
     const fsPath = uriToPath(doc.uri);
     const { config } = getWorkspaceForFile(fsPath);
 
-    let symbolTable = {};
+    let symbolTable = new SymbolTable();
     try {
-      symbolTable = buildSymbolTable(fsPath, config);
+      symbolTable = SymbolTable.build(fsPath, config);
     } catch {
       // If symbol table build fails (e.g. file not on disk yet), continue with empty table
     }

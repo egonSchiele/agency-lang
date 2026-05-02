@@ -1,6 +1,6 @@
 import * as fs from "fs";
 import * as path from "path";
-import { buildSymbolTable } from "@/symbolTable.js";
+import { SymbolTable } from "@/symbolTable.js";
 
 type FileData = {
   path: string;
@@ -11,15 +11,16 @@ type FileData = {
 // Excludes stdlib files (only includes files under the source directory).
 function discoverSourceFiles(sourceFile: string): FileData[] {
   const sourceDir = path.dirname(path.resolve(sourceFile));
-  const symbolTable = buildSymbolTable(sourceFile);
+  const symbolTable = SymbolTable.build(sourceFile);
   const absSourceFile = path.resolve(sourceFile);
 
-  // buildSymbolTable silently skips missing files, so check the entrypoint is in the table
-  if (!symbolTable[absSourceFile]) {
+  // SymbolTable.build silently skips missing files, so check the entrypoint is in the table
+  if (!symbolTable.has(absSourceFile)) {
     throw new Error(`Source file not found or failed to parse: ${sourceFile}`);
   }
 
-  return Object.keys(symbolTable)
+  return symbolTable
+    .filePaths()
     .filter((absPath) => {
       const rel = path.relative(sourceDir, absPath);
       return !path.isAbsolute(rel) && !rel.startsWith("..");

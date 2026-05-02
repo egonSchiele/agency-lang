@@ -133,7 +133,7 @@ function collectImportedSymbols(
     if (node.type === "importNodeStatement") {
       const importedFile = resolveImportedFile(fsPath, node.agencyFile);
       if (!importedFile) continue;
-      const fileSymbols = symbolTable[importedFile] ?? {};
+      const fileSymbols = symbolTable.getFile(importedFile) ?? {};
       for (const name of node.importedNodes) {
         const symbol = fileSymbols[name];
         if (!symbol) continue;
@@ -151,7 +151,7 @@ function collectImportedSymbols(
     if (node.type !== "importStatement") continue;
     const importedFile = resolveImportedFile(fsPath, node.modulePath);
     if (!importedFile) continue;
-    const fileSymbols = symbolTable[importedFile] ?? {};
+    const fileSymbols = symbolTable.getFile(importedFile) ?? {};
     for (const importedName of node.importedNames) {
       if (importedName.type !== "namedImport") continue;
       for (const name of importedName.importedNames) {

@@ -5,7 +5,7 @@ import * as os from "os";
 import * as path from "path";
 import { handleHover } from "./hover.js";
 import { runDiagnostics } from "./diagnostics.js";
-import { buildSymbolTable } from "../symbolTable.js";
+import { SymbolTable } from "../symbolTable.js";
 
 function makeDoc(content: string, uri = "file:///test.agency") {
   return TextDocument.create(uri, "agency", 1, content);
@@ -19,16 +19,22 @@ describe("handleHover", () => {
 }
 greet("world")`;
     const doc = makeDoc(source);
-    const { semanticIndex } = runDiagnostics(doc, "/test.agency", {}, {});
+    const { semanticIndex } = runDiagnostics(
+      doc,
+      "/test.agency",
+      {},
+      new SymbolTable(),
+    );
     const result = handleHover(
       { textDocument: { uri: doc.uri }, position: { line: 4, character: 0 } },
       doc,
       semanticIndex,
     );
     if (result) {
-      const value = typeof result.contents === "string"
-        ? result.contents
-        : (result.contents as any).value ?? "";
+      const value =
+        typeof result.contents === "string"
+          ? result.contents
+          : ((result.contents as any).value ?? "");
       expect(value).toContain("greet(name: string): string");
     }
   });
@@ -58,7 +64,7 @@ greet("world")`;
       fs.writeFileSync(mainFile, source);
 
       const doc = makeDoc(source, `file://${mainFile}`);
-      const symbolTable = buildSymbolTable(mainFile, {});
+      const symbolTable = SymbolTable.build(mainFile, {});
       const { semanticIndex } = runDiagnostics(doc, mainFile, {}, symbolTable);
       const result = handleHover(
         { textDocument: { uri: doc.uri }, position: { line: 3, character: 8 } },
@@ -66,11 +72,12 @@ greet("world")`;
         semanticIndex,
       );
 
-      const value = typeof result?.contents === "string"
-        ? result.contents
-        : (result?.contents as any)?.value ?? "";
+      const value =
+        typeof result?.contents === "string"
+          ? result.contents
+          : ((result?.contents as any)?.value ?? "");
       expect(value).toContain("hello(name: string): string");
-      expect(value).toContain('Imported from `./helpers.agency` as `greet`');
+      expect(value).toContain("Imported from `./helpers.agency` as `greet`");
     } finally {
       fs.rmSync(tmpDir, { recursive: true, force: true });
     }
@@ -78,7 +85,12 @@ greet("world")`;
 
   it("returns null when not on an identifier", () => {
     const doc = makeDoc("let x: number = 5");
-    const { semanticIndex } = runDiagnostics(doc, "/test.agency", {}, {});
+    const { semanticIndex } = runDiagnostics(
+      doc,
+      "/test.agency",
+      {},
+      new SymbolTable(),
+    );
     const result = handleHover(
       { textDocument: { uri: doc.uri }, position: { line: 0, character: 3 } },
       doc,

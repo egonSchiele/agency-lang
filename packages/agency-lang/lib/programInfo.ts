@@ -74,9 +74,9 @@ export function collectProgramInfo(
     graphNodes: [],
     importedNodes: [],
     importStatements: [],
-    safeFunctions: {},
     importedFunctions: {},
     classDefinitions: {},
+    safeFunctions: {},
   };
 
   // Top-level pass: collect functions, graph nodes, imports
@@ -136,7 +136,7 @@ export function collectProgramInfo(
       }
     }
 
-    for (const fileSymbols of Object.values(symbolTable)) {
+    for (const [, fileSymbols] of symbolTable.allFiles()) {
       for (const [name, symbol] of Object.entries(fileSymbols)) {
         if (symbol.parameters) {
           const localName = originalToLocal[name] ?? name;
@@ -165,13 +165,10 @@ export function collectProgramInfo(
         for (const name of nameType.importedNames) {
           const localName = nameType.aliases[name] ?? name;
           // Look up the type definition in any file's symbols
-          for (const fileSymbols of Object.values(symbolTable)) {
-            const symbol = fileSymbols[name];
-            if (symbol?.kind === "type" && symbol.aliasedType) {
-              ensureScope(info.typeAliases, GLOBAL_SCOPE_KEY)[localName] =
-                symbol.aliasedType;
-              break;
-            }
+          const symbol = symbolTable.findTypeAcrossFiles(name);
+          if (symbol?.kind === "type" && symbol.aliasedType) {
+            ensureScope(info.typeAliases, GLOBAL_SCOPE_KEY)[localName] =
+              symbol.aliasedType;
           }
         }
       }

@@ -1,7 +1,11 @@
 import { describe, it, expect } from "vitest";
 import { resolveImports } from "./importResolver.js";
 import type { AgencyProgram } from "../types.js";
-import type { SymbolTable } from "../symbolTable.js";
+import { SymbolTable, type FileSymbols } from "../symbolTable.js";
+
+function table(files: Record<string, FileSymbols>): SymbolTable {
+  return new SymbolTable(files);
+}
 import type {
   ImportStatement,
   ImportNodeStatement,
@@ -27,11 +31,11 @@ describe("resolveImports", () => {
       type: "agencyProgram",
       nodes: [makeImportStatement(["greet"], "./other.agency")],
     };
-    const symbolTable: SymbolTable = {
+    const symbolTable = table({
       "/project/other.agency": {
         greet: { kind: "node", name: "greet" },
       },
-    };
+    });
     const result = resolveImports(program, symbolTable, "/project/main.agency");
     expect(result.nodes).toHaveLength(1);
     const node = result.nodes[0] as ImportNodeStatement;
@@ -45,11 +49,11 @@ describe("resolveImports", () => {
       type: "agencyProgram",
       nodes: [makeImportStatement(["add"], "./utils.agency")],
     };
-    const symbolTable: SymbolTable = {
+    const symbolTable = table({
       "/project/utils.agency": {
         add: { kind: "function", name: "add", exported: true },
       },
-    };
+    });
     const result = resolveImports(program, symbolTable, "/project/main.agency");
     expect(result.nodes).toHaveLength(1);
     const node = result.nodes[0] as ImportStatement;
@@ -65,11 +69,11 @@ describe("resolveImports", () => {
       type: "agencyProgram",
       nodes: [makeImportStatement(["Config"], "./types.agency")],
     };
-    const symbolTable: SymbolTable = {
+    const symbolTable = table({
       "/project/types.agency": {
         Config: { kind: "type", name: "Config", exported: true },
       },
-    };
+    });
     const result = resolveImports(program, symbolTable, "/project/main.agency");
     expect(result.nodes).toHaveLength(1);
     const node = result.nodes[0] as ImportStatement;
@@ -87,13 +91,13 @@ describe("resolveImports", () => {
         makeImportStatement(["greet", "add", "Config"], "./mixed.agency"),
       ],
     };
-    const symbolTable: SymbolTable = {
+    const symbolTable = table({
       "/project/mixed.agency": {
         greet: { kind: "node", name: "greet" },
         add: { kind: "function", name: "add", exported: true },
         Config: { kind: "type", name: "Config", exported: true },
       },
-    };
+    });
     const result = resolveImports(program, symbolTable, "/project/main.agency");
     // Nodes get a separate ImportNodeStatement, functions+types share an ImportStatement
     expect(result.nodes).toHaveLength(2);
@@ -128,11 +132,11 @@ describe("resolveImports", () => {
         },
       ],
     };
-    const symbolTable: SymbolTable = {
+    const symbolTable = table({
       "/project/utils.agency": {
         add: { kind: "function", name: "add", exported: true },
       },
-    };
+    });
     const result = resolveImports(program, symbolTable, "/project/main.agency");
     expect(result.nodes).toHaveLength(1);
     const node = result.nodes[0] as ImportStatement;
@@ -161,11 +165,11 @@ describe("resolveImports", () => {
         },
       ],
     };
-    const symbolTable: SymbolTable = {
+    const symbolTable = table({
       "/project/types.agency": {
         Config: { kind: "type", name: "Config", exported: true },
       },
-    };
+    });
     const result = resolveImports(program, symbolTable, "/project/main.agency");
     expect(result.nodes).toHaveLength(1);
     const node = result.nodes[0] as ImportStatement;
@@ -197,12 +201,12 @@ describe("resolveImports", () => {
         },
       ],
     };
-    const symbolTable: SymbolTable = {
+    const symbolTable = table({
       "/project/mixed.agency": {
         add: { kind: "function", name: "add", exported: true },
         Config: { kind: "type", name: "Config", exported: true },
       },
-    };
+    });
     const result = resolveImports(program, symbolTable, "/project/main.agency");
     // Functions and types are now combined in a single ImportStatement
     expect(result.nodes).toHaveLength(1);
@@ -220,11 +224,11 @@ describe("resolveImports", () => {
       type: "agencyProgram",
       nodes: [makeImportStatement(["helper"], "./utils.agency")],
     };
-    const symbolTable: SymbolTable = {
+    const symbolTable = table({
       "/project/utils.agency": {
         helper: { kind: "function", name: "helper" },
       },
-    };
+    });
     expect(() =>
       resolveImports(program, symbolTable, "/project/main.agency"),
     ).toThrow("Function 'helper' in './utils.agency' is not exported");
@@ -235,9 +239,9 @@ describe("resolveImports", () => {
       type: "agencyProgram",
       nodes: [makeImportStatement(["missing"], "./other.agency")],
     };
-    const symbolTable: SymbolTable = {
+    const symbolTable = table({
       "/project/other.agency": {},
-    };
+    });
     expect(() =>
       resolveImports(program, symbolTable, "/project/main.agency"),
     ).toThrow("Symbol 'missing' is not defined in './other.agency'");
@@ -256,7 +260,7 @@ describe("resolveImports", () => {
       type: "agencyProgram",
       nodes: [tsImport],
     };
-    const result = resolveImports(program, {}, "/project/main.agency");
+    const result = resolveImports(program, new SymbolTable(), "/project/main.agency");
     expect(result.nodes).toEqual([tsImport]);
   });
 
@@ -270,7 +274,7 @@ describe("resolveImports", () => {
       type: "agencyProgram",
       nodes: [nodeImport],
     };
-    const result = resolveImports(program, {}, "/project/main.agency");
+    const result = resolveImports(program, new SymbolTable(), "/project/main.agency");
     expect(result.nodes).toEqual([nodeImport]);
   });
 });

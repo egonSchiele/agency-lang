@@ -45,7 +45,7 @@ export function resolveImports(
       node.modulePath,
       currentFile,
     );
-    const fileSymbols = symbolTable[importedFilePath] ?? {};
+    const fileSymbols = symbolTable.getFile(importedFilePath) ?? {};
 
     const nodeNames: string[] = [];
     const functionNames: string[] = [];

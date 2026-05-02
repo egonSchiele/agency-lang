@@ -1,10 +1,40 @@
 import { describe, it, expect } from "vitest";
 import { resolveImports } from "./importResolver.js";
 import type { AgencyProgram } from "../types.js";
-import { SymbolTable, type FileSymbols } from "../symbolTable.js";
+import {
+  SymbolTable,
+  type FileSymbols,
+  type FunctionSymbol,
+  type NodeSymbol,
+  type TypeSymbol,
+} from "../symbolTable.js";
 
 function table(files: Record<string, FileSymbols>): SymbolTable {
   return new SymbolTable(files);
+}
+
+function fn(name: string, opts: { exported?: boolean; safe?: boolean } = {}): FunctionSymbol {
+  return {
+    kind: "function",
+    name,
+    exported: opts.exported ?? false,
+    safe: opts.safe ?? false,
+    parameters: [],
+    returnType: null,
+  };
+}
+
+function nodeSym(name: string): NodeSymbol {
+  return { kind: "node", name, parameters: [], returnType: null };
+}
+
+function typeSym(name: string): TypeSymbol {
+  return {
+    kind: "type",
+    name,
+    exported: true,
+    aliasedType: { type: "primitiveType", value: "string" },
+  };
 }
 import type {
   ImportStatement,
@@ -33,7 +63,7 @@ describe("resolveImports", () => {
     };
     const symbolTable = table({
       "/project/other.agency": {
-        greet: { kind: "node", name: "greet" },
+        greet: nodeSym("greet"),
       },
     });
     const result = resolveImports(program, symbolTable, "/project/main.agency");
@@ -51,7 +81,7 @@ describe("resolveImports", () => {
     };
     const symbolTable = table({
       "/project/utils.agency": {
-        add: { kind: "function", name: "add", exported: true },
+        add: fn("add", { exported: true }),
       },
     });
     const result = resolveImports(program, symbolTable, "/project/main.agency");
@@ -71,7 +101,7 @@ describe("resolveImports", () => {
     };
     const symbolTable = table({
       "/project/types.agency": {
-        Config: { kind: "type", name: "Config", exported: true },
+        Config: typeSym("Config"),
       },
     });
     const result = resolveImports(program, symbolTable, "/project/main.agency");
@@ -93,9 +123,9 @@ describe("resolveImports", () => {
     };
     const symbolTable = table({
       "/project/mixed.agency": {
-        greet: { kind: "node", name: "greet" },
-        add: { kind: "function", name: "add", exported: true },
-        Config: { kind: "type", name: "Config", exported: true },
+        greet: nodeSym("greet"),
+        add: fn("add", { exported: true }),
+        Config: typeSym("Config"),
       },
     });
     const result = resolveImports(program, symbolTable, "/project/main.agency");
@@ -134,7 +164,7 @@ describe("resolveImports", () => {
     };
     const symbolTable = table({
       "/project/utils.agency": {
-        add: { kind: "function", name: "add", exported: true },
+        add: fn("add", { exported: true }),
       },
     });
     const result = resolveImports(program, symbolTable, "/project/main.agency");
@@ -167,7 +197,7 @@ describe("resolveImports", () => {
     };
     const symbolTable = table({
       "/project/types.agency": {
-        Config: { kind: "type", name: "Config", exported: true },
+        Config: typeSym("Config"),
       },
     });
     const result = resolveImports(program, symbolTable, "/project/main.agency");
@@ -203,8 +233,8 @@ describe("resolveImports", () => {
     };
     const symbolTable = table({
       "/project/mixed.agency": {
-        add: { kind: "function", name: "add", exported: true },
-        Config: { kind: "type", name: "Config", exported: true },
+        add: fn("add", { exported: true }),
+        Config: typeSym("Config"),
       },
     });
     const result = resolveImports(program, symbolTable, "/project/main.agency");
@@ -226,7 +256,7 @@ describe("resolveImports", () => {
     };
     const symbolTable = table({
       "/project/utils.agency": {
-        helper: { kind: "function", name: "helper" },
+        helper: fn("helper"),
       },
     });
     expect(() =>

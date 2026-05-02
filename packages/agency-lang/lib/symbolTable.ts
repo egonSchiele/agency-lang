@@ -21,16 +21,39 @@ import {
 
 export type SymbolKind = "node" | "function" | "type" | "class";
 
-export type SymbolInfo = {
-  kind: SymbolKind;
+export type FunctionSymbol = {
+  kind: "function";
   name: string;
   loc?: SourceLocation;
-  safe?: boolean;
-  exported?: boolean;
-  parameters?: FunctionParameter[];
-  returnType?: VariableType | null;
-  aliasedType?: VariableType;
+  safe: boolean;
+  exported: boolean;
+  parameters: FunctionParameter[];
+  returnType: VariableType | null;
 };
+
+export type NodeSymbol = {
+  kind: "node";
+  name: string;
+  loc?: SourceLocation;
+  parameters: FunctionParameter[];
+  returnType: VariableType | null;
+};
+
+export type TypeSymbol = {
+  kind: "type";
+  name: string;
+  loc?: SourceLocation;
+  exported: boolean;
+  aliasedType: VariableType;
+};
+
+export type ClassSymbol = {
+  kind: "class";
+  name: string;
+  loc?: SourceLocation;
+};
+
+export type SymbolInfo = FunctionSymbol | NodeSymbol | TypeSymbol | ClassSymbol;
 
 /** Maps symbol name → info for a single file. */
 export type FileSymbols = Record<string, SymbolInfo>;
@@ -191,6 +214,8 @@ export function classifySymbols(program: AgencyProgram): FileSymbols {
           kind: "node",
           name: node.nodeName,
           loc: node.loc,
+          parameters: node.parameters,
+          returnType: node.returnType ?? null,
         };
         break;
       case "function":
@@ -198,10 +223,10 @@ export function classifySymbols(program: AgencyProgram): FileSymbols {
           kind: "function",
           name: node.functionName,
           loc: node.loc,
-          safe: node.safe,
-          exported: node.exported,
+          safe: !!node.safe,
+          exported: !!node.exported,
           parameters: node.parameters,
-          returnType: node.returnType,
+          returnType: node.returnType ?? null,
         };
         break;
       case "typeAlias":
@@ -209,7 +234,7 @@ export function classifySymbols(program: AgencyProgram): FileSymbols {
           kind: "type",
           name: node.aliasName,
           loc: node.loc,
-          exported: node.exported,
+          exported: !!node.exported,
           aliasedType: node.aliasedType,
         };
         break;

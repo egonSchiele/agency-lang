@@ -138,11 +138,10 @@ export function collectProgramInfo(
 
     for (const [, fileSymbols] of symbolTable.allFiles()) {
       for (const [name, symbol] of Object.entries(fileSymbols)) {
-        if (symbol.parameters) {
-          const localName = originalToLocal[name] ?? name;
-          if (info.importedFunctions[localName]) {
-            info.importedFunctions[localName].parameters = symbol.parameters;
-          }
+        if (symbol.kind !== "function" && symbol.kind !== "node") continue;
+        const localName = originalToLocal[name] ?? name;
+        if (info.importedFunctions[localName]) {
+          info.importedFunctions[localName].parameters = symbol.parameters;
         }
       }
     }

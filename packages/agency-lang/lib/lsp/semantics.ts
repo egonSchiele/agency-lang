@@ -96,16 +96,18 @@ function addImportedSymbol(
     symbol: SymbolInfo;
   },
 ): void {
+  const sym = opts.symbol;
+  const isCallable = sym.kind === "function" || sym.kind === "node";
   addSymbol(index, {
     name: opts.localName,
     originalName: opts.originalName,
-    kind: opts.symbol.kind,
+    kind: sym.kind,
     source: "imported",
     filePath: opts.filePath,
-    loc: opts.symbol.loc,
-    parameters: opts.symbol.parameters,
-    returnType: opts.symbol.returnType,
-    aliasedType: opts.symbol.aliasedType,
+    loc: sym.loc,
+    parameters: isCallable ? sym.parameters : undefined,
+    returnType: isCallable ? sym.returnType : undefined,
+    aliasedType: sym.kind === "type" ? sym.aliasedType : undefined,
     importPath: opts.importPath,
   });
 }

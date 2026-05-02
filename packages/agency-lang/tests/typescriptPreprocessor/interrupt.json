@@ -22,8 +22,8 @@
         {
           "type": "returnStatement",
           "value": {
-            "type": "functionCall",
-            "functionName": "interrupt",
+            "type": "interruptStatement",
+            "kind": "unknown",
             "arguments": [
               {
                 "type": "string",
@@ -42,8 +42,7 @@
                         "col": 46,
                         "start": 88,
                         "end": 94
-                      },
-                      "scope": "args"
+                      }
                     }
                   }
                 ]
@@ -53,9 +52,8 @@
               "line": -1,
               "col": 9,
               "start": 51,
-              "end": 100
-            },
-            "scope": "imported"
+              "end": 97
+            }
           },
           "loc": {
             "line": -1,

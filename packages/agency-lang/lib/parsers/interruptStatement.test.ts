@@ -39,10 +39,24 @@ describe("interruptStatementParser", () => {
     expect(result.result.arguments).toHaveLength(1);
   });
 
-  it("does NOT match bare interrupt (no namespace)", () => {
+  it("parses bare interrupt as kind 'unknown'", () => {
     const input = 'interrupt("msg")';
     const result = interruptStatementParser(input);
-    expect(result.success).toBe(false);
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.result.type).toBe("interruptStatement");
+    expect(result.result.kind).toBe("unknown");
+    expect(result.result.arguments).toHaveLength(1);
+  });
+
+  it("parses bare interrupt with two arguments", () => {
+    const input = 'interrupt("msg", { foo: 1 })';
+    const result = interruptStatementParser(input);
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.result.type).toBe("interruptStatement");
+    expect(result.result.kind).toBe("unknown");
+    expect(result.result.arguments).toHaveLength(2);
   });
 });
 
@@ -54,5 +68,14 @@ describe("interruptExprParser", () => {
     if (!result.success) return;
     expect(result.result.type).toBe("interruptStatement");
     expect(result.result.kind).toBe("std::read");
+  });
+
+  it("parses bare interrupt expression", () => {
+    const input = 'interrupt("msg")';
+    const result = interruptExprParser(input);
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.result.type).toBe("interruptStatement");
+    expect(result.result.kind).toBe("unknown");
   });
 });

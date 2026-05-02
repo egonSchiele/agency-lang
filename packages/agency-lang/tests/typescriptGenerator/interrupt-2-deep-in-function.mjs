@@ -185,7 +185,7 @@ if (__response) {
   }
 } else {
   // First run: call handlers, then propagate if unhandled
-  const __handlerResult = await interruptWithHandlers("unknown", `Agent wants to call the greet function with name: ${__stack.args.name} and age: ${__stack.args.age}`, {}, "./interrupt-2-deep-in-function.agency", __ctx, __stateStack);
+  const __handlerResult = await interruptWithHandlers("unknown", `Agent wants to call the greet function with name: ${name} and age: ${age}`, {}, "./interrupt-2-deep-in-function.agency", __ctx, __stateStack);
   if (isRejected(__handlerResult)) {
     
     

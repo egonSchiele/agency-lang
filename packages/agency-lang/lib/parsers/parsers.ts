@@ -1702,17 +1702,28 @@ const namespaceIdentifier: Parser<string> = (input: string) => {
 };
 
 // Core interrupt parser without trailing whitespace/semicolons (for use in expressions)
+// Handles both structured `interrupt std::read("msg")` and bare `interrupt("msg")` forms.
+// Bare form gets kind "unknown".
 const _interruptExprParser: Parser<InterruptStatement> = (input: string) => {
-  const parser = seqC(
+  // Try structured form first: interrupt <namespace>(<args>)
+  const structured = seqC(
     set("type", "interruptStatement"),
     str("interrupt"),
     spaces,
     capture(namespaceIdentifier, "kind"),
     captureCaptures(argumentListParser),
-  );
-  const result = parser(input);
-  if (!result.success) return result;
-  return success(result.result as InterruptStatement, result.rest);
+  )(input);
+  if (structured.success) return success(structured.result as InterruptStatement, structured.rest);
+
+  // Bare form: interrupt(<args>) — no namespace, kind defaults to "unknown"
+  const bare = seqC(
+    set("type", "interruptStatement"),
+    str("interrupt"),
+    set("kind", "unknown"),
+    captureCaptures(argumentListParser),
+  )(input);
+  if (!bare.success) return bare;
+  return success(bare.result as InterruptStatement, bare.rest);
 };
 
 export const interruptExprParser: Parser<InterruptStatement> = withLoc(_interruptExprParser);

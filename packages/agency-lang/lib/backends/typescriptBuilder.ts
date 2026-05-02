@@ -1902,50 +1902,20 @@ export class TypeScriptBuilder {
     );
   }
 
-  private extractInterruptFields(node: InterruptStatement | FunctionCall): { kind: string; messageExpr: string; dataExpr: string } {
-    if (node.type === "interruptStatement") {
-      return {
-        kind: node.kind,
-        messageExpr: node.arguments && node.arguments.length > 0
-          ? this.str(this.processCallArg(node.arguments[0]))
-          : '""',
-        dataExpr: node.arguments && node.arguments.length > 1
-          ? this.str(this.processCallArg(node.arguments[1]))
-          : "{}",
-      };
-    }
+  private extractInterruptFields(node: InterruptStatement): { kind: string; messageExpr: string; dataExpr: string } {
     return {
-      kind: "unknown",
+      kind: node.kind,
       messageExpr: node.arguments && node.arguments.length > 0
         ? this.str(this.processCallArg(node.arguments[0]))
         : '""',
-      dataExpr: "{}",
+      dataExpr: node.arguments && node.arguments.length > 1
+        ? this.str(this.processCallArg(node.arguments[1]))
+        : "{}",
     };
   }
 
-  private buildInterruptReturn(args: FunctionCall["arguments"]): TsNode {
-    // Bare interrupt("msg") — desugar to kind "unknown", data {}
-    const messageExpr = args.length > 0
-      ? this.str(this.processCallArg(args[0]))
-      : '""';
-    return this.buildInterruptReturnStructured("unknown", messageExpr, "{}");
-  }
-
   private isInterruptExpression(node: AgencyNode): boolean {
-    return (
-      node.type === "interruptStatement" ||
-      (node.type === "functionCall" && node.functionName === "interrupt")
-    );
-  }
-
-  private buildInterruptReturnFromExpr(node: AgencyNode): TsNode {
-    if (node.type === "interruptStatement") {
-      return this.processInterruptStatement(node);
-    }
-    if (node.type === "functionCall") {
-      return this.buildInterruptReturn(node.arguments);
-    }
-    throw new Error("Expected interruptStatement or functionCall");
+    return node.type === "interruptStatement";
   }
 
   private processInterruptStatement(node: InterruptStatement): TsNode {
@@ -1954,10 +1924,6 @@ export class TypeScriptBuilder {
   }
 
   private processFunctionCallAsStatement(node: FunctionCall): TsNode {
-    if (node.functionName === "interrupt") {
-      return this.buildInterruptReturn(node.arguments);
-    }
-
     if (node.functionName === "_emit") {
       return this.processFunctionCall(node);
     }
@@ -2476,7 +2442,7 @@ export class TypeScriptBuilder {
     // Block bodies: halt the block's runner with the raw value
     if (this.getCurrentScope().type === "block") {
       if (this.isInterruptExpression(node.value)) {
-        return this.buildInterruptReturnFromExpr(node.value);
+        return this.processInterruptStatement(node.value as InterruptStatement);
       }
       const valueNode = this.processNode(node.value);
       return ts.runnerHalt(valueNode);
@@ -2484,7 +2450,7 @@ export class TypeScriptBuilder {
 
     if (this.isInsideGraphNode) {
       if (this.isInterruptExpression(node.value)) {
-        return this.buildInterruptReturnFromExpr(node.value);
+        return this.processInterruptStatement(node.value as InterruptStatement);
       }
       if (
         node.value.type === "functionCall" &&
@@ -2512,7 +2478,7 @@ export class TypeScriptBuilder {
     }
 
     if (this.isInterruptExpression(node.value)) {
-      return this.buildInterruptReturnFromExpr(node.value);
+      return this.processInterruptStatement(node.value as InterruptStatement);
     } else if (
       node.value.type === "functionCall" &&
       node.value.functionName === "llm"
@@ -2562,7 +2528,7 @@ export class TypeScriptBuilder {
     if (value.type === "functionCall" && value.functionName === "llm") {
       return this.processLlmCall(variableName, typeHint, value, node.scope!);
     } else if (this.isInterruptExpression(value)) {
-      const { kind, messageExpr, dataExpr } = this.extractInterruptFields(value as InterruptStatement | FunctionCall);
+      const { kind, messageExpr, dataExpr } = this.extractInterruptFields(value as InterruptStatement);
       const origin = moduleIdToOrigin(this.moduleId);
       const makeAssign = (val: string) =>
         this.str(

@@ -1090,7 +1090,7 @@ export const agencyObjectKVParser: Parser<AgencyObjectKV> = (
     "agencyObjectKVParser",
     seqC(
       optionalSpaces,
-      capture(or(map(quotedString, removeQuotes), manyWithJoin(varNameChar)), "key"),
+      capture(or(map(quotedString, removeQuotes), many1WithJoin(varNameChar)), "key"),
       optionalSpaces,
       char(":"),
       optionalSpaces,

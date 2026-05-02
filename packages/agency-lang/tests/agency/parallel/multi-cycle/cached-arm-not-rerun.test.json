@@ -1,0 +1,14 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Two-arm parallel where one arm interrupts and one runs to completion. The completed arm increments a module-level `counter` global as a side effect. After resume, the test asserts counter is exactly 1 — if the BranchState.result caching is broken and the completed arm re-executes on resume, counter would be 2 (or more) and the exact-match would fail. This addresses the gap described in fork/multi-cycle/partial-cycle-cached: pure non-interrupting branches don't reveal re-execution, but a side-effecting branch does.",
+      "input": "",
+      "expectedOutput": "\"n1,ok,counter:1\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "interruptHandlers": [
+        { "action": "approve" }
+      ]
+    }
+  ]
+}

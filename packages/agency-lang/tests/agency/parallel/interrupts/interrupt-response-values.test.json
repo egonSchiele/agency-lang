@@ -1,0 +1,15 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Two arms interrupt simultaneously, each gets resolved with a distinct value. The test asserts each arm received the value addressed to its prompt — this catches a bug where the desugar's responseMap (matching by interruptId) routed arm B's resolved value to arm A or vice versa.",
+      "input": "",
+      "expectedOutput": "\"a-got-vA,b-got-vB\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "interruptHandlers": [
+        { "action": "resolve", "expectedMessage": "approve a?", "resolvedValue": "vA" },
+        { "action": "resolve", "expectedMessage": "approve b?", "resolvedValue": "vB" }
+      ]
+    }
+  ]
+}

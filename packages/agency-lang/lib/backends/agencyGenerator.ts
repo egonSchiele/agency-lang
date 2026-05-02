@@ -278,8 +278,8 @@ export class AgencyGenerator {
   }
 
   protected processInterruptStatement(node: InterruptStatement): string {
-    // todo
-    return ""
+    const args = this.renderArgList(node.arguments);
+    return this.indentStr(`interrupt ${node.kind}${args}`);
   }
 
   protected needsParensLeft(child: BinOpArgument, parentOp: Operator): boolean {

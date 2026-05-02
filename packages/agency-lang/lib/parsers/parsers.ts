@@ -1083,16 +1083,6 @@ export const agencyArrayParser: Parser<AgencyArray> = (
   return parser(input);
 };
 
-const stripQuotes = (s: string) => {
-  if (
-    (s.startsWith('"') && s.endsWith('"')) ||
-    (s.startsWith("'") && s.endsWith("'"))
-  ) {
-    return s.slice(1, -1);
-  }
-  return s;
-}
-
 export const agencyObjectKVParser: Parser<AgencyObjectKV> = (
   input: string,
 ): ParserResult<AgencyObjectKV> => {
@@ -1100,7 +1090,7 @@ export const agencyObjectKVParser: Parser<AgencyObjectKV> = (
     "agencyObjectKVParser",
     seqC(
       optionalSpaces,
-      capture(or(map(quotedString, stripQuotes), manyWithJoin(varNameChar)), "key"),
+      capture(or(map(quotedString, removeQuotes), manyWithJoin(varNameChar)), "key"),
       optionalSpaces,
       char(":"),
       optionalSpaces,

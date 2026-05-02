@@ -1902,6 +1902,27 @@ export class TypeScriptBuilder {
     );
   }
 
+  private extractInterruptFields(node: InterruptStatement | FunctionCall): { kind: string; messageExpr: string; dataExpr: string } {
+    if (node.type === "interruptStatement") {
+      return {
+        kind: node.kind,
+        messageExpr: node.arguments.length > 0
+          ? this.str(this.processCallArg(node.arguments[0]))
+          : '""',
+        dataExpr: node.arguments.length > 1
+          ? this.str(this.processCallArg(node.arguments[1]))
+          : "{}",
+      };
+    }
+    return {
+      kind: "unknown",
+      messageExpr: node.arguments.length > 0
+        ? this.str(this.processCallArg(node.arguments[0]))
+        : '""',
+      dataExpr: "{}",
+    };
+  }
+
   private buildInterruptReturn(args: FunctionCall["arguments"]): TsNode {
     // Bare interrupt("msg") — desugar to kind "unknown", data {}
     const messageExpr = args.length > 0
@@ -1910,7 +1931,7 @@ export class TypeScriptBuilder {
     return this.buildInterruptReturnStructured("unknown", messageExpr, "{}");
   }
 
-  private isInterruptExpression(node: { type: string; functionName?: string }): boolean {
+  private isInterruptExpression(node: AgencyNode): boolean {
     return (
       node.type === "interruptStatement" ||
       (node.type === "functionCall" && node.functionName === "interrupt")
@@ -1928,13 +1949,8 @@ export class TypeScriptBuilder {
   }
 
   private processInterruptStatement(node: InterruptStatement): TsNode {
-    const messageExpr = node.arguments.length > 0
-      ? this.str(this.processCallArg(node.arguments[0]))
-      : '""';
-    const dataExpr = node.arguments.length > 1
-      ? this.str(this.processCallArg(node.arguments[1]))
-      : "{}";
-    return this.buildInterruptReturnStructured(node.kind, messageExpr, dataExpr);
+    const { kind, messageExpr, dataExpr } = this.extractInterruptFields(node);
+    return this.buildInterruptReturnStructured(kind, messageExpr, dataExpr);
   }
 
   private processFunctionCallAsStatement(node: FunctionCall): TsNode {
@@ -2546,26 +2562,7 @@ export class TypeScriptBuilder {
     if (value.type === "functionCall" && value.functionName === "llm") {
       return this.processLlmCall(variableName, typeHint, value, node.scope!);
     } else if (this.isInterruptExpression(value)) {
-      let kind: string;
-      let messageExpr: string;
-      let dataExpr: string;
-      const intVal = value as InterruptStatement | FunctionCall;
-      if (intVal.type === "interruptStatement") {
-        kind = intVal.kind;
-        messageExpr = intVal.arguments.length > 0
-          ? this.str(this.processCallArg(intVal.arguments[0]))
-          : '""';
-        dataExpr = intVal.arguments.length > 1
-          ? this.str(this.processCallArg(intVal.arguments[1]))
-          : "{}";
-      } else {
-        // bare interrupt("msg") — desugar
-        kind = "unknown";
-        messageExpr = intVal.arguments.length > 0
-          ? this.str(this.processCallArg(intVal.arguments[0]))
-          : '""';
-        dataExpr = "{}";
-      }
+      const { kind, messageExpr, dataExpr } = this.extractInterruptFields(value as InterruptStatement | FunctionCall);
       const origin = moduleIdToOrigin(this.moduleId);
       const makeAssign = (val: string) =>
         this.str(

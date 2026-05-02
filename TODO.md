@@ -126,3 +126,5 @@ Tool call "unsafeMethodTool" crashed: Unknown named argument 'action' in call to
 ```
 
 import * from std::array into every file
+
+nested fork blocks, inner block can't access the variables of the outer block (the arg vars at least)

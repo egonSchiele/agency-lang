@@ -15,6 +15,8 @@ make                    # build everything
 pnpm test               # Run vitest in watch mode
 pnpm test:run           # Run vitest once
 pnpm run agency <file>  # Compile and run an .agency file
+pnpm run agency test <file>  # Run a single Agency test
+pnpm run agency test js <file>  # Run a single Agency js test
 pnpm run compile <file> # Compile .agency to .ts
 pnpm run ast <file>     # Parse .agency and print AST as JSON
 pnpm run preprocess <file>     # Parse .agency, run preprocessor, and print the resulting AST as JSON
@@ -217,3 +219,6 @@ There are plenty of files that dive into implementation details on specific feat
 - `docs/dev/trace.md` — execution traces capturing checkpoints at every step
 - `docs/dev/typechecker.md` — bidirectional type checking to catch errors before compilation
 - `docs/dev/typescript-ir.md` — structured TsNode tree representation of generated TypeScript
+
+## Guidance on writing commit messages and PR descriptions
+If you try to write commit messages with apostrophes right on the command line, you will get an error. I'm telling you this now because you do this every time. Same with PR descriptions. Instead you need to write the commit message or PR description in a file, and then pass that in to the git command.

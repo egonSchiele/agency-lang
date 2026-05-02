@@ -65,21 +65,21 @@ export type Interrupt<T = any> = {
   runId: string; // unique ID for the agent run, persists across interrupt pauses/resumes
 };
 
-export function interrupt<T = any>(
-  kind: string,
-  message: string,
-  data: T,
-  origin: string,
-  runId: string,
-): Interrupt<T> {
+export function interrupt<T = any>(opts: {
+  kind: string;
+  message: string;
+  data: T;
+  origin: string;
+  runId: string;
+}): Interrupt<T> {
   return {
     type: "interrupt",
-    kind,
-    message,
-    origin,
+    kind: opts.kind,
+    message: opts.message,
+    origin: opts.origin,
     interruptId: nanoid(),
-    data,
-    runId,
+    data: opts.data,
+    runId: opts.runId,
   };
 }
 
@@ -133,7 +133,7 @@ export async function interruptWithHandlers<T = any>(
 ): Promise<Interrupt<T>[] | Approved | Rejected> {
   const interruptObj = { kind, message, data, origin };
   if (ctx.handlers.length === 0) {
-    return [interrupt(kind, message, data, origin, ctx.getRunId())];
+    return [interrupt({ kind, message, data, origin, runId: ctx.getRunId() })];
   }
   let approvedValue: any = undefined;
   let hasApproval = false;
@@ -172,12 +172,12 @@ export async function interruptWithHandlers<T = any>(
     );
   }
   if (hasPropagation) {
-    return [interrupt(kind, message, data, origin, ctx.getRunId())];
+    return [interrupt({ kind, message, data, origin, runId: ctx.getRunId() })];
   }
   if (hasApproval) {
     return { type: "approve", value: approvedValue };
   }
-  return [interrupt(kind, message, data, origin, ctx.getRunId())];
+  return [interrupt({ kind, message, data, origin, runId: ctx.getRunId() })];
 }
 
 export async function respondToInterrupts(args: {

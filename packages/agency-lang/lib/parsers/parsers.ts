@@ -1686,32 +1686,19 @@ export const gotoStatementParser: Parser<GotoStatement> = label("a goto statemen
 // interruptStatement.ts
 // =============================================================================
 
-// Namespace identifier: one or more segments separated by "::"
+// Namespace identifier: two or more segments separated by "::"
 // e.g. "std::read", "myapp::deploy", "std::http::fetch"
 const namespaceIdentifier: Parser<string> = (input: string) => {
-  // First segment
-  const firstResult = many1WithJoin(varNameChar)(input);
-  if (!firstResult.success) return failure("expected namespace identifier", input);
-
-  let result = firstResult.result;
-  let rest = firstResult.rest;
-
-  // Try to consume additional ::segment pairs
-  while (true) {
-    const sepResult = str("::")(rest);
-    if (!sepResult.success) break;
-    const segResult = many1WithJoin(varNameChar)(sepResult.rest);
-    if (!segResult.success) break;
-    result += "::" + segResult.result;
-    rest = segResult.rest;
+  const parser = map(
+    sepBy1(str("::"), many1WithJoin(varNameChar)),
+    (segments) => segments.join("::"),
+  );
+  const result = parser(input);
+  if (!result.success) return result;
+  if (!result.result.includes("::")) {
+    return failure("expected interrupt kind with ::, e.g. std::read or myapp::deploy", input);
   }
-
-  // Must have at least one :: to be a namespace identifier
-  if (!result.includes("::")) {
-    return failure("expected namespace identifier with ::", input);
-  }
-
-  return success(result, rest);
+  return result;
 };
 
 // Core interrupt parser without trailing whitespace/semicolons (for use in expressions)

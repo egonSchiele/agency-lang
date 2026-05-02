@@ -8,8 +8,8 @@ def greet(name: string): string {
 node main() {
   const policy = {
     "mytest::greet": [
-      { "match": { "name": "Alice" }, "action": "allow" },
-      { "action": "deny" }
+      { "match": { "name": "Alice" }, "action": "approve" },
+      { "action": "reject" }
     ]
   }
   handle {

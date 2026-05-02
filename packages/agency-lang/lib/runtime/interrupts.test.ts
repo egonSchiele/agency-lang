@@ -4,14 +4,14 @@ import { interrupt, hasInterrupts } from "./interrupts.js";
 describe("hasInterrupts", () => {
   it("returns true for an array of interrupts", () => {
     const interrupts = [
-      interrupt("unknown", "test1", {}, "", "run1"),
-      interrupt("unknown", "test2", {}, "", "run1"),
+      interrupt({ kind: "unknown", message: "test1", data: {}, origin: "", runId: "run1" }),
+      interrupt({ kind: "unknown", message: "test2", data: {}, origin: "", runId: "run1" }),
     ];
     expect(hasInterrupts(interrupts)).toBe(true);
   });
 
   it("returns true for a single-element array", () => {
-    expect(hasInterrupts([interrupt("unknown", "test", {}, "", "run1")])).toBe(true);
+    expect(hasInterrupts([interrupt({ kind: "unknown", message: "test", data: {}, origin: "", runId: "run1" })])).toBe(true);
   });
 
   it("returns false for null/undefined", () => {

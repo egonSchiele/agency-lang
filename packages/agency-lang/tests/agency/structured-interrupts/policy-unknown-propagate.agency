@@ -8,7 +8,7 @@ def confirm() {
 node main() {
   const policy = {
     "mytest::greet": [
-      { "action": "allow" }
+      { "action": "approve" }
     ]
   }
   handle {

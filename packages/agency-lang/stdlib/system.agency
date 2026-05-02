@@ -25,7 +25,7 @@ export def setEnv(name: string, value: string): Result {
   """
   Set an environment variable in the current process. Fails if the name is empty or contains '='. The change is visible to child processes spawned afterward but does not persist outside the current process.
   """
-  return interrupt std::system::setEnv("Are you sure you want to set this environment variable?", {
+  return interrupt std::setEnv("Are you sure you want to set this environment variable?", {
     name: name,
     value: value
   })

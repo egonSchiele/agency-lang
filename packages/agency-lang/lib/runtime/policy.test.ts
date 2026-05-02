@@ -12,8 +12,8 @@ describe("checkPolicy", () => {
   it("matches exact field value (glob with no wildcards)", () => {
     const policy = {
       "test::greet": [
-        { match: { name: "Alice" }, action: "allow" as const },
-        { action: "deny" as const },
+        { match: { name: "Alice" }, action: "approve" as const },
+        { action: "reject" as const },
       ],
     };
     expect(checkPolicy(policy, { kind: "test::greet", message: "", data: { name: "Alice" }, origin: "" }))
@@ -25,8 +25,8 @@ describe("checkPolicy", () => {
   it("matches glob patterns with *", () => {
     const policy = {
       "test::cmd": [
-        { match: { command: "ls *" }, action: "allow" as const },
-        { action: "deny" as const },
+        { match: { command: "ls *" }, action: "approve" as const },
+        { action: "reject" as const },
       ],
     };
     expect(checkPolicy(policy, { kind: "test::cmd", message: "", data: { command: "ls -la" }, origin: "" }))
@@ -38,8 +38,8 @@ describe("checkPolicy", () => {
   it("matches glob patterns with ** for paths", () => {
     const policy = {
       "test::read": [
-        { match: { path: "src/**" }, action: "allow" as const },
-        { action: "deny" as const },
+        { match: { path: "src/**" }, action: "approve" as const },
+        { action: "reject" as const },
       ],
     };
     expect(checkPolicy(policy, { kind: "test::read", message: "", data: { path: "src/foo/bar.ts" }, origin: "" }))
@@ -51,8 +51,8 @@ describe("checkPolicy", () => {
   it("uses first-match-wins ordering", () => {
     const policy = {
       "test::greet": [
-        { match: { name: "Alice" }, action: "deny" as const },
-        { match: { name: "Ali*" }, action: "allow" as const },
+        { match: { name: "Alice" }, action: "reject" as const },
+        { match: { name: "Ali*" }, action: "approve" as const },
       ],
     };
     expect(checkPolicy(policy, { kind: "test::greet", message: "", data: { name: "Alice" }, origin: "" }))
@@ -62,8 +62,8 @@ describe("checkPolicy", () => {
   it("skips rules when match field is missing from data", () => {
     const policy = {
       "test::greet": [
-        { match: { email: "alice@*" }, action: "deny" as const },
-        { action: "allow" as const },
+        { match: { email: "alice@*" }, action: "reject" as const },
+        { action: "approve" as const },
       ],
     };
     expect(checkPolicy(policy, { kind: "test::greet", message: "", data: { name: "Alice" }, origin: "" }))
@@ -73,8 +73,8 @@ describe("checkPolicy", () => {
   it("matches on origin (special key)", () => {
     const policy = {
       "std::read": [
-        { match: { origin: "std::*" }, action: "allow" as const },
-        { action: "deny" as const },
+        { match: { origin: "std::*" }, action: "approve" as const },
+        { action: "reject" as const },
       ],
     };
     expect(checkPolicy(policy, { kind: "std::read", message: "", data: {}, origin: "std::fs" }))
@@ -86,8 +86,8 @@ describe("checkPolicy", () => {
   it("matches on message (special key)", () => {
     const policy = {
       "test::x": [
-        { match: { message: "Are you sure*" }, action: "allow" as const },
-        { action: "deny" as const },
+        { match: { message: "Are you sure*" }, action: "approve" as const },
+        { action: "reject" as const },
       ],
     };
     expect(checkPolicy(policy, { kind: "test::x", message: "Are you sure about this?", data: {}, origin: "" }))
@@ -97,8 +97,8 @@ describe("checkPolicy", () => {
   it("ANDs all match fields together", () => {
     const policy = {
       "test::cmd": [
-        { match: { command: "rm *", dir: "/tmp/*" }, action: "allow" as const },
-        { action: "deny" as const },
+        { match: { command: "rm *", dir: "/tmp/*" }, action: "approve" as const },
+        { action: "reject" as const },
       ],
     };
     expect(checkPolicy(policy, { kind: "test::cmd", message: "", data: { command: "rm foo", dir: "/tmp/x" }, origin: "" }))
@@ -109,15 +109,15 @@ describe("checkPolicy", () => {
 
   it("catch-all rule (no match) matches everything", () => {
     const policy = {
-      "test::x": [{ action: "allow" as const }],
+      "test::x": [{ action: "approve" as const }],
     };
     expect(checkPolicy(policy, { kind: "test::x", message: "", data: { anything: "whatever" }, origin: "" }))
       .toEqual({ type: "approve" });
   });
 
-  it("maps deny action to reject type", () => {
+  it("reject action produces reject result", () => {
     const policy = {
-      "test::x": [{ action: "deny" as const }],
+      "test::x": [{ action: "reject" as const }],
     };
     const result = checkPolicy(policy, { kind: "test::x", message: "", data: {}, origin: "" });
     expect(result).toEqual({ type: "reject" });
@@ -127,7 +127,7 @@ describe("checkPolicy", () => {
 describe("validatePolicy", () => {
   it("accepts a valid policy", () => {
     const result = validatePolicy({
-      "std::read": [{ match: { filename: "*.md" }, action: "allow" }],
+      "std::read": [{ match: { filename: "*.md" }, action: "approve" }],
     });
     expect(result.success).toBe(true);
   });

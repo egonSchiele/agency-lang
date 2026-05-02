@@ -2,7 +2,7 @@ import picomatch from "picomatch";
 
 type PolicyRule = {
   match?: Record<string, string>;
-  action: "allow" | "deny" | "propagate";
+  action: "approve" | "reject" | "propagate";
 };
 
 type Policy = Record<string, PolicyRule[]>;
@@ -23,7 +23,7 @@ export function checkPolicy(
 
   for (const rule of rules) {
     if (matchesRule(rule, interrupt)) {
-      return actionToResult(rule.action);
+      return { type: rule.action };
     }
   }
 
@@ -55,15 +55,6 @@ function matchesRule(
   return true;
 }
 
-function actionToResult(action: string): PolicyResult {
-  switch (action) {
-    case "allow": return { type: "approve" };
-    case "deny": return { type: "reject" };
-    case "propagate": return { type: "propagate" };
-    default: return { type: "propagate" };
-  }
-}
-
 export function validatePolicy(policy: any): { success: boolean; error?: string } {
   if (typeof policy !== "object" || policy === null) {
     return { success: false, error: "Policy must be an object" };
@@ -73,7 +64,7 @@ export function validatePolicy(policy: any): { success: boolean; error?: string 
       return { success: false, error: `Rules for "${kind}" must be an array` };
     }
     for (const rule of rules as any[]) {
-      if (!rule.action || !["allow", "deny", "propagate"].includes(rule.action)) {
+      if (!rule.action || !["approve", "reject", "propagate"].includes(rule.action)) {
         return { success: false, error: `Invalid action in rules for "${kind}": ${rule.action}` };
       }
     }

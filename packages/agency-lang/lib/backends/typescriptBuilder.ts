@@ -1906,17 +1906,17 @@ export class TypeScriptBuilder {
     if (node.type === "interruptStatement") {
       return {
         kind: node.kind,
-        messageExpr: node.arguments.length > 0
+        messageExpr: node.arguments && node.arguments.length > 0
           ? this.str(this.processCallArg(node.arguments[0]))
           : '""',
-        dataExpr: node.arguments.length > 1
+        dataExpr: node.arguments && node.arguments.length > 1
           ? this.str(this.processCallArg(node.arguments[1]))
           : "{}",
       };
     }
     return {
       kind: "unknown",
-      messageExpr: node.arguments.length > 0
+      messageExpr: node.arguments && node.arguments.length > 0
         ? this.str(this.processCallArg(node.arguments[0]))
         : '""',
       dataExpr: "{}",

@@ -97,6 +97,7 @@ import {
 import { GraphNodeDefinition, Visibility } from "../types/graphNode.js";
 import { ForLoop } from "../types/forLoop.js";
 import { WhileLoop } from "../types/whileLoop.js";
+import { ParallelBlock, SeqBlock } from "../types/parallelBlock.js";
 import { IfElse } from "../types/ifElse.js";
 import { ValueAccess } from "../types/access.js";
 import { BlockArgument } from "../types/blockArgument.js";
@@ -2103,6 +2104,8 @@ export const bodyParser = (input: string): ParserResult<AgencyNode[]> => {
     gotoStatementParser,
     forLoopParser,
     whileLoopParser,
+    parallelBlockParser,
+    seqBlockParser,
     matchBlockParser,
     ifParser,
     messageThreadParser,
@@ -2348,6 +2351,44 @@ export const whileLoopParser: Parser<WhileLoop> = label("a while loop", withLoc(
         optionalSpacesOrNewline,
         char("}"),
         optionalSpacesOrNewline,
+      ),
+    ),
+  ),
+)));
+
+export const parallelBlockParser: Parser<ParallelBlock> = label("a parallel block", withLoc(trace(
+  "parallelBlockParser",
+  seqC(
+    set("type", "parallelBlock"),
+    str("parallel"),
+    optionalSpaces,
+    captureCaptures(
+      parseError(
+        "expected `{` to open parallel block body",
+        char("{"),
+        optionalSpacesOrNewline,
+        capture(bodyParser, "body"),
+        optionalSpacesOrNewline,
+        char("}"),
+      ),
+    ),
+  ),
+)));
+
+export const seqBlockParser: Parser<SeqBlock> = label("a seq block", withLoc(trace(
+  "seqBlockParser",
+  seqC(
+    set("type", "seqBlock"),
+    str("seq"),
+    optionalSpaces,
+    captureCaptures(
+      parseError(
+        "expected `{` to open seq block body",
+        char("{"),
+        optionalSpacesOrNewline,
+        capture(bodyParser, "body"),
+        optionalSpacesOrNewline,
+        char("}"),
       ),
     ),
   ),

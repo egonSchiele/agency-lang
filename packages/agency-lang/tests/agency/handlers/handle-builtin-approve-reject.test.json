@@ -13,31 +13,9 @@
     },
     {
       "nodeName": "testWithReject",
-      "description": "with reject auto-rejects, function halts, rejection value is interrupt data",
+      "description": "with reject auto-rejects, function halts",
       "input": "",
-      "expectedOutput": "[\"foo start\",\"check\"]",
-      "evaluationCriteria": [
-        {
-          "type": "exact"
-        }
-      ]
-    },
-    {
-      "nodeName": "testWithApproveAssigned",
-      "description": "with approve on assigned interrupt, approved value is interrupt data",
-      "input": "",
-      "expectedOutput": "[\"foo start\",\"foo end\",\"check\"]",
-      "evaluationCriteria": [
-        {
-          "type": "exact"
-        }
-      ]
-    },
-    {
-      "nodeName": "testWithRejectAssigned",
-      "description": "with reject on assigned interrupt, rejection value is interrupt data",
-      "input": "",
-      "expectedOutput": "[\"foo start\",\"check\"]",
+      "expectedOutput": "[\"foo start\",\"interrupt rejected\"]",
       "evaluationCriteria": [
         {
           "type": "exact"

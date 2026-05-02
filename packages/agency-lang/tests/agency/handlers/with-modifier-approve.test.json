@@ -2,9 +2,9 @@
   "tests": [
     {
       "nodeName": "main",
-      "description": "with approve auto-approves, approved value is interrupt data",
+      "description": "with approve auto-approves, execution continues past interrupt",
       "input": "",
-      "expectedOutput": "\"check\"",
+      "expectedOutput": "\"approved\"",
       "evaluationCriteria": [
         {
           "type": "exact"

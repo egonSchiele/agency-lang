@@ -4,7 +4,7 @@
       "nodeName": "main",
       "input": "",
       "description": "return statement with inline handler auto-approves interrupt",
-      "expectedOutput": "\"data.txt\"",
+      "expectedOutput": "\"read:data.txt\"",
       "evaluationCriteria": [
         {
           "type": "exact"

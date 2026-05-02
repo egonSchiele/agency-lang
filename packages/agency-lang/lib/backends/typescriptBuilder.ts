@@ -2969,16 +2969,16 @@ export class TypeScriptBuilder {
   }
 
   private buildHandlerArrow(handlerName: string): TsNode {
-    const args = handlerName === "propagate" ? [] : [ts.id("__data")];
-
     if (TypeScriptBuilder.DIRECT_CALL_FUNCTIONS.has(handlerName)) {
-      // Built-in handler (approve/reject/propagate): plain JS function, call directly
+      // Built-in handler (approve/reject/propagate): call with no args
       return ts.arrowFn(
         [{ name: "__data", typeAnnotation: "any" }],
-        ts.call(ts.id(handlerName), args),
+        ts.call(ts.id(handlerName), []),
         { async: true },
       );
     }
+
+    const args = [ts.id("__data")];
 
     // User-defined function handler: use __call
     const descriptor = ts.obj({

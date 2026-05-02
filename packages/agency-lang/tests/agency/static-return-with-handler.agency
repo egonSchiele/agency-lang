@@ -1,6 +1,6 @@
 def interruptingRead(filename: string) {
-  const result = interrupt(filename)
-  return result
+  return interrupt(filename)
+  return "read:${filename}"
 }
 
 node main() {

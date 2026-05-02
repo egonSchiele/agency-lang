@@ -501,10 +501,11 @@ export function createProgram(deps: CliDependencies = {}): Command {
     .argument("<input>", "Path to .agency file or directory")
     .option("-o, --output <dir>", "Output directory for generated docs")
     .option("--ignore <dirs...>", "Directory names to ignore when scanning recursively")
-    .action((input: string, opts: { output?: string; ignore?: string[] }) => {
+    .option("--base-url <url>", "Base URL for source links")
+    .action((input: string, opts: { output?: string; ignore?: string[]; baseUrl?: string }) => {
       const config = getConfig();
       const outputDir = opts.output || config.doc?.outDir || "docs";
-      generateDoc(config, input, outputDir, opts.ignore || []);
+      generateDoc(config, input, outputDir, opts.ignore || [], opts.baseUrl);
     });
 
   program

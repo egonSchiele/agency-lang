@@ -34,8 +34,10 @@ export function generateDoc(
   inputPath: string,
   outputDir: string,
   ignoreDirs: string[] = [],
+  baseUrlOverride?: string,
 ): void {
-  const baseUrl = config.doc?.baseUrl;
+  const rawBaseUrl = baseUrlOverride || config.doc?.baseUrl;
+  const baseUrl = rawBaseUrl?.replace(/\/+$/, "");
 
   if (fs.statSync(inputPath).isDirectory()) {
     // First pass: parse and preprocess all files, build symbol registry

@@ -2,20 +2,14 @@ const log = []
 
 def greet() {
   log.push("greet-before")
-  const name = interrupt({
-    type: "safe",
-    message: "Who do you want to say bye to?"
-  })
+  const name = interrupt test::safe("Who do you want to say bye to?")
   log.push("greet-after-${name}")
   return "greet result"
 }
 
 def readStuff() {
   log.push("read-before")
-  return interrupt({
-    type: "read",
-    message: "Can I read a file?"
-  })
+  return interrupt test::read("Can I read a file?")
   log.push("read-after")
   return "read result"
 }
@@ -41,10 +35,10 @@ node main() {
   handle {
     const res1 = foo()
     log.push("foo returned ${res1}")
-  } with (data) {
-    if (data.type == "safe") {
+  } with (interrupt) {
+    if (interrupt.kind == "test::safe") {
       return approve("Alice")
-    } else if (data.type == "read") {
+    } else if (interrupt.kind == "test::read") {
       return reject("not allowed")
     }
   }
@@ -55,10 +49,10 @@ node bothRejected() {
   handle {
     const res1 = foo()
     log.push("foo returned ${res1}")
-  } with (data) {
-    if (data.type == "safe") {
+  } with (interrupt) {
+    if (interrupt.kind == "test::safe") {
       return reject()
-    } else if (data.type == "read") {
+    } else if (interrupt.kind == "test::read") {
       return reject("not allowed")
     }
   }

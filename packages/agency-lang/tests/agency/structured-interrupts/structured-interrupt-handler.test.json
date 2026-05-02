@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Handler receives structured interrupt with kind and data fields",
+      "input": "",
+      "expectedOutput": "\"Hello, Alice!\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

@@ -10,13 +10,13 @@ node main() {
         return innerInterrupt(item)
       }
       return results
-    } with (data) {
-      if (data == "approve a?") {
+    } with (interrupt) {
+      if (interrupt.message == "approve a?") {
         return approve()
       }
       return propagate()
     }
-  } with (data) {
+  } with (interrupt) {
     return approve()
   }
 }

@@ -2,9 +2,9 @@
   "tests": [
     {
       "nodeName": "main",
-      "description": "with reject auto-rejects, result is a failure with interrupt data as error",
+      "description": "with reject auto-rejects, result is a failure",
       "input": "",
-      "expectedOutput": "\"check\"",
+      "expectedOutput": "\"interrupt rejected\"",
       "evaluationCriteria": [
         {
           "type": "exact"

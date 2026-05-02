@@ -3,7 +3,7 @@
     {
       "nodeName": "main",
       "input": "",
-      "expectedOutput": "[{\"success\":false,\"error\":\"approve a?\"},{\"success\":false,\"error\":\"approve b?\"}]",
+      "expectedOutput": "[{\"success\":false,\"error\":\"interrupt rejected\"},{\"success\":false,\"error\":\"interrupt rejected\"}]",
       "evaluationCriteria": [
         {
           "type": "exact"

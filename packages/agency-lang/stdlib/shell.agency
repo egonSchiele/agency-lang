@@ -10,9 +10,7 @@ export def bash(command: string, cwd: string = "", timeout: number = 0, stdin: s
   """
   Run a shell command and return its stdout, stderr, and exit code. Pass cwd to change the working directory, timeout (seconds) to enforce a time limit, and stdin to feed input to the command.
   """
-  return interrupt({
-    type: "std::bash",
-    message: "Are you sure you want to run this shell command?",
+  return interrupt std::bash("Are you sure you want to run this shell command?", {
     command: command,
     cwd: cwd,
     timeout: timeout,
@@ -33,9 +31,7 @@ export def ls(dir: string = ".", recursive: boolean = false): Result {
   """
   List entries in a directory. Each entry includes name, path, type ("file", "dir", "symlink", "other"), and size. Set recursive to true to walk subdirectories. Fails if the directory cannot be read (missing, not a directory, permission denied).
   """
-  return interrupt({
-    type: "std::ls",
-    message: "Are you sure you want to list this directory?",
+  return interrupt std::ls("Are you sure you want to list this directory?", {
     dir: dir,
     recursive: recursive
   })
@@ -53,9 +49,7 @@ export def grep(pattern: string, dir: string = ".", flags: string = "", maxResul
   """
   Search for a regex pattern in files under a directory. Returns matches with file path, line number, and matched line. Skips node_modules, .git, dist, build. Stops at maxResults. Fails if the pattern is not a valid regex or the directory cannot be read.
   """
-  return interrupt({
-    type: "std::grep",
-    message: "Are you sure you want to search files with grep?",
+  return interrupt std::grep("Are you sure you want to search files with grep?", {
     pattern: pattern,
     dir: dir,
     flags: flags,
@@ -69,9 +63,7 @@ export def glob(pattern: string, dir: string = ".", maxResults: number = 500): R
   """
   Find files whose paths match a glob pattern (e.g. "src/**/*.ts"). Returns paths relative to the current working directory. Stops at maxResults. Fails if the pattern is not valid glob syntax or the directory cannot be read.
   """
-  return interrupt({
-    type: "std::glob",
-    message: "Are you sure you want to glob files?",
+  return interrupt std::glob("Are you sure you want to glob files?", {
     pattern: pattern,
     dir: dir,
     maxResults: maxResults

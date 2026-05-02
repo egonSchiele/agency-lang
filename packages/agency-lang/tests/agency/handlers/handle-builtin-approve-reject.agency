@@ -7,13 +7,6 @@ def foo() {
   return "foo result"
 }
 
-def fooWithAssign() {
-  log.push("foo start")
-  const result = interrupt("check")
-  log.push("foo end")
-  return result
-}
-
 node testWithApprove() {
   handle {
     const result = foo()
@@ -25,26 +18,6 @@ node testWithApprove() {
 node testWithReject() {
   handle {
     const result = foo()
-    if (isFailure(result)) {
-      log.push(result.error)
-    } else {
-      log.push(result)
-    }
-  } with reject
-  return log
-}
-
-node testWithApproveAssigned() {
-  handle {
-    const result = fooWithAssign()
-    log.push(result)
-  } with approve
-  return log
-}
-
-node testWithRejectAssigned() {
-  handle {
-    const result = fooWithAssign()
     if (isFailure(result)) {
       log.push(result.error)
     } else {

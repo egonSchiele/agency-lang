@@ -1,0 +1,17 @@
+def check(name: string) {
+  return interrupt mytest::greet("May I greet?", { name: name })
+  return "Hello, ${name}!"
+}
+
+node main() {
+  handle {
+    return check("Alice")
+  } with (interrupt) {
+    if (interrupt.kind == "mytest::greet") {
+      if (interrupt.data.name == "Alice") {
+        return approve()
+      }
+    }
+    return reject()
+  }
+}

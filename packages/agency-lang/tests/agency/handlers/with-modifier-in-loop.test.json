@@ -4,7 +4,7 @@
       "nodeName": "main",
       "description": "with approve inside a for loop auto-approves each iteration",
       "input": "",
-      "expectedOutput": "[\"a\",\"b\",\"c\"]",
+      "expectedOutput": "[\"got:a\",\"got:b\",\"got:c\"]",
       "evaluationCriteria": [
         {
           "type": "exact"

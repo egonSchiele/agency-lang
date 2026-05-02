@@ -5,12 +5,15 @@ import {
   AgencyProgram,
   Assignment,
   DebuggerStatement,
+  InterruptStatement,
   Literal,
   MultiLineStringLiteral,
   NewLine,
   ObjectProperty,
+  ParallelBlock,
   Scope,
   ScopeType,
+  SeqBlock,
   StringLiteral,
   TypeAlias,
   VariableType,
@@ -165,7 +168,7 @@ export class AgencyGenerator {
     }
   }
 
-  protected preprocessAST(): void {}
+  protected preprocessAST(): void { }
 
   protected generateBuiltins(): string {
     return "";
@@ -187,7 +190,7 @@ export class AgencyGenerator {
     this.functionDefinitions[node.functionName] = node;
   }
 
-  protected processGraphNodeName(node: GraphNodeDefinition): void {}
+  protected processGraphNodeName(node: GraphNodeDefinition): void { }
 
   public processNode(node: AgencyNode): string {
     switch (node.type) {
@@ -269,9 +272,23 @@ export class AgencyGenerator {
         return `schema(${variableTypeToString(node.typeArg, this.typeAliases)})`;
       case "regex":
         return `re/${node.pattern}/${node.flags}`;
+      case "interruptStatement":
+        return this.processInterruptStatement(node);
+      case "parallelBlock":
+        return this.processParallelBlock(node);
+      case "seqBlock":
+        return this.processSeqBlock(node);
       default:
         throw new Error(`Unhandled Agency node type: ${(node as any).type}`);
     }
+  }
+
+  protected processInterruptStatement(node: InterruptStatement): string {
+    const args = this.renderArgList(node.arguments);
+    if (node.kind === "unknown") {
+      return this.indentStr(`interrupt${args}`);
+    }
+    return this.indentStr(`interrupt ${node.kind}${args}`);
   }
 
   protected needsParensLeft(child: BinOpArgument, parentOp: Operator): boolean {
@@ -624,7 +641,7 @@ export class AgencyGenerator {
       }
       const kv = entry as AgencyObjectKV;
       const valueCode = this.processNode(kv.value).trim();
-      return this.indentStr(`${kv.key}: ${valueCode}`);
+      return this.indentStr(`${this.addQuotesToKey(kv.key)}: ${valueCode}`);
     });
     this.decreaseIndent();
     if (entries.length === 0) {
@@ -633,6 +650,13 @@ export class AgencyGenerator {
     let entriesStr = "\n" + entries.join(",\n") + "\n";
 
     return `{ ${entriesStr}` + this.indentStr("}");
+  }
+
+  private addQuotesToKey(key: string): string {
+    if (/^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(key)) {
+      return key;
+    }
+    return `"${key}"`;
   }
 
   // Access expressions
@@ -975,6 +999,40 @@ export class AgencyGenerator {
     const threadType = node.threadType;
     return this.indentStr(
       `${threadType} {\n${bodyCodeStr}${this.indentStr("}")}`,
+    );
+  }
+
+  protected processParallelBlock(node: ParallelBlock): string {
+    this.increaseIndent();
+    const bodyCodes: string[] = [];
+    for (const stmt of node.body) {
+      bodyCodes.push(this.processNode(stmt));
+    }
+    this.decreaseIndent();
+    const bodyCodeStr =
+      bodyCodes
+        .filter((s) => s !== "")
+        .join("\n")
+        .trimEnd() + "\n";
+    return this.indentStr(
+      `parallel {\n${bodyCodeStr}${this.indentStr("}")}`,
+    );
+  }
+
+  protected processSeqBlock(node: SeqBlock): string {
+    this.increaseIndent();
+    const bodyCodes: string[] = [];
+    for (const stmt of node.body) {
+      bodyCodes.push(this.processNode(stmt));
+    }
+    this.decreaseIndent();
+    const bodyCodeStr =
+      bodyCodes
+        .filter((s) => s !== "")
+        .join("\n")
+        .trimEnd() + "\n";
+    return this.indentStr(
+      `seq {\n${bodyCodeStr}${this.indentStr("}")}`,
     );
   }
 

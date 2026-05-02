@@ -11,6 +11,7 @@ import { validateTypeReferences } from "./validate.js";
 import { ScopeInfo, TypeCheckerContext } from "./types.js";
 import { Scope } from "./scope.js";
 import { formatTypeHint } from "../cli/util.js";
+import { checkType } from "./utils.js";
 
 export function buildScopes(ctx: TypeCheckerContext): ScopeInfo[] {
   const scopes: ScopeInfo[] = [];
@@ -66,10 +67,12 @@ export function buildScopes(ctx: TypeCheckerContext): ScopeInfo[] {
 }
 
 /**
- * Add a binding to the scope, with no compatibility checking. Annotated
- * declarations validate their type references; unannotated ones synthesize
- * a type from the value and widen it. Reassignment compatibility is
- * verified later in checkAssignmentsInScope.
+ * Process one assignment statement: validate its type, check the value
+ * against the declared type, and add (or update) the binding in scope.
+ *
+ * Run in source order from walkScopeBody — the value-vs-binding check
+ * needs the scope state as it was at this point in the program, not the
+ * final state after all declarations.
  */
 export function declareVariable(
   node: AgencyNode,
@@ -78,8 +81,10 @@ export function declareVariable(
 ): void {
   if (node.type !== "assignment") return;
   const newType = node.typeHint;
+  const typeAliases = ctx.getTypeAliases();
+  const existingType = scope.lookup(node.variableName);
+
   if (newType) {
-    const typeAliases = ctx.getTypeAliases();
     validateTypeReferences(
       newType,
       node.variableName,
@@ -87,9 +92,7 @@ export function declareVariable(
       ctx.errors,
       node.loc,
     );
-    // Re-declaration with an incompatible annotation is a declaration-time
-    // error, reported here while statement order is still meaningful.
-    const existingType = scope.lookup(node.variableName);
+    // Re-declaration with an incompatible annotation.
     if (
       existingType &&
       existingType !== "any" &&
@@ -103,8 +106,33 @@ export function declareVariable(
         loc: node.loc,
       });
     }
+    checkType(
+      node.value,
+      newType,
+      scope,
+      `assignment to '${node.variableName}'`,
+      ctx,
+    );
     scope.declare(node.variableName, newType);
-  } else if (!scope.has(node.variableName)) {
+  } else if (existingType) {
+    // Unannotated reassignment to an existing binding: value must match
+    // the binding's current type.
+    const valueType = synthType(node.value, scope, ctx);
+    if (
+      valueType !== "any" &&
+      existingType !== "any" &&
+      !isAssignable(valueType, existingType, typeAliases)
+    ) {
+      ctx.errors.push({
+        message: `Type '${formatTypeHint(valueType)}' is not assignable to type '${formatTypeHint(existingType)}'.`,
+        variableName: node.variableName,
+        expectedType: formatTypeHint(existingType),
+        actualType: formatTypeHint(valueType),
+        loc: node.loc,
+      });
+    }
+  } else {
+    // First declaration with no annotation — infer.
     if (ctx.config.strictTypes) {
       ctx.errors.push({
         message: `Variable '${node.variableName}' has no type annotation (strict mode).`,

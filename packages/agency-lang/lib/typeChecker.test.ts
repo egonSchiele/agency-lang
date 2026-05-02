@@ -2820,6 +2820,41 @@ describe("TypeChecker", () => {
       expect(errors).toHaveLength(0);
     });
 
+    it("validates an unannotated reassignment against the type in effect at that point, not the final type", () => {
+      // let x: string = "a"     OK
+      // x = "b"                  OK at this point — x is still string
+      // let x: number = 1        ERROR: number not assignable to string (re-decl)
+      // The middle reassignment must NOT be flagged just because x is later
+      // re-declared as number.
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "assignment",
+            variableName: "x",
+            typeHint: { type: "primitiveType", value: "string" },
+            value: { type: "string", segments: [{ type: "text", value: "a" }] },
+          },
+          {
+            type: "assignment",
+            variableName: "x",
+            value: { type: "string", segments: [{ type: "text", value: "b" }] },
+          },
+          {
+            type: "assignment",
+            variableName: "x",
+            typeHint: { type: "primitiveType", value: "number" },
+            value: { type: "number", value: "1" },
+          },
+        ],
+      };
+
+      const { errors } = typeCheck(program);
+      // Exactly one error: the re-declaration `let x: number` clashing with prior `string`.
+      expect(errors).toHaveLength(1);
+      expect(errors[0].message).toContain("'number' is not assignable to type 'string'");
+    });
+
     it("should error on property access on 'unknown'", () => {
       const program: AgencyProgram = {
         type: "agencyProgram",

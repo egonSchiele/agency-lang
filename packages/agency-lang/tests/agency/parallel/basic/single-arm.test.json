@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Degenerate single-arm parallel block. The desugar still produces a fork with one arm — no actual concurrency, but no special-case path either. The single binding hoists out normally. Per the v1 spec, this is allowed without warning to keep the parser/preprocessor edges simple.",
+      "input": "",
+      "expectedOutput": "\"only-arm\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Two-arm parallel where one arm interrupts and the other completes immediately. On resume, the completed arm's result must be cached (not re-executed) and only the interrupted arm continues. Verifies that the desugar's per-arm BranchState resume protocol — inherited from fork's existing machinery — works for parallel-shaped concurrent calls.",
+      "input": "",
+      "expectedOutput": "\"a-result,b-result\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "interruptHandlers": [
+        { "action": "approve" }
+      ]
+    }
+  ]
+}

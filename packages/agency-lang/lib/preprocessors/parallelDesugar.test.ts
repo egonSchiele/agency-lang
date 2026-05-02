@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { parseAgency } from "../parser.js";
+import { generateTypeScript } from "../backends/typescriptGenerator.js";
 import { TypescriptPreprocessor } from "./typescriptPreprocessor.js";
 import {
   desugarParallelInBody,
@@ -173,6 +174,79 @@ describe("validateParallelBlock", () => {
       /not allowed at the top level of a `parallel` block/,
     );
   });
+
+  it("rejects `while` at the top level of a parallel block", () => {
+    const body = getMainBody(`
+      node main() {
+        parallel {
+          while (cond) {
+            foo()
+          }
+          bar()
+        }
+      }
+    `);
+    expect(() => validateParallelBlock(findParallelBlock(body))).toThrow(
+      /not allowed at the top level of a `parallel` block/,
+    );
+  });
+
+  it("rejects reassignment (no declKind) at the top level", () => {
+    const body = getMainBody(`
+      node main() {
+        let x = 0
+        parallel {
+          x = 1
+          let y = bar()
+        }
+      }
+    `);
+    expect(() => validateParallelBlock(findParallelBlock(body))).toThrow(
+      /Reassignment to `x` is not allowed at the top level of a `parallel` block/,
+    );
+  });
+
+  it("rejects `return` at the top level of a parallel block", () => {
+    const body = getMainBody(`
+      node main() {
+        parallel {
+          return 1
+          let y = bar()
+        }
+      }
+    `);
+    expect(() => validateParallelBlock(findParallelBlock(body))).toThrow(
+      /not allowed at the top level of a `parallel` block/,
+    );
+  });
+
+  it("rejects `break` at the top level of a parallel block", () => {
+    const body = getMainBody(`
+      node main() {
+        parallel {
+          break
+          let y = bar()
+        }
+      }
+    `);
+    expect(() => validateParallelBlock(findParallelBlock(body))).toThrow(
+      /not allowed at the top level of a `parallel` block/,
+    );
+  });
+
+  it("rejects `continue` at the top level of a parallel block", () => {
+    const body = getMainBody(`
+      node main() {
+        parallel {
+          continue
+          let y = bar()
+        }
+      }
+    `);
+    expect(() => validateParallelBlock(findParallelBlock(body))).toThrow(
+      /not allowed at the top level of a `parallel` block/,
+    );
+  });
 });
 
 describe("desugarParallelInBody", () => {
@@ -325,5 +399,57 @@ describe("end-to-end through TypescriptPreprocessor", () => {
     expect(() => pp.preprocess()).toThrow(
       /Parallel arm references `x`, which is declared by a sibling arm/,
     );
+  });
+});
+
+describe("desugar → codegen snapshot", () => {
+  beforeEach(() => resetParallelCounter());
+
+  // This snapshot captures the contract of the preprocessor + codegen pipeline
+  // for parallel/seq blocks. It exists to catch unintended regressions in:
+  //   - the desugar shape (fork over arm name strings, if-chain dispatch,
+  //     binding return objects, post-fork destructuring),
+  //   - the existing fork lowering's handling of branch-divergent bodies,
+  //   - upstream codegen changes that affect how let/fork/return are emitted.
+  // If the assertions below fail, that means one of those layers changed
+  // shape — either intentionally (update the snapshot) or accidentally.
+  it("emits fork+if-chain shape for a parallel block with seq arm", () => {
+    const src = `
+      def foo(): string { return "f" }
+      def bar(): string { return "b" }
+      def baz(s: string): string { return s }
+      node main() {
+        parallel {
+          let a = foo()
+          seq {
+            let b = bar()
+            let c = baz(b)
+          }
+        }
+        return "done"
+      }
+    `;
+    const result = parseAgency(src, {}, false);
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    const ts = generateTypeScript(result.result, undefined, undefined, "snapshot.agency");
+
+    // Structural assertions — looser than a full snapshot file but specific
+    // enough to catch regressions in any layer. Codegen uses backtick
+    // template literals for string args, so arm names show up as `arm_N`.
+    // 1. The preprocessor introduced an __arms_0 binding fed by a fork call
+    //    over the arm name strings.
+    expect(ts).toMatch(/runner\d*\.fork\(\s*\d+\s*,\s*\[\s*`arm_0`\s*,\s*`arm_1`\s*\]/);
+    // 2. Each arm is dispatched by a string-equality check on the arm param.
+    expect(ts).toMatch(/__arm_0\s*===?\s*`arm_0`/);
+    expect(ts).toMatch(/__arm_0\s*===?\s*`arm_1`/);
+    // 3. Bindings (a from arm 0, b and c from the seq arm) are hoisted and
+    //    assigned from __arms_0 indexed access.
+    expect(ts).toMatch(/__arms_0\[0\]\.a/);
+    expect(ts).toMatch(/__arms_0\[1\]\.b/);
+    expect(ts).toMatch(/__arms_0\[1\]\.c/);
+    // 4. parallelBlock and seqBlock should have no representation in the
+    //    generated TS — they're pure preprocessor sugar.
+    expect(ts).not.toMatch(/parallelBlock|seqBlock/);
   });
 });

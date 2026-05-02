@@ -445,6 +445,14 @@ function descendIntoSubstructures(node: AgencyNode): void {
     case "withModifier":
       node.statement = desugarParallelInBody([node.statement as any])[0];
       return;
+    case "assignment":
+      // The RHS may be a function call that has a block (e.g. fork) whose
+      // body might contain a parallel block.
+      descendIntoSubstructures(node.value as AgencyNode);
+      return;
+    case "returnStatement":
+      if (node.value) descendIntoSubstructures(node.value as AgencyNode);
+      return;
     case "functionCall":
       if (node.block) {
         node.block.body = desugarParallelInBody(node.block.body);

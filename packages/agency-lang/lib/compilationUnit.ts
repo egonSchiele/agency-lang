@@ -16,7 +16,46 @@ import { walkNodes } from "./utils/node.js";
 
 export const GLOBAL_SCOPE_KEY = "global";
 
-export type ScopedTypeMap = Record<string, Record<string, VariableType>>;
+/**
+ * Type aliases keyed by the scope they were declared in. Lookups via
+ * `visibleIn(scopeKey)` see the requested scope plus the global scope
+ * (scope-local overrides global).
+ */
+export class ScopedTypeAliases {
+  private readonly byScope: Record<string, Record<string, VariableType>>;
+
+  constructor(initial?: Record<string, Record<string, VariableType>>) {
+    this.byScope = { [GLOBAL_SCOPE_KEY]: {} };
+    if (initial) {
+      for (const [k, v] of Object.entries(initial)) {
+        this.byScope[k] = { ...v };
+      }
+    }
+  }
+
+  add(scopeKey: string, name: string, type: VariableType): void {
+    if (!this.byScope[scopeKey]) this.byScope[scopeKey] = {};
+    this.byScope[scopeKey][name] = type;
+  }
+
+  get(scopeKey: string): Record<string, VariableType> | undefined {
+    return this.byScope[scopeKey];
+  }
+
+  /** Flat map of every alias visible in `scopeKey`; scope-local wins. */
+  visibleIn(scopeKey: string): Record<string, VariableType> {
+    return { ...this.byScope[GLOBAL_SCOPE_KEY], ...this.byScope[scopeKey] };
+  }
+
+  /** Iterate over every (scopeKey, aliases-in-that-scope) pair. */
+  scopes(): [string, Record<string, VariableType>][] {
+    return Object.entries(this.byScope);
+  }
+
+  clone(): ScopedTypeAliases {
+    return new ScopedTypeAliases(this.byScope);
+  }
+}
 
 /**
  * Per-compilation aggregate. Holds the rich AST nodes for the entry file's
@@ -26,7 +65,7 @@ export type ScopedTypeMap = Record<string, Record<string, VariableType>>;
  */
 export type CompilationUnit = {
   functionDefinitions: Record<string, FunctionDefinition>;
-  typeAliases: ScopedTypeMap;
+  typeAliases: ScopedTypeAliases;
   graphNodes: GraphNodeDefinition[];
   importedNodes: ImportNodeStatement[];
   importStatements: ImportStatement[];
@@ -54,22 +93,6 @@ export function scopeKey(scope: Scope): string {
   }
 }
 
-/** Get a flat map of all types visible in the given scope (scope-local overrides global). */
-export function getVisibleTypes(
-  map: ScopedTypeMap,
-  key: string,
-): Record<string, VariableType> {
-  return { ...map[GLOBAL_SCOPE_KEY], ...map[key] };
-}
-
-function ensureScope(
-  map: ScopedTypeMap,
-  key: string,
-): Record<string, VariableType> {
-  if (!map[key]) map[key] = {};
-  return map[key];
-}
-
 export function buildCompilationUnit(
   program: AgencyProgram,
   symbolTable?: SymbolTable,
@@ -77,7 +100,7 @@ export function buildCompilationUnit(
 ): CompilationUnit {
   const unit: CompilationUnit = {
     functionDefinitions: {},
-    typeAliases: { [GLOBAL_SCOPE_KEY]: {} },
+    typeAliases: new ScopedTypeAliases(),
     graphNodes: [],
     importedNodes: [],
     importStatements: [],
@@ -130,7 +153,7 @@ export function buildCompilationUnit(
   for (const { node, scopes } of walkNodes(program.nodes)) {
     const key = scopeKey(scopes[scopes.length - 1]);
     if (node.type === "typeAlias") {
-      ensureScope(unit.typeAliases, key)[node.aliasName] = node.aliasedType;
+      unit.typeAliases.add(key, node.aliasName, node.aliasedType);
     }
   }
 
@@ -150,8 +173,7 @@ export function buildCompilationUnit(
           unit.safeFunctions[r.localName] = true;
         }
         if (r.symbol.kind === "type") {
-          ensureScope(unit.typeAliases, GLOBAL_SCOPE_KEY)[r.localName] =
-            r.symbol.aliasedType;
+          unit.typeAliases.add(GLOBAL_SCOPE_KEY, r.localName, r.symbol.aliasedType);
         }
       }
     }

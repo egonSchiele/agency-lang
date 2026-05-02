@@ -98,7 +98,7 @@ import type {
   TsTemplatePart,
 } from "../ir/tsIR.js";
 import type { CompilationUnit } from "../compilationUnit.js";
-import { getVisibleTypes, scopeKey } from "../compilationUnit.js";
+import { scopeKey } from "../compilationUnit.js";
 import { SourceMapBuilder } from "./sourceMap.js";
 
 const DEFAULT_PROMPT_NAME = "__promptVar";
@@ -302,10 +302,7 @@ export class TypeScriptBuilder {
   }
 
   private getVisibleTypeAliases(): Record<string, VariableType> {
-    return getVisibleTypes(
-      this.compilationUnit.typeAliases,
-      this.currentScopeKey(),
-    );
+    return this.compilationUnit.typeAliases.visibleIn(this.currentScopeKey());
   }
 
   private forkBranchSetup(branchKey: string): TsNode[] {

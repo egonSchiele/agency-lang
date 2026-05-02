@@ -20,7 +20,7 @@ export function getCompletions(info: CompilationUnit): CompletionItem[] {
     add(node.nodeName, CompletionItemKind.Module);
   }
 
-  const globalAliases = info.typeAliases[GLOBAL_SCOPE_KEY];
+  const globalAliases = info.typeAliases.get(GLOBAL_SCOPE_KEY);
   if (globalAliases) {
     for (const name of Object.keys(globalAliases)) {
       add(name, CompletionItemKind.TypeParameter);

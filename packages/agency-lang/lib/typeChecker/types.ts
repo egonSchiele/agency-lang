@@ -6,6 +6,7 @@ import {
   VariableType,
 } from "../types.js";
 import { SourceLocation } from "../types/base.js";
+import type { ScopedTypeAliases } from "../compilationUnit.js";
 
 export type TypeCheckError = {
   message: string;
@@ -37,7 +38,7 @@ export type BuiltinSignature = {
 
 export type TypeCheckerContext = {
   programNodes: AgencyNode[];
-  scopedTypeAliases: Record<string, Record<string, VariableType>>;
+  scopedTypeAliases: ScopedTypeAliases;
   currentScopeKey: string;
   functionDefs: Record<string, FunctionDefinition>;
   nodeDefs: Record<string, GraphNodeDefinition>;

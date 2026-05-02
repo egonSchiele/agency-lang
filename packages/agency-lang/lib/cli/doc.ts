@@ -64,7 +64,7 @@ export function generateDoc(
         symbolRegistry[node.nodeName] = mdRelPath;
       }
       for (const name of Object.keys(
-        info.typeAliases[GLOBAL_SCOPE_KEY] || {},
+        info.typeAliases.get(GLOBAL_SCOPE_KEY) ?? {},
       )) {
         symbolRegistry[name] = mdRelPath;
       }

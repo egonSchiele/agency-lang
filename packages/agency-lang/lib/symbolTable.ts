@@ -19,8 +19,6 @@ import {
   getStdlibDir,
 } from "./importPaths.js";
 
-export type SymbolKind = "node" | "function" | "type" | "class";
-
 export type FunctionSymbol = {
   kind: "function";
   name: string;
@@ -54,6 +52,7 @@ export type ClassSymbol = {
 };
 
 export type SymbolInfo = FunctionSymbol | NodeSymbol | TypeSymbol | ClassSymbol;
+export type SymbolKind = SymbolInfo["kind"];
 
 /** Maps symbol name → info for a single file. */
 export type FileSymbols = Record<string, SymbolInfo>;
@@ -92,11 +91,22 @@ export class SymbolTable {
 
       if (!fs.existsSync(absPath)) return;
 
+      if (config.verbose) {
+        console.log(`[SymbolTable] Processing ${absPath}`);
+      }
+
       const contents = fs.readFileSync(absPath, "utf-8");
       const isStdlibIndex =
         absPath === path.join(getStdlibDir(), "index.agency");
       const parseResult = parseAgency(contents, config, !isStdlibIndex);
-      if (!parseResult.success) return;
+      if (!parseResult.success) {
+        if (config.verbose) {
+          console.error(
+            `[SymbolTable] Failed to parse ${absPath}: ${JSON.stringify(parseResult, null, 2)}`,
+          );
+        }
+        return;
+      }
 
       const program = parseResult.result;
       files[absPath] = classifySymbols(program);
@@ -232,4 +242,3 @@ export function classifySymbols(program: AgencyProgram): FileSymbols {
 
   return symbols;
 }
-

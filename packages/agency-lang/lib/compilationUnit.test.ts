@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildCompilationUnit, getVisibleTypes, GLOBAL_SCOPE_KEY } from "./compilationUnit.js";
+import { buildCompilationUnit, GLOBAL_SCOPE_KEY } from "./compilationUnit.js";
 import type { AgencyProgram } from "./types.js";
 
 describe("buildCompilationUnit", () => {
@@ -33,7 +33,7 @@ describe("buildCompilationUnit", () => {
       ],
     };
     const info = buildCompilationUnit(program);
-    expect(info.typeAliases[GLOBAL_SCOPE_KEY]).toEqual({
+    expect(info.typeAliases.get(GLOBAL_SCOPE_KEY)).toEqual({
       Name: { type: "primitiveType", value: "string" },
     });
   });
@@ -57,13 +57,13 @@ describe("buildCompilationUnit", () => {
       ],
     };
     const info = buildCompilationUnit(program);
-    expect(info.typeAliases["node:start"]).toEqual({
+    expect(info.typeAliases.get("node:start")).toEqual({
       LocalType: { type: "primitiveType", value: "number" },
     });
-    expect(info.typeAliases[GLOBAL_SCOPE_KEY]["LocalType"]).toBeUndefined();
+    expect(info.typeAliases.get(GLOBAL_SCOPE_KEY)?.["LocalType"]).toBeUndefined();
   });
 
-  it("getVisibleTypes merges scope with global (scope overrides)", () => {
+  it("visibleIn merges scope with global (scope overrides)", () => {
     const program: AgencyProgram = {
       type: "agencyProgram",
       nodes: [
@@ -87,7 +87,7 @@ describe("buildCompilationUnit", () => {
       ],
     };
     const info = buildCompilationUnit(program);
-    const visible = getVisibleTypes(info.typeAliases, "function:fn");
+    const visible = info.typeAliases.visibleIn("function:fn");
     // Function-scoped T overrides global T
     expect(visible["T"]).toEqual({ type: "primitiveType", value: "number" });
   });
@@ -163,7 +163,7 @@ describe("buildCompilationUnit", () => {
     };
     const info = buildCompilationUnit(program);
     expect(Object.keys(info.functionDefinitions)).toEqual(["doStuff"]);
-    expect(Object.keys(info.typeAliases[GLOBAL_SCOPE_KEY])).toEqual(["Color"]);
+    expect(Object.keys(info.typeAliases.get(GLOBAL_SCOPE_KEY) ?? {})).toEqual(["Color"]);
     expect(info.graphNodes).toHaveLength(1);
   });
 

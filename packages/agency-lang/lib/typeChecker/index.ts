@@ -1,6 +1,6 @@
 import { color } from "@/utils/termcolors.js";
 import type { CompilationUnit } from "../compilationUnit.js";
-import { GLOBAL_SCOPE_KEY, getVisibleTypes, scopeKey, buildCompilationUnit } from "../compilationUnit.js";
+import { GLOBAL_SCOPE_KEY, ScopedTypeAliases, scopeKey, buildCompilationUnit } from "../compilationUnit.js";
 import { AgencyConfig } from "../config.js";
 import {
   AgencyProgram,
@@ -21,7 +21,7 @@ export type { TypeCheckError, TypeCheckResult } from "./types.js";
 export class TypeChecker {
   private program: AgencyProgram;
   private config: AgencyConfig;
-  private scopedTypeAliases: Record<string, Record<string, VariableType>> = {};
+  private scopedTypeAliases: ScopedTypeAliases = new ScopedTypeAliases();
   private currentScopeKey: string = GLOBAL_SCOPE_KEY;
   private functionDefs: Record<string, FunctionDefinition> = {};
   private nodeDefs: Record<string, GraphNodeDefinition> = {};
@@ -33,9 +33,7 @@ export class TypeChecker {
     this.program = program;
     this.config = config;
     const resolved = info ?? buildCompilationUnit(program);
-    this.scopedTypeAliases = Object.fromEntries(
-      Object.entries(resolved.typeAliases).map(([k, v]) => [k, { ...v }]),
-    );
+    this.scopedTypeAliases = resolved.typeAliases.clone();
     this.functionDefs = { ...resolved.functionDefinitions };
     this.nodeDefs = Object.fromEntries(
       resolved.graphNodes.map((n) => [n.nodeName, n]),
@@ -43,7 +41,7 @@ export class TypeChecker {
   }
 
   private get typeAliases(): Record<string, VariableType> {
-    return getVisibleTypes(this.scopedTypeAliases, this.currentScopeKey);
+    return this.scopedTypeAliases.visibleIn(this.currentScopeKey);
   }
 
   private withScope<T>(key: string, fn: () => T): T {
@@ -79,7 +77,7 @@ export class TypeChecker {
     const ctx = this.makeContext();
 
     // 1. Validate type alias references
-    for (const [sk, scopeAliases] of Object.entries(this.scopedTypeAliases)) {
+    for (const [sk, scopeAliases] of this.scopedTypeAliases.scopes()) {
       this.withScope(sk, () => {
         for (const [name, aliasedType] of Object.entries(scopeAliases)) {
           validateTypeReferences(aliasedType, name, this.typeAliases, this.errors);

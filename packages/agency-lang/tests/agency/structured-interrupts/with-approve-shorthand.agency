@@ -1,0 +1,9 @@
+def check() {
+  return interrupt mytest::check("confirm", {})
+  return "ok"
+}
+
+node main() {
+  const result = check() with approve
+  return result
+}

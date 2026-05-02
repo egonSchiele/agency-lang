@@ -1,0 +1,22 @@
+import { checkPolicy } from "std::policy"
+
+def greet(name: string): string {
+  return interrupt mytest::greet("May I greet?", { name: name })
+  return "Hello, ${name}!"
+}
+
+node main() {
+  const policy = {
+    "mytest::greet": [
+      { "match": { "name": "Alice" }, "action": "allow" },
+      { "action": "deny" }
+    ]
+  }
+  handle {
+    const r1 = greet("Alice")
+    const r2 = greet("Bob") catch "denied"
+    return { r1: r1, r2: r2 }
+  } with (interrupt) {
+    return checkPolicy(policy, interrupt)
+  }
+}

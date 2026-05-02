@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Assignment form of structured interrupt receives value from handler",
+      "input": "",
+      "expectedOutput": "\"Hello, Alice!\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

@@ -1,0 +1,17 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Bare interrupt with no matching policy propagates to user",
+      "input": "",
+      "expectedOutput": "\"confirmed\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "interruptHandlers": [
+        {
+          "action": "approve",
+          "expectedMessage": "Are you sure?"
+        }
+      ]
+    }
+  ]
+}

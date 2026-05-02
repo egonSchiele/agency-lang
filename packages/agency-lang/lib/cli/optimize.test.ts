@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { parseAgency } from "@/parser.js";
 import { TypescriptPreprocessor } from "@/preprocessors/typescriptPreprocessor.js";
-import { collectProgramInfo } from "@/programInfo.js";
+import { buildCompilationUnit } from "@/compilationUnit.js";
 import { AgencyGenerator } from "@/backends/agencyGenerator.js";
 import {
   parsePromptToSegments,
@@ -14,7 +14,7 @@ import {
 function preprocess(code: string) {
   const parsed = parseAgency(code);
   if (!parsed.success) throw new Error(`Parse failed: ${parsed.message}`);
-  const info = collectProgramInfo(parsed.result);
+  const info = buildCompilationUnit(parsed.result);
   const preprocessor = new TypescriptPreprocessor(parsed.result, {}, info);
   return preprocessor.preprocess();
 }
@@ -268,7 +268,7 @@ node main(msg: string): string {
     if (!reparsed.success) return;
 
     // Re-preprocess and verify the prompt changed
-    const info2 = collectProgramInfo(reparsed.result);
+    const info2 = buildCompilationUnit(reparsed.result);
     const preprocessor2 = new TypescriptPreprocessor(reparsed.result, {}, info2);
     const program2 = preprocessor2.preprocess();
     const targets2 = findOptimizeTargets(program2, "main");

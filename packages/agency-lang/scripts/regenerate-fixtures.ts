@@ -5,7 +5,7 @@ import fs from "fs";
 import { generateTypeScript } from "../lib/backends/typescriptGenerator.js";
 import { TypescriptPreprocessor } from "../lib/preprocessors/typescriptPreprocessor.js";
 import { parseAgency } from "../lib/parser.js";
-import { collectProgramInfo } from "../lib/programInfo.js";
+import { buildCompilationUnit } from "../lib/compilationUnit.js";
 import { fileURLToPath } from "url";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -25,7 +25,7 @@ const generatorTransform: Transform = (ast, fileName) => ({
 });
 
 const preprocessorTransform: Transform = (ast) => {
-  const info = collectProgramInfo(ast);
+  const info = buildCompilationUnit(ast);
   const preprocessor = new TypescriptPreprocessor(ast, {}, info);
   return { content: JSON.stringify(preprocessor.preprocess(), null, 2), ext: ".json" };
 };

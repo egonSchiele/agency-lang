@@ -1,7 +1,7 @@
 import { CompletionItem, CompletionItemKind } from "vscode-languageserver-protocol";
-import { ProgramInfo, GLOBAL_SCOPE_KEY } from "../programInfo.js";
+import { CompilationUnit, GLOBAL_SCOPE_KEY } from "../compilationUnit.js";
 
-export function getCompletions(info: ProgramInfo): CompletionItem[] {
+export function getCompletions(info: CompilationUnit): CompletionItem[] {
   const seen = new Set<string>();
   const items: CompletionItem[] = [];
 

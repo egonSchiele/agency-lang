@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { parseAgency } from "@/parser.js";
 import { TypescriptPreprocessor } from "@/preprocessors/typescriptPreprocessor.js";
-import { collectProgramInfo } from "@/programInfo.js";
+import { buildCompilationUnit } from "@/compilationUnit.js";
 import { AgencyGenerator } from "@/backends/agencyGenerator.js";
 
 describe("tag parsing", () => {
@@ -52,7 +52,7 @@ node main(msg: string): string {
     const parsed = parseAgency(code);
     expect(parsed.success).toBe(true);
     if (!parsed.success) return;
-    const info = collectProgramInfo(parsed.result);
+    const info = buildCompilationUnit(parsed.result);
     const preprocessor = new TypescriptPreprocessor(parsed.result, {}, info);
     const processed = preprocessor.preprocess();
 
@@ -78,7 +78,7 @@ node main(msg: string): string {
     const parsed = parseAgency(code);
     expect(parsed.success).toBe(true);
     if (!parsed.success) return;
-    const info = collectProgramInfo(parsed.result);
+    const info = buildCompilationUnit(parsed.result);
     const preprocessor = new TypescriptPreprocessor(parsed.result, {}, info);
     const processed = preprocessor.preprocess();
 
@@ -120,7 +120,7 @@ node main(msg: string): string {
     expect(parsed.success).toBe(true);
     if (!parsed.success) return;
 
-    const info = collectProgramInfo(parsed.result);
+    const info = buildCompilationUnit(parsed.result);
     const preprocessor = new TypescriptPreprocessor(parsed.result, {}, info);
     const processed = preprocessor.preprocess();
 

@@ -6,7 +6,7 @@ import {
   functionScope,
   nodeScope,
 } from "../types.js";
-import { scopeKey } from "../programInfo.js";
+import { scopeKey } from "../compilationUnit.js";
 import { walkNodes } from "../utils/node.js";
 import { isAssignable, widenType } from "./assignability.js";
 import { synthType } from "./synthesizer.js";

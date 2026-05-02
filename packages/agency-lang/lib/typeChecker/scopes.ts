@@ -3,7 +3,7 @@ import {
   functionScope,
   nodeScope,
 } from "../types.js";
-import { GLOBAL_SCOPE_KEY, scopeKey } from "../programInfo.js";
+import { GLOBAL_SCOPE_KEY, scopeKey } from "../compilationUnit.js";
 import { getImportedNames } from "../types/importStatement.js";
 import { isAssignable, widenType } from "./assignability.js";
 import { synthType } from "./synthesizer.js";

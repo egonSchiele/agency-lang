@@ -1,6 +1,6 @@
 import { color } from "@/utils/termcolors.js";
-import type { ProgramInfo } from "../programInfo.js";
-import { GLOBAL_SCOPE_KEY, getVisibleTypes, scopeKey, collectProgramInfo } from "../programInfo.js";
+import type { CompilationUnit } from "../compilationUnit.js";
+import { GLOBAL_SCOPE_KEY, getVisibleTypes, scopeKey, buildCompilationUnit } from "../compilationUnit.js";
 import { AgencyConfig } from "../config.js";
 import {
   AgencyProgram,
@@ -29,10 +29,10 @@ export class TypeChecker {
   private inferredReturnTypes: Record<string, VariableType | "any"> = {};
   private inferringReturnType = new Set<string>();
 
-  constructor(program: AgencyProgram, config: AgencyConfig = {}, info?: ProgramInfo) {
+  constructor(program: AgencyProgram, config: AgencyConfig = {}, info?: CompilationUnit) {
     this.program = program;
     this.config = config;
-    const resolved = info ?? collectProgramInfo(program);
+    const resolved = info ?? buildCompilationUnit(program);
     this.scopedTypeAliases = Object.fromEntries(
       Object.entries(resolved.typeAliases).map(([k, v]) => [k, { ...v }]),
     );
@@ -121,7 +121,7 @@ export class TypeChecker {
 export function typeCheck(
   program: AgencyProgram,
   config: AgencyConfig = {},
-  info?: ProgramInfo,
+  info?: CompilationUnit,
 ): TypeCheckResult {
   const checker = new TypeChecker(program, config, info);
   return checker.check();

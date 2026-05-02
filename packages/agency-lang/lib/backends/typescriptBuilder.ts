@@ -97,8 +97,8 @@ import type {
   TsParam,
   TsTemplatePart,
 } from "../ir/tsIR.js";
-import type { ProgramInfo } from "../programInfo.js";
-import { getVisibleTypes, scopeKey } from "../programInfo.js";
+import type { CompilationUnit } from "../compilationUnit.js";
+import { getVisibleTypes, scopeKey } from "../compilationUnit.js";
 import { SourceMapBuilder } from "./sourceMap.js";
 
 const DEFAULT_PROMPT_NAME = "__promptVar";
@@ -167,7 +167,7 @@ export class TypeScriptBuilder {
   private _sourceMapBuilder: SourceMapBuilder = new SourceMapBuilder();
 
 
-  private programInfo: ProgramInfo;
+  private programInfo: CompilationUnit;
   private moduleId: string;
   private outputFile: string | undefined;
 
@@ -183,7 +183,7 @@ export class TypeScriptBuilder {
    */
   constructor(
     config: AgencyConfig | undefined,
-    info: ProgramInfo,
+    info: CompilationUnit,
     moduleId: string,
     outputFile?: string,
   ) {

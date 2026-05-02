@@ -2,7 +2,7 @@ import { generateAgency } from "@/backends/agencyGenerator.js";
 import { AgencyConfig, loadConfigSafe } from "@/config.js";
 import { AgencyProgram, generateTypeScript } from "@/index.js";
 import { resolveImports } from "@/preprocessors/importResolver.js";
-import { collectProgramInfo } from "@/programInfo.js";
+import { buildCompilationUnit } from "@/compilationUnit.js";
 import { SymbolTable } from "@/symbolTable.js";
 import { formatErrors, typeCheck } from "@/typeChecker/index.js";
 import { spawn } from "child_process";
@@ -151,7 +151,7 @@ export function compile(
     symbolTable,
     absoluteInputFile,
   );
-  const info = collectProgramInfo(resolvedProgram, symbolTable);
+  const info = buildCompilationUnit(resolvedProgram, symbolTable, absoluteInputFile);
 
   if (config.typeCheck || config.typeCheckStrict) {
     const { errors } = typeCheck(resolvedProgram, config, info);

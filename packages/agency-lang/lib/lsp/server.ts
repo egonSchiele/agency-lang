@@ -19,7 +19,7 @@ import { getDocumentSymbols } from "./documentSymbol.js";
 import { handleFormatting } from "./formatting.js";
 import { handleHover } from "./hover.js";
 import { getCompletions } from "./completion.js";
-import type { ProgramInfo } from "../programInfo.js";
+import type { CompilationUnit } from "../compilationUnit.js";
 import type { SemanticIndex } from "./semantics.js";
 
 export function startServer(): void {
@@ -31,7 +31,7 @@ export function startServer(): void {
 
   // Per-document state: latest parsed program and program info
   const docPrograms = new Map<string, AgencyProgram>();
-  const docInfos = new Map<string, ProgramInfo>();
+  const docInfos = new Map<string, CompilationUnit>();
   const docSemanticIndexes = new Map<string, SemanticIndex>();
 
   // Debounce timers for diagnostics (per URI)

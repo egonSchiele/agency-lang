@@ -17,7 +17,7 @@ import { AgencyConfig } from "@/config.js";
 import * as path from "path";
 import { _parseAgency } from "@/parser.js";
 import { TypescriptPreprocessor } from "@/preprocessors/typescriptPreprocessor.js";
-import { collectProgramInfo } from "@/programInfo.js";
+import { buildCompilationUnit } from "@/compilationUnit.js";
 import { formatErrors, typeCheck } from "@/typeChecker/index.js";
 import { Command } from "commander";
 import * as fs from "fs";
@@ -222,7 +222,7 @@ export function createProgram(deps: CliDependencies = {}): Command {
 
       const processInput = (contents: string) => {
         const parsedProgram = parse(contents, config);
-        const info = collectProgramInfo(parsedProgram);
+        const info = buildCompilationUnit(parsedProgram);
         const preprocessor = new TypescriptPreprocessor(
           parsedProgram,
           config,
@@ -414,7 +414,7 @@ export function createProgram(deps: CliDependencies = {}): Command {
       let hasErrors = false;
       const runTypeCheck = (contents: string) => {
         const parsedProgram = parse(contents, config);
-        const info = collectProgramInfo(parsedProgram);
+        const info = buildCompilationUnit(parsedProgram);
         const { errors } = typeCheck(parsedProgram, config, info);
         if (errors.length > 0) {
           console.error(formatErrors(errors));

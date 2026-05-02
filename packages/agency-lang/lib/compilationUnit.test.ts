@@ -1,8 +1,8 @@
 import { describe, it, expect } from "vitest";
-import { collectProgramInfo, getVisibleTypes, GLOBAL_SCOPE_KEY } from "./programInfo.js";
+import { buildCompilationUnit, getVisibleTypes, GLOBAL_SCOPE_KEY } from "./compilationUnit.js";
 import type { AgencyProgram } from "./types.js";
 
-describe("collectProgramInfo", () => {
+describe("buildCompilationUnit", () => {
   it("collects function definitions", () => {
     const program: AgencyProgram = {
       type: "agencyProgram",
@@ -16,7 +16,7 @@ describe("collectProgramInfo", () => {
       ],
     };
 
-    const info = collectProgramInfo(program);
+    const info = buildCompilationUnit(program);
     expect(Object.keys(info.functionDefinitions)).toEqual(["greet"]);
     expect(info.functionDefinitions["greet"].functionName).toBe("greet");
   });
@@ -32,7 +32,7 @@ describe("collectProgramInfo", () => {
         },
       ],
     };
-    const info = collectProgramInfo(program);
+    const info = buildCompilationUnit(program);
     expect(info.typeAliases[GLOBAL_SCOPE_KEY]).toEqual({
       Name: { type: "primitiveType", value: "string" },
     });
@@ -56,7 +56,7 @@ describe("collectProgramInfo", () => {
         },
       ],
     };
-    const info = collectProgramInfo(program);
+    const info = buildCompilationUnit(program);
     expect(info.typeAliases["node:start"]).toEqual({
       LocalType: { type: "primitiveType", value: "number" },
     });
@@ -86,7 +86,7 @@ describe("collectProgramInfo", () => {
         },
       ],
     };
-    const info = collectProgramInfo(program);
+    const info = buildCompilationUnit(program);
     const visible = getVisibleTypes(info.typeAliases, "function:fn");
     // Function-scoped T overrides global T
     expect(visible["T"]).toEqual({ type: "primitiveType", value: "number" });
@@ -104,7 +104,7 @@ describe("collectProgramInfo", () => {
         },
       ],
     };
-    const info = collectProgramInfo(program);
+    const info = buildCompilationUnit(program);
     expect(info.graphNodes).toHaveLength(1);
     expect(info.graphNodes[0].nodeName).toBe("start");
   });
@@ -133,7 +133,7 @@ describe("collectProgramInfo", () => {
         },
       ],
     };
-    const info = collectProgramInfo(program);
+    const info = buildCompilationUnit(program);
     expect(info.importedNodes).toHaveLength(1);
     expect(info.importStatements).toHaveLength(1);
   });
@@ -161,7 +161,7 @@ describe("collectProgramInfo", () => {
         },
       ],
     };
-    const info = collectProgramInfo(program);
+    const info = buildCompilationUnit(program);
     expect(Object.keys(info.functionDefinitions)).toEqual(["doStuff"]);
     expect(Object.keys(info.typeAliases[GLOBAL_SCOPE_KEY])).toEqual(["Color"]);
     expect(info.graphNodes).toHaveLength(1);
@@ -178,7 +178,7 @@ describe("collectProgramInfo", () => {
       type: "agencyProgram",
       nodes: [funcNode],
     };
-    const info = collectProgramInfo(program);
+    const info = buildCompilationUnit(program);
     expect(info.functionDefinitions["test"]).toBe(funcNode);
   });
 
@@ -210,7 +210,7 @@ describe("collectProgramInfo", () => {
         },
       ],
     };
-    const info = collectProgramInfo(program);
+    const info = buildCompilationUnit(program);
     expect(info.safeFunctions["Math.add"]).toBe(true);
     expect(info.safeFunctions["Math.save"]).toBeUndefined();
   });

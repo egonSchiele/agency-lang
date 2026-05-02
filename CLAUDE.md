@@ -25,18 +25,18 @@ make fixtures           # Rebuild all integration test fixtures
 ```
 
 ## The full pipeline
-The full pipeline is: `parse → buildSymbolTable → collectProgramInfo → TypescriptPreprocessor → TypeScriptBuilder.build() → printTs()`.
+The full pipeline is: `parse → SymbolTable.build → buildCompilationUnit → TypescriptPreprocessor → TypeScriptBuilder.build() → printTs()`.
 
 ### Parse
 Parses the code into an AST. Uses parsers in `lib/parser.ts` and `lib/parsers/`. The main entry point is the `parseAgency()` function in `lib/parser.ts`, which returns an Agency AST.
 
 All the types for the AST nodes are defined in `lib/types/` and `lib/types.ts`.
 
-### buildSymbolTable
-Collects symbols from across all the files that are going to be compiled. For each symbol, it stores its type: is it a node, a function, a type, etc. This is then used in the preprocessor to transform import statements into import statements of a specific type; for example, if a node is being imported, an import statement will be transformed into an import node statement. See `lib/symbolTable.ts` for more.
+### SymbolTable.build
+Builds a `SymbolTable` — a cross-file index of every declaration reachable from the entrypoint. For each symbol it records its kind (node, function, type, class) plus signature data. The preprocessor uses this to rewrite generic `importStatement` nodes into the specific kind (e.g. importing a node becomes an `importNodeStatement`). The class also exposes query methods like `resolveImport`, `findTypeAcrossFiles`, and `getFile` so consumers don't reach into the underlying record. See `lib/symbolTable.ts`.
 
-### collectProgramInfo
-Collects all sorts of other program info: information about function definitions, type aliases, graph nodes, imports, etc. See the `lib/programInfo.ts` class for full information.
+### buildCompilationUnit
+Collects all sorts of program info for the file being compiled: function definitions, type aliases, graph nodes, imports, safe-function markings, etc. Cross-file lookups (resolving imported types/functions) delegate to `SymbolTable`. See `lib/compilationUnit.ts`.
 
 ### preprocessor
 Runs several transforms on the agency AST before it is sent to the builder. The preprocessor marks certain LLM calls as asynchronous, removes unused LLM code, and resolves variable scopes; that is, for each variable used, it identifies whether it is a global variable, local variable, imported variable, shared variable, etc. See `lib/preprocessors/typescriptPreprocessor.ts`.

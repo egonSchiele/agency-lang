@@ -151,6 +151,10 @@ export const varNameChar: Parser<string> = oneOf(
   "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_",
 );
 
+export const objectKeyChar: Parser<string> = oneOf(
+  "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-:",
+);
+
 // =============================================================================
 // loc.ts
 // =============================================================================
@@ -1079,6 +1083,16 @@ export const agencyArrayParser: Parser<AgencyArray> = (
   return parser(input);
 };
 
+const stripQuotes = (s: string) => {
+  if (
+    (s.startsWith('"') && s.endsWith('"')) ||
+    (s.startsWith("'") && s.endsWith("'"))
+  ) {
+    return s.slice(1, -1);
+  }
+  return s;
+}
+
 export const agencyObjectKVParser: Parser<AgencyObjectKV> = (
   input: string,
 ): ParserResult<AgencyObjectKV> => {
@@ -1086,9 +1100,7 @@ export const agencyObjectKVParser: Parser<AgencyObjectKV> = (
     "agencyObjectKVParser",
     seqC(
       optionalSpaces,
-      optional(char('"')),
-      capture(many1WithJoin(varNameChar), "key"),
-      optional(char('"')),
+      capture(or(map(quotedString, stripQuotes), manyWithJoin(varNameChar)), "key"),
       optionalSpaces,
       char(":"),
       optionalSpaces,

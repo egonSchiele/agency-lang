@@ -7,8 +7,8 @@ if (!hasInterrupts(result.data)) {
   throw new Error("Expected an interrupt");
 }
 
-if (result.data[0].data !== "Do you approve?") {
-  throw new Error("Unexpected interrupt message: " + result.data[0].data);
+if (result.data[0].message !== "Do you approve?") {
+  throw new Error("Unexpected interrupt message: " + result.data[0].message);
 }
 
 const finalResult = await respondToInterrupts(result.data, [reject()]);

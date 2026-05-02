@@ -16,11 +16,11 @@ type SafetyResp = {
 node main() {
   handle {
     return riskyOp()
-  } with (data) {
+  } with (interrupt) {
     // Have the LLM decide based on the interrupt's message. The prompt
     // makes the answer deterministic — the message explicitly says the
     // operation is benign.
-    const safety: SafetyResp = llm("Is the following operation safe? Operation: '${data}'. Return is_safe field as a boolean. Only return true if the operation is clearly benign.")
+    const safety: SafetyResp = llm("Is the following operation safe? Operation: '${interrupt.message}'. Return is_safe field as a boolean. Only return true if the operation is clearly benign.")
     if (safety.is_safe) {
       return approve()
     }

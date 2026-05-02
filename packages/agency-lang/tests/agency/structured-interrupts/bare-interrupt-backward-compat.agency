@@ -1,0 +1,15 @@
+def check() {
+  return interrupt("Are you sure?")
+  return "confirmed"
+}
+
+node main() {
+  handle {
+    return check()
+  } with (interrupt) {
+    if (interrupt.kind == "unknown") {
+      return approve()
+    }
+    return reject()
+  }
+}

@@ -21,7 +21,7 @@ if (new Set(ids).size !== ids.length) {
 }
 
 // Verify expected messages (order may vary due to parallel execution)
-const messages = interrupts.map(i => i.data).sort();
+const messages = interrupts.map(i => i.message).sort();
 const expected = ["approve x-1?", "approve x-2?", "approve y-1?", "approve y-2?"];
 if (JSON.stringify(messages) !== JSON.stringify(expected)) {
   throw new Error("Unexpected interrupt messages: " + JSON.stringify(messages));

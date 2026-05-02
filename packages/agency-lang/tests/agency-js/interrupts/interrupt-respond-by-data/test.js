@@ -16,7 +16,7 @@ if (interrupts.length !== 3) {
 // Approve alpha and gamma, reject beta. The responses array MUST be in the same order as
 // the interrupts array, but each response is selected by content.
 const responses = interrupts.map((intr) => {
-  if (intr.data === "approve beta?") return reject("nope");
+  if (intr.message === "approve beta?") return reject("nope");
   return approve();
 });
 

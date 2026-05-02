@@ -1,0 +1,15 @@
+def askName() {
+  const name = interrupt mytest::ask("What is your name?", { default: "World" })
+  return "Hello, ${name}!"
+}
+
+node main() {
+  handle {
+    return askName()
+  } with (interrupt) {
+    if (interrupt.kind == "mytest::ask") {
+      return approve("Alice")
+    }
+    return reject()
+  }
+}

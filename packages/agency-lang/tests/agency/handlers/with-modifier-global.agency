@@ -1,6 +1,6 @@
 def interruptingRead(filename: string) {
-  const result = interrupt(filename)
-  return result
+  return interrupt(filename)
+  return "read:${filename}"
 }
 
 const text = interruptingRead("test.txt") with approve

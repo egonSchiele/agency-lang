@@ -13,16 +13,16 @@ if (interrupts.length !== 2) {
 }
 
 // Find which interrupt is for "a" and which is for "b"
-const interruptA = interrupts.find(i => i.data === "approve a?");
-const interruptB = interrupts.find(i => i.data === "approve b?");
+const interruptA = interrupts.find(i => i.message === "approve a?");
+const interruptB = interrupts.find(i => i.message === "approve b?");
 
 if (!interruptA || !interruptB) {
-  throw new Error("Could not find expected interrupts: " + JSON.stringify(interrupts.map(i => i.data)));
+  throw new Error("Could not find expected interrupts: " + JSON.stringify(interrupts.map(i => i.message)));
 }
 
 // Approve "a", reject "b" — responses must be in same order as interrupts array
 const responses = interrupts.map(intr => {
-  if (intr.data === "approve a?") return approve();
+  if (intr.message === "approve a?") return approve();
   return reject();
 });
 

@@ -1,0 +1,19 @@
+import { checkPolicy } from "std::policy"
+
+def confirm() {
+  return interrupt("Are you sure?")
+  return "confirmed"
+}
+
+node main() {
+  const policy = {
+    "mytest::greet": [
+      { "action": "approve" }
+    ]
+  }
+  handle {
+    return confirm()
+  } with (interrupt) {
+    return checkPolicy(policy, interrupt)
+  }
+}

@@ -1,6 +1,6 @@
 def foo() {
-  const result = interrupt("check")
-  return result
+  return interrupt("check")
+  return "approved"
 }
 
 node main() {

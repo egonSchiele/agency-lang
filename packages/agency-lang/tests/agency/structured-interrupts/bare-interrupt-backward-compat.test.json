@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Bare interrupt desugars to kind unknown and handler can match it",
+      "input": "",
+      "expectedOutput": "\"confirmed\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

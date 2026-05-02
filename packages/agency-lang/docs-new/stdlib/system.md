@@ -87,4 +87,4 @@ Open a URL in the user's default browser. Currently macOS-only.
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/system.agency#L36))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/system.agency#L34))

@@ -106,6 +106,7 @@ import { Placeholder } from "../types/placeholder.js";
 import { TryExpression } from "../types/tryExpression.js";
 import { ClassDefinition, ClassField, ClassMethod, NewExpression } from "../types/classDefinition.js";
 import { SchemaExpression } from "../types/schemaExpression.js";
+import { InterruptStatement } from "../types/interruptStatement.js";
 import { ReturnStatement } from "../types/returnStatement.js";
 import { GotoStatement } from "../types/gotoStatement.js";
 import { DebuggerStatement } from "../types/debuggerStatement.js";
@@ -1085,9 +1086,7 @@ export const agencyObjectKVParser: Parser<AgencyObjectKV> = (
     "agencyObjectKVParser",
     seqC(
       optionalSpaces,
-      optional(char('"')),
-      capture(many1WithJoin(varNameChar), "key"),
-      optional(char('"')),
+      capture(or(map(quotedString, removeQuotes), many1WithJoin(varNameChar)), "key"),
       optionalSpaces,
       char(":"),
       optionalSpaces,
@@ -1508,6 +1507,7 @@ const baseAtom: Parser<Expression> = or(
   tryExpressionParser,
   newExpressionParser,
   schemaExpressionParser,
+  lazy(() => interruptExprParser),
   placeholderParser,
   lazy(() => agencyArrayParser),
   lazy(() => agencyObjectParser),
@@ -1681,6 +1681,52 @@ export const gotoStatementParser: Parser<GotoStatement> = label("a goto statemen
   optionalSemicolon,
   optionalSpacesOrNewline,
 )));
+
+// =============================================================================
+// interruptStatement.ts
+// =============================================================================
+
+// Namespace identifier: two or more segments separated by "::"
+// e.g. "std::read", "myapp::deploy", "std::http::fetch"
+const namespaceIdentifier: Parser<string> = (input: string) => {
+  const parser = map(
+    sepBy1(str("::"), many1WithJoin(varNameChar)),
+    (segments) => segments.join("::"),
+  );
+  const result = parser(input);
+  if (!result.success) return result;
+  if (!result.result.includes("::")) {
+    return failure("expected interrupt kind with ::, e.g. std::read or myapp::deploy", input);
+  }
+  return result;
+};
+
+// Core interrupt parser without trailing whitespace/semicolons (for use in expressions)
+const _interruptExprParser: Parser<InterruptStatement> = (input: string) => {
+  const parser = seqC(
+    set("type", "interruptStatement"),
+    str("interrupt"),
+    spaces,
+    capture(namespaceIdentifier, "kind"),
+    captureCaptures(argumentListParser),
+  );
+  const result = parser(input);
+  if (!result.success) return result;
+  return success(result.result as InterruptStatement, result.rest);
+};
+
+export const interruptExprParser: Parser<InterruptStatement> = withLoc(_interruptExprParser);
+
+export const interruptStatementParser: Parser<InterruptStatement> = label("an interrupt statement", withLoc(
+  (input: string) => {
+    const result = _interruptExprParser(input);
+    if (!result.success) return result;
+    // Consume trailing semicolon/whitespace
+    const semiResult = optionalSemicolon(result.rest);
+    const wsResult = optionalSpacesOrNewline(semiResult.success ? semiResult.rest : result.rest);
+    return success(result.result, wsResult.success ? wsResult.rest : (semiResult.success ? semiResult.rest : result.rest));
+  },
+));
 
 // =============================================================================
 // binop.ts
@@ -2102,6 +2148,7 @@ export const bodyParser = (input: string): ParserResult<AgencyNode[]> => {
     tagParser,
     returnStatementParser,
     gotoStatementParser,
+    interruptStatementParser,
     forLoopParser,
     whileLoopParser,
     parallelBlockParser,

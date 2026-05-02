@@ -5,6 +5,7 @@ import {
   AgencyProgram,
   Assignment,
   DebuggerStatement,
+  InterruptStatement,
   Literal,
   MultiLineStringLiteral,
   NewLine,
@@ -165,7 +166,7 @@ export class AgencyGenerator {
     }
   }
 
-  protected preprocessAST(): void {}
+  protected preprocessAST(): void { }
 
   protected generateBuiltins(): string {
     return "";
@@ -187,7 +188,7 @@ export class AgencyGenerator {
     this.functionDefinitions[node.functionName] = node;
   }
 
-  protected processGraphNodeName(node: GraphNodeDefinition): void {}
+  protected processGraphNodeName(node: GraphNodeDefinition): void { }
 
   public processNode(node: AgencyNode): string {
     switch (node.type) {
@@ -269,9 +270,16 @@ export class AgencyGenerator {
         return `schema(${variableTypeToString(node.typeArg, this.typeAliases)})`;
       case "regex":
         return `re/${node.pattern}/${node.flags}`;
+      case "interruptStatement":
+        return this.processInterruptStatement(node);
       default:
         throw new Error(`Unhandled Agency node type: ${(node as any).type}`);
     }
+  }
+
+  protected processInterruptStatement(node: InterruptStatement): string {
+    const args = this.renderArgList(node.arguments);
+    return this.indentStr(`interrupt ${node.kind}${args}`);
   }
 
   protected needsParensLeft(child: BinOpArgument, parentOp: Operator): boolean {
@@ -624,7 +632,7 @@ export class AgencyGenerator {
       }
       const kv = entry as AgencyObjectKV;
       const valueCode = this.processNode(kv.value).trim();
-      return this.indentStr(`${kv.key}: ${valueCode}`);
+      return this.indentStr(`${this.addQuotesToKey(kv.key)}: ${valueCode}`);
     });
     this.decreaseIndent();
     if (entries.length === 0) {
@@ -633,6 +641,13 @@ export class AgencyGenerator {
     let entriesStr = "\n" + entries.join(",\n") + "\n";
 
     return `{ ${entriesStr}` + this.indentStr("}");
+  }
+
+  private addQuotesToKey(key: string): string {
+    if (/^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(key)) {
+      return key;
+    }
+    return `"${key}"`;
   }
 
   // Access expressions

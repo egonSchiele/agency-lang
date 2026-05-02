@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Policy allows Alice by exact match and denies Bob via catch-all",
+      "input": "",
+      "expectedOutput": "{\"r1\":\"Hello, Alice!\",\"r2\":\"denied\"}",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

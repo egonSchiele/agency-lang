@@ -172,7 +172,7 @@ if (__response) {
   }
 } else {
   // First run: call handlers, then propagate if unhandled
-  const __handlerResult = await interruptWithHandlers(`check`, __ctx, __stateStack);
+  const __handlerResult = await interruptWithHandlers("unknown", `check`, {}, "./withModifier.agency", __ctx, __stateStack);
   if (isRejected(__handlerResult)) {
     
     
@@ -260,7 +260,7 @@ let __functionCompleted = false;
   })
   const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "withModifier.agency", scopeName: "main" });
   try {
-    await runner.handle(0, async (__data: any) => approve(__data), async (runner) => {
+    await runner.handle(0, async (__data: any) => approve(), async (runner) => {
 await runner.step(0, async (runner) => {
 __stack.locals.result = await __call(foo, {
           type: "positional",

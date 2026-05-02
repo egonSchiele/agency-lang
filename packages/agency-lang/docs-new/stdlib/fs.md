@@ -23,7 +23,7 @@ type Edit = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L23))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L21))
 
 ### MultiEditResult
 
@@ -35,7 +35,7 @@ type MultiEditResult = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L29))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L27))
 
 ### PatchResult
 
@@ -46,7 +46,7 @@ type PatchResult = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L49))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L45))
 
 ## Functions
 
@@ -88,7 +88,7 @@ Apply a sequence of edits to a single file atomically. Each edit has oldText, ne
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L35))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L33))
 
 ### applyPatch
 
@@ -106,7 +106,7 @@ Apply a unified diff to the working tree. Supports file creation (--- /dev/null)
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L54))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L50))
 
 ### mkdir
 
@@ -124,7 +124,7 @@ Create a directory, including any missing parent directories. Idempotent: succee
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L67))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L61))
 
 ### copy
 
@@ -143,7 +143,7 @@ Copy a file or directory. Directories are copied recursively. Fails if src does 
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L80))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L72))
 
 ### move
 
@@ -162,7 +162,7 @@ Move or rename a file or directory. Falls back to copy+remove if src and dest ar
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L94))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L84))
 
 ### remove
 
@@ -180,4 +180,4 @@ Delete a file or directory. Directories are removed recursively. Does not fail i
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L108))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L96))

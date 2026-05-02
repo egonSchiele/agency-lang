@@ -1,4 +1,4 @@
-/** 
+/**
 The imports from this file get auto-imported into every .agency file, so you can use these tools without needing to import them manually. */
 import { _print, _printJSON, _input, _sleep, _round, _fetch, _fetchJSON, _read, _write, _readImage, _notify, _range, _mostCommon, _keys, _values, _entries } from "./lib/builtins.js"
 export safe def print(...messages) {
@@ -40,9 +40,7 @@ export def fetch(url: string): string {
   """
   A tool for fetching a URL and returning the response as text.
   """
-  return interrupt({ 
-    type: "std::fetch",
-    message: "Are you sure you want to fetch this URL?",
+  return interrupt std::fetch("Are you sure you want to fetch this URL?", {
     url: url
   })
   return _fetch(url)
@@ -52,9 +50,7 @@ export def fetchJSON(url: string) {
   """
   A tool for fetching a URL and returning the response as parsed JSON.
   """
-  return interrupt({ 
-    type: "std::fetchJSON",
-    message: "Are you sure you want to fetch this URL and parse it as JSON?",
+  return interrupt std::fetchJSON("Are you sure you want to fetch this URL and parse it as JSON?", {
     url: url
   })
   return _fetchJSON(url)
@@ -64,9 +60,7 @@ export def read(filename: string): string {
   """
   A tool for reading the contents of a file and returning it as a string.
   """
-  return interrupt({ 
-    type: "std::read",
-    message: "Are you sure you want to read this file?",
+  return interrupt std::read("Are you sure you want to read this file?", {
     filename: filename
   })
   return _read(filename)
@@ -76,9 +70,7 @@ export def write(filename: string, content: string) {
   """
   A tool for writing content to a file.
   """
-  return interrupt({ 
-    type: "std::write",
-    message: "Are you sure you want to write to this file?",
+  return interrupt std::write("Are you sure you want to write to this file?", {
     filename: filename,
     content: content
   })
@@ -89,9 +81,7 @@ export def readImage(filename: string): string {
   """
   A tool for reading an image file and returning its contents as a Base64-encoded string.
   """
-  return interrupt({ 
-    type: "std::readImage",
-    message: "Are you sure you want to read this image file?",
+  return interrupt std::readImage("Are you sure you want to read this image file?", {
     filename: filename
   })
   return _readImage(filename)
@@ -101,9 +91,7 @@ export def notify(title: string, message: string): boolean {
   """
   A tool for showing a native OS notification with a title and message. Returns true if the notification was sent.
   """
-  return interrupt({ 
-    type: "std::notify",
-    message: "Are you sure you want to show this notification?",
+  return interrupt std::notify("Are you sure you want to show this notification?", {
     title: title,
     body: message
   })

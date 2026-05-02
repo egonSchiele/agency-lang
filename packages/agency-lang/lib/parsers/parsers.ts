@@ -151,10 +151,6 @@ export const varNameChar: Parser<string> = oneOf(
   "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_",
 );
 
-export const objectKeyChar: Parser<string> = oneOf(
-  "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-:",
-);
-
 // =============================================================================
 // loc.ts
 // =============================================================================

@@ -172,7 +172,7 @@ if (__response) {
   }
 } else {
   // First run: call handlers, then propagate if unhandled
-  const __handlerResult = await interruptWithHandlers(`check`, __ctx, __stateStack);
+  const __handlerResult = await interruptWithHandlers("unknown", `check`, {}, "./withModifier.agency", __ctx, __stateStack);
   if (isRejected(__handlerResult)) {
     
     

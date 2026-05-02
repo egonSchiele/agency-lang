@@ -83,8 +83,8 @@ node main() {
       for (r in result.results) {
         allResults.push(extract(r))
       }
-    } with (data) {
-      if (data == "really delete 'important'?") {
+    } with (interrupt) {
+      if (interrupt.message == "really delete 'important'?") {
         return propagate()
       }
       return approve()

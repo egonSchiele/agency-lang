@@ -19,8 +19,8 @@ node main() {
       return result
     }
     return results2
-  } with (data) {
-    if (data == "approve deny?") {
+  } with (interrupt) {
+    if (interrupt.message == "approve deny?") {
       return reject()
     }
     return approve()

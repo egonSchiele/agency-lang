@@ -15,7 +15,7 @@ if (__response) {
   }
 } else {
   // First run: call handlers, then propagate if unhandled
-  const __handlerResult = await interruptWithHandlers({{{interruptArgs}}}, __ctx, __stateStack);
+  const __handlerResult = await interruptWithHandlers({{{kind}}}, {{{message}}}, {{{data}}}, {{{origin}}}, __ctx, __stateStack);
   if (isRejected(__handlerResult)) {
     {{#nodeContext}}
     runner.halt({ messages: __threads, data: failure(__handlerResult.value ?? "interrupt rejected", { retryable: false }) });

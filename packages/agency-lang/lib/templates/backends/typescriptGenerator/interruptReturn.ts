@@ -20,7 +20,7 @@ if (__response) {
   }
 } else {
   // First run: call handlers, then propagate if unhandled
-  const __handlerResult = await interruptWithHandlers({{{interruptArgs}}}, __ctx, __stateStack);
+  const __handlerResult = await interruptWithHandlers({{{kind}}}, {{{message}}}, {{{data}}}, {{{origin}}}, __ctx, __stateStack);
   if (isRejected(__handlerResult)) {
     {{#nodeContext}}
     runner.halt({ messages: __threads, data: failure(__handlerResult.value ?? "interrupt rejected", { retryable: false }) });
@@ -52,7 +52,10 @@ if (__response) {
 export type TemplateType = {
   interruptIdKey: string;
   nodeContext: boolean;
-  interruptArgs: string | boolean | number;
+  kind: string | boolean | number;
+  message: string | boolean | number;
+  data: string | boolean | number;
+  origin: string | boolean | number;
   moduleId: string | boolean | number;
   scopeName: string | boolean | number;
   stepPath: string | boolean | number;

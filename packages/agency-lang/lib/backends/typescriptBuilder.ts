@@ -77,6 +77,8 @@ import { ReturnStatement } from "../types/returnStatement.js";
 import { GotoStatement } from "../types/gotoStatement.js";
 import { WhileLoop } from "../types/whileLoop.js";
 import { ClassDefinition, ClassField, ClassMethod, NewExpression, isClassKeyword } from "../types/classDefinition.js";
+import { InterruptStatement } from "../types/interruptStatement.js";
+import { moduleIdToOrigin } from "../runtime/origin.js";
 import { escape, mergeDeep } from "../utils.js";
 import {
   generateBuiltinHelpers,
@@ -894,6 +896,8 @@ export class TypeScriptBuilder {
         return this.processNewExpression(node);
       case "schemaExpression":
         return this.processSchemaExpression(node);
+      case "interruptStatement":
+        return this.processInterruptStatement(node);
       case "regex":
         return ts.raw(`/${node.pattern}/${node.flags}`);
       default:
@@ -1876,19 +1880,61 @@ export class TypeScriptBuilder {
     return this.processNode(node);
   }
 
-  private buildInterruptReturn(args: FunctionCall["arguments"]): TsNode {
-    const interruptArgs = args
-      .map((arg) => this.str(this.processCallArg(arg)))
-      .join(", ");
+  private interruptTemplateArgs(kind: string, message: string, data: string, origin: string) {
+    return {
+      kind: JSON.stringify(kind),
+      message,
+      data,
+      origin: JSON.stringify(origin),
+    };
+  }
+
+  private buildInterruptReturnStructured(kind: string, messageExpr: string, dataExpr: string): TsNode {
+    const origin = moduleIdToOrigin(this.moduleId);
     const opts = this.checkpointOpts();
     return ts.raw(
       renderInterruptReturn.default({
-        interruptArgs,
+        ...this.interruptTemplateArgs(kind, messageExpr, dataExpr, origin),
         nodeContext: this.getCurrentScope().type === "node",
         interruptIdKey: `__interruptId_${this._subStepPath.join("_")}`,
         ...opts,
       }),
     );
+  }
+
+  private buildInterruptReturn(args: FunctionCall["arguments"]): TsNode {
+    // Bare interrupt("msg") — desugar to kind "unknown", data {}
+    const messageExpr = args.length > 0
+      ? this.str(this.processCallArg(args[0]))
+      : '""';
+    return this.buildInterruptReturnStructured("unknown", messageExpr, "{}");
+  }
+
+  private isInterruptExpression(node: { type: string; functionName?: string }): boolean {
+    return (
+      node.type === "interruptStatement" ||
+      (node.type === "functionCall" && node.functionName === "interrupt")
+    );
+  }
+
+  private buildInterruptReturnFromExpr(node: AgencyNode): TsNode {
+    if (node.type === "interruptStatement") {
+      return this.processInterruptStatement(node);
+    }
+    if (node.type === "functionCall") {
+      return this.buildInterruptReturn(node.arguments);
+    }
+    throw new Error("Expected interruptStatement or functionCall");
+  }
+
+  private processInterruptStatement(node: InterruptStatement): TsNode {
+    const messageExpr = node.arguments.length > 0
+      ? this.str(this.processCallArg(node.arguments[0]))
+      : '""';
+    const dataExpr = node.arguments.length > 1
+      ? this.str(this.processCallArg(node.arguments[1]))
+      : "{}";
+    return this.buildInterruptReturnStructured(node.kind, messageExpr, dataExpr);
   }
 
   private processFunctionCallAsStatement(node: FunctionCall): TsNode {
@@ -2413,22 +2459,16 @@ export class TypeScriptBuilder {
 
     // Block bodies: halt the block's runner with the raw value
     if (this.getCurrentScope().type === "block") {
-      if (
-        node.value.type === "functionCall" &&
-        node.value.functionName === "interrupt"
-      ) {
-        return this.buildInterruptReturn(node.value.arguments);
+      if (this.isInterruptExpression(node.value)) {
+        return this.buildInterruptReturnFromExpr(node.value);
       }
       const valueNode = this.processNode(node.value);
       return ts.runnerHalt(valueNode);
     }
 
     if (this.isInsideGraphNode) {
-      if (
-        node.value.type === "functionCall" &&
-        node.value.functionName === "interrupt"
-      ) {
-        return this.buildInterruptReturn(node.value.arguments);
+      if (this.isInterruptExpression(node.value)) {
+        return this.buildInterruptReturnFromExpr(node.value);
       }
       if (
         node.value.type === "functionCall" &&
@@ -2455,11 +2495,8 @@ export class TypeScriptBuilder {
       return ts.nodeResult(this.maybeWrapReturnValidation(valueNode));
     }
 
-    if (
-      node.value.type === "functionCall" &&
-      node.value.functionName === "interrupt"
-    ) {
-      return this.buildInterruptReturn(node.value.arguments);
+    if (this.isInterruptExpression(node.value)) {
+      return this.buildInterruptReturnFromExpr(node.value);
     } else if (
       node.value.type === "functionCall" &&
       node.value.functionName === "llm"
@@ -2508,13 +2545,28 @@ export class TypeScriptBuilder {
 
     if (value.type === "functionCall" && value.functionName === "llm") {
       return this.processLlmCall(variableName, typeHint, value, node.scope!);
-    } else if (
-      value.type === "functionCall" &&
-      value.functionName === "interrupt"
-    ) {
-      const interruptArgs = value.arguments
-        .map((arg) => this.str(this.processCallArg(arg)))
-        .join(", ");
+    } else if (this.isInterruptExpression(value)) {
+      let kind: string;
+      let messageExpr: string;
+      let dataExpr: string;
+      const intVal = value as InterruptStatement | FunctionCall;
+      if (intVal.type === "interruptStatement") {
+        kind = intVal.kind;
+        messageExpr = intVal.arguments.length > 0
+          ? this.str(this.processCallArg(intVal.arguments[0]))
+          : '""';
+        dataExpr = intVal.arguments.length > 1
+          ? this.str(this.processCallArg(intVal.arguments[1]))
+          : "{}";
+      } else {
+        // bare interrupt("msg") — desugar
+        kind = "unknown";
+        messageExpr = intVal.arguments.length > 0
+          ? this.str(this.processCallArg(intVal.arguments[0]))
+          : '""';
+        dataExpr = "{}";
+      }
+      const origin = moduleIdToOrigin(this.moduleId);
       const makeAssign = (val: string) =>
         this.str(
           this.scopedAssign(
@@ -2530,7 +2582,7 @@ export class TypeScriptBuilder {
           assignResolve: makeAssign("__response.value"),
           assignApprove: makeAssign("true"),
           handlerApprove: makeAssign("__handlerResult.value"),
-          interruptArgs,
+          ...this.interruptTemplateArgs(kind, messageExpr, dataExpr, origin),
           nodeContext: this.getCurrentScope().type === "node",
           interruptIdKey: `__interruptId_${this._subStepPath.join("_")}`,
           ...opts,

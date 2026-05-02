@@ -52,6 +52,9 @@ export type InterruptState = {
 
 export type Interrupt<T = any> = {
   type: "interrupt";
+  kind: string;           // e.g. "std::read", "unknown"
+  message: string;        // human-readable description
+  origin: string;         // compiler-injected module origin
   interruptId: string; // nanoid — globally unique
   data: T;
   debugger?: boolean;
@@ -62,9 +65,18 @@ export type Interrupt<T = any> = {
   runId: string; // unique ID for the agent run, persists across interrupt pauses/resumes
 };
 
-export function interrupt<T = any>(data: T, runId: string): Interrupt<T> {
+export function interrupt<T = any>(
+  kind: string,
+  message: string,
+  data: T,
+  origin: string,
+  runId: string,
+): Interrupt<T> {
   return {
     type: "interrupt",
+    kind,
+    message,
+    origin,
     interruptId: nanoid(),
     data,
     runId,
@@ -79,6 +91,9 @@ export function createDebugInterrupt<T = any>(
 ): Interrupt<T> {
   return {
     type: "interrupt",
+    kind: "debug",
+    message: "",
+    origin: "",
     interruptId: nanoid(),
     data,
     debugger: true,
@@ -109,12 +124,16 @@ export function isApproved(obj: any): obj is Approved {
 }
 
 export async function interruptWithHandlers<T = any>(
+  kind: string,
+  message: string,
   data: T,
+  origin: string,
   ctx: RuntimeContext<any>,
   stack?: StateStack,
 ): Promise<Interrupt<T>[] | Approved | Rejected> {
+  const interruptObj = { kind, message, data, origin };
   if (ctx.handlers.length === 0) {
-    return [interrupt(data, ctx.getRunId())];
+    return [interrupt(kind, message, data, origin, ctx.getRunId())];
   }
   let approvedValue: any = undefined;
   let hasApproval = false;
@@ -129,7 +148,7 @@ export async function interruptWithHandlers<T = any>(
     ctx.enterToolCall();
     let result: any;
     try {
-      result = await ctx.handlers[i](data);
+      result = await ctx.handlers[i](interruptObj);
     } finally {
       ctx.exitToolCall();
     }
@@ -153,12 +172,12 @@ export async function interruptWithHandlers<T = any>(
     );
   }
   if (hasPropagation) {
-    return [interrupt(data, ctx.getRunId())];
+    return [interrupt(kind, message, data, origin, ctx.getRunId())];
   }
   if (hasApproval) {
     return { type: "approve", value: approvedValue };
   }
-  return [interrupt(data, ctx.getRunId())];
+  return [interrupt(kind, message, data, origin, ctx.getRunId())];
 }
 
 export async function respondToInterrupts(args: {

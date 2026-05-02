@@ -19,17 +19,17 @@ export async function runEvaluation() {
 
     for (const interruptItem of interrupts) {
       if (handlerIndex >= interruptHandlers.length) {
-        throw new Error("Unexpected interrupt #" + (handlerIndex + 1) + ": \\"" + interruptItem.data + "\\". No handler provided.");
+        throw new Error("Unexpected interrupt #" + (handlerIndex + 1) + ": \\"" + interruptItem.message + "\\". No handler provided.");
       }
 
       const handler = interruptHandlers[handlerIndex];
 
       // Validate expected message if provided
-      if (handler.expectedMessage !== undefined && interruptItem.data !== handler.expectedMessage) {
+      if (handler.expectedMessage !== undefined && interruptItem.message !== handler.expectedMessage) {
         throw new Error(
           "Interrupt #" + (handlerIndex + 1) + " message mismatch.\\n" +
           "  Expected: \\"" + handler.expectedMessage + "\\"\\n" +
-          "  Actual: \\"" + interruptItem.data + "\\""
+          "  Actual: \\"" + interruptItem.message + "\\""
         );
       }
 

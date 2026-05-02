@@ -5,13 +5,13 @@ const RUN_ID = "test-run-id";
 
 describe("isDebugger", () => {
   it("returns true for an interrupt with debugger: true", () => {
-    const i = interrupt("breakpoint", RUN_ID);
+    const i = interrupt("debug", "breakpoint", {}, "", RUN_ID);
     i.debugger = true;
     expect(isDebugger(i)).toBe(true);
   });
 
   it("returns false for a regular interrupt", () => {
-    const i = interrupt("regular", RUN_ID);
+    const i = interrupt("unknown", "regular", {}, "", RUN_ID);
     expect(isDebugger(i)).toBe(false);
   });
 
@@ -23,7 +23,7 @@ describe("isDebugger", () => {
   });
 
   it("returns false for interrupt with debugger: false", () => {
-    const i = interrupt("breakpoint", RUN_ID);
+    const i = interrupt("debug", "breakpoint", {}, "", RUN_ID);
     i.debugger = false;
     expect(isDebugger(i)).toBe(false);
   });

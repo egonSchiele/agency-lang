@@ -120,6 +120,10 @@ export function expressionToString(expr: Expression): string {
       return `/${expr.pattern}/${expr.flags}`;
     case "schemaExpression":
       return `schema(${variableTypeToString(expr.typeArg, {})})`;
+    case "interruptStatement": {
+      const args = expr.arguments.map(callArgToString).join(", ");
+      return `interrupt ${expr.kind}(${args})`;
+    }
   }
 }
 

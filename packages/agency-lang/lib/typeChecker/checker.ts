@@ -18,12 +18,59 @@ export function checkScopes(
 ): void {
   for (const scope of scopes) {
     ctx.withScope(scope.scopeKey, () => {
+      checkAssignmentsInScope(scope, synthCtx);
       checkFunctionCallsInScope(scope, synthCtx);
       if (scope.returnType !== undefined) {
         checkReturnTypesInScope(scope, synthCtx);
       }
       checkExpressionsInScope(scope, synthCtx);
     });
+  }
+}
+
+/**
+ * Verify that each assignment's value is compatible with the binding's
+ * declared type. Re-declaration incompatibility (annotation vs. annotation)
+ * is reported earlier in declareVariable, where statement order is preserved.
+ */
+function checkAssignmentsInScope(
+  scope: ScopeInfo,
+  ctx: SynthContext,
+): void {
+  const typeAliases = ctx.getTypeAliases();
+  for (const { node } of walkNodes(scope.body)) {
+    if (node.type !== "assignment") continue;
+    const existingType = scope.variableTypes[node.variableName];
+    const newType = node.typeHint;
+    const loc = node.loc;
+
+    if (newType) {
+      checkType(
+        node.value,
+        newType,
+        scope.variableTypes,
+        `assignment to '${node.variableName}'`,
+        ctx,
+      );
+    } else if (existingType) {
+      const valueType = synthType(node.value, scope.variableTypes, ctx);
+      if (
+        valueType !== "any" &&
+        existingType !== "any" &&
+        !isAssignable(valueType, existingType, typeAliases)
+      ) {
+        ctx.errors.push({
+          message: `Type '${typeof valueType === "string" ? valueType : formatTypeHint(valueType)}' is not assignable to type '${formatTypeHint(existingType)}'.`,
+          variableName: node.variableName,
+          expectedType: formatTypeHint(existingType),
+          actualType:
+            typeof valueType === "string"
+              ? valueType
+              : formatTypeHint(valueType),
+          loc,
+        });
+      }
+    }
   }
 }
 

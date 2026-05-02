@@ -1,18 +1,16 @@
 import {
   AgencyNode,
-  VariableType,
   functionScope,
   nodeScope,
 } from "../types.js";
 import { GLOBAL_SCOPE_KEY, scopeKey } from "../programInfo.js";
 import { getImportedNames } from "../types/importStatement.js";
-import { formatTypeHint } from "../cli/util.js";
 import { isAssignable, widenType } from "./assignability.js";
 import { synthType, SynthContext } from "./synthesizer.js";
 import { validateTypeReferences } from "./validate.js";
 import { ScopeInfo, TypeCheckerContext } from "./types.js";
-import { checkType } from "./utils.js";
 import { Scope } from "./scope.js";
+import { formatTypeHint } from "../cli/util.js";
 
 export function buildScopes(
   ctx: TypeCheckerContext,
@@ -23,7 +21,7 @@ export function buildScopes(
   // Top-level scope
   const topLevelScope = new Scope(GLOBAL_SCOPE_KEY);
   ctx.withScope(GLOBAL_SCOPE_KEY, () => {
-    collectVariableTypes(ctx.programNodes, topLevelScope, "top-level", synthCtx);
+    populateScope(ctx.programNodes, topLevelScope, synthCtx);
   });
   scopes.push({
     variableTypes: topLevelScope.toRecord(),
@@ -40,7 +38,7 @@ export function buildScopes(
       fnScope.declare(param.name, param.typeHint ?? "any");
     }
     ctx.withScope(sk, () => {
-      collectVariableTypes(fn.body, fnScope, fn.functionName, synthCtx);
+      populateScope(fn.body, fnScope, synthCtx);
     });
     scopes.push({
       variableTypes: fnScope.toRecord(),
@@ -59,7 +57,7 @@ export function buildScopes(
       nodeScope_.declare(param.name, param.typeHint ?? "any");
     }
     ctx.withScope(sk, () => {
-      collectVariableTypes(node.body, nodeScope_, node.nodeName, synthCtx);
+      populateScope(node.body, nodeScope_, synthCtx);
     });
     scopes.push({
       variableTypes: nodeScope_.toRecord(),
@@ -74,72 +72,73 @@ export function buildScopes(
 }
 
 /**
- * Walk statements to collect variable types AND check assignments.
- * Kept as single-pass to preserve existing behavior.
+ * Add a binding to the scope, with no compatibility checking. Annotated
+ * declarations validate their type references; unannotated ones synthesize
+ * a type from the value and widen it. Reassignment compatibility is
+ * verified later in checkAssignmentsInScope.
  */
-export function collectVariableTypes(
-  nodes: AgencyNode[],
+export function declareVariable(
+  node: AgencyNode,
   scope: Scope,
-  scopeName: string,
   ctx: SynthContext,
 ): void {
-  const typeAliases = ctx.getTypeAliases();
+  if (node.type !== "assignment") return;
+  const newType = node.typeHint;
+  if (newType) {
+    const typeAliases = ctx.getTypeAliases();
+    validateTypeReferences(
+      newType,
+      node.variableName,
+      typeAliases,
+      ctx.errors,
+      node.loc,
+    );
+    // Re-declaration with an incompatible annotation is a declaration-time
+    // error, so we report it during the declaration walk (when the order
+    // of declarations is meaningful).
+    const existingType = scope.lookup(node.variableName);
+    if (
+      existingType &&
+      existingType !== "any" &&
+      !isAssignable(newType, existingType, typeAliases)
+    ) {
+      ctx.errors.push({
+        message: `Type '${formatTypeHint(newType)}' is not assignable to type '${formatTypeHint(existingType)}'.`,
+        variableName: node.variableName,
+        expectedType: formatTypeHint(existingType),
+        actualType: formatTypeHint(newType),
+        loc: node.loc,
+      });
+    }
+    scope.declare(node.variableName, newType);
+  } else if (!scope.has(node.variableName)) {
+    if (ctx.config.strictTypes) {
+      ctx.errors.push({
+        message: `Variable '${node.variableName}' has no type annotation (strict mode).`,
+        variableName: node.variableName,
+        loc: node.loc,
+      });
+    }
+    const inferred = synthType(node.value, scope.toRecord(), ctx);
+    scope.declare(node.variableName, widenType(inferred));
+  }
+  // Reassignment to an already-declared name with no annotation: no-op here;
+  // checkAssignmentsInScope verifies compatibility.
+}
 
+/**
+ * Walk a body of statements and declare every binding into the given scope.
+ * Recurses into nested blocks (if/while/messageThread) using the same scope,
+ * which preserves today's function-scoped semantics.
+ */
+export function walkScopeBody(
+  nodes: AgencyNode[],
+  scope: Scope,
+  ctx: SynthContext,
+): void {
   for (const node of nodes) {
     if (node.type === "assignment") {
-      const existingType = scope.lookup(node.variableName);
-      const newType = node.typeHint;
-      const loc = node.loc;
-
-      if (newType) {
-        validateTypeReferences(newType, node.variableName, typeAliases, ctx.errors, loc);
-        // Check reassignment consistency
-        if (
-          existingType &&
-          existingType !== "any" &&
-          !isAssignable(newType, existingType, typeAliases)
-        ) {
-          ctx.errors.push({
-            message: `Type '${formatTypeHint(newType)}' is not assignable to type '${formatTypeHint(existingType)}'.`,
-            variableName: node.variableName,
-            expectedType: formatTypeHint(existingType),
-            actualType: formatTypeHint(newType),
-            loc,
-          });
-        }
-        // Check that the assigned value is compatible with the annotation
-        checkType(node.value, newType, scope.toRecord(), `assignment to '${node.variableName}'`, ctx);
-        scope.declare(node.variableName, newType);
-      } else if (existingType) {
-        const valueType = synthType(node.value, scope.toRecord(), ctx);
-        if (
-          valueType !== "any" &&
-          existingType !== "any" &&
-          !isAssignable(valueType, existingType, typeAliases)
-        ) {
-          ctx.errors.push({
-            message: `Type '${typeof valueType === "string" ? valueType : formatTypeHint(valueType)}' is not assignable to type '${formatTypeHint(existingType)}'.`,
-            variableName: node.variableName,
-            expectedType: formatTypeHint(existingType),
-            actualType:
-              typeof valueType === "string"
-                ? valueType
-                : formatTypeHint(valueType),
-            loc,
-          });
-        }
-      } else {
-        // No type annotation — infer from value
-        if (ctx.config.strictTypes) {
-          ctx.errors.push({
-            message: `Variable '${node.variableName}' has no type annotation (strict mode).`,
-            variableName: node.variableName,
-            loc,
-          });
-        }
-        const inferred = synthType(node.value, scope.toRecord(), ctx);
-        scope.declare(node.variableName, widenType(inferred));
-      }
+      declareVariable(node, scope, ctx);
     } else if (node.type === "importStatement") {
       for (const importName of node.importedNames) {
         for (const name of getImportedNames(importName)) {
@@ -154,23 +153,47 @@ export function collectVariableTypes(
         scope.declare(node.itemVar, "any");
       }
       if (node.indexVar) {
-        scope.declare(node.indexVar, { type: "primitiveType", value: "number" });
+        scope.declare(node.indexVar, {
+          type: "primitiveType",
+          value: "number",
+        });
       }
-      collectVariableTypes(node.body, scope, scopeName, ctx);
+      walkScopeBody(node.body, scope, ctx);
     }
   }
 
-  // Walk into nested blocks
   for (const node of nodes) {
     if (node.type === "ifElse") {
-      collectVariableTypes(node.thenBody, scope, scopeName, ctx);
-      if (node.elseBody) {
-        collectVariableTypes(node.elseBody, scope, scopeName, ctx);
-      }
+      walkScopeBody(node.thenBody, scope, ctx);
+      if (node.elseBody) walkScopeBody(node.elseBody, scope, ctx);
     } else if (node.type === "whileLoop") {
-      collectVariableTypes(node.body, scope, scopeName, ctx);
+      walkScopeBody(node.body, scope, ctx);
     } else if (node.type === "messageThread") {
-      collectVariableTypes(node.body, scope, scopeName, ctx);
+      walkScopeBody(node.body, scope, ctx);
     }
   }
+}
+
+/**
+ * Public entry: populate a scope from a body of statements.
+ */
+export function populateScope(
+  nodes: AgencyNode[],
+  scope: Scope,
+  ctx: SynthContext,
+): void {
+  walkScopeBody(nodes, scope, ctx);
+}
+
+/**
+ * Backwards-compatible alias for callers that haven't migrated yet
+ * (inference.ts). Will be removed in Step 3.
+ */
+export function collectVariableTypes(
+  nodes: AgencyNode[],
+  scope: Scope,
+  _scopeName: string,
+  ctx: SynthContext,
+): void {
+  populateScope(nodes, scope, ctx);
 }

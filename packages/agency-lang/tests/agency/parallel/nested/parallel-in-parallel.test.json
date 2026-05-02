@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "A parallel block whose second arm is itself a parallel block. After both desugars, this becomes fork-inside-fork, which the existing fork machinery handles. Verifies that bindings declared in the inner parallel (innerP, innerQ) hoist all the way out — first to the outer arm's scope, then out of the outer parallel — and are visible in the enclosing node body.",
+      "input": "",
+      "expectedOutput": "\"v-oa|v-ip,v-iq\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

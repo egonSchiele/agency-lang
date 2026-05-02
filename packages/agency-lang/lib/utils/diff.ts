@@ -8,29 +8,34 @@ const DIFF_EQUAL = 0;
 const dmp = new DiffMatchPatch();
 
 /**
- * Formats a colored, line-based diff between two strings.
- * Deletions (expected) are shown in red with a "-" prefix.
- * Insertions (actual) are shown in green with a "+" prefix.
- * Equal lines are shown dimmed with a "  " prefix.
+ * Formats expected vs actual for failed test output.
+ *
+ * Always prints both full strings (labelled) so the failure is readable
+ * regardless of how the inline diff renders. If the strings differ, an
+ * inline diff is appended below with `[-deleted-]` / `{+inserted+}` markers.
  */
 export function formatDiff(expected: string, actual: string): string {
+  const out: string[] = [];
+  out.push(color.dim("  Expected: ") + expected);
+  out.push(color.dim("  Actual:   ") + actual);
+
   const diffs = dmp.diff_main(expected, actual);
   dmp.diff_cleanupSemantic(diffs);
 
-  const lines: string[] = [];
+  const hasChange = diffs.some(([op]) => op !== DIFF_EQUAL);
+  if (!hasChange) return out.join("\n");
+
+  out.push(color.dim("  Diff:"));
+  let inline = "  ";
   for (const [op, text] of diffs) {
-    // Split text into individual lines to get per-line prefixes
-    const parts = text.split("\n");
-    for (let i = 0; i < parts.length; i++) {
-      const part = parts[i];
-      if (op === DIFF_DELETE) {
-        lines.push(color.red(`- ${part}`));
-      } else if (op === DIFF_INSERT) {
-        lines.push(color.green(`+ ${part}`));
-      } else {
-        lines.push(color.dim(`  ${part}`));
-      }
+    if (op === DIFF_DELETE) {
+      inline += color.red(`[-${text}-]`);
+    } else if (op === DIFF_INSERT) {
+      inline += color.green(`{+${text}+}`);
+    } else {
+      inline += color.dim(text);
     }
   }
-  return lines.join("\n");
+  out.push(inline);
+  return out.join("\n");
 }

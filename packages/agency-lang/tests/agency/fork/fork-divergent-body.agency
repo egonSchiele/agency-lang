@@ -1,0 +1,34 @@
+def fetchA(): string {
+  let x = interrupt("approve a?")
+  return "a-result"
+}
+
+def fetchB(): string {
+  return "b-result"
+}
+
+def fetchC(): string {
+  let x = interrupt("approve c?")
+  return "c-result"
+}
+
+node main() {
+  let results = fork(["arm_0", "arm_1", "arm_2"]) as __arm {
+    if (__arm == "arm_0") {
+      let a = fetchA()
+      return { a: a }
+    }
+    if (__arm == "arm_1") {
+      let b = fetchB()
+      return { b: b }
+    }
+    if (__arm == "arm_2") {
+      let c = fetchC()
+      return { c: c }
+    }
+  }
+  let a = results[0].a
+  let b = results[1].b
+  let c = results[2].c
+  return "${a},${b},${c}"
+}

@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Both parallel arms read a variable bound in the enclosing node scope. Per the cross-arm rule, references to outer-scope bindings do NOT count as cross-arm refs (the binding is not declared by a sibling arm), so the validation passes and both arms see the same `prefix`.",
+      "input": "",
+      "expectedOutput": "\"outer-a,outer-b\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

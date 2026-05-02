@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Three independent let-binding arms in a parallel block. Confirms the desugar handles N>2 cleanly: arm names arm_0/arm_1/arm_2, all three bindings hoist out, all three run concurrently and produce their values.",
+      "input": "",
+      "expectedOutput": "\"v-a,v-b,v-c\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

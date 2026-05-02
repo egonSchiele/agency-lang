@@ -1,0 +1,13 @@
+def fa(): string { return "pa" }
+def fb(): string { return "pb" }
+
+node main() {
+  let results = fork(["x", "y"]) as item {
+    parallel {
+      let p = fa()
+      let q = fb()
+    }
+    return "${p}+${q}"
+  }
+  return "${results[0]}|${results[1]}"
+}

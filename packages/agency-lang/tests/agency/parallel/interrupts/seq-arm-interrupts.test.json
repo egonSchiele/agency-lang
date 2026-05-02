@@ -1,0 +1,14 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "An interrupt that fires inside a `seq` arm's body must pause that arm and resume from the right point inside the seq. The seq has two sequential calls, the first of which interrupts. After resume, both p1 and p2 must be in scope along with the sibling arm's `a`. Exercises the case where an interrupt fires deeper than the parallel arm boundary.",
+      "input": "",
+      "expectedOutput": "\"a-result,p1,p2-p1\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "interruptHandlers": [
+        { "action": "approve" }
+      ]
+    }
+  ]
+}

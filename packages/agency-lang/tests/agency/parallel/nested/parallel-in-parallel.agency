@@ -1,0 +1,14 @@
+def f(label: string): string {
+  return "v-${label}"
+}
+
+node main() {
+  parallel {
+    let outerA = f("oa")
+    parallel {
+      let innerP = f("ip")
+      let innerQ = f("iq")
+    }
+  }
+  return "${outerA}|${innerP},${innerQ}"
+}

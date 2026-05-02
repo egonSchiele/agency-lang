@@ -1,0 +1,10 @@
+def foo(): string { return "F" }
+def bar(s: string): string { return "B-${s}" }
+
+node main() {
+  seq {
+    let a = foo()
+    let b = bar(a)
+  }
+  return "${a},${b}"
+}

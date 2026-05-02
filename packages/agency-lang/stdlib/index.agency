@@ -1,3 +1,5 @@
+/** 
+The imports from this file get auto-imported into every .agency file, so you can use these tools without needing to import them manually. */
 import { _print, _printJSON, _input, _sleep, _round, _fetch, _fetchJSON, _read, _write, _readImage, _notify, _range, _mostCommon, _keys, _values, _entries } from "./lib/builtins.js"
 export safe def print(...messages) {
   """

@@ -1,0 +1,15 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Fork body with top-level if-chain dispatching on the iteration item — each branch executes a different code path. Exercises the shape the parallel/seq desugar produces. Two of three arms interrupt; on resume, the non-interrupting arm's result must be cached and only the interrupted arms re-execute. Final output exact-matches a comma-joined string built from each arm's distinct return-shape ({a:...}, {b:...}, {c:...}), confirming per-arm bindings round-trip correctly through the fork result aggregation.",
+      "input": "",
+      "expectedOutput": "\"a-result,b-result,c-result\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "interruptHandlers": [
+        { "action": "approve" },
+        { "action": "approve" }
+      ]
+    }
+  ]
+}

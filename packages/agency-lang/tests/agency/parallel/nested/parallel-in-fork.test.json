@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "A `parallel` block inside a `fork(...) as item { ... }` body. Each fork branch independently desugars its own parallel block. Confirms suffix uniqueness across nested fork iterations and that the parallel's bindings hoist into the fork-body scope correctly so the trailing `return` sees them. The arms do not reference the outer fork's `item` because that is an unrelated pre-existing fork limitation (outer block args don't capture into inner fork closures).",
+      "input": "",
+      "expectedOutput": "\"pa+pb|pa+pb\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

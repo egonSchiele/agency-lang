@@ -1,0 +1,19 @@
+def maybeFails(label: string): string {
+  if (label == "fail") {
+    return failure("boom")
+  }
+  return "ok-${label}"
+}
+
+node main() {
+  parallel {
+    let a = maybeFails("ok1")
+    let b = maybeFails("fail")
+    let c = maybeFails("ok2")
+  }
+  let bMsg = "no-error"
+  if (isFailure(b)) {
+    bMsg = b.error
+  }
+  return "${a},${bMsg},${c}"
+}

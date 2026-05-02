@@ -1,0 +1,14 @@
+def foo(): string { return "foo-result" }
+def bar(): string { return "bar-result" }
+def baz(s: string): string { return "baz-${s}" }
+
+node main() {
+  parallel {
+    let a = foo()
+    seq {
+      let b = bar()
+      let c = baz(b)
+    }
+  }
+  return "${a},${b},${c}"
+}

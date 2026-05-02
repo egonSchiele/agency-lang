@@ -26,6 +26,7 @@ import {
   getAllVariablesInBodyArray,
   walkNodesArray,
 } from "@/utils/node.js";
+import { desugarParallelInBody } from "./parallelDesugar.js";
 
 /**
  * Recursively apply a transform function to all body arrays in a node tree.
@@ -65,6 +66,8 @@ function walkBody(
       node.statement = walkBody([node.statement], fn)[0];
     } else if (node.type === "functionCall" && node.block) {
       node.block.body = walkBody(node.block.body, fn);
+    } else if (node.type === "parallelBlock" || node.type === "seqBlock") {
+      node.body = walkBody(node.body, fn);
     }
     return node;
   });
@@ -232,6 +235,7 @@ export class TypescriptPreprocessor {
   preprocess(): AgencyProgram {
     this.attachDocComments();
     this.program.nodes = collectTags(this.program.nodes);
+    this.desugarParallelBlocks();
     if (Object.keys(this.functionDefinitions).length === 0) {
       this.getFunctionDefinitions();
     }
@@ -277,6 +281,24 @@ export class TypescriptPreprocessor {
 
     this.resolveVariableScopes();
     return this.program;
+  }
+
+  /**
+   * Walk every function and graph-node body and desugar `parallel { ... }`
+   * blocks into the existing `fork` primitive. Also inlines any `seq { ... }`
+   * blocks that appear outside a parallel block (where they have no runtime
+   * effect). See lib/preprocessors/parallelDesugar.ts.
+   */
+  protected desugarParallelBlocks(): void {
+    for (const node of this.program.nodes) {
+      if (node.type === "function" || node.type === "graphNode") {
+        node.body = desugarParallelInBody(node.body);
+      } else if (node.type === "classDefinition") {
+        for (const m of node.methods) {
+          m.body = desugarParallelInBody(m.body);
+        }
+      }
+    }
   }
 
   protected removeUnusedLlmCalls(): void {

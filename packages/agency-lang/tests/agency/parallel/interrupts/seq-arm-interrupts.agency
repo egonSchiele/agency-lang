@@ -1,0 +1,23 @@
+def fetchA(): string {
+  return "a-result"
+}
+
+def fetchPart1(): string {
+  let approved = interrupt("approve part 1?")
+  return "p1"
+}
+
+def fetchPart2(s: string): string {
+  return "p2-${s}"
+}
+
+node main() {
+  parallel {
+    let a = fetchA()
+    seq {
+      let p1 = fetchPart1()
+      let p2 = fetchPart2(p1)
+    }
+  }
+  return "${a},${p1},${p2}"
+}

@@ -1,0 +1,10 @@
+def f(): string {
+  return "only-arm"
+}
+
+node main() {
+  parallel {
+    let a = f()
+  }
+  return a
+}

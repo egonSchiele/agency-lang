@@ -1,0 +1,24 @@
+// Verifies that interrupt response values are routed to the correct arm.
+// Two arms each interrupt with a distinct prompt; the test harness resolves
+// each interrupt with a distinct value matched by `expectedMessage`. If the
+// desugar broke routing — e.g., responseMap matching by interruptId got
+// scrambled across arms — arm A would receive arm B's value (and vice
+// versa), and the exact-match would fail.
+
+def armA(): string {
+  const v = interrupt("approve a?")
+  return "a-got-${v}"
+}
+
+def armB(): string {
+  const v = interrupt("approve b?")
+  return "b-got-${v}"
+}
+
+node main() {
+  parallel {
+    let a = armA()
+    let b = armB()
+  }
+  return "${a},${b}"
+}

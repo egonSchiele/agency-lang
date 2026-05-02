@@ -15,7 +15,6 @@ import { buildScopes } from "./scopes.js";
 import { checkScopes } from "./checker.js";
 import { isAssignable as _isAssignable } from "./assignability.js";
 import { inferReturnTypeFor } from "./inference.js";
-import { makeSynthContext } from "./utils.js";
 
 export type { TypeCheckError, TypeCheckResult } from "./types.js";
 
@@ -58,7 +57,7 @@ export class TypeChecker {
   }
 
   private makeContext(): TypeCheckerContext {
-    return {
+    const ctx: TypeCheckerContext = {
       programNodes: this.program.nodes,
       scopedTypeAliases: this.scopedTypeAliases,
       currentScopeKey: this.currentScopeKey,
@@ -70,7 +69,9 @@ export class TypeChecker {
       config: this.config,
       getTypeAliases: () => this.typeAliases,
       withScope: <T>(key: string, fn: () => T): T => this.withScope(key, fn),
+      inferReturnTypeFor: (name, def) => inferReturnTypeFor(name, def, ctx),
     };
+    return ctx;
   }
 
   check(): TypeCheckResult {
@@ -86,20 +87,14 @@ export class TypeChecker {
       });
     }
 
-    // Create SynthContext once, shared across all phases
-    let synthCtx: ReturnType<typeof makeSynthContext>;
-    synthCtx = makeSynthContext(ctx, (name, def) =>
-      inferReturnTypeFor(name, def, ctx, synthCtx),
-    );
-
     // 2. Infer return types
-    inferReturnTypes(ctx, synthCtx);
+    inferReturnTypes(ctx);
 
     // 3. Build scopes (collects variable types and checks assignments)
-    const scopes = buildScopes(ctx, synthCtx);
+    const scopes = buildScopes(ctx);
 
     // 4. Check function calls, return types, and expressions
-    checkScopes(scopes, ctx, synthCtx);
+    checkScopes(scopes, ctx);
 
     return { errors: this.deduplicateErrors() };
   }

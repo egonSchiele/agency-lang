@@ -9,15 +9,12 @@ import {
 import { scopeKey } from "../programInfo.js";
 import { walkNodes } from "../utils/node.js";
 import { isAssignable, widenType } from "./assignability.js";
-import { synthType, SynthContext } from "./synthesizer.js";
-import { collectVariableTypes } from "./scopes.js";
+import { synthType } from "./synthesizer.js";
+import { populateScope } from "./scopes.js";
 import { TypeCheckerContext } from "./types.js";
 import { Scope } from "./scope.js";
 
-export function inferReturnTypes(
-  ctx: TypeCheckerContext,
-  synthCtx: SynthContext,
-): void {
+export function inferReturnTypes(ctx: TypeCheckerContext): void {
   const allDefs: (FunctionDefinition | GraphNodeDefinition)[] = [
     ...Object.values(ctx.functionDefs),
     ...Object.values(ctx.nodeDefs),
@@ -27,7 +24,7 @@ export function inferReturnTypes(
     if (def.returnType) continue;
 
     const name = def.type === "function" ? def.functionName : def.nodeName;
-    inferReturnTypeFor(name, def, ctx, synthCtx);
+    inferReturnTypeFor(name, def, ctx);
   }
 }
 
@@ -35,7 +32,6 @@ export function inferReturnTypeFor(
   name: string,
   def: FunctionDefinition | GraphNodeDefinition,
   ctx: TypeCheckerContext,
-  synthCtx: SynthContext,
 ): VariableType | "any" {
   if (name in ctx.inferredReturnTypes) {
     return ctx.inferredReturnTypes[name];
@@ -56,7 +52,7 @@ export function inferReturnTypeFor(
     for (const param of def.parameters) {
       scope.declare(param.name, param.typeHint ?? "any");
     }
-    collectVariableTypes(def.body, scope, name, synthCtx);
+    populateScope(def.body, scope, ctx);
 
     const returnValues: AgencyNode[] = [];
     for (const { node, ancestors } of walkNodes(def.body)) {
@@ -75,7 +71,7 @@ export function inferReturnTypeFor(
       inferred = { type: "primitiveType", value: "void" };
     } else {
       const typeAliases = ctx.getTypeAliases();
-      const types = returnValues.map((v) => synthType(v, scope.toRecord(), synthCtx));
+      const types = returnValues.map((v) => synthType(v, scope.toRecord(), ctx));
       if (types.some((t) => t === "any")) {
         inferred = "any";
       } else {

@@ -45,4 +45,8 @@ export type TypeCheckerContext = {
   config: AgencyConfig;
   getTypeAliases(): Record<string, VariableType>;
   withScope<T>(key: string, fn: () => T): T;
+  inferReturnTypeFor(
+    name: string,
+    def: FunctionDefinition | GraphNodeDefinition,
+  ): VariableType | "any";
 };

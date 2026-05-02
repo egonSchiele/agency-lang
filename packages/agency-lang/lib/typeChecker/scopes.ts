@@ -6,22 +6,19 @@ import {
 import { GLOBAL_SCOPE_KEY, scopeKey } from "../programInfo.js";
 import { getImportedNames } from "../types/importStatement.js";
 import { isAssignable, widenType } from "./assignability.js";
-import { synthType, SynthContext } from "./synthesizer.js";
+import { synthType } from "./synthesizer.js";
 import { validateTypeReferences } from "./validate.js";
 import { ScopeInfo, TypeCheckerContext } from "./types.js";
 import { Scope } from "./scope.js";
 import { formatTypeHint } from "../cli/util.js";
 
-export function buildScopes(
-  ctx: TypeCheckerContext,
-  synthCtx: SynthContext,
-): ScopeInfo[] {
+export function buildScopes(ctx: TypeCheckerContext): ScopeInfo[] {
   const scopes: ScopeInfo[] = [];
 
   // Top-level scope
   const topLevelScope = new Scope(GLOBAL_SCOPE_KEY);
   ctx.withScope(GLOBAL_SCOPE_KEY, () => {
-    populateScope(ctx.programNodes, topLevelScope, synthCtx);
+    populateScope(ctx.programNodes, topLevelScope, ctx);
   });
   scopes.push({
     variableTypes: topLevelScope.toRecord(),
@@ -38,7 +35,7 @@ export function buildScopes(
       fnScope.declare(param.name, param.typeHint ?? "any");
     }
     ctx.withScope(sk, () => {
-      populateScope(fn.body, fnScope, synthCtx);
+      populateScope(fn.body, fnScope, ctx);
     });
     scopes.push({
       variableTypes: fnScope.toRecord(),
@@ -57,7 +54,7 @@ export function buildScopes(
       nodeScope_.declare(param.name, param.typeHint ?? "any");
     }
     ctx.withScope(sk, () => {
-      populateScope(node.body, nodeScope_, synthCtx);
+      populateScope(node.body, nodeScope_, ctx);
     });
     scopes.push({
       variableTypes: nodeScope_.toRecord(),
@@ -80,7 +77,7 @@ export function buildScopes(
 export function declareVariable(
   node: AgencyNode,
   scope: Scope,
-  ctx: SynthContext,
+  ctx: TypeCheckerContext,
 ): void {
   if (node.type !== "assignment") return;
   const newType = node.typeHint;
@@ -134,7 +131,7 @@ export function declareVariable(
 export function walkScopeBody(
   nodes: AgencyNode[],
   scope: Scope,
-  ctx: SynthContext,
+  ctx: TypeCheckerContext,
 ): void {
   for (const node of nodes) {
     if (node.type === "assignment") {
@@ -180,20 +177,8 @@ export function walkScopeBody(
 export function populateScope(
   nodes: AgencyNode[],
   scope: Scope,
-  ctx: SynthContext,
+  ctx: TypeCheckerContext,
 ): void {
   walkScopeBody(nodes, scope, ctx);
 }
 
-/**
- * Backwards-compatible alias for callers that haven't migrated yet
- * (inference.ts). Will be removed in Step 3.
- */
-export function collectVariableTypes(
-  nodes: AgencyNode[],
-  scope: Scope,
-  _scopeName: string,
-  ctx: SynthContext,
-): void {
-  populateScope(nodes, scope, ctx);
-}

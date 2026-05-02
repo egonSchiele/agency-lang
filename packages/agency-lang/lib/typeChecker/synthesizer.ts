@@ -1,34 +1,17 @@
 import {
   AgencyNode,
-  FunctionDefinition,
-  GraphNodeDefinition,
   VariableType,
   ValueAccess,
 } from "../types.js";
-import { AgencyConfig } from "../config.js";
 import { formatTypeHint } from "../cli/util.js";
 import { BUILTIN_FUNCTION_TYPES } from "./builtins.js";
 import { isAssignable, resolveType } from "./assignability.js";
-import { TypeCheckError } from "./types.js";
-
-export type SynthContext = {
-  functionDefs: Record<string, FunctionDefinition>;
-  nodeDefs: Record<string, GraphNodeDefinition>;
-  inferredReturnTypes: Record<string, VariableType | "any">;
-  inferringReturnType: Set<string>;
-  errors: TypeCheckError[];
-  config: AgencyConfig;
-  getTypeAliases(): Record<string, VariableType>;
-  inferReturnTypeFor(
-    name: string,
-    def: FunctionDefinition | GraphNodeDefinition,
-  ): VariableType | "any";
-};
+import { TypeCheckerContext } from "./types.js";
 
 export function synthType(
   expr: AgencyNode,
   scopeVars: Record<string, VariableType | "any">,
-  ctx: SynthContext,
+  ctx: TypeCheckerContext,
 ): VariableType | "any" {
   switch (expr.type) {
     case "variableName": {
@@ -65,7 +48,7 @@ export function synthType(
 function synthBinOp(
   expr: AgencyNode & { type: "binOpExpression" },
   scopeVars: Record<string, VariableType | "any">,
-  ctx: SynthContext,
+  ctx: TypeCheckerContext,
 ): VariableType | "any" {
   const op = expr.operator;
   if (
@@ -99,7 +82,7 @@ function synthBinOp(
 function synthFunctionCall(
   expr: AgencyNode & { type: "functionCall" },
   scopeVars: Record<string, VariableType | "any">,
-  ctx: SynthContext,
+  ctx: TypeCheckerContext,
 ): VariableType | "any" {
   if (expr.functionName in BUILTIN_FUNCTION_TYPES) {
     return BUILTIN_FUNCTION_TYPES[expr.functionName].returnType;
@@ -121,7 +104,7 @@ function synthFunctionCall(
 function synthArray(
   expr: AgencyNode & { type: "agencyArray" },
   scopeVars: Record<string, VariableType | "any">,
-  ctx: SynthContext,
+  ctx: TypeCheckerContext,
 ): VariableType | "any" {
   if (expr.items.length === 0)
     return {
@@ -153,7 +136,7 @@ function synthArray(
 function synthObject(
   expr: AgencyNode & { type: "agencyObject" },
   scopeVars: Record<string, VariableType | "any">,
-  ctx: SynthContext,
+  ctx: TypeCheckerContext,
 ): VariableType | "any" {
   const properties: { key: string; value: VariableType }[] = [];
   for (const entry of expr.entries) {
@@ -173,7 +156,7 @@ function synthObject(
 export function synthValueAccess(
   expr: ValueAccess,
   scopeVars: Record<string, VariableType | "any">,
-  ctx: SynthContext,
+  ctx: TypeCheckerContext,
 ): VariableType | "any" {
   let currentType = synthType(expr.base, scopeVars, ctx);
   const typeAliases = ctx.getTypeAliases();

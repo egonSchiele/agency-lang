@@ -6,7 +6,7 @@ import { walkNodes } from "../utils/node.js";
 import { formatTypeHint } from "../cli/util.js";
 import { BUILTIN_FUNCTION_TYPES } from "./builtins.js";
 import { isAssignable } from "./assignability.js";
-import { synthType, SynthContext } from "./synthesizer.js";
+import { synthType } from "./synthesizer.js";
 import { ScopeInfo } from "./types.js";
 import type { TypeCheckerContext } from "./types.js";
 import { checkType } from "./utils.js";
@@ -14,16 +14,15 @@ import { checkType } from "./utils.js";
 export function checkScopes(
   scopes: ScopeInfo[],
   ctx: TypeCheckerContext,
-  synthCtx: SynthContext,
 ): void {
   for (const scope of scopes) {
     ctx.withScope(scope.scopeKey, () => {
-      checkAssignmentsInScope(scope, synthCtx);
-      checkFunctionCallsInScope(scope, synthCtx);
+      checkAssignmentsInScope(scope, ctx);
+      checkFunctionCallsInScope(scope, ctx);
       if (scope.returnType !== undefined) {
-        checkReturnTypesInScope(scope, synthCtx);
+        checkReturnTypesInScope(scope, ctx);
       }
-      checkExpressionsInScope(scope, synthCtx);
+      checkExpressionsInScope(scope, ctx);
     });
   }
 }
@@ -35,7 +34,7 @@ export function checkScopes(
  */
 function checkAssignmentsInScope(
   scope: ScopeInfo,
-  ctx: SynthContext,
+  ctx: TypeCheckerContext,
 ): void {
   const typeAliases = ctx.getTypeAliases();
   for (const { node } of walkNodes(scope.body)) {
@@ -76,7 +75,7 @@ function checkAssignmentsInScope(
 
 function checkFunctionCallsInScope(
   scope: ScopeInfo,
-  ctx: SynthContext,
+  ctx: TypeCheckerContext,
 ): void {
   for (const { node } of walkNodes(scope.body)) {
     if (node.type === "functionCall") {
@@ -88,7 +87,7 @@ function checkFunctionCallsInScope(
 function checkSingleFunctionCall(
   call: FunctionCall,
   scopeVars: Record<string, VariableType | "any">,
-  ctx: SynthContext,
+  ctx: TypeCheckerContext,
 ): void {
   const typeAliases = ctx.getTypeAliases();
 
@@ -161,7 +160,7 @@ function checkSingleFunctionCall(
 
 function checkReturnTypesInScope(
   scope: ScopeInfo,
-  ctx: SynthContext,
+  ctx: TypeCheckerContext,
 ): void {
   if (!scope.returnType) return;
 
@@ -180,7 +179,7 @@ function checkReturnTypesInScope(
 
 function checkExpressionsInScope(
   scope: ScopeInfo,
-  ctx: SynthContext,
+  ctx: TypeCheckerContext,
 ): void {
   for (const { node } of walkNodes(scope.body)) {
     if (node.type === "valueAccess") {

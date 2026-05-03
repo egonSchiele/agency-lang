@@ -140,7 +140,7 @@ export function startServer(): void {
     const doc = documents.get(params.textDocument.uri);
     if (!doc) return null;
     const state = docStates.get(params.textDocument.uri);
-    return handleDefinition(params, doc, uriToPath(doc.uri), state?.semanticIndex ?? {});
+    return handleDefinition(params, doc, uriToPath(doc.uri), state?.semanticIndex ?? {}, state?.program, state?.scopes);
   });
 
   connection.onTypeDefinition((params) => {

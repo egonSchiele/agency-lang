@@ -4801,6 +4801,100 @@ describe("TypeChecker", () => {
       expect(typeCheck(program).errors).toHaveLength(0);
     });
 
+    it("accepts a Result failure as input to a validated param", () => {
+      // def greet(name: string!): Result<number, string> { ... }
+      // const f: Result<string, string> = failure("oops")
+      // greet(f)  // should accept — failures pass through unvalidated
+      const resultStrStr: VariableType = {
+        type: "resultType",
+        successType: str,
+        failureType: str,
+      };
+      const resultNum: VariableType = {
+        type: "resultType",
+        successType: num,
+        failureType: { type: "primitiveType", value: "any" },
+      };
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "function",
+            functionName: "greet",
+            parameters: [
+              { type: "functionParameter", name: "n", typeHint: str, validated: true },
+            ],
+            returnType: resultNum,
+            body: [
+              {
+                type: "returnStatement",
+                value: {
+                  type: "functionCall",
+                  functionName: "success",
+                  arguments: [{ type: "number", value: "5" }],
+                },
+              },
+            ],
+          },
+          {
+            type: "assignment",
+            variableName: "f",
+            typeHint: resultStrStr,
+            value: {
+              type: "functionCall",
+              functionName: "failure",
+              arguments: [{ type: "string", segments: [{ type: "text", value: "oops" }] }],
+            },
+          },
+          {
+            type: "functionCall",
+            functionName: "greet",
+            arguments: [{ type: "variableName", value: "f" }],
+          },
+        ],
+      };
+      expect(typeCheck(program).errors).toHaveLength(0);
+    });
+
+    it("rejects a wrong-typed value passed to a validated param", () => {
+      // greet(42) — 42 is neither string nor a Result, should error
+      const resultNum: VariableType = {
+        type: "resultType",
+        successType: num,
+        failureType: { type: "primitiveType", value: "any" },
+      };
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "function",
+            functionName: "greet",
+            parameters: [
+              { type: "functionParameter", name: "n", typeHint: str, validated: true },
+            ],
+            returnType: resultNum,
+            body: [
+              {
+                type: "returnStatement",
+                value: {
+                  type: "functionCall",
+                  functionName: "success",
+                  arguments: [{ type: "number", value: "5" }],
+                },
+              },
+            ],
+          },
+          {
+            type: "functionCall",
+            functionName: "greet",
+            arguments: [{ type: "number", value: "42" }],
+          },
+        ],
+      };
+      const errors = typeCheck(program).errors;
+      expect(errors.some((e) => /not assignable/i.test(e.message))).toBe(true);
+    });
+
     it("checks the RHS of a validated assignment against the un-bang'd type", () => {
       // const x: number! = "not a number" — RHS is checked against `number`.
       const program: AgencyProgram = {

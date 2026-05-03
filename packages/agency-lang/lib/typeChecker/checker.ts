@@ -37,6 +37,7 @@ function paramListSignature(params: FunctionParameter[], argCount: number): {
   minArgs: number;
   maxArgs: number;
   paramTypes: (VariableType | "any" | undefined)[];
+  validatedFlags: boolean[];
 } {
   const lastParam = params[params.length - 1];
   const hasRest = lastParam?.variadic === true;
@@ -48,15 +49,18 @@ function paramListSignature(params: FunctionParameter[], argCount: number): {
   const paramTypes: (VariableType | "any" | undefined)[] = params.map((p) =>
     p.typeHint,
   );
+  const validatedFlags: boolean[] = params.map((p) => !!p.validated);
   if (hasRest) {
     // Replace the variadic slot's array type with the element type, so a
     // single arg at that position is checked element-wise. Then extend to
     // cover any extra args.
     const elementType = variadicElementType(lastParam);
     paramTypes[paramTypes.length - 1] = elementType;
+    const lastValidated = validatedFlags[validatedFlags.length - 1] ?? false;
     while (paramTypes.length < argCount) paramTypes.push(elementType);
+    while (validatedFlags.length < argCount) validatedFlags.push(lastValidated);
   }
-  return { minArgs, maxArgs, paramTypes };
+  return { minArgs, maxArgs, paramTypes, validatedFlags };
 }
 
 export function checkScopes(
@@ -102,12 +106,12 @@ function checkSingleFunctionCall(
   const params = def?.parameters ?? importedSig?.parameters;
 
   if (params) {
-    const { minArgs, maxArgs, paramTypes } = paramListSignature(
+    const { minArgs, maxArgs, paramTypes, validatedFlags } = paramListSignature(
       params,
       call.arguments.length,
     );
     if (!checkArity(call, minArgs, maxArgs, hasSplatArg, ctx)) return;
-    checkArgsAgainstParams(call, paramTypes, scope, ctx);
+    checkArgsAgainstParams(call, paramTypes, scope, ctx, validatedFlags);
     return;
   }
 
@@ -123,7 +127,8 @@ function checkSingleFunctionCall(
         paramTypes.push(sig.restParam!);
       }
     }
-    checkArgsAgainstParams(call, paramTypes, scope, ctx);
+    // Builtins don't have a validated concept; pass empty flags.
+    checkArgsAgainstParams(call, paramTypes, scope, ctx, []);
   }
 }
 
@@ -170,6 +175,7 @@ function checkArgsAgainstParams(
   paramTypes: (VariableType | "any" | undefined)[],
   scope: Scope,
   ctx: TypeCheckerContext,
+  validatedFlags: boolean[],
 ): void {
   const typeAliases = ctx.getTypeAliases();
   for (let argIndex = 0; argIndex < call.arguments.length; argIndex++) {
@@ -182,6 +188,11 @@ function checkArgsAgainstParams(
     const argType = synthType(innerArg, scope, ctx);
     const paramType = paramTypes[argIndex];
     if (paramType === undefined || paramType === "any" || argType === "any") {
+      continue;
+    }
+    // Validated params accept either the un-bang'd type T or any Result —
+    // failures pass through unvalidated per docs-new/guide/schemas.md.
+    if (validatedFlags[argIndex] && argType.type === "resultType") {
       continue;
     }
     if (!isAssignable(argType, paramType, typeAliases)) {

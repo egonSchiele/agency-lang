@@ -23,6 +23,7 @@ import { getFoldingRanges } from "./foldingRange.js";
 import { getDocumentLinks } from "./documentLink.js";
 import { handleSignatureHelp } from "./signatureHelp.js";
 import { handleReferences } from "./references.js";
+import { handleRename, handlePrepareRename } from "./rename.js";
 import type { DocumentState } from "./documentState.js";
 
 export function startServer(): void {
@@ -49,6 +50,7 @@ export function startServer(): void {
         documentSymbolProvider: true,
         documentFormattingProvider: true,
         referencesProvider: true,
+        renameProvider: { prepareProvider: true },
         documentHighlightProvider: true,
         foldingRangeProvider: true,
         documentLinkProvider: {},
@@ -174,6 +176,18 @@ export function startServer(): void {
     const doc = documents.get(params.textDocument.uri);
     if (!doc) return [];
     return handleReferences(params, doc);
+  });
+
+  connection.onPrepareRename((params) => {
+    const doc = documents.get(params.textDocument.uri);
+    if (!doc) return null;
+    return handlePrepareRename(params, doc);
+  });
+
+  connection.onRenameRequest((params) => {
+    const doc = documents.get(params.textDocument.uri);
+    if (!doc) return null;
+    return handleRename(params, doc);
   });
 
   connection.onDocumentHighlight((params) => {

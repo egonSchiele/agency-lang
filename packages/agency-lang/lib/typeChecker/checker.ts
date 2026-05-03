@@ -157,7 +157,6 @@ function checkSplatAgainstRemainingParams(
     return;
   }
   const elementType = splatType.elementType;
-  if (elementType === "any") return;
   const elementStr = formatTypeHint(elementType);
   const typeAliases = ctx.getTypeAliases();
   for (const remainingParam of paramTypes.slice(splatIndex)) {

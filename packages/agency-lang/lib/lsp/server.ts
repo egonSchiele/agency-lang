@@ -26,6 +26,7 @@ import { handleReferences } from "./references.js";
 import { handleRename, handlePrepareRename } from "./rename.js";
 import { getInlayHints } from "./inlayHint.js";
 import { handleTypeDefinition } from "./typeDefinition.js";
+import { getCodeActions } from "./codeAction.js";
 import type { DocumentState } from "./documentState.js";
 
 export function startServer(): void {
@@ -57,6 +58,7 @@ export function startServer(): void {
         documentHighlightProvider: true,
         inlayHintProvider: true,
         foldingRangeProvider: true,
+        codeActionProvider: true,
         documentLinkProvider: {},
       },
     };
@@ -227,6 +229,13 @@ export function startServer(): void {
     const state = docStates.get(params.textDocument.uri);
     if (!doc || !state) return [];
     return getFoldingRanges(state.program, doc);
+  });
+
+  connection.onCodeAction((params) => {
+    const doc = documents.get(params.textDocument.uri);
+    if (!doc) return [];
+    const state = docStates.get(params.textDocument.uri);
+    return getCodeActions(params, doc, state?.symbolTable ?? new SymbolTable());
   });
 
   connection.onDocumentLinks((params) => {

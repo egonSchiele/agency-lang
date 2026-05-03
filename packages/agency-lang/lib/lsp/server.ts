@@ -160,9 +160,17 @@ export function startServer(): void {
   });
 
   connection.onCompletion((params) => {
+    const doc = documents.get(params.textDocument.uri);
     const state = docStates.get(params.textDocument.uri);
-    if (!state) return CompletionList.create([], true);
-    return CompletionList.create(getCompletions(state.info), false);
+    if (!state || !doc) return CompletionList.create([], true);
+    const context = {
+      source: doc.getText(),
+      line: params.position.line,
+      character: params.position.character,
+      scopes: state.scopes,
+      program: state.program,
+    };
+    return CompletionList.create(getCompletions(state.info, context), false);
   });
 
   connection.onSignatureHelp((params) => {

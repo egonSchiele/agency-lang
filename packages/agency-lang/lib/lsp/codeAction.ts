@@ -1,4 +1,5 @@
 import path from "path";
+import fs from "fs";
 import {
   CodeAction,
   CodeActionKind,
@@ -9,6 +10,25 @@ import {
 import { TextDocument } from "vscode-languageserver-textdocument";
 import type { SymbolTable } from "../symbolTable.js";
 import { uriToPath } from "./uri.js";
+import { getStdlibFiles } from "../importPaths.js";
+
+// Lazily built index: symbol name → "std::module"
+let stdlibIndex: Record<string, string> | null = null;
+
+function getStdlibIndex(): Record<string, string> {
+  if (stdlibIndex) return stdlibIndex;
+  stdlibIndex = {};
+  for (const filePath of getStdlibFiles()) {
+    const moduleName = path.basename(filePath, ".agency");
+    const content = fs.readFileSync(filePath, "utf-8");
+    const exportPattern = /export\s+(?:def|node)\s+([a-zA-Z_][a-zA-Z0-9_]*)/g;
+    let m: RegExpExecArray | null;
+    while ((m = exportPattern.exec(content)) !== null) {
+      stdlibIndex[m[1]] = `std::${moduleName}`;
+    }
+  }
+  return stdlibIndex;
+}
 
 export function getCodeActions(
   params: CodeActionParams,
@@ -20,6 +40,8 @@ export function getCodeActions(
   for (const diagnostic of params.context.diagnostics) {
     const importAction = suggestMissingImport(diagnostic, doc, symbolTable);
     if (importAction) actions.push(importAction);
+    const stdlibAction = suggestStdlibImport(diagnostic, doc);
+    if (stdlibAction) actions.push(stdlibAction);
   }
 
   return actions;
@@ -66,4 +88,36 @@ function suggestMissingImport(
   }
 
   return null;
+}
+
+function suggestStdlibImport(
+  diagnostic: Diagnostic,
+  doc: TextDocument,
+): CodeAction | null {
+  const match = diagnostic.message.match(/[''](\w+)['']/);
+  if (!match) return null;
+
+  const symbolName = match[1];
+  const index = getStdlibIndex();
+  const modulePath = index[symbolName];
+  if (!modulePath) return null;
+
+  // Check if this import already exists in the document
+  const text = doc.getText();
+  if (text.includes(`from "${modulePath}"`)) return null;
+
+  const importLine = `import { ${symbolName} } from "${modulePath}"\n`;
+  return {
+    title: `Add import from '${modulePath}'`,
+    kind: CodeActionKind.QuickFix,
+    diagnostics: [diagnostic],
+    isPreferred: true,
+    edit: {
+      changes: {
+        [doc.uri]: [
+          TextEdit.insert({ line: 0, character: 0 }, importLine),
+        ],
+      },
+    },
+  };
 }

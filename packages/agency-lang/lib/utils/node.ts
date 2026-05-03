@@ -307,9 +307,11 @@ export function* walkNodes(
     } else if (node.type === "whileLoop") {
       yield* walkNodes([node.condition], [...ancestors, node], scopes);
       yield* walkNodes(node.body, [...ancestors, node], scopes);
-    } else if (node.type === "messageThread") {
-      yield* walkNodes(node.body, [...ancestors, node], scopes);
-    } else if (node.type === "parallelBlock" || node.type === "seqBlock") {
+    } else if (
+      node.type === "messageThread" ||
+      node.type === "parallelBlock" ||
+      node.type === "seqBlock"
+    ) {
       yield* walkNodes(node.body, [...ancestors, node], scopes);
     } else if (node.type === "handleBlock") {
       yield* walkNodes(node.body, [...ancestors, node], scopes);

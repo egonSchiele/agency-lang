@@ -99,21 +99,24 @@ function checkArgsAgainstParams(
       const splatType = synthType(arg.value, scope, ctx);
       if (splatType === "any") return;
       if (splatType.type !== "arrayType") {
+        const splatStr = formatTypeHint(splatType);
         ctx.errors.push({
-          message: `Splat argument must be an array, got '${formatTypeHint(splatType)}' in call to '${call.functionName}'.`,
-          actualType: formatTypeHint(splatType),
+          message: `Splat argument must be an array, got '${splatStr}' in call to '${call.functionName}'.`,
+          actualType: splatStr,
         });
         return;
       }
       const elemType = splatType.elementType;
+      const elemStr = formatTypeHint(elemType);
       for (let j = i; j < paramTypes.length; j++) {
         const pt = paramTypes[j];
         if (pt === undefined || pt === "any" || elemType === "any") continue;
         if (!isAssignable(elemType, pt, typeAliases)) {
+          const ptStr = formatTypeHint(pt);
           ctx.errors.push({
-            message: `Splat element type '${formatTypeHint(elemType)}' is not assignable to parameter type '${formatTypeHint(pt)}' in call to '${call.functionName}'.`,
-            expectedType: formatTypeHint(pt),
-            actualType: formatTypeHint(elemType),
+            message: `Splat element type '${elemStr}' is not assignable to parameter type '${ptStr}' in call to '${call.functionName}'.`,
+            expectedType: ptStr,
+            actualType: elemStr,
           });
         }
       }
@@ -154,27 +157,19 @@ function checkReturnTypesInScope(
   }
 }
 
+const BOOLEAN_TYPE: VariableType = { type: "primitiveType", value: "boolean" };
+
 function checkExpressionsInScope(
   info: ScopeInfo,
   ctx: TypeCheckerContext,
 ): void {
-  const booleanType: VariableType = { type: "primitiveType", value: "boolean" };
   for (const { node } of walkNodes(info.body)) {
     if (node.type === "valueAccess") {
       synthType(node, info.scope, ctx);
     } else if (node.type === "returnStatement" && node.value) {
       synthType(node.value, info.scope, ctx);
     } else if (node.type === "ifElse" || node.type === "whileLoop") {
-      checkType(node.condition, booleanType, info.scope, "condition", ctx);
-    } else if (node.type === "forLoop") {
-      const iterableType = synthType(node.iterable, info.scope, ctx);
-      if (iterableType !== "any" && iterableType.type !== "arrayType") {
-        ctx.errors.push({
-          message: `For-loop iterable must be an array, got '${formatTypeHint(iterableType)}'.`,
-          actualType: formatTypeHint(iterableType),
-          loc: node.iterable.loc,
-        });
-      }
+      checkType(node.condition, BOOLEAN_TYPE, info.scope, "condition", ctx);
     }
   }
 }

@@ -7,7 +7,7 @@ const voidT = { type: "primitiveType", value: "void" } as const;
 const stringArray = { type: "arrayType", elementType: string } as const;
 const anyArray = {
   type: "arrayType",
-  elementType: { type: "primitiveType", value: "any" } as const,
+  elementType: { type: "primitiveType", value: "any" },
 } as const;
 
 /**

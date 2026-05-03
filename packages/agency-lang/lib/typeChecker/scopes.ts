@@ -164,10 +164,17 @@ export function walkScopeBody(
         break;
       case "forLoop": {
         const iterableType = synthType(node.iterable, scope, ctx);
-        if (iterableType !== "any" && iterableType.type === "arrayType") {
+        if (iterableType === "any") {
+          scope.declare(node.itemVar, "any");
+        } else if (iterableType.type === "arrayType") {
           scope.declare(node.itemVar, iterableType.elementType);
         } else {
           scope.declare(node.itemVar, "any");
+          ctx.errors.push({
+            message: `For-loop iterable must be an array, got '${formatTypeHint(iterableType)}'.`,
+            actualType: formatTypeHint(iterableType),
+            loc: node.iterable.loc,
+          });
         }
         if (node.indexVar) {
           scope.declare(node.indexVar, {

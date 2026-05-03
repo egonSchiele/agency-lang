@@ -78,12 +78,12 @@ describe("getCompletions", () => {
   });
 
   it("suggests stdlib modules in import path", () => {
-    const source = 'import { map } from "';
+    const source = 'import { map } from "s';
     const program = parse("node main() { }");
     const info = buildCompilationUnit(program, new SymbolTable());
     const { scopes } = typeCheck(program, {}, info);
-    // Cursor right after the opening quote in from "
-    const items = getCompletions(info, { source, line: 0, character: 21, scopes, program, fsPath: "/test.agency" });
+    // Cursor after typing "s" inside the import path
+    const items = getCompletions(info, { source, line: 0, character: 22, scopes, program, fsPath: "/test.agency" });
     const stdArray = items.find((i) => i.label === "std::array");
     expect(stdArray).toBeDefined();
     expect(stdArray!.kind).toBe(CompletionItemKind.Module);

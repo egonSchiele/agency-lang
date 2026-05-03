@@ -3535,4 +3535,301 @@ describe("TypeChecker", () => {
       expect(errors[0].message).toMatch(/not assignable to parameter type 'string'/);
     });
   });
+
+  describe("v2: Result type synth", () => {
+    it("success(x) synths as Result<typeof x, any>", () => {
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "function",
+            functionName: "expectResult",
+            parameters: [
+              {
+                type: "functionParameter",
+                name: "r",
+                typeHint: {
+                  type: "resultType",
+                  successType: { type: "primitiveType", value: "number" },
+                  failureType: { type: "primitiveType", value: "any" },
+                },
+              },
+            ],
+            body: [],
+          },
+          {
+            type: "functionCall",
+            functionName: "expectResult",
+            arguments: [
+              {
+                type: "functionCall",
+                functionName: "success",
+                arguments: [{ type: "number", value: "10" }],
+              },
+            ],
+          },
+        ],
+      };
+      expect(typeCheck(program).errors).toHaveLength(0);
+    });
+
+    it("success(string) is not assignable to Result<number, any>", () => {
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "function",
+            functionName: "expectResult",
+            parameters: [
+              {
+                type: "functionParameter",
+                name: "r",
+                typeHint: {
+                  type: "resultType",
+                  successType: { type: "primitiveType", value: "number" },
+                  failureType: { type: "primitiveType", value: "any" },
+                },
+              },
+            ],
+            body: [],
+          },
+          {
+            type: "functionCall",
+            functionName: "expectResult",
+            arguments: [
+              {
+                type: "functionCall",
+                functionName: "success",
+                arguments: [{ type: "string", segments: [{ type: "text", value: "x" }] }],
+              },
+            ],
+          },
+        ],
+      };
+      const errors = typeCheck(program).errors;
+      expect(errors.length).toBeGreaterThanOrEqual(1);
+      expect(errors[0].message).toMatch(/not assignable to parameter type/);
+    });
+
+    it("failure(msg) synths as Result<any, typeof msg>", () => {
+      // failure("err") → Result<any, string>; should be assignable to Result<any, any>.
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "assignment",
+            variableName: "r",
+            typeHint: {
+              type: "resultType",
+              successType: { type: "primitiveType", value: "any" },
+              failureType: { type: "primitiveType", value: "any" },
+            },
+            value: {
+              type: "functionCall",
+              functionName: "failure",
+              arguments: [{ type: "string", segments: [{ type: "text", value: "oops" }] }],
+            },
+          },
+        ],
+      };
+      expect(typeCheck(program).errors).toHaveLength(0);
+    });
+
+    it("try expr wraps inner return type as Result", () => {
+      // def half(): number { ... } ; const r: Result<number, any> = try half()
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "function",
+            functionName: "half",
+            parameters: [],
+            returnType: { type: "primitiveType", value: "number" },
+            body: [],
+          },
+          {
+            type: "assignment",
+            variableName: "r",
+            typeHint: {
+              type: "resultType",
+              successType: { type: "primitiveType", value: "number" },
+              failureType: { type: "primitiveType", value: "any" },
+            },
+            value: {
+              type: "tryExpression",
+              call: { type: "functionCall", functionName: "half", arguments: [] },
+            },
+          },
+        ],
+      };
+      expect(typeCheck(program).errors).toHaveLength(0);
+    });
+
+    it("try on a Result-returning function passes through", () => {
+      // def safeDiv(): Result<number, any> { ... } ; const r: Result<number, any> = try safeDiv()
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "function",
+            functionName: "safeDiv",
+            parameters: [],
+            returnType: {
+              type: "resultType",
+              successType: { type: "primitiveType", value: "number" },
+              failureType: { type: "primitiveType", value: "any" },
+            },
+            body: [],
+          },
+          {
+            type: "assignment",
+            variableName: "r",
+            typeHint: {
+              type: "resultType",
+              successType: { type: "primitiveType", value: "number" },
+              failureType: { type: "primitiveType", value: "any" },
+            },
+            value: {
+              type: "tryExpression",
+              call: { type: "functionCall", functionName: "safeDiv", arguments: [] },
+            },
+          },
+        ],
+      };
+      expect(typeCheck(program).errors).toHaveLength(0);
+    });
+
+    it("`Result<T> catch T` unwraps to T", () => {
+      // const n: number = success(10) catch 0  -> n is number, no error
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "assignment",
+            variableName: "n",
+            typeHint: { type: "primitiveType", value: "number" },
+            value: {
+              type: "binOpExpression",
+              operator: "catch",
+              left: {
+                type: "functionCall",
+                functionName: "success",
+                arguments: [{ type: "number", value: "10" }],
+              },
+              right: { type: "number", value: "0" },
+            },
+          },
+        ],
+      };
+      expect(typeCheck(program).errors).toHaveLength(0);
+    });
+
+    it("catch flags default arm not assignable to success type", () => {
+      // success(10) catch "wrong" -> expected number, got string
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "assignment",
+            variableName: "n",
+            typeHint: { type: "primitiveType", value: "number" },
+            value: {
+              type: "binOpExpression",
+              operator: "catch",
+              left: {
+                type: "functionCall",
+                functionName: "success",
+                arguments: [{ type: "number", value: "10" }],
+              },
+              right: { type: "string", segments: [{ type: "text", value: "x" }] },
+            },
+          },
+        ],
+      };
+      const errors = typeCheck(program).errors;
+      expect(errors.some((e) => /catch default/.test(e.message))).toBe(true);
+    });
+
+    it("pipe synths as Result wrapping right-hand return type", () => {
+      // def half(x: number): number { ... }
+      // const r: Result<number, any> = success(10) |> half
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "function",
+            functionName: "half",
+            parameters: [
+              { type: "functionParameter", name: "x", typeHint: { type: "primitiveType", value: "number" } },
+            ],
+            returnType: { type: "primitiveType", value: "number" },
+            body: [],
+          },
+          {
+            type: "assignment",
+            variableName: "r",
+            typeHint: {
+              type: "resultType",
+              successType: { type: "primitiveType", value: "number" },
+              failureType: { type: "primitiveType", value: "any" },
+            },
+            value: {
+              type: "binOpExpression",
+              operator: "|>",
+              left: {
+                type: "functionCall",
+                functionName: "success",
+                arguments: [{ type: "number", value: "10" }],
+              },
+              right: { type: "variableName", value: "half" },
+            },
+          },
+        ],
+      };
+      expect(typeCheck(program).errors).toHaveLength(0);
+    });
+
+    it("pipe whose right-hand returns a Result does not double-wrap", () => {
+      // def safeHalf(x: number): Result<number, any> { ... }
+      // const r: Result<number, any> = success(10) |> safeHalf
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "function",
+            functionName: "safeHalf",
+            parameters: [
+              { type: "functionParameter", name: "x", typeHint: { type: "primitiveType", value: "number" } },
+            ],
+            returnType: {
+              type: "resultType",
+              successType: { type: "primitiveType", value: "number" },
+              failureType: { type: "primitiveType", value: "any" },
+            },
+            body: [],
+          },
+          {
+            type: "assignment",
+            variableName: "r",
+            typeHint: {
+              type: "resultType",
+              successType: { type: "primitiveType", value: "number" },
+              failureType: { type: "primitiveType", value: "any" },
+            },
+            value: {
+              type: "binOpExpression",
+              operator: "|>",
+              left: {
+                type: "functionCall",
+                functionName: "success",
+                arguments: [{ type: "number", value: "10" }],
+              },
+              right: { type: "variableName", value: "safeHalf" },
+            },
+          },
+        ],
+      };
+      expect(typeCheck(program).errors).toHaveLength(0);
+    });
+  });
 });

@@ -154,6 +154,17 @@ export function isAssignable(
     );
   }
 
+  // Result<T, E>: covariant in both type parameters.
+  if (
+    resolvedSource.type === "resultType" &&
+    resolvedTarget.type === "resultType"
+  ) {
+    return (
+      isAssignable(resolvedSource.successType, resolvedTarget.successType, typeAliases) &&
+      isAssignable(resolvedSource.failureType, resolvedTarget.failureType, typeAliases)
+    );
+  }
+
   if (
     resolvedSource.type === "objectType" &&
     resolvedTarget.type === "objectType"

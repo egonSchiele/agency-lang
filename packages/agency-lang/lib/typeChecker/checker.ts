@@ -263,6 +263,23 @@ function checkExpressionsInScope(
       synthType(node.value, info.scope, ctx);
     } else if (node.type === "ifElse" || node.type === "whileLoop") {
       checkType(node.condition, BOOLEAN_TYPE, info.scope, "condition", ctx);
+    } else if (node.type === "binOpExpression" && node.operator === "catch") {
+      checkCatchDefault(node, info.scope, ctx);
     }
   }
+}
+
+/**
+ * `expr catch default`: when `expr` is a Result<T>, the default arm is
+ * returned in place of the success value on failure, so its type must be
+ * assignable to `T`.
+ */
+function checkCatchDefault(
+  node: AgencyNode & { type: "binOpExpression" },
+  scope: Scope,
+  ctx: TypeCheckerContext,
+): void {
+  const left = synthType(node.left, scope, ctx);
+  if (left === "any" || left.type !== "resultType") return;
+  checkType(node.right, left.successType, scope, "catch default", ctx);
 }

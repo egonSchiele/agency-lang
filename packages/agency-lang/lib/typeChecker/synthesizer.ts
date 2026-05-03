@@ -40,9 +40,27 @@ export function synthType(
       return synthObject(expr, scope, ctx);
     case "valueAccess":
       return synthValueAccess(expr, scope, ctx);
+    case "tryExpression":
+      return synthTryExpression(expr, scope, ctx);
     default:
       return "any";
   }
+}
+
+/**
+ * `try expr` runs `expr` and converts a thrown error to a `failure(...)`.
+ * If the inner call already returns a Result, pass it through (matches
+ * runtime `__tryCall` behavior). Otherwise wrap as `Result<T, any>`.
+ */
+function synthTryExpression(
+  expr: AgencyNode & { type: "tryExpression" },
+  scope: Scope,
+  ctx: TypeCheckerContext,
+): VariableType | "any" {
+  const inner = synthType(expr.call, scope, ctx);
+  if (inner === "any") return "any";
+  if (inner.type === "resultType") return inner;
+  return { type: "resultType", successType: inner, failureType: ANY_T };
 }
 
 function synthBinOp(
@@ -76,14 +94,91 @@ function synthBinOp(
       return { type: "primitiveType", value: "string" };
     }
   }
+  if (op === "catch") return synthCatch(expr, scope, ctx);
+  if (op === "|>") return synthPipe(expr, scope, ctx);
   return { type: "primitiveType", value: "number" };
+}
+
+/**
+ * `expr catch default` unwraps a Result: returns the success value if
+ * present, otherwise evaluates `default`. The synthed type is the
+ * success type. (We don't union with default's type — agency runtime
+ * returns the default as-is on failure, so callers get whichever
+ * branch fires; downstream type-checking via checkExpressionsInScope
+ * verifies default is assignable to the success type.)
+ */
+function synthCatch(
+  expr: AgencyNode & { type: "binOpExpression" },
+  scope: Scope,
+  ctx: TypeCheckerContext,
+): VariableType | "any" {
+  const left = synthType(expr.left, scope, ctx);
+  if (left === "any") return "any";
+  if (left.type !== "resultType") {
+    // `catch` on a non-Result is a no-op at runtime — type is just left.
+    return left;
+  }
+  return left.successType;
+}
+
+/**
+ * `left |> right` chains: left's success value flows into right (a function
+ * call or function reference). The chain short-circuits on failure, so the
+ * result is always a Result wrapping right's return type.
+ *
+ * For `success(10) |> half`: left synths to Result<number, any>; right's
+ * return type is the chain's value type (re-wrapped if not already a Result).
+ *
+ * Per-arg validation (placeholder typing, first-arg check) is handled in
+ * the checker phase, since synth shouldn't push errors.
+ */
+function synthPipe(
+  expr: AgencyNode & { type: "binOpExpression" },
+  scope: Scope,
+  ctx: TypeCheckerContext,
+): VariableType | "any" {
+  const right = synthType(expr.right, scope, ctx);
+  if (right === "any") return "any";
+  if (right.type === "resultType") return right;
+  return { type: "resultType", successType: right, failureType: ANY_T };
+}
+
+const ANY_T: VariableType = { type: "primitiveType", value: "any" };
+
+/**
+ * Coerce a synth result to a concrete VariableType for embedding inside
+ * structured types like ResultType (whose fields don't accept "any").
+ */
+function asVarType(t: VariableType | "any"): VariableType {
+  return t === "any" ? ANY_T : t;
 }
 
 function synthFunctionCall(
   expr: AgencyNode & { type: "functionCall" },
-  _scope: Scope,
+  scope: Scope,
   ctx: TypeCheckerContext,
 ): VariableType | "any" {
+  // Result constructors: parameterize the ResultType from the argument.
+  if (expr.functionName === "success" && expr.arguments.length === 1) {
+    const arg = expr.arguments[0];
+    if (arg.type !== "splat" && arg.type !== "namedArgument") {
+      return {
+        type: "resultType",
+        successType: asVarType(synthType(arg, scope, ctx)),
+        failureType: ANY_T,
+      };
+    }
+  }
+  if (expr.functionName === "failure" && expr.arguments.length >= 1) {
+    const arg = expr.arguments[0];
+    if (arg.type !== "splat" && arg.type !== "namedArgument") {
+      return {
+        type: "resultType",
+        successType: ANY_T,
+        failureType: asVarType(synthType(arg, scope, ctx)),
+      };
+    }
+  }
   const fn = ctx.functionDefs[expr.functionName];
   const graphNode = ctx.nodeDefs[expr.functionName];
   const def = fn ?? graphNode;

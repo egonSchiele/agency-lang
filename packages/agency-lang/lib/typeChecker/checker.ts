@@ -264,7 +264,7 @@ function checkExpressionsInScope(
     } else if (node.type === "ifElse" || node.type === "whileLoop") {
       checkType(node.condition, BOOLEAN_TYPE, info.scope, "condition", ctx);
     } else if (node.type === "binOpExpression" && node.operator === "catch") {
-      checkCatchDefault(node, info.scope, ctx);
+      checkCatchDefaultType(node, info.scope, ctx);
     }
   }
 }
@@ -274,7 +274,7 @@ function checkExpressionsInScope(
  * returned in place of the success value on failure, so its type must be
  * assignable to `T`.
  */
-function checkCatchDefault(
+function checkCatchDefaultType(
   node: AgencyNode & { type: "binOpExpression" },
   scope: Scope,
   ctx: TypeCheckerContext,

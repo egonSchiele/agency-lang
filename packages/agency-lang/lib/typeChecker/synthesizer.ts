@@ -1,13 +1,41 @@
 import {
   AgencyNode,
+  Expression,
   VariableType,
   ValueAccess,
 } from "../types.js";
+import type { NamedArgument, SplatExpression } from "../types/dataStructures.js";
 import { formatTypeHint } from "../cli/util.js";
 import { BUILTIN_FUNCTION_TYPES } from "./builtins.js";
 import { isAssignable, resolveType } from "./assignability.js";
 import { TypeCheckerContext } from "./types.js";
 import { Scope } from "./scope.js";
+
+const ANY_T: VariableType = { type: "primitiveType", value: "any" };
+
+/** Names treated as Result constructors (synth parameterizes ResultType from arg). */
+const RESULT_CONSTRUCTORS = new Set<string>(["success", "failure"]);
+
+/**
+ * Coerce a synth result to a concrete VariableType for embedding inside
+ * structured types like ResultType (whose fields don't accept the "any"
+ * sentinel string).
+ */
+function asVarType(t: VariableType | "any"): VariableType {
+  return t === "any" ? ANY_T : t;
+}
+
+/**
+ * Return the inner expression for a plain positional argument, or undefined
+ * for splat / named args. Synth-time special cases (success/failure) decline
+ * to fire on those forms because the per-arg type isn't directly available.
+ */
+function asPositionalArg(
+  arg: Expression | SplatExpression | NamedArgument,
+): Expression | undefined {
+  if (arg.type === "splat" || arg.type === "namedArgument") return undefined;
+  return arg;
+}
 
 export function synthType(
   expr: AgencyNode,
@@ -63,26 +91,28 @@ function synthTryExpression(
   return { type: "resultType", successType: inner, failureType: ANY_T };
 }
 
+const BOOLEAN_OPS = new Set([
+  "==",
+  "!=",
+  "=~",
+  "!~",
+  "<",
+  ">",
+  "<=",
+  ">=",
+  "&&",
+  "||",
+]);
+
 function synthBinOp(
   expr: AgencyNode & { type: "binOpExpression" },
   scope: Scope,
   ctx: TypeCheckerContext,
 ): VariableType | "any" {
   const op = expr.operator;
-  if (
-    op === "==" ||
-    op === "!=" ||
-    op === "=~" ||
-    op === "!~" ||
-    op === "<" ||
-    op === ">" ||
-    op === "<=" ||
-    op === ">=" ||
-    op === "&&" ||
-    op === "||"
-  ) {
-    return { type: "primitiveType", value: "boolean" };
-  }
+  if (op === "catch") return synthCatch(expr, scope, ctx);
+  if (op === "|>") return synthPipe(expr, scope, ctx);
+  if (BOOLEAN_OPS.has(op)) return { type: "primitiveType", value: "boolean" };
   if (op === "+") {
     const leftType = synthType(expr.left, scope, ctx);
     const rightType = synthType(expr.right, scope, ctx);
@@ -94,8 +124,6 @@ function synthBinOp(
       return { type: "primitiveType", value: "string" };
     }
   }
-  if (op === "catch") return synthCatch(expr, scope, ctx);
-  if (op === "|>") return synthPipe(expr, scope, ctx);
   return { type: "primitiveType", value: "number" };
 }
 
@@ -124,13 +152,12 @@ function synthCatch(
 /**
  * `left |> right` chains: left's success value flows into right (a function
  * call or function reference). The chain short-circuits on failure, so the
- * result is always a Result wrapping right's return type.
+ * result is always a Result wrapping right's return type. If right already
+ * returns a Result, pass it through.
  *
- * For `success(10) |> half`: left synths to Result<number, any>; right's
- * return type is the chain's value type (re-wrapped if not already a Result).
- *
- * Per-arg validation (placeholder typing, first-arg check) is handled in
- * the checker phase, since synth shouldn't push errors.
+ * NOTE: per-arg validation (placeholder slot typing, first-arg compatibility
+ * with left's success type) is not yet implemented — see the deferred items
+ * in the v2 plan.
  */
 function synthPipe(
   expr: AgencyNode & { type: "binOpExpression" },
@@ -143,40 +170,18 @@ function synthPipe(
   return { type: "resultType", successType: right, failureType: ANY_T };
 }
 
-const ANY_T: VariableType = { type: "primitiveType", value: "any" };
-
-/**
- * Coerce a synth result to a concrete VariableType for embedding inside
- * structured types like ResultType (whose fields don't accept "any").
- */
-function asVarType(t: VariableType | "any"): VariableType {
-  return t === "any" ? ANY_T : t;
-}
-
 function synthFunctionCall(
   expr: AgencyNode & { type: "functionCall" },
   scope: Scope,
   ctx: TypeCheckerContext,
 ): VariableType | "any" {
-  // Result constructors: parameterize the ResultType from the argument.
-  if (expr.functionName === "success" && expr.arguments.length === 1) {
-    const arg = expr.arguments[0];
-    if (arg.type !== "splat" && arg.type !== "namedArgument") {
-      return {
-        type: "resultType",
-        successType: asVarType(synthType(arg, scope, ctx)),
-        failureType: ANY_T,
-      };
-    }
-  }
-  if (expr.functionName === "failure" && expr.arguments.length >= 1) {
-    const arg = expr.arguments[0];
-    if (arg.type !== "splat" && arg.type !== "namedArgument") {
-      return {
-        type: "resultType",
-        successType: ANY_T,
-        failureType: asVarType(synthType(arg, scope, ctx)),
-      };
+  if (RESULT_CONSTRUCTORS.has(expr.functionName) && expr.arguments.length >= 1) {
+    const inner = asPositionalArg(expr.arguments[0]);
+    if (inner) {
+      const innerType = asVarType(synthType(inner, scope, ctx));
+      return expr.functionName === "success"
+        ? { type: "resultType", successType: innerType, failureType: ANY_T }
+        : { type: "resultType", successType: ANY_T, failureType: innerType };
     }
   }
   const fn = ctx.functionDefs[expr.functionName];

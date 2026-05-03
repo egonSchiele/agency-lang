@@ -18,6 +18,19 @@ export function occurrenceToRange(occ: Occurrence): Range {
 }
 
 /**
+ * Compute the character offset of the start of the given line without splitting.
+ */
+export function offsetOfLine(source: string, line: number): number {
+  let offset = 0;
+  for (let i = 0; i < line; i++) {
+    const idx = source.indexOf("\n", offset);
+    if (idx === -1) return source.length;
+    offset = idx + 1;
+  }
+  return offset;
+}
+
+/**
  * Find all whole-word occurrences of `word` in `source`.
  * Known limitation: matches inside string literals and comments.
  */

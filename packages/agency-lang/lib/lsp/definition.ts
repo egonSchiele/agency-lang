@@ -5,8 +5,9 @@ import { pathToUri } from "./uri.js";
 import { lookupSemanticSymbol, type SemanticIndex } from "./semantics.js";
 import type { AgencyProgram } from "../types.js";
 import type { ScopeInfo } from "../typeChecker/types.js";
-import { findContainingScope } from "./scopeResolution.js";
+import { findContainingScope, findDefForScope } from "./scopeResolution.js";
 import { walkNodes } from "../utils/node.js";
+import { offsetOfLine } from "./util.js";
 
 export function handleDefinition(
   params: DefinitionParams,
@@ -70,39 +71,24 @@ function findLocalDefinition(
   const word = getWordAtPosition(source, line, character);
   if (!word) return null;
 
-  // Find which scope the cursor is in
-  const lines = source.split("\n");
-  let offset = 0;
-  for (let i = 0; i < line; i++) offset += lines[i].length + 1;
-  offset += character;
-
+  const offset = offsetOfLine(source, line) + character;
   const scope = findContainingScope(offset, scopes, program);
   if (!scope) return null;
 
-  // Check that this variable exists in the scope
-  const resolved = scope.scope.lookup(word);
-  if (!resolved) return null;
+  if (!scope.scope.lookup(word)) return null;
 
-  // Walk the scope's body to find the first assignment with this variable name
   for (const { node } of walkNodes(scope.body)) {
     if (node.type === "assignment" && node.variableName === word && node.declKind && node.loc) {
       return { line: node.loc.line, character: node.loc.col };
     }
   }
 
-  // Check function/node parameters
-  for (const topNode of program.nodes) {
-    if (topNode.type === "function" && topNode.functionName === scope.name) {
-      const param = topNode.parameters.find((p) => p.name === word);
-      if (param && topNode.loc) {
-        return { line: topNode.loc.line, character: topNode.loc.col };
-      }
-    }
-    if (topNode.type === "graphNode" && topNode.nodeName === scope.name) {
-      const param = topNode.parameters.find((p) => p.name === word);
-      if (param && topNode.loc) {
-        return { line: topNode.loc.line, character: topNode.loc.col };
-      }
+  // Check if it's a parameter of the containing function/node
+  const def = findDefForScope(scope.name, program);
+  if (def && "parameters" in def) {
+    const param = def.parameters.find((p) => p.name === word);
+    if (param && def.loc) {
+      return { line: def.loc.line, character: def.loc.col };
     }
   }
 

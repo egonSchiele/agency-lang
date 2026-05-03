@@ -6,6 +6,7 @@ import type { AgencyProgram, FunctionParameter, VariableType } from "../types.js
 import type { ScopeInfo } from "../typeChecker/types.js";
 import { resolveTypeAtPosition } from "./typeResolution.js";
 import { findContainingScope } from "./scopeResolution.js";
+import { offsetOfLine } from "./util.js";
 
 function formatParams(params: FunctionParameter[]): string {
   return params
@@ -155,8 +156,7 @@ function getDotCompletions(context: CompletionContext, info: CompilationUnit): C
   const varType = resolveTypeAtPosition(source, line, varCol, program, scopes);
   if (!varType) return null;
 
-  // Use scoped aliases (visible from the cursor's containing scope)
-  const offset = source.split("\n").slice(0, line).reduce((acc, l) => acc + l.length + 1, 0) + character;
+  const offset = offsetOfLine(source, line) + character;
   const containingScope = findContainingScope(offset, scopes, program);
   const scopeKey = containingScope?.scopeKey ?? GLOBAL_SCOPE_KEY;
   const aliases = info.typeAliases.visibleIn(scopeKey);

@@ -240,11 +240,9 @@ export function startServer(): void {
   });
 
   connection.onWorkspaceSymbol((params) => {
-    // Use the symbol table from the first available document state
-    for (const state of docStates.values()) {
-      return getWorkspaceSymbols(params.query, state.symbolTable);
-    }
-    return [];
+    const firstState = docStates.values().next().value;
+    if (!firstState) return [];
+    return getWorkspaceSymbols(params.query, firstState.symbolTable);
   });
 
   documents.listen(connection);

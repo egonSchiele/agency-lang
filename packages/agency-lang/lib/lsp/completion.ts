@@ -1,4 +1,4 @@
-import { CompletionItem, CompletionItemKind } from "vscode-languageserver-protocol";
+import { CompletionItem, CompletionItemKind, InsertTextFormat } from "vscode-languageserver-protocol";
 import { CompilationUnit, GLOBAL_SCOPE_KEY } from "../compilationUnit.js";
 import { formatTypeHint } from "../cli/util.js";
 import { resolveType } from "../typeChecker/assignability.js";
@@ -72,8 +72,72 @@ export function getCompletions(info: CompilationUnit, context?: CompletionContex
     add(name, CompletionItemKind.Function, detail);
   }
 
+  // Snippet templates
+  for (const snippet of SNIPPETS) {
+    items.push(snippet);
+  }
+
   return items;
 }
+
+const SNIPPETS: CompletionItem[] = [
+  {
+    label: "def",
+    kind: CompletionItemKind.Snippet,
+    insertText: "def ${1:name}(${2:params}) {\n  $0\n}",
+    insertTextFormat: InsertTextFormat.Snippet,
+    detail: "Function definition",
+  },
+  {
+    label: "node",
+    kind: CompletionItemKind.Snippet,
+    insertText: "node ${1:name}(${2:params}) {\n  $0\n}",
+    insertTextFormat: InsertTextFormat.Snippet,
+    detail: "Graph node definition",
+  },
+  {
+    label: "type",
+    kind: CompletionItemKind.Snippet,
+    insertText: "type ${1:Name} = {\n  ${2:field}: ${3:string}\n}",
+    insertTextFormat: InsertTextFormat.Snippet,
+    detail: "Type alias",
+  },
+  {
+    label: "if",
+    kind: CompletionItemKind.Snippet,
+    insertText: "if (${1:condition}) {\n  $0\n}",
+    insertTextFormat: InsertTextFormat.Snippet,
+    detail: "If statement",
+  },
+  {
+    label: "for",
+    kind: CompletionItemKind.Snippet,
+    insertText: "for (${1:item} in ${2:items}) {\n  $0\n}",
+    insertTextFormat: InsertTextFormat.Snippet,
+    detail: "For loop",
+  },
+  {
+    label: "while",
+    kind: CompletionItemKind.Snippet,
+    insertText: "while (${1:condition}) {\n  $0\n}",
+    insertTextFormat: InsertTextFormat.Snippet,
+    detail: "While loop",
+  },
+  {
+    label: "thread",
+    kind: CompletionItemKind.Snippet,
+    insertText: "thread {\n  ${1:name}: ${2:Type} = llm(\"${3:prompt}\")\n}",
+    insertTextFormat: InsertTextFormat.Snippet,
+    detail: "Message thread with LLM call",
+  },
+  {
+    label: "import",
+    kind: CompletionItemKind.Snippet,
+    insertText: "import { ${1:name} } from \"${2:module}\"",
+    insertTextFormat: InsertTextFormat.Snippet,
+    detail: "Import statement",
+  },
+];
 
 function getDotCompletions(context: CompletionContext, info: CompilationUnit): CompletionItem[] | null {
   const { source, line, character, scopes, program } = context;

@@ -18,6 +18,7 @@ import * as path from "path";
 import { _parseAgency } from "@/parser.js";
 import { TypescriptPreprocessor } from "@/preprocessors/typescriptPreprocessor.js";
 import { buildCompilationUnit } from "@/compilationUnit.js";
+import { SymbolTable } from "@/symbolTable.js";
 import { formatErrors, typeCheck } from "@/typeChecker/index.js";
 import { Command } from "commander";
 import * as fs from "fs";
@@ -412,13 +413,20 @@ export function createProgram(deps: CliDependencies = {}): Command {
     .action(async (inputs: string[], opts: { strict?: boolean }) => {
       const config = getConfig();
       let hasErrors = false;
-      const runTypeCheck = (contents: string) => {
+      const runTypeCheck = (
+        contents: string,
+        filePath?: string,
+        symbolTable?: SymbolTable,
+      ) => {
         const parsedProgram = parse(contents, config);
-        const info = buildCompilationUnit(parsedProgram);
+        const absPath = filePath ? path.resolve(filePath) : undefined;
+        const info = buildCompilationUnit(parsedProgram, symbolTable, absPath);
         const { errors } = typeCheck(parsedProgram, config, info);
         if (errors.length > 0) {
           console.error(formatErrors(errors));
-          hasErrors = true;
+          if (errors.some((e) => (e.severity ?? "error") === "error")) {
+            hasErrors = true;
+          }
         } else {
           console.log("No type errors found.");
         }
@@ -428,9 +436,12 @@ export function createProgram(deps: CliDependencies = {}): Command {
         const contents = await readStdin();
         runTypeCheck(contents);
       } else {
+        // Build one SymbolTable seeded from the first input. Reachable files
+        // (including stdlib) are crawled once, not once per input file.
+        const symbolTable = SymbolTable.build(path.resolve(inputs[0]), config);
         for (const input of inputs) {
           const contents = readFile(input);
-          runTypeCheck(contents);
+          runTypeCheck(contents, input, symbolTable);
         }
       }
       if (hasErrors) process.exit(1);

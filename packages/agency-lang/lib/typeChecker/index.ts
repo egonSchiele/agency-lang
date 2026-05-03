@@ -1,5 +1,8 @@
 import { color } from "@/utils/termcolors.js";
-import type { CompilationUnit } from "../compilationUnit.js";
+import type {
+  CompilationUnit,
+  ImportedFunctionSignature,
+} from "../compilationUnit.js";
 import { GLOBAL_SCOPE_KEY, ScopedTypeAliases, scopeKey, buildCompilationUnit } from "../compilationUnit.js";
 import { AgencyConfig } from "../config.js";
 import {
@@ -8,6 +11,7 @@ import {
   GraphNodeDefinition,
   VariableType,
 } from "../types.js";
+import type { SourceLocation } from "../types/base.js";
 import { TypeCheckError, TypeCheckResult, TypeCheckerContext } from "./types.js";
 import { validateTypeReferences } from "./validate.js";
 import { inferReturnTypes } from "./inference.js";
@@ -25,6 +29,7 @@ export class TypeChecker {
   private currentScopeKey: string = GLOBAL_SCOPE_KEY;
   private functionDefs: Record<string, FunctionDefinition> = {};
   private nodeDefs: Record<string, GraphNodeDefinition> = {};
+  private importedFunctions: Record<string, ImportedFunctionSignature> = {};
   private errors: TypeCheckError[] = [];
   private inferredReturnTypes: Record<string, VariableType | "any"> = {};
   private inferringReturnType = new Set<string>();
@@ -38,6 +43,7 @@ export class TypeChecker {
     this.nodeDefs = Object.fromEntries(
       resolved.graphNodes.map((n) => [n.nodeName, n]),
     );
+    this.importedFunctions = { ...resolved.importedFunctions };
   }
 
   private get typeAliases(): Record<string, VariableType> {
@@ -61,6 +67,7 @@ export class TypeChecker {
       currentScopeKey: this.currentScopeKey,
       functionDefs: this.functionDefs,
       nodeDefs: this.nodeDefs,
+      importedFunctions: this.importedFunctions,
       errors: this.errors,
       inferredReturnTypes: this.inferredReturnTypes,
       inferringReturnType: this.inferringReturnType,
@@ -83,6 +90,22 @@ export class TypeChecker {
           validateTypeReferences(aliasedType, name, this.typeAliases, this.errors);
         }
       });
+    }
+
+    // 1b. Warn on local definitions that shadow imported functions/nodes.
+    // functionDefs and nodeDefs are mutually exclusive by construction
+    // (a name is parsed as one or the other, never both).
+    const shadowWarning = (name: string, loc: SourceLocation | undefined) =>
+      this.errors.push({
+        message: `'${name}' shadows an imported function.`,
+        severity: "warning",
+        loc,
+      });
+    for (const [name, def] of Object.entries(this.functionDefs)) {
+      if (this.importedFunctions[name]) shadowWarning(name, def.loc);
+    }
+    for (const [name, def] of Object.entries(this.nodeDefs)) {
+      if (this.importedFunctions[name]) shadowWarning(name, def.loc);
     }
 
     // 2. Infer return types
@@ -131,8 +154,9 @@ export function formatErrors(
 ): string {
   return errors
     .map((err) => {
-      const colorFunc = errorType === "warning" ? color.yellow : color.red;
-      return `${colorFunc(errorType)}: ${err.message}`;
+      const kind = err.severity ?? errorType;
+      const colorFunc = kind === "warning" ? color.yellow : color.red;
+      return `${colorFunc(kind)}: ${err.message}`;
     })
     .join("\n");
 }

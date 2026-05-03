@@ -7,10 +7,14 @@ import {
   VariableType,
 } from "../types.js";
 import { SourceLocation } from "../types/base.js";
-import type { ScopedTypeAliases } from "../compilationUnit.js";
+import type {
+  ImportedFunctionSignature,
+  ScopedTypeAliases,
+} from "../compilationUnit.js";
 
 export type TypeCheckError = {
   message: string;
+  severity?: "error" | "warning"; // defaults to "error" when omitted
   variableName?: string;
   expectedType?: string;
   actualType?: string;
@@ -42,6 +46,7 @@ export type TypeCheckerContext = {
   currentScopeKey: string;
   functionDefs: Record<string, FunctionDefinition>;
   nodeDefs: Record<string, GraphNodeDefinition>;
+  importedFunctions: Record<string, ImportedFunctionSignature>;
   errors: TypeCheckError[];
   inferredReturnTypes: Record<string, VariableType | "any">;
   inferringReturnType: Set<string>;

@@ -1,6 +1,7 @@
 import {
   AgencyNode,
   FunctionCall,
+  FunctionParameter,
   VariableType,
 } from "../types.js";
 import { walkNodes } from "../utils/node.js";
@@ -12,6 +13,51 @@ import { ScopeInfo } from "./types.js";
 import type { TypeCheckerContext } from "./types.js";
 import { checkType } from "./utils.js";
 import { Scope } from "./scope.js";
+
+/**
+ * Derive arity bounds and per-position param types from a parameter list,
+ * honoring optional (`defaultValue`) and rest (`variadic`) parameters.
+ *
+ * For a variadic last parameter declared as `...xs: T[]`, every arg at or
+ * past its position is checked against the array's element type `T`.
+ */
+/**
+ * Per-arg type for a variadic param. `...xs: T[]` means each incoming arg
+ * is a `T`; if the typeHint isn't an arrayType (e.g. untyped `...args`),
+ * fall back to its raw hint or "any".
+ */
+function variadicElementType(
+  param: FunctionParameter,
+): VariableType | "any" | undefined {
+  if (param.typeHint?.type === "arrayType") return param.typeHint.elementType;
+  return param.typeHint ?? "any";
+}
+
+function paramListSignature(params: FunctionParameter[], argCount: number): {
+  minArgs: number;
+  maxArgs: number;
+  paramTypes: (VariableType | "any" | undefined)[];
+} {
+  const lastParam = params[params.length - 1];
+  const hasRest = lastParam?.variadic === true;
+  const minArgs = params.filter(
+    (p) => p.defaultValue === undefined && !p.variadic,
+  ).length;
+  const maxArgs = hasRest ? Infinity : params.length;
+
+  const paramTypes: (VariableType | "any" | undefined)[] = params.map((p) =>
+    p.typeHint,
+  );
+  if (hasRest) {
+    // Replace the variadic slot's array type with the element type, so a
+    // single arg at that position is checked element-wise. Then extend to
+    // cover any extra args.
+    const elementType = variadicElementType(lastParam);
+    paramTypes[paramTypes.length - 1] = elementType;
+    while (paramTypes.length < argCount) paramTypes.push(elementType);
+  }
+  return { minArgs, maxArgs, paramTypes };
+}
 
 export function checkScopes(
   scopes: ScopeInfo[],
@@ -48,25 +94,29 @@ function checkSingleFunctionCall(
   // checking when one is present. The splat element-type check still runs.
   const hasSplatArg = call.arguments.some((a) => a.type === "splat");
 
+  // Resolution order: local definition → imported (cross-file) → builtin
+  // fallback. Importeds take precedence over builtins so a real stdlib
+  // function shadows a hardcoded signature when SymbolTable info is wired in.
+  const def = ctx.functionDefs[call.functionName] ?? ctx.nodeDefs[call.functionName];
+  const importedSig = ctx.importedFunctions[call.functionName];
+  const params = def?.parameters ?? importedSig?.parameters;
+
+  if (params) {
+    const { minArgs, maxArgs, paramTypes } = paramListSignature(
+      params,
+      call.arguments.length,
+    );
+    if (!checkArity(call, minArgs, maxArgs, hasSplatArg, ctx)) return;
+    checkArgsAgainstParams(call, paramTypes, scope, ctx);
+    return;
+  }
+
   if (call.functionName in BUILTIN_FUNCTION_TYPES) {
     const sig = BUILTIN_FUNCTION_TYPES[call.functionName];
     const minArgs = sig.minParams ?? sig.params.length;
     const hasRest = sig.restParam !== undefined;
     const maxArgs = hasRest ? Infinity : sig.params.length;
-    if (
-      !hasSplatArg &&
-      (call.arguments.length < minArgs || call.arguments.length > maxArgs)
-    ) {
-      const expected = hasRest
-        ? `at least ${minArgs}`
-        : minArgs === maxArgs
-          ? `${minArgs}`
-          : `${minArgs}-${maxArgs}`;
-      ctx.errors.push({
-        message: `Expected ${expected} argument(s) for '${call.functionName}', but got ${call.arguments.length}.`,
-      });
-      return;
-    }
+    if (!checkArity(call, minArgs, maxArgs, hasSplatArg, ctx)) return;
     const paramTypes: (VariableType | "any" | undefined)[] = [...sig.params];
     if (hasRest) {
       while (paramTypes.length < call.arguments.length) {
@@ -74,24 +124,34 @@ function checkSingleFunctionCall(
       }
     }
     checkArgsAgainstParams(call, paramTypes, scope, ctx);
-    return;
   }
+}
 
-  const def = ctx.functionDefs[call.functionName] ?? ctx.nodeDefs[call.functionName];
-  if (!def) return;
+/**
+ * Validate arg count against [minArgs, maxArgs]. Pushes an error and returns
+ * `false` (caller should bail) when arity is wrong and there's no splat. With
+ * a splat present we can't tell the count statically, so always return `true`
+ * and let the splat element-type check run.
+ */
+function checkArity(
+  call: FunctionCall,
+  minArgs: number,
+  maxArgs: number,
+  hasSplatArg: boolean,
+  ctx: TypeCheckerContext,
+): boolean {
+  if (hasSplatArg) return true;
+  if (call.arguments.length >= minArgs && call.arguments.length <= maxArgs) return true;
+  ctx.errors.push({
+    message: `Expected ${formatArity(minArgs, maxArgs)} argument(s) for '${call.functionName}', but got ${call.arguments.length}.`,
+  });
+  return false;
+}
 
-  if (!hasSplatArg && call.arguments.length !== def.parameters.length) {
-    ctx.errors.push({
-      message: `Expected ${def.parameters.length} argument(s) for '${call.functionName}', but got ${call.arguments.length}.`,
-    });
-    return;
-  }
-  checkArgsAgainstParams(
-    call,
-    def.parameters.map((p) => p.typeHint),
-    scope,
-    ctx,
-  );
+function formatArity(minArgs: number, maxArgs: number): string {
+  if (maxArgs === Infinity) return `at least ${minArgs}`;
+  if (minArgs === maxArgs) return `${minArgs}`;
+  return `${minArgs}-${maxArgs}`;
 }
 
 /**

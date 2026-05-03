@@ -84,9 +84,6 @@ function synthFunctionCall(
   _scope: Scope,
   ctx: TypeCheckerContext,
 ): VariableType | "any" {
-  if (expr.functionName in BUILTIN_FUNCTION_TYPES) {
-    return BUILTIN_FUNCTION_TYPES[expr.functionName].returnType;
-  }
   const fn = ctx.functionDefs[expr.functionName];
   const graphNode = ctx.nodeDefs[expr.functionName];
   const def = fn ?? graphNode;
@@ -94,9 +91,15 @@ function synthFunctionCall(
   if (expr.functionName in ctx.inferredReturnTypes) {
     return ctx.inferredReturnTypes[expr.functionName];
   }
-  // Lazily trigger inference if we're in the inference phase
   if (def && !def.returnType && ctx.inferringReturnType.size > 0) {
     return ctx.inferReturnTypeFor(expr.functionName, def);
+  }
+  if (!def) {
+    const imported = ctx.importedFunctions[expr.functionName];
+    if (imported?.returnType) return imported.returnType;
+    if (expr.functionName in BUILTIN_FUNCTION_TYPES) {
+      return BUILTIN_FUNCTION_TYPES[expr.functionName].returnType;
+    }
   }
   return "any";
 }

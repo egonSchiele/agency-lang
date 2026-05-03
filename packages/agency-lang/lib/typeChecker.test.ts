@@ -4895,6 +4895,43 @@ describe("TypeChecker", () => {
       expect(errors.some((e) => /not assignable/i.test(e.message))).toBe(true);
     });
 
+    it("rejects bang syntax on inline handler params", () => {
+      // node main() { handle { ... } with (data: Person!) { return approve() } }
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "graphNode",
+            nodeName: "main",
+            parameters: [],
+            body: [
+              {
+                type: "handleBlock",
+                body: [],
+                handler: {
+                  kind: "inline",
+                  param: {
+                    type: "functionParameter",
+                    name: "data",
+                    typeHint: person,
+                    validated: true,
+                  },
+                  body: [
+                    {
+                      type: "returnStatement",
+                      value: { type: "functionCall", functionName: "approve", arguments: [] },
+                    },
+                  ],
+                },
+              },
+            ],
+          },
+        ],
+      };
+      const errors = typeCheck(program).errors;
+      expect(errors.some((e) => /not allowed on handler/i.test(e.message))).toBe(true);
+    });
+
     it("checks the RHS of a validated assignment against the un-bang'd type", () => {
       // const x: number! = "not a number" — RHS is checked against `number`.
       const program: AgencyProgram = {

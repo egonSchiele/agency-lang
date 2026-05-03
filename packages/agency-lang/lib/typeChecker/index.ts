@@ -20,6 +20,7 @@ import { checkScopes } from "./checker.js";
 import { isAssignable as _isAssignable } from "./assignability.js";
 import { inferReturnTypeFor } from "./inference.js";
 import { effectiveReturnType } from "./validation.js";
+import { walkNodes } from "../utils/node.js";
 
 export type { TypeCheckError, TypeCheckResult } from "./types.js";
 
@@ -184,6 +185,21 @@ export class TypeChecker {
     }
     for (const [name, def] of Object.entries(this.nodeDefs)) {
       checkValidatedParamReturn(name, def);
+    }
+
+    // 1e. The `!` validation suffix is meaningless on handler params:
+    // handlers don't have a caller-observable return type, so the
+    // "validation failure short-circuits the function" semantics don't apply.
+    // Validate inside the handler body instead.
+    for (const { node } of walkNodes(this.program.nodes)) {
+      if (node.type !== "handleBlock") continue;
+      if (node.handler.kind !== "inline") continue;
+      if (node.handler.param.validated) {
+        this.errors.push({
+          message: "The '!' validation syntax is not allowed on handler parameters. Validate the data inside the handler body if needed.",
+          loc: node.handler.param.loc ?? node.loc,
+        });
+      }
     }
 
     // 2. Infer return types

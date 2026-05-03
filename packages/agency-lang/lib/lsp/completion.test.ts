@@ -12,13 +12,15 @@ function parse(source: string) {
 }
 
 describe("getCompletions", () => {
-  it("includes function definitions as Function items", () => {
-    const program = parse("def greet() { let x: string = `hi` }");
+  it("includes function definitions as Function items with detail", () => {
+    const program = parse('def greet(name: string): string {\n  """\n  Say hello\n  """\n  return `hi ${name}`\n}');
     const info = buildCompilationUnit(program, new SymbolTable());
     const items = getCompletions(info);
     const greet = items.find((i) => i.label === "greet");
     expect(greet).toBeDefined();
     expect(greet?.kind).toBe(CompletionItemKind.Function);
+    expect(greet?.detail).toBe("(name: string): string");
+    expect(greet?.documentation).toBe("Say hello");
   });
 
   it("includes graph nodes as Module items", () => {

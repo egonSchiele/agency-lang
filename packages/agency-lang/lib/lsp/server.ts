@@ -19,6 +19,9 @@ import { getDocumentSymbols } from "./documentSymbol.js";
 import { handleFormatting } from "./formatting.js";
 import { handleHover } from "./hover.js";
 import { getCompletions } from "./completion.js";
+import { handleDocumentHighlight } from "./documentHighlight.js";
+import { getFoldingRanges } from "./foldingRange.js";
+import { getDocumentLinks } from "./documentLink.js";
 import type { CompilationUnit } from "../compilationUnit.js";
 import type { SemanticIndex } from "./semantics.js";
 
@@ -46,6 +49,9 @@ export function startServer(): void {
         definitionProvider: true,
         documentSymbolProvider: true,
         documentFormattingProvider: true,
+        documentHighlightProvider: true,
+        foldingRangeProvider: true,
+        documentLinkProvider: {},
       },
     };
   });
@@ -161,6 +167,26 @@ export function startServer(): void {
     const info = docInfos.get(params.textDocument.uri);
     if (!info) return CompletionList.create([], true);
     return CompletionList.create(getCompletions(info), false);
+  });
+
+  connection.onDocumentHighlight((params) => {
+    const doc = documents.get(params.textDocument.uri);
+    if (!doc) return [];
+    return handleDocumentHighlight(params, doc);
+  });
+
+  connection.onFoldingRanges((params) => {
+    const doc = documents.get(params.textDocument.uri);
+    const program = docPrograms.get(params.textDocument.uri);
+    if (!doc || !program) return [];
+    return getFoldingRanges(program, doc);
+  });
+
+  connection.onDocumentLinks((params) => {
+    const doc = documents.get(params.textDocument.uri);
+    const program = docPrograms.get(params.textDocument.uri);
+    if (!doc || !program) return [];
+    return getDocumentLinks(program, doc, uriToPath(doc.uri));
   });
 
   documents.listen(connection);

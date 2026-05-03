@@ -138,17 +138,17 @@ function mergeResultParam(types: VariableType[]): VariableType {
 }
 
 /**
- * Build a union of distinct types (deduped structurally). Returns the lone
- * type if there's only one unique entry, avoiding wrapping single types in
- * a one-element union.
+ * Build a union of distinct types (deduped structurally via a Map keyed by
+ * the stringified shape). Returns the lone type when there's only one unique
+ * entry, avoiding wrapping single types in a one-element union.
  */
 function unionTypes(types: VariableType[]): VariableType {
-  const seen: VariableType[] = [];
+  const seen = new Map<string, VariableType>();
   for (const t of types) {
-    if (!seen.some((s) => JSON.stringify(s) === JSON.stringify(t))) {
-      seen.push(t);
-    }
+    const key = JSON.stringify(t);
+    if (!seen.has(key)) seen.set(key, t);
   }
-  if (seen.length === 1) return seen[0];
-  return { type: "unionType", types: seen };
+  const uniques = Array.from(seen.values());
+  if (uniques.length === 1) return uniques[0];
+  return { type: "unionType", types: uniques };
 }

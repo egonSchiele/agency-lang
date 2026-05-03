@@ -22,6 +22,32 @@ import { inferReturnTypeFor } from "./inference.js";
 
 export type { TypeCheckError, TypeCheckResult } from "./types.js";
 
+/**
+ * Function/node names that are part of the language itself or whose
+ * semantics the typechecker hardcodes. Keep in sync with
+ * docs-new/appendix/agency-stdlib.md. `interrupt` and `debugger` are also
+ * statements at the parse level — listing them here is belt-and-suspenders.
+ */
+const RESERVED_FUNCTION_NAMES = new Set<string>([
+  "success",
+  "failure",
+  "isSuccess",
+  "isFailure",
+  "interrupt",
+  "approve",
+  "reject",
+  "propagate",
+  "schema",
+  "llm",
+  "checkpoint",
+  "getCheckpoint",
+  "restore",
+  "debugger",
+]);
+
+/** Type-alias names that resolve to built-in types. */
+const RESERVED_TYPE_NAMES = new Set<string>(["Result"]);
+
 export class TypeChecker {
   private program: AgencyProgram;
   private config: AgencyConfig;
@@ -106,6 +132,31 @@ export class TypeChecker {
     }
     for (const [name, def] of Object.entries(this.nodeDefs)) {
       if (this.importedFunctions[name]) shadowWarning(name, def.loc);
+    }
+
+    // 1c. Reserve names baked into the language. The synth pipeline relies
+    // on `success(x)` and `failure(msg)` parameterizing ResultType, and on
+    // `Result` being the built-in type. Allowing user definitions of these
+    // names would silently change semantics.
+    const reservedFn = (name: string, loc: SourceLocation | undefined) =>
+      this.errors.push({
+        message: `'${name}' is a reserved built-in; cannot be redefined.`,
+        loc,
+      });
+    for (const [name, def] of Object.entries(this.functionDefs)) {
+      if (RESERVED_FUNCTION_NAMES.has(name)) reservedFn(name, def.loc);
+    }
+    for (const [name, def] of Object.entries(this.nodeDefs)) {
+      if (RESERVED_FUNCTION_NAMES.has(name)) reservedFn(name, def.loc);
+    }
+    for (const [, aliases] of this.scopedTypeAliases.scopes()) {
+      for (const name of Object.keys(aliases)) {
+        if (RESERVED_TYPE_NAMES.has(name)) {
+          this.errors.push({
+            message: `'${name}' is a reserved built-in type; cannot be redefined.`,
+          });
+        }
+      }
     }
 
     // 2. Infer return types

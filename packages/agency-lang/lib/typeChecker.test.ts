@@ -3964,10 +3964,7 @@ describe("TypeChecker", () => {
       expect(errors.some((e) => /catch default/.test(e.message))).toBe(true);
     });
 
-    it("user-defined success shadows the Result constructor synth", () => {
-      // def success(): string { return "no" }
-      // const r: Result<number, any> = success(10)  -- arity mismatch + type mismatch
-      // The point: success() now resolves to the local def, not the special case.
+    it("user-defined success/failure functions are rejected as reserved", () => {
       const program: AgencyProgram = {
         type: "agencyProgram",
         nodes: [
@@ -3979,24 +3976,38 @@ describe("TypeChecker", () => {
             body: [],
           },
           {
-            type: "assignment",
-            variableName: "r",
-            typeHint: {
-              type: "resultType",
-              successType: { type: "primitiveType", value: "number" },
-              failureType: { type: "primitiveType", value: "any" },
-            },
-            value: {
-              type: "functionCall",
-              functionName: "success",
-              arguments: [],
-            },
+            type: "function",
+            functionName: "failure",
+            parameters: [],
+            returnType: { type: "primitiveType", value: "string" },
+            body: [],
           },
         ],
       };
       const errors = typeCheck(program).errors;
-      // Local success returns string, not Result — assignment should fail.
-      expect(errors.some((e) => /not assignable/.test(e.message))).toBe(true);
+      expect(
+        errors.some((e) => /'success' is a reserved built-in/.test(e.message)),
+      ).toBe(true);
+      expect(
+        errors.some((e) => /'failure' is a reserved built-in/.test(e.message)),
+      ).toBe(true);
+    });
+
+    it("user-defined Result type alias is rejected as reserved", () => {
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "typeAlias",
+            aliasName: "Result",
+            aliasedType: { type: "primitiveType", value: "string" },
+          },
+        ],
+      };
+      const errors = typeCheck(program).errors;
+      expect(
+        errors.some((e) => /'Result' is a reserved built-in type/.test(e.message)),
+      ).toBe(true);
     });
 
     it("pipe synth flows the actual return type (regression: variableName RHS used to be 'any')", () => {

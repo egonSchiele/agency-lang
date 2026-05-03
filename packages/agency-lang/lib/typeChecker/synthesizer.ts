@@ -214,19 +214,10 @@ function synthFunctionCall(
   ctx: TypeCheckerContext,
 ): VariableType | "any" {
   // Result constructors: parameterize ResultType from the argument so callers
-  // get `Result<T, any>` (success) or `Result<any, T>` (failure). Only fires
-  // when the name isn't shadowed by a local def or an import — that way a
-  // user who defines their own `success(...)` still resolves to their
-  // signature. Builtin entries don't shadow this case because the Result
-  // constructors are themselves builtin runtime functions; this special-case
-  // just gives them a more precise type than the flat builtin signature.
-  if (
-    RESULT_CONSTRUCTORS.has(expr.functionName) &&
-    expr.arguments.length >= 1 &&
-    !(expr.functionName in ctx.functionDefs) &&
-    !(expr.functionName in ctx.nodeDefs) &&
-    !(expr.functionName in ctx.importedFunctions)
-  ) {
+  // get `Result<T, any>` (success) or `Result<any, T>` (failure). The names
+  // are reserved at the typechecker level (see RESERVED_FUNCTION_NAMES in
+  // index.ts), so shadowing is impossible — no gating needed here.
+  if (RESULT_CONSTRUCTORS.has(expr.functionName) && expr.arguments.length >= 1) {
     const inner = asPositionalArg(expr.arguments[0]);
     if (inner) {
       const innerType = maybeAny(synthType(inner, scope, ctx));

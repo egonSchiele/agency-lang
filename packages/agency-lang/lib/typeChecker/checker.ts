@@ -50,7 +50,7 @@ function checkSingleFunctionCall(
     const minArgs = sig.minParams ?? sig.params.length;
     const maxArgs = sig.params.length;
     if (call.arguments.length < minArgs || call.arguments.length > maxArgs) {
-      const expected = minArgs === maxArgs ? `${minArgs}` : `${minArgs}–${maxArgs}`;
+      const expected = minArgs === maxArgs ? `${minArgs}` : `${minArgs}-${maxArgs}`;
       ctx.errors.push({
         message: `Expected ${expected} argument(s) for '${call.functionName}', but got ${call.arguments.length}.`,
       });

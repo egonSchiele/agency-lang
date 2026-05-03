@@ -1,3 +1,4 @@
+import type { Scope } from "./scope.js";
 import { AgencyConfig } from "../config.js";
 import {
   AgencyNode,
@@ -19,8 +20,6 @@ export type TypeCheckError = {
 export type TypeCheckResult = {
   errors: TypeCheckError[];
 };
-
-import type { Scope } from "./scope.js";
 
 export type ScopeInfo = {
   scope: Scope;

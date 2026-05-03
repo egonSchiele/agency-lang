@@ -656,7 +656,10 @@ describe("TypeChecker", () => {
               {
                 type: "functionCall",
                 functionName: "round",
-                arguments: [{ type: "number", value: "3.14" }],
+                arguments: [
+                  { type: "number", value: "3.14" },
+                  { type: "number", value: "2" },
+                ],
               },
             ],
           },
@@ -2881,6 +2884,401 @@ describe("TypeChecker", () => {
       expect(errors).toHaveLength(1);
       expect(errors[0].message).toContain("foo");
       expect(errors[0].message).toContain("unknown");
+    });
+  });
+
+  describe("v2: boolean condition checks", () => {
+    it("flags non-boolean if condition", () => {
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "assignment",
+            variableName: "n",
+            typeHint: { type: "primitiveType", value: "number" },
+            value: { type: "number", value: "5" },
+          },
+          {
+            type: "ifElse",
+            condition: { type: "variableName", value: "n" },
+            thenBody: [],
+          },
+        ],
+      };
+      const { errors } = typeCheck(program);
+      expect(errors).toHaveLength(1);
+      expect(errors[0].message).toMatch(/not assignable.*boolean/);
+    });
+
+    it("accepts boolean if condition", () => {
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "assignment",
+            variableName: "ok",
+            typeHint: { type: "primitiveType", value: "boolean" },
+            value: { type: "boolean", value: true },
+          },
+          {
+            type: "ifElse",
+            condition: { type: "variableName", value: "ok" },
+            thenBody: [],
+          },
+        ],
+      };
+      expect(typeCheck(program).errors).toHaveLength(0);
+    });
+
+    it("flags non-boolean while condition", () => {
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "assignment",
+            variableName: "s",
+            typeHint: { type: "primitiveType", value: "string" },
+            value: { type: "string", segments: [{ type: "text", value: "x" }] },
+          },
+          {
+            type: "whileLoop",
+            condition: { type: "variableName", value: "s" },
+            body: [],
+          },
+        ],
+      };
+      const { errors } = typeCheck(program);
+      expect(errors).toHaveLength(1);
+      expect(errors[0].message).toMatch(/not assignable.*boolean/);
+    });
+  });
+
+  describe("v2: splat argument checking", () => {
+    it("accepts splat of matching element type", () => {
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "function",
+            functionName: "takesNums",
+            parameters: [
+              { type: "functionParameter", name: "a", typeHint: { type: "primitiveType", value: "number" } },
+              { type: "functionParameter", name: "b", typeHint: { type: "primitiveType", value: "number" } },
+            ],
+            body: [],
+          },
+          {
+            type: "assignment",
+            variableName: "nums",
+            typeHint: {
+              type: "arrayType",
+              elementType: { type: "primitiveType", value: "number" },
+            },
+            value: {
+              type: "agencyArray",
+              items: [
+                { type: "number", value: "1" },
+                { type: "number", value: "2" },
+              ],
+            },
+          },
+          {
+            type: "functionCall",
+            functionName: "takesNums",
+            arguments: [
+              { type: "splat", value: { type: "variableName", value: "nums" } },
+            ],
+          },
+        ],
+      };
+      expect(typeCheck(program).errors).toHaveLength(0);
+    });
+
+    it("flags splat element type that is not assignable to remaining params", () => {
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "function",
+            functionName: "takesNums",
+            parameters: [
+              { type: "functionParameter", name: "a", typeHint: { type: "primitiveType", value: "number" } },
+              { type: "functionParameter", name: "b", typeHint: { type: "primitiveType", value: "number" } },
+            ],
+            body: [],
+          },
+          {
+            type: "assignment",
+            variableName: "strs",
+            typeHint: {
+              type: "arrayType",
+              elementType: { type: "primitiveType", value: "string" },
+            },
+            value: {
+              type: "agencyArray",
+              items: [{ type: "string", segments: [{ type: "text", value: "a" }] }],
+            },
+          },
+          {
+            type: "functionCall",
+            functionName: "takesNums",
+            arguments: [
+              { type: "splat", value: { type: "variableName", value: "strs" } },
+            ],
+          },
+        ],
+      };
+      const errors = typeCheck(program).errors;
+      expect(errors.length).toBeGreaterThanOrEqual(1);
+      expect(errors[0].message).toMatch(/Splat element type 'string'.*not assignable.*'number'/);
+    });
+
+    it("flags non-array splat source", () => {
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "function",
+            functionName: "anyFn",
+            parameters: [
+              { type: "functionParameter", name: "x", typeHint: { type: "primitiveType", value: "any" } },
+            ],
+            body: [],
+          },
+          {
+            type: "assignment",
+            variableName: "n",
+            typeHint: { type: "primitiveType", value: "number" },
+            value: { type: "number", value: "1" },
+          },
+          {
+            type: "functionCall",
+            functionName: "anyFn",
+            arguments: [
+              { type: "splat", value: { type: "variableName", value: "n" } },
+            ],
+          },
+        ],
+      };
+      const errors = typeCheck(program).errors;
+      expect(errors.some((e) => /Splat argument must be an array/.test(e.message))).toBe(true);
+    });
+  });
+
+  describe("v2: print/printJSON varargs", () => {
+    it("accepts any number of args to print", () => {
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "functionCall",
+            functionName: "print",
+            arguments: [
+              { type: "string", segments: [{ type: "text", value: "a" }] },
+              { type: "number", value: "1" },
+              { type: "boolean", value: true },
+            ],
+          },
+          { type: "functionCall", functionName: "print", arguments: [] },
+        ],
+      };
+      expect(typeCheck(program).errors).toHaveLength(0);
+    });
+  });
+
+  describe("v2: object literal splat is later-wins", () => {
+    it("explicit key after splat overrides splat type", () => {
+      // const a = { x: 1 }; const b = { ...a, x: "hello" }; b.x : string
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "assignment",
+            variableName: "a",
+            value: {
+              type: "agencyObject",
+              entries: [{ key: "x", value: { type: "number", value: "1" } }],
+            },
+          },
+          {
+            type: "assignment",
+            variableName: "b",
+            value: {
+              type: "agencyObject",
+              entries: [
+                { type: "splat", value: { type: "variableName", value: "a" } },
+                { key: "x", value: { type: "string", segments: [{ type: "text", value: "hi" }] } },
+              ],
+            },
+          },
+          {
+            type: "function",
+            functionName: "expectStr",
+            parameters: [
+              { type: "functionParameter", name: "s", typeHint: { type: "primitiveType", value: "string" } },
+            ],
+            body: [],
+          },
+          {
+            type: "functionCall",
+            functionName: "expectStr",
+            arguments: [
+              {
+                type: "valueAccess",
+                base: { type: "variableName", value: "b" },
+                chain: [{ kind: "property", name: "x" }],
+              },
+            ],
+          },
+        ],
+      };
+      // b.x should resolve to string (overriding a.x's number), so no error.
+      expect(typeCheck(program).errors).toHaveLength(0);
+    });
+  });
+
+  describe("v2: scope walks through nested blocks", () => {
+    it("declarations inside parallel block are visible after", () => {
+      // parallel { let x: number = 1 } expectNum(x)
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "function",
+            functionName: "expectNum",
+            parameters: [
+              { type: "functionParameter", name: "n", typeHint: { type: "primitiveType", value: "number" } },
+            ],
+            body: [],
+          },
+          {
+            type: "parallelBlock",
+            body: [
+              {
+                type: "assignment",
+                variableName: "x",
+                typeHint: { type: "primitiveType", value: "number" },
+                value: { type: "number", value: "1" },
+              },
+            ],
+          },
+          {
+            type: "functionCall",
+            functionName: "expectNum",
+            arguments: [{ type: "variableName", value: "x" }],
+          },
+        ],
+      };
+      expect(typeCheck(program).errors).toHaveLength(0);
+    });
+
+    it("declarations inside seq block are visible after", () => {
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "function",
+            functionName: "expectStr",
+            parameters: [
+              { type: "functionParameter", name: "s", typeHint: { type: "primitiveType", value: "string" } },
+            ],
+            body: [],
+          },
+          {
+            type: "seqBlock",
+            body: [
+              {
+                type: "assignment",
+                variableName: "x",
+                typeHint: { type: "primitiveType", value: "number" },
+                value: { type: "number", value: "1" },
+              },
+            ],
+          },
+          {
+            type: "functionCall",
+            functionName: "expectStr",
+            arguments: [{ type: "variableName", value: "x" }],
+          },
+        ],
+      };
+      const errors = typeCheck(program).errors;
+      expect(errors.length).toBeGreaterThanOrEqual(1);
+      expect(errors[0].message).toMatch(/not assignable to parameter type 'string'/);
+    });
+
+    it("inline handler param is visible inside handler body", () => {
+      // handle { ... } catch (err: string) { expectStr(err) }
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "function",
+            functionName: "expectStr",
+            parameters: [
+              { type: "functionParameter", name: "s", typeHint: { type: "primitiveType", value: "string" } },
+            ],
+            body: [],
+          },
+          {
+            type: "handleBlock",
+            body: [],
+            handler: {
+              kind: "inline",
+              param: { type: "functionParameter", name: "err", typeHint: { type: "primitiveType", value: "string" } },
+              body: [
+                {
+                  type: "functionCall",
+                  functionName: "expectStr",
+                  arguments: [{ type: "variableName", value: "err" }],
+                },
+              ],
+            },
+          },
+        ],
+      };
+      expect(typeCheck(program).errors).toHaveLength(0);
+    });
+
+    it("match block case body is type-checked", () => {
+      // match (n) { 1 -> expectStr(n) }
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "function",
+            functionName: "expectStr",
+            parameters: [
+              { type: "functionParameter", name: "s", typeHint: { type: "primitiveType", value: "string" } },
+            ],
+            body: [],
+          },
+          {
+            type: "assignment",
+            variableName: "n",
+            typeHint: { type: "primitiveType", value: "number" },
+            value: { type: "number", value: "1" },
+          },
+          {
+            type: "matchBlock",
+            expression: { type: "variableName", value: "n" },
+            cases: [
+              {
+                type: "matchBlockCase",
+                caseValue: { type: "number", value: "1" },
+                body: {
+                  type: "functionCall",
+                  functionName: "expectStr",
+                  arguments: [{ type: "variableName", value: "n" }],
+                },
+              },
+            ],
+          },
+        ],
+      };
+      const errors = typeCheck(program).errors;
+      expect(errors.length).toBeGreaterThanOrEqual(1);
+      expect(errors[0].message).toMatch(/not assignable to parameter type 'string'/);
     });
   });
 });

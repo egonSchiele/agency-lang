@@ -142,13 +142,15 @@ function synthObject(
   scope: Scope,
   ctx: TypeCheckerContext,
 ): VariableType | "any" {
-  const properties: { key: string; value: VariableType }[] = [];
+  // Use a Map so later entries overwrite earlier ones (later-wins for splats
+  // followed by explicit keys, e.g. { ...a, x: "new" } produces x's literal type).
+  const properties = new Map<string, VariableType>();
   for (const entry of expr.entries) {
     if ("type" in entry && entry.type === "splat") {
       const splatType = synthType(entry.value, scope, ctx);
       if (splatType === "any") return "any";
       if (splatType.type !== "objectType") return "any";
-      for (const prop of splatType.properties) properties.push(prop);
+      for (const prop of splatType.properties) properties.set(prop.key, prop.value);
       continue;
     }
     const kv = entry as { key: string; value: AgencyNode };
@@ -156,9 +158,12 @@ function synthObject(
     if (valueType === "any") {
       return "any";
     }
-    properties.push({ key: kv.key, value: valueType });
+    properties.set(kv.key, valueType);
   }
-  return { type: "objectType", properties };
+  return {
+    type: "objectType",
+    properties: Array.from(properties, ([key, value]) => ({ key, value })),
+  };
 }
 
 export function synthValueAccess(

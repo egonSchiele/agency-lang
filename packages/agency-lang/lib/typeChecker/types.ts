@@ -33,6 +33,7 @@ export type BuiltinSignature = {
   params: (VariableType | "any")[];
   returnType: VariableType | "any";
   minParams?: number; // if set, arity is [minParams, params.length]; otherwise exact
+  restParam?: VariableType | "any"; // if set, accepts unlimited extra args of this type after the fixed params
 };
 
 export type TypeCheckerContext = {

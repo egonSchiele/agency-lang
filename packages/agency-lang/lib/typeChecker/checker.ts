@@ -1,4 +1,5 @@
 import {
+  AgencyNode,
   FunctionCall,
   VariableType,
 } from "../types.js";
@@ -43,26 +44,43 @@ function checkSingleFunctionCall(
   scope: Scope,
   ctx: TypeCheckerContext,
 ): void {
+  // A splat can expand to any number of positional args, so skip arity
+  // checking when one is present. The splat element-type check still runs.
+  const hasSplatArg = call.arguments.some((a) => a.type === "splat");
+
   if (call.functionName in BUILTIN_FUNCTION_TYPES) {
     const sig = BUILTIN_FUNCTION_TYPES[call.functionName];
     const minArgs = sig.minParams ?? sig.params.length;
-    const maxArgs = sig.params.length;
-    if (call.arguments.length < minArgs || call.arguments.length > maxArgs) {
-      const expected =
-        minArgs === maxArgs ? `${minArgs}` : `${minArgs}-${maxArgs}`;
+    const hasRest = sig.restParam !== undefined;
+    const maxArgs = hasRest ? Infinity : sig.params.length;
+    if (
+      !hasSplatArg &&
+      (call.arguments.length < minArgs || call.arguments.length > maxArgs)
+    ) {
+      const expected = hasRest
+        ? `at least ${minArgs}`
+        : minArgs === maxArgs
+          ? `${minArgs}`
+          : `${minArgs}-${maxArgs}`;
       ctx.errors.push({
         message: `Expected ${expected} argument(s) for '${call.functionName}', but got ${call.arguments.length}.`,
       });
       return;
     }
-    checkArgsAgainstParams(call, sig.params, scope, ctx);
+    const paramTypes: (VariableType | "any" | undefined)[] = [...sig.params];
+    if (hasRest) {
+      while (paramTypes.length < call.arguments.length) {
+        paramTypes.push(sig.restParam!);
+      }
+    }
+    checkArgsAgainstParams(call, paramTypes, scope, ctx);
     return;
   }
 
   const def = ctx.functionDefs[call.functionName] ?? ctx.nodeDefs[call.functionName];
   if (!def) return;
 
-  if (call.arguments.length !== def.parameters.length) {
+  if (!hasSplatArg && call.arguments.length !== def.parameters.length) {
     ctx.errors.push({
       message: `Expected ${def.parameters.length} argument(s) for '${call.functionName}', but got ${call.arguments.length}.`,
     });
@@ -93,38 +111,15 @@ function checkArgsAgainstParams(
   ctx: TypeCheckerContext,
 ): void {
   const typeAliases = ctx.getTypeAliases();
-  for (let i = 0; i < call.arguments.length; i++) {
-    const arg = call.arguments[i];
+  for (let argIndex = 0; argIndex < call.arguments.length; argIndex++) {
+    const arg = call.arguments[argIndex];
     if (arg.type === "splat") {
-      const splatType = synthType(arg.value, scope, ctx);
-      if (splatType === "any") return;
-      if (splatType.type !== "arrayType") {
-        const splatStr = formatTypeHint(splatType);
-        ctx.errors.push({
-          message: `Splat argument must be an array, got '${splatStr}' in call to '${call.functionName}'.`,
-          actualType: splatStr,
-        });
-        return;
-      }
-      const elemType = splatType.elementType;
-      const elemStr = formatTypeHint(elemType);
-      for (let j = i; j < paramTypes.length; j++) {
-        const pt = paramTypes[j];
-        if (pt === undefined || pt === "any" || elemType === "any") continue;
-        if (!isAssignable(elemType, pt, typeAliases)) {
-          const ptStr = formatTypeHint(pt);
-          ctx.errors.push({
-            message: `Splat element type '${elemStr}' is not assignable to parameter type '${ptStr}' in call to '${call.functionName}'.`,
-            expectedType: ptStr,
-            actualType: elemStr,
-          });
-        }
-      }
+      checkSplatAgainstRemainingParams(call, arg.value, argIndex, paramTypes, scope, ctx);
       return;
     }
     const innerArg = arg.type === "namedArgument" ? arg.value : arg;
     const argType = synthType(innerArg, scope, ctx);
-    const paramType = paramTypes[i];
+    const paramType = paramTypes[argIndex];
     if (paramType === undefined || paramType === "any" || argType === "any") {
       continue;
     }
@@ -135,6 +130,45 @@ function checkArgsAgainstParams(
         actualType: formatTypeHint(argType),
       });
     }
+  }
+}
+
+/**
+ * Check a splat argument against the remaining positional params. The splat's
+ * source must synth to an array, and its element type must be assignable to
+ * each remaining param.
+ */
+function checkSplatAgainstRemainingParams(
+  call: FunctionCall,
+  splatSource: AgencyNode,
+  splatIndex: number,
+  paramTypes: (VariableType | "any" | undefined)[],
+  scope: Scope,
+  ctx: TypeCheckerContext,
+): void {
+  const splatType = synthType(splatSource, scope, ctx);
+  if (splatType === "any") return;
+  if (splatType.type !== "arrayType") {
+    const splatStr = formatTypeHint(splatType);
+    ctx.errors.push({
+      message: `Splat argument must be an array, got '${splatStr}' in call to '${call.functionName}'.`,
+      actualType: splatStr,
+    });
+    return;
+  }
+  const elementType = splatType.elementType;
+  if (elementType === "any") return;
+  const elementStr = formatTypeHint(elementType);
+  const typeAliases = ctx.getTypeAliases();
+  for (const remainingParam of paramTypes.slice(splatIndex)) {
+    if (remainingParam === undefined || remainingParam === "any") continue;
+    if (isAssignable(elementType, remainingParam, typeAliases)) continue;
+    const paramStr = formatTypeHint(remainingParam);
+    ctx.errors.push({
+      message: `Splat element type '${elementStr}' is not assignable to parameter type '${paramStr}' in call to '${call.functionName}'.`,
+      expectedType: paramStr,
+      actualType: elementStr,
+    });
   }
 }
 

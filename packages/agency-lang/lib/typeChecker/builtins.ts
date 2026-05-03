@@ -22,8 +22,8 @@ const anyArray = {
  */
 export const BUILTIN_FUNCTION_TYPES: Record<string, BuiltinSignature> = {
   // --- IO / debugging ---
-  print: { params: ["any"], returnType: voidT },
-  printJSON: { params: ["any"], returnType: voidT },
+  print: { params: [], restParam: "any", returnType: voidT },
+  printJSON: { params: [], restParam: "any", returnType: voidT },
   input: { params: [string], returnType: string },
   read: { params: [string], returnType: string },
   readImage: { params: [string], returnType: string },
@@ -32,9 +32,9 @@ export const BUILTIN_FUNCTION_TYPES: Record<string, BuiltinSignature> = {
   fetchJSON: { params: [string], returnType: "any" },
   notify: { params: [string, string], returnType: boolean },
   sleep: { params: [number], returnType: voidT },
-  round: { params: [number, number], minParams: 1, returnType: number },
+  round: { params: [number, number], returnType: number },
   llm: { params: ["any", "any"], minParams: 1, returnType: string },
-  emit: { params: ["any"], returnType: voidT },
+  emit: { params: [], restParam: "any", returnType: voidT },
 
   // --- Object / array helpers (auto-imported from stdlib/index.agency) ---
   range: { params: [number, number], minParams: 1, returnType: { type: "arrayType", elementType: number } },
@@ -50,5 +50,5 @@ export const BUILTIN_FUNCTION_TYPES: Record<string, BuiltinSignature> = {
   isFailure: { params: ["any"], returnType: boolean },
 
   // --- Checkpoint / rewind ---
-  restore: { params: ["any", "any"], minParams: 1, returnType: voidT },
+  restore: { params: ["any", "any"], returnType: voidT },
 };

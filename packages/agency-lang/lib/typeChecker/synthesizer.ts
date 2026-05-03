@@ -16,6 +16,17 @@ const ANY_T: VariableType = { type: "primitiveType", value: "any" };
 /** Names treated as Result constructors (synth parameterizes ResultType from arg). */
 const RESULT_CONSTRUCTORS = new Set<string>(["success", "failure"]);
 
+/** Runtime fields exposed on Success/Failure. See lib/runtime/result.ts. */
+const RESULT_FIELDS = new Set<string>([
+  "value",
+  "error",
+  "checkpoint",
+  "functionName",
+  "args",
+  "retryable",
+  "success",
+]);
+
 /**
  * `synthType` returns `VariableType | "any"` where `"any"` is the literal
  * string sentinel meaning "we don't know". When we want to embed that
@@ -324,6 +335,16 @@ export function synthValueAccess(
 
     switch (element.kind) {
       case "property": {
+        // Result<T, E>: allow access to runtime fields without flow narrowing.
+        // Until isSuccess/isFailure narrowing lands (Tier 2 PR B), users have
+        // no way to safely unwrap a Result. Treating these field accesses as
+        // `any` keeps real Result code from flooding with spurious "property
+        // does not exist" errors. Once narrowing lands, this can be tightened
+        // so .value is only valid on the Success branch and .error/etc. are
+        // only valid on Failure.
+        if (resolved.type === "resultType" && RESULT_FIELDS.has(element.name)) {
+          return "any";
+        }
         if (resolved.type === "unionType") {
           const propTypes: VariableType[] = [];
           for (const member of resolved.types) {

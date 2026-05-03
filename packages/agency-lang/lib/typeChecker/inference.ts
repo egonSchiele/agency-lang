@@ -84,6 +84,11 @@ export function inferReturnTypeFor(
         // Result<typeof x, typeof y> instead of degrading to "any".
         if (concrete.every((t) => t.type === "resultType")) {
           inferred = mergeResultTypes(concrete as ResultTypes);
+        } else if (concrete.some((t) => t.type === "resultType")) {
+          // Mixed Result + non-Result returns (e.g. `return 5` in one branch,
+          // `return success(10)` in another) infer as a union so callers can
+          // still get useful narrowing instead of degrading to "any".
+          inferred = unionTypes(concrete);
         } else {
           const first = concrete[0];
           const allSame = concrete.every(
@@ -129,10 +134,17 @@ function mergeResultTypes(results: ResultTypes): VariableType {
 function mergeResultParam(types: VariableType[]): VariableType {
   const concrete = types.filter((t) => !isAnyType(t));
   if (concrete.length === 0) return ANY_T;
-  if (concrete.length === 1) return concrete[0];
-  // Deduplicate by structure; collapse identical types.
+  return unionTypes(concrete);
+}
+
+/**
+ * Build a union of distinct types (deduped structurally). Returns the lone
+ * type if there's only one unique entry, avoiding wrapping single types in
+ * a one-element union.
+ */
+function unionTypes(types: VariableType[]): VariableType {
   const seen: VariableType[] = [];
-  for (const t of concrete) {
+  for (const t of types) {
     if (!seen.some((s) => JSON.stringify(s) === JSON.stringify(t))) {
       seen.push(t);
     }

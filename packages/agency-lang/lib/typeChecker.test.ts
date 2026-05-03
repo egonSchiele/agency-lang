@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { TypeChecker, typeCheck } from "./typeChecker/index.js";
-import { AgencyProgram } from "./types.js";
+import { AgencyProgram, VariableType } from "./types.js";
 import { buildCompilationUnit } from "./compilationUnit.js";
 import type { CompilationUnit } from "./compilationUnit.js";
 
@@ -3533,6 +3533,1023 @@ describe("TypeChecker", () => {
       const errors = typeCheck(program).errors;
       expect(errors.length).toBeGreaterThanOrEqual(1);
       expect(errors[0].message).toMatch(/not assignable to parameter type 'string'/);
+    });
+  });
+
+  describe("v2: Result type synth", () => {
+    it("success(x) synths as Result<typeof x, any>", () => {
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "function",
+            functionName: "expectResult",
+            parameters: [
+              {
+                type: "functionParameter",
+                name: "r",
+                typeHint: {
+                  type: "resultType",
+                  successType: { type: "primitiveType", value: "number" },
+                  failureType: { type: "primitiveType", value: "any" },
+                },
+              },
+            ],
+            body: [],
+          },
+          {
+            type: "functionCall",
+            functionName: "expectResult",
+            arguments: [
+              {
+                type: "functionCall",
+                functionName: "success",
+                arguments: [{ type: "number", value: "10" }],
+              },
+            ],
+          },
+        ],
+      };
+      expect(typeCheck(program).errors).toHaveLength(0);
+    });
+
+    it("success(string) is not assignable to Result<number, any>", () => {
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "function",
+            functionName: "expectResult",
+            parameters: [
+              {
+                type: "functionParameter",
+                name: "r",
+                typeHint: {
+                  type: "resultType",
+                  successType: { type: "primitiveType", value: "number" },
+                  failureType: { type: "primitiveType", value: "any" },
+                },
+              },
+            ],
+            body: [],
+          },
+          {
+            type: "functionCall",
+            functionName: "expectResult",
+            arguments: [
+              {
+                type: "functionCall",
+                functionName: "success",
+                arguments: [{ type: "string", segments: [{ type: "text", value: "x" }] }],
+              },
+            ],
+          },
+        ],
+      };
+      const errors = typeCheck(program).errors;
+      expect(errors.length).toBeGreaterThanOrEqual(1);
+      expect(errors[0].message).toMatch(/not assignable to parameter type/);
+    });
+
+    it("failure(msg) synths as Result<any, typeof msg>", () => {
+      // failure("err") → Result<any, string>; should be assignable to Result<any, any>.
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "assignment",
+            variableName: "r",
+            typeHint: {
+              type: "resultType",
+              successType: { type: "primitiveType", value: "any" },
+              failureType: { type: "primitiveType", value: "any" },
+            },
+            value: {
+              type: "functionCall",
+              functionName: "failure",
+              arguments: [{ type: "string", segments: [{ type: "text", value: "oops" }] }],
+            },
+          },
+        ],
+      };
+      expect(typeCheck(program).errors).toHaveLength(0);
+    });
+
+    it("try expr wraps inner return type as Result", () => {
+      // def half(): number { ... } ; const r: Result<number, any> = try half()
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "function",
+            functionName: "half",
+            parameters: [],
+            returnType: { type: "primitiveType", value: "number" },
+            body: [],
+          },
+          {
+            type: "assignment",
+            variableName: "r",
+            typeHint: {
+              type: "resultType",
+              successType: { type: "primitiveType", value: "number" },
+              failureType: { type: "primitiveType", value: "any" },
+            },
+            value: {
+              type: "tryExpression",
+              call: { type: "functionCall", functionName: "half", arguments: [] },
+            },
+          },
+        ],
+      };
+      expect(typeCheck(program).errors).toHaveLength(0);
+    });
+
+    it("try on a Result-returning function passes through", () => {
+      // def safeDiv(): Result<number, any> { ... } ; const r: Result<number, any> = try safeDiv()
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "function",
+            functionName: "safeDiv",
+            parameters: [],
+            returnType: {
+              type: "resultType",
+              successType: { type: "primitiveType", value: "number" },
+              failureType: { type: "primitiveType", value: "any" },
+            },
+            body: [],
+          },
+          {
+            type: "assignment",
+            variableName: "r",
+            typeHint: {
+              type: "resultType",
+              successType: { type: "primitiveType", value: "number" },
+              failureType: { type: "primitiveType", value: "any" },
+            },
+            value: {
+              type: "tryExpression",
+              call: { type: "functionCall", functionName: "safeDiv", arguments: [] },
+            },
+          },
+        ],
+      };
+      expect(typeCheck(program).errors).toHaveLength(0);
+    });
+
+    it("`Result<T> catch T` unwraps to T", () => {
+      // const n: number = success(10) catch 0  -> n is number, no error
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "assignment",
+            variableName: "n",
+            typeHint: { type: "primitiveType", value: "number" },
+            value: {
+              type: "binOpExpression",
+              operator: "catch",
+              left: {
+                type: "functionCall",
+                functionName: "success",
+                arguments: [{ type: "number", value: "10" }],
+              },
+              right: { type: "number", value: "0" },
+            },
+          },
+        ],
+      };
+      expect(typeCheck(program).errors).toHaveLength(0);
+    });
+
+    it("catch flags default arm not assignable to success type", () => {
+      // success(10) catch "wrong" -> expected number, got string
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "assignment",
+            variableName: "n",
+            typeHint: { type: "primitiveType", value: "number" },
+            value: {
+              type: "binOpExpression",
+              operator: "catch",
+              left: {
+                type: "functionCall",
+                functionName: "success",
+                arguments: [{ type: "number", value: "10" }],
+              },
+              right: { type: "string", segments: [{ type: "text", value: "x" }] },
+            },
+          },
+        ],
+      };
+      const errors = typeCheck(program).errors;
+      expect(errors.some((e) => /catch default/.test(e.message))).toBe(true);
+    });
+
+    it("pipe synths as Result wrapping right-hand return type", () => {
+      // def half(x: number): number { ... }
+      // const r: Result<number, any> = success(10) |> half
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "function",
+            functionName: "half",
+            parameters: [
+              { type: "functionParameter", name: "x", typeHint: { type: "primitiveType", value: "number" } },
+            ],
+            returnType: { type: "primitiveType", value: "number" },
+            body: [],
+          },
+          {
+            type: "assignment",
+            variableName: "r",
+            typeHint: {
+              type: "resultType",
+              successType: { type: "primitiveType", value: "number" },
+              failureType: { type: "primitiveType", value: "any" },
+            },
+            value: {
+              type: "binOpExpression",
+              operator: "|>",
+              left: {
+                type: "functionCall",
+                functionName: "success",
+                arguments: [{ type: "number", value: "10" }],
+              },
+              right: { type: "variableName", value: "half" },
+            },
+          },
+        ],
+      };
+      expect(typeCheck(program).errors).toHaveLength(0);
+    });
+
+    it("pipe whose right-hand returns a Result does not double-wrap", () => {
+      // def safeHalf(x: number): Result<number, any> { ... }
+      // const r: Result<number, any> = success(10) |> safeHalf
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "function",
+            functionName: "safeHalf",
+            parameters: [
+              { type: "functionParameter", name: "x", typeHint: { type: "primitiveType", value: "number" } },
+            ],
+            returnType: {
+              type: "resultType",
+              successType: { type: "primitiveType", value: "number" },
+              failureType: { type: "primitiveType", value: "any" },
+            },
+            body: [],
+          },
+          {
+            type: "assignment",
+            variableName: "r",
+            typeHint: {
+              type: "resultType",
+              successType: { type: "primitiveType", value: "number" },
+              failureType: { type: "primitiveType", value: "any" },
+            },
+            value: {
+              type: "binOpExpression",
+              operator: "|>",
+              left: {
+                type: "functionCall",
+                functionName: "success",
+                arguments: [{ type: "number", value: "10" }],
+              },
+              right: { type: "variableName", value: "safeHalf" },
+            },
+          },
+        ],
+      };
+      expect(typeCheck(program).errors).toHaveLength(0);
+    });
+
+    it("pipe with a functionCall RHS resolves to its return type", () => {
+      // const r: Result<string, any> = success(10) |> labeler(?, "tag")
+      // Right is a functionCall (not a bare variableName), so synth flows
+      // through the regular call path rather than the function-reference
+      // shortcut.
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "function",
+            functionName: "labeler",
+            parameters: [
+              { type: "functionParameter", name: "n", typeHint: { type: "primitiveType", value: "number" } },
+              { type: "functionParameter", name: "tag", typeHint: { type: "primitiveType", value: "string" } },
+            ],
+            returnType: { type: "primitiveType", value: "string" },
+            body: [],
+          },
+          {
+            type: "assignment",
+            variableName: "r",
+            typeHint: {
+              type: "resultType",
+              successType: { type: "primitiveType", value: "string" },
+              failureType: { type: "primitiveType", value: "any" },
+            },
+            value: {
+              type: "binOpExpression",
+              operator: "|>",
+              left: {
+                type: "functionCall",
+                functionName: "success",
+                arguments: [{ type: "number", value: "10" }],
+              },
+              right: {
+                type: "functionCall",
+                functionName: "labeler",
+                arguments: [
+                  { type: "placeholder" },
+                  { type: "string", segments: [{ type: "text", value: "tag" }] },
+                ],
+              },
+            },
+          },
+        ],
+      };
+      expect(typeCheck(program).errors).toHaveLength(0);
+    });
+
+    it("function with branched success/failure returns infers as Result<T, E>", () => {
+      // def foo(b: boolean): Result {
+      //   if (b) { return success(10) } else { return failure("err") }
+      // }
+      // Inferred return should be Result<number, string>, so this assignment
+      // accepts and `failure(42)` would NOT (failureType is string).
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "function",
+            functionName: "foo",
+            parameters: [
+              { type: "functionParameter", name: "b", typeHint: { type: "primitiveType", value: "boolean" } },
+            ],
+            body: [
+              {
+                type: "ifElse",
+                condition: { type: "variableName", value: "b" },
+                thenBody: [
+                  {
+                    type: "returnStatement",
+                    value: {
+                      type: "functionCall",
+                      functionName: "success",
+                      arguments: [{ type: "number", value: "10" }],
+                    },
+                  },
+                ],
+                elseBody: [
+                  {
+                    type: "returnStatement",
+                    value: {
+                      type: "functionCall",
+                      functionName: "failure",
+                      arguments: [{ type: "string", segments: [{ type: "text", value: "err" }] }],
+                    },
+                  },
+                ],
+              },
+            ],
+          },
+          {
+            type: "assignment",
+            variableName: "r",
+            typeHint: {
+              type: "resultType",
+              successType: { type: "primitiveType", value: "number" },
+              failureType: { type: "primitiveType", value: "string" },
+            },
+            value: {
+              type: "functionCall",
+              functionName: "foo",
+              arguments: [{ type: "boolean", value: true }],
+            },
+          },
+        ],
+      };
+      expect(typeCheck(program).errors).toHaveLength(0);
+    });
+
+    it("catch on a non-Result still validates default vs left type", () => {
+      // const n: number = 42 catch "wrong"
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "assignment",
+            variableName: "n",
+            typeHint: { type: "primitiveType", value: "number" },
+            value: {
+              type: "binOpExpression",
+              operator: "catch",
+              left: { type: "number", value: "42" },
+              right: { type: "string", segments: [{ type: "text", value: "wrong" }] },
+            },
+          },
+        ],
+      };
+      const errors = typeCheck(program).errors;
+      expect(errors.some((e) => /catch default/.test(e.message))).toBe(true);
+    });
+
+    it("user-defined success/failure functions are rejected as reserved", () => {
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "function",
+            functionName: "success",
+            parameters: [],
+            returnType: { type: "primitiveType", value: "string" },
+            body: [],
+          },
+          {
+            type: "function",
+            functionName: "failure",
+            parameters: [],
+            returnType: { type: "primitiveType", value: "string" },
+            body: [],
+          },
+        ],
+      };
+      const errors = typeCheck(program).errors;
+      expect(
+        errors.some((e) => /'success' is a reserved built-in/.test(e.message)),
+      ).toBe(true);
+      expect(
+        errors.some((e) => /'failure' is a reserved built-in/.test(e.message)),
+      ).toBe(true);
+    });
+
+    it("user-defined Result type alias is rejected as reserved", () => {
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "typeAlias",
+            aliasName: "Result",
+            aliasedType: { type: "primitiveType", value: "string" },
+          },
+        ],
+      };
+      const errors = typeCheck(program).errors;
+      expect(
+        errors.some((e) => /'Result' is a reserved built-in type/.test(e.message)),
+      ).toBe(true);
+    });
+
+    it("pipe synth flows the actual return type (regression: variableName RHS used to be 'any')", () => {
+      // const r: Result<string, any> = success(10) |> labeler
+      // labeler returns number. Pipe should synth as Result<number, any>,
+      // which is NOT assignable to Result<string, any>.
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "function",
+            functionName: "labeler",
+            parameters: [
+              { type: "functionParameter", name: "n", typeHint: { type: "primitiveType", value: "number" } },
+            ],
+            returnType: { type: "primitiveType", value: "number" },
+            body: [],
+          },
+          {
+            type: "assignment",
+            variableName: "r",
+            typeHint: {
+              type: "resultType",
+              successType: { type: "primitiveType", value: "string" },
+              failureType: { type: "primitiveType", value: "any" },
+            },
+            value: {
+              type: "binOpExpression",
+              operator: "|>",
+              left: {
+                type: "functionCall",
+                functionName: "success",
+                arguments: [{ type: "number", value: "10" }],
+              },
+              right: { type: "variableName", value: "labeler" },
+            },
+          },
+        ],
+      };
+      const errors = typeCheck(program).errors;
+      expect(errors.length).toBeGreaterThanOrEqual(1);
+      expect(errors[0].message).toMatch(/not assignable/);
+    });
+  });
+
+  describe("v2: Result type corner cases", () => {
+    const num: VariableType = { type: "primitiveType", value: "number" };
+    const str: VariableType = { type: "primitiveType", value: "string" };
+    const anyT: VariableType = { type: "primitiveType", value: "any" };
+    const result = (s: VariableType, f: VariableType): VariableType => ({
+      type: "resultType",
+      successType: s,
+      failureType: f,
+    });
+
+    it("success({a:1, b:'x'}) synths as Result<{a:number,b:string}, any>", () => {
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "function",
+            functionName: "expect",
+            parameters: [
+              {
+                type: "functionParameter",
+                name: "r",
+                typeHint: result(
+                  {
+                    type: "objectType",
+                    properties: [
+                      { key: "a", value: num },
+                      { key: "b", value: str },
+                    ],
+                  },
+                  anyT,
+                ),
+              },
+            ],
+            body: [],
+          },
+          {
+            type: "functionCall",
+            functionName: "expect",
+            arguments: [
+              {
+                type: "functionCall",
+                functionName: "success",
+                arguments: [
+                  {
+                    type: "agencyObject",
+                    entries: [
+                      { key: "a", value: { type: "number", value: "1" } },
+                      { key: "b", value: { type: "string", segments: [{ type: "text", value: "x" }] } },
+                    ],
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      };
+      expect(typeCheck(program).errors).toHaveLength(0);
+    });
+
+    it("success() with no args fails arity check", () => {
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "functionCall",
+            functionName: "success",
+            arguments: [],
+          },
+        ],
+      };
+      const errors = typeCheck(program).errors;
+      expect(errors.some((e) => /Expected 1 argument\(s\) for 'success'/.test(e.message))).toBe(true);
+    });
+
+    it("all-success returns infer as Result<T, any>", () => {
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "function",
+            functionName: "f",
+            parameters: [
+              { type: "functionParameter", name: "b", typeHint: { type: "primitiveType", value: "boolean" } },
+            ],
+            body: [
+              {
+                type: "ifElse",
+                condition: { type: "variableName", value: "b" },
+                thenBody: [
+                  {
+                    type: "returnStatement",
+                    value: {
+                      type: "functionCall",
+                      functionName: "success",
+                      arguments: [{ type: "number", value: "1" }],
+                    },
+                  },
+                ],
+                elseBody: [
+                  {
+                    type: "returnStatement",
+                    value: {
+                      type: "functionCall",
+                      functionName: "success",
+                      arguments: [{ type: "number", value: "2" }],
+                    },
+                  },
+                ],
+              },
+            ],
+          },
+          {
+            type: "assignment",
+            variableName: "r",
+            typeHint: result(num, anyT),
+            value: {
+              type: "functionCall",
+              functionName: "f",
+              arguments: [{ type: "boolean", value: true }],
+            },
+          },
+        ],
+      };
+      expect(typeCheck(program).errors).toHaveLength(0);
+    });
+
+    it("all-failure returns infer as Result<any, E>", () => {
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "function",
+            functionName: "f",
+            parameters: [
+              { type: "functionParameter", name: "b", typeHint: { type: "primitiveType", value: "boolean" } },
+            ],
+            body: [
+              {
+                type: "ifElse",
+                condition: { type: "variableName", value: "b" },
+                thenBody: [
+                  {
+                    type: "returnStatement",
+                    value: {
+                      type: "functionCall",
+                      functionName: "failure",
+                      arguments: [{ type: "string", segments: [{ type: "text", value: "a" }] }],
+                    },
+                  },
+                ],
+                elseBody: [
+                  {
+                    type: "returnStatement",
+                    value: {
+                      type: "functionCall",
+                      functionName: "failure",
+                      arguments: [{ type: "string", segments: [{ type: "text", value: "b" }] }],
+                    },
+                  },
+                ],
+              },
+            ],
+          },
+          {
+            type: "assignment",
+            variableName: "r",
+            typeHint: result(anyT, str),
+            value: {
+              type: "functionCall",
+              functionName: "f",
+              arguments: [{ type: "boolean", value: true }],
+            },
+          },
+        ],
+      };
+      expect(typeCheck(program).errors).toHaveLength(0);
+    });
+
+    it("mixed Result + non-Result returns infer as a union", () => {
+      // f returns either 5 or success(10). Assigning to number should fail
+      // (union includes Result), but assigning to a union of both should pass.
+      const mixed: VariableType = {
+        type: "unionType",
+        types: [num, result(num, anyT)],
+      };
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "function",
+            functionName: "f",
+            parameters: [
+              { type: "functionParameter", name: "b", typeHint: { type: "primitiveType", value: "boolean" } },
+            ],
+            body: [
+              {
+                type: "ifElse",
+                condition: { type: "variableName", value: "b" },
+                thenBody: [
+                  { type: "returnStatement", value: { type: "number", value: "5" } },
+                ],
+                elseBody: [
+                  {
+                    type: "returnStatement",
+                    value: {
+                      type: "functionCall",
+                      functionName: "success",
+                      arguments: [{ type: "number", value: "10" }],
+                    },
+                  },
+                ],
+              },
+            ],
+          },
+          {
+            type: "assignment",
+            variableName: "r",
+            typeHint: mixed,
+            value: {
+              type: "functionCall",
+              functionName: "f",
+              arguments: [{ type: "boolean", value: true }],
+            },
+          },
+        ],
+      };
+      expect(typeCheck(program).errors).toHaveLength(0);
+    });
+
+    it("Result<number, string> widens to Result<any, any>", () => {
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "function",
+            functionName: "specific",
+            parameters: [],
+            returnType: result(num, str),
+            body: [],
+          },
+          {
+            type: "assignment",
+            variableName: "r",
+            typeHint: result(anyT, anyT),
+            value: { type: "functionCall", functionName: "specific", arguments: [] },
+          },
+        ],
+      };
+      expect(typeCheck(program).errors).toHaveLength(0);
+    });
+
+    it("Result<any, any> 'narrows' to Result<number, string> (any goes both ways)", () => {
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "function",
+            functionName: "wide",
+            parameters: [],
+            returnType: result(anyT, anyT),
+            body: [],
+          },
+          {
+            type: "assignment",
+            variableName: "r",
+            typeHint: result(num, str),
+            value: { type: "functionCall", functionName: "wide", arguments: [] },
+          },
+        ],
+      };
+      expect(typeCheck(program).errors).toHaveLength(0);
+    });
+
+    it("Result<number, string> is not assignable to plain number", () => {
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "function",
+            functionName: "f",
+            parameters: [],
+            returnType: result(num, str),
+            body: [],
+          },
+          {
+            type: "assignment",
+            variableName: "n",
+            typeHint: num,
+            value: { type: "functionCall", functionName: "f", arguments: [] },
+          },
+        ],
+      };
+      const errors = typeCheck(program).errors;
+      expect(errors.some((e) => /not assignable/.test(e.message))).toBe(true);
+    });
+
+    it("type alias Result<number, string> resolves through assignability", () => {
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "typeAlias",
+            aliasName: "MyResult",
+            aliasedType: result(num, str),
+          },
+          {
+            type: "function",
+            functionName: "expect",
+            parameters: [
+              {
+                type: "functionParameter",
+                name: "r",
+                typeHint: { type: "typeAliasVariable", aliasName: "MyResult" },
+              },
+            ],
+            body: [],
+          },
+          {
+            type: "functionCall",
+            functionName: "expect",
+            arguments: [
+              {
+                type: "functionCall",
+                functionName: "success",
+                arguments: [{ type: "number", value: "1" }],
+              },
+            ],
+          },
+        ],
+      };
+      expect(typeCheck(program).errors).toHaveLength(0);
+    });
+
+    it("multi-step pipe chain types as Result<lastReturn>", () => {
+      // success(10) |> half |> half : Result<number, any>
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "function",
+            functionName: "half",
+            parameters: [
+              { type: "functionParameter", name: "x", typeHint: num },
+            ],
+            returnType: num,
+            body: [],
+          },
+          {
+            type: "assignment",
+            variableName: "r",
+            typeHint: result(num, anyT),
+            value: {
+              type: "binOpExpression",
+              operator: "|>",
+              left: {
+                type: "binOpExpression",
+                operator: "|>",
+                left: {
+                  type: "functionCall",
+                  functionName: "success",
+                  arguments: [{ type: "number", value: "10" }],
+                },
+                right: { type: "variableName", value: "half" },
+              },
+              right: { type: "variableName", value: "half" },
+            },
+          },
+        ],
+      };
+      expect(typeCheck(program).errors).toHaveLength(0);
+    });
+
+    it("try on a void-returning function wraps as Result<void, any>", () => {
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "function",
+            functionName: "noop",
+            parameters: [],
+            returnType: { type: "primitiveType", value: "void" },
+            body: [],
+          },
+          {
+            type: "assignment",
+            variableName: "r",
+            typeHint: result({ type: "primitiveType", value: "void" }, anyT),
+            value: {
+              type: "tryExpression",
+              call: { type: "functionCall", functionName: "noop", arguments: [] },
+            },
+          },
+        ],
+      };
+      expect(typeCheck(program).errors).toHaveLength(0);
+    });
+
+    it("Result.value access types as any (until narrowing lands)", () => {
+      // const r: Result<number, any> = success(10)
+      // const n: string = r.value   -- string, not number; .value is `any` so this passes.
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "assignment",
+            variableName: "r",
+            typeHint: result(num, anyT),
+            value: {
+              type: "functionCall",
+              functionName: "success",
+              arguments: [{ type: "number", value: "10" }],
+            },
+          },
+          {
+            type: "assignment",
+            variableName: "n",
+            typeHint: str,
+            value: {
+              type: "valueAccess",
+              base: { type: "variableName", value: "r" },
+              chain: [{ kind: "property", name: "value" }],
+            },
+          },
+        ],
+      };
+      // Result.value escapes to any; assignable to anything.
+      expect(typeCheck(program).errors).toHaveLength(0);
+    });
+
+    it("Result.error / .checkpoint / .args also type as any", () => {
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "assignment",
+            variableName: "r",
+            typeHint: result(num, anyT),
+            value: {
+              type: "functionCall",
+              functionName: "failure",
+              arguments: [{ type: "string", segments: [{ type: "text", value: "x" }] }],
+            },
+          },
+          {
+            type: "assignment",
+            variableName: "e",
+            typeHint: str,
+            value: {
+              type: "valueAccess",
+              base: { type: "variableName", value: "r" },
+              chain: [{ kind: "property", name: "error" }],
+            },
+          },
+          {
+            type: "assignment",
+            variableName: "ck",
+            typeHint: anyT,
+            value: {
+              type: "valueAccess",
+              base: { type: "variableName", value: "r" },
+              chain: [{ kind: "property", name: "checkpoint" }],
+            },
+          },
+        ],
+      };
+      expect(typeCheck(program).errors).toHaveLength(0);
+    });
+
+    it("Result.unknownField still errors", () => {
+      // Sanity: only the known runtime fields escape; typos still fire.
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "assignment",
+            variableName: "r",
+            typeHint: result(num, anyT),
+            value: {
+              type: "functionCall",
+              functionName: "success",
+              arguments: [{ type: "number", value: "10" }],
+            },
+          },
+          {
+            type: "assignment",
+            variableName: "x",
+            typeHint: anyT,
+            value: {
+              type: "valueAccess",
+              base: { type: "variableName", value: "r" },
+              chain: [{ kind: "property", name: "vlaue" }], // typo
+            },
+          },
+        ],
+      };
+      const errors = typeCheck(program).errors;
+      expect(errors.some((e) => /Property 'vlaue'/.test(e.message))).toBe(true);
     });
   });
 });

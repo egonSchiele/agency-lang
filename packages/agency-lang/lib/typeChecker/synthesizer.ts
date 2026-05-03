@@ -1,13 +1,54 @@
 import {
   AgencyNode,
+  Expression,
   VariableType,
   ValueAccess,
 } from "../types.js";
+import type { NamedArgument, SplatExpression } from "../types/dataStructures.js";
 import { formatTypeHint } from "../cli/util.js";
 import { BUILTIN_FUNCTION_TYPES } from "./builtins.js";
 import { isAssignable, resolveType } from "./assignability.js";
 import { TypeCheckerContext } from "./types.js";
 import { Scope } from "./scope.js";
+
+const ANY_T: VariableType = { type: "primitiveType", value: "any" };
+
+/** Names treated as Result constructors (synth parameterizes ResultType from arg). */
+const RESULT_CONSTRUCTORS = new Set<string>(["success", "failure"]);
+
+/** Runtime fields exposed on Success/Failure. See lib/runtime/result.ts. */
+const RESULT_FIELDS = new Set<string>([
+  "value",
+  "error",
+  "checkpoint",
+  "functionName",
+  "args",
+  "retryable",
+  "success",
+]);
+
+/**
+ * `synthType` returns `VariableType | "any"` where `"any"` is the literal
+ * string sentinel meaning "we don't know". When we want to embed that
+ * result inside a structured VariableType (e.g. as ResultType.successType,
+ * which is just `VariableType`), convert the sentinel into the equivalent
+ * primitiveType("any") so the inner field is a real VariableType.
+ */
+function maybeAny(t: VariableType | "any"): VariableType {
+  return t === "any" ? ANY_T : t;
+}
+
+/**
+ * Return the inner expression for a plain positional argument, or undefined
+ * for splat / named args. Synth-time special cases (success/failure) decline
+ * to fire on those forms because the per-arg type isn't directly available.
+ */
+function asPositionalArg(
+  arg: Expression | SplatExpression | NamedArgument,
+): Expression | undefined {
+  if (arg.type === "splat" || arg.type === "namedArgument") return undefined;
+  return arg;
+}
 
 export function synthType(
   expr: AgencyNode,
@@ -40,10 +81,41 @@ export function synthType(
       return synthObject(expr, scope, ctx);
     case "valueAccess":
       return synthValueAccess(expr, scope, ctx);
+    case "tryExpression":
+      return synthTryExpression(expr, scope, ctx);
     default:
       return "any";
   }
 }
+
+/**
+ * `try expr` runs `expr` and converts a thrown error to a `failure(...)`.
+ * If the inner call already returns a Result, pass it through (matches
+ * runtime `__tryCall` behavior). Otherwise wrap as `Result<T, any>`.
+ */
+function synthTryExpression(
+  expr: AgencyNode & { type: "tryExpression" },
+  scope: Scope,
+  ctx: TypeCheckerContext,
+): VariableType | "any" {
+  const inner = synthType(expr.call, scope, ctx);
+  if (inner === "any") return inner;
+  if (inner.type === "resultType") return inner;
+  return { type: "resultType", successType: inner, failureType: ANY_T };
+}
+
+const BOOLEAN_OPS = new Set([
+  "==",
+  "!=",
+  "=~",
+  "!~",
+  "<",
+  ">",
+  "<=",
+  ">=",
+  "&&",
+  "||",
+]);
 
 function synthBinOp(
   expr: AgencyNode & { type: "binOpExpression" },
@@ -51,20 +123,9 @@ function synthBinOp(
   ctx: TypeCheckerContext,
 ): VariableType | "any" {
   const op = expr.operator;
-  if (
-    op === "==" ||
-    op === "!=" ||
-    op === "=~" ||
-    op === "!~" ||
-    op === "<" ||
-    op === ">" ||
-    op === "<=" ||
-    op === ">=" ||
-    op === "&&" ||
-    op === "||"
-  ) {
-    return { type: "primitiveType", value: "boolean" };
-  }
+  if (op === "catch") return synthCatch(expr, scope, ctx);
+  if (op === "|>") return synthPipe(expr, scope, ctx);
+  if (BOOLEAN_OPS.has(op)) return { type: "primitiveType", value: "boolean" };
   if (op === "+") {
     const leftType = synthType(expr.left, scope, ctx);
     const rightType = synthType(expr.right, scope, ctx);
@@ -79,11 +140,92 @@ function synthBinOp(
   return { type: "primitiveType", value: "number" };
 }
 
-function synthFunctionCall(
-  expr: AgencyNode & { type: "functionCall" },
-  _scope: Scope,
+/**
+ * `expr catch default` unwraps a Result: returns the success value if
+ * present, otherwise evaluates `default`. The synthed type is the
+ * success type. (We don't union with default's type — agency runtime
+ * returns the default as-is on failure, so callers get whichever
+ * branch fires; downstream type-checking via checkExpressionsInScope
+ * verifies default is assignable to the success type.)
+ */
+function synthCatch(
+  expr: AgencyNode & { type: "binOpExpression" },
+  scope: Scope,
   ctx: TypeCheckerContext,
 ): VariableType | "any" {
+  const left = synthType(expr.left, scope, ctx);
+  if (left === "any") return left;
+  if (left.type === "resultType") {
+    // `catch` on a non-Result is a no-op at runtime — type is just left.
+    return left.successType;
+  }
+  return left;
+}
+
+/**
+ * `left |> right` chains: left's success value flows into right (a function
+ * call or function reference). The chain short-circuits on failure, so the
+ * result is always a Result wrapping right's return type. If right already
+ * returns a Result, pass it through.
+ *
+ * NOTE: per-arg validation (placeholder slot typing, first-arg compatibility
+ * with left's success type) is not yet implemented — see the deferred items
+ * in the v2 plan.
+ */
+function synthPipe(
+  expr: AgencyNode & { type: "binOpExpression" },
+  scope: Scope,
+  ctx: TypeCheckerContext,
+): VariableType | "any" {
+  const right = synthPipeRhs(expr.right, scope, ctx);
+  if (right === "any") return right;
+  if (right.type === "resultType") return right;
+  return { type: "resultType", successType: right, failureType: ANY_T };
+}
+
+/**
+ * The RHS of `|>` may be a function reference (`variableName`) — synthType
+ * on a bare identifier only consults `scope.lookup`, which returns "any"
+ * for top-level function names. Resolve via functionDefs / nodeDefs /
+ * importedFunctions so `... |> half` types as `Result<halfReturn>` rather
+ * than `any`. Other RHS forms (function calls, etc.) fall through to
+ * regular synth.
+ */
+function synthPipeRhs(
+  rhs: AgencyNode,
+  scope: Scope,
+  ctx: TypeCheckerContext,
+): VariableType | "any" {
+  if (rhs.type === "variableName") {
+    const name = rhs.value;
+    const fnReturn =
+      ctx.functionDefs[name]?.returnType ??
+      ctx.nodeDefs[name]?.returnType ??
+      ctx.inferredReturnTypes[name] ??
+      ctx.importedFunctions[name]?.returnType;
+    if (fnReturn) return fnReturn;
+  }
+  return synthType(rhs, scope, ctx);
+}
+
+function synthFunctionCall(
+  expr: AgencyNode & { type: "functionCall" },
+  scope: Scope,
+  ctx: TypeCheckerContext,
+): VariableType | "any" {
+  // Result constructors: parameterize ResultType from the argument so callers
+  // get `Result<T, any>` (success) or `Result<any, T>` (failure). The names
+  // are reserved at the typechecker level (see RESERVED_FUNCTION_NAMES in
+  // index.ts), so shadowing is impossible — no gating needed here.
+  if (RESULT_CONSTRUCTORS.has(expr.functionName) && expr.arguments.length >= 1) {
+    const inner = asPositionalArg(expr.arguments[0]);
+    if (inner) {
+      const innerType = maybeAny(synthType(inner, scope, ctx));
+      return expr.functionName === "success"
+        ? { type: "resultType", successType: innerType, failureType: ANY_T }
+        : { type: "resultType", successType: ANY_T, failureType: innerType };
+    }
+  }
   const fn = ctx.functionDefs[expr.functionName];
   const graphNode = ctx.nodeDefs[expr.functionName];
   const def = fn ?? graphNode;
@@ -184,6 +326,16 @@ export function synthValueAccess(
 
     switch (element.kind) {
       case "property": {
+        // Result<T, E>: allow access to runtime fields without flow narrowing.
+        // Until isSuccess/isFailure narrowing lands (Tier 2 PR B), users have
+        // no way to safely unwrap a Result. Treating these field accesses as
+        // `any` keeps real Result code from flooding with spurious "property
+        // does not exist" errors. Once narrowing lands, this can be tightened
+        // so .value is only valid on the Success branch and .error/etc. are
+        // only valid on Failure.
+        if (resolved.type === "resultType" && RESULT_FIELDS.has(element.name)) {
+          return "any";
+        }
         if (resolved.type === "unionType") {
           const propTypes: VariableType[] = [];
           for (const member of resolved.types) {

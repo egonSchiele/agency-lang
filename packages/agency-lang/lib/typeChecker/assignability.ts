@@ -39,6 +39,12 @@ export function widenType(vt: VariableType | "any"): VariableType | "any" {
         type: "unionType",
         types: vt.types.map((t) => widenType(t) as VariableType),
       };
+    case "resultType":
+      return {
+        type: "resultType",
+        successType: widenType(vt.successType) as VariableType,
+        failureType: widenType(vt.failureType) as VariableType,
+      };
     default:
       return vt;
   }
@@ -151,6 +157,17 @@ export function isAssignable(
       resolvedSource.elementType,
       resolvedTarget.elementType,
       typeAliases,
+    );
+  }
+
+  // Result<T, E>: covariant in both type parameters.
+  if (
+    resolvedSource.type === "resultType" &&
+    resolvedTarget.type === "resultType"
+  ) {
+    return (
+      isAssignable(resolvedSource.successType, resolvedTarget.successType, typeAliases) &&
+      isAssignable(resolvedSource.failureType, resolvedTarget.failureType, typeAliases)
     );
   }
 

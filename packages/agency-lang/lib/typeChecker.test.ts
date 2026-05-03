@@ -4552,4 +4552,113 @@ describe("TypeChecker", () => {
       expect(errors.some((e) => /Property 'vlaue'/.test(e.message))).toBe(true);
     });
   });
+
+  describe("v2: bang (!) validation", () => {
+    const num: VariableType = { type: "primitiveType", value: "number" };
+    const str: VariableType = { type: "primitiveType", value: "string" };
+    const person: VariableType = {
+      type: "objectType",
+      properties: [{ key: "name", value: str }],
+    };
+    const resultPersonStr: VariableType = {
+      type: "resultType",
+      successType: person,
+      failureType: str,
+    };
+
+    it("declares a validated variable as Result<T, string>", () => {
+      // const x: Person! = { name: "alice" }; expectResult(x)
+      // expectResult takes Result<Person, string>; passing x must typecheck.
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "function",
+            functionName: "expectResult",
+            parameters: [
+              { type: "functionParameter", name: "r", typeHint: resultPersonStr },
+            ],
+            body: [],
+          },
+          {
+            type: "assignment",
+            variableName: "x",
+            typeHint: person,
+            validated: true,
+            value: {
+              type: "agencyObject",
+              entries: [
+                { key: "name", value: { type: "string", segments: [{ type: "text", value: "alice" }] } },
+              ],
+            },
+          },
+          {
+            type: "functionCall",
+            functionName: "expectResult",
+            arguments: [{ type: "variableName", value: "x" }],
+          },
+        ],
+      };
+      expect(typeCheck(program).errors).toHaveLength(0);
+    });
+
+    it("does not rewrap a Result type with bang", () => {
+      // const x: Result<Person, string>! = success({...}); expectResult(x)
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "function",
+            functionName: "expectResult",
+            parameters: [
+              { type: "functionParameter", name: "r", typeHint: resultPersonStr },
+            ],
+            body: [],
+          },
+          {
+            type: "assignment",
+            variableName: "x",
+            typeHint: resultPersonStr,
+            validated: true,
+            value: {
+              type: "functionCall",
+              functionName: "success",
+              arguments: [
+                {
+                  type: "agencyObject",
+                  entries: [
+                    { key: "name", value: { type: "string", segments: [{ type: "text", value: "alice" }] } },
+                  ],
+                },
+              ],
+            },
+          },
+          {
+            type: "functionCall",
+            functionName: "expectResult",
+            arguments: [{ type: "variableName", value: "x" }],
+          },
+        ],
+      };
+      expect(typeCheck(program).errors).toHaveLength(0);
+    });
+
+    it("checks the RHS of a validated assignment against the un-bang'd type", () => {
+      // const x: number! = "not a number" — RHS is checked against `number`.
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "assignment",
+            variableName: "x",
+            typeHint: num,
+            validated: true,
+            value: { type: "string", segments: [{ type: "text", value: "not a number" }] },
+          },
+        ],
+      };
+      const errors = typeCheck(program).errors;
+      expect(errors.some((e) => /not assignable/i.test(e.message))).toBe(true);
+    });
+  });
 });

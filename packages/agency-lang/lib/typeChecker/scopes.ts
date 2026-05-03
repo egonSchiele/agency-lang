@@ -11,6 +11,7 @@ import { GLOBAL_SCOPE_KEY, scopeKey } from "../compilationUnit.js";
 import { getImportedNames } from "../types/importStatement.js";
 import { isAssignable, widenType } from "./assignability.js";
 import { synthType } from "./synthesizer.js";
+import { applyValidationFlag } from "./validation.js";
 import { validateTypeReferences } from "./validate.js";
 import { ScopeInfo, TypeCheckerContext } from "./types.js";
 import { Scope } from "./scope.js";
@@ -101,7 +102,10 @@ export function declareVariable(
       `assignment to '${node.variableName}'`,
       ctx,
     );
-    scope.declare(node.variableName, newType);
+    // The runtime wraps validated values in Result<T, string>, so the
+    // declared scope type must match — otherwise downstream property accesses
+    // see `T` instead of the actual `Result<T, string>` and silently miscompile.
+    scope.declare(node.variableName, applyValidationFlag(newType, node.validated));
     return;
   }
 

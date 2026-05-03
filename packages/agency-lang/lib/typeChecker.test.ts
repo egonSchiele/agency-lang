@@ -4643,6 +4643,48 @@ describe("TypeChecker", () => {
       expect(typeCheck(program).errors).toHaveLength(0);
     });
 
+    it("exposes a function's bang-annotated return as Result at call sites", () => {
+      // def getPerson(): Person! { return { name: "alice" } }
+      // expectResult(getPerson())  // expectResult: Result<Person, string>
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "function",
+            functionName: "getPerson",
+            parameters: [],
+            returnType: person,
+            returnTypeValidated: true,
+            body: [
+              {
+                type: "returnStatement",
+                value: {
+                  type: "agencyObject",
+                  entries: [
+                    { key: "name", value: { type: "string", segments: [{ type: "text", value: "alice" }] } },
+                  ],
+                },
+              },
+            ],
+          },
+          {
+            type: "function",
+            functionName: "expectResult",
+            parameters: [
+              { type: "functionParameter", name: "r", typeHint: resultPersonStr },
+            ],
+            body: [],
+          },
+          {
+            type: "functionCall",
+            functionName: "expectResult",
+            arguments: [{ type: "functionCall", functionName: "getPerson", arguments: [] }],
+          },
+        ],
+      };
+      expect(typeCheck(program).errors).toHaveLength(0);
+    });
+
     it("checks the RHS of a validated assignment against the un-bang'd type", () => {
       // const x: number! = "not a number" — RHS is checked against `number`.
       const program: AgencyProgram = {

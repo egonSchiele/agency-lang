@@ -8,6 +8,7 @@ import type { NamedArgument, SplatExpression } from "../types/dataStructures.js"
 import { formatTypeHint } from "../cli/util.js";
 import { BUILTIN_FUNCTION_TYPES } from "./builtins.js";
 import { isAssignable, resolveType } from "./assignability.js";
+import { effectiveReturnType } from "./validation.js";
 import { TypeCheckerContext } from "./types.js";
 import { Scope } from "./scope.js";
 
@@ -198,11 +199,14 @@ function synthPipeRhs(
 ): VariableType | "any" {
   if (rhs.type === "variableName") {
     const name = rhs.value;
+    const def = ctx.functionDefs[name] ?? ctx.nodeDefs[name];
+    const importedSig = ctx.importedFunctions[name];
+    // Pull the caller-visible return type (with `!` already applied) so
+    // pipes inherit Result wrapping like direct calls do.
     const fnReturn =
-      ctx.functionDefs[name]?.returnType ??
-      ctx.nodeDefs[name]?.returnType ??
+      (def && effectiveReturnType(def)) ??
       ctx.inferredReturnTypes[name] ??
-      ctx.importedFunctions[name]?.returnType;
+      (importedSig && effectiveReturnType(importedSig));
     if (fnReturn) return fnReturn;
   }
   return synthType(rhs, scope, ctx);
@@ -229,7 +233,7 @@ function synthFunctionCall(
   const fn = ctx.functionDefs[expr.functionName];
   const graphNode = ctx.nodeDefs[expr.functionName];
   const def = fn ?? graphNode;
-  if (def?.returnType) return def.returnType;
+  if (def?.returnType) return effectiveReturnType(def)!;
   if (expr.functionName in ctx.inferredReturnTypes) {
     return ctx.inferredReturnTypes[expr.functionName];
   }
@@ -238,7 +242,7 @@ function synthFunctionCall(
   }
   if (!def) {
     const imported = ctx.importedFunctions[expr.functionName];
-    if (imported?.returnType) return imported.returnType;
+    if (imported?.returnType) return effectiveReturnType(imported)!;
     if (expr.functionName in BUILTIN_FUNCTION_TYPES) {
       return BUILTIN_FUNCTION_TYPES[expr.functionName].returnType;
     }

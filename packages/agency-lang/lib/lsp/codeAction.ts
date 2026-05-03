@@ -47,6 +47,28 @@ export function getCodeActions(
   return actions;
 }
 
+/**
+ * Build an edit that either merges into an existing import line or inserts a new one.
+ * Scans the document for `from "modulePath"` and appends to the existing `{ ... }`.
+ */
+function buildImportEdit(
+  symbolName: string,
+  modulePath: string,
+  doc: TextDocument,
+): TextEdit {
+  const lines = doc.getText().split("\n");
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    if (line.includes(`from "${modulePath}"`) || line.includes(`from '${modulePath}'`)) {
+      const braceIdx = line.lastIndexOf("}");
+      if (braceIdx !== -1) {
+        return TextEdit.insert({ line: i, character: braceIdx }, `, ${symbolName}`);
+      }
+    }
+  }
+  return TextEdit.insert({ line: 0, character: 0 }, `import { ${symbolName} } from "${modulePath}"\n`);
+}
+
 function suggestMissingImport(
   diagnostic: Diagnostic,
   doc: TextDocument,
@@ -63,7 +85,6 @@ function suggestMissingImport(
     const sym = fileSymbols[symbolName];
     if (!sym) continue;
 
-    // Only suggest exported symbols
     if ("exported" in sym && !sym.exported) continue;
 
     const docPath = uriToPath(doc.uri);
@@ -72,18 +93,12 @@ function suggestMissingImport(
     let importPath = path.relative(path.dirname(docPath), filePath).split(path.sep).join("/");
     if (!importPath.startsWith(".")) importPath = "./" + importPath;
 
-    const importLine = `import { ${symbolName} } from "${importPath}"\n`;
+    const edit = buildImportEdit(symbolName, importPath, doc);
     return {
       title: `Add import from '${importPath}'`,
       kind: CodeActionKind.QuickFix,
       diagnostics: [diagnostic],
-      edit: {
-        changes: {
-          [doc.uri]: [
-            TextEdit.insert({ line: 0, character: 0 }, importLine),
-          ],
-        },
-      },
+      edit: { changes: { [doc.uri]: [edit] } },
     };
   }
 
@@ -102,22 +117,18 @@ function suggestStdlibImport(
   const modulePath = index[symbolName];
   if (!modulePath) return null;
 
-  // Check if this import already exists in the document
+  // Check if symbol is already imported from this module
   const text = doc.getText();
-  if (text.includes(`from "${modulePath}"`)) return null;
+  if (text.match(new RegExp(`import\\s*\\{[^}]*\\b${symbolName}\\b[^}]*\\}\\s*from\\s*["']${modulePath.replace("::", "::")}["']`))) {
+    return null;
+  }
 
-  const importLine = `import { ${symbolName} } from "${modulePath}"\n`;
+  const edit = buildImportEdit(symbolName, modulePath, doc);
   return {
     title: `Add import from '${modulePath}'`,
     kind: CodeActionKind.QuickFix,
     diagnostics: [diagnostic],
     isPreferred: true,
-    edit: {
-      changes: {
-        [doc.uri]: [
-          TextEdit.insert({ line: 0, character: 0 }, importLine),
-        ],
-      },
-    },
+    edit: { changes: { [doc.uri]: [edit] } },
   };
 }

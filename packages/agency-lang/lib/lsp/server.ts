@@ -47,7 +47,7 @@ export function startServer(): void {
       capabilities: {
         textDocumentSync: TextDocumentSyncKind.Incremental,
         hoverProvider: true,
-        completionProvider: { triggerCharacters: ["."] },
+        completionProvider: { triggerCharacters: [".", "/", ":"] },
         signatureHelpProvider: { triggerCharacters: ["(", ","] },
         definitionProvider: true,
         typeDefinitionProvider: true,
@@ -183,6 +183,7 @@ export function startServer(): void {
       character: params.position.character,
       scopes: state.scopes,
       program: state.program,
+      fsPath: uriToPath(doc.uri),
     };
     return CompletionList.create(getCompletions(state.info, context), false);
   });

@@ -60,7 +60,7 @@ describe("getCompletions", () => {
     const info = buildCompilationUnit(program, new SymbolTable());
     const { scopes } = typeCheck(program, {}, info);
     // Cursor at line 3, character 4 (right after "x.")
-    const items = getCompletions(info, { source, line: 3, character: 4, scopes, program });
+    const items = getCompletions(info, { source, line: 3, character: 4, scopes, program, fsPath: "/test.agency" });
     const names = items.map((i) => i.label);
     expect(names).toContain("name");
     expect(names).toContain("age");
@@ -75,6 +75,18 @@ describe("getCompletions", () => {
     expect(defSnippet).toBeDefined();
     expect(defSnippet!.insertTextFormat).toBe(InsertTextFormat.Snippet);
     expect(defSnippet!.insertText).toContain("${1:");
+  });
+
+  it("suggests stdlib modules in import path", () => {
+    const source = 'import { map } from "';
+    const program = parse("node main() { }");
+    const info = buildCompilationUnit(program, new SymbolTable());
+    const { scopes } = typeCheck(program, {}, info);
+    // Cursor right after the opening quote in from "
+    const items = getCompletions(info, { source, line: 0, character: 21, scopes, program, fsPath: "/test.agency" });
+    const stdArray = items.find((i) => i.label === "std::array");
+    expect(stdArray).toBeDefined();
+    expect(stdArray!.kind).toBe(CompletionItemKind.Module);
   });
 
   it("returns empty array for empty program", () => {

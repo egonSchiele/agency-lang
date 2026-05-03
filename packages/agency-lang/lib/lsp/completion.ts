@@ -1,3 +1,5 @@
+import path from "path";
+import fs from "fs";
 import { CompletionItem, CompletionItemKind, InsertTextFormat } from "vscode-languageserver-protocol";
 import { CompilationUnit, GLOBAL_SCOPE_KEY } from "../compilationUnit.js";
 import { formatTypeHint } from "../cli/util.js";
@@ -7,6 +9,7 @@ import type { ScopeInfo } from "../typeChecker/types.js";
 import { resolveTypeAtPosition } from "./typeResolution.js";
 import { findContainingScope } from "./scopeResolution.js";
 import { offsetOfLine } from "./util.js";
+import { getStdlibFiles } from "../importPaths.js";
 
 function formatParams(params: FunctionParameter[]): string {
   return params
@@ -25,10 +28,14 @@ export type CompletionContext = {
   character: number;
   scopes: ScopeInfo[];
   program: AgencyProgram;
+  fsPath: string;
 };
 
 export function getCompletions(info: CompilationUnit, context?: CompletionContext): CompletionItem[] {
   if (context) {
+    const importItems = getImportPathCompletions(context);
+    if (importItems) return importItems;
+
     const dotItems = getDotCompletions(context, info);
     if (dotItems) return dotItems;
   }
@@ -216,6 +223,84 @@ const SNIPPETS: CompletionItem[] = [
     detail: "Pause execution for approval",
   },
 ];
+
+// Lazily cached stdlib module names
+let stdlibModules: string[] | null = null;
+
+function getStdlibModules(): string[] {
+  if (stdlibModules) return stdlibModules;
+  stdlibModules = getStdlibFiles().map((f) => "std::" + path.basename(f, ".agency"));
+  return stdlibModules;
+}
+
+function getImportPathCompletions(context: CompletionContext): CompletionItem[] | null {
+  const { source, line, character, fsPath } = context;
+  const currentLine = source.split("\n")[line] ?? "";
+
+  // Detect if cursor is inside an import path string: from "...|"
+  const beforeCursor = currentLine.slice(0, character);
+  const importMatch = beforeCursor.match(/from\s+["']([^"']*)$/);
+  if (!importMatch) return null;
+
+  const partial = importMatch[1];
+  const items: CompletionItem[] = [];
+
+  // Range to replace: from the start of the partial to the cursor
+  const replaceStart = character - partial.length;
+  const range = {
+    start: { line, character: replaceStart },
+    end: { line, character },
+  };
+
+  // Suggest std:: modules (only after the user starts typing)
+  if (partial.length > 0 && "std::".startsWith(partial.slice(0, 5))) {
+    for (const mod of getStdlibModules()) {
+      if (mod.startsWith(partial)) {
+        items.push({
+          label: mod,
+          kind: CompletionItemKind.Module,
+          detail: "Standard library",
+          textEdit: { range, newText: mod },
+        });
+      }
+    }
+  }
+
+  // Suggest relative .agency files (after typing "." or "./")
+  if (partial.startsWith(".")) {
+    const dir = path.dirname(fsPath);
+    const relPrefix = partial || "./";
+    const resolvedDir = path.resolve(dir, relPrefix.endsWith("/") ? relPrefix : path.dirname(relPrefix));
+
+    try {
+      const entries = fs.readdirSync(resolvedDir, { withFileTypes: true });
+      for (const entry of entries) {
+        if (entry.name.startsWith(".")) continue;
+
+        if (entry.isDirectory()) {
+          const relPath = "./" + path.relative(dir, path.join(resolvedDir, entry.name)).split(path.sep).join("/") + "/";
+          items.push({
+            label: relPath,
+            kind: CompletionItemKind.Folder,
+            textEdit: { range, newText: relPath },
+          });
+        } else if (entry.name.endsWith(".agency") && path.join(resolvedDir, entry.name) !== fsPath) {
+          const relPath = "./" + path.relative(dir, path.join(resolvedDir, entry.name)).split(path.sep).join("/");
+          items.push({
+            label: relPath,
+            kind: CompletionItemKind.File,
+            detail: "Agency file",
+            textEdit: { range, newText: relPath },
+          });
+        }
+      }
+    } catch {
+      // Directory doesn't exist or not readable
+    }
+  }
+
+  return items.length > 0 ? items : null;
+}
 
 function getDotCompletions(context: CompletionContext, info: CompilationUnit): CompletionItem[] | null {
   const { source, line, character, scopes, program } = context;

@@ -18,6 +18,7 @@ import * as path from "path";
 import { _parseAgency } from "@/parser.js";
 import { TypescriptPreprocessor } from "@/preprocessors/typescriptPreprocessor.js";
 import { buildCompilationUnit } from "@/compilationUnit.js";
+import { SymbolTable } from "@/symbolTable.js";
 import { formatErrors, typeCheck } from "@/typeChecker/index.js";
 import { Command } from "commander";
 import * as fs from "fs";
@@ -412,9 +413,16 @@ export function createProgram(deps: CliDependencies = {}): Command {
     .action(async (inputs: string[], opts: { strict?: boolean }) => {
       const config = getConfig();
       let hasErrors = false;
-      const runTypeCheck = (contents: string) => {
+      const runTypeCheck = (contents: string, filePath?: string) => {
         const parsedProgram = parse(contents, config);
-        const info = buildCompilationUnit(parsedProgram);
+        const symbolTable = filePath
+          ? SymbolTable.build(path.resolve(filePath), config)
+          : undefined;
+        const info = buildCompilationUnit(
+          parsedProgram,
+          symbolTable,
+          filePath ? path.resolve(filePath) : undefined,
+        );
         const { errors } = typeCheck(parsedProgram, config, info);
         if (errors.length > 0) {
           console.error(formatErrors(errors));
@@ -430,7 +438,7 @@ export function createProgram(deps: CliDependencies = {}): Command {
       } else {
         for (const input of inputs) {
           const contents = readFile(input);
-          runTypeCheck(contents);
+          runTypeCheck(contents, input);
         }
       }
       if (hasErrors) process.exit(1);

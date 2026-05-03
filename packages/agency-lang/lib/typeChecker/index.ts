@@ -25,6 +25,7 @@ export class TypeChecker {
   private currentScopeKey: string = GLOBAL_SCOPE_KEY;
   private functionDefs: Record<string, FunctionDefinition> = {};
   private nodeDefs: Record<string, GraphNodeDefinition> = {};
+  private importedFunctions: CompilationUnit["importedFunctions"] = {};
   private errors: TypeCheckError[] = [];
   private inferredReturnTypes: Record<string, VariableType | "any"> = {};
   private inferringReturnType = new Set<string>();
@@ -38,6 +39,7 @@ export class TypeChecker {
     this.nodeDefs = Object.fromEntries(
       resolved.graphNodes.map((n) => [n.nodeName, n]),
     );
+    this.importedFunctions = { ...resolved.importedFunctions };
   }
 
   private get typeAliases(): Record<string, VariableType> {
@@ -61,6 +63,7 @@ export class TypeChecker {
       currentScopeKey: this.currentScopeKey,
       functionDefs: this.functionDefs,
       nodeDefs: this.nodeDefs,
+      importedFunctions: this.importedFunctions,
       errors: this.errors,
       inferredReturnTypes: this.inferredReturnTypes,
       inferringReturnType: this.inferringReturnType,
@@ -83,6 +86,21 @@ export class TypeChecker {
           validateTypeReferences(aliasedType, name, this.typeAliases, this.errors);
         }
       });
+    }
+
+    // 1b. Warn on local definitions that shadow imported functions/nodes.
+    for (const localName of [
+      ...Object.keys(this.functionDefs),
+      ...Object.keys(this.nodeDefs),
+    ]) {
+      if (this.importedFunctions[localName]) {
+        const def =
+          this.functionDefs[localName] ?? this.nodeDefs[localName];
+        this.errors.push({
+          message: `'${localName}' shadows an imported function.`,
+          loc: def.loc,
+        });
+      }
     }
 
     // 2. Infer return types

@@ -70,7 +70,10 @@ export type CompilationUnit = {
   importedNodes: ImportNodeStatement[];
   importStatements: ImportStatement[];
   safeFunctions: Record<string, boolean>;
-  importedFunctions: Record<string, { parameters: FunctionParameter[] }>;
+  importedFunctions: Record<
+    string,
+    { parameters: FunctionParameter[]; returnType: VariableType | null }
+  >;
   classDefinitions: Record<string, ClassDefinition>;
 };
 
@@ -137,7 +140,7 @@ export function buildCompilationUnit(
           if (node.isAgencyImport) {
             for (const name of nameType.importedNames) {
               const localName = nameType.aliases[name] ?? name;
-              unit.importedFunctions[localName] = { parameters: [] };
+              unit.importedFunctions[localName] = { parameters: [], returnType: null };
             }
           }
           for (const safeName of nameType.safeNames) {
@@ -168,6 +171,7 @@ export function buildCompilationUnit(
           unit.importedFunctions[r.localName]
         ) {
           unit.importedFunctions[r.localName].parameters = r.symbol.parameters;
+          unit.importedFunctions[r.localName].returnType = r.symbol.returnType;
         }
         if (r.symbol.kind === "function" && r.symbol.safe) {
           unit.safeFunctions[r.localName] = true;

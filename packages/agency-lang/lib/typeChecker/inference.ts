@@ -132,9 +132,9 @@ function mergeResultTypes(results: ResultTypes): VariableType {
 }
 
 function mergeResultParam(types: VariableType[]): VariableType {
-  const concrete = types.filter((t) => !isAnyType(t));
-  if (concrete.length === 0) return ANY_T;
-  return unionTypes(concrete);
+  const hasAny = types.some((t) => isAnyType(t));
+  if (hasAny) return ANY_T;
+  return unionTypes(types);
 }
 
 /**

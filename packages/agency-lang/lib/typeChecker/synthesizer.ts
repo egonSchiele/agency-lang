@@ -34,7 +34,7 @@ const RESULT_FIELDS = new Set<string>([
  * which is just `VariableType`), convert the sentinel into the equivalent
  * primitiveType("any") so the inner field is a real VariableType.
  */
-function asVarType(t: VariableType | "any"): VariableType {
+function maybeAny(t: VariableType | "any"): VariableType {
   return t === "any" ? ANY_T : t;
 }
 
@@ -99,7 +99,7 @@ function synthTryExpression(
   ctx: TypeCheckerContext,
 ): VariableType | "any" {
   const inner = synthType(expr.call, scope, ctx);
-  if (inner === "any") return "any";
+  if (inner === "any") return inner;
   if (inner.type === "resultType") return inner;
   return { type: "resultType", successType: inner, failureType: ANY_T };
 }
@@ -154,12 +154,12 @@ function synthCatch(
   ctx: TypeCheckerContext,
 ): VariableType | "any" {
   const left = synthType(expr.left, scope, ctx);
-  if (left === "any") return "any";
-  if (left.type !== "resultType") {
+  if (left === "any") return left;
+  if (left.type === "resultType") {
     // `catch` on a non-Result is a no-op at runtime — type is just left.
-    return left;
+    return left.successType;
   }
-  return left.successType;
+  return left;
 }
 
 /**
@@ -178,7 +178,7 @@ function synthPipe(
   ctx: TypeCheckerContext,
 ): VariableType | "any" {
   const right = synthPipeRhs(expr.right, scope, ctx);
-  if (right === "any") return "any";
+  if (right === "any") return right;
   if (right.type === "resultType") return right;
   return { type: "resultType", successType: right, failureType: ANY_T };
 }
@@ -229,7 +229,7 @@ function synthFunctionCall(
   ) {
     const inner = asPositionalArg(expr.arguments[0]);
     if (inner) {
-      const innerType = asVarType(synthType(inner, scope, ctx));
+      const innerType = maybeAny(synthType(inner, scope, ctx));
       return expr.functionName === "success"
         ? { type: "resultType", successType: innerType, failureType: ANY_T }
         : { type: "resultType", successType: ANY_T, failureType: innerType };

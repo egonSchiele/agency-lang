@@ -1,8 +1,12 @@
 import {
   AgencyNode,
+  FunctionDefinition,
+  GraphNodeDefinition,
+  VariableType,
   functionScope,
   nodeScope,
 } from "../types.js";
+import type { SourceLocation } from "../types/base.js";
 import { GLOBAL_SCOPE_KEY, scopeKey } from "../compilationUnit.js";
 import { getImportedNames } from "../types/importStatement.js";
 import { isAssignable, widenType } from "./assignability.js";
@@ -27,43 +31,39 @@ export function buildScopes(ctx: TypeCheckerContext): ScopeInfo[] {
     scopeKey: GLOBAL_SCOPE_KEY,
   });
 
-  for (const fn of Object.values(ctx.functionDefs)) {
-    const sk = scopeKey(functionScope(fn.functionName));
-    const fnScope = new Scope(sk);
-    for (const param of fn.parameters) {
-      fnScope.declare(param.name, param.typeHint ?? "any");
-    }
-    ctx.withScope(sk, () => {
-      walkScopeBody(fn.body, fnScope, ctx);
-    });
-    scopes.push({
-      scope: fnScope,
-      body: fn.body,
-      name: fn.functionName,
-      scopeKey: sk,
-      returnType: fn.returnType,
-    });
-  }
-
-  for (const node of Object.values(ctx.nodeDefs)) {
-    const sk = scopeKey(nodeScope(node.nodeName));
-    const ns = new Scope(sk);
-    for (const param of node.parameters) {
-      ns.declare(param.name, param.typeHint ?? "any");
-    }
-    ctx.withScope(sk, () => {
-      walkScopeBody(node.body, ns, ctx);
-    });
-    scopes.push({
-      scope: ns,
-      body: node.body,
-      name: node.nodeName,
-      scopeKey: sk,
-      returnType: node.returnType,
-    });
+  for (const def of [
+    ...Object.values(ctx.functionDefs),
+    ...Object.values(ctx.nodeDefs),
+  ]) {
+    scopes.push(buildDefScope(def, ctx));
   }
 
   return scopes;
+}
+
+function buildDefScope(
+  def: FunctionDefinition | GraphNodeDefinition,
+  ctx: TypeCheckerContext,
+): ScopeInfo {
+  const name = def.type === "function" ? def.functionName : def.nodeName;
+  const sk =
+    def.type === "function"
+      ? scopeKey(functionScope(def.functionName))
+      : scopeKey(nodeScope(def.nodeName));
+  const scope = new Scope(sk);
+  for (const param of def.parameters) {
+    scope.declare(param.name, param.typeHint ?? "any");
+  }
+  ctx.withScope(sk, () => {
+    walkScopeBody(def.body, scope, ctx);
+  });
+  return {
+    scope,
+    body: def.body,
+    name,
+    scopeKey: sk,
+    returnType: def.returnType,
+  };
 }
 
 /**
@@ -81,30 +81,18 @@ export function declareVariable(
 ): void {
   if (node.type !== "assignment") return;
   const newType = node.typeHint;
-  const typeAliases = ctx.getTypeAliases();
   const existingType = scope.lookup(node.variableName);
 
   if (newType) {
     validateTypeReferences(
       newType,
       node.variableName,
-      typeAliases,
+      ctx.getTypeAliases(),
       ctx.errors,
       node.loc,
     );
-    // Re-declaration with an incompatible annotation.
-    if (
-      existingType &&
-      existingType !== "any" &&
-      !isAssignable(newType, existingType, typeAliases)
-    ) {
-      ctx.errors.push({
-        message: `Type '${formatTypeHint(newType)}' is not assignable to type '${formatTypeHint(existingType)}'.`,
-        variableName: node.variableName,
-        expectedType: formatTypeHint(existingType),
-        actualType: formatTypeHint(newType),
-        loc: node.loc,
-      });
+    if (existingType) {
+      reportNotAssignable(ctx, node.variableName, newType, existingType, node.loc);
     }
     checkType(
       node.value,
@@ -114,41 +102,52 @@ export function declareVariable(
       ctx,
     );
     scope.declare(node.variableName, newType);
-  } else if (existingType) {
-    // Unannotated reassignment to an existing binding: value must match
-    // the binding's current type.
-    const valueType = synthType(node.value, scope, ctx);
-    if (
-      valueType !== "any" &&
-      existingType !== "any" &&
-      !isAssignable(valueType, existingType, typeAliases)
-    ) {
-      ctx.errors.push({
-        message: `Type '${formatTypeHint(valueType)}' is not assignable to type '${formatTypeHint(existingType)}'.`,
-        variableName: node.variableName,
-        expectedType: formatTypeHint(existingType),
-        actualType: formatTypeHint(valueType),
-        loc: node.loc,
-      });
-    }
-  } else {
-    // First declaration with no annotation — infer.
-    if (ctx.config.strictTypes) {
-      ctx.errors.push({
-        message: `Variable '${node.variableName}' has no type annotation (strict mode).`,
-        variableName: node.variableName,
-        loc: node.loc,
-      });
-    }
-    const inferred = synthType(node.value, scope, ctx);
-    scope.declare(node.variableName, widenType(inferred));
+    return;
   }
+
+  if (existingType) {
+    const valueType = synthType(node.value, scope, ctx);
+    reportNotAssignable(ctx, node.variableName, valueType, existingType, node.loc);
+    return;
+  }
+
+  if (ctx.config.strictTypes) {
+    ctx.errors.push({
+      message: `Variable '${node.variableName}' has no type annotation (strict mode).`,
+      variableName: node.variableName,
+      loc: node.loc,
+    });
+  }
+  const inferred = synthType(node.value, scope, ctx);
+  scope.declare(node.variableName, widenType(inferred));
+}
+
+function reportNotAssignable(
+  ctx: TypeCheckerContext,
+  variableName: string,
+  actual: VariableType | "any",
+  expected: VariableType | "any",
+  loc: SourceLocation | undefined,
+): void {
+  if (actual === "any" || expected === "any") return;
+  if (isAssignable(actual, expected, ctx.getTypeAliases())) return;
+  ctx.errors.push({
+    message: `Type '${formatTypeHint(actual)}' is not assignable to type '${formatTypeHint(expected)}'.`,
+    variableName,
+    expectedType: formatTypeHint(expected),
+    actualType: formatTypeHint(actual),
+    loc,
+  });
 }
 
 /**
  * Walk a body of statements and declare every binding into the given scope.
  * Recurses into nested blocks (if/while/messageThread) using the same scope,
  * which preserves today's function-scoped semantics.
+ *
+ * NOTE: many AST node types that contain bodies (match, handle, parallel,
+ * seq, schema, class methods, blocks) are NOT yet handled here. Declarations
+ * inside those will be invisible to the typechecker. See follow-up issue.
  */
 export function walkScopeBody(
   nodes: AgencyNode[],
@@ -156,39 +155,41 @@ export function walkScopeBody(
   ctx: TypeCheckerContext,
 ): void {
   for (const node of nodes) {
-    if (node.type === "assignment") {
-      declareVariable(node, scope, ctx);
-    } else if (node.type === "importStatement") {
-      for (const importName of node.importedNames) {
-        for (const name of getImportedNames(importName)) {
-          scope.declare(name, "any");
+    switch (node.type) {
+      case "assignment":
+        declareVariable(node, scope, ctx);
+        break;
+      case "importStatement":
+        for (const importName of node.importedNames) {
+          for (const name of getImportedNames(importName)) {
+            scope.declare(name, "any");
+          }
         }
+        break;
+      case "forLoop": {
+        const iterableType = synthType(node.iterable, scope, ctx);
+        if (iterableType !== "any" && iterableType.type === "arrayType") {
+          scope.declare(node.itemVar, iterableType.elementType);
+        } else {
+          scope.declare(node.itemVar, "any");
+        }
+        if (node.indexVar) {
+          scope.declare(node.indexVar, {
+            type: "primitiveType",
+            value: "number",
+          });
+        }
+        walkScopeBody(node.body, scope, ctx);
+        break;
       }
-    } else if (node.type === "forLoop") {
-      const iterableType = synthType(node.iterable, scope, ctx);
-      if (iterableType !== "any" && iterableType.type === "arrayType") {
-        scope.declare(node.itemVar, iterableType.elementType);
-      } else {
-        scope.declare(node.itemVar, "any");
-      }
-      if (node.indexVar) {
-        scope.declare(node.indexVar, {
-          type: "primitiveType",
-          value: "number",
-        });
-      }
-      walkScopeBody(node.body, scope, ctx);
-    }
-  }
-
-  for (const node of nodes) {
-    if (node.type === "ifElse") {
-      walkScopeBody(node.thenBody, scope, ctx);
-      if (node.elseBody) walkScopeBody(node.elseBody, scope, ctx);
-    } else if (node.type === "whileLoop") {
-      walkScopeBody(node.body, scope, ctx);
-    } else if (node.type === "messageThread") {
-      walkScopeBody(node.body, scope, ctx);
+      case "ifElse":
+        walkScopeBody(node.thenBody, scope, ctx);
+        if (node.elseBody) walkScopeBody(node.elseBody, scope, ctx);
+        break;
+      case "whileLoop":
+      case "messageThread":
+        walkScopeBody(node.body, scope, ctx);
+        break;
     }
   }
 }

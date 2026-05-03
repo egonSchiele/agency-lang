@@ -4685,6 +4685,122 @@ describe("TypeChecker", () => {
       expect(typeCheck(program).errors).toHaveLength(0);
     });
 
+    it("errors when a function has validated params and an explicit non-Result return type", () => {
+      // def greet(name: string!): number { return 5 }
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "function",
+            functionName: "greet",
+            parameters: [
+              { type: "functionParameter", name: "n", typeHint: str, validated: true },
+            ],
+            returnType: num,
+            body: [{ type: "returnStatement", value: { type: "number", value: "5" } }],
+          },
+        ],
+      };
+      const errors = typeCheck(program).errors;
+      expect(errors.some((e) => /validated parameters/i.test(e.message))).toBe(true);
+    });
+
+    it("infers Result<T, string> when validated params + no return annotation", () => {
+      // def greet(name: string!) { return 5 }
+      // expectResult(greet("alice"))  // expectResult: Result<number, string>
+      const resultNumStr: VariableType = {
+        type: "resultType",
+        successType: num,
+        failureType: str,
+      };
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "function",
+            functionName: "greet",
+            parameters: [
+              { type: "functionParameter", name: "n", typeHint: str, validated: true },
+            ],
+            body: [{ type: "returnStatement", value: { type: "number", value: "5" } }],
+          },
+          {
+            type: "function",
+            functionName: "expectResult",
+            parameters: [
+              { type: "functionParameter", name: "r", typeHint: resultNumStr },
+            ],
+            body: [],
+          },
+          {
+            type: "functionCall",
+            functionName: "expectResult",
+            arguments: [
+              {
+                type: "functionCall",
+                functionName: "greet",
+                arguments: [{ type: "string", segments: [{ type: "text", value: "alice" }] }],
+              },
+            ],
+          },
+        ],
+      };
+      expect(typeCheck(program).errors).toHaveLength(0);
+    });
+
+    it("accepts a function with validated params and explicit Result return type", () => {
+      const resultNum: VariableType = {
+        type: "resultType",
+        successType: num,
+        failureType: { type: "primitiveType", value: "any" },
+      };
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "function",
+            functionName: "greet",
+            parameters: [
+              { type: "functionParameter", name: "n", typeHint: str, validated: true },
+            ],
+            returnType: resultNum,
+            body: [
+              {
+                type: "returnStatement",
+                value: {
+                  type: "functionCall",
+                  functionName: "success",
+                  arguments: [{ type: "number", value: "5" }],
+                },
+              },
+            ],
+          },
+        ],
+      };
+      expect(typeCheck(program).errors).toHaveLength(0);
+    });
+
+    it("accepts a function with validated params and bang return type", () => {
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "function",
+            functionName: "greet",
+            parameters: [
+              { type: "functionParameter", name: "n", typeHint: str, validated: true },
+            ],
+            returnType: str,
+            returnTypeValidated: true,
+            body: [
+              { type: "returnStatement", value: { type: "string", segments: [{ type: "text", value: "hi" }] } },
+            ],
+          },
+        ],
+      };
+      expect(typeCheck(program).errors).toHaveLength(0);
+    });
+
     it("checks the RHS of a validated assignment against the un-bang'd type", () => {
       // const x: number! = "not a number" — RHS is checked against `number`.
       const program: AgencyProgram = {

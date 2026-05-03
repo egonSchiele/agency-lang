@@ -19,6 +19,7 @@ import { buildScopes } from "./scopes.js";
 import { checkScopes } from "./checker.js";
 import { isAssignable as _isAssignable } from "./assignability.js";
 import { inferReturnTypeFor } from "./inference.js";
+import { effectiveReturnType } from "./validation.js";
 
 export type { TypeCheckError, TypeCheckResult } from "./types.js";
 
@@ -157,6 +158,32 @@ export class TypeChecker {
           });
         }
       }
+    }
+
+    // 1d. A function/node with validated parameters can short-circuit and
+    // return a `failure` before the body runs. If the user explicitly
+    // annotated a non-Result return type, that's a contradiction — the
+    // caller-visible type must admit a failure. Functions without an
+    // explicit return annotation get auto-wrapped during inference instead.
+    const checkValidatedParamReturn = (
+      name: string,
+      def: FunctionDefinition | GraphNodeDefinition,
+    ) => {
+      if (!def.parameters.some((p) => p.validated)) return;
+      if (!def.returnType) return;
+      const effective = effectiveReturnType(def);
+      if (effective && effective !== "any" && (effective as VariableType).type !== "resultType") {
+        this.errors.push({
+          message: `Function '${name}' has validated parameters but its return type is not a Result type. Validated parameters can short-circuit with a failure, so the return type must be 'Result<...>'.`,
+          loc: def.loc,
+        });
+      }
+    };
+    for (const [name, def] of Object.entries(this.functionDefs)) {
+      checkValidatedParamReturn(name, def);
+    }
+    for (const [name, def] of Object.entries(this.nodeDefs)) {
+      checkValidatedParamReturn(name, def);
     }
 
     // 2. Infer return types

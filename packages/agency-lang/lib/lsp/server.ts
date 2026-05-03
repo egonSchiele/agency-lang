@@ -25,6 +25,7 @@ import { handleSignatureHelp } from "./signatureHelp.js";
 import { handleReferences } from "./references.js";
 import { handleRename, handlePrepareRename } from "./rename.js";
 import { getInlayHints } from "./inlayHint.js";
+import { handleTypeDefinition } from "./typeDefinition.js";
 import type { DocumentState } from "./documentState.js";
 
 export function startServer(): void {
@@ -48,6 +49,7 @@ export function startServer(): void {
         completionProvider: { triggerCharacters: ["."] },
         signatureHelpProvider: { triggerCharacters: ["(", ","] },
         definitionProvider: true,
+        typeDefinitionProvider: true,
         documentSymbolProvider: true,
         documentFormattingProvider: true,
         referencesProvider: true,
@@ -137,6 +139,14 @@ export function startServer(): void {
     if (!doc) return null;
     const state = docStates.get(params.textDocument.uri);
     return handleDefinition(params, doc, uriToPath(doc.uri), state?.semanticIndex ?? {});
+  });
+
+  connection.onTypeDefinition((params) => {
+    const doc = documents.get(params.textDocument.uri);
+    if (!doc) return null;
+    const state = docStates.get(params.textDocument.uri);
+    if (!state) return null;
+    return handleTypeDefinition(params, doc, state.program, state.scopes, state.semanticIndex);
   });
 
   connection.onDocumentSymbol((params) => {

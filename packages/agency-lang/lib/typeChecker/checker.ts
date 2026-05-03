@@ -81,8 +81,10 @@ function checkSingleFunctionCall(
  * index. `undefined` paramType (user-defined functions without an
  * annotation) and `"any"` paramType (lenient builtins) are skipped.
  *
- * NOTE: splat args are skipped — we don't yet check that the splat's
- * element type satisfies the remaining positional params. See follow-up.
+ * For splat args, verify the splat is an array and that its element type
+ * is assignable to each remaining positional param. We then stop checking
+ * subsequent fixed args, since we can't tell statically how many positions
+ * the splat consumes.
  */
 function checkArgsAgainstParams(
   call: FunctionCall,
@@ -93,7 +95,30 @@ function checkArgsAgainstParams(
   const typeAliases = ctx.getTypeAliases();
   for (let i = 0; i < call.arguments.length; i++) {
     const arg = call.arguments[i];
-    if (arg.type === "splat") continue;
+    if (arg.type === "splat") {
+      const splatType = synthType(arg.value, scope, ctx);
+      if (splatType === "any") return;
+      if (splatType.type !== "arrayType") {
+        ctx.errors.push({
+          message: `Splat argument must be an array, got '${formatTypeHint(splatType)}' in call to '${call.functionName}'.`,
+          actualType: formatTypeHint(splatType),
+        });
+        return;
+      }
+      const elemType = splatType.elementType;
+      for (let j = i; j < paramTypes.length; j++) {
+        const pt = paramTypes[j];
+        if (pt === undefined || pt === "any" || elemType === "any") continue;
+        if (!isAssignable(elemType, pt, typeAliases)) {
+          ctx.errors.push({
+            message: `Splat element type '${formatTypeHint(elemType)}' is not assignable to parameter type '${formatTypeHint(pt)}' in call to '${call.functionName}'.`,
+            expectedType: formatTypeHint(pt),
+            actualType: formatTypeHint(elemType),
+          });
+        }
+      }
+      return;
+    }
     const innerArg = arg.type === "namedArgument" ? arg.value : arg;
     const argType = synthType(innerArg, scope, ctx);
     const paramType = paramTypes[i];
@@ -133,11 +158,23 @@ function checkExpressionsInScope(
   info: ScopeInfo,
   ctx: TypeCheckerContext,
 ): void {
+  const booleanType: VariableType = { type: "primitiveType", value: "boolean" };
   for (const { node } of walkNodes(info.body)) {
     if (node.type === "valueAccess") {
       synthType(node, info.scope, ctx);
     } else if (node.type === "returnStatement" && node.value) {
       synthType(node.value, info.scope, ctx);
+    } else if (node.type === "ifElse" || node.type === "whileLoop") {
+      checkType(node.condition, booleanType, info.scope, "condition", ctx);
+    } else if (node.type === "forLoop") {
+      const iterableType = synthType(node.iterable, info.scope, ctx);
+      if (iterableType !== "any" && iterableType.type !== "arrayType") {
+        ctx.errors.push({
+          message: `For-loop iterable must be an array, got '${formatTypeHint(iterableType)}'.`,
+          actualType: formatTypeHint(iterableType),
+          loc: node.iterable.loc,
+        });
+      }
     }
   }
 }

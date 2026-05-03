@@ -114,7 +114,11 @@ function synthArray(
   const itemTypes: (VariableType | "any")[] = [];
   for (const item of expr.items) {
     if (item.type === "splat") {
-      return "any";
+      const splatType = synthType(item.value, scope, ctx);
+      if (splatType === "any") return "any";
+      if (splatType.type !== "arrayType") return "any";
+      itemTypes.push(splatType.elementType);
+      continue;
     }
     itemTypes.push(synthType(item, scope, ctx));
   }
@@ -141,7 +145,11 @@ function synthObject(
   const properties: { key: string; value: VariableType }[] = [];
   for (const entry of expr.entries) {
     if ("type" in entry && entry.type === "splat") {
-      return "any";
+      const splatType = synthType(entry.value, scope, ctx);
+      if (splatType === "any") return "any";
+      if (splatType.type !== "objectType") return "any";
+      for (const prop of splatType.properties) properties.push(prop);
+      continue;
     }
     const kv = entry as { key: string; value: AgencyNode };
     const valueType = synthType(kv.value, scope, ctx);

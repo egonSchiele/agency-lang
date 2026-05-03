@@ -1925,7 +1925,7 @@ describe("TypeChecker", () => {
   });
 
   describe("for loop with non-array iterable", () => {
-    it("should infer any for item when iterable is not an array type", () => {
+    it("should error when iterable is not an array type", () => {
       const program: AgencyProgram = {
         type: "agencyProgram",
         nodes: [
@@ -1962,9 +1962,9 @@ describe("TypeChecker", () => {
         ],
       };
 
-      // item is any since data is string (not array), so no error
       const { errors } = typeCheck(program);
-      expect(errors).toHaveLength(0);
+      expect(errors).toHaveLength(1);
+      expect(errors[0].message).toMatch(/For-loop iterable must be an array/);
     });
   });
 

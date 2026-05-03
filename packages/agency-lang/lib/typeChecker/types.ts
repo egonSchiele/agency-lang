@@ -3,17 +3,14 @@ import { AgencyConfig } from "../config.js";
 import {
   AgencyNode,
   FunctionDefinition,
-  FunctionParameter,
   GraphNodeDefinition,
   VariableType,
 } from "../types.js";
 import { SourceLocation } from "../types/base.js";
-import type { ScopedTypeAliases } from "../compilationUnit.js";
-
-export type ImportedFunctionSignature = {
-  parameters: FunctionParameter[];
-  returnType: VariableType | null;
-};
+import type {
+  ImportedFunctionSignature,
+  ScopedTypeAliases,
+} from "../compilationUnit.js";
 
 export type TypeCheckError = {
   message: string;

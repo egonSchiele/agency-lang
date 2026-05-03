@@ -1,5 +1,8 @@
 import { color } from "@/utils/termcolors.js";
-import type { CompilationUnit } from "../compilationUnit.js";
+import type {
+  CompilationUnit,
+  ImportedFunctionSignature,
+} from "../compilationUnit.js";
 import { GLOBAL_SCOPE_KEY, ScopedTypeAliases, scopeKey, buildCompilationUnit } from "../compilationUnit.js";
 import { AgencyConfig } from "../config.js";
 import {
@@ -25,7 +28,7 @@ export class TypeChecker {
   private currentScopeKey: string = GLOBAL_SCOPE_KEY;
   private functionDefs: Record<string, FunctionDefinition> = {};
   private nodeDefs: Record<string, GraphNodeDefinition> = {};
-  private importedFunctions: CompilationUnit["importedFunctions"] = {};
+  private importedFunctions: Record<string, ImportedFunctionSignature> = {};
   private errors: TypeCheckError[] = [];
   private inferredReturnTypes: Record<string, VariableType | "any"> = {};
   private inferringReturnType = new Set<string>();
@@ -89,15 +92,20 @@ export class TypeChecker {
     }
 
     // 1b. Warn on local definitions that shadow imported functions/nodes.
-    for (const localName of [
-      ...Object.keys(this.functionDefs),
-      ...Object.keys(this.nodeDefs),
-    ]) {
-      if (this.importedFunctions[localName]) {
-        const def =
-          this.functionDefs[localName] ?? this.nodeDefs[localName];
+    // functionDefs and nodeDefs are mutually exclusive by construction
+    // (a name is parsed as one or the other, never both).
+    for (const [name, def] of Object.entries(this.functionDefs)) {
+      if (this.importedFunctions[name]) {
         this.errors.push({
-          message: `'${localName}' shadows an imported function.`,
+          message: `'${name}' shadows an imported function.`,
+          loc: def.loc,
+        });
+      }
+    }
+    for (const [name, def] of Object.entries(this.nodeDefs)) {
+      if (this.importedFunctions[name]) {
+        this.errors.push({
+          message: `'${name}' shadows an imported function.`,
           loc: def.loc,
         });
       }

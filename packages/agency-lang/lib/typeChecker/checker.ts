@@ -100,10 +100,7 @@ function checkSingleFunctionCall(
       params,
       call.arguments.length,
     );
-    reportArityIfBad(call, minArgs, maxArgs, hasSplatArg, ctx);
-    if (call.arguments.length < minArgs || call.arguments.length > maxArgs) {
-      if (!hasSplatArg) return;
-    }
+    if (!checkArity(call, minArgs, maxArgs, hasSplatArg, ctx)) return;
     checkArgsAgainstParams(call, paramTypes, scope, ctx);
     return;
   }
@@ -113,10 +110,7 @@ function checkSingleFunctionCall(
     const minArgs = sig.minParams ?? sig.params.length;
     const hasRest = sig.restParam !== undefined;
     const maxArgs = hasRest ? Infinity : sig.params.length;
-    reportArityIfBad(call, minArgs, maxArgs, hasSplatArg, ctx);
-    if (call.arguments.length < minArgs || call.arguments.length > maxArgs) {
-      if (!hasSplatArg) return;
-    }
+    if (!checkArity(call, minArgs, maxArgs, hasSplatArg, ctx)) return;
     const paramTypes: (VariableType | "any" | undefined)[] = [...sig.params];
     if (hasRest) {
       while (paramTypes.length < call.arguments.length) {
@@ -127,15 +121,21 @@ function checkSingleFunctionCall(
   }
 }
 
-function reportArityIfBad(
+/**
+ * Validate arg count against [minArgs, maxArgs]. Pushes an error and returns
+ * `false` (caller should bail) when arity is wrong and there's no splat. With
+ * a splat present we can't tell the count statically, so always return `true`
+ * and let the splat element-type check run.
+ */
+function checkArity(
   call: FunctionCall,
   minArgs: number,
   maxArgs: number,
   hasSplatArg: boolean,
   ctx: TypeCheckerContext,
-): void {
-  if (hasSplatArg) return;
-  if (call.arguments.length >= minArgs && call.arguments.length <= maxArgs) return;
+): boolean {
+  if (hasSplatArg) return true;
+  if (call.arguments.length >= minArgs && call.arguments.length <= maxArgs) return true;
   const expected =
     maxArgs === Infinity
       ? `at least ${minArgs}`
@@ -145,6 +145,7 @@ function reportArityIfBad(
   ctx.errors.push({
     message: `Expected ${expected} argument(s) for '${call.functionName}', but got ${call.arguments.length}.`,
   });
+  return false;
 }
 
 /**

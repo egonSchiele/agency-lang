@@ -58,6 +58,17 @@ export class ScopedTypeAliases {
 }
 
 /**
+ * Signature info collected from a SymbolTable for a name brought in via
+ * `import { ... }`. Both fields may be populated lazily — `parameters` is
+ * filled by the stitch loop in `buildCompilationUnit`, and `returnType`
+ * comes from the imported function/node's declaration.
+ */
+export type ImportedFunctionSignature = {
+  parameters: FunctionParameter[];
+  returnType: VariableType | null;
+};
+
+/**
  * Per-compilation aggregate. Holds the rich AST nodes for the entry file's
  * local declarations plus a typechecker-shaped scoped type-alias map. For
  * any cross-file question — what does this name resolve to in another
@@ -70,10 +81,7 @@ export type CompilationUnit = {
   importedNodes: ImportNodeStatement[];
   importStatements: ImportStatement[];
   safeFunctions: Record<string, boolean>;
-  importedFunctions: Record<
-    string,
-    { parameters: FunctionParameter[]; returnType: VariableType | null }
-  >;
+  importedFunctions: Record<string, ImportedFunctionSignature>;
   classDefinitions: Record<string, ClassDefinition>;
 };
 

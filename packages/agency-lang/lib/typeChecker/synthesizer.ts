@@ -84,9 +84,6 @@ function synthFunctionCall(
   _scope: Scope,
   ctx: TypeCheckerContext,
 ): VariableType | "any" {
-  // Resolution order: local definition → imported (cross-file) → builtin
-  // fallback. Importeds take precedence over builtins so a real stdlib
-  // function shadows a hardcoded signature when SymbolTable info is wired in.
   const fn = ctx.functionDefs[expr.functionName];
   const graphNode = ctx.nodeDefs[expr.functionName];
   const def = fn ?? graphNode;

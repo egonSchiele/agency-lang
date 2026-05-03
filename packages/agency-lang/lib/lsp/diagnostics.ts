@@ -13,12 +13,14 @@ import { AgencyProgram } from "../types.js";
 import { CompilationUnit } from "../compilationUnit.js";
 import { buildSemanticIndex, type SemanticIndex } from "./semantics.js";
 import { TEMPLATE_OFFSET } from "./locations.js";
+import type { ScopeInfo } from "../typeChecker/types.js";
 
 type DiagnosticsResult = {
   diagnostics: Diagnostic[];
   program: AgencyProgram | null;
   info: CompilationUnit | null;
   semanticIndex: SemanticIndex;
+  scopes: ScopeInfo[];
 };
 
 export function runDiagnostics(
@@ -51,7 +53,7 @@ export function runDiagnostics(
         source: "agency",
       });
     }
-    return { diagnostics, program: null, info: null, semanticIndex: {} };
+    return { diagnostics, program: null, info: null, semanticIndex: {}, scopes: [] };
   }
 
   let program = parseResult.result;
@@ -65,11 +67,11 @@ export function runDiagnostics(
       message: err instanceof Error ? err.message : String(err),
       source: "agency",
     });
-    return { diagnostics, program: null, info: null, semanticIndex: {} };
+    return { diagnostics, program: null, info: null, semanticIndex: {}, scopes: [] };
   }
 
   const info = buildCompilationUnit(program, symbolTable, fsPath);
-  const { errors } = typeCheck(program, config, info);
+  const { errors, scopes } = typeCheck(program, config, info);
 
   for (const err of errors) {
     const range = err.loc
@@ -91,5 +93,6 @@ export function runDiagnostics(
     program,
     info,
     semanticIndex: buildSemanticIndex(program, fsPath, symbolTable),
+    scopes,
   };
 }

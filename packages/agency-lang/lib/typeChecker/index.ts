@@ -117,7 +117,7 @@ export class TypeChecker {
     // 4. Check function calls, return types, and expressions
     checkScopes(scopes, ctx);
 
-    return { errors: this.deduplicateErrors() };
+    return { errors: this.deduplicateErrors(), scopes };
   }
 
   private deduplicateErrors(): TypeCheckError[] {

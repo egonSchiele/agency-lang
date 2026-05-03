@@ -6,6 +6,9 @@ import * as path from "path";
 import { handleHover } from "./hover.js";
 import { runDiagnostics } from "./diagnostics.js";
 import { SymbolTable } from "../symbolTable.js";
+import { parseAgency } from "../parser.js";
+import { buildCompilationUnit } from "../compilationUnit.js";
+import { typeCheck } from "../typeChecker/index.js";
 
 function makeDoc(content: string, uri = "file:///test.agency") {
   return TextDocument.create(uri, "agency", 1, content);
@@ -81,6 +84,29 @@ greet("world")`;
     } finally {
       fs.rmSync(tmpDir, { recursive: true, force: true });
     }
+  });
+
+  it("returns type for a local variable on hover", () => {
+    const source = 'node main() {\n  let name: string = "hi"\n  print(name)\n}';
+    const doc = makeDoc(source);
+    const r = parseAgency(source, {}, false);
+    if (!r.success) throw new Error("parse failed");
+    const program = r.result;
+    const info = buildCompilationUnit(program, new SymbolTable());
+    const { scopes } = typeCheck(program, {}, info);
+    const { semanticIndex } = runDiagnostics(doc, "/test.agency", {}, new SymbolTable());
+    // Hover over "name" in print(name) — line 2, character 8
+    const result = handleHover(
+      { textDocument: { uri: doc.uri }, position: { line: 2, character: 8 } },
+      doc,
+      semanticIndex,
+      program,
+      scopes,
+    );
+    expect(result).not.toBeNull();
+    const value = (result!.contents as any).value;
+    expect(value).toContain("string");
+    expect(value).toContain("name");
   });
 
   it("returns null when not on an identifier", () => {

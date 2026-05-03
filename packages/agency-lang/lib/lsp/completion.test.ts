@@ -4,6 +4,7 @@ import { getCompletions } from "./completion.js";
 import { parseAgency } from "../parser.js";
 import { buildCompilationUnit } from "../compilationUnit.js";
 import { SymbolTable } from "@/symbolTable.js";
+import { typeCheck } from "../typeChecker/index.js";
 
 function parse(source: string) {
   const r = parseAgency(source, {}, false);
@@ -48,6 +49,22 @@ describe("getCompletions", () => {
     const labels = items.map((i) => i.label);
     const unique = new Set(labels);
     expect(labels.length).toBe(unique.size);
+  });
+
+  it("returns object fields after dot", () => {
+    // Use a complete, parseable source. The dot-completion logic inspects
+    // the raw text at the cursor position, not the AST, so we place the
+    // cursor right after "x." on a line that has a full expression.
+    const source = 'type Foo = { name: string, age: number }\nnode main() {\n  let x: Foo = llm("hi")\n  x.name\n}';
+    const program = parse(source);
+    const info = buildCompilationUnit(program, new SymbolTable());
+    const { scopes } = typeCheck(program, {}, info);
+    // Cursor at line 3, character 4 (right after "x.")
+    const items = getCompletions(info, { source, line: 3, character: 4, scopes, program });
+    const names = items.map((i) => i.label);
+    expect(names).toContain("name");
+    expect(names).toContain("age");
+    expect(names).not.toContain("main");
   });
 
   it("returns empty array for empty program", () => {

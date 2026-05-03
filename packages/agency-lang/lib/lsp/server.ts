@@ -22,6 +22,7 @@ import { handleDocumentHighlight } from "./documentHighlight.js";
 import { getFoldingRanges } from "./foldingRange.js";
 import { getDocumentLinks } from "./documentLink.js";
 import { handleSignatureHelp } from "./signatureHelp.js";
+import { handleReferences } from "./references.js";
 import type { DocumentState } from "./documentState.js";
 
 export function startServer(): void {
@@ -47,6 +48,7 @@ export function startServer(): void {
         definitionProvider: true,
         documentSymbolProvider: true,
         documentFormattingProvider: true,
+        referencesProvider: true,
         documentHighlightProvider: true,
         foldingRangeProvider: true,
         documentLinkProvider: {},
@@ -166,6 +168,12 @@ export function startServer(): void {
     if (!doc) return null;
     const state = docStates.get(params.textDocument.uri);
     return handleSignatureHelp(params, doc, state?.semanticIndex ?? {});
+  });
+
+  connection.onReferences((params) => {
+    const doc = documents.get(params.textDocument.uri);
+    if (!doc) return [];
+    return handleReferences(params, doc);
   });
 
   connection.onDocumentHighlight((params) => {

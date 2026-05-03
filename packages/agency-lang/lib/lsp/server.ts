@@ -9,7 +9,6 @@ import {
   CompletionList,
 } from "vscode-languageserver/node.js";
 import { TextDocument } from "vscode-languageserver-textdocument";
-import { AgencyProgram } from "../types.js";
 import { SymbolTable } from "../symbolTable.js";
 import { uriToPath } from "./uri.js";
 import { getWorkspaceForFile, invalidateWorkspace } from "./workspace.js";
@@ -22,8 +21,7 @@ import { getCompletions } from "./completion.js";
 import { handleDocumentHighlight } from "./documentHighlight.js";
 import { getFoldingRanges } from "./foldingRange.js";
 import { getDocumentLinks } from "./documentLink.js";
-import type { CompilationUnit } from "../compilationUnit.js";
-import type { SemanticIndex } from "./semantics.js";
+import type { DocumentState } from "./documentState.js";
 
 export function startServer(): void {
   const connection = createConnection(
@@ -32,10 +30,8 @@ export function startServer(): void {
   );
   const documents = new TextDocuments(TextDocument);
 
-  // Per-document state: latest parsed program and program info
-  const docPrograms = new Map<string, AgencyProgram>();
-  const docInfos = new Map<string, CompilationUnit>();
-  const docSemanticIndexes = new Map<string, SemanticIndex>();
+  // Per-document state: parsed program, compilation info, semantic index, scopes, symbol table
+  const docStates = new Map<string, DocumentState>();
 
   // Debounce timers for diagnostics (per URI)
   const debounceTimers = new Map<string, ReturnType<typeof setTimeout>>();
@@ -67,7 +63,7 @@ export function startServer(): void {
       // If symbol table build fails (e.g. file not on disk yet), continue with empty table
     }
 
-    const { diagnostics, program, info, semanticIndex } = runDiagnostics(
+    const { diagnostics, program, info, semanticIndex, scopes } = runDiagnostics(
       doc,
       fsPath,
       config,
@@ -76,13 +72,9 @@ export function startServer(): void {
     connection.sendDiagnostics({ uri: doc.uri, diagnostics });
 
     if (program && info) {
-      docPrograms.set(doc.uri, program);
-      docInfos.set(doc.uri, info);
-      docSemanticIndexes.set(doc.uri, semanticIndex);
+      docStates.set(doc.uri, { program, info, semanticIndex, scopes, symbolTable });
     } else {
-      docPrograms.delete(doc.uri);
-      docInfos.delete(doc.uri);
-      docSemanticIndexes.delete(doc.uri);
+      docStates.delete(doc.uri);
     }
   }
 
@@ -113,9 +105,7 @@ export function startServer(): void {
 
   documents.onDidClose((event) => {
     connection.sendDiagnostics({ uri: event.document.uri, diagnostics: [] });
-    docPrograms.delete(event.document.uri);
-    docInfos.delete(event.document.uri);
-    docSemanticIndexes.delete(event.document.uri);
+    docStates.delete(event.document.uri);
   });
 
   connection.onDidChangeWatchedFiles((params) => {
@@ -137,14 +127,14 @@ export function startServer(): void {
   connection.onDefinition((params) => {
     const doc = documents.get(params.textDocument.uri);
     if (!doc) return null;
-    const semanticIndex = docSemanticIndexes.get(params.textDocument.uri) ?? {};
-    return handleDefinition(params, doc, uriToPath(doc.uri), semanticIndex);
+    const state = docStates.get(params.textDocument.uri);
+    return handleDefinition(params, doc, uriToPath(doc.uri), state?.semanticIndex ?? {});
   });
 
   connection.onDocumentSymbol((params) => {
-    const program = docPrograms.get(params.textDocument.uri);
-    if (!program) return [];
-    return getDocumentSymbols(program);
+    const state = docStates.get(params.textDocument.uri);
+    if (!state) return [];
+    return getDocumentSymbols(state.program);
   });
 
   connection.onDocumentFormatting((params) => {
@@ -158,15 +148,15 @@ export function startServer(): void {
   connection.onHover((params) => {
     const doc = documents.get(params.textDocument.uri);
     if (!doc) return null;
-    const semanticIndex = docSemanticIndexes.get(params.textDocument.uri);
-    if (!semanticIndex) return null;
-    return handleHover(params, doc, semanticIndex);
+    const state = docStates.get(params.textDocument.uri);
+    if (!state) return null;
+    return handleHover(params, doc, state.semanticIndex);
   });
 
   connection.onCompletion((params) => {
-    const info = docInfos.get(params.textDocument.uri);
-    if (!info) return CompletionList.create([], true);
-    return CompletionList.create(getCompletions(info), false);
+    const state = docStates.get(params.textDocument.uri);
+    if (!state) return CompletionList.create([], true);
+    return CompletionList.create(getCompletions(state.info), false);
   });
 
   connection.onDocumentHighlight((params) => {
@@ -177,16 +167,16 @@ export function startServer(): void {
 
   connection.onFoldingRanges((params) => {
     const doc = documents.get(params.textDocument.uri);
-    const program = docPrograms.get(params.textDocument.uri);
-    if (!doc || !program) return [];
-    return getFoldingRanges(program, doc);
+    const state = docStates.get(params.textDocument.uri);
+    if (!doc || !state) return [];
+    return getFoldingRanges(state.program, doc);
   });
 
   connection.onDocumentLinks((params) => {
     const doc = documents.get(params.textDocument.uri);
-    const program = docPrograms.get(params.textDocument.uri);
-    if (!doc || !program) return [];
-    return getDocumentLinks(program, doc, uriToPath(doc.uri));
+    const state = docStates.get(params.textDocument.uri);
+    if (!doc || !state) return [];
+    return getDocumentLinks(state.program, doc, uriToPath(doc.uri));
   });
 
   documents.listen(connection);

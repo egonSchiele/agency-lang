@@ -173,7 +173,7 @@ export class TypeChecker {
       if (!def.parameters.some((p) => p.validated)) return;
       if (!def.returnType) return;
       const effective = effectiveReturnType(def);
-      if (effective && effective !== "any" && (effective as VariableType).type !== "resultType") {
+      if (effective && effective.type !== "resultType") {
         this.errors.push({
           message: `Function '${name}' has validated parameters but its return type is not a Result type. Validated parameters can short-circuit with a failure, so the return type must be 'Result<...>'.`,
           loc: def.loc,
@@ -197,7 +197,7 @@ export class TypeChecker {
       if (node.handler.param.validated) {
         this.errors.push({
           message: "The '!' validation syntax is not allowed on handler parameters. Validate the data inside the handler body if needed.",
-          loc: node.handler.param.loc ?? node.loc,
+          loc: node.loc,
         });
       }
     }

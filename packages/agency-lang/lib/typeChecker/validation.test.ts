@@ -3,7 +3,7 @@ import { applyValidationFlag, effectiveReturnType } from "./validation.js";
 import type { VariableType, FunctionDefinition } from "../types.js";
 
 describe("applyValidationFlag", () => {
-  const person: VariableType = { type: "namedType", name: "Person" };
+  const person: VariableType = { type: "typeAliasVariable", aliasName: "Person" };
   const stringT: VariableType = { type: "primitiveType", value: "string" };
 
   it("returns the type unchanged when validated is false/undefined", () => {
@@ -39,7 +39,7 @@ describe("applyValidationFlag", () => {
 });
 
 describe("effectiveReturnType", () => {
-  const person: VariableType = { type: "namedType", name: "Person" };
+  const person: VariableType = { type: "typeAliasVariable", aliasName: "Person" };
   const stringT: VariableType = { type: "primitiveType", value: "string" };
 
   function fn(returnType: VariableType | null | undefined, validated?: boolean): FunctionDefinition {

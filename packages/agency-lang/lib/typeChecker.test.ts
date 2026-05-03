@@ -4932,6 +4932,79 @@ describe("TypeChecker", () => {
       expect(errors.some((e) => /not allowed on handler/i.test(e.message))).toBe(true);
     });
 
+    it("allows .value/.error on a validated Result via RESULT_FIELDS escape", () => {
+      // const r: Person! = {...}; const v = r.value; const e = r.error
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "assignment",
+            variableName: "r",
+            typeHint: person,
+            validated: true,
+            value: {
+              type: "agencyObject",
+              entries: [
+                { key: "name", value: { type: "string", segments: [{ type: "text", value: "alice" }] } },
+              ],
+            },
+          },
+          {
+            type: "assignment",
+            variableName: "v",
+            value: {
+              type: "valueAccess",
+              base: { type: "variableName", value: "r" },
+              chain: [{ kind: "property", name: "value" }],
+            },
+          },
+          {
+            type: "assignment",
+            variableName: "e",
+            value: {
+              type: "valueAccess",
+              base: { type: "variableName", value: "r" },
+              chain: [{ kind: "property", name: "error" }],
+            },
+          },
+        ],
+      };
+      expect(typeCheck(program).errors).toHaveLength(0);
+    });
+
+    it("errors on arbitrary property access on a validated Result (the bug class this catches)", () => {
+      // const r: Person! = {...}; const n = r.name
+      // r is Result<Person, string>; r.name is bogus until narrowing (#14).
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "assignment",
+            variableName: "r",
+            typeHint: person,
+            validated: true,
+            value: {
+              type: "agencyObject",
+              entries: [
+                { key: "name", value: { type: "string", segments: [{ type: "text", value: "alice" }] } },
+              ],
+            },
+          },
+          {
+            type: "assignment",
+            variableName: "n",
+            value: {
+              type: "valueAccess",
+              base: { type: "variableName", value: "r" },
+              chain: [{ kind: "property", name: "name" }],
+            },
+          },
+        ],
+      };
+      const errors = typeCheck(program).errors;
+      expect(errors.length).toBeGreaterThan(0);
+    });
+
     it("checks the RHS of a validated assignment against the un-bang'd type", () => {
       // const x: number! = "not a number" — RHS is checked against `number`.
       const program: AgencyProgram = {

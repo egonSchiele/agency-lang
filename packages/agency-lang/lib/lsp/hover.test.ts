@@ -35,7 +35,7 @@ greet("world")`;
         typeof result.contents === "string"
           ? result.contents
           : ((result.contents as any).value ?? "");
-      expect(value).toContain("greet(name: string): string");
+      expect(value).toContain("def greet(name: string): string");
     }
   });
 
@@ -76,7 +76,7 @@ greet("world")`;
         typeof result?.contents === "string"
           ? result.contents
           : ((result?.contents as any)?.value ?? "");
-      expect(value).toContain("hello(name: string): string");
+      expect(value).toContain("def hello(name: string): string");
       expect(value).toContain("Imported from `./helpers.agency` as `greet`");
     } finally {
       fs.rmSync(tmpDir, { recursive: true, force: true });

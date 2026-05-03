@@ -424,7 +424,9 @@ export function createProgram(deps: CliDependencies = {}): Command {
         const { errors } = typeCheck(parsedProgram, config, info);
         if (errors.length > 0) {
           console.error(formatErrors(errors));
-          hasErrors = true;
+          if (errors.some((e) => (e.severity ?? "error") === "error")) {
+            hasErrors = true;
+          }
         } else {
           console.log("No type errors found.");
         }

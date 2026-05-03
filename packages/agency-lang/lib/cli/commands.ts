@@ -158,7 +158,8 @@ export function compile(
     if (errors.length > 0) {
       if (config.typeCheckStrict) {
         console.error(formatErrors(errors));
-        process.exit(1);
+        const hasFatal = errors.some((e) => (e.severity ?? "error") === "error");
+        if (hasFatal) process.exit(1);
       } else {
         console.warn(formatErrors(errors, "warning"));
       }

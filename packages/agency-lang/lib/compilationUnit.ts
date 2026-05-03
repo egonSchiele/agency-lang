@@ -145,12 +145,6 @@ export function buildCompilationUnit(
         unit.importStatements.push(node);
         for (const nameType of node.importedNames) {
           if (nameType.type !== "namedImport") continue;
-          if (node.isAgencyImport) {
-            for (const name of nameType.importedNames) {
-              const localName = nameType.aliases[name] ?? name;
-              unit.importedFunctions[localName] = { parameters: [], returnType: null };
-            }
-          }
           for (const safeName of nameType.safeNames) {
             const localSafe = nameType.aliases[safeName] ?? safeName;
             unit.safeFunctions[localSafe] = true;
@@ -168,18 +162,19 @@ export function buildCompilationUnit(
     }
   }
 
-  // Stitch in cross-file information from imports. Both passes use
-  // resolveImport, so the (file, original→local) mapping is computed once
-  // per statement instead of being re-derived from raw symbol-table loops.
+  // Stitch in cross-file information from imports. Entries are only added
+  // to importedFunctions when the SymbolTable actually resolves them — an
+  // unresolved import (no SymbolTable, missing file, etc.) falls through
+  // to the typechecker's builtin/any path instead of being treated as a
+  // bogus 0-arg signature.
   if (symbolTable && fromFile) {
     for (const stmt of unit.importStatements) {
       for (const r of symbolTable.resolveImport(stmt, fromFile)) {
-        if (
-          (r.symbol.kind === "function" || r.symbol.kind === "node") &&
-          unit.importedFunctions[r.localName]
-        ) {
-          unit.importedFunctions[r.localName].parameters = r.symbol.parameters;
-          unit.importedFunctions[r.localName].returnType = r.symbol.returnType;
+        if (r.symbol.kind === "function" || r.symbol.kind === "node") {
+          unit.importedFunctions[r.localName] = {
+            parameters: r.symbol.parameters,
+            returnType: r.symbol.returnType,
+          };
         }
         if (r.symbol.kind === "function" && r.symbol.safe) {
           unit.safeFunctions[r.localName] = true;

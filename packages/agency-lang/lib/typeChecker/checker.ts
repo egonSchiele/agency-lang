@@ -21,6 +21,18 @@ import { Scope } from "./scope.js";
  * For a variadic last parameter declared as `...xs: T[]`, every arg at or
  * past its position is checked against the array's element type `T`.
  */
+/**
+ * Per-arg type for a variadic param. `...xs: T[]` means each incoming arg
+ * is a `T`; if the typeHint isn't an arrayType (e.g. untyped `...args`),
+ * fall back to its raw hint or "any".
+ */
+function variadicElementType(
+  param: FunctionParameter,
+): VariableType | "any" | undefined {
+  if (param.typeHint?.type === "arrayType") return param.typeHint.elementType;
+  return param.typeHint ?? "any";
+}
+
 function paramListSignature(params: FunctionParameter[], argCount: number): {
   minArgs: number;
   maxArgs: number;
@@ -28,17 +40,10 @@ function paramListSignature(params: FunctionParameter[], argCount: number): {
 } {
   const lastParam = params[params.length - 1];
   const hasRest = lastParam?.variadic === true;
-  const requiredCount = params.filter(
+  const minArgs = params.filter(
     (p) => p.defaultValue === undefined && !p.variadic,
   ).length;
-  const minArgs = requiredCount;
   const maxArgs = hasRest ? Infinity : params.length;
-
-  const restElementType: VariableType | "any" | undefined = hasRest
-    ? lastParam.typeHint?.type === "arrayType"
-      ? lastParam.typeHint.elementType
-      : (lastParam.typeHint ?? "any")
-    : undefined;
 
   const paramTypes: (VariableType | "any" | undefined)[] = params.map((p) =>
     p.typeHint,
@@ -47,8 +52,9 @@ function paramListSignature(params: FunctionParameter[], argCount: number): {
     // Replace the variadic slot's array type with the element type, so a
     // single arg at that position is checked element-wise. Then extend to
     // cover any extra args.
-    paramTypes[paramTypes.length - 1] = restElementType;
-    while (paramTypes.length < argCount) paramTypes.push(restElementType);
+    const elementType = variadicElementType(lastParam);
+    paramTypes[paramTypes.length - 1] = elementType;
+    while (paramTypes.length < argCount) paramTypes.push(elementType);
   }
   return { minArgs, maxArgs, paramTypes };
 }
@@ -136,16 +142,16 @@ function checkArity(
 ): boolean {
   if (hasSplatArg) return true;
   if (call.arguments.length >= minArgs && call.arguments.length <= maxArgs) return true;
-  const expected =
-    maxArgs === Infinity
-      ? `at least ${minArgs}`
-      : minArgs === maxArgs
-        ? `${minArgs}`
-        : `${minArgs}-${maxArgs}`;
   ctx.errors.push({
-    message: `Expected ${expected} argument(s) for '${call.functionName}', but got ${call.arguments.length}.`,
+    message: `Expected ${formatArity(minArgs, maxArgs)} argument(s) for '${call.functionName}', but got ${call.arguments.length}.`,
   });
   return false;
+}
+
+function formatArity(minArgs: number, maxArgs: number): string {
+  if (maxArgs === Infinity) return `at least ${minArgs}`;
+  if (minArgs === maxArgs) return `${minArgs}`;
+  return `${minArgs}-${maxArgs}`;
 }
 
 /**

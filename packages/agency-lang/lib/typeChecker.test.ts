@@ -3413,7 +3413,44 @@ describe("TypeChecker", () => {
         },
       });
       const errors = typeCheck(program, {}, info).errors;
-      expect(errors.some((e) => /'add' shadows an imported function/.test(e.message))).toBe(true);
+      const shadow = errors.find((e) => /'add' shadows an imported function/.test(e.message));
+      expect(shadow).toBeDefined();
+      expect(shadow!.severity).toBe("warning");
+    });
+
+    it("does not register importedFunctions placeholders when no SymbolTable", () => {
+      // Regression: stdin / no-SymbolTable mode used to create placeholder
+      // entries with parameters: [] for every auto-imported stdlib name,
+      // leading to bogus "Expected 0 args" errors on calls like print("x").
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "importStatement",
+            modulePath: "std::index",
+            isAgencyImport: true,
+            importedNames: [
+              {
+                type: "namedImport",
+                importedNames: ["print"],
+                aliases: {},
+                safeNames: [],
+              },
+            ],
+          },
+          {
+            type: "functionCall",
+            functionName: "print",
+            arguments: [
+              { type: "string", segments: [{ type: "text", value: "x" }] },
+            ],
+          },
+        ],
+      };
+      // No SymbolTable passed → typeCheck builds a CompilationUnit with
+      // empty importedFunctions and falls through to the builtin signature.
+      const errors = typeCheck(program).errors;
+      expect(errors.filter((e) => /Expected.*argument\(s\) for 'print'/.test(e.message))).toHaveLength(0);
     });
 
     it("local definition wins over imported function", () => {

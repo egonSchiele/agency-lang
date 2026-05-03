@@ -14,6 +14,7 @@ import type {
 
 export type TypeCheckError = {
   message: string;
+  severity?: "error" | "warning"; // defaults to "error" when omitted
   variableName?: string;
   expectedType?: string;
   actualType?: string;

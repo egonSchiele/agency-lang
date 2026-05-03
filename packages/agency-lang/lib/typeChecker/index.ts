@@ -11,6 +11,7 @@ import {
   GraphNodeDefinition,
   VariableType,
 } from "../types.js";
+import type { SourceLocation } from "../types/base.js";
 import { TypeCheckError, TypeCheckResult, TypeCheckerContext } from "./types.js";
 import { validateTypeReferences } from "./validate.js";
 import { inferReturnTypes } from "./inference.js";
@@ -94,21 +95,17 @@ export class TypeChecker {
     // 1b. Warn on local definitions that shadow imported functions/nodes.
     // functionDefs and nodeDefs are mutually exclusive by construction
     // (a name is parsed as one or the other, never both).
+    const shadowWarning = (name: string, loc: SourceLocation | undefined) =>
+      this.errors.push({
+        message: `'${name}' shadows an imported function.`,
+        severity: "warning",
+        loc,
+      });
     for (const [name, def] of Object.entries(this.functionDefs)) {
-      if (this.importedFunctions[name]) {
-        this.errors.push({
-          message: `'${name}' shadows an imported function.`,
-          loc: def.loc,
-        });
-      }
+      if (this.importedFunctions[name]) shadowWarning(name, def.loc);
     }
     for (const [name, def] of Object.entries(this.nodeDefs)) {
-      if (this.importedFunctions[name]) {
-        this.errors.push({
-          message: `'${name}' shadows an imported function.`,
-          loc: def.loc,
-        });
-      }
+      if (this.importedFunctions[name]) shadowWarning(name, def.loc);
     }
 
     // 2. Infer return types
@@ -157,8 +154,9 @@ export function formatErrors(
 ): string {
   return errors
     .map((err) => {
-      const colorFunc = errorType === "warning" ? color.yellow : color.red;
-      return `${colorFunc(errorType)}: ${err.message}`;
+      const kind = err.severity ?? errorType;
+      const colorFunc = kind === "warning" ? color.yellow : color.red;
+      return `${colorFunc(kind)}: ${err.message}`;
     })
     .join("\n");
 }

@@ -142,12 +142,8 @@ function reportNotAssignable(
 
 /**
  * Walk a body of statements and declare every binding into the given scope.
- * Recurses into nested blocks (if/while/messageThread) using the same scope,
- * which preserves today's function-scoped semantics.
- *
- * NOTE: many AST node types that contain bodies (match, handle, parallel,
- * seq, schema, class methods, blocks) are NOT yet handled here. Declarations
- * inside those will be invisible to the typechecker. See follow-up issue.
+ * Recurses into nested blocks using the same scope, which preserves today's
+ * function-scoped semantics — declarations leak out of nested blocks.
  */
 export function walkScopeBody(
   nodes: AgencyNode[],
@@ -168,10 +164,17 @@ export function walkScopeBody(
         break;
       case "forLoop": {
         const iterableType = synthType(node.iterable, scope, ctx);
-        if (iterableType !== "any" && iterableType.type === "arrayType") {
+        if (iterableType === "any") {
+          scope.declare(node.itemVar, "any");
+        } else if (iterableType.type === "arrayType") {
           scope.declare(node.itemVar, iterableType.elementType);
         } else {
           scope.declare(node.itemVar, "any");
+          ctx.errors.push({
+            message: `For-loop iterable must be an array, got '${formatTypeHint(iterableType)}'.`,
+            actualType: formatTypeHint(iterableType),
+            loc: node.iterable.loc,
+          });
         }
         if (node.indexVar) {
           scope.declare(node.indexVar, {
@@ -188,7 +191,30 @@ export function walkScopeBody(
         break;
       case "whileLoop":
       case "messageThread":
+      case "parallelBlock":
+      case "seqBlock":
         walkScopeBody(node.body, scope, ctx);
+        break;
+      case "matchBlock":
+        for (const caseItem of node.cases) {
+          if (caseItem.type === "comment") continue;
+          walkScopeBody([caseItem.body], scope, ctx);
+        }
+        break;
+      case "handleBlock":
+        walkScopeBody(node.body, scope, ctx);
+        if (node.handler.kind === "inline") {
+          scope.declare(node.handler.param.name, node.handler.param.typeHint ?? "any");
+          walkScopeBody(node.handler.body, scope, ctx);
+        }
+        break;
+      case "functionCall":
+        if (node.block) {
+          for (const param of node.block.params) {
+            scope.declare(param.name, param.typeHint ?? "any");
+          }
+          walkScopeBody(node.block.body, scope, ctx);
+        }
         break;
     }
   }

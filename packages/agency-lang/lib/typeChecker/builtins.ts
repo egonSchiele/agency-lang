@@ -1,56 +1,54 @@
 import { BuiltinSignature } from "./types.js";
 
+const string = { type: "primitiveType", value: "string" } as const;
+const number = { type: "primitiveType", value: "number" } as const;
+const boolean = { type: "primitiveType", value: "boolean" } as const;
+const voidT = { type: "primitiveType", value: "void" } as const;
+const stringArray = { type: "arrayType", elementType: string } as const;
+const anyArray = {
+  type: "arrayType",
+  elementType: { type: "primitiveType", value: "any" },
+} as const;
+
+/**
+ * Signatures for builtin / auto-imported functions that the typechecker
+ * needs to know about.
+ *
+ * NOTE: many entries here (print, fetch, read, etc.) are also defined as
+ * real functions in stdlib/index.agency. Ideally the typechecker would
+ * resolve them through the SymbolTable instead of hardcoding signatures.
+ * Until that lands, hardcoding here keeps arg-count and return-type
+ * checking working for callers.
+ */
 export const BUILTIN_FUNCTION_TYPES: Record<string, BuiltinSignature> = {
-  print: {
-    params: ["any"],
-    returnType: { type: "primitiveType", value: "void" },
-  },
-  printJSON: {
-    params: ["any"],
-    returnType: { type: "primitiveType", value: "void" },
-  },
-  input: {
-    params: [{ type: "primitiveType", value: "string" }],
-    returnType: { type: "primitiveType", value: "string" },
-  },
-  read: {
-    params: [{ type: "primitiveType", value: "string" }],
-    returnType: { type: "primitiveType", value: "string" },
-  },
-  readImage: {
-    params: [{ type: "primitiveType", value: "string" }],
-    returnType: { type: "primitiveType", value: "string" },
-  },
-  write: {
-    params: [
-      { type: "primitiveType", value: "string" },
-      { type: "primitiveType", value: "string" },
-    ],
-    returnType: { type: "primitiveType", value: "void" },
-  },
-  fetch: {
-    params: [{ type: "primitiveType", value: "string" }],
-    returnType: { type: "primitiveType", value: "string" },
-  },
-  fetchJSON: {
-    params: [{ type: "primitiveType", value: "string" }],
-    returnType: "any",
-  },
-  fetchJson: {
-    params: [{ type: "primitiveType", value: "string" }],
-    returnType: "any",
-  },
-  sleep: {
-    params: [{ type: "primitiveType", value: "number" }],
-    returnType: { type: "primitiveType", value: "void" },
-  },
-  round: {
-    params: [{ type: "primitiveType", value: "number" }],
-    returnType: { type: "primitiveType", value: "number" },
-  },
-  llm: {
-    params: ["any", "any"],
-    minParams: 1,
-    returnType: { type: "primitiveType", value: "string" },
-  },
+  // --- IO / debugging ---
+  print: { params: [], restParam: "any", returnType: voidT },
+  printJSON: { params: [], restParam: "any", returnType: voidT },
+  input: { params: [string], returnType: string },
+  read: { params: [string], returnType: string },
+  readImage: { params: [string], returnType: string },
+  write: { params: [string, string], returnType: voidT },
+  fetch: { params: [string], returnType: string },
+  fetchJSON: { params: [string], returnType: "any" },
+  notify: { params: [string, string], returnType: boolean },
+  sleep: { params: [number], returnType: voidT },
+  round: { params: [number, number], returnType: number },
+  llm: { params: ["any", "any"], minParams: 1, returnType: string },
+  emit: { params: [], restParam: "any", returnType: voidT },
+
+  // --- Object / array helpers (auto-imported from stdlib/index.agency) ---
+  range: { params: [number, number], minParams: 1, returnType: { type: "arrayType", elementType: number } },
+  keys: { params: ["any"], returnType: stringArray },
+  values: { params: ["any"], returnType: anyArray },
+  entries: { params: ["any"], returnType: anyArray },
+  mostCommon: { params: [anyArray], returnType: "any" },
+
+  // --- Result type (lib/runtime/result.ts) ---
+  success: { params: ["any"], returnType: "any" },
+  failure: { params: ["any", "any"], minParams: 1, returnType: "any" },
+  isSuccess: { params: ["any"], returnType: boolean },
+  isFailure: { params: ["any"], returnType: boolean },
+
+  // --- Checkpoint / rewind ---
+  restore: { params: ["any", "any"], returnType: voidT },
 };

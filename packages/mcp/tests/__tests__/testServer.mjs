@@ -13,7 +13,7 @@ server.tool(
   { a: z.number(), b: z.number() },
   async ({ a, b }) => {
     return {
-      content: [{ type: "text" as const, text: String(a + b) }],
+      content: [{ type: "text", text: String(a + b) }],
     };
   },
 );

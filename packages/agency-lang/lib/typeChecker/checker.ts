@@ -144,6 +144,7 @@ function checkArity(
   if (call.arguments.length >= minArgs && call.arguments.length <= maxArgs) return true;
   ctx.errors.push({
     message: `Expected ${formatArity(minArgs, maxArgs)} argument(s) for '${call.functionName}', but got ${call.arguments.length}.`,
+    loc: call.loc,
   });
   return false;
 }
@@ -188,6 +189,7 @@ function checkArgsAgainstParams(
         message: `Argument type '${formatTypeHint(argType)}' is not assignable to parameter type '${formatTypeHint(paramType)}' in call to '${call.functionName}'.`,
         expectedType: formatTypeHint(paramType),
         actualType: formatTypeHint(argType),
+        loc: call.loc,
       });
     }
   }
@@ -213,6 +215,7 @@ function checkSplatAgainstRemainingParams(
     ctx.errors.push({
       message: `Splat argument must be an array, got '${splatStr}' in call to '${call.functionName}'.`,
       actualType: splatStr,
+      loc: call.loc,
     });
     return;
   }
@@ -227,6 +230,7 @@ function checkSplatAgainstRemainingParams(
       message: `Splat element type '${elementStr}' is not assignable to parameter type '${paramStr}' in call to '${call.functionName}'.`,
       expectedType: paramStr,
       actualType: elementStr,
+      loc: call.loc,
     });
   }
 }

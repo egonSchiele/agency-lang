@@ -26,6 +26,7 @@ import { handleReferences } from "./references.js";
 import { handleRename, handlePrepareRename } from "./rename.js";
 import { handleTypeDefinition } from "./typeDefinition.js";
 import { getCodeActions } from "./codeAction.js";
+import { getWorkspaceSymbols } from "./workspaceSymbol.js";
 import type { DocumentState } from "./documentState.js";
 
 export function startServer(): void {
@@ -57,6 +58,7 @@ export function startServer(): void {
         documentHighlightProvider: true,
         foldingRangeProvider: true,
         codeActionProvider: true,
+        workspaceSymbolProvider: true,
         documentLinkProvider: {},
       },
     };
@@ -235,6 +237,14 @@ export function startServer(): void {
     const state = docStates.get(params.textDocument.uri);
     if (!doc || !state) return [];
     return getDocumentLinks(state.program, doc, uriToPath(doc.uri));
+  });
+
+  connection.onWorkspaceSymbol((params) => {
+    // Use the symbol table from the first available document state
+    for (const state of docStates.values()) {
+      return getWorkspaceSymbols(params.query, state.symbolTable);
+    }
+    return [];
   });
 
   documents.listen(connection);

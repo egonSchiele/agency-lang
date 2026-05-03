@@ -4,7 +4,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const TEST_SERVER_PATH = path.join(__dirname, "__tests__", "testServer.ts");
+const TEST_SERVER_PATH = path.join(__dirname, "__tests__", "testServer.mjs");
 
 describe("McpConnection", () => {
   let conn: McpConnection;
@@ -17,8 +17,8 @@ describe("McpConnection", () => {
 
   it("should connect to a stdio server, list tools, and call a tool", async () => {
     conn = new McpConnection("test", {
-      command: "npx",
-      args: ["tsx", TEST_SERVER_PATH],
+      command: "node",
+      args: [TEST_SERVER_PATH],
     });
 
     await conn.connect();

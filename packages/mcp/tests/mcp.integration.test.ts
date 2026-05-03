@@ -5,7 +5,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const TEST_SERVER_PATH = path.join(__dirname, "__tests__", "testServer.ts");
+const TEST_SERVER_PATH = path.join(__dirname, "__tests__", "testServer.mjs");
 
 describe("MCP integration", () => {
   let manager: McpManager;
@@ -19,8 +19,8 @@ describe("MCP integration", () => {
   it("tools survive JSON serialization round-trip and remain callable", async () => {
     manager = new McpManager({
       test: {
-        command: "npx",
-        args: ["tsx", TEST_SERVER_PATH],
+        command: "node",
+        args: [TEST_SERVER_PATH],
       },
     });
 

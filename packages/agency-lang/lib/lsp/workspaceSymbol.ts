@@ -1,13 +1,15 @@
 import { SymbolInformation, SymbolKind } from "vscode-languageserver-protocol";
 import type { SymbolTable, SymbolInfo } from "../symbolTable.js";
 import { pathToUri } from "./uri.js";
+import { TEMPLATE_OFFSET } from "./locations.js";
 
 function symbolKindToLsp(kind: SymbolInfo["kind"]): SymbolKind {
   switch (kind) {
     case "function": return SymbolKind.Function;
-    case "node": return SymbolKind.Class;
+    case "node": return SymbolKind.Module;
     case "type": return SymbolKind.TypeParameter;
     case "class": return SymbolKind.Class;
+    default: return SymbolKind.Variable;
   }
 }
 
@@ -31,7 +33,7 @@ export function getWorkspaceSymbols(
         location: {
           uri: pathToUri(filePath),
           range: sym.loc
-            ? { start: { line: sym.loc.line, character: sym.loc.col }, end: { line: sym.loc.line, character: sym.loc.col } }
+            ? { start: { line: sym.loc.line + TEMPLATE_OFFSET, character: sym.loc.col }, end: { line: sym.loc.line + TEMPLATE_OFFSET, character: sym.loc.col } }
             : { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } },
         },
       });

@@ -6,6 +6,7 @@ import {
   functionScope,
   nodeScope,
 } from "../types.js";
+import type { ResultType } from "../types/typeHints.js";
 import { scopeKey } from "../compilationUnit.js";
 import { walkNodes } from "../utils/node.js";
 import { isAssignable, widenType } from "./assignability.js";
@@ -77,14 +78,21 @@ export function inferReturnTypeFor(
       if (types.some((t) => t === "any")) {
         inferred = "any";
       } else {
-        const first = types[0] as VariableType;
-        const allSame = types.every(
-          (t) =>
-            t !== "any" &&
-            isAssignable(t, first, typeAliases) &&
-            isAssignable(first, t, typeAliases),
-        );
-        inferred = allSame ? first : "any";
+        const concrete = types as VariableType[];
+        // Returns that are all Result-typed merge into a single Result<T, E>
+        // so `if (...) return success(x); return failure(y)` infers as
+        // Result<typeof x, typeof y> instead of degrading to "any".
+        if (concrete.every((t) => t.type === "resultType")) {
+          inferred = mergeResultTypes(concrete as ResultTypes);
+        } else {
+          const first = concrete[0];
+          const allSame = concrete.every(
+            (t) =>
+              isAssignable(t, first, typeAliases) &&
+              isAssignable(first, t, typeAliases),
+          );
+          inferred = allSame ? first : "any";
+        }
       }
     }
 
@@ -92,4 +100,43 @@ export function inferReturnTypeFor(
     ctx.inferringReturnType.delete(name);
     return ctx.inferredReturnTypes[name];
   });
+}
+
+type ResultTypes = readonly ResultType[];
+
+const ANY_T: VariableType = { type: "primitiveType", value: "any" };
+
+/** True when t is the "any" sentinel synth result expressed as a primitive. */
+function isAnyType(t: VariableType): boolean {
+  return t.type === "primitiveType" && t.value === "any";
+}
+
+/**
+ * Merge multiple Result types from different return paths. The success type
+ * is the union of all non-`any` success types (or `any` if every branch is
+ * `any`); same for failure. This lets a function that returns
+ * `success(x)` in one branch and `failure(y)` in another infer as
+ * `Result<typeof x, typeof y>` instead of degrading to "any".
+ */
+function mergeResultTypes(results: ResultTypes): VariableType {
+  return {
+    type: "resultType",
+    successType: mergeResultParam(results.map((r) => r.successType)),
+    failureType: mergeResultParam(results.map((r) => r.failureType)),
+  };
+}
+
+function mergeResultParam(types: VariableType[]): VariableType {
+  const concrete = types.filter((t) => !isAnyType(t));
+  if (concrete.length === 0) return ANY_T;
+  if (concrete.length === 1) return concrete[0];
+  // Deduplicate by structure; collapse identical types.
+  const seen: VariableType[] = [];
+  for (const t of concrete) {
+    if (!seen.some((s) => JSON.stringify(s) === JSON.stringify(t))) {
+      seen.push(t);
+    }
+  }
+  if (seen.length === 1) return seen[0];
+  return { type: "unionType", types: seen };
 }

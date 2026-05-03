@@ -3831,5 +3831,214 @@ describe("TypeChecker", () => {
       };
       expect(typeCheck(program).errors).toHaveLength(0);
     });
+
+    it("pipe with a functionCall RHS resolves to its return type", () => {
+      // const r: Result<string, any> = success(10) |> labeler(?, "tag")
+      // Right is a functionCall (not a bare variableName), so synth flows
+      // through the regular call path rather than the function-reference
+      // shortcut.
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "function",
+            functionName: "labeler",
+            parameters: [
+              { type: "functionParameter", name: "n", typeHint: { type: "primitiveType", value: "number" } },
+              { type: "functionParameter", name: "tag", typeHint: { type: "primitiveType", value: "string" } },
+            ],
+            returnType: { type: "primitiveType", value: "string" },
+            body: [],
+          },
+          {
+            type: "assignment",
+            variableName: "r",
+            typeHint: {
+              type: "resultType",
+              successType: { type: "primitiveType", value: "string" },
+              failureType: { type: "primitiveType", value: "any" },
+            },
+            value: {
+              type: "binOpExpression",
+              operator: "|>",
+              left: {
+                type: "functionCall",
+                functionName: "success",
+                arguments: [{ type: "number", value: "10" }],
+              },
+              right: {
+                type: "functionCall",
+                functionName: "labeler",
+                arguments: [
+                  { type: "placeholder" },
+                  { type: "string", segments: [{ type: "text", value: "tag" }] },
+                ],
+              },
+            },
+          },
+        ],
+      };
+      expect(typeCheck(program).errors).toHaveLength(0);
+    });
+
+    it("function with branched success/failure returns infers as Result<T, E>", () => {
+      // def foo(b: boolean): Result {
+      //   if (b) { return success(10) } else { return failure("err") }
+      // }
+      // Inferred return should be Result<number, string>, so this assignment
+      // accepts and `failure(42)` would NOT (failureType is string).
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "function",
+            functionName: "foo",
+            parameters: [
+              { type: "functionParameter", name: "b", typeHint: { type: "primitiveType", value: "boolean" } },
+            ],
+            body: [
+              {
+                type: "ifElse",
+                condition: { type: "variableName", value: "b" },
+                thenBody: [
+                  {
+                    type: "returnStatement",
+                    value: {
+                      type: "functionCall",
+                      functionName: "success",
+                      arguments: [{ type: "number", value: "10" }],
+                    },
+                  },
+                ],
+                elseBody: [
+                  {
+                    type: "returnStatement",
+                    value: {
+                      type: "functionCall",
+                      functionName: "failure",
+                      arguments: [{ type: "string", segments: [{ type: "text", value: "err" }] }],
+                    },
+                  },
+                ],
+              },
+            ],
+          },
+          {
+            type: "assignment",
+            variableName: "r",
+            typeHint: {
+              type: "resultType",
+              successType: { type: "primitiveType", value: "number" },
+              failureType: { type: "primitiveType", value: "string" },
+            },
+            value: {
+              type: "functionCall",
+              functionName: "foo",
+              arguments: [{ type: "boolean", value: true }],
+            },
+          },
+        ],
+      };
+      expect(typeCheck(program).errors).toHaveLength(0);
+    });
+
+    it("catch on a non-Result still validates default vs left type", () => {
+      // const n: number = 42 catch "wrong"
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "assignment",
+            variableName: "n",
+            typeHint: { type: "primitiveType", value: "number" },
+            value: {
+              type: "binOpExpression",
+              operator: "catch",
+              left: { type: "number", value: "42" },
+              right: { type: "string", segments: [{ type: "text", value: "wrong" }] },
+            },
+          },
+        ],
+      };
+      const errors = typeCheck(program).errors;
+      expect(errors.some((e) => /catch default/.test(e.message))).toBe(true);
+    });
+
+    it("user-defined success shadows the Result constructor synth", () => {
+      // def success(): string { return "no" }
+      // const r: Result<number, any> = success(10)  -- arity mismatch + type mismatch
+      // The point: success() now resolves to the local def, not the special case.
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "function",
+            functionName: "success",
+            parameters: [],
+            returnType: { type: "primitiveType", value: "string" },
+            body: [],
+          },
+          {
+            type: "assignment",
+            variableName: "r",
+            typeHint: {
+              type: "resultType",
+              successType: { type: "primitiveType", value: "number" },
+              failureType: { type: "primitiveType", value: "any" },
+            },
+            value: {
+              type: "functionCall",
+              functionName: "success",
+              arguments: [],
+            },
+          },
+        ],
+      };
+      const errors = typeCheck(program).errors;
+      // Local success returns string, not Result — assignment should fail.
+      expect(errors.some((e) => /not assignable/.test(e.message))).toBe(true);
+    });
+
+    it("pipe synth flows the actual return type (regression: variableName RHS used to be 'any')", () => {
+      // const r: Result<string, any> = success(10) |> labeler
+      // labeler returns number. Pipe should synth as Result<number, any>,
+      // which is NOT assignable to Result<string, any>.
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "function",
+            functionName: "labeler",
+            parameters: [
+              { type: "functionParameter", name: "n", typeHint: { type: "primitiveType", value: "number" } },
+            ],
+            returnType: { type: "primitiveType", value: "number" },
+            body: [],
+          },
+          {
+            type: "assignment",
+            variableName: "r",
+            typeHint: {
+              type: "resultType",
+              successType: { type: "primitiveType", value: "string" },
+              failureType: { type: "primitiveType", value: "any" },
+            },
+            value: {
+              type: "binOpExpression",
+              operator: "|>",
+              left: {
+                type: "functionCall",
+                functionName: "success",
+                arguments: [{ type: "number", value: "10" }],
+              },
+              right: { type: "variableName", value: "labeler" },
+            },
+          },
+        ],
+      };
+      const errors = typeCheck(program).errors;
+      expect(errors.length).toBeGreaterThanOrEqual(1);
+      expect(errors[0].message).toMatch(/not assignable/);
+    });
   });
 });

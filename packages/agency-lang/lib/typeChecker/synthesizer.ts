@@ -17,9 +17,11 @@ const ANY_T: VariableType = { type: "primitiveType", value: "any" };
 const RESULT_CONSTRUCTORS = new Set<string>(["success", "failure"]);
 
 /**
- * Coerce a synth result to a concrete VariableType for embedding inside
- * structured types like ResultType (whose fields don't accept the "any"
- * sentinel string).
+ * `synthType` returns `VariableType | "any"` where `"any"` is the literal
+ * string sentinel meaning "we don't know". When we want to embed that
+ * result inside a structured VariableType (e.g. as ResultType.successType,
+ * which is just `VariableType`), convert the sentinel into the equivalent
+ * primitiveType("any") so the inner field is a real VariableType.
  */
 function asVarType(t: VariableType | "any"): VariableType {
   return t === "any" ? ANY_T : t;
@@ -164,10 +166,35 @@ function synthPipe(
   scope: Scope,
   ctx: TypeCheckerContext,
 ): VariableType | "any" {
-  const right = synthType(expr.right, scope, ctx);
+  const right = synthPipeRhs(expr.right, scope, ctx);
   if (right === "any") return "any";
   if (right.type === "resultType") return right;
   return { type: "resultType", successType: right, failureType: ANY_T };
+}
+
+/**
+ * The RHS of `|>` may be a function reference (`variableName`) — synthType
+ * on a bare identifier only consults `scope.lookup`, which returns "any"
+ * for top-level function names. Resolve via functionDefs / nodeDefs /
+ * importedFunctions so `... |> half` types as `Result<halfReturn>` rather
+ * than `any`. Other RHS forms (function calls, etc.) fall through to
+ * regular synth.
+ */
+function synthPipeRhs(
+  rhs: AgencyNode,
+  scope: Scope,
+  ctx: TypeCheckerContext,
+): VariableType | "any" {
+  if (rhs.type === "variableName") {
+    const name = rhs.value;
+    const fnReturn =
+      ctx.functionDefs[name]?.returnType ??
+      ctx.nodeDefs[name]?.returnType ??
+      ctx.inferredReturnTypes[name] ??
+      ctx.importedFunctions[name]?.returnType;
+    if (fnReturn) return fnReturn;
+  }
+  return synthType(rhs, scope, ctx);
 }
 
 function synthFunctionCall(
@@ -175,7 +202,20 @@ function synthFunctionCall(
   scope: Scope,
   ctx: TypeCheckerContext,
 ): VariableType | "any" {
-  if (RESULT_CONSTRUCTORS.has(expr.functionName) && expr.arguments.length >= 1) {
+  // Result constructors: parameterize ResultType from the argument so callers
+  // get `Result<T, any>` (success) or `Result<any, T>` (failure). Only fires
+  // when the name isn't shadowed by a local def or an import — that way a
+  // user who defines their own `success(...)` still resolves to their
+  // signature. Builtin entries don't shadow this case because the Result
+  // constructors are themselves builtin runtime functions; this special-case
+  // just gives them a more precise type than the flat builtin signature.
+  if (
+    RESULT_CONSTRUCTORS.has(expr.functionName) &&
+    expr.arguments.length >= 1 &&
+    !(expr.functionName in ctx.functionDefs) &&
+    !(expr.functionName in ctx.nodeDefs) &&
+    !(expr.functionName in ctx.importedFunctions)
+  ) {
     const inner = asPositionalArg(expr.arguments[0]);
     if (inner) {
       const innerType = asVarType(synthType(inner, scope, ctx));

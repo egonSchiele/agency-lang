@@ -39,6 +39,12 @@ export function widenType(vt: VariableType | "any"): VariableType | "any" {
         type: "unionType",
         types: vt.types.map((t) => widenType(t) as VariableType),
       };
+    case "resultType":
+      return {
+        type: "resultType",
+        successType: widenType(vt.successType) as VariableType,
+        failureType: widenType(vt.failureType) as VariableType,
+      };
     default:
       return vt;
   }

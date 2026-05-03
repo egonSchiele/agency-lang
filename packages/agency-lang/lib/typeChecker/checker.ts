@@ -270,9 +270,10 @@ function checkExpressionsInScope(
 }
 
 /**
- * `expr catch default`: when `expr` is a Result<T>, the default arm is
- * returned in place of the success value on failure, so its type must be
- * assignable to `T`.
+ * `expr catch default`: the default arm replaces the value on failure, so
+ * its type must be assignable to whatever `expr` evaluates to. When `expr`
+ * is a Result<T>, that's `T`; otherwise (catch on a non-Result is a no-op
+ * at runtime) it's the left's own type.
  */
 function checkCatchDefaultType(
   node: AgencyNode & { type: "binOpExpression" },
@@ -280,6 +281,7 @@ function checkCatchDefaultType(
   ctx: TypeCheckerContext,
 ): void {
   const left = synthType(node.left, scope, ctx);
-  if (left === "any" || left.type !== "resultType") return;
-  checkType(node.right, left.successType, scope, "catch default", ctx);
+  if (left === "any") return;
+  const expected = left.type === "resultType" ? left.successType : left;
+  checkType(node.right, expected, scope, "catch default", ctx);
 }

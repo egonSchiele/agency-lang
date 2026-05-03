@@ -8,7 +8,7 @@ import { TypeAlias, VariableType } from "@/types/typeHints.js";
 import { FunctionDefinition, FunctionParameter } from "@/types/function.js";
 import { GraphNodeDefinition } from "@/types/graphNode.js";
 import { TypescriptPreprocessor } from "@/preprocessors/typescriptPreprocessor.js";
-import { collectProgramInfo, GLOBAL_SCOPE_KEY } from "@/programInfo.js";
+import { buildCompilationUnit, GLOBAL_SCOPE_KEY } from "@/compilationUnit.js";
 import {
   heading,
   codeFence,
@@ -56,7 +56,7 @@ export function generateDoc(
 
       parsedPrograms.set(filePath, { program, relativePath, mdRelPath });
 
-      const info = collectProgramInfo(program);
+      const info = buildCompilationUnit(program);
       for (const name of Object.keys(info.functionDefinitions)) {
         symbolRegistry[name] = mdRelPath;
       }
@@ -64,7 +64,7 @@ export function generateDoc(
         symbolRegistry[node.nodeName] = mdRelPath;
       }
       for (const name of Object.keys(
-        info.typeAliases[GLOBAL_SCOPE_KEY] || {},
+        info.typeAliases.get(GLOBAL_SCOPE_KEY) ?? {},
       )) {
         symbolRegistry[name] = mdRelPath;
       }
@@ -125,7 +125,7 @@ function generateDocForFile(
   ctx: DocContext,
   program: AgencyProgram,
 ): void {
-  const info = collectProgramInfo(program);
+  const info = buildCompilationUnit(program);
 
   const typeAliases: TypeAlias[] = [];
   for (const node of program.nodes) {

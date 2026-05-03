@@ -1,5 +1,5 @@
 import { AgencyConfig, BUILTIN_FUNCTIONS } from "@/config.js";
-import type { ProgramInfo } from "@/programInfo.js";
+import type { CompilationUnit } from "@/compilationUnit.js";
 import {
   AgencyMultiLineComment,
   AgencyNode,
@@ -160,7 +160,7 @@ export class TypescriptPreprocessor {
   constructor(
     program: AgencyProgram,
     config: AgencyConfig = {},
-    info?: ProgramInfo,
+    info?: CompilationUnit,
   ) {
     this.program = program;
     this.config = config;

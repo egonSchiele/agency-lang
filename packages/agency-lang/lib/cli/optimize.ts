@@ -5,7 +5,7 @@ import { parseAgency } from "@/parser.js";
 import { exprParser } from "@/parsers/parsers.js";
 import { Tag, AgencyProgram, AgencyNode, PromptSegment, FunctionParameter, GraphNodeDefinition } from "@/types.js";
 import { TypescriptPreprocessor } from "@/preprocessors/typescriptPreprocessor.js";
-import { collectProgramInfo } from "@/programInfo.js";
+import { buildCompilationUnit } from "@/compilationUnit.js";
 import { AgencyGenerator } from "@/backends/agencyGenerator.js";
 import { expressionToString } from "@/utils/node.js";
 import { OptimizerIO, DefaultOptimizerIO } from "./optimizerIO.js";
@@ -103,7 +103,7 @@ export async function optimize(
     process.exit(1);
   }
 
-  const info = collectProgramInfo(parsed.result);
+  const info = buildCompilationUnit(parsed.result);
   const preprocessor = new TypescriptPreprocessor(parsed.result, config, info);
   const program = preprocessor.preprocess();
 

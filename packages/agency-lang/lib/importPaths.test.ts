@@ -10,7 +10,7 @@ import {
   resolvePkgAgencyPath,
 } from "./importPaths.js";
 import { CompileStrategy, RunStrategy } from "./importStrategy.js";
-import { buildSymbolTable } from "./symbolTable.js";
+import { SymbolTable } from "./symbolTable.js";
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
@@ -197,7 +197,7 @@ describe("toCompiledImportPath for pkg::", () => {
   });
 });
 
-describe("buildSymbolTable with std:: imports", () => {
+describe("SymbolTable.build with std:: imports", () => {
   it("should resolve std:: imports and include their symbols", () => {
     // Create a temp file that imports from std::math
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "agency-test-"));
@@ -207,12 +207,12 @@ describe("buildSymbolTable with std:: imports", () => {
       'import { add } from "std::math"\nnode main() {\n  return add(1, 2)\n}\n',
     );
 
-    const table = buildSymbolTable(tmpFile);
+    const table = SymbolTable.build(tmpFile);
     const stdlibMathPath = path.join(getStdlibDir(), "math.agency");
 
     // The symbol table should contain entries for the stdlib file
-    expect(table[stdlibMathPath]).toBeDefined();
-    expect(table[stdlibMathPath]["add"]).toMatchObject({
+    expect(table.has(stdlibMathPath)).toBe(true);
+    expect(table.getFile(stdlibMathPath)?.["add"]).toMatchObject({
       kind: "function",
       name: "add",
     });
@@ -266,18 +266,18 @@ describe("pkg:: resolution with fixture package", () => {
   });
 });
 
-describe("buildSymbolTable with pkg:: imports", () => {
+describe("SymbolTable.build with pkg:: imports", () => {
   it("should follow pkg:: imports and classify symbols", () => {
-    const table = buildSymbolTable(FIXTURE_MAIN);
+    const table = SymbolTable.build(FIXTURE_MAIN);
     const pkgIndexPath = path.join(FIXTURE_PKG_DIR, "index.agency");
 
     // The symbol table should contain the package's symbols
-    expect(table[pkgIndexPath]).toBeDefined();
-    expect(table[pkgIndexPath]["double"]).toMatchObject({
+    expect(table.has(pkgIndexPath)).toBe(true);
+    expect(table.getFile(pkgIndexPath)?.["double"]).toMatchObject({
       kind: "function",
       name: "double",
     });
-    expect(table[pkgIndexPath]["greet"]).toMatchObject({
+    expect(table.getFile(pkgIndexPath)?.["greet"]).toMatchObject({
       kind: "function",
       name: "greet",
     });
@@ -292,11 +292,11 @@ describe("buildSymbolTable with pkg:: imports", () => {
     );
 
     try {
-      const table = buildSymbolTable(tmpFile);
+      const table = SymbolTable.build(tmpFile);
       const pkgFooPath = path.join(FIXTURE_PKG2_DIR, "foo.agency");
 
-      expect(table[pkgFooPath]).toBeDefined();
-      expect(table[pkgFooPath]["square"]).toMatchObject({
+      expect(table.has(pkgFooPath)).toBe(true);
+      expect(table.getFile(pkgFooPath)?.["square"]).toMatchObject({
         kind: "function",
         name: "square",
       });

@@ -1,3 +1,4 @@
+import type { Scope } from "./scope.js";
 import { AgencyConfig } from "../config.js";
 import {
   AgencyNode,
@@ -6,6 +7,7 @@ import {
   VariableType,
 } from "../types.js";
 import { SourceLocation } from "../types/base.js";
+import type { ScopedTypeAliases } from "../compilationUnit.js";
 
 export type TypeCheckError = {
   message: string;
@@ -20,7 +22,7 @@ export type TypeCheckResult = {
 };
 
 export type ScopeInfo = {
-  variableTypes: Record<string, VariableType | "any">;
+  scope: Scope;
   body: AgencyNode[];
   name: string;
   scopeKey: string;
@@ -35,7 +37,7 @@ export type BuiltinSignature = {
 
 export type TypeCheckerContext = {
   programNodes: AgencyNode[];
-  scopedTypeAliases: Record<string, Record<string, VariableType>>;
+  scopedTypeAliases: ScopedTypeAliases;
   currentScopeKey: string;
   functionDefs: Record<string, FunctionDefinition>;
   nodeDefs: Record<string, GraphNodeDefinition>;
@@ -45,4 +47,8 @@ export type TypeCheckerContext = {
   config: AgencyConfig;
   getTypeAliases(): Record<string, VariableType>;
   withScope<T>(key: string, fn: () => T): T;
+  inferReturnTypeFor(
+    name: string,
+    def: FunctionDefinition | GraphNodeDefinition,
+  ): VariableType | "any";
 };

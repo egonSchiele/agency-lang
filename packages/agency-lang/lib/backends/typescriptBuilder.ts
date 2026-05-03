@@ -97,8 +97,8 @@ import type {
   TsParam,
   TsTemplatePart,
 } from "../ir/tsIR.js";
-import type { ProgramInfo } from "../programInfo.js";
-import { getVisibleTypes, scopeKey } from "../programInfo.js";
+import type { CompilationUnit } from "../compilationUnit.js";
+import { scopeKey } from "../compilationUnit.js";
 import { SourceMapBuilder } from "./sourceMap.js";
 
 const DEFAULT_PROMPT_NAME = "__promptVar";
@@ -167,7 +167,7 @@ export class TypeScriptBuilder {
   private _sourceMapBuilder: SourceMapBuilder = new SourceMapBuilder();
 
 
-  private programInfo: ProgramInfo;
+  private compilationUnit: CompilationUnit;
   private moduleId: string;
   private outputFile: string | undefined;
 
@@ -183,12 +183,12 @@ export class TypeScriptBuilder {
    */
   constructor(
     config: AgencyConfig | undefined,
-    info: ProgramInfo,
+    info: CompilationUnit,
     moduleId: string,
     outputFile?: string,
   ) {
     this.agencyConfig = mergeDeep(this.configDefaults(), config || {});
-    this.programInfo = info;
+    this.compilationUnit = info;
     this.moduleId = moduleId;
     this.outputFile = outputFile;
   }
@@ -302,10 +302,7 @@ export class TypeScriptBuilder {
   }
 
   private getVisibleTypeAliases(): Record<string, VariableType> {
-    return getVisibleTypes(
-      this.programInfo.typeAliases,
-      this.currentScopeKey(),
-    );
+    return this.compilationUnit.typeAliases.visibleIn(this.currentScopeKey());
   }
 
   private forkBranchSetup(branchKey: string): TsNode[] {
@@ -372,7 +369,7 @@ export class TypeScriptBuilder {
   private _buildImportNameSets(): void {
     this._plainTsImportNames = new Set<string>();
     this._agencyImportNames = new Set<string>();
-    for (const stmt of this.programInfo.importStatements) {
+    for (const stmt of this.compilationUnit.importStatements) {
       const targetSet = stmt.isAgencyImport
         ? this._agencyImportNames
         : this._plainTsImportNames;
@@ -386,10 +383,10 @@ export class TypeScriptBuilder {
 
   private isGraphNode(functionName: string): boolean {
     return (
-      this.programInfo.graphNodes
+      this.compilationUnit.graphNodes
         .map((n) => n.nodeName)
         .includes(functionName) ||
-      this.programInfo.importedNodes
+      this.compilationUnit.importedNodes
         .map((n) => n.importedNodes)
         .flat()
         .includes(functionName)
@@ -414,7 +411,7 @@ export class TypeScriptBuilder {
     }
     return (
       (this._plainTsImportNames!.has(functionName) || this._agencyImportNames!.has(functionName)) &&
-      !this.programInfo.safeFunctions[functionName]
+      !this.compilationUnit.safeFunctions[functionName]
     );
   }
 
@@ -436,14 +433,14 @@ export class TypeScriptBuilder {
         return undefined;
       case "function": {
         const funcDef =
-          this.programInfo.functionDefinitions[currentScope.functionName];
+          this.compilationUnit.functionDefinitions[currentScope.functionName];
         if (funcDef && funcDef.returnType) {
           return funcDef.returnType;
         }
         return undefined;
       }
       case "node": {
-        const graphNode = this.programInfo.graphNodes.find(
+        const graphNode = this.compilationUnit.graphNodes.find(
           (n) => n.nodeName === currentScope.nodeName,
         );
         if (graphNode && graphNode.returnType) {
@@ -461,11 +458,11 @@ export class TypeScriptBuilder {
     switch (currentScope.type) {
       case "function": {
         const funcDef =
-          this.programInfo.functionDefinitions[currentScope.functionName];
+          this.compilationUnit.functionDefinitions[currentScope.functionName];
         return !!funcDef?.returnTypeValidated;
       }
       case "node": {
-        const graphNode = this.programInfo.graphNodes.find(
+        const graphNode = this.compilationUnit.graphNodes.find(
           (n) => n.nodeName === currentScope.nodeName,
         );
         return !!graphNode?.returnTypeValidated;
@@ -1165,7 +1162,7 @@ export class TypeScriptBuilder {
    * Used to decide whether to inject __state into method calls.
    */
   private isKnownClassMethod(methodName: string): boolean {
-    for (const classDef of Object.values(this.programInfo.classDefinitions)) {
+    for (const classDef of Object.values(this.compilationUnit.classDefinitions)) {
       if (classDef.methods.some((m) => m.name === methodName)) {
         return true;
       }
@@ -1200,7 +1197,7 @@ export class TypeScriptBuilder {
   private collectAllClassFields(node: ClassDefinition): ClassField[] {
     const allFields: ClassField[] = [];
     if (node.parentClass) {
-      const parent = this.programInfo.classDefinitions[node.parentClass];
+      const parent = this.compilationUnit.classDefinitions[node.parentClass];
       if (parent) {
         allFields.push(...this.collectAllClassFields(parent));
       }
@@ -1267,7 +1264,7 @@ export class TypeScriptBuilder {
       allFields: allFields.map((f) => ({ name: f.name })),
       constructorParamsStr: allFields.map((f) => `${f.name}: ${formatTypeHint(f.typeHint)}`).join(", "),
       superArgsStr: parentClass
-        ? this.collectAllClassFields(this.programInfo.classDefinitions[parentClass]).map((f) => f.name).join(", ")
+        ? this.collectAllClassFields(this.compilationUnit.classDefinitions[parentClass]).map((f) => f.name).join(", ")
         : "",
       methods: methods.map((m) => this.buildMethodCode(m, className)),
     }));
@@ -1485,8 +1482,8 @@ export class TypeScriptBuilder {
    */
   private processBlockArgument(node: Pick<FunctionCall, "block"> & { functionName?: string }): TsNode {
     const block = node.block!;
-    const fnDef = node.functionName ? this.programInfo.functionDefinitions[node.functionName] : undefined;
-    const imported = node.functionName ? this.programInfo.importedFunctions[node.functionName] : undefined;
+    const fnDef = node.functionName ? this.compilationUnit.functionDefinitions[node.functionName] : undefined;
+    const imported = node.functionName ? this.compilationUnit.importedFunctions[node.functionName] : undefined;
     const paramList = fnDef?.parameters ?? imported?.parameters;
     const blockType = paramList
       ?.map((p) => p.typeHint)
@@ -1539,7 +1536,7 @@ export class TypeScriptBuilder {
   private buildToolDefinition(node: FunctionDefinition): TsNode {
     const { functionName, parameters } = node;
     if (
-      this.programInfo.graphNodes.map((n) => n.nodeName).includes(functionName)
+      this.compilationUnit.graphNodes.map((n) => n.nodeName).includes(functionName)
     ) {
       throw new Error(
         `There is already a node named '${functionName}'. Functions can't have the same name as an existing node.`,
@@ -2244,7 +2241,7 @@ export class TypeScriptBuilder {
 
   private generateNodeCallExpression(node: FunctionCall): TsNode {
     const functionName = mapFunctionName(node.functionName);
-    const targetNode = this.programInfo.graphNodes.find(
+    const targetNode = this.compilationUnit.graphNodes.find(
       (n) => n.nodeName === functionName,
     );
     const resolvedArgs = this.resolveNamedArgs(node, targetNode?.parameters, true);
@@ -3432,7 +3429,7 @@ export class TypeScriptBuilder {
 
   private preprocess(): TsNode[] {
     const nodes: TsNode[] = [];
-    this.programInfo.importedNodes.forEach((importNode) => {
+    this.compilationUnit.importedNodes.forEach((importNode) => {
       const from = importNode.agencyFile.replace(".agency", ".js");
       const defaultImportName = this.agencyFileToDefaultImportName(
         importNode.agencyFile,
@@ -3473,7 +3470,7 @@ export class TypeScriptBuilder {
       );
     });
 
-    this.programInfo.importedNodes.forEach((importNode) => {
+    this.compilationUnit.importedNodes.forEach((importNode) => {
       const defaultImportName = this.agencyFileToDefaultImportName(
         importNode.agencyFile,
       );
@@ -3485,7 +3482,7 @@ export class TypeScriptBuilder {
       );
     });
 
-    for (const node of this.programInfo.graphNodes) {
+    for (const node of this.compilationUnit.graphNodes) {
       const args = node.parameters;
       const fnParams: {
         name: string;
@@ -3539,7 +3536,7 @@ export class TypeScriptBuilder {
       );
     }
 
-    if (this.programInfo.graphNodes.map((n) => n.nodeName).includes("main")) {
+    if (this.compilationUnit.graphNodes.map((n) => n.nodeName).includes("main")) {
       result.push(
         ts.if(
           ts.binOp(

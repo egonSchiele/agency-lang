@@ -15,15 +15,10 @@ node greet(name: string) {
   return "hi"
 }
 `);
-    expect(symbols.greet).toEqual({
+    expect(symbols.greet).toMatchObject({
       kind: "node",
-      loc: {
-        col: 0,
-        end: 43,
-        line: -1,
-        start: 1,
-      },
       name: "greet",
+      loc: { col: 0, end: 43, line: -1, start: 1 },
     });
   });
 
@@ -33,8 +28,10 @@ def add(a: number, b: number) {
   return a + b
 }
 `);
-    expect(symbols.add).toMatchObject({ kind: "function", name: "add" });
-    expect(symbols.add.parameters).toHaveLength(2);
+    const add = symbols.add;
+    expect(add).toMatchObject({ kind: "function", name: "add" });
+    if (add.kind !== "function") throw new Error("expected function");
+    expect(add.parameters).toHaveLength(2);
   });
 
   it("classifies type aliases", () => {
@@ -58,15 +55,10 @@ node main() {
 `);
     expect(symbols.Config).toMatchObject({ kind: "type", name: "Config" });
     expect(symbols.helper).toMatchObject({ kind: "function", name: "helper" });
-    expect(symbols.main).toEqual({
+    expect(symbols.main).toMatchObject({
       kind: "node",
-      loc: {
-        col: 0,
-        end: 96,
-        line: 5,
-        start: 63,
-      },
       name: "main",
+      loc: { col: 0, end: 96, line: 5, start: 63 },
     });
   });
 

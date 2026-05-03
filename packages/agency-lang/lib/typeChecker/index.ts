@@ -1,6 +1,6 @@
 import { color } from "@/utils/termcolors.js";
-import type { ProgramInfo } from "../programInfo.js";
-import { GLOBAL_SCOPE_KEY, getVisibleTypes, scopeKey, collectProgramInfo } from "../programInfo.js";
+import type { CompilationUnit } from "../compilationUnit.js";
+import { GLOBAL_SCOPE_KEY, ScopedTypeAliases, scopeKey, buildCompilationUnit } from "../compilationUnit.js";
 import { AgencyConfig } from "../config.js";
 import {
   AgencyProgram,
@@ -15,14 +15,13 @@ import { buildScopes } from "./scopes.js";
 import { checkScopes } from "./checker.js";
 import { isAssignable as _isAssignable } from "./assignability.js";
 import { inferReturnTypeFor } from "./inference.js";
-import { makeSynthContext } from "./utils.js";
 
 export type { TypeCheckError, TypeCheckResult } from "./types.js";
 
 export class TypeChecker {
   private program: AgencyProgram;
   private config: AgencyConfig;
-  private scopedTypeAliases: Record<string, Record<string, VariableType>> = {};
+  private scopedTypeAliases: ScopedTypeAliases = new ScopedTypeAliases();
   private currentScopeKey: string = GLOBAL_SCOPE_KEY;
   private functionDefs: Record<string, FunctionDefinition> = {};
   private nodeDefs: Record<string, GraphNodeDefinition> = {};
@@ -30,13 +29,11 @@ export class TypeChecker {
   private inferredReturnTypes: Record<string, VariableType | "any"> = {};
   private inferringReturnType = new Set<string>();
 
-  constructor(program: AgencyProgram, config: AgencyConfig = {}, info?: ProgramInfo) {
+  constructor(program: AgencyProgram, config: AgencyConfig = {}, info?: CompilationUnit) {
     this.program = program;
     this.config = config;
-    const resolved = info ?? collectProgramInfo(program);
-    this.scopedTypeAliases = Object.fromEntries(
-      Object.entries(resolved.typeAliases).map(([k, v]) => [k, { ...v }]),
-    );
+    const resolved = info ?? buildCompilationUnit(program);
+    this.scopedTypeAliases = resolved.typeAliases.clone();
     this.functionDefs = { ...resolved.functionDefinitions };
     this.nodeDefs = Object.fromEntries(
       resolved.graphNodes.map((n) => [n.nodeName, n]),
@@ -44,7 +41,7 @@ export class TypeChecker {
   }
 
   private get typeAliases(): Record<string, VariableType> {
-    return getVisibleTypes(this.scopedTypeAliases, this.currentScopeKey);
+    return this.scopedTypeAliases.visibleIn(this.currentScopeKey);
   }
 
   private withScope<T>(key: string, fn: () => T): T {
@@ -58,7 +55,7 @@ export class TypeChecker {
   }
 
   private makeContext(): TypeCheckerContext {
-    return {
+    const ctx: TypeCheckerContext = {
       programNodes: this.program.nodes,
       scopedTypeAliases: this.scopedTypeAliases,
       currentScopeKey: this.currentScopeKey,
@@ -70,7 +67,9 @@ export class TypeChecker {
       config: this.config,
       getTypeAliases: () => this.typeAliases,
       withScope: <T>(key: string, fn: () => T): T => this.withScope(key, fn),
+      inferReturnTypeFor: (name, def) => inferReturnTypeFor(name, def, ctx),
     };
+    return ctx;
   }
 
   check(): TypeCheckResult {
@@ -78,7 +77,7 @@ export class TypeChecker {
     const ctx = this.makeContext();
 
     // 1. Validate type alias references
-    for (const [sk, scopeAliases] of Object.entries(this.scopedTypeAliases)) {
+    for (const [sk, scopeAliases] of this.scopedTypeAliases.scopes()) {
       this.withScope(sk, () => {
         for (const [name, aliasedType] of Object.entries(scopeAliases)) {
           validateTypeReferences(aliasedType, name, this.typeAliases, this.errors);
@@ -86,20 +85,14 @@ export class TypeChecker {
       });
     }
 
-    // Create SynthContext once, shared across all phases
-    let synthCtx: ReturnType<typeof makeSynthContext>;
-    synthCtx = makeSynthContext(ctx, (name, def) =>
-      inferReturnTypeFor(name, def, ctx, synthCtx),
-    );
-
     // 2. Infer return types
-    inferReturnTypes(ctx, synthCtx);
+    inferReturnTypes(ctx);
 
     // 3. Build scopes (collects variable types and checks assignments)
-    const scopes = buildScopes(ctx, synthCtx);
+    const scopes = buildScopes(ctx);
 
     // 4. Check function calls, return types, and expressions
-    checkScopes(scopes, ctx, synthCtx);
+    checkScopes(scopes, ctx);
 
     return { errors: this.deduplicateErrors() };
   }
@@ -126,7 +119,7 @@ export class TypeChecker {
 export function typeCheck(
   program: AgencyProgram,
   config: AgencyConfig = {},
-  info?: ProgramInfo,
+  info?: CompilationUnit,
 ): TypeCheckResult {
   const checker = new TypeChecker(program, config, info);
   return checker.check();

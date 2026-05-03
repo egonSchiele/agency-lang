@@ -1,12 +1,13 @@
 import { describe, it, expect } from "vitest";
 import { TextDocument } from "vscode-languageserver-textdocument";
 import { runDiagnostics } from "./diagnostics.js";
+import { SymbolTable } from "../symbolTable.js";
 
 function makeDoc(content: string, uri = "file:///test.agency") {
   return TextDocument.create(uri, "agency", 1, content);
 }
 
-const emptySymbolTable = {};
+const emptySymbolTable = new SymbolTable();
 
 describe("runDiagnostics", () => {
   it("returns empty diagnostics for valid code", () => {

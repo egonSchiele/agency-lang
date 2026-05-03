@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { parseAgency } from "../parser.js";
 import { TypeScriptBuilder } from "./typescriptBuilder.js";
 import { TypescriptPreprocessor } from "@/preprocessors/typescriptPreprocessor.js";
-import { collectProgramInfo } from "@/programInfo.js";
+import { buildCompilationUnit } from "@/compilationUnit.js";
 import { printTs } from "../ir/prettyPrint.js";
 import fs from "fs";
 import path from "path";
@@ -82,7 +82,7 @@ export function generateWithBuilder(agencySource: string, moduleId: string = "te
   if (!parseResult.success) {
     throw new Error(`Failed to parse: ${parseResult.message}`);
   }
-  const info = collectProgramInfo(parseResult.result);
+  const info = buildCompilationUnit(parseResult.result);
   const preprocessor = new TypescriptPreprocessor(parseResult.result, {}, info);
   const preprocessedProgram = preprocessor.preprocess();
   const builder = new TypeScriptBuilder(undefined, info, moduleId);

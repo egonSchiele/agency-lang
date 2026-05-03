@@ -5,19 +5,19 @@ import {
 import { TextDocument } from "vscode-languageserver-textdocument";
 import { parseAgency } from "../parser.js";
 import { resolveImports } from "../preprocessors/importResolver.js";
-import { collectProgramInfo } from "../programInfo.js";
+import { buildCompilationUnit } from "../compilationUnit.js";
 import { typeCheck } from "../typeChecker/index.js";
 import { AgencyConfig } from "../config.js";
 import { SymbolTable } from "../symbolTable.js";
 import { AgencyProgram } from "../types.js";
-import { ProgramInfo } from "../programInfo.js";
+import { CompilationUnit } from "../compilationUnit.js";
 import { buildSemanticIndex, type SemanticIndex } from "./semantics.js";
 import { TEMPLATE_OFFSET } from "./locations.js";
 
 type DiagnosticsResult = {
   diagnostics: Diagnostic[];
   program: AgencyProgram | null;
-  info: ProgramInfo | null;
+  info: CompilationUnit | null;
   semanticIndex: SemanticIndex;
 };
 
@@ -68,7 +68,7 @@ export function runDiagnostics(
     return { diagnostics, program: null, info: null, semanticIndex: {} };
   }
 
-  const info = collectProgramInfo(program, symbolTable);
+  const info = buildCompilationUnit(program, symbolTable, fsPath);
   const { errors } = typeCheck(program, config, info);
 
   for (const err of errors) {

@@ -10,7 +10,7 @@ import {
 } from "vscode-languageserver/node.js";
 import { TextDocument } from "vscode-languageserver-textdocument";
 import { AgencyProgram } from "../types.js";
-import { buildSymbolTable } from "../symbolTable.js";
+import { SymbolTable } from "../symbolTable.js";
 import { uriToPath } from "./uri.js";
 import { getWorkspaceForFile, invalidateWorkspace } from "./workspace.js";
 import { runDiagnostics } from "./diagnostics.js";
@@ -19,7 +19,7 @@ import { getDocumentSymbols } from "./documentSymbol.js";
 import { handleFormatting } from "./formatting.js";
 import { handleHover } from "./hover.js";
 import { getCompletions } from "./completion.js";
-import type { ProgramInfo } from "../programInfo.js";
+import type { CompilationUnit } from "../compilationUnit.js";
 import type { SemanticIndex } from "./semantics.js";
 
 export function startServer(): void {
@@ -31,7 +31,7 @@ export function startServer(): void {
 
   // Per-document state: latest parsed program and program info
   const docPrograms = new Map<string, AgencyProgram>();
-  const docInfos = new Map<string, ProgramInfo>();
+  const docInfos = new Map<string, CompilationUnit>();
   const docSemanticIndexes = new Map<string, SemanticIndex>();
 
   // Debounce timers for diagnostics (per URI)
@@ -54,9 +54,9 @@ export function startServer(): void {
     const fsPath = uriToPath(doc.uri);
     const { config } = getWorkspaceForFile(fsPath);
 
-    let symbolTable = {};
+    let symbolTable = new SymbolTable();
     try {
-      symbolTable = buildSymbolTable(fsPath, config);
+      symbolTable = SymbolTable.build(fsPath, config);
     } catch {
       // If symbol table build fails (e.g. file not on disk yet), continue with empty table
     }

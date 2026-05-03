@@ -1,9 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { CompletionItemKind } from "vscode-languageserver-protocol";
+import { CompletionItemKind, InsertTextFormat } from "vscode-languageserver-protocol";
 import { getCompletions } from "./completion.js";
 import { parseAgency } from "../parser.js";
 import { buildCompilationUnit } from "../compilationUnit.js";
 import { SymbolTable } from "@/symbolTable.js";
+import { typeCheck } from "../typeChecker/index.js";
 
 function parse(source: string) {
   const r = parseAgency(source, {}, false);
@@ -12,13 +13,15 @@ function parse(source: string) {
 }
 
 describe("getCompletions", () => {
-  it("includes function definitions as Function items", () => {
-    const program = parse("def greet() { let x: string = `hi` }");
+  it("includes function definitions as Function items with detail", () => {
+    const program = parse('def greet(name: string): string {\n  """\n  Say hello\n  """\n  return `hi ${name}`\n}');
     const info = buildCompilationUnit(program, new SymbolTable());
     const items = getCompletions(info);
     const greet = items.find((i) => i.label === "greet");
     expect(greet).toBeDefined();
     expect(greet?.kind).toBe(CompletionItemKind.Function);
+    expect(greet?.detail).toBe("(name: string): string");
+    expect(greet?.documentation).toBe("Say hello");
   });
 
   it("includes graph nodes as Module items", () => {
@@ -46,6 +49,44 @@ describe("getCompletions", () => {
     const labels = items.map((i) => i.label);
     const unique = new Set(labels);
     expect(labels.length).toBe(unique.size);
+  });
+
+  it("returns object fields after dot", () => {
+    // Use a complete, parseable source. The dot-completion logic inspects
+    // the raw text at the cursor position, not the AST, so we place the
+    // cursor right after "x." on a line that has a full expression.
+    const source = 'type Foo = { name: string, age: number }\nnode main() {\n  let x: Foo = llm("hi")\n  x.name\n}';
+    const program = parse(source);
+    const info = buildCompilationUnit(program, new SymbolTable());
+    const { scopes } = typeCheck(program, {}, info);
+    // Cursor at line 3, character 4 (right after "x.")
+    const items = getCompletions(info, { source, line: 3, character: 4, scopes, program, fsPath: "/test.agency" });
+    const names = items.map((i) => i.label);
+    expect(names).toContain("name");
+    expect(names).toContain("age");
+    expect(names).not.toContain("main");
+  });
+
+  it("includes snippet completions with correct format", () => {
+    const program = parse("node main() { }");
+    const info = buildCompilationUnit(program, new SymbolTable());
+    const items = getCompletions(info);
+    const defSnippet = items.find((i) => i.label === "def" && i.kind === CompletionItemKind.Snippet);
+    expect(defSnippet).toBeDefined();
+    expect(defSnippet!.insertTextFormat).toBe(InsertTextFormat.Snippet);
+    expect(defSnippet!.insertText).toContain("${1:");
+  });
+
+  it("suggests stdlib modules in import path", () => {
+    const source = 'import { map } from "s';
+    const program = parse("node main() { }");
+    const info = buildCompilationUnit(program, new SymbolTable());
+    const { scopes } = typeCheck(program, {}, info);
+    // Cursor after typing "s" inside the import path
+    const items = getCompletions(info, { source, line: 0, character: 22, scopes, program, fsPath: "/test.agency" });
+    const stdArray = items.find((i) => i.label === "std::array");
+    expect(stdArray).toBeDefined();
+    expect(stdArray!.kind).toBe(CompletionItemKind.Module);
   });
 
   it("returns empty array for empty program", () => {

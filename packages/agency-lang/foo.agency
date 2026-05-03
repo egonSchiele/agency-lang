@@ -1,5 +1,22 @@
+import { greet } from "./bar.agency"
 import { map } from "std::array"
-def riskyOp(label: string): string {
-  interrupt("approve ${label}?")
-  return "confirmed: ${label}"
+type Foo = {
+  name: string;
+  description: string;
+  capabilities: string[]
+}
+
+node main() {
+  print(color.cyan("Welcome to the Agency Agent!"))
+  print(color.cyan("Would you like to create a new agent or modify an existing one?"))
+  userinput = input("(create/modify) ")
+  thread {
+    mode: Foo = llm("categorize this user response as 'create' or 'modify': ${userinput}", config)
+    greet(mode.name)
+  }
+  print(color.cyan("Great! Let's ${mode} an agent."))
+  match(mode) {
+    "create" => return plan("create", "", null)
+    "modify" => return readExisting()
+  }
 }

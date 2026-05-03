@@ -33,6 +33,19 @@ export function getStdlibDir(): string {
 }
 
 /**
+ * Returns all .agency files in the stdlib directory as absolute paths.
+ */
+export function getStdlibFiles(): string[] {
+  try {
+    return fs.readdirSync(STDLIB_DIR)
+      .filter((f) => f.endsWith(".agency"))
+      .map((f) => path.join(STDLIB_DIR, f));
+  } catch {
+    return [];
+  }
+}
+
+/**
  * Returns the absolute path to the tests directory.
  */
 export function getTestDir(): string {

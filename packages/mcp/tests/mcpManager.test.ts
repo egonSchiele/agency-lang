@@ -6,7 +6,7 @@ import os from "os";
 import { fileURLToPath } from "url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const TEST_SERVER_PATH = path.join(__dirname, "__tests__", "testServer.ts");
+const TEST_SERVER_PATH = path.join(__dirname, "__tests__", "testServer.mjs");
 
 describe("McpManager", () => {
   let manager: McpManager;
@@ -20,8 +20,8 @@ describe("McpManager", () => {
   it("should connect to a server and return tools as a success Result", async () => {
     manager = new McpManager({
       test: {
-        command: "npx",
-        args: ["tsx", TEST_SERVER_PATH],
+        command: "node",
+        args: [TEST_SERVER_PATH],
       },
     });
 
@@ -36,8 +36,8 @@ describe("McpManager", () => {
   it("should return the same array reference on second call (cached)", async () => {
     manager = new McpManager({
       test: {
-        command: "npx",
-        args: ["tsx", TEST_SERVER_PATH],
+        command: "node",
+        args: [TEST_SERVER_PATH],
       },
     });
 
@@ -70,8 +70,8 @@ describe("McpManager", () => {
   it("should lazily reconnect when calling a tool after disconnectAll", async () => {
     manager = new McpManager({
       test: {
-        command: "npx",
-        args: ["tsx", TEST_SERVER_PATH],
+        command: "node",
+        args: [TEST_SERVER_PATH],
       },
     });
 

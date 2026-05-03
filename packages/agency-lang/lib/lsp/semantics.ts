@@ -198,35 +198,49 @@ function formatParameters(parameters: FunctionParameter[] | undefined): string {
     .join(", ");
 }
 
+function prettyPrintType(vt: VariableType, indent: number = 0): string {
+  if (vt.type === "objectType") {
+    if (vt.properties.length === 0) return "{}";
+    const inner = indent + 2;
+    const pad = " ".repeat(inner);
+    const lines = vt.properties.map(
+      (p) => `${pad}${p.key}: ${prettyPrintType(p.value, inner)}`,
+    );
+    return `{\n${lines.join("\n")}\n${" ".repeat(indent)}}`;
+  }
+  return formatTypeHint(vt);
+}
+
 function formatSignature(symbol: SemanticSymbol): string {
   switch (symbol.kind) {
     case "function": {
       const params = formatParameters(symbol.parameters);
       const ret = symbol.returnType ? `: ${formatTypeHint(symbol.returnType)}` : "";
-      return `${symbol.name}(${params})${ret}`;
+      return `def ${symbol.name}(${params})${ret}`;
     }
     case "node": {
       const params = formatParameters(symbol.parameters);
       const ret = symbol.returnType ? `: ${formatTypeHint(symbol.returnType)}` : "";
-      return `${symbol.name}(${params})${ret}`;
+      return `node ${symbol.name}(${params})${ret}`;
     }
     case "type":
       return symbol.aliasedType
-        ? `${symbol.name} = ${formatTypeHint(symbol.aliasedType)}`
-        : symbol.name;
+        ? `type ${symbol.name} = ${prettyPrintType(symbol.aliasedType)}`
+        : `type ${symbol.name}`;
     case "class":
-      return symbol.name;
+      return `class ${symbol.name}`;
   }
 }
 
 export function formatSemanticHover(symbol: SemanticSymbol): string {
-  const heading = `**${symbol.kind}** \`${formatSignature(symbol)}\``;
+  const signature = formatSignature(symbol);
+  const codeBlock = `\`\`\`typescript\n${signature}\n\`\`\``;
   if (symbol.source === "local") {
-    return heading;
+    return codeBlock;
   }
 
   const aliasNote = symbol.originalName !== symbol.name
     ? ` as \`${symbol.originalName}\``
     : "";
-  return `${heading}\n\nImported from \`${symbol.importPath}\`${aliasNote}`;
+  return `${codeBlock}\n\nImported from \`${symbol.importPath}\`${aliasNote}`;
 }

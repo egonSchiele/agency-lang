@@ -1,17 +1,27 @@
 import { Location, DefinitionParams } from "vscode-languageserver-protocol";
 import { TextDocument } from "vscode-languageserver-textdocument";
-import { findDefinition } from "../cli/definition.js";
+import { findDefinition, getWordAtPosition } from "../cli/definition.js";
 import { pathToUri } from "./uri.js";
 import { lookupSemanticSymbol, type SemanticIndex } from "./semantics.js";
+import type { AgencyProgram } from "../types.js";
+import type { ScopeInfo } from "../typeChecker/types.js";
+import { findContainingScope, findDefForScope } from "./scopeResolution.js";
+import { walkNodes } from "../utils/node.js";
+import { offsetOfLine } from "./util.js";
+import { TEMPLATE_OFFSET } from "./locations.js";
 
 export function handleDefinition(
   params: DefinitionParams,
   doc: TextDocument,
   fsPath: string,
   semanticIndex: SemanticIndex,
+  program?: AgencyProgram,
+  scopes?: ScopeInfo[],
 ): Location | null {
+  const source = doc.getText();
+
   const symbol = lookupSemanticSymbol(
-    doc.getText(),
+    source,
     params.position.line,
     params.position.character,
     semanticIndex,
@@ -27,8 +37,16 @@ export function handleDefinition(
     };
   }
 
+  // Try local variable definition via AST
+  if (program && scopes) {
+    const loc = findLocalDefinition(source, params.position.line, params.position.character, program, scopes);
+    if (loc) {
+      return { uri: doc.uri, range: { start: loc, end: loc } };
+    }
+  }
+
   const result = findDefinition(
-    doc.getText(),
+    source,
     params.position.line,
     params.position.character,
     fsPath,
@@ -42,4 +60,38 @@ export function handleDefinition(
       end: { line: result.line, character: result.column },
     },
   };
+}
+
+function findLocalDefinition(
+  source: string,
+  line: number,
+  character: number,
+  program: AgencyProgram,
+  scopes: ScopeInfo[],
+): { line: number; character: number } | null {
+  const word = getWordAtPosition(source, line, character);
+  if (!word) return null;
+
+  const offset = offsetOfLine(source, line) + character;
+  const scope = findContainingScope(offset, scopes, program);
+  if (!scope) return null;
+
+  if (!scope.scope.lookup(word)) return null;
+
+  for (const { node } of walkNodes(scope.body)) {
+    if (node.type === "assignment" && node.variableName === word && node.declKind && node.loc) {
+      return { line: node.loc.line + TEMPLATE_OFFSET, character: node.loc.col };
+    }
+  }
+
+  // Jump to containing function/node header for parameters
+  const def = findDefForScope(scope.name, program);
+  if (def && "parameters" in def) {
+    const param = def.parameters.find((p) => p.name === word);
+    if (param && def.loc) {
+      return { line: def.loc.line + TEMPLATE_OFFSET, character: def.loc.col };
+    }
+  }
+
+  return null;
 }

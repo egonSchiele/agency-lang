@@ -365,6 +365,7 @@ export function synthValueAccess(
           } else {
             ctx.errors.push({
               message: `Property '${element.name}' does not exist on type '${formatTypeHint(resolved)}'.`,
+              loc: expr.loc,
             });
             return "any";
           }
@@ -377,6 +378,7 @@ export function synthValueAccess(
           } else {
             ctx.errors.push({
               message: `Property '${element.name}' does not exist on type '${formatTypeHint(resolved)}'.`,
+              loc: expr.loc,
             });
             return "any";
           }

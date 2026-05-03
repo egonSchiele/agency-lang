@@ -23,6 +23,7 @@ export type TypeCheckError = {
 
 export type TypeCheckResult = {
   errors: TypeCheckError[];
+  scopes: ScopeInfo[];
 };
 
 export type ScopeInfo = {

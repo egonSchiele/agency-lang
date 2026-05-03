@@ -24,6 +24,7 @@ import { getDocumentLinks } from "./documentLink.js";
 import { handleSignatureHelp } from "./signatureHelp.js";
 import { handleReferences } from "./references.js";
 import { handleRename, handlePrepareRename } from "./rename.js";
+import { getInlayHints } from "./inlayHint.js";
 import type { DocumentState } from "./documentState.js";
 
 export function startServer(): void {
@@ -52,6 +53,7 @@ export function startServer(): void {
         referencesProvider: true,
         renameProvider: { prepareProvider: true },
         documentHighlightProvider: true,
+        inlayHintProvider: true,
         foldingRangeProvider: true,
         documentLinkProvider: {},
       },
@@ -202,6 +204,12 @@ export function startServer(): void {
     const doc = documents.get(params.textDocument.uri);
     if (!doc) return [];
     return handleDocumentHighlight(params, doc);
+  });
+
+  connection.languages.inlayHint.on((params) => {
+    const state = docStates.get(params.textDocument.uri);
+    if (!state) return [];
+    return getInlayHints(state.program, state.scopes);
   });
 
   connection.onFoldingRanges((params) => {

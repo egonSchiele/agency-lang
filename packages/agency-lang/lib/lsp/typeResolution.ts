@@ -25,9 +25,10 @@ export function resolveTypeAtPosition(
 
 function offsetOfLine(source: string, line: number): number {
   let offset = 0;
-  const lines = source.split("\n");
-  for (let i = 0; i < line && i < lines.length; i++) {
-    offset += lines[i].length + 1;
+  for (let i = 0; i < line; i++) {
+    const idx = source.indexOf("\n", offset);
+    if (idx === -1) return source.length;
+    offset = idx + 1;
   }
   return offset;
 }

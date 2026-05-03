@@ -7,7 +7,7 @@ import {
 } from "vscode-languageserver-protocol";
 import { TextDocument } from "vscode-languageserver-textdocument";
 import { getWordAtPosition } from "../cli/definition.js";
-import { findAllOccurrences } from "./util.js";
+import { findAllOccurrences, occurrenceToRange } from "./util.js";
 
 export function handlePrepareRename(
   params: PrepareRenameParams,
@@ -39,10 +39,7 @@ export function handleRename(
   if (occurrences.length === 0) return null;
 
   const edits: TextEdit[] = occurrences.map((occ) => ({
-    range: {
-      start: { line: occ.line, character: occ.character },
-      end: { line: occ.line, character: occ.character + occ.length },
-    },
+    range: occurrenceToRange(occ),
     newText: params.newName,
   }));
 

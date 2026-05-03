@@ -1,6 +1,7 @@
 import { CompletionItem, CompletionItemKind } from "vscode-languageserver-protocol";
 import { CompilationUnit, GLOBAL_SCOPE_KEY } from "../compilationUnit.js";
 import { formatTypeHint } from "../cli/util.js";
+import { resolveType } from "../typeChecker/assignability.js";
 import type { AgencyProgram, FunctionParameter, VariableType } from "../types.js";
 import type { ScopeInfo } from "../typeChecker/types.js";
 import { resolveTypeAtPosition } from "./typeResolution.js";
@@ -90,9 +91,9 @@ function getDotCompletions(context: CompletionContext, info: CompilationUnit): C
   const varType = resolveTypeAtPosition(source, line, varCol, program, scopes);
   if (!varType) return null;
 
-  // Resolve type aliases to their underlying type
-  const resolved = resolveAliases(varType, info);
-  if (!resolved || resolved.type !== "objectType") return null;
+  const aliases = info.typeAliases.get(GLOBAL_SCOPE_KEY) ?? {};
+  const resolved = resolveType(varType, aliases);
+  if (resolved.type !== "objectType") return null;
 
   return resolved.properties.map((prop) => ({
     label: prop.key,
@@ -101,12 +102,3 @@ function getDotCompletions(context: CompletionContext, info: CompilationUnit): C
   }));
 }
 
-function resolveAliases(vt: VariableType, info: CompilationUnit): VariableType {
-  if (vt.type === "typeAliasVariable") {
-    const aliases = info.typeAliases.get(GLOBAL_SCOPE_KEY);
-    if (aliases && aliases[vt.aliasName]) {
-      return resolveAliases(aliases[vt.aliasName], info);
-    }
-  }
-  return vt;
-}

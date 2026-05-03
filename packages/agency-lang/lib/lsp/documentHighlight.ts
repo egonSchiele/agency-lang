@@ -5,7 +5,7 @@ import {
 } from "vscode-languageserver-protocol";
 import { TextDocument } from "vscode-languageserver-textdocument";
 import { getWordAtPosition } from "../cli/definition.js";
-import { findAllOccurrences } from "./util.js";
+import { findAllOccurrences, occurrenceToRange } from "./util.js";
 
 export function handleDocumentHighlight(
   params: DocumentHighlightParams,
@@ -16,10 +16,7 @@ export function handleDocumentHighlight(
   if (!word) return [];
 
   return findAllOccurrences(source, word).map((occ) => ({
-    range: {
-      start: { line: occ.line, character: occ.character },
-      end: { line: occ.line, character: occ.character + occ.length },
-    },
+    range: occurrenceToRange(occ),
     kind: DocumentHighlightKind.Text,
   }));
 }

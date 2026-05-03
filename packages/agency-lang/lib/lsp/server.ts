@@ -233,9 +233,9 @@ export function startServer(): void {
 
   connection.onCodeAction((params) => {
     const doc = documents.get(params.textDocument.uri);
-    if (!doc) return [];
     const state = docStates.get(params.textDocument.uri);
-    return getCodeActions(params, doc, state?.symbolTable ?? new SymbolTable());
+    if (!doc || !state) return [];
+    return getCodeActions(params, doc, state.symbolTable);
   });
 
   connection.onDocumentLinks((params) => {

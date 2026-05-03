@@ -1,3 +1,5 @@
+import { Range } from "vscode-languageserver-protocol";
+
 export function escapeRegExp(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
@@ -7,6 +9,13 @@ export type Occurrence = {
   character: number;
   length: number;
 };
+
+export function occurrenceToRange(occ: Occurrence): Range {
+  return {
+    start: { line: occ.line, character: occ.character },
+    end: { line: occ.line, character: occ.character + occ.length },
+  };
+}
 
 /**
  * Find all whole-word occurrences of `word` in `source`.

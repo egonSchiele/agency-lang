@@ -21,19 +21,27 @@ export function findContainingScope(
   scopes: ScopeInfo[],
   program: AgencyProgram,
 ): ScopeInfo | undefined {
+  // Build name→def map once to avoid repeated linear scans
+  const defMap: Record<string, ReturnType<typeof findDefForScope>> = {};
+  for (const scopeInfo of scopes) {
+    if (scopeInfo.name !== "top-level" && !(scopeInfo.name in defMap)) {
+      defMap[scopeInfo.name] = findDefForScope(scopeInfo.name, program);
+    }
+  }
+
   let best: ScopeInfo | undefined;
   for (const scopeInfo of scopes) {
     if (scopeInfo.name === "top-level") {
       if (!best) best = scopeInfo;
       continue;
     }
-    const def = findDefForScope(scopeInfo.name, program);
+    const def = defMap[scopeInfo.name];
     if (!def?.loc) continue;
     if (offset >= def.loc.start && offset <= def.loc.end) {
       if (!best || best.name === "top-level") {
         best = scopeInfo;
       } else {
-        const bestDef = findDefForScope(best.name, program);
+        const bestDef = defMap[best.name];
         if (bestDef?.loc && def.loc.start > bestDef.loc.start) {
           best = scopeInfo;
         }

@@ -1,4 +1,4 @@
-import { CompletionItem, CompletionItemKind } from "vscode-languageserver-protocol";
+import { CompletionItem, CompletionItemKind, InsertTextFormat } from "vscode-languageserver-protocol";
 import { CompilationUnit, GLOBAL_SCOPE_KEY } from "../compilationUnit.js";
 import { formatTypeHint } from "../cli/util.js";
 import { resolveType } from "../typeChecker/assignability.js";
@@ -6,6 +6,7 @@ import type { AgencyProgram, FunctionParameter, VariableType } from "../types.js
 import type { ScopeInfo } from "../typeChecker/types.js";
 import { resolveTypeAtPosition } from "./typeResolution.js";
 import { findContainingScope } from "./scopeResolution.js";
+import { offsetOfLine } from "./util.js";
 
 function formatParams(params: FunctionParameter[]): string {
   return params
@@ -72,8 +73,149 @@ export function getCompletions(info: CompilationUnit, context?: CompletionContex
     add(name, CompletionItemKind.Function, detail);
   }
 
+  // Snippet templates
+  for (const snippet of SNIPPETS) {
+    items.push(snippet);
+  }
+
   return items;
 }
+
+const SNIPPETS: CompletionItem[] = [
+  {
+    label: "def",
+    kind: CompletionItemKind.Snippet,
+    insertText: "def ${1:name}(${2:params}) {\n  $0\n}",
+    insertTextFormat: InsertTextFormat.Snippet,
+    detail: "Function definition",
+  },
+  {
+    label: "export def",
+    kind: CompletionItemKind.Snippet,
+    insertText: "export def ${1:name}(${2:params}) {\n  $0\n}",
+    insertTextFormat: InsertTextFormat.Snippet,
+    detail: "Exported function definition",
+  },
+  {
+    label: "node",
+    kind: CompletionItemKind.Snippet,
+    insertText: "node ${1:name}(${2:params}) {\n  $0\n}",
+    insertTextFormat: InsertTextFormat.Snippet,
+    detail: "Graph node definition",
+  },
+  {
+    label: "export node",
+    kind: CompletionItemKind.Snippet,
+    insertText: "export node ${1:name}(${2:params}) {\n  $0\n}",
+    insertTextFormat: InsertTextFormat.Snippet,
+    detail: "Exported graph node",
+  },
+  {
+    label: "type",
+    kind: CompletionItemKind.Snippet,
+    insertText: "type ${1:Name} = {\n  ${2:field}: ${3:string}\n}",
+    insertTextFormat: InsertTextFormat.Snippet,
+    detail: "Type alias",
+  },
+  {
+    label: "class",
+    kind: CompletionItemKind.Snippet,
+    insertText: "class ${1:Name} {\n  ${2:field}: ${3:string}\n\n  def ${4:method}() {\n    $0\n  }\n}",
+    insertTextFormat: InsertTextFormat.Snippet,
+    detail: "Class definition",
+  },
+  {
+    label: "if",
+    kind: CompletionItemKind.Snippet,
+    insertText: "if (${1:condition}) {\n  $0\n}",
+    insertTextFormat: InsertTextFormat.Snippet,
+    detail: "If statement",
+  },
+  {
+    label: "for",
+    kind: CompletionItemKind.Snippet,
+    insertText: "for (${1:item} in ${2:items}) {\n  $0\n}",
+    insertTextFormat: InsertTextFormat.Snippet,
+    detail: "For loop",
+  },
+  {
+    label: "while",
+    kind: CompletionItemKind.Snippet,
+    insertText: "while (${1:condition}) {\n  $0\n}",
+    insertTextFormat: InsertTextFormat.Snippet,
+    detail: "While loop",
+  },
+  {
+    label: "match",
+    kind: CompletionItemKind.Snippet,
+    insertText: "match(${1:value}) {\n  \"${2:case1}\" => $3\n  _ => $0\n}",
+    insertTextFormat: InsertTextFormat.Snippet,
+    detail: "Pattern matching",
+  },
+  {
+    label: "thread",
+    kind: CompletionItemKind.Snippet,
+    insertText: "thread {\n  ${1:name}: ${2:Type} = llm(\"${3:prompt}\")\n}",
+    insertTextFormat: InsertTextFormat.Snippet,
+    detail: "Message thread with LLM call",
+  },
+  {
+    label: "fork",
+    kind: CompletionItemKind.Snippet,
+    insertText: "fork(${1:items}) as ${2:item} {\n  $0\n}",
+    insertTextFormat: InsertTextFormat.Snippet,
+    detail: "Parallel fork over items",
+  },
+  {
+    label: "map",
+    kind: CompletionItemKind.Snippet,
+    insertText: "map(${1:items}) as ${2:item} {\n  $0\n}",
+    insertTextFormat: InsertTextFormat.Snippet,
+    detail: "Map with block argument",
+  },
+  {
+    label: "handle",
+    kind: CompletionItemKind.Snippet,
+    insertText: "handle {\n  $1\n} with (${2:data}) {\n  $0\n}",
+    insertTextFormat: InsertTextFormat.Snippet,
+    detail: "Handler block for interrupts",
+  },
+  {
+    label: "parallel",
+    kind: CompletionItemKind.Snippet,
+    insertText: "parallel {\n  $0\n}",
+    insertTextFormat: InsertTextFormat.Snippet,
+    detail: "Run statements in parallel",
+  },
+  {
+    label: "seq",
+    kind: CompletionItemKind.Snippet,
+    insertText: "seq {\n  $0\n}",
+    insertTextFormat: InsertTextFormat.Snippet,
+    detail: "Run statements sequentially",
+  },
+  {
+    label: "import",
+    kind: CompletionItemKind.Snippet,
+    insertText: "import { ${1:name} } from \"${2:module}\"",
+    insertTextFormat: InsertTextFormat.Snippet,
+    detail: "Import statement",
+  },
+  {
+    label: "llm",
+    kind: CompletionItemKind.Snippet,
+    insertText: "${1:name}: ${2:Type} = llm(\"${3:prompt}\")",
+    insertTextFormat: InsertTextFormat.Snippet,
+    detail: "LLM call with typed result",
+  },
+  {
+    label: "interrupt",
+    kind: CompletionItemKind.Snippet,
+    insertText: "interrupt(\"${1:message}\")",
+    insertTextFormat: InsertTextFormat.Snippet,
+    detail: "Pause execution for approval",
+  },
+];
 
 function getDotCompletions(context: CompletionContext, info: CompilationUnit): CompletionItem[] | null {
   const { source, line, character, scopes, program } = context;
@@ -91,8 +233,7 @@ function getDotCompletions(context: CompletionContext, info: CompilationUnit): C
   const varType = resolveTypeAtPosition(source, line, varCol, program, scopes);
   if (!varType) return null;
 
-  // Use scoped aliases (visible from the cursor's containing scope)
-  const offset = source.split("\n").slice(0, line).reduce((acc, l) => acc + l.length + 1, 0) + character;
+  const offset = offsetOfLine(source, line) + character;
   const containingScope = findContainingScope(offset, scopes, program);
   const scopeKey = containingScope?.scopeKey ?? GLOBAL_SCOPE_KEY;
   const aliases = info.typeAliases.visibleIn(scopeKey);

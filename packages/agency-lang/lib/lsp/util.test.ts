@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { findAllOccurrences, escapeRegExp } from "./util.js";
+import { findAllOccurrences, escapeRegExp, offsetOfLine } from "./util.js";
 
 describe("findAllOccurrences", () => {
   it("finds all whole-word matches", () => {
@@ -21,5 +21,25 @@ describe("findAllOccurrences", () => {
 describe("escapeRegExp", () => {
   it("escapes special characters", () => {
     expect(escapeRegExp("foo.bar")).toBe("foo\\.bar");
+  });
+});
+
+describe("offsetOfLine", () => {
+  const source = "abc\ndef\nghi";
+
+  it("returns 0 for line 0", () => {
+    expect(offsetOfLine(source, 0)).toBe(0);
+  });
+
+  it("returns correct offset for middle line", () => {
+    expect(offsetOfLine(source, 1)).toBe(4);
+  });
+
+  it("returns correct offset for last line", () => {
+    expect(offsetOfLine(source, 2)).toBe(8);
+  });
+
+  it("returns source length for out-of-range line", () => {
+    expect(offsetOfLine(source, 5)).toBe(source.length);
   });
 });

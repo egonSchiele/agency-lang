@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { CompletionItemKind } from "vscode-languageserver-protocol";
+import { CompletionItemKind, InsertTextFormat } from "vscode-languageserver-protocol";
 import { getCompletions } from "./completion.js";
 import { parseAgency } from "../parser.js";
 import { buildCompilationUnit } from "../compilationUnit.js";
@@ -65,6 +65,16 @@ describe("getCompletions", () => {
     expect(names).toContain("name");
     expect(names).toContain("age");
     expect(names).not.toContain("main");
+  });
+
+  it("includes snippet completions with correct format", () => {
+    const program = parse("node main() { }");
+    const info = buildCompilationUnit(program, new SymbolTable());
+    const items = getCompletions(info);
+    const defSnippet = items.find((i) => i.label === "def" && i.kind === CompletionItemKind.Snippet);
+    expect(defSnippet).toBeDefined();
+    expect(defSnippet!.insertTextFormat).toBe(InsertTextFormat.Snippet);
+    expect(defSnippet!.insertText).toContain("${1:");
   });
 
   it("returns empty array for empty program", () => {

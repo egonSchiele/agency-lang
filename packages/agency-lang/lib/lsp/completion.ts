@@ -5,6 +5,7 @@ import { resolveType } from "../typeChecker/assignability.js";
 import type { AgencyProgram, FunctionParameter, VariableType } from "../types.js";
 import type { ScopeInfo } from "../typeChecker/types.js";
 import { resolveTypeAtPosition } from "./typeResolution.js";
+import { findContainingScope } from "./scopeResolution.js";
 
 function formatParams(params: FunctionParameter[]): string {
   return params
@@ -87,11 +88,14 @@ function getDotCompletions(context: CompletionContext, info: CompilationUnit): C
   const varName = dotMatch[1];
   const varCol = dotMatch.index!;
 
-  // Resolve the variable's type
   const varType = resolveTypeAtPosition(source, line, varCol, program, scopes);
   if (!varType) return null;
 
-  const aliases = info.typeAliases.get(GLOBAL_SCOPE_KEY) ?? {};
+  // Use scoped aliases (visible from the cursor's containing scope)
+  const offset = source.split("\n").slice(0, line).reduce((acc, l) => acc + l.length + 1, 0) + character;
+  const containingScope = findContainingScope(offset, scopes, program);
+  const scopeKey = containingScope?.scopeKey ?? GLOBAL_SCOPE_KEY;
+  const aliases = info.typeAliases.visibleIn(scopeKey);
   const resolved = resolveType(varType, aliases);
   if (resolved.type !== "objectType") return null;
 

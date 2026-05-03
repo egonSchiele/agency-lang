@@ -48,22 +48,28 @@ type CallContext = {
 };
 
 function findCallContext(textBeforeCursor: string): CallContext | null {
-  let depth = 0;
+  let parenDepth = 0;
+  let bracketDepth = 0;
+  let braceDepth = 0;
   let commaCount = 0;
 
   for (let i = textBeforeCursor.length - 1; i >= 0; i--) {
     const ch = textBeforeCursor[i];
-    if (ch === ")") depth++;
+    if (ch === ")") parenDepth++;
+    else if (ch === "]") bracketDepth++;
+    else if (ch === "}") braceDepth++;
+    else if (ch === "[") bracketDepth--;
+    else if (ch === "{") braceDepth--;
     else if (ch === "(") {
-      if (depth > 0) {
-        depth--;
+      if (parenDepth > 0) {
+        parenDepth--;
       } else {
         const before = textBeforeCursor.slice(0, i).trimEnd();
         const match = before.match(/([a-zA-Z_][a-zA-Z0-9_]*)$/);
         if (!match) return null;
         return { functionName: match[1], argIndex: commaCount };
       }
-    } else if (ch === "," && depth === 0) {
+    } else if (ch === "," && parenDepth === 0 && bracketDepth === 0 && braceDepth === 0) {
       commaCount++;
     }
   }

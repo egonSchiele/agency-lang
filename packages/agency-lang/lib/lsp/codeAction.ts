@@ -41,11 +41,13 @@ function suggestMissingImport(
     const sym = fileSymbols[symbolName];
     if (!sym) continue;
 
+    // Only suggest exported symbols
+    if ("exported" in sym && !sym.exported) continue;
+
     const docPath = uriToPath(doc.uri);
-    // Skip if it's the same file
     if (path.resolve(filePath) === path.resolve(docPath)) continue;
 
-    let importPath = path.relative(path.dirname(docPath), filePath);
+    let importPath = path.relative(path.dirname(docPath), filePath).split(path.sep).join("/");
     if (!importPath.startsWith(".")) importPath = "./" + importPath;
 
     const importLine = `import { ${symbolName} } from "${importPath}"\n`;

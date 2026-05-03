@@ -21,6 +21,7 @@ import { getCompletions } from "./completion.js";
 import { handleDocumentHighlight } from "./documentHighlight.js";
 import { getFoldingRanges } from "./foldingRange.js";
 import { getDocumentLinks } from "./documentLink.js";
+import { handleSignatureHelp } from "./signatureHelp.js";
 import type { DocumentState } from "./documentState.js";
 
 export function startServer(): void {
@@ -42,6 +43,7 @@ export function startServer(): void {
         textDocumentSync: TextDocumentSyncKind.Incremental,
         hoverProvider: true,
         completionProvider: { triggerCharacters: ["."] },
+        signatureHelpProvider: { triggerCharacters: ["(", ","] },
         definitionProvider: true,
         documentSymbolProvider: true,
         documentFormattingProvider: true,
@@ -157,6 +159,13 @@ export function startServer(): void {
     const state = docStates.get(params.textDocument.uri);
     if (!state) return CompletionList.create([], true);
     return CompletionList.create(getCompletions(state.info), false);
+  });
+
+  connection.onSignatureHelp((params) => {
+    const doc = documents.get(params.textDocument.uri);
+    if (!doc) return null;
+    const state = docStates.get(params.textDocument.uri);
+    return handleSignatureHelp(params, doc, state?.semanticIndex ?? {});
   });
 
   connection.onDocumentHighlight((params) => {

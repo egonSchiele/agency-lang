@@ -165,6 +165,7 @@ function walkForBindings(node: AgencyNode, binds: Set<string>): void {
   if (node.type === "matchBlock") {
     for (const c of node.cases) {
       if (c.type === "comment") continue;
+      if (c.type === "newLine") continue;
       walkForBindings(c.body as any, binds);
     }
     return;
@@ -439,6 +440,7 @@ function descendIntoSubstructures(node: AgencyNode): void {
     case "matchBlock":
       for (const c of node.cases) {
         if (c.type === "comment") continue;
+        if (c.type === "newLine") continue;
         c.body = desugarParallelInBody([c.body as any])[0] as any;
       }
       return;

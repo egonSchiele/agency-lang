@@ -21,7 +21,7 @@ import {
   RunStrategy,
   type ImportStrategy,
 } from "../importStrategy.js";
-import { parseAgency } from "../parser.js";
+import { parseAgency, replaceBlankLines } from "../parser.js";
 import { findRecursively, getImports } from "./util.js";
 
 // Load configuration from agency.json
@@ -240,7 +240,7 @@ export async function format(
   contents: string,
   config: AgencyConfig = {},
 ): Promise<string> {
-  const program = parse(contents, config, false);
+  const program = parse(replaceBlankLines(contents), config, false);
   return generateAgency(program);
 }
 

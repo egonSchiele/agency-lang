@@ -216,6 +216,13 @@ export const newLineParser: Parser<NewLine> = seqC(
   or(str("\r\n"), str("\n")),
 );
 
+export const BLANK_LINE_SENTINEL = "\uE000";
+
+export const blankLineParser: Parser<NewLine> = map(
+  many1(char(BLANK_LINE_SENTINEL)),
+  () => ({ type: "newLine" as const }),
+);
+
 // =============================================================================
 // comment.ts
 // =============================================================================
@@ -225,7 +232,7 @@ export const commentParser: Parser<AgencyComment> = (input: string) => {
     set("type", "comment"),
     optionalSpaces,
     str("//"),
-    capture(manyTill(newline), "content"),
+    capture(manyTill(or(newline, blankLineParser)), "content"),
     optionalSpacesOrNewline,
   );
   return parser(input);
@@ -1887,7 +1894,7 @@ export const matchBlockParser = label("a match block", withLoc(seqC(
     parseError(
       "expected match cases of the form `value => expression` separated by `;` or newlines, followed by `}`",
       optionalSpacesOrNewline,
-      capture(many(or(commentParser, matchBlockParserCase)), "cases"),
+      capture(many(or(blankLineParser, commentParser, matchBlockParserCase)), "cases"),
       optionalSpaces,
       char("}"),
     ),
@@ -1930,9 +1937,9 @@ export const importNodeStatmentParser: Parser<ImportNodeStatement> = trace(
         "expected a statement of the form `import nodes { x, y } from 'filename.agency'`",
         spaces,
         char("{"),
-        optionalSpaces,
-        capture(sepBy1(comma, many1WithJoin(varNameChar)), "importedNodes"),
-        optionalSpaces,
+        optionalSpacesOrNewline,
+        capture(sepBy1(commaWithNewline, many1WithJoin(varNameChar)), "importedNodes"),
+        optionalSpacesOrNewline,
         char("}"),
         spaces,
         str("from"),
@@ -1981,9 +1988,9 @@ const namedImportParser: Parser<NamedImport> = trace(
   map(
     seqC(
       char("{"),
-      optionalSpaces,
-      capture(sepBy1(comma, safeNameItem), "items"),
-      optionalSpaces,
+      optionalSpacesOrNewline,
+      capture(sepBy1(commaWithNewline, safeNameItem), "items"),
+      optionalSpacesOrNewline,
       char("}"),
     ),
     (result) => {
@@ -2179,6 +2186,7 @@ export const bodyParser = (input: string): ParserResult<AgencyNode[]> => {
     booleanParser,
     valueAccessParser,
     literalParser,
+    blankLineParser,
     newLineParser,
   );
   const parser = trace(
@@ -2813,6 +2821,7 @@ const classBodyMemberParser = or(
   rejectConstructorParser,
   classMethodParser,
   classFieldParser,
+  blankLineParser,
 );
 
 const _classParserInner: Parser<ClassDefinition> = (input: string) => {
@@ -2855,6 +2864,7 @@ const _classParserInner: Parser<ClassDefinition> = (input: string) => {
     } else if (member.type === "classMethod") {
       methods.push(member);
     }
+    // Skip newLine nodes from blank lines
   }
 
   const parentClass = result.result._extends?.parentClass;

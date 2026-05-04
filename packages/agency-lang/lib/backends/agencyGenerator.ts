@@ -26,7 +26,7 @@ import {
   AgencyObject,
   AgencyObjectKV,
 } from "../types/dataStructures.js";
-import { FunctionCall, FunctionDefinition } from "../types/function.js";
+import { FunctionCall, FunctionDefinition, FunctionParameter } from "../types/function.js";
 import { GraphNodeDefinition, Visibility } from "../types/graphNode.js";
 import { IfElse } from "../types/ifElse.js";
 import {
@@ -63,6 +63,7 @@ export class AgencyGenerator {
   protected typeAliases: Record<string, VariableType> = {};
   protected functionsUsed: Set<string> = new Set();
   protected importStatements: string[] = [];
+  protected importNodes: ImportStatement[] = [];
   protected importedNodes: ImportNodeStatement[] = [];
   protected functionDefinitions: Record<string, FunctionDefinition> = {};
   protected currentScope: Scope[] = [{ type: "global" }];
@@ -120,43 +121,42 @@ export class AgencyGenerator {
 
     // Types that should have a blank line before/after them at the top level
     const BLOCK_TYPES = new Set(["graphNode", "function", "typeAlias"]);
-    const NO_SPACE_TYPES = new Set(["comment", "multiLineComment", "tag"]);
+    const NO_SPACE_TYPES = new Set(["comment", "multiLineComment", "tag", "newLine"]);
 
     // Pass 5: Process all nodes and generate code
     const stmtPairs: { type: string; code: string }[] = [];
     for (const node of program.nodes) {
       const result = this.processNode(node);
-      if (result !== "") {
+      if (result !== "" || node.type === "newLine") {
         stmtPairs.push({ type: node.type, code: result });
       }
     }
-
+    //console.log(JSON.stringify(stmtPairs, null, 2))
     // Join top-level statements: blank line between block declarations,
     // single newline between simple statements
-    const stmtLines: string[] = [];
+    const stmtLines: string[] = [];//stmtPairs.map((s => s.code));
     for (let i = 0; i < stmtPairs.length; i++) {
       if (i > 0) {
         const prev = stmtPairs[i - 1];
         const curr = stmtPairs[i];
         if (
-          BLOCK_TYPES.has(prev.type) ||
+          (BLOCK_TYPES.has(prev.type) && !NO_SPACE_TYPES.has(curr.type)) ||
           (BLOCK_TYPES.has(curr.type) && !NO_SPACE_TYPES.has(prev.type))
         ) {
+          //console.log(`Adding blank line between ${prev.type} and ${curr.type}`);
           stmtLines.push(""); // blank line
         }
       }
       stmtLines.push(stmtPairs[i].code);
     }
-
+    //console.log(stmtLines.join("\n"))
     const output: string[] = [];
 
-    this.addIfNonEmpty(this.preprocess(), output);
-    this.addIfNonEmpty(this.importStatements.join("\n"), output);
-    this.addIfNonEmpty(this.generateImports(), output);
-    this.addIfNonEmpty(this.generateBuiltins(), output);
-    output.push(...this.generatedTypeAliases);
-    output.push(stmtLines.join("\n"));
-    this.addIfNonEmpty(this.postprocess(), output);
+    this.addIfNonEmpty(this.sortAndRenderImports(), output);
+    this.addIfNonEmpty(this.generatedTypeAliases.join("\n"), output);
+    this.addIfNonEmpty(stmtLines.join("\n"), output);
+    //console.log(output)
+
     return {
       output: output.join("\n"),
     };
@@ -230,10 +230,10 @@ export class AgencyGenerator {
       case "graphNode":
         return this.processGraphNode(node);
       case "importStatement":
-        this.importStatements.push(this.processImportStatement(node));
+        this.importNodes.push(node);
         return "";
       case "importNodeStatement":
-        this.importStatements.push(this.processImportNodeStatement(node));
+        this.importedNodes.push(node);
         return "";
       case "forLoop":
         return this.processForLoop(node);
@@ -344,6 +344,39 @@ export class AgencyGenerator {
 
   private indentStr(str: string): string {
     return `${this.indent()}${str}`;
+  }
+
+  // Wrapping helpers
+
+  private wrapList(
+    items: string[],
+    prefix: string,
+    open: string,
+    close: string,
+    suffix: string = "",
+  ): string {
+    const inline = `${prefix}${open}${items.join(", ")}${close}${suffix}`;
+    if (this.indentStr(inline).length <= 80) return inline;
+    this.increaseIndent();
+    const lines = items.map((item) => this.indentStr(`${item},`));
+    this.decreaseIndent();
+    return `${prefix}${open}\n${lines.join("\n")}\n${this.indent()}${close}${suffix}`;
+  }
+
+  private renderParams(parameters: FunctionParameter[]): string[] {
+    return parameters.map((p) => {
+      const prefix = p.variadic ? "..." : "";
+      const defaultSuffix = p.defaultValue
+        ? ` = ${this.processNode(p.defaultValue).trim()}`
+        : "";
+      if (p.typeHint) {
+        const typeStr = variableTypeToString(p.typeHint, this.typeAliases);
+        const bang = p.validated ? "!" : "";
+        return `${prefix}${p.name}: ${typeStr}${bang}${defaultSuffix}`;
+      } else {
+        return `${prefix}${p.name}${defaultSuffix}`;
+      }
+    });
   }
 
   // Type system methods
@@ -487,55 +520,35 @@ export class AgencyGenerator {
     const tags = this.formatAttachedTags(node);
     const { functionName, body, parameters } = node;
 
-    const params = parameters
-      .map((p) => {
-        const prefix = p.variadic ? "..." : "";
-        const defaultSuffix = p.defaultValue
-          ? ` = ${this.processNode(p.defaultValue).trim()}`
-          : "";
-        if (p.typeHint) {
-          const typeStr = variableTypeToString(p.typeHint, this.typeAliases);
-          const bang = p.validated ? "!" : "";
-          return `${prefix}${p.name}: ${typeStr}${bang}${defaultSuffix}`;
-        } else {
-          return `${prefix}${p.name}${defaultSuffix}`;
-        }
-      })
-      .join(", ");
-
     const returnTypeBang = node.returnTypeValidated ? "!" : "";
     const returnTypeStr = node.returnType
       ? ": " + variableTypeToString(node.returnType, this.typeAliases) + returnTypeBang
       : "";
 
-    let safePrefix = node.safe ? "safe " : "";
+    const prefixes: string[] = [];
+    if (node.exported) prefixes.push("export");
+    if (node.safe) prefixes.push("safe");
+    node.callback ? prefixes.push("callback") : prefixes.push("def");
 
-    const exportPrefix = node.exported ? "export " : "";
+    const prefix = `${prefixes.join(" ")} ${functionName}`;
+    const renderedParams = this.renderParams(parameters);
+    const signature = this.wrapList(renderedParams, prefix, "(", ")", `${returnTypeStr} {`);
 
-    const keyword = node.callback ? "callback" : "def";
-
-    let result = this.indentStr(
-      `${exportPrefix}${safePrefix}${keyword} ${functionName}(${params})${returnTypeStr} {\n`,
-    );
+    let result = this.indentStr(`${signature}\n`);
 
     this.increaseIndent();
 
     if (node.docString) {
-      const docLines = [`"""`, ...node.docString.value.split("\n"), `"""`];
+      const lines = node.docString.value.split("\n").map(l => l.trim());
+      const docLines = [`"""`, ...lines, `"""`];
       const docStr = docLines.map((line) => this.indentStr(line)).join("\n");
       result += `${docStr}\n`;
     }
 
-    const lines: string[] = [];
-    for (const stmt of body) {
-      lines.push(this.processNode(stmt));
+    const bodyStr = this.renderBody(body);
+    if (bodyStr.trim() !== "") {
+      result += bodyStr;
     }
-    const bodyCode =
-      lines
-        .filter((s) => s !== "")
-        .join("\n")
-        .trimEnd() + "\n";
-    result += bodyCode;
 
     this.decreaseIndent();
 
@@ -550,8 +563,8 @@ export class AgencyGenerator {
     return tags + this.indentStr(`${expr}`);
   }
 
-  // Render arguments (and optional inline block) into a parenthesized string: (arg1, arg2, \x -> expr)
-  protected renderArgList(args: FunctionCall["arguments"], block?: BlockArgument): string {
+  // Render each argument to a string array
+  protected renderArgs(args: FunctionCall["arguments"], block?: BlockArgument): string[] {
     const rendered = args.map((arg) => {
       if (arg.type === "namedArgument") {
         return `${arg.name}: ${this.processNode(arg.value).trim()}`;
@@ -572,6 +585,12 @@ export class AgencyGenerator {
       }
       rendered.push(`\\${params} -> ${exprStr}`);
     }
+    return rendered;
+  }
+
+  // Format args as inline parenthesized list (no wrapping — used by access chain callers)
+  protected renderArgList(args: FunctionCall["arguments"], block?: BlockArgument): string {
+    const rendered = this.renderArgs(args, block);
     return `(${rendered.join(", ")})`;
   }
 
@@ -587,7 +606,9 @@ export class AgencyGenerator {
     }
 
     const block = node.block;
-    let result = `${asyncPrefix}${node.functionName}${this.renderArgList(node.arguments, block?.inline ? block : undefined)}`;
+    const inlineBlock = block?.inline ? block : undefined;
+    const rendered = this.renderArgs(node.arguments, inlineBlock);
+    let result = this.wrapList(rendered, `${asyncPrefix}${node.functionName}`, "(", ")", "");
 
     if (block && !block.inline) {
       let asClause = "as ";
@@ -598,16 +619,8 @@ export class AgencyGenerator {
       }
 
       this.increaseIndent();
-      const bodyLines: string[] = [];
-      for (const stmt of block.body) {
-        bodyLines.push(this.processNode(stmt));
-      }
+      const bodyStr = this.renderBody(block.body);
       this.decreaseIndent();
-      const bodyStr =
-        bodyLines
-          .filter((s) => s !== "")
-          .join("\n")
-          .trimEnd() + "\n";
 
       result += ` ${asClause}{\n${bodyStr}${this.indentStr("}")}`;
     }
@@ -649,7 +662,7 @@ export class AgencyGenerator {
     }
     let entriesStr = "\n" + entries.join(",\n") + "\n";
 
-    return `{ ${entriesStr}` + this.indentStr("}");
+    return `{${entriesStr}` + this.indentStr("}");
   }
 
   private addQuotesToKey(key: string): string {
@@ -692,6 +705,11 @@ export class AgencyGenerator {
         continue;
       }
 
+      if (caseNode.type === "newLine") {
+        result += this.processNewLine(caseNode);
+        continue
+      }
+
       const pattern =
         caseNode.caseValue === "_"
           ? "_"
@@ -717,15 +735,7 @@ export class AgencyGenerator {
     let result = this.indentStr(`for (${vars} in ${iterableCode}) {\n`);
 
     this.increaseIndent();
-    const lines: string[] = [];
-    for (const stmt of node.body) {
-      lines.push(this.processNode(stmt));
-    }
-    result +=
-      lines
-        .filter((s) => s !== "")
-        .join("\n")
-        .trimEnd() + "\n";
+    result += this.renderBody(node.body);
     this.decreaseIndent();
 
     result += this.indentStr(`}`);
@@ -738,15 +748,7 @@ export class AgencyGenerator {
     let result = this.indentStr(`while (${conditionCode}) {\n`);
 
     this.increaseIndent();
-    const lines: string[] = [];
-    for (const stmt of node.body) {
-      lines.push(this.processNode(stmt));
-    }
-    result +=
-      lines
-        .filter((s) => s !== "")
-        .join("\n")
-        .trimEnd() + "\n";
+    result += this.renderBody(node.body);
     this.decreaseIndent();
 
     result += this.indentStr(`}`);
@@ -759,18 +761,9 @@ export class AgencyGenerator {
     const lines = [];
     lines.push(this.indentStr(`if (${conditionCode}) {\n`));
 
-    const bodyLines: string[] = [];
     this.increaseIndent();
-    for (const stmt of node.thenBody) {
-      bodyLines.push(this.processNode(stmt));
-    }
+    lines.push(this.renderBody(node.thenBody));
     this.decreaseIndent();
-    lines.push(
-      bodyLines
-        .filter((s) => s !== "")
-        .join("\n")
-        .trimEnd() + "\n",
-    );
 
     if (node.elseBody && node.elseBody.length > 0) {
       if (node.elseBody.length === 1 && node.elseBody[0].type === "ifElse") {
@@ -778,19 +771,10 @@ export class AgencyGenerator {
         lines.push(this.indentStr(`} else ${elseIfCode.trimStart()}`));
         return lines.join("");
       } else {
-        const elseBodyLines: string[] = [];
         lines.push(this.indentStr(`} else {\n`));
         this.increaseIndent();
-        for (const stmt of node.elseBody) {
-          elseBodyLines.push(this.processNode(stmt));
-        }
+        lines.push(this.renderBody(node.elseBody));
         this.decreaseIndent();
-        lines.push(
-          elseBodyLines
-            .filter((s) => s !== "")
-            .join("\n")
-            .trimEnd() + "\n",
-        );
       }
     }
 
@@ -834,16 +818,27 @@ export class AgencyGenerator {
   }
 
   protected processImportStatement(node: ImportStatement): string {
-    const importedNames = node.importedNames.map((name) =>
-      this.processImportNameType(name),
-    );
     const modulePath = node.modulePath.startsWith("std::")
       ? node.modulePath.replace(/\.agency$/, "")
       : node.modulePath;
-    const str = this.indentStr(
-      `import ${importedNames.join(", ")} from "${modulePath}"`,
+    const suffix = ` from "${modulePath}"`;
+
+    // For single named import, use wrapList
+    if (node.importedNames.length === 1 && node.importedNames[0].type === "namedImport") {
+      const namedImport = node.importedNames[0];
+      const names = namedImport.importedNames.map((name) => {
+        const alias = namedImport.aliases[name];
+        const base = alias ? `${name} as ${alias}` : name;
+        return namedImport.safeNames?.includes(name) ? `safe ${base}` : base;
+      });
+      return this.indentStr(this.wrapList(names, "import ", "{ ", " }", suffix));
+    }
+
+    // Default/namespace/mixed imports — always inline
+    const importedNames = node.importedNames.map((name) =>
+      this.processImportNameType(name),
     );
-    return str;
+    return this.indentStr(`import ${importedNames.join(", ")}${suffix}`);
   }
 
   protected processImportNameType(node: ImportNameType): string {
@@ -867,6 +862,40 @@ export class AgencyGenerator {
     return `import node { ${node.importedNodes.join(", ")} } from "${node.agencyFile}"`;
   }
 
+  private sortAndRenderImports(): string {
+    type ImportEntry = { modulePath: string; render: () => string };
+
+    const stdlib: ImportEntry[] = [];
+    const packages: ImportEntry[] = [];
+    const relative: ImportEntry[] = [];
+
+    for (const node of this.importNodes) {
+      const entry: ImportEntry = { modulePath: node.modulePath, render: () => this.processImportStatement(node) };
+      if (node.modulePath.startsWith("std::")) {
+        stdlib.push(entry);
+      } else if (node.modulePath.startsWith("pkg::")) {
+        packages.push(entry);
+      } else {
+        relative.push(entry);
+      }
+    }
+
+    for (const node of this.importedNodes) {
+      relative.push({ modulePath: node.agencyFile, render: () => this.processImportNodeStatement(node) });
+    }
+
+    const sort = (arr: ImportEntry[]) =>
+      arr.sort((a, b) => a.modulePath.localeCompare(b.modulePath));
+    sort(stdlib);
+    sort(packages);
+    sort(relative);
+
+    const groups = [stdlib, packages, relative]
+      .filter((g) => g.length > 0)
+      .map((g) => g.map((e) => e.render()).join("\n"));
+    return groups.join("\n\n");
+  }
+
 
   protected visibilityToString(vis: Visibility): string {
     switch (vis) {
@@ -882,42 +911,27 @@ export class AgencyGenerator {
   protected processGraphNode(node: GraphNodeDefinition): string {
     const tags = this.formatAttachedTags(node);
     const { nodeName, body, parameters } = node;
-    const params = parameters
-      .map((p) => {
-        if (p.typeHint) {
-          const bang = p.validated ? "!" : "";
-          return `${p.name}: ${variableTypeToString(p.typeHint, this.typeAliases)}${bang}`;
-        }
-        return p.name;
-      })
-      .join(", ");
     const returnTypeBang = node.returnTypeValidated ? "!" : "";
     const returnTypeStr = node.returnType
       ? ": " + variableTypeToString(node.returnType, this.typeAliases) + returnTypeBang
       : "";
     const visibilityStr = this.visibilityToString(node.visibility);
-    let result = this.indentStr(
-      `${visibilityStr}node ${nodeName}(${params})${returnTypeStr} {\n`,
-    );
+    const prefix = `${visibilityStr}node ${nodeName}`;
+    const renderedParams = this.renderParams(parameters);
+    const signature = this.wrapList(renderedParams, prefix, "(", ")", `${returnTypeStr} {`);
+
+    let result = this.indentStr(`${signature}\n`);
 
     this.increaseIndent();
 
     if (node.docString) {
       const docLines = [`"""`, ...node.docString.value.split("\n"), `"""`];
-      const docStr = docLines.map((line) => this.indentStr(line)).join("\n");
+      const docStr = docLines.join("\n");
+      //const docStr = docLines.map((line) => this.indentStr(line)).join("\n");
       result += `${docStr}\n`;
     }
 
-    const lines: string[] = [];
-    for (const stmt of body) {
-      lines.push(this.processNode(stmt));
-    }
-    const bodyCode =
-      lines
-        .filter((s) => s !== "")
-        .join("\n")
-        .trimEnd() + "\n";
-    result += bodyCode;
+    result += this.renderBody(body);
 
     this.decreaseIndent();
 
@@ -952,15 +966,7 @@ export class AgencyGenerator {
       result +=
         "\n" + this.indentStr(`${method.name}(${params})${returnTypeStr} {\n`);
       this.increaseIndent();
-      const methodLines: string[] = [];
-      for (const stmt of method.body) {
-        methodLines.push(this.processNode(stmt));
-      }
-      result +=
-        methodLines
-          .filter((s) => s !== "")
-          .join("\n")
-          .trimEnd() + "\n";
+      result += this.renderBody(method.body);
       this.decreaseIndent();
       result += this.indentStr(`}\n`);
     }
@@ -984,18 +990,21 @@ export class AgencyGenerator {
     return "";
   }
 
+  protected renderBody(body: AgencyNode[]): string {
+    const lines: string[] = [];
+    for (const stmt of body) {
+      const line = this.processNode(stmt);
+      if (line !== "" || stmt.type === "newLine") {
+        lines.push(line);
+      }
+    }
+    return lines.join("\n").trimEnd() + "\n";
+  }
+
   protected processMessageThread(node: MessageThread): string {
     this.increaseIndent();
-    const bodyCodes: string[] = [];
-    for (const stmt of node.body) {
-      bodyCodes.push(this.processNode(stmt));
-    }
+    const bodyCodeStr = this.renderBody(node.body);
     this.decreaseIndent();
-    const bodyCodeStr =
-      bodyCodes
-        .filter((s) => s !== "")
-        .join("\n")
-        .trimEnd() + "\n";
     const threadType = node.threadType;
     return this.indentStr(
       `${threadType} {\n${bodyCodeStr}${this.indentStr("}")}`,
@@ -1004,16 +1013,8 @@ export class AgencyGenerator {
 
   protected processParallelBlock(node: ParallelBlock): string {
     this.increaseIndent();
-    const bodyCodes: string[] = [];
-    for (const stmt of node.body) {
-      bodyCodes.push(this.processNode(stmt));
-    }
+    const bodyCodeStr = this.renderBody(node.body);
     this.decreaseIndent();
-    const bodyCodeStr =
-      bodyCodes
-        .filter((s) => s !== "")
-        .join("\n")
-        .trimEnd() + "\n";
     return this.indentStr(
       `parallel {\n${bodyCodeStr}${this.indentStr("}")}`,
     );
@@ -1021,16 +1022,8 @@ export class AgencyGenerator {
 
   protected processSeqBlock(node: SeqBlock): string {
     this.increaseIndent();
-    const bodyCodes: string[] = [];
-    for (const stmt of node.body) {
-      bodyCodes.push(this.processNode(stmt));
-    }
+    const bodyCodeStr = this.renderBody(node.body);
     this.decreaseIndent();
-    const bodyCodeStr =
-      bodyCodes
-        .filter((s) => s !== "")
-        .join("\n")
-        .trimEnd() + "\n";
     return this.indentStr(
       `seq {\n${bodyCodeStr}${this.indentStr("}")}`,
     );
@@ -1038,16 +1031,8 @@ export class AgencyGenerator {
 
   protected processHandleBlock(node: HandleBlock): string {
     this.increaseIndent();
-    const bodyCodes: string[] = [];
-    for (const stmt of node.body) {
-      bodyCodes.push(this.processNode(stmt));
-    }
+    const bodyCodeStr = this.renderBody(node.body);
     this.decreaseIndent();
-    const bodyCodeStr =
-      bodyCodes
-        .filter((s) => s !== "")
-        .join("\n")
-        .trimEnd() + "\n";
 
     let handlerStr: string;
     if (node.handler.kind === "inline") {
@@ -1056,16 +1041,8 @@ export class AgencyGenerator {
         ? `${node.handler.param.name}: ${variableTypeToString(node.handler.param.typeHint, this.typeAliases)}${handlerBang}`
         : node.handler.param.name;
       this.increaseIndent();
-      const handlerBodyCodes: string[] = [];
-      for (const stmt of node.handler.body) {
-        handlerBodyCodes.push(this.processNode(stmt));
-      }
+      const handlerBodyStr = this.renderBody(node.handler.body);
       this.decreaseIndent();
-      const handlerBodyStr =
-        handlerBodyCodes
-          .filter((s) => s !== "")
-          .join("\n")
-          .trimEnd() + "\n";
       handlerStr = `(${paramStr}) {\n${handlerBodyStr}${this.indentStr("}")}`;
     } else {
       handlerStr = node.handler.functionName;
@@ -1105,8 +1082,27 @@ export class AgencyGenerator {
     const rightStr = this.processNode(node.right).trim();
     const left = this.needsParensLeft(node.left, op) ? `(${leftStr})` : leftStr;
     const right = this.needsParensRight(node.right, op) ? `(${rightStr})` : rightStr;
-    const result = `${left} ${op} ${right}`;
-    return assigned ? result : this.indentStr(result);
+    const inline = `${left} ${op} ${right}`;
+
+    // For pipe chains, break into multiple lines if the inline version is too long
+    if (op === "|>" && inline.length > 80) {
+      const segments = this.flattenPipeChain(node);
+      const multiline = segments.join(`\n${this.indent()}|> `);
+      return assigned ? multiline : this.indentStr(multiline);
+    }
+
+    return assigned ? inline : this.indentStr(inline);
+  }
+
+  private flattenPipeChain(node: BinOpExpression): string[] {
+    const segments: string[] = [];
+    let current: BinOpArgument = node;
+    while (current.type === "binOpExpression" && current.operator === "|>") {
+      segments.unshift(this.processNode(current.right).trim());
+      current = current.left;
+    }
+    segments.unshift(this.processNode(current).trim());
+    return segments;
   }
 
   protected processAccessChainElement(node: AccessChainElement): string {
@@ -1160,5 +1156,8 @@ export class AgencyGenerator {
 
 export function generateAgency(program: AgencyProgram): string {
   const generator = new AgencyGenerator();
-  return generator.generate(program).output.trim();
+  return generator.generate(program).output
+    .trim()
+    .replace(/[ \t]+$/gm, "")
+    + "\n";
 }

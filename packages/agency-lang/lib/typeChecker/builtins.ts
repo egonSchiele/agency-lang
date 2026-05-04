@@ -54,7 +54,8 @@ const llmOptions: VariableType = {
       }),
     },
     { key: "tools", value: optional(anyArray) },
-    { key: "metadata", value: optional({ type: "primitiveType", value: "any" }) },
+    // `any` already accepts undefined, so no need to wrap in optional.
+    { key: "metadata", value: { type: "primitiveType", value: "any" } },
   ],
 };
 

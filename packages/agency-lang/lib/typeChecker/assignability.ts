@@ -51,17 +51,17 @@ export function widenType(vt: VariableType | "any"): VariableType | "any" {
 }
 
 /**
- * A type that includes `undefined` — i.e. the desugared form of an optional
- * property (`key?: T` parses as `key: T | undefined`). Used to decide whether
- * a target object property may be absent from the source.
+ * A type that admits `undefined` as a value, so the corresponding object
+ * property may be absent from the source. Covers the `key?: T` desugaring
+ * (parsed as `T | undefined`) plus `any`, which subsumes undefined.
  */
 function isOptionalType(
   vt: VariableType,
   typeAliases: Record<string, VariableType>,
 ): boolean {
   const resolved = resolveType(vt, typeAliases);
-  if (resolved.type === "primitiveType" && resolved.value === "undefined")
-    return true;
+  if (resolved.type === "primitiveType")
+    return resolved.value === "undefined" || resolved.value === "any";
   if (resolved.type === "unionType")
     return resolved.types.some((t) => isOptionalType(t, typeAliases));
   return false;

@@ -341,11 +341,10 @@ function checkExcessObjectProperties(
   if (resolved.type !== "objectType") return;
   const known = new Set(resolved.properties.map((p) => p.key));
   for (const entry of literal.entries) {
-    if ("type" in entry && entry.type === "splat") continue;
-    const kv = entry as { key: string };
-    if (!known.has(kv.key)) {
+    if ("type" in entry) continue; // splat
+    if (!known.has(entry.key)) {
       ctx.errors.push({
-        message: `Unknown property '${kv.key}' on type '${formatTypeHint(paramType)}' in call to '${call.functionName}'.`,
+        message: `Unknown property '${entry.key}' on type '${formatTypeHint(paramType)}' in call to '${call.functionName}'.`,
         loc: call.loc,
       });
     }

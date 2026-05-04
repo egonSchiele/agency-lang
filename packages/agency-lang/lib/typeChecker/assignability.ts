@@ -50,6 +50,23 @@ export function widenType(vt: VariableType | "any"): VariableType | "any" {
   }
 }
 
+/**
+ * A type that admits `undefined` as a value, so the corresponding object
+ * property may be absent from the source. Covers the `key?: T` desugaring
+ * (parsed as `T | undefined`) plus `any`, which subsumes undefined.
+ */
+function isOptionalType(
+  vt: VariableType,
+  typeAliases: Record<string, VariableType>,
+): boolean {
+  const resolved = resolveType(vt, typeAliases);
+  if (resolved.type === "primitiveType")
+    return resolved.value === "undefined" || resolved.value === "any";
+  if (resolved.type === "unionType")
+    return resolved.types.some((t) => isOptionalType(t, typeAliases));
+  return false;
+}
+
 export function isAssignable(
   source: VariableType | "any",
   target: VariableType | "any",
@@ -175,12 +192,17 @@ export function isAssignable(
     resolvedSource.type === "objectType" &&
     resolvedTarget.type === "objectType"
   ) {
-    // Structural: source must have all properties of target with compatible types
+    // Structural: source must have all properties of target with compatible
+    // types. A target property whose type permits `undefined` (the desugaring
+    // of `key?:`) may be omitted from the source.
     for (const targetProp of resolvedTarget.properties) {
       const sourceProp = resolvedSource.properties.find(
         (p) => p.key === targetProp.key,
       );
-      if (!sourceProp) return false;
+      if (!sourceProp) {
+        if (isOptionalType(targetProp.value, typeAliases)) continue;
+        return false;
+      }
       if (!isAssignable(sourceProp.value, targetProp.value, typeAliases))
         return false;
     }

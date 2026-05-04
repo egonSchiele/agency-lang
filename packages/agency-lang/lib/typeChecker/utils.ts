@@ -10,13 +10,13 @@ import { Scope } from "./scope.js";
  * nodes, and imported functions — the resolution order used at every call
  * site that needs to inspect a callee's signature.
  */
-export function lookupCallableParams(
+export function getParamsForNodeOrFunc(
   name: string,
   ctx: TypeCheckerContext,
 ): FunctionParameter[] | undefined {
-  const def = ctx.functionDefs[name] ?? ctx.nodeDefs[name];
-  if (def) return def.parameters;
-  return ctx.importedFunctions[name]?.parameters;
+  const def =
+    ctx.functionDefs[name] ?? ctx.nodeDefs[name] ?? ctx.importedFunctions[name];
+  return def?.parameters;
 }
 
 export function isAnyType(t: VariableType): boolean {

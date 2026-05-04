@@ -11,7 +11,7 @@ import { isAssignable } from "./assignability.js";
 import { synthType } from "./synthesizer.js";
 import { ScopeInfo } from "./types.js";
 import type { TypeCheckerContext } from "./types.js";
-import { checkType, isAnyType, lookupCallableParams } from "./utils.js";
+import { checkType, isAnyType, getParamsForNodeOrFunc } from "./utils.js";
 import { Scope } from "./scope.js";
 
 /**
@@ -40,7 +40,10 @@ type ParamSlot = {
   name?: string;
 };
 
-function paramListSignature(params: FunctionParameter[], argCount: number): {
+function paramListSignature(
+  params: FunctionParameter[],
+  argCount: number,
+): {
   minArgs: number;
   maxArgs: number;
   slots: ParamSlot[];
@@ -114,7 +117,8 @@ function checkSingleFunctionCall(
   // Resolution order: local definition → imported (cross-file) → builtin
   // fallback. Importeds take precedence over builtins so a real stdlib
   // function shadows a hardcoded signature when SymbolTable info is wired in.
-  const def = ctx.functionDefs[call.functionName] ?? ctx.nodeDefs[call.functionName];
+  const def =
+    ctx.functionDefs[call.functionName] ?? ctx.nodeDefs[call.functionName];
   const importedSig = ctx.importedFunctions[call.functionName];
   const params = def?.parameters ?? importedSig?.parameters;
 
@@ -145,7 +149,10 @@ function checkSingleFunctionCall(
     const hasRest = sig.restParam !== undefined;
     const maxArgs = hasRest ? Infinity : sig.params.length;
     if (!checkArity(call, minArgs, maxArgs, hasSplatArg, ctx)) return;
-    const slots: ParamSlot[] = sig.params.map((type) => ({ type, validated: false }));
+    const slots: ParamSlot[] = sig.params.map((type) => ({
+      type,
+      validated: false,
+    }));
     if (hasRest) {
       while (slots.length < call.arguments.length) {
         slots.push({ type: sig.restParam!, validated: false });
@@ -230,7 +237,8 @@ function checkArity(
   ctx: TypeCheckerContext,
 ): boolean {
   if (hasSplatArg) return true;
-  if (call.arguments.length >= minArgs && call.arguments.length <= maxArgs) return true;
+  if (call.arguments.length >= minArgs && call.arguments.length <= maxArgs)
+    return true;
   ctx.errors.push({
     message: `Expected ${formatArity(minArgs, maxArgs)} argument(s) for '${call.functionName}', but got ${call.arguments.length}.`,
     loc: call.loc,
@@ -264,7 +272,14 @@ function checkArgsAgainstParams(
   for (let argIndex = 0; argIndex < call.arguments.length; argIndex++) {
     const arg = call.arguments[argIndex];
     if (arg.type === "splat") {
-      checkSplatAgainstRemainingParams(call, arg.value, argIndex, slots, scope, ctx);
+      checkSplatAgainstRemainingParams(
+        call,
+        arg.value,
+        argIndex,
+        slots,
+        scope,
+        ctx,
+      );
       return;
     }
     let slot: ParamSlot | undefined;
@@ -408,7 +423,8 @@ function validatePipeArg(
 
   const leftType = synthType(expr.left, scope, ctx);
   if (leftType === "any") return;
-  const flowingType = leftType.type === "resultType" ? leftType.successType : leftType;
+  const flowingType =
+    leftType.type === "resultType" ? leftType.successType : leftType;
   if (isAnyType(flowingType)) return;
 
   if (!isAssignable(flowingType, slotType, ctx.getTypeAliases())) {
@@ -426,14 +442,16 @@ function pipeRhsSlotType(
   ctx: TypeCheckerContext,
 ): VariableType | "any" | undefined {
   if (rhs.type === "variableName") {
-    const params = lookupCallableParams(rhs.value, ctx);
+    const params = getParamsForNodeOrFunc(rhs.value, ctx);
     return params?.[0]?.typeHint;
   }
   if (rhs.type === "functionCall") {
-    const params = lookupCallableParams(rhs.functionName, ctx);
+    const params = getParamsForNodeOrFunc(rhs.functionName, ctx);
     if (!params) return undefined;
     // No placeholder = backend will reject; nothing to type-check here.
-    const placeholderIdx = rhs.arguments.findIndex((a) => a.type === "placeholder");
+    const placeholderIdx = rhs.arguments.findIndex(
+      (a) => a.type === "placeholder",
+    );
     if (placeholderIdx < 0) return undefined;
     return params[placeholderIdx]?.typeHint;
   }

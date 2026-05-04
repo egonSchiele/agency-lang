@@ -4556,6 +4556,7 @@ describe("TypeChecker", () => {
   describe("v2: bang (!) validation", () => {
     const num: VariableType = { type: "primitiveType", value: "number" };
     const str: VariableType = { type: "primitiveType", value: "string" };
+    const undef: VariableType = { type: "primitiveType", value: "undefined" };
     const person: VariableType = {
       type: "objectType",
       properties: [{ key: "name", value: str }],
@@ -5857,7 +5858,6 @@ describe("TypeChecker", () => {
 
     it("still type-checks the value of an optional property when present", () => {
       // type Opts = { model?: string }; use({ model: 123 })  ← number, not string
-      const undef: VariableType = { type: "primitiveType", value: "undefined" };
       const opts: VariableType = {
         type: "objectType",
         properties: [
@@ -5891,7 +5891,6 @@ describe("TypeChecker", () => {
 
     it("resolves type aliases when checking optional-property omission", () => {
       // type Opts = { a?: string }; def use(o: Opts) {}; use({})  ← target is alias, not inline
-      const undef: VariableType = { type: "primitiveType", value: "undefined" };
       const optsAlias: VariableType = { type: "typeAliasVariable", aliasName: "Opts" };
       const program: AgencyProgram = {
         type: "agencyProgram",

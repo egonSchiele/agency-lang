@@ -431,6 +431,22 @@ function validatePipeArg(
   scope: Scope,
   ctx: TypeCheckerContext,
 ): void {
+  // Pipe semantics require exactly one `?` placeholder on a functionCall RHS
+  // (the LHS fills it). Catch the wrong count here so the user gets a
+  // typecheck diagnostic instead of a backend codegen throw.
+  if (expr.right.type === "functionCall") {
+    const placeholders = expr.right.arguments.filter(
+      (a) => a.type === "placeholder",
+    ).length;
+    if (placeholders !== 1) {
+      ctx.errors.push({
+        message: `Function call on right side of '|>' must contain exactly one '?' placeholder, got ${placeholders}.`,
+        loc: expr.loc,
+      });
+      return;
+    }
+  }
+
   const slotType = pipeRhsSlotType(expr.right, ctx);
   if (slotType === undefined || slotType === "any") return;
 

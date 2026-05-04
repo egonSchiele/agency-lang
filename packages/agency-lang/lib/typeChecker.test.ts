@@ -5964,14 +5964,8 @@ describe("TypeChecker", () => {
       expect(errors.some((e) => /unknown property 'modle'/i.test(e.message))).toBe(true);
     });
 
-    // Known typechecker gap: a pipe RHS with no `?` placeholder is currently
-    // delegated to the backend (`pipeRhsSlotType` early-returns when no
-    // placeholder is found — "backend will reject"). The typechecker emits
-    // no error even when the resulting arity is bogus (here: LHS + 2 explicit
-    // args for a 2-param fn). Pinned as `.skip` so we have a target to flip
-    // when the typechecker grows pipe arity-checking.
-    it.skip("pipe RHS arity mismatch errors when no placeholder is given", () => {
-      // 5 |> add(10, 20)  ← LHS + 2 explicit args ≠ 2 params.
+    it("rejects a pipe RHS functionCall with no '?' placeholder", () => {
+      // 5 |> add(10, 20)  ← needs exactly one '?'
       const program: AgencyProgram = {
         type: "agencyProgram",
         nodes: [
@@ -5998,7 +5992,38 @@ describe("TypeChecker", () => {
         ],
       };
       const errors = typeCheck(program).errors;
-      expect(errors.length).toBeGreaterThan(0);
+      expect(errors.some((e) => /exactly one '\?' placeholder, got 0/.test(e.message))).toBe(true);
+    });
+
+    it("rejects a pipe RHS functionCall with multiple '?' placeholders", () => {
+      // 5 |> add(?, ?)  ← only one '?' allowed
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "function",
+            functionName: "add",
+            parameters: [
+              { type: "functionParameter", name: "a", typeHint: num },
+              { type: "functionParameter", name: "b", typeHint: num },
+            ],
+            returnType: num,
+            body: [{ type: "returnStatement", value: { type: "number", value: "0" } }],
+          },
+          {
+            type: "binOpExpression",
+            operator: "|>",
+            left: { type: "number", value: "5" },
+            right: {
+              type: "functionCall",
+              functionName: "add",
+              arguments: [{ type: "placeholder" }, { type: "placeholder" }],
+            },
+          },
+        ],
+      };
+      const errors = typeCheck(program).errors;
+      expect(errors.some((e) => /exactly one '\?' placeholder, got 2/.test(e.message))).toBe(true);
     });
 
     it("named-arg call may omit a default-valued param", () => {

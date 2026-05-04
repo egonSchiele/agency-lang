@@ -5798,5 +5798,298 @@ describe("TypeChecker", () => {
       const errors = typeCheck(program).errors;
       expect(errors.some((e) => /not assignable/i.test(e.message))).toBe(true);
     });
+
+    it("rejects a wrong-typed value inside a nested llm() option", () => {
+      // llm("...", { thinking: { enabled: "yes" } })  ← enabled must be boolean
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "functionCall",
+            functionName: "llm",
+            arguments: [
+              { type: "string", segments: [{ type: "text", value: "hi" }] },
+              {
+                type: "agencyObject",
+                entries: [
+                  {
+                    key: "thinking",
+                    value: {
+                      type: "agencyObject",
+                      entries: [
+                        { key: "enabled", value: { type: "string", segments: [{ type: "text", value: "yes" }] } },
+                      ],
+                    },
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      };
+      const errors = typeCheck(program).errors;
+      expect(errors.some((e) => /not assignable/i.test(e.message))).toBe(true);
+    });
+
+    it("rejects an invalid string literal in llm()'s reasoningEffort", () => {
+      // llm("...", { reasoningEffort: "ultra" })  ← only "low" | "medium" | "high"
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "functionCall",
+            functionName: "llm",
+            arguments: [
+              { type: "string", segments: [{ type: "text", value: "hi" }] },
+              {
+                type: "agencyObject",
+                entries: [
+                  { key: "reasoningEffort", value: { type: "string", segments: [{ type: "text", value: "ultra" }] } },
+                ],
+              },
+            ],
+          },
+        ],
+      };
+      const errors = typeCheck(program).errors;
+      expect(errors.some((e) => /not assignable/i.test(e.message))).toBe(true);
+    });
+
+    it("still type-checks the value of an optional property when present", () => {
+      // type Opts = { model?: string }; use({ model: 123 })  ← number, not string
+      const undef: VariableType = { type: "primitiveType", value: "undefined" };
+      const opts: VariableType = {
+        type: "objectType",
+        properties: [
+          { key: "model", value: { type: "unionType", types: [str, undef] } },
+        ],
+      };
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "function",
+            functionName: "use",
+            parameters: [{ type: "functionParameter", name: "o", typeHint: opts }],
+            body: [],
+          },
+          {
+            type: "functionCall",
+            functionName: "use",
+            arguments: [
+              {
+                type: "agencyObject",
+                entries: [{ key: "model", value: { type: "number", value: "123" } }],
+              },
+            ],
+          },
+        ],
+      };
+      const errors = typeCheck(program).errors;
+      expect(errors.some((e) => /not assignable/i.test(e.message))).toBe(true);
+    });
+
+    it("resolves type aliases when checking optional-property omission", () => {
+      // type Opts = { a?: string }; def use(o: Opts) {}; use({})  ← target is alias, not inline
+      const undef: VariableType = { type: "primitiveType", value: "undefined" };
+      const optsAlias: VariableType = { type: "typeAliasVariable", aliasName: "Opts" };
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "typeAlias",
+            aliasName: "Opts",
+            aliasedType: {
+              type: "objectType",
+              properties: [
+                { key: "a", value: { type: "unionType", types: [str, undef] } },
+              ],
+            },
+          },
+          {
+            type: "function",
+            functionName: "use",
+            parameters: [{ type: "functionParameter", name: "o", typeHint: optsAlias }],
+            body: [],
+          },
+          {
+            type: "functionCall",
+            functionName: "use",
+            arguments: [{ type: "agencyObject", entries: [] }],
+          },
+        ],
+      };
+      expect(typeCheck(program).errors).toEqual([]);
+    });
+
+    it("excess-property check still catches typos when a splat is mixed in", () => {
+      // type Opts = { model: string }; const base: Opts = ...; use({ ...base, modle: "x" })
+      const opts: VariableType = {
+        type: "objectType",
+        properties: [{ key: "model", value: str }],
+      };
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "assignment",
+            variableName: "base",
+            typeHint: opts,
+            value: {
+              type: "agencyObject",
+              entries: [{ key: "model", value: { type: "string", segments: [{ type: "text", value: "gpt-4" }] } }],
+            },
+          },
+          {
+            type: "function",
+            functionName: "use",
+            parameters: [{ type: "functionParameter", name: "o", typeHint: opts }],
+            body: [],
+          },
+          {
+            type: "functionCall",
+            functionName: "use",
+            arguments: [
+              {
+                type: "agencyObject",
+                entries: [
+                  { type: "splat", value: { type: "variableName", value: "base" } },
+                  { key: "modle", value: { type: "string", segments: [{ type: "text", value: "x" }] } },
+                ],
+              },
+            ],
+          },
+        ],
+      };
+      const errors = typeCheck(program).errors;
+      expect(errors.some((e) => /unknown property 'modle'/i.test(e.message))).toBe(true);
+    });
+
+    // Known typechecker gap: a pipe RHS with no `?` placeholder is currently
+    // delegated to the backend (see pipeRhsSlotType in checker.ts:468 — "No
+    // placeholder = backend will reject"). The typechecker emits no error
+    // even when the resulting arity is bogus (here: LHS + 2 explicit args
+    // for a 2-param fn). Pinned as `.skip` so we have a target to flip when
+    // the typechecker grows pipe arity-checking.
+    it.skip("pipe RHS arity mismatch errors when no placeholder is given", () => {
+      // 5 |> add(10, 20)  ← LHS + 2 explicit args ≠ 2 params.
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "function",
+            functionName: "add",
+            parameters: [
+              { type: "functionParameter", name: "a", typeHint: num },
+              { type: "functionParameter", name: "b", typeHint: num },
+            ],
+            returnType: num,
+            body: [{ type: "returnStatement", value: { type: "number", value: "0" } }],
+          },
+          {
+            type: "binOpExpression",
+            operator: "|>",
+            left: { type: "number", value: "5" },
+            right: {
+              type: "functionCall",
+              functionName: "add",
+              arguments: [{ type: "number", value: "10" }, { type: "number", value: "20" }],
+            },
+          },
+        ],
+      };
+      const errors = typeCheck(program).errors;
+      expect(errors.length).toBeGreaterThan(0);
+    });
+
+    it("named-arg call may omit a default-valued param", () => {
+      // def f(a: string, b: string = "x") {}; f(a: "y")  ← b has a default, omittable
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "function",
+            functionName: "f",
+            parameters: [
+              { type: "functionParameter", name: "a", typeHint: str },
+              {
+                type: "functionParameter",
+                name: "b",
+                typeHint: str,
+                defaultValue: { type: "string", segments: [{ type: "text", value: "x" }] },
+              },
+            ],
+            body: [],
+          },
+          {
+            type: "functionCall",
+            functionName: "f",
+            arguments: [
+              { type: "namedArgument", name: "a", value: { type: "string", segments: [{ type: "text", value: "y" }] } },
+            ],
+          },
+        ],
+      };
+      expect(typeCheck(program).errors).toEqual([]);
+    });
+
+    it("named arg targeting a block-typed param is rejected as unknown", () => {
+      // def f(cb: () => void) {}; f(cb: ...)  ← block-typed params can't be named
+      const blockT: VariableType = {
+        type: "blockType",
+        params: [],
+        returnType: { type: "primitiveType", value: "void" },
+      };
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "function",
+            functionName: "f",
+            parameters: [{ type: "functionParameter", name: "cb", typeHint: blockT }],
+            body: [],
+          },
+          {
+            type: "functionCall",
+            functionName: "f",
+            arguments: [
+              { type: "namedArgument", name: "cb", value: { type: "string", segments: [{ type: "text", value: "x" }] } },
+            ],
+          },
+        ],
+      };
+      const errors = typeCheck(program).errors;
+      expect(errors.some((e) => /Unknown named argument 'cb'/.test(e.message))).toBe(true);
+    });
+
+    it("variable as llm() second argument typechecks without excess-property errors", () => {
+      // const cfg = { model: "gpt-4" }; llm("...", cfg)
+      // The excess-property check only fires on object literals — passing a
+      // variable should pass through assignability (structural) cleanly.
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "assignment",
+            variableName: "cfg",
+            value: {
+              type: "agencyObject",
+              entries: [
+                { key: "model", value: { type: "string", segments: [{ type: "text", value: "gpt-4" }] } },
+              ],
+            },
+          },
+          {
+            type: "functionCall",
+            functionName: "llm",
+            arguments: [
+              { type: "string", segments: [{ type: "text", value: "hi" }] },
+              { type: "variableName", value: "cfg" },
+            ],
+          },
+        ],
+      };
+      expect(typeCheck(program).errors).toEqual([]);
+    });
   });
 });

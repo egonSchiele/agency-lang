@@ -5034,6 +5034,87 @@ describe("TypeChecker", () => {
       expect(typeCheck(program, {}, info).errors).toHaveLength(0);
     });
 
+    it("const x: Person = llm() typechecks; LHS annotation drives structured output", () => {
+      // Default llm() return is `string`; with an annotation, the typechecker
+      // must trust the LHS as the structured-output schema rather than
+      // checking the (string) builtin return against it.
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "assignment",
+            variableName: "x",
+            typeHint: person,
+            value: {
+              type: "functionCall",
+              functionName: "llm",
+              arguments: [{ type: "string", segments: [{ type: "text", value: "who" }] }],
+            },
+          },
+        ],
+      };
+      expect(typeCheck(program).errors).toHaveLength(0);
+    });
+
+    it("const x: Person! = llm() composes with the bang", () => {
+      // x's declared type should be Result<Person, string>.
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "function",
+            functionName: "expectResult",
+            parameters: [
+              { type: "functionParameter", name: "r", typeHint: resultPersonStr },
+            ],
+            body: [],
+          },
+          {
+            type: "assignment",
+            variableName: "x",
+            typeHint: person,
+            validated: true,
+            value: {
+              type: "functionCall",
+              functionName: "llm",
+              arguments: [{ type: "string", segments: [{ type: "text", value: "who" }] }],
+            },
+          },
+          {
+            type: "functionCall",
+            functionName: "expectResult",
+            arguments: [{ type: "variableName", value: "x" }],
+          },
+        ],
+      };
+      expect(typeCheck(program).errors).toHaveLength(0);
+    });
+
+    it("def foo(): Person { return llm() } typechecks", () => {
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "function",
+            functionName: "foo",
+            parameters: [],
+            returnType: person,
+            body: [
+              {
+                type: "returnStatement",
+                value: {
+                  type: "functionCall",
+                  functionName: "llm",
+                  arguments: [{ type: "string", segments: [{ type: "text", value: "who" }] }],
+                },
+              },
+            ],
+          },
+        ],
+      };
+      expect(typeCheck(program).errors).toHaveLength(0);
+    });
+
     it("checks the RHS of a validated assignment against the un-bang'd type", () => {
       // const x: number! = "not a number" — RHS is checked against `number`.
       const program: AgencyProgram = {

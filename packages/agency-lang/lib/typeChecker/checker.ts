@@ -11,8 +11,12 @@ import { isAssignable } from "./assignability.js";
 import { synthType } from "./synthesizer.js";
 import { ScopeInfo } from "./types.js";
 import type { TypeCheckerContext } from "./types.js";
-import { checkType, isAnyType, getParamsForNodeOrFunc } from "./utils.js";
-import { resolveType } from "./assignability.js";
+import {
+  checkType,
+  isAnyType,
+  getParamsForNodeOrFunc,
+  checkExcessObjectProperties,
+} from "./utils.js";
 import { Scope } from "./scope.js";
 
 /**
@@ -312,41 +316,14 @@ function checkArgsAgainstParams(
         actualType: formatTypeHint(argType),
         loc: call.loc,
       });
-      continue;
     }
-    // Excess-property check for object literals: a typo'd or unknown key
-    // would otherwise pass since assignability is purely structural in the
-    // target → source direction.
     if (innerArg.type === "agencyObject") {
-      checkExcessObjectProperties(innerArg, paramType, call, ctx);
-    }
-  }
-}
-
-/**
- * When an object literal is assigned to an object-typed slot, every key in
- * the literal must correspond to a property declared on the target. Mirrors
- * TypeScript's excess-property check; without it, typos like `modle:` slip
- * through structural assignability.
- *
- * Only literal keys are checked — splats are dynamic and skipped.
- */
-function checkExcessObjectProperties(
-  literal: AgencyNode & { type: "agencyObject" },
-  paramType: VariableType,
-  call: FunctionCall,
-  ctx: TypeCheckerContext,
-): void {
-  const resolved = resolveType(paramType, ctx.getTypeAliases());
-  if (resolved.type !== "objectType") return;
-  const known = new Set(resolved.properties.map((p) => p.key));
-  for (const entry of literal.entries) {
-    if ("type" in entry) continue; // splat
-    if (!known.has(entry.key)) {
-      ctx.errors.push({
-        message: `Unknown property '${entry.key}' on type '${formatTypeHint(paramType)}' in call to '${call.functionName}'.`,
-        loc: literal.loc ?? call.loc,
-      });
+      checkExcessObjectProperties(
+        innerArg,
+        paramType,
+        `call to '${call.functionName}'`,
+        ctx,
+      );
     }
   }
 }

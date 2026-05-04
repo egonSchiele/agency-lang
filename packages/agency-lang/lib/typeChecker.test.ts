@@ -5723,6 +5723,64 @@ describe("TypeChecker", () => {
       expect(errors.some((e) => /not assignable/i.test(e.message))).toBe(true);
     });
 
+    it("rejects an unknown property in an annotated assignment", () => {
+      // const x: Opts = { modle: "..." } — typo in `model` should error.
+      const opts: VariableType = {
+        type: "objectType",
+        properties: [{ key: "model", value: str }],
+      };
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "assignment",
+            variableName: "x",
+            typeHint: opts,
+            value: {
+              type: "agencyObject",
+              entries: [
+                { key: "modle", value: { type: "string", segments: [{ type: "text", value: "gpt-4" }] } },
+              ],
+            },
+          },
+        ],
+      };
+      const errors = typeCheck(program).errors;
+      expect(errors.some((e) => /unknown property 'modle'/i.test(e.message))).toBe(true);
+    });
+
+    it("rejects an unknown property in a function's returned object literal", () => {
+      // def f(): Opts { return { modle: "..." } }
+      const opts: VariableType = {
+        type: "objectType",
+        properties: [{ key: "model", value: str }],
+      };
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "function",
+            functionName: "f",
+            parameters: [],
+            returnType: opts,
+            body: [
+              {
+                type: "returnStatement",
+                value: {
+                  type: "agencyObject",
+                  entries: [
+                    { key: "modle", value: { type: "string", segments: [{ type: "text", value: "gpt-4" }] } },
+                  ],
+                },
+              },
+            ],
+          },
+        ],
+      };
+      const errors = typeCheck(program).errors;
+      expect(errors.some((e) => /unknown property 'modle'/i.test(e.message))).toBe(true);
+    });
+
     it("checks the RHS of a validated assignment against the un-bang'd type", () => {
       // const x: number! = "not a number" — RHS is checked against `number`.
       const program: AgencyProgram = {

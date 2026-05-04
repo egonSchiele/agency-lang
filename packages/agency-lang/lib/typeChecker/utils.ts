@@ -1,6 +1,6 @@
 import { AgencyNode, FunctionParameter, VariableType } from "../types.js";
 import { formatTypeHint } from "../cli/util.js";
-import { isAssignable } from "./assignability.js";
+import { isAssignable, resolveType } from "./assignability.js";
 import { synthType } from "./synthesizer.js";
 import { TypeCheckerContext } from "./types.js";
 import { Scope } from "./scope.js";
@@ -87,5 +87,34 @@ export function checkType(
       actualType: formatTypeHint(actualType),
       loc: expr.loc,
     });
+  }
+  if (expr.type === "agencyObject") {
+    checkExcessObjectProperties(expr, expectedType, context, ctx);
+  }
+}
+
+/**
+ * When an object literal meets an object-typed target, every key must
+ * correspond to a declared property. Mirrors TypeScript's excess-property
+ * check; without it, typos like `modle:` slip through structural
+ * assignability. Splat entries are dynamic and skipped.
+ */
+export function checkExcessObjectProperties(
+  literal: AgencyNode & { type: "agencyObject" },
+  expectedType: VariableType,
+  context: string,
+  ctx: TypeCheckerContext,
+): void {
+  const resolved = resolveType(expectedType, ctx.getTypeAliases());
+  if (resolved.type !== "objectType") return;
+  const known = new Set(resolved.properties.map((p) => p.key));
+  for (const entry of literal.entries) {
+    if ("type" in entry) continue; // splat
+    if (!known.has(entry.key)) {
+      ctx.errors.push({
+        message: `Unknown property '${entry.key}' on type '${formatTypeHint(expectedType)}' (${context}).`,
+        loc: literal.loc,
+      });
+    }
   }
 }

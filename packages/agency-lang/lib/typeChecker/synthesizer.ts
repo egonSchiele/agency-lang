@@ -168,81 +168,20 @@ function synthCatch(
  * call or function reference). The chain short-circuits on failure, so the
  * result is always a Result wrapping right's return type. If right already
  * returns a Result, pass it through.
+ *
+ * Slot-type validation lives in checker.ts (`validatePipeArg`) — kept out of
+ * synth so it doesn't fire twice when a pipe appears in an assignment/return
+ * context that already synths the expression.
  */
 function synthPipe(
   expr: AgencyNode & { type: "binOpExpression" },
   scope: Scope,
   ctx: TypeCheckerContext,
 ): VariableType | "any" {
-  validatePipeArg(expr, scope, ctx);
   const right = synthPipeRhs(expr.right, scope, ctx);
   if (right === "any") return right;
   if (right.type === "resultType") return right;
   return { type: "resultType", successType: right, failureType: ANY_T };
-}
-
-/**
- * Validate the LHS of `|>` against the slot it flows into on the RHS:
- * - bare variable RHS (`lhs |> half`) — slot is param 0
- * - functionCall RHS with `?` placeholder (`lhs |> add(?, 5)`) — slot is the placeholder's index
- *
- * The runtime auto-unwraps a Result LHS to its success value before passing
- * it to the next stage, so we compare against `lhs.successType` when the
- * LHS is a Result.
- */
-function validatePipeArg(
-  expr: AgencyNode & { type: "binOpExpression" },
-  scope: Scope,
-  ctx: TypeCheckerContext,
-): void {
-  const slotType = pipeRhsSlotType(expr.right, ctx);
-  if (slotType === undefined) return;
-  if (slotType === "any") return;
-
-  const leftType = synthType(expr.left, scope, ctx);
-  if (leftType === "any") return;
-  const flowingType = leftType.type === "resultType" ? leftType.successType : leftType;
-  if (isAnyType(flowingType)) return;
-
-  const typeAliases = ctx.getTypeAliases();
-  if (!isAssignable(flowingType, slotType, typeAliases)) {
-    ctx.errors.push({
-      message: `Type '${formatTypeHint(flowingType)}' is not assignable to pipe slot of type '${formatTypeHint(slotType)}'.`,
-      expectedType: formatTypeHint(slotType),
-      actualType: formatTypeHint(flowingType),
-      loc: expr.loc,
-    });
-  }
-}
-
-function isAnyType(t: VariableType): boolean {
-  return t.type === "primitiveType" && t.value === "any";
-}
-
-/** Param type at the slot where the LHS will flow on the RHS, or undefined if we can't determine it. */
-function pipeRhsSlotType(
-  rhs: AgencyNode,
-  ctx: TypeCheckerContext,
-): VariableType | "any" | undefined {
-  if (rhs.type === "variableName") {
-    const params = pipeFunctionParams(rhs.value, ctx);
-    return params?.[0]?.typeHint;
-  }
-  if (rhs.type === "functionCall") {
-    const params = pipeFunctionParams(rhs.functionName, ctx);
-    if (!params) return undefined;
-    const placeholderIdx = rhs.arguments.findIndex((a) => a.type === "placeholder");
-    if (placeholderIdx < 0) return undefined; // backend will reject; nothing to type-check
-    return params[placeholderIdx]?.typeHint;
-  }
-  return undefined;
-}
-
-function pipeFunctionParams(name: string, ctx: TypeCheckerContext) {
-  const def = ctx.functionDefs[name] ?? ctx.nodeDefs[name];
-  if (def) return def.parameters;
-  const imported = ctx.importedFunctions[name];
-  return imported?.parameters;
 }
 
 /**

@@ -11,7 +11,7 @@ import { isAssignable } from "./assignability.js";
 import { synthType } from "./synthesizer.js";
 import { ScopeInfo } from "./types.js";
 import type { TypeCheckerContext } from "./types.js";
-import { checkType } from "./utils.js";
+import { checkType, isAnyType, lookupCallableParams } from "./utils.js";
 import { Scope } from "./scope.js";
 
 /**
@@ -36,6 +36,8 @@ function variadicElementType(
 type ParamSlot = {
   type: VariableType | "any" | undefined;
   validated: boolean;
+  /** Original parameter name. Absent for builtins (which can't take named args). */
+  name?: string;
 };
 
 function paramListSignature(params: FunctionParameter[], argCount: number): {
@@ -53,6 +55,7 @@ function paramListSignature(params: FunctionParameter[], argCount: number): {
   const slots: ParamSlot[] = params.map((p) => ({
     type: p.typeHint,
     validated: !!p.validated,
+    name: p.name,
   }));
   if (hasRest) {
     // Replace the variadic slot's array type with the element type, so a
@@ -62,6 +65,7 @@ function paramListSignature(params: FunctionParameter[], argCount: number): {
     const restSlot: ParamSlot = {
       type: elementType,
       validated: slots[slots.length - 1]?.validated ?? false,
+      name: lastParam.name,
     };
     slots[slots.length - 1] = restSlot;
     while (slots.length < argCount) slots.push(restSlot);
@@ -118,7 +122,7 @@ function checkSingleFunctionCall(
       call.arguments.length,
     );
     if (!checkArity(call, minArgs, maxArgs, hasSplatArg, ctx)) return;
-    checkArgsAgainstParams(call, slots, scope, ctx, params);
+    checkArgsAgainstParams(call, slots, scope, ctx);
     return;
   }
 
@@ -134,67 +138,60 @@ function checkSingleFunctionCall(
         slots.push({ type: sig.restParam!, validated: false });
       }
     }
-    checkArgsAgainstParams(call, slots, scope, ctx, undefined);
+    checkArgsAgainstParams(call, slots, scope, ctx);
   }
 }
 
 /**
- * Catch structural mistakes in named-arg usage that have nothing to do with
- * types: duplicates, positionals after named, and named args that target a
- * slot already filled positionally. Mirrors what the backend rejects at
- * codegen time (typescriptBuilder.ts), but earlier with proper diagnostics.
+ * Catch structural mistakes in named-arg usage (duplicates, positionals
+ * after named, name-conflicts-with-positional). Returns false when the
+ * arg/slot alignment is broken, so the caller bails before per-arg type
+ * checks would emit misleading errors.
  *
- * Returns false to signal the caller to bail before per-arg type checking —
- * once arg/slot alignment is broken, type errors would be misleading.
+ * Variadic and block params can't be passed by name — same as the backend.
+ * Unknown-name errors are emitted later in checkArgsAgainstParams.
  */
 function checkNamedArgStructure(
   call: FunctionCall,
   params: FunctionParameter[],
   ctx: TypeCheckerContext,
 ): boolean {
-  const namedStartIdx = call.arguments.findIndex((a) => a.type === "namedArgument");
-  if (namedStartIdx < 0) return true;
-
   let ok = true;
+  let namedStartIdx = -1;
+  let nameableParams: FunctionParameter[] | null = null;
+  const seen = new Set<string>();
 
-  for (let i = namedStartIdx + 1; i < call.arguments.length; i++) {
-    const a = call.arguments[i];
-    if (a.type !== "namedArgument" && a.type !== "splat") {
+  for (let i = 0; i < call.arguments.length; i++) {
+    const arg = call.arguments[i];
+    if (arg.type === "namedArgument") {
+      if (namedStartIdx < 0) namedStartIdx = i;
+      if (seen.has(arg.name)) {
+        ctx.errors.push({
+          message: `Duplicate named argument '${arg.name}' in call to '${call.functionName}'.`,
+          loc: call.loc,
+        });
+        ok = false;
+        continue;
+      }
+      seen.add(arg.name);
+      nameableParams ??= params.filter(
+        (p) => !p.variadic && p.typeHint?.type !== "blockType",
+      );
+      const paramIdx = nameableParams.findIndex((p) => p.name === arg.name);
+      if (paramIdx >= 0 && paramIdx < namedStartIdx) {
+        ctx.errors.push({
+          message: `Named argument '${arg.name}' conflicts with positional argument at position ${paramIdx + 1} in call to '${call.functionName}'.`,
+          loc: call.loc,
+        });
+        ok = false;
+      }
+    } else if (namedStartIdx >= 0 && arg.type !== "splat") {
       ctx.errors.push({
         message: `Positional argument cannot follow a named argument in call to '${call.functionName}'.`,
         loc: call.loc,
       });
       ok = false;
       break;
-    }
-  }
-
-  // Variadic and block params can't be passed by name (matches backend).
-  const nameableParams = params.filter(
-    (p) => !p.variadic && p.typeHint?.type !== "blockType",
-  );
-  const seen = new Set<string>();
-  for (let i = namedStartIdx; i < call.arguments.length; i++) {
-    const arg = call.arguments[i];
-    if (arg.type !== "namedArgument") continue;
-    if (seen.has(arg.name)) {
-      ctx.errors.push({
-        message: `Duplicate named argument '${arg.name}' in call to '${call.functionName}'.`,
-        loc: call.loc,
-      });
-      ok = false;
-      continue;
-    }
-    seen.add(arg.name);
-    const paramIdx = nameableParams.findIndex((p) => p.name === arg.name);
-    // Unknown-name errors are emitted later in checkArgsAgainstParams.
-    if (paramIdx < 0) continue;
-    if (paramIdx < namedStartIdx) {
-      ctx.errors.push({
-        message: `Named argument '${arg.name}' conflicts with positional argument at position ${paramIdx + 1} in call to '${call.functionName}'.`,
-        loc: call.loc,
-      });
-      ok = false;
     }
   }
 
@@ -244,9 +241,11 @@ function checkArgsAgainstParams(
   slots: ParamSlot[],
   scope: Scope,
   ctx: TypeCheckerContext,
-  params: FunctionParameter[] | undefined,
 ): void {
   const typeAliases = ctx.getTypeAliases();
+  // Slots without names come from builtin signatures, which the runtime /
+  // backend rejects named args for. Skip the name lookup in that case.
+  const hasNames = slots.some((s) => s.name !== undefined);
   for (let argIndex = 0; argIndex < call.arguments.length; argIndex++) {
     const arg = call.arguments[argIndex];
     if (arg.type === "splat") {
@@ -256,18 +255,15 @@ function checkArgsAgainstParams(
     let slot: ParamSlot | undefined;
     let innerArg: AgencyNode;
     if (arg.type === "namedArgument") {
-      // Resolve the slot by parameter name. Builtins (no `params`) can't
-      // express named args; the runtime / backend rejects those, but we
-      // skip the type check here rather than emit a confusing error.
-      const paramIdx = params?.findIndex((p) => p.name === arg.name) ?? -1;
-      if (params && paramIdx < 0) {
+      const slotIdx = slots.findIndex((s) => s.name === arg.name);
+      if (hasNames && slotIdx < 0) {
         ctx.errors.push({
           message: `Unknown named argument '${arg.name}' in call to '${call.functionName}'.`,
           loc: call.loc,
         });
         continue;
       }
-      slot = paramIdx >= 0 ? slots[paramIdx] : undefined;
+      slot = slotIdx >= 0 ? slots[slotIdx] : undefined;
       innerArg = arg.value;
     } else {
       slot = slots[argIndex];
@@ -375,12 +371,72 @@ function checkExpressionsInScope(
     ) {
       checkRegexMatch(node, info.scope, ctx);
     } else if (node.type === "binOpExpression" && node.operator === "|>") {
-      // synth runs validatePipeArg as a side effect; needed so a pipe whose
-      // result is discarded (or used purely for its short-circuit behavior)
-      // still gets its slot-type check.
-      synthType(node, info.scope, ctx);
+      validatePipeArg(node, info.scope, ctx);
     }
   }
+}
+
+const STRING_T: VariableType = { type: "primitiveType", value: "string" };
+const REGEX_T: VariableType = { type: "primitiveType", value: "regex" };
+
+/**
+ * Validate the LHS of `|>` against the slot it flows into on the RHS:
+ * - bare variable RHS (`lhs |> half`) — slot is param 0
+ * - functionCall RHS with `?` placeholder (`lhs |> add(?, 5)`) — slot is the placeholder's index
+ *
+ * The runtime auto-unwraps a Result LHS to its success value before passing
+ * it to the next stage, so we compare against `lhs.successType` when LHS is
+ * a Result.
+ */
+function validatePipeArg(
+  expr: AgencyNode & { type: "binOpExpression" },
+  scope: Scope,
+  ctx: TypeCheckerContext,
+): void {
+  const slotType = pipeRhsSlotType(expr.right, ctx);
+  if (slotType === undefined || slotType === "any") return;
+
+  const leftType = synthType(expr.left, scope, ctx);
+  if (leftType === "any") return;
+  const flowingType = leftType.type === "resultType" ? leftType.successType : leftType;
+  if (isAnyType(flowingType)) return;
+
+  if (!isAssignable(flowingType, slotType, ctx.getTypeAliases())) {
+    ctx.errors.push({
+      message: `Type '${formatTypeHint(flowingType)}' is not assignable to pipe slot of type '${formatTypeHint(slotType)}'.`,
+      expectedType: formatTypeHint(slotType),
+      actualType: formatTypeHint(flowingType),
+      loc: expr.loc,
+    });
+  }
+}
+
+function pipeRhsSlotType(
+  rhs: AgencyNode,
+  ctx: TypeCheckerContext,
+): VariableType | "any" | undefined {
+  if (rhs.type === "variableName") {
+    const params = lookupCallableParams(rhs.value, ctx);
+    return params?.[0]?.typeHint;
+  }
+  if (rhs.type === "functionCall") {
+    const params = lookupCallableParams(rhs.functionName, ctx);
+    if (!params) return undefined;
+    // No placeholder = backend will reject; nothing to type-check here.
+    const placeholderIdx = rhs.arguments.findIndex((a) => a.type === "placeholder");
+    if (placeholderIdx < 0) return undefined;
+    return params[placeholderIdx]?.typeHint;
+  }
+  return undefined;
+}
+
+function checkRegexMatch(
+  node: AgencyNode & { type: "binOpExpression" },
+  scope: Scope,
+  ctx: TypeCheckerContext,
+): void {
+  checkType(node.left, STRING_T, scope, `left of '${node.operator}'`, ctx);
+  checkType(node.right, REGEX_T, scope, `right of '${node.operator}'`, ctx);
 }
 
 /**
@@ -389,23 +445,6 @@ function checkExpressionsInScope(
  * is a Result<T>, that's `T`; otherwise (catch on a non-Result is a no-op
  * at runtime) it's the left's own type.
  */
-/**
- * `s =~ /re/` and `s !~ /re/` compile to `/re/.test(s)`. The left operand
- * must be a string, the right must be a regex literal (or value of `regex`
- * type). Catching this at compile time avoids runtime "X.test is not a
- * function" surprises when a user forgets the regex literal syntax.
- */
-function checkRegexMatch(
-  node: AgencyNode & { type: "binOpExpression" },
-  scope: Scope,
-  ctx: TypeCheckerContext,
-): void {
-  const STRING: VariableType = { type: "primitiveType", value: "string" };
-  const REGEX: VariableType = { type: "primitiveType", value: "regex" };
-  checkType(node.left, STRING, scope, `left of '${node.operator}'`, ctx);
-  checkType(node.right, REGEX, scope, `right of '${node.operator}'`, ctx);
-}
-
 function checkCatchDefaultType(
   node: AgencyNode & { type: "binOpExpression" },
   scope: Scope,

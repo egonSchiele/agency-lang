@@ -300,9 +300,7 @@ export function executeNode(args: ExecuteNodeArgs): {
 export function formatTypeHint(vt: VariableType): string {
   switch (vt.type) {
     case "primitiveType":
-      // Agency's `regex` primitive maps to TypeScript's RegExp. formatTypeHint
-      // is used for generated TS code (function signatures, class fields), so
-      // we have to emit the TS-side name here, not the Agency-side keyword.
+      // Agency's `regex` primitive maps to TS RegExp at emit time.
       if (vt.value === "regex") return "RegExp";
       return vt.value;
     case "arrayType":

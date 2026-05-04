@@ -286,6 +286,11 @@ function checkExpressionsInScope(
       checkType(node.condition, BOOLEAN_TYPE, info.scope, "condition", ctx);
     } else if (node.type === "binOpExpression" && node.operator === "catch") {
       checkCatchDefaultType(node, info.scope, ctx);
+    } else if (node.type === "binOpExpression" && node.operator === "|>") {
+      // synth runs validatePipeArg as a side effect; needed so a pipe whose
+      // result is discarded (or used purely for its short-circuit behavior)
+      // still gets its slot-type check.
+      synthType(node, info.scope, ctx);
     }
   }
 }

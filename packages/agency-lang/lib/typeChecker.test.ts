@@ -5115,6 +5115,124 @@ describe("TypeChecker", () => {
       expect(typeCheck(program).errors).toHaveLength(0);
     });
 
+    it("pipe with bare-var RHS validates LHS against RHS first param", () => {
+      // def half(n: number): number { return n / 2 }
+      // const x: string = "hello"
+      // x |> half  → error: 'string' not assignable to 'number'
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "function",
+            functionName: "half",
+            parameters: [{ type: "functionParameter", name: "n", typeHint: num }],
+            returnType: num,
+            body: [{ type: "returnStatement", value: { type: "number", value: "5" } }],
+          },
+          {
+            type: "binOpExpression",
+            operator: "|>",
+            left: { type: "string", segments: [{ type: "text", value: "hello" }] },
+            right: { type: "variableName", value: "half" },
+          },
+        ],
+      };
+      const errors = typeCheck(program).errors;
+      expect(errors.some((e) => /not assignable/i.test(e.message))).toBe(true);
+    });
+
+    it("pipe with bare-var RHS unwraps Result LHS for the first-arg check", () => {
+      // r: Result<number, string> |> half  — half takes number, success type is number → ok
+      const resultNumStr: VariableType = { type: "resultType", successType: num, failureType: str };
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "function",
+            functionName: "half",
+            parameters: [{ type: "functionParameter", name: "n", typeHint: num }],
+            returnType: num,
+            body: [{ type: "returnStatement", value: { type: "number", value: "5" } }],
+          },
+          {
+            type: "assignment",
+            variableName: "r",
+            typeHint: resultNumStr,
+            value: { type: "functionCall", functionName: "success", arguments: [{ type: "number", value: "10" }] },
+          },
+          {
+            type: "binOpExpression",
+            operator: "|>",
+            left: { type: "variableName", value: "r" },
+            right: { type: "variableName", value: "half" },
+          },
+        ],
+      };
+      expect(typeCheck(program).errors).toHaveLength(0);
+    });
+
+    it("pipe with placeholder RHS validates LHS against the ? slot", () => {
+      // def add(a: number, b: number): number { return a + b }
+      // "x" |> add(?, 5)  → error: 'string' not assignable to 'number' for slot 0
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "function",
+            functionName: "add",
+            parameters: [
+              { type: "functionParameter", name: "a", typeHint: num },
+              { type: "functionParameter", name: "b", typeHint: num },
+            ],
+            returnType: num,
+            body: [{ type: "returnStatement", value: { type: "number", value: "0" } }],
+          },
+          {
+            type: "binOpExpression",
+            operator: "|>",
+            left: { type: "string", segments: [{ type: "text", value: "x" }] },
+            right: {
+              type: "functionCall",
+              functionName: "add",
+              arguments: [{ type: "placeholder" }, { type: "number", value: "5" }],
+            },
+          },
+        ],
+      };
+      const errors = typeCheck(program).errors;
+      expect(errors.some((e) => /not assignable/i.test(e.message))).toBe(true);
+    });
+
+    it("pipe with placeholder in second slot validates against that param", () => {
+      // 5 |> add(10, ?)  → ok (number → number)
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "function",
+            functionName: "add",
+            parameters: [
+              { type: "functionParameter", name: "a", typeHint: num },
+              { type: "functionParameter", name: "b", typeHint: num },
+            ],
+            returnType: num,
+            body: [{ type: "returnStatement", value: { type: "number", value: "0" } }],
+          },
+          {
+            type: "binOpExpression",
+            operator: "|>",
+            left: { type: "number", value: "5" },
+            right: {
+              type: "functionCall",
+              functionName: "add",
+              arguments: [{ type: "number", value: "10" }, { type: "placeholder" }],
+            },
+          },
+        ],
+      };
+      expect(typeCheck(program).errors).toHaveLength(0);
+    });
+
     it("checks the RHS of a validated assignment against the un-bang'd type", () => {
       // const x: number! = "not a number" — RHS is checked against `number`.
       const program: AgencyProgram = {

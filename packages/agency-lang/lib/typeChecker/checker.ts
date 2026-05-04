@@ -345,7 +345,7 @@ function checkExcessObjectProperties(
     if (!known.has(entry.key)) {
       ctx.errors.push({
         message: `Unknown property '${entry.key}' on type '${formatTypeHint(paramType)}' in call to '${call.functionName}'.`,
-        loc: call.loc,
+        loc: literal.loc ?? call.loc,
       });
     }
   }

@@ -1,13 +1,12 @@
-import {
-  AgencyNode,
-  Expression,
-  VariableType,
-  ValueAccess,
-} from "../types.js";
-import type { NamedArgument, SplatExpression } from "../types/dataStructures.js";
+import { AgencyNode, Expression, VariableType, ValueAccess } from "../types.js";
+import type {
+  NamedArgument,
+  SplatExpression,
+} from "../types/dataStructures.js";
 import { formatTypeHint } from "../cli/util.js";
 import { BUILTIN_FUNCTION_TYPES } from "./builtins.js";
 import { isAssignable, resolveType } from "./assignability.js";
+import { resultTypeForValidation } from "./validation.js";
 import { TypeCheckerContext } from "./types.js";
 import { Scope } from "./scope.js";
 
@@ -198,11 +197,16 @@ function synthPipeRhs(
 ): VariableType | "any" {
   if (rhs.type === "variableName") {
     const name = rhs.value;
+    const def = ctx.functionDefs[name] ?? ctx.nodeDefs[name];
+    const importedSig = ctx.importedFunctions[name];
+    // Pipes inherit Result wrapping like direct calls — apply the bang at
+    // the call-site read so `... |> half` types as `Result<halfReturn>`.
     const fnReturn =
-      ctx.functionDefs[name]?.returnType ??
-      ctx.nodeDefs[name]?.returnType ??
+      (def?.returnType &&
+        resultTypeForValidation(def.returnType, def.returnTypeValidated)) ??
       ctx.inferredReturnTypes[name] ??
-      ctx.importedFunctions[name]?.returnType;
+      (importedSig?.returnType &&
+        resultTypeForValidation(importedSig.returnType, undefined));
     if (fnReturn) return fnReturn;
   }
   return synthType(rhs, scope, ctx);
@@ -217,7 +221,10 @@ function synthFunctionCall(
   // get `Result<T, any>` (success) or `Result<any, T>` (failure). The names
   // are reserved at the typechecker level (see RESERVED_FUNCTION_NAMES in
   // index.ts), so shadowing is impossible — no gating needed here.
-  if (RESULT_CONSTRUCTORS.has(expr.functionName) && expr.arguments.length >= 1) {
+  if (
+    RESULT_CONSTRUCTORS.has(expr.functionName) &&
+    expr.arguments.length >= 1
+  ) {
     const inner = asPositionalArg(expr.arguments[0]);
     if (inner) {
       const innerType = maybeAny(synthType(inner, scope, ctx));
@@ -229,7 +236,8 @@ function synthFunctionCall(
   const fn = ctx.functionDefs[expr.functionName];
   const graphNode = ctx.nodeDefs[expr.functionName];
   const def = fn ?? graphNode;
-  if (def?.returnType) return def.returnType;
+  if (def?.returnType)
+    return resultTypeForValidation(def.returnType, def.returnTypeValidated);
   if (expr.functionName in ctx.inferredReturnTypes) {
     return ctx.inferredReturnTypes[expr.functionName];
   }
@@ -295,7 +303,8 @@ function synthObject(
       const splatType = synthType(entry.value, scope, ctx);
       if (splatType === "any") return "any";
       if (splatType.type !== "objectType") return "any";
-      for (const prop of splatType.properties) properties.set(prop.key, prop.value);
+      for (const prop of splatType.properties)
+        properties.set(prop.key, prop.value);
       continue;
     }
     const kv = entry as { key: string; value: AgencyNode };
@@ -322,7 +331,8 @@ export function synthValueAccess(
   for (const element of expr.chain) {
     if (currentType === "any") return "any";
     const resolved = resolveType(currentType, typeAliases);
-    if (resolved.type === "primitiveType" && resolved.value === "any") return "any";
+    if (resolved.type === "primitiveType" && resolved.value === "any")
+      return "any";
 
     switch (element.kind) {
       case "property": {
@@ -361,9 +371,7 @@ export function synthValueAccess(
             return "any";
           }
         } else if (resolved.type === "objectType") {
-          const prop = resolved.properties.find(
-            (p) => p.key === element.name,
-          );
+          const prop = resolved.properties.find((p) => p.key === element.name);
           if (prop) {
             currentType = prop.value;
           } else {
@@ -373,10 +381,7 @@ export function synthValueAccess(
             });
             return "any";
           }
-        } else if (
-          resolved.type === "arrayType" &&
-          element.name === "length"
-        ) {
+        } else if (resolved.type === "arrayType" && element.name === "length") {
           currentType = { type: "primitiveType", value: "number" };
         } else {
           ctx.errors.push({

@@ -10,6 +10,7 @@ import type { ResultType } from "../types/typeHints.js";
 import { scopeKey } from "../compilationUnit.js";
 import { walkNodes } from "../utils/node.js";
 import { isAssignable, widenType } from "./assignability.js";
+import { resultTypeForValidation } from "./validation.js";
 import { synthType } from "./synthesizer.js";
 import { walkScopeBody } from "./scopes.js";
 import { TypeCheckerContext } from "./types.js";
@@ -46,9 +47,10 @@ export function inferReturnTypeFor(
 
   ctx.inferringReturnType.add(name);
 
-  const defScopeKey = def.type === "function"
-    ? scopeKey(functionScope(def.functionName))
-    : scopeKey(nodeScope(def.nodeName));
+  const defScopeKey =
+    def.type === "function"
+      ? scopeKey(functionScope(def.functionName))
+      : scopeKey(nodeScope(def.nodeName));
 
   return ctx.withScope(defScopeKey, () => {
     const scope = new Scope(defScopeKey);
@@ -99,6 +101,15 @@ export function inferReturnTypeFor(
           inferred = allSame ? first : "any";
         }
       }
+    }
+
+    // Validated params can short-circuit the body with a failure, so the
+    // caller-visible inferred type must admit one. Functions whose user
+    // explicitly annotated a non-Result return type are caught earlier in
+    // index.ts (section 1d) — this branch only handles unannotated returns.
+    const hasValidatedParam = def.parameters.some((p) => p.validated);
+    if (hasValidatedParam && inferred !== "any") {
+      inferred = resultTypeForValidation(inferred, true);
     }
 
     ctx.inferredReturnTypes[name] = widenType(inferred);

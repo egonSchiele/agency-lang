@@ -112,6 +112,7 @@ function checkSingleFunctionCall(
   const params = def?.parameters ?? importedSig?.parameters;
 
   if (params) {
+    if (!checkNamedArgStructure(call, params, ctx)) return;
     const { minArgs, maxArgs, slots } = paramListSignature(
       params,
       call.arguments.length,
@@ -135,6 +136,69 @@ function checkSingleFunctionCall(
     }
     checkArgsAgainstParams(call, slots, scope, ctx, undefined);
   }
+}
+
+/**
+ * Catch structural mistakes in named-arg usage that have nothing to do with
+ * types: duplicates, positionals after named, and named args that target a
+ * slot already filled positionally. Mirrors what the backend rejects at
+ * codegen time (typescriptBuilder.ts), but earlier with proper diagnostics.
+ *
+ * Returns false to signal the caller to bail before per-arg type checking —
+ * once arg/slot alignment is broken, type errors would be misleading.
+ */
+function checkNamedArgStructure(
+  call: FunctionCall,
+  params: FunctionParameter[],
+  ctx: TypeCheckerContext,
+): boolean {
+  const namedStartIdx = call.arguments.findIndex((a) => a.type === "namedArgument");
+  if (namedStartIdx < 0) return true;
+
+  let ok = true;
+
+  for (let i = namedStartIdx + 1; i < call.arguments.length; i++) {
+    const a = call.arguments[i];
+    if (a.type !== "namedArgument" && a.type !== "splat") {
+      ctx.errors.push({
+        message: `Positional argument cannot follow a named argument in call to '${call.functionName}'.`,
+        loc: call.loc,
+      });
+      ok = false;
+      break;
+    }
+  }
+
+  // Variadic and block params can't be passed by name (matches backend).
+  const nameableParams = params.filter(
+    (p) => !p.variadic && p.typeHint?.type !== "blockType",
+  );
+  const seen = new Set<string>();
+  for (let i = namedStartIdx; i < call.arguments.length; i++) {
+    const arg = call.arguments[i];
+    if (arg.type !== "namedArgument") continue;
+    if (seen.has(arg.name)) {
+      ctx.errors.push({
+        message: `Duplicate named argument '${arg.name}' in call to '${call.functionName}'.`,
+        loc: call.loc,
+      });
+      ok = false;
+      continue;
+    }
+    seen.add(arg.name);
+    const paramIdx = nameableParams.findIndex((p) => p.name === arg.name);
+    // Unknown-name errors are emitted later in checkArgsAgainstParams.
+    if (paramIdx < 0) continue;
+    if (paramIdx < namedStartIdx) {
+      ctx.errors.push({
+        message: `Named argument '${arg.name}' conflicts with positional argument at position ${paramIdx + 1} in call to '${call.functionName}'.`,
+        loc: call.loc,
+      });
+      ok = false;
+    }
+  }
+
+  return ok;
 }
 
 /**

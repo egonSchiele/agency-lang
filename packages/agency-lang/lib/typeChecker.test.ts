@@ -5360,6 +5360,88 @@ describe("TypeChecker", () => {
       expect(typeCheck(program).errors).toHaveLength(0);
     });
 
+    it("duplicate named argument errors", () => {
+      // greet(name="a", name="b")
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "function",
+            functionName: "greet",
+            parameters: [{ type: "functionParameter", name: "name", typeHint: str }],
+            body: [],
+          },
+          {
+            type: "functionCall",
+            functionName: "greet",
+            arguments: [
+              { type: "namedArgument", name: "name", value: { type: "string", segments: [{ type: "text", value: "a" }] } },
+              { type: "namedArgument", name: "name", value: { type: "string", segments: [{ type: "text", value: "b" }] } },
+            ],
+          },
+        ],
+      };
+      const errors = typeCheck(program).errors;
+      expect(errors.some((e) => /Duplicate named argument 'name'/.test(e.message))).toBe(true);
+    });
+
+    it("positional argument after named argument errors", () => {
+      // greet(name="a", 5)
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "function",
+            functionName: "greet",
+            parameters: [
+              { type: "functionParameter", name: "name", typeHint: str },
+              { type: "functionParameter", name: "age", typeHint: num },
+            ],
+            body: [],
+          },
+          {
+            type: "functionCall",
+            functionName: "greet",
+            arguments: [
+              { type: "namedArgument", name: "name", value: { type: "string", segments: [{ type: "text", value: "a" }] } },
+              { type: "number", value: "5" },
+            ],
+          },
+        ],
+      };
+      const errors = typeCheck(program).errors;
+      expect(errors.some((e) => /Positional argument cannot follow a named argument/.test(e.message))).toBe(true);
+    });
+
+    it("named argument that conflicts with a positional argument errors", () => {
+      // def greet(name: string, age: number) {}
+      // greet("alice", name="bob")  ← name is param 0, already filled by "alice"
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "function",
+            functionName: "greet",
+            parameters: [
+              { type: "functionParameter", name: "name", typeHint: str },
+              { type: "functionParameter", name: "age", typeHint: num },
+            ],
+            body: [],
+          },
+          {
+            type: "functionCall",
+            functionName: "greet",
+            arguments: [
+              { type: "string", segments: [{ type: "text", value: "alice" }] },
+              { type: "namedArgument", name: "name", value: { type: "string", segments: [{ type: "text", value: "bob" }] } },
+            ],
+          },
+        ],
+      };
+      const errors = typeCheck(program).errors;
+      expect(errors.some((e) => /conflicts with positional argument/.test(e.message))).toBe(true);
+    });
+
     it("checks the RHS of a validated assignment against the un-bang'd type", () => {
       // const x: number! = "not a number" — RHS is checked against `number`.
       const program: AgencyProgram = {

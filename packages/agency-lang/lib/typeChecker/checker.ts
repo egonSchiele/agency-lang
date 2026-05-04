@@ -130,17 +130,11 @@ function checkSingleFunctionCall(
   if (params) {
     if (!checkNamedArgStructure(call, params, ctx)) return;
     if (!checkBlockArgShape(call, params, ctx)) return;
-    // A block argument (trailing `as` block or inline `\... -> ...`) fills the
-    // block-typed param slot but lives at `call.block`, not `call.arguments`.
-    // Count it for arity so `f() as x { }` doesn't look like a 0-arg call.
-    const effectiveArgCount =
-      call.arguments.length + (call.block ? 1 : 0);
     const { minArgs, maxArgs, slots } = paramListSignature(
       params,
-      effectiveArgCount,
+      call.arguments.length,
     );
-    if (!checkArity(call, minArgs, maxArgs, hasSplatArg, effectiveArgCount, ctx))
-      return;
+    if (!checkArity(call, minArgs, maxArgs, hasSplatArg, ctx)) return;
     checkArgsAgainstParams(call, slots, scope, ctx);
     return;
   }
@@ -160,8 +154,7 @@ function checkSingleFunctionCall(
     const minArgs = sig.minParams ?? sig.params.length;
     const hasRest = sig.restParam !== undefined;
     const maxArgs = hasRest ? Infinity : sig.params.length;
-    if (!checkArity(call, minArgs, maxArgs, hasSplatArg, call.arguments.length, ctx))
-      return;
+    if (!checkArity(call, minArgs, maxArgs, hasSplatArg, ctx)) return;
     const slots: ParamSlot[] = sig.params.map((type) => ({
       type,
       validated: false,
@@ -270,13 +263,16 @@ function checkArity(
   minArgs: number,
   maxArgs: number,
   hasSplatArg: boolean,
-  effectiveArgCount: number,
   ctx: TypeCheckerContext,
 ): boolean {
   if (hasSplatArg) return true;
-  if (effectiveArgCount >= minArgs && effectiveArgCount <= maxArgs) return true;
+  // A block argument (trailing `as` block or inline `\... -> ...`) fills the
+  // block-typed param slot but lives at `call.block`, not `call.arguments`.
+  // Count it so `f() as x { }` doesn't look like a 0-arg call.
+  const argCount = call.arguments.length + (call.block ? 1 : 0);
+  if (argCount >= minArgs && argCount <= maxArgs) return true;
   ctx.errors.push({
-    message: `Expected ${formatArity(minArgs, maxArgs)} argument(s) for '${call.functionName}', but got ${effectiveArgCount}.`,
+    message: `Expected ${formatArity(minArgs, maxArgs)} argument(s) for '${call.functionName}', but got ${argCount}.`,
     loc: call.loc,
   });
   return false;

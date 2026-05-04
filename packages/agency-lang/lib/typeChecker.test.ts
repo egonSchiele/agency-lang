@@ -5965,11 +5965,11 @@ describe("TypeChecker", () => {
     });
 
     // Known typechecker gap: a pipe RHS with no `?` placeholder is currently
-    // delegated to the backend (see pipeRhsSlotType in checker.ts:468 — "No
-    // placeholder = backend will reject"). The typechecker emits no error
-    // even when the resulting arity is bogus (here: LHS + 2 explicit args
-    // for a 2-param fn). Pinned as `.skip` so we have a target to flip when
-    // the typechecker grows pipe arity-checking.
+    // delegated to the backend (`pipeRhsSlotType` early-returns when no
+    // placeholder is found — "backend will reject"). The typechecker emits
+    // no error even when the resulting arity is bogus (here: LHS + 2 explicit
+    // args for a 2-param fn). Pinned as `.skip` so we have a target to flip
+    // when the typechecker grows pipe arity-checking.
     it.skip("pipe RHS arity mismatch errors when no placeholder is given", () => {
       // 5 |> add(10, 20)  ← LHS + 2 explicit args ≠ 2 params.
       const program: AgencyProgram = {
@@ -6062,9 +6062,11 @@ describe("TypeChecker", () => {
     });
 
     it("variable as llm() second argument typechecks without excess-property errors", () => {
-      // const cfg = { model: "gpt-4" }; llm("...", cfg)
-      // The excess-property check only fires on object literals — passing a
-      // variable should pass through assignability (structural) cleanly.
+      // const cfg = { model: "gpt-4", modle: "x" }; llm("...", cfg)
+      // The excess-property check only fires on object literals at the call
+      // site — assigning the typo'd object to a variable first launders it
+      // past the check, exactly as TypeScript behaves. Confirms that passing
+      // a *variable* with an extra key produces no excess-property error.
       const program: AgencyProgram = {
         type: "agencyProgram",
         nodes: [
@@ -6075,6 +6077,7 @@ describe("TypeChecker", () => {
               type: "agencyObject",
               entries: [
                 { key: "model", value: { type: "string", segments: [{ type: "text", value: "gpt-4" }] } },
+                { key: "modle", value: { type: "string", segments: [{ type: "text", value: "x" }] } },
               ],
             },
           },
@@ -6088,7 +6091,8 @@ describe("TypeChecker", () => {
           },
         ],
       };
-      expect(typeCheck(program).errors).toEqual([]);
+      const errors = typeCheck(program).errors;
+      expect(errors.some((e) => /unknown property/i.test(e.message))).toBe(false);
     });
   });
 });

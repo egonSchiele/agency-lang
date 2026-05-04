@@ -1,33 +1,6 @@
 import { AgencyConfig } from "@/config.js";
-import { compile } from "./commands.js";
-import { spawn } from "child_process";
-import * as path from "path";
+import { runBundledAgent } from "./runBundledAgent.js";
 
 export function agent(config: AgencyConfig): void {
-  // Resolve the bundled agent directory relative to this file in dist/
-  const currentDir = path.dirname(new URL(import.meta.url).pathname);
-  const agentDir = path.resolve(currentDir, "../agents/agency-agent");
-  const agencyFile = path.join(agentDir, "agent.agency");
-  const runFile = path.join(agentDir, "run.js");
-
-  // Compile the agent's .agency file
-  compile(config, agencyFile);
-
-  // Run the wrapper
-  console.log("---");
-  const nodeProcess = spawn("node", [runFile], {
-    stdio: "inherit",
-    shell: false,
-  });
-
-  nodeProcess.on("error", (error) => {
-    console.error(`Failed to run agent:`, error);
-    process.exit(1);
-  });
-
-  nodeProcess.on("exit", (code) => {
-    if (code !== 0) {
-      process.exit(code || 1);
-    }
-  });
+  runBundledAgent(config, "agency-agent");
 }

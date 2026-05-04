@@ -20,7 +20,6 @@ import { checkScopes } from "./checker.js";
 import { isAssignable as _isAssignable } from "./assignability.js";
 import { inferReturnTypeFor } from "./inference.js";
 import { effectiveReturnType } from "./validation.js";
-import { walkNodes } from "../utils/node.js";
 
 export type { TypeCheckError, TypeCheckResult } from "./types.js";
 
@@ -161,11 +160,9 @@ export class TypeChecker {
       }
     }
 
-    // 1d. A function/node with validated parameters can short-circuit and
-    // return a `failure` before the body runs. If the user explicitly
-    // annotated a non-Result return type, that's a contradiction — the
-    // caller-visible type must admit a failure. Functions without an
-    // explicit return annotation get auto-wrapped during inference instead.
+    // Validated params let a function short-circuit with a failure before
+    // the body runs. An explicit non-Result return type contradicts that.
+    // (Unannotated returns are auto-wrapped during inference instead.)
     const checkValidatedParamReturn = (
       name: string,
       def: FunctionDefinition | GraphNodeDefinition,
@@ -185,21 +182,6 @@ export class TypeChecker {
     }
     for (const [name, def] of Object.entries(this.nodeDefs)) {
       checkValidatedParamReturn(name, def);
-    }
-
-    // 1e. The `!` validation suffix is meaningless on handler params:
-    // handlers don't have a caller-observable return type, so the
-    // "validation failure short-circuits the function" semantics don't apply.
-    // Validate inside the handler body instead.
-    for (const { node } of walkNodes(this.program.nodes)) {
-      if (node.type !== "handleBlock") continue;
-      if (node.handler.kind !== "inline") continue;
-      if (node.handler.param.validated) {
-        this.errors.push({
-          message: "The '!' validation syntax is not allowed on handler parameters. Validate the data inside the handler body if needed.",
-          loc: node.loc,
-        });
-      }
     }
 
     // 2. Infer return types

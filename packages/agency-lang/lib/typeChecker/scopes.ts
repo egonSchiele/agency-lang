@@ -208,6 +208,12 @@ export function walkScopeBody(
       case "handleBlock":
         walkScopeBody(node.body, scope, ctx);
         if (node.handler.kind === "inline") {
+          if (node.handler.param.validated) {
+            ctx.errors.push({
+              message: "The '!' validation syntax is not allowed on handler parameters. Validate the data inside the handler body if needed.",
+              loc: node.loc,
+            });
+          }
           scope.declare(node.handler.param.name, node.handler.param.typeHint ?? "any");
           walkScopeBody(node.handler.body, scope, ctx);
         }

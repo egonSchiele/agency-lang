@@ -8,7 +8,7 @@ import type { NamedArgument, SplatExpression } from "../types/dataStructures.js"
 import { formatTypeHint } from "../cli/util.js";
 import { BUILTIN_FUNCTION_TYPES } from "./builtins.js";
 import { isAssignable, resolveType } from "./assignability.js";
-import { effectiveReturnType } from "./validation.js";
+import { applyValidationFlag } from "./validation.js";
 import { TypeCheckerContext } from "./types.js";
 import { Scope } from "./scope.js";
 
@@ -201,12 +201,12 @@ function synthPipeRhs(
     const name = rhs.value;
     const def = ctx.functionDefs[name] ?? ctx.nodeDefs[name];
     const importedSig = ctx.importedFunctions[name];
-    // Pull the caller-visible return type (with `!` already applied) so
-    // pipes inherit Result wrapping like direct calls do.
+    // Pipes inherit Result wrapping like direct calls — apply the bang at
+    // the call-site read so `... |> half` types as `Result<halfReturn>`.
     const fnReturn =
-      (def && effectiveReturnType(def)) ??
+      (def?.returnType && applyValidationFlag(def.returnType, def.returnTypeValidated)) ??
       ctx.inferredReturnTypes[name] ??
-      (importedSig && effectiveReturnType(importedSig));
+      (importedSig?.returnType && applyValidationFlag(importedSig.returnType, undefined));
     if (fnReturn) return fnReturn;
   }
   return synthType(rhs, scope, ctx);
@@ -233,7 +233,7 @@ function synthFunctionCall(
   const fn = ctx.functionDefs[expr.functionName];
   const graphNode = ctx.nodeDefs[expr.functionName];
   const def = fn ?? graphNode;
-  if (def?.returnType) return effectiveReturnType(def)!;
+  if (def?.returnType) return applyValidationFlag(def.returnType, def.returnTypeValidated);
   if (expr.functionName in ctx.inferredReturnTypes) {
     return ctx.inferredReturnTypes[expr.functionName];
   }
@@ -242,7 +242,7 @@ function synthFunctionCall(
   }
   if (!def) {
     const imported = ctx.importedFunctions[expr.functionName];
-    if (imported?.returnType) return effectiveReturnType(imported)!;
+    if (imported?.returnType) return imported.returnType;
     if (expr.functionName in BUILTIN_FUNCTION_TYPES) {
       return BUILTIN_FUNCTION_TYPES[expr.functionName].returnType;
     }

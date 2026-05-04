@@ -33,11 +33,15 @@ function variadicElementType(
   return param.typeHint ?? "any";
 }
 
+type ParamSlot = {
+  type: VariableType | "any" | undefined;
+  validated: boolean;
+};
+
 function paramListSignature(params: FunctionParameter[], argCount: number): {
   minArgs: number;
   maxArgs: number;
-  paramTypes: (VariableType | "any" | undefined)[];
-  validatedFlags: boolean[];
+  slots: ParamSlot[];
 } {
   const lastParam = params[params.length - 1];
   const hasRest = lastParam?.variadic === true;
@@ -46,21 +50,23 @@ function paramListSignature(params: FunctionParameter[], argCount: number): {
   ).length;
   const maxArgs = hasRest ? Infinity : params.length;
 
-  const paramTypes: (VariableType | "any" | undefined)[] = params.map((p) =>
-    p.typeHint,
-  );
-  const validatedFlags: boolean[] = params.map((p) => !!p.validated);
+  const slots: ParamSlot[] = params.map((p) => ({
+    type: p.typeHint,
+    validated: !!p.validated,
+  }));
   if (hasRest) {
     // Replace the variadic slot's array type with the element type, so a
     // single arg at that position is checked element-wise. Then extend to
     // cover any extra args.
     const elementType = variadicElementType(lastParam);
-    paramTypes[paramTypes.length - 1] = elementType;
-    const lastValidated = validatedFlags[validatedFlags.length - 1] ?? false;
-    while (paramTypes.length < argCount) paramTypes.push(elementType);
-    while (validatedFlags.length < argCount) validatedFlags.push(lastValidated);
+    const restSlot: ParamSlot = {
+      type: elementType,
+      validated: slots[slots.length - 1]?.validated ?? false,
+    };
+    slots[slots.length - 1] = restSlot;
+    while (slots.length < argCount) slots.push(restSlot);
   }
-  return { minArgs, maxArgs, paramTypes, validatedFlags };
+  return { minArgs, maxArgs, slots };
 }
 
 export function checkScopes(
@@ -106,12 +112,12 @@ function checkSingleFunctionCall(
   const params = def?.parameters ?? importedSig?.parameters;
 
   if (params) {
-    const { minArgs, maxArgs, paramTypes, validatedFlags } = paramListSignature(
+    const { minArgs, maxArgs, slots } = paramListSignature(
       params,
       call.arguments.length,
     );
     if (!checkArity(call, minArgs, maxArgs, hasSplatArg, ctx)) return;
-    checkArgsAgainstParams(call, paramTypes, scope, ctx, validatedFlags);
+    checkArgsAgainstParams(call, slots, scope, ctx);
     return;
   }
 
@@ -121,14 +127,13 @@ function checkSingleFunctionCall(
     const hasRest = sig.restParam !== undefined;
     const maxArgs = hasRest ? Infinity : sig.params.length;
     if (!checkArity(call, minArgs, maxArgs, hasSplatArg, ctx)) return;
-    const paramTypes: (VariableType | "any" | undefined)[] = [...sig.params];
+    const slots: ParamSlot[] = sig.params.map((type) => ({ type, validated: false }));
     if (hasRest) {
-      while (paramTypes.length < call.arguments.length) {
-        paramTypes.push(sig.restParam!);
+      while (slots.length < call.arguments.length) {
+        slots.push({ type: sig.restParam!, validated: false });
       }
     }
-    // Builtins don't have a validated concept; pass empty flags.
-    checkArgsAgainstParams(call, paramTypes, scope, ctx, []);
+    checkArgsAgainstParams(call, slots, scope, ctx);
   }
 }
 
@@ -172,27 +177,27 @@ function formatArity(minArgs: number, maxArgs: number): string {
  */
 function checkArgsAgainstParams(
   call: FunctionCall,
-  paramTypes: (VariableType | "any" | undefined)[],
+  slots: ParamSlot[],
   scope: Scope,
   ctx: TypeCheckerContext,
-  validatedFlags: boolean[],
 ): void {
   const typeAliases = ctx.getTypeAliases();
   for (let argIndex = 0; argIndex < call.arguments.length; argIndex++) {
     const arg = call.arguments[argIndex];
+    const slot = slots[argIndex];
     if (arg.type === "splat") {
-      checkSplatAgainstRemainingParams(call, arg.value, argIndex, paramTypes, scope, ctx);
+      checkSplatAgainstRemainingParams(call, arg.value, argIndex, slots, scope, ctx);
       return;
     }
     const innerArg = arg.type === "namedArgument" ? arg.value : arg;
     const argType = synthType(innerArg, scope, ctx);
-    const paramType = paramTypes[argIndex];
+    const paramType = slot?.type;
     if (paramType === undefined || paramType === "any" || argType === "any") {
       continue;
     }
     // Validated params accept either the un-bang'd type T or any Result —
     // failures pass through unvalidated per docs-new/guide/schemas.md.
-    if (validatedFlags[argIndex] && argType.type === "resultType") {
+    if (slot.validated && argType.type === "resultType") {
       continue;
     }
     if (!isAssignable(argType, paramType, typeAliases)) {
@@ -215,7 +220,7 @@ function checkSplatAgainstRemainingParams(
   call: FunctionCall,
   splatSource: AgencyNode,
   splatIndex: number,
-  paramTypes: (VariableType | "any" | undefined)[],
+  slots: ParamSlot[],
   scope: Scope,
   ctx: TypeCheckerContext,
 ): void {
@@ -233,10 +238,11 @@ function checkSplatAgainstRemainingParams(
   const elementType = splatType.elementType;
   const elementStr = formatTypeHint(elementType);
   const typeAliases = ctx.getTypeAliases();
-  for (const remainingParam of paramTypes.slice(splatIndex)) {
-    if (remainingParam === undefined || remainingParam === "any") continue;
-    if (isAssignable(elementType, remainingParam, typeAliases)) continue;
-    const paramStr = formatTypeHint(remainingParam);
+  for (const slot of slots.slice(splatIndex)) {
+    const paramType = slot.type;
+    if (paramType === undefined || paramType === "any") continue;
+    if (isAssignable(elementType, paramType, typeAliases)) continue;
+    const paramStr = formatTypeHint(paramType);
     ctx.errors.push({
       message: `Splat element type '${elementStr}' is not assignable to parameter type '${paramStr}' in call to '${call.functionName}'.`,
       expectedType: paramStr,

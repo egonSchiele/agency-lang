@@ -175,48 +175,49 @@ function checkNamedArgStructure(
   params: FunctionParameter[],
   ctx: TypeCheckerContext,
 ): boolean {
-  let ok = true;
-  let namedStartIdx = -1;
-  let nameableParams: FunctionParameter[] | null = null;
-  const seen = new Set<string>();
+  const namedStartIdx = call.arguments.findIndex(
+    (a) => a.type === "namedArgument",
+  );
+  if (namedStartIdx < 0) return true;
 
-  for (let i = 0; i < call.arguments.length; i++) {
-    const arg = call.arguments[i];
-    if (arg.type === "namedArgument") {
-      if (namedStartIdx < 0) namedStartIdx = i;
-      if (seen.has(arg.name)) {
-        ctx.errors.push({
-          message: `Duplicate named argument '${arg.name}' in call to '${call.functionName}'.`,
-          loc: call.loc,
-        });
-        ok = false;
-        continue;
-      }
-      seen.add(arg.name);
-      nameableParams ??= params.filter(
-        (p) => !p.variadic && p.typeHint?.type !== "blockType",
+  let ok = true;
+  const pushErr = (message: string) => {
+    ctx.errors.push({ message, loc: call.loc });
+    ok = false;
+  };
+
+  // Pass 1: positional args (other than splats) can't follow named args.
+  for (let i = namedStartIdx + 1; i < call.arguments.length; i++) {
+    const a = call.arguments[i];
+    if (a.type !== "namedArgument" && a.type !== "splat") {
+      pushErr(
+        `Positional argument cannot follow a named argument in call to '${call.functionName}'.`,
       );
-      const paramIdx = nameableParams.findIndex((p) => p.name === arg.name);
-      if (paramIdx < 0) {
-        ctx.errors.push({
-          message: `Unknown named argument '${arg.name}' in call to '${call.functionName}'.`,
-          loc: call.loc,
-        });
-        ok = false;
-      } else if (paramIdx < namedStartIdx) {
-        ctx.errors.push({
-          message: `Named argument '${arg.name}' conflicts with positional argument at position ${paramIdx + 1} in call to '${call.functionName}'.`,
-          loc: call.loc,
-        });
-        ok = false;
-      }
-    } else if (namedStartIdx >= 0 && arg.type !== "splat") {
-      ctx.errors.push({
-        message: `Positional argument cannot follow a named argument in call to '${call.functionName}'.`,
-        loc: call.loc,
-      });
-      ok = false;
       break;
+    }
+  }
+
+  // Pass 2: validate each named arg against the nameable params (variadic
+  // and block-typed params can't be passed by name — same as the backend).
+  const nameableParams = params.filter(
+    (p) => !p.variadic && p.typeHint?.type !== "blockType",
+  );
+  const seen = new Set<string>();
+  for (let i = namedStartIdx; i < call.arguments.length; i++) {
+    const arg = call.arguments[i];
+    if (arg.type !== "namedArgument") continue;
+    if (seen.has(arg.name)) {
+      pushErr(`Duplicate named argument '${arg.name}' in call to '${call.functionName}'.`);
+      continue;
+    }
+    seen.add(arg.name);
+    const paramIdx = nameableParams.findIndex((p) => p.name === arg.name);
+    if (paramIdx < 0) {
+      pushErr(`Unknown named argument '${arg.name}' in call to '${call.functionName}'.`);
+    } else if (paramIdx < namedStartIdx) {
+      pushErr(
+        `Named argument '${arg.name}' conflicts with positional argument at position ${paramIdx + 1} in call to '${call.functionName}'.`,
+      );
     }
   }
 
@@ -287,8 +288,7 @@ function checkArgsAgainstParams(
     if (arg.type === "namedArgument") {
       // Unknown / variadic / block names are caught upstream in
       // checkNamedArgStructure; lookup here is best-effort.
-      const slotIdx = slots.findIndex((s) => s.name === arg.name);
-      slot = slotIdx >= 0 ? slots[slotIdx] : undefined;
+      slot = slots.find((s) => s.name === arg.name);
       innerArg = arg.value;
     } else {
       slot = slots[argIndex];

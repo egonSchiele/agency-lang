@@ -5540,6 +5540,53 @@ describe("TypeChecker", () => {
       expect(errors.some((e) => /Named arguments can only be used with Agency-defined functions/.test(e.message))).toBe(true);
     });
 
+    it("rejects regex in an llm() structured-output type", () => {
+      // const r: regex = llm("...")  → error: regex isn't JSON-representable
+      const regexT: VariableType = { type: "primitiveType", value: "regex" };
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "assignment",
+            variableName: "r",
+            typeHint: regexT,
+            value: {
+              type: "functionCall",
+              functionName: "llm",
+              arguments: [{ type: "string", segments: [{ type: "text", value: "x" }] }],
+            },
+          },
+        ],
+      };
+      const errors = typeCheck(program).errors;
+      expect(errors.some((e) => /regex.*cannot appear in an llm/i.test(e.message))).toBe(true);
+    });
+
+    it("rejects regex nested inside an llm() return type", () => {
+      // type Foo = { pattern: regex }; const r: Foo = llm("...")
+      const fooType: VariableType = {
+        type: "objectType",
+        properties: [{ key: "pattern", value: { type: "primitiveType", value: "regex" } }],
+      };
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "assignment",
+            variableName: "r",
+            typeHint: fooType,
+            value: {
+              type: "functionCall",
+              functionName: "llm",
+              arguments: [{ type: "string", segments: [{ type: "text", value: "x" }] }],
+            },
+          },
+        ],
+      };
+      const errors = typeCheck(program).errors;
+      expect(errors.some((e) => /regex.*cannot appear in an llm/i.test(e.message))).toBe(true);
+    });
+
     it("checks the RHS of a validated assignment against the un-bang'd type", () => {
       // const x: number! = "not a number" — RHS is checked against `number`.
       const program: AgencyProgram = {

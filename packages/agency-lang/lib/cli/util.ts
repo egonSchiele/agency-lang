@@ -303,38 +303,22 @@ const TS_PRIMITIVE_ALIASES: Record<string, string> = {
 };
 
 /**
- * Format a VariableType for use in generated TypeScript code. Same shape as
- * formatTypeHint, but maps Agency-only primitive names (currently `regex`)
- * to their TS equivalents (`RegExp`). Use this for codegen; use the plain
- * formatTypeHint for diagnostics, hover, and anywhere the user reads it as
- * Agency source.
+ * Format a VariableType for display.
+ *
+ * Pass `primitiveAliases` (e.g. for codegen) to substitute Agency-only
+ * primitive names with target-language equivalents. Default omits the map
+ * so diagnostics, LSP hover, and CLI prompts show source-level keywords.
  */
-export function formatTypeHintTs(vt: VariableType): string {
-  if (vt.type === "primitiveType") return TS_PRIMITIVE_ALIASES[vt.value] ?? vt.value;
-  if (vt.type === "arrayType") return `${formatTypeHintTs(vt.elementType)}[]`;
-  if (vt.type === "unionType") return vt.types.map(formatTypeHintTs).join(" | ");
-  if (vt.type === "objectType") {
-    return `{ ${vt.properties.map((p) => `${p.key}: ${formatTypeHintTs(p.value)}`).join(", ")} }`;
-  }
-  if (vt.type === "blockType") {
-    const params = vt.params.map((p) => formatTypeHintTs(p.typeAnnotation)).join(", ");
-    return `(${params}) => ${formatTypeHintTs(vt.returnType)}`;
-  }
-  if (vt.type === "resultType") {
-    const s = formatTypeHintTs(vt.successType);
-    const f = formatTypeHintTs(vt.failureType);
-    if (s === "any" && f === "any") return "Result";
-    return `Result<${s}, ${f}>`;
-  }
-  return formatTypeHint(vt);
-}
-
-export function formatTypeHint(vt: VariableType): string {
+export function formatTypeHint(
+  vt: VariableType,
+  primitiveAliases?: Record<string, string>,
+): string {
+  const recurse = (v: VariableType) => formatTypeHint(v, primitiveAliases);
   switch (vt.type) {
     case "primitiveType":
-      return vt.value;
+      return primitiveAliases?.[vt.value] ?? vt.value;
     case "arrayType":
-      return `${formatTypeHint(vt.elementType)}[]`;
+      return `${recurse(vt.elementType)}[]`;
     case "stringLiteralType":
       return `"${vt.value}"`;
     case "numberLiteralType":
@@ -342,33 +326,29 @@ export function formatTypeHint(vt: VariableType): string {
     case "booleanLiteralType":
       return vt.value;
     case "unionType":
-      return vt.types.map(formatTypeHint).join(" | ");
+      return vt.types.map(recurse).join(" | ");
     case "objectType":
-      return `{ ${vt.properties.map((p) => `${p.key}: ${formatTypeHint(p.value)}`).join(", ")} }`;
+      return `{ ${vt.properties.map((p) => `${p.key}: ${recurse(p.value)}`).join(", ")} }`;
     case "typeAliasVariable":
       return vt.aliasName;
     case "blockType": {
-      const params = vt.params
-        .map((p) => formatTypeHint(p.typeAnnotation))
-        .join(", ");
-      const ret = formatTypeHint(vt.returnType);
-      return `(${params}) => ${ret}`;
+      const params = vt.params.map((p) => recurse(p.typeAnnotation)).join(", ");
+      return `(${params}) => ${recurse(vt.returnType)}`;
     }
     case "resultType": {
-      const { successType, failureType } = vt;
-      if (
-        successType.type === "primitiveType" &&
-        successType.value === "any" &&
-        failureType.type === "primitiveType" &&
-        failureType.value === "any"
-      ) {
-        return "Result";
-      }
-      return `Result<${formatTypeHint(successType)}, ${formatTypeHint(failureType)}>`;
+      const s = recurse(vt.successType);
+      const f = recurse(vt.failureType);
+      if (s === "any" && f === "any") return "Result";
+      return `Result<${s}, ${f}>`;
     }
     default:
       throw new Error(`Unknown variable type: ${(vt as any).type}`);
   }
+}
+
+/** Convenience wrapper for codegen contexts. */
+export function formatTypeHintTs(vt: VariableType): string {
+  return formatTypeHint(vt, TS_PRIMITIVE_ALIASES);
 }
 
 function serializeArgValue(value: string): string {

@@ -19,17 +19,17 @@ type ReviewResult = {
 
 node main() {
   let cliArgs = args()
-  if (cliArgs.length == 0) {
+  if (cliArgs.length < 2) {
     print("Usage: agency review <file.agency>")
     return end()
   }
-  let filePath = cliArgs[0]
+  let agencyScript = cliArgs[0]
+  let filePath = cliArgs[1]
   let code = read(filePath)
   print("Reviewing: ${filePath}\n")
-  // Run the typechecker
   print("Running type checker...")
-  let typeCheckResult = bash("node dist/scripts/agency.js typecheck ${filePath}")
-  let typeErrors: string | number = ""
+  let typeCheckResult = bash("node '${agencyScript}' typecheck '${filePath}'")
+  let typeErrors = ""
   if (typeCheckResult.exitCode != 0) {
     typeErrors = typeCheckResult.stderr + typeCheckResult.stdout
     print("Type checker found issues:\n${typeErrors}\n")

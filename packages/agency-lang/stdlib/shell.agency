@@ -1,14 +1,29 @@
-import { _bash, _ls, _grep, _glob, _stat, _exists, _which } from "./lib/shell.js"
+import { _exec, _bash, _ls, _grep, _glob, _stat, _exists, _which } from "./lib/shell.js"
 
-type BashResult = {
+type ExecResult = {
   stdout: string;
   stderr: string;
   exitCode: number
 }
 
-export def bash(command: string, cwd: string = "", timeout: number = 0, stdin: string = ""): BashResult {
+export def exec(command: string, args: string[] = [], cwd: string = "", timeout: number = 0, stdin: string = ""): ExecResult {
   """
-  Run a shell command and return its stdout, stderr, and exit code. Pass cwd to change the working directory, timeout (seconds) to enforce a time limit, and stdin to feed input to the command.
+  Run an executable directly with an array of arguments, bypassing the shell. This is safer than bash() because arguments are passed directly to the process without shell interpretation, preventing command injection. Use this when you have a known command and structured arguments. Pass cwd to change the working directory, timeout (seconds) to enforce a time limit, and stdin to feed input to the command.
+  """
+  return interrupt std::exec("Are you sure you want to run this command?", {
+    command: command,
+    args: args,
+    cwd: cwd,
+    timeout: timeout,
+    stdin: stdin
+  })
+
+  return _exec(command, args, cwd, timeout, stdin)
+}
+
+export def bash(command: string, cwd: string = "", timeout: number = 0, stdin: string = ""): ExecResult {
+  """
+  Run a shell command string via sh -c and return its stdout, stderr, and exit code. The command is interpreted by the shell, so pipes, redirects, globbing, and other shell features work. However, this means interpolated values are subject to shell interpretation -- use exec() instead when passing untrusted or dynamic arguments. Pass cwd to change the working directory, timeout (seconds) to enforce a time limit, and stdin to feed input to the command.
   """
   return interrupt std::bash("Are you sure you want to run this shell command?", {
     command: command,

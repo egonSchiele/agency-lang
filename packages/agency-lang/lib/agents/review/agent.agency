@@ -1,4 +1,4 @@
-import { bash } from "std::shell"
+import { exec } from "std::shell"
 import { args } from "std::system"
 systemPrompt = read("./prompts/system.md")
 
@@ -28,7 +28,7 @@ node main() {
   let code = read(filePath)
   print("Reviewing: ${filePath}\n")
   print("Running type checker...")
-  let typeCheckResult = bash("node '${agencyScript}' typecheck '${filePath}'")
+  let typeCheckResult = exec("node", [agencyScript, "typecheck", filePath])
   let typeErrors = ""
   if (typeCheckResult.exitCode != 0) {
     typeErrors = typeCheckResult.stderr + typeCheckResult.stdout

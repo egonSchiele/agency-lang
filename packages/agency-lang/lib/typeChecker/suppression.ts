@@ -53,13 +53,26 @@ export function parseSuppressions(source: string): Suppressions {
   return { nocheck, ignoreLines };
 }
 
+/**
+ * Drop errors covered by `suppressions`. `lineOffset` is subtracted from
+ * each ignoreLine before comparing against `error.loc.line` — needed when
+ * the parser produced loc.line values in a different convention than the
+ * raw-source 0-indexed lines `parseSuppressions` emits (e.g. LSP path,
+ * where `applyTemplate=false` shifts loc.line by -AGENCY_TEMPLATE_OFFSET).
+ */
 export function applySuppressions(
   errors: TypeCheckError[],
   suppressions: Suppressions,
+  lineOffset: number = 0,
 ): TypeCheckError[] {
   if (suppressions.nocheck) return [];
   if (suppressions.ignoreLines.size === 0) return errors;
-  return errors.filter(
-    (e) => !e.loc || !suppressions.ignoreLines.has(e.loc.line),
-  );
+  if (lineOffset === 0) {
+    return errors.filter(
+      (e) => !e.loc || !suppressions.ignoreLines.has(e.loc.line),
+    );
+  }
+  const adjusted = new Set<number>();
+  for (const line of suppressions.ignoreLines) adjusted.add(line - lineOffset);
+  return errors.filter((e) => !e.loc || !adjusted.has(e.loc.line));
 }

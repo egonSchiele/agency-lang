@@ -92,11 +92,11 @@ describe("applySuppressions", () => {
 });
 
 describe("typeCheck honors suppressions end-to-end", () => {
-  function check(source: string) {
-    const parseResult = parseAgency(source, {}, true);
+  function check(source: string, applyTemplate: boolean = true) {
+    const parseResult = parseAgency(source, {}, applyTemplate);
     if (!parseResult.success) throw new Error(`Parse failed: ${parseResult.message}`);
     const program = parseResult.result;
-    const info = buildCompilationUnit(program, undefined, undefined, source);
+    const info = buildCompilationUnit(program, undefined, undefined, source, applyTemplate);
     return typeCheck(program, {}, info);
   }
 
@@ -118,5 +118,18 @@ describe("typeCheck honors suppressions end-to-end", () => {
   it("@tc-nocheck mid-file is not honored", () => {
     const src = `def take(x: number): void { print(x) }\n\n// @tc-nocheck\nnode main() {\n  take("a")\n}\n`;
     expect(check(src).errors.length).toBeGreaterThan(0);
+  });
+
+  it("@tc-ignore works when source is parsed without the template (LSP path)", () => {
+    // LSP calls parseAgency(source, config, false). The parser shifts
+    // loc.line by -AGENCY_TEMPLATE_OFFSET in this mode, so suppression
+    // line numbers must be aligned with that shift to actually filter.
+    const src = `def take(x: number): void { print(x) }\n\nnode main() {\n  // @tc-ignore\n  take("not a number")\n}\n`;
+    expect(check(src, false).errors).toEqual([]);
+  });
+
+  it("@tc-nocheck works in LSP-mode parsing", () => {
+    const src = `// @tc-nocheck\ndef take(x: number): void { print(x) }\n\nnode main() {\n  take("a")\n}\n`;
+    expect(check(src, false).errors).toEqual([]);
   });
 });

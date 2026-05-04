@@ -150,6 +150,16 @@ function checkSingleFunctionCall(
       });
       return;
     }
+    if (call.block) {
+      // None of the entries in BUILTIN_FUNCTION_TYPES take a block. (fork /
+      // race do, but they're special-cased in the backend and never reach
+      // this branch — they fall through with no params lookup at all.)
+      ctx.errors.push({
+        message: `'${call.functionName}' does not accept a block argument.`,
+        loc: call.block.loc ?? call.loc,
+      });
+      return;
+    }
     const sig = BUILTIN_FUNCTION_TYPES[call.functionName];
     const minArgs = sig.minParams ?? sig.params.length;
     const hasRest = sig.restParam !== undefined;
@@ -181,8 +191,21 @@ function checkBlockArgShape(
   ctx: TypeCheckerContext,
 ): boolean {
   if (!call.block) return true;
-  const hasBlockParam = params.some((p) => p.typeHint?.type === "blockType");
-  if (hasBlockParam) return true;
+  // The backend pushes `call.block` as the final positional argument, so the
+  // last parameter is what receives it. Accept a block-typed slot, or the
+  // permissive cases — untyped (no hint) and `any` — that could legitimately
+  // hold a block.
+  const lastParam = params[params.length - 1];
+  if (lastParam) {
+    const hint = lastParam.typeHint;
+    if (
+      hint === undefined ||
+      hint.type === "blockType" ||
+      (hint.type === "primitiveType" && hint.value === "any")
+    ) {
+      return true;
+    }
+  }
   ctx.errors.push({
     message: `'${call.functionName}' does not accept a block argument.`,
     loc: call.block.loc ?? call.loc,

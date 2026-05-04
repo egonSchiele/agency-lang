@@ -67,6 +67,10 @@ export class ScopedTypeAliases {
 export type ImportedFunctionSignature = {
   parameters: FunctionParameter[];
   returnType: VariableType | null;
+  /** Absolute path of the file the symbol was imported from. Used to
+   * resolve type aliases referenced by the signature in the right module
+   * (so a type-name collision across files picks the right one). */
+  originFile?: string;
 };
 
 /**
@@ -88,6 +92,14 @@ export type CompilationUnit = {
    * `// @tc-nocheck` / `// @tc-ignore` directives. Optional because
    * many callers (including most tests) construct the AST directly. */
   sourceText?: string;
+  /** True iff `parseAgency` was called with the template wrapper applied
+   * (the CLI default). The parser unconditionally subtracts
+   * `AGENCY_TEMPLATE_OFFSET` from every span's line, so when the wrapper
+   * was *not* applied (LSP path), error `loc.line` values are off by
+   * `-AGENCY_TEMPLATE_OFFSET` from raw-source 0-indexed lines. The
+   * typechecker uses this flag to align suppression-directive line
+   * numbers with error locations. */
+  templateApplied?: boolean;
 };
 
 export function scopeKey(scope: Scope): string {
@@ -114,6 +126,7 @@ export function buildCompilationUnit(
   symbolTable?: SymbolTable,
   fromFile?: string,
   sourceText?: string,
+  templateApplied: boolean = true,
 ): CompilationUnit {
   const unit: CompilationUnit = {
     functionDefinitions: {},
@@ -125,6 +138,7 @@ export function buildCompilationUnit(
     classDefinitions: {},
     safeFunctions: {},
     sourceText,
+    templateApplied,
   };
 
   // Top-level pass: collect functions, graph nodes, imports.
@@ -192,6 +206,7 @@ export function buildCompilationUnit(
           unit.importedFunctions[r.localName] = {
             parameters: r.symbol.parameters,
             returnType,
+            originFile: r.file,
           };
         }
         if (r.symbol.kind === "function" && r.symbol.safe) {
@@ -229,23 +244,49 @@ function pullTransitiveAliases(
   symbolTable: SymbolTable,
 ): void {
   const globalAliases = unit.typeAliases.get(GLOBAL_SCOPE_KEY) ?? {};
-  const queue: string[] = [];
+  // Each pending alias remembers the file it was referenced from, so
+  // resolution prefers the originating module's symbols when a name
+  // collides across files.
+  const queue: { name: string; preferFile?: string }[] = [];
 
   for (const sig of Object.values(unit.importedFunctions)) {
+    const names: string[] = [];
     for (const p of sig.parameters) {
-      if (p.typeHint) collectAliasNames(p.typeHint, queue);
+      if (p.typeHint) collectAliasNames(p.typeHint, names);
     }
-    if (sig.returnType) collectAliasNames(sig.returnType, queue);
+    if (sig.returnType) collectAliasNames(sig.returnType, names);
+    for (const name of names) queue.push({ name, preferFile: sig.originFile });
   }
 
   while (queue.length > 0) {
-    const name = queue.shift()!;
+    const { name, preferFile } = queue.shift()!;
     if (globalAliases[name] !== undefined) continue; // already known
-    const sym = symbolTable.findTypeAcrossFiles(name);
-    if (!sym || sym.kind !== "type") continue;
+    const sym = resolveTypeFromFile(symbolTable, name, preferFile);
+    if (!sym) continue;
     unit.typeAliases.add(GLOBAL_SCOPE_KEY, name, sym.aliasedType);
-    collectAliasNames(sym.aliasedType, queue);
+    const nested: string[] = [];
+    collectAliasNames(sym.aliasedType, nested);
+    for (const n of nested) queue.push({ name: n, preferFile });
   }
+}
+
+/**
+ * Look up a type alias by name. Prefers the originating module's symbols
+ * (so cross-file name collisions pick the file the import actually came
+ * from), then falls back to the global cross-file search.
+ */
+function resolveTypeFromFile(
+  symbolTable: SymbolTable,
+  name: string,
+  preferFile: string | undefined,
+): { aliasedType: VariableType } | undefined {
+  if (preferFile) {
+    const fileSym = symbolTable.getFile(preferFile)?.[name];
+    if (fileSym?.kind === "type") return fileSym;
+  }
+  const sym = symbolTable.findTypeAcrossFiles(name);
+  if (sym?.kind === "type") return sym;
+  return undefined;
 }
 
 function collectAliasNames(t: VariableType, out: string[]): void {

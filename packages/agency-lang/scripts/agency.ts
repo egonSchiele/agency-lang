@@ -26,6 +26,7 @@ import { color } from "@/utils/termcolors.js";
 import { TarsecError } from "tarsec";
 import process from "process";
 import { agent } from "@/cli/agent.js";
+import { review } from "@/cli/review.js";
 import { loadEnv } from "@/utils/envfile.js";
 import { debug } from "@/cli/debug.js";
 import { generateDoc } from "@/cli/doc.js";
@@ -538,6 +539,15 @@ export function createProgram(deps: CliDependencies = {}): Command {
     .action(() => {
       const config = getConfig();
       agent(config);
+    });
+
+  program
+    .command("review")
+    .description("Review an Agency file for type errors and code quality")
+    .argument("<file>", "The .agency file to review")
+    .action((file: string) => {
+      const config = getConfig();
+      review(config, file);
     });
 
   const lspCmd = program

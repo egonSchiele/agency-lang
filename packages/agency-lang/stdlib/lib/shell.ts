@@ -16,6 +16,36 @@ import {
   str,
 } from "tarsec";
 
+export function _exec(
+  command: string,
+  args: string[],
+  cwd: string,
+  timeout: number,
+  stdin: string,
+): { stdout: string; stderr: string; exitCode: number } {
+  const options: SpawnSyncOptions = {
+    encoding: "utf8",
+    stdio: ["pipe", "pipe", "pipe"],
+  };
+
+  if (cwd) {
+    options.cwd = cwd;
+  }
+  if (timeout > 0) {
+    options.timeout = timeout * 1000;
+  }
+  if (stdin) {
+    options.input = stdin;
+  }
+
+  const result = spawnSync(command, args, options);
+  return {
+    stdout: (result.stdout as string) ?? "",
+    stderr: (result.stderr as string) ?? "",
+    exitCode: result.status ?? 1,
+  };
+}
+
 export function _bash(
   command: string,
   cwd: string,

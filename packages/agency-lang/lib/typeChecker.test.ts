@@ -5587,6 +5587,142 @@ describe("TypeChecker", () => {
       expect(errors.some((e) => /regex.*cannot appear in an llm/i.test(e.message))).toBe(true);
     });
 
+    it("allows omitting an optional object property when calling a function", () => {
+      // type Opts = { model?: string, temperature?: number }
+      // def use(o: Opts) {}; use({ model: "gpt-4" })
+      const undef: VariableType = { type: "primitiveType", value: "undefined" };
+      const opts: VariableType = {
+        type: "objectType",
+        properties: [
+          { key: "model", value: { type: "unionType", types: [str, undef] } },
+          { key: "temperature", value: { type: "unionType", types: [num, undef] } },
+        ],
+      };
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "function",
+            functionName: "use",
+            parameters: [{ type: "functionParameter", name: "o", typeHint: opts }],
+            body: [],
+          },
+          {
+            type: "functionCall",
+            functionName: "use",
+            arguments: [
+              {
+                type: "agencyObject",
+                entries: [
+                  { key: "model", value: { type: "string", segments: [{ type: "text", value: "gpt-4" }] } },
+                ],
+              },
+            ],
+          },
+        ],
+      };
+      expect(typeCheck(program).errors).toEqual([]);
+    });
+
+    it("still rejects omitting a required object property", () => {
+      // type Opts = { model: string, temperature?: number }; use({}) — model required.
+      const undef: VariableType = { type: "primitiveType", value: "undefined" };
+      const opts: VariableType = {
+        type: "objectType",
+        properties: [
+          { key: "model", value: str },
+          { key: "temperature", value: { type: "unionType", types: [num, undef] } },
+        ],
+      };
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "function",
+            functionName: "use",
+            parameters: [{ type: "functionParameter", name: "o", typeHint: opts }],
+            body: [],
+          },
+          {
+            type: "functionCall",
+            functionName: "use",
+            arguments: [{ type: "agencyObject", entries: [] }],
+          },
+        ],
+      };
+      const errors = typeCheck(program).errors;
+      expect(errors.some((e) => /not assignable/i.test(e.message))).toBe(true);
+    });
+
+    it("accepts llm() with a known option of the right type", () => {
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "functionCall",
+            functionName: "llm",
+            arguments: [
+              { type: "string", segments: [{ type: "text", value: "hi" }] },
+              {
+                type: "agencyObject",
+                entries: [
+                  { key: "model", value: { type: "string", segments: [{ type: "text", value: "gpt-4" }] } },
+                  { key: "temperature", value: { type: "number", value: "0.5" } },
+                ],
+              },
+            ],
+          },
+        ],
+      };
+      expect(typeCheck(program).errors).toEqual([]);
+    });
+
+    it("rejects an unknown option in llm()", () => {
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "functionCall",
+            functionName: "llm",
+            arguments: [
+              { type: "string", segments: [{ type: "text", value: "hi" }] },
+              {
+                type: "agencyObject",
+                entries: [
+                  { key: "modle", value: { type: "string", segments: [{ type: "text", value: "gpt-4" }] } },
+                ],
+              },
+            ],
+          },
+        ],
+      };
+      const errors = typeCheck(program).errors;
+      expect(errors.some((e) => /unknown property 'modle'/i.test(e.message))).toBe(true);
+    });
+
+    it("rejects an option with the wrong type in llm()", () => {
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "functionCall",
+            functionName: "llm",
+            arguments: [
+              { type: "string", segments: [{ type: "text", value: "hi" }] },
+              {
+                type: "agencyObject",
+                entries: [
+                  { key: "temperature", value: { type: "string", segments: [{ type: "text", value: "hot" }] } },
+                ],
+              },
+            ],
+          },
+        ],
+      };
+      const errors = typeCheck(program).errors;
+      expect(errors.some((e) => /not assignable/i.test(e.message))).toBe(true);
+    });
+
     it("checks the RHS of a validated assignment against the un-bang'd type", () => {
       // const x: number! = "not a number" — RHS is checked against `number`.
       const program: AgencyProgram = {

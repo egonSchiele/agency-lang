@@ -1,14 +1,62 @@
+import { VariableType } from "../types.js";
 import { BuiltinSignature } from "./types.js";
 
 const string = { type: "primitiveType", value: "string" } as const;
 const number = { type: "primitiveType", value: "number" } as const;
 const boolean = { type: "primitiveType", value: "boolean" } as const;
 const voidT = { type: "primitiveType", value: "void" } as const;
+const undef = { type: "primitiveType", value: "undefined" } as const;
 const stringArray = { type: "arrayType", elementType: string } as const;
 const anyArray = {
   type: "arrayType",
   elementType: { type: "primitiveType", value: "any" },
 } as const;
+
+const optional = (t: VariableType): VariableType => ({
+  type: "unionType",
+  types: [t, undef],
+});
+
+/**
+ * Options accepted by `llm()`'s second argument. Mirrors the user-facing
+ * fields of smoltalk's PromptConfig (lib/runtime/llmClient.ts) — the runtime
+ * forwards everything to smoltalk. `metadata` accepts arbitrary shape, so
+ * we type it as optional `any` and skip structural checking.
+ */
+const llmOptions: VariableType = {
+  type: "objectType",
+  properties: [
+    { key: "model", value: optional(string) },
+    { key: "provider", value: optional(string) },
+    { key: "apiKey", value: optional(string) },
+    { key: "maxTokens", value: optional(number) },
+    { key: "temperature", value: optional(number) },
+    { key: "stream", value: optional(boolean) },
+    {
+      key: "reasoningEffort",
+      value: optional({
+        type: "unionType",
+        types: [
+          { type: "stringLiteralType", value: "low" },
+          { type: "stringLiteralType", value: "medium" },
+          { type: "stringLiteralType", value: "high" },
+        ],
+      }),
+    },
+    {
+      key: "thinking",
+      value: optional({
+        type: "objectType",
+        properties: [
+          { key: "enabled", value: boolean },
+          { key: "budgetTokens", value: optional(number) },
+        ],
+      }),
+    },
+    { key: "tools", value: optional(anyArray) },
+    { key: "metadata", value: optional({ type: "primitiveType", value: "any" }) },
+  ],
+};
 
 /**
  * Signatures for builtin / auto-imported functions that the typechecker
@@ -33,7 +81,7 @@ export const BUILTIN_FUNCTION_TYPES: Record<string, BuiltinSignature> = {
   notify: { params: [string, string], returnType: boolean },
   sleep: { params: [number], returnType: voidT },
   round: { params: [number, number], returnType: number },
-  llm: { params: ["any", "any"], minParams: 1, returnType: string },
+  llm: { params: ["any", llmOptions], minParams: 1, returnType: string },
   emit: { params: [], restParam: "any", returnType: voidT },
 
   // --- Object / array helpers (auto-imported from stdlib/index.agency) ---

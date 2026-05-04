@@ -261,31 +261,42 @@ function pullTransitiveAliases(
   while (queue.length > 0) {
     const { name, preferFile } = queue.shift()!;
     if (globalAliases[name] !== undefined) continue; // already known
-    const sym = resolveTypeFromFile(symbolTable, name, preferFile);
-    if (!sym) continue;
-    unit.typeAliases.add(GLOBAL_SCOPE_KEY, name, sym.aliasedType);
+    const found = resolveTypeFromFile(symbolTable, name, preferFile);
+    if (!found) continue;
+    unit.typeAliases.add(GLOBAL_SCOPE_KEY, name, found.aliasedType);
+    // Nested aliases referenced by this type should resolve in the file
+    // the type was actually found in (not the original preferFile) — the
+    // body's references are scoped to that module.
     const nested: string[] = [];
-    collectAliasNames(sym.aliasedType, nested);
-    for (const n of nested) queue.push({ name: n, preferFile });
+    collectAliasNames(found.aliasedType, nested);
+    for (const n of nested) queue.push({ name: n, preferFile: found.file });
   }
 }
 
 /**
  * Look up a type alias by name. Prefers the originating module's symbols
  * (so cross-file name collisions pick the file the import actually came
- * from), then falls back to the global cross-file search.
+ * from), then falls back to the global cross-file search. Returns the
+ * file the type was found in alongside its body, so callers can resolve
+ * nested alias references in that same module.
  */
 function resolveTypeFromFile(
   symbolTable: SymbolTable,
   name: string,
   preferFile: string | undefined,
-): { aliasedType: VariableType } | undefined {
+): { aliasedType: VariableType; file: string } | undefined {
   if (preferFile) {
     const fileSym = symbolTable.getFile(preferFile)?.[name];
-    if (fileSym?.kind === "type") return fileSym;
+    if (fileSym?.kind === "type") {
+      return { aliasedType: fileSym.aliasedType, file: preferFile };
+    }
   }
-  const sym = symbolTable.findTypeAcrossFiles(name);
-  if (sym?.kind === "type") return sym;
+  for (const file of symbolTable.filePaths()) {
+    const sym = symbolTable.getFile(file)?.[name];
+    if (sym?.kind === "type") {
+      return { aliasedType: sym.aliasedType, file };
+    }
+  }
   return undefined;
 }
 

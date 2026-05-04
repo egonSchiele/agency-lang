@@ -6381,7 +6381,13 @@ describe("TypeChecker", () => {
         type: "objectType",
         properties: [{ key: "fromB", value: str }],
       };
+      // b.agency declared FIRST so the fallback (findTypeAcrossFiles)
+      // returns b's Result2 by default. The fix must use originFile to
+      // prefer a.agency, otherwise this test would fail.
       const symbolTable = new SymbolTable({
+        "/project/b.agency": {
+          Result2: { kind: "type", name: "Result2", aliasedType: bResult, exported: true },
+        },
         "/project/a.agency": {
           Result2: { kind: "type", name: "Result2", aliasedType: aResult, exported: true },
           getA: {
@@ -6389,9 +6395,6 @@ describe("TypeChecker", () => {
             parameters: [],
             returnType: { type: "typeAliasVariable", aliasName: "Result2" },
           },
-        },
-        "/project/b.agency": {
-          Result2: { kind: "type", name: "Result2", aliasedType: bResult, exported: true },
         },
       });
       const program: AgencyProgram = {
@@ -6429,6 +6432,88 @@ describe("TypeChecker", () => {
       // fromB only exists on b.agency's Result2; resolution should NOT pick
       // that file since the import came from a.agency.
       expect(errors.some((e) => /Property 'fromB' does not exist/.test(e.message))).toBe(true);
+    });
+
+    it("alias resolution recurses into the host file of the resolved type", () => {
+      // F1 imports `getThing` from origin.agency. origin.agency does NOT
+      // define `Outer` — `Outer` lives in real.agency, where its body
+      // references `Inner`. There's a *different* `Inner` in decoy.agency
+      // declared before real.agency. Without per-file nested resolution,
+      // the recursion would re-acquire decoy's `Inner` for `Outer`.
+      const realInner: VariableType = {
+        type: "objectType",
+        properties: [{ key: "id", value: num }],
+      };
+      const decoyInner: VariableType = {
+        type: "objectType",
+        properties: [{ key: "wrong", value: str }],
+      };
+      const symbolTable = new SymbolTable({
+        // decoy declared first → findTypeAcrossFiles for "Inner" returns it.
+        "/project/decoy.agency": {
+          Inner: { kind: "type", name: "Inner", aliasedType: decoyInner, exported: true },
+        },
+        "/project/real.agency": {
+          Inner: { kind: "type", name: "Inner", aliasedType: realInner, exported: true },
+          Outer: {
+            kind: "type",
+            name: "Outer",
+            aliasedType: {
+              type: "objectType",
+              properties: [
+                { key: "inner", value: { type: "typeAliasVariable", aliasName: "Inner" } },
+              ],
+            },
+            exported: true,
+          },
+        },
+        "/project/origin.agency": {
+          getThing: {
+            kind: "function", name: "getThing", exported: true, safe: false,
+            parameters: [],
+            returnType: { type: "typeAliasVariable", aliasName: "Outer" },
+          },
+        },
+      });
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "importStatement",
+            modulePath: "./origin.agency",
+            isAgencyImport: true,
+            importedNames: [
+              { type: "namedImport", importedNames: ["getThing"], aliases: {}, safeNames: [] },
+            ],
+          },
+          {
+            type: "assignment",
+            variableName: "r",
+            value: { type: "functionCall", functionName: "getThing", arguments: [] },
+          },
+          {
+            type: "valueAccess",
+            base: { type: "variableName", value: "r" },
+            chain: [
+              { kind: "property", name: "inner" },
+              { kind: "property", name: "id" },
+            ],
+          },
+          {
+            type: "valueAccess",
+            base: { type: "variableName", value: "r" },
+            chain: [
+              { kind: "property", name: "inner" },
+              { kind: "property", name: "wrong" },
+            ],
+          },
+        ],
+      };
+      const info = buildCompilationUnit(program, symbolTable, "/project/main.agency");
+      const errors = typeCheck(program, {}, info).errors;
+      // Real Inner has 'id', not 'wrong' — recursion must have picked real.agency.
+      expect(errors.filter((e) => /Property 'id'/.test(e.message))).toEqual([]);
+      expect(errors.some((e) => /Property 'wrong' does not exist/.test(e.message))).toBe(true);
     });
 
     it("a builtin call is rejected when given a block argument", () => {

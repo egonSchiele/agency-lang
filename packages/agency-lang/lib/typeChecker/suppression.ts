@@ -67,12 +67,7 @@ export function applySuppressions(
 ): TypeCheckError[] {
   if (suppressions.nocheck) return [];
   if (suppressions.ignoreLines.size === 0) return errors;
-  if (lineOffset === 0) {
-    return errors.filter(
-      (e) => !e.loc || !suppressions.ignoreLines.has(e.loc.line),
-    );
-  }
-  const adjusted = new Set<number>();
-  for (const line of suppressions.ignoreLines) adjusted.add(line - lineOffset);
-  return errors.filter((e) => !e.loc || !adjusted.has(e.loc.line));
+  return errors.filter(
+    (e) => !e.loc || !suppressions.ignoreLines.has(e.loc.line + lineOffset),
+  );
 }

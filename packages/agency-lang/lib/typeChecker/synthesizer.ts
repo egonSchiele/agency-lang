@@ -70,6 +70,8 @@ export function synthType(
       return { type: "primitiveType", value: "string" };
     case "boolean":
       return { type: "primitiveType", value: "boolean" };
+    case "regex":
+      return { type: "primitiveType", value: "regex" };
     case "binOpExpression":
       return synthBinOp(expr, scope, ctx);
     case "functionCall":

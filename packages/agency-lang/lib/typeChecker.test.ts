@@ -5285,6 +5285,81 @@ describe("TypeChecker", () => {
       expect(errors.some((e) => /Unknown named argument 'nayme'/.test(e.message))).toBe(true);
     });
 
+    it("regex literal synths as primitive 'regex'", () => {
+      // expectRegex(/foo/i)  — expectRegex takes regex
+      const regexT: VariableType = { type: "primitiveType", value: "regex" };
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "function",
+            functionName: "expectRegex",
+            parameters: [{ type: "functionParameter", name: "r", typeHint: regexT }],
+            body: [],
+          },
+          {
+            type: "functionCall",
+            functionName: "expectRegex",
+            arguments: [{ type: "regex", pattern: "foo", flags: "i" }],
+          },
+        ],
+      };
+      expect(typeCheck(program).errors).toHaveLength(0);
+    });
+
+    it("regex literal in a string-typed slot errors", () => {
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "function",
+            functionName: "expectStr",
+            parameters: [{ type: "functionParameter", name: "s", typeHint: str }],
+            body: [],
+          },
+          {
+            type: "functionCall",
+            functionName: "expectStr",
+            arguments: [{ type: "regex", pattern: "foo", flags: "" }],
+          },
+        ],
+      };
+      const errors = typeCheck(program).errors;
+      expect(errors.some((e) => /not assignable/i.test(e.message))).toBe(true);
+    });
+
+    it("=~ operator requires string on the left and regex on the right", () => {
+      // "hello" =~ "world"  → error: right must be regex (it's a string)
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "binOpExpression",
+            operator: "=~",
+            left: { type: "string", segments: [{ type: "text", value: "hello" }] },
+            right: { type: "string", segments: [{ type: "text", value: "world" }] },
+          },
+        ],
+      };
+      const errors = typeCheck(program).errors;
+      expect(errors.some((e) => /regex/i.test(e.message))).toBe(true);
+    });
+
+    it("=~ operator passes when types are correct", () => {
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "binOpExpression",
+            operator: "=~",
+            left: { type: "string", segments: [{ type: "text", value: "hello" }] },
+            right: { type: "regex", pattern: "ello", flags: "" },
+          },
+        ],
+      };
+      expect(typeCheck(program).errors).toHaveLength(0);
+    });
+
     it("checks the RHS of a validated assignment against the un-bang'd type", () => {
       // const x: number! = "not a number" — RHS is checked against `number`.
       const program: AgencyProgram = {

@@ -216,7 +216,7 @@ function checkArgsAgainstParams(
     }
     // Validated params accept either the un-bang'd type T or any Result —
     // failures pass through unvalidated per docs-new/guide/schemas.md.
-    if (slot.validated && argType.type === "resultType") {
+    if (slot?.validated && argType.type === "resultType") {
       continue;
     }
     if (!isAssignable(argType, paramType, typeAliases)) {
@@ -305,6 +305,11 @@ function checkExpressionsInScope(
       checkType(node.condition, BOOLEAN_TYPE, info.scope, "condition", ctx);
     } else if (node.type === "binOpExpression" && node.operator === "catch") {
       checkCatchDefaultType(node, info.scope, ctx);
+    } else if (
+      node.type === "binOpExpression" &&
+      (node.operator === "=~" || node.operator === "!~")
+    ) {
+      checkRegexMatch(node, info.scope, ctx);
     } else if (node.type === "binOpExpression" && node.operator === "|>") {
       // synth runs validatePipeArg as a side effect; needed so a pipe whose
       // result is discarded (or used purely for its short-circuit behavior)
@@ -320,6 +325,23 @@ function checkExpressionsInScope(
  * is a Result<T>, that's `T`; otherwise (catch on a non-Result is a no-op
  * at runtime) it's the left's own type.
  */
+/**
+ * `s =~ /re/` and `s !~ /re/` compile to `/re/.test(s)`. The left operand
+ * must be a string, the right must be a regex literal (or value of `regex`
+ * type). Catching this at compile time avoids runtime "X.test is not a
+ * function" surprises when a user forgets the regex literal syntax.
+ */
+function checkRegexMatch(
+  node: AgencyNode & { type: "binOpExpression" },
+  scope: Scope,
+  ctx: TypeCheckerContext,
+): void {
+  const STRING: VariableType = { type: "primitiveType", value: "string" };
+  const REGEX: VariableType = { type: "primitiveType", value: "regex" };
+  checkType(node.left, STRING, scope, `left of '${node.operator}'`, ctx);
+  checkType(node.right, REGEX, scope, `right of '${node.operator}'`, ctx);
+}
+
 function checkCatchDefaultType(
   node: AgencyNode & { type: "binOpExpression" },
   scope: Scope,

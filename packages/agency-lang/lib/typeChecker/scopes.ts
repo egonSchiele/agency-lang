@@ -11,7 +11,7 @@ import { GLOBAL_SCOPE_KEY, scopeKey } from "../compilationUnit.js";
 import { getImportedNames } from "../types/importStatement.js";
 import { isAssignable, widenType } from "./assignability.js";
 import { synthType } from "./synthesizer.js";
-import { applyValidationFlag } from "./validation.js";
+import { resultTypeForValidation } from "./validation.js";
 import { validateTypeReferences } from "./validate.js";
 import { ScopeInfo, TypeCheckerContext } from "./types.js";
 import { Scope } from "./scope.js";
@@ -93,7 +93,13 @@ export function declareVariable(
       node.loc,
     );
     if (existingType) {
-      reportNotAssignable(ctx, node.variableName, newType, existingType, node.loc);
+      reportNotAssignable(
+        ctx,
+        node.variableName,
+        newType,
+        existingType,
+        node.loc,
+      );
     }
     checkType(
       node.value,
@@ -105,13 +111,22 @@ export function declareVariable(
     // The runtime wraps validated values in Result<T, string>, so the
     // declared scope type must match — otherwise downstream property accesses
     // see `T` instead of the actual `Result<T, string>` and silently miscompile.
-    scope.declare(node.variableName, applyValidationFlag(newType, node.validated));
+    scope.declare(
+      node.variableName,
+      resultTypeForValidation(newType, node.validated),
+    );
     return;
   }
 
   if (existingType) {
     const valueType = synthType(node.value, scope, ctx);
-    reportNotAssignable(ctx, node.variableName, valueType, existingType, node.loc);
+    reportNotAssignable(
+      ctx,
+      node.variableName,
+      valueType,
+      existingType,
+      node.loc,
+    );
     return;
   }
 
@@ -210,11 +225,15 @@ export function walkScopeBody(
         if (node.handler.kind === "inline") {
           if (node.handler.param.validated) {
             ctx.errors.push({
-              message: "The '!' validation syntax is not allowed on handler parameters. Validate the data inside the handler body if needed.",
+              message:
+                "The '!' validation syntax is not allowed on handler parameters. Validate the data inside the handler body if needed.",
               loc: node.loc,
             });
           }
-          scope.declare(node.handler.param.name, node.handler.param.typeHint ?? "any");
+          scope.declare(
+            node.handler.param.name,
+            node.handler.param.typeHint ?? "any",
+          );
           walkScopeBody(node.handler.body, scope, ctx);
         }
         break;

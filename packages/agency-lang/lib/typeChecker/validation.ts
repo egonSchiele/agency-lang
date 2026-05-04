@@ -1,14 +1,18 @@
-import type { VariableType, FunctionDefinition, GraphNodeDefinition } from "../types.js";
+import type {
+  VariableType,
+  FunctionDefinition,
+  GraphNodeDefinition,
+} from "../types.js";
 import type { ImportedFunctionSignature } from "../compilationUnit.js";
 
 const STRING_T: VariableType = { type: "primitiveType", value: "string" };
 
 /**
  * Wrap `t` in Result<T, string> when `validated` is true, mirroring the
- * runtime's __validateType wrapping. Per the no-rewrap rule in
- * docs-new/guide/schemas.md, an already-Result type passes through.
+ * runtime's __validateType wrapping. An already-Result type passes through
+ * without re-wrapping.
  */
-export function applyValidationFlag(
+export function resultTypeForValidation(
   t: VariableType,
   validated: boolean | undefined,
 ): VariableType {
@@ -38,6 +42,7 @@ export function effectiveReturnType(
   def: FunctionDefinition | GraphNodeDefinition | ImportedFunctionSignature,
 ): VariableType | null | undefined {
   if (!def.returnType) return def.returnType;
-  const validated = "returnTypeValidated" in def ? def.returnTypeValidated : undefined;
-  return applyValidationFlag(def.returnType, validated);
+  const validated =
+    "returnTypeValidated" in def ? def.returnTypeValidated : undefined;
+  return resultTypeForValidation(def.returnType, validated);
 }

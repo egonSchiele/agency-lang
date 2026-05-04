@@ -1,18 +1,21 @@
 import { describe, expect, it } from "vitest";
-import { applyValidationFlag, effectiveReturnType } from "./validation.js";
+import { resultTypeForValidation, effectiveReturnType } from "./validation.js";
 import type { VariableType, FunctionDefinition } from "../types.js";
 
 describe("applyValidationFlag", () => {
-  const person: VariableType = { type: "typeAliasVariable", aliasName: "Person" };
+  const person: VariableType = {
+    type: "typeAliasVariable",
+    aliasName: "Person",
+  };
   const stringT: VariableType = { type: "primitiveType", value: "string" };
 
   it("returns the type unchanged when validated is false/undefined", () => {
-    expect(applyValidationFlag(person, false)).toEqual(person);
-    expect(applyValidationFlag(person, undefined)).toEqual(person);
+    expect(resultTypeForValidation(person, false)).toEqual(person);
+    expect(resultTypeForValidation(person, undefined)).toEqual(person);
   });
 
   it("wraps a non-Result type in Result<T, string> when validated", () => {
-    expect(applyValidationFlag(person, true)).toEqual({
+    expect(resultTypeForValidation(person, true)).toEqual({
       type: "resultType",
       successType: person,
       failureType: stringT,
@@ -25,12 +28,12 @@ describe("applyValidationFlag", () => {
       successType: person,
       failureType: stringT,
     };
-    expect(applyValidationFlag(result, true)).toEqual(result);
+    expect(resultTypeForValidation(result, true)).toEqual(result);
   });
 
   it("wraps an array type in Result<T[], string>", () => {
     const arr: VariableType = { type: "arrayType", elementType: person };
-    expect(applyValidationFlag(arr, true)).toEqual({
+    expect(resultTypeForValidation(arr, true)).toEqual({
       type: "resultType",
       successType: arr,
       failureType: stringT,
@@ -39,10 +42,16 @@ describe("applyValidationFlag", () => {
 });
 
 describe("effectiveReturnType", () => {
-  const person: VariableType = { type: "typeAliasVariable", aliasName: "Person" };
+  const person: VariableType = {
+    type: "typeAliasVariable",
+    aliasName: "Person",
+  };
   const stringT: VariableType = { type: "primitiveType", value: "string" };
 
-  function fn(returnType: VariableType | null | undefined, validated?: boolean): FunctionDefinition {
+  function fn(
+    returnType: VariableType | null | undefined,
+    validated?: boolean,
+  ): FunctionDefinition {
     return {
       type: "function",
       functionName: "f",

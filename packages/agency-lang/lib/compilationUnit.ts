@@ -13,7 +13,7 @@ import type {
 } from "./types/importStatement.js";
 import type { SymbolTable } from "./symbolTable.js";
 import { walkNodes } from "./utils/node.js";
-import { applyValidationFlag } from "./typeChecker/validation.js";
+import { resultTypeForValidation } from "./typeChecker/validation.js";
 
 export const GLOBAL_SCOPE_KEY = "global";
 
@@ -178,7 +178,10 @@ export function buildCompilationUnit(
           // the time a value crosses the import boundary it really is a
           // Result<T, string> — the typechecker just needs to agree.
           const returnType = r.symbol.returnType
-            ? applyValidationFlag(r.symbol.returnType, r.symbol.returnTypeValidated)
+            ? resultTypeForValidation(
+                r.symbol.returnType,
+                r.symbol.returnTypeValidated,
+              )
             : r.symbol.returnType;
           unit.importedFunctions[r.localName] = {
             parameters: r.symbol.parameters,
@@ -189,7 +192,11 @@ export function buildCompilationUnit(
           unit.safeFunctions[r.localName] = true;
         }
         if (r.symbol.kind === "type") {
-          unit.typeAliases.add(GLOBAL_SCOPE_KEY, r.localName, r.symbol.aliasedType);
+          unit.typeAliases.add(
+            GLOBAL_SCOPE_KEY,
+            r.localName,
+            r.symbol.aliasedType,
+          );
         }
       }
     }

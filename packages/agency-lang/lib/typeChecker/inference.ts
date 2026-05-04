@@ -10,7 +10,7 @@ import type { ResultType } from "../types/typeHints.js";
 import { scopeKey } from "../compilationUnit.js";
 import { walkNodes } from "../utils/node.js";
 import { isAssignable, widenType } from "./assignability.js";
-import { applyValidationFlag } from "./validation.js";
+import { resultTypeForValidation } from "./validation.js";
 import { synthType } from "./synthesizer.js";
 import { walkScopeBody } from "./scopes.js";
 import { TypeCheckerContext } from "./types.js";
@@ -47,9 +47,10 @@ export function inferReturnTypeFor(
 
   ctx.inferringReturnType.add(name);
 
-  const defScopeKey = def.type === "function"
-    ? scopeKey(functionScope(def.functionName))
-    : scopeKey(nodeScope(def.nodeName));
+  const defScopeKey =
+    def.type === "function"
+      ? scopeKey(functionScope(def.functionName))
+      : scopeKey(nodeScope(def.nodeName));
 
   return ctx.withScope(defScopeKey, () => {
     const scope = new Scope(defScopeKey);
@@ -108,7 +109,7 @@ export function inferReturnTypeFor(
     // index.ts (section 1d) — this branch only handles unannotated returns.
     const hasValidatedParam = def.parameters.some((p) => p.validated);
     if (hasValidatedParam && inferred !== "any") {
-      inferred = applyValidationFlag(inferred, true);
+      inferred = resultTypeForValidation(inferred, true);
     }
 
     ctx.inferredReturnTypes[name] = widenType(inferred);

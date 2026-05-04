@@ -1,0 +1,91 @@
+import { bash } from "std::shell"
+import { args } from "std::system"
+systemPrompt = read("./prompts/system.md")
+
+type Severity = "critical" | "warning" | "suggestion"
+
+type Issue = {
+  severity: Severity;
+  line: number | null;
+  message: string;
+  suggestion: string | null
+}
+
+type ReviewResult = {
+  summary: string;
+  issues: Issue[];
+  strengths: string[]
+}
+
+node main() {
+  let cliArgs = args()
+  if (cliArgs.length == 0) {
+    print("Usage: agency review <file.agency>")
+    return end()
+  }
+  let filePath = cliArgs[0]
+  let code = read(filePath)
+  print("Reviewing: ${filePath}\n")
+  // Run the typechecker
+  print("Running type checker...")
+  let typeCheckResult = bash("node dist/scripts/agency.js typecheck ${filePath}")
+  let typeErrors: string | number = ""
+  if (typeCheckResult.exitCode != 0) {
+    typeErrors = typeCheckResult.stderr + typeCheckResult.stdout
+    print("Type checker found issues:\n${typeErrors}\n")
+  } else {
+    print("Type checker passed.\n")
+  }
+  // Have the LLM review the code
+  thread {
+    system(systemPrompt)
+    let typeErrorMessage = "The type checker found no errors."
+    if (typeErrors != "") {
+      typeErrorMessage = "The type checker reported the following errors:\n${typeErrors}"
+    }
+    const reviewPrompt = """
+              Please review the following Agency code.
+
+              File: ${filePath}
+
+              ---CODE START---
+              ${code}
+              ---CODE END---
+
+              ${typeErrorMessage}
+
+              Provide a structured review with a summary, list of issues (with severity, line number if applicable, message, and suggested fix), and a list of strengths.
+            """
+    let review: ReviewResult = llm(reviewPrompt)
+  }
+  // Display the review
+  print("\n--- Review Summary ---")
+  print(review.summary)
+  if (review.strengths.length > 0) {
+    print("\n--- Strengths ---")
+    for (strength in review.strengths) {
+      print("  + ${strength}")
+    }
+  }
+  if (review.issues.length > 0) {
+    print("\n--- Issues ---")
+    for (issue in review.issues) {
+      let prefix = "[${issue.severity}]"
+      let lineInfo = ""
+      if (issue.line != null) {
+        lineInfo = " (line ${issue.line})"
+      }
+      print("  ${prefix}${lineInfo} ${issue.message}")
+      if (issue.suggestion != null) {
+        print("    Fix: ${issue.suggestion}")
+      }
+    }
+  } else {
+    print("\nNo issues found. Code looks good!")
+  }
+  return end()
+}
+
+node end() {
+
+}

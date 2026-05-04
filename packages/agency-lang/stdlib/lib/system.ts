@@ -6,6 +6,10 @@ import { promisify } from "util";
 
 const execFileAsync = promisify(execFile);
 
+export function _args(): string[] {
+  return process.argv.slice(2);
+}
+
 export function _cwd(): string {
   return process.cwd();
 }

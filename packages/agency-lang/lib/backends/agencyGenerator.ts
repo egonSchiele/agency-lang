@@ -62,7 +62,6 @@ export class AgencyGenerator {
   protected generatedTypeAliases: string[] = [];
   protected typeAliases: Record<string, VariableType> = {};
   protected functionsUsed: Set<string> = new Set();
-  protected importStatements: string[] = [];
   protected importNodes: ImportStatement[] = [];
   protected importedNodes: ImportNodeStatement[] = [];
   protected functionDefinitions: Record<string, FunctionDefinition> = {};
@@ -131,10 +130,9 @@ export class AgencyGenerator {
         stmtPairs.push({ type: node.type, code: result });
       }
     }
-    //console.log(JSON.stringify(stmtPairs, null, 2))
     // Join top-level statements: blank line between block declarations,
     // single newline between simple statements
-    const stmtLines: string[] = [];//stmtPairs.map((s => s.code));
+    const stmtLines: string[] = [];
     for (let i = 0; i < stmtPairs.length; i++) {
       if (i > 0) {
         const prev = stmtPairs[i - 1];
@@ -143,19 +141,17 @@ export class AgencyGenerator {
           (BLOCK_TYPES.has(prev.type) && !NO_SPACE_TYPES.has(curr.type)) ||
           (BLOCK_TYPES.has(curr.type) && !NO_SPACE_TYPES.has(prev.type))
         ) {
-          //console.log(`Adding blank line between ${prev.type} and ${curr.type}`);
           stmtLines.push(""); // blank line
         }
       }
       stmtLines.push(stmtPairs[i].code);
     }
-    //console.log(stmtLines.join("\n"))
+
     const output: string[] = [];
 
     this.addIfNonEmpty(this.sortAndRenderImports(), output);
     this.addIfNonEmpty(this.generatedTypeAliases.join("\n"), output);
     this.addIfNonEmpty(stmtLines.join("\n"), output);
-    //console.log(output)
 
     return {
       output: output.join("\n"),
@@ -637,12 +633,7 @@ export class AgencyGenerator {
       }
       return this.processNode(item).trim();
     });
-    const inline = `[${items.join(", ")}]`;
-    if (inline.length <= 80) return inline;
-    this.increaseIndent();
-    const indented = items.map((item) => this.indentStr(item));
-    this.decreaseIndent();
-    return `[\n${indented.join(",\n")}\n${this.indentStr("]")}`;
+    return this.wrapList(items, "", "[", "]");
   }
 
   protected processAgencyObject(node: AgencyObject): string {
@@ -925,9 +916,9 @@ export class AgencyGenerator {
     this.increaseIndent();
 
     if (node.docString) {
-      const docLines = [`"""`, ...node.docString.value.split("\n"), `"""`];
-      const docStr = docLines.join("\n");
-      //const docStr = docLines.map((line) => this.indentStr(line)).join("\n");
+      const lines = node.docString.value.split("\n").map(l => l.trim());
+      const docLines = [`"""`, ...lines, `"""`];
+      const docStr = docLines.map((line) => this.indentStr(line)).join("\n");
       result += `${docStr}\n`;
     }
 

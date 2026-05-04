@@ -117,7 +117,7 @@ function checkSingleFunctionCall(
       call.arguments.length,
     );
     if (!checkArity(call, minArgs, maxArgs, hasSplatArg, ctx)) return;
-    checkArgsAgainstParams(call, slots, scope, ctx);
+    checkArgsAgainstParams(call, slots, scope, ctx, params);
     return;
   }
 
@@ -133,7 +133,7 @@ function checkSingleFunctionCall(
         slots.push({ type: sig.restParam!, validated: false });
       }
     }
-    checkArgsAgainstParams(call, slots, scope, ctx);
+    checkArgsAgainstParams(call, slots, scope, ctx, undefined);
   }
 }
 
@@ -180,16 +180,35 @@ function checkArgsAgainstParams(
   slots: ParamSlot[],
   scope: Scope,
   ctx: TypeCheckerContext,
+  params: FunctionParameter[] | undefined,
 ): void {
   const typeAliases = ctx.getTypeAliases();
   for (let argIndex = 0; argIndex < call.arguments.length; argIndex++) {
     const arg = call.arguments[argIndex];
-    const slot = slots[argIndex];
     if (arg.type === "splat") {
       checkSplatAgainstRemainingParams(call, arg.value, argIndex, slots, scope, ctx);
       return;
     }
-    const innerArg = arg.type === "namedArgument" ? arg.value : arg;
+    let slot: ParamSlot | undefined;
+    let innerArg: AgencyNode;
+    if (arg.type === "namedArgument") {
+      // Resolve the slot by parameter name. Builtins (no `params`) can't
+      // express named args; the runtime / backend rejects those, but we
+      // skip the type check here rather than emit a confusing error.
+      const paramIdx = params?.findIndex((p) => p.name === arg.name) ?? -1;
+      if (params && paramIdx < 0) {
+        ctx.errors.push({
+          message: `Unknown named argument '${arg.name}' in call to '${call.functionName}'.`,
+          loc: call.loc,
+        });
+        continue;
+      }
+      slot = paramIdx >= 0 ? slots[paramIdx] : undefined;
+      innerArg = arg.value;
+    } else {
+      slot = slots[argIndex];
+      innerArg = arg;
+    }
     const argType = synthType(innerArg, scope, ctx);
     const paramType = slot?.type;
     if (paramType === undefined || paramType === "any" || argType === "any") {

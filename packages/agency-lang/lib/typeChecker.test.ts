@@ -5233,6 +5233,58 @@ describe("TypeChecker", () => {
       expect(typeCheck(program).errors).toHaveLength(0);
     });
 
+    it("named arg with wrong-typed value is checked against the named param's type, not positional", () => {
+      // def greet(name: string, age: number) {}
+      // greet(age=1, name=2)  → 'name' should error: 2 is not a string
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "function",
+            functionName: "greet",
+            parameters: [
+              { type: "functionParameter", name: "name", typeHint: str },
+              { type: "functionParameter", name: "age", typeHint: num },
+            ],
+            body: [],
+          },
+          {
+            type: "functionCall",
+            functionName: "greet",
+            arguments: [
+              { type: "namedArgument", name: "age", value: { type: "number", value: "1" } },
+              { type: "namedArgument", name: "name", value: { type: "number", value: "2" } },
+            ],
+          },
+        ],
+      };
+      const errors = typeCheck(program).errors;
+      expect(errors.some((e) => /not assignable/i.test(e.message))).toBe(true);
+    });
+
+    it("named arg with unknown name errors", () => {
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "function",
+            functionName: "greet",
+            parameters: [{ type: "functionParameter", name: "name", typeHint: str }],
+            body: [],
+          },
+          {
+            type: "functionCall",
+            functionName: "greet",
+            arguments: [
+              { type: "namedArgument", name: "nayme", value: { type: "string", segments: [{ type: "text", value: "x" }] } },
+            ],
+          },
+        ],
+      };
+      const errors = typeCheck(program).errors;
+      expect(errors.some((e) => /Unknown named argument 'nayme'/.test(e.message))).toBe(true);
+    });
+
     it("checks the RHS of a validated assignment against the un-bang'd type", () => {
       // const x: number! = "not a number" — RHS is checked against `number`.
       const program: AgencyProgram = {

@@ -297,11 +297,41 @@ export function executeNode(args: ExecuteNodeArgs): {
   return JSON.parse(results);
 }
 
+/** Maps Agency primitive type names to their TypeScript equivalents. */
+const TS_PRIMITIVE_ALIASES: Record<string, string> = {
+  regex: "RegExp",
+};
+
+/**
+ * Format a VariableType for use in generated TypeScript code. Same shape as
+ * formatTypeHint, but maps Agency-only primitive names (currently `regex`)
+ * to their TS equivalents (`RegExp`). Use this for codegen; use the plain
+ * formatTypeHint for diagnostics, hover, and anywhere the user reads it as
+ * Agency source.
+ */
+export function formatTypeHintTs(vt: VariableType): string {
+  if (vt.type === "primitiveType") return TS_PRIMITIVE_ALIASES[vt.value] ?? vt.value;
+  if (vt.type === "arrayType") return `${formatTypeHintTs(vt.elementType)}[]`;
+  if (vt.type === "unionType") return vt.types.map(formatTypeHintTs).join(" | ");
+  if (vt.type === "objectType") {
+    return `{ ${vt.properties.map((p) => `${p.key}: ${formatTypeHintTs(p.value)}`).join(", ")} }`;
+  }
+  if (vt.type === "blockType") {
+    const params = vt.params.map((p) => formatTypeHintTs(p.typeAnnotation)).join(", ");
+    return `(${params}) => ${formatTypeHintTs(vt.returnType)}`;
+  }
+  if (vt.type === "resultType") {
+    const s = formatTypeHintTs(vt.successType);
+    const f = formatTypeHintTs(vt.failureType);
+    if (s === "any" && f === "any") return "Result";
+    return `Result<${s}, ${f}>`;
+  }
+  return formatTypeHint(vt);
+}
+
 export function formatTypeHint(vt: VariableType): string {
   switch (vt.type) {
     case "primitiveType":
-      // Agency's `regex` primitive maps to TS RegExp at emit time.
-      if (vt.value === "regex") return "RegExp";
       return vt.value;
     case "arrayType":
       return `${formatTypeHint(vt.elementType)}[]`;

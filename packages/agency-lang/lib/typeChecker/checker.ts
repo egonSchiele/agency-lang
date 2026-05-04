@@ -52,20 +52,23 @@ function paramListSignature(params: FunctionParameter[], argCount: number): {
   ).length;
   const maxArgs = hasRest ? Infinity : params.length;
 
+  // Only nameable params (not variadic, not block-typed) get a `name` —
+  // matching the backend's nameableParams filter (typescriptBuilder.ts).
+  // Slots without names are unreachable by named-arg lookup, which is
+  // exactly what we want for variadic/block slots.
+  const isNameable = (p: FunctionParameter) =>
+    !p.variadic && p.typeHint?.type !== "blockType";
   const slots: ParamSlot[] = params.map((p) => ({
     type: p.typeHint,
     validated: !!p.validated,
-    name: p.name,
+    name: isNameable(p) ? p.name : undefined,
   }));
   if (hasRest) {
-    // Replace the variadic slot's array type with the element type, so a
-    // single arg at that position is checked element-wise. Then extend to
-    // cover any extra args.
     const elementType = variadicElementType(lastParam);
     const restSlot: ParamSlot = {
       type: elementType,
       validated: slots[slots.length - 1]?.validated ?? false,
-      name: lastParam.name,
+      // Variadic by definition; not nameable.
     };
     slots[slots.length - 1] = restSlot;
     while (slots.length < argCount) slots.push(restSlot);
@@ -127,6 +130,16 @@ function checkSingleFunctionCall(
   }
 
   if (call.functionName in BUILTIN_FUNCTION_TYPES) {
+    // Builtins don't have parameter names — named args have nowhere to bind.
+    // The backend throws at codegen time (typescriptBuilder.ts); surface it
+    // here with a proper diagnostic instead.
+    if (call.arguments.some((a) => a.type === "namedArgument")) {
+      ctx.errors.push({
+        message: `Named arguments can only be used with Agency-defined functions, not '${call.functionName}'.`,
+        loc: call.loc,
+      });
+      return;
+    }
     const sig = BUILTIN_FUNCTION_TYPES[call.functionName];
     const minArgs = sig.minParams ?? sig.params.length;
     const hasRest = sig.restParam !== undefined;
@@ -143,13 +156,12 @@ function checkSingleFunctionCall(
 }
 
 /**
- * Catch structural mistakes in named-arg usage (duplicates, positionals
- * after named, name-conflicts-with-positional). Returns false when the
- * arg/slot alignment is broken, so the caller bails before per-arg type
- * checks would emit misleading errors.
+ * Catch structural mistakes in named-arg usage (unknown names, duplicates,
+ * positionals after named, name-conflicts-with-positional). Variadic and
+ * block params can't be passed by name — same as the backend.
  *
- * Variadic and block params can't be passed by name — same as the backend.
- * Unknown-name errors are emitted later in checkArgsAgainstParams.
+ * Returns false when the arg/slot alignment is broken, so the caller bails
+ * before per-arg type checks would emit misleading errors.
  */
 function checkNamedArgStructure(
   call: FunctionCall,
@@ -178,7 +190,13 @@ function checkNamedArgStructure(
         (p) => !p.variadic && p.typeHint?.type !== "blockType",
       );
       const paramIdx = nameableParams.findIndex((p) => p.name === arg.name);
-      if (paramIdx >= 0 && paramIdx < namedStartIdx) {
+      if (paramIdx < 0) {
+        ctx.errors.push({
+          message: `Unknown named argument '${arg.name}' in call to '${call.functionName}'.`,
+          loc: call.loc,
+        });
+        ok = false;
+      } else if (paramIdx < namedStartIdx) {
         ctx.errors.push({
           message: `Named argument '${arg.name}' conflicts with positional argument at position ${paramIdx + 1} in call to '${call.functionName}'.`,
           loc: call.loc,
@@ -243,9 +261,6 @@ function checkArgsAgainstParams(
   ctx: TypeCheckerContext,
 ): void {
   const typeAliases = ctx.getTypeAliases();
-  // Slots without names come from builtin signatures, which the runtime /
-  // backend rejects named args for. Skip the name lookup in that case.
-  const hasNames = slots.some((s) => s.name !== undefined);
   for (let argIndex = 0; argIndex < call.arguments.length; argIndex++) {
     const arg = call.arguments[argIndex];
     if (arg.type === "splat") {
@@ -255,14 +270,9 @@ function checkArgsAgainstParams(
     let slot: ParamSlot | undefined;
     let innerArg: AgencyNode;
     if (arg.type === "namedArgument") {
+      // Unknown / variadic / block names are caught upstream in
+      // checkNamedArgStructure; lookup here is best-effort.
       const slotIdx = slots.findIndex((s) => s.name === arg.name);
-      if (hasNames && slotIdx < 0) {
-        ctx.errors.push({
-          message: `Unknown named argument '${arg.name}' in call to '${call.functionName}'.`,
-          loc: call.loc,
-        });
-        continue;
-      }
       slot = slotIdx >= 0 ? slots[slotIdx] : undefined;
       innerArg = arg.value;
     } else {

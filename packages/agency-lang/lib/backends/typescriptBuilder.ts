@@ -17,7 +17,7 @@ import {
   VariableType,
 } from "../types.js";
 import path from "path";
-import { formatTypeHint } from "@/cli/util.js";
+import { formatTypeHint, formatTypeHintTs } from "@/cli/util.js";
 import {
   BUILTIN_FUNCTIONS,
   BUILTIN_TOOLS,
@@ -1207,7 +1207,7 @@ export class TypeScriptBuilder {
   }
 
   private formatParam(p: { name: string; typeHint?: VariableType }): string {
-    return p.typeHint ? `${p.name}: ${formatTypeHint(p.typeHint)}` : p.name;
+    return p.typeHint ? `${p.name}: ${formatTypeHintTs(p.typeHint)}` : p.name;
   }
 
 
@@ -1231,7 +1231,7 @@ export class TypeScriptBuilder {
     // Build as an async method with __state as last param
     const params = method.parameters.map((p) => this.formatParam(p)).join(", ");
     const fnParams: TsParam[] = method.parameters.map((p) => {
-      const baseType = p.typeHint ? formatTypeHint(p.typeHint) : "any";
+      const baseType = p.typeHint ? formatTypeHintTs(p.typeHint) : "any";
       return { name: p.name, typeAnnotation: baseType };
     });
     fnParams.push({
@@ -1260,9 +1260,9 @@ export class TypeScriptBuilder {
       parentClassName: parentClass || "",
       hasParent: !!parentClass,
       classKey,
-      fields: fields.map((f) => ({ name: f.name, typeStr: formatTypeHint(f.typeHint) })),
+      fields: fields.map((f) => ({ name: f.name, typeStr: formatTypeHintTs(f.typeHint) })),
       allFields: allFields.map((f) => ({ name: f.name })),
-      constructorParamsStr: allFields.map((f) => `${f.name}: ${formatTypeHint(f.typeHint)}`).join(", "),
+      constructorParamsStr: allFields.map((f) => `${f.name}: ${formatTypeHintTs(f.typeHint)}`).join(", "),
       superArgsStr: parentClass
         ? this.collectAllClassFields(this.compilationUnit.classDefinitions[parentClass]).map((f) => f.name).join(", ")
         : "",
@@ -1492,7 +1492,7 @@ export class TypeScriptBuilder {
     const blockParams: TsParam[] = block.params.map((p, i) => ({
       name: p.name,
       typeAnnotation: blockType?.params[i]
-        ? formatTypeHint(blockType.params[i].typeAnnotation)
+        ? formatTypeHintTs(blockType.params[i].typeAnnotation)
         : "any",
     }));
 
@@ -1802,7 +1802,7 @@ export class TypeScriptBuilder {
 
     // Build function params: typed args + __state
     const fnParams: TsParam[] = parameters.map((p) => {
-      const baseType = p.typeHint ? formatTypeHint(p.typeHint) : "any";
+      const baseType = p.typeHint ? formatTypeHintTs(p.typeHint) : "any";
       if (p.defaultValue) {
         return {
           name: p.name,
@@ -2971,7 +2971,7 @@ export class TypeScriptBuilder {
       );
       this.insideHandlerBody = prevInsideHandlerBody;
       const paramType = node.handler.param.typeHint
-        ? formatTypeHint(node.handler.param.typeHint)
+        ? formatTypeHintTs(node.handler.param.typeHint)
         : "any";
       handler = ts.arrowFn(
         [{ name: node.handler.param.name, typeAnnotation: paramType }],
@@ -3491,7 +3491,7 @@ export class TypeScriptBuilder {
       }[] = [];
       if (args.length > 0) {
         for (const arg of args) {
-          const typeHint = arg.typeHint ? formatTypeHint(arg.typeHint) : "any";
+          const typeHint = arg.typeHint ? formatTypeHintTs(arg.typeHint) : "any";
           fnParams.push({ name: arg.name, typeAnnotation: typeHint });
         }
       }

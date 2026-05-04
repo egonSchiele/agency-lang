@@ -5490,6 +5490,56 @@ describe("TypeChecker", () => {
       expect(typeCheck(program).errors).toHaveLength(0);
     });
 
+    it("named arg targeting a variadic param is rejected as unknown", () => {
+      // def collect(...xs: number[]) {}
+      // collect(xs=1)  ← variadic params can't be named
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "function",
+            functionName: "collect",
+            parameters: [
+              {
+                type: "functionParameter",
+                name: "xs",
+                variadic: true,
+                typeHint: { type: "arrayType", elementType: num },
+              },
+            ],
+            body: [],
+          },
+          {
+            type: "functionCall",
+            functionName: "collect",
+            arguments: [
+              { type: "namedArgument", name: "xs", value: { type: "number", value: "1" } },
+            ],
+          },
+        ],
+      };
+      const errors = typeCheck(program).errors;
+      expect(errors.some((e) => /Unknown named argument 'xs'/.test(e.message))).toBe(true);
+    });
+
+    it("named args on a builtin call error with a clear message", () => {
+      // print(x="hi")  ← builtins don't accept named args
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "functionCall",
+            functionName: "print",
+            arguments: [
+              { type: "namedArgument", name: "x", value: { type: "string", segments: [{ type: "text", value: "hi" }] } },
+            ],
+          },
+        ],
+      };
+      const errors = typeCheck(program).errors;
+      expect(errors.some((e) => /Named arguments can only be used with Agency-defined functions/.test(e.message))).toBe(true);
+    });
+
     it("checks the RHS of a validated assignment against the un-bang'd type", () => {
       // const x: number! = "not a number" — RHS is checked against `number`.
       const program: AgencyProgram = {

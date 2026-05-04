@@ -13,6 +13,7 @@ import type {
 } from "./types/importStatement.js";
 import type { SymbolTable } from "./symbolTable.js";
 import { walkNodes } from "./utils/node.js";
+import { applyValidationFlag } from "./typeChecker/validation.js";
 
 export const GLOBAL_SCOPE_KEY = "global";
 
@@ -171,9 +172,17 @@ export function buildCompilationUnit(
     for (const stmt of unit.importStatements) {
       for (const r of symbolTable.resolveImport(stmt, fromFile)) {
         if (r.symbol.kind === "function" || r.symbol.kind === "node") {
+          // Pre-wrap the imported return type so consumers see the same
+          // caller-visible shape they would for a local def. The runtime
+          // validation lives inside the imported function's body, so by
+          // the time a value crosses the import boundary it really is a
+          // Result<T, string> — the typechecker just needs to agree.
+          const returnType = r.symbol.returnType
+            ? applyValidationFlag(r.symbol.returnType, r.symbol.returnTypeValidated)
+            : r.symbol.returnType;
           unit.importedFunctions[r.localName] = {
             parameters: r.symbol.parameters,
-            returnType: r.symbol.returnType,
+            returnType,
           };
         }
         if (r.symbol.kind === "function" && r.symbol.safe) {

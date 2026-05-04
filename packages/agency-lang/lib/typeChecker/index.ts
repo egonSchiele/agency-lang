@@ -171,8 +171,9 @@ export class TypeChecker {
       if (!def.returnType) return;
       const effective = effectiveReturnType(def);
       if (effective && effective.type !== "resultType") {
+        const kind = def.type === "function" ? "Function" : "Node";
         this.errors.push({
-          message: `Function '${name}' has validated parameters but its return type is not a Result type. Validated parameters can short-circuit with a failure, so the return type must be 'Result<...>'.`,
+          message: `${kind} '${name}' has validated parameters but its return type is not a Result type. Validated parameters can short-circuit with a failure, so the return type must be 'Result<...>'.`,
           loc: def.loc,
         });
       }

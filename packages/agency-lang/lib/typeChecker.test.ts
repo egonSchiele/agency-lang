@@ -5005,6 +5005,35 @@ describe("TypeChecker", () => {
       expect(errors.length).toBeGreaterThan(0);
     });
 
+    it("imported function with bang return type is seen as Result at call sites", () => {
+      // Imported `def getPerson(): Person!` — at the import boundary the
+      // return is pre-wrapped to Result<Person, string>, so calling it from
+      // another file types as a Result like a local def would.
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "function",
+            functionName: "expectResult",
+            parameters: [
+              { type: "functionParameter", name: "r", typeHint: resultPersonStr },
+            ],
+            body: [],
+          },
+          {
+            type: "functionCall",
+            functionName: "expectResult",
+            arguments: [{ type: "functionCall", functionName: "getPerson", arguments: [] }],
+          },
+        ],
+      };
+      // Imported sigs are post-wrap by convention (see compilationUnit.ts).
+      const info = withImports(program, {
+        getPerson: { parameters: [], returnType: resultPersonStr },
+      });
+      expect(typeCheck(program, {}, info).errors).toHaveLength(0);
+    });
+
     it("checks the RHS of a validated assignment against the un-bang'd type", () => {
       // const x: number! = "not a number" — RHS is checked against `number`.
       const program: AgencyProgram = {

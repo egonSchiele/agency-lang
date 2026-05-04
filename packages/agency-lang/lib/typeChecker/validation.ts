@@ -26,8 +26,13 @@ export function applyValidationFlag(
  * on the declared return type. Does NOT auto-wrap based on validated params —
  * the auto-wrap for unannotated returns happens during inference.
  *
- * Returns undefined for functions with no declared return type and no
- * inference yet — caller should look up the inferred return type instead.
+ * Returns the un-set value (`null` for unannotated functions/nodes per the
+ * parser, `undefined` if the field is absent) when there's no declared
+ * return type — caller should look up the inferred return type instead.
+ *
+ * For ImportedFunctionSignature, the bang is already baked into `returnType`
+ * at compilation-unit-build time (see compilationUnit.ts), so passing one
+ * through here is a no-op wrap — the un-bang'd shape isn't reachable.
  */
 export function effectiveReturnType(
   def: FunctionDefinition | GraphNodeDefinition | ImportedFunctionSignature,

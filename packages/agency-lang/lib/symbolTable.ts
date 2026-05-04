@@ -27,6 +27,7 @@ export type FunctionSymbol = {
   exported: boolean;
   parameters: FunctionParameter[];
   returnType: VariableType | null;
+  returnTypeValidated?: boolean;
 };
 
 export type NodeSymbol = {
@@ -35,6 +36,7 @@ export type NodeSymbol = {
   loc?: SourceLocation;
   parameters: FunctionParameter[];
   returnType: VariableType | null;
+  returnTypeValidated?: boolean;
 };
 
 export type TypeSymbol = {
@@ -208,6 +210,7 @@ export function classifySymbols(program: AgencyProgram): FileSymbols {
           loc: node.loc,
           parameters: node.parameters,
           returnType: node.returnType ?? null,
+          returnTypeValidated: node.returnTypeValidated,
         };
         break;
       case "function":
@@ -219,6 +222,7 @@ export function classifySymbols(program: AgencyProgram): FileSymbols {
           exported: !!node.exported,
           parameters: node.parameters,
           returnType: node.returnType ?? null,
+          returnTypeValidated: node.returnTypeValidated,
         };
         break;
       case "typeAlias":

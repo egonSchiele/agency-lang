@@ -87,4 +87,23 @@ describe("mapTypeToValidationSchema", () => {
     const result = mapTypeToValidationSchema(variableType, typeAliases);
     expect(result).toBe("Category");
   });
+
+  it("maps the regex primitive to z.instanceof(RegExp)", () => {
+    const result = mapTypeToValidationSchema(
+      { type: "primitiveType", value: "regex" },
+      {},
+    );
+    expect(result).toBe("z.instanceof(RegExp)");
+  });
+
+  it("maps regex inside an object property", () => {
+    const result = mapTypeToValidationSchema(
+      {
+        type: "objectType",
+        properties: [{ key: "pattern", value: { type: "primitiveType", value: "regex" } }],
+      },
+      {},
+    );
+    expect(result).toBe(`z.object({ "pattern": z.instanceof(RegExp) })`);
+  });
 });

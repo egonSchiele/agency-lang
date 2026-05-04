@@ -40,6 +40,8 @@ function mapTypeToSchema(
         return "z.unknown()";
       case "object":
         return "z.record(z.string(), z.any())";
+      case "regex":
+        return "z.instanceof(RegExp)";
       default:
         return DEFAULT_SCHEMA;
     }

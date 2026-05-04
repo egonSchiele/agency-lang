@@ -513,6 +513,7 @@ export const primitiveTypeParser: Parser<PrimitiveType> = trace(
         str("any"),
         str("unknown"),
         str("object"),
+        str("regex"),
       ),
       "value",
     ),

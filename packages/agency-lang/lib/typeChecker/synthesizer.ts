@@ -70,6 +70,8 @@ export function synthType(
       return { type: "primitiveType", value: "string" };
     case "boolean":
       return { type: "primitiveType", value: "boolean" };
+    case "regex":
+      return { type: "primitiveType", value: "regex" };
     case "binOpExpression":
       return synthBinOp(expr, scope, ctx);
     case "functionCall":
@@ -167,9 +169,9 @@ function synthCatch(
  * result is always a Result wrapping right's return type. If right already
  * returns a Result, pass it through.
  *
- * NOTE: per-arg validation (placeholder slot typing, first-arg compatibility
- * with left's success type) is not yet implemented — see the deferred items
- * in the v2 plan.
+ * Slot-type validation lives in checker.ts (`validatePipeArg`) — kept out of
+ * synth so it doesn't fire twice when a pipe appears in an assignment/return
+ * context that already synths the expression.
  */
 function synthPipe(
   expr: AgencyNode & { type: "binOpExpression" },

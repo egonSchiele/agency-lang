@@ -5115,6 +5115,478 @@ describe("TypeChecker", () => {
       expect(typeCheck(program).errors).toHaveLength(0);
     });
 
+    it("pipe with bare-var RHS validates LHS against RHS first param", () => {
+      // def half(n: number): number { return n / 2 }
+      // const x: string = "hello"
+      // x |> half  → error: 'string' not assignable to 'number'
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "function",
+            functionName: "half",
+            parameters: [{ type: "functionParameter", name: "n", typeHint: num }],
+            returnType: num,
+            body: [{ type: "returnStatement", value: { type: "number", value: "5" } }],
+          },
+          {
+            type: "binOpExpression",
+            operator: "|>",
+            left: { type: "string", segments: [{ type: "text", value: "hello" }] },
+            right: { type: "variableName", value: "half" },
+          },
+        ],
+      };
+      const errors = typeCheck(program).errors;
+      expect(errors.some((e) => /not assignable/i.test(e.message))).toBe(true);
+    });
+
+    it("pipe with bare-var RHS unwraps Result LHS for the first-arg check", () => {
+      // r: Result<number, string> |> half  — half takes number, success type is number → ok
+      const resultNumStr: VariableType = { type: "resultType", successType: num, failureType: str };
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "function",
+            functionName: "half",
+            parameters: [{ type: "functionParameter", name: "n", typeHint: num }],
+            returnType: num,
+            body: [{ type: "returnStatement", value: { type: "number", value: "5" } }],
+          },
+          {
+            type: "assignment",
+            variableName: "r",
+            typeHint: resultNumStr,
+            value: { type: "functionCall", functionName: "success", arguments: [{ type: "number", value: "10" }] },
+          },
+          {
+            type: "binOpExpression",
+            operator: "|>",
+            left: { type: "variableName", value: "r" },
+            right: { type: "variableName", value: "half" },
+          },
+        ],
+      };
+      expect(typeCheck(program).errors).toHaveLength(0);
+    });
+
+    it("pipe with placeholder RHS validates LHS against the ? slot", () => {
+      // def add(a: number, b: number): number { return a + b }
+      // "x" |> add(?, 5)  → error: 'string' not assignable to 'number' for slot 0
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "function",
+            functionName: "add",
+            parameters: [
+              { type: "functionParameter", name: "a", typeHint: num },
+              { type: "functionParameter", name: "b", typeHint: num },
+            ],
+            returnType: num,
+            body: [{ type: "returnStatement", value: { type: "number", value: "0" } }],
+          },
+          {
+            type: "binOpExpression",
+            operator: "|>",
+            left: { type: "string", segments: [{ type: "text", value: "x" }] },
+            right: {
+              type: "functionCall",
+              functionName: "add",
+              arguments: [{ type: "placeholder" }, { type: "number", value: "5" }],
+            },
+          },
+        ],
+      };
+      const errors = typeCheck(program).errors;
+      expect(errors.some((e) => /not assignable/i.test(e.message))).toBe(true);
+    });
+
+    it("pipe with placeholder in second slot validates against that param", () => {
+      // 5 |> add(10, ?)  → ok (number → number)
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "function",
+            functionName: "add",
+            parameters: [
+              { type: "functionParameter", name: "a", typeHint: num },
+              { type: "functionParameter", name: "b", typeHint: num },
+            ],
+            returnType: num,
+            body: [{ type: "returnStatement", value: { type: "number", value: "0" } }],
+          },
+          {
+            type: "binOpExpression",
+            operator: "|>",
+            left: { type: "number", value: "5" },
+            right: {
+              type: "functionCall",
+              functionName: "add",
+              arguments: [{ type: "number", value: "10" }, { type: "placeholder" }],
+            },
+          },
+        ],
+      };
+      expect(typeCheck(program).errors).toHaveLength(0);
+    });
+
+    it("named arg with wrong-typed value is checked against the named param's type, not positional", () => {
+      // def greet(name: string, age: number) {}
+      // greet(age=1, name=2)  → 'name' should error: 2 is not a string
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "function",
+            functionName: "greet",
+            parameters: [
+              { type: "functionParameter", name: "name", typeHint: str },
+              { type: "functionParameter", name: "age", typeHint: num },
+            ],
+            body: [],
+          },
+          {
+            type: "functionCall",
+            functionName: "greet",
+            arguments: [
+              { type: "namedArgument", name: "age", value: { type: "number", value: "1" } },
+              { type: "namedArgument", name: "name", value: { type: "number", value: "2" } },
+            ],
+          },
+        ],
+      };
+      const errors = typeCheck(program).errors;
+      expect(errors.some((e) => /not assignable/i.test(e.message))).toBe(true);
+    });
+
+    it("named arg with unknown name errors", () => {
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "function",
+            functionName: "greet",
+            parameters: [{ type: "functionParameter", name: "name", typeHint: str }],
+            body: [],
+          },
+          {
+            type: "functionCall",
+            functionName: "greet",
+            arguments: [
+              { type: "namedArgument", name: "nayme", value: { type: "string", segments: [{ type: "text", value: "x" }] } },
+            ],
+          },
+        ],
+      };
+      const errors = typeCheck(program).errors;
+      expect(errors.some((e) => /Unknown named argument 'nayme'/.test(e.message))).toBe(true);
+    });
+
+    it("regex literal synths as primitive 'regex'", () => {
+      // expectRegex(/foo/i)  — expectRegex takes regex
+      const regexT: VariableType = { type: "primitiveType", value: "regex" };
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "function",
+            functionName: "expectRegex",
+            parameters: [{ type: "functionParameter", name: "r", typeHint: regexT }],
+            body: [],
+          },
+          {
+            type: "functionCall",
+            functionName: "expectRegex",
+            arguments: [{ type: "regex", pattern: "foo", flags: "i" }],
+          },
+        ],
+      };
+      expect(typeCheck(program).errors).toHaveLength(0);
+    });
+
+    it("regex literal in a string-typed slot errors", () => {
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "function",
+            functionName: "expectStr",
+            parameters: [{ type: "functionParameter", name: "s", typeHint: str }],
+            body: [],
+          },
+          {
+            type: "functionCall",
+            functionName: "expectStr",
+            arguments: [{ type: "regex", pattern: "foo", flags: "" }],
+          },
+        ],
+      };
+      const errors = typeCheck(program).errors;
+      expect(errors.some((e) => /not assignable/i.test(e.message))).toBe(true);
+    });
+
+    it("=~ operator requires string on the left and regex on the right", () => {
+      // "hello" =~ "world"  → error: right must be regex (it's a string)
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "binOpExpression",
+            operator: "=~",
+            left: { type: "string", segments: [{ type: "text", value: "hello" }] },
+            right: { type: "string", segments: [{ type: "text", value: "world" }] },
+          },
+        ],
+      };
+      const errors = typeCheck(program).errors;
+      expect(errors.some((e) => /regex/i.test(e.message))).toBe(true);
+    });
+
+    it("=~ operator passes when types are correct", () => {
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "binOpExpression",
+            operator: "=~",
+            left: { type: "string", segments: [{ type: "text", value: "hello" }] },
+            right: { type: "regex", pattern: "ello", flags: "" },
+          },
+        ],
+      };
+      expect(typeCheck(program).errors).toHaveLength(0);
+    });
+
+    it("duplicate named argument errors", () => {
+      // greet(name="a", name="b")
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "function",
+            functionName: "greet",
+            parameters: [{ type: "functionParameter", name: "name", typeHint: str }],
+            body: [],
+          },
+          {
+            type: "functionCall",
+            functionName: "greet",
+            arguments: [
+              { type: "namedArgument", name: "name", value: { type: "string", segments: [{ type: "text", value: "a" }] } },
+              { type: "namedArgument", name: "name", value: { type: "string", segments: [{ type: "text", value: "b" }] } },
+            ],
+          },
+        ],
+      };
+      const errors = typeCheck(program).errors;
+      expect(errors.some((e) => /Duplicate named argument 'name'/.test(e.message))).toBe(true);
+    });
+
+    it("positional argument after named argument errors", () => {
+      // greet(name="a", 5)
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "function",
+            functionName: "greet",
+            parameters: [
+              { type: "functionParameter", name: "name", typeHint: str },
+              { type: "functionParameter", name: "age", typeHint: num },
+            ],
+            body: [],
+          },
+          {
+            type: "functionCall",
+            functionName: "greet",
+            arguments: [
+              { type: "namedArgument", name: "name", value: { type: "string", segments: [{ type: "text", value: "a" }] } },
+              { type: "number", value: "5" },
+            ],
+          },
+        ],
+      };
+      const errors = typeCheck(program).errors;
+      expect(errors.some((e) => /Positional argument cannot follow a named argument/.test(e.message))).toBe(true);
+    });
+
+    it("named argument that conflicts with a positional argument errors", () => {
+      // def greet(name: string, age: number) {}
+      // greet("alice", name="bob")  ← name is param 0, already filled by "alice"
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "function",
+            functionName: "greet",
+            parameters: [
+              { type: "functionParameter", name: "name", typeHint: str },
+              { type: "functionParameter", name: "age", typeHint: num },
+            ],
+            body: [],
+          },
+          {
+            type: "functionCall",
+            functionName: "greet",
+            arguments: [
+              { type: "string", segments: [{ type: "text", value: "alice" }] },
+              { type: "namedArgument", name: "name", value: { type: "string", segments: [{ type: "text", value: "bob" }] } },
+            ],
+          },
+        ],
+      };
+      const errors = typeCheck(program).errors;
+      expect(errors.some((e) => /conflicts with positional argument/.test(e.message))).toBe(true);
+    });
+
+    it("regex can be used as a primitive type in annotations", () => {
+      // const r: regex = /abc/i  → ok
+      const regexT: VariableType = { type: "primitiveType", value: "regex" };
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "assignment",
+            variableName: "r",
+            typeHint: regexT,
+            value: { type: "regex", pattern: "abc", flags: "i" },
+          },
+        ],
+      };
+      expect(typeCheck(program).errors).toHaveLength(0);
+    });
+
+    it("regex inside an object type works as a property type", () => {
+      // type MyType = { pattern: regex }
+      // expectMyType({ pattern: /abc/ })
+      const myType: VariableType = {
+        type: "objectType",
+        properties: [{ key: "pattern", value: { type: "primitiveType", value: "regex" } }],
+      };
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "function",
+            functionName: "expectMyType",
+            parameters: [{ type: "functionParameter", name: "m", typeHint: myType }],
+            body: [],
+          },
+          {
+            type: "functionCall",
+            functionName: "expectMyType",
+            arguments: [
+              {
+                type: "agencyObject",
+                entries: [{ key: "pattern", value: { type: "regex", pattern: "abc", flags: "" } }],
+              },
+            ],
+          },
+        ],
+      };
+      expect(typeCheck(program).errors).toHaveLength(0);
+    });
+
+    it("named arg targeting a variadic param is rejected as unknown", () => {
+      // def collect(...xs: number[]) {}
+      // collect(xs=1)  ← variadic params can't be named
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "function",
+            functionName: "collect",
+            parameters: [
+              {
+                type: "functionParameter",
+                name: "xs",
+                variadic: true,
+                typeHint: { type: "arrayType", elementType: num },
+              },
+            ],
+            body: [],
+          },
+          {
+            type: "functionCall",
+            functionName: "collect",
+            arguments: [
+              { type: "namedArgument", name: "xs", value: { type: "number", value: "1" } },
+            ],
+          },
+        ],
+      };
+      const errors = typeCheck(program).errors;
+      expect(errors.some((e) => /Unknown named argument 'xs'/.test(e.message))).toBe(true);
+    });
+
+    it("named args on a builtin call error with a clear message", () => {
+      // print(x="hi")  ← builtins don't accept named args
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "functionCall",
+            functionName: "print",
+            arguments: [
+              { type: "namedArgument", name: "x", value: { type: "string", segments: [{ type: "text", value: "hi" }] } },
+            ],
+          },
+        ],
+      };
+      const errors = typeCheck(program).errors;
+      expect(errors.some((e) => /Named arguments can only be used with Agency-defined functions/.test(e.message))).toBe(true);
+    });
+
+    it("rejects regex in an llm() structured-output type", () => {
+      // const r: regex = llm("...")  → error: regex isn't JSON-representable
+      const regexT: VariableType = { type: "primitiveType", value: "regex" };
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "assignment",
+            variableName: "r",
+            typeHint: regexT,
+            value: {
+              type: "functionCall",
+              functionName: "llm",
+              arguments: [{ type: "string", segments: [{ type: "text", value: "x" }] }],
+            },
+          },
+        ],
+      };
+      const errors = typeCheck(program).errors;
+      expect(errors.some((e) => /regex.*cannot appear in an llm/i.test(e.message))).toBe(true);
+    });
+
+    it("rejects regex nested inside an llm() return type", () => {
+      // type Foo = { pattern: regex }; const r: Foo = llm("...")
+      const fooType: VariableType = {
+        type: "objectType",
+        properties: [{ key: "pattern", value: { type: "primitiveType", value: "regex" } }],
+      };
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "assignment",
+            variableName: "r",
+            typeHint: fooType,
+            value: {
+              type: "functionCall",
+              functionName: "llm",
+              arguments: [{ type: "string", segments: [{ type: "text", value: "x" }] }],
+            },
+          },
+        ],
+      };
+      const errors = typeCheck(program).errors;
+      expect(errors.some((e) => /regex.*cannot appear in an llm/i.test(e.message))).toBe(true);
+    });
+
     it("checks the RHS of a validated assignment against the un-bang'd type", () => {
       // const x: number! = "not a number" — RHS is checked against `number`.
       const program: AgencyProgram = {

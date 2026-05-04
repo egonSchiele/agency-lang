@@ -84,6 +84,10 @@ export type CompilationUnit = {
   safeFunctions: Record<string, boolean>;
   importedFunctions: Record<string, ImportedFunctionSignature>;
   classDefinitions: Record<string, ClassDefinition>;
+  /** Original source text. Used by the typechecker to locate
+   * `// @tc-nocheck` / `// @tc-ignore` directives. Optional because
+   * many callers (including most tests) construct the AST directly. */
+  sourceText?: string;
 };
 
 export function scopeKey(scope: Scope): string {
@@ -109,6 +113,7 @@ export function buildCompilationUnit(
   program: AgencyProgram,
   symbolTable?: SymbolTable,
   fromFile?: string,
+  sourceText?: string,
 ): CompilationUnit {
   const unit: CompilationUnit = {
     functionDefinitions: {},
@@ -119,6 +124,7 @@ export function buildCompilationUnit(
     importedFunctions: {},
     classDefinitions: {},
     safeFunctions: {},
+    sourceText,
   };
 
   // Top-level pass: collect functions, graph nodes, imports.
@@ -200,7 +206,71 @@ export function buildCompilationUnit(
         }
       }
     }
+    // Pull in any type aliases referenced by imported function/node
+    // signatures so property access on those return values resolves
+    // correctly. Without this, `let r = exec(...); r.exitCode` errors with
+    // "Property 'exitCode' does not exist on type 'ExecResult'" because
+    // the alias body lives in the source module and was never imported.
+    pullTransitiveAliases(unit, symbolTable);
   }
 
   return unit;
+}
+
+/**
+ * Walk every imported function/node signature and recursively pull any
+ * type aliases its parameters or return type reference into the unit's
+ * global scope, so the typechecker can resolve property access through
+ * them. Walks transitively (an alias whose body references another alias
+ * pulls that one too) and tracks visited names to terminate on cycles.
+ */
+function pullTransitiveAliases(
+  unit: CompilationUnit,
+  symbolTable: SymbolTable,
+): void {
+  const globalAliases = unit.typeAliases.get(GLOBAL_SCOPE_KEY) ?? {};
+  const queue: string[] = [];
+
+  for (const sig of Object.values(unit.importedFunctions)) {
+    for (const p of sig.parameters) {
+      if (p.typeHint) collectAliasNames(p.typeHint, queue);
+    }
+    if (sig.returnType) collectAliasNames(sig.returnType, queue);
+  }
+
+  while (queue.length > 0) {
+    const name = queue.shift()!;
+    if (globalAliases[name] !== undefined) continue; // already known
+    const sym = symbolTable.findTypeAcrossFiles(name);
+    if (!sym || sym.kind !== "type") continue;
+    unit.typeAliases.add(GLOBAL_SCOPE_KEY, name, sym.aliasedType);
+    collectAliasNames(sym.aliasedType, queue);
+  }
+}
+
+function collectAliasNames(t: VariableType, out: string[]): void {
+  switch (t.type) {
+    case "typeAliasVariable":
+      out.push(t.aliasName);
+      return;
+    case "arrayType":
+      collectAliasNames(t.elementType, out);
+      return;
+    case "unionType":
+      for (const m of t.types) collectAliasNames(m, out);
+      return;
+    case "objectType":
+      for (const p of t.properties) collectAliasNames(p.value, out);
+      return;
+    case "resultType":
+      collectAliasNames(t.successType, out);
+      collectAliasNames(t.failureType, out);
+      return;
+    case "blockType":
+      for (const p of t.params) collectAliasNames(p.typeAnnotation, out);
+      collectAliasNames(t.returnType, out);
+      return;
+    default:
+      return;
+  }
 }

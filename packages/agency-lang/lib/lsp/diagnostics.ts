@@ -70,7 +70,7 @@ export function runDiagnostics(
     return { diagnostics, program: null, info: null, semanticIndex: {}, scopes: [] };
   }
 
-  const info = buildCompilationUnit(program, symbolTable, fsPath);
+  const info = buildCompilationUnit(program, symbolTable, fsPath, source);
   const { errors, scopes } = typeCheck(program, config, info);
 
   for (const err of errors) {

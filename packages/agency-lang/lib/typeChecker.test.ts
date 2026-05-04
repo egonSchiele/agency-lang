@@ -3,6 +3,7 @@ import { TypeChecker, typeCheck } from "./typeChecker/index.js";
 import { AgencyProgram, VariableType } from "./types.js";
 import { buildCompilationUnit } from "./compilationUnit.js";
 import type { CompilationUnit } from "./compilationUnit.js";
+import { SymbolTable } from "./symbolTable.js";
 
 function withImports(
   program: AgencyProgram,
@@ -6118,6 +6119,254 @@ describe("TypeChecker", () => {
       };
       const errors = typeCheck(program).errors;
       expect(errors.some((e) => /unknown property/i.test(e.message))).toBe(false);
+    });
+
+    it("counts a trailing 'as' block toward arity", () => {
+      // def f(x: number, b: (number) => string): void { ... }
+      // f(1) as y { return "ok" }  ← block fills slot 1; arity must check out.
+      const blockT: VariableType = {
+        type: "blockType",
+        params: [{ name: "y", typeAnnotation: num }],
+        returnType: str,
+      };
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "function",
+            functionName: "f",
+            parameters: [
+              { type: "functionParameter", name: "x", typeHint: num },
+              { type: "functionParameter", name: "b", typeHint: blockT },
+            ],
+            body: [],
+          },
+          {
+            type: "functionCall",
+            functionName: "f",
+            arguments: [{ type: "number", value: "1" }],
+            block: {
+              type: "blockArgument",
+              params: [{ type: "functionParameter", name: "y" }],
+              body: [
+                { type: "returnStatement", value: { type: "string", segments: [{ type: "text", value: "ok" }] } },
+              ],
+            },
+          },
+        ],
+      };
+      expect(typeCheck(program).errors).toEqual([]);
+    });
+
+    it("rejects a block argument passed to a function with no block-typed param", () => {
+      // def noBlock(x: number) {}; noBlock(1) as y { ... }  ← extra block
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "function",
+            functionName: "noBlock",
+            parameters: [{ type: "functionParameter", name: "x", typeHint: num }],
+            body: [],
+          },
+          {
+            type: "functionCall",
+            functionName: "noBlock",
+            arguments: [{ type: "number", value: "1" }],
+            block: {
+              type: "blockArgument",
+              params: [{ type: "functionParameter", name: "y" }],
+              body: [{ type: "returnStatement", value: { type: "number", value: "0" } }],
+            },
+          },
+        ],
+      };
+      const errors = typeCheck(program).errors;
+      expect(errors.some((e) => /does not accept a block argument/.test(e.message))).toBe(true);
+    });
+
+    it("accepts identical block types via assignability", () => {
+      // def passThrough(b: (number) => string): string { return takes(b) }
+      // (number)=>string → (number)=>string should typecheck.
+      const blockT: VariableType = {
+        type: "blockType",
+        params: [{ name: "x", typeAnnotation: num }],
+        returnType: str,
+      };
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "function",
+            functionName: "takes",
+            parameters: [{ type: "functionParameter", name: "b", typeHint: blockT }],
+            returnType: str,
+            body: [{ type: "returnStatement", value: { type: "string", segments: [{ type: "text", value: "ok" }] } }],
+          },
+          {
+            type: "function",
+            functionName: "passThrough",
+            parameters: [{ type: "functionParameter", name: "b", typeHint: blockT }],
+            returnType: str,
+            body: [
+              {
+                type: "returnStatement",
+                value: {
+                  type: "functionCall",
+                  functionName: "takes",
+                  arguments: [{ type: "variableName", value: "b" }],
+                },
+              },
+            ],
+          },
+        ],
+      };
+      expect(typeCheck(program).errors).toEqual([]);
+    });
+
+    it("rejects block-type assignment with mismatched param types", () => {
+      // (number) => string is not assignable to (string) => string.
+      const numToStr: VariableType = {
+        type: "blockType",
+        params: [{ name: "x", typeAnnotation: num }],
+        returnType: str,
+      };
+      const strToStr: VariableType = {
+        type: "blockType",
+        params: [{ name: "x", typeAnnotation: str }],
+        returnType: str,
+      };
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "function",
+            functionName: "takes",
+            parameters: [{ type: "functionParameter", name: "b", typeHint: strToStr }],
+            returnType: str,
+            body: [{ type: "returnStatement", value: { type: "string", segments: [{ type: "text", value: "ok" }] } }],
+          },
+          {
+            type: "function",
+            functionName: "passWrong",
+            parameters: [{ type: "functionParameter", name: "b", typeHint: numToStr }],
+            returnType: str,
+            body: [
+              {
+                type: "returnStatement",
+                value: {
+                  type: "functionCall",
+                  functionName: "takes",
+                  arguments: [{ type: "variableName", value: "b" }],
+                },
+              },
+            ],
+          },
+        ],
+      };
+      const errors = typeCheck(program).errors;
+      expect(errors.some((e) => /not assignable/i.test(e.message))).toBe(true);
+    });
+
+    it("rejects block-type assignment with mismatched arity", () => {
+      // (number) => string vs (number, number) => string — arity differs.
+      const oneArg: VariableType = {
+        type: "blockType",
+        params: [{ name: "x", typeAnnotation: num }],
+        returnType: str,
+      };
+      const twoArgs: VariableType = {
+        type: "blockType",
+        params: [
+          { name: "x", typeAnnotation: num },
+          { name: "y", typeAnnotation: num },
+        ],
+        returnType: str,
+      };
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "function",
+            functionName: "takes",
+            parameters: [{ type: "functionParameter", name: "b", typeHint: twoArgs }],
+            returnType: str,
+            body: [{ type: "returnStatement", value: { type: "string", segments: [{ type: "text", value: "ok" }] } }],
+          },
+          {
+            type: "function",
+            functionName: "passWrong",
+            parameters: [{ type: "functionParameter", name: "b", typeHint: oneArg }],
+            returnType: str,
+            body: [
+              {
+                type: "returnStatement",
+                value: {
+                  type: "functionCall",
+                  functionName: "takes",
+                  arguments: [{ type: "variableName", value: "b" }],
+                },
+              },
+            ],
+          },
+        ],
+      };
+      const errors = typeCheck(program).errors;
+      expect(errors.some((e) => /not assignable/i.test(e.message))).toBe(true);
+    });
+
+    it("resolves type aliases referenced by imported function signatures", () => {
+      // Mirror of the real-world bug: imported `exec` returns `ExecResult`,
+      // but `ExecResult` lives in the imported module. Without alias pull-in,
+      // `r.exitCode` errors with "Property 'exitCode' does not exist on type
+      // 'ExecResult'" because resolveType can't find ExecResult in scope.
+      const execResult: VariableType = {
+        type: "objectType",
+        properties: [
+          { key: "stdout", value: str },
+          { key: "stderr", value: str },
+          { key: "exitCode", value: num },
+        ],
+      };
+      const symbolTable = new SymbolTable({
+        "/project/shell.agency": {
+          ExecResult: { kind: "type", name: "ExecResult", aliasedType: execResult, exported: true },
+          exec: {
+            kind: "function",
+            name: "exec",
+            exported: true,
+            safe: false,
+            parameters: [],
+            returnType: { type: "typeAliasVariable", aliasName: "ExecResult" },
+          },
+        },
+      });
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "importStatement",
+            modulePath: "./shell.agency",
+            isAgencyImport: true,
+            importedNames: [
+              { type: "namedImport", importedNames: ["exec"], aliases: {}, safeNames: [] },
+            ],
+          },
+          {
+            type: "assignment",
+            variableName: "r",
+            value: { type: "functionCall", functionName: "exec", arguments: [] },
+          },
+          {
+            type: "valueAccess",
+            base: { type: "variableName", value: "r" },
+            chain: [{ kind: "property", name: "exitCode" }],
+          },
+        ],
+      };
+      const info = buildCompilationUnit(program, symbolTable, "/project/main.agency");
+      const errors = typeCheck(program, {}, info).errors;
+      expect(errors.filter((e) => /does not exist/.test(e.message))).toEqual([]);
     });
   });
 });

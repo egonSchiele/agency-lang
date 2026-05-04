@@ -129,11 +129,18 @@ function checkSingleFunctionCall(
 
   if (params) {
     if (!checkNamedArgStructure(call, params, ctx)) return;
+    if (!checkBlockArgShape(call, params, ctx)) return;
+    // A block argument (trailing `as` block or inline `\... -> ...`) fills the
+    // block-typed param slot but lives at `call.block`, not `call.arguments`.
+    // Count it for arity so `f() as x { }` doesn't look like a 0-arg call.
+    const effectiveArgCount =
+      call.arguments.length + (call.block ? 1 : 0);
     const { minArgs, maxArgs, slots } = paramListSignature(
       params,
-      call.arguments.length,
+      effectiveArgCount,
     );
-    if (!checkArity(call, minArgs, maxArgs, hasSplatArg, ctx)) return;
+    if (!checkArity(call, minArgs, maxArgs, hasSplatArg, effectiveArgCount, ctx))
+      return;
     checkArgsAgainstParams(call, slots, scope, ctx);
     return;
   }
@@ -153,7 +160,8 @@ function checkSingleFunctionCall(
     const minArgs = sig.minParams ?? sig.params.length;
     const hasRest = sig.restParam !== undefined;
     const maxArgs = hasRest ? Infinity : sig.params.length;
-    if (!checkArity(call, minArgs, maxArgs, hasSplatArg, ctx)) return;
+    if (!checkArity(call, minArgs, maxArgs, hasSplatArg, call.arguments.length, ctx))
+      return;
     const slots: ParamSlot[] = sig.params.map((type) => ({
       type,
       validated: false,
@@ -165,6 +173,28 @@ function checkSingleFunctionCall(
     }
     checkArgsAgainstParams(call, slots, scope, ctx);
   }
+}
+
+/**
+ * If the call passes a block (trailing `as` or inline `\... -> ...`), the
+ * function must declare a `blockType` parameter to receive it. Reject calls
+ * that pass a block to a function with no block-typed param.
+ *
+ * Returns false to bail before downstream checks emit confusing diagnostics.
+ */
+function checkBlockArgShape(
+  call: FunctionCall,
+  params: FunctionParameter[],
+  ctx: TypeCheckerContext,
+): boolean {
+  if (!call.block) return true;
+  const hasBlockParam = params.some((p) => p.typeHint?.type === "blockType");
+  if (hasBlockParam) return true;
+  ctx.errors.push({
+    message: `'${call.functionName}' does not accept a block argument.`,
+    loc: call.block.loc ?? call.loc,
+  });
+  return false;
 }
 
 /**
@@ -240,13 +270,13 @@ function checkArity(
   minArgs: number,
   maxArgs: number,
   hasSplatArg: boolean,
+  effectiveArgCount: number,
   ctx: TypeCheckerContext,
 ): boolean {
   if (hasSplatArg) return true;
-  if (call.arguments.length >= minArgs && call.arguments.length <= maxArgs)
-    return true;
+  if (effectiveArgCount >= minArgs && effectiveArgCount <= maxArgs) return true;
   ctx.errors.push({
-    message: `Expected ${formatArity(minArgs, maxArgs)} argument(s) for '${call.functionName}', but got ${call.arguments.length}.`,
+    message: `Expected ${formatArity(minArgs, maxArgs)} argument(s) for '${call.functionName}', but got ${effectiveArgCount}.`,
     loc: call.loc,
   });
   return false;

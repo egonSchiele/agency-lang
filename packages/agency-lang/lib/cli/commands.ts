@@ -151,7 +151,7 @@ export function compile(
     symbolTable,
     absoluteInputFile,
   );
-  const info = buildCompilationUnit(resolvedProgram, symbolTable, absoluteInputFile);
+  const info = buildCompilationUnit(resolvedProgram, symbolTable, absoluteInputFile, contents);
 
   if (config.typeCheck || config.typeCheckStrict) {
     const { errors } = typeCheck(resolvedProgram, config, info);

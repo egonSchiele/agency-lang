@@ -5442,6 +5442,54 @@ describe("TypeChecker", () => {
       expect(errors.some((e) => /conflicts with positional argument/.test(e.message))).toBe(true);
     });
 
+    it("regex can be used as a primitive type in annotations", () => {
+      // const r: regex = /abc/i  → ok
+      const regexT: VariableType = { type: "primitiveType", value: "regex" };
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "assignment",
+            variableName: "r",
+            typeHint: regexT,
+            value: { type: "regex", pattern: "abc", flags: "i" },
+          },
+        ],
+      };
+      expect(typeCheck(program).errors).toHaveLength(0);
+    });
+
+    it("regex inside an object type works as a property type", () => {
+      // type MyType = { pattern: regex }
+      // expectMyType({ pattern: /abc/ })
+      const myType: VariableType = {
+        type: "objectType",
+        properties: [{ key: "pattern", value: { type: "primitiveType", value: "regex" } }],
+      };
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "function",
+            functionName: "expectMyType",
+            parameters: [{ type: "functionParameter", name: "m", typeHint: myType }],
+            body: [],
+          },
+          {
+            type: "functionCall",
+            functionName: "expectMyType",
+            arguments: [
+              {
+                type: "agencyObject",
+                entries: [{ key: "pattern", value: { type: "regex", pattern: "abc", flags: "" } }],
+              },
+            ],
+          },
+        ],
+      };
+      expect(typeCheck(program).errors).toHaveLength(0);
+    });
+
     it("checks the RHS of a validated assignment against the un-bang'd type", () => {
       // const x: number! = "not a number" — RHS is checked against `number`.
       const program: AgencyProgram = {

@@ -19,7 +19,7 @@ Map a function over an array, returning a new array of results.
 
 **Returns:** `any[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/array.agency#L0))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/array.agency#L1))
 
 ### filter
 
@@ -38,7 +38,7 @@ Return a new array containing only the elements for which the function returns t
 
 **Returns:** `any[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/array.agency#L11))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/array.agency#L12))
 
 ### exclude
 
@@ -57,7 +57,7 @@ Return a new array excluding elements for which the function returns true. Inver
 
 **Returns:** `any[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/array.agency#L24))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/array.agency#L25))
 
 ### find
 
@@ -76,7 +76,7 @@ Return the first element for which the function returns true, or null if none ma
 
 **Returns:** `any`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/array.agency#L37))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/array.agency#L38))
 
 ### findIndex
 
@@ -95,7 +95,7 @@ Return the index of the first element for which the function returns true, or -1
 
 **Returns:** `number`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/array.agency#L49))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/array.agency#L50))
 
 ### reduce
 
@@ -115,7 +115,7 @@ Reduce an array to a single value by applying a function to an accumulator and e
 
 **Returns:** `any`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/array.agency#L61))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/array.agency#L62))
 
 ### flatMap
 
@@ -134,7 +134,7 @@ Map a function over an array and flatten the results by one level.
 
 **Returns:** `any[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/array.agency#L72))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/array.agency#L73))
 
 ### every
 
@@ -153,7 +153,7 @@ Return true if the function returns true for every element in the array.
 
 **Returns:** `boolean`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/array.agency#L86))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/array.agency#L87))
 
 ### some
 
@@ -172,7 +172,7 @@ Return true if the function returns true for at least one element in the array.
 
 **Returns:** `boolean`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/array.agency#L98))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/array.agency#L99))
 
 ### count
 
@@ -191,7 +191,7 @@ Count the number of elements in the array for which the function returns true.
 
 **Returns:** `number`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/array.agency#L110))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/array.agency#L111))
 
 ### sortBy
 
@@ -210,7 +210,7 @@ Return a new array sorted by the values returned by the function, in ascending o
 
 **Returns:** `any[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/array.agency#L123))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/array.agency#L124))
 
 ### unique
 
@@ -229,7 +229,7 @@ Return a new array with duplicate elements removed, using the function to determ
 
 **Returns:** `any[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/array.agency#L147))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/array.agency#L148))
 
 ### groupBy
 
@@ -248,4 +248,4 @@ Group elements of an array by the value returned by the function. Returns an obj
 
 **Returns:** `any`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/array.agency#L169))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/array.agency#L170))

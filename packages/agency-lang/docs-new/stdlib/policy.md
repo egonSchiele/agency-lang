@@ -17,7 +17,7 @@ Evaluate a policy against an interrupt. Returns approve(), reject(), or propagat
 | policy | `Record<string, any>` |  |
 | interrupt | `Record<string, any>` |  |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/policy.agency#L2))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/policy.agency#L3))
 
 ### validatePolicy
 
@@ -33,4 +33,4 @@ Validate that a policy object is well-formed. Returns { success: true } if valid
 |---|---|---|
 | policy | `Record<string, any>` |  |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/policy.agency#L9))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/policy.agency#L10))

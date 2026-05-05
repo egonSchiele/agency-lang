@@ -1,0 +1,208 @@
+import { _authorizeCalendar, _listEvents, _createEvent, _updateEvent, _deleteEvent, _isCalendarAuthorized } from "./lib/calendar.js"
+
+type CalendarEvent = {
+  id: string;
+  summary: string;
+  description: string;
+  location: string;
+  start: string;
+  end: string;
+  htmlLink: string
+}
+
+/**
+  ## Usage
+
+  ```ts
+  import { authorizeCalendar, isCalendarAuthorized, listEvents, createEvent } from "std::calendar"
+  import { env } from "std::system"
+
+  node main() {
+    // One-time: opens browser for Google OAuth consent.
+    // This uses std::oauth under the hood — tokens are encrypted and
+    // stored locally, and refreshed automatically on future runs.
+    if (!isCalendarAuthorized()) {
+      authorizeCalendar(env("GOOGLE_CLIENT_ID"), env("GOOGLE_CLIENT_SECRET"))
+    }
+
+    // List upcoming events
+    const events = listEvents()
+    print(events)
+
+    // Create a new event
+    const event = createEvent(
+      summary: "Team meeting",
+      start: "2026-05-10T10:00:00-07:00",
+      end: "2026-05-10T11:00:00-07:00",
+      description: "Weekly sync",
+      location: "Conference Room A"
+    )
+    print(event)
+  }
+  ```
+
+  ### Using std::date for convenient date construction
+
+  ```ts
+  import { createEvent, listEvents } from "std::calendar"
+  import { tomorrow, atTime, addMinutes, nextDayOfWeek, startOfWeek, endOfWeek } from "std::date"
+
+  node main() {
+    const tz = "America/Los_Angeles"
+
+    // "Tomorrow at 3pm for 1 hour"
+    const start = atTime(tomorrow(tz), "15:00", tz)
+    createEvent(summary: "Dentist", start: start, end: addMinutes(start, 60))
+
+    // "Next Monday at 10am for 30 min"
+    const monday = atTime(nextDayOfWeek("monday", tz), "10:00", tz)
+    createEvent(summary: "1:1 with manager", start: monday, end: addMinutes(monday, 30))
+
+    // List all events this week
+    const events = listEvents(timeMin: startOfWeek(), timeMax: endOfWeek())
+    print(events)
+  }
+  ```
+
+  You can also use `std::oauth` directly for more control over the
+  authorization flow (e.g. custom scopes, port, or extra params):
+
+  ```ts
+  import { authorize, isAuthorized } from "std::oauth"
+  import { env } from "std::system"
+  import { listEvents } from "std::calendar"
+
+  node main() {
+    if (!isAuthorized("google-calendar")) {
+      const clientId = env("GOOGLE_CLIENT_ID") catch ""
+      const clientSecret = env("GOOGLE_CLIENT_SECRET") catch ""
+      authorize("google-calendar",
+        authUrl: "https://accounts.google.com/o/oauth2/v2/auth",
+        tokenUrl: "https://oauth2.googleapis.com/token",
+        clientId: clientId,
+        clientSecret: clientSecret,
+        scopes: "https://www.googleapis.com/auth/calendar",
+        extraAuthParams: "access_type=offline prompt=consent"
+      )
+    }
+
+    const events = listEvents()
+    print(events)
+  }
+  ```
+
+  ## Setup
+  1. Go to https://console.cloud.google.com
+  2. Create a project (or use an existing one)
+  3. Enable the Google Calendar API
+  4. Create OAuth 2.0 credentials (Desktop app type)
+  5. Set `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` env vars
+  6. Run your agent — it will open a browser for consent on first use
+
+  ## Authentication
+  `authorizeCalendar` is a convenience wrapper around `std::oauth`. It handles
+  the OAuth 2.0 authorization code flow with PKCE, stores tokens in
+  `~/.agency/oauth/google-calendar.json`, and automatically refreshes expired
+  tokens. Tokens are encrypted at rest if a system keyring (macOS Keychain /
+  Linux Secret Service) or `AGENCY_OAUTH_KEY` env var is available; otherwise
+  they are stored as plaintext.
+
+  ## Date/time formats
+  - For timed events: ISO 8601 with timezone, e.g. "2026-05-10T10:00:00-07:00"
+  - For all-day events: date only, e.g. "2026-05-10"
+  - Note: for all-day events, `end` is exclusive. A single-day event on May 10
+    should have start="2026-05-10" and end="2026-05-11".
+*/
+
+export def authorizeCalendar(clientId: string, clientSecret: string): Result {
+  """
+  Authorize access to Google Calendar. Opens a browser for the user to sign in and grant permission. Only needs to be run once — tokens are stored locally and refreshed automatically.
+  """
+  return interrupt std::authorizeCalendar("Are you sure you want to authorize access to Google Calendar?", {
+    clientId: clientId
+  })
+
+  return try _authorizeCalendar(clientId, clientSecret)
+}
+
+export safe def isCalendarAuthorized(): boolean {
+  """
+  Check if Google Calendar has been authorized. Returns true if OAuth tokens exist locally.
+  """
+  return _isCalendarAuthorized()
+}
+
+export def listEvents(maxResults: number = 10, timeMin: string = "", timeMax: string = "", query: string = "", calendarId: string = "primary"): Result {
+  """
+  List upcoming events from Google Calendar. Returns an array of events with id, summary, description, location, start, end, and htmlLink. Parameters: maxResults (default 10), timeMin/timeMax (ISO 8601 datetime to filter range), query (free-text search), calendarId (default "primary").
+  """
+  return interrupt std::listEvents("Are you sure you want to read your Google Calendar events?", {
+    maxResults: maxResults,
+    calendarId: calendarId,
+    query: query
+  })
+
+  return try _listEvents({
+    maxResults: maxResults,
+    timeMin: timeMin,
+    timeMax: timeMax,
+    query: query,
+    calendarId: calendarId
+  })
+}
+
+export def createEvent(summary: string, start: string, end: string, description: string = "", location: string = "", calendarId: string = "primary"): Result {
+  """
+  Create a new event on Google Calendar. Parameters: summary (title), start (ISO 8601 datetime or YYYY-MM-DD for all-day), end (same format), description (optional), location (optional), calendarId (default "primary"). Returns the created event.
+  """
+  return interrupt std::createEvent("Are you sure you want to create this calendar event?", {
+    summary: summary,
+    start: start,
+    end: end,
+    description: description,
+    location: location
+  })
+
+  return try _createEvent({
+    summary: summary,
+    start: start,
+    end: end,
+    description: description,
+    location: location,
+    calendarId: calendarId
+  })
+}
+
+export def updateEvent(eventId: string, summary: string = "", start: string = "", end: string = "", description: string = "", location: string = "", calendarId: string = "primary"): Result {
+  """
+  Update an existing event on Google Calendar. Pass the eventId and any fields to change. Empty strings are treated as "don't change". Returns the updated event.
+  """
+  return interrupt std::updateEvent("Are you sure you want to update this calendar event?", {
+    eventId: eventId,
+    summary: summary,
+    start: start,
+    end: end
+  })
+
+  return try _updateEvent({
+    eventId: eventId,
+    summary: summary,
+    start: start,
+    end: end,
+    description: description,
+    location: location,
+    calendarId: calendarId
+  })
+}
+
+export def deleteEvent(eventId: string, calendarId: string = "primary"): Result {
+  """
+  Delete an event from Google Calendar by its event ID. Returns { deleted: true } on success.
+  """
+  return interrupt std::deleteEvent("Are you sure you want to delete this calendar event?", {
+    eventId: eventId,
+    calendarId: calendarId
+  })
+
+  return try _deleteEvent(eventId, calendarId)
+}

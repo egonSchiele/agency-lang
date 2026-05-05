@@ -20,7 +20,7 @@ A tool for taking a screenshot and saving it to a file. Optionally specify x, y,
 | width | `number` | -1 |
 | height | `number` | -1 |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/system.agency#L2))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/system.agency#L3))
 
 ### args
 
@@ -32,7 +32,7 @@ Return the command-line arguments passed to the Agency program (excluding the no
 
 **Returns:** `string[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/system.agency#L9))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/system.agency#L10))
 
 ### cwd
 
@@ -44,7 +44,7 @@ Return the absolute path of the current working directory of the Agency process.
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/system.agency#L16))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/system.agency#L17))
 
 ### env
 
@@ -62,7 +62,7 @@ Read an environment variable. Returns null if the variable is not set.
 
 **Returns:** `string | null`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/system.agency#L23))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/system.agency#L24))
 
 ### setEnv
 
@@ -81,7 +81,7 @@ Set an environment variable in the current process. Fails if the name is empty o
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/system.agency#L30))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/system.agency#L31))
 
 ### openUrl
 
@@ -99,4 +99,4 @@ Open a URL in the user's default browser. Currently macOS-only.
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/system.agency#L41))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/system.agency#L42))

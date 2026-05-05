@@ -18,7 +18,7 @@ Join path segments using the platform separator, normalizing the result.
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/path.agency#L2))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/path.agency#L3))
 
 ### resolve
 
@@ -36,7 +36,7 @@ Resolve path segments into an absolute path, relative to the current working dir
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/path.agency#L9))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/path.agency#L10))
 
 ### basename
 
@@ -55,7 +55,7 @@ Return the last portion of a path. If ext is given and the path ends with it, ex
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/path.agency#L16))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/path.agency#L17))
 
 ### dirname
 
@@ -73,7 +73,7 @@ Return the directory portion of a path.
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/path.agency#L23))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/path.agency#L24))
 
 ### extname
 
@@ -91,7 +91,7 @@ Return the extension of a path (including the leading dot), or an empty string i
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/path.agency#L30))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/path.agency#L31))
 
 ### relative
 
@@ -110,7 +110,7 @@ Return the relative path from 'from' to 'to'.
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/path.agency#L37))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/path.agency#L38))
 
 ### isAbsolute
 
@@ -128,4 +128,4 @@ Return true if the path is absolute.
 
 **Returns:** `boolean`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/path.agency#L44))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/path.agency#L45))

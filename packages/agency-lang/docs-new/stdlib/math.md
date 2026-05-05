@@ -17,7 +17,7 @@ add(a: number, b: number): number
 
 **Returns:** `number`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/math.agency#L0))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/math.agency#L1))
 
 ### subtract
 
@@ -34,7 +34,7 @@ subtract(a: number, b: number): number
 
 **Returns:** `number`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/math.agency#L4))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/math.agency#L5))
 
 ### multiply
 
@@ -51,7 +51,7 @@ multiply(a: number, b: number): number
 
 **Returns:** `number`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/math.agency#L8))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/math.agency#L9))
 
 ### divide
 
@@ -68,4 +68,4 @@ divide(a: number, b: number): Result<number>
 
 **Returns:** `Result<number>`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/math.agency#L12))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/math.agency#L13))

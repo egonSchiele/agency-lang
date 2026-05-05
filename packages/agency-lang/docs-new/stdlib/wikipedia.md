@@ -12,7 +12,7 @@ type WikiSearchResult = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/wikipedia.agency#L2))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/wikipedia.agency#L3))
 
 ### WikiSummary
 
@@ -25,7 +25,7 @@ type WikiSummary = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/wikipedia.agency#L8))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/wikipedia.agency#L9))
 
 ### WikiArticle
 
@@ -37,7 +37,7 @@ type WikiArticle = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/wikipedia.agency#L15))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/wikipedia.agency#L16))
 
 ## Functions
 
@@ -58,7 +58,7 @@ Search Wikipedia for articles matching the given query. Returns up to limit resu
 
 **Returns:** `WikiSearchResult[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/wikipedia.agency#L21))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/wikipedia.agency#L22))
 
 ### summary
 
@@ -76,7 +76,7 @@ Get a summary of a Wikipedia article by its title. Returns the title, descriptio
 
 **Returns:** [WikiSummary](#wikisummary)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/wikipedia.agency#L28))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/wikipedia.agency#L29))
 
 ### article
 
@@ -94,4 +94,4 @@ Get the full text of a Wikipedia article by its title. Returns the title, full p
 
 **Returns:** [WikiArticle](#wikiarticle)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/wikipedia.agency#L35))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/wikipedia.agency#L36))

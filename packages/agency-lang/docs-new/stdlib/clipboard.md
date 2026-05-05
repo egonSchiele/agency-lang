@@ -16,7 +16,7 @@ A tool for copying text to the system clipboard.
 |---|---|---|
 | text | `string` |  |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/clipboard.agency#L2))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/clipboard.agency#L3))
 
 ### paste
 
@@ -28,4 +28,4 @@ A tool for reading text from the system clipboard.
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/clipboard.agency#L9))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/clipboard.agency#L10))

@@ -18,7 +18,7 @@ A tool for printing a message to the console.
 |---|---|---|
 | messages |  |  |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L3))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L4))
 
 ### printJSON
 
@@ -34,7 +34,7 @@ A tool for printing an object as formatted JSON to the console.
 |---|---|---|
 | obj |  |  |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L10))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L11))
 
 ### input
 
@@ -52,7 +52,7 @@ A tool for prompting the user for input and returning their response.
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L17))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L18))
 
 ### sleep
 
@@ -68,7 +68,7 @@ A tool for pausing execution for a specified number of seconds.
 |---|---|---|
 | seconds | `number` |  |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L24))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L25))
 
 ### round
 
@@ -87,7 +87,7 @@ A tool for rounding a number to a specified number of decimal places.
 
 **Returns:** `number`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L31))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L32))
 
 ### fetch
 
@@ -105,7 +105,7 @@ A tool for fetching a URL and returning the response as text.
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L38))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L39))
 
 ### fetchJSON
 
@@ -121,7 +121,7 @@ A tool for fetching a URL and returning the response as parsed JSON.
 |---|---|---|
 | url | `string` |  |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L48))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L49))
 
 ### read
 
@@ -139,7 +139,7 @@ A tool for reading the contents of a file and returning it as a string.
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L58))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L59))
 
 ### write
 
@@ -156,7 +156,7 @@ A tool for writing content to a file.
 | filename | `string` |  |
 | content | `string` |  |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L68))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L69))
 
 ### readImage
 
@@ -174,7 +174,7 @@ A tool for reading an image file and returning its contents as a Base64-encoded 
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L79))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L80))
 
 ### notify
 
@@ -193,7 +193,7 @@ A tool for showing a native OS notification with a title and message. Returns tr
 
 **Returns:** `boolean`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L89))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L90))
 
 ### range
 
@@ -212,7 +212,7 @@ Generate an array of numbers. With one argument, generates from 0 to start-1. Wi
 
 **Returns:** `number[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L100))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L101))
 
 ### mostCommon
 
@@ -230,7 +230,7 @@ Return the most common element in an array. Uses JSON serialization for comparis
 
 **Returns:** `any`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L110))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L111))
 
 ### keys
 
@@ -248,7 +248,7 @@ Return an array of an object's own enumerable property names.
 
 **Returns:** `string[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L117))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L118))
 
 ### values
 
@@ -266,7 +266,7 @@ Return an array of an object's own enumerable property values.
 
 **Returns:** `any[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L124))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L125))
 
 ### entries
 
@@ -284,7 +284,7 @@ Return an array of an object's own enumerable entries, each as { key, value }.
 
 **Returns:** `any[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L131))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L132))
 
 ### emit
 
@@ -300,4 +300,4 @@ Emit a custom event to the calling TypeScript code via the onEmit callback.
 |---|---|---|
 | data |  |  |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L138))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L139))

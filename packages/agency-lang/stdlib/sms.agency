@@ -27,6 +27,10 @@ export def sendSms(to: string, body: string, from: string = "", accountSid: stri
   """
   Send an SMS text message via the Twilio API. Requires TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, and TWILIO_FROM_NUMBER env vars, or pass them directly. Parameters: to (recipient phone number in E.164 format), body (message text), and optionally from, accountSid, authToken.
   """
+  return interrupt std::sendSms("Are you sure you want to send this SMS?", {
+    to: to
+  })
+
   return try _sendSms(to, body, {
     from: from,
     accountSid: accountSid,

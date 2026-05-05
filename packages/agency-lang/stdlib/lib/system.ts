@@ -1,4 +1,4 @@
-import { execFileSync, execFile } from "child_process";
+import { execFile } from "child_process";
 import path from "path";
 import process from "process";
 import { detectPlatform } from "./utils.js";
@@ -39,7 +39,7 @@ export function _setEnv(name: string, value: string): void {
  * Currently macOS-only (uses the `open` command). Throws on other platforms.
  */
 export async function _openUrl(url: string): Promise<void> {
-  const platform = detectPlatform();
+  const platform = await detectPlatform();
 
   if (platform === "macos") {
     await execFileAsync("open", ["--", url]);
@@ -51,28 +51,28 @@ export async function _openUrl(url: string): Promise<void> {
   }
 }
 
-export function _screenshot(
+export async function _screenshot(
   filepath: string,
   x: number,
   y: number,
   width: number,
   height: number,
-): void {
-  const platform = detectPlatform();
+): Promise<void> {
+  const platform = await detectPlatform();
   const resolvedPath = path.resolve(process.cwd(), filepath);
   const hasRegion = x >= 0 && y >= 0 && width >= 0 && height >= 0;
 
   if (platform === "macos") {
     if (hasRegion) {
-      execFileSync("screencapture", ["-R", `${x},${y},${width},${height}`, resolvedPath]);
+      await execFileAsync("screencapture", ["-R", `${x},${y},${width},${height}`, resolvedPath]);
     } else {
-      execFileSync("screencapture", ["-x", resolvedPath]);
+      await execFileAsync("screencapture", ["-x", resolvedPath]);
     }
   } else if (platform === "linux") {
     if (hasRegion) {
-      execFileSync("import", ["-crop", `${width}x${height}+${x}+${y}`, "-window", "root", resolvedPath]);
+      await execFileAsync("import", ["-crop", `${width}x${height}+${x}+${y}`, "-window", "root", resolvedPath]);
     } else {
-      execFileSync("import", ["-window", "root", resolvedPath]);
+      await execFileAsync("import", ["-window", "root", resolvedPath]);
     }
   } else {
     console.error(

@@ -1,4 +1,4 @@
-import fs from "fs";
+import fs from "fs/promises";
 import os from "os";
 import path from "path";
 import process from "process";
@@ -9,17 +9,17 @@ export type EditResult = {
   path: string;
 };
 
-export function _edit(
+export async function _edit(
   filename: string,
   oldText: string,
   newText: string,
   replaceAll: boolean,
-): EditResult {
+): Promise<EditResult> {
   if (oldText.length === 0) {
     throw new Error("edit: oldText must not be empty");
   }
   const full = path.resolve(process.cwd(), filename);
-  const before = fs.readFileSync(full, "utf8");
+  const before = await fs.readFile(full, "utf8");
 
   if (replaceAll) {
     if (before.indexOf(oldText) === -1) {
@@ -30,7 +30,7 @@ export function _edit(
       count++;
       return newText;
     });
-    fs.writeFileSync(full, after, "utf8");
+    await fs.writeFile(full, after, "utf8");
     return { replacements: count, path: filename };
   }
 
@@ -48,7 +48,7 @@ export function _edit(
   }
   const after =
     before.slice(0, first) + newText + before.slice(first + oldText.length);
-  fs.writeFileSync(full, after, "utf8");
+  await fs.writeFile(full, after, "utf8");
   return { replacements: 1, path: filename };
 }
 
@@ -64,12 +64,12 @@ export type MultiEditResult = {
   edits: number;
 };
 
-export function _multiedit(
+export async function _multiedit(
   filename: string,
   edits: MultiEdit[],
-): MultiEditResult {
+): Promise<MultiEditResult> {
   const full = path.resolve(process.cwd(), filename);
-  let contents = fs.readFileSync(full, "utf8");
+  let contents = await fs.readFile(full, "utf8");
   let total = 0;
 
   for (let i = 0; i < edits.length; i++) {
@@ -110,7 +110,7 @@ export function _multiedit(
     }
   }
 
-  fs.writeFileSync(full, contents, "utf8");
+  await fs.writeFile(full, contents, "utf8");
   return { replacements: total, path: filename, edits: edits.length };
 }
 
@@ -119,7 +119,7 @@ export type PatchResult = {
   files: string[];
 };
 
-export function _applyPatch(patch: string): PatchResult {
+export async function _applyPatch(patch: string): Promise<PatchResult> {
   const files = parseUnifiedDiff(patch);
   const touched: string[] = [];
 
@@ -129,11 +129,11 @@ export function _applyPatch(patch: string): PatchResult {
     if (f.isNew) {
       original = "";
     } else {
-      original = fs.readFileSync(full, "utf8");
+      original = await fs.readFile(full, "utf8");
     }
     const updated = applyHunks(original, f.hunks, f.path);
-    fs.mkdirSync(path.dirname(full), { recursive: true });
-    fs.writeFileSync(full, updated, "utf8");
+    await fs.mkdir(path.dirname(full), { recursive: true });
+    await fs.writeFile(full, updated, "utf8");
     touched.push(f.path);
   }
 
@@ -242,52 +242,52 @@ function applyHunks(original: string, hunks: Hunk[], filePath: string): string {
   return updated;
 }
 
-export function _mkdir(dir: string): void {
+export async function _mkdir(dir: string): Promise<void> {
   const full = path.resolve(process.cwd(), dir);
-  fs.mkdirSync(full, { recursive: true });
+  await fs.mkdir(full, { recursive: true });
 }
 
-export function _copy(src: string, dest: string): void {
+export async function _copy(src: string, dest: string): Promise<void> {
   const srcFull = path.resolve(process.cwd(), src);
   const destFull = path.resolve(process.cwd(), dest);
-  fs.cpSync(srcFull, destFull, { recursive: true });
+  await fs.cp(srcFull, destFull, { recursive: true });
 }
 
-export function _move(src: string, dest: string): void {
-  rejectDangerousPath(src, "move", "source");
+export async function _move(src: string, dest: string): Promise<void> {
+  await rejectDangerousPath(src, "move", "source");
   const srcFull = path.resolve(process.cwd(), src);
   const destFull = path.resolve(process.cwd(), dest);
   try {
-    fs.renameSync(srcFull, destFull);
+    await fs.rename(srcFull, destFull);
   } catch (e: any) {
     if (e?.code === "EXDEV") {
-      fs.cpSync(srcFull, destFull, { recursive: true });
-      fs.rmSync(srcFull, { recursive: true, force: true });
+      await fs.cp(srcFull, destFull, { recursive: true });
+      await fs.rm(srcFull, { recursive: true, force: true });
       return;
     }
     throw e;
   }
 }
 
-export function _remove(target: string): void {
-  rejectDangerousPath(target, "remove", "target");
+export async function _remove(target: string): Promise<void> {
+  await rejectDangerousPath(target, "remove", "target");
   const full = path.resolve(process.cwd(), target);
-  fs.rmSync(full, { recursive: true, force: true });
+  await fs.rm(full, { recursive: true, force: true });
 }
 
-export function rejectDangerousPath(
+export async function rejectDangerousPath(
   p: string,
   op: string,
   role: string,
-): void {
+): Promise<void> {
   const trimmed = p.trim();
   if (trimmed === "") {
     throw new Error(`${op}: ${role} must not be empty`);
   }
   const lexical = path.resolve(process.cwd(), trimmed);
-  const real = realpathOrResolve(lexical);
-  const homeReal = realpathOrResolve(os.homedir());
-  const cwdReal = realpathOrResolve(process.cwd());
+  const real = await realpathOrResolve(lexical);
+  const homeReal = await realpathOrResolve(os.homedir());
+  const cwdReal = await realpathOrResolve(process.cwd());
 
   for (const candidate of new Set([lexical, real])) {
     const root = path.parse(candidate).root;
@@ -325,9 +325,9 @@ export function rejectDangerousPath(
   }
 }
 
-function realpathOrResolve(p: string): string {
+async function realpathOrResolve(p: string): Promise<string> {
   try {
-    return fs.realpathSync.native(p);
+    return await fs.realpath(p);
   } catch {
     return p;
   }

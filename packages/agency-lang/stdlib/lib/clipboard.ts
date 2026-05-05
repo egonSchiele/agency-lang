@@ -1,12 +1,15 @@
-import { execFileSync } from "child_process";
+import { execFile } from "child_process";
+import { promisify } from "util";
 import { detectPlatform } from "./utils.js";
 
-export function _copy(text: string): void {
-  const platform = detectPlatform();
+const execFileAsync = promisify(execFile);
+
+export async function _copy(text: string): Promise<void> {
+  const platform = await detectPlatform();
   if (platform === "macos") {
-    execFileSync("pbcopy", [], { input: text });
+    await execFileAsync("pbcopy", [], { input: text } as any);
   } else if (platform === "linux") {
-    execFileSync("xclip", ["-selection", "clipboard"], { input: text });
+    await execFileAsync("xclip", ["-selection", "clipboard"], { input: text } as any);
   } else {
     console.error(
       `copy is not supported on platform: ${platform}. ` +
@@ -15,12 +18,14 @@ export function _copy(text: string): void {
   }
 }
 
-export function _paste(): string {
-  const platform = detectPlatform();
+export async function _paste(): Promise<string> {
+  const platform = await detectPlatform();
   if (platform === "macos") {
-    return execFileSync("pbpaste").toString();
+    const { stdout } = await execFileAsync("pbpaste");
+    return stdout;
   } else if (platform === "linux") {
-    return execFileSync("xclip", ["-selection", "clipboard", "-o"]).toString();
+    const { stdout } = await execFileAsync("xclip", ["-selection", "clipboard", "-o"]);
+    return stdout;
   } else {
     console.error(
       `paste is not supported on platform: ${platform}. ` +

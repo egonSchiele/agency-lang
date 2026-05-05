@@ -1,4 +1,4 @@
-import { readFileSync } from "fs";
+import { readFile } from "fs/promises";
 
 export type Platform = "macos" | "linux" | "windows" | "wsl" | "unknown";
 
@@ -23,7 +23,7 @@ let _cachedPlatform: Platform | null = null;
  *   in WSL even though the user is on Windows.
  * - Anything not darwin, win32, or linux is treated as "unknown"
  */
-export function detectPlatform(): Platform {
+export async function detectPlatform(): Promise<Platform> {
   if (_cachedPlatform !== null) return _cachedPlatform;
 
   const p = process.platform;
@@ -35,7 +35,7 @@ export function detectPlatform(): Platform {
   } else if (p === "linux") {
     // Check for WSL — process.platform returns "linux" in WSL
     try {
-      const version = readFileSync("/proc/version", "utf8");
+      const version = await readFile("/proc/version", "utf8");
       if (/microsoft/i.test(version)) {
         _cachedPlatform = "wsl";
       } else {

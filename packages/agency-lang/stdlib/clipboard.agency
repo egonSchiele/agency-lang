@@ -4,6 +4,8 @@ export def copy(text: string) {
   """
   A tool for copying text to the system clipboard.
   """
+  return interrupt std::clipboardCopy("Are you sure you want to copy text to the clipboard?")
+
   _copy(text)
 }
 
@@ -11,5 +13,7 @@ export def paste(): string {
   """
   A tool for reading text from the system clipboard.
   """
+  return interrupt std::clipboardPaste("Are you sure you want to read from the clipboard? It may contain sensitive data such as passwords.")
+
   return _paste()
 }

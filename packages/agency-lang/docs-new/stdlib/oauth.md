@@ -1,0 +1,125 @@
+# oauth
+
+## Functions
+
+### authorize
+
+```ts
+authorize(name: string, authUrl: string, tokenUrl: string, clientId: string, clientSecret: string, scopes: string, port: number, extraAuthParams: string): Result
+```
+
+Start an OAuth 2.0 authorization flow. Opens the user's browser for consent, captures the callback, exchanges the code for tokens, and saves them locally. Only needs to be run once per provider. Parameters: name (identifier like "google-calendar"), authUrl (authorization endpoint), tokenUrl (token endpoint), clientId, clientSecret, scopes (space-separated), port (callback port, default 8914), extraAuthParams (space-separated key=value pairs for provider-specific params like "access_type=offline prompt=consent").
+
+## Usage
+
+  ```ts
+  import { authorize, getAccessToken, isAuthorized } from "std::oauth"
+
+  node main() {
+    if (!isAuthorized("google-calendar")) {
+      authorize("google-calendar",
+        authUrl: "https://accounts.google.com/o/oauth2/v2/auth",
+        tokenUrl: "https://oauth2.googleapis.com/token",
+        clientId: env("GOOGLE_CLIENT_ID"),
+        clientSecret: env("GOOGLE_CLIENT_SECRET"),
+        scopes: "https://www.googleapis.com/auth/calendar",
+        extraAuthParams: "access_type=offline prompt=consent"
+      )
+    }
+
+    const token = getAccessToken("google-calendar")
+
+    const events = fetchJSON("https://www.googleapis.com/calendar/v3/calendars/primary/events", {
+      headers: { "Authorization": "Bearer ${token}" }
+    })
+    print(events)
+  }
+  ```
+
+  ## Setup
+
+  To use OAuth with a provider, you need:
+  1. Register an app with the provider (e.g. Google Cloud Console)
+  2. Get a client ID and client secret
+  3. Set them as env vars or pass directly
+
+  Tokens are stored in `~/.agency/oauth/{name}.json`.
+  The authorization flow uses PKCE for security.
+
+  ## Token encryption
+  Token files are encrypted at rest using AES-256-GCM.
+  The encryption key is resolved in this order:
+  1. `AGENCY_OAUTH_KEY` env var (for servers/CI)
+  2. System keyring (macOS Keychain / Linux Secret Service) — key is auto-generated on first use
+  3. If neither is available, tokens are stored unencrypted
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| name | `string` |  |
+| authUrl | `string` |  |
+| tokenUrl | `string` |  |
+| clientId | `string` |  |
+| clientSecret | `string` |  |
+| scopes | `string` |  |
+| port | `number` | 8914 |
+| extraAuthParams | `string` | "" |
+
+**Returns:** `Result`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/oauth.agency#L48))
+
+### getAccessToken
+
+```ts
+getAccessToken(name: string): Result
+```
+
+Get a valid OAuth access token for a previously authorized provider. Automatically refreshes the token if it has expired. Returns the access token string. Throws if not yet authorized.
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| name | `string` |  |
+
+**Returns:** `Result`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/oauth.agency#L69))
+
+### isAuthorized
+
+```ts
+isAuthorized(name: string): boolean
+```
+
+Check if OAuth tokens exist for a given provider name. Returns true if tokens are stored locally (does not verify they are still valid).
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| name | `string` |  |
+
+**Returns:** `boolean`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/oauth.agency#L76))
+
+### revokeAuth
+
+```ts
+revokeAuth(name: string): Result
+```
+
+Delete stored OAuth tokens for a provider. The user will need to run authorize again to re-authenticate.
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| name | `string` |  |
+
+**Returns:** `Result`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/oauth.agency#L83))

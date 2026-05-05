@@ -19,7 +19,7 @@ Return a new object with the same keys, but with each value transformed by the f
 
 **Returns:** `any`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/object.agency#L0))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/object.agency#L1))
 
 ### mapEntries
 
@@ -38,7 +38,7 @@ Return a new object by applying the function to each entry. The function receive
 
 **Returns:** `any`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/object.agency#L11))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/object.agency#L12))
 
 ### filterEntries
 
@@ -57,7 +57,7 @@ Return a new object containing only the entries for which the function returns t
 
 **Returns:** `any`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/object.agency#L23))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/object.agency#L24))
 
 ### everyEntry
 
@@ -76,7 +76,7 @@ Return true if the function returns true for every entry in the object. The func
 
 **Returns:** `boolean`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/object.agency#L36))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/object.agency#L37))
 
 ### someEntry
 
@@ -95,4 +95,4 @@ Return true if the function returns true for at least one entry in the object. T
 
 **Returns:** `boolean`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/object.agency#L48))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/object.agency#L49))

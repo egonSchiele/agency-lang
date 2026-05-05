@@ -69,6 +69,14 @@ type Person = {
 }
 ```
 
+You can also write a module-level doc comment using the `@module` tag. This documents the file itself and appears at the top of the generated documentation:
+
+```ts
+/** @module
+  This module provides utilities for working with dates.
+*/
+```
+
 > Note: comments must be on their own line, they cannot be at the end of a line containing code.
 
 Regexes are also supported as a primitive:

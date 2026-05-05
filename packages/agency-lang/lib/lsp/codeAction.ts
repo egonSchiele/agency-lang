@@ -21,7 +21,7 @@ function getStdlibIndex(): Record<string, string> {
   for (const filePath of getStdlibFiles()) {
     const moduleName = path.basename(filePath, ".agency");
     const content = fs.readFileSync(filePath, "utf-8");
-    const exportPattern = /export\s+(?:def|node)\s+([a-zA-Z_][a-zA-Z0-9_]*)/g;
+    const exportPattern = /export\s+(?:safe\s+)?(?:def|node)\s+([a-zA-Z_][a-zA-Z0-9_]*)/g;
     let m: RegExpExecArray | null;
     while ((m = exportPattern.exec(content)) !== null) {
       stdlibIndex[m[1]] = `std::${moduleName}`;

@@ -154,6 +154,9 @@ export async function _sendWithMailgun(
       "Missing Mailgun domain. Set MAILGUN_DOMAIN env var or pass domain option."
     );
   }
+  if (domain.includes("/") || domain.includes("\\")) {
+    throw new Error("Invalid Mailgun domain: must not contain path separators.");
+  }
 
   const region = options?.region || process.env.MAILGUN_REGION || "us";
   const baseUrl = region === "eu"

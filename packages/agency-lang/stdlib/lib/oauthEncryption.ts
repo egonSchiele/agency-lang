@@ -3,6 +3,7 @@ import { _getSecret, _setSecret, _isKeyringAvailable } from "./keyring.js";
 
 const KEYRING_KEY = "oauth-encryption-key";
 const ALGORITHM = "aes-256-gcm";
+const KEY_LENGTH = 32;
 const IV_LENGTH = 12;
 const TAG_LENGTH = 16;
 
@@ -11,33 +12,42 @@ const TAG_LENGTH = 16;
  * Priority: AGENCY_OAUTH_KEY env var > system keyring > null (plaintext fallback)
  */
 export async function getEncryptionKey(): Promise<Buffer | null> {
-  // 1. Check env var
   const envKey = process.env.AGENCY_OAUTH_KEY;
   if (envKey) {
-    // Derive a 256-bit key from the env var using SHA-256
     return crypto.createHash("sha256").update(envKey).digest();
   }
 
-  // 2. Try system keyring
   if (await _isKeyringAvailable()) {
     const stored = await _getSecret(KEYRING_KEY);
     if (stored) {
-      return Buffer.from(stored, "hex");
+      const decoded = Buffer.from(stored, "hex");
+      if (decoded.length !== KEY_LENGTH) {
+        // Corrupted key — regenerate
+        const newKey = crypto.randomBytes(KEY_LENGTH);
+        await _setSecret(KEYRING_KEY, newKey.toString("hex"));
+        return newKey;
+      }
+      return decoded;
     }
 
-    // Generate and store a new key
-    const newKey = crypto.randomBytes(32);
+    // Generate a new key, store it, then re-read to handle races
+    const newKey = crypto.randomBytes(KEY_LENGTH);
     await _setSecret(KEYRING_KEY, newKey.toString("hex"));
+
+    // Re-read to converge on a single key if another process raced us
+    const verify = await _getSecret(KEYRING_KEY);
+    if (verify) {
+      return Buffer.from(verify, "hex");
+    }
     return newKey;
   }
 
-  // 3. No encryption available
   return null;
 }
 
 /**
  * Encrypt a string using AES-256-GCM.
- * Returns a base64-encoded string containing: iv + ciphertext + auth tag
+ * Returns a base64-encoded string: iv (12 bytes) + auth tag (16 bytes) + ciphertext
  */
 export function encrypt(plaintext: string, key: Buffer): string {
   const iv = crypto.randomBytes(IV_LENGTH);
@@ -45,13 +55,13 @@ export function encrypt(plaintext: string, key: Buffer): string {
   const encrypted = Buffer.concat([cipher.update(plaintext, "utf-8"), cipher.final()]);
   const tag = cipher.getAuthTag();
 
-  // Pack: iv (12) + tag (16) + ciphertext
   const packed = Buffer.concat([iv, tag, encrypted]);
   return packed.toString("base64");
 }
 
 /**
- * Decrypt a base64-encoded string that was encrypted with encrypt().
+ * Decrypt a base64-encoded string produced by encrypt().
+ * Layout: iv (12 bytes) + auth tag (16 bytes) + ciphertext
  */
 export function decrypt(ciphertext: string, key: Buffer): string {
   const packed = Buffer.from(ciphertext, "base64");

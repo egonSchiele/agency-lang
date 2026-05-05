@@ -281,14 +281,16 @@ export async function _authorize(
     throw new Error("OAuth state mismatch — possible CSRF attack.");
   }
 
-  const tokenResponse = await exchangeCodeForTokens(config.tokenUrl, {
+  const exchangeParams: Record<string, string> = {
     grant_type: "authorization_code",
     code,
     redirect_uri: redirectUri,
     client_id: config.clientId,
-    client_secret: config.clientSecret,
     code_verifier: codeVerifier,
-  });
+  };
+  if (config.clientSecret) exchangeParams.client_secret = config.clientSecret;
+
+  const tokenResponse = await exchangeCodeForTokens(config.tokenUrl, exchangeParams);
 
   const tokens: StoredTokens = {
     access_token: tokenResponse.access_token,
@@ -329,12 +331,14 @@ export async function _getAccessToken(name: string): Promise<string> {
 
   const refreshPromise = (async () => {
     try {
-      const refreshResponse = await exchangeCodeForTokens(tokens.token_url, {
+      const refreshParams: Record<string, string> = {
         grant_type: "refresh_token",
         refresh_token: tokens.refresh_token,
         client_id: tokens.client_id,
-        client_secret: tokens.client_secret,
-      });
+      };
+      if (tokens.client_secret) refreshParams.client_secret = tokens.client_secret;
+
+      const refreshResponse = await exchangeCodeForTokens(tokens.token_url, refreshParams);
 
       tokens.access_token = refreshResponse.access_token;
       tokens.expires_at = Date.now() + refreshResponse.expires_in * 1000;
@@ -364,7 +368,10 @@ export async function _revokeAuth(name: string): Promise<{ revoked: boolean }> {
   try {
     await fs.unlink(tokenPath);
     return { revoked: true };
-  } catch {
-    return { revoked: false };
+  } catch (err: unknown) {
+    if ((err as NodeJS.ErrnoException).code === "ENOENT") {
+      return { revoked: false };
+    }
+    throw err;
   }
 }

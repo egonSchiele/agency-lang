@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, afterEach } from "vitest";
+import { describe, it, expect, vi, afterEach, afterAll } from "vitest";
 import fs from "fs/promises";
 import fsSync from "fs";
 import path from "path";
@@ -6,7 +6,16 @@ import os from "os";
 
 // Set temp dir BEFORE importing oauth (getTokenDir() reads env at call time)
 const TOKEN_DIR = path.join(os.tmpdir(), "agency-oauth-test-" + process.pid);
+const originalTokenDir = process.env.AGENCY_OAUTH_TOKEN_DIR;
 process.env.AGENCY_OAUTH_TOKEN_DIR = TOKEN_DIR;
+
+afterAll(() => {
+  if (originalTokenDir !== undefined) {
+    process.env.AGENCY_OAUTH_TOKEN_DIR = originalTokenDir;
+  } else {
+    delete process.env.AGENCY_OAUTH_TOKEN_DIR;
+  }
+});
 
 // Mock encryption to return null key (plaintext mode) so tests don't hit real keyring
 vi.mock("../oauthEncryption.js", () => ({

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterAll } from "vitest";
 import { _setSecret, _getSecret, _deleteSecret, _isKeyringAvailable } from "../keyring.js";
 
 // Mock child_process
@@ -9,6 +9,11 @@ vi.mock("child_process", () => ({
   execFile: (...args: unknown[]) => mockExecFile(...args),
   spawn: (...args: unknown[]) => mockSpawn(...args),
 }));
+
+const originalPlatform = process.platform;
+afterAll(() => {
+  Object.defineProperty(process, "platform", { value: originalPlatform, writable: true });
+});
 
 describe("keyring (macOS)", () => {
   beforeEach(() => {

@@ -36,6 +36,13 @@ import { _authorize, _getAccessToken, _isAuthorized, _revokeAuth } from "./lib/o
 
   Tokens are stored in `~/.agency/oauth/{name}.json`.
   The authorization flow uses PKCE for security.
+
+  ## Token encryption
+  Token files are encrypted at rest using AES-256-GCM.
+  The encryption key is resolved in this order:
+  1. `AGENCY_OAUTH_KEY` env var (for servers/CI)
+  2. System keyring (macOS Keychain / Linux Secret Service) — key is auto-generated on first use
+  3. If neither is available, tokens are stored unencrypted
 */
 
 export def authorize(name: string, authUrl: string, tokenUrl: string, clientId: string, clientSecret: string, scopes: string, port: number = 8914, extraAuthParams: string = ""): Result {

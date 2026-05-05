@@ -33,8 +33,15 @@ function getSmtpConfig(options?: SmtpOptions) {
     );
   }
 
-  const port = options?.port || Number(process.env.SMTP_PORT) || 587;
+  // port=0 means "not provided" — fall through to env or default
+  const port = (options?.port && options.port > 0)
+    ? options.port
+    : (Number(process.env.SMTP_PORT) || 587);
+
+  // secure is only explicitly set if port was explicitly provided as 465,
+  // or SMTP_SECURE env is set. Otherwise default based on resolved port.
   const secure = options?.secure ?? (process.env.SMTP_SECURE === "true" || port === 465);
+
   const user = options?.user || process.env.SMTP_USER;
   const pass = options?.pass || process.env.SMTP_PASS;
 

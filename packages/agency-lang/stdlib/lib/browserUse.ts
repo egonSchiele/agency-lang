@@ -1,5 +1,6 @@
 const BASE_URL = "https://api.browser-use.com/api/v3";
 const TERMINAL_STATUSES = ["stopped", "error", "timed_out"] as const;
+const DEFAULT_TIMEOUT_MS = 120000; // 2 minutes
 
 export type BrowserUseResult = {
   output: string;
@@ -13,6 +14,7 @@ export type BrowserUseOptions = {
   maxCostUsd?: number;
   proxyCountryCode?: string;
   outputSchema?: Record<string, unknown>;
+  timeoutMs?: number;
 };
 
 type SessionResponse = {
@@ -28,13 +30,13 @@ function isTerminal(status: string): boolean {
 
 async function pollSession(
   sessionId: string,
-  apiKey: string
+  apiKey: string,
+  timeoutMs: number
 ): Promise<SessionResponse> {
   const pollInterval = 2000;
-  const maxWait = 600000; // 10 minutes
   const start = Date.now();
 
-  while (Date.now() - start < maxWait) {
+  while (Date.now() - start < timeoutMs) {
     const response = await fetch(`${BASE_URL}/sessions/${sessionId}`, {
       headers: {
         "X-Browser-Use-API-Key": apiKey,
@@ -58,7 +60,7 @@ async function pollSession(
   }
 
   throw new Error(
-    `Browser Use session ${sessionId} timed out after ${maxWait / 1000}s`
+    `Browser Use session ${sessionId} timed out after ${timeoutMs / 1000}s`
   );
 }
 
@@ -73,6 +75,7 @@ export async function _browserUse(
     );
   }
 
+  const timeoutMs = options?.timeoutMs || DEFAULT_TIMEOUT_MS;
   const body: Record<string, unknown> = { task };
 
   if (options?.model) body.model = options.model;
@@ -108,7 +111,7 @@ export async function _browserUse(
     };
   }
 
-  const result = await pollSession(sessionId, apiKey);
+  const result = await pollSession(sessionId, apiKey, timeoutMs);
 
   return {
     output: result.output ?? "",

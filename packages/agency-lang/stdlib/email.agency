@@ -5,8 +5,10 @@ type EmailResult = {
   provider: string
 }
 
-/*
-  Usage from Agency code:
+/**
+  ## Usage
+
+  ```ts
   import { sendWithResend, sendWithSendGrid, sendWithMailgun } from "std::email"
 
   node main() {
@@ -18,16 +20,18 @@ type EmailResult = {
     )
     print(result)
   }
+  ```
 
-  Environment Variables:
-  - Resend: RESEND_API_KEY
-  - SendGrid: SENDGRID_API_KEY
-  - Mailgun: MAILGUN_API_KEY and MAILGUN_DOMAIN (optionally MAILGUN_REGION = "us" | "eu")
+  ## Environment Variables
+  - Resend: `RESEND_API_KEY`
+  - SendGrid: `SENDGRID_API_KEY`
+  - Mailgun: `MAILGUN_API_KEY` and `MAILGUN_DOMAIN` (optionally `MAILGUN_REGION` = "us" | "eu")
 */
 
+/** Send an email using the Resend API. Requires `RESEND_API_KEY` env var or pass apiKey directly. */
 export def sendWithResend(from: string, to: string, subject: string, html: string = "", text: string = "", cc: string = "", bcc: string = "", replyTo: string = "", apiKey: string = ""): Result {
   """
-  Send an email using the Resend API. Requires RESEND_API_KEY env var or pass apiKey directly. Free tier: 3000 emails/month. Parameters: from (sender address), to (recipient), subject, html or text content, and optionally cc, bcc, replyTo.
+  Send an email using the Resend API. Requires RESEND_API_KEY env var or pass apiKey directly. Parameters: from (sender address), to (recipient), subject, html or text content, and optionally cc, bcc, replyTo.
   """
   return try _sendWithResend({
     from: from,
@@ -43,6 +47,7 @@ export def sendWithResend(from: string, to: string, subject: string, html: strin
   })
 }
 
+/** Send an email using the SendGrid API. Requires `SENDGRID_API_KEY` env var or pass apiKey directly. */
 export def sendWithSendGrid(from: string, to: string, subject: string, html: string = "", text: string = "", cc: string = "", bcc: string = "", replyTo: string = "", apiKey: string = ""): Result {
   """
   Send an email using the SendGrid API. Requires SENDGRID_API_KEY env var or pass apiKey directly. Parameters: from (sender address), to (recipient), subject, html or text content, and optionally cc, bcc, replyTo.
@@ -61,6 +66,7 @@ export def sendWithSendGrid(from: string, to: string, subject: string, html: str
   })
 }
 
+/** Send an email using the Mailgun API. Requires `MAILGUN_API_KEY` and `MAILGUN_DOMAIN` env vars, or pass them directly. Set region to "eu" for the EU endpoint. */
 export def sendWithMailgun(from: string, to: string, subject: string, html: string = "", text: string = "", cc: string = "", bcc: string = "", replyTo: string = "", apiKey: string = "", domain: string = "", region: string = ""): Result {
   """
   Send an email using the Mailgun API. Requires MAILGUN_API_KEY and MAILGUN_DOMAIN env vars, or pass them directly. Set region to "eu" for the EU endpoint. Parameters: from (sender address), to (recipient), subject, html or text content, and optionally cc, bcc, replyTo, domain, region.

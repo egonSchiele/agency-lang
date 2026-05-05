@@ -10,7 +10,7 @@ npm install @agency-lang/email
 Set SMTP connection details:
 - `SMTP_HOST` — SMTP server hostname (e.g. "smtp.gmail.com")
 - `SMTP_PORT` — Port number (default: 587)
-- `SMTP_USER` — Username for authentication
+- `SMTP_USER` — Username for authentication (optional for unauthenticated relays)
 - `SMTP_PASS` — Password or app password
 - `SMTP_SECURE` — "true" for TLS on connect (port 465), "false" for STARTTLS (port 587)
 
@@ -43,7 +43,7 @@ import { sendEmail as sendEmailImpl } from "./dist/src/email.js"
 
 export def sendEmail(from: string, to: string, subject: string, html: string = "", text: string = "", cc: string = "", bcc: string = "", replyTo: string = "", host: string = "", port: number = 0, secure: boolean = false, user: string = "", pass: string = ""): Result {
   """
-  Send an email via SMTP using Nodemailer. Works with any email provider (Gmail, Outlook, Yahoo, self-hosted, etc). Requires SMTP_HOST, SMTP_USER, and SMTP_PASS env vars, or pass host/user/pass directly.
+  Send an email via SMTP using Nodemailer. Works with any email provider (Gmail, Outlook, Yahoo, self-hosted, etc). Requires SMTP_HOST env var or pass host directly. Authentication (SMTP_USER/SMTP_PASS) is optional. Set port to 0 for auto-detection (default 587). Secure is auto-detected from port and SMTP_SECURE env var when not explicitly set.
   """
   return try sendEmailImpl({
     from: from,
@@ -57,7 +57,6 @@ export def sendEmail(from: string, to: string, subject: string, html: string = "
   }, {
     host: host,
     port: port,
-    secure: secure,
     user: user,
     pass: pass
   })

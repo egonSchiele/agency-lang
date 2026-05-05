@@ -4,6 +4,7 @@ import fs from "fs/promises";
 import os from "os";
 import path from "path";
 import { execFile } from "child_process";
+import { getEncryptionKey, encrypt, decrypt } from "./oauthEncryption.js";
 
 function getTokenDir(): string {
   return process.env.AGENCY_OAUTH_TOKEN_DIR || path.join(os.homedir(), ".agency", "oauth");
@@ -201,7 +202,12 @@ async function exchangeCodeForTokens(
 
 async function saveTokens(name: string, tokens: StoredTokens): Promise<void> {
   await fs.mkdir(getTokenDir(), { recursive: true });
-  await fs.writeFile(getTokenPath(name), JSON.stringify(tokens, null, 2), {
+  const json = JSON.stringify(tokens, null, 2);
+
+  const key = await getEncryptionKey();
+  const content = key ? encrypt(json, key) : json;
+
+  await fs.writeFile(getTokenPath(name), content, {
     encoding: "utf-8",
     mode: 0o600,
   });
@@ -210,8 +216,24 @@ async function saveTokens(name: string, tokens: StoredTokens): Promise<void> {
 async function loadTokens(name: string): Promise<StoredTokens | null> {
   const tokenPath = getTokenPath(name);
   try {
-    const data = await fs.readFile(tokenPath, "utf-8");
-    const parsed = JSON.parse(data) as Record<string, unknown>;
+    const raw = await fs.readFile(tokenPath, "utf-8");
+
+    // Determine if file is encrypted or plaintext JSON
+    let json: string;
+    if (raw.trimStart().startsWith("{")) {
+      json = raw;
+    } else {
+      const key = await getEncryptionKey();
+      if (!key) {
+        throw new Error(
+          `OAuth token file for "${name}" is encrypted but no decryption key is available. ` +
+          `Set AGENCY_OAUTH_KEY env var or ensure the system keyring is accessible.`
+        );
+      }
+      json = decrypt(raw, key);
+    }
+
+    const parsed = JSON.parse(json) as Record<string, unknown>;
     if (
       !parsed.access_token ||
       !parsed.token_url ||

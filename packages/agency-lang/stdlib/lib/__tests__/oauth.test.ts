@@ -8,6 +8,13 @@ import os from "os";
 const TOKEN_DIR = path.join(os.tmpdir(), "agency-oauth-test-" + process.pid);
 process.env.AGENCY_OAUTH_TOKEN_DIR = TOKEN_DIR;
 
+// Mock encryption to return null key (plaintext mode) so tests don't hit real keyring
+vi.mock("../oauthEncryption.js", () => ({
+  getEncryptionKey: vi.fn().mockResolvedValue(null),
+  encrypt: vi.fn(),
+  decrypt: vi.fn(),
+}));
+
 // Mock child_process (for openBrowser)
 vi.mock("child_process", () => ({
   execFile: vi.fn((_cmd: unknown, _args: unknown, _cb: unknown) => {}),

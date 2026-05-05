@@ -1,0 +1,55 @@
+import { _setSecret, _getSecret, _deleteSecret, _isKeyringAvailable } from "./lib/keyring.js"
+
+/**
+  ## Usage
+
+  ```ts
+  import { setSecret, getSecret, deleteSecret, isKeyringAvailable } from "std::keyring"
+
+  node main() {
+    if (isKeyringAvailable()) {
+      setSecret("my-api-key", "sk-abc123")
+      const key = getSecret("my-api-key")
+      print(key)
+      deleteSecret("my-api-key")
+    }
+  }
+  ```
+
+  ## How it works
+  - macOS: Uses Keychain via the `security` CLI tool
+  - Linux: Uses Secret Service via the `secret-tool` CLI tool
+  - Windows: Not currently supported (use env vars instead)
+
+  All secrets are stored under the "agency-lang" service name by default.
+  Pass a custom `service` parameter to use a different namespace.
+  No external dependencies required.
+*/
+
+export def setSecret(key: string, value: string, service: string = "agency-lang"): Result {
+  """
+  Store a secret in the system keyring (macOS Keychain or Linux Secret Service). The secret is stored under the given service name (default "agency-lang") with the given key. Overwrites any existing value for the same key.
+  """
+  return try _setSecret(key, value, service)
+}
+
+export def getSecret(key: string, service: string = "agency-lang"): Result {
+  """
+  Retrieve a secret from the system keyring by key. Returns the secret value as a string, or null if not found. Uses the "agency-lang" service by default.
+  """
+  return try _getSecret(key, service)
+}
+
+export def deleteSecret(key: string, service: string = "agency-lang"): Result {
+  """
+  Delete a secret from the system keyring. Returns true if deleted, false if the key did not exist.
+  """
+  return try _deleteSecret(key, service)
+}
+
+export safe def isKeyringAvailable(): boolean {
+  """
+  Check if the system keyring is available on this platform. Returns true on macOS (Keychain) and Linux (with secret-tool installed), false otherwise.
+  """
+  return _isKeyringAvailable()
+}

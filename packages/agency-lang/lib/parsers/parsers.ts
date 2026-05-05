@@ -216,6 +216,15 @@ export const newLineParser: Parser<NewLine> = seqC(
   or(str("\r\n"), str("\n")),
 );
 
+export const BLANK_LINE_SENTINEL = "\uE000";
+
+export const stripSentinels = (s: string) => s.replaceAll(BLANK_LINE_SENTINEL, "\n");
+
+export const blankLineParser: Parser<NewLine> = map(
+  many1(char(BLANK_LINE_SENTINEL)),
+  () => ({ type: "newLine" as const }),
+);
+
 // =============================================================================
 // comment.ts
 // =============================================================================
@@ -225,7 +234,7 @@ export const commentParser: Parser<AgencyComment> = (input: string) => {
     set("type", "comment"),
     optionalSpaces,
     str("//"),
-    capture(manyTill(newline), "content"),
+    capture(manyTill(or(newline, blankLineParser)), "content"),
     optionalSpacesOrNewline,
   );
   return parser(input);
@@ -248,10 +257,10 @@ export const multiLineCommentParser: Parser<AgencyMultiLineComment> = (
   );
   const result = parser(input);
   if (result.success) {
-    const content = result.result.content;
-    if (content.startsWith("*")) {
+    result.result.content = stripSentinels(result.result.content);
+    if (result.result.content.startsWith("*")) {
       result.result.isDoc = true;
-      result.result.content = content.slice(1);
+      result.result.content = result.result.content.slice(1);
     }
   }
   return result;
@@ -408,6 +417,9 @@ export const stringParser: Parser<StringLiteral> = label("a string", (input: str
       });
     }
   });
+  for (const seg of segments) {
+    if (seg.type === "text") seg.value = stripSentinels(seg.value);
+  }
   return success(
     {
       type: "string" as const,
@@ -417,15 +429,24 @@ export const stringParser: Parser<StringLiteral> = label("a string", (input: str
   );
 });
 
-export const multiLineStringParser: Parser<MultiLineStringLiteral> = seqC(
-  set("type", "multiLineString"),
-  str('"""'),
-  capture(
-    many(or(multiLineStringTextSegmentParser, interpolationSegmentParser)),
-    "segments",
-  ),
-  str('"""'),
-);
+export const multiLineStringParser: Parser<MultiLineStringLiteral> = (input: string) => {
+  const parser = seqC(
+    set("type", "multiLineString"),
+    str('"""'),
+    capture(
+      many(or(multiLineStringTextSegmentParser, interpolationSegmentParser)),
+      "segments",
+    ),
+    str('"""'),
+  );
+  const result = parser(input);
+  if (result.success) {
+    for (const seg of result.result.segments) {
+      if (seg.type === "text") seg.value = stripSentinels(seg.value);
+    }
+  }
+  return result;
+};
 
 export const variableNameParser: Parser<VariableNameLiteral> = label("an identifier", (
   input: string,
@@ -1137,7 +1158,7 @@ const namedArgumentParser: Parser<NamedArgument> = trace(
 // Used by both _functionCallParser and callChainParser.
 const argumentListParser = seqC(
   char("("),
-  optionalSpaces,
+  optionalSpacesOrNewline,
   capture(
     sepBy(
       comma,
@@ -1150,7 +1171,8 @@ const argumentListParser = seqC(
     ),
     "arguments",
   ),
-  optionalSpaces,
+  optional(comma),
+  optionalSpacesOrNewline,
   char(")"),
 );
 
@@ -1887,7 +1909,7 @@ export const matchBlockParser = label("a match block", withLoc(seqC(
     parseError(
       "expected match cases of the form `value => expression` separated by `;` or newlines, followed by `}`",
       optionalSpacesOrNewline,
-      capture(many(or(commentParser, matchBlockParserCase)), "cases"),
+      capture(many(or(blankLineParser, commentParser, matchBlockParserCase)), "cases"),
       optionalSpaces,
       char("}"),
     ),
@@ -1930,9 +1952,9 @@ export const importNodeStatmentParser: Parser<ImportNodeStatement> = trace(
         "expected a statement of the form `import nodes { x, y } from 'filename.agency'`",
         spaces,
         char("{"),
-        optionalSpaces,
-        capture(sepBy1(comma, many1WithJoin(varNameChar)), "importedNodes"),
-        optionalSpaces,
+        optionalSpacesOrNewline,
+        capture(sepBy1(commaWithNewline, many1WithJoin(varNameChar)), "importedNodes"),
+        optionalSpacesOrNewline,
         char("}"),
         spaces,
         str("from"),
@@ -1981,9 +2003,10 @@ const namedImportParser: Parser<NamedImport> = trace(
   map(
     seqC(
       char("{"),
-      optionalSpaces,
-      capture(sepBy1(comma, safeNameItem), "items"),
-      optionalSpaces,
+      optionalSpacesOrNewline,
+      capture(sepBy1(commaWithNewline, safeNameItem), "items"),
+      optional(commaWithNewline),
+      optionalSpacesOrNewline,
       char("}"),
     ),
     (result) => {
@@ -2143,15 +2166,22 @@ export const staticAssignmentParser: Parser<Assignment> = (input: string) => {
 };
 
 const trim = (s: string) => s.trim();
-export const docStringParser: Parser<DocString> = trace(
-  "docStringParser",
-  seqC(
-    set("type", "docString"),
-    str('"""'),
-    capture(map(many1Till(str('"""')), trim), "value"),
-    str('"""'),
-  ),
-);
+export const docStringParser: Parser<DocString> = (input: string) => {
+  const parser = trace(
+    "docStringParser",
+    seqC(
+      set("type", "docString"),
+      str('"""'),
+      capture(map(many1Till(str('"""')), trim), "value"),
+      str('"""'),
+    ),
+  );
+  const result = parser(input);
+  if (result.success) {
+    result.result.value = stripSentinels(result.result.value);
+  }
+  return result;
+};
 
 export const bodyParser = (input: string): ParserResult<AgencyNode[]> => {
   const bodyNodeParser = or(
@@ -2179,6 +2209,7 @@ export const bodyParser = (input: string): ParserResult<AgencyNode[]> => {
     booleanParser,
     valueAccessParser,
     literalParser,
+    blankLineParser,
     newLineParser,
   );
   const parser = trace(
@@ -2586,7 +2617,8 @@ const _baseFunctionParser: Parser<any> = trace(
       ),
       "parameters",
     ),
-    optionalSpaces,
+    optional(comma),
+    optionalSpacesOrNewline,
     char(")"),
     optionalSpaces,
     capture(optional(functionReturnTypeParser), "returnType"),
@@ -2785,6 +2817,7 @@ const classMethodParser: Parser<ClassMethod> = map(
       sepBy(comma, or(variadicParameterParser, functionParameterParser)),
       "parameters",
     ),
+    optional(comma),
     optionalSpaces,
     char(")"),
     optionalSpaces,
@@ -2813,6 +2846,7 @@ const classBodyMemberParser = or(
   rejectConstructorParser,
   classMethodParser,
   classFieldParser,
+  blankLineParser,
 );
 
 const _classParserInner: Parser<ClassDefinition> = (input: string) => {
@@ -2855,6 +2889,7 @@ const _classParserInner: Parser<ClassDefinition> = (input: string) => {
     } else if (member.type === "classMethod") {
       methods.push(member);
     }
+    // Skip newLine nodes from blank lines
   }
 
   const parentClass = result.result._extends?.parentClass;

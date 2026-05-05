@@ -3,7 +3,7 @@ export function heading(level: number, text: string): string {
 }
 
 export function codeFence(code: string, lang: string = "ts"): string {
-  return `\`\`\`${lang}\n${code}\n\`\`\``;
+  return `\`\`\`${lang}\n${code.trimEnd()}\n\`\`\``;
 }
 
 export function bold(text: string): string {

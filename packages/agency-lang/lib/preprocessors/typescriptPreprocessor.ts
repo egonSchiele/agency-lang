@@ -51,6 +51,7 @@ function walkBody(
     } else if (node.type === "matchBlock") {
       for (const caseItem of node.cases) {
         if (caseItem.type === "comment") continue;
+        if (caseItem.type === "newLine") continue;
         caseItem.body = walkBody([caseItem.body], fn)[0] as any;
       }
     } else if (node.type === "handleBlock") {
@@ -117,7 +118,7 @@ function attachTags(nodes: AgencyNode[]): AgencyNode[] {
 
     if (pendingTags.length > 0) {
       if (node.type === "graphNode" || node.type === "function" ||
-          node.type === "assignment" || node.type === "functionCall") {
+        node.type === "assignment" || node.type === "functionCall") {
         node.tags = [...(node.tags || []), ...pendingTags];
         pendingTags = [];
       } else {
@@ -1187,6 +1188,9 @@ export class TypescriptPreprocessor {
       } else if (node.type === "matchBlock") {
         node.cases = node.cases.map((caseItem) => {
           if (caseItem.type === "comment") {
+            return caseItem;
+          }
+          if (caseItem.type === "newLine") {
             return caseItem;
           }
           return {

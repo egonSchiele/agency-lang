@@ -1,5 +1,39 @@
 import { describe, it, expect } from "vitest";
-import { agencyNode, agencyParser, parseAgency } from "./parser.js";
+import { agencyNode, agencyParser, parseAgency, replaceBlankLines } from "./parser.js";
+
+const S = "\uE000";
+
+describe("replaceBlankLines", () => {
+  it("replaces a simple blank line", () => {
+    const input = "a\n\nb";
+    expect(replaceBlankLines(input)).toBe(`a${S}\nb`);
+  });
+
+  it("replaces multiple consecutive blank lines", () => {
+    const input = "a\n\n\nb";
+    expect(replaceBlankLines(input)).toBe(`a${S}${S}\nb`);
+  });
+
+  it("preserves length", () => {
+    const input = "a\n\nb";
+    expect(replaceBlankLines(input).length).toBe(input.length);
+  });
+
+  it("does not touch non-blank lines", () => {
+    const input = "a\nb\nc";
+    expect(replaceBlankLines(input)).toBe("a\nb\nc");
+  });
+
+  it("handles blank line at start of input", () => {
+    const input = "\n\na";
+    expect(replaceBlankLines(input)).toBe(`${S}\na`);
+  });
+
+  it("handles blank line at end of input", () => {
+    const input = "a\n\n";
+    expect(replaceBlankLines(input)).toBe(`a${S}\n`);
+  });
+});
 
 describe("agencyNode", () => {
   const testCases = [

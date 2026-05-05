@@ -1,0 +1,125 @@
+import { bar as baz } from "./bar.agency"
+import { foo } from "./foo.js"
+
+type Person = {
+  name: string;
+  age: number
+}
+
+type Status = "active" | "inactive"
+
+// A simple helper function
+def greet(name: string): string {
+  """
+  This function takes a name and returns a greeting message.
+  It demonstrates a multi-line docstring that should be preserved
+  during formatting. The docstring can include details about the function's
+  parameters, return value, and any other relevant information.
+  """
+  return "Hello, ${name}!"
+}
+
+safe def add(a: number, b: number): number {
+  return a + b
+}
+
+def withDefaults(x: number, y: number = 10) {
+  return add(x, y)
+}
+
+def withBlock(items: string[], block: (string) => string): string[] {
+  const result = []
+  for (item in items) {
+    result.push(block(item))
+  }
+  return result
+}
+
+def validated(arg: string!): string! {
+  if (arg.length < 5) {
+    const issue = "short"
+    return failure("Argument too ${issue}")
+  }
+  return arg
+}
+
+def tail(str: string): string {
+  if (str.length === 0) {
+    return ""
+  }
+  return str.substring(1)
+}
+
+node main(message: string) {
+  const greeting = greet("world")
+  print(greeting)
+
+  let x = 5
+  let y = 10
+
+  if (x > 3) {
+    print("x is big")
+  } else {
+    print("x is small")
+  }
+
+  for (item in ["a", "b", "c"]) {
+    print(item)
+  }
+
+  while (x > 0) {
+    x = x - 1
+  }
+
+  const person: Person = {
+    name: "Alice",
+    age: 30
+  }
+  const items = [1, 2, 3]
+
+  thread {
+    const result = llm("Say hello")
+  }
+
+  subthread {
+    const other = llm("Say goodbye")
+  }
+
+  match(person.name) {
+    "Alice" => print("Found Alice")
+    "Bob" => print("Found Bob")
+    _ => print("Unknown")
+  }
+
+  handle {
+    const name = "alice"
+    const data = llm("Do something risky with the name ${name}")
+  } with (data) {
+    return approve()
+  }
+
+  const foo = read("foo.txt") with reject
+
+  const mapped = map(items) as item {
+    return item + 1
+  }
+
+  const inlined = map(items, \item -> item + 1)
+
+  const orDef = try validated("hi") catch "default"
+
+  const chopped = validated("greeting")
+  |> validated
+  |> validated
+  |> validated
+  |> validated
+  |> validated + " world"
+
+  const res = 1 + 3.14 + 2.71 + 100 + 100000
+
+  return greeting
+}
+
+node other() {
+  return main("test")
+}

@@ -41,6 +41,8 @@ import {
   messageThreadParser,
   multiLineCommentParser,
   newLineParser,
+  blankLineParser,
+  BLANK_LINE_SENTINEL,
   optionalSpacesOrNewline,
   returnStatementParser,
   staticAssignmentParser,
@@ -82,6 +84,7 @@ const nodeParser = or(
   valueAccessParser,
   multiLineCommentParser,
   commentParser,
+  blankLineParser,
   newLineParser,
 );
 
@@ -108,6 +111,12 @@ export const agencyParser: Parser<AgencyProgram> = seqC(
 export const normalizeCode = (code: string) => {
   return code;
 };
+
+export function replaceBlankLines(input: string): string {
+  return input.replace(/(\r?\n)(\r?\n)+/g, (match) =>
+    BLANK_LINE_SENTINEL.repeat(match.length - 1) + "\n"
+  );
+}
 
 export function _parseAgency(
   input: string,

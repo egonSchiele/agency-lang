@@ -15,6 +15,7 @@ type CalendarEvent = {
 
   ```ts
   import { authorizeCalendar, isCalendarAuthorized, listEvents, createEvent } from "std::calendar"
+  import { env } from "std::system"
 
   node main() {
     // One-time: opens browser for Google OAuth consent.
@@ -103,6 +104,8 @@ type CalendarEvent = {
   ## Date/time formats
   - For timed events: ISO 8601 with timezone, e.g. "2026-05-10T10:00:00-07:00"
   - For all-day events: date only, e.g. "2026-05-10"
+  - Note: for all-day events, `end` is exclusive. A single-day event on May 10
+    should have start="2026-05-10" and end="2026-05-11".
 */
 
 export def authorizeCalendar(clientId: string, clientSecret: string): Result {

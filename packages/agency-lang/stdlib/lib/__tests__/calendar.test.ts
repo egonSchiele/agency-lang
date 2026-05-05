@@ -1,11 +1,14 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { _listEvents, _createEvent, _updateEvent, _deleteEvent, _isCalendarAuthorized } from "../calendar.js";
+import { _listEvents, _createEvent, _updateEvent, _deleteEvent, _isCalendarAuthorized, _authorizeCalendar } from "../calendar.js";
 
 // Mock the oauth module
+const mockAuthorize = vi.fn().mockResolvedValue({ success: true });
+const mockIsAuthorized = vi.fn().mockResolvedValue(true);
+
 vi.mock("../oauth.js", () => ({
   _getAccessToken: vi.fn().mockResolvedValue("mock-access-token"),
-  _isAuthorized: vi.fn().mockResolvedValue(true),
-  _authorize: vi.fn().mockResolvedValue({ success: true }),
+  _isAuthorized: (...args: unknown[]) => mockIsAuthorized(...args),
+  _authorize: (...args: unknown[]) => mockAuthorize(...args),
 }));
 
 function mockFetchResponse(body: unknown, status = 200) {
@@ -241,5 +244,56 @@ describe("_isCalendarAuthorized", () => {
   it("delegates to _isAuthorized with google-calendar provider", async () => {
     const result = await _isCalendarAuthorized();
     expect(result).toBe(true);
+    expect(mockIsAuthorized).toHaveBeenCalledWith("google-calendar");
+  });
+});
+
+describe("_authorizeCalendar", () => {
+  it("calls _authorize with correct Google config", async () => {
+    await _authorizeCalendar("my-client-id", "my-client-secret");
+
+    expect(mockAuthorize).toHaveBeenCalledWith("google-calendar", {
+      authUrl: "https://accounts.google.com/o/oauth2/v2/auth",
+      tokenUrl: "https://oauth2.googleapis.com/token",
+      clientId: "my-client-id",
+      clientSecret: "my-client-secret",
+      scopes: "https://www.googleapis.com/auth/calendar",
+      extraAuthParams: { access_type: "offline", prompt: "consent" },
+    });
+  });
+});
+
+describe("_updateEvent empty string handling", () => {
+  const originalFetch = globalThis.fetch;
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  it("omits empty-string fields from PATCH body", async () => {
+    const mockFetch = mockFetchResponse({
+      id: "evt1",
+      summary: "Unchanged",
+      start: { dateTime: "2026-05-10T10:00:00Z" },
+      end: { dateTime: "2026-05-10T11:00:00Z" },
+    });
+    globalThis.fetch = mockFetch;
+
+    await _updateEvent({
+      eventId: "evt1",
+      summary: "New title",
+      start: "",
+      end: "",
+      description: "",
+      location: "",
+    });
+
+    const [, init] = mockFetch.mock.calls[0];
+    const body = JSON.parse(init.body);
+    expect(body.summary).toBe("New title");
+    expect(body).not.toHaveProperty("start");
+    expect(body).not.toHaveProperty("end");
+    expect(body).not.toHaveProperty("description");
+    expect(body).not.toHaveProperty("location");
   });
 });

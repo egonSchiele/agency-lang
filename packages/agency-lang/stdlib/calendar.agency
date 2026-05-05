@@ -109,6 +109,10 @@ export def authorizeCalendar(clientId: string, clientSecret: string): Result {
   """
   Authorize access to Google Calendar. Opens a browser for the user to sign in and grant permission. Only needs to be run once — tokens are stored locally and refreshed automatically.
   """
+  return interrupt std::authorizeCalendar("Are you sure you want to authorize access to Google Calendar?", {
+    clientId: clientId
+  })
+
   return try _authorizeCalendar(clientId, clientSecret)
 }
 
@@ -123,6 +127,12 @@ export def listEvents(maxResults: number = 10, timeMin: string = "", timeMax: st
   """
   List upcoming events from Google Calendar. Returns an array of events with id, summary, description, location, start, end, and htmlLink. Parameters: maxResults (default 10), timeMin/timeMax (ISO 8601 datetime to filter range), query (free-text search), calendarId (default "primary").
   """
+  return interrupt std::listEvents("Are you sure you want to read your Google Calendar events?", {
+    maxResults: maxResults,
+    calendarId: calendarId,
+    query: query
+  })
+
   return try _listEvents({
     maxResults: maxResults,
     timeMin: timeMin,
@@ -136,6 +146,14 @@ export def createEvent(summary: string, start: string, end: string, description:
   """
   Create a new event on Google Calendar. Parameters: summary (title), start (ISO 8601 datetime or YYYY-MM-DD for all-day), end (same format), description (optional), location (optional), calendarId (default "primary"). Returns the created event.
   """
+  return interrupt std::createEvent("Are you sure you want to create this calendar event?", {
+    summary: summary,
+    start: start,
+    end: end,
+    description: description,
+    location: location
+  })
+
   return try _createEvent({
     summary: summary,
     start: start,
@@ -150,6 +168,13 @@ export def updateEvent(eventId: string, summary: string = "", start: string = ""
   """
   Update an existing event on Google Calendar. Pass the eventId and any fields to change. Empty strings are treated as "don't change". Returns the updated event.
   """
+  return interrupt std::updateEvent("Are you sure you want to update this calendar event?", {
+    eventId: eventId,
+    summary: summary,
+    start: start,
+    end: end
+  })
+
   return try _updateEvent({
     eventId: eventId,
     summary: summary,
@@ -165,5 +190,10 @@ export def deleteEvent(eventId: string, calendarId: string = "primary"): Result 
   """
   Delete an event from Google Calendar by its event ID. Returns { deleted: true } on success.
   """
+  return interrupt std::deleteEvent("Are you sure you want to delete this calendar event?", {
+    eventId: eventId,
+    calendarId: calendarId
+  })
+
   return try _deleteEvent(eventId, calendarId)
 }

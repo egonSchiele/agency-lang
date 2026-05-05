@@ -1,0 +1,65 @@
+/**
+## Installation
+
+```
+npm install @agency-lang/email
+```
+
+## Environment Variables
+
+Set SMTP connection details:
+- `SMTP_HOST` — SMTP server hostname (e.g. "smtp.gmail.com")
+- `SMTP_PORT` — Port number (default: 587)
+- `SMTP_USER` — Username for authentication
+- `SMTP_PASS` — Password or app password
+- `SMTP_SECURE` — "true" for TLS on connect (port 465), "false" for STARTTLS (port 587)
+
+Alternatively, pass these directly via parameters.
+
+## Usage
+
+```ts
+import { sendEmail } from "pkg::@agency-lang/email"
+
+node main() {
+  const result = sendEmail(
+    from: "you@gmail.com",
+    to: "friend@example.com",
+    subject: "Hello from Agency!",
+    text: "This email was sent by my agent."
+  )
+  print(result)
+}
+```
+
+## Common SMTP Configurations
+
+**Gmail:** host="smtp.gmail.com", port=587, user=your email, pass=app password
+**Outlook:** host="smtp.office365.com", port=587
+**Yahoo:** host="smtp.mail.yahoo.com", port=465, secure=true
+*/
+
+import { sendEmail as sendEmailImpl } from "./dist/src/email.js"
+
+/// Send an email via SMTP using Nodemailer. Works with any email provider (Gmail, Outlook, Yahoo, self-hosted, etc). Requires SMTP_HOST, SMTP_USER, and SMTP_PASS env vars, or pass host/user/pass directly. Parameters: from (sender), to (recipient), subject, html or text content, and optionally cc, bcc, replyTo, host, port, secure, user, pass.
+export def sendEmail(from: string, to: string, subject: string, html: string = "", text: string = "", cc: string = "", bcc: string = "", replyTo: string = "", host: string = "", port: number = 0, secure: boolean = false, user: string = "", pass: string = ""): Result {
+  """
+  Send an email via SMTP using Nodemailer. Works with any email provider (Gmail, Outlook, Yahoo, self-hosted, etc). Requires SMTP_HOST, SMTP_USER, and SMTP_PASS env vars, or pass host/user/pass directly.
+  """
+  return try sendEmailImpl({
+    from: from,
+    to: to,
+    subject: subject,
+    html: html,
+    text: text,
+    cc: cc,
+    bcc: bcc,
+    replyTo: replyTo
+  }, {
+    host: host,
+    port: port,
+    secure: secure,
+    user: user,
+    pass: pass
+  })
+}

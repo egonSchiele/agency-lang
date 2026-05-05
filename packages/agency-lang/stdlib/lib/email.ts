@@ -1,0 +1,196 @@
+// Email sending via Resend, SendGrid, and Mailgun HTTP APIs (zero dependencies)
+
+export type EmailParams = {
+  from: string;
+  to: string | string[];
+  subject: string;
+  html?: string;
+  text?: string;
+  cc?: string | string[];
+  bcc?: string | string[];
+  replyTo?: string;
+};
+
+export type EmailResult = {
+  id: string;
+  provider: string;
+};
+
+// --- Resend ---
+
+export type ResendOptions = {
+  apiKey?: string;
+};
+
+export async function _sendWithResend(
+  params: EmailParams,
+  options?: ResendOptions
+): Promise<EmailResult> {
+  const apiKey = options?.apiKey || process.env.RESEND_API_KEY;
+  if (!apiKey) {
+    throw new Error(
+      "Missing Resend API key. Set RESEND_API_KEY env var or pass apiKey option."
+    );
+  }
+
+  const body: Record<string, unknown> = {
+    from: params.from,
+    to: Array.isArray(params.to) ? params.to : [params.to],
+    subject: params.subject,
+  };
+
+  if (params.html) body.html = params.html;
+  if (params.text) body.text = params.text;
+  if (params.cc) body.cc = Array.isArray(params.cc) ? params.cc : [params.cc];
+  if (params.bcc) body.bcc = Array.isArray(params.bcc) ? params.bcc : [params.bcc];
+  if (params.replyTo) body.reply_to = params.replyTo;
+
+  const response = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body),
+  });
+
+  if (!response.ok) {
+    const responseBody = await response.text();
+    throw new Error(`Resend API error (${response.status}): ${responseBody}`);
+  }
+
+  const data = await response.json() as { id: string };
+  return { id: data.id, provider: "resend" };
+}
+
+// --- SendGrid ---
+
+export type SendGridOptions = {
+  apiKey?: string;
+};
+
+export async function _sendWithSendGrid(
+  params: EmailParams,
+  options?: SendGridOptions
+): Promise<EmailResult> {
+  const apiKey = options?.apiKey || process.env.SENDGRID_API_KEY;
+  if (!apiKey) {
+    throw new Error(
+      "Missing SendGrid API key. Set SENDGRID_API_KEY env var or pass apiKey option."
+    );
+  }
+
+  const personalizations: Record<string, unknown> = {
+    to: (Array.isArray(params.to) ? params.to : [params.to]).map((email) => ({ email })),
+  };
+
+  if (params.cc) {
+    personalizations.cc = (Array.isArray(params.cc) ? params.cc : [params.cc]).map((email) => ({ email }));
+  }
+  if (params.bcc) {
+    personalizations.bcc = (Array.isArray(params.bcc) ? params.bcc : [params.bcc]).map((email) => ({ email }));
+  }
+
+  const content: { type: string; value: string }[] = [];
+  if (params.text) content.push({ type: "text/plain", value: params.text });
+  if (params.html) content.push({ type: "text/html", value: params.html });
+  if (content.length === 0) content.push({ type: "text/plain", value: "" });
+
+  const body: Record<string, unknown> = {
+    personalizations: [{ ...personalizations, subject: params.subject }],
+    from: { email: params.from },
+    content,
+  };
+
+  if (params.replyTo) {
+    body.reply_to = { email: params.replyTo };
+  }
+
+  const response = await fetch("https://api.sendgrid.com/v3/mail/send", {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body),
+  });
+
+  if (!response.ok) {
+    const responseBody = await response.text();
+    throw new Error(`SendGrid API error (${response.status}): ${responseBody}`);
+  }
+
+  // SendGrid returns 202 with message ID in x-message-id header
+  const messageId = response.headers.get("x-message-id") ?? "";
+  return { id: messageId, provider: "sendgrid" };
+}
+
+// --- Mailgun ---
+
+export type MailgunOptions = {
+  apiKey?: string;
+  domain?: string;
+  region?: string; // "us" (default) or "eu"
+};
+
+export async function _sendWithMailgun(
+  params: EmailParams,
+  options?: MailgunOptions
+): Promise<EmailResult> {
+  const apiKey = options?.apiKey || process.env.MAILGUN_API_KEY;
+  if (!apiKey) {
+    throw new Error(
+      "Missing Mailgun API key. Set MAILGUN_API_KEY env var or pass apiKey option."
+    );
+  }
+
+  const domain = options?.domain || process.env.MAILGUN_DOMAIN;
+  if (!domain) {
+    throw new Error(
+      "Missing Mailgun domain. Set MAILGUN_DOMAIN env var or pass domain option."
+    );
+  }
+
+  const region = options?.region || process.env.MAILGUN_REGION || "us";
+  const baseUrl = region === "eu"
+    ? "https://api.eu.mailgun.net"
+    : "https://api.mailgun.net";
+
+  const formData = new URLSearchParams();
+  formData.set("from", params.from);
+  formData.set("subject", params.subject);
+
+  const toList = Array.isArray(params.to) ? params.to : [params.to];
+  formData.set("to", toList.join(","));
+
+  if (params.html) formData.set("html", params.html);
+  if (params.text) formData.set("text", params.text);
+  if (params.cc) {
+    const ccList = Array.isArray(params.cc) ? params.cc : [params.cc];
+    formData.set("cc", ccList.join(","));
+  }
+  if (params.bcc) {
+    const bccList = Array.isArray(params.bcc) ? params.bcc : [params.bcc];
+    formData.set("bcc", bccList.join(","));
+  }
+  if (params.replyTo) formData.set("h:Reply-To", params.replyTo);
+
+  const credentials = Buffer.from(`api:${apiKey}`).toString("base64");
+
+  const response = await fetch(`${baseUrl}/v3/${domain}/messages`, {
+    method: "POST",
+    headers: {
+      "Authorization": `Basic ${credentials}`,
+      "Content-Type": "application/x-www-form-urlencoded",
+    },
+    body: formData.toString(),
+  });
+
+  if (!response.ok) {
+    const responseBody = await response.text();
+    throw new Error(`Mailgun API error (${response.status}): ${responseBody}`);
+  }
+
+  const data = await response.json() as { id: string };
+  return { id: data.id, provider: "mailgun" };
+}

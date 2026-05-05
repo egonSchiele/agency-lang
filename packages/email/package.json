@@ -1,0 +1,42 @@
+{
+  "name": "@agency-lang/email",
+  "version": "0.0.1",
+  "description": "SMTP email integration for Agency via Nodemailer",
+  "type": "module",
+  "agency": "./index.agency",
+  "main": "./index.js",
+  "exports": {
+    ".": {
+      "types": "./dist/src/email.d.ts",
+      "import": "./dist/src/email.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist/",
+    "index.agency",
+    "index.js"
+  ],
+  "author": "Aditya Bhargava",
+  "license": "ISC",
+  "bugs": { "url": "https://github.com/egonSchiele/agency-lang/issues" },
+  "homepage": "https://github.com/egonSchiele/agency-lang",
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest",
+    "test:run": "vitest run",
+    "test:agency": "agency tests/agency"
+  },
+  "dependencies": {
+    "nodemailer": "^7.0.0"
+  },
+  "peerDependencies": {
+    "agency-lang": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^25.0.0",
+    "@types/nodemailer": "^6.4.0",
+    "typescript": "^5.0.0",
+    "vitest": "^3.0.0"
+  }
+}

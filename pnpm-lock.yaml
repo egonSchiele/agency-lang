@@ -113,7 +113,7 @@ importers:
         version: link:../agency-lang
     devDependencies:
       '@types/node':
-        specifier: ^25.0.0
+        specifier: ^25.0.6
         version: 25.0.6
       typescript:
         specifier: ^5.0.0
@@ -132,7 +132,7 @@ importers:
         version: 7.0.13
     devDependencies:
       '@types/node':
-        specifier: ^25.0.0
+        specifier: ^25.0.6
         version: 25.0.6
       '@types/nodemailer':
         specifier: ^6.4.0

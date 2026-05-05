@@ -20,7 +20,7 @@ Get the current date and time as an ISO 8601 string with timezone offset.
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/date.agency#L80))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/date.agency#L79))
 
 ### today
 
@@ -40,7 +40,7 @@ Get today's date as a YYYY-MM-DD string.
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/date.agency#L88))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/date.agency#L87))
 
 ### tomorrow
 
@@ -60,7 +60,7 @@ Get tomorrow's date as a YYYY-MM-DD string.
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/date.agency#L96))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/date.agency#L95))
 
 ### addMinutes
 
@@ -81,7 +81,7 @@ Add minutes to a datetime string and return the new datetime.
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/date.agency#L104))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/date.agency#L103))
 
 ### addHours
 
@@ -102,7 +102,7 @@ Add hours to a datetime string and return the new datetime.
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/date.agency#L112))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/date.agency#L111))
 
 ### addDays
 
@@ -123,7 +123,7 @@ Add days to a datetime string and return the new datetime.
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/date.agency#L120))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/date.agency#L119))
 
 ### nextDayOfWeek
 
@@ -144,7 +144,7 @@ Get the date of the next occurrence of a day of the week (e.g. "monday").
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/date.agency#L128))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/date.agency#L127))
 
 ### atTime
 
@@ -166,28 +166,7 @@ Combine a date (YYYY-MM-DD) and time (HH:MM) into a timezone-aware ISO 8601 stri
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/date.agency#L136))
-
-### endAfter
-
-```ts
-endAfter(start: string, minutes: number): string
-```
-
-Compute an end time by adding a duration in minutes to a start time. Useful for creating calendar events: endAfter(start, 60) gives you an end time 1 hour after start.
-
-Compute an end time by adding minutes to a start time.
-
-**Parameters:**
-
-| Name | Type | Default |
-|---|---|---|
-| start | `string` |  |
-| minutes | `number` |  |
-
-**Returns:** `string`
-
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/date.agency#L144))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/date.agency#L135))
 
 ### startOfDay
 
@@ -208,7 +187,7 @@ Get the start of the day (midnight) as an ISO 8601 string.
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/date.agency#L152))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/date.agency#L143))
 
 ### endOfDay
 
@@ -229,7 +208,7 @@ Get the end of the day (23:59:59) as an ISO 8601 string.
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/date.agency#L160))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/date.agency#L151))
 
 ### startOfWeek
 
@@ -250,7 +229,7 @@ Get the start of the current week (Sunday midnight) as an ISO 8601 string.
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/date.agency#L168))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/date.agency#L159))
 
 ### endOfWeek
 
@@ -271,7 +250,7 @@ Get the end of the current week (Saturday 23:59:59) as an ISO 8601 string.
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/date.agency#L176))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/date.agency#L167))
 
 ### startOfMonth
 
@@ -292,7 +271,7 @@ Get the start of the month (1st at midnight) as an ISO 8601 string.
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/date.agency#L184))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/date.agency#L175))
 
 ### endOfMonth
 
@@ -313,4 +292,4 @@ Get the end of the month (last day at 23:59:59) as an ISO 8601 string.
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/date.agency#L192))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/date.agency#L183))

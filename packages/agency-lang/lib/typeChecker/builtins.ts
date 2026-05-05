@@ -1,16 +1,16 @@
 import { VariableType } from "../types.js";
 import { BuiltinSignature } from "./types.js";
+import {
+  ANY_T,
+  BOOLEAN_T as boolean,
+  NUMBER_T as number,
+  STRING_T as string,
+  UNDEFINED_T as undef,
+  VOID_T as voidT,
+} from "./primitives.js";
 
-const string = { type: "primitiveType", value: "string" } as const;
-const number = { type: "primitiveType", value: "number" } as const;
-const boolean = { type: "primitiveType", value: "boolean" } as const;
-const voidT = { type: "primitiveType", value: "void" } as const;
-const undef = { type: "primitiveType", value: "undefined" } as const;
 const stringArray = { type: "arrayType", elementType: string } as const;
-const anyArray = {
-  type: "arrayType",
-  elementType: { type: "primitiveType", value: "any" },
-} as const;
+const anyArray = { type: "arrayType", elementType: ANY_T } as const;
 
 const optional = (t: VariableType): VariableType => ({
   type: "unionType",
@@ -55,7 +55,7 @@ const llmOptions: VariableType = {
     },
     { key: "tools", value: optional(anyArray) },
     // `any` already accepts undefined, so no need to wrap in optional.
-    { key: "metadata", value: { type: "primitiveType", value: "any" } },
+    { key: "metadata", value: ANY_T },
   ],
 };
 

@@ -17,6 +17,7 @@ import { ScopeInfo, TypeCheckerContext } from "./types.js";
 import { Scope } from "./scope.js";
 import { formatTypeHint } from "../cli/util.js";
 import { checkType } from "./utils.js";
+import { NUMBER_T } from "./primitives.js";
 
 export function buildScopes(ctx: TypeCheckerContext): ScopeInfo[] {
   const scopes: ScopeInfo[] = [];
@@ -196,10 +197,7 @@ export function walkScopeBody(
           });
         }
         if (node.indexVar) {
-          scope.declare(node.indexVar, {
-            type: "primitiveType",
-            value: "number",
-          });
+          scope.declare(node.indexVar, NUMBER_T);
         }
         walkScopeBody(node.body, scope, ctx);
         break;

@@ -18,6 +18,7 @@ import {
   checkExcessObjectProperties,
 } from "./utils.js";
 import { Scope } from "./scope.js";
+import { BOOLEAN_T, REGEX_T, STRING_T } from "./primitives.js";
 
 /**
  * Derive arity bounds and per-position param types from a parameter list,
@@ -437,8 +438,6 @@ function checkReturnTypesInScope(
   }
 }
 
-const BOOLEAN_TYPE: VariableType = { type: "primitiveType", value: "boolean" };
-
 function checkExpressionsInScope(
   info: ScopeInfo,
   ctx: TypeCheckerContext,
@@ -449,7 +448,7 @@ function checkExpressionsInScope(
     } else if (node.type === "returnStatement" && node.value) {
       synthType(node.value, info.scope, ctx);
     } else if (node.type === "ifElse" || node.type === "whileLoop") {
-      checkType(node.condition, BOOLEAN_TYPE, info.scope, "condition", ctx);
+      checkType(node.condition, BOOLEAN_T, info.scope, "condition", ctx);
     } else if (node.type === "binOpExpression" && node.operator === "catch") {
       checkCatchDefaultType(node, info.scope, ctx);
     } else if (
@@ -462,9 +461,6 @@ function checkExpressionsInScope(
     }
   }
 }
-
-const STRING_T: VariableType = { type: "primitiveType", value: "string" };
-const REGEX_T: VariableType = { type: "primitiveType", value: "regex" };
 
 /**
  * Validate the LHS of `|>` against the slot it flows into on the RHS:

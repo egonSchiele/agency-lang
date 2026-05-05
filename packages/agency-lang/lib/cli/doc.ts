@@ -196,7 +196,7 @@ function sourceLink(
   ctx: DocContext,
 ): string {
   if (!ctx.baseUrl || !ctx.sourceRelPath || !loc) return "";
-  return `([source](${ctx.baseUrl}/${toPosixPath(ctx.sourceRelPath)}#L${loc.line}))`;
+  return `([source](${ctx.baseUrl}/${toPosixPath(ctx.sourceRelPath)}#L${loc.line + 1}))`;
 }
 
 function formatSignature(

@@ -1,4 +1,5 @@
 import { VariableType } from "../types.js";
+import { BOOLEAN_T, NUMBER_T, STRING_T } from "./primitives.js";
 
 export function resolveType(
   vt: VariableType,
@@ -16,11 +17,11 @@ export function widenType(vt: VariableType | "any"): VariableType | "any" {
   if (vt === "any") return "any";
   switch (vt.type) {
     case "stringLiteralType":
-      return { type: "primitiveType", value: "string" };
+      return STRING_T;
     case "numberLiteralType":
-      return { type: "primitiveType", value: "number" };
+      return NUMBER_T;
     case "booleanLiteralType":
-      return { type: "primitiveType", value: "boolean" };
+      return BOOLEAN_T;
     case "objectType":
       return {
         type: "objectType",

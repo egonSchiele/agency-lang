@@ -4,8 +4,7 @@ import type {
   GraphNodeDefinition,
 } from "../types.js";
 import type { ImportedFunctionSignature } from "../compilationUnit.js";
-
-const STRING_T: VariableType = { type: "primitiveType", value: "string" };
+import { STRING_T } from "./primitives.js";
 
 /**
  * Wrap `t` in Result<T, string> when `validated` is true, mirroring the

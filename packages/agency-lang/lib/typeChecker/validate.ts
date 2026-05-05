@@ -1,6 +1,7 @@
 import { VariableType } from "../types.js";
 import { SourceLocation } from "../types/base.js";
 import { TypeCheckError } from "./types.js";
+import { visitTypes } from "./typeWalker.js";
 
 export function validateTypeReferences(
   vt: VariableType,
@@ -9,27 +10,12 @@ export function validateTypeReferences(
   errors: TypeCheckError[],
   loc?: SourceLocation,
 ): void {
-  switch (vt.type) {
-    case "typeAliasVariable":
-      if (!typeAliases[vt.aliasName]) {
-        errors.push({
-          message: `Type alias '${vt.aliasName}' is not defined (referenced in '${context}').`,
-          loc,
-        });
-      }
-      break;
-    case "arrayType":
-      validateTypeReferences(vt.elementType, context, typeAliases, errors);
-      break;
-    case "unionType":
-      for (const t of vt.types) {
-        validateTypeReferences(t, context, typeAliases, errors);
-      }
-      break;
-    case "objectType":
-      for (const prop of vt.properties) {
-        validateTypeReferences(prop.value, context, typeAliases, errors);
-      }
-      break;
-  }
+  visitTypes(vt, (t) => {
+    if (t.type === "typeAliasVariable" && !typeAliases[t.aliasName]) {
+      errors.push({
+        message: `Type alias '${t.aliasName}' is not defined (referenced in '${context}').`,
+        loc,
+      });
+    }
+  });
 }

@@ -9,8 +9,7 @@ import { isAssignable, resolveType } from "./assignability.js";
 import { resultTypeForValidation } from "./validation.js";
 import { TypeCheckerContext } from "./types.js";
 import { Scope } from "./scope.js";
-
-const ANY_T: VariableType = { type: "primitiveType", value: "any" };
+import { ANY_T, BOOLEAN_T, NUMBER_T, REGEX_T, STRING_T } from "./primitives.js";
 
 /** Names treated as Result constructors (synth parameterizes ResultType from arg). */
 const RESULT_CONSTRUCTORS = new Set<string>(["success", "failure"]);
@@ -59,19 +58,19 @@ export function synthType(
       return scope.lookup(expr.value) ?? "any";
     }
     case "number":
-      return { type: "primitiveType", value: "number" };
+      return NUMBER_T;
     case "string": {
       if (expr.segments.length === 1 && expr.segments[0].type === "text") {
         return { type: "stringLiteralType", value: expr.segments[0].value };
       }
-      return { type: "primitiveType", value: "string" };
+      return STRING_T;
     }
     case "multiLineString":
-      return { type: "primitiveType", value: "string" };
+      return STRING_T;
     case "boolean":
-      return { type: "primitiveType", value: "boolean" };
+      return BOOLEAN_T;
     case "regex":
-      return { type: "primitiveType", value: "regex" };
+      return REGEX_T;
     case "binOpExpression":
       return synthBinOp(expr, scope, ctx);
     case "functionCall":
@@ -126,7 +125,7 @@ function synthBinOp(
   const op = expr.operator;
   if (op === "catch") return synthCatch(expr, scope, ctx);
   if (op === "|>") return synthPipe(expr, scope, ctx);
-  if (BOOLEAN_OPS.has(op)) return { type: "primitiveType", value: "boolean" };
+  if (BOOLEAN_OPS.has(op)) return BOOLEAN_T;
   if (op === "+") {
     const leftType = synthType(expr.left, scope, ctx);
     const rightType = synthType(expr.right, scope, ctx);
@@ -135,10 +134,10 @@ function synthBinOp(
       ((t.type === "primitiveType" && t.value === "string") ||
         t.type === "stringLiteralType");
     if (isString(leftType) || isString(rightType)) {
-      return { type: "primitiveType", value: "string" };
+      return STRING_T;
     }
   }
-  return { type: "primitiveType", value: "number" };
+  return NUMBER_T;
 }
 
 /**
@@ -262,10 +261,7 @@ function synthArray(
   ctx: TypeCheckerContext,
 ): VariableType | "any" {
   if (expr.items.length === 0)
-    return {
-      type: "arrayType",
-      elementType: { type: "primitiveType", value: "any" },
-    };
+    return { type: "arrayType", elementType: ANY_T };
   const itemTypes: (VariableType | "any")[] = [];
   for (const item of expr.items) {
     if (item.type === "splat") {
@@ -384,7 +380,7 @@ export function synthValueAccess(
             return "any";
           }
         } else if (resolved.type === "arrayType" && element.name === "length") {
-          currentType = { type: "primitiveType", value: "number" };
+          currentType = NUMBER_T;
         } else {
           ctx.errors.push({
             message: `Property '${element.name}' does not exist on type '${formatTypeHint(resolved)}'.`,

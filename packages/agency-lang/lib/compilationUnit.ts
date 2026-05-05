@@ -14,6 +14,7 @@ import type {
 import type { SymbolTable } from "./symbolTable.js";
 import { walkNodes } from "./utils/node.js";
 import { resultTypeForValidation } from "./typeChecker/validation.js";
+import { visitTypes } from "./typeChecker/typeWalker.js";
 
 export const GLOBAL_SCOPE_KEY = "global";
 
@@ -303,28 +304,7 @@ function resolveTypeFromFile(
 }
 
 function collectAliasNames(t: VariableType, out: string[]): void {
-  switch (t.type) {
-    case "typeAliasVariable":
-      out.push(t.aliasName);
-      return;
-    case "arrayType":
-      collectAliasNames(t.elementType, out);
-      return;
-    case "unionType":
-      for (const m of t.types) collectAliasNames(m, out);
-      return;
-    case "objectType":
-      for (const p of t.properties) collectAliasNames(p.value, out);
-      return;
-    case "resultType":
-      collectAliasNames(t.successType, out);
-      collectAliasNames(t.failureType, out);
-      return;
-    case "blockType":
-      for (const p of t.params) collectAliasNames(p.typeAnnotation, out);
-      collectAliasNames(t.returnType, out);
-      return;
-    default:
-      return;
-  }
+  visitTypes(t, (n) => {
+    if (n.type === "typeAliasVariable") out.push(n.aliasName);
+  });
 }

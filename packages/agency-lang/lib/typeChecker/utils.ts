@@ -4,6 +4,7 @@ import { isAssignable, resolveType } from "./assignability.js";
 import { synthType } from "./synthesizer.js";
 import { TypeCheckerContext } from "./types.js";
 import { Scope } from "./scope.js";
+import { visitTypes } from "./typeWalker.js";
 
 /**
  * Look up the parameter list for a callable name across local defs, graph
@@ -44,20 +45,10 @@ function rejectRegexInLlmType(
 }
 
 function containsRegex(t: VariableType): boolean {
-  switch (t.type) {
-    case "primitiveType":
-      return t.value === "regex";
-    case "arrayType":
-      return containsRegex(t.elementType);
-    case "unionType":
-      return t.types.some(containsRegex);
-    case "objectType":
-      return t.properties.some((p) => containsRegex(p.value));
-    case "resultType":
-      return containsRegex(t.successType) || containsRegex(t.failureType);
-    default:
-      return false;
-  }
+  return visitTypes(
+    t,
+    (n) => n.type === "primitiveType" && n.value === "regex",
+  );
 }
 
 /**

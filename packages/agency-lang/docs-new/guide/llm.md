@@ -18,15 +18,14 @@ const response: Response = llm("What is the capital of France?")
 print(response)
 ```
 
-Any function defined in Agency can automatically be used as a tool for the LLM.
+Any function defined in Agency can automatically be used as a tool for the LLM. Pass the function in the `tools` option:
 
 ```ts
 def add(a: number, b: number): number {
   return a + b
 }
 
-uses add
-const result = llm("What is 4 + 5?")
+const result = llm("What is 4 + 5?", { tools: [add] })
 print(result)
 ```
 

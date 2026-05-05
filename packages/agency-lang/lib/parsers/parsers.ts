@@ -259,6 +259,7 @@ export const multiLineCommentParser: Parser<AgencyMultiLineComment> = (
   const parser = seqC(
     set("type", "multiLineComment"),
     set("isDoc", false as boolean),
+    set("isModuleDoc", false as boolean),
     optionalSpaces,
     capture(map(between(str("/*"), str("*/"), anyChar), joinChars), "content"),
   );
@@ -268,6 +269,13 @@ export const multiLineCommentParser: Parser<AgencyMultiLineComment> = (
     if (result.result.content.startsWith("*")) {
       result.result.isDoc = true;
       result.result.content = result.result.content.slice(1);
+      // Detect /** @module ... */ syntax for file-level doc comments
+      const trimmed = result.result.content.trimStart();
+      if (trimmed.startsWith("@module")) {
+        result.result.isModuleDoc = true;
+        // Strip the @module tag from content
+        result.result.content = trimmed.slice("@module".length);
+      }
     }
   }
   return result;

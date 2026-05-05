@@ -1,6 +1,6 @@
 import { _authorize, _getAccessToken, _isAuthorized, _revokeAuth } from "./lib/oauth.js"
 
-/**
+/** @module
   ## Usage
 
   ```ts

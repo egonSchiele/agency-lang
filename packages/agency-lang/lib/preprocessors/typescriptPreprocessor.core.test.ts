@@ -974,11 +974,11 @@ describe("TypescriptPreprocessor Core Functionality", () => {
   });
 
   describe("attachDocComments", () => {
-    it("should attach a file-level doc comment to program.docComment", () => {
+    it("should attach a @module doc comment to program.docComment", () => {
       const program: AgencyProgram = {
         type: "agencyProgram",
         nodes: [
-          { type: "multiLineComment", content: " File docs ", isDoc: true },
+          { type: "multiLineComment", content: " File docs ", isDoc: true, isModuleDoc: true },
           {
             type: "importStatement",
             modulePath: "./foo.js",
@@ -1000,12 +1000,58 @@ describe("TypescriptPreprocessor Core Functionality", () => {
       expect(program.nodes.every((n) => n.type !== "multiLineComment")).toBe(true);
     });
 
-    it("should skip regular comments before file-level doc comment", () => {
+    it("should allow @module doc comment after imports", () => {
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "importStatement",
+            modulePath: "./foo.js",
+            importedNames: [],
+          } as any,
+          { type: "multiLineComment", content: " File docs ", isDoc: true, isModuleDoc: true },
+          {
+            type: "function",
+            functionName: "foo",
+            parameters: [],
+            body: [],
+          },
+        ],
+      };
+      const preprocessor = new TypescriptPreprocessor(program);
+      preprocessor.preprocess();
+      expect(program.docComment).toBeDefined();
+      expect(program.docComment!.content).toBe(" File docs ");
+    });
+
+    it("should throw if @module doc comment appears after non-import code", () => {
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "typeAlias",
+            aliasName: "Foo",
+            aliasedType: { type: "primitiveType", value: "string" },
+          },
+          { type: "multiLineComment", content: " Too late ", isDoc: true, isModuleDoc: true },
+          {
+            type: "function",
+            functionName: "foo",
+            parameters: [],
+            body: [],
+          },
+        ],
+      };
+      const preprocessor = new TypescriptPreprocessor(program);
+      expect(() => preprocessor.preprocess()).toThrow("@module doc comment must appear before any code");
+    });
+
+    it("should skip regular comments before @module doc comment", () => {
       const program: AgencyProgram = {
         type: "agencyProgram",
         nodes: [
           { type: "comment", content: " regular comment" },
-          { type: "multiLineComment", content: " File docs ", isDoc: true },
+          { type: "multiLineComment", content: " File docs ", isDoc: true, isModuleDoc: true },
           {
             type: "importStatement",
             modulePath: "./foo.js",
@@ -1025,11 +1071,34 @@ describe("TypescriptPreprocessor Core Functionality", () => {
       expect(program.docComment!.content).toBe(" File docs ");
     });
 
+    it("should not treat a regular doc comment as file-level", () => {
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          { type: "multiLineComment", content: " Not module doc ", isDoc: true, isModuleDoc: false },
+          {
+            type: "importStatement",
+            modulePath: "./foo.js",
+            importedNames: [],
+          } as any,
+          {
+            type: "function",
+            functionName: "foo",
+            parameters: [],
+            body: [],
+          },
+        ],
+      };
+      const preprocessor = new TypescriptPreprocessor(program);
+      preprocessor.preprocess();
+      expect(program.docComment).toBeUndefined();
+    });
+
     it("should attach doc comment to a function when directly before it", () => {
       const program: AgencyProgram = {
         type: "agencyProgram",
         nodes: [
-          { type: "multiLineComment", content: " Func docs ", isDoc: true },
+          { type: "multiLineComment", content: " Func docs ", isDoc: true, isModuleDoc: false },
           {
             type: "function",
             functionName: "foo",
@@ -1056,7 +1125,7 @@ describe("TypescriptPreprocessor Core Functionality", () => {
             modulePath: "./foo.js",
             importedNames: [],
           } as any,
-          { type: "multiLineComment", content: " Func docs ", isDoc: true },
+          { type: "multiLineComment", content: " Func docs ", isDoc: true, isModuleDoc: false },
           {
             type: "function",
             functionName: "foo",
@@ -1082,7 +1151,7 @@ describe("TypescriptPreprocessor Core Functionality", () => {
             modulePath: "./foo.js",
             importedNames: [],
           } as any,
-          { type: "multiLineComment", content: " Node docs ", isDoc: true },
+          { type: "multiLineComment", content: " Node docs ", isDoc: true, isModuleDoc: false },
           {
             type: "graphNode",
             nodeName: "main",
@@ -1107,7 +1176,7 @@ describe("TypescriptPreprocessor Core Functionality", () => {
             modulePath: "./foo.js",
             importedNames: [],
           } as any,
-          { type: "multiLineComment", content: " Type docs ", isDoc: true },
+          { type: "multiLineComment", content: " Type docs ", isDoc: true, isModuleDoc: false },
           {
             type: "typeAlias",
             aliasName: "Foo",
@@ -1126,7 +1195,7 @@ describe("TypescriptPreprocessor Core Functionality", () => {
       const program: AgencyProgram = {
         type: "agencyProgram",
         nodes: [
-          { type: "multiLineComment", content: " regular ", isDoc: false },
+          { type: "multiLineComment", content: " regular ", isDoc: false, isModuleDoc: false },
           {
             type: "function",
             functionName: "foo",
@@ -1151,7 +1220,7 @@ describe("TypescriptPreprocessor Core Functionality", () => {
             modulePath: "./foo.js",
             importedNames: [],
           } as any,
-          { type: "multiLineComment", content: " orphan doc ", isDoc: true },
+          { type: "multiLineComment", content: " orphan doc ", isDoc: true, isModuleDoc: false },
           {
             type: "importStatement",
             modulePath: "./bar.js",
@@ -1175,7 +1244,7 @@ describe("TypescriptPreprocessor Core Functionality", () => {
             modulePath: "./foo.js",
             importedNames: [],
           } as any,
-          { type: "multiLineComment", content: " Func docs ", isDoc: true },
+          { type: "multiLineComment", content: " Func docs ", isDoc: true, isModuleDoc: false },
           { type: "newLine" },
           {
             type: "function",

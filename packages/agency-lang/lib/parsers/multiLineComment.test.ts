@@ -7,7 +7,7 @@ describe("multiLineCommentParser", () => {
       input: "/* this is a comment */",
       expected: {
         success: true,
-        result: { type: "multiLineComment", content: " this is a comment ", isDoc: false },
+        result: { type: "multiLineComment", content: " this is a comment ", isDoc: false, isModuleDoc: false },
       },
     },
     {
@@ -18,6 +18,7 @@ describe("multiLineCommentParser", () => {
           type: "multiLineComment",
           content: " multi\nline\ncomment ",
           isDoc: false,
+          isModuleDoc: false,
         },
       },
     },
@@ -25,7 +26,7 @@ describe("multiLineCommentParser", () => {
       input: "/*no spaces*/",
       expected: {
         success: true,
-        result: { type: "multiLineComment", content: "no spaces", isDoc: false },
+        result: { type: "multiLineComment", content: "no spaces", isDoc: false, isModuleDoc: false },
       },
     },
     {
@@ -36,6 +37,7 @@ describe("multiLineCommentParser", () => {
           type: "multiLineComment",
           content: " comment with special chars !@# ",
           isDoc: false,
+          isModuleDoc: false,
         },
       },
     },
@@ -43,7 +45,7 @@ describe("multiLineCommentParser", () => {
       input: "/**/",
       expected: {
         success: true,
-        result: { type: "multiLineComment", content: "", isDoc: false },
+        result: { type: "multiLineComment", content: "", isDoc: false, isModuleDoc: false },
       },
     },
     // Doc comment cases
@@ -51,7 +53,7 @@ describe("multiLineCommentParser", () => {
       input: "/** this is a doc comment */",
       expected: {
         success: true,
-        result: { type: "multiLineComment", content: " this is a doc comment ", isDoc: true },
+        result: { type: "multiLineComment", content: " this is a doc comment ", isDoc: true, isModuleDoc: false },
       },
     },
     {
@@ -62,6 +64,7 @@ describe("multiLineCommentParser", () => {
           type: "multiLineComment",
           content: " multi\nline\ndoc comment ",
           isDoc: true,
+          isModuleDoc: false,
         },
       },
     },
@@ -69,7 +72,29 @@ describe("multiLineCommentParser", () => {
       input: "/***/",
       expected: {
         success: true,
-        result: { type: "multiLineComment", content: "", isDoc: true },
+        result: { type: "multiLineComment", content: "", isDoc: true, isModuleDoc: false },
+      },
+    },
+    // @module doc comment cases
+    {
+      input: "/** @module This is a module doc comment. */",
+      expected: {
+        success: true,
+        result: { type: "multiLineComment", content: " This is a module doc comment. ", isDoc: true, isModuleDoc: true },
+      },
+    },
+    {
+      input: "/** @module\n  Multi-line module doc.\n*/",
+      expected: {
+        success: true,
+        result: { type: "multiLineComment", content: "\n  Multi-line module doc.\n", isDoc: true, isModuleDoc: true },
+      },
+    },
+    {
+      input: "/** Not a module doc */",
+      expected: {
+        success: true,
+        result: { type: "multiLineComment", content: " Not a module doc ", isDoc: true, isModuleDoc: false },
       },
     },
     // Failure cases

@@ -1,6 +1,6 @@
 import { _setSecret, _getSecret, _deleteSecret, _isKeyringAvailable } from "./lib/keyring.js"
 
-/**
+/** @module
   ## Usage
 
   ```ts

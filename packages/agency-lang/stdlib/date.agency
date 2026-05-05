@@ -1,6 +1,6 @@
 import { _now, _today, _tomorrow, _addMinutes, _addHours, _addDays, _nextDayOfWeek, _atTime, _startOfDay, _endOfDay, _startOfWeek, _endOfWeek, _startOfMonth, _endOfMonth } from "./lib/date.js"
 
-/**
+/** @module
   ## Date and Time Utilities
 
   Helpers for constructing timezone-aware ISO 8601 date strings — the format

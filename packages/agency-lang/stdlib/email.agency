@@ -1,11 +1,6 @@
 import { _sendWithResend, _sendWithSendGrid, _sendWithMailgun } from "./lib/email.js"
 
-type EmailResult = {
-  id: string;
-  provider: string
-}
-
-/**
+/** @module
   ## Usage
 
   ```ts
@@ -27,6 +22,11 @@ type EmailResult = {
   - SendGrid: `SENDGRID_API_KEY`
   - Mailgun: `MAILGUN_API_KEY` and `MAILGUN_DOMAIN` (optionally `MAILGUN_REGION` = "us" | "eu")
 */
+
+type EmailResult = {
+  id: string;
+  provider: string
+}
 
 /** Send an email using the Resend API. Requires `RESEND_API_KEY` env var or pass apiKey directly. */
 export def sendWithResend(from: string, to: string, subject: string, html: string = "", text: string = "", cc: string = "", bcc: string = "", replyTo: string = "", apiKey: string = ""): Result {

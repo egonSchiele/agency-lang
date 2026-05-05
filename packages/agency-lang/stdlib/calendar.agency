@@ -1,16 +1,6 @@
 import { _authorizeCalendar, _listEvents, _createEvent, _updateEvent, _deleteEvent, _isCalendarAuthorized } from "./lib/calendar.js"
 
-type CalendarEvent = {
-  id: string;
-  summary: string;
-  description: string;
-  location: string;
-  start: string;
-  end: string;
-  htmlLink: string
-}
-
-/**
+/** @module
   ## Usage
 
   ```ts
@@ -113,6 +103,16 @@ type CalendarEvent = {
   - Note: for all-day events, `end` is exclusive. A single-day event on May 10
     should have start="2026-05-10" and end="2026-05-11".
 */
+
+type CalendarEvent = {
+  id: string;
+  summary: string;
+  description: string;
+  location: string;
+  start: string;
+  end: string;
+  htmlLink: string
+}
 
 export def authorizeCalendar(clientId: string, clientSecret: string): Result {
   """

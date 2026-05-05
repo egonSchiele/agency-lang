@@ -1,11 +1,6 @@
 import { _sendSms } from "./lib/sms.js"
 
-type SmsResult = {
-  sid: string;
-  status: string
-}
-
-/**
+/** @module
   ## Usage
 
   ```ts
@@ -22,6 +17,11 @@ type SmsResult = {
   - `TWILIO_AUTH_TOKEN` — Your Twilio Auth Token
   - `TWILIO_FROM_NUMBER` — Your Twilio phone number (e.g. "+15550001234")
 */
+
+type SmsResult = {
+  sid: string;
+  status: string
+}
 
 export def sendSms(to: string, body: string, from: string = "", accountSid: string = "", authToken: string = ""): Result {
   """

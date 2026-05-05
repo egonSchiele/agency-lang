@@ -40,6 +40,27 @@ type CalendarEvent = {
   }
   ```
 
+  ### Using std::date for convenient date construction
+
+  ```ts
+  import { createEvent, listEvents } from "std::calendar"
+  import { tomorrow, atTime, endAfter, nextDayOfWeek, startOfWeek, endOfWeek } from "std::date"
+
+  node main() {
+    // "Tomorrow at 3pm for 1 hour"
+    const start = atTime(tomorrow(), "15:00", "America/Los_Angeles")
+    createEvent(summary: "Dentist", start: start, end: endAfter(start, 60))
+
+    // "Next Monday at 10am for 30 min"
+    const monday = atTime(nextDayOfWeek("monday"), "10:00")
+    createEvent(summary: "1:1 with manager", start: monday, end: endAfter(monday, 30))
+
+    // List all events this week
+    const events = listEvents(timeMin: startOfWeek(), timeMax: endOfWeek())
+    print(events)
+  }
+  ```
+
   You can also use `std::oauth` directly for more control over the
   authorization flow (e.g. custom scopes, port, or extra params):
 

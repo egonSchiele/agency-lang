@@ -217,6 +217,7 @@ export function walkScopeBody(
       case "matchBlock":
         for (const caseItem of node.cases) {
           if (caseItem.type === "comment") continue;
+          if (caseItem.type === "newLine") continue;
           walkScopeBody([caseItem.body], scope, ctx);
         }
         break;

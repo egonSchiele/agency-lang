@@ -176,6 +176,7 @@ export function* getAllVariablesInBody(
     } else if (node.type === "matchBlock") {
       for (const caseItem of node.cases) {
         if (caseItem.type === "comment") continue;
+        if (caseItem.type === "newLine") continue;
         if (caseItem.caseValue === "_") continue;
         yield* getAllVariablesInBody([caseItem.caseValue]);
       }
@@ -360,6 +361,7 @@ export function* walkNodes(
       yield* walkNodes([node.expression], [...ancestors, node], scopes);
       for (const caseItem of node.cases) {
         if (caseItem.type === "comment") continue;
+        if (caseItem.type === "newLine") continue;
         if (caseItem.caseValue !== "_") {
           yield* walkNodes([caseItem.caseValue], [...ancestors, node], scopes);
         }

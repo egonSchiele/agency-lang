@@ -45,11 +45,6 @@ export type UpdateEventParams = {
 };
 
 async function getToken(): Promise<string> {
-  if (!(await _isAuthorized(PROVIDER_NAME))) {
-    throw new Error(
-      "Google Calendar is not authorized. Call authorizeCalendar() first."
-    );
-  }
   return _getAccessToken(PROVIDER_NAME);
 }
 
@@ -118,8 +113,8 @@ export async function _listEvents(
   });
 
   if (!response.ok) {
-    const body = await response.text();
-    throw new Error(`Google Calendar API error (${response.status}): ${body.slice(0, 200)}`);
+    const errBody = await response.text();
+    throw new Error(`Google Calendar API error (${response.status}): ${errBody.slice(0, 200)}`);
   }
 
   const data = await response.json() as { items?: Record<string, unknown>[] };
@@ -172,11 +167,11 @@ export async function _updateEvent(
   const calendarId = params.calendarId || "primary";
 
   const body: Record<string, unknown> = {};
-  if (params.summary !== undefined) body.summary = params.summary;
-  if (params.start !== undefined) body.start = buildEventTime(params.start);
-  if (params.end !== undefined) body.end = buildEventTime(params.end);
-  if (params.description !== undefined) body.description = params.description;
-  if (params.location !== undefined) body.location = params.location;
+  if (params.summary) body.summary = params.summary;
+  if (params.start) body.start = buildEventTime(params.start);
+  if (params.end) body.end = buildEventTime(params.end);
+  if (params.description) body.description = params.description;
+  if (params.location) body.location = params.location;
 
   const response = await fetch(
     `${CALENDAR_API}/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(params.eventId)}`,

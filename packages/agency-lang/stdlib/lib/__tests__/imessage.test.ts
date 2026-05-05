@@ -93,15 +93,17 @@ describe("_sendIMessage", () => {
     );
   });
 
-  it("throws with descriptive error when osascript fails", async () => {
+  it("throws with stderr info when osascript fails, without leaking script contents", async () => {
     (execFile as unknown as ReturnType<typeof vi.fn>).mockImplementation(
-      (_cmd: string, _args: string[], cb: (err: Error | null) => void) => {
-        cb(new Error("Messages app not available"));
+      (_cmd: string, _args: string[], cb: (err: unknown) => void) => {
+        cb({ stderr: "execution error: Messages got an error", code: 1 });
       }
     );
 
-    await expect(_sendIMessage("+15551234567", "Hi")).rejects.toThrow(
-      "Failed to send iMessage: Messages app not available"
-    );
+    const err = await _sendIMessage("+15551234567", "Hi").catch((e) => e);
+    expect(err.message).toContain("Failed to send iMessage:");
+    expect(err.message).toContain("execution error");
+    // Should NOT contain the phone number or message in the error
+    expect(err.message).not.toContain("+15551234567");
   });
 });

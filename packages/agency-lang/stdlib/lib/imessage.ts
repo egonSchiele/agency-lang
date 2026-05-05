@@ -34,9 +34,12 @@ export async function _sendIMessage(
   try {
     await execFileAsync("osascript", ["-e", script]);
     return { sent: true };
-  } catch (error) {
-    const msg = error instanceof Error ? error.message : String(error);
-    throw new Error(`Failed to send iMessage: ${msg}`);
+  } catch (error: unknown) {
+    // Avoid leaking script contents (which contain recipient/message) into error messages.
+    // execFile errors include stderr which has the actionable info.
+    const err = error as { stderr?: string; code?: number };
+    const detail = err.stderr?.trim() || `exit code ${err.code ?? "unknown"}`;
+    throw new Error(`Failed to send iMessage: ${detail}`);
   }
 }
 

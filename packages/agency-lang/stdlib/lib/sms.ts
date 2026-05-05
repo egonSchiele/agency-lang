@@ -37,6 +37,18 @@ export async function _sendSms(
     );
   }
 
+  if (!to) {
+    throw new Error("Missing recipient phone number.");
+  }
+  if (!/^\+[1-9]\d{1,14}$/.test(to)) {
+    throw new Error(
+      `Invalid phone number "${to}". Must be in E.164 format (e.g. "+15551234567").`
+    );
+  }
+  if (!body) {
+    throw new Error("Missing message body.");
+  }
+
   const formData = new URLSearchParams();
   formData.set("To", to);
   formData.set("From", from);

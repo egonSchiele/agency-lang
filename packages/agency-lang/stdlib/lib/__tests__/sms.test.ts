@@ -123,6 +123,19 @@ describe("_sendSms", () => {
     );
   });
 
+  it("throws when to is empty", async () => {
+    await expect(_sendSms("", "Hi")).rejects.toThrow("Missing recipient");
+  });
+
+  it("throws when to is not E.164 format", async () => {
+    await expect(_sendSms("5551234567", "Hi")).rejects.toThrow("E.164");
+    await expect(_sendSms("not-a-number", "Hi")).rejects.toThrow("E.164");
+  });
+
+  it("throws when body is empty", async () => {
+    await expect(_sendSms("+15559876543", "")).rejects.toThrow("Missing message body");
+  });
+
   it("URL-encodes account SID in path", async () => {
     const mockFetch = mockFetchResponse({ sid: "SM123", status: "queued" });
     globalThis.fetch = mockFetch;

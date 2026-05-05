@@ -83,6 +83,7 @@ function waitForCallback(
 ): Promise<{ code: string; state: string }> {
   return new Promise((resolve, reject) => {
     let settled = false;
+    let timer: ReturnType<typeof setTimeout>;
 
     const server = http.createServer((req, res) => {
       if (settled) {
@@ -134,7 +135,7 @@ function waitForCallback(
 
     server.listen(port, "127.0.0.1");
 
-    const timer = setTimeout(() => {
+    timer = setTimeout(() => {
       if (!settled) {
         settled = true;
         server.close();
@@ -190,7 +191,13 @@ async function loadTokens(name: string): Promise<StoredTokens | null> {
   try {
     const data = await fs.readFile(tokenPath, "utf-8");
     const parsed = JSON.parse(data) as Record<string, unknown>;
-    if (!parsed.access_token || !parsed.token_url || !parsed.client_id) {
+    if (
+      !parsed.access_token ||
+      !parsed.token_url ||
+      !parsed.client_id ||
+      !parsed.client_secret ||
+      typeof parsed.expires_at !== "number"
+    ) {
       return null;
     }
     return parsed as unknown as StoredTokens;
@@ -213,30 +220,26 @@ export async function _authorize(
     ? config.scopes.join(" ")
     : config.scopes;
 
-  const authParams = new URLSearchParams({
-    client_id: config.clientId,
-    redirect_uri: redirectUri,
-    response_type: "code",
-    scope: scopes,
-    state,
-    code_challenge: codeChallenge,
-    code_challenge_method: "S256",
-  });
+  const authorizationUrl = new URL(config.authUrl);
+  authorizationUrl.searchParams.set("client_id", config.clientId);
+  authorizationUrl.searchParams.set("redirect_uri", redirectUri);
+  authorizationUrl.searchParams.set("response_type", "code");
+  authorizationUrl.searchParams.set("scope", scopes);
+  authorizationUrl.searchParams.set("state", state);
+  authorizationUrl.searchParams.set("code_challenge", codeChallenge);
+  authorizationUrl.searchParams.set("code_challenge_method", "S256");
 
-  // Provider-specific params (e.g. access_type=offline for Google)
   if (config.extraAuthParams) {
     const params = typeof config.extraAuthParams === "string"
       ? parseExtraParams(config.extraAuthParams)
       : config.extraAuthParams;
     for (const [key, value] of Object.entries(params)) {
-      authParams.set(key, value);
+      authorizationUrl.searchParams.set(key, value);
     }
   }
 
-  const authorizationUrl = `${config.authUrl}?${authParams.toString()}`;
-
   const callbackPromise = waitForCallback(port);
-  openBrowser(authorizationUrl);
+  openBrowser(authorizationUrl.toString());
 
   const { code, state: returnedState } = await callbackPromise;
 

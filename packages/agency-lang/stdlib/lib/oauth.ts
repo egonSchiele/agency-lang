@@ -1,15 +1,13 @@
 import http from "http";
 import crypto from "crypto";
 import fs from "fs/promises";
+import os from "os";
 import path from "path";
 import { execFile } from "child_process";
 
-const TOKEN_DIR = path.join(
-  process.env.HOME || process.env.USERPROFILE || "~",
-  ".agency",
-  "oauth"
-);
-
+function getTokenDir(): string {
+  return process.env.AGENCY_OAUTH_TOKEN_DIR || path.join(os.homedir(), ".agency", "oauth");
+}
 const DEFAULT_PORT = 8914;
 const EXPIRY_BUFFER_MS = 60000;
 const AUTH_TIMEOUT_MS = 300000;
@@ -25,6 +23,7 @@ export type OAuthConfig = {
   clientSecret: string;
   scopes: string | string[];
   port?: number;
+  extraAuthParams?: string | Record<string, string>;
 };
 
 type StoredTokens = {
@@ -42,7 +41,7 @@ function getTokenPath(name: string): string {
       `Invalid OAuth provider name: "${name}". Use only letters, numbers, dots, hyphens, and underscores.`
     );
   }
-  return path.join(TOKEN_DIR, `${name}.json`);
+  return path.join(getTokenDir(), `${name}.json`);
 }
 
 function generateCodeVerifier(): string {
@@ -57,14 +56,26 @@ function escapeHtml(str: string): string {
   return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 
+function parseExtraParams(str: string): Record<string, string> {
+  if (!str.trim()) return {};
+  const result: Record<string, string> = {};
+  for (const pair of str.trim().split(/\s+/)) {
+    const eqIdx = pair.indexOf("=");
+    if (eqIdx > 0) {
+      result[pair.slice(0, eqIdx)] = pair.slice(eqIdx + 1);
+    }
+  }
+  return result;
+}
+
 function openBrowser(url: string): void {
-  const cmd =
-    process.platform === "darwin"
-      ? "open"
-      : process.platform === "win32"
-        ? "start"
-        : "xdg-open";
-  execFile(cmd, [url], () => {});
+  if (process.platform === "darwin") {
+    execFile("open", [url], () => {});
+  } else if (process.platform === "win32") {
+    execFile("cmd.exe", ["/c", "start", "", url], () => {});
+  } else {
+    execFile("xdg-open", [url], () => {});
+  }
 }
 
 function waitForCallback(
@@ -167,7 +178,7 @@ async function exchangeCodeForTokens(
 }
 
 async function saveTokens(name: string, tokens: StoredTokens): Promise<void> {
-  await fs.mkdir(TOKEN_DIR, { recursive: true });
+  await fs.mkdir(getTokenDir(), { recursive: true });
   await fs.writeFile(getTokenPath(name), JSON.stringify(tokens, null, 2), {
     encoding: "utf-8",
     mode: 0o600,
@@ -192,7 +203,7 @@ export async function _authorize(
   name: string,
   config: OAuthConfig
 ): Promise<{ success: boolean }> {
-  const port = config.port ?? DEFAULT_PORT;
+  const port = (config.port && config.port > 0) ? config.port : DEFAULT_PORT;
   const redirectUri = `http://127.0.0.1:${port}`;
   const state = crypto.randomBytes(16).toString("hex");
   const codeVerifier = generateCodeVerifier();
@@ -210,9 +221,17 @@ export async function _authorize(
     state,
     code_challenge: codeChallenge,
     code_challenge_method: "S256",
-    access_type: "offline",
-    prompt: "consent",
   });
+
+  // Provider-specific params (e.g. access_type=offline for Google)
+  if (config.extraAuthParams) {
+    const params = typeof config.extraAuthParams === "string"
+      ? parseExtraParams(config.extraAuthParams)
+      : config.extraAuthParams;
+    for (const [key, value] of Object.entries(params)) {
+      authParams.set(key, value);
+    }
+  }
 
   const authorizationUrl = `${config.authUrl}?${authParams.toString()}`;
 
@@ -252,7 +271,7 @@ export async function _getAccessToken(name: string): Promise<string> {
   const tokens = await loadTokens(name);
   if (!tokens) {
     throw new Error(
-      `No OAuth tokens found for "${name}". Run authorize("${name}", config) first.`
+      `No OAuth tokens found for "${name}". Run authorize() first.`
     );
   }
 
@@ -262,12 +281,11 @@ export async function _getAccessToken(name: string): Promise<string> {
 
   if (!tokens.refresh_token) {
     throw new Error(
-      `OAuth token for "${name}" has expired and no refresh token is available. Run authorize("${name}", config) again.`
+      `OAuth token for "${name}" has expired and no refresh token is available. Run authorize() again.`
     );
   }
 
   // Use a mutex to prevent concurrent refresh attempts for the same provider.
-  // If a refresh is already in flight, wait for it instead of firing another.
   if (refreshLocks[name]) {
     return refreshLocks[name]!;
   }

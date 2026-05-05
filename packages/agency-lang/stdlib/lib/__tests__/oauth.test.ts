@@ -1,17 +1,16 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, vi, afterEach } from "vitest";
 import fs from "fs/promises";
 import fsSync from "fs";
 import path from "path";
-import {
-  _authorize,
-  _getAccessToken,
-  _isAuthorized,
-  _revokeAuth,
-} from "../oauth.js";
+import os from "os";
+
+// Set temp dir BEFORE importing oauth (getTokenDir() reads env at call time)
+const TOKEN_DIR = path.join(os.tmpdir(), "agency-oauth-test-" + process.pid);
+process.env.AGENCY_OAUTH_TOKEN_DIR = TOKEN_DIR;
 
 // Mock child_process (for openBrowser)
 vi.mock("child_process", () => ({
-  execFile: vi.fn((_cmd, _args, _cb) => {}),
+  execFile: vi.fn((_cmd: unknown, _args: unknown, _cb: unknown) => {}),
 }));
 
 // Mock http server
@@ -31,11 +30,11 @@ vi.mock("http", () => ({
   },
 }));
 
-const TOKEN_DIR = path.join(
-  process.env.HOME || process.env.USERPROFILE || "~",
-  ".agency",
-  "oauth"
-);
+import {
+  _getAccessToken,
+  _isAuthorized,
+  _revokeAuth,
+} from "../oauth.js";
 
 function mockFetchResponse(body: unknown, status = 200) {
   return vi.fn().mockResolvedValue({
@@ -46,12 +45,15 @@ function mockFetchResponse(body: unknown, status = 200) {
   });
 }
 
+// Cleanup after each test
+afterEach(async () => {
+  try {
+    await fs.rm(TOKEN_DIR, { recursive: true, force: true });
+  } catch {}
+});
+
 describe("_isAuthorized", () => {
   const testTokenPath = path.join(TOKEN_DIR, "test-provider.json");
-
-  afterEach(async () => {
-    try { await fs.unlink(testTokenPath); } catch {}
-  });
 
   it("returns false when no token file exists", async () => {
     expect(await _isAuthorized("nonexistent-provider")).toBe(false);
@@ -77,17 +79,17 @@ describe("_isAuthorized", () => {
 describe("_revokeAuth", () => {
   const testTokenPath = path.join(TOKEN_DIR, "revoke-test.json");
 
-  afterEach(async () => {
-    try { await fs.unlink(testTokenPath); } catch {}
-  });
-
   it("returns revoked:false when no tokens exist", async () => {
     expect(await _revokeAuth("revoke-test")).toEqual({ revoked: false });
   });
 
   it("deletes token file and returns revoked:true", async () => {
     await fs.mkdir(TOKEN_DIR, { recursive: true });
-    await fs.writeFile(testTokenPath, JSON.stringify({ access_token: "x" }));
+    await fs.writeFile(testTokenPath, JSON.stringify({
+      access_token: "x",
+      token_url: "https://example.com/token",
+      client_id: "id",
+    }));
     expect(await _revokeAuth("revoke-test")).toEqual({ revoked: true });
     expect(fsSync.existsSync(testTokenPath)).toBe(false);
   });
@@ -97,9 +99,8 @@ describe("_getAccessToken", () => {
   const testTokenPath = path.join(TOKEN_DIR, "token-test.json");
   const originalFetch = globalThis.fetch;
 
-  afterEach(async () => {
+  afterEach(() => {
     globalThis.fetch = originalFetch;
-    try { await fs.unlink(testTokenPath); } catch {}
   });
 
   it("throws when no tokens exist", async () => {
@@ -267,7 +268,6 @@ describe("_getAccessToken", () => {
     let fetchCallCount = 0;
     globalThis.fetch = vi.fn().mockImplementation(async () => {
       fetchCallCount++;
-      // Simulate network delay
       await new Promise((r) => setTimeout(r, 10));
       return {
         ok: true,
@@ -275,7 +275,6 @@ describe("_getAccessToken", () => {
       };
     });
 
-    // Fire two concurrent getAccessToken calls
     const [token1, token2] = await Promise.all([
       _getAccessToken("token-test"),
       _getAccessToken("token-test"),
@@ -283,7 +282,6 @@ describe("_getAccessToken", () => {
 
     expect(token1).toBe("refreshed");
     expect(token2).toBe("refreshed");
-    // Only one fetch call should have been made
     expect(fetchCallCount).toBe(1);
   });
 });

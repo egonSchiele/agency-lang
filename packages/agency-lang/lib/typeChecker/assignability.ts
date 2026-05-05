@@ -177,6 +177,31 @@ export function isAssignable(
     );
   }
 
+  // Block types: contravariant in parameters, covariant in return — standard
+  // function compatibility. Arity must match exactly (no auto-extension).
+  if (
+    resolvedSource.type === "blockType" &&
+    resolvedTarget.type === "blockType"
+  ) {
+    if (resolvedSource.params.length !== resolvedTarget.params.length)
+      return false;
+    for (let i = 0; i < resolvedSource.params.length; i++) {
+      if (
+        !isAssignable(
+          resolvedTarget.params[i].typeAnnotation,
+          resolvedSource.params[i].typeAnnotation,
+          typeAliases,
+        )
+      )
+        return false;
+    }
+    return isAssignable(
+      resolvedSource.returnType,
+      resolvedTarget.returnType,
+      typeAliases,
+    );
+  }
+
   // Result<T, E>: covariant in both type parameters.
   if (
     resolvedSource.type === "resultType" &&

@@ -421,7 +421,7 @@ export function createProgram(deps: CliDependencies = {}): Command {
       ) => {
         const parsedProgram = parse(contents, config);
         const absPath = filePath ? path.resolve(filePath) : undefined;
-        const info = buildCompilationUnit(parsedProgram, symbolTable, absPath);
+        const info = buildCompilationUnit(parsedProgram, symbolTable, absPath, contents);
         const { errors } = typeCheck(parsedProgram, config, info);
         if (errors.length > 0) {
           console.error(formatErrors(errors));

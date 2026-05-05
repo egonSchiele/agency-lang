@@ -3,6 +3,7 @@ import { TypeChecker, typeCheck } from "./typeChecker/index.js";
 import { AgencyProgram, VariableType } from "./types.js";
 import { buildCompilationUnit } from "./compilationUnit.js";
 import type { CompilationUnit } from "./compilationUnit.js";
+import { SymbolTable } from "./symbolTable.js";
 
 function withImports(
   program: AgencyProgram,
@@ -5964,14 +5965,8 @@ describe("TypeChecker", () => {
       expect(errors.some((e) => /unknown property 'modle'/i.test(e.message))).toBe(true);
     });
 
-    // Known typechecker gap: a pipe RHS with no `?` placeholder is currently
-    // delegated to the backend (`pipeRhsSlotType` early-returns when no
-    // placeholder is found — "backend will reject"). The typechecker emits
-    // no error even when the resulting arity is bogus (here: LHS + 2 explicit
-    // args for a 2-param fn). Pinned as `.skip` so we have a target to flip
-    // when the typechecker grows pipe arity-checking.
-    it.skip("pipe RHS arity mismatch errors when no placeholder is given", () => {
-      // 5 |> add(10, 20)  ← LHS + 2 explicit args ≠ 2 params.
+    it("rejects a pipe RHS functionCall with no '?' placeholder", () => {
+      // 5 |> add(10, 20)  ← needs exactly one '?'
       const program: AgencyProgram = {
         type: "agencyProgram",
         nodes: [
@@ -5998,7 +5993,38 @@ describe("TypeChecker", () => {
         ],
       };
       const errors = typeCheck(program).errors;
-      expect(errors.length).toBeGreaterThan(0);
+      expect(errors.some((e) => /exactly one '\?' placeholder, got 0/.test(e.message))).toBe(true);
+    });
+
+    it("rejects a pipe RHS functionCall with multiple '?' placeholders", () => {
+      // 5 |> add(?, ?)  ← only one '?' allowed
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "function",
+            functionName: "add",
+            parameters: [
+              { type: "functionParameter", name: "a", typeHint: num },
+              { type: "functionParameter", name: "b", typeHint: num },
+            ],
+            returnType: num,
+            body: [{ type: "returnStatement", value: { type: "number", value: "0" } }],
+          },
+          {
+            type: "binOpExpression",
+            operator: "|>",
+            left: { type: "number", value: "5" },
+            right: {
+              type: "functionCall",
+              functionName: "add",
+              arguments: [{ type: "placeholder" }, { type: "placeholder" }],
+            },
+          },
+        ],
+      };
+      const errors = typeCheck(program).errors;
+      expect(errors.some((e) => /exactly one '\?' placeholder, got 2/.test(e.message))).toBe(true);
     });
 
     it("named-arg call may omit a default-valued param", () => {
@@ -6093,6 +6119,536 @@ describe("TypeChecker", () => {
       };
       const errors = typeCheck(program).errors;
       expect(errors.some((e) => /unknown property/i.test(e.message))).toBe(false);
+    });
+
+    it("counts a trailing 'as' block toward arity", () => {
+      // def f(x: number, b: (number) => string): void { ... }
+      // f(1) as y { return "ok" }  ← block fills slot 1; arity must check out.
+      const blockT: VariableType = {
+        type: "blockType",
+        params: [{ name: "y", typeAnnotation: num }],
+        returnType: str,
+      };
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "function",
+            functionName: "f",
+            parameters: [
+              { type: "functionParameter", name: "x", typeHint: num },
+              { type: "functionParameter", name: "b", typeHint: blockT },
+            ],
+            body: [],
+          },
+          {
+            type: "functionCall",
+            functionName: "f",
+            arguments: [{ type: "number", value: "1" }],
+            block: {
+              type: "blockArgument",
+              params: [{ type: "functionParameter", name: "y" }],
+              body: [
+                { type: "returnStatement", value: { type: "string", segments: [{ type: "text", value: "ok" }] } },
+              ],
+            },
+          },
+        ],
+      };
+      expect(typeCheck(program).errors).toEqual([]);
+    });
+
+    it("rejects a block argument passed to a function with no block-typed param", () => {
+      // def noBlock(x: number) {}; noBlock(1) as y { ... }  ← extra block
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "function",
+            functionName: "noBlock",
+            parameters: [{ type: "functionParameter", name: "x", typeHint: num }],
+            body: [],
+          },
+          {
+            type: "functionCall",
+            functionName: "noBlock",
+            arguments: [{ type: "number", value: "1" }],
+            block: {
+              type: "blockArgument",
+              params: [{ type: "functionParameter", name: "y" }],
+              body: [{ type: "returnStatement", value: { type: "number", value: "0" } }],
+            },
+          },
+        ],
+      };
+      const errors = typeCheck(program).errors;
+      expect(errors.some((e) => /does not accept a block argument/.test(e.message))).toBe(true);
+    });
+
+    it("accepts identical block types via assignability", () => {
+      // def passThrough(b: (number) => string): string { return takes(b) }
+      // (number)=>string → (number)=>string should typecheck.
+      const blockT: VariableType = {
+        type: "blockType",
+        params: [{ name: "x", typeAnnotation: num }],
+        returnType: str,
+      };
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "function",
+            functionName: "takes",
+            parameters: [{ type: "functionParameter", name: "b", typeHint: blockT }],
+            returnType: str,
+            body: [{ type: "returnStatement", value: { type: "string", segments: [{ type: "text", value: "ok" }] } }],
+          },
+          {
+            type: "function",
+            functionName: "passThrough",
+            parameters: [{ type: "functionParameter", name: "b", typeHint: blockT }],
+            returnType: str,
+            body: [
+              {
+                type: "returnStatement",
+                value: {
+                  type: "functionCall",
+                  functionName: "takes",
+                  arguments: [{ type: "variableName", value: "b" }],
+                },
+              },
+            ],
+          },
+        ],
+      };
+      expect(typeCheck(program).errors).toEqual([]);
+    });
+
+    it("rejects block-type assignment with mismatched param types", () => {
+      // (number) => string is not assignable to (string) => string.
+      const numToStr: VariableType = {
+        type: "blockType",
+        params: [{ name: "x", typeAnnotation: num }],
+        returnType: str,
+      };
+      const strToStr: VariableType = {
+        type: "blockType",
+        params: [{ name: "x", typeAnnotation: str }],
+        returnType: str,
+      };
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "function",
+            functionName: "takes",
+            parameters: [{ type: "functionParameter", name: "b", typeHint: strToStr }],
+            returnType: str,
+            body: [{ type: "returnStatement", value: { type: "string", segments: [{ type: "text", value: "ok" }] } }],
+          },
+          {
+            type: "function",
+            functionName: "passWrong",
+            parameters: [{ type: "functionParameter", name: "b", typeHint: numToStr }],
+            returnType: str,
+            body: [
+              {
+                type: "returnStatement",
+                value: {
+                  type: "functionCall",
+                  functionName: "takes",
+                  arguments: [{ type: "variableName", value: "b" }],
+                },
+              },
+            ],
+          },
+        ],
+      };
+      const errors = typeCheck(program).errors;
+      expect(errors.some((e) => /not assignable/i.test(e.message))).toBe(true);
+    });
+
+    it("rejects block-type assignment with mismatched arity", () => {
+      // (number) => string vs (number, number) => string — arity differs.
+      const oneArg: VariableType = {
+        type: "blockType",
+        params: [{ name: "x", typeAnnotation: num }],
+        returnType: str,
+      };
+      const twoArgs: VariableType = {
+        type: "blockType",
+        params: [
+          { name: "x", typeAnnotation: num },
+          { name: "y", typeAnnotation: num },
+        ],
+        returnType: str,
+      };
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "function",
+            functionName: "takes",
+            parameters: [{ type: "functionParameter", name: "b", typeHint: twoArgs }],
+            returnType: str,
+            body: [{ type: "returnStatement", value: { type: "string", segments: [{ type: "text", value: "ok" }] } }],
+          },
+          {
+            type: "function",
+            functionName: "passWrong",
+            parameters: [{ type: "functionParameter", name: "b", typeHint: oneArg }],
+            returnType: str,
+            body: [
+              {
+                type: "returnStatement",
+                value: {
+                  type: "functionCall",
+                  functionName: "takes",
+                  arguments: [{ type: "variableName", value: "b" }],
+                },
+              },
+            ],
+          },
+        ],
+      };
+      const errors = typeCheck(program).errors;
+      expect(errors.some((e) => /not assignable/i.test(e.message))).toBe(true);
+    });
+
+    it("resolves type aliases referenced by imported function signatures", () => {
+      // Mirror of the real-world bug: imported `exec` returns `ExecResult`,
+      // but `ExecResult` lives in the imported module. Without alias pull-in,
+      // `r.exitCode` errors with "Property 'exitCode' does not exist on type
+      // 'ExecResult'" because resolveType can't find ExecResult in scope.
+      const execResult: VariableType = {
+        type: "objectType",
+        properties: [
+          { key: "stdout", value: str },
+          { key: "stderr", value: str },
+          { key: "exitCode", value: num },
+        ],
+      };
+      const symbolTable = new SymbolTable({
+        "/project/shell.agency": {
+          ExecResult: { kind: "type", name: "ExecResult", aliasedType: execResult, exported: true },
+          exec: {
+            kind: "function",
+            name: "exec",
+            exported: true,
+            safe: false,
+            parameters: [],
+            returnType: { type: "typeAliasVariable", aliasName: "ExecResult" },
+          },
+        },
+      });
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "importStatement",
+            modulePath: "./shell.agency",
+            isAgencyImport: true,
+            importedNames: [
+              { type: "namedImport", importedNames: ["exec"], aliases: {}, safeNames: [] },
+            ],
+          },
+          {
+            type: "assignment",
+            variableName: "r",
+            value: { type: "functionCall", functionName: "exec", arguments: [] },
+          },
+          {
+            type: "valueAccess",
+            base: { type: "variableName", value: "r" },
+            chain: [{ kind: "property", name: "exitCode" }],
+          },
+        ],
+      };
+      const info = buildCompilationUnit(program, symbolTable, "/project/main.agency");
+      const errors = typeCheck(program, {}, info).errors;
+      expect(errors.filter((e) => /does not exist/.test(e.message))).toEqual([]);
+    });
+
+    it("alias resolution prefers the originating module on name collision", () => {
+      // Two imported modules both define `Result2` (collision avoided with
+      // the reserved `Result` name). Imported `getA` came from a.agency.
+      // Property access should resolve through a.agency's definition.
+      const aResult: VariableType = {
+        type: "objectType",
+        properties: [{ key: "fromA", value: str }],
+      };
+      const bResult: VariableType = {
+        type: "objectType",
+        properties: [{ key: "fromB", value: str }],
+      };
+      // b.agency declared FIRST so the fallback (findTypeAcrossFiles)
+      // returns b's Result2 by default. The fix must use originFile to
+      // prefer a.agency, otherwise this test would fail.
+      const symbolTable = new SymbolTable({
+        "/project/b.agency": {
+          Result2: { kind: "type", name: "Result2", aliasedType: bResult, exported: true },
+        },
+        "/project/a.agency": {
+          Result2: { kind: "type", name: "Result2", aliasedType: aResult, exported: true },
+          getA: {
+            kind: "function", name: "getA", exported: true, safe: false,
+            parameters: [],
+            returnType: { type: "typeAliasVariable", aliasName: "Result2" },
+          },
+        },
+      });
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "importStatement",
+            modulePath: "./a.agency",
+            isAgencyImport: true,
+            importedNames: [
+              { type: "namedImport", importedNames: ["getA"], aliases: {}, safeNames: [] },
+            ],
+          },
+          {
+            type: "assignment",
+            variableName: "r",
+            value: { type: "functionCall", functionName: "getA", arguments: [] },
+          },
+          {
+            type: "valueAccess",
+            base: { type: "variableName", value: "r" },
+            chain: [{ kind: "property", name: "fromA" }],
+          },
+          {
+            type: "valueAccess",
+            base: { type: "variableName", value: "r" },
+            chain: [{ kind: "property", name: "fromB" }],
+          },
+        ],
+      };
+      const info = buildCompilationUnit(program, symbolTable, "/project/main.agency");
+      const errors = typeCheck(program, {}, info).errors;
+      // fromA exists on a.agency's Result2 → no error.
+      expect(errors.filter((e) => /Property 'fromA'/.test(e.message))).toEqual([]);
+      // fromB only exists on b.agency's Result2; resolution should NOT pick
+      // that file since the import came from a.agency.
+      expect(errors.some((e) => /Property 'fromB' does not exist/.test(e.message))).toBe(true);
+    });
+
+    it("alias resolution recurses into the host file of the resolved type", () => {
+      // F1 imports `getThing` from origin.agency. origin.agency does NOT
+      // define `Outer` — `Outer` lives in real.agency, where its body
+      // references `Inner`. There's a *different* `Inner` in decoy.agency
+      // declared before real.agency. Without per-file nested resolution,
+      // the recursion would re-acquire decoy's `Inner` for `Outer`.
+      const realInner: VariableType = {
+        type: "objectType",
+        properties: [{ key: "id", value: num }],
+      };
+      const decoyInner: VariableType = {
+        type: "objectType",
+        properties: [{ key: "wrong", value: str }],
+      };
+      const symbolTable = new SymbolTable({
+        // decoy declared first → findTypeAcrossFiles for "Inner" returns it.
+        "/project/decoy.agency": {
+          Inner: { kind: "type", name: "Inner", aliasedType: decoyInner, exported: true },
+        },
+        "/project/real.agency": {
+          Inner: { kind: "type", name: "Inner", aliasedType: realInner, exported: true },
+          Outer: {
+            kind: "type",
+            name: "Outer",
+            aliasedType: {
+              type: "objectType",
+              properties: [
+                { key: "inner", value: { type: "typeAliasVariable", aliasName: "Inner" } },
+              ],
+            },
+            exported: true,
+          },
+        },
+        "/project/origin.agency": {
+          getThing: {
+            kind: "function", name: "getThing", exported: true, safe: false,
+            parameters: [],
+            returnType: { type: "typeAliasVariable", aliasName: "Outer" },
+          },
+        },
+      });
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "importStatement",
+            modulePath: "./origin.agency",
+            isAgencyImport: true,
+            importedNames: [
+              { type: "namedImport", importedNames: ["getThing"], aliases: {}, safeNames: [] },
+            ],
+          },
+          {
+            type: "assignment",
+            variableName: "r",
+            value: { type: "functionCall", functionName: "getThing", arguments: [] },
+          },
+          {
+            type: "valueAccess",
+            base: { type: "variableName", value: "r" },
+            chain: [
+              { kind: "property", name: "inner" },
+              { kind: "property", name: "id" },
+            ],
+          },
+          {
+            type: "valueAccess",
+            base: { type: "variableName", value: "r" },
+            chain: [
+              { kind: "property", name: "inner" },
+              { kind: "property", name: "wrong" },
+            ],
+          },
+        ],
+      };
+      const info = buildCompilationUnit(program, symbolTable, "/project/main.agency");
+      const errors = typeCheck(program, {}, info).errors;
+      // Real Inner has 'id', not 'wrong' — recursion must have picked real.agency.
+      expect(errors.filter((e) => /Property 'id'/.test(e.message))).toEqual([]);
+      expect(errors.some((e) => /Property 'wrong' does not exist/.test(e.message))).toBe(true);
+    });
+
+    it("pulls transitive aliases from a directly imported type alias's body", () => {
+      // main imports `Outer` from types.agency. Outer = { inner: Inner },
+      // where Inner is also defined in types.agency. Property access on
+      // r.inner.x must resolve through Inner without explicit import.
+      const inner: VariableType = {
+        type: "objectType",
+        properties: [{ key: "x", value: num }],
+      };
+      const outer: VariableType = {
+        type: "objectType",
+        properties: [
+          { key: "inner", value: { type: "typeAliasVariable", aliasName: "Inner" } },
+        ],
+      };
+      const symbolTable = new SymbolTable({
+        "/project/types.agency": {
+          Inner: { kind: "type", name: "Inner", aliasedType: inner, exported: true },
+          Outer: { kind: "type", name: "Outer", aliasedType: outer, exported: true },
+        },
+      });
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "importStatement",
+            modulePath: "./types.agency",
+            isAgencyImport: true,
+            importedNames: [
+              { type: "namedImport", importedNames: ["Outer"], aliases: {}, safeNames: [] },
+            ],
+          },
+          {
+            type: "function",
+            functionName: "consume",
+            parameters: [
+              { type: "functionParameter", name: "o", typeHint: { type: "typeAliasVariable", aliasName: "Outer" } },
+            ],
+            body: [
+              {
+                type: "valueAccess",
+                base: { type: "variableName", value: "o" },
+                chain: [
+                  { kind: "property", name: "inner" },
+                  { kind: "property", name: "x" },
+                ],
+              },
+            ],
+          },
+        ],
+      };
+      const info = buildCompilationUnit(program, symbolTable, "/project/main.agency");
+      const errors = typeCheck(program, {}, info).errors;
+      expect(errors.filter((e) => /does not exist/.test(e.message))).toEqual([]);
+    });
+
+    it("a builtin call is rejected when given a block argument", () => {
+      // print(1) as x { return 2 }  ← `print` is a builtin, not a block-taker.
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "functionCall",
+            functionName: "print",
+            arguments: [{ type: "number", value: "1" }],
+            block: {
+              type: "blockArgument",
+              params: [{ type: "functionParameter", name: "x" }],
+              body: [{ type: "returnStatement", value: { type: "number", value: "2" } }],
+            },
+          },
+        ],
+      };
+      const errors = typeCheck(program).errors;
+      expect(errors.some((e) => /'print' does not accept a block/.test(e.message))).toBe(true);
+    });
+
+    it("accepts a block argument when the last param is untyped", () => {
+      // def f(a: number, b) {}; f(1) as y { return 2 }
+      // ← `b` has no typeHint; the block fills slot `b`. Effective arity: 2.
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "function",
+            functionName: "f",
+            parameters: [
+              { type: "functionParameter", name: "a", typeHint: num },
+              { type: "functionParameter", name: "b" },
+            ],
+            body: [],
+          },
+          {
+            type: "functionCall",
+            functionName: "f",
+            arguments: [{ type: "number", value: "1" }],
+            block: {
+              type: "blockArgument",
+              params: [{ type: "functionParameter", name: "y" }],
+              body: [{ type: "returnStatement", value: { type: "number", value: "2" } }],
+            },
+          },
+        ],
+      };
+      expect(typeCheck(program).errors).toEqual([]);
+    });
+
+    it("accepts a block argument when the last param is typed `any`", () => {
+      const anyT: VariableType = { type: "primitiveType", value: "any" };
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "function",
+            functionName: "f",
+            parameters: [
+              { type: "functionParameter", name: "a", typeHint: num },
+              { type: "functionParameter", name: "b", typeHint: anyT },
+            ],
+            body: [],
+          },
+          {
+            type: "functionCall",
+            functionName: "f",
+            arguments: [{ type: "number", value: "1" }],
+            block: {
+              type: "blockArgument",
+              params: [{ type: "functionParameter", name: "y" }],
+              body: [{ type: "returnStatement", value: { type: "number", value: "2" } }],
+            },
+          },
+        ],
+      };
+      expect(typeCheck(program).errors).toEqual([]);
     });
   });
 });

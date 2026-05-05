@@ -67,6 +67,10 @@ export class ScopedTypeAliases {
 export type ImportedFunctionSignature = {
   parameters: FunctionParameter[];
   returnType: VariableType | null;
+  /** Absolute path of the file the symbol was imported from. Used to
+   * resolve type aliases referenced by the signature in the right module
+   * (so a type-name collision across files picks the right one). */
+  originFile?: string;
 };
 
 /**
@@ -84,6 +88,18 @@ export type CompilationUnit = {
   safeFunctions: Record<string, boolean>;
   importedFunctions: Record<string, ImportedFunctionSignature>;
   classDefinitions: Record<string, ClassDefinition>;
+  /** Original source text. Used by the typechecker to locate
+   * `// @tc-nocheck` / `// @tc-ignore` directives. Optional because
+   * many callers (including most tests) construct the AST directly. */
+  sourceText?: string;
+  /** True iff `parseAgency` was called with the template wrapper applied
+   * (the CLI default). The parser unconditionally subtracts
+   * `AGENCY_TEMPLATE_OFFSET` from every span's line, so when the wrapper
+   * was *not* applied (LSP path), error `loc.line` values are off by
+   * `-AGENCY_TEMPLATE_OFFSET` from raw-source 0-indexed lines. The
+   * typechecker uses this flag to align suppression-directive line
+   * numbers with error locations. */
+  templateApplied?: boolean;
 };
 
 export function scopeKey(scope: Scope): string {
@@ -109,6 +125,8 @@ export function buildCompilationUnit(
   program: AgencyProgram,
   symbolTable?: SymbolTable,
   fromFile?: string,
+  sourceText?: string,
+  templateApplied: boolean = true,
 ): CompilationUnit {
   const unit: CompilationUnit = {
     functionDefinitions: {},
@@ -119,6 +137,8 @@ export function buildCompilationUnit(
     importedFunctions: {},
     classDefinitions: {},
     safeFunctions: {},
+    sourceText,
+    templateApplied,
   };
 
   // Top-level pass: collect functions, graph nodes, imports.
@@ -169,6 +189,12 @@ export function buildCompilationUnit(
   // to the typechecker's builtin/any path instead of being treated as a
   // bogus 0-arg signature.
   if (symbolTable && fromFile) {
+    // Type-alias seeds gathered from imports — both directly imported
+    // aliases and the types referenced by imported function/node
+    // signatures. Each seed remembers the file it came from so transitive
+    // resolution can prefer that module on name collisions.
+    type AliasSeed = { type: VariableType; preferFile: string };
+    const aliasSeeds: AliasSeed[] = [];
     for (const stmt of unit.importStatements) {
       for (const r of symbolTable.resolveImport(stmt, fromFile)) {
         if (r.symbol.kind === "function" || r.symbol.kind === "node") {
@@ -186,7 +212,12 @@ export function buildCompilationUnit(
           unit.importedFunctions[r.localName] = {
             parameters: r.symbol.parameters,
             returnType,
+            originFile: r.file,
           };
+          for (const p of r.symbol.parameters) {
+            if (p.typeHint) aliasSeeds.push({ type: p.typeHint, preferFile: r.file });
+          }
+          if (returnType) aliasSeeds.push({ type: returnType, preferFile: r.file });
         }
         if (r.symbol.kind === "function" && r.symbol.safe) {
           unit.safeFunctions[r.localName] = true;
@@ -197,10 +228,113 @@ export function buildCompilationUnit(
             r.localName,
             r.symbol.aliasedType,
           );
+          // Imported type's body may reference other aliases from its
+          // module — pull those transitively too.
+          aliasSeeds.push({ type: r.symbol.aliasedType, preferFile: r.file });
         }
       }
     }
+    // Pull in any type aliases referenced by imports so property access
+    // on those values resolves correctly. Without this, `let r = exec(...);
+    // r.exitCode` errors with "Property 'exitCode' does not exist on type
+    // 'ExecResult'" because the alias body lives in the source module and
+    // was never imported.
+    pullTransitiveAliases(unit, symbolTable, aliasSeeds);
   }
 
   return unit;
+}
+
+/**
+ * Walk every alias-seed type (from imported function/node signatures and
+ * directly imported type aliases) and recursively pull any referenced
+ * aliases into the unit's global scope, so the typechecker can resolve
+ * property access through them. Walks transitively (an alias whose body
+ * references another alias pulls that one too) and tracks visited names
+ * to terminate on cycles.
+ */
+function pullTransitiveAliases(
+  unit: CompilationUnit,
+  symbolTable: SymbolTable,
+  seeds: { type: VariableType; preferFile: string }[],
+): void {
+  const globalAliases = unit.typeAliases.get(GLOBAL_SCOPE_KEY) ?? {};
+  // Each pending alias remembers the file it was referenced from, so
+  // resolution prefers the originating module's symbols when a name
+  // collides across files.
+  const queue: { name: string; preferFile?: string }[] = [];
+
+  for (const seed of seeds) {
+    const names: string[] = [];
+    collectAliasNames(seed.type, names);
+    for (const name of names) queue.push({ name, preferFile: seed.preferFile });
+  }
+
+  while (queue.length > 0) {
+    const { name, preferFile } = queue.shift()!;
+    if (globalAliases[name] !== undefined) continue; // already known
+    const found = resolveTypeFromFile(symbolTable, name, preferFile);
+    if (!found) continue;
+    unit.typeAliases.add(GLOBAL_SCOPE_KEY, name, found.aliasedType);
+    // Nested aliases referenced by this type should resolve in the file
+    // the type was actually found in (not the original preferFile) — the
+    // body's references are scoped to that module.
+    const nested: string[] = [];
+    collectAliasNames(found.aliasedType, nested);
+    for (const n of nested) queue.push({ name: n, preferFile: found.file });
+  }
+}
+
+/**
+ * Look up a type alias by name. Prefers the originating module's symbols
+ * (so cross-file name collisions pick the file the import actually came
+ * from), then falls back to the global cross-file search. Returns the
+ * file the type was found in alongside its body, so callers can resolve
+ * nested alias references in that same module.
+ */
+function resolveTypeFromFile(
+  symbolTable: SymbolTable,
+  name: string,
+  preferFile: string | undefined,
+): { aliasedType: VariableType; file: string } | undefined {
+  if (preferFile) {
+    const fileSym = symbolTable.getFile(preferFile)?.[name];
+    if (fileSym?.kind === "type") {
+      return { aliasedType: fileSym.aliasedType, file: preferFile };
+    }
+  }
+  for (const file of symbolTable.filePaths()) {
+    const sym = symbolTable.getFile(file)?.[name];
+    if (sym?.kind === "type") {
+      return { aliasedType: sym.aliasedType, file };
+    }
+  }
+  return undefined;
+}
+
+function collectAliasNames(t: VariableType, out: string[]): void {
+  switch (t.type) {
+    case "typeAliasVariable":
+      out.push(t.aliasName);
+      return;
+    case "arrayType":
+      collectAliasNames(t.elementType, out);
+      return;
+    case "unionType":
+      for (const m of t.types) collectAliasNames(m, out);
+      return;
+    case "objectType":
+      for (const p of t.properties) collectAliasNames(p.value, out);
+      return;
+    case "resultType":
+      collectAliasNames(t.successType, out);
+      collectAliasNames(t.failureType, out);
+      return;
+    case "blockType":
+      for (const p of t.params) collectAliasNames(p.typeAnnotation, out);
+      collectAliasNames(t.returnType, out);
+      return;
+    default:
+      return;
+  }
 }

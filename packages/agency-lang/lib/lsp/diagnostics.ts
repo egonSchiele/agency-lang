@@ -70,7 +70,10 @@ export function runDiagnostics(
     return { diagnostics, program: null, info: null, semanticIndex: {}, scopes: [] };
   }
 
-  const info = buildCompilationUnit(program, symbolTable, fsPath);
+  // applyTemplate=false above, so `loc.line` is shifted by -TEMPLATE_OFFSET
+  // from raw source lines. Pass templateApplied=false so the typechecker can
+  // align suppression directives with error locations.
+  const info = buildCompilationUnit(program, symbolTable, fsPath, source, false);
   const { errors, scopes } = typeCheck(program, config, info);
 
   for (const err of errors) {

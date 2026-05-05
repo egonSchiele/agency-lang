@@ -51,7 +51,24 @@ const result = await main("some-param", { callbacks })
 
 ## Other options to llm()
 
-Agency uses the [Smoltalk library](https://github.com/egonSchiele/smoltalk) behind the scenes so any options you can pass into Smoltalk ([SmolConfig](https://github.com/egonSchiele/smoltalk#client-options-smolconfig) or [PromptConfig](https://github.com/egonSchiele/smoltalk#request-options-promptconfig)) you can pass in as part of the config object, which is the optional second parameter to the `llm` call.
+Agency uses the [Smoltalk library](https://github.com/egonSchiele/smoltalk) behind the scenes, and the optional second argument to `llm()` forwards through to it. The typechecker recognizes these options:
+
+| Option | Type |
+|---|---|
+| `model` | `string` |
+| `provider` | `string` |
+| `apiKey` | `string` |
+| `maxTokens` | `number` |
+| `temperature` | `number` |
+| `stream` | `boolean` |
+| `reasoningEffort` | `"low" \| "medium" \| "high"` |
+| `thinking` | `{ enabled: boolean, budgetTokens?: number }` |
+| `tools` | `any[]` |
+| `metadata` | `any` |
+
+All optional.
+
+For the full list of fields Smoltalk accepts, see the [SmolConfig](https://github.com/egonSchiele/smoltalk#client-options-smolconfig) and [PromptConfig](https://github.com/egonSchiele/smoltalk#request-options-promptconfig) docs.
 
 ## Interrupts
 Any [interrupts](./interrupts) thrown in tools will just work with no extra work required.

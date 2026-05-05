@@ -130,16 +130,26 @@ export function expressionToString(expr: Expression): string {
 export function* getAllVariablesInBody(
   body: AgencyNode[],
 ): Generator<{ name: string; node: AgencyNode }> {
-  for (const { node } of walkNodes(body)) {
+  // Track the initial function scope depth so we can skip nodes
+  // that belong to nested function definitions (they get their
+  // own scope processing pass).
+  let initialFuncDepth: number | null = null;
+  for (const { node, scopes } of walkNodes(body)) {
+    const funcDepth = scopes.filter(
+      (s) => s.type === "function" || s.type === "node",
+    ).length;
+    if (initialFuncDepth === null) initialFuncDepth = funcDepth;
+    // Skip nodes inside nested function bodies
+    if (funcDepth > initialFuncDepth) continue;
+
     if (node.type === "assignment") {
       yield { name: node.variableName, node };
       yield* getAllVariablesInBody([node.value as AgencyNode]);
     } else if (node.type === "function") {
+      // Yield the function name as a binding in the enclosing scope,
+      // but do NOT recurse into params or body — those belong to the
+      // inner function's own scope and are processed separately.
       yield { name: node.functionName, node };
-      for (const param of node.parameters) {
-        yield { name: param.name, node };
-      }
-      yield* getAllVariablesInBody(node.body);
     } else if (node.type === "graphNode") {
       yield { name: node.nodeName, node };
       for (const param of node.parameters) {

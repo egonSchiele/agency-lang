@@ -113,4 +113,38 @@ describe("functionBodyParser", () => {
       });
     }
   });
+
+  it("parses a nested def inside a function body", () => {
+    const input = `def inner(x: number): number {\n  return x + 1\n}`;
+    const result = bodyParser(input);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.result.length).toBe(1);
+      expect(result.result[0].type).toBe("function");
+      expect((result.result[0] as any).functionName).toBe("inner");
+    }
+  });
+
+  it("parses multiple nested defs", () => {
+    const input = `def a(): number {\n  return 1\n}\ndef b(): number {\n  return 2\n}`;
+    const result = bodyParser(input);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      const fns = result.result.filter((n: any) => n.type === "function");
+      expect(fns.length).toBe(2);
+      expect((fns[0] as any).functionName).toBe("a");
+      expect((fns[1] as any).functionName).toBe("b");
+    }
+  });
+
+  it("parses safe def inside a function body", () => {
+    const input = `safe def helper(x: number): number {\n  return x + 1\n}`;
+    const result = bodyParser(input);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.result.length).toBe(1);
+      expect(result.result[0].type).toBe("function");
+      expect((result.result[0] as any).safe).toBe(true);
+    }
+  });
 });

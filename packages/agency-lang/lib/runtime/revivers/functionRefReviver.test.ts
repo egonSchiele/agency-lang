@@ -1,7 +1,9 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { AgencyFunction } from "../agencyFunction.js";
+import type { FuncParam } from "../agencyFunction.js";
 import { FunctionRefReviver } from "./functionRefReviver.js";
 import { nativeTypeReplacer, nativeTypeReviver, functionRefReviver } from "./index.js";
+import { registerClosure, CLOSURE_SELF_SENTINEL } from "../closureRegistry.js";
 
 function makeAgencyFunction(name: string, module: string): AgencyFunction {
   return new AgencyFunction({
@@ -12,6 +14,11 @@ function makeAgencyFunction(name: string, module: string): AgencyFunction {
     toolDefinition: null,
   });
 }
+
+const testClosureImpl = async (...args: unknown[]) => args;
+const testClosureParams: FuncParam[] = [
+  { name: "y", hasDefault: false, defaultValue: undefined, variadic: false },
+];
 
 describe("FunctionRefReviver", () => {
   const reviver = new FunctionRefReviver();
@@ -167,5 +174,196 @@ describe("full round-trip: serialize then deserialize", () => {
     expect(restored.data).toBe("hello");
 
     functionRefReviver.registry = null;
+  });
+});
+
+describe("FunctionRefReviver closure support", () => {
+  const reviver = new FunctionRefReviver();
+  const closureKey = "test.agency:outer::inner";
+
+  beforeEach(() => {
+    registerClosure(closureKey, { fn: testClosureImpl, params: testClosureParams });
+  });
+
+  describe("serialize", () => {
+    it("includes closureKey, closureData, toolDefinition, and params for closure functions", () => {
+      const fn = new AgencyFunction({
+        name: "inner",
+        module: "test.agency",
+        fn: testClosureImpl,
+        params: testClosureParams,
+        toolDefinition: { name: "inner", description: "A tool", schema: {} },
+        closureData: { multiplier: 6 },
+        closureKey,
+      });
+      const result = reviver.serialize(fn);
+      expect(result).toEqual({
+        __nativeType: "FunctionRef",
+        name: "inner",
+        module: "test.agency",
+        closureKey,
+        closureData: { multiplier: 6 },
+        toolDefinition: { name: "inner", description: "A tool", schema: {} },
+        params: testClosureParams,
+      });
+    });
+
+    it("produces minimal output for non-closure functions (backward compatible)", () => {
+      const fn = makeAgencyFunction("greet", "test.agency");
+      const result = reviver.serialize(fn);
+      expect(result).toEqual({
+        __nativeType: "FunctionRef",
+        name: "greet",
+        module: "test.agency",
+      });
+      expect(result.closureKey).toBeUndefined();
+      expect(result.closureData).toBeUndefined();
+    });
+
+    it("replaces self-reference with sentinel to avoid circular JSON", () => {
+      const fn = new AgencyFunction({
+        name: "fib",
+        module: "test.agency",
+        fn: testClosureImpl,
+        params: testClosureParams,
+        toolDefinition: null,
+        closureData: { fib: null as any },
+        closureKey: "test.agency:outer::fib",
+      });
+      // Set the self-reference
+      (fn.closureData as any).fib = fn;
+
+      const result = reviver.serialize(fn);
+      expect(result.closureData).toEqual({ fib: CLOSURE_SELF_SENTINEL });
+    });
+  });
+
+  describe("revive", () => {
+    it("reconstructs AgencyFunction from closure registry + closureData", () => {
+      const result = reviver.revive({
+        name: "inner",
+        module: "test.agency",
+        closureKey,
+        closureData: { multiplier: 6 },
+        toolDefinition: { name: "inner", description: "A tool", schema: {} },
+        params: testClosureParams,
+      });
+      expect(result).toBeInstanceOf(AgencyFunction);
+      expect(result.name).toBe("inner");
+      expect(result.closureKey).toBe(closureKey);
+      expect(result.closureData).toEqual({ multiplier: 6 });
+    });
+
+    it("replaces __self__ sentinel with the revived AgencyFunction", () => {
+      registerClosure("test.agency:outer::fib", { fn: testClosureImpl, params: testClosureParams });
+      const result = reviver.revive({
+        name: "fib",
+        module: "test.agency",
+        closureKey: "test.agency:outer::fib",
+        closureData: { fib: CLOSURE_SELF_SENTINEL },
+        toolDefinition: null,
+        params: testClosureParams,
+      });
+      expect(result.closureData!.fib).toBe(result);
+    });
+
+    it("falls back to toolRegistry for non-closure functions", () => {
+      const fn = makeAgencyFunction("greet", "test.agency");
+      reviver.registry = { greet: fn };
+      const result = reviver.revive({ name: "greet", module: "test.agency" });
+      expect(result).toBe(fn);
+      reviver.registry = null;
+    });
+
+    it("throws when closure key is not found in registry", () => {
+      expect(() =>
+        reviver.revive({
+          name: "missing",
+          module: "test.agency",
+          closureKey: "test.agency:outer::missing",
+          closureData: {},
+          params: [],
+        })
+      ).toThrow("cannot revive closure function");
+    });
+  });
+
+  describe("round-trip", () => {
+    it("round-trips closure function through JSON serialize/deserialize", () => {
+      const fn = new AgencyFunction({
+        name: "inner",
+        module: "test.agency",
+        fn: testClosureImpl,
+        params: testClosureParams,
+        toolDefinition: { name: "inner", description: "test", schema: {} },
+        closureData: { x: 1, y: "hello", z: [1, 2, 3] },
+        closureKey,
+      });
+
+      const obj = { tool: fn, data: "test" };
+      const json = JSON.stringify(obj, nativeTypeReplacer);
+      const restored = JSON.parse(json, nativeTypeReviver);
+
+      expect(restored.tool).toBeInstanceOf(AgencyFunction);
+      expect(restored.tool.name).toBe("inner");
+      expect(restored.tool.closureKey).toBe(closureKey);
+      expect(restored.tool.closureData).toEqual({ x: 1, y: "hello", z: [1, 2, 3] });
+      expect(restored.data).toBe("test");
+    });
+
+    it("round-trips closure containing another AgencyFunction", () => {
+      const helperKey = "test.agency:outer::helper";
+      registerClosure(helperKey, { fn: testClosureImpl, params: [] });
+
+      const helper = new AgencyFunction({
+        name: "helper",
+        module: "test.agency",
+        fn: testClosureImpl,
+        params: [],
+        toolDefinition: null,
+        closureData: null,
+        closureKey: helperKey,
+      });
+
+      const tool = new AgencyFunction({
+        name: "tool",
+        module: "test.agency",
+        fn: testClosureImpl,
+        params: testClosureParams,
+        toolDefinition: null,
+        closureData: { helper },
+        closureKey: "test.agency:outer::tool",
+      });
+      registerClosure("test.agency:outer::tool", { fn: testClosureImpl, params: testClosureParams });
+
+      const json = JSON.stringify({ tool }, nativeTypeReplacer);
+      const restored = JSON.parse(json, nativeTypeReviver);
+
+      expect(restored.tool).toBeInstanceOf(AgencyFunction);
+      expect(restored.tool.closureData.helper).toBeInstanceOf(AgencyFunction);
+      expect(restored.tool.closureData.helper.name).toBe("helper");
+    });
+
+    it("round-trips recursive inner function with self-reference", () => {
+      const fibKey = "test.agency:outer::fib";
+      registerClosure(fibKey, { fn: testClosureImpl, params: testClosureParams });
+
+      const fib = new AgencyFunction({
+        name: "fib",
+        module: "test.agency",
+        fn: testClosureImpl,
+        params: testClosureParams,
+        toolDefinition: null,
+        closureData: { fib: null as any },
+        closureKey: fibKey,
+      });
+      (fib.closureData as any).fib = fib;
+
+      const json = JSON.stringify({ fn: fib }, nativeTypeReplacer);
+      const restored = JSON.parse(json, nativeTypeReviver);
+
+      expect(restored.fn).toBeInstanceOf(AgencyFunction);
+      expect(restored.fn.closureData.fib).toBe(restored.fn);
+    });
   });
 });

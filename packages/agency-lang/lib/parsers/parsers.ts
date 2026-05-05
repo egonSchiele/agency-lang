@@ -2210,6 +2210,7 @@ export const bodyParser = (input: string): ParserResult<AgencyNode[]> => {
     multiLineCommentParser,
     commentParser,
     skillParser,
+    functionParser,
     withModifierParser,
     assignmentParser,
     binOpParser,

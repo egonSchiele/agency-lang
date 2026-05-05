@@ -170,4 +170,57 @@ describe("AgencyFunction", () => {
       expect(fn.name).toBe("add");
     });
   });
+
+  describe("closure support", () => {
+    it("sets closureData and closureKey to null by default", () => {
+      const fn = makeFunction([{ name: "a" }]);
+      expect(fn.closureData).toBeNull();
+      expect(fn.closureKey).toBeNull();
+    });
+
+    it("stores closureData and closureKey when provided", () => {
+      const fn = new AgencyFunction({
+        name: "inner",
+        module: "test.agency",
+        fn: async (...args: unknown[]) => args,
+        params: [],
+        toolDefinition: null,
+        closureData: { x: 1, y: "hello" },
+        closureKey: "test.agency:outer::inner",
+      });
+      expect(fn.closureData).toEqual({ x: 1, y: "hello" });
+      expect(fn.closureKey).toBe("test.agency:outer::inner");
+    });
+
+    it("invoke injects closure data and self into state when closureData is set", async () => {
+      let capturedState: any = null;
+      const fn = new AgencyFunction({
+        name: "inner",
+        module: "test.agency",
+        fn: async (x: any, state: any) => { capturedState = state; return x; },
+        params: [{ name: "x", hasDefault: false, defaultValue: undefined, variadic: false }],
+        toolDefinition: null,
+        closureData: { multiplier: 6 },
+        closureKey: "test.agency:outer::inner",
+      });
+      await fn.invoke({ type: "positional", args: [42] }, { ctx: "mock" });
+      expect(capturedState.closure).toEqual({ multiplier: 6 });
+      expect(capturedState.self).toBe(fn);
+      expect(capturedState.ctx).toBe("mock");
+    });
+
+    it("invoke passes state unchanged when closureData is null", async () => {
+      let capturedState: any = null;
+      const fn = new AgencyFunction({
+        name: "inner",
+        module: "test.agency",
+        fn: async (x: any, state: any) => { capturedState = state; return x; },
+        params: [{ name: "x", hasDefault: false, defaultValue: undefined, variadic: false }],
+        toolDefinition: null,
+      });
+      const mockState = { ctx: "mock" };
+      await fn.invoke({ type: "positional", args: [42] }, mockState);
+      expect(capturedState).toBe(mockState);
+    });
+  });
 });

@@ -1192,4 +1192,214 @@ describe("TypescriptPreprocessor Core Functionality", () => {
       expect(fn.docComment.content).toBe(" Func docs ");
     });
   });
+
+  describe("closure analysis for nested functions", () => {
+    it("marks variables from enclosing function as captured", () => {
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "function",
+            functionName: "outer",
+            parameters: [
+              { type: "functionParameter", name: "x" },
+            ],
+            body: [
+              {
+                type: "assignment",
+                variableName: "y",
+                declKind: "const",
+                value: { type: "number", value: "5" },
+              },
+              {
+                type: "function",
+                functionName: "inner",
+                parameters: [
+                  { type: "functionParameter", name: "z" },
+                ],
+                body: [
+                  {
+                    type: "variableName",
+                    value: "x",
+                  },
+                  {
+                    type: "variableName",
+                    value: "y",
+                  },
+                  {
+                    type: "variableName",
+                    value: "z",
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      };
+      const preprocessor = new TypescriptPreprocessor(program);
+      preprocessor.preprocess();
+
+      const outer = program.nodes[0] as any;
+      const inner = outer.body.find((n: any) => n.type === "function");
+      expect(inner).toBeDefined();
+
+      // x and y should be captured from outer
+      expect(inner.capturedVariables).toBeDefined();
+      expect(inner.capturedVariables).toHaveLength(2);
+      const capturedNames = inner.capturedVariables.map((v: any) => v.name);
+      expect(capturedNames).toContain("x");
+      expect(capturedNames).toContain("y");
+
+      // x is an arg, y is a local in outer
+      const xCapture = inner.capturedVariables.find((v: any) => v.name === "x");
+      expect(xCapture.sourceType).toBe("args");
+      const yCapture = inner.capturedVariables.find((v: any) => v.name === "y");
+      expect(yCapture.sourceType).toBe("local");
+
+      // z is inner's own param — should be scoped as "args", not captured
+      const zNode = inner.body.find((n: any) => n.type === "variableName" && n.value === "z");
+      expect(zNode.scope).toBe("args");
+
+      // x and y in inner's body should be scoped as "captured"
+      const xNode = inner.body.find((n: any) => n.type === "variableName" && n.value === "x");
+      expect(xNode.scope).toBe("captured");
+      const yNode = inner.body.find((n: any) => n.type === "variableName" && n.value === "y");
+      expect(yNode.scope).toBe("captured");
+    });
+
+    it("inner function with no captures has no capturedVariables", () => {
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "function",
+            functionName: "outer",
+            parameters: [],
+            body: [
+              {
+                type: "function",
+                functionName: "inner",
+                parameters: [
+                  { type: "functionParameter", name: "x" },
+                ],
+                body: [
+                  { type: "variableName", value: "x" },
+                ],
+              },
+            ],
+          },
+        ],
+      };
+      const preprocessor = new TypescriptPreprocessor(program);
+      preprocessor.preprocess();
+
+      const outer = program.nodes[0] as any;
+      const inner = outer.body.find((n: any) => n.type === "function");
+      expect(inner.capturedVariables).toBeUndefined();
+    });
+
+    it("globals are not captured — they keep global scope", () => {
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "assignment",
+            variableName: "g",
+            declKind: "const",
+            value: { type: "number", value: "1" },
+          },
+          {
+            type: "function",
+            functionName: "outer",
+            parameters: [],
+            body: [
+              {
+                type: "function",
+                functionName: "inner",
+                parameters: [],
+                body: [
+                  { type: "variableName", value: "g" },
+                ],
+              },
+            ],
+          },
+        ],
+      };
+      const preprocessor = new TypescriptPreprocessor(program);
+      preprocessor.preprocess();
+
+      const outer = program.nodes.find((n: any) => n.type === "function") as any;
+      const inner = outer.body.find((n: any) => n.type === "function");
+      const gNode = inner.body.find((n: any) => n.type === "variableName" && n.value === "g");
+      expect(gNode.scope).toBe("global");
+      expect(inner.capturedVariables).toBeUndefined();
+    });
+
+    it("detects self-referencing inner function", () => {
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "function",
+            functionName: "outer",
+            parameters: [],
+            body: [
+              {
+                type: "function",
+                functionName: "fib",
+                parameters: [
+                  { type: "functionParameter", name: "n" },
+                ],
+                body: [
+                  { type: "variableName", value: "fib" },
+                  { type: "variableName", value: "n" },
+                ],
+              },
+            ],
+          },
+        ],
+      };
+      const preprocessor = new TypescriptPreprocessor(program);
+      preprocessor.preprocess();
+
+      const outer = program.nodes[0] as any;
+      const fib = outer.body.find((n: any) => n.type === "function");
+      expect(fib.selfReferencing).toBe(true);
+      // Self-reference should not appear in capturedVariables
+      expect(fib.capturedVariables ?? []).toHaveLength(0);
+    });
+
+    it("nested def inside a node body captures node args", () => {
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "graphNode",
+            nodeName: "main",
+            parameters: [
+              { type: "functionParameter", name: "name" },
+            ],
+            body: [
+              {
+                type: "function",
+                functionName: "greet",
+                parameters: [],
+                body: [
+                  { type: "variableName", value: "name" },
+                ],
+              },
+            ],
+          },
+        ],
+      };
+      const preprocessor = new TypescriptPreprocessor(program);
+      preprocessor.preprocess();
+
+      const main = program.nodes[0] as any;
+      const greet = main.body.find((n: any) => n.type === "function");
+      expect(greet.capturedVariables).toHaveLength(1);
+      expect(greet.capturedVariables[0].name).toBe("name");
+      expect(greet.capturedVariables[0].sourceType).toBe("args");
+    });
+  });
 });

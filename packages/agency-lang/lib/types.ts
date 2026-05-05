@@ -124,7 +124,7 @@ export type Scope =
   | StaticScope
   | LocalScope
   | BlockScope;
-export type ScopeType = Scope["type"] | "args" | "blockArgs" | "functionRef";
+export type ScopeType = Scope["type"] | "args" | "blockArgs" | "functionRef" | "captured";
 export type GlobalScope = {
   type: "global";
 };

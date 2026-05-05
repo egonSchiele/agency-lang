@@ -39,6 +39,12 @@ export const VALID_CALLBACK_NAMES = [
 
 export type CallbackName = (typeof VALID_CALLBACK_NAMES)[number];
 
+export type CapturedVariable = {
+  name: string;
+  sourceScope: string;
+  sourceType: "local" | "args";
+};
+
 export type FunctionDefinition = BaseNode & {
   type: "function";
   functionName: string;
@@ -53,6 +59,8 @@ export type FunctionDefinition = BaseNode & {
   exported?: boolean;
   callback?: boolean;
   tags?: Tag[];
+  capturedVariables?: CapturedVariable[];
+  selfReferencing?: boolean;
 };
 
 export type FunctionCall = BaseNode & {

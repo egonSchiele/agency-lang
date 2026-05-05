@@ -3489,3 +3489,103 @@ describe("bang (!) validated type annotations", () => {
     }
   });
 });
+
+describe("nested function definitions", () => {
+  it("parses def inside a def body", () => {
+    const code = `def outer(x: number) {
+  def inner(y: number): number {
+    return y + 1
+  }
+  return inner
+}`;
+    const result = functionParser(code);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.result.functionName).toBe("outer");
+      const innerDef = result.result.body.find((n: any) => n.type === "function");
+      expect(innerDef).toBeDefined();
+      expect((innerDef as any).functionName).toBe("inner");
+    }
+  });
+
+  it("parses def inside a node body", () => {
+    const code = `node main() {
+  def helper(): string {
+    return "hello"
+  }
+  const result = helper()
+}`;
+    const result = graphNodeParser(code);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.result.nodeName).toBe("main");
+      const innerDef = result.result.body.find((n: any) => n.type === "function");
+      expect(innerDef).toBeDefined();
+      expect((innerDef as any).functionName).toBe("helper");
+    }
+  });
+
+  it("parses nested def inside def inside def", () => {
+    const code = `def a() {
+  def b() {
+    def c(): number {
+      return 1
+    }
+    return c
+  }
+  return b
+}`;
+    const result = functionParser(code);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      const bDef = result.result.body.find((n: any) => n.type === "function") as any;
+      expect(bDef).toBeDefined();
+      expect(bDef.functionName).toBe("b");
+      const cDef = bDef.body.find((n: any) => n.type === "function");
+      expect(cDef).toBeDefined();
+      expect((cDef as any).functionName).toBe("c");
+    }
+  });
+
+  it("parses multiple nested defs in one function", () => {
+    const code = `def outer() {
+  def a(): number { return 1 }
+  def b(): number { return 2 }
+  return [a, b]
+}`;
+    const result = functionParser(code);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      const fns = result.result.body.filter((n: any) => n.type === "function");
+      expect(fns.length).toBe(2);
+      expect((fns[0] as any).functionName).toBe("a");
+      expect((fns[1] as any).functionName).toBe("b");
+    }
+  });
+
+  it("parses full agency file with nested def via parseAgency", () => {
+    const code = `def outer(x: number) {
+  const multiplier = x * 2
+
+  def inner(y: number): number {
+    return y * multiplier
+  }
+
+  return inner
+}
+
+node main() {
+  const fn = outer(3)
+}`;
+    const result = parseAgency(code);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      const nodes = result.result.nodes;
+      const outerDef = nodes.find((n: any) => n.type === "function" && n.functionName === "outer") as any;
+      expect(outerDef).toBeDefined();
+      const innerDef = outerDef.body.find((n: any) => n.type === "function");
+      expect(innerDef).toBeDefined();
+      expect(innerDef.functionName).toBe("inner");
+    }
+  });
+});

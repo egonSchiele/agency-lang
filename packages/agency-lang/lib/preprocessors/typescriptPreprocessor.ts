@@ -19,6 +19,7 @@ import {
   WhileLoop,
   isClassKeyword,
 } from "@/types.js";
+import type { CapturedVariable } from "@/types/function.js";
 import { MessageThread } from "@/types/messageThread.js";
 // import { Skill } from "@/types/skill.js"; // Unused after llm() refactor
 import {
@@ -1438,6 +1439,45 @@ export class TypescriptPreprocessor {
       return null;
     };
 
+    // Like lookupScope but also checks enclosing function scopes.
+    // Returns "captured" if the variable is found in an enclosing function's args/locals.
+    const lookupScopeWithCapture = (
+      funcName: string,
+      varName: string,
+      enclosingFuncNames: string[],
+    ): ScopeType | null => {
+      // Check current function first
+      const direct = lookupScope(funcName, varName);
+      if (direct) return direct;
+
+      // Check enclosing function scopes (innermost first)
+      for (let i = enclosingFuncNames.length - 1; i >= 0; i--) {
+        const enclosing = enclosingFuncNames[i];
+        if (funcArgs[enclosing]?.includes(varName)) return "captured";
+        if (localVarsInFunction[enclosing]?.has(varName)) return "captured";
+      }
+
+      return null;
+    };
+
+    // Track which enclosing function scope a captured variable comes from
+    // and whether it's an arg or local in that scope.
+    const getCaptureInfo = (
+      varName: string,
+      enclosingFuncNames: string[],
+    ): CapturedVariable | null => {
+      for (let i = enclosingFuncNames.length - 1; i >= 0; i--) {
+        const enclosing = enclosingFuncNames[i];
+        if (funcArgs[enclosing]?.includes(varName)) {
+          return { name: varName, sourceScope: enclosing, sourceType: "args" };
+        }
+        if (localVarsInFunction[enclosing]?.has(varName)) {
+          return { name: varName, sourceScope: enclosing, sourceType: "local" };
+        }
+      }
+      return null;
+    };
+
     // second, make sure all args are scoped correctly,
     // and all vars defined within a function or graph node are scoped to that function or graph node.
     for (const { node, scopes } of walkNodesArray(this.program.nodes)) {
@@ -1454,6 +1494,29 @@ export class TypescriptPreprocessor {
         funcArgs[nodeName] = [...node.parameters.map((p) => p.name)];
         localVarsInFunction[nodeName] = new Set();
 
+        // Detect if this function is nested inside another function/node.
+        // scopes looks like [global, function:outer] for a nested function.
+        const enclosingFuncNames: string[] = [];
+        for (const s of scopes) {
+          if (s.type === "function") enclosingFuncNames.push(s.functionName);
+          else if (s.type === "node") enclosingFuncNames.push(s.nodeName);
+        }
+        const isNested = enclosingFuncNames.length > 0;
+        const capturedVars = new Map<string, CapturedVariable>();
+
+        // Effective lookup: use capture-aware lookup for nested functions
+        const effectiveLookup = (varName: string): ScopeType | null => {
+          if (isNested) {
+            const result = lookupScopeWithCapture(nodeName, varName, enclosingFuncNames);
+            if (result === "captured") {
+              const info = getCaptureInfo(varName, enclosingFuncNames);
+              if (info) capturedVars.set(varName, info);
+            }
+            return result;
+          }
+          return lookupScope(nodeName, varName);
+        };
+
         // Phase 1: Resolve block body variables first.
         // Block params get "blockArgs" scope, new variables inside blocks get "block" scope,
         // and references to outer-scope variables keep their original scope (captured via closure).
@@ -1468,7 +1531,7 @@ export class TypescriptPreprocessor {
             for (const { node: blockVarNode } of getAllVariablesInBodyArray(bodyNode.block.body)) {
               if (blockVarNode.type === "assignment") {
                 const name = blockVarNode.variableName;
-                if (!blockParamNames.has(name) && lookupScope(nodeName, name) === null) {
+                if (!blockParamNames.has(name) && effectiveLookup(name) === null) {
                   blockLocalNames.add(name);
                 }
               }
@@ -1482,7 +1545,7 @@ export class TypescriptPreprocessor {
                 } else if (blockLocalNames.has(blockVarNode.variableName)) {
                   blockVarNode.scope = "block";
                 } else {
-                  const resolved = lookupScope(nodeName, blockVarNode.variableName);
+                  const resolved = effectiveLookup(blockVarNode.variableName);
                   if (resolved) blockVarNode.scope = resolved;
                   // else: leave unscoped — Phase 2 will resolve once locals are registered
                 }
@@ -1492,7 +1555,7 @@ export class TypescriptPreprocessor {
                 } else if (blockLocalNames.has(blockVarNode.value)) {
                   blockVarNode.scope = "block";
                 } else {
-                  const resolved = lookupScope(nodeName, blockVarNode.value);
+                  const resolved = effectiveLookup(blockVarNode.value);
                   if (resolved) blockVarNode.scope = resolved;
                   // else: leave unscoped — Phase 2 will resolve once locals are registered
                 }
@@ -1515,7 +1578,7 @@ export class TypescriptPreprocessor {
               scope = "local";
               localVarsInFunction[nodeName].add(varNode.variableName);
             } else {
-              scope = lookupScope(nodeName, varNode.variableName) ?? "local";
+              scope = effectiveLookup(varNode.variableName) ?? "local";
               if (scope === "static") {
                 throw new Error(
                   `Cannot reassign static variable '${varNode.variableName}'. Static variables are immutable after initialization.`
@@ -1529,7 +1592,7 @@ export class TypescriptPreprocessor {
           } else if (varNode.type === "variableName") {
             if (varNode.scope) continue; // already resolved in block Phase 1
             if (isClassKeyword(varNode.value)) continue;
-            const resolved = lookupScope(nodeName, varNode.value);
+            const resolved = effectiveLookup(varNode.value);
             if (resolved) {
               varNode.scope = resolved;
             } else if (this.graphNodeDefinitions[varNode.value]) {
@@ -1551,9 +1614,25 @@ export class TypescriptPreprocessor {
             if (this.functionDefinitions[name]) {
               callNode.scope = "functionRef";
             } else {
-              const resolved = lookupScope(nodeName, name);
+              const resolved = effectiveLookup(name);
               callNode.scope = resolved ?? "imported";
             }
+          }
+        }
+
+        // For nested functions, attach captured variables and detect self-references
+        if (isNested && node.type === "function") {
+          const fnNode = node as FunctionDefinition;
+          if (capturedVars.size > 0) {
+            fnNode.capturedVariables = Array.from(capturedVars.values());
+          }
+          // Detect self-referencing inner function (name appears in captured vars)
+          if (capturedVars.has(fnNode.functionName)) {
+            fnNode.selfReferencing = true;
+            // Remove self from captured vars — it's handled via sentinel
+            fnNode.capturedVariables = fnNode.capturedVariables?.filter(
+              (v) => v.name !== fnNode.functionName,
+            );
           }
         }
       }

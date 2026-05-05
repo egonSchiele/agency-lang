@@ -29,6 +29,8 @@ export {
 export { functionRefReviver } from "./revivers/index.js";
 export { AgencyFunction, UNSET } from "./agencyFunction.js";
 export type { FuncParam, CallType, ToolDefinition, AgencyFunctionOpts } from "./agencyFunction.js";
+export { registerClosure, lookupClosure, CLOSURE_SELF_SENTINEL } from "./closureRegistry.js";
+export type { ClosureRegistryEntry } from "./closureRegistry.js";
 export { __call, __callMethod } from "./call.js";
 
 export { callHook, registerGlobalHook } from "./hooks.js";

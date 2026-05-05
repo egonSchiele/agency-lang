@@ -144,12 +144,6 @@ export function _atTime(date: string, time: string, timezone?: string): string {
   return `${date}T${finalTime}${offset}`;
 }
 
-// --- Duration helpers ---
-
-export function _endAfter(start: string, minutes: number): string {
-  return _addMinutes(start, minutes);
-}
-
 // --- Range boundaries ---
 
 export function _startOfDay(date?: string, timezone?: string): string {

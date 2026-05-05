@@ -1,4 +1,4 @@
-import { _now, _today, _tomorrow, _addMinutes, _addHours, _addDays, _nextDayOfWeek, _atTime, _endAfter, _startOfDay, _endOfDay, _startOfWeek, _endOfWeek, _startOfMonth, _endOfMonth } from "./lib/date.js"
+import { _now, _today, _tomorrow, _addMinutes, _addHours, _addDays, _nextDayOfWeek, _atTime, _startOfDay, _endOfDay, _startOfWeek, _endOfWeek, _startOfMonth, _endOfMonth } from "./lib/date.js"
 
 /**
   ## Date and Time Utilities
@@ -21,20 +21,19 @@ import { _now, _today, _tomorrow, _addMinutes, _addHours, _addDays, _nextDayOfWe
   ### Building dates for calendar events
 
   ```ts
-  import { atTime, endAfter, tomorrow, nextDayOfWeek } from "std::date"
+  import { atTime, addMinutes, tomorrow, nextDayOfWeek } from "std::date"
   import { createEvent } from "std::calendar"
 
   node main() {
-    // "Tomorrow at 3pm Pacific"
-    const start = atTime(tomorrow(), "15:00", "America/Los_Angeles")
-    const end = endAfter(start, 60)
+    // "Tomorrow at 3pm Pacific for 1 hour"
+    const tz = "America/Los_Angeles"
+    const start = atTime(tomorrow(tz), "15:00", tz)
+    createEvent(summary: "Dentist", start: start, end: addMinutes(start, 60))
 
-    createEvent(summary: "Dentist", start: start, end: end)
-
-    // "Next Tuesday at 10am"
-    const tuesday = nextDayOfWeek("tuesday")
-    const meetingStart = atTime(tuesday, "10:00")
-    createEvent(summary: "Team sync", start: meetingStart, end: endAfter(meetingStart, 30))
+    // "Next Tuesday at 10am for 30 min"
+    const tuesday = nextDayOfWeek("tuesday", tz)
+    const meetingStart = atTime(tuesday, "10:00", tz)
+    createEvent(summary: "Team sync", start: meetingStart, end: addMinutes(meetingStart, 30))
   }
   ```
 
@@ -138,14 +137,6 @@ export safe def atTime(date: string, time: string, timezone: string = ""): strin
   Combine a date and time into a full timezone-aware ISO 8601 string. For example, atTime("2026-05-10", "15:00", "America/Los_Angeles") returns "2026-05-10T15:00:00-07:00". Uses local timezone if not specified.
   """
   return _atTime(date, time, timezone)
-}
-
-/** Compute an end time by adding minutes to a start time. */
-export safe def endAfter(start: string, minutes: number): string {
-  """
-  Compute an end time by adding a duration in minutes to a start time. Useful for creating calendar events: endAfter(start, 60) gives you an end time 1 hour after start.
-  """
-  return _endAfter(start, minutes)
 }
 
 /** Get the start of the day (midnight) as an ISO 8601 string. */

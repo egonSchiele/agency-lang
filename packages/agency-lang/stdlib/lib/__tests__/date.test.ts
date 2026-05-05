@@ -8,7 +8,6 @@ import {
   _addDays,
   _nextDayOfWeek,
   _atTime,
-  _endAfter,
   _startOfDay,
   _endOfDay,
   _startOfWeek,
@@ -137,23 +136,6 @@ describe("_atTime", () => {
   it("handles seconds in time", () => {
     const result = _atTime("2026-05-10", "09:30:45", "UTC");
     expect(result).toBe("2026-05-10T09:30:45+00:00");
-  });
-});
-
-describe("_endAfter", () => {
-  it("returns start time plus duration", () => {
-    const start = "2026-05-10T10:00:00Z";
-    const end = _endAfter(start, 60);
-    expect(end).toContain("11:00:00");
-  });
-
-  it("works with timezone-offset datetimes", () => {
-    const start = "2026-05-10T10:00:00-07:00";
-    const end = _endAfter(start, 90);
-    // Should be 11:30, same offset behavior preserved via UTC conversion
-    const d = new Date(end);
-    const startD = new Date(start);
-    expect(d.getTime() - startD.getTime()).toBe(90 * 60 * 1000);
   });
 });
 

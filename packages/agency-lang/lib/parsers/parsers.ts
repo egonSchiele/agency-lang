@@ -156,10 +156,17 @@ export const varNameChar: Parser<string> = oneOf(
 // =============================================================================
 
 /* withLoc appends accurate line and column numbers to different symbols in the agency code.
-However, because every agency code gets rendered in a template that imports some standard functions,
-the line numbers would be off if we didn't account for the template lines.
+parseAgency sets the per-parse offset (AGENCY_TEMPLATE_OFFSET when the template
+wrapper was applied, else 0) so loc.line is always 0-indexed in the user's
+source regardless of parse mode.
 */
 export const AGENCY_TEMPLATE_OFFSET = 2;
+
+let currentTemplateOffset = 0;
+
+export function setTemplateOffset(n: number): void {
+  currentTemplateOffset = n;
+}
 
 /**
  * Wraps a parser to add a `loc` field from tarsec's withSpan.
@@ -174,7 +181,7 @@ export function withLoc<T>(
     if (!result.success) return result;
     const { value, span } = result.result;
     const loc: SourceLocation = {
-      line: span.start.line - AGENCY_TEMPLATE_OFFSET,
+      line: span.start.line - currentTemplateOffset,
       col: span.start.column,
       start: span.start.offset,
       end: span.end.offset,

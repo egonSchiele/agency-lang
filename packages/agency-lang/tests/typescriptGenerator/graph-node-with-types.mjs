@@ -220,4 +220,4 @@ export async function greet(name: string, { messages, callbacks }: { messages?: 
 }
 export const __greetNodeParams = ["name"];
 export default graph
-export const __sourceMap = {"graph-node-with-types.agency:greet":{"0":{"line":1,"col":2},"1":{"line":2,"col":2}}};
+export const __sourceMap = {"graph-node-with-types.agency:greet":{"0":{"line":3,"col":2},"1":{"line":4,"col":2}}};

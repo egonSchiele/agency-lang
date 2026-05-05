@@ -31,7 +31,7 @@
             ]
           },
           "loc": {
-            "line": -1,
+            "line": 1,
             "col": 2,
             "start": 36,
             "end": 48
@@ -39,7 +39,7 @@
         }
       ],
       "loc": {
-        "line": -2,
+        "line": 0,
         "col": 0,
         "start": 0,
         "end": 49
@@ -59,7 +59,7 @@
             "type": "variableName",
             "value": "greet",
             "loc": {
-              "line": 3,
+              "line": 5,
               "col": 13,
               "start": 78,
               "end": 83
@@ -67,7 +67,7 @@
             "scope": "functionRef"
           },
           "loc": {
-            "line": 3,
+            "line": 5,
             "col": 2,
             "start": 67,
             "end": 86
@@ -93,7 +93,7 @@
               }
             ],
             "loc": {
-              "line": 4,
+              "line": 6,
               "col": 17,
               "start": 101,
               "end": 111
@@ -101,7 +101,7 @@
             "scope": "local"
           },
           "loc": {
-            "line": 4,
+            "line": 6,
             "col": 2,
             "start": 86,
             "end": 111
@@ -110,7 +110,7 @@
         }
       ],
       "loc": {
-        "line": 2,
+        "line": 4,
         "col": 0,
         "start": 51,
         "end": 112

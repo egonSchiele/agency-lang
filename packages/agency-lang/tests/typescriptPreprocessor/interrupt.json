@@ -38,7 +38,7 @@
                       "type": "variableName",
                       "value": "action",
                       "loc": {
-                        "line": -1,
+                        "line": 1,
                         "col": 46,
                         "start": 88,
                         "end": 94
@@ -49,14 +49,14 @@
               }
             ],
             "loc": {
-              "line": -1,
+              "line": 1,
               "col": 9,
               "start": 51,
               "end": 97
             }
           },
           "loc": {
-            "line": -1,
+            "line": 1,
             "col": 2,
             "start": 44,
             "end": 100
@@ -77,7 +77,7 @@
                   "type": "variableName",
                   "value": "action",
                   "loc": {
-                    "line": 0,
+                    "line": 2,
                     "col": 23,
                     "start": 121,
                     "end": 127
@@ -88,7 +88,7 @@
             ]
           },
           "loc": {
-            "line": 0,
+            "line": 2,
             "col": 2,
             "start": 100,
             "end": 130
@@ -96,7 +96,7 @@
         }
       ],
       "loc": {
-        "line": -2,
+        "line": 0,
         "col": 0,
         "start": 0,
         "end": 131
@@ -131,7 +131,7 @@
                   "type": "variableName",
                   "value": "x",
                   "loc": {
-                    "line": 4,
+                    "line": 6,
                     "col": 12,
                     "start": 181,
                     "end": 182
@@ -146,7 +146,7 @@
             ]
           },
           "loc": {
-            "line": 4,
+            "line": 6,
             "col": 2,
             "start": 171,
             "end": 190
@@ -154,7 +154,7 @@
         }
       ],
       "loc": {
-        "line": 3,
+        "line": 5,
         "col": 0,
         "start": 133,
         "end": 191
@@ -199,7 +199,7 @@
                           "type": "variableName",
                           "value": "riskyAction",
                           "loc": {
-                            "line": 8,
+                            "line": 10,
                             "col": 80,
                             "start": 287,
                             "end": 298
@@ -210,7 +210,7 @@
                           "type": "variableName",
                           "value": "safeAction",
                           "loc": {
-                            "line": 8,
+                            "line": 10,
                             "col": 93,
                             "start": 300,
                             "end": 310
@@ -224,7 +224,7 @@
               }
             ],
             "loc": {
-              "line": 8,
+              "line": 10,
               "col": 25,
               "start": 232,
               "end": 317
@@ -232,7 +232,7 @@
             "scope": "imported"
           },
           "loc": {
-            "line": 8,
+            "line": 10,
             "col": 2,
             "start": 209,
             "end": 317
@@ -247,7 +247,7 @@
               "type": "variableName",
               "value": "result",
               "loc": {
-                "line": 9,
+                "line": 11,
                 "col": 8,
                 "start": 323,
                 "end": 329
@@ -256,7 +256,7 @@
             }
           ],
           "loc": {
-            "line": 9,
+            "line": 11,
             "col": 2,
             "start": 317,
             "end": 331
@@ -265,7 +265,7 @@
         }
       ],
       "loc": {
-        "line": 7,
+        "line": 9,
         "col": 0,
         "start": 193,
         "end": 332

@@ -53,6 +53,8 @@ import {
   whileLoopParser,
   withModifierParser,
   classParser,
+  AGENCY_TEMPLATE_OFFSET,
+  setTemplateOffset,
 } from "./parsers/parsers.js";
 import { AgencyNode, AgencyProgram } from "./types.js";
 
@@ -167,6 +169,12 @@ export function parseAgency(
   if (applyTemplate) {
     input = render({ body: input });
   }
+  // The parser adds locs by subtracting `currentTemplateOffset` from
+  // tarsec spans. When the template was applied, spans are shifted by
+  // AGENCY_TEMPLATE_OFFSET (the prelude lines); when not, no shift. Net
+  // effect: loc.line is always 0-indexed in the user's source.
+  const offset = applyTemplate ? AGENCY_TEMPLATE_OFFSET : 0;
+  setTemplateOffset(offset);
   try {
     return _parseAgency(input, config);
   } catch (error) {
@@ -176,7 +184,7 @@ export function parseAgency(
         message: error.message,
         rest: input,
         errorData: {
-          line: error.data.line,
+          line: error.data.line - offset,
           column: error.data.column,
           length: error.data.length,
           message: error.data.message,
@@ -186,5 +194,7 @@ export function parseAgency(
     } else {
       throw error;
     }
+  } finally {
+    setTemplateOffset(0);
   }
 }

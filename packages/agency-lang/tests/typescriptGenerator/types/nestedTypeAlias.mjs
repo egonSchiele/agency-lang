@@ -233,4 +233,4 @@ if (__process.argv[1] === fileURLToPath(import.meta.url)) {
   }
 }
 export default graph
-export const __sourceMap = {"nestedTypeAlias.agency:main":{"0":{"line":6,"col":2},"1":{"line":7,"col":2}}};
+export const __sourceMap = {"nestedTypeAlias.agency:main":{"0":{"line":8,"col":2},"1":{"line":9,"col":2}}};

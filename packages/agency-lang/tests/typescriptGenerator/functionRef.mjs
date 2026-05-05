@@ -550,4 +550,4 @@ if (__process.argv[1] === fileURLToPath(import.meta.url)) {
   }
 }
 export default graph
-export const __sourceMap = {"functionRef.agency:greet":{"0":{"line":-1,"col":2}},"functionRef.agency:double":{"0":{"line":3,"col":2}},"functionRef.agency:applyToAll":{"0":{"line":7,"col":2},"1":{"line":8,"col":2},"2":{"line":11,"col":2},"1.0":{"line":9,"col":4}},"functionRef.agency:main":{"0":{"line":15,"col":2},"1":{"line":16,"col":2},"2":{"line":17,"col":2}}};
+export const __sourceMap = {"functionRef.agency:greet":{"0":{"line":1,"col":2}},"functionRef.agency:double":{"0":{"line":5,"col":2}},"functionRef.agency:applyToAll":{"0":{"line":9,"col":2},"1":{"line":10,"col":2},"2":{"line":13,"col":2},"1.0":{"line":11,"col":4}},"functionRef.agency:main":{"0":{"line":17,"col":2},"1":{"line":18,"col":2},"2":{"line":19,"col":2}}};

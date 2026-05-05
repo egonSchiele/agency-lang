@@ -440,4 +440,4 @@ if (__process.argv[1] === fileURLToPath(import.meta.url)) {
   }
 }
 export default graph
-export const __sourceMap = {"class-inheritance.agency:Animal.speak":{"0":{"line":2,"col":4},"1":{"line":3,"col":4}},"class-inheritance.agency:Dog.speak":{"0":{"line":11,"col":4},"1":{"line":12,"col":4}},"class-inheritance.agency:main":{"0":{"line":17,"col":2},"1":{"line":18,"col":2},"2":{"line":19,"col":2}}};
+export const __sourceMap = {"class-inheritance.agency:Animal.speak":{"0":{"line":4,"col":4},"1":{"line":5,"col":4}},"class-inheritance.agency:Dog.speak":{"0":{"line":13,"col":4},"1":{"line":14,"col":4}},"class-inheritance.agency:main":{"0":{"line":19,"col":2},"1":{"line":20,"col":2},"2":{"line":21,"col":2}}};

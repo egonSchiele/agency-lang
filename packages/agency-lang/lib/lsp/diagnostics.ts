@@ -12,7 +12,6 @@ import { SymbolTable } from "../symbolTable.js";
 import { AgencyProgram } from "../types.js";
 import { CompilationUnit } from "../compilationUnit.js";
 import { buildSemanticIndex, type SemanticIndex } from "./semantics.js";
-import { TEMPLATE_OFFSET } from "./locations.js";
 import type { ScopeInfo } from "../typeChecker/types.js";
 
 type DiagnosticsResult = {
@@ -70,17 +69,14 @@ export function runDiagnostics(
     return { diagnostics, program: null, info: null, semanticIndex: {}, scopes: [] };
   }
 
-  // applyTemplate=false above, so `loc.line` is shifted by -TEMPLATE_OFFSET
-  // from raw source lines. Pass templateApplied=false so the typechecker can
-  // align suppression directives with error locations.
-  const info = buildCompilationUnit(program, symbolTable, fsPath, source, false);
+  const info = buildCompilationUnit(program, symbolTable, fsPath, source);
   const { errors, scopes } = typeCheck(program, config, info);
 
   for (const err of errors) {
     const range = err.loc
       ? {
-          start: { line: err.loc.line + TEMPLATE_OFFSET, character: err.loc.col },
-          end: { line: err.loc.line + TEMPLATE_OFFSET, character: err.loc.col },
+          start: { line: err.loc.line, character: err.loc.col },
+          end: { line: err.loc.line, character: err.loc.col },
         }
       : { start: { line: 0, character: 0 }, end: { line: 0, character: 1 } };
     diagnostics.push({

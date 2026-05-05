@@ -189,4 +189,4 @@ if (__process.argv[1] === fileURLToPath(import.meta.url)) {
   }
 }
 export default graph
-export const __sourceMap = {"string-interpolation.agency:main":{"0":{"line":-1,"col":2}}};
+export const __sourceMap = {"string-interpolation.agency:main":{"0":{"line":1,"col":2}}};

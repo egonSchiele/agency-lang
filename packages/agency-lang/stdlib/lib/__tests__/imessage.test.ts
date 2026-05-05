@@ -56,6 +56,25 @@ describe("_sendIMessage", () => {
     expect(script).toContain("path\\\\to\\\\file");
   });
 
+  it("escapes newlines to prevent AppleScript injection", async () => {
+    await _sendIMessage("+15551234567", "line1\nline2\rline3\r\nline4");
+
+    const [, args] = (execFile as unknown as ReturnType<typeof vi.fn>).mock.calls[0];
+    const script = args[1];
+    // All line breaks should be escaped as \n, not literal newlines in the AppleScript string
+    expect(script).toContain("line1\\nline2\\nline3\\nline4");
+    // Should not contain unescaped newlines within the send command's string literal
+    expect(script.match(/send "[^"]*\n[^"]*"/)).toBeNull();
+  });
+
+  it("escapes tabs", async () => {
+    await _sendIMessage("+15551234567", "col1\tcol2");
+
+    const [, args] = (execFile as unknown as ReturnType<typeof vi.fn>).mock.calls[0];
+    const script = args[1];
+    expect(script).toContain("col1\\tcol2");
+  });
+
   it("throws on non-macOS platforms", async () => {
     Object.defineProperty(process, "platform", { value: "linux", writable: true });
 

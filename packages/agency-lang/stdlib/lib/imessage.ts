@@ -23,12 +23,11 @@ export async function _sendIMessage(
     throw new Error("Missing message body.");
   }
 
-  // Use AppleScript via osascript to send an iMessage
   const script = `
     tell application "Messages"
       set targetService to 1st account whose service type = iMessage
-      set targetBuddy to participant "${escapedAppleScript(to)}" of targetService
-      send "${escapedAppleScript(message)}" to targetBuddy
+      set targetBuddy to participant "${escapeAppleScriptString(to)}" of targetService
+      send "${escapeAppleScriptString(message)}" to targetBuddy
     end tell
   `;
 
@@ -41,7 +40,16 @@ export async function _sendIMessage(
   }
 }
 
-function escapedAppleScript(str: string): string {
-  // Escape backslashes first, then double quotes
-  return str.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+function escapeAppleScriptString(str: string): string {
+  // Escape backslashes, double quotes, and replace characters that would
+  // terminate an AppleScript string literal or inject new statements.
+  return str
+    .replace(/\\/g, "\\\\")
+    .replace(/"/g, '\\"')
+    .replace(/\r\n/g, "\\n")
+    .replace(/\r/g, "\\n")
+    .replace(/\n/g, "\\n")
+    .replace(/\t/g, "\\t")
+    .replace(/\u2028/g, "\\n")
+    .replace(/\u2029/g, "\\n");
 }

@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { agencyNode, agencyParser, parseAgency, replaceBlankLines } from "./parser.js";
+import type { AgencyProgram } from "./types.js";
 
 const S = "\uE000";
 
@@ -188,6 +189,38 @@ describe("parseAgency structured errors", () => {
     if (!result.success) {
       expect(result.message).toBeDefined();
     }
+  });
+});
+
+describe("parseAgency loc.line invariant", () => {
+  // Pin the invariant that loc.line is 0-indexed in the user's source
+  // regardless of whether the template wrapper was applied. Without this,
+  // every consumer would have to compensate for the parse mode.
+  it("produces identical loc.line values with and without applyTemplate", () => {
+    const source = "def foo() {}\n\nnode main() {\n  print(1)\n}\n";
+    const withTemplate = parseAgency(source, {}, true);
+    const withoutTemplate = parseAgency(source, {}, false);
+    expect(withTemplate.success).toBe(true);
+    expect(withoutTemplate.success).toBe(true);
+    if (!withTemplate.success || !withoutTemplate.success) return;
+
+    const collectLines = (program: AgencyProgram): number[] => {
+      const lines: number[] = [];
+      const visit = (node: any) => {
+        if (node && typeof node === "object") {
+          if (node.loc && typeof node.loc.line === "number") lines.push(node.loc.line);
+          for (const key of Object.keys(node)) {
+            const v = (node as any)[key];
+            if (Array.isArray(v)) v.forEach(visit);
+            else if (v && typeof v === "object") visit(v);
+          }
+        }
+      };
+      visit(program);
+      return lines;
+    };
+
+    expect(collectLines(withTemplate.result)).toEqual(collectLines(withoutTemplate.result));
   });
 });
 

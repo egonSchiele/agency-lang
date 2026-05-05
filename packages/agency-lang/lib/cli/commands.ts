@@ -156,7 +156,6 @@ export function compile(
     symbolTable,
     absoluteInputFile,
     contents,
-    !isStdlibIndex,
   );
 
   if (config.typeCheck || config.typeCheckStrict) {

@@ -40,7 +40,7 @@
                       "type": "variableName",
                       "value": "label",
                       "loc": {
-                        "line": -1,
+                        "line": 1,
                         "col": 33,
                         "start": 71,
                         "end": 76
@@ -52,7 +52,7 @@
               }
             ],
             "loc": {
-              "line": -1,
+              "line": 1,
               "col": 17,
               "start": 55,
               "end": 82
@@ -60,7 +60,7 @@
             "scope": "imported"
           },
           "loc": {
-            "line": -1,
+            "line": 1,
             "col": 2,
             "start": 40,
             "end": 82
@@ -73,7 +73,7 @@
             "type": "variableName",
             "value": "result",
             "loc": {
-              "line": 0,
+              "line": 2,
               "col": 9,
               "start": 89,
               "end": 95
@@ -81,7 +81,7 @@
             "scope": "local"
           },
           "loc": {
-            "line": 0,
+            "line": 2,
             "col": 2,
             "start": 82,
             "end": 96
@@ -89,7 +89,7 @@
         }
       ],
       "loc": {
-        "line": -2,
+        "line": 0,
         "col": 0,
         "start": 0,
         "end": 97
@@ -124,7 +124,7 @@
               }
             ],
             "loc": {
-              "line": 4,
+              "line": 6,
               "col": 20,
               "start": 133,
               "end": 159
@@ -132,7 +132,7 @@
             "scope": "imported"
           },
           "loc": {
-            "line": 4,
+            "line": 6,
             "col": 2,
             "start": 115,
             "end": 159
@@ -162,7 +162,7 @@
               }
             ],
             "loc": {
-              "line": 5,
+              "line": 7,
               "col": 20,
               "start": 177,
               "end": 204
@@ -170,7 +170,7 @@
             "scope": "imported"
           },
           "loc": {
-            "line": 5,
+            "line": 7,
             "col": 2,
             "start": 159,
             "end": 204
@@ -190,7 +190,7 @@
                   "type": "variableName",
                   "value": "a",
                   "loc": {
-                    "line": 6,
+                    "line": 8,
                     "col": 22,
                     "start": 224,
                     "end": 225
@@ -208,7 +208,7 @@
                   "type": "variableName",
                   "value": "b",
                   "loc": {
-                    "line": 6,
+                    "line": 8,
                     "col": 31,
                     "start": 233,
                     "end": 234
@@ -219,7 +219,7 @@
             ]
           },
           "loc": {
-            "line": 6,
+            "line": 8,
             "col": 2,
             "start": 204,
             "end": 239
@@ -234,7 +234,7 @@
               "type": "variableName",
               "value": "combined",
               "loc": {
-                "line": 7,
+                "line": 9,
                 "col": 8,
                 "start": 245,
                 "end": 253
@@ -243,7 +243,7 @@
             }
           ],
           "loc": {
-            "line": 7,
+            "line": 9,
             "col": 2,
             "start": 239,
             "end": 255
@@ -252,7 +252,7 @@
         }
       ],
       "loc": {
-        "line": 3,
+        "line": 5,
         "col": 0,
         "start": 99,
         "end": 256

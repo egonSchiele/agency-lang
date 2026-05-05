@@ -31,7 +31,7 @@
               }
             ],
             "loc": {
-              "line": -1,
+              "line": 1,
               "col": 17,
               "start": 35,
               "end": 59
@@ -39,7 +39,7 @@
             "scope": "imported"
           },
           "loc": {
-            "line": -1,
+            "line": 1,
             "col": 2,
             "start": 20,
             "end": 59
@@ -52,7 +52,7 @@
             "type": "variableName",
             "value": "result",
             "loc": {
-              "line": 0,
+              "line": 2,
               "col": 9,
               "start": 66,
               "end": 72
@@ -60,7 +60,7 @@
             "scope": "local"
           },
           "loc": {
-            "line": 0,
+            "line": 2,
             "col": 2,
             "start": 59,
             "end": 73
@@ -68,7 +68,7 @@
         }
       ],
       "loc": {
-        "line": -2,
+        "line": 0,
         "col": 0,
         "start": 0,
         "end": 74

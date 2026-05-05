@@ -15,7 +15,6 @@ import type { SourceLocation } from "../types/base.js";
 import { TypeCheckError, TypeCheckResult, TypeCheckerContext } from "./types.js";
 import { validateTypeReferences } from "./validate.js";
 import { applySuppressions, parseSuppressions } from "./suppression.js";
-import { AGENCY_TEMPLATE_OFFSET } from "../parsers/parsers.js";
 import { inferReturnTypes } from "./inference.js";
 import { buildScopes } from "./scopes.js";
 import { checkScopes } from "./checker.js";
@@ -63,7 +62,6 @@ export class TypeChecker {
   private inferredReturnTypes: Record<string, VariableType | "any"> = {};
   private inferringReturnType = new Set<string>();
   private sourceText: string | undefined;
-  private templateApplied: boolean = true;
 
   constructor(program: AgencyProgram, config: AgencyConfig = {}, info?: CompilationUnit) {
     this.program = program;
@@ -76,7 +74,6 @@ export class TypeChecker {
     );
     this.importedFunctions = { ...resolved.importedFunctions };
     this.sourceText = resolved.sourceText;
-    this.templateApplied = resolved.templateApplied ?? true;
   }
 
   private get typeAliases(): Record<string, VariableType> {
@@ -205,16 +202,7 @@ export class TypeChecker {
 
   private applySuppressions(errors: TypeCheckError[]): TypeCheckError[] {
     if (this.sourceText === undefined) return errors;
-    // When the source was parsed without the template wrapper, error
-    // loc.line is shifted by -AGENCY_TEMPLATE_OFFSET from raw-source 0-
-    // indexed lines (the convention parseSuppressions emits in). Pass
-    // that offset so applySuppressions can align them.
-    const lineOffset = this.templateApplied ? 0 : AGENCY_TEMPLATE_OFFSET;
-    return applySuppressions(
-      errors,
-      parseSuppressions(this.sourceText),
-      lineOffset,
-    );
+    return applySuppressions(errors, parseSuppressions(this.sourceText));
   }
 
   private deduplicateErrors(): TypeCheckError[] {

@@ -1,14 +1,11 @@
 import { DocumentSymbol, SymbolKind } from "vscode-languageserver-protocol";
 import { AgencyProgram } from "../types.js";
 import { SourceLocation } from "../types/base.js";
-import { toUserSourceLocation } from "./locations.js";
 
 function locToRange(loc: SourceLocation) {
-  const normalized = toUserSourceLocation(loc);
-  const line = normalized?.line ?? loc.line;
   return {
-    start: { line, character: loc.col },
-    end: { line, character: loc.col },
+    start: { line: loc.line, character: loc.col },
+    end: { line: loc.line, character: loc.col },
   };
 }
 

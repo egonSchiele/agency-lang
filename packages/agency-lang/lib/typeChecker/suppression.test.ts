@@ -96,7 +96,7 @@ describe("typeCheck honors suppressions end-to-end", () => {
     const parseResult = parseAgency(source, {}, applyTemplate);
     if (!parseResult.success) throw new Error(`Parse failed: ${parseResult.message}`);
     const program = parseResult.result;
-    const info = buildCompilationUnit(program, undefined, undefined, source, applyTemplate);
+    const info = buildCompilationUnit(program, undefined, undefined, source);
     return typeCheck(program, {}, info);
   }
 

@@ -8,7 +8,6 @@ import type { ScopeInfo } from "../typeChecker/types.js";
 import { findContainingScope, findDefForScope } from "./scopeResolution.js";
 import { walkNodes } from "../utils/node.js";
 import { offsetOfLine } from "./util.js";
-import { TEMPLATE_OFFSET } from "./locations.js";
 
 export function handleDefinition(
   params: DefinitionParams,
@@ -80,7 +79,7 @@ function findLocalDefinition(
 
   for (const { node } of walkNodes(scope.body)) {
     if (node.type === "assignment" && node.variableName === word && node.declKind && node.loc) {
-      return { line: node.loc.line + TEMPLATE_OFFSET, character: node.loc.col };
+      return { line: node.loc.line, character: node.loc.col };
     }
   }
 
@@ -89,7 +88,7 @@ function findLocalDefinition(
   if (def && "parameters" in def) {
     const param = def.parameters.find((p) => p.name === word);
     if (param && def.loc) {
-      return { line: def.loc.line + TEMPLATE_OFFSET, character: def.loc.col };
+      return { line: def.loc.line, character: def.loc.col };
     }
   }
 

@@ -18,7 +18,7 @@ node greet(name: string) {
     expect(symbols.greet).toMatchObject({
       kind: "node",
       name: "greet",
-      loc: { col: 0, end: 43, line: -1, start: 1 },
+      loc: { col: 0, end: 43, line: 1, start: 1 },
     });
   });
 
@@ -58,7 +58,7 @@ node main() {
     expect(symbols.main).toMatchObject({
       kind: "node",
       name: "main",
-      loc: { col: 0, end: 96, line: 5, start: 63 },
+      loc: { col: 0, end: 96, line: 7, start: 63 },
     });
   });
 

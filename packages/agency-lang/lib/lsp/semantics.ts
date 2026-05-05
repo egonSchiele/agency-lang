@@ -10,7 +10,6 @@ import type {
   TypeAlias,
 } from "../types.js";
 import type { SourceLocation, VariableType } from "../types.js";
-import { toUserSourceLocation } from "./locations.js";
 
 export type SemanticSymbol = {
   name: string;
@@ -44,7 +43,7 @@ function addLocalDefinition(
         kind: "function",
         source: "local",
         filePath: fsPath,
-        loc: toUserSourceLocation(node.loc),
+        loc: node.loc,
         parameters: node.parameters,
         returnType: node.returnType,
       });
@@ -56,7 +55,7 @@ function addLocalDefinition(
         kind: "node",
         source: "local",
         filePath: fsPath,
-        loc: toUserSourceLocation(node.loc),
+        loc: node.loc,
         parameters: node.parameters,
         returnType: node.returnType,
       });
@@ -68,7 +67,7 @@ function addLocalDefinition(
         kind: "type",
         source: "local",
         filePath: fsPath,
-        loc: toUserSourceLocation(node.loc),
+        loc: node.loc,
         aliasedType: node.aliasedType,
       });
       break;
@@ -79,7 +78,7 @@ function addLocalDefinition(
         kind: "class",
         source: "local",
         filePath: fsPath,
-        loc: toUserSourceLocation(node.loc),
+        loc: node.loc,
       });
       break;
   }

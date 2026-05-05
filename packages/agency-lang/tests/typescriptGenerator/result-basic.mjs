@@ -228,4 +228,4 @@ const checkAge = __AgencyFunction.create({
   }
 }, __toolRegistry);
 export default graph
-export const __sourceMap = {"result-basic.agency:checkAge":{"0":{"line":-1,"col":2},"1":{"line":2,"col":2},"0.0":{"line":0,"col":4}}};
+export const __sourceMap = {"result-basic.agency:checkAge":{"0":{"line":1,"col":2},"1":{"line":4,"col":2},"0.0":{"line":2,"col":4}}};

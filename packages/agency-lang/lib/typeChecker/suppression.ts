@@ -54,23 +54,16 @@ export function parseSuppressions(source: string): Suppressions {
 }
 
 /**
- * Drop errors covered by `suppressions`. `lineOffset` is added to each
- * `error.loc.line` before checking membership in `ignoreLines` — needed
- * when the parser produced loc.line values in a different convention
- * than the raw-source 0-indexed lines `parseSuppressions` emits. Pass
- * `AGENCY_TEMPLATE_OFFSET` when the source was parsed with
- * `applyTemplate=false`, since the parser still subtracts the offset
- * from spans, leaving error loc.line shifted by `-AGENCY_TEMPLATE_OFFSET`
- * relative to raw source.
+ * Drop errors covered by `suppressions`. Both `error.loc.line` and the
+ * keys in `ignoreLines` are 0-indexed in the user's source.
  */
 export function applySuppressions(
   errors: TypeCheckError[],
   suppressions: Suppressions,
-  lineOffset: number = 0,
 ): TypeCheckError[] {
   if (suppressions.nocheck) return [];
   if (suppressions.ignoreLines.size === 0) return errors;
   return errors.filter(
-    (e) => !e.loc || !suppressions.ignoreLines.has(e.loc.line + lineOffset),
+    (e) => !e.loc || !suppressions.ignoreLines.has(e.loc.line),
   );
 }

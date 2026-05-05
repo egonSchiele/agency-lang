@@ -92,14 +92,6 @@ export type CompilationUnit = {
    * `// @tc-nocheck` / `// @tc-ignore` directives. Optional because
    * many callers (including most tests) construct the AST directly. */
   sourceText?: string;
-  /** True iff `parseAgency` was called with the template wrapper applied
-   * (the CLI default). The parser unconditionally subtracts
-   * `AGENCY_TEMPLATE_OFFSET` from every span's line, so when the wrapper
-   * was *not* applied (LSP path), error `loc.line` values are off by
-   * `-AGENCY_TEMPLATE_OFFSET` from raw-source 0-indexed lines. The
-   * typechecker uses this flag to align suppression-directive line
-   * numbers with error locations. */
-  templateApplied?: boolean;
 };
 
 export function scopeKey(scope: Scope): string {
@@ -126,7 +118,6 @@ export function buildCompilationUnit(
   symbolTable?: SymbolTable,
   fromFile?: string,
   sourceText?: string,
-  templateApplied: boolean = true,
 ): CompilationUnit {
   const unit: CompilationUnit = {
     functionDefinitions: {},
@@ -138,7 +129,6 @@ export function buildCompilationUnit(
     classDefinitions: {},
     safeFunctions: {},
     sourceText,
-    templateApplied,
   };
 
   // Top-level pass: collect functions, graph nodes, imports.

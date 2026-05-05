@@ -2,7 +2,6 @@ import { FoldingRange, FoldingRangeKind } from "vscode-languageserver-protocol";
 import { TextDocument } from "vscode-languageserver-textdocument";
 import type { AgencyProgram } from "../types.js";
 import { walkNodes } from "../utils/node.js";
-import { TEMPLATE_OFFSET } from "./locations.js";
 
 export function getFoldingRanges(
   program: AgencyProgram,
@@ -22,7 +21,7 @@ export function getFoldingRanges(
       case "ifElse":
       case "whileLoop":
       case "forLoop": {
-        const startLine = node.loc.line + TEMPLATE_OFFSET;
+        const startLine = node.loc.line;
         const endLine = doc.positionAt(node.loc.end).line;
         if (endLine > startLine) {
           ranges.push({

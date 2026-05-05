@@ -218,20 +218,8 @@ async function loadTokens(name: string): Promise<StoredTokens | null> {
   try {
     const raw = await fs.readFile(tokenPath, "utf-8");
 
-    // Determine if file is encrypted or plaintext JSON
-    let json: string;
-    if (raw.trimStart().startsWith("{")) {
-      json = raw;
-    } else {
-      const key = await getEncryptionKey();
-      if (!key) {
-        throw new Error(
-          `OAuth token file for "${name}" is encrypted but no decryption key is available. ` +
-          `Set AGENCY_OAUTH_KEY env var or ensure the system keyring is accessible.`
-        );
-      }
-      json = decrypt(raw, key);
-    }
+    const key = await getEncryptionKey();
+    const json = key ? decrypt(raw, key) : raw;
 
     const parsed = JSON.parse(json) as Record<string, unknown>;
     if (

@@ -210,6 +210,7 @@ There are plenty of files that dive into implementation details on specific feat
 - `docs/dev/globalstore.md` — global variable management with module isolation and serialization
 - `docs/dev/init.md` — issues with global variable initialization outside graph node context
 - `docs/dev/interrupts.md` — how interrupts resume inside blocks using step counters (substeps)
+- `docs/dev/locations.md` — how `loc.line` / `loc.col` / parse-mode template offset interact; reference for any source-position bug
 - `docs/dev/message-thread-tests.md` — test cases for message threads and thread behavior
 - `docs/dev/pkg-imports.md` — importing Agency code from npm packages using `pkg::` prefix
 - `docs/dev/simplemachine.md` — graph execution engine that runs compiled Agency programs

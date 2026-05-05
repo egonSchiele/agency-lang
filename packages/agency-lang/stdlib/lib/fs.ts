@@ -285,9 +285,11 @@ export async function rejectDangerousPath(
     throw new Error(`${op}: ${role} must not be empty`);
   }
   const lexical = path.resolve(process.cwd(), trimmed);
-  const real = await realpathOrResolve(lexical);
-  const homeReal = await realpathOrResolve(os.homedir());
-  const cwdReal = await realpathOrResolve(process.cwd());
+  const [real, homeReal, cwdReal] = await Promise.all([
+    realpathOrResolve(lexical),
+    realpathOrResolve(os.homedir()),
+    realpathOrResolve(process.cwd()),
+  ]);
 
   for (const candidate of new Set([lexical, real])) {
     const root = path.parse(candidate).root;

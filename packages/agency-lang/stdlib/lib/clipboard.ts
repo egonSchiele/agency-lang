@@ -1,15 +1,24 @@
-import { execFile } from "child_process";
+import { spawn, execFile } from "child_process";
 import { promisify } from "util";
 import { detectPlatform } from "./utils.js";
 
 const execFileAsync = promisify(execFile);
 
+function spawnWithInput(command: string, args: string[], input: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const child = spawn(command, args, { stdio: ["pipe", "ignore", "ignore"] });
+    child.stdin!.end(input);
+    child.on("close", () => resolve());
+    child.on("error", reject);
+  });
+}
+
 export async function _copy(text: string): Promise<void> {
   const platform = await detectPlatform();
   if (platform === "macos") {
-    await execFileAsync("pbcopy", [], { input: text } as any);
+    await spawnWithInput("pbcopy", [], text);
   } else if (platform === "linux") {
-    await execFileAsync("xclip", ["-selection", "clipboard"], { input: text } as any);
+    await spawnWithInput("xclip", ["-selection", "clipboard"], text);
   } else {
     console.error(
       `copy is not supported on platform: ${platform}. ` +

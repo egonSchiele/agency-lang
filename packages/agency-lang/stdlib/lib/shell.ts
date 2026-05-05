@@ -67,6 +67,16 @@ function spawnAsync(
   });
 }
 
+type SpawnAsyncOptions = SpawnOptions & { input?: string; timeout?: number };
+
+function buildSpawnOptions(cwd: string, timeout: number, stdin: string): SpawnAsyncOptions {
+  const options: SpawnAsyncOptions = {};
+  if (cwd) options.cwd = cwd;
+  if (timeout > 0) options.timeout = timeout * 1000;
+  if (stdin) options.input = stdin;
+  return options;
+}
+
 export async function _exec(
   command: string,
   args: string[],
@@ -74,19 +84,7 @@ export async function _exec(
   timeout: number,
   stdin: string,
 ): Promise<{ stdout: string; stderr: string; exitCode: number }> {
-  const options: SpawnOptions & { input?: string; timeout?: number } = {};
-
-  if (cwd) {
-    options.cwd = cwd;
-  }
-  if (timeout > 0) {
-    options.timeout = timeout * 1000;
-  }
-  if (stdin) {
-    options.input = stdin;
-  }
-
-  return spawnAsync(command, args, options);
+  return spawnAsync(command, args, buildSpawnOptions(cwd, timeout, stdin));
 }
 
 export async function _bash(
@@ -95,19 +93,7 @@ export async function _bash(
   timeout: number,
   stdin: string,
 ): Promise<{ stdout: string; stderr: string; exitCode: number }> {
-  const options: SpawnOptions & { input?: string; timeout?: number } = {};
-
-  if (cwd) {
-    options.cwd = cwd;
-  }
-  if (timeout > 0) {
-    options.timeout = timeout * 1000;
-  }
-  if (stdin) {
-    options.input = stdin;
-  }
-
-  return spawnAsync("sh", ["-c", command], options);
+  return spawnAsync("sh", ["-c", command], buildSpawnOptions(cwd, timeout, stdin));
 }
 
 export type LsEntry = {

@@ -179,15 +179,21 @@ export class TypescriptPreprocessor {
     const PREAMBLE_TYPES = ["comment", "newLine", "importStatement"];
 
     // First pass: extract and validate @module doc comment.
-    // It must appear before any non-import code.
+    // It must appear before any non-import code, and there can be at most one.
     let seenNonPreamble = false;
+    let foundModuleDoc = false;
     for (let i = 0; i < nodes.length; i++) {
       const node = nodes[i];
       if (node.type === "multiLineComment") {
         const mc = node as AgencyMultiLineComment;
         if (mc.isModuleDoc) {
+          const line = mc.loc?.line != null ? mc.loc.line + 1 : "unknown";
+          if (foundModuleDoc) {
+            throw new Error(
+              `Only one @module doc comment is allowed per file (duplicate found at line ${line}).`
+            );
+          }
           if (seenNonPreamble) {
-            const line = mc.loc?.line != null ? mc.loc.line + 1 : "unknown";
             throw new Error(
               `@module doc comment must appear before any code (found at line ${line}). ` +
               `Move it to the top of the file or right after the imports.`
@@ -195,7 +201,9 @@ export class TypescriptPreprocessor {
           }
           this.program.docComment = mc;
           nodes.splice(i, 1);
-          break;
+          i--;
+          foundModuleDoc = true;
+          continue;
         }
         // Non-module multiline comments in the preamble are fine
         if (!mc.isDoc) continue;

@@ -1046,6 +1046,24 @@ describe("TypescriptPreprocessor Core Functionality", () => {
       expect(() => preprocessor.preprocess()).toThrow("@module doc comment must appear before any code");
     });
 
+    it("should throw if there are duplicate @module doc comments", () => {
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          { type: "multiLineComment", content: " First ", isDoc: true, isModuleDoc: true },
+          { type: "multiLineComment", content: " Second ", isDoc: true, isModuleDoc: true },
+          {
+            type: "function",
+            functionName: "foo",
+            parameters: [],
+            body: [],
+          },
+        ],
+      };
+      const preprocessor = new TypescriptPreprocessor(program);
+      expect(() => preprocessor.preprocess()).toThrow("Only one @module doc comment is allowed per file");
+    });
+
     it("should skip regular comments before @module doc comment", () => {
       const program: AgencyProgram = {
         type: "agencyProgram",

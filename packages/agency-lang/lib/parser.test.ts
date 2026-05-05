@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { agencyNode, agencyParser, parseAgency, replaceBlankLines } from "./parser.js";
 import type { AgencyProgram } from "./types.js";
+import { walkNodes } from "./utils/node.js";
 
 const S = "\uE000";
 
@@ -196,31 +197,35 @@ describe("parseAgency loc.line invariant", () => {
   // Pin the invariant that loc.line is 0-indexed in the user's source
   // regardless of whether the template wrapper was applied. Without this,
   // every consumer would have to compensate for the parse mode.
+  const collectLines = (program: AgencyProgram): number[] => {
+    const lines: number[] = [];
+    for (const { node } of walkNodes(program.nodes)) {
+      if (node.loc) lines.push(node.loc.line);
+    }
+    return lines;
+  };
+
   it("produces identical loc.line values with and without applyTemplate", () => {
     const source = "def foo() {}\n\nnode main() {\n  print(1)\n}\n";
     const withTemplate = parseAgency(source, {}, true);
     const withoutTemplate = parseAgency(source, {}, false);
-    expect(withTemplate.success).toBe(true);
-    expect(withoutTemplate.success).toBe(true);
-    if (!withTemplate.success || !withoutTemplate.success) return;
-
-    const collectLines = (program: AgencyProgram): number[] => {
-      const lines: number[] = [];
-      const visit = (node: any) => {
-        if (node && typeof node === "object") {
-          if (node.loc && typeof node.loc.line === "number") lines.push(node.loc.line);
-          for (const key of Object.keys(node)) {
-            const v = (node as any)[key];
-            if (Array.isArray(v)) v.forEach(visit);
-            else if (v && typeof v === "object") visit(v);
-          }
-        }
-      };
-      visit(program);
-      return lines;
-    };
-
+    if (!withTemplate.success || !withoutTemplate.success) {
+      throw new Error("parse failed");
+    }
     expect(collectLines(withTemplate.result)).toEqual(collectLines(withoutTemplate.result));
+  });
+
+  it("places loc.line at the user-source 0-indexed line", () => {
+    // Anchors against ground truth, not just inter-mode equality —
+    // catches a hypothetical regression where both modes drift the same way.
+    // Source:
+    //   line 0: def foo() {}
+    //   line 1: let x = 5
+    const result = parseAgency("def foo() {}\nlet x = 5\n", {}, true);
+    if (!result.success) throw new Error("parse failed");
+    const lines = collectLines(result.result);
+    expect(Math.min(...lines)).toBe(0);
+    expect(Math.max(...lines)).toBe(1);
   });
 });
 

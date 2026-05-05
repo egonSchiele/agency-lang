@@ -14,10 +14,12 @@ type CalendarEvent = {
   ## Usage
 
   ```ts
-  import { authorizeCalendar, listEvents, createEvent } from "std::calendar"
+  import { authorizeCalendar, isCalendarAuthorized, listEvents, createEvent } from "std::calendar"
 
   node main() {
-    // One-time: opens browser for Google consent
+    // One-time: opens browser for Google OAuth consent.
+    // This uses std::oauth under the hood — tokens are encrypted and
+    // stored locally, and refreshed automatically on future runs.
     if (!isCalendarAuthorized()) {
       authorizeCalendar(env("GOOGLE_CLIENT_ID"), env("GOOGLE_CLIENT_SECRET"))
     }
@@ -38,6 +40,31 @@ type CalendarEvent = {
   }
   ```
 
+  You can also use `std::oauth` directly for more control over the
+  authorization flow (e.g. custom scopes, port, or extra params):
+
+  ```ts
+  import { authorize, getAccessToken, isAuthorized } from "std::oauth"
+  import { listEvents } from "std::calendar"
+
+  node main() {
+    if (!isAuthorized("google-calendar")) {
+      authorize("google-calendar",
+        authUrl: "https://accounts.google.com/o/oauth2/v2/auth",
+        tokenUrl: "https://oauth2.googleapis.com/token",
+        clientId: env("GOOGLE_CLIENT_ID"),
+        clientSecret: env("GOOGLE_CLIENT_SECRET"),
+        scopes: "https://www.googleapis.com/auth/calendar",
+        extraAuthParams: "access_type=offline prompt=consent"
+      )
+    }
+
+    // std::calendar functions use the "google-calendar" OAuth token automatically
+    const events = listEvents()
+    print(events)
+  }
+  ```
+
   ## Setup
   1. Go to https://console.cloud.google.com
   2. Create a project (or use an existing one)
@@ -45,6 +72,12 @@ type CalendarEvent = {
   4. Create OAuth 2.0 credentials (Desktop app type)
   5. Set `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` env vars
   6. Run your agent — it will open a browser for consent on first use
+
+  ## Authentication
+  `authorizeCalendar` is a convenience wrapper around `std::oauth`. It handles
+  the OAuth 2.0 authorization code flow with PKCE, stores tokens encrypted
+  in `~/.agency/oauth/google-calendar.json` (encrypted via system keyring or
+  `AGENCY_OAUTH_KEY` env var), and automatically refreshes expired tokens.
 
   ## Date/time formats
   - For timed events: ISO 8601 with timezone, e.g. "2026-05-10T10:00:00-07:00"

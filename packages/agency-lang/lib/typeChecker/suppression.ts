@@ -54,11 +54,14 @@ export function parseSuppressions(source: string): Suppressions {
 }
 
 /**
- * Drop errors covered by `suppressions`. `lineOffset` is subtracted from
- * each ignoreLine before comparing against `error.loc.line` — needed when
- * the parser produced loc.line values in a different convention than the
- * raw-source 0-indexed lines `parseSuppressions` emits (e.g. LSP path,
- * where `applyTemplate=false` shifts loc.line by -AGENCY_TEMPLATE_OFFSET).
+ * Drop errors covered by `suppressions`. `lineOffset` is added to each
+ * `error.loc.line` before checking membership in `ignoreLines` — needed
+ * when the parser produced loc.line values in a different convention
+ * than the raw-source 0-indexed lines `parseSuppressions` emits. Pass
+ * `AGENCY_TEMPLATE_OFFSET` when the source was parsed with
+ * `applyTemplate=false`, since the parser still subtracts the offset
+ * from spans, leaving error loc.line shifted by `-AGENCY_TEMPLATE_OFFSET`
+ * relative to raw source.
  */
 export function applySuppressions(
   errors: TypeCheckError[],

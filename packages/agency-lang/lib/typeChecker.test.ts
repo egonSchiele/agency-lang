@@ -6516,6 +6516,61 @@ describe("TypeChecker", () => {
       expect(errors.some((e) => /Property 'wrong' does not exist/.test(e.message))).toBe(true);
     });
 
+    it("pulls transitive aliases from a directly imported type alias's body", () => {
+      // main imports `Outer` from types.agency. Outer = { inner: Inner },
+      // where Inner is also defined in types.agency. Property access on
+      // r.inner.x must resolve through Inner without explicit import.
+      const inner: VariableType = {
+        type: "objectType",
+        properties: [{ key: "x", value: num }],
+      };
+      const outer: VariableType = {
+        type: "objectType",
+        properties: [
+          { key: "inner", value: { type: "typeAliasVariable", aliasName: "Inner" } },
+        ],
+      };
+      const symbolTable = new SymbolTable({
+        "/project/types.agency": {
+          Inner: { kind: "type", name: "Inner", aliasedType: inner, exported: true },
+          Outer: { kind: "type", name: "Outer", aliasedType: outer, exported: true },
+        },
+      });
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "importStatement",
+            modulePath: "./types.agency",
+            isAgencyImport: true,
+            importedNames: [
+              { type: "namedImport", importedNames: ["Outer"], aliases: {}, safeNames: [] },
+            ],
+          },
+          {
+            type: "function",
+            functionName: "consume",
+            parameters: [
+              { type: "functionParameter", name: "o", typeHint: { type: "typeAliasVariable", aliasName: "Outer" } },
+            ],
+            body: [
+              {
+                type: "valueAccess",
+                base: { type: "variableName", value: "o" },
+                chain: [
+                  { kind: "property", name: "inner" },
+                  { kind: "property", name: "x" },
+                ],
+              },
+            ],
+          },
+        ],
+      };
+      const info = buildCompilationUnit(program, symbolTable, "/project/main.agency");
+      const errors = typeCheck(program, {}, info).errors;
+      expect(errors.filter((e) => /does not exist/.test(e.message))).toEqual([]);
+    });
+
     it("a builtin call is rejected when given a block argument", () => {
       // print(1) as x { return 2 }  ← `print` is a builtin, not a block-taker.
       const program: AgencyProgram = {

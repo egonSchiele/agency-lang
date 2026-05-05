@@ -189,6 +189,12 @@ export function buildCompilationUnit(
   // to the typechecker's builtin/any path instead of being treated as a
   // bogus 0-arg signature.
   if (symbolTable && fromFile) {
+    // Type-alias seeds gathered from imports — both directly imported
+    // aliases and the types referenced by imported function/node
+    // signatures. Each seed remembers the file it came from so transitive
+    // resolution can prefer that module on name collisions.
+    type AliasSeed = { type: VariableType; preferFile: string };
+    const aliasSeeds: AliasSeed[] = [];
     for (const stmt of unit.importStatements) {
       for (const r of symbolTable.resolveImport(stmt, fromFile)) {
         if (r.symbol.kind === "function" || r.symbol.kind === "node") {
@@ -208,6 +214,10 @@ export function buildCompilationUnit(
             returnType,
             originFile: r.file,
           };
+          for (const p of r.symbol.parameters) {
+            if (p.typeHint) aliasSeeds.push({ type: p.typeHint, preferFile: r.file });
+          }
+          if (returnType) aliasSeeds.push({ type: returnType, preferFile: r.file });
         }
         if (r.symbol.kind === "function" && r.symbol.safe) {
           unit.safeFunctions[r.localName] = true;
@@ -218,30 +228,35 @@ export function buildCompilationUnit(
             r.localName,
             r.symbol.aliasedType,
           );
+          // Imported type's body may reference other aliases from its
+          // module — pull those transitively too.
+          aliasSeeds.push({ type: r.symbol.aliasedType, preferFile: r.file });
         }
       }
     }
-    // Pull in any type aliases referenced by imported function/node
-    // signatures so property access on those return values resolves
-    // correctly. Without this, `let r = exec(...); r.exitCode` errors with
-    // "Property 'exitCode' does not exist on type 'ExecResult'" because
-    // the alias body lives in the source module and was never imported.
-    pullTransitiveAliases(unit, symbolTable);
+    // Pull in any type aliases referenced by imports so property access
+    // on those values resolves correctly. Without this, `let r = exec(...);
+    // r.exitCode` errors with "Property 'exitCode' does not exist on type
+    // 'ExecResult'" because the alias body lives in the source module and
+    // was never imported.
+    pullTransitiveAliases(unit, symbolTable, aliasSeeds);
   }
 
   return unit;
 }
 
 /**
- * Walk every imported function/node signature and recursively pull any
- * type aliases its parameters or return type reference into the unit's
- * global scope, so the typechecker can resolve property access through
- * them. Walks transitively (an alias whose body references another alias
- * pulls that one too) and tracks visited names to terminate on cycles.
+ * Walk every alias-seed type (from imported function/node signatures and
+ * directly imported type aliases) and recursively pull any referenced
+ * aliases into the unit's global scope, so the typechecker can resolve
+ * property access through them. Walks transitively (an alias whose body
+ * references another alias pulls that one too) and tracks visited names
+ * to terminate on cycles.
  */
 function pullTransitiveAliases(
   unit: CompilationUnit,
   symbolTable: SymbolTable,
+  seeds: { type: VariableType; preferFile: string }[],
 ): void {
   const globalAliases = unit.typeAliases.get(GLOBAL_SCOPE_KEY) ?? {};
   // Each pending alias remembers the file it was referenced from, so
@@ -249,13 +264,10 @@ function pullTransitiveAliases(
   // collides across files.
   const queue: { name: string; preferFile?: string }[] = [];
 
-  for (const sig of Object.values(unit.importedFunctions)) {
+  for (const seed of seeds) {
     const names: string[] = [];
-    for (const p of sig.parameters) {
-      if (p.typeHint) collectAliasNames(p.typeHint, names);
-    }
-    if (sig.returnType) collectAliasNames(sig.returnType, names);
-    for (const name of names) queue.push({ name, preferFile: sig.originFile });
+    collectAliasNames(seed.type, names);
+    for (const name of names) queue.push({ name, preferFile: seed.preferFile });
   }
 
   while (queue.length > 0) {

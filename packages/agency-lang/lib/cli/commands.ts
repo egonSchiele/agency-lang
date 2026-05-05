@@ -151,7 +151,13 @@ export function compile(
     symbolTable,
     absoluteInputFile,
   );
-  const info = buildCompilationUnit(resolvedProgram, symbolTable, absoluteInputFile, contents);
+  const info = buildCompilationUnit(
+    resolvedProgram,
+    symbolTable,
+    absoluteInputFile,
+    contents,
+    !isStdlibIndex,
+  );
 
   if (config.typeCheck || config.typeCheckStrict) {
     const { errors } = typeCheck(resolvedProgram, config, info);

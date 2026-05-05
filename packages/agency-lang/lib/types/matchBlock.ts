@@ -1,4 +1,4 @@
-import { Assignment, AgencyComment, Expression } from "../types.js";
+import { Assignment, AgencyComment, Expression, NewLine } from "../types.js";
 import { BaseNode } from "./base.js";
 import { ReturnStatement } from "./returnStatement.js";
 
@@ -13,5 +13,5 @@ export type MatchBlockCase = {
 export type MatchBlock = BaseNode & {
   type: "matchBlock";
   expression: Expression;
-  cases: (MatchBlockCase | AgencyComment)[];
+  cases: (MatchBlockCase | AgencyComment | NewLine)[];
 };

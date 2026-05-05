@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { formatSource } from "./formatter.js";
 import fs from "fs";
+import { fileURLToPath } from "url";
 import path from "path";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 describe("formatSource", () => {
   it("does not inject stdlib imports when formatting user source", () => {

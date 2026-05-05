@@ -218,6 +218,8 @@ export const newLineParser: Parser<NewLine> = seqC(
 
 export const BLANK_LINE_SENTINEL = "\uE000";
 
+export const stripSentinels = (s: string) => s.replaceAll(BLANK_LINE_SENTINEL, "\n");
+
 export const blankLineParser: Parser<NewLine> = map(
   many1(char(BLANK_LINE_SENTINEL)),
   () => ({ type: "newLine" as const }),
@@ -255,10 +257,10 @@ export const multiLineCommentParser: Parser<AgencyMultiLineComment> = (
   );
   const result = parser(input);
   if (result.success) {
-    const content = result.result.content;
-    if (content.startsWith("*")) {
+    result.result.content = stripSentinels(result.result.content);
+    if (result.result.content.startsWith("*")) {
       result.result.isDoc = true;
-      result.result.content = content.slice(1);
+      result.result.content = result.result.content.slice(1);
     }
   }
   return result;
@@ -415,6 +417,9 @@ export const stringParser: Parser<StringLiteral> = label("a string", (input: str
       });
     }
   });
+  for (const seg of segments) {
+    if (seg.type === "text") seg.value = stripSentinels(seg.value);
+  }
   return success(
     {
       type: "string" as const,
@@ -424,15 +429,24 @@ export const stringParser: Parser<StringLiteral> = label("a string", (input: str
   );
 });
 
-export const multiLineStringParser: Parser<MultiLineStringLiteral> = seqC(
-  set("type", "multiLineString"),
-  str('"""'),
-  capture(
-    many(or(multiLineStringTextSegmentParser, interpolationSegmentParser)),
-    "segments",
-  ),
-  str('"""'),
-);
+export const multiLineStringParser: Parser<MultiLineStringLiteral> = (input: string) => {
+  const parser = seqC(
+    set("type", "multiLineString"),
+    str('"""'),
+    capture(
+      many(or(multiLineStringTextSegmentParser, interpolationSegmentParser)),
+      "segments",
+    ),
+    str('"""'),
+  );
+  const result = parser(input);
+  if (result.success) {
+    for (const seg of result.result.segments) {
+      if (seg.type === "text") seg.value = stripSentinels(seg.value);
+    }
+  }
+  return result;
+};
 
 export const variableNameParser: Parser<VariableNameLiteral> = label("an identifier", (
   input: string,
@@ -1144,7 +1158,7 @@ const namedArgumentParser: Parser<NamedArgument> = trace(
 // Used by both _functionCallParser and callChainParser.
 const argumentListParser = seqC(
   char("("),
-  optionalSpaces,
+  optionalSpacesOrNewline,
   capture(
     sepBy(
       comma,
@@ -1157,7 +1171,8 @@ const argumentListParser = seqC(
     ),
     "arguments",
   ),
-  optionalSpaces,
+  optional(comma),
+  optionalSpacesOrNewline,
   char(")"),
 );
 
@@ -1990,6 +2005,7 @@ const namedImportParser: Parser<NamedImport> = trace(
       char("{"),
       optionalSpacesOrNewline,
       capture(sepBy1(commaWithNewline, safeNameItem), "items"),
+      optional(commaWithNewline),
       optionalSpacesOrNewline,
       char("}"),
     ),
@@ -2150,15 +2166,22 @@ export const staticAssignmentParser: Parser<Assignment> = (input: string) => {
 };
 
 const trim = (s: string) => s.trim();
-export const docStringParser: Parser<DocString> = trace(
-  "docStringParser",
-  seqC(
-    set("type", "docString"),
-    str('"""'),
-    capture(map(many1Till(str('"""')), trim), "value"),
-    str('"""'),
-  ),
-);
+export const docStringParser: Parser<DocString> = (input: string) => {
+  const parser = trace(
+    "docStringParser",
+    seqC(
+      set("type", "docString"),
+      str('"""'),
+      capture(map(many1Till(str('"""')), trim), "value"),
+      str('"""'),
+    ),
+  );
+  const result = parser(input);
+  if (result.success) {
+    result.result.value = stripSentinels(result.result.value);
+  }
+  return result;
+};
 
 export const bodyParser = (input: string): ParserResult<AgencyNode[]> => {
   const bodyNodeParser = or(
@@ -2594,7 +2617,8 @@ const _baseFunctionParser: Parser<any> = trace(
       ),
       "parameters",
     ),
-    optionalSpaces,
+    optional(comma),
+    optionalSpacesOrNewline,
     char(")"),
     optionalSpaces,
     capture(optional(functionReturnTypeParser), "returnType"),
@@ -2793,6 +2817,7 @@ const classMethodParser: Parser<ClassMethod> = map(
       sepBy(comma, or(variadicParameterParser, functionParameterParser)),
       "parameters",
     ),
+    optional(comma),
     optionalSpaces,
     char(")"),
     optionalSpaces,

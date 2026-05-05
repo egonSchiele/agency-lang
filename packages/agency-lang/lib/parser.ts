@@ -113,7 +113,7 @@ export const normalizeCode = (code: string) => {
 };
 
 export function replaceBlankLines(input: string): string {
-  return input.replace(/\n\n+/g, (match) =>
+  return input.replace(/(\r?\n)(\r?\n)+/g, (match) =>
     BLANK_LINE_SENTINEL.repeat(match.length - 1) + "\n"
   );
 }

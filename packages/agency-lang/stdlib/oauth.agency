@@ -1,0 +1,76 @@
+import { _authorize, _getAccessToken, _isAuthorized, _revokeAuth } from "./lib/oauth.js"
+
+/**
+  ## Usage
+
+  ```ts
+  import { authorize, getAccessToken, isAuthorized } from "std::oauth"
+
+  node main() {
+    // One-time: opens browser for user consent, saves tokens locally
+    if (!isAuthorized("google-calendar")) {
+      authorize("google-calendar", {
+        authUrl: "https://accounts.google.com/o/oauth2/v2/auth",
+        tokenUrl: "https://oauth2.googleapis.com/token",
+        clientId: env("GOOGLE_CLIENT_ID"),
+        clientSecret: env("GOOGLE_CLIENT_SECRET"),
+        scopes: ["https://www.googleapis.com/auth/calendar"]
+      })
+    }
+
+    // Get a valid access token (auto-refreshes if expired)
+    const token = getAccessToken("google-calendar")
+
+    // Use with any API
+    const events = fetchJSON("https://www.googleapis.com/calendar/v3/calendars/primary/events", {
+      headers: { "Authorization": "Bearer ${token}" }
+    })
+    print(events)
+  }
+  ```
+
+  ## Setup
+
+  To use OAuth with a provider, you need:
+  1. Register an app with the provider (e.g. Google Cloud Console)
+  2. Get a client ID and client secret
+  3. Set them as env vars or pass directly
+
+  Tokens are stored in `~/.agency/oauth/{name}.json`.
+  The authorization flow uses PKCE for security.
+*/
+
+export def authorize(name: string, authUrl: string, tokenUrl: string, clientId: string, clientSecret: string, scopes: string, port: number = 0): Result {
+  """
+  Start an OAuth 2.0 authorization flow. Opens the user's browser for consent, captures the callback, exchanges the code for tokens, and saves them locally. Only needs to be run once per provider. Parameters: name (identifier for this auth, e.g. "google-calendar"), authUrl (provider's authorization endpoint), tokenUrl (provider's token endpoint), clientId, clientSecret, scopes (space-separated), port (localhost callback port, default 8914).
+  """
+  return try _authorize(name, {
+    authUrl: authUrl,
+    tokenUrl: tokenUrl,
+    clientId: clientId,
+    clientSecret: clientSecret,
+    scopes: scopes,
+    port: port
+  })
+}
+
+export def getAccessToken(name: string): Result {
+  """
+  Get a valid OAuth access token for a previously authorized provider. Automatically refreshes the token if it has expired. Returns the access token string. Throws if not yet authorized (run authorize first).
+  """
+  return try _getAccessToken(name)
+}
+
+export safe def isAuthorized(name: string): boolean {
+  """
+  Check if OAuth tokens exist for a given provider name. Returns true if tokens are stored locally (does not verify they are still valid).
+  """
+  return _isAuthorized(name)
+}
+
+export def revokeAuth(name: string): Result {
+  """
+  Delete stored OAuth tokens for a provider. The user will need to run authorize again to re-authenticate.
+  """
+  return try _revokeAuth(name)
+}

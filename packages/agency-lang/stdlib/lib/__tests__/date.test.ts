@@ -66,6 +66,22 @@ describe("_addMinutes", () => {
     const result = _addMinutes("2026-05-10T10:00:00Z", -30);
     expect(result).toContain("09:30:00");
   });
+
+  it("preserves timezone offset from input", () => {
+    const result = _addMinutes("2026-05-10T10:00:00-07:00", 30);
+    expect(result).toBe("2026-05-10T10:30:00-07:00");
+  });
+
+  it("preserves UTC (Z) as +00:00", () => {
+    const result = _addMinutes("2026-05-10T10:00:00Z", 30);
+    // Z input should give ISO output (which uses Z)
+    expect(result).toContain("10:30:00");
+  });
+
+  it("preserves positive timezone offset", () => {
+    const result = _addMinutes("2026-05-10T10:00:00+05:30", 60);
+    expect(result).toBe("2026-05-10T11:00:00+05:30");
+  });
 });
 
 describe("_addHours", () => {

@@ -19,7 +19,7 @@ Run a block n times in parallel. Returns an array of all results.
 
 **Returns:** `any[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/strategy.agency#L0))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/strategy.agency#L1))
 
 ### consensus
 
@@ -38,7 +38,7 @@ Run a block n times in parallel and return the most common result (majority vote
 
 **Returns:** `any`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/strategy.agency#L9))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/strategy.agency#L10))
 
 ### retry
 
@@ -58,7 +58,7 @@ Run a block up to n times. Returns the first result that passes the test functio
 
 **Returns:** `any`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/strategy.agency#L17))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/strategy.agency#L18))
 
 ### retryWithFeedback
 
@@ -78,7 +78,7 @@ Run a block up to n times. Each attempt receives the previous result and the att
 
 **Returns:** `any`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/strategy.agency#L31))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/strategy.agency#L32))
 
 ### firstValid
 
@@ -98,4 +98,4 @@ Run a block for each variant in parallel, then return the first result that pass
 
 **Returns:** `any`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/strategy.agency#L47))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/strategy.agency#L48))

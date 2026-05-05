@@ -19,7 +19,7 @@ A tool for speaking text aloud using text-to-speech. Optionally specify a voice 
 | rate | `number` | 0 |
 | outputFile | `string` | "" |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/speech.agency#L2))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/speech.agency#L3))
 
 ### transcribe
 
@@ -38,4 +38,4 @@ A tool for transcribing an audio file to text using OpenAI's Whisper API. Option
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/speech.agency#L9))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/speech.agency#L10))

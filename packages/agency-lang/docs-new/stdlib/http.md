@@ -18,7 +18,7 @@ Fetch a URL and return the response body as text. Fails on network errors or if 
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/http.agency#L2))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/http.agency#L3))
 
 ### fetchJSON
 
@@ -36,7 +36,7 @@ Fetch a URL and parse the response body as JSON. Fails on network errors, invali
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/http.agency#L12))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/http.agency#L13))
 
 ### webfetch
 
@@ -54,4 +54,4 @@ Fetch a URL and return the body as readable markdown when the response is HTML, 
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/http.agency#L22))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/http.agency#L23))

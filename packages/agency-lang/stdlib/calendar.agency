@@ -1,0 +1,115 @@
+import { _authorizeCalendar, _listEvents, _createEvent, _updateEvent, _deleteEvent, _isCalendarAuthorized } from "./lib/calendar.js"
+
+type CalendarEvent = {
+  id: string;
+  summary: string;
+  description: string;
+  location: string;
+  start: string;
+  end: string;
+  htmlLink: string
+}
+
+/**
+  ## Usage
+
+  ```ts
+  import { authorizeCalendar, listEvents, createEvent } from "std::calendar"
+
+  node main() {
+    // One-time: opens browser for Google consent
+    if (!isCalendarAuthorized()) {
+      authorizeCalendar(env("GOOGLE_CLIENT_ID"), env("GOOGLE_CLIENT_SECRET"))
+    }
+
+    // List upcoming events
+    const events = listEvents()
+    print(events)
+
+    // Create a new event
+    const event = createEvent(
+      summary: "Team meeting",
+      start: "2026-05-10T10:00:00-07:00",
+      end: "2026-05-10T11:00:00-07:00",
+      description: "Weekly sync",
+      location: "Conference Room A"
+    )
+    print(event)
+  }
+  ```
+
+  ## Setup
+  1. Go to https://console.cloud.google.com
+  2. Create a project (or use an existing one)
+  3. Enable the Google Calendar API
+  4. Create OAuth 2.0 credentials (Desktop app type)
+  5. Set `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` env vars
+  6. Run your agent — it will open a browser for consent on first use
+
+  ## Date/time formats
+  - For timed events: ISO 8601 with timezone, e.g. "2026-05-10T10:00:00-07:00"
+  - For all-day events: date only, e.g. "2026-05-10"
+*/
+
+export def authorizeCalendar(clientId: string, clientSecret: string): Result {
+  """
+  Authorize access to Google Calendar. Opens a browser for the user to sign in and grant permission. Only needs to be run once — tokens are stored locally and refreshed automatically.
+  """
+  return try _authorizeCalendar(clientId, clientSecret)
+}
+
+export safe def isCalendarAuthorized(): boolean {
+  """
+  Check if Google Calendar has been authorized. Returns true if OAuth tokens exist locally.
+  """
+  return _isCalendarAuthorized()
+}
+
+export def listEvents(maxResults: number = 10, timeMin: string = "", timeMax: string = "", query: string = "", calendarId: string = "primary"): Result {
+  """
+  List upcoming events from Google Calendar. Returns an array of events with id, summary, description, location, start, end, and htmlLink. Parameters: maxResults (default 10), timeMin/timeMax (ISO 8601 datetime to filter range), query (free-text search), calendarId (default "primary").
+  """
+  return try _listEvents({
+    maxResults: maxResults,
+    timeMin: timeMin,
+    timeMax: timeMax,
+    query: query,
+    calendarId: calendarId
+  })
+}
+
+export def createEvent(summary: string, start: string, end: string, description: string = "", location: string = "", calendarId: string = "primary"): Result {
+  """
+  Create a new event on Google Calendar. Parameters: summary (title), start (ISO 8601 datetime or YYYY-MM-DD for all-day), end (same format), description (optional), location (optional), calendarId (default "primary"). Returns the created event.
+  """
+  return try _createEvent({
+    summary: summary,
+    start: start,
+    end: end,
+    description: description,
+    location: location,
+    calendarId: calendarId
+  })
+}
+
+export def updateEvent(eventId: string, summary: string = "", start: string = "", end: string = "", description: string = "", location: string = "", calendarId: string = "primary"): Result {
+  """
+  Update an existing event on Google Calendar. Pass the eventId and any fields to change. Empty strings are treated as "don't change". Returns the updated event.
+  """
+  return try _updateEvent({
+    eventId: eventId,
+    summary: summary,
+    start: start,
+    end: end,
+    description: description,
+    location: location,
+    calendarId: calendarId
+  })
+}
+
+export def deleteEvent(eventId: string, calendarId: string = "primary"): Result {
+  """
+  Delete an event from Google Calendar by its event ID. Returns { deleted: true } on success.
+  """
+  return try _deleteEvent(eventId, calendarId)
+}

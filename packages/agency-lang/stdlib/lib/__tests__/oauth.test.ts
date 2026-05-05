@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import fs from "fs";
+import fs from "fs/promises";
+import fsSync from "fs";
 import path from "path";
 import {
   _authorize,
@@ -13,16 +14,16 @@ vi.mock("child_process", () => ({
   execFile: vi.fn((_cmd, _args, _cb) => {}),
 }));
 
-// Mock http server and fetch
+// Mock http server
 const mockServerInstance = {
-  listen: vi.fn((_port: number, _host: string, cb: () => void) => cb()),
+  listen: vi.fn((_port: number, _host: string) => {}),
   close: vi.fn(),
+  on: vi.fn(),
 };
 
 vi.mock("http", () => ({
   default: {
     createServer: vi.fn((handler: (req: unknown, res: unknown) => void) => {
-      // Store handler so we can trigger it in tests
       (mockServerInstance as unknown as { _handler: typeof handler })._handler =
         handler;
       return mockServerInstance;
@@ -48,44 +49,47 @@ function mockFetchResponse(body: unknown, status = 200) {
 describe("_isAuthorized", () => {
   const testTokenPath = path.join(TOKEN_DIR, "test-provider.json");
 
-  afterEach(() => {
-    if (fs.existsSync(testTokenPath)) {
-      fs.unlinkSync(testTokenPath);
-    }
+  afterEach(async () => {
+    try { await fs.unlink(testTokenPath); } catch {}
   });
 
-  it("returns false when no token file exists", () => {
-    expect(_isAuthorized("nonexistent-provider")).toBe(false);
+  it("returns false when no token file exists", async () => {
+    expect(await _isAuthorized("nonexistent-provider")).toBe(false);
   });
 
-  it("returns true when token file exists", () => {
-    fs.mkdirSync(TOKEN_DIR, { recursive: true });
-    fs.writeFileSync(
+  it("returns true when token file exists with required fields", async () => {
+    await fs.mkdir(TOKEN_DIR, { recursive: true });
+    await fs.writeFile(
       testTokenPath,
-      JSON.stringify({ access_token: "test", refresh_token: "test", expires_at: 0 })
+      JSON.stringify({
+        access_token: "test",
+        refresh_token: "test",
+        expires_at: 0,
+        token_url: "https://example.com/token",
+        client_id: "id",
+        client_secret: "secret",
+      })
     );
-    expect(_isAuthorized("test-provider")).toBe(true);
+    expect(await _isAuthorized("test-provider")).toBe(true);
   });
 });
 
 describe("_revokeAuth", () => {
   const testTokenPath = path.join(TOKEN_DIR, "revoke-test.json");
 
-  afterEach(() => {
-    if (fs.existsSync(testTokenPath)) {
-      fs.unlinkSync(testTokenPath);
-    }
+  afterEach(async () => {
+    try { await fs.unlink(testTokenPath); } catch {}
   });
 
-  it("returns revoked:false when no tokens exist", () => {
-    expect(_revokeAuth("revoke-test")).toEqual({ revoked: false });
+  it("returns revoked:false when no tokens exist", async () => {
+    expect(await _revokeAuth("revoke-test")).toEqual({ revoked: false });
   });
 
-  it("deletes token file and returns revoked:true", () => {
-    fs.mkdirSync(TOKEN_DIR, { recursive: true });
-    fs.writeFileSync(testTokenPath, JSON.stringify({ access_token: "x" }));
-    expect(_revokeAuth("revoke-test")).toEqual({ revoked: true });
-    expect(fs.existsSync(testTokenPath)).toBe(false);
+  it("deletes token file and returns revoked:true", async () => {
+    await fs.mkdir(TOKEN_DIR, { recursive: true });
+    await fs.writeFile(testTokenPath, JSON.stringify({ access_token: "x" }));
+    expect(await _revokeAuth("revoke-test")).toEqual({ revoked: true });
+    expect(fsSync.existsSync(testTokenPath)).toBe(false);
   });
 });
 
@@ -93,11 +97,9 @@ describe("_getAccessToken", () => {
   const testTokenPath = path.join(TOKEN_DIR, "token-test.json");
   const originalFetch = globalThis.fetch;
 
-  afterEach(() => {
+  afterEach(async () => {
     globalThis.fetch = originalFetch;
-    if (fs.existsSync(testTokenPath)) {
-      fs.unlinkSync(testTokenPath);
-    }
+    try { await fs.unlink(testTokenPath); } catch {}
   });
 
   it("throws when no tokens exist", async () => {
@@ -107,13 +109,13 @@ describe("_getAccessToken", () => {
   });
 
   it("returns access token when not expired", async () => {
-    fs.mkdirSync(TOKEN_DIR, { recursive: true });
-    fs.writeFileSync(
+    await fs.mkdir(TOKEN_DIR, { recursive: true });
+    await fs.writeFile(
       testTokenPath,
       JSON.stringify({
         access_token: "valid-token",
         refresh_token: "refresh-123",
-        expires_at: Date.now() + 3600000, // 1 hour from now
+        expires_at: Date.now() + 3600000,
         token_url: "https://example.com/token",
         client_id: "id",
         client_secret: "secret",
@@ -125,13 +127,13 @@ describe("_getAccessToken", () => {
   });
 
   it("refreshes token when expired", async () => {
-    fs.mkdirSync(TOKEN_DIR, { recursive: true });
-    fs.writeFileSync(
+    await fs.mkdir(TOKEN_DIR, { recursive: true });
+    await fs.writeFile(
       testTokenPath,
       JSON.stringify({
         access_token: "expired-token",
         refresh_token: "refresh-456",
-        expires_at: Date.now() - 1000, // already expired
+        expires_at: Date.now() - 1000,
         token_url: "https://example.com/token",
         client_id: "id",
         client_secret: "secret",
@@ -147,15 +149,14 @@ describe("_getAccessToken", () => {
     const token = await _getAccessToken("token-test");
     expect(token).toBe("new-token");
 
-    // Verify it was saved
-    const saved = JSON.parse(fs.readFileSync(testTokenPath, "utf-8"));
+    const saved = JSON.parse(await fs.readFile(testTokenPath, "utf-8"));
     expect(saved.access_token).toBe("new-token");
     expect(saved.refresh_token).toBe("new-refresh");
   });
 
   it("keeps old refresh token when new one not provided", async () => {
-    fs.mkdirSync(TOKEN_DIR, { recursive: true });
-    fs.writeFileSync(
+    await fs.mkdir(TOKEN_DIR, { recursive: true });
+    await fs.writeFile(
       testTokenPath,
       JSON.stringify({
         access_token: "expired",
@@ -170,18 +171,17 @@ describe("_getAccessToken", () => {
     globalThis.fetch = mockFetchResponse({
       access_token: "refreshed",
       expires_in: 3600,
-      // No refresh_token in response
     });
 
     await _getAccessToken("token-test");
 
-    const saved = JSON.parse(fs.readFileSync(testTokenPath, "utf-8"));
+    const saved = JSON.parse(await fs.readFile(testTokenPath, "utf-8"));
     expect(saved.refresh_token).toBe("keep-this-refresh");
   });
 
   it("sends correct refresh request", async () => {
-    fs.mkdirSync(TOKEN_DIR, { recursive: true });
-    fs.writeFileSync(
+    await fs.mkdir(TOKEN_DIR, { recursive: true });
+    await fs.writeFile(
       testTokenPath,
       JSON.stringify({
         access_token: "expired",
@@ -211,8 +211,8 @@ describe("_getAccessToken", () => {
   });
 
   it("throws when refresh fails", async () => {
-    fs.mkdirSync(TOKEN_DIR, { recursive: true });
-    fs.writeFileSync(
+    await fs.mkdir(TOKEN_DIR, { recursive: true });
+    await fs.writeFile(
       testTokenPath,
       JSON.stringify({
         access_token: "expired",
@@ -232,8 +232,8 @@ describe("_getAccessToken", () => {
   });
 
   it("throws when no refresh token available", async () => {
-    fs.mkdirSync(TOKEN_DIR, { recursive: true });
-    fs.writeFileSync(
+    await fs.mkdir(TOKEN_DIR, { recursive: true });
+    await fs.writeFile(
       testTokenPath,
       JSON.stringify({
         access_token: "expired",
@@ -249,12 +249,60 @@ describe("_getAccessToken", () => {
       "no refresh token"
     );
   });
+
+  it("deduplicates concurrent refresh requests", async () => {
+    await fs.mkdir(TOKEN_DIR, { recursive: true });
+    await fs.writeFile(
+      testTokenPath,
+      JSON.stringify({
+        access_token: "expired",
+        refresh_token: "refresh",
+        expires_at: Date.now() - 1000,
+        token_url: "https://example.com/token",
+        client_id: "id",
+        client_secret: "secret",
+      })
+    );
+
+    let fetchCallCount = 0;
+    globalThis.fetch = vi.fn().mockImplementation(async () => {
+      fetchCallCount++;
+      // Simulate network delay
+      await new Promise((r) => setTimeout(r, 10));
+      return {
+        ok: true,
+        json: async () => ({ access_token: "refreshed", expires_in: 3600 }),
+      };
+    });
+
+    // Fire two concurrent getAccessToken calls
+    const [token1, token2] = await Promise.all([
+      _getAccessToken("token-test"),
+      _getAccessToken("token-test"),
+    ]);
+
+    expect(token1).toBe("refreshed");
+    expect(token2).toBe("refreshed");
+    // Only one fetch call should have been made
+    expect(fetchCallCount).toBe(1);
+  });
 });
 
 describe("input validation", () => {
-  it("rejects provider names with path separators", () => {
-    expect(() => _isAuthorized("../evil")).toThrow("Invalid OAuth provider name");
-    expect(() => _isAuthorized("foo/bar")).toThrow("Invalid OAuth provider name");
-    expect(() => _isAuthorized("foo\\bar")).toThrow("Invalid OAuth provider name");
+  it("rejects provider names with path separators", async () => {
+    await expect(_isAuthorized("../evil")).rejects.toThrow("Invalid OAuth provider name");
+    await expect(_isAuthorized("foo/bar")).rejects.toThrow("Invalid OAuth provider name");
+    await expect(_isAuthorized("foo\\bar")).rejects.toThrow("Invalid OAuth provider name");
+  });
+
+  it("rejects provider names with invalid characters", async () => {
+    await expect(_isAuthorized("foo bar")).rejects.toThrow("Invalid OAuth provider name");
+    await expect(_isAuthorized("")).rejects.toThrow("Invalid OAuth provider name");
+  });
+
+  it("accepts valid provider names", async () => {
+    expect(await _isAuthorized("google-calendar")).toBe(false);
+    expect(await _isAuthorized("my_provider.v2")).toBe(false);
+    expect(await _isAuthorized("GitHub")).toBe(false);
   });
 });

@@ -1,6 +1,6 @@
 import http from "http";
 import crypto from "crypto";
-import fs from "fs";
+import fs from "fs/promises";
 import path from "path";
 import { execFile } from "child_process";
 
@@ -11,7 +11,12 @@ const TOKEN_DIR = path.join(
 );
 
 const DEFAULT_PORT = 8914;
-const EXPIRY_BUFFER_MS = 60000; // refresh 60s before expiry
+const EXPIRY_BUFFER_MS = 60000;
+const AUTH_TIMEOUT_MS = 300000;
+const VALID_NAME_PATTERN = /^[a-z0-9][a-z0-9._-]*$/i;
+
+// Per-provider mutex to prevent concurrent refresh races
+const refreshLocks: Record<string, Promise<string> | undefined> = {};
 
 export type OAuthConfig = {
   authUrl: string;
@@ -32,8 +37,10 @@ type StoredTokens = {
 };
 
 function getTokenPath(name: string): string {
-  if (name.includes("/") || name.includes("\\") || name.includes("..")) {
-    throw new Error(`Invalid OAuth provider name: "${name}"`);
+  if (!VALID_NAME_PATTERN.test(name)) {
+    throw new Error(
+      `Invalid OAuth provider name: "${name}". Use only letters, numbers, dots, hyphens, and underscores.`
+    );
   }
   return path.join(TOKEN_DIR, `${name}.json`);
 }
@@ -44,6 +51,10 @@ function generateCodeVerifier(): string {
 
 function generateCodeChallenge(verifier: string): string {
   return crypto.createHash("sha256").update(verifier).digest("base64url");
+}
+
+function escapeHtml(str: string): string {
+  return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 
 function openBrowser(url: string): void {
@@ -60,15 +71,25 @@ function waitForCallback(
   port: number
 ): Promise<{ code: string; state: string }> {
   return new Promise((resolve, reject) => {
+    let settled = false;
+
     const server = http.createServer((req, res) => {
+      if (settled) {
+        res.writeHead(200);
+        res.end();
+        return;
+      }
+
       const url = new URL(req.url ?? "/", `http://127.0.0.1:${port}`);
       const code = url.searchParams.get("code");
       const error = url.searchParams.get("error");
       const state = url.searchParams.get("state") ?? "";
 
       if (error) {
+        settled = true;
         res.writeHead(400, { "Content-Type": "text/html" });
-        res.end(`<h1>Authorization failed</h1><p>${error}</p>`);
+        res.end(`<h1>Authorization failed</h1><p>${escapeHtml(error)}</p>`);
+        clearTimeout(timer);
         server.close();
         reject(new Error(`OAuth authorization failed: ${error}`));
         return;
@@ -77,26 +98,39 @@ function waitForCallback(
       if (!code) {
         res.writeHead(400, { "Content-Type": "text/html" });
         res.end("<h1>Missing authorization code</h1>");
-        server.close();
-        reject(new Error("No authorization code received"));
         return;
       }
 
+      settled = true;
       res.writeHead(200, { "Content-Type": "text/html" });
       res.end(
         "<h1>Authorization successful!</h1><p>You can close this tab and return to your terminal.</p>"
       );
+      clearTimeout(timer);
       server.close();
       resolve({ code, state });
     });
 
-    server.listen(port, "127.0.0.1", () => {});
+    server.on("error", (err: NodeJS.ErrnoException) => {
+      settled = true;
+      clearTimeout(timer);
+      if (err.code === "EADDRINUSE") {
+        reject(new Error(`OAuth callback port ${port} is already in use. Try a different port.`));
+      } else {
+        reject(new Error(`OAuth callback server error: ${err.message}`));
+      }
+    });
 
-    // Timeout after 5 minutes
-    setTimeout(() => {
-      server.close();
-      reject(new Error("OAuth authorization timed out (5 minutes)"));
-    }, 300000);
+    server.listen(port, "127.0.0.1");
+
+    const timer = setTimeout(() => {
+      if (!settled) {
+        settled = true;
+        server.close();
+        reject(new Error("OAuth authorization timed out (5 minutes)"));
+      }
+    }, AUTH_TIMEOUT_MS);
+    timer.unref();
   });
 }
 
@@ -128,22 +162,30 @@ async function exchangeCodeForTokens(
   return {
     access_token: data.access_token as string,
     refresh_token: (data.refresh_token as string) ?? "",
-    expires_in: (data.expires_in as number) ?? 3600,
+    expires_in: Number(data.expires_in) || 3600,
   };
 }
 
-function saveTokens(name: string, tokens: StoredTokens): void {
-  fs.mkdirSync(TOKEN_DIR, { recursive: true });
-  fs.writeFileSync(getTokenPath(name), JSON.stringify(tokens, null, 2), "utf-8");
+async function saveTokens(name: string, tokens: StoredTokens): Promise<void> {
+  await fs.mkdir(TOKEN_DIR, { recursive: true });
+  await fs.writeFile(getTokenPath(name), JSON.stringify(tokens, null, 2), {
+    encoding: "utf-8",
+    mode: 0o600,
+  });
 }
 
-function loadTokens(name: string): StoredTokens | null {
+async function loadTokens(name: string): Promise<StoredTokens | null> {
   const tokenPath = getTokenPath(name);
-  if (!fs.existsSync(tokenPath)) {
+  try {
+    const data = await fs.readFile(tokenPath, "utf-8");
+    const parsed = JSON.parse(data) as Record<string, unknown>;
+    if (!parsed.access_token || !parsed.token_url || !parsed.client_id) {
+      return null;
+    }
+    return parsed as unknown as StoredTokens;
+  } catch {
     return null;
   }
-  const data = fs.readFileSync(tokenPath, "utf-8");
-  return JSON.parse(data) as StoredTokens;
 }
 
 export async function _authorize(
@@ -174,9 +216,7 @@ export async function _authorize(
 
   const authorizationUrl = `${config.authUrl}?${authParams.toString()}`;
 
-  // Start callback server before opening browser
   const callbackPromise = waitForCallback(port);
-
   openBrowser(authorizationUrl);
 
   const { code, state: returnedState } = await callbackPromise;
@@ -203,60 +243,73 @@ export async function _authorize(
     client_secret: config.clientSecret,
   };
 
-  saveTokens(name, tokens);
+  await saveTokens(name, tokens);
 
   return { success: true };
 }
 
 export async function _getAccessToken(name: string): Promise<string> {
-  const tokens = loadTokens(name);
+  const tokens = await loadTokens(name);
   if (!tokens) {
     throw new Error(
       `No OAuth tokens found for "${name}". Run authorize("${name}", config) first.`
     );
   }
 
-  // Token still valid
   if (Date.now() < tokens.expires_at - EXPIRY_BUFFER_MS) {
     return tokens.access_token;
   }
 
-  // Need to refresh
   if (!tokens.refresh_token) {
     throw new Error(
       `OAuth token for "${name}" has expired and no refresh token is available. Run authorize("${name}", config) again.`
     );
   }
 
-  const refreshResponse = await exchangeCodeForTokens(tokens.token_url, {
-    grant_type: "refresh_token",
-    refresh_token: tokens.refresh_token,
-    client_id: tokens.client_id,
-    client_secret: tokens.client_secret,
-  });
-
-  // Update stored tokens
-  tokens.access_token = refreshResponse.access_token;
-  tokens.expires_at = Date.now() + refreshResponse.expires_in * 1000;
-  // Some providers rotate refresh tokens
-  if (refreshResponse.refresh_token) {
-    tokens.refresh_token = refreshResponse.refresh_token;
+  // Use a mutex to prevent concurrent refresh attempts for the same provider.
+  // If a refresh is already in flight, wait for it instead of firing another.
+  if (refreshLocks[name]) {
+    return refreshLocks[name]!;
   }
 
-  saveTokens(name, tokens);
+  const refreshPromise = (async () => {
+    try {
+      const refreshResponse = await exchangeCodeForTokens(tokens.token_url, {
+        grant_type: "refresh_token",
+        refresh_token: tokens.refresh_token,
+        client_id: tokens.client_id,
+        client_secret: tokens.client_secret,
+      });
 
-  return tokens.access_token;
+      tokens.access_token = refreshResponse.access_token;
+      tokens.expires_at = Date.now() + refreshResponse.expires_in * 1000;
+      // Some providers rotate refresh tokens
+      if (refreshResponse.refresh_token) {
+        tokens.refresh_token = refreshResponse.refresh_token;
+      }
+
+      await saveTokens(name, tokens);
+
+      return tokens.access_token;
+    } finally {
+      delete refreshLocks[name];
+    }
+  })();
+
+  refreshLocks[name] = refreshPromise;
+  return refreshPromise;
 }
 
-export function _isAuthorized(name: string): boolean {
-  return loadTokens(name) !== null;
+export async function _isAuthorized(name: string): Promise<boolean> {
+  return (await loadTokens(name)) !== null;
 }
 
-export function _revokeAuth(name: string): { revoked: boolean } {
+export async function _revokeAuth(name: string): Promise<{ revoked: boolean }> {
   const tokenPath = getTokenPath(name);
-  if (fs.existsSync(tokenPath)) {
-    fs.unlinkSync(tokenPath);
+  try {
+    await fs.unlink(tokenPath);
     return { revoked: true };
+  } catch {
+    return { revoked: false };
   }
-  return { revoked: false };
 }

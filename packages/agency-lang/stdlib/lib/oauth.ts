@@ -16,6 +16,16 @@ const VALID_NAME_PATTERN = /^[a-z0-9][a-z0-9._-]*$/i;
 // Per-provider mutex to prevent concurrent refresh races
 const refreshLocks: Record<string, Promise<string> | undefined> = {};
 
+function requireHttps(url: string, label: string): void {
+  const parsed = new URL(url);
+  if (parsed.protocol !== "https:" && parsed.hostname !== "localhost" && parsed.hostname !== "127.0.0.1") {
+    throw new Error(
+      `${label} must use HTTPS (got "${parsed.protocol}//"). ` +
+      `HTTP is only allowed for localhost during development.`
+    );
+  }
+}
+
 export type OAuthConfig = {
   authUrl: string;
   tokenUrl: string;
@@ -93,6 +103,14 @@ function waitForCallback(
       }
 
       const url = new URL(req.url ?? "/", `http://127.0.0.1:${port}`);
+
+      // Only handle the callback path; ignore favicon, prefetch, etc.
+      if (url.pathname !== "/oauth/callback" && url.pathname !== "/") {
+        res.writeHead(404);
+        res.end();
+        return;
+      }
+
       const code = url.searchParams.get("code");
       const error = url.searchParams.get("error");
       const state = url.searchParams.get("state") ?? "";
@@ -160,8 +178,11 @@ async function exchangeCodeForTokens(
 
   if (!response.ok) {
     const responseBody = await response.text();
+    const truncated = responseBody.length > 200
+      ? responseBody.slice(0, 200) + "..."
+      : responseBody;
     throw new Error(
-      `OAuth token exchange failed (${response.status}): ${responseBody}`
+      `OAuth token exchange failed (${response.status}): ${truncated}`
     );
   }
 
@@ -210,8 +231,11 @@ export async function _authorize(
   name: string,
   config: OAuthConfig
 ): Promise<{ success: boolean }> {
+  requireHttps(config.authUrl, "authUrl");
+  requireHttps(config.tokenUrl, "tokenUrl");
+
   const port = (config.port && config.port > 0) ? config.port : DEFAULT_PORT;
-  const redirectUri = `http://127.0.0.1:${port}`;
+  const redirectUri = `http://127.0.0.1:${port}/oauth/callback`;
   const state = crypto.randomBytes(16).toString("hex");
   const codeVerifier = generateCodeVerifier();
   const codeChallenge = generateCodeChallenge(codeVerifier);

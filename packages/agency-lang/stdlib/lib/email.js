@@ -1,4 +1,8 @@
-// Email sending via Resend, SendGrid, and Mailgun HTTP APIs (zero dependencies)
+const RESEND_URL = "https://api.resend.com/emails";
+const SENDGRID_URL = "https://api.sendgrid.com/v3/mail/send";
+function toArray(value) {
+    return Array.isArray(value) ? value : [value];
+}
 export async function _sendWithResend(params, options) {
     const apiKey = options?.apiKey || process.env.RESEND_API_KEY;
     if (!apiKey) {
@@ -6,7 +10,7 @@ export async function _sendWithResend(params, options) {
     }
     const body = {
         from: params.from,
-        to: Array.isArray(params.to) ? params.to : [params.to],
+        to: toArray(params.to),
         subject: params.subject,
     };
     if (params.html)
@@ -14,12 +18,12 @@ export async function _sendWithResend(params, options) {
     if (params.text)
         body.text = params.text;
     if (params.cc)
-        body.cc = Array.isArray(params.cc) ? params.cc : [params.cc];
+        body.cc = toArray(params.cc);
     if (params.bcc)
-        body.bcc = Array.isArray(params.bcc) ? params.bcc : [params.bcc];
+        body.bcc = toArray(params.bcc);
     if (params.replyTo)
         body.reply_to = params.replyTo;
-    const response = await fetch("https://api.resend.com/emails", {
+    const response = await fetch(RESEND_URL, {
         method: "POST",
         headers: {
             "Authorization": `Bearer ${apiKey}`,
@@ -40,13 +44,13 @@ export async function _sendWithSendGrid(params, options) {
         throw new Error("Missing SendGrid API key. Set SENDGRID_API_KEY env var or pass apiKey option.");
     }
     const personalizations = {
-        to: (Array.isArray(params.to) ? params.to : [params.to]).map((email) => ({ email })),
+        to: toArray(params.to).map((email) => ({ email })),
     };
     if (params.cc) {
-        personalizations.cc = (Array.isArray(params.cc) ? params.cc : [params.cc]).map((email) => ({ email }));
+        personalizations.cc = toArray(params.cc).map((email) => ({ email }));
     }
     if (params.bcc) {
-        personalizations.bcc = (Array.isArray(params.bcc) ? params.bcc : [params.bcc]).map((email) => ({ email }));
+        personalizations.bcc = toArray(params.bcc).map((email) => ({ email }));
     }
     const content = [];
     if (params.text)
@@ -63,7 +67,7 @@ export async function _sendWithSendGrid(params, options) {
     if (params.replyTo) {
         body.reply_to = { email: params.replyTo };
     }
-    const response = await fetch("https://api.sendgrid.com/v3/mail/send", {
+    const response = await fetch(SENDGRID_URL, {
         method: "POST",
         headers: {
             "Authorization": `Bearer ${apiKey}`,
@@ -75,7 +79,6 @@ export async function _sendWithSendGrid(params, options) {
         const responseBody = await response.text();
         throw new Error(`SendGrid API error (${response.status}): ${responseBody}`);
     }
-    // SendGrid returns 202 with message ID in x-message-id header
     const messageId = response.headers.get("x-message-id") ?? "";
     return { id: messageId, provider: "sendgrid" };
 }
@@ -95,20 +98,15 @@ export async function _sendWithMailgun(params, options) {
     const formData = new URLSearchParams();
     formData.set("from", params.from);
     formData.set("subject", params.subject);
-    const toList = Array.isArray(params.to) ? params.to : [params.to];
-    formData.set("to", toList.join(","));
+    formData.set("to", toArray(params.to).join(","));
     if (params.html)
         formData.set("html", params.html);
     if (params.text)
         formData.set("text", params.text);
-    if (params.cc) {
-        const ccList = Array.isArray(params.cc) ? params.cc : [params.cc];
-        formData.set("cc", ccList.join(","));
-    }
-    if (params.bcc) {
-        const bccList = Array.isArray(params.bcc) ? params.bcc : [params.bcc];
-        formData.set("bcc", bccList.join(","));
-    }
+    if (params.cc)
+        formData.set("cc", toArray(params.cc).join(","));
+    if (params.bcc)
+        formData.set("bcc", toArray(params.bcc).join(","));
     if (params.replyTo)
         formData.set("h:Reply-To", params.replyTo);
     const credentials = Buffer.from(`api:${apiKey}`).toString("base64");

@@ -1,4 +1,8 @@
 const BASE_URL = "https://api.browser-use.com/api/v3";
+const TERMINAL_STATUSES = ["stopped", "error", "timed_out"];
+function isTerminal(status) {
+    return TERMINAL_STATUSES.includes(status);
+}
 async function pollSession(sessionId, apiKey) {
     const pollInterval = 2000;
     const maxWait = 600000; // 10 minutes
@@ -14,9 +18,7 @@ async function pollSession(sessionId, apiKey) {
             throw new Error(`Browser Use API error polling session (${response.status}): ${body}`);
         }
         const data = (await response.json());
-        if (data.status === "stopped" ||
-            data.status === "error" ||
-            data.status === "timed_out") {
+        if (isTerminal(data.status)) {
             return data;
         }
         await new Promise((resolve) => setTimeout(resolve, pollInterval));
@@ -31,7 +33,7 @@ export async function _browserUse(task, options) {
     const body = { task };
     if (options?.model)
         body.model = options.model;
-    if (options?.maxCostUsd)
+    if (options?.maxCostUsd !== undefined)
         body.maxCostUsd = options.maxCostUsd;
     if (options?.proxyCountryCode)
         body.proxyCountryCode = options.proxyCountryCode;
@@ -51,17 +53,13 @@ export async function _browserUse(task, options) {
     }
     const session = (await response.json());
     const sessionId = session.id;
-    // If session is already complete, return immediately
-    if (session.status === "stopped" ||
-        session.status === "error" ||
-        session.status === "timed_out") {
+    if (isTerminal(session.status)) {
         return {
             output: session.output ?? "",
             status: session.status,
             sessionId,
         };
     }
-    // Otherwise poll until completion
     const result = await pollSession(sessionId, apiKey);
     return {
         output: result.output ?? "",

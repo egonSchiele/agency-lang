@@ -66,11 +66,15 @@ export async function sendEmail(
   if (params.bcc) mailOptions.bcc = Array.isArray(params.bcc) ? params.bcc.join(", ") : params.bcc;
   if (params.replyTo) mailOptions.replyTo = params.replyTo;
 
-  const info = await transporter.sendMail(mailOptions);
+  try {
+    const info = await transporter.sendMail(mailOptions);
 
-  return {
-    messageId: info.messageId ?? "",
-    accepted: (info.accepted as string[]) ?? [],
-    rejected: (info.rejected as string[]) ?? [],
-  };
+    return {
+      messageId: info.messageId ?? "",
+      accepted: (info.accepted as string[]) ?? [],
+      rejected: (info.rejected as string[]) ?? [],
+    };
+  } finally {
+    transporter.close();
+  }
 }

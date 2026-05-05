@@ -13,6 +13,7 @@ vi.mock("nodemailer", () => {
     default: {
       createTransport: vi.fn().mockReturnValue({
         sendMail: sendMailMock,
+        close: vi.fn(),
       }),
     },
   };

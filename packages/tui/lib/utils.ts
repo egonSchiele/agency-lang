@@ -16,3 +16,7 @@ export function resolveEdges(value: number | { top?: number; bottom?: number; le
 export function sameStyle(a: Cell, b: Cell): boolean {
   return a.fg === b.fg && a.bg === b.bg && a.bold === b.bold;
 }
+
+export function escapeHtml(s: string): string {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}

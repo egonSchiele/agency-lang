@@ -1,7 +1,7 @@
 import type { Cell } from "../elements.js";
 import type { Frame } from "../frame.js";
 import { cssColors } from "../colors.js";
-import { sameStyle } from "../utils.js";
+import { sameStyle, escapeHtml } from "../utils.js";
 import { flatten } from "./flatten.js";
 
 function cellStyle(cell: Cell): string {
@@ -18,13 +18,6 @@ function cellStyle(cell: Cell): string {
   return parts.join(";");
 }
 
-function escapeHTML(ch: string): string {
-  if (ch === "<") return "&lt;";
-  if (ch === ">") return "&gt;";
-  if (ch === "&") return "&amp;";
-  return ch;
-}
-
 export function toHTML(frame: Frame): string {
   const grid = flatten(frame, frame.width, frame.height);
   const lines: string[] = [];
@@ -37,10 +30,10 @@ export function toHTML(frame: Frame): string {
       const style = cellStyle(cell);
 
       // Collect run of cells with same style
-      let run = escapeHTML(cell.char);
+      let run = escapeHtml(cell.char);
       let j = i + 1;
       while (j < row.length && sameStyle(row[j], cell)) {
-        run += escapeHTML(row[j].char);
+        run += escapeHtml(row[j].char);
         j++;
       }
 

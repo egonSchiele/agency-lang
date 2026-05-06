@@ -2,6 +2,7 @@ import * as fs from "node:fs";
 import type { Frame } from "../frame.js";
 import type { OutputTarget } from "./types.js";
 import { toHTML as frameToHTML } from "../render/html.js";
+import { escapeHtml } from "../utils.js";
 
 type RecordedFrame = {
   frame: Frame;
@@ -73,8 +74,4 @@ show(0);
   writeHTML(path: string): void {
     fs.writeFileSync(path, this.toHTML());
   }
-}
-
-function escapeHtml(s: string): string {
-  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }

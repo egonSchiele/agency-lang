@@ -144,8 +144,8 @@ function layoutChildren(
   // Inner area after border and padding
   const innerX = parent.resolvedX + borderSize + padding.left;
   const innerY = parent.resolvedY + borderSize + padding.top;
-  const innerWidth = parent.resolvedWidth - 2 * borderSize - padding.left - padding.right;
-  const innerHeight = parent.resolvedHeight - 2 * borderSize - padding.top - padding.bottom;
+  const innerWidth = Math.max(0, parent.resolvedWidth - 2 * borderSize - padding.left - padding.right);
+  const innerHeight = Math.max(0, parent.resolvedHeight - 2 * borderSize - padding.top - padding.bottom);
 
   const direction = style.flexDirection ?? "column";
   const isRow = direction === "row";

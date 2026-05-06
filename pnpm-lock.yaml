@@ -175,6 +175,18 @@ importers:
         specifier: ^3.0.0
         version: 3.2.4(@types/node@25.0.6)
 
+  packages/tui:
+    devDependencies:
+      '@types/node':
+        specifier: ^25.0.0
+        version: 25.0.6
+      typescript:
+        specifier: ^5.0.0
+        version: 5.9.3
+      vitest:
+        specifier: ^3.0.0
+        version: 3.2.4(@types/node@25.0.6)
+
   packages/web-fetch:
     dependencies:
       '@mozilla/readability':

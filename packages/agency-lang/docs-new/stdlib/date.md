@@ -183,9 +183,9 @@ Add hours to a datetime string and return the new datetime.
 addDays(datetime: string, days: number): string
 ```
 
-Add days to a datetime string. Returns a new ISO 8601 datetime string. Negative values subtract days.
+Add days to a datetime string. Returns a new ISO 8601 datetime string. Negative values subtract days. Note: adds a fixed 24 hours per day — on DST transition days the wall-clock time may shift by an hour. For DST-safe day arithmetic, compute the target date separately and use atTime().
 
-Add days to a datetime string and return the new datetime.
+Add days to a datetime string and return the new datetime. Note: adds a fixed 24 hours per day, which may shift the wall-clock time by an hour on DST transition days. For DST-safe day arithmetic, use atTime with a date string instead.
 
 **Parameters:**
 

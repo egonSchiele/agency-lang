@@ -86,6 +86,9 @@ export function _addHours(datetime: string, hours: number): string {
   return _addMinutes(datetime, hours * 60);
 }
 
+// NOTE: This adds a fixed 24 hours per day. On DST transition days, a
+// calendar day is 23 or 25 hours, so the wall-clock time may shift by
+// an hour. To avoid this, use _atTime with a timezone-aware date instead.
 export function _addDays(datetime: string, days: number): string {
   return _addMinutes(datetime, days * 24 * 60);
 }

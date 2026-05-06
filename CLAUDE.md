@@ -11,7 +11,7 @@ NOTE! Most of the file paths you'll see in this CLAUDE.md are relative to the pa
 ## Key Commands
 
 ```bash
-make                    # build everything
+make                    # build everything (ALWAYS use this when changing stdlib files)
 pnpm test               # Run vitest in watch mode
 pnpm test:run           # Run vitest once
 pnpm run agency <file>  # Compile and run an .agency file

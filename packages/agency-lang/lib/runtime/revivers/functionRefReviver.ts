@@ -23,6 +23,9 @@ export class FunctionRefReviver implements BaseReviver<AgencyFunction> {
     if (value.boundArgs) {
       result.boundArgs = value.boundArgs;
     }
+    if (value.toolDefinition) {
+      result.customDescription = value.toolDefinition.description;
+    }
     return result;
   }
 
@@ -66,10 +69,19 @@ export class FunctionRefReviver implements BaseReviver<AgencyFunction> {
     }
 
     // If boundArgs present, reconstruct bound function directly (skip re-validation)
+    let revived = original;
     if (value.boundArgs) {
-      return original.withBoundArgs(value.boundArgs as any);
+      revived = original.withBoundArgs(value.boundArgs as any);
     }
 
-    return original;
+    // Restore custom description if it was overridden via .describe()
+    if (typeof value.customDescription === "string" && revived.toolDefinition) {
+      revived = revived.withToolDefinition({
+        ...revived.toolDefinition,
+        description: value.customDescription,
+      });
+    }
+
+    return revived;
   }
 }

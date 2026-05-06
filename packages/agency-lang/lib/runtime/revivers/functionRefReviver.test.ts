@@ -278,6 +278,31 @@ describe("FunctionRefReviver with bound functions", () => {
     functionRefReviver.registry = null;
   });
 
+  it("revives function with custom description from .describe()", () => {
+    const registry: Record<string, AgencyFunction> = {};
+    const fn = AgencyFunction.create({
+      name: "add",
+      module: "test",
+      fn: (a: number, b: number) => a + b,
+      params: [
+        { name: "a", hasDefault: false, defaultValue: undefined, variadic: false },
+        { name: "b", hasDefault: false, defaultValue: undefined, variadic: false },
+      ],
+      toolDefinition: { name: "add", description: "Add two numbers.\n@param a - First\n@param b - Second", schema: {} },
+    }, registry);
+    const described = fn.partial({ a: 5 }).describe("Adds 5 to a number");
+    functionRefReviver.registry = registry;
+
+    const json = JSON.stringify({ tool: described }, nativeTypeReplacer);
+    const restored = JSON.parse(json, nativeTypeReviver);
+
+    expect(restored.tool.toolDefinition.description).toBe("Adds 5 to a number");
+    expect(restored.tool.params).toHaveLength(1);
+    expect(restored.tool.params[0].name).toBe("b");
+
+    functionRefReviver.registry = null;
+  });
+
   it("revived bound function invokes correctly", async () => {
     const registry: Record<string, AgencyFunction> = {};
     const fn = AgencyFunction.create({

@@ -55,7 +55,7 @@ const readFoo = readFile.partial(dir: "~/foo/")
 4. Variadic parameters cannot be bound.
 5. `.partial()` only works on Agency functions, not imported TypeScript functions. Users can wrap TypeScript functions in Agency functions if needed. `.partial()` does work on Agency functions imported from other Agency modules.
 6. Adding new optional parameters to a function does not break existing `.partial()` calls.
-7. `.partial()` with no bindings (empty call) returns a clone of the function with identical signature.
+7. `.partial()` with no bindings (empty call) returns the same function instance (no-op).
 8. Binding an already-bound param in a chained `.partial()` call is an error.
 9. Duplicate param names in a single `.partial()` call is an error.
 
@@ -80,7 +80,7 @@ const result = success(10) |> half |> divide(?, 3)
 const result = success(10) |> half |> divide.partial(b: 3)
 ```
 
-The `?` placeholder is removed from the language entirely.
+The `?` placeholder is deprecated and will be removed in a future release. New code should use `.partial()` instead.
 
 ### Compilation
 

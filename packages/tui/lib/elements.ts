@@ -43,13 +43,7 @@ export type Cell = {
   bold?: boolean;
 };
 
-export type FrameStyle = {
-  border?: boolean;
-  borderColor?: string;
-  bg?: string;
-  label?: string;
-  labelColor?: string;
-};
+export type FrameStyle = Pick<Style, "border" | "borderColor" | "bg" | "label" | "labelColor">;
 
 export type PositionedElement = Element & {
   resolvedX: number;

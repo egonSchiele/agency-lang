@@ -2,6 +2,7 @@ import type { Cell, PositionedElement } from "../elements.js";
 import type { FrameStyle } from "../elements.js";
 import { Frame } from "../frame.js";
 import { parseStyledText } from "../styleParser.js";
+import { resolveEdges } from "../utils.js";
 
 // Box-drawing characters for borders
 const BORDER = {
@@ -12,6 +13,14 @@ const BORDER = {
   horizontal: "─",
   vertical: "│",
 };
+
+function blitCells(dest: Cell[][], src: Cell[][], startX: number, startY: number, maxW: number, maxH: number): void {
+  for (let y = 0; y < src.length && y < maxH; y++) {
+    for (let x = 0; x < src[y].length && x < maxW; x++) {
+      dest[startY + y][startX + x] = src[y][x];
+    }
+  }
+}
 
 function emptyCell(bg?: string): Cell {
   return { char: " ", bg };
@@ -165,7 +174,7 @@ export function render(positioned: PositionedElement, parentScrollOffset = 0): F
   const hasBorder = style.border ?? false;
   const borderSize = hasBorder ? 1 : 0;
 
-  const padding = normalizePadding(style.padding);
+  const padding = resolveEdges(style.padding);
   const width = positioned.resolvedWidth;
   const height = positioned.resolvedHeight;
 
@@ -193,14 +202,14 @@ export function render(positioned: PositionedElement, parentScrollOffset = 0): F
 
   // Render inner content based on element type
   let innerContent: Cell[][] | undefined;
+  const effectiveScrollOffset = style.scrollOffset ?? parentScrollOffset;
 
-  if (positioned.type === "text" && positioned.content !== undefined) {
-    const scrollOffset = style.scrollOffset ?? parentScrollOffset;
+  if ((positioned.type === "text" || positioned.type === "box") && positioned.content !== undefined) {
     innerContent = renderTextContent(
       positioned.content,
       innerWidth,
       innerHeight,
-      scrollOffset,
+      effectiveScrollOffset,
       style.fg,
       style.bg,
       style.bold,
@@ -223,42 +232,11 @@ export function render(positioned: PositionedElement, parentScrollOffset = 0): F
     );
   }
 
-  // If there's inner content, blit it into the frame grid
   if (innerContent) {
     if (!content) {
       content = makeGrid(width, height, style.bg);
     }
-    const startX = borderSize + padding.left;
-    const startY = borderSize + padding.top;
-    for (let y = 0; y < innerContent.length && y < innerHeight; y++) {
-      for (let x = 0; x < innerContent[y].length && x < innerWidth; x++) {
-        content[startY + y][startX + x] = innerContent[y][x];
-      }
-    }
-  }
-
-  // Handle box elements with text content (box wrapping a text child is
-  // handled by recursion, but a box can also have direct content)
-  if (positioned.type === "box" && positioned.content !== undefined) {
-    const boxInner = renderTextContent(
-      positioned.content,
-      innerWidth,
-      innerHeight,
-      style.scrollOffset ?? 0,
-      style.fg,
-      style.bg,
-      style.bold,
-    );
-    if (!content) {
-      content = makeGrid(width, height, style.bg);
-    }
-    const startX = borderSize + padding.left;
-    const startY = borderSize + padding.top;
-    for (let y = 0; y < boxInner.length && y < innerHeight; y++) {
-      for (let x = 0; x < boxInner[y].length && x < innerWidth; x++) {
-        content[startY + y][startX + x] = boxInner[y][x];
-      }
-    }
+    blitCells(content, innerContent, borderSize + padding.left, borderSize + padding.top, innerWidth, innerHeight);
   }
 
   // Recurse into children, passing scroll offset if this element is scrollable
@@ -277,15 +255,4 @@ export function render(positioned: PositionedElement, parentScrollOffset = 0): F
   });
 
   return frame;
-}
-
-function normalizePadding(padding: undefined | number | { top?: number; bottom?: number; left?: number; right?: number }): { top: number; bottom: number; left: number; right: number } {
-  if (padding === undefined) return { top: 0, bottom: 0, left: 0, right: 0 };
-  if (typeof padding === "number") return { top: padding, bottom: padding, left: padding, right: padding };
-  return {
-    top: padding.top ?? 0,
-    bottom: padding.bottom ?? 0,
-    left: padding.left ?? 0,
-    right: padding.right ?? 0,
-  };
 }

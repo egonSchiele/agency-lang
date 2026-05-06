@@ -1,6 +1,7 @@
 import type { Cell } from "../elements.js";
 import type { Frame } from "../frame.js";
 import { cssColors } from "../colors.js";
+import { sameStyle } from "../utils.js";
 import { flatten } from "./flatten.js";
 
 function cellStyle(cell: Cell): string {
@@ -17,10 +18,6 @@ function cellStyle(cell: Cell): string {
     parts.push("font-weight:bold");
   }
   return parts.join(";");
-}
-
-function sameStyle(a: Cell, b: Cell): boolean {
-  return a.fg === b.fg && a.bg === b.bg && a.bold === b.bold;
 }
 
 function escapeHTML(ch: string): string {

@@ -1,6 +1,7 @@
 import type { Cell } from "../elements.js";
 import type { Frame } from "../frame.js";
 import { ansiColors, ansiBgColors } from "../colors.js";
+import { sameStyle } from "../utils.js";
 import { flatten } from "./flatten.js";
 
 const RESET = "\x1b[0m";
@@ -12,10 +13,6 @@ function cellEscapes(cell: Cell): string {
   if (cell.fg) seq += ansiColors[cell.fg] ?? "";
   if (cell.bg) seq += ansiBgColors[cell.bg] ?? "";
   return seq;
-}
-
-function sameStyle(a: Cell, b: Cell): boolean {
-  return a.fg === b.fg && a.bg === b.bg && a.bold === b.bold;
 }
 
 export function toANSI(frame: Frame): string {

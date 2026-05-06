@@ -1,3 +1,4 @@
+import * as fs from "node:fs";
 import type { Frame } from "../frame.js";
 import type { OutputTarget } from "./types.js";
 import { toHTML as frameToHTML } from "../render/html.js";
@@ -66,7 +67,6 @@ show(0);
   }
 
   writeHTML(path: string): void {
-    const fs = require("node:fs");
     fs.writeFileSync(path, this.toHTML());
   }
 }

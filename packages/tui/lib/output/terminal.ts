@@ -34,12 +34,14 @@ export class TerminalOutput implements OutputTarget {
   suspend(): void {
     if (this.inAltScreen) {
       process.stdout.write(SHOW_CURSOR + EXIT_ALT_SCREEN);
+      this.inAltScreen = false;
     }
   }
 
   resume(): void {
-    if (this.inAltScreen) {
+    if (!this.inAltScreen) {
       process.stdout.write(ENTER_ALT_SCREEN + HIDE_CURSOR);
+      this.inAltScreen = true;
     }
   }
 }

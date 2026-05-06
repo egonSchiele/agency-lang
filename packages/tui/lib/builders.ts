@@ -1,6 +1,6 @@
 import type { Element, StyleProps } from "./elements.js";
 
-function isStyleProps(arg: any): arg is StyleProps {
+function isStyleProps(arg: StyleProps | Element): arg is StyleProps {
   return arg !== null && typeof arg === "object" && !("type" in arg);
 }
 

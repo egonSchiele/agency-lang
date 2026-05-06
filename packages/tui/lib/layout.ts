@@ -1,17 +1,5 @@
 import type { Element, PositionedElement } from "./elements.js";
-
-type Edges = { top: number; bottom: number; left: number; right: number };
-
-function resolveEdges(value: number | { top?: number; bottom?: number; left?: number; right?: number } | undefined): Edges {
-  if (value === undefined) return { top: 0, bottom: 0, left: 0, right: 0 };
-  if (typeof value === "number") return { top: value, bottom: value, left: value, right: value };
-  return {
-    top: value.top ?? 0,
-    bottom: value.bottom ?? 0,
-    left: value.left ?? 0,
-    right: value.right ?? 0,
-  };
-}
+import { resolveEdges, type Edges } from "./utils.js";
 
 function resolveDimension(
   value: number | string | undefined,
@@ -90,18 +78,14 @@ function layoutChild(
 
   const crossAxis = mainAxis === "width" ? "height" : "width";
 
-  // Main axis: already resolved by parent, use directly
-  const mainDim = mainAxisSize;
-
-  // Cross axis: child resolves its own size against available space
   const crossProp = style[crossAxis];
   let crossDim = resolveDimension(crossProp, crossAxisAvailable) ?? crossAxisAvailable;
   const crossMin = crossAxis === "width" ? style.minWidth : style.minHeight;
   const crossMax = crossAxis === "width" ? style.maxWidth : style.maxHeight;
   crossDim = clampDimension(crossDim, crossMin, crossMax);
 
-  const width = mainAxis === "width" ? mainDim : crossDim;
-  const height = mainAxis === "height" ? mainDim : crossDim;
+  const width = mainAxis === "width" ? mainAxisSize : crossDim;
+  const height = mainAxis === "height" ? mainAxisSize : crossDim;
   const { children: _, ...rest } = element;
 
   const result: PositionedElement = {
@@ -154,10 +138,12 @@ function layoutChildren(
   let usedMain = 0;
   let totalFlex = 0;
   const childMainSizes: (number | null)[] = [];
+  const childMargins: Edges[] = [];
 
   for (const child of visibleChildren) {
     const cs = child.style ?? {};
     const childMargin = resolveEdges(cs.margin);
+    childMargins.push(childMargin);
     const mainMarginSum = isRow
       ? childMargin.left + childMargin.right
       : childMargin.top + childMargin.bottom;
@@ -167,8 +153,6 @@ function layoutChildren(
     const hasExplicitMainSize = mainProp !== undefined;
 
     if (hasFlex || !hasExplicitMainSize) {
-      // Flex children and children with no explicit main-axis size both
-      // get their space from pass 2. Treat no-size-no-flex as flex: 1.
       const flexValue = cs.flex ?? 1;
       totalFlex += flexValue;
       childMainSizes.push(null);
@@ -196,8 +180,7 @@ function layoutChildren(
   for (let i = 0; i < visibleChildren.length; i++) {
     const child = visibleChildren[i];
     const childMainSize = childMainSizes[i]!;
-    const cs = child.style ?? {};
-    const childMargin = resolveEdges(cs.margin);
+    const childMargin = childMargins[i];
 
     let childX: number;
     let childY: number;
@@ -212,7 +195,6 @@ function layoutChildren(
       mainOffset += childMainSize + childMargin.top + childMargin.bottom;
     }
 
-    // Parent owns the main axis; child resolves the cross axis.
     const positioned = layoutChild(
       child, childX, childY,
       childMainSize, crossSize,

@@ -3172,6 +3172,17 @@ export class TypeScriptBuilder {
         }
       }
 
+      // Registered method (e.g. .partial()) as pipe stage: call the method to produce
+      // an AgencyFunction, then invoke it with the piped value
+      if (lastElement?.kind === "methodCall" && isRegisteredMethod("AgencyFunction", lastElement.functionCall.functionName)) {
+        const partialExpr = this.processNode(stage);
+        const invokeExpr = ts.call(
+          ts.prop(partialExpr, "invoke"),
+          [ts.obj({ type: ts.str("positional"), args: ts.arr([pipeArg]) })],
+        );
+        return ts.arrowFn([{ name: "__pipeArg" }], ts.await(invokeExpr), { async: true });
+      }
+
       // No placeholder: bare method/property reference — use __callMethod to preserve `this`
       const receiver = this.processValueAccessPartial(stage);
       const lastEl = stage.chain[stage.chain.length - 1];

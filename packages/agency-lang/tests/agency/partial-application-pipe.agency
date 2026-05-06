@@ -1,0 +1,12 @@
+def multiply(a: number, b: number): Result {
+  return success(a * b)
+}
+
+def half(x: number): Result {
+  return success(x / 2)
+}
+
+node main() {
+  const result = success(10) |> half |> multiply.partial(a: 3)
+  return result
+}

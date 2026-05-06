@@ -72,12 +72,22 @@ export class AgencyFunction {
     const unboundParams = boundArgs.originalParams.filter(
       (_, i) => !boundArgs.indices.includes(i)
     );
+    // Re-derive reduced toolDefinition from bound state
+    let toolDef = this.toolDefinition;
+    if (toolDef) {
+      const boundNames = boundArgs.indices.map(i => boundArgs.originalParams[i].name);
+      toolDef = {
+        ...toolDef,
+        description: stripBoundParams(toolDef.description, boundNames),
+        schema: buildReducedSchema(toolDef.schema, unboundParams),
+      };
+    }
     return new AgencyFunction({
       name: this.name,
       module: this.module,
       fn: this._fn,
       params: unboundParams,
-      toolDefinition: this.toolDefinition,
+      toolDefinition: toolDef,
       boundArgs,
     });
   }
@@ -97,6 +107,8 @@ export class AgencyFunction {
   }
 
   partial(bindings: Record<string, unknown>): AgencyFunction {
+    if (Object.keys(bindings).length === 0) return this;
+
     const originalParams = this.getOriginalParams();
 
     // Single pass: validate and collect indices/values

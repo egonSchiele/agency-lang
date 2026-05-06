@@ -1091,7 +1091,7 @@ export class TypeScriptBuilder {
     }
 
     // Default: pass positional args directly (e.g. .describe("text"))
-    const argNodes = args.map((a) => this.processNode(a as AgencyNode));
+    const argNodes = args.map((a) => this.processCallArg(a));
     return ts.call(ts.prop(receiver, methodName), argNodes);
   }
 
@@ -3178,7 +3178,7 @@ export class TypeScriptBuilder {
         const partialExpr = this.processNode(stage);
         const invokeExpr = ts.call(
           ts.prop(partialExpr, "invoke"),
-          [ts.obj({ type: ts.str("positional"), args: ts.arr([pipeArg]) })],
+          [ts.obj({ type: ts.str("positional"), args: ts.arr([pipeArg]) }), this.buildStateConfig()],
         );
         return ts.arrowFn([{ name: "__pipeArg" }], ts.await(invokeExpr), { async: true });
       }

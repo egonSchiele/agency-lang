@@ -194,14 +194,13 @@ describe("partial()", () => {
     expect(bound.params[0].name).toBe("b");
   });
 
-  it("empty partial returns clone with same signature", () => {
+  it("empty partial returns same instance", () => {
     const fn = makeFunction([
       { name: "a" },
       { name: "b" },
     ]);
-    const clone = fn.partial({});
-    expect(clone.params).toHaveLength(2);
-    expect(clone).not.toBe(fn);
+    const same = fn.partial({});
+    expect(same).toBe(fn);
   });
 
   it("throws on unknown param name", () => {

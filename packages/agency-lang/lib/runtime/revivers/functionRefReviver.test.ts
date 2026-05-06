@@ -169,3 +169,113 @@ describe("full round-trip: serialize then deserialize", () => {
     functionRefReviver.registry = null;
   });
 });
+
+describe("FunctionRefReviver with bound functions", () => {
+  const reviver = new FunctionRefReviver();
+
+  it("serializes bound function with boundArgs", () => {
+    const registry: Record<string, AgencyFunction> = {};
+    const fn = AgencyFunction.create({
+      name: "add",
+      module: "test",
+      fn: (a: number, b: number) => a + b,
+      params: [
+        { name: "a", hasDefault: false, defaultValue: undefined, variadic: false },
+        { name: "b", hasDefault: false, defaultValue: undefined, variadic: false },
+      ],
+      toolDefinition: null,
+    }, registry);
+    const bound = fn.partial({ a: 5 });
+
+    const serialized = reviver.serialize(bound);
+    expect(serialized.name).toBe("add");
+    expect(serialized.module).toBe("test");
+    expect((serialized as any).boundArgs).toBeDefined();
+    expect((serialized as any).boundArgs.indices).toEqual([0]);
+    expect((serialized as any).boundArgs.values).toEqual([5]);
+  });
+
+  it("revives bound function from serialized data", () => {
+    const registry: Record<string, AgencyFunction> = {};
+    const fn = AgencyFunction.create({
+      name: "add",
+      module: "test",
+      fn: (a: number, b: number) => a + b,
+      params: [
+        { name: "a", hasDefault: false, defaultValue: undefined, variadic: false },
+        { name: "b", hasDefault: false, defaultValue: undefined, variadic: false },
+      ],
+      toolDefinition: null,
+    }, registry);
+    reviver.registry = registry;
+
+    const serialized = {
+      name: "add",
+      module: "test",
+      boundArgs: {
+        indices: [0],
+        values: [5],
+        originalParamCount: 2,
+        originalParams: fn.params,
+      },
+    };
+    const revived = reviver.revive(serialized);
+    expect(revived.params).toHaveLength(1);
+    expect(revived.params[0].name).toBe("b");
+    expect(revived.boundArgs).not.toBeNull();
+  });
+
+  it("revives unbound function unchanged", () => {
+    const registry: Record<string, AgencyFunction> = {};
+    const fn = AgencyFunction.create({
+      name: "add",
+      module: "test",
+      fn: (a: number, b: number) => a + b,
+      params: [
+        { name: "a", hasDefault: false, defaultValue: undefined, variadic: false },
+        { name: "b", hasDefault: false, defaultValue: undefined, variadic: false },
+      ],
+      toolDefinition: null,
+    }, registry);
+    reviver.registry = registry;
+
+    const revived = reviver.revive({ name: "add", module: "test" });
+    expect(revived).toBe(fn);
+    expect(revived.boundArgs).toBeNull();
+  });
+
+  it("validates records with boundArgs", () => {
+    expect(reviver.validate({
+      name: "add",
+      module: "test",
+      boundArgs: { indices: [0], values: [5], originalParamCount: 2, originalParams: [] },
+    })).toBe(true);
+  });
+
+  it("round-trips bound function through JSON", () => {
+    const registry: Record<string, AgencyFunction> = {};
+    const fn = AgencyFunction.create({
+      name: "add",
+      module: "test",
+      fn: (a: number, b: number) => a + b,
+      params: [
+        { name: "a", hasDefault: false, defaultValue: undefined, variadic: false },
+        { name: "b", hasDefault: false, defaultValue: undefined, variadic: false },
+      ],
+      toolDefinition: null,
+    }, registry);
+    const bound = fn.partial({ a: 5 });
+    functionRefReviver.registry = registry;
+
+    const obj = { callback: bound, data: "test" };
+    const json = JSON.stringify(obj, nativeTypeReplacer);
+    const restored = JSON.parse(json, nativeTypeReviver);
+
+    expect(restored.callback.params).toHaveLength(1);
+    expect(restored.callback.params[0].name).toBe("b");
+    expect(restored.callback.boundArgs).not.toBeNull();
+    expect(restored.data).toBe("test");
+
+    functionRefReviver.registry = null;
+  });
+});

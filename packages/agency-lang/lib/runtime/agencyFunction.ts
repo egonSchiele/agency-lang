@@ -163,6 +163,13 @@ export class AgencyFunction {
     });
   }
 
+  describe(description: string): AgencyFunction {
+    const newToolDef = this.toolDefinition
+      ? { ...this.toolDefinition, description }
+      : { name: this.name, description, schema: null };
+    return this.withToolDefinition(newToolDef);
+  }
+
   private mergeWithBound(unboundArgs: unknown[]): unknown[] {
     const totalParams = this.boundArgs!.originalParamCount;
     const fullArgs: unknown[] = new Array(totalParams);

@@ -274,3 +274,79 @@ describe("partial()", () => {
     expect(bound.toolDefinition!.description).toBe("Read a file.\n@param filename - The file");
   });
 });
+
+describe("describe()", () => {
+  it("returns new AgencyFunction with updated description", () => {
+    const fn = AgencyFunction.create({
+      name: "readFile",
+      module: "test",
+      fn: () => {},
+      params: [
+        { name: "filename", hasDefault: false, defaultValue: undefined, variadic: false },
+      ],
+      toolDefinition: {
+        name: "readFile",
+        description: "Original description",
+        schema: {},
+      },
+    }, {});
+    const described = fn.describe("New description");
+    expect(described.toolDefinition!.description).toBe("New description");
+    expect(fn.toolDefinition!.description).toBe("Original description");
+  });
+
+  it("works on function without toolDefinition", () => {
+    const fn = AgencyFunction.create({
+      name: "readFile",
+      module: "test",
+      fn: () => {},
+      params: [],
+      toolDefinition: null,
+    }, {});
+    const described = fn.describe("New description");
+    expect(described.toolDefinition!.description).toBe("New description");
+    expect(described.toolDefinition!.name).toBe("readFile");
+  });
+
+  it("does not mutate original", () => {
+    const fn = AgencyFunction.create({
+      name: "foo",
+      module: "test",
+      fn: () => {},
+      params: [],
+      toolDefinition: { name: "foo", description: "old", schema: {} },
+    }, {});
+    fn.describe("new");
+    expect(fn.toolDefinition!.description).toBe("old");
+  });
+
+  it("empty string clears description", () => {
+    const fn = AgencyFunction.create({
+      name: "foo",
+      module: "test",
+      fn: () => {},
+      params: [],
+      toolDefinition: { name: "foo", description: "old", schema: {} },
+    }, {});
+    const described = fn.describe("");
+    expect(described.toolDefinition!.description).toBe("");
+  });
+
+  it("preserves boundArgs when describing a partial function", () => {
+    const fn = AgencyFunction.create({
+      name: "add",
+      module: "test",
+      fn: (a: number, b: number) => a + b,
+      params: [
+        { name: "a", hasDefault: false, defaultValue: undefined, variadic: false },
+        { name: "b", hasDefault: false, defaultValue: undefined, variadic: false },
+      ],
+      toolDefinition: { name: "add", description: "Add.\n@param a - First\n@param b - Second", schema: {} },
+    }, {});
+    const bound = fn.partial({ a: 5 });
+    const described = bound.describe("Adds 5 to a number");
+    expect(described.boundArgs).not.toBeNull();
+    expect(described.params).toHaveLength(1);
+    expect(described.toolDefinition!.description).toBe("Adds 5 to a number");
+  });
+});

@@ -255,6 +255,65 @@ describe("partial()", () => {
     expect(result).toBe(60);
   });
 
+  it("invoke on chained partial merges all bound values", async () => {
+    const impl = (a: number, b: number, c: number) => a * 100 + b * 10 + c;
+    const fn = AgencyFunction.create({
+      name: "combine",
+      module: "test",
+      fn: impl,
+      params: [
+        { name: "a", hasDefault: false, defaultValue: undefined, variadic: false },
+        { name: "b", hasDefault: false, defaultValue: undefined, variadic: false },
+        { name: "c", hasDefault: false, defaultValue: undefined, variadic: false },
+      ],
+      toolDefinition: null,
+    }, {});
+    const bound1 = fn.partial({ a: 1 });
+    const bound2 = bound1.partial({ c: 3 });
+    const result = await bound2.invoke({ type: "positional", args: [2] });
+    expect(result).toBe(123);
+  });
+
+  it("invoke with middle param bound", async () => {
+    const impl = (a: number, b: number, c: number) => a * 100 + b * 10 + c;
+    const fn = AgencyFunction.create({
+      name: "combine",
+      module: "test",
+      fn: impl,
+      params: [
+        { name: "a", hasDefault: false, defaultValue: undefined, variadic: false },
+        { name: "b", hasDefault: false, defaultValue: undefined, variadic: false },
+        { name: "c", hasDefault: false, defaultValue: undefined, variadic: false },
+      ],
+      toolDefinition: null,
+    }, {});
+    const bound = fn.partial({ b: 5 });
+    const result = await bound.invoke({ type: "positional", args: [1, 3] });
+    expect(result).toBe(153);
+  });
+
+  it("invoke bound function with named args", async () => {
+    const impl = (a: number, b: number, c: number) => a + b + c;
+    const fn = AgencyFunction.create({
+      name: "add3",
+      module: "test",
+      fn: impl,
+      params: [
+        { name: "a", hasDefault: false, defaultValue: undefined, variadic: false },
+        { name: "b", hasDefault: false, defaultValue: undefined, variadic: false },
+        { name: "c", hasDefault: false, defaultValue: undefined, variadic: false },
+      ],
+      toolDefinition: null,
+    }, {});
+    const bound = fn.partial({ a: 10 });
+    const result = await bound.invoke({
+      type: "named",
+      positionalArgs: [],
+      namedArgs: { c: 30, b: 20 },
+    });
+    expect(result).toBe(60);
+  });
+
   it("strips @param lines from tool description", () => {
     const fn = AgencyFunction.create({
       name: "readFile",

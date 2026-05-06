@@ -277,4 +277,27 @@ describe("FunctionRefReviver with bound functions", () => {
 
     functionRefReviver.registry = null;
   });
+
+  it("revived bound function invokes correctly", async () => {
+    const registry: Record<string, AgencyFunction> = {};
+    const fn = AgencyFunction.create({
+      name: "add",
+      module: "test",
+      fn: (a: number, b: number) => a + b,
+      params: [
+        { name: "a", hasDefault: false, defaultValue: undefined, variadic: false },
+        { name: "b", hasDefault: false, defaultValue: undefined, variadic: false },
+      ],
+      toolDefinition: null,
+    }, registry);
+    const bound = fn.partial({ a: 5 });
+    functionRefReviver.registry = registry;
+
+    const json = JSON.stringify({ callback: bound }, nativeTypeReplacer);
+    const restored = JSON.parse(json, nativeTypeReviver);
+    const result = await restored.callback.invoke({ type: "positional", args: [7] });
+    expect(result).toBe(12);
+
+    functionRefReviver.registry = null;
+  });
 });

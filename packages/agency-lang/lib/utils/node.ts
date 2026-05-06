@@ -12,8 +12,19 @@ import {
   nodeScope,
   Scope,
 } from "@/types.js";
+import type { BlockArgument } from "@/types/blockArgument.js";
 import { variableTypeToString } from "@/backends/typescriptGenerator/typeToString.js";
 import { color } from "@/utils/termcolors.js";
+
+/** `BlockArgument` is a child of `FunctionCall`, not a standalone statement,
+ * so it isn't in the `AgencyNode` union. But blocks DO appear on the ancestors
+ * list when `walkNodes` descends into a block body — widen the type so
+ * consumers can match `a.type === "blockArgument"`. */
+export type WalkAncestor = AgencyNode | BlockArgument;
+
+export function isInsideBlock(ancestors: WalkAncestor[]): boolean {
+  return ancestors.some((a) => a.type === "blockArgument");
+}
 
 /** Unwrap a function call argument to its inner expression. */
 function unwrapCallArg(arg: Expression | SplatExpression | NamedArgument): Expression {
@@ -262,9 +273,9 @@ export let walkNodeDebug = false;
 export const setWalkNodeDebug = (value: boolean) => (walkNodeDebug = value);
 export function* walkNodes(
   nodes: AgencyNode[],
-  ancestors: AgencyNode[] = [],
+  ancestors: WalkAncestor[] = [],
   scopes: Scope[] = [],
-): Generator<{ node: AgencyNode; ancestors: AgencyNode[]; scopes: Scope[] }> {
+): Generator<{ node: AgencyNode; ancestors: WalkAncestor[]; scopes: Scope[] }> {
   if (scopes.length === 0) {
     scopes.push(globalScope());
   }
@@ -355,7 +366,11 @@ export function* walkNodes(
         yield* walkNodes([unwrapCallArg(arg) as AgencyNode], [...ancestors, node], scopes);
       }
       if (node.block) {
-        yield* walkNodes(node.block.body, [...ancestors, node], scopes);
+        yield* walkNodes(
+          node.block.body,
+          [...ancestors, node, node.block],
+          scopes,
+        );
       }
     } else if (node.type === "matchBlock") {
       yield* walkNodes([node.expression], [...ancestors, node], scopes);
@@ -423,12 +438,12 @@ export function* walkNodes(
 
 export function walkNodesArray(
   nodes: AgencyNode[],
-  ancestors: AgencyNode[] = [],
+  ancestors: WalkAncestor[] = [],
   scopes: Scope[] = [],
 ) {
   const results: {
     node: AgencyNode;
-    ancestors: AgencyNode[];
+    ancestors: WalkAncestor[];
     scopes: Scope[];
   }[] = [];
   for (const result of walkNodes(nodes, ancestors, scopes)) {

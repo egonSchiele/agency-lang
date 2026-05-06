@@ -63,7 +63,10 @@ export function inferReturnTypeFor(
     for (const { node, ancestors } of walkNodes(def.body)) {
       if (node.type === "returnStatement" && node.value) {
         const insideNested = ancestors.some(
-          (a) => a.type === "function" || a.type === "graphNode",
+          (a) =>
+            a.type === "function" ||
+            a.type === "graphNode" ||
+            a.type === "blockArgument",
         );
         if (!insideNested) {
           returnValues.push(node.value);

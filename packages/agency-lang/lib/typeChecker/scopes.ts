@@ -16,7 +16,7 @@ import { validateTypeReferences } from "./validate.js";
 import { ScopeInfo, TypeCheckerContext } from "./types.js";
 import { Scope } from "./scope.js";
 import { formatTypeHint } from "../cli/util.js";
-import { checkType } from "./utils.js";
+import { checkType, getBlockSlot } from "./utils.js";
 import { NUMBER_T } from "./primitives.js";
 
 export function buildScopes(ctx: TypeCheckerContext): ScopeInfo[] {
@@ -238,9 +238,19 @@ export function walkScopeBody(
         break;
       case "functionCall":
         if (node.block) {
-          for (const param of node.block.params) {
-            scope.declare(param.name, param.typeHint ?? "any");
-          }
+          // Block params today have no syntax for an explicit type annotation,
+          // so the type comes from the matching slot in the callee's
+          // `blockType` param (when present), falling back to `any`. The
+          // `param.typeHint` branch is dead code that anticipates a future
+          // typed-block-param syntax.
+          const slot = getBlockSlot(node.functionName, ctx);
+          node.block.params.forEach((param, i) => {
+            const slotType = slot?.params[i]?.typeAnnotation;
+            scope.declare(
+              param.name,
+              param.typeHint ?? slotType ?? "any",
+            );
+          });
           walkScopeBody(node.block.body, scope, ctx);
         }
         break;

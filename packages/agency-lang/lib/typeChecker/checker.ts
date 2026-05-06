@@ -4,7 +4,7 @@ import {
   FunctionParameter,
   VariableType,
 } from "../types.js";
-import { walkNodes, type WalkAncestor } from "../utils/node.js";
+import { walkNodes, isInsideBlock, type WalkAncestor } from "../utils/node.js";
 import { formatTypeHint } from "../cli/util.js";
 import { BUILTIN_FUNCTION_TYPES } from "./builtins.js";
 import { isAssignable } from "./assignability.js";
@@ -20,6 +20,7 @@ import {
 } from "./utils.js";
 import { Scope } from "./scope.js";
 import { BOOLEAN_T, REGEX_T, STRING_T } from "./primitives.js";
+import type { BlockType } from "../types/typeHints.js";
 
 /**
  * Derive arity bounds and per-position param types from a parameter list,
@@ -430,7 +431,7 @@ function checkReturnTypesInScope(
     if (node.type !== "returnStatement" || !node.value) continue;
     // Returns inside a block belong to the block, not the enclosing function;
     // they're checked against the slot's return type by checkExpressionsInScope.
-    if (ancestors.some((a) => a.type === "blockArgument")) continue;
+    if (isInsideBlock(ancestors)) continue;
     checkType(
       node.value,
       info.returnType,
@@ -451,7 +452,7 @@ function checkReturnTypesInScope(
 function findEnclosingBlockSlot(
   ancestors: WalkAncestor[],
   ctx: TypeCheckerContext,
-) {
+): BlockType | undefined {
   for (let i = ancestors.length - 1; i >= 0; i--) {
     if (ancestors[i].type !== "blockArgument") continue;
     const parent = ancestors[i - 1];

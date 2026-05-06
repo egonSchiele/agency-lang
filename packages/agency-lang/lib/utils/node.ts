@@ -13,13 +13,18 @@ import {
   Scope,
 } from "@/types.js";
 import type { BlockArgument } from "@/types/blockArgument.js";
-
-/** Block bodies can sit on the ancestors list even though `BlockArgument`
- * isn't a member of `AgencyNode` (it's a child of `FunctionCall`, never a
- * standalone statement). Widen the ancestor type so consumers can match it. */
-export type WalkAncestor = AgencyNode | BlockArgument;
 import { variableTypeToString } from "@/backends/typescriptGenerator/typeToString.js";
 import { color } from "@/utils/termcolors.js";
+
+/** `BlockArgument` is a child of `FunctionCall`, not a standalone statement,
+ * so it isn't in the `AgencyNode` union. But blocks DO appear on the ancestors
+ * list when `walkNodes` descends into a block body — widen the type so
+ * consumers can match `a.type === "blockArgument"`. */
+export type WalkAncestor = AgencyNode | BlockArgument;
+
+export function isInsideBlock(ancestors: WalkAncestor[]): boolean {
+  return ancestors.some((a) => a.type === "blockArgument");
+}
 
 /** Unwrap a function call argument to its inner expression. */
 function unwrapCallArg(arg: Expression | SplatExpression | NamedArgument): Expression {

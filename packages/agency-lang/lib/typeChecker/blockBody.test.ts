@@ -12,8 +12,6 @@ function check(source: string): string[] {
 
 describe("block body type-checking", () => {
   it("block return doesn't leak into the enclosing function's return inference", () => {
-    // `return "hello"` belongs to the block, not `main`. Without the fix, it
-    // gets folded into main's inferred return type and fights with `return 42`.
     const errs = check(`
 def twice(b: () => string): string[] {
   return [b(), b()]
@@ -30,8 +28,6 @@ def main(): number {
   });
 
   it("block return is checked against the slot's return type", () => {
-    // Slot says block returns number; literal returns a string — diagnostic
-    // should mention 'block return', not the enclosing function's return.
     const errs = check(`
 def f(b: () => number): number {
   return b()
@@ -47,8 +43,6 @@ def main(): void {
   });
 
   it("block params pick up types from the slot when the literal is unannotated", () => {
-    // Slot is `(number) => void`, so `x` should be number inside the block.
-    // Assigning to `let y: string = x` must error.
     const errs = check(`
 def each(items: number[], cb: (number) => void): void {
   cb(items[0])
@@ -64,8 +58,6 @@ def main(): void {
   });
 
   it("untyped slot leaves block params as any (no spurious errors)", () => {
-    // Callee's block-receiving param has no type annotation, so the literal's
-    // params and returns aren't constrained by a contract.
     const errs = check(`
 def each(items: number[], cb): void {
   print("hi")
@@ -82,8 +74,6 @@ def main(): void {
   });
 
   it("nested block returns are routed to the right slot", () => {
-    // Outer block's return is checked against `outer`'s slot (number).
-    // Inner block's return is checked against `inner`'s slot (string).
     const outerOK = check(`
 def outer(b: () => number): number { return b() }
 def inner(b: () => string): string { return b() }

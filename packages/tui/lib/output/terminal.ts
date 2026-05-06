@@ -10,10 +10,12 @@ const CURSOR_HOME = "\x1b[H";
 
 export class TerminalOutput implements OutputTarget {
   private inAltScreen = false;
+  private exitHandler = () => this.destroy();
 
   init(): void {
     process.stdout.write(ENTER_ALT_SCREEN + HIDE_CURSOR);
     this.inAltScreen = true;
+    process.on("exit", this.exitHandler);
   }
 
   write(frame: Frame): void {
@@ -29,6 +31,7 @@ export class TerminalOutput implements OutputTarget {
       process.stdout.write(SHOW_CURSOR + EXIT_ALT_SCREEN);
       this.inAltScreen = false;
     }
+    process.removeListener("exit", this.exitHandler);
   }
 
   suspend(): void {

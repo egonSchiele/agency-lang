@@ -15,6 +15,10 @@ export class FrameRecorder implements OutputTarget {
     this.frames.push({ frame, label });
   }
 
+  clear(): void {
+    this.frames = [];
+  }
+
   toHTML(): string {
     const frameHtmls = this.frames.map((entry, i) => {
       const label = entry.label ?? `Frame ${i + 1}`;

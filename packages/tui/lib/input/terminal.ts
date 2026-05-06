@@ -60,6 +60,7 @@ export class TerminalInput implements InputSource {
   private dataHandler: ((data: Buffer) => void) | null = null;
   private wasRaw = false;
   private initialized = false;
+  private inLineMode = false;
 
   private ensureInitialized(): void {
     if (this.initialized) return;
@@ -100,7 +101,10 @@ export class TerminalInput implements InputSource {
   }
 
   nextLine(prompt: string): Promise<string> {
-    // Temporarily exit raw mode for line input
+    if (this.inLineMode) {
+      return Promise.reject(new Error("nextLine() already in progress"));
+    }
+    this.inLineMode = true;
     if (process.stdin.isTTY && process.stdin.isRaw) {
       process.stdin.setRawMode(false);
     }
@@ -116,7 +120,7 @@ export class TerminalInput implements InputSource {
     return new Promise<string>((resolve) => {
       rl.question(prompt, (answer) => {
         rl.close();
-        // Re-enter raw mode
+        this.inLineMode = false;
         if (process.stdin.isTTY) {
           process.stdin.setRawMode(true);
           process.stdin.resume();
@@ -138,5 +142,7 @@ export class TerminalInput implements InputSource {
       process.stdin.setRawMode(this.wasRaw);
     }
     process.stdin.pause();
+    this.keyQueue = [];
+    this.keyWaiters = [];
   }
 }

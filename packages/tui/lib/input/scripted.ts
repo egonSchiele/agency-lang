@@ -41,6 +41,9 @@ export class ScriptedInput implements InputSource {
   }
 
   destroy(): void {
-    // Nothing to clean up for scripted input
+    this.keyQueue = [];
+    this.keyWaiters = [];
+    this.lineQueue = [];
+    this.lineWaiters = [];
   }
 }

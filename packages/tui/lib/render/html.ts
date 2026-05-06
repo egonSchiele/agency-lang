@@ -6,10 +6,10 @@ import { flatten } from "./flatten.js";
 
 function cellStyle(cell: Cell): string {
   const parts: string[] = [];
-  if (cell.fg && cell.fg in cssColors) {
+  if (cell.fg && Object.prototype.hasOwnProperty.call(cssColors, cell.fg)) {
     parts.push(`color:${cssColors[cell.fg]}`);
   }
-  if (cell.bg && cell.bg in cssColors) {
+  if (cell.bg && Object.prototype.hasOwnProperty.call(cssColors, cell.bg)) {
     parts.push(`background-color:${cssColors[cell.bg]}`);
   }
   if (cell.bold) {

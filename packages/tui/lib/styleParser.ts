@@ -10,7 +10,7 @@ type StyleEntry =
   | { type: "fg"; color: string }
   | { type: "bg"; color: string };
 
-const TAG_RE = /(?<!\\)\{(\/?)([^}]+)(?<!\\)\}/g;
+const TAG_PATTERN = /(?<!\\)\{(\/?)([^}]+)(?<!\\)\}/g;
 
 function currentStyle(stack: StyleEntry[]): Omit<StyledSpan, "text"> {
   const style: Omit<StyledSpan, "text"> = {};
@@ -54,9 +54,9 @@ export function parseStyledText(input: string): StyledSpan[] {
   const stack: StyleEntry[] = [];
   let lastIndex = 0;
 
-  TAG_RE.lastIndex = 0;
+  const tagRe = new RegExp(TAG_PATTERN.source, TAG_PATTERN.flags);
   let match;
-  while ((match = TAG_RE.exec(input)) !== null) {
+  while ((match = tagRe.exec(input)) !== null) {
     const [fullMatch, isClosing, tagName] = match;
 
     // Text before this tag

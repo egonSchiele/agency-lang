@@ -23,7 +23,6 @@ export type ToolDefinition = {
 export type BoundArgs = {
   indices: number[];
   values: unknown[];
-  originalParamCount: number;
   originalParams: FuncParam[];
 };
 
@@ -69,6 +68,20 @@ export class AgencyFunction {
     });
   }
 
+  withBoundArgs(boundArgs: BoundArgs): AgencyFunction {
+    const unboundParams = boundArgs.originalParams.filter(
+      (_, i) => !boundArgs.indices.includes(i)
+    );
+    return new AgencyFunction({
+      name: this.name,
+      module: this.module,
+      fn: this._fn,
+      params: unboundParams,
+      toolDefinition: this.toolDefinition,
+      boundArgs,
+    });
+  }
+
   getOriginalParams(): FuncParam[] {
     return this.boundArgs ? this.boundArgs.originalParams : this.params;
   }
@@ -85,39 +98,21 @@ export class AgencyFunction {
 
   partial(bindings: Record<string, unknown>): AgencyFunction {
     const originalParams = this.getOriginalParams();
-    const boundNames = Object.keys(bindings);
 
-    // Validate: no unknown param names
-    for (const name of boundNames) {
-      const index = originalParams.findIndex(p => p.name === name);
-      if (index === -1) {
-        throw new Error(`Unknown parameter '${name}' in .partial() call`);
-      }
-    }
-
-    // Validate: no re-binding of already-bound params
-    if (this.boundArgs) {
-      for (const name of boundNames) {
-        const origIndex = originalParams.findIndex(p => p.name === name);
-        if (this.boundArgs.indices.includes(origIndex)) {
-          throw new Error(`Parameter '${name}' is already bound`);
-        }
-      }
-    }
-
-    // Validate: variadic params cannot be bound
-    for (const name of boundNames) {
-      const param = originalParams.find(p => p.name === name);
-      if (param?.variadic) {
-        throw new Error(`Variadic parameter '${name}' cannot be bound`);
-      }
-    }
-
-    // Map param names to indices
+    // Single pass: validate and collect indices/values
     const boundIndices: number[] = [];
     const boundValues: unknown[] = [];
     for (const [name, value] of Object.entries(bindings)) {
       const index = originalParams.findIndex(p => p.name === name);
+      if (index === -1) {
+        throw new Error(`Unknown parameter '${name}' in .partial() call`);
+      }
+      if (this.boundArgs && this.boundArgs.indices.includes(index)) {
+        throw new Error(`Parameter '${name}' is already bound`);
+      }
+      if (originalParams[index].variadic) {
+        throw new Error(`Variadic parameter '${name}' cannot be bound`);
+      }
       boundIndices.push(index);
       boundValues.push(value);
     }
@@ -130,16 +125,13 @@ export class AgencyFunction {
       ? [...this.boundArgs.values, ...boundValues]
       : boundValues;
 
-    const originalParamCount = this.boundArgs
-      ? this.boundArgs.originalParamCount
-      : this.params.length;
-
     // Compute remaining unbound params
     const unboundParams = originalParams.filter(
       (_, i) => !allBoundIndices.includes(i)
     );
 
     // Build reduced tool definition if one exists
+    const boundNames = Object.keys(bindings);
     const newToolDef = this.toolDefinition
       ? {
           ...this.toolDefinition,
@@ -157,7 +149,6 @@ export class AgencyFunction {
       boundArgs: {
         indices: allBoundIndices,
         values: allBoundValues,
-        originalParamCount,
         originalParams,
       },
     });
@@ -171,14 +162,21 @@ export class AgencyFunction {
   }
 
   private mergeWithBound(unboundArgs: unknown[]): unknown[] {
-    const totalParams = this.boundArgs!.originalParamCount;
+    const totalParams = this.boundArgs!.originalParams.length;
+    const indices = this.boundArgs!.indices;
+    const values = this.boundArgs!.values;
     const fullArgs: unknown[] = new Array(totalParams);
     let unboundIdx = 0;
 
+    // Build index→value lookup for O(1) per slot
+    const boundMap: Record<number, unknown> = {};
+    for (let i = 0; i < indices.length; i++) {
+      boundMap[indices[i]] = values[i];
+    }
+
     for (let i = 0; i < totalParams; i++) {
-      const boundPos = this.boundArgs!.indices.indexOf(i);
-      if (boundPos !== -1) {
-        fullArgs[i] = this.boundArgs!.values[boundPos];
+      if (i in boundMap) {
+        fullArgs[i] = boundMap[i];
       } else {
         fullArgs[i] = unboundArgs[unboundIdx++];
       }
@@ -286,11 +284,11 @@ function buildReducedSchema(
   unboundParams: FuncParam[]
 ): any {
   if (!originalSchema || !originalSchema.shape) return originalSchema;
-  const unboundNames = new Set(unboundParams.map(p => p.name));
+  const unboundNames = unboundParams.map(p => p.name);
   const shape = originalSchema.shape;
   const reducedShape: Record<string, any> = {};
   for (const [key, value] of Object.entries(shape)) {
-    if (unboundNames.has(key)) {
+    if (unboundNames.includes(key)) {
       reducedShape[key] = value;
     }
   }

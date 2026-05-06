@@ -215,7 +215,6 @@ describe("FunctionRefReviver with bound functions", () => {
       boundArgs: {
         indices: [0],
         values: [5],
-        originalParamCount: 2,
         originalParams: fn.params,
       },
     };
@@ -248,7 +247,7 @@ describe("FunctionRefReviver with bound functions", () => {
     expect(reviver.validate({
       name: "add",
       module: "test",
-      boundArgs: { indices: [0], values: [5], originalParamCount: 2, originalParams: [] },
+      boundArgs: { indices: [0], values: [5], originalParams: [] },
     })).toBe(true);
   });
 

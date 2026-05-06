@@ -32,7 +32,3 @@ export const knownRegistry: KnownRegistry = {
 export function isRegisteredMethod(typeName: string, methodName: string): boolean {
   return !!knownRegistry.methods[typeName]?.[methodName];
 }
-
-export function isRegisteredFunction(name: string): boolean {
-  return !!knownRegistry.functions[name];
-}

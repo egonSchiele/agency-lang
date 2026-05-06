@@ -65,17 +65,9 @@ export class FunctionRefReviver implements BaseReviver<AgencyFunction> {
       );
     }
 
-    // If boundArgs present, re-apply partial bindings
+    // If boundArgs present, reconstruct bound function directly (skip re-validation)
     if (value.boundArgs) {
-      const boundArgs = value.boundArgs as any;
-      const bindings: Record<string, unknown> = {};
-      const originalParams = boundArgs.originalParams;
-      for (let i = 0; i < boundArgs.indices.length; i++) {
-        const paramIndex = boundArgs.indices[i];
-        const paramName = originalParams[paramIndex].name;
-        bindings[paramName] = boundArgs.values[i];
-      }
-      return original.partial(bindings);
+      return original.withBoundArgs(value.boundArgs as any);
     }
 
     return original;

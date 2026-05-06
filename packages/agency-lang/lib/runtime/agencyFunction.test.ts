@@ -179,8 +179,10 @@ describe("partial()", () => {
       { name: "b" },
     ]);
     const bound = fn.partial({ a: 5 });
-    expect(bound.params).toHaveLength(1);
-    expect(bound.params[0].name).toBe("b");
+    expect(bound.getUnboundParams()).toHaveLength(1);
+    expect(bound.getUnboundParams()[0].name).toBe("b");
+    expect(bound.params[0].isBound).toBe(true);
+    expect(bound.params[0].boundValue).toBe(5);
   });
 
   it("binds multiple params", () => {
@@ -190,8 +192,8 @@ describe("partial()", () => {
       { name: "c" },
     ]);
     const bound = fn.partial({ a: 1, c: 3 });
-    expect(bound.params).toHaveLength(1);
-    expect(bound.params[0].name).toBe("b");
+    expect(bound.getUnboundParams()).toHaveLength(1);
+    expect(bound.getUnboundParams()[0].name).toBe("b");
   });
 
   it("empty partial returns same instance", () => {
@@ -216,8 +218,8 @@ describe("partial()", () => {
     ]);
     const bound1 = fn.partial({ a: 1 });
     const bound2 = bound1.partial({ c: 3 });
-    expect(bound2.params).toHaveLength(1);
-    expect(bound2.params[0].name).toBe("b");
+    expect(bound2.getUnboundParams()).toHaveLength(1);
+    expect(bound2.getUnboundParams()[0].name).toBe("b");
   });
 
   it("throws when re-binding an already-bound param", () => {
@@ -390,7 +392,7 @@ describe("describe()", () => {
     expect(described.toolDefinition!.description).toBe("");
   });
 
-  it("preserves boundArgs when describing a partial function", () => {
+  it("preserves bound params when describing a partial function", () => {
     const fn = AgencyFunction.create({
       name: "add",
       module: "test",
@@ -403,8 +405,8 @@ describe("describe()", () => {
     }, {});
     const bound = fn.partial({ a: 5 });
     const described = bound.describe("Adds 5 to a number");
-    expect(described.boundArgs).not.toBeNull();
-    expect(described.params).toHaveLength(1);
+    expect(described.params[0].isBound).toBe(true);
+    expect(described.getUnboundParams()).toHaveLength(1);
     expect(described.toolDefinition!.description).toBe("Adds 5 to a number");
   });
 });

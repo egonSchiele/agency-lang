@@ -89,7 +89,6 @@ import {
   mapTypeToValidationSchema,
 } from "./typescriptGenerator/typeToZodSchema.js";
 
-import { isRegisteredMethod } from "../knownRegistry.js";
 import { $, ts } from "../ir/builders.js";
 import { printTs } from "../ir/prettyPrint.js";
 import type {
@@ -1046,10 +1045,6 @@ export class TypeScriptBuilder {
         }
         case "methodCall": {
           const fnCall = element.functionCall;
-          if (isRegisteredMethod("AgencyFunction", fnCall.functionName)) {
-            result = this.buildRegisteredMethodCall(result, fnCall);
-            break;
-          }
           const descriptor = this.buildCallDescriptor(fnCall);
           const configObj = this.buildStateConfig();
           const callArgs: TsNode[] = [result, ts.str(fnCall.functionName), descriptor, configObj];
@@ -1072,27 +1067,6 @@ export class TypeScriptBuilder {
 
   private awaitChainCall(callExpr: TsNode, isLast: boolean): TsNode {
     return isLast ? ts.await(callExpr) : ts.raw(`(${this.str(ts.await(callExpr))})`);
-  }
-
-  private buildRegisteredMethodCall(receiver: TsNode, fnCall: FunctionCall): TsNode {
-    const methodName = fnCall.functionName;
-    const args = fnCall.arguments;
-    const hasNamedArgs = args.some((a) => a.type === "namedArgument");
-
-    if (methodName === "partial" && hasNamedArgs) {
-      // .partial(a: 5, b: 10) => .partial({ a: 5, b: 10 })
-      const entries: Record<string, TsNode> = {};
-      for (const arg of args) {
-        if (arg.type === "namedArgument") {
-          entries[arg.name] = this.processNode(arg.value as AgencyNode);
-        }
-      }
-      return ts.call(ts.prop(receiver, "partial"), [ts.obj(entries)]);
-    }
-
-    // Default: pass positional args directly (e.g. .describe("text"))
-    const argNodes = args.map((a) => this.processCallArg(a));
-    return ts.call(ts.prop(receiver, methodName), argNodes);
   }
 
   private processBinOpExpression(node: BinOpExpression): TsNode {
@@ -2669,10 +2643,6 @@ export class TypeScriptBuilder {
           break;
         case "methodCall": {
           const fnCall = el.functionCall;
-          if (isRegisteredMethod("AgencyFunction", fnCall.functionName)) {
-            result = this.buildRegisteredMethodCall(result, fnCall);
-            break;
-          }
           const descriptor = this.buildCallDescriptor(fnCall);
           const configObj = this.buildStateConfig();
 
@@ -3172,15 +3142,13 @@ export class TypeScriptBuilder {
         }
       }
 
-      // Registered method (e.g. .partial()) as pipe stage: call the method to produce
-      // an AgencyFunction, then invoke it with the piped value
-      if (lastElement?.kind === "methodCall" && isRegisteredMethod("AgencyFunction", lastElement.functionCall.functionName)) {
-        const partialExpr = this.processNode(stage);
-        const invokeExpr = ts.call(
-          ts.prop(partialExpr, "invoke"),
-          [ts.obj({ type: ts.str("positional"), args: ts.arr([pipeArg]) }), this.buildStateConfig()],
-        );
-        return ts.arrowFn([{ name: "__pipeArg" }], ts.await(invokeExpr), { async: true });
+      // Method call with args but no placeholder (e.g. multiply.partial(a: 3)):
+      // call the method first to produce a function, then invoke with piped value
+      if (lastElement?.kind === "methodCall" && lastElement.functionCall.arguments.length > 0) {
+        const fnExpr = this.processNode(stage);
+        const descriptor = ts.obj({ type: ts.str("positional"), args: ts.arr([pipeArg]) });
+        const callExpr = ts.call(ts.id("__call"), [fnExpr, descriptor, this.buildStateConfig()]);
+        return ts.arrowFn([{ name: "__pipeArg" }], ts.await(callExpr), { async: true });
       }
 
       // No placeholder: bare method/property reference — use __callMethod to preserve `this`

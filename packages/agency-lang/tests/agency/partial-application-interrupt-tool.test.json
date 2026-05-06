@@ -3,8 +3,13 @@
     {
       "nodeName": "main",
       "input": "",
+      "retry": 3,
       "expectedOutput": "[12,5,7]",
-      "evaluationCriteria": [{ "type": "exact" }],
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
       "description": "partial function as LLM tool survives interrupt with correct schema after revival",
       "interruptHandlers": [
         {

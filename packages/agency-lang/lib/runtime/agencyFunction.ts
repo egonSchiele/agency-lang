@@ -8,6 +8,8 @@ export type FuncParam = {
   hasDefault: boolean;
   defaultValue: unknown;
   variadic: boolean;
+  boundValue?: unknown;
+  isBound?: boolean;
 };
 
 export type CallType =
@@ -20,19 +22,12 @@ export type ToolDefinition = {
   schema: unknown;
 };
 
-export type BoundArgs = {
-  indices: number[];
-  values: unknown[];
-  originalParams: FuncParam[];
-};
-
 export type AgencyFunctionOpts = {
   name: string;
   module: string;
   fn: Function;
   params: FuncParam[];
   toolDefinition: ToolDefinition | null;
-  boundArgs?: BoundArgs | null;
 };
 
 export class AgencyFunction {
@@ -41,10 +36,11 @@ export class AgencyFunction {
   readonly module: string;
   readonly params: FuncParam[];
   readonly toolDefinition: ToolDefinition | null;
-  readonly boundArgs: BoundArgs | null;
   private readonly _fn: Function;
-  private readonly _nonVariadicParams: FuncParam[];
+  private readonly _unboundParams: FuncParam[];
+  private readonly _nonVariadicUnbound: FuncParam[];
   private readonly _hasVariadic: boolean;
+  private readonly _isBound: boolean;
 
   constructor(opts: AgencyFunctionOpts) {
     this.name = opts.name;
@@ -52,9 +48,23 @@ export class AgencyFunction {
     this._fn = opts.fn;
     this.params = opts.params;
     this.toolDefinition = opts.toolDefinition;
-    this.boundArgs = opts.boundArgs ?? null;
-    this._nonVariadicParams = opts.params.filter(p => !p.variadic);
-    this._hasVariadic = opts.params.length > 0 && opts.params[opts.params.length - 1].variadic;
+    this._unboundParams = opts.params.filter(p => !p.isBound);
+    this._nonVariadicUnbound = this._unboundParams.filter(p => !p.variadic);
+    this._hasVariadic = this._unboundParams.length > 0 && this._unboundParams[this._unboundParams.length - 1].variadic;
+    this._isBound = opts.params.some(p => p.isBound);
+  }
+
+  get boundArgs(): { indices: number[]; values: unknown[]; originalParams: FuncParam[] } | null {
+    if (!this._isBound) return null;
+    const indices: number[] = [];
+    const values: unknown[] = [];
+    for (let i = 0; i < this.params.length; i++) {
+      if (this.params[i].isBound) {
+        indices.push(i);
+        values.push(this.params[i].boundValue);
+      }
+    }
+    return { indices, values, originalParams: this.params };
   }
 
   withToolDefinition(toolDefinition: ToolDefinition | null): AgencyFunction {
@@ -64,40 +74,19 @@ export class AgencyFunction {
       fn: this._fn,
       params: this.params,
       toolDefinition,
-      boundArgs: this.boundArgs,
-    });
-  }
-
-  withBoundArgs(boundArgs: BoundArgs): AgencyFunction {
-    const unboundParams = boundArgs.originalParams.filter(
-      (_, i) => !boundArgs.indices.includes(i)
-    );
-    // Re-derive reduced toolDefinition from bound state
-    let toolDef = this.toolDefinition;
-    if (toolDef) {
-      const boundNames = boundArgs.indices.map(i => boundArgs.originalParams[i].name);
-      toolDef = {
-        ...toolDef,
-        description: stripBoundParams(toolDef.description, boundNames),
-        schema: buildReducedSchema(toolDef.schema, unboundParams),
-      };
-    }
-    return new AgencyFunction({
-      name: this.name,
-      module: this.module,
-      fn: this._fn,
-      params: unboundParams,
-      toolDefinition: toolDef,
-      boundArgs,
     });
   }
 
   getOriginalParams(): FuncParam[] {
-    return this.boundArgs ? this.boundArgs.originalParams : this.params;
+    return this.params;
+  }
+
+  getUnboundParams(): FuncParam[] {
+    return this._unboundParams;
   }
 
   async invoke(descriptor: CallType, state?: unknown): Promise<unknown> {
-    if (this.boundArgs) {
+    if (this._isBound) {
       const callArgs = this.resolveArgs(descriptor);
       const fullArgs = this.mergeWithBound(callArgs);
       return this._fn(...fullArgs, state);
@@ -109,38 +98,29 @@ export class AgencyFunction {
   partial(bindings: Record<string, unknown>): AgencyFunction {
     if (Object.keys(bindings).length === 0) return this;
 
-    const originalParams = this.getOriginalParams();
-
-    // Single pass: validate and collect indices/values
-    const boundIndices: number[] = [];
-    const boundValues: unknown[] = [];
-    for (const [name, value] of Object.entries(bindings)) {
-      const index = originalParams.findIndex(p => p.name === name);
-      if (index === -1) {
+    // Single pass: validate bindings against full param list
+    for (const name of Object.keys(bindings)) {
+      const param = this.params.find(p => p.name === name);
+      if (!param) {
         throw new Error(`Unknown parameter '${name}' in .partial() call`);
       }
-      if (this.boundArgs && this.boundArgs.indices.includes(index)) {
+      if (param.isBound) {
         throw new Error(`Parameter '${name}' is already bound`);
       }
-      if (originalParams[index].variadic) {
+      if (param.variadic) {
         throw new Error(`Variadic parameter '${name}' cannot be bound`);
       }
-      boundIndices.push(index);
-      boundValues.push(value);
     }
 
-    // Compute cumulative bound state
-    const allBoundIndices = this.boundArgs
-      ? [...this.boundArgs.indices, ...boundIndices]
-      : boundIndices;
-    const allBoundValues = this.boundArgs
-      ? [...this.boundArgs.values, ...boundValues]
-      : boundValues;
+    // Build new params with bound values set
+    const newParams = this.params.map(p => {
+      if (p.name in bindings) {
+        return { ...p, isBound: true, boundValue: bindings[p.name] };
+      }
+      return p;
+    });
 
-    // Compute remaining unbound params
-    const unboundParams = originalParams.filter(
-      (_, i) => !allBoundIndices.includes(i)
-    );
+    const unboundParams = newParams.filter(p => !p.isBound);
 
     // Build reduced tool definition if one exists
     const boundNames = Object.keys(bindings);
@@ -156,13 +136,8 @@ export class AgencyFunction {
       name: this.name,
       module: this.module,
       fn: this._fn,
-      params: unboundParams,
+      params: newParams,
       toolDefinition: newToolDef,
-      boundArgs: {
-        indices: allBoundIndices,
-        values: allBoundValues,
-        originalParams,
-      },
     });
   }
 
@@ -174,23 +149,13 @@ export class AgencyFunction {
   }
 
   private mergeWithBound(unboundArgs: unknown[]): unknown[] {
-    const totalParams = this.boundArgs!.originalParams.length;
-    const indices = this.boundArgs!.indices;
-    const values = this.boundArgs!.values;
-    const fullArgs: unknown[] = new Array(totalParams);
+    const fullArgs: unknown[] = [];
     let unboundIdx = 0;
-
-    // Build index→value lookup for O(1) per slot
-    const boundMap: Record<number, unknown> = {};
-    for (let i = 0; i < indices.length; i++) {
-      boundMap[indices[i]] = values[i];
-    }
-
-    for (let i = 0; i < totalParams; i++) {
-      if (i in boundMap) {
-        fullArgs[i] = boundMap[i];
+    for (const param of this.params) {
+      if (param.isBound) {
+        fullArgs.push(param.boundValue);
       } else {
-        fullArgs[i] = unboundArgs[unboundIdx++];
+        fullArgs.push(unboundArgs[unboundIdx++]);
       }
     }
     return fullArgs;
@@ -205,23 +170,23 @@ export class AgencyFunction {
 
   private resolvePositional(args: unknown[]): unknown[] {
     // Fast path: exact arg count, no variadics — no work needed
-    if (args.length === this._nonVariadicParams.length && !this._hasVariadic) {
+    if (args.length === this._nonVariadicUnbound.length && !this._hasVariadic) {
       return args;
     }
 
     // Pad missing optional args with UNSET
     let result = args;
-    if (args.length < this._nonVariadicParams.length) {
+    if (args.length < this._nonVariadicUnbound.length) {
       result = [...args];
-      for (let i = args.length; i < this._nonVariadicParams.length; i++) {
-        if (!this._nonVariadicParams[i].hasDefault) break;
+      for (let i = args.length; i < this._nonVariadicUnbound.length; i++) {
+        if (!this._nonVariadicUnbound[i].hasDefault) break;
         result.push(UNSET);
       }
     }
 
     // Wrap trailing args for variadic param
     if (this._hasVariadic) {
-      const nonVariadicCount = this._nonVariadicParams.length;
+      const nonVariadicCount = this._nonVariadicUnbound.length;
       const regularArgs = result.slice(0, nonVariadicCount);
       const variadicArgs = result.slice(nonVariadicCount);
       regularArgs.push(variadicArgs);
@@ -234,7 +199,7 @@ export class AgencyFunction {
   private resolveNamed(positionalArgs: unknown[], namedArgs: Record<string, unknown>): unknown[] {
     // Validate named args: no unknowns, no conflicts with positional
     for (const name of Object.keys(namedArgs)) {
-      const paramIdx = this._nonVariadicParams.findIndex(p => p.name === name);
+      const paramIdx = this._nonVariadicUnbound.findIndex(p => p.name === name);
       if (paramIdx === -1) {
         throw new Error(
           `Unknown named argument '${name}' in call to '${this.name}'`,
@@ -250,12 +215,12 @@ export class AgencyFunction {
     // Build result: positional args first, then fill from named args in parameter order
     const result: unknown[] = [...positionalArgs];
 
-    for (let i = positionalArgs.length; i < this._nonVariadicParams.length; i++) {
-      const param = this._nonVariadicParams[i];
+    for (let i = positionalArgs.length; i < this._nonVariadicUnbound.length; i++) {
+      const param = this._nonVariadicUnbound[i];
       if (Object.hasOwn(namedArgs, param.name)) {
         result.push(namedArgs[param.name]);
       } else if (param.hasDefault) {
-        const hasLaterNamedArg = this._nonVariadicParams
+        const hasLaterNamedArg = this._nonVariadicUnbound
           .slice(i + 1)
           .some(p => p.name in namedArgs);
         if (hasLaterNamedArg) {

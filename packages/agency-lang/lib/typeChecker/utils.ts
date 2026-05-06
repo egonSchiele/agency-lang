@@ -1,4 +1,5 @@
 import { AgencyNode, FunctionParameter, VariableType } from "../types.js";
+import type { BlockType } from "../types/typeHints.js";
 import { formatTypeHint } from "../cli/util.js";
 import { isAssignable, resolveType } from "./assignability.js";
 import { synthType } from "./synthesizer.js";
@@ -18,6 +19,23 @@ export function getParamsForNodeOrFunc(
   const def =
     ctx.functionDefs[name] ?? ctx.nodeDefs[name] ?? ctx.importedFunctions[name];
   return def?.parameters;
+}
+
+/**
+ * If the named callable's last parameter is `blockType`, return that signature
+ * — the slot a trailing/inline block fills. Returns undefined for callables
+ * whose block param is untyped, `any`, or absent (block bodies in those cases
+ * keep their literal annotations and aren't checked against a contract).
+ */
+export function getBlockSlot(
+  name: string,
+  ctx: TypeCheckerContext,
+): BlockType | undefined {
+  const params = getParamsForNodeOrFunc(name, ctx);
+  if (!params || params.length === 0) return undefined;
+  const last = params[params.length - 1];
+  if (last.typeHint?.type !== "blockType") return undefined;
+  return last.typeHint;
 }
 
 export function isAnyType(t: VariableType): boolean {

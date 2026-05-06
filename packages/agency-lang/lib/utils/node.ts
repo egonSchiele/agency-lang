@@ -12,6 +12,12 @@ import {
   nodeScope,
   Scope,
 } from "@/types.js";
+import type { BlockArgument } from "@/types/blockArgument.js";
+
+/** Block bodies can sit on the ancestors list even though `BlockArgument`
+ * isn't a member of `AgencyNode` (it's a child of `FunctionCall`, never a
+ * standalone statement). Widen the ancestor type so consumers can match it. */
+export type WalkAncestor = AgencyNode | BlockArgument;
 import { variableTypeToString } from "@/backends/typescriptGenerator/typeToString.js";
 import { color } from "@/utils/termcolors.js";
 
@@ -262,9 +268,9 @@ export let walkNodeDebug = false;
 export const setWalkNodeDebug = (value: boolean) => (walkNodeDebug = value);
 export function* walkNodes(
   nodes: AgencyNode[],
-  ancestors: AgencyNode[] = [],
+  ancestors: WalkAncestor[] = [],
   scopes: Scope[] = [],
-): Generator<{ node: AgencyNode; ancestors: AgencyNode[]; scopes: Scope[] }> {
+): Generator<{ node: AgencyNode; ancestors: WalkAncestor[]; scopes: Scope[] }> {
   if (scopes.length === 0) {
     scopes.push(globalScope());
   }
@@ -355,7 +361,11 @@ export function* walkNodes(
         yield* walkNodes([unwrapCallArg(arg) as AgencyNode], [...ancestors, node], scopes);
       }
       if (node.block) {
-        yield* walkNodes(node.block.body, [...ancestors, node], scopes);
+        yield* walkNodes(
+          node.block.body,
+          [...ancestors, node, node.block],
+          scopes,
+        );
       }
     } else if (node.type === "matchBlock") {
       yield* walkNodes([node.expression], [...ancestors, node], scopes);
@@ -419,12 +429,12 @@ export function* walkNodes(
 
 export function walkNodesArray(
   nodes: AgencyNode[],
-  ancestors: AgencyNode[] = [],
+  ancestors: WalkAncestor[] = [],
   scopes: Scope[] = [],
 ) {
   const results: {
     node: AgencyNode;
-    ancestors: AgencyNode[];
+    ancestors: WalkAncestor[];
     scopes: Scope[];
   }[] = [];
   for (const result of walkNodes(nodes, ancestors, scopes)) {

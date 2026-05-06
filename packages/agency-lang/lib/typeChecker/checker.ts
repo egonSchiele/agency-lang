@@ -4,7 +4,7 @@ import {
   FunctionParameter,
   VariableType,
 } from "../types.js";
-import { walkNodes } from "../utils/node.js";
+import { walkNodes, type WalkAncestor } from "../utils/node.js";
 import { formatTypeHint } from "../cli/util.js";
 import { BUILTIN_FUNCTION_TYPES } from "./builtins.js";
 import { isAssignable } from "./assignability.js";
@@ -15,6 +15,7 @@ import {
   checkType,
   isAnyType,
   getParamsForNodeOrFunc,
+  getBlockSlot,
   checkExcessObjectProperties,
 } from "./utils.js";
 import { Scope } from "./scope.js";
@@ -425,28 +426,65 @@ function checkReturnTypesInScope(
 ): void {
   if (!info.returnType) return;
 
-  for (const { node } of walkNodes(info.body)) {
-    if (node.type === "returnStatement" && node.value) {
-      checkType(
-        node.value,
-        info.returnType,
-        info.scope,
-        `return in '${info.name}'`,
-        ctx,
-      );
-    }
+  for (const { node, ancestors } of walkNodes(info.body)) {
+    if (node.type !== "returnStatement" || !node.value) continue;
+    // Returns inside a block belong to the block, not the enclosing function;
+    // they're checked against the slot's return type by checkExpressionsInScope.
+    if (ancestors.some((a) => a.type === "blockArgument")) continue;
+    checkType(
+      node.value,
+      info.returnType,
+      info.scope,
+      `return in '${info.name}'`,
+      ctx,
+    );
   }
+}
+
+/**
+ * Find the `blockType` slot for the innermost enclosing block, if any.
+ * `walkNodes` includes the `blockArgument` AST node in `ancestors` when
+ * descending into a block body, so the innermost `blockArgument` ancestor
+ * marks "we're inside a block" and the immediately preceding ancestor is
+ * the call that received it.
+ */
+function findEnclosingBlockSlot(
+  ancestors: WalkAncestor[],
+  ctx: TypeCheckerContext,
+) {
+  for (let i = ancestors.length - 1; i >= 0; i--) {
+    if (ancestors[i].type !== "blockArgument") continue;
+    const parent = ancestors[i - 1];
+    if (parent?.type !== "functionCall") return undefined;
+    return getBlockSlot(parent.functionName, ctx);
+  }
+  return undefined;
 }
 
 function checkExpressionsInScope(
   info: ScopeInfo,
   ctx: TypeCheckerContext,
 ): void {
-  for (const { node } of walkNodes(info.body)) {
+  for (const { node, ancestors } of walkNodes(info.body)) {
     if (node.type === "valueAccess") {
       synthType(node, info.scope, ctx);
     } else if (node.type === "returnStatement" && node.value) {
-      synthType(node.value, info.scope, ctx);
+      // A return inside a block body belongs to the block, not the enclosing
+      // function. If the block fills a typed slot, check the return value
+      // against the slot's declared return type. (Inference for the enclosing
+      // function already excludes block returns — see inference.ts.)
+      const blockSlot = findEnclosingBlockSlot(ancestors, ctx);
+      if (blockSlot) {
+        checkType(
+          node.value,
+          blockSlot.returnType,
+          info.scope,
+          "block return",
+          ctx,
+        );
+      } else {
+        synthType(node.value, info.scope, ctx);
+      }
     } else if (node.type === "ifElse" || node.type === "whileLoop") {
       checkType(node.condition, BOOLEAN_T, info.scope, "condition", ctx);
     } else if (node.type === "binOpExpression" && node.operator === "catch") {

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { stripBoundParams } from "./stripBoundParams";
+import { stripBoundParams } from "./stripBoundParams.js";
 
 export const UNSET: unique symbol = Symbol("UNSET");
 

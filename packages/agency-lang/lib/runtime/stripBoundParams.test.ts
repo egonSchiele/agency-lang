@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { stripBoundParams } from "./stripBoundParams";
+import { stripBoundParams } from "./stripBoundParams.js";
 
 describe("stripBoundParams", () => {
   it("strips single @param line for bound param", () => {

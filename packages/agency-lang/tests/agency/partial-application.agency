@@ -1,0 +1,23 @@
+def add(a: number, b: number): number {
+  return a + b
+}
+
+def add3(a: number, b: number, c: number): number {
+  return a + b + c
+}
+
+node testBasic() {
+  const add5 = add.partial(a: 5)
+  return add5(7)
+}
+
+node testChained() {
+  const add5 = add3.partial(a: 5)
+  const add5and2 = add5.partial(b: 2)
+  return add5and2(10)
+}
+
+node testDescribe() {
+  const tool = add.partial(a: 5).describe("Adds 5 to a number")
+  return tool(3)
+}

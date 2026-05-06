@@ -6,13 +6,11 @@ import { flatten } from "./flatten.js";
 
 function cellStyle(cell: Cell): string {
   const parts: string[] = [];
-  if (cell.fg) {
-    const color = cssColors[cell.fg] ?? cell.fg;
-    parts.push(`color:${color}`);
+  if (cell.fg && cell.fg in cssColors) {
+    parts.push(`color:${cssColors[cell.fg]}`);
   }
-  if (cell.bg) {
-    const color = cssColors[cell.bg] ?? cell.bg;
-    parts.push(`background-color:${color}`);
+  if (cell.bg && cell.bg in cssColors) {
+    parts.push(`background-color:${cssColors[cell.bg]}`);
   }
   if (cell.bold) {
     parts.push("font-weight:bold");

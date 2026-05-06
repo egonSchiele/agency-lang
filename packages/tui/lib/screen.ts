@@ -39,6 +39,6 @@ export class Screen {
 
   destroy(): void {
     this.input.destroy();
-    if (this.output.flush) this.output.flush();
+    if (this.output.destroy) this.output.destroy();
   }
 }

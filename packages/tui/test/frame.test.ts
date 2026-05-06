@@ -43,4 +43,20 @@ describe("Frame", () => {
     });
     expect(frame.toPlainText()).toContain("hello");
   });
+
+  it("toPlainText works on nested frame with non-zero x/y via findByKey", () => {
+    const frame = new Frame({
+      x: 0, y: 0, width: 80, height: 24, style: {},
+      children: [
+        new Frame({
+          key: "child", x: 10, y: 5, width: 5, height: 1, style: {},
+          content: [[
+            { char: "A" }, { char: "B" }, { char: "C" }, { char: " " }, { char: " " },
+          ]],
+        }),
+      ],
+    });
+    const child = frame.findByKey("child")!;
+    expect(child.toPlainText()).toContain("ABC");
+  });
 });

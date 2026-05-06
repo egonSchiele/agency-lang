@@ -10,7 +10,7 @@ type StyleEntry =
   | { type: "fg"; color: string }
   | { type: "bg"; color: string };
 
-const TAG_RE = /\{(\/?)([^}]+)\}/g;
+const TAG_RE = /(?<!\\)\{(\/?)([^}]+)(?<!\\)\}/g;
 
 function currentStyle(stack: StyleEntry[]): Omit<StyledSpan, "text"> {
   const style: Omit<StyledSpan, "text"> = {};
@@ -22,12 +22,22 @@ function currentStyle(stack: StyleEntry[]): Omit<StyledSpan, "text"> {
   return style;
 }
 
+function unescape(text: string): string {
+  return text.replace(/\\([{}])/g, "$1");
+}
+
 function makeSpan(text: string, style: Omit<StyledSpan, "text">): StyledSpan {
-  const span: StyledSpan = { text };
+  const span: StyledSpan = { text: unescape(text) };
   if (style.bold) span.bold = true;
   if (style.fg) span.fg = style.fg;
   if (style.bg) span.bg = style.bg;
   return span;
+}
+
+function matchesEntry(a: StyleEntry, b: StyleEntry): boolean {
+  if (a.type !== b.type) return false;
+  if (a.type === "bold") return true;
+  return (a as { color: string }).color === (b as { color: string }).color;
 }
 
 function parseTag(tag: string): StyleEntry | null {
@@ -58,9 +68,8 @@ export function parseStyledText(input: string): StyledSpan[] {
     const entry = parseTag(tagName);
     if (entry) {
       if (isClosing) {
-        // Pop matching entry from stack
         for (let i = stack.length - 1; i >= 0; i--) {
-          if (stack[i].type === entry.type) {
+          if (matchesEntry(stack[i], entry)) {
             stack.splice(i, 1);
             break;
           }

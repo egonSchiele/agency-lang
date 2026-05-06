@@ -35,6 +35,19 @@ describe("parseStyledText", () => {
   it("returns empty array for empty string", () => {
     expect(parseStyledText("")).toEqual([]);
   });
+
+  it("escaped braces are not parsed as tags", () => {
+    const result = parseStyledText(escapeStyleTags("{bold}hello{/bold}"));
+    expect(result).toEqual([{ text: "{bold}hello{/bold}" }]);
+  });
+
+  it("closing tag matches by type and color", () => {
+    const result = parseStyledText("{red-fg}{green-fg}x{/green-fg}y{/red-fg}");
+    expect(result).toEqual([
+      { text: "x", fg: "green" },
+      { text: "y", fg: "red" },
+    ]);
+  });
 });
 
 describe("escapeStyleTags", () => {

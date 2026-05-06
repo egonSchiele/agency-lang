@@ -59,6 +59,13 @@ export class TerminalInput implements InputSource {
   private keyQueue: KeyEvent[] = [];
   private dataHandler: ((data: Buffer) => void) | null = null;
   private wasRaw = false;
+  private initialized = false;
+
+  private ensureInitialized(): void {
+    if (this.initialized) return;
+    this.initialized = true;
+    this.init();
+  }
 
   init(): void {
     if (!process.stdin.isTTY) return;
@@ -82,6 +89,7 @@ export class TerminalInput implements InputSource {
   }
 
   nextKey(): Promise<KeyEvent> {
+    this.ensureInitialized();
     const queued = this.keyQueue.shift();
     if (queued) return Promise.resolve(queued);
     return new Promise((resolve) => {

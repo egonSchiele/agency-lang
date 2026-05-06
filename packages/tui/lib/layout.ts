@@ -65,6 +65,8 @@ function layoutRoot(
  * Lay out a child element. The parent has already resolved the main-axis
  * size. The child resolves only its cross-axis size.
  */
+type AlignItems = "flex-start" | "center" | "flex-end" | "stretch";
+
 function layoutChild(
   element: Element,
   x: number,
@@ -72,17 +74,37 @@ function layoutChild(
   mainAxisSize: number,
   crossAxisAvailable: number,
   mainAxis: "width" | "height",
+  alignItems: AlignItems,
 ): PositionedElement {
   const style = element.style ?? {};
   const margin = resolveEdges(style.margin);
 
   const crossAxis = mainAxis === "width" ? "height" : "width";
 
+  // For stretch (default), fill available cross space.
+  // For other alignments, use child's own size if specified.
   const crossProp = style[crossAxis];
-  let crossDim = resolveDimension(crossProp, crossAxisAvailable) ?? crossAxisAvailable;
+  let crossDim: number;
+  if (alignItems === "stretch") {
+    crossDim = resolveDimension(crossProp, crossAxisAvailable) ?? crossAxisAvailable;
+  } else {
+    crossDim = resolveDimension(crossProp, crossAxisAvailable) ?? crossAxisAvailable;
+  }
   const crossMin = crossAxis === "width" ? style.minWidth : style.minHeight;
   const crossMax = crossAxis === "width" ? style.maxWidth : style.maxHeight;
   crossDim = clampDimension(crossDim, crossMin, crossMax);
+
+  // Cross-axis offset based on alignItems
+  let crossOffset = 0;
+  if (alignItems === "center") {
+    crossOffset = Math.floor((crossAxisAvailable - crossDim) / 2);
+  } else if (alignItems === "flex-end") {
+    crossOffset = crossAxisAvailable - crossDim;
+  }
+
+  const isRow = mainAxis === "width";
+  const adjustedX = x + (isRow ? 0 : crossOffset);
+  const adjustedY = y + (isRow ? crossOffset : 0);
 
   const width = mainAxis === "width" ? mainAxisSize : crossDim;
   const height = mainAxis === "height" ? mainAxisSize : crossDim;
@@ -90,8 +112,8 @@ function layoutChild(
 
   const result: PositionedElement = {
     ...rest,
-    resolvedX: x + margin.left,
-    resolvedY: y + margin.top,
+    resolvedX: adjustedX + margin.left,
+    resolvedY: adjustedY + margin.top,
     resolvedWidth: width,
     resolvedHeight: height,
   };
@@ -174,7 +196,27 @@ function layoutChildren(
   }
 
   // --- Pass 3: position children and recurse ---
+  // Compute total used main-axis space (after flex distribution)
+  let totalUsedMain = 0;
+  for (let i = 0; i < visibleChildren.length; i++) {
+    const m = childMargins[i];
+    const marginSum = isRow ? m.left + m.right : m.top + m.bottom;
+    totalUsedMain += childMainSizes[i]! + marginSum;
+  }
+  const freeMain = Math.max(0, mainSize - totalUsedMain);
+
+  const justify = style.justifyContent ?? "flex-start";
   let mainOffset = 0;
+  let gap = 0;
+  if (justify === "flex-end") {
+    mainOffset = freeMain;
+  } else if (justify === "center") {
+    mainOffset = Math.floor(freeMain / 2);
+  } else if (justify === "space-between" && visibleChildren.length > 1) {
+    gap = Math.floor(freeMain / (visibleChildren.length - 1));
+  }
+
+  const alignItems: AlignItems = style.alignItems ?? "stretch";
   const positionedChildren: PositionedElement[] = [];
 
   for (let i = 0; i < visibleChildren.length; i++) {
@@ -188,17 +230,18 @@ function layoutChildren(
     if (isRow) {
       childX = innerX + mainOffset;
       childY = innerY;
-      mainOffset += childMainSize + childMargin.left + childMargin.right;
+      mainOffset += childMainSize + childMargin.left + childMargin.right + gap;
     } else {
       childX = innerX;
       childY = innerY + mainOffset;
-      mainOffset += childMainSize + childMargin.top + childMargin.bottom;
+      mainOffset += childMainSize + childMargin.top + childMargin.bottom + gap;
     }
 
     const positioned = layoutChild(
       child, childX, childY,
       childMainSize, crossSize,
       mainAxis,
+      alignItems,
     );
     positionedChildren.push(positioned);
   }

@@ -77,6 +77,9 @@ export function parseStyledText(input: string): StyledSpan[] {
       } else {
         stack.push(entry);
       }
+    } else {
+      // Unrecognized tag — treat as literal text
+      spans.push(makeSpan(fullMatch, currentStyle(stack)));
     }
 
     lastIndex = match.index + fullMatch.length;

@@ -68,7 +68,9 @@ export class TerminalInput implements InputSource {
   }
 
   init(): void {
-    if (!process.stdin.isTTY) return;
+    if (!process.stdin.isTTY) {
+      throw new Error("TerminalInput requires a TTY stdin");
+    }
 
     this.wasRaw = process.stdin.isRaw;
     process.stdin.setRawMode(true);

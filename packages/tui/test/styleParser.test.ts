@@ -48,6 +48,15 @@ describe("parseStyledText", () => {
       { text: "y", fg: "red" },
     ]);
   });
+
+  it("unrecognized tags are preserved as literal text", () => {
+    const result = parseStyledText("hello {unknown} world");
+    expect(result).toEqual([
+      { text: "hello " },
+      { text: "{unknown}" },
+      { text: " world" },
+    ]);
+  });
 });
 
 describe("escapeStyleTags", () => {

@@ -150,4 +150,66 @@ describe("layout", () => {
     const result = layout(el, 80, 24);
     expect(result.resolvedHeight).toBe(12);
   });
+
+  it("justifyContent flex-end pushes children to end", () => {
+    const el = column({ justifyContent: "flex-end" },
+      box({ key: "a", height: 5 }),
+    );
+    const result = layout(el, 80, 24);
+    const a = result.children!.find(c => c.key === "a")!;
+    expect(a.resolvedY).toBe(19); // 24 - 5
+  });
+
+  it("justifyContent center centers children", () => {
+    const el = row({ justifyContent: "center" },
+      box({ key: "a", width: 20 }),
+    );
+    const result = layout(el, 80, 24);
+    const a = result.children!.find(c => c.key === "a")!;
+    expect(a.resolvedX).toBe(30); // (80 - 20) / 2
+  });
+
+  it("justifyContent space-between distributes gaps", () => {
+    const el = row({ justifyContent: "space-between" },
+      box({ key: "a", width: 10 }),
+      box({ key: "b", width: 10 }),
+      box({ key: "c", width: 10 }),
+    );
+    const result = layout(el, 80, 24);
+    const a = result.children!.find(c => c.key === "a")!;
+    const b = result.children!.find(c => c.key === "b")!;
+    const c = result.children!.find(c => c.key === "c")!;
+    expect(a.resolvedX).toBe(0);
+    // gap = floor((80 - 30) / 2) = 25
+    expect(b.resolvedX).toBe(35); // 0 + 10 + 25
+    expect(c.resolvedX).toBe(70); // 35 + 10 + 25
+  });
+
+  it("alignItems center centers children on cross axis", () => {
+    const el = row({ alignItems: "center" },
+      box({ key: "a", width: 20, height: 10 }),
+    );
+    const result = layout(el, 80, 24);
+    const a = result.children!.find(c => c.key === "a")!;
+    expect(a.resolvedY).toBe(7); // (24 - 10) / 2
+    expect(a.resolvedHeight).toBe(10);
+  });
+
+  it("alignItems flex-end positions children at cross axis end", () => {
+    const el = row({ alignItems: "flex-end" },
+      box({ key: "a", width: 20, height: 10 }),
+    );
+    const result = layout(el, 80, 24);
+    const a = result.children!.find(c => c.key === "a")!;
+    expect(a.resolvedY).toBe(14); // 24 - 10
+  });
+
+  it("alignItems stretch fills cross axis (default)", () => {
+    const el = row(
+      box({ key: "a", width: 20 }),
+    );
+    const result = layout(el, 80, 24);
+    const a = result.children!.find(c => c.key === "a")!;
+    expect(a.resolvedHeight).toBe(24);
+  });
 });

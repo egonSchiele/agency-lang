@@ -238,9 +238,11 @@ export function walkScopeBody(
         break;
       case "functionCall":
         if (node.block) {
-          // Block params are typed (in priority order): an explicit annotation
-          // on the literal (`as x: T { ... }`); otherwise the matching slot
-          // type from the callee's `blockType` param; otherwise `any`.
+          // Block params today have no syntax for an explicit type annotation,
+          // so the type comes from the matching slot in the callee's
+          // `blockType` param (when present), falling back to `any`. The
+          // `param.typeHint` branch is dead code that anticipates a future
+          // typed-block-param syntax.
           const slot = getBlockSlot(node.functionName, ctx);
           node.block.params.forEach((param, i) => {
             const slotType = slot?.params[i]?.typeAnnotation;

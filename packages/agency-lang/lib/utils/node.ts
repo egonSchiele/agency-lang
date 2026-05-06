@@ -413,6 +413,10 @@ export function* walkNodes(
     } else if (node.type === "binOpExpression") {
       yield* walkNodes([node.left], [...ancestors, node], scopes);
       yield* walkNodes([node.right], [...ancestors, node], scopes);
+    } else if (node.type === "interruptStatement") {
+      for (const arg of node.arguments) {
+        yield* walkNodes([unwrapCallArg(arg) as AgencyNode], [...ancestors, node], scopes);
+      }
     }
   }
 }

@@ -1,0 +1,10 @@
+def guardedAction(dir: string, filename: string): string {
+  const check = interrupt("Are you sure you want to read ${dir}/${filename}?")
+  return "${dir}/${filename}"
+}
+
+node main() {
+  const tool = guardedAction.partial(dir: "/safe")
+  const result = tool("secret.txt")
+  return result
+}

@@ -1,0 +1,18 @@
+{
+  "tests": [
+    {
+      "nodeName": "testGlobalPartial",
+      "input": "",
+      "expectedOutput": "15",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "global-scope .partial() function works when called from a node"
+    },
+    {
+      "nodeName": "testGlobalChain",
+      "input": "",
+      "expectedOutput": "16",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "multiple global-scope partials can be composed"
+    }
+  ]
+}

@@ -1,0 +1,19 @@
+def add(a: number, b: number): number {
+  return a + b
+}
+
+def multiply(a: number, b: number): number {
+  return a * b
+}
+
+const add5 = add.partial(a: 5)
+const double = multiply.partial(a: 2)
+
+node testGlobalPartial() {
+  return add5(10)
+}
+
+node testGlobalChain() {
+  const result = add5(3)
+  return double(result)
+}

@@ -1,0 +1,17 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "\"/safe/secret.txt\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "partial function survives interrupt serialization cycle",
+      "interruptHandlers": [
+        {
+          "action": "approve",
+          "expectedMessage": "Are you sure you want to read /safe/secret.txt?"
+        }
+      ]
+    }
+  ]
+}

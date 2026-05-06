@@ -97,13 +97,13 @@ Number must be even to be halved, got 5
 
 Cool, so the first call to `half` succeeded, but the second call failed, and so the pipe chain short-circuited and did not make the third call to `half`.
 
-You can also use functions that take multiple arguments in a pipe chain using the placeholder syntax. Here is a chain that halves a number and then divides it by 3:
+You can also use functions that take multiple arguments in a pipe chain using `.partial()`. Here is a chain that halves a number and then divides it by 3:
 
 ```
-const result = success(10) |> half |> divide(?, 3)
+const result = success(10) |> half |> divide.partial(b: 3)
 ```
 
-The placeholder (`?`) says which parameter the result value should be assigned to.
+The `.partial()` call binds the `b` parameter to 3, producing a function that takes a single argument (the piped value).
 
 ## Checkpoints
 If you're still holding out for a good reason to use the `Result` type, this may be the one. Every failure also contains a checkpoint. The checkpoint is from the start of the function where the failure occurred. The failure also contains the function name and the arguments it was called with.

@@ -3142,6 +3142,15 @@ export class TypeScriptBuilder {
         }
       }
 
+      // Method call with args but no placeholder (e.g. multiply.partial(a: 3)):
+      // call the method first to produce a function, then invoke with piped value
+      if (lastElement?.kind === "methodCall" && lastElement.functionCall.arguments.length > 0) {
+        const fnExpr = this.processNode(stage);
+        const descriptor = ts.obj({ type: ts.str("positional"), args: ts.arr([pipeArg]) });
+        const callExpr = ts.call(ts.id("__call"), [fnExpr, descriptor, this.buildStateConfig()]);
+        return ts.arrowFn([{ name: "__pipeArg" }], ts.await(callExpr), { async: true });
+      }
+
       // No placeholder: bare method/property reference — use __callMethod to preserve `this`
       const receiver = this.processValueAccessPartial(stage);
       const lastEl = stage.chain[stage.chain.length - 1];

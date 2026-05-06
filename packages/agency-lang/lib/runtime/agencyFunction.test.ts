@@ -171,3 +171,242 @@ describe("AgencyFunction", () => {
     });
   });
 });
+
+describe("partial()", () => {
+  it("binds a single param by name", () => {
+    const fn = makeFunction([
+      { name: "a" },
+      { name: "b" },
+    ]);
+    const bound = fn.partial({ a: 5 });
+    expect(bound.getUnboundParams()).toHaveLength(1);
+    expect(bound.getUnboundParams()[0].name).toBe("b");
+    expect(bound.params[0].isBound).toBe(true);
+    expect(bound.params[0].boundValue).toBe(5);
+  });
+
+  it("binds multiple params", () => {
+    const fn = makeFunction([
+      { name: "a" },
+      { name: "b" },
+      { name: "c" },
+    ]);
+    const bound = fn.partial({ a: 1, c: 3 });
+    expect(bound.getUnboundParams()).toHaveLength(1);
+    expect(bound.getUnboundParams()[0].name).toBe("b");
+  });
+
+  it("empty partial returns same instance", () => {
+    const fn = makeFunction([
+      { name: "a" },
+      { name: "b" },
+    ]);
+    const same = fn.partial({});
+    expect(same).toBe(fn);
+  });
+
+  it("throws on unknown param name", () => {
+    const fn = makeFunction([{ name: "a" }]);
+    expect(() => fn.partial({ z: 5 })).toThrow("Unknown parameter 'z'");
+  });
+
+  it("chained partial binds remaining params", () => {
+    const fn = makeFunction([
+      { name: "a" },
+      { name: "b" },
+      { name: "c" },
+    ]);
+    const bound1 = fn.partial({ a: 1 });
+    const bound2 = bound1.partial({ c: 3 });
+    expect(bound2.getUnboundParams()).toHaveLength(1);
+    expect(bound2.getUnboundParams()[0].name).toBe("b");
+  });
+
+  it("throws when re-binding an already-bound param", () => {
+    const fn = makeFunction([
+      { name: "a" },
+      { name: "b" },
+    ]);
+    const bound = fn.partial({ a: 5 });
+    expect(() => bound.partial({ a: 10 })).toThrow("already bound");
+  });
+
+  it("throws when binding a variadic param", () => {
+    const fn = makeFunction([
+      { name: "messages", variadic: true },
+    ]);
+    expect(() => fn.partial({ messages: ["hi"] })).toThrow("Variadic parameter");
+  });
+
+  it("invoke on bound function merges args correctly", async () => {
+    const impl = (a: number, b: number, c: number) => a + b + c;
+    const fn = AgencyFunction.create({
+      name: "add3",
+      module: "test",
+      fn: impl,
+      params: [
+        { name: "a", hasDefault: false, defaultValue: undefined, variadic: false },
+        { name: "b", hasDefault: false, defaultValue: undefined, variadic: false },
+        { name: "c", hasDefault: false, defaultValue: undefined, variadic: false },
+      ],
+      toolDefinition: null,
+    }, {});
+    const bound = fn.partial({ a: 10 });
+    const result = await bound.invoke({ type: "positional", args: [20, 30] });
+    expect(result).toBe(60);
+  });
+
+  it("invoke on chained partial merges all bound values", async () => {
+    const impl = (a: number, b: number, c: number) => a * 100 + b * 10 + c;
+    const fn = AgencyFunction.create({
+      name: "combine",
+      module: "test",
+      fn: impl,
+      params: [
+        { name: "a", hasDefault: false, defaultValue: undefined, variadic: false },
+        { name: "b", hasDefault: false, defaultValue: undefined, variadic: false },
+        { name: "c", hasDefault: false, defaultValue: undefined, variadic: false },
+      ],
+      toolDefinition: null,
+    }, {});
+    const bound1 = fn.partial({ a: 1 });
+    const bound2 = bound1.partial({ c: 3 });
+    const result = await bound2.invoke({ type: "positional", args: [2] });
+    expect(result).toBe(123);
+  });
+
+  it("invoke with middle param bound", async () => {
+    const impl = (a: number, b: number, c: number) => a * 100 + b * 10 + c;
+    const fn = AgencyFunction.create({
+      name: "combine",
+      module: "test",
+      fn: impl,
+      params: [
+        { name: "a", hasDefault: false, defaultValue: undefined, variadic: false },
+        { name: "b", hasDefault: false, defaultValue: undefined, variadic: false },
+        { name: "c", hasDefault: false, defaultValue: undefined, variadic: false },
+      ],
+      toolDefinition: null,
+    }, {});
+    const bound = fn.partial({ b: 5 });
+    const result = await bound.invoke({ type: "positional", args: [1, 3] });
+    expect(result).toBe(153);
+  });
+
+  it("invoke bound function with named args", async () => {
+    const impl = (a: number, b: number, c: number) => a + b + c;
+    const fn = AgencyFunction.create({
+      name: "add3",
+      module: "test",
+      fn: impl,
+      params: [
+        { name: "a", hasDefault: false, defaultValue: undefined, variadic: false },
+        { name: "b", hasDefault: false, defaultValue: undefined, variadic: false },
+        { name: "c", hasDefault: false, defaultValue: undefined, variadic: false },
+      ],
+      toolDefinition: null,
+    }, {});
+    const bound = fn.partial({ a: 10 });
+    const result = await bound.invoke({
+      type: "named",
+      positionalArgs: [],
+      namedArgs: { c: 30, b: 20 },
+    });
+    expect(result).toBe(60);
+  });
+
+  it("strips @param lines from tool description", () => {
+    const fn = AgencyFunction.create({
+      name: "readFile",
+      module: "test",
+      fn: () => {},
+      params: [
+        { name: "dir", hasDefault: false, defaultValue: undefined, variadic: false },
+        { name: "filename", hasDefault: false, defaultValue: undefined, variadic: false },
+      ],
+      toolDefinition: {
+        name: "readFile",
+        description: "Read a file.\n@param dir - The directory\n@param filename - The file",
+        schema: {},
+      },
+    }, {});
+    const bound = fn.partial({ dir: "/foo" });
+    expect(bound.toolDefinition!.description).toBe("Read a file.\n@param filename - The file");
+  });
+});
+
+describe("describe()", () => {
+  it("returns new AgencyFunction with updated description", () => {
+    const fn = AgencyFunction.create({
+      name: "readFile",
+      module: "test",
+      fn: () => {},
+      params: [
+        { name: "filename", hasDefault: false, defaultValue: undefined, variadic: false },
+      ],
+      toolDefinition: {
+        name: "readFile",
+        description: "Original description",
+        schema: {},
+      },
+    }, {});
+    const described = fn.describe("New description");
+    expect(described.toolDefinition!.description).toBe("New description");
+    expect(fn.toolDefinition!.description).toBe("Original description");
+  });
+
+  it("works on function without toolDefinition", () => {
+    const fn = AgencyFunction.create({
+      name: "readFile",
+      module: "test",
+      fn: () => {},
+      params: [],
+      toolDefinition: null,
+    }, {});
+    const described = fn.describe("New description");
+    expect(described.toolDefinition!.description).toBe("New description");
+    expect(described.toolDefinition!.name).toBe("readFile");
+  });
+
+  it("does not mutate original", () => {
+    const fn = AgencyFunction.create({
+      name: "foo",
+      module: "test",
+      fn: () => {},
+      params: [],
+      toolDefinition: { name: "foo", description: "old", schema: {} },
+    }, {});
+    fn.describe("new");
+    expect(fn.toolDefinition!.description).toBe("old");
+  });
+
+  it("empty string clears description", () => {
+    const fn = AgencyFunction.create({
+      name: "foo",
+      module: "test",
+      fn: () => {},
+      params: [],
+      toolDefinition: { name: "foo", description: "old", schema: {} },
+    }, {});
+    const described = fn.describe("");
+    expect(described.toolDefinition!.description).toBe("");
+  });
+
+  it("preserves bound params when describing a partial function", () => {
+    const fn = AgencyFunction.create({
+      name: "add",
+      module: "test",
+      fn: (a: number, b: number) => a + b,
+      params: [
+        { name: "a", hasDefault: false, defaultValue: undefined, variadic: false },
+        { name: "b", hasDefault: false, defaultValue: undefined, variadic: false },
+      ],
+      toolDefinition: { name: "add", description: "Add.\n@param a - First\n@param b - Second", schema: {} },
+    }, {});
+    const bound = fn.partial({ a: 5 });
+    const described = bound.describe("Adds 5 to a number");
+    expect(described.params[0].isBound).toBe(true);
+    expect(described.getUnboundParams()).toHaveLength(1);
+    expect(described.toolDefinition!.description).toBe("Adds 5 to a number");
+  });
+});

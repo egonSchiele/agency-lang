@@ -1,0 +1,25 @@
+{
+  "tests": [
+    {
+      "nodeName": "testBasic",
+      "input": "",
+      "expectedOutput": "12",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "basic partial application binds one param"
+    },
+    {
+      "nodeName": "testChained",
+      "input": "",
+      "expectedOutput": "17",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "chained partial binds multiple params"
+    },
+    {
+      "nodeName": "testDescribe",
+      "input": "",
+      "expectedOutput": "8",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "partial + describe still invokes correctly"
+    }
+  ]
+}

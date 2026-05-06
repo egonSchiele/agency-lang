@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "{\"__type\":\"resultType\",\"success\":true,\"value\":15}",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "pipe with .partial() as stage"
+    }
+  ]
+}

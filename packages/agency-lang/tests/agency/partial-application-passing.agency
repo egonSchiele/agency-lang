@@ -1,0 +1,44 @@
+def add(a: number, b: number): number {
+  return a + b
+}
+
+def multiply(a: number, b: number): number {
+  return a * b
+}
+
+def applyToAll(items: number[], transform: (number) => number): number[] {
+  const result: number[] = []
+  for (item in items) {
+    result.push(transform(item))
+  }
+  return result
+}
+
+def makeAdder(n: number): any {
+  return add.partial(a: n)
+}
+
+def applyFn(fn: any, x: number): number {
+  return fn(x)
+}
+
+node testReturnFromFunction() {
+  const add10 = makeAdder(10)
+  return add10(5)
+}
+
+node testPassAsArg() {
+  const double = multiply.partial(a: 2)
+  return applyFn(double, 7)
+}
+
+node testAsBlock() {
+  const triple = multiply.partial(a: 3)
+  const results = applyToAll([1, 2, 3, 4], triple)
+  return results
+}
+
+node testReturnThenPassAsArg() {
+  const add7 = makeAdder(7)
+  return applyFn(add7, 3)
+}

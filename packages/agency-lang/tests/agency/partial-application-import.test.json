@@ -1,0 +1,18 @@
+{
+  "tests": [
+    {
+      "nodeName": "testImportedPartial",
+      "input": "",
+      "expectedOutput": "17",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": ".partial() works on imported functions"
+    },
+    {
+      "nodeName": "testImportedChained",
+      "input": "",
+      "expectedOutput": "45",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "multiple imported functions can be partially applied and composed"
+    }
+  ]
+}

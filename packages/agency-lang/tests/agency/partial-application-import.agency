@@ -1,0 +1,13 @@
+import { add, multiply } from "./partial-application-helpers.agency"
+
+node testImportedPartial() {
+  const add10 = add.partial(a: 10)
+  return add10(7)
+}
+
+node testImportedChained() {
+  const add10 = add.partial(a: 10)
+  const triple = multiply.partial(a: 3)
+  const sum = add10(5)
+  return triple(sum)
+}

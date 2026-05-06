@@ -34,6 +34,23 @@ export async function __callMethod(
   if (optional && (obj === null || obj === undefined)) {
     return undefined;
   }
+
+  // AgencyFunction methods: .partial() and .describe() are handled directly
+  if (AgencyFunction.isAgencyFunction(obj)) {
+    if (prop === "partial") {
+      if (descriptor.type !== "named") {
+        throw new Error(".partial() requires named arguments, e.g. fn.partial(a: 5)");
+      }
+      return obj.partial(descriptor.namedArgs);
+    }
+    if (prop === "describe") {
+      if (descriptor.type !== "positional" || descriptor.args.length !== 1) {
+        throw new Error(".describe() requires exactly one string argument");
+      }
+      return obj.describe(descriptor.args[0] as string);
+    }
+  }
+
   const target = (obj as any)[prop];
   if (AgencyFunction.isAgencyFunction(target)) {
     return target.invoke(descriptor, state);

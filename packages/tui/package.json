@@ -1,0 +1,28 @@
+{
+  "name": "@agency-lang/tui",
+  "version": "0.0.1",
+  "description": "A testable TUI library with immediate-mode rendering and flexbox layout",
+  "type": "module",
+  "main": "./dist/lib/index.js",
+  "types": "./dist/lib/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/lib/index.d.ts",
+      "import": "./dist/lib/index.js"
+    }
+  },
+  "files": ["dist/"],
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest",
+    "test:run": "vitest run"
+  },
+  "keywords": ["tui", "terminal", "ui", "flexbox"],
+  "author": "Aditya Bhargava",
+  "license": "ISC",
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.0.0",
+    "vitest": "^3.0.0"
+  }
+}

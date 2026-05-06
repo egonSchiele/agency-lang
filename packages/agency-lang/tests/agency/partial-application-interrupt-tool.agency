@@ -1,0 +1,15 @@
+let aVal: number = 0
+let bVal: number = 0
+
+export def add(a: number, b: number): number {
+  aVal = a
+  bVal = b
+  const check = interrupt("Confirm adding ${a} + ${b}?")
+  return a + b
+}
+
+node main() {
+  const add5 = add.partial(a: 5)
+  const result: number = llm("Use the add5 tool to add 5 and 7. Return ONLY the number.", { tools: [add5] })
+  return [result, aVal, bVal]
+}

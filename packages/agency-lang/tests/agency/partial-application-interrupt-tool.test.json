@@ -1,0 +1,17 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "[12,5,7]",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "partial function as LLM tool survives interrupt with correct schema after revival",
+      "interruptHandlers": [
+        {
+          "action": "approve",
+          "expectedMessage": "Confirm adding 5 + 7?"
+        }
+      ]
+    }
+  ]
+}

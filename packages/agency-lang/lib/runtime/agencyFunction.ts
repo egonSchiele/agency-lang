@@ -17,12 +17,20 @@ export type ToolDefinition = {
   schema: unknown;
 };
 
+export type BoundArgs = {
+  indices: number[];
+  values: unknown[];
+  originalParamCount: number;
+  originalParams: FuncParam[];
+};
+
 export type AgencyFunctionOpts = {
   name: string;
   module: string;
   fn: Function;
   params: FuncParam[];
   toolDefinition: ToolDefinition | null;
+  boundArgs?: BoundArgs | null;
 };
 
 export class AgencyFunction {
@@ -31,6 +39,7 @@ export class AgencyFunction {
   readonly module: string;
   readonly params: FuncParam[];
   readonly toolDefinition: ToolDefinition | null;
+  readonly boundArgs: BoundArgs | null;
   private readonly _fn: Function;
   private readonly _nonVariadicParams: FuncParam[];
   private readonly _hasVariadic: boolean;
@@ -41,8 +50,24 @@ export class AgencyFunction {
     this._fn = opts.fn;
     this.params = opts.params;
     this.toolDefinition = opts.toolDefinition;
+    this.boundArgs = opts.boundArgs ?? null;
     this._nonVariadicParams = opts.params.filter(p => !p.variadic);
     this._hasVariadic = opts.params.length > 0 && opts.params[opts.params.length - 1].variadic;
+  }
+
+  withToolDefinition(toolDefinition: ToolDefinition | null): AgencyFunction {
+    return new AgencyFunction({
+      name: this.name,
+      module: this.module,
+      fn: this._fn,
+      params: this.params,
+      toolDefinition,
+      boundArgs: this.boundArgs,
+    });
+  }
+
+  getOriginalParams(): FuncParam[] {
+    return this.boundArgs ? this.boundArgs.originalParams : this.params;
   }
 
   async invoke(descriptor: CallType, state?: unknown): Promise<unknown> {

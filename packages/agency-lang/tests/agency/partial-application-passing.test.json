@@ -1,0 +1,32 @@
+{
+  "tests": [
+    {
+      "nodeName": "testReturnFromFunction",
+      "input": "",
+      "expectedOutput": "15",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "partial function returned from another function works correctly"
+    },
+    {
+      "nodeName": "testPassAsArg",
+      "input": "",
+      "expectedOutput": "14",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "partial function passed as argument to another function"
+    },
+    {
+      "nodeName": "testAsBlock",
+      "input": "",
+      "expectedOutput": "[3,6,9,12]",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "partial function used where a block/callback is expected"
+    },
+    {
+      "nodeName": "testReturnThenPassAsArg",
+      "input": "",
+      "expectedOutput": "10",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "partial returned from function then passed as arg to another"
+    }
+  ]
+}

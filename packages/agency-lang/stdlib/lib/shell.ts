@@ -1,6 +1,7 @@
-import { spawnSync, SpawnSyncOptions } from "child_process";
+import { spawn, SpawnOptions } from "child_process";
 import process from "process";
-import fs from "fs";
+import fs from "fs/promises";
+import { constants as fsConstants } from "fs";
 import path from "path";
 import {
   anyChar,
@@ -16,63 +17,83 @@ import {
   str,
 } from "tarsec";
 
-export function _exec(
+function spawnAsync(
+  command: string,
+  args: string[],
+  options: SpawnOptions & { input?: string; timeout?: number },
+): Promise<{ stdout: string; stderr: string; exitCode: number }> {
+  return new Promise((resolve, reject) => {
+    const child = spawn(command, args, {
+      ...options,
+      stdio: ["pipe", "pipe", "pipe"],
+    });
+
+    let stdout = "";
+    let stderr = "";
+    let timedOut = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+
+    child.stdout!.setEncoding("utf8");
+    child.stderr!.setEncoding("utf8");
+    child.stdout!.on("data", (data: string) => { stdout += data; });
+    child.stderr!.on("data", (data: string) => { stderr += data; });
+
+    if (options.input) {
+      child.stdin!.write(options.input);
+      child.stdin!.end();
+    } else {
+      child.stdin!.end();
+    }
+
+    if (options.timeout && options.timeout > 0) {
+      timer = setTimeout(() => {
+        timedOut = true;
+        child.kill("SIGTERM");
+      }, options.timeout);
+    }
+
+    child.on("close", (code) => {
+      if (timer) clearTimeout(timer);
+      if (timedOut) {
+        resolve({ stdout, stderr: stderr + "\nProcess timed out", exitCode: 1 });
+      } else {
+        resolve({ stdout, stderr, exitCode: code ?? 1 });
+      }
+    });
+    child.on("error", (err) => {
+      if (timer) clearTimeout(timer);
+      reject(err);
+    });
+  });
+}
+
+type SpawnAsyncOptions = SpawnOptions & { input?: string; timeout?: number };
+
+function buildSpawnOptions(cwd: string, timeout: number, stdin: string): SpawnAsyncOptions {
+  const options: SpawnAsyncOptions = {};
+  if (cwd) options.cwd = cwd;
+  if (timeout > 0) options.timeout = timeout * 1000;
+  if (stdin) options.input = stdin;
+  return options;
+}
+
+export async function _exec(
   command: string,
   args: string[],
   cwd: string,
   timeout: number,
   stdin: string,
-): { stdout: string; stderr: string; exitCode: number } {
-  const options: SpawnSyncOptions = {
-    encoding: "utf8",
-    stdio: ["pipe", "pipe", "pipe"],
-  };
-
-  if (cwd) {
-    options.cwd = cwd;
-  }
-  if (timeout > 0) {
-    options.timeout = timeout * 1000;
-  }
-  if (stdin) {
-    options.input = stdin;
-  }
-
-  const result = spawnSync(command, args, options);
-  return {
-    stdout: (result.stdout as string) ?? "",
-    stderr: (result.stderr as string) ?? "",
-    exitCode: result.status ?? 1,
-  };
+): Promise<{ stdout: string; stderr: string; exitCode: number }> {
+  return spawnAsync(command, args, buildSpawnOptions(cwd, timeout, stdin));
 }
 
-export function _bash(
+export async function _bash(
   command: string,
   cwd: string,
   timeout: number,
   stdin: string,
-): { stdout: string; stderr: string; exitCode: number } {
-  const options: SpawnSyncOptions = {
-    encoding: "utf8",
-    stdio: ["pipe", "pipe", "pipe"],
-  };
-
-  if (cwd) {
-    options.cwd = cwd;
-  }
-  if (timeout > 0) {
-    options.timeout = timeout * 1000;
-  }
-  if (stdin) {
-    options.input = stdin;
-  }
-
-  const result = spawnSync("sh", ["-c", command], options);
-  return {
-    stdout: (result.stdout as string) ?? "",
-    stderr: (result.stderr as string) ?? "",
-    exitCode: result.status ?? 1,
-  };
+): Promise<{ stdout: string; stderr: string; exitCode: number }> {
+  return spawnAsync("sh", ["-c", command], buildSpawnOptions(cwd, timeout, stdin));
 }
 
 export type LsEntry = {
@@ -82,17 +103,17 @@ export type LsEntry = {
   size: number;
 };
 
-export function _ls(dir: string, recursive: boolean): LsEntry[] {
+export async function _ls(dir: string, recursive: boolean): Promise<LsEntry[]> {
   const root = path.resolve(process.cwd(), dir);
   const out: LsEntry[] = [];
 
-  function walk(current: string): void {
-    const names = fs.readdirSync(current);
+  async function walk(current: string): Promise<void> {
+    const names = await fs.readdir(current);
     for (const name of names) {
       const full = path.join(current, name);
-      let st: fs.Stats;
+      let st: Awaited<ReturnType<typeof fs.lstat>>;
       try {
-        st = fs.lstatSync(full);
+        st = await fs.lstat(full);
       } catch {
         continue;
       }
@@ -107,12 +128,12 @@ export function _ls(dir: string, recursive: boolean): LsEntry[] {
         size: st.size,
       });
       if (recursive && type === "dir") {
-        walk(full);
+        await walk(full);
       }
     }
   }
 
-  walk(root);
+  await walk(root);
   return out;
 }
 
@@ -135,49 +156,49 @@ const SKIP_DIRS = new Set([
   ".cache",
 ]);
 
-type Visitor = (fullPath: string, stat: fs.Stats) => boolean;
+type Visitor = (fullPath: string, stat: Awaited<ReturnType<typeof fs.lstat>>) => Promise<boolean>;
 
-function walkDir(root: string, visit: Visitor): void {
-  function walk(current: string): boolean {
+async function walkDir(root: string, visit: Visitor): Promise<void> {
+  async function walk(current: string): Promise<boolean> {
     let entries: string[];
     try {
-      entries = fs.readdirSync(current);
+      entries = await fs.readdir(current);
     } catch {
       return true;
     }
     for (const name of entries) {
       if (SKIP_DIRS.has(name)) continue;
       const full = path.join(current, name);
-      let st: fs.Stats;
+      let st: Awaited<ReturnType<typeof fs.lstat>>;
       try {
-        st = fs.lstatSync(full);
+        st = await fs.lstat(full);
       } catch {
         continue;
       }
-      if (!visit(full, st)) return false;
-      if (st.isDirectory() && !walk(full)) return false;
+      if (!(await visit(full, st))) return false;
+      if (st.isDirectory() && !(await walk(full))) return false;
     }
     return true;
   }
-  walk(root);
+  await walk(root);
 }
 
-export function _grep(
+export async function _grep(
   pattern: string,
   dir: string,
   flags: string,
   maxResults: number,
-): GrepMatch[] {
+): Promise<GrepMatch[]> {
   const root = path.resolve(process.cwd(), dir);
   const re = new RegExp(pattern, flags || undefined);
   const results: GrepMatch[] = [];
 
-  walkDir(root, (full, st) => {
+  await walkDir(root, async (full, st) => {
     if (!st.isFile()) return true;
     if (st.size > 5_000_000) return true;
     let text: string;
     try {
-      text = fs.readFileSync(full, "utf8");
+      text = await fs.readFile(full, "utf8");
     } catch {
       return true;
     }
@@ -199,16 +220,16 @@ export function _grep(
   return results;
 }
 
-export function _glob(
+export async function _glob(
   pattern: string,
   dir: string,
   maxResults: number,
-): string[] {
+): Promise<string[]> {
   const root = path.resolve(process.cwd(), dir);
   const re = globToRegExp(pattern);
   const results: string[] = [];
 
-  walkDir(root, (full) => {
+  await walkDir(root, async (full) => {
     const rel = toPosix(path.relative(root, full));
     if (re.test(rel)) {
       results.push(toPosix(path.relative(process.cwd(), full)));
@@ -290,10 +311,10 @@ export type StatInfo = {
   modifiedMs: number;
 };
 
-export function _stat(filename: string): StatInfo {
+export async function _stat(filename: string): Promise<StatInfo> {
   const full = path.resolve(process.cwd(), filename);
   try {
-    const st = fs.lstatSync(full);
+    const st = await fs.lstat(full);
     let type: StatInfo["type"] = "other";
     if (st.isSymbolicLink()) type = "symlink";
     else if (st.isDirectory()) type = "dir";
@@ -309,12 +330,17 @@ export function _stat(filename: string): StatInfo {
   }
 }
 
-export function _exists(filename: string): boolean {
+export async function _exists(filename: string): Promise<boolean> {
   const full = path.resolve(process.cwd(), filename);
-  return fs.existsSync(full);
+  try {
+    await fs.access(full);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
-export function _which(command: string): string {
+export async function _which(command: string): Promise<string> {
   if (command.length === 0) return "";
   if (command.includes("/") || command.includes("\\") || command.includes("\0")) {
     throw new Error(
@@ -331,10 +357,10 @@ export function _which(command: string): string {
     for (const ext of extensions) {
       const candidate = path.resolve(dir, command + ext);
       try {
-        const st = fs.statSync(candidate);
+        const st = await fs.stat(candidate);
         if (!st.isFile()) continue;
         if (!isWindows) {
-          fs.accessSync(candidate, fs.constants.X_OK);
+          await fs.access(candidate, fsConstants.X_OK);
         }
         return candidate;
       } catch {}

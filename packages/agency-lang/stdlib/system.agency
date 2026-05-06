@@ -4,6 +4,10 @@ export def screenshot(filepath: string, x: number = -1, y: number = -1, width: n
   """
   A tool for taking a screenshot and saving it to a file. Optionally specify x, y, width, and height to capture a specific region.
   """
+  return interrupt std::screenshot("Are you sure you want to take a screenshot? This will capture the screen contents, which may include sensitive information.", {
+    filepath: filepath
+  })
+
   _screenshot(filepath, x, y, width, height)
 }
 
@@ -43,5 +47,9 @@ export def openUrl(url: string): Result {
   """
   Open a URL in the user's default browser. Currently macOS-only.
   """
+  return interrupt std::openUrl("Are you sure you want to open this URL in the browser?", {
+    url: url
+  })
+
   return try _openUrl(url)
 }

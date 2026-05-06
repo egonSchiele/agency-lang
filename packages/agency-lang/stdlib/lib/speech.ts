@@ -1,20 +1,22 @@
-import { execFileSync } from "child_process";
-import fsSync from "fs";
-import fs from "fs/promises";
+import { execFile } from "child_process";
+import { readFile, writeFile, unlink } from "fs/promises";
+import { promisify } from "util";
 import { nanoid } from "nanoid";
 import os from "os";
 import path from "path";
 import process from "process";
 import { detectPlatform } from "./utils.js";
 
-export function _speak(text: string, voice: string, rate: number, outputFile: string): void {
+const execFileAsync = promisify(execFile);
+
+export async function _speak(text: string, voice: string, rate: number, outputFile: string): Promise<void> {
   if (text === "") return;
 
-  const platform = detectPlatform();
+  const platform = await detectPlatform();
   if (platform === "macos") {
     const tmpFile = path.join(os.tmpdir(), `agency-speak-${nanoid()}.txt`);
     try {
-      fsSync.writeFileSync(tmpFile, text, "utf8");
+      await writeFile(tmpFile, text, "utf8");
       const args: string[] = ["-f", tmpFile];
       if (voice !== "") {
         args.push("-v", voice);
@@ -25,9 +27,9 @@ export function _speak(text: string, voice: string, rate: number, outputFile: st
       if (outputFile !== "") {
         args.push("-o", path.resolve(process.cwd(), outputFile));
       }
-      execFileSync("say", args);
+      await execFileAsync("say", args);
     } finally {
-      try { fsSync.unlinkSync(tmpFile); } catch {}
+      try { await unlink(tmpFile); } catch {}
     }
   } else {
     console.error(
@@ -46,7 +48,7 @@ export async function _transcribe(filepath: string, language: string): Promise<s
   }
 
   const resolvedPath = path.resolve(process.cwd(), filepath);
-  const fileData = await fs.readFile(resolvedPath);
+  const fileData = await readFile(resolvedPath);
   const filename = path.basename(resolvedPath);
 
   const formData = new FormData();

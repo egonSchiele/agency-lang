@@ -36,3 +36,34 @@ def greet(name: string): string {
   return `Hello, ${name}!`
 }
 ```
+
+## Module-level doc comments
+
+To document the file itself — for example, to provide an overview, usage examples, or setup instructions — use the `@module` tag:
+
+```ts
+/** @module
+  ## Date Utilities
+
+  Helpers for constructing timezone-aware ISO 8601 date strings.
+
+  ### Usage
+
+  ```ts
+  import { now, tomorrow, addMinutes } from "std::date"
+
+  node main() {
+    const start = tomorrow("America/New_York")
+    print(start)
+  }
+  ```
+*/
+
+def now(timezone: string = ""): string {
+  // ...
+}
+```
+
+The `@module` doc comment must appear at the top of the file, or right after the imports. If it appears after any other code (type aliases, functions, nodes), the compiler will throw an error.
+
+In the generated documentation, the module doc comment appears at the top of the page, before the types and functions sections.

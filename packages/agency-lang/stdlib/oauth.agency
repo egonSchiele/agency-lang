@@ -1,6 +1,6 @@
 import { _authorize, _getAccessToken, _isAuthorized, _revokeAuth } from "./lib/oauth.js"
 
-/**
+/** @module
   ## Usage
 
   ```ts
@@ -70,6 +70,10 @@ export def getAccessToken(name: string): Result {
   """
   Get a valid OAuth access token for a previously authorized provider. Automatically refreshes the token if it has expired. Returns the access token string. Throws if not yet authorized.
   """
+  return interrupt std::getAccessToken("Are you sure you want to retrieve an OAuth access token? This exposes a sensitive credential.", {
+    name: name
+  })
+
   return try _getAccessToken(name)
 }
 

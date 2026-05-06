@@ -28,4 +28,4 @@ A tool for reading text from the system clipboard.
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/clipboard.agency#L10))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/clipboard.agency#L12))

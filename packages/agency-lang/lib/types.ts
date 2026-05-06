@@ -189,6 +189,7 @@ export type AgencyMultiLineComment = BaseNode & {
   type: "multiLineComment";
   content: string;
   isDoc: boolean;
+  isModuleDoc: boolean;
 };
 
 export type NewLine = BaseNode & {

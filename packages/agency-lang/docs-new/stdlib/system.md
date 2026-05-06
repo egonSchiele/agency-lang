@@ -32,7 +32,7 @@ Return the command-line arguments passed to the Agency program (excluding the no
 
 **Returns:** `string[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/system.agency#L10))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/system.agency#L14))
 
 ### cwd
 
@@ -44,7 +44,7 @@ Return the absolute path of the current working directory of the Agency process.
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/system.agency#L17))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/system.agency#L21))
 
 ### env
 
@@ -62,7 +62,7 @@ Read an environment variable. Returns null if the variable is not set.
 
 **Returns:** `string | null`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/system.agency#L24))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/system.agency#L28))
 
 ### setEnv
 
@@ -81,7 +81,7 @@ Set an environment variable in the current process. Fails if the name is empty o
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/system.agency#L31))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/system.agency#L35))
 
 ### openUrl
 
@@ -99,4 +99,4 @@ Open a URL in the user's default browser. Currently macOS-only.
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/system.agency#L42))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/system.agency#L46))

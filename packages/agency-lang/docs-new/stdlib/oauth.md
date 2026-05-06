@@ -1,15 +1,5 @@
 # oauth
 
-## Functions
-
-### authorize
-
-```ts
-authorize(name: string, authUrl: string, tokenUrl: string, clientId: string, clientSecret: string, scopes: string, port: number, extraAuthParams: string): Result
-```
-
-Start an OAuth 2.0 authorization flow. Opens the user's browser for consent, captures the callback, exchanges the code for tokens, and saves them locally. Only needs to be run once per provider. Parameters: name (identifier like "google-calendar"), authUrl (authorization endpoint), tokenUrl (token endpoint), clientId, clientSecret, scopes (space-separated), port (callback port, default 8914), extraAuthParams (space-separated key=value pairs for provider-specific params like "access_type=offline prompt=consent").
-
 ## Usage
 
   ```ts
@@ -52,6 +42,16 @@ Start an OAuth 2.0 authorization flow. Opens the user's browser for consent, cap
   1. `AGENCY_OAUTH_KEY` env var (for servers/CI)
   2. System keyring (macOS Keychain / Linux Secret Service) — key is auto-generated on first use
   3. If neither is available, tokens are stored unencrypted
+
+## Functions
+
+### authorize
+
+```ts
+authorize(name: string, authUrl: string, tokenUrl: string, clientId: string, clientSecret: string, scopes: string, port: number, extraAuthParams: string): Result
+```
+
+Start an OAuth 2.0 authorization flow. Opens the user's browser for consent, captures the callback, exchanges the code for tokens, and saves them locally. Only needs to be run once per provider. Parameters: name (identifier like "google-calendar"), authUrl (authorization endpoint), tokenUrl (token endpoint), clientId, clientSecret, scopes (space-separated), port (callback port, default 8914), extraAuthParams (space-separated key=value pairs for provider-specific params like "access_type=offline prompt=consent").
 
 **Parameters:**
 
@@ -104,7 +104,7 @@ Check if OAuth tokens exist for a given provider name. Returns true if tokens ar
 
 **Returns:** `boolean`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/oauth.agency#L76))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/oauth.agency#L80))
 
 ### revokeAuth
 
@@ -122,4 +122,4 @@ Delete stored OAuth tokens for a provider. The user will need to run authorize a
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/oauth.agency#L83))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/oauth.agency#L87))

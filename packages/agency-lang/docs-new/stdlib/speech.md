@@ -38,4 +38,4 @@ A tool for transcribing an audio file to text using OpenAI's Whisper API. Option
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/speech.agency#L10))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/speech.agency#L14))

@@ -1,27 +1,5 @@
 # imessage
 
-## Types
-
-### IMessageResult
-
-```ts
-type IMessageResult = {
-  sent: boolean
-}
-```
-
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/imessage.agency#L3))
-
-## Functions
-
-### sendIMessage
-
-```ts
-sendIMessage(to: string, message: string): Result
-```
-
-Send an iMessage via the macOS Messages app. Only works on macOS with Messages.app signed in. Parameters: to (phone number or email address of the recipient), message (the text to send). No API key or account required.
-
 ## Usage
 
   ```ts
@@ -37,6 +15,28 @@ Send an iMessage via the macOS Messages app. Only works on macOS with Messages.a
   - macOS only
   - Messages.app must be signed in to iMessage
   - No API key required
+
+## Types
+
+### IMessageResult
+
+```ts
+type IMessageResult = {
+  sent: boolean
+}
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/imessage.agency#L21))
+
+## Functions
+
+### sendIMessage
+
+```ts
+sendIMessage(to: string, message: string): Result
+```
+
+Send an iMessage via the macOS Messages app. Only works on macOS with Messages.app signed in. Parameters: to (phone number or email address of the recipient), message (the text to send). No API key or account required.
 
 **Parameters:**
 

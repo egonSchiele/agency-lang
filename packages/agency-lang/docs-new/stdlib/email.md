@@ -1,5 +1,26 @@
 # email
 
+## Usage
+
+  ```ts
+  import { sendWithResend, sendWithSendGrid, sendWithMailgun } from "std::email"
+
+  node main() {
+    const result = sendWithResend(
+      from: "you@yourdomain.com",
+      to: "friend@example.com",
+      subject: "Hello!",
+      text: "Hey, how are you?"
+    )
+    print(result)
+  }
+  ```
+
+  ## Environment Variables
+  - Resend: `RESEND_API_KEY`
+  - SendGrid: `SENDGRID_API_KEY`
+  - Mailgun: `MAILGUN_API_KEY` and `MAILGUN_DOMAIN` (optionally `MAILGUN_REGION` = "us" | "eu")
+
 ## Types
 
 ### EmailResult
@@ -11,7 +32,7 @@ type EmailResult = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/email.agency#L3))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/email.agency#L26))
 
 ## Functions
 
@@ -69,7 +90,7 @@ Send an email using the SendGrid API. Requires `SENDGRID_API_KEY` env var or pas
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/email.agency#L51))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/email.agency#L57))
 
 ### sendWithMailgun
 
@@ -99,4 +120,4 @@ Send an email using the Mailgun API. Requires `MAILGUN_API_KEY` and `MAILGUN_DOM
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/email.agency#L70))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/email.agency#L82))

@@ -1,9 +1,12 @@
 import * as readline from "readline";
 import process from "process";
-import fs from "fs";
+import { readFile, writeFile } from "fs/promises";
 import path from "path";
-import { execFileSync } from "child_process";
+import { execFile } from "child_process";
+import { promisify } from "util";
 import { detectPlatform } from "./utils.js";
+
+const execFileAsync = promisify(execFile);
 
 export function _print(...messages: any[]): void {
   console.log(...messages);
@@ -63,35 +66,35 @@ export async function _fetchJSON(url: string): Promise<any> {
   }
 }
 
-export function _read(filename: string): string {
+export async function _read(filename: string): Promise<string> {
   const filePath = path.resolve(process.cwd(), filename);
-  const data = fs.readFileSync(filePath);
+  const data = await readFile(filePath);
   return data.toString("utf8");
 }
 
-export function _write(filename: string, content: string): boolean {
+export async function _write(filename: string, content: string): Promise<boolean> {
   const filePath = path.resolve(process.cwd(), filename);
-  fs.writeFileSync(filePath, content, "utf8");
+  await writeFile(filePath, content, "utf8");
   return true;
 }
 
-export function _readImage(filename: string): string {
+export async function _readImage(filename: string): Promise<string> {
   const filePath = path.resolve(process.cwd(), filename);
-  const data = fs.readFileSync(filePath);
+  const data = await readFile(filePath);
   return data.toString("base64");
 }
 
-export function _notify(title: string, message: string): boolean {
-  const platform = detectPlatform();
+export async function _notify(title: string, message: string): Promise<boolean> {
+  const platform = await detectPlatform();
   if (platform === "macos") {
     // Escape for AppleScript string literals (backslashes and double quotes).
-    // We use execFileSync with an args array to bypass the shell entirely,
+    // We use execFileAsync with an args array to bypass the shell entirely,
     // which eliminates all shell injection concerns.
     const escapeAS = (s: string) => s.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
     const script = `display notification "${escapeAS(message)}" with title "${escapeAS(title)}"`;
-    execFileSync("osascript", ["-e", script]);
+    await execFileAsync("osascript", ["-e", script]);
   } else if (platform === "linux") {
-    execFileSync("notify-send", [title, message]);
+    await execFileAsync("notify-send", [title, message]);
   } else if (platform === "wsl") {
     console.error(
       `notify is not yet supported in WSL. ` +

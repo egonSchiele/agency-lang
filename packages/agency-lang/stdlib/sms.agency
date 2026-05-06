@@ -1,11 +1,6 @@
 import { _sendSms } from "./lib/sms.js"
 
-type SmsResult = {
-  sid: string;
-  status: string
-}
-
-/**
+/** @module
   ## Usage
 
   ```ts
@@ -23,10 +18,19 @@ type SmsResult = {
   - `TWILIO_FROM_NUMBER` — Your Twilio phone number (e.g. "+15550001234")
 */
 
+type SmsResult = {
+  sid: string;
+  status: string
+}
+
 export def sendSms(to: string, body: string, from: string = "", accountSid: string = "", authToken: string = ""): Result {
   """
   Send an SMS text message via the Twilio API. Requires TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, and TWILIO_FROM_NUMBER env vars, or pass them directly. Parameters: to (recipient phone number in E.164 format), body (message text), and optionally from, accountSid, authToken.
   """
+  return interrupt std::sendSms("Are you sure you want to send this SMS?", {
+    to: to
+  })
+
   return try _sendSms(to, body, {
     from: from,
     accountSid: accountSid,

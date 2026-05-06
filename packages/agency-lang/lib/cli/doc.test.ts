@@ -181,7 +181,7 @@ def greet(name: string = "world"): string {
 
     fs.writeFileSync(
       path.join(inputDir, "filedoc.agency"),
-      `/** This file implements email categorization. */
+      `/** @module This file implements email categorization. */
 
 import { helper } from "./helper.ts"
 

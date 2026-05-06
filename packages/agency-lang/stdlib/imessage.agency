@@ -1,10 +1,6 @@
 import { _sendIMessage } from "./lib/imessage.js"
 
-type IMessageResult = {
-  sent: boolean
-}
-
-/**
+/** @module
   ## Usage
 
   ```ts
@@ -22,9 +18,17 @@ type IMessageResult = {
   - No API key required
 */
 
+type IMessageResult = {
+  sent: boolean
+}
+
 export def sendIMessage(to: string, message: string): Result {
   """
   Send an iMessage via the macOS Messages app. Only works on macOS with Messages.app signed in. Parameters: to (phone number or email address of the recipient), message (the text to send). No API key or account required.
   """
+  return interrupt std::sendIMessage("Are you sure you want to send this iMessage?", {
+    to: to
+  })
+
   return try _sendIMessage(to, message)
 }

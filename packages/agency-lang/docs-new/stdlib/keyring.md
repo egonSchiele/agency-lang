@@ -1,15 +1,5 @@
 # keyring
 
-## Functions
-
-### setSecret
-
-```ts
-setSecret(key: string, value: string, service: string): Result
-```
-
-Store a secret in the system keyring (macOS Keychain or Linux Secret Service). The secret is stored under the given service name (default "agency-lang") with the given key. Overwrites any existing value for the same key.
-
 ## Usage
 
   ```ts
@@ -33,6 +23,16 @@ Store a secret in the system keyring (macOS Keychain or Linux Secret Service). T
   All secrets are stored under the "agency-lang" service name by default.
   Pass a custom `service` parameter to use a different namespace.
   No external dependencies required.
+
+## Functions
+
+### setSecret
+
+```ts
+setSecret(key: string, value: string, service: string): Result
+```
+
+Store a secret in the system keyring (macOS Keychain or Linux Secret Service). The secret is stored under the given service name (default "agency-lang") with the given key. Overwrites any existing value for the same key.
 
 **Parameters:**
 

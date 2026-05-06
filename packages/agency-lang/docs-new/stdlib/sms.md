@@ -1,28 +1,5 @@
 # sms
 
-## Types
-
-### SmsResult
-
-```ts
-type SmsResult = {
-  sid: string;
-  status: string
-}
-```
-
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/sms.agency#L3))
-
-## Functions
-
-### sendSms
-
-```ts
-sendSms(to: string, body: string, from: string, accountSid: string, authToken: string): Result
-```
-
-Send an SMS text message via the Twilio API. Requires TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, and TWILIO_FROM_NUMBER env vars, or pass them directly. Parameters: to (recipient phone number in E.164 format), body (message text), and optionally from, accountSid, authToken.
-
 ## Usage
 
   ```ts
@@ -38,6 +15,29 @@ Send an SMS text message via the Twilio API. Requires TWILIO_ACCOUNT_SID, TWILIO
   - `TWILIO_ACCOUNT_SID` — Your Twilio Account SID
   - `TWILIO_AUTH_TOKEN` — Your Twilio Auth Token
   - `TWILIO_FROM_NUMBER` — Your Twilio phone number (e.g. "+15550001234")
+
+## Types
+
+### SmsResult
+
+```ts
+type SmsResult = {
+  sid: string;
+  status: string
+}
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/sms.agency#L21))
+
+## Functions
+
+### sendSms
+
+```ts
+sendSms(to: string, body: string, from: string, accountSid: string, authToken: string): Result
+```
+
+Send an SMS text message via the Twilio API. Requires TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, and TWILIO_FROM_NUMBER env vars, or pass them directly. Parameters: to (recipient phone number in E.164 format), body (message text), and optionally from, accountSid, authToken.
 
 **Parameters:**
 

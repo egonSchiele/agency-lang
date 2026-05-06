@@ -10,7 +10,6 @@ import {
   GraphNodeDefinition,
   getImportedNames,
   IfElse,
-  ImportStatement,
   RawCode,
   Scope,
   ScopeType,
@@ -177,12 +176,44 @@ export class TypescriptPreprocessor {
     const nodes = this.program.nodes;
     const DECLARATION_TYPES = ["function", "graphNode", "typeAlias"];
     const SKIP_TYPES = ["newLine", "tag"];
+    const PREAMBLE_TYPES = ["comment", "newLine", "importStatement"];
 
-    const isStdlibImport = (node: AgencyNode): boolean =>
-      node.type === "importStatement" &&
-      (node as ImportStatement).modulePath.startsWith("std::");
+    // First pass: extract and validate @module doc comment.
+    // It must appear before any non-import code, and there can be at most one.
+    let seenNonPreamble = false;
+    let foundModuleDoc = false;
+    for (let i = 0; i < nodes.length; i++) {
+      const node = nodes[i];
+      if (node.type === "multiLineComment") {
+        const mc = node as AgencyMultiLineComment;
+        if (mc.isModuleDoc) {
+          const line = mc.loc?.line != null ? mc.loc.line + 1 : "unknown";
+          if (foundModuleDoc) {
+            throw new Error(
+              `Only one @module doc comment is allowed per file (duplicate found at line ${line}).`
+            );
+          }
+          if (seenNonPreamble) {
+            throw new Error(
+              `@module doc comment must appear before any code (found at line ${line}). ` +
+              `Move it to the top of the file or right after the imports.`
+            );
+          }
+          this.program.docComment = mc;
+          nodes.splice(i, 1);
+          i--;
+          foundModuleDoc = true;
+          continue;
+        }
+        // Non-module multiline comments in the preamble are fine
+        if (!mc.isDoc) continue;
+      }
+      if (!PREAMBLE_TYPES.includes(node.type) && node.type !== "multiLineComment") {
+        seenNonPreamble = true;
+      }
+    }
 
-    // Build a new node list, attaching doc comments to declarations and dropping them from the list
+    // Second pass: attach remaining doc comments to declarations
     const result: AgencyNode[] = [];
     let pendingDocComment: AgencyMultiLineComment | null = null;
 
@@ -217,20 +248,6 @@ export class TypescriptPreprocessor {
     }
 
     this.program.nodes = result;
-
-    // File-level doc comment: first unmatched doc comment before any user import/declaration
-    for (let i = 0; i < this.program.nodes.length; i++) {
-      const node = this.program.nodes[i];
-      if (node.type === "comment" || node.type === "newLine") continue;
-      if (node.type === "multiLineComment" && !node.isDoc) continue;
-      if (isStdlibImport(node)) continue;
-
-      if (node.type === "multiLineComment" && node.isDoc) {
-        this.program.docComment = node as AgencyMultiLineComment;
-        this.program.nodes.splice(i, 1);
-      }
-      break;
-    }
   }
 
   preprocess(): AgencyProgram {

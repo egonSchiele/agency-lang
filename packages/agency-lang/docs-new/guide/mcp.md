@@ -80,7 +80,6 @@ node main() {
   const fsTools = mcp("filesystem") catch []
   const dbTools = mcp("database") catch []
 
-  uses summarize
   const result = llm("Read my files, query the database, and summarize everything", {
     tools: [summarize, ...fsTools, ...dbTools]
   })

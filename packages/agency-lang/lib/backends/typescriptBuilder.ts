@@ -89,6 +89,7 @@ import {
   mapTypeToValidationSchema,
 } from "./typescriptGenerator/typeToZodSchema.js";
 
+import { isRegisteredMethod } from "../knownRegistry.js";
 import { $, ts } from "../ir/builders.js";
 import { printTs } from "../ir/prettyPrint.js";
 import type {
@@ -1045,6 +1046,10 @@ export class TypeScriptBuilder {
         }
         case "methodCall": {
           const fnCall = element.functionCall;
+          if (isRegisteredMethod("AgencyFunction", fnCall.functionName)) {
+            result = this.buildRegisteredMethodCall(result, fnCall);
+            break;
+          }
           const descriptor = this.buildCallDescriptor(fnCall);
           const configObj = this.buildStateConfig();
           const callArgs: TsNode[] = [result, ts.str(fnCall.functionName), descriptor, configObj];
@@ -1067,6 +1072,27 @@ export class TypeScriptBuilder {
 
   private awaitChainCall(callExpr: TsNode, isLast: boolean): TsNode {
     return isLast ? ts.await(callExpr) : ts.raw(`(${this.str(ts.await(callExpr))})`);
+  }
+
+  private buildRegisteredMethodCall(receiver: TsNode, fnCall: FunctionCall): TsNode {
+    const methodName = fnCall.functionName;
+    const args = fnCall.arguments;
+    const hasNamedArgs = args.some((a) => a.type === "namedArgument");
+
+    if (methodName === "partial" && hasNamedArgs) {
+      // .partial(a: 5, b: 10) => .partial({ a: 5, b: 10 })
+      const entries: Record<string, TsNode> = {};
+      for (const arg of args) {
+        if (arg.type === "namedArgument") {
+          entries[arg.name] = this.processNode(arg.value as AgencyNode);
+        }
+      }
+      return ts.call(ts.prop(receiver, "partial"), [ts.obj(entries)]);
+    }
+
+    // Default: pass positional args directly (e.g. .describe("text"))
+    const argNodes = args.map((a) => this.processNode(a as AgencyNode));
+    return ts.call(ts.prop(receiver, methodName), argNodes);
   }
 
   private processBinOpExpression(node: BinOpExpression): TsNode {
@@ -2643,6 +2669,10 @@ export class TypeScriptBuilder {
           break;
         case "methodCall": {
           const fnCall = el.functionCall;
+          if (isRegisteredMethod("AgencyFunction", fnCall.functionName)) {
+            result = this.buildRegisteredMethodCall(result, fnCall);
+            break;
+          }
           const descriptor = this.buildCallDescriptor(fnCall);
           const configObj = this.buildStateConfig();
 

@@ -1,3 +1,6 @@
+import { z } from "zod";
+import { stripBoundParams } from "./stripBoundParams";
+
 export const UNSET: unique symbol = Symbol("UNSET");
 
 export type FuncParam = {
@@ -71,8 +74,109 @@ export class AgencyFunction {
   }
 
   async invoke(descriptor: CallType, state?: unknown): Promise<unknown> {
+    if (this.boundArgs) {
+      const callArgs = this.resolveArgs(descriptor);
+      const fullArgs = this.mergeWithBound(callArgs);
+      return this._fn(...fullArgs, state);
+    }
     const resolvedArgs = this.resolveArgs(descriptor);
     return this._fn(...resolvedArgs, state);
+  }
+
+  partial(bindings: Record<string, unknown>): AgencyFunction {
+    const originalParams = this.getOriginalParams();
+    const boundNames = Object.keys(bindings);
+
+    // Validate: no unknown param names
+    for (const name of boundNames) {
+      const index = originalParams.findIndex(p => p.name === name);
+      if (index === -1) {
+        throw new Error(`Unknown parameter '${name}' in .partial() call`);
+      }
+    }
+
+    // Validate: no re-binding of already-bound params
+    if (this.boundArgs) {
+      for (const name of boundNames) {
+        const origIndex = originalParams.findIndex(p => p.name === name);
+        if (this.boundArgs.indices.includes(origIndex)) {
+          throw new Error(`Parameter '${name}' is already bound`);
+        }
+      }
+    }
+
+    // Validate: variadic params cannot be bound
+    for (const name of boundNames) {
+      const param = originalParams.find(p => p.name === name);
+      if (param?.variadic) {
+        throw new Error(`Variadic parameter '${name}' cannot be bound`);
+      }
+    }
+
+    // Map param names to indices
+    const boundIndices: number[] = [];
+    const boundValues: unknown[] = [];
+    for (const [name, value] of Object.entries(bindings)) {
+      const index = originalParams.findIndex(p => p.name === name);
+      boundIndices.push(index);
+      boundValues.push(value);
+    }
+
+    // Compute cumulative bound state
+    const allBoundIndices = this.boundArgs
+      ? [...this.boundArgs.indices, ...boundIndices]
+      : boundIndices;
+    const allBoundValues = this.boundArgs
+      ? [...this.boundArgs.values, ...boundValues]
+      : boundValues;
+
+    const originalParamCount = this.boundArgs
+      ? this.boundArgs.originalParamCount
+      : this.params.length;
+
+    // Compute remaining unbound params
+    const unboundParams = originalParams.filter(
+      (_, i) => !allBoundIndices.includes(i)
+    );
+
+    // Build reduced tool definition if one exists
+    const newToolDef = this.toolDefinition
+      ? {
+          ...this.toolDefinition,
+          description: stripBoundParams(this.toolDefinition.description, boundNames),
+          schema: buildReducedSchema(this.toolDefinition.schema, unboundParams),
+        }
+      : null;
+
+    return new AgencyFunction({
+      name: this.name,
+      module: this.module,
+      fn: this._fn,
+      params: unboundParams,
+      toolDefinition: newToolDef,
+      boundArgs: {
+        indices: allBoundIndices,
+        values: allBoundValues,
+        originalParamCount,
+        originalParams,
+      },
+    });
+  }
+
+  private mergeWithBound(unboundArgs: unknown[]): unknown[] {
+    const totalParams = this.boundArgs!.originalParamCount;
+    const fullArgs: unknown[] = new Array(totalParams);
+    let unboundIdx = 0;
+
+    for (let i = 0; i < totalParams; i++) {
+      const boundPos = this.boundArgs!.indices.indexOf(i);
+      if (boundPos !== -1) {
+        fullArgs[i] = this.boundArgs!.values[boundPos];
+      } else {
+        fullArgs[i] = unboundArgs[unboundIdx++];
+      }
+    }
+    return fullArgs;
   }
 
   private resolveArgs(descriptor: CallType): unknown[] {
@@ -168,4 +272,20 @@ export class AgencyFunction {
     registry[opts.name] = fn;
     return fn;
   }
+}
+
+function buildReducedSchema(
+  originalSchema: any,
+  unboundParams: FuncParam[]
+): any {
+  if (!originalSchema || !originalSchema.shape) return originalSchema;
+  const unboundNames = new Set(unboundParams.map(p => p.name));
+  const shape = originalSchema.shape;
+  const reducedShape: Record<string, any> = {};
+  for (const [key, value] of Object.entries(shape)) {
+    if (unboundNames.has(key)) {
+      reducedShape[key] = value;
+    }
+  }
+  return z.object(reducedShape);
 }

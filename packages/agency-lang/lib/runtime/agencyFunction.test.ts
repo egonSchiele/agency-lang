@@ -171,3 +171,106 @@ describe("AgencyFunction", () => {
     });
   });
 });
+
+describe("partial()", () => {
+  it("binds a single param by name", () => {
+    const fn = makeFunction([
+      { name: "a" },
+      { name: "b" },
+    ]);
+    const bound = fn.partial({ a: 5 });
+    expect(bound.params).toHaveLength(1);
+    expect(bound.params[0].name).toBe("b");
+  });
+
+  it("binds multiple params", () => {
+    const fn = makeFunction([
+      { name: "a" },
+      { name: "b" },
+      { name: "c" },
+    ]);
+    const bound = fn.partial({ a: 1, c: 3 });
+    expect(bound.params).toHaveLength(1);
+    expect(bound.params[0].name).toBe("b");
+  });
+
+  it("empty partial returns clone with same signature", () => {
+    const fn = makeFunction([
+      { name: "a" },
+      { name: "b" },
+    ]);
+    const clone = fn.partial({});
+    expect(clone.params).toHaveLength(2);
+    expect(clone).not.toBe(fn);
+  });
+
+  it("throws on unknown param name", () => {
+    const fn = makeFunction([{ name: "a" }]);
+    expect(() => fn.partial({ z: 5 })).toThrow("Unknown parameter 'z'");
+  });
+
+  it("chained partial binds remaining params", () => {
+    const fn = makeFunction([
+      { name: "a" },
+      { name: "b" },
+      { name: "c" },
+    ]);
+    const bound1 = fn.partial({ a: 1 });
+    const bound2 = bound1.partial({ c: 3 });
+    expect(bound2.params).toHaveLength(1);
+    expect(bound2.params[0].name).toBe("b");
+  });
+
+  it("throws when re-binding an already-bound param", () => {
+    const fn = makeFunction([
+      { name: "a" },
+      { name: "b" },
+    ]);
+    const bound = fn.partial({ a: 5 });
+    expect(() => bound.partial({ a: 10 })).toThrow("already bound");
+  });
+
+  it("throws when binding a variadic param", () => {
+    const fn = makeFunction([
+      { name: "messages", variadic: true },
+    ]);
+    expect(() => fn.partial({ messages: ["hi"] })).toThrow("Variadic parameter");
+  });
+
+  it("invoke on bound function merges args correctly", async () => {
+    const impl = (a: number, b: number, c: number) => a + b + c;
+    const fn = AgencyFunction.create({
+      name: "add3",
+      module: "test",
+      fn: impl,
+      params: [
+        { name: "a", hasDefault: false, defaultValue: undefined, variadic: false },
+        { name: "b", hasDefault: false, defaultValue: undefined, variadic: false },
+        { name: "c", hasDefault: false, defaultValue: undefined, variadic: false },
+      ],
+      toolDefinition: null,
+    }, {});
+    const bound = fn.partial({ a: 10 });
+    const result = await bound.invoke({ type: "positional", args: [20, 30] });
+    expect(result).toBe(60);
+  });
+
+  it("strips @param lines from tool description", () => {
+    const fn = AgencyFunction.create({
+      name: "readFile",
+      module: "test",
+      fn: () => {},
+      params: [
+        { name: "dir", hasDefault: false, defaultValue: undefined, variadic: false },
+        { name: "filename", hasDefault: false, defaultValue: undefined, variadic: false },
+      ],
+      toolDefinition: {
+        name: "readFile",
+        description: "Read a file.\n@param dir - The directory\n@param filename - The file",
+        schema: {},
+      },
+    }, {});
+    const bound = fn.partial({ dir: "/foo" });
+    expect(bound.toolDefinition!.description).toBe("Read a file.\n@param filename - The file");
+  });
+});

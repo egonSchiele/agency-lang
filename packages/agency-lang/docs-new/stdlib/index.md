@@ -71,16 +71,16 @@ A tool for prompting the user for input and returning their response.
 ### sleep
 
 ```ts
-sleep(seconds: number)
+sleep(ms: number)
 ```
 
-A tool for pausing execution for a specified number of seconds.
+Pause execution for the given duration in milliseconds. Use with unit literals for clarity: sleep(1s), sleep(500ms), sleep(2m).
 
 **Parameters:**
 
 | Name | Type | Default |
 |---|---|---|
-| seconds | `number` |  |
+| ms | `number` |  |
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L40))
 

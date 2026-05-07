@@ -1,12 +1,13 @@
 import { describe, it, expect } from "vitest";
 import { typeCheck } from "./index.js";
 import { AgencyProgram, UnitLiteral } from "../types.js";
+import { Operator } from "../types/binop.js";
 
 function unitLit(value: string, unit: UnitLiteral["unit"], canonicalValue: number, dimension: "time" | "cost"): UnitLiteral {
   return { type: "unitLiteral", value, unit, canonicalValue, dimension };
 }
 
-function programWithBinOp(op: string, left: any, right: any): AgencyProgram {
+function programWithBinOp(op: Operator, left: any, right: any): AgencyProgram {
   return {
     type: "agencyProgram",
     nodes: [

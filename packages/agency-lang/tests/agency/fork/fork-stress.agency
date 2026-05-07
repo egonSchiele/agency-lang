@@ -18,7 +18,7 @@ def quickCheck(item: string): string {
   ]) as entry {
     if (entry.id == "slow") {
       for (n in [1, 2, 3]) {
-        sleep(0.5)
+        sleep(500ms)
       }
     }
     return "${entry.id}: ${item}"

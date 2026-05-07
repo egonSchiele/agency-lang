@@ -1,5 +1,5 @@
 def transform(val: string): string {
-  sleep(0.05)
+  sleep(50ms)
   return "transformed: ${val}"
 }
 

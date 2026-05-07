@@ -3,11 +3,12 @@
 // Any manual changes will be lost.
 import { apply } from "typestache";
 
-export const template = `function _builtinSleep(seconds: number): Promise<void> {
+export const template = `function _builtinSleep(ms: number): Promise<void> {
   return new Promise((resolve) => {
-    setTimeout(resolve, seconds * 1000);
+    setTimeout(resolve, ms);
   });
-}`;
+}
+`;
 
 export type TemplateType = {
 };

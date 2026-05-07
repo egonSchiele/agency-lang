@@ -166,7 +166,7 @@ if (__ctx._pendingArgOverrides) {
     await runner.step(0, async (runner) => {
 const __funcResult = await __call(sleep, {
         type: "positional",
-        args: [0.1]
+        args: [100]
       }, {
         ctx: __ctx,
         threads: __threads,

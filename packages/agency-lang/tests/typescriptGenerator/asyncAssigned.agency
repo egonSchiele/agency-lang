@@ -1,5 +1,5 @@
 def compute(val: number): number {
-  sleep(0.1)
+  sleep(100ms)
   return val * 2
 }
 

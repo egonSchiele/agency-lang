@@ -1,5 +1,5 @@
 def double(val: number): number {
-  sleep(0.05)
+  sleep(50ms)
   return val * 2
 }
 

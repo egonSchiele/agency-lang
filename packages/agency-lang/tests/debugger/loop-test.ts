@@ -7,21 +7,17 @@ import { z } from "zod";
 import { goToNode, color, nanoid } from "agency-lang";
 import { smoltalk } from "agency-lang";
 import path from "path";
-import type { GraphState, InternalFunctionState, Interrupt, InterruptResponse, RewindCheckpoint, LLMClient } from "agency-lang/runtime";
+import type { GraphState, InternalFunctionState, Interrupt, InterruptResponse, Checkpoint, LLMClient } from "agency-lang/runtime";
 import {
   RuntimeContext, MessageThread, ThreadStore, Runner, McpManager,
   setupNode, setupFunction, runNode, runPrompt, callHook,
   checkpoint as __checkpoint_impl, getCheckpoint as __getCheckpoint_impl, restore as __restore_impl,
   interrupt, isInterrupt, hasInterrupts, isDebugger, isRejected, isApproved, interruptWithHandlers, debugStep,
   respondToInterrupts as _respondToInterrupts,
-  respondToInterrupt as _respondToInterrupt,
-  approveInterrupt as _approveInterrupt,
-  rejectInterrupt as _rejectInterrupt,
-  resolveInterrupt as _resolveInterrupt,
-  modifyInterrupt as _modifyInterrupt,
   rewindFrom as _rewindFrom,
   RestoreSignal,
   deepClone as __deepClone,
+  deepFreeze as __deepFreeze,
   head, tail, empty,
   success, failure, isSuccess, isFailure, __pipeBind, __tryCall, __catchResult,
   Schema, __validateType,
@@ -70,24 +66,15 @@ export function readSkill({filepath}: {filepath: string}): string {
   return _readSkillRaw({ filepath, dirname: __dirname });
 }
 
-// Handler result builtins (used in generated 'with' blocks)
-function __handlerApprove(value?: any) { return { type: "approved" as const, value }; }
-function __handlerReject(value?: any) { return { type: "rejected" as const, value }; }
-function __handlerPropagate() { return { type: "propagated" as const }; }
-
-// Interrupt response constructors (exported for TypeScript callers)
+// Handler result builtins and interrupt response constructors (unified types)
 export function approve(value?: any) { return { type: "approve" as const, value }; }
 export function reject(value?: any) { return { type: "reject" as const, value }; }
+function propagate() { return { type: "propagate" as const }; }
 
 // Interrupt and rewind re-exports bound to this module's context
 export { interrupt, isInterrupt, hasInterrupts, isDebugger };
 export const respondToInterrupts = (interrupts: Interrupt[], responses: InterruptResponse[], opts?: { overrides?: Record<string, unknown>; metadata?: Record<string, any> }) => _respondToInterrupts({ ctx: __globalCtx, interrupts, responses, overrides: opts?.overrides, metadata: opts?.metadata });
-export const respondToInterrupt = (interrupt: Interrupt, response: InterruptResponse, opts?: { overrides?: Record<string, unknown>; metadata?: Record<string, any> }) => _respondToInterrupt({ ctx: __globalCtx, interrupt, interruptResponse: response, overrides: opts?.overrides, metadata: opts?.metadata });
-export const approveInterrupt = (interrupt: Interrupt, opts?: { overrides?: Record<string, unknown>; metadata?: Record<string, any> }) => _approveInterrupt({ ctx: __globalCtx, interrupt, overrides: opts?.overrides, metadata: opts?.metadata });
-export const rejectInterrupt = (interrupt: Interrupt, opts?: { overrides?: Record<string, unknown>; metadata?: Record<string, any> }) => _rejectInterrupt({ ctx: __globalCtx, interrupt, overrides: opts?.overrides, metadata: opts?.metadata });
-export const modifyInterrupt = (interrupt: Interrupt, newArguments: Record<string, any>, opts?: { overrides?: Record<string, unknown>; metadata?: Record<string, any> }) => _modifyInterrupt({ ctx: __globalCtx, interrupt, newArguments, overrides: opts?.overrides, metadata: opts?.metadata });
-export const resolveInterrupt = (interrupt: Interrupt, value: any, opts?: { overrides?: Record<string, unknown>; metadata?: Record<string, any> }) => _resolveInterrupt({ ctx: __globalCtx, interrupt, value, overrides: opts?.overrides, metadata: opts?.metadata });
-export const rewindFrom = (checkpoint: RewindCheckpoint, overrides: Record<string, unknown>, opts?: { metadata?: Record<string, any> }) => _rewindFrom({ ctx: __globalCtx, checkpoint, overrides, metadata: opts?.metadata });
+export const rewindFrom = (checkpoint: Checkpoint, overrides: Record<string, unknown>, opts?: { metadata?: Record<string, any> }) => _rewindFrom({ ctx: __globalCtx, checkpoint, overrides, metadata: opts?.metadata });
 
 export const __setDebugger = (dbg: any) => { __globalCtx.debuggerState = dbg; };
 export const __setTraceWriter = (tw: any) => { __globalCtx.traceWriter = tw; };
@@ -151,7 +138,8 @@ graph.node("main", async (__state: GraphState) => {
   const __setupData = setupNode({
     state: __state
   });
-  const __stack = __setupData.stack;
+  const __stateStack = __state.ctx.stateStack;
+const __stack = __setupData.stack;
 const __step = __setupData.step;
 const __self = __setupData.self;
 const __threads = __setupData.threads;
@@ -202,6 +190,7 @@ return;
       throw __error
     }
     console.error(`\nAgent crashed: ${__error.message}`)
+    console.error(__error.stack)
     return {
       messages: __threads,
       data: failure(__error instanceof Error ? __error.message : String(__error), { functionName: "main" })

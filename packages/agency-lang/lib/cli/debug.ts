@@ -7,6 +7,7 @@ import { getNodesOfType } from "@/utils/node.js";
 import { GraphNodeDefinition } from "@/types.js";
 import { DebuggerDriver } from "@/debugger/driver.js";
 import { DebuggerUI } from "@/debugger/ui.js";
+import { Screen, TerminalInput, TerminalOutput } from "@agency-lang/tui";
 import { TraceReader } from "@/runtime/trace/traceReader.js";
 import type { TraceHeader } from "@/runtime/trace/types.js";
 import { Checkpoint } from "@/runtime/state/checkpointStore.js";
@@ -204,7 +205,18 @@ export async function debug(
       },
       sourceMap,
       rewindSize,
-      ui: new DebuggerUI(),
+      ui: (() => {
+        // Remove any existing keypress data handlers on stdin left behind by
+        // readline/prompts, which would conflict with TerminalInput's raw mode.
+        process.stdin.removeAllListeners("data");
+        delete (process.stdin as any)[Symbol.for("nodejs.readline.KEYPRESS_DECODER")];
+        return new DebuggerUI(new Screen({
+          input: new TerminalInput(),
+          output: new TerminalOutput(),
+          width: process.stdout.columns || 80,
+          height: process.stdout.rows || 24,
+        }));
+      })(),
       checkpoints: traceCheckpoints,
       traceHeader,
     });

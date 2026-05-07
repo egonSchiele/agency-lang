@@ -1,5 +1,13 @@
-import { syntaxHighlight } from "@/utils/agentUtils.js";
-import blessed from "blessed";
+import {
+  Screen,
+  box,
+  row,
+  column,
+  text,
+  escapeStyleTags,
+  type Element,
+  type Frame,
+} from "@agency-lang/tui";
 import { readFileSync } from "fs";
 import { formatTypeHint } from "../cli/util.js";
 import type { Checkpoint } from "../runtime/state/checkpointStore.js";
@@ -24,180 +32,50 @@ function readSourceFile(filePath: string): string {
   }
 }
 
-const baseStyle = {
-  border: { type: "line" as any },
-  scrollable: true,
-  alwaysScroll: true,
-  keys: true,
-  vi: true,
-  tags: true,
-  style: {
-    border: { fg: "green" },
-    label: { fg: "green" },
-  },
+type PaneInfo = {
+  name: string;
+  color: string;
+  label: string;
 };
 
 export class DebuggerUI implements DebuggerIO {
-  private screen: blessed.Widgets.Screen;
-  private sourceBox: blessed.Widgets.BoxElement;
-  private localsBox: blessed.Widgets.BoxElement;
-  private globalsBox: blessed.Widgets.BoxElement;
-  private callStackBox: blessed.Widgets.BoxElement;
-  private activityBox: blessed.Widgets.BoxElement;
-  private stdoutBox: blessed.Widgets.BoxElement;
-  private threadsBox: blessed.Widgets.BoxElement;
-  private commandBar: blessed.Widgets.BoxElement;
-  private commandInput: blessed.Widgets.TextboxElement;
-  private statsBar: blessed.Widgets.BoxElement;
-
-  private focusIndex = 0;
-  private focusablePanes: {
-    box: blessed.Widgets.BoxElement;
-    name: string;
-    color: string;
-    label: string;
-  }[];
+  private screen: Screen;
   public state: UIState;
   public prevState: UIState | null = null;
-  private commandBarContent = "";
 
-  // Zoom: stores original position/size so we can restore on un-zoom
-  private zoomedPane: { name: string; original: Record<string, any> } | null =
-    null;
+  // Focus
+  private focusIndex = 0;
+  private focusablePanes: PaneInfo[] = [];
 
-  // Thread cycling: index into the list of thread IDs for the current checkpoint.
-  // undefined = show the active thread (default); number = explicit user selection.
+  // Zoom
+  private zoomedPane: string | null = null;
+
+  // Threads
   private threadDisplayIndex: number | undefined = undefined;
-  private spinnerInterval: ReturnType<typeof setInterval> | null = null;
 
-  constructor() {
+  // Scroll offsets per pane
+  private scrollOffsets: Record<string, number> = {};
+
+  // Spinner
+  private spinnerInterval: ReturnType<typeof setInterval> | null = null;
+  private spinnerText = "";
+
+  // Command bar
+  private commandBarContent: string;
+  private commandBarOverride: string | null = null;
+
+  // Text input state
+  private inputPrompt: string | null = null;
+  private inputValue = "";
+
+  // Last rendered frame for inspection
+  lastFrame: Frame | null = null;
+
+  constructor(screen: Screen) {
+    this.screen = screen;
     this.state = new UIState();
 
-    /* 
-    /*   1. What: removes existing data listeners and the readline keypress decoder guard from stdin
-  2. Why: the prompts library (used by pickANode) calls readline.emitKeypressEvents(stdin), and blessed has its
-  own keys.emitKeypressEvents(stdin) with a different guard — so both install data handlers, causing every key
-  to fire twice
-  3. How: clearing data listeners before blessed creates its screen ensures only blessed's handler is active
-  */
-    // Remove any existing keypress data handlers on stdin left behind by
-    // readline/prompts. Blessed installs its own keypress parser via
-    // keys.emitKeypressEvents, but Node's readline.emitKeypressEvents uses
-    // a different guard, so both can install — causing every key to register
-    // twice. Clearing data listeners before blessed takes over prevents this.
-    process.stdin.removeAllListeners("data");
-    // Also clear the readline guard so blessed's guard is the only one.
-    delete (process.stdin as any)[
-      Symbol.for("nodejs.readline.KEYPRESS_DECODER")
-    ];
-
-    this.screen = blessed.screen({
-      smartCSR: true,
-      title: "Agency Debugger",
-      fullUnicode: true,
-      terminal: "xterm",
-      warnings: false,
-    });
-
-    // Source pane (~40% height)
-    this.sourceBox = blessed.box({
-      ...baseStyle,
-      top: 0,
-      left: 0,
-      width: "100%",
-      height: "40%",
-      label: " source ",
-      style: {
-        border: { fg: "cyan" },
-        label: { fg: "cyan" },
-      },
-    });
-
-    // Threads pane (top right, initially hidden)
-    this.threadsBox = blessed.box({
-      ...baseStyle,
-      top: 0,
-      left: "65%+1",
-      width: "35%-1",
-      height: "40%",
-      label: " threads ",
-      hidden: true,
-      style: {
-        border: { fg: "cyan" },
-        label: { fg: "cyan" },
-      },
-    });
-
-    // Locals pane (~25% height, left half)
-    this.localsBox = blessed.box({
-      ...baseStyle,
-      top: "40%",
-      left: 0,
-      width: "40%",
-      height: "25%",
-      label: " locals ",
-      style: {
-        border: { fg: "green" },
-        label: { fg: "green" },
-      },
-    });
-
-    this.globalsBox = blessed.box({
-      ...baseStyle,
-      top: "40%",
-      left: "40%+1",
-      width: "40%",
-      height: "25%",
-      label: " globals ",
-      style: {
-        border: { fg: "green" },
-        label: { fg: "green" },
-      },
-    });
-
-    // Call stack pane (~25% height, right half)
-    this.callStackBox = blessed.box({
-      ...baseStyle,
-      top: "40%",
-      right: 0,
-      width: "20%",
-      height: "25%",
-      label: " call stack ",
-      style: {
-        border: { fg: "magenta" },
-        label: { fg: "magenta" },
-      },
-    });
-
-    // Activity pane
-    this.activityBox = blessed.box({
-      ...baseStyle,
-      top: "65%",
-      left: 0,
-      width: "50%",
-      height: "35%-4",
-      label: " activity ",
-      style: {
-        border: { fg: "yellow" },
-        label: { fg: "yellow" },
-      },
-    });
-
-    // Stdout pane
-    this.stdoutBox = blessed.box({
-      ...baseStyle,
-      top: "65%",
-      right: 0,
-      width: "50%",
-      height: "35%-4",
-      label: " stdout ",
-      style: {
-        border: { fg: "blue" },
-        label: { fg: "blue" },
-      },
-    });
-
-    const commands = {
+    const commands: Record<string, string> = {
       s: "step",
       n: "next",
       i: "in",
@@ -210,169 +88,346 @@ export class DebuggerUI implements DebuggerIO {
       q: "quit",
       ["(:)"]: "cmd",
     };
-
-    // Build command bar content
-    const commandParts = Object.entries(commands).map(
-      ([key, action]) => `${this.bold(`(${key})`)}${action}`,
-    );
-    const commandContent = commandParts.join(" ");
-    this.commandBarContent = commandContent;
-
-    // Command bar (bottom, fixed 3 rows)
-    this.commandBar = blessed.box({
-      bottom: 0,
-      left: 0,
-      width: "100%",
-      height: 3,
-      border: { type: "line" },
-      tags: true,
-      style: {
-        border: { fg: "white" },
-      },
-      content: commandContent,
-    });
-
-    // Hidden textbox for command input
-    this.commandInput = blessed.textbox({
-      bottom: 0,
-      left: 0,
-      width: "100%",
-      height: 3,
-      border: { type: "line" },
-      style: {
-        border: { fg: "white" },
-        fg: "white",
-      },
-      hidden: true,
-    });
-
-    // Stats bar (thin, borderless, above command bar)
-    this.statsBar = blessed.box({
-      bottom: 3,
-      left: 0,
-      width: "100%",
-      height: 1,
-      tags: true,
-      style: {
-        fg: "gray",
-      },
-    });
-
-    this.screen.append(this.sourceBox);
-    this.screen.append(this.threadsBox);
-    this.screen.append(this.localsBox);
-    this.screen.append(this.globalsBox);
-    this.screen.append(this.callStackBox);
-    this.screen.append(this.activityBox);
-    this.screen.append(this.stdoutBox);
-    this.screen.append(this.statsBar);
-    this.screen.append(this.commandBar);
-    this.screen.append(this.commandInput);
-
-    this.focusablePanes = [
-      {
-        box: this.sourceBox,
-        name: "sourceBox",
-        color: "cyan",
-        label: " source ",
-      },
-      {
-        box: this.localsBox,
-        name: "localsBox",
-        color: "green",
-        label: " locals ",
-      },
-      {
-        box: this.globalsBox,
-        name: "globalsBox",
-        color: "green",
-        label: " globals ",
-      },
-      {
-        box: this.callStackBox,
-        name: "callStackBox",
-        color: "magenta",
-        label: " call stack ",
-      },
-      {
-        box: this.activityBox,
-        name: "activityBox",
-        color: "yellow",
-        label: " activity ",
-      },
-      {
-        box: this.stdoutBox,
-        name: "stdoutBox",
-        color: "blue",
-        label: " stdout ",
-      },
-    ];
-
-    // Ctrl-C to quit — blessed puts the terminal in raw mode so SIGINT
-    // is not generated; we must catch the keypress directly.
-    this.screen.key(["C-c"], () => this.cleanup());
-
-    // Ctrl-Z to suspend — blessed puts the terminal in raw mode so SIGTSTP
-    // is not generated; we must catch the keypress, restore the terminal,
-    // and send SIGTSTP manually. We defer the signal to the next tick so
-    // the terminal escape sequences flush first.
-    this.screen.key(["C-z"], () => {
-      process.stdin.setRawMode?.(false);
-      process.stdout.write(
-        "\x1b[?1049l" + // exit alternate screen buffer
-          "\x1b[2J" + // clear entire screen
-          "\x1b[H" + // move cursor to top-left
-          "\x1b[?25h", // show cursor
-      );
-      // Node suppresses the default OS suspend action when any SIGTSTP
-      // listener is registered (blessed installs one). Remove them so the
-      // kernel's default suspend behavior is restored, then signal the
-      // entire process group so shell job control works.
-      process.removeAllListeners("SIGTSTP");
-      process.kill(0, "SIGTSTP");
-    });
-
-    // Terminal cleanup handlers
-    process.on("SIGINT", () => this.cleanup());
-    process.on("SIGTERM", () => this.cleanup());
-    process.on("SIGCONT", () => {
-      process.stdin.setRawMode?.(true);
-      this.screen.program.alternateBuffer();
-      this.screen.program.hideCursor();
-      // Force a full repaint: clear blessed's internal line cache so it
-      // redraws every cell instead of diffing against stale state.
-      this.screen.alloc();
-      this.screen.render();
-    });
-    process.on("uncaughtException", (err) => {
-      this.cleanup(`Uncaught exception: ${err.stack || err}`);
-    });
+    this.commandBarContent = Object.entries(commands)
+      .map(([key, action]) => `{bold}(${key}){/bold}${action}`)
+      .join(" ");
   }
 
+  // --- Formatting helpers ---
+
+  private fmt(str: string): string {
+    return escapeStyleTags(str);
+  }
+
+  private bold(str: string): string {
+    return `{bold}${str}{/bold}`;
+  }
+
+  private highlight(str: string): string {
+    return `{yellow-fg}${escapeStyleTags(str)}{/yellow-fg}`;
+  }
+
+  private formatKeyVal(
+    key: string,
+    value: unknown,
+    { highlight }: { highlight?: boolean } = {},
+  ): string {
+    const formatted = `${escapeStyleTags(key)} = ${escapeStyleTags(formatValue(value))}`;
+    return highlight ? this.highlight(formatted) : formatted;
+  }
+
+  // --- Pane management ---
+
+  private buildPaneList(): PaneInfo[] {
+    const panes: PaneInfo[] = [
+      { name: "source", color: "cyan", label: " source " },
+    ];
+
+    const threadData = this.state.getThreadMessages(this.threadDisplayIndex);
+    if (threadData) {
+      const countLabel =
+        threadData.threadCount > 1
+          ? ` [${threadData.threadIndex + 1}/${threadData.threadCount}]`
+          : "";
+      panes.push({
+        name: "threads",
+        color: "cyan",
+        label: ` threads: (id: ${threadData.threadId})${countLabel} `,
+      });
+    }
+
+    panes.push(
+      { name: "locals", color: "green", label: " locals " },
+      { name: "globals", color: "green", label: " globals " },
+      { name: "callStack", color: "magenta", label: " call stack " },
+      { name: "activity", color: "yellow", label: " activity " },
+      { name: "stdout", color: "blue", label: " stdout " },
+    );
+
+    return panes;
+  }
+
+  // --- Content builders ---
+
+  private buildSourceContent(): string {
+    const moduleId = this.state.getModuleId();
+    const currentLine = this.state.getCurrentLine();
+    const filePath =
+      this.state.resolveModulePath(moduleId, [".agency"]) ?? moduleId;
+    const fileContent = readSourceFile(filePath);
+    const lines = fileContent.split("\n");
+
+    const windowSize = 20;
+    const center = currentLine ? currentLine - 1 : 0;
+    const start = Math.max(0, center - Math.floor(windowSize / 2));
+    const end = Math.min(lines.length, start + windowSize);
+
+    const content: string[] = [];
+    for (let i = start; i < end; i++) {
+      const lineNum = i + 1;
+      const numStr = String(lineNum).padStart(4, " ");
+      const lineText = this.fmt(lines[i]);
+
+      if (currentLine !== null && lineNum === currentLine) {
+        content.push(
+          `{magenta-bg}{bold}> ${numStr}  ${lineText}{/bold}{/magenta-bg}`,
+        );
+      } else {
+        content.push(`  ${numStr}  ${lineText}`);
+      }
+    }
+
+    return content.join("\n");
+  }
+
+  private buildThreadsContent(): string {
+    const threadData = this.state.getThreadMessages(this.threadDisplayIndex);
+    if (!threadData) return "";
+
+    const isZoomed = this.zoomedPane === "threads";
+    return threadData.messages
+      .map((m) => {
+        const display = isZoomed
+          ? m.content
+          : m.content.length > 200
+            ? m.content.slice(0, 197) + "..."
+            : m.content;
+        return `  ${this.bold(`[${this.fmt(m.role)}]`)} ${this.fmt(display)}`;
+      })
+      .join("\n");
+  }
+
+  private buildLocalsContent(): string {
+    const content: string[] = [];
+    this.state.getArgs().forEach((arg) => {
+      const val = arg.override || arg.value;
+      content.push(
+        this.formatKeyVal(arg.key, val, {
+          highlight: arg.override !== undefined,
+        }),
+      );
+    });
+    this.state.getLocals().forEach((local) => {
+      const val = local.override || local.value;
+      content.push(
+        this.formatKeyVal(local.key, val, {
+          highlight: local.override !== undefined,
+        }),
+      );
+    });
+    return content.join("\n");
+  }
+
+  private buildGlobalsContent(): string {
+    const content: string[] = [];
+    this.state.getGlobals().forEach((global) => {
+      const val = global.override || global.value;
+      content.push(
+        this.formatKeyVal(global.key, val, {
+          highlight: global.override !== undefined,
+        }),
+      );
+    });
+    return content.join("\n");
+  }
+
+  private buildCallStackContent(): string {
+    const callStack = this.state.getCallStack();
+    return callStack
+      .map((entry, i) => {
+        const prefix = i === callStack.length - 1 ? " > " : "   ";
+        const fileName = entry.moduleId.split("/").pop() || entry.moduleId;
+        return `${prefix}${this.fmt(entry.functionName)} (${this.fmt(fileName)}:${entry.line})`;
+      })
+      .join("\n");
+  }
+
+  private buildActivityContent(): string {
+    return this.state
+      .getActivityLog()
+      .map((entry) => `  ${this.fmt(entry)}`)
+      .join("\n");
+  }
+
+  private buildStdoutContent(): string {
+    return this.state
+      .getStdout()
+      .map((line) => `  ${this.fmt(line)}`)
+      .join("\n");
+  }
+
+  private buildStatsContent(): string {
+    const stats = this.state.getTokenStats();
+    const cost =
+      stats.totalCost === 0
+        ? "$0.00"
+        : stats.totalCost < 0.0001
+          ? "<$0.0001"
+          : `$${stats.totalCost.toFixed(4)}`;
+    return `{gray-fg}  tokens: ${stats.totalTokens.toLocaleString()} | cost: ${cost}{/gray-fg}`;
+  }
+
+  private getContentForPane(name: string): string {
+    switch (name) {
+      case "source":
+        return this.buildSourceContent();
+      case "threads":
+        return this.buildThreadsContent();
+      case "locals":
+        return this.buildLocalsContent();
+      case "globals":
+        return this.buildGlobalsContent();
+      case "callStack":
+        return this.buildCallStackContent();
+      case "activity":
+        return this.buildActivityContent();
+      case "stdout":
+        return this.buildStdoutContent();
+      default:
+        return "";
+    }
+  }
+
+  // --- Element tree builders ---
+
+  private buildPane(
+    paneName: string,
+    label: string,
+    baseColor: string,
+    content: string,
+    extraStyle: Record<string, unknown> = {},
+  ): Element {
+    const isFocused = this.focusablePanes[this.focusIndex]?.name === paneName;
+    const borderColor = isFocused ? "white" : baseColor;
+    const labelColor = isFocused ? "cyan" : baseColor;
+    const fg = isFocused ? undefined : "gray";
+
+    return box(
+      {
+        key: paneName,
+        border: true,
+        borderColor,
+        label: ` ${this.fmt(label.trim())} `,
+        labelColor,
+        fg,
+        scrollable: true,
+        scrollOffset: this.scrollOffsets[paneName] || 0,
+        ...extraStyle,
+      },
+      text(content),
+    );
+  }
+
+  private buildCommandBar(): Element {
+    let content: string;
+    if (this.inputPrompt !== null) {
+      content = `${this.inputPrompt} ${this.inputValue}\u2588`;
+    } else {
+      content =
+        this.commandBarOverride ||
+        this.spinnerText ||
+        this.commandBarContent;
+    }
+    return box(
+      { height: 3, border: true, borderColor: "white", key: "commandBar" },
+      text(content),
+    );
+  }
+
+  private buildElementTree(): Element {
+    this.focusablePanes = this.buildPaneList();
+    if (this.focusIndex >= this.focusablePanes.length) {
+      this.focusIndex = 0;
+    }
+
+    const moduleId = this.state.getModuleId();
+    const threadData = this.state.getThreadMessages(this.threadDisplayIndex);
+    const hasThreads = threadData !== null;
+
+    // If zoomed, show only the zoomed pane
+    if (this.zoomedPane) {
+      const pane = this.focusablePanes.find((p) => p.name === this.zoomedPane);
+      if (pane) {
+        return column(
+          this.buildPane(pane.name, pane.label, pane.color, this.getContentForPane(pane.name), { flex: 1 }),
+          box({ height: 1, key: "stats" }, text(this.buildStatsContent())),
+          this.buildCommandBar(),
+        );
+      }
+    }
+
+    // Normal layout
+    const sourceLabel = ` source: ${this.fmt(moduleId)} `;
+    const topChildren: Element[] = [
+      this.buildPane(
+        "source",
+        sourceLabel,
+        "cyan",
+        this.buildSourceContent(),
+        hasThreads ? { width: "65%" } : { flex: 1 },
+      ),
+    ];
+    if (hasThreads) {
+      const threadPane = this.focusablePanes.find(
+        (p) => p.name === "threads",
+      )!;
+      topChildren.push(
+        this.buildPane(
+          "threads",
+          threadPane.label,
+          "cyan",
+          this.buildThreadsContent(),
+          { width: "35%" },
+        ),
+      );
+    }
+
+    return column(
+      row({ height: "40%" }, ...topChildren),
+      row(
+        { height: "25%" },
+        this.buildPane("locals", " locals ", "green", this.buildLocalsContent(), { width: "40%" }),
+        this.buildPane("globals", " globals ", "green", this.buildGlobalsContent(), { width: "40%" }),
+        this.buildPane("callStack", " call stack ", "magenta", this.buildCallStackContent(), { flex: 1 }),
+      ),
+      row(
+        { flex: 1 },
+        this.buildPane("activity", " activity ", "yellow", this.buildActivityContent(), { width: "50%" }),
+        this.buildPane("stdout", " stdout ", "blue", this.buildStdoutContent(), { flex: 1 }),
+      ),
+      box({ height: 1, key: "stats" }, text(this.buildStatsContent())),
+      this.buildCommandBar(),
+    );
+  }
+
+  private renderUI(label?: string): Frame {
+    const tree = this.buildElementTree();
+    const frame = this.screen.render(tree, label);
+    this.lastFrame = frame;
+    return frame;
+  }
+
+  // --- DebuggerIO implementation ---
+
+  async render(checkpoint?: Checkpoint, _full = true): Promise<void> {
+    if (checkpoint) {
+      await this.state.setCheckpoint(checkpoint);
+      this.threadDisplayIndex = undefined;
+    }
+    this.renderUI();
+  }
+
+  // Spinner
+
   private static SPINNER_FRAMES = [
-    "⠋",
-    "⠙",
-    "⠹",
-    "⠸",
-    "⠼",
-    "⠴",
-    "⠦",
-    "⠧",
-    "⠇",
-    "⠏",
+    "⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏",
   ];
   private static SPINNER_PHRASES = [
-    "thinking",
-    "pondering",
-    "reasoning",
-    "working",
-    "executing",
-    "processing",
-    "contemplating",
-    "computing",
+    "thinking", "pondering", "reasoning", "working",
+    "executing", "processing", "contemplating", "computing",
   ];
   private static SPINNER_INTERVAL_MS = 80;
-  private static SPINNER_PHRASE_TICKS = 30; // ~2.4s at 80ms interval
+  private static SPINNER_PHRASE_TICKS = 30;
 
   startSpinner(): void {
     if (this.spinnerInterval) return;
@@ -384,13 +439,15 @@ export class DebuggerUI implements DebuggerIO {
 
     const update = () => {
       const frame =
-        DebuggerUI.SPINNER_FRAMES[frameIdx % DebuggerUI.SPINNER_FRAMES.length];
+        DebuggerUI.SPINNER_FRAMES[
+          frameIdx % DebuggerUI.SPINNER_FRAMES.length
+        ];
       const phrase =
         DebuggerUI.SPINNER_PHRASES[
           phraseIdx % DebuggerUI.SPINNER_PHRASES.length
         ];
-      this.commandBar.setContent(`{cyan-fg}${frame}{/cyan-fg} ${phrase}...`);
-      this.screen.render();
+      this.spinnerText = `{cyan-fg}${frame}{/cyan-fg} ${phrase}...`;
+      this.renderUI();
       frameIdx++;
       ticksSincePhrase++;
       if (ticksSincePhrase >= DebuggerUI.SPINNER_PHRASE_TICKS) {
@@ -407,8 +464,8 @@ export class DebuggerUI implements DebuggerIO {
     if (!this.spinnerInterval) return;
     clearInterval(this.spinnerInterval);
     this.spinnerInterval = null;
-    this.commandBar.setContent(this.commandBarContent);
-    this.screen.render();
+    this.spinnerText = "";
+    this.renderUI();
   }
 
   cleanup(error?: string): void {
@@ -420,516 +477,180 @@ export class DebuggerUI implements DebuggerIO {
     process.exit(error ? 1 : 0);
   }
 
-  async render(checkpoint?: Checkpoint, full = true): Promise<void> {
-    if (checkpoint) {
-      await this.state.setCheckpoint(checkpoint);
-      // Reset to default (active thread) so the pane tracks the most recent thread.
-      // User can still override with [ / ] cycling.
-      this.threadDisplayIndex = undefined;
-    }
+  async waitForCommand(): Promise<DebuggerCommand> {
+    while (true) {
+      const keyEvent = await this.screen.nextKey();
+      const { key } = keyEvent;
 
-    // this.state.setSourceMap(sourceMap);
-    //console.log(JSON.stringify(sourceMap));
-
-    // Update source pane
-    this.renderSourcePane();
-    this.renderThreadsPane();
-    //if (!full) return;
-
-    // Update locals pane
-    this.renderLocalsPane();
-
-    // Update call stack pane
-    this.renderCallStackPane();
-
-    // Update activity pane
-    this.renderActivityPane();
-
-    this.renderStdoutPane();
-    this.renderStatsBar();
-
-    this.screen.render();
-  }
-
-  private renderSourcePane(): void {
-    const moduleId = this.state.getModuleId();
-    const currentLine = this.state.getCurrentLine();
-    const filePath = this.state.resolveModulePath(moduleId, [".agency"]) ?? moduleId;
-    const fileContent = readSourceFile(filePath);
-    const highlighted = syntaxHighlight(fileContent, "ts");
-    const lines = highlighted.split("\n");
-    this.sourceBox.setLabel(` source: ${moduleId} `);
-
-    const content: string[] = [];
-    const windowSize = 20;
-    const center = currentLine ? currentLine - 1 : 0; // 0-indexed
-    const start = Math.max(0, center - Math.floor(windowSize / 2));
-    const end = Math.min(lines.length, start + windowSize);
-
-    for (let i = start; i < end; i++) {
-      const lineNum = i + 1; // 1-indexed display
-      const numStr = String(lineNum).padStart(4, " ");
-      const lineText = lines[i];
-
-      if (currentLine !== null && lineNum === currentLine) {
-        content.push(
-          `{magenta-bg}{bold}> ${numStr}  ${blessed.escape(lineText)}{/bold}{/magenta-bg}`,
-        );
-      } else {
-        content.push(`  ${numStr}  ${blessed.escape(lineText)}`);
+      // Ctrl-C to quit
+      if (key === "c" && keyEvent.ctrl) {
+        this.cleanup();
       }
-    }
 
-    this.sourceBox.setContent(content.join("\n"));
-
-    // Scroll to make the current line visible
-    if (currentLine !== null) {
-      const scrollTarget = Math.max(0, center - start - 3);
-      this.sourceBox.scrollTo(scrollTarget);
-    }
-  }
-
-  private bold(str: string): string {
-    return `{bold}${str}{/bold}`;
-  }
-
-  private highlight(str: string): string {
-    return `{yellow-fg}${blessed.escape(str)}{/yellow-fg}`;
-  }
-
-  private formatKeyVal(
-    key: string,
-    value: unknown,
-    { highlight }: { highlight?: boolean } = {},
-  ): string {
-    const formatted = `${blessed.escape(key)} = ${blessed.escape(formatValue(value))}`;
-    return highlight ? this.highlight(formatted) : formatted;
-  }
-
-  private restoreFocusByName(focusedName: string | undefined): void {
-    const newIndex = this.focusablePanes.findIndex(
-      (p) => p.name === focusedName,
-    );
-    this.focusIndex = newIndex >= 0 ? newIndex : 0;
-  }
-
-  private renderThreadsPane(): void {
-    const threadData = this.state.getThreadMessages(this.threadDisplayIndex);
-    const focusedName = this.focusablePanes[this.focusIndex]?.name;
-    if (!threadData) {
-      this.threadsBox.hide();
-      this.sourceBox.width = "100%";
-      this.focusablePanes = this.focusablePanes.filter(
-        (p) => p.name !== "threadsBox",
-      );
-      this.restoreFocusByName(focusedName);
-      this.threadDisplayIndex = undefined;
-      return;
-    }
-
-    // Resize source and show threads
-    this.sourceBox.width = "65%";
-    this.threadsBox.show();
-
-    const countLabel =
-      threadData.threadCount > 1
-        ? ` [${threadData.threadIndex + 1}/${threadData.threadCount}]`
-        : "";
-    const threadLabel = ` threads: (id: ${threadData.threadId})${countLabel} `;
-
-    // Add to focusable panes if not already there
-    const existingPane = this.focusablePanes.find(
-      (p) => p.name === "threadsBox",
-    );
-    if (existingPane) {
-      existingPane.label = threadLabel;
-    } else {
-      this.focusablePanes.splice(1, 0, {
-        box: this.threadsBox,
-        name: "threadsBox",
-        color: "cyan",
-        label: threadLabel,
-      });
-      this.restoreFocusByName(focusedName);
-    }
-
-    this.threadsBox.setLabel(` ${this.fmt(threadLabel)} `);
-
-    // Format messages
-    const isZoomed = this.zoomedPane?.name === "threadsBox";
-    const content = threadData.messages
-      .map((m) => {
-        const display = isZoomed
-          ? m.content
-          : m.content.length > 200
-            ? m.content.slice(0, 197) + "..."
-            : m.content;
-        return `  ${this.bold(`[${this.fmt(m.role)}]`)} ${this.fmt(display)}`;
-      })
-      .join("\n");
-
-    this.threadsBox.setContent(content);
-    this.threadsBox.setScrollPerc(100);
-  }
-
-  private renderLocalsPane(): void {
-    const content: string[] = [];
-
-    this.state.getArgs().forEach((arg) => {
-      const val = arg.override || arg.value;
-      let display = this.formatKeyVal(arg.key, val, {
-        highlight: arg.override !== undefined,
-      });
-      content.push(display);
-    });
-
-    this.state.getLocals().forEach((local) => {
-      const val = local.override || local.value;
-      let display = this.formatKeyVal(local.key, val, {
-        highlight: local.override !== undefined,
-      });
-      content.push(display);
-    });
-
-    const globalsContent: string[] = [];
-    this.state.getGlobals().forEach((global) => {
-      const val = global.override || global.value;
-      let display = this.formatKeyVal(global.key, val, {
-        highlight: global.override !== undefined,
-      });
-      globalsContent.push(display);
-    });
-
-    this.localsBox.setContent(content.join("\n"));
-    this.globalsBox.setContent(globalsContent.join("\n"));
-  }
-
-  private fmt(str: string): string {
-    return blessed.escape(str);
-  }
-
-  private renderCallStackPane(): void {
-    const content: string[] = [];
-    const callStack = this.state.getCallStack();
-    for (let i = 0; i < callStack.length; i++) {
-      const entry = callStack[i];
-      const prefix = i === callStack.length - 1 ? " > " : "   ";
-      const fileName = entry.moduleId.split("/").pop() || entry.moduleId;
-      content.push(
-        `${prefix}${this.fmt(entry.functionName)} (${this.fmt(fileName)}:${entry.line})`,
-      );
-    }
-    this.callStackBox.setContent(content.join("\n"));
-  }
-
-  private renderActivityPane(): void {
-    const content = this.state
-      .getActivityLog()
-      .map((entry) => `  ${this.fmt(entry)}`)
-      .join("\n");
-    this.activityBox.setContent(content);
-    // Scroll to bottom
-    this.activityBox.setScrollPerc(100);
-  }
-
-  private renderStdoutPane(): void {
-    const content = this.state
-      .getStdout()
-      .map((line) => `  ${this.fmt(line)}`)
-      .join("\n");
-    this.stdoutBox.setContent(content);
-    // Scroll to bottom
-    this.stdoutBox.setScrollPerc(100);
-  }
-
-  private renderStatsBar(): void {
-    const stats = this.state.getTokenStats();
-    const cost =
-      stats.totalCost === 0
-        ? "$0.00"
-        : stats.totalCost < 0.0001
-          ? "<$0.0001"
-          : `$${stats.totalCost.toFixed(4)}`;
-    const content = `  tokens: ${stats.totalTokens.toLocaleString()} | cost: ${cost}`;
-    this.statsBar.setContent(`{gray-fg}${content}{/gray-fg}`);
-  }
-
-  waitForCommand(): Promise<DebuggerCommand> {
-    return new Promise((resolve) => {
-      const handleKey = (
-        _ch: string,
-        key: blessed.Widgets.Events.IKeyEventArg,
-      ) => {
-        switch (key.name) {
-          case "s":
-          case "right":
-            cleanup();
-            resolve({ type: "step" });
-            break;
-          case "n":
-            cleanup();
-            resolve({ type: "next" });
-            break;
-          case "i":
-            cleanup();
-            resolve({ type: "stepIn" });
-            break;
-          case "o":
-            cleanup();
-            resolve({ type: "stepOut" });
-            break;
-          case "space":
-          case "c":
-            cleanup();
-            resolve({ type: "continue" });
-            break;
-          case "r":
-            cleanup();
-            // Rewind mode is handled externally via showRewindSelector
-            // Here we just signal intent; the driver will call showRewindSelector
-            resolve({ type: "rewind" });
-            break;
-          case "d":
-            cleanup();
-            resolve({ type: "showCheckpoints" });
-            break;
-          case "k":
-            cleanup();
-            this.enterTextInput("checkpoint label (enter to skip)> ").then(
-              (input) => {
-                const label = input?.trim() || undefined;
-                resolve({ type: "checkpoint", label });
-              },
-            );
-            break;
-          case "p":
-            cleanup();
-            this.enterTextInput("print> ").then((input) => {
-              if (input && input.trim()) {
-                resolve({ type: "print", varName: input.trim() });
-              } else {
-                // Re-prompt if empty
-                this.waitForCommand().then(resolve);
-              }
-            });
-            break;
-          case "escape":
-          case "q":
-            cleanup();
-            resolve({ type: "quit" });
-            break;
-          case "tab":
-            if (key.shift) {
-              this.focusPane(
-                (this.focusIndex - 1 + this.focusablePanes.length) %
-                  this.focusablePanes.length,
-              );
-            } else {
-              this.cycleFocus();
-            }
-            this.screen.render();
-            break;
-          case "up": {
-            const currentFocusUp = this.focusablePanes[this.focusIndex];
-            if (currentFocusUp.name === "sourceBox") {
-              cleanup();
-              resolve({
-                type: "stepBack",
-                preserveOverrides: key.shift === true,
-              });
-              break;
-            }
-            currentFocusUp.box.scroll(-1);
-            this.screen.render();
-            break;
-          }
-
-          case "down": {
-            const currentFocus = this.focusablePanes[this.focusIndex];
-            if (currentFocus.name === "sourceBox") {
-              cleanup();
-              resolve({ type: "step" });
-              break;
-            }
-            currentFocus.box.scroll(1);
-            this.screen.render();
-            break;
-          }
-          case "z":
-            this.toggleZoom();
-            break;
-          default:
-            // Number keys: jump directly to a panel (1-indexed)
-            if (key.full >= "1" && key.full <= "9") {
-              const panelIndex = parseInt(key.full, 10) - 1;
-              if (panelIndex < this.focusablePanes.length) {
-                this.focusPane(panelIndex);
-                this.screen.render();
-              }
-              break;
-            }
-            // Thread cycling: [ and ] to navigate between threads
-            if (key.full === "[" || key.full === "]") {
-              const current = this.threadDisplayIndex ?? 0;
-              this.threadDisplayIndex = current + (key.full === "]" ? 1 : -1);
-              this.renderThreadsPane();
-              this.screen.render();
-              break;
-            }
-            if (key.full === ":") {
-              cleanup();
-              this.enterTextInput(":").then((input) => {
-                const cmd = parseCommandInput(input || "");
-                if (cmd) {
-                  resolve(cmd);
-                } else {
-                  this.waitForCommand().then(resolve);
-                }
-              });
-            }
-            break;
+      switch (key) {
+        case "s":
+        case "right":
+          return { type: "step" };
+        case "n":
+          return { type: "next" };
+        case "i":
+          return { type: "stepIn" };
+        case "o":
+          return { type: "stepOut" };
+        case " ":
+        case "c":
+          return { type: "continue" };
+        case "r":
+          return { type: "rewind" };
+        case "d":
+          return { type: "showCheckpoints" };
+        case "k": {
+          const label = await this.enterTextInput(
+            "checkpoint label (enter to skip)>",
+          );
+          return { type: "checkpoint", label: label?.trim() || undefined };
         }
-      };
-
-      /* waitForCommand is a one-shot promise — it resolves with a single command,
-      then the driver processes that command and calls waitForCommand() again
-      for the next one. The cleanup removes the listener so keys pressed
-      during command processing (like during resume() or enterTextInput())
-      don't accidentally resolve a stale promise.
-
-      Without cleanup, if a key arrived while the driver was mid-processing, the
-      old handler would try to resolve an already-resolved promise. It's essentially
-      treating each waitForCommand() call as a single "wait for one keypress" operation.
-
-      An alternative would be a persistent listener that pushes commands into a queue,
-      but the one-shot approach is simpler and avoids buffering issues.
-      */
-      const cleanup = () => {
-        this.screen.removeListener("keypress", handleKey);
-      };
-
-      this.screen.on("keypress", handleKey);
-    });
-  }
-
-  private enterTextInput(prompt: string): Promise<string | null> {
-    return new Promise((resolve) => {
-      this.commandBar.hide();
-      this.commandInput.setLabel(` ${prompt} `);
-      this.commandInput.setValue("");
-      this.commandInput.show();
-      this.screen.saveFocus();
-      this.commandInput.focus();
-      this.screen.render();
-
-      // Handle escape to cancel, Ctrl-C to quit
-      const onKeypress = (
-        _ch: string,
-        key: blessed.Widgets.Events.IKeyEventArg,
-      ) => {
-        if (key.full === "C-c") {
-          this.cleanup();
-        } else if (key.name === "escape") {
-          done(null);
+        case "p": {
+          const input = await this.enterTextInput("print>");
+          if (input && input.trim()) {
+            return { type: "print", varName: input.trim() };
+          }
+          continue;
         }
-      };
-
-      const done = (value: string | null) => {
-        this.commandInput.removeListener("keypress", onKeypress);
-        this.commandInput.hide();
-        this.commandBar.show();
-        this.screen.restoreFocus();
-        this.screen.render();
-        resolve(value);
-      };
-
-      this.commandInput.readInput((_err: any, value: string | undefined) => {
-        done(value || null);
-      });
-
-      this.commandInput.on("keypress", onKeypress);
-    });
-  }
-
-  private focusPane(index: number): void {
-    for (let i = 0; i < this.focusablePanes.length; i++) {
-      const pane = this.focusablePanes[i];
-      if (i === index) {
-        pane.box.style.border.fg = "white";
-        pane.box.style.label.fg = "cyan";
-        pane.box.style.label.bold = true;
-        pane.box.setLabel(pane.label);
-        pane.box.style.fg = "white";
-      } else {
-        pane.box.style.border.fg = pane.color;
-        pane.box.style.label.fg = pane.color;
-        pane.box.style.label.bold = false;
-        pane.box.setLabel(pane.label);
-        pane.box.style.fg = "gray";
+        case "escape":
+        case "q":
+          return { type: "quit" };
+        case "tab":
+          if (keyEvent.shift) {
+            this.focusIndex =
+              (this.focusIndex - 1 + this.focusablePanes.length) %
+              this.focusablePanes.length;
+          } else {
+            this.focusIndex =
+              (this.focusIndex + 1) % this.focusablePanes.length;
+          }
+          this.renderUI();
+          continue;
+        case "up": {
+          const focusedPane = this.focusablePanes[this.focusIndex];
+          if (focusedPane?.name === "source") {
+            return {
+              type: "stepBack",
+              preserveOverrides: keyEvent.shift === true,
+            };
+          }
+          const offset = this.scrollOffsets[focusedPane?.name] || 0;
+          if (offset > 0) {
+            this.scrollOffsets[focusedPane.name] = offset - 1;
+            this.renderUI();
+          }
+          continue;
+        }
+        case "down": {
+          const focusedPane = this.focusablePanes[this.focusIndex];
+          if (focusedPane?.name === "source") {
+            return { type: "step" };
+          }
+          const name = focusedPane?.name;
+          if (name) {
+            this.scrollOffsets[name] = (this.scrollOffsets[name] || 0) + 1;
+            this.renderUI();
+          }
+          continue;
+        }
+        case "z":
+          if (this.zoomedPane) {
+            this.zoomedPane = null;
+          } else {
+            this.zoomedPane =
+              this.focusablePanes[this.focusIndex]?.name || null;
+          }
+          this.renderUI();
+          continue;
+        case ":": {
+          const input = await this.enterTextInput(":");
+          const cmd = parseCommandInput(input || "");
+          if (cmd) return cmd;
+          continue;
+        }
+        case "[":
+        case "]": {
+          const current = this.threadDisplayIndex ?? 0;
+          this.threadDisplayIndex = current + (key === "]" ? 1 : -1);
+          this.renderUI();
+          continue;
+        }
+        default: {
+          // Number keys for panel focus
+          if (key >= "1" && key <= "9") {
+            const panelIndex = parseInt(key, 10) - 1;
+            if (panelIndex < this.focusablePanes.length) {
+              this.focusIndex = panelIndex;
+              this.renderUI();
+            }
+          }
+          continue;
+        }
       }
     }
-    this.focusIndex = index;
-    this.focusablePanes[index].box.focus();
   }
 
-  private cycleFocus(): void {
-    this.focusPane((this.focusIndex + 1) % this.focusablePanes.length);
-  }
+  private async enterTextInput(prompt: string): Promise<string | null> {
+    this.inputPrompt = prompt;
+    this.inputValue = "";
+    this.renderUI();
 
-  private toggleZoom(): void {
-    const pane = this.focusablePanes[this.focusIndex];
-    if (this.zoomedPane) {
-      // Restore original position/size
-      const { original } = this.zoomedPane;
-      pane.box.top = original.top;
-      pane.box.left = original.left;
-      pane.box.width = original.width;
-      pane.box.height = original.height;
-      // Show all other panes
-      for (const p of this.focusablePanes) {
-        p.box.show();
+    while (true) {
+      const keyEvent = await this.screen.nextKey();
+
+      if (keyEvent.key === "enter") {
+        const value = this.inputValue;
+        this.inputPrompt = null;
+        this.inputValue = "";
+        this.renderUI();
+        return value;
       }
-      this.zoomedPane = null;
-    } else {
-      // Save original geometry and maximize
-      this.zoomedPane = {
-        name: pane.name,
-        original: {
-          top: pane.box.top,
-          left: pane.box.left,
-          width: pane.box.width,
-          height: pane.box.height,
-        },
-      };
-      // Hide all other panes
-      for (const p of this.focusablePanes) {
-        if (p.name !== pane.name) p.box.hide();
+      if (keyEvent.key === "escape") {
+        this.inputPrompt = null;
+        this.inputValue = "";
+        this.renderUI();
+        return null;
       }
-      pane.box.top = 0;
-      pane.box.left = 0;
-      pane.box.width = "100%";
-      pane.box.height = "100%-4";
+      if (keyEvent.key === "c" && keyEvent.ctrl) {
+        this.cleanup();
+        return null;
+      }
+      if (keyEvent.key === "backspace") {
+        this.inputValue = this.inputValue.slice(0, -1);
+        this.renderUI();
+        continue;
+      }
+      // Regular character input
+      if (keyEvent.key.length === 1 && !keyEvent.ctrl) {
+        this.inputValue += keyEvent.key;
+        this.renderUI();
+      }
     }
-    this.screen.render();
   }
 
   promptForInput(prompt: string): Promise<string> {
-    return new Promise((resolve) => {
-      const tryInput = () => {
-        this.enterTextInput(prompt).then((value) => {
-          if (value !== null) {
-            resolve(value);
-          } else {
-            // Escape pressed — re-prompt since the program needs a value
-            tryInput();
-          }
-        });
+    return new Promise<string>((resolve) => {
+      const tryInput = async () => {
+        const value = await this.enterTextInput(prompt);
+        if (value !== null) {
+          resolve(value);
+        } else {
+          // Escape pressed — re-prompt since the program needs a value
+          await tryInput();
+        }
       };
       tryInput();
     });
   }
 
-  async promptForNodeArgs(parameters: FunctionParameter[]): Promise<unknown[]> {
+  async promptForNodeArgs(
+    parameters: FunctionParameter[],
+  ): Promise<unknown[]> {
     const args: unknown[] = [];
     for (const param of parameters) {
       const typeLabel = param.typeHint
@@ -946,229 +667,163 @@ export class DebuggerUI implements DebuggerIO {
   }
 
   renderActivityOnly(): void {
-    this.renderActivityPane();
-    this.screen.render();
-  }
-
-  showResult(result: unknown): void {
-    this.activityBox.setContent(
-      `{green-fg}${this.bold("Program result:")}{/green-fg}\n  ${blessed.escape(formatValue(result))}`,
-    );
-    this.commandBar.setContent(" Press any key to exit.");
-    this.screen.render();
+    this.renderUI();
   }
 
   showRewindSelector(checkpoints: Checkpoint[]): Promise<number | null> {
-    return new Promise((resolve) => {
+    return new Promise<number | null>(async (resolve) => {
       this.prevState = this.state.clone();
 
       if (checkpoints.length === 0) {
-        // No checkpoints available
-        this.activityBox.setContent(
-          "{red-fg}No checkpoints available for rewind.{/red-fg}",
-        );
-        this.screen.render();
+        this.state.log("No checkpoints available for rewind.");
+        this.renderUI();
         resolve(null);
         return;
       }
 
-      // Build list items
-      const items = checkpoints.map((cp) => {
-        let tag = "[auto]";
-        if (cp.pinned) {
-          tag = cp.label ? `[manual: ${cp.label}]` : "[code]";
-        }
-        const fileName = cp.getFilename();
-        return `${tag} #${cp.id} - ${fileName}:${cp.scopeName} step ${cp.stepPath}`;
-      });
+      let selectedIndex = checkpoints.length - 1;
 
-      // Create a list overlay in place of the activity pane
-      const list = blessed.list({
-        top: "65%",
-        left: 0,
-        width: "100%",
-        height: "35%-3",
-        border: { type: "line" },
-        label: " select checkpoint (Enter=select, Esc=cancel) ",
-        items,
-        keys: true,
-        vi: true,
-        tags: true,
+      const renderSelector = () => {
+        const items = checkpoints
+          .map((cp, i) => {
+            let tag = "[auto]";
+            if (cp.pinned) {
+              tag = cp.label ? `[manual: ${cp.label}]` : "[code]";
+            }
+            const fileName = cp.getFilename();
+            const line = `${tag} #${cp.id} - ${fileName}:${cp.scopeName} step ${cp.stepPath}`;
+            if (i === selectedIndex) {
+              return `{blue-bg}{white-fg} > ${this.fmt(line)} {/white-fg}{/blue-bg}`;
+            }
+            return `   ${this.fmt(line)}`;
+          })
+          .join("\n");
 
-        // setting true disable text selection
-        mouse: false,
-        style: {
-          border: { fg: "yellow" },
-          selected: {
-            bg: "blue",
-            fg: "white",
-            bold: true,
-          },
-          item: {
-            fg: "white",
-          },
-        },
-      });
+        const threadData = this.state.getThreadMessages(this.threadDisplayIndex);
+        const hasThreads = threadData !== null;
+        const moduleId = this.state.getModuleId();
+        const sourceLabel = ` source: ${this.fmt(moduleId)} `;
 
-      list.select(items.length - 1); // start with most recent checkpoint selected
-      this.screen.append(list);
-      list.focus();
-      this.screen.render();
-
-      const cleanup = () => {
-        if (!this.prevState) {
-          throw new Error(
-            "No previous state to restore to after rewind selection",
+        const topChildren: Element[] = [
+          this.buildPane(
+            "source", sourceLabel, "cyan", this.buildSourceContent(),
+            hasThreads ? { width: "65%" } : { flex: 1 },
+          ),
+        ];
+        if (hasThreads) {
+          const threadPane = this.focusablePanes.find((p) => p.name === "threads")!;
+          topChildren.push(
+            this.buildPane("threads", threadPane.label, "cyan", this.buildThreadsContent(), { width: "35%" }),
           );
         }
-        this.state = this.prevState.clone();
-        list.destroy();
-        this.screen.render();
+
+        const tree = column(
+          row({ height: "40%" }, ...topChildren),
+          row(
+            { height: "25%" },
+            this.buildPane("locals", " locals ", "green", this.buildLocalsContent(), { width: "40%" }),
+            this.buildPane("globals", " globals ", "green", this.buildGlobalsContent(), { width: "40%" }),
+            this.buildPane("callStack", " call stack ", "magenta", this.buildCallStackContent(), { flex: 1 }),
+          ),
+          box(
+            {
+              flex: 1,
+              border: true,
+              borderColor: "yellow",
+              label: " select checkpoint (Enter=select, Esc=cancel) ",
+              scrollable: true,
+              scrollOffset: Math.max(0, selectedIndex - 10),
+            },
+            text(items),
+          ),
+          box({ height: 1, key: "stats" }, text(this.buildStatsContent())),
+          box(
+            { height: 3, border: true, borderColor: "white" },
+            text(this.commandBarContent),
+          ),
+        );
+
+        this.screen.render(tree);
       };
 
-      list.on("select item", async (_item: any, index: number) => {
-        const checkpoint = checkpoints[index];
-        await this.render(checkpoint, false);
-      });
+      // Preview the initially selected checkpoint
+      await this.state.setCheckpoint(checkpoints[selectedIndex]);
+      renderSelector();
 
-      list.on("select", (_item: any, index: number) => {
-        cleanup();
-        this.render();
-        resolve(checkpoints[index].id);
-      });
+      while (true) {
+        const keyEvent = await this.screen.nextKey();
 
-      list.key(["C-c"], () => {
-        this.cleanup();
-      });
+        if (keyEvent.key === "c" && keyEvent.ctrl) {
+          this.cleanup();
+          return;
+        }
 
-      list.key(["escape", "q"], () => {
-        cleanup();
-        this.render();
-        resolve(null);
-      });
+        switch (keyEvent.key) {
+          case "up":
+          case "k":
+            if (selectedIndex > 0) {
+              selectedIndex--;
+              await this.state.setCheckpoint(checkpoints[selectedIndex]);
+              renderSelector();
+            }
+            break;
+          case "down":
+          case "j":
+            if (selectedIndex < checkpoints.length - 1) {
+              selectedIndex++;
+              await this.state.setCheckpoint(checkpoints[selectedIndex]);
+              renderSelector();
+            }
+            break;
+          case "enter":
+            if (this.prevState) {
+              this.state = this.prevState.clone();
+            }
+            await this.render();
+            resolve(checkpoints[selectedIndex].id);
+            return;
+          case "escape":
+          case "q":
+            if (this.prevState) {
+              this.state = this.prevState.clone();
+            }
+            await this.render();
+            resolve(null);
+            return;
+        }
+      }
     });
   }
 
   showCheckpointsPanel(checkpoints: Checkpoint[]): Promise<void> {
-    return new Promise((resolve) => {
+    return new Promise<void>(async (resolve) => {
       if (checkpoints.length === 0) {
         this.state.log("No checkpoints available.");
-        this.renderActivityPane();
-        this.screen.render();
+        this.renderUI();
         resolve();
         return;
       }
 
-      let selectedIndex = checkpoints.length - 1; // start at most recent
+      let selectedIndex = checkpoints.length - 1;
       let rawMode = false;
+      let detailScrollOffset = 0;
 
-      // Full-screen container
-      const container = blessed.box({
-        top: 0,
-        left: 0,
-        width: "100%",
-        height: "100%-3",
-        style: { bg: "black" },
-      });
-
-      // Left panel: checkpoint list
-      const listBox = blessed.box({
-        ...baseStyle,
-        parent: container,
-        top: 0,
-        left: 0,
-        width: "35%",
-        height: "100%",
-        label: " checkpoints ",
-        style: {
-          border: { fg: "cyan" },
-          label: { fg: "cyan" },
-        },
-      });
-
-      // Right panel: checkpoint detail
-      const detailBox = blessed.box({
-        ...baseStyle,
-        parent: container,
-        top: 0,
-        left: "35%+1",
-        width: "65%-1",
-        height: "100%",
-        label: " checkpoint detail ",
-        style: {
-          border: { fg: "green" },
-          label: { fg: "green" },
-        },
-      });
-
-      // Help bar replaces command bar
-      const helpBar = blessed.box({
-        bottom: 0,
-        left: 0,
-        width: "100%",
-        height: 3,
-        border: { type: "line" },
-        tags: true,
-        style: { border: { fg: "white" } },
-        content: `${this.bold("(↑/↓)")}navigate  ${this.bold("(^F/^B)")}scroll detail  ${this.bold("(t)")}toggle raw  ${this.bold("(enter)")}go to checkpoint  ${this.bold("(esc/q)")}close`,
-      });
-
-      // Hide normal UI
-      for (const p of this.focusablePanes) p.box.hide();
-      this.statsBar.hide();
-      this.commandBar.hide();
-
-      this.screen.append(container);
-      this.screen.append(helpBar);
-
-      const renderList = () => {
-        const lines = checkpoints.map((cp, i) => {
-          let tag = "{gray-fg}[auto]{/gray-fg}";
-          if (cp.pinned) {
-            tag = cp.label
-              ? `{yellow-fg}[manual: ${blessed.escape(cp.label)}]{/yellow-fg}`
-              : "{magenta-fg}[code]{/magenta-fg}";
-          }
-          const fileName = cp.getFilename();
-          const line = `${tag} {bold}#${cp.id}{/bold} ${blessed.escape(fileName)}:${blessed.escape(cp.scopeName)}`;
-          if (i === selectedIndex) {
-            return `{blue-bg}{white-fg} > ${line} {/white-fg}{/blue-bg}`;
-          }
-          return `   ${line}`;
-        });
-        listBox.setContent(lines.join("\n"));
-        listBox.setLabel(
-          ` checkpoints (${selectedIndex + 1}/${checkpoints.length}) `,
-        );
-
-        // Scroll to keep selected item visible
-        const boxHeight = (listBox as any).height as number;
-        const visibleRows = typeof boxHeight === "number" ? boxHeight - 2 : 20;
-        if (selectedIndex >= visibleRows) {
-          listBox.scrollTo(selectedIndex - Math.floor(visibleRows / 2));
-        } else {
-          listBox.scrollTo(0);
-        }
-      };
-
-      const renderFormattedDetail = (cp: Checkpoint): string[] => {
+      const renderFormattedDetail = (cp: Checkpoint): string => {
         const lines: string[] = [];
-
         lines.push(`{bold}{cyan-fg}Checkpoint #${cp.id}{/cyan-fg}{/bold}`);
         lines.push("");
         lines.push(
-          `{bold}Location:{/bold}  ${blessed.escape(cp.getFilename())}:${blessed.escape(cp.scopeName)}`,
+          `{bold}Location:{/bold}  ${this.fmt(cp.getFilename())}:${this.fmt(cp.scopeName)}`,
         );
-        lines.push(`{bold}Step:{/bold}      ${blessed.escape(cp.stepPath)}`);
+        lines.push(`{bold}Step:{/bold}      ${this.fmt(cp.stepPath)}`);
         lines.push(
-          `{bold}Node:{/bold}      ${blessed.escape(cp.nodeId || "(none)")}`,
+          `{bold}Node:{/bold}      ${this.fmt(cp.nodeId || "(none)")}`,
         );
         lines.push(`{bold}Pinned:{/bold}    ${cp.pinned ? "yes" : "no"}`);
         if (cp.label) {
-          lines.push(`{bold}Label:{/bold}     ${blessed.escape(cp.label)}`);
+          lines.push(`{bold}Label:{/bold}     ${this.fmt(cp.label)}`);
         }
 
-        // Show the call stack
         const frame = cp.getCurrentFrame();
         if (frame) {
           lines.push("");
@@ -1177,7 +832,7 @@ export class DebuggerUI implements DebuggerIO {
             for (const [key, value] of Object.entries(frame.args)) {
               if (!key.startsWith("__")) {
                 lines.push(
-                  `  ${blessed.escape(key)} = ${blessed.escape(formatValue(value))}`,
+                  `  ${this.fmt(key)} = ${this.fmt(formatValue(value))}`,
                 );
               }
             }
@@ -1191,7 +846,7 @@ export class DebuggerUI implements DebuggerIO {
             for (const [key, value] of Object.entries(frame.locals)) {
               if (!key.startsWith("__")) {
                 lines.push(
-                  `  ${blessed.escape(key)} = ${blessed.escape(formatValue(value))}`,
+                  `  ${this.fmt(key)} = ${this.fmt(formatValue(value))}`,
                 );
               }
             }
@@ -1200,7 +855,6 @@ export class DebuggerUI implements DebuggerIO {
           }
         }
 
-        // Show globals for this module
         const globals = cp.getGlobalsForModule();
         if (globals) {
           lines.push("");
@@ -1208,13 +862,12 @@ export class DebuggerUI implements DebuggerIO {
           for (const [key, value] of Object.entries(globals)) {
             if (!key.startsWith("__")) {
               lines.push(
-                `  ${blessed.escape(key)} = ${blessed.escape(formatValue(value))}`,
+                `  ${this.fmt(key)} = ${this.fmt(formatValue(value))}`,
               );
             }
           }
         }
 
-        // Show stack depth
         const frames = cp.stack?.stack;
         if (frames && frames.length > 0) {
           lines.push("");
@@ -1229,102 +882,140 @@ export class DebuggerUI implements DebuggerIO {
             );
             const argStr =
               argKeys.length > 0 ? `(${argKeys.join(", ")})` : "()";
-            lines.push(`${prefix}frame ${i} ${argStr} at step ${entry.step}`);
+            lines.push(
+              `${prefix}frame ${i} ${argStr} at step ${entry.step}`,
+            );
           }
         }
 
-        return lines;
+        return lines.join("\n");
       };
 
-      const renderRawDetail = (cp: Checkpoint): string[] => {
-        const json = JSON.stringify(cp.toJSON(), null, 2);
-        return blessed.escape(json).split("\n");
+      const renderRawDetail = (cp: Checkpoint): string => {
+        return this.fmt(JSON.stringify(cp.toJSON(), null, 2));
       };
 
-      const renderDetail = () => {
+      const renderPanel = () => {
         const cp = checkpoints[selectedIndex];
         const modeLabel = rawMode ? "raw" : "formatted";
-        const lines = rawMode ? renderRawDetail(cp) : renderFormattedDetail(cp);
-        detailBox.setContent(lines.join("\n"));
-        detailBox.setLabel(` checkpoint #${cp.id} detail (${modeLabel}) `);
+        const detailContent = rawMode
+          ? renderRawDetail(cp)
+          : renderFormattedDetail(cp);
+
+        const listLines = checkpoints
+          .map((cp, i) => {
+            let tag = "{gray-fg}[auto]{/gray-fg}";
+            if (cp.pinned) {
+              tag = cp.label
+                ? `{yellow-fg}[manual: ${this.fmt(cp.label)}]{/yellow-fg}`
+                : "{magenta-fg}[code]{/magenta-fg}";
+            }
+            const fileName = cp.getFilename();
+            const line = `${tag} {bold}#${cp.id}{/bold} ${this.fmt(fileName)}:${this.fmt(cp.scopeName)}`;
+            if (i === selectedIndex) {
+              return `{blue-bg}{white-fg} > ${line} {/white-fg}{/blue-bg}`;
+            }
+            return `   ${line}`;
+          })
+          .join("\n");
+
+        const helpContent = `${this.bold("(↑/↓)")}navigate  ${this.bold("(^F/^B)")}scroll detail  ${this.bold("(t)")}toggle raw  ${this.bold("(enter)")}go to checkpoint  ${this.bold("(esc/q)")}close`;
+
+        const tree = column(
+          row(
+            { flex: 1 },
+            box(
+              {
+                width: "35%",
+                border: true,
+                borderColor: "cyan",
+                label: ` checkpoints (${selectedIndex + 1}/${checkpoints.length}) `,
+                scrollable: true,
+                scrollOffset: Math.max(0, selectedIndex - 10),
+              },
+              text(listLines),
+            ),
+            box(
+              {
+                flex: 1,
+                border: true,
+                borderColor: "green",
+                label: ` checkpoint #${cp.id} detail (${modeLabel}) `,
+                scrollable: true,
+                scrollOffset: detailScrollOffset,
+              },
+              text(detailContent),
+            ),
+          ),
+          box(
+            { height: 3, border: true, borderColor: "white" },
+            text(helpContent),
+          ),
+        );
+
+        this.screen.render(tree);
       };
 
-      const renderAll = () => {
-        renderList();
-        renderDetail();
-        this.screen.render();
-      };
+      renderPanel();
 
-      renderAll();
-      container.focus();
+      while (true) {
+        const keyEvent = await this.screen.nextKey();
 
-      const cleanup = () => {
-        container.destroy();
-        helpBar.destroy();
-        // Show normal UI
-        for (const p of this.focusablePanes) p.box.show();
-        this.statsBar.show();
-        this.commandBar.show();
-        this.render();
-      };
-
-      container.key(["up", "k"], () => {
-        if (selectedIndex > 0) {
-          selectedIndex--;
-          renderAll();
+        if (keyEvent.key === "c" && keyEvent.ctrl) {
+          this.cleanup();
+          return;
         }
-      });
 
-      container.key(["down", "j"], () => {
-        if (selectedIndex < checkpoints.length - 1) {
-          selectedIndex++;
-          renderAll();
+        switch (keyEvent.key) {
+          case "up":
+          case "k":
+            if (selectedIndex > 0) {
+              selectedIndex--;
+              detailScrollOffset = 0;
+              renderPanel();
+            }
+            break;
+          case "down":
+          case "j":
+            if (selectedIndex < checkpoints.length - 1) {
+              selectedIndex++;
+              detailScrollOffset = 0;
+              renderPanel();
+            }
+            break;
+          case "f":
+            if (keyEvent.ctrl) {
+              detailScrollOffset += 20;
+              renderPanel();
+            }
+            break;
+          case "b":
+            if (keyEvent.ctrl) {
+              detailScrollOffset = Math.max(0, detailScrollOffset - 20);
+              renderPanel();
+            }
+            break;
+          case "t":
+            rawMode = !rawMode;
+            detailScrollOffset = 0;
+            renderPanel();
+            break;
+          case "enter":
+            await this.render(checkpoints[selectedIndex]);
+            resolve();
+            return;
+          case "escape":
+          case "q":
+            await this.render();
+            resolve();
+            return;
         }
-      });
-
-      container.key(["C-f"], () => {
-        const boxHeight = (detailBox as any).height as number;
-        const pageSize = typeof boxHeight === "number" ? boxHeight - 2 : 20;
-        detailBox.scroll(pageSize);
-        this.screen.render();
-      });
-
-      container.key(["C-b"], () => {
-        const boxHeight = (detailBox as any).height as number;
-        const pageSize = typeof boxHeight === "number" ? boxHeight - 2 : 20;
-        detailBox.scroll(-pageSize);
-        this.screen.render();
-      });
-
-      container.key(["t"], () => {
-        rawMode = !rawMode;
-        renderAll();
-      });
-
-      container.key(["enter"], async () => {
-        const cp = checkpoints[selectedIndex];
-        cleanup();
-        await this.render(cp);
-        resolve();
-      });
-
-      container.key(["escape", "q"], () => {
-        cleanup();
-        resolve();
-      });
-
-      container.key(["C-c"], () => {
-        this.cleanup();
-      });
+      }
     });
   }
 
   destroy(): void {
     this.stopSpinner();
-    try {
-      this.screen.destroy();
-    } catch {
-      // Screen may already be destroyed
-    }
+    this.screen.destroy();
   }
 }

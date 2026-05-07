@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { checkAllowBlockList } from "./allowBlockList.js";
+import { checkAllowBlockList, checkAllowedPaths } from "./allowBlockList.js";
 
 describe("checkAllowBlockList", () => {
   it("passes when no lists are set", () => {
@@ -84,5 +84,30 @@ describe("checkAllowBlockList", () => {
       [],
     );
     expect(result).toBeNull();
+  });
+});
+
+describe("checkAllowedPaths", () => {
+  it("passes when allowedPaths is empty", () => {
+    expect(checkAllowedPaths("anything", [])).toBeNull();
+  });
+
+  it("passes when path starts with an allowed prefix", () => {
+    expect(checkAllowedPaths("src/foo.ts", ["src/", "tests/"])).toBeNull();
+  });
+
+  it("fails when path does not match any prefix", () => {
+    const result = checkAllowedPaths("lib/secret.ts", ["src/", "tests/"]);
+    expect(result).toContain("lib/secret.ts");
+    expect(result).toContain("not under any of the allowed paths");
+  });
+
+  it("matches exact prefix", () => {
+    expect(checkAllowedPaths("src/foo.ts", ["src/"])).toBeNull();
+  });
+
+  it("does not match partial directory names", () => {
+    const result = checkAllowedPaths("srclib/foo.ts", ["src/"]);
+    expect(result).not.toBeNull();
   });
 });

@@ -29,3 +29,18 @@ export function checkAllowBlockList(
 
   return null;
 }
+
+/**
+ * Check that a path starts with one of the allowed prefixes.
+ * Returns null if allowed, or an error message string if rejected.
+ */
+export function checkAllowedPaths(
+  targetPath: string,
+  allowedPaths: string[],
+): string | null {
+  if (allowedPaths.length === 0) return null;
+  for (const prefix of allowedPaths) {
+    if (targetPath.startsWith(prefix)) return null;
+  }
+  return `Path "${targetPath}" is not under any of the allowed paths: ${allowedPaths.join(", ")}.`;
+}

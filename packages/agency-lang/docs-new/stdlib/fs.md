@@ -141,13 +141,14 @@ Create a directory, including any missing parent directories. Idempotent: succee
 ### copy
 
 ```ts
-copy(src: string, dest: string): Result
+copy(src: string, dest: string, allowedPaths: string[]): Result
 ```
 
-Copy a file or directory. Directories are copied recursively. Fails if src does not exist or dest cannot be written.
+Copy a file or directory. Directories are copied recursively. Fails if src does not exist or dest cannot be written. Set allowedPaths to restrict which path prefixes are permitted.
 
   @param src - The source path
   @param dest - The destination path
+  @param allowedPaths - Only allow paths starting with these prefixes
 
 **Parameters:**
 
@@ -155,6 +156,7 @@ Copy a file or directory. Directories are copied recursively. Fails if src does 
 |---|---|---|
 | src | `string` |  |
 | dest | `string` |  |
+| allowedPaths | `string[]` | [] |
 
 **Returns:** `Result`
 
@@ -163,13 +165,14 @@ Copy a file or directory. Directories are copied recursively. Fails if src does 
 ### move
 
 ```ts
-move(src: string, dest: string): Result
+move(src: string, dest: string, allowedPaths: string[]): Result
 ```
 
-Move or rename a file or directory. Falls back to copy+remove if src and dest are on different filesystems. Fails if src does not exist.
+Move or rename a file or directory. Falls back to copy+remove if src and dest are on different filesystems. Fails if src does not exist. Set allowedPaths to restrict which path prefixes are permitted.
 
   @param src - The source path
   @param dest - The destination path
+  @param allowedPaths - Only allow paths starting with these prefixes
 
 **Parameters:**
 
@@ -177,25 +180,30 @@ Move or rename a file or directory. Falls back to copy+remove if src and dest ar
 |---|---|---|
 | src | `string` |  |
 | dest | `string` |  |
+| allowedPaths | `string[]` | [] |
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L100))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L101))
 
 ### remove
 
 ```ts
-remove(target: string): Result
+remove(target: string, allowedPaths: string[]): Result
 ```
 
-Delete a file or directory. Directories are removed recursively. Does not fail if the target does not exist.
+Delete a file or directory. Directories are removed recursively. Does not fail if the target does not exist. Set allowedPaths to restrict which path prefixes are permitted.
+
+  @param target - The path to delete
+  @param allowedPaths - Only allow paths starting with these prefixes
 
 **Parameters:**
 
 | Name | Type | Default |
 |---|---|---|
 | target | `string` |  |
+| allowedPaths | `string[]` | [] |
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L115))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L117))

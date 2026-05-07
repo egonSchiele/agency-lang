@@ -4,6 +4,7 @@ import path from "path";
 import process from "process";
 import diff_match_patch from "diff-match-patch";
 import { resolvePath } from "./resolvePath.js";
+import { checkAllowedPaths } from "./allowBlockList.js";
 
 export { resolvePath } from "./resolvePath.js";
 
@@ -252,13 +253,33 @@ export async function _mkdir(dir: string): Promise<void> {
   await fs.mkdir(full, { recursive: true });
 }
 
-export async function _copy(src: string, dest: string): Promise<void> {
+export async function _copy(
+  src: string,
+  dest: string,
+  allowedPaths?: string[],
+): Promise<void> {
+  if (allowedPaths && allowedPaths.length > 0) {
+    const srcError = checkAllowedPaths(src, allowedPaths);
+    if (srcError) throw new Error(srcError);
+    const destError = checkAllowedPaths(dest, allowedPaths);
+    if (destError) throw new Error(destError);
+  }
   const srcFull = path.resolve(process.cwd(), src);
   const destFull = path.resolve(process.cwd(), dest);
   await fs.cp(srcFull, destFull, { recursive: true });
 }
 
-export async function _move(src: string, dest: string): Promise<void> {
+export async function _move(
+  src: string,
+  dest: string,
+  allowedPaths?: string[],
+): Promise<void> {
+  if (allowedPaths && allowedPaths.length > 0) {
+    const srcError = checkAllowedPaths(src, allowedPaths);
+    if (srcError) throw new Error(srcError);
+    const destError = checkAllowedPaths(dest, allowedPaths);
+    if (destError) throw new Error(destError);
+  }
   await rejectDangerousPath(src, "move", "source");
   const srcFull = path.resolve(process.cwd(), src);
   const destFull = path.resolve(process.cwd(), dest);
@@ -274,7 +295,14 @@ export async function _move(src: string, dest: string): Promise<void> {
   }
 }
 
-export async function _remove(target: string): Promise<void> {
+export async function _remove(
+  target: string,
+  allowedPaths?: string[],
+): Promise<void> {
+  if (allowedPaths && allowedPaths.length > 0) {
+    const error = checkAllowedPaths(target, allowedPaths);
+    if (error) throw new Error(error);
+  }
   await rejectDangerousPath(target, "remove", "target");
   const full = path.resolve(process.cwd(), target);
   await fs.rm(full, { recursive: true, force: true });

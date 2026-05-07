@@ -15,6 +15,7 @@ export type BrowserUseOptions = {
   proxyCountryCode?: string;
   outputSchema?: Record<string, unknown>;
   timeoutMs?: number;
+  allowedDomains?: string[];
 };
 
 type SessionResponse = {
@@ -76,7 +77,12 @@ export async function _browserUse(
   }
 
   const timeoutMs = options?.timeoutMs || DEFAULT_TIMEOUT_MS;
-  const body: Record<string, unknown> = { task };
+  let finalTask = task;
+  if (options?.allowedDomains && options.allowedDomains.length > 0) {
+    const domainList = options.allowedDomains.join(", ");
+    finalTask = `IMPORTANT: You must ONLY navigate to these domains: ${domainList}. Do not visit any other domains.\n\n${task}`;
+  }
+  const body: Record<string, unknown> = { task: finalTask };
 
   if (options?.model) body.model = options.model;
   if (options?.maxCostUsd !== undefined) body.maxCostUsd = options.maxCostUsd;

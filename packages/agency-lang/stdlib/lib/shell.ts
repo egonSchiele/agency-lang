@@ -77,22 +77,49 @@ function buildSpawnOptions(cwd: string, timeout: number, stdin: string): SpawnAs
   return options;
 }
 
+import { checkAllowBlockList } from "./allowBlockList.js";
+
+export type ExecOptions = {
+  allowedCommands?: string[];
+  blockedCommands?: string[];
+};
+
 export async function _exec(
   command: string,
   args: string[],
   cwd: string,
   timeout: number,
   stdin: string,
+  options?: ExecOptions,
 ): Promise<{ stdout: string; stderr: string; exitCode: number }> {
+  const cmdError = checkAllowBlockList(
+    [command],
+    options?.allowedCommands ?? [],
+    options?.blockedCommands ?? [],
+  );
+  if (cmdError) throw new Error(cmdError);
   return spawnAsync(command, args, buildSpawnOptions(cwd, timeout, stdin));
 }
+
+export type BashOptions = {
+  blockedCommands?: string[];
+};
 
 export async function _bash(
   command: string,
   cwd: string,
   timeout: number,
   stdin: string,
+  options?: BashOptions,
 ): Promise<{ stdout: string; stderr: string; exitCode: number }> {
+  if (options?.blockedCommands && options.blockedCommands.length > 0) {
+    const trimmed = command.trimStart();
+    for (const blocked of options.blockedCommands) {
+      if (trimmed.startsWith(blocked)) {
+        throw new Error(`Command "${blocked}" is in the blockedCommands list.`);
+      }
+    }
+  }
   return spawnAsync("sh", ["-c", command], buildSpawnOptions(cwd, timeout, stdin));
 }
 

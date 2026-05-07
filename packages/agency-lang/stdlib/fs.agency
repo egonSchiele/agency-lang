@@ -82,43 +82,48 @@ export def mkdir(dir: string): Result {
   return try _mkdir(dir)
 }
 
-export def copy(src: string, dest: string): Result {
+export def copy(src: string, dest: string, allowedPaths: string[] = []): Result {
   """
-  Copy a file or directory. Directories are copied recursively. Fails if src does not exist or dest cannot be written.
+  Copy a file or directory. Directories are copied recursively. Fails if src does not exist or dest cannot be written. Set allowedPaths to restrict which path prefixes are permitted.
 
   @param src - The source path
   @param dest - The destination path
+  @param allowedPaths - Only allow paths starting with these prefixes
   """
   return interrupt std::copy("Are you sure you want to copy this file or directory?", {
     src: src,
     dest: dest
   })
 
-  return try _copy(src, dest)
+  return try _copy(src, dest, allowedPaths)
 }
 
-export def move(src: string, dest: string): Result {
+export def move(src: string, dest: string, allowedPaths: string[] = []): Result {
   """
-  Move or rename a file or directory. Falls back to copy+remove if src and dest are on different filesystems. Fails if src does not exist.
+  Move or rename a file or directory. Falls back to copy+remove if src and dest are on different filesystems. Fails if src does not exist. Set allowedPaths to restrict which path prefixes are permitted.
 
   @param src - The source path
   @param dest - The destination path
+  @param allowedPaths - Only allow paths starting with these prefixes
   """
   return interrupt std::move("Are you sure you want to move this file or directory?", {
     src: src,
     dest: dest
   })
 
-  return try _move(src, dest)
+  return try _move(src, dest, allowedPaths)
 }
 
-export def remove(target: string): Result {
+export def remove(target: string, allowedPaths: string[] = []): Result {
   """
-  Delete a file or directory. Directories are removed recursively. Does not fail if the target does not exist.
+  Delete a file or directory. Directories are removed recursively. Does not fail if the target does not exist. Set allowedPaths to restrict which path prefixes are permitted.
+
+  @param target - The path to delete
+  @param allowedPaths - Only allow paths starting with these prefixes
   """
   return interrupt std::remove("Are you sure you want to delete this file or directory? This cannot be undone.", {
     target: target
   })
 
-  return try _remove(target)
+  return try _remove(target, allowedPaths)
 }

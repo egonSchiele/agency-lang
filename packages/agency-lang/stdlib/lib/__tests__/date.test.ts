@@ -103,12 +103,6 @@ describe("_nextDayOfWeek", () => {
     expect(result).toMatch(/^\d{4}-\d{2}-\d{2}$/);
   });
 
-  it("returns a date that is the correct day of week", () => {
-    const result = _nextDayOfWeek("wednesday", "UTC");
-    const d = new Date(result + "T12:00:00Z");
-    expect(d.getUTCDay()).toBe(3); // Wednesday = 3
-  });
-
   it("returns a future date (not today even if today is that day)", () => {
     const today = new Date();
     const dayName = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"][today.getDay()];

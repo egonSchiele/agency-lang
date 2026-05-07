@@ -5,6 +5,7 @@ import { apply } from "typestache";
 
 export const template = `#!/bin/bash
 set -e
+umask 077
 cd "{{{agentDir:string}}}"
 {{#hasEnvFile:boolean}}
 set -a
@@ -12,7 +13,7 @@ set -a
 set +a
 {{/hasEnvFile}}
 LOGFILE="{{{logDir:string}}}/$(date +%Y-%m-%dT%H-%M-%S).log"
-{{{command:string}}} run "{{{agentFile:string}}}" >> "$LOGFILE" 2>&1
+agency run "{{{agentFile:string}}}" >> "$LOGFILE" 2>&1
 
 # Rotate: keep last 50 logs
 cd "{{{logDir}}}"
@@ -24,7 +25,6 @@ export type TemplateType = {
   hasEnvFile: boolean;
   envFile: string;
   logDir: string;
-  command: string;
   agentFile: string;
 };
 

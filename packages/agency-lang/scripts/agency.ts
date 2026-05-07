@@ -577,10 +577,6 @@ export function createProgram(deps: CliDependencies = {}): Command {
       "Schedule name (default: derived from filename)",
     )
     .option("--env-file <path>", "Path to .env file")
-    .option(
-      "--command <cmd>",
-      "Command to run agency (default: agency)",
-    )
     .action(
       async (
         file: string,
@@ -589,7 +585,6 @@ export function createProgram(deps: CliDependencies = {}): Command {
           cron?: string;
           name?: string;
           envFile?: string;
-          command?: string;
         },
       ) => {
         try {
@@ -655,7 +650,6 @@ export function createProgram(deps: CliDependencies = {}): Command {
     )
     .option("--cron <expression>", "Cron expression (5 fields)")
     .option("--env-file <path>", "Path to .env file")
-    .option("--command <cmd>", "Command to run agency")
     .action(
       (
         name: string,
@@ -663,7 +657,6 @@ export function createProgram(deps: CliDependencies = {}): Command {
           every?: string;
           cron?: string;
           envFile?: string;
-          command?: string;
         },
       ) => {
         try {

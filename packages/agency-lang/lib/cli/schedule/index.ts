@@ -44,7 +44,6 @@ export type AddOptions = {
   cron?: string;
   name?: string;
   envFile?: string;
-  command?: string;
   baseDir?: string;
   force?: boolean;
 };
@@ -78,7 +77,6 @@ export function scheduleAdd(opts: AddOptions): void {
     cron,
     preset,
     envFile: opts.envFile ? path.resolve(opts.envFile) : "",
-    command: opts.command ?? "agency",
     logDir: path.join(baseDir, name, "logs"),
     createdAt: new Date().toISOString(),
     backend: backendType,
@@ -155,7 +153,6 @@ export type EditOptions = {
   every?: string;
   cron?: string;
   envFile?: string;
-  command?: string;
   baseDir?: string;
 };
 
@@ -182,7 +179,6 @@ export function scheduleEdit(opts: EditOptions): void {
     cron,
     preset,
     envFile: opts.envFile ? path.resolve(opts.envFile) : existing.envFile,
-    command: opts.command ?? existing.command,
   };
 
   // Install first (overwrites existing config files in-place), then update registry.

@@ -11,7 +11,6 @@ function makeEntry(tmpDir: string, overrides = {}) {
     cron: "0 9 * * *",
     preset: "daily",
     envFile: "",
-    command: "agency",
     logDir: path.join(tmpDir, "test-agent", "logs"),
     createdAt: "2026-05-06T10:00:00-07:00",
     backend: "launchd" as const,

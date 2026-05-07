@@ -12,12 +12,11 @@ export function writeRunScript(entry: ScheduleEntry): string {
     hasEnvFile: !!entry.envFile,
     envFile: entry.envFile,
     logDir: entry.logDir,
-    command: entry.command,
     agentFile: entry.agentFile,
   });
 
   fs.mkdirSync(scriptDir, { recursive: true });
   fs.mkdirSync(entry.logDir, { recursive: true });
-  fs.writeFileSync(scriptPath, content, { mode: 0o755 });
+  fs.writeFileSync(scriptPath, content, { mode: 0o700 });
   return scriptPath;
 }

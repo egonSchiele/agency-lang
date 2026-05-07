@@ -53,13 +53,12 @@ describe("scheduleAdd", () => {
     expect(reg["custom"]).toBeDefined();
   });
 
-  it("stores env-file and command", () => {
+  it("stores env-file path", () => {
     const envFile = path.join(tmpDir, ".env");
     fs.writeFileSync(envFile, "KEY=value");
-    scheduleAdd({ file: path.join(tmpDir, "agent.agency"), every: "daily", envFile, command: "pnpm run agency", baseDir: tmpDir });
+    scheduleAdd({ file: path.join(tmpDir, "agent.agency"), every: "daily", envFile, baseDir: tmpDir });
     const reg = JSON.parse(fs.readFileSync(path.join(tmpDir, "schedules.json"), "utf-8"));
     expect(reg["agent"].envFile).toBe(envFile);
-    expect(reg["agent"].command).toBe("pnpm run agency");
   });
 
   it("calls backend.install", () => {
@@ -225,12 +224,12 @@ describe("scheduleEdit", () => {
     expect(reg["agent"].preset).toBe("");
   });
 
-  it("updates command while keeping other fields", () => {
+  it("updates preset while keeping other fields", () => {
     scheduleAdd({ file: path.join(tmpDir, "agent.agency"), every: "daily", baseDir: tmpDir });
-    scheduleEdit({ name: "agent", command: "npx agency-lang", baseDir: tmpDir });
+    scheduleEdit({ name: "agent", every: "hourly", baseDir: tmpDir });
     const reg = JSON.parse(fs.readFileSync(path.join(tmpDir, "schedules.json"), "utf-8"));
-    expect(reg["agent"].command).toBe("npx agency-lang");
-    expect(reg["agent"].cron).toBe("0 9 * * *");
+    expect(reg["agent"].cron).toBe("0 * * * *");
+    expect(reg["agent"].envFile).toBe("");
   });
 
   it("does not update registry if install fails", () => {

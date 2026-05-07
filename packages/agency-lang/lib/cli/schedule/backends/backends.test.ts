@@ -32,7 +32,6 @@ const mockEntry: ScheduleEntry = {
   cron: "0 9 * * *",
   preset: "daily",
   envFile: "/home/user/project/.env",
-  command: "agency",
   logDir: "/home/user/.agency/schedules/test-agent/logs",
   createdAt: "2026-05-06T10:00:00-07:00",
   backend: "launchd",

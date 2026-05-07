@@ -9,7 +9,6 @@ export type ScheduleEntry = {
   cron: string;
   preset: string;
   envFile: string;
-  command: string;
   logDir: string;
   createdAt: string;
   backend: BackendType;
@@ -57,6 +56,6 @@ export class Registry {
 
   private write(data: ScheduleRegistry): void {
     fs.mkdirSync(path.dirname(this.filePath), { recursive: true });
-    fs.writeFileSync(this.filePath, JSON.stringify(data, null, 2));
+    fs.writeFileSync(this.filePath, JSON.stringify(data, null, 2), { mode: 0o600 });
   }
 }

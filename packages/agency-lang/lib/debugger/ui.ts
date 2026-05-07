@@ -122,7 +122,7 @@ export class DebuggerUI implements DebuggerIO {
   ): string {
     const formatted = `${escapeStyleTags(key)} = ${escapeStyleTags(formatValue(value))}`;
     return opts.highlight
-      ? `{yellow-fg}${escapeStyleTags(formatted)}{/yellow-fg}`
+      ? `{yellow-fg}${formatted}{/yellow-fg}`
       : formatted;
   }
 
@@ -585,12 +585,14 @@ export class DebuggerUI implements DebuggerIO {
   // --- Overlays ---
 
   private overlayContext(): OverlayContext {
-    const panes = this.getPanes();
-    const focusedName = panes[this.focusIndex]?.name;
     return {
       screen: this.screen,
       state: this.state,
-      buildTopRows: () => this.buildTopRows(panes, focusedName),
+      buildTopRows: () => {
+        const panes = this.getPanes();
+        const focusedName = panes[this.focusIndex]?.name;
+        return this.buildTopRows(panes, focusedName);
+      },
       buildStatsBar: () => this.buildStatsBar(),
       commandBarContent: COMMAND_BAR_CONTENT,
       cleanup: () => this.cleanup(),

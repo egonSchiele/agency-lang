@@ -60,6 +60,24 @@ An ESLint setup with `@typescript-eslint/parser` and custom rules specific to th
 - **Auto-fixable:** No
 - **Implementation:** Check for `ImportExpression` AST node (dynamic `import()` calls).
 
+#### `max-nesting-depth`
+- **Catches:** Functions with more than 4 levels of nesting (configurable)
+- **Remediation message:** "Nesting depth exceeds {limit} levels. Extract inner logic into a separate function or use early returns to reduce nesting."
+- **Auto-fixable:** No
+- **Implementation:** Walk function bodies and track brace depth. Count nested block statements (if, for, while, try, etc.).
+
+#### `max-function-lines`
+- **Catches:** Functions exceeding 100 lines (configurable)
+- **Remediation message:** "Function exceeds {limit} lines ({actual} lines). Break it into smaller, focused functions."
+- **Auto-fixable:** No
+- **Implementation:** Check `FunctionDeclaration`, `ArrowFunctionExpression`, and `FunctionExpression` node line spans.
+
+#### `prefer-const`
+- **Catches:** `let` declarations that are never reassigned
+- **Remediation message:** "Variable is never reassigned. Use `const` instead of `let`."
+- **Auto-fixable:** Yes
+- **Implementation:** Use the built-in ESLint `prefer-const` rule (no custom implementation needed).
+
 #### `max-file-lines`
 - **Catches:** Files exceeding a configurable line limit (default: 600)
 - **Remediation message:** "File exceeds {limit} lines ({actual} lines). Consider splitting into smaller, focused modules."
@@ -171,6 +189,15 @@ Reimplementing something that already exists in the codebase instead of finding 
 
 #### 6. Unnecessary error handling
 Validating things that cannot happen, adding fallbacks for impossible states, wrapping in try-catch internally when the framework already handles it. Trust internal code and framework guarantees.
+
+#### 7. Imperative code where declarative would work
+Writing long sequences of imperative steps when the intent could be expressed declaratively. Imperative code should be encapsulated and hidden behind a clean declarative interface. The caller should be able to say *what* they want, not *how* to do it.
+
+#### 8. Order-dependent mutable state
+Code where multiple variables must be set in a specific sequence to work correctly. This is fragile — reordering lines breaks things silently. Prefer designs where each piece of state is self-contained, or where the dependency is made explicit through function parameters or return values.
+
+#### 9. Leaky abstractions
+Code where understanding one piece requires reading many other pieces because they are all connected. Good abstractions have clear boundaries — you can understand what a unit does without reading its internals, and you can change the internals without breaking consumers.
 
 ### Seeding from conversation history
 

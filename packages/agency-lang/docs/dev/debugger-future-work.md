@@ -72,3 +72,7 @@ Adding ANSI escape code parsing to `renderTextContent()` would enable syntax hig
 ### Shift+Tab key mapping
 
 `TerminalInput` doesn't map Shift+Tab (`\x1b[Z` / CSI Z). The debugger uses Shift+Tab for reverse focus cycling. This works in debugger tests via `TestInput` (in `testSession.ts`) but not in the real terminal. Add `"\x1b[Z": { key: "tab", shift: true }` to `KEY_MAP` in `packages/tui/lib/input/terminal.ts`.
+
+### Ctrl+Z suspend handling
+
+The old blessed-based UI handled Ctrl+Z to suspend the process (raw mode prevents the default SIGTSTP). With `TerminalInput` in raw mode, Ctrl+Z won't suspend unless explicitly handled. To support suspend/resume: detect `ctrl+z` in `waitForCommand()`, temporarily restore the terminal (disable raw mode, exit alt screen), send `SIGTSTP` to the process, then re-enter alt screen and raw mode on resume.

@@ -23,15 +23,9 @@ const ifElseCompiled = path.join(fixtureDir, "if-else-test.ts");
 const nestedAgency = path.join(fixtureDir, "nested-calls-test.agency");
 const nestedCompiled = path.join(fixtureDir, "nested-calls-test.ts");
 
-const allCompiled = [
-  stepTestCompiled,
-  fnCallCompiled,
-  interruptCompiled,
-  loopCompiled,
-  ifElseCompiled,
-  nestedCompiled,
-];
-
+// Compiled fixtures are shared across test files (testSession.test.ts,
+// exportFrames.test.ts) so we compile but don't clean up — the .gitignore
+// entry for *.ts under tests/debugger/ handles excluding them from git.
 beforeAll(() => {
   compile({ debugger: true }, stepTestAgency, stepTestCompiled, { ts: true });
   compile({ debugger: true }, fnCallAgency, fnCallCompiled, { ts: true });
@@ -39,12 +33,6 @@ beforeAll(() => {
   compile({ debugger: true }, loopAgency, loopCompiled, { ts: true });
   compile({ debugger: true }, ifElseAgency, ifElseCompiled, { ts: true });
   compile({ debugger: true }, nestedAgency, nestedCompiled, { ts: true });
-});
-
-afterAll(() => {
-  for (const f of allCompiled) {
-    try { fs.unlinkSync(f); } catch { /* ignore */ }
-  }
 });
 
 // --- Helper: collect checkpoints by stepping through step-test to completion ---

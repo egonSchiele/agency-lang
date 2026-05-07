@@ -1,6 +1,6 @@
 # How to Write Debugger Tests
 
-Debugger tests use `DebuggerTestSession` (`lib/debugger/testSession.ts`) to drive the debugger headlessly. The session creates a real `DebuggerUI` wired to test infrastructure — the same rendering and key mapping code that runs in production, but with `ScriptedInput` + `FrameRecorder` instead of terminal I/O.
+Debugger tests use `DebuggerTestSession` (`lib/debugger/testSession.ts`) to drive the debugger headlessly. The session creates a real `DebuggerUI` wired to test infrastructure — the same rendering and key mapping code that runs in production, but with a `TestInput` (custom input with idle detection) + `FrameRecorder` (via `LabelingOutput` wrapper) instead of terminal I/O. `TestInput` is similar to `@agency-lang/tui`'s `ScriptedInput` but adds `waitForIdle()` so `press()` can synchronize with the driver's async processing.
 
 ## Quick example
 

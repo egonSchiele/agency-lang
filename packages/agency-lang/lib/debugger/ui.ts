@@ -711,9 +711,13 @@ export class DebuggerUI implements DebuggerIO {
           ),
         ];
         if (hasThreads) {
-          const threadPane = this.focusablePanes.find((p) => p.name === "threads")!;
+          const countLabel =
+            threadData!.threadCount > 1
+              ? ` [${threadData!.threadIndex + 1}/${threadData!.threadCount}]`
+              : "";
+          const threadLabel = ` threads: (id: ${threadData!.threadId})${countLabel} `;
           topChildren.push(
-            this.buildPane("threads", threadPane.label, "cyan", this.buildThreadsContent(), { width: "35%" }),
+            this.buildPane("threads", threadLabel, "cyan", this.buildThreadsContent(), { width: "35%" }),
           );
         }
 

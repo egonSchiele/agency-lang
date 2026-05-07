@@ -2,13 +2,22 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import * as fs from "fs";
 import * as path from "path";
 import * as os from "os";
-import { scheduleAdd, scheduleList, scheduleRemove, scheduleEdit } from "./index.js";
+import {
+  scheduleAdd,
+  scheduleList,
+  scheduleRemove,
+  scheduleEdit,
+  ScheduleExistsError,
+} from "./index.js";
+
+const mockInstall = vi.fn();
+const mockUninstall = vi.fn();
 
 vi.mock("./backends/index.js", () => ({
   detectBackend: () => "launchd" as const,
   getBackend: () => ({
-    install: vi.fn(),
-    uninstall: vi.fn(),
+    install: mockInstall,
+    uninstall: mockUninstall,
   }),
 }));
 
@@ -18,6 +27,8 @@ describe("scheduleAdd", () => {
   beforeEach(() => {
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "agency-sched-test-"));
     fs.writeFileSync(path.join(tmpDir, "agent.agency"), "node main() {}");
+    mockInstall.mockReset();
+    mockUninstall.mockReset();
   });
 
   afterEach(() => fs.rmSync(tmpDir, { recursive: true, force: true }));
@@ -51,6 +62,12 @@ describe("scheduleAdd", () => {
     expect(reg["agent"].command).toBe("pnpm run agency");
   });
 
+  it("calls backend.install", () => {
+    scheduleAdd({ file: path.join(tmpDir, "agent.agency"), every: "daily", baseDir: tmpDir });
+    expect(mockInstall).toHaveBeenCalledTimes(1);
+    expect(mockInstall.mock.calls[0][0].name).toBe("agent");
+  });
+
   it("throws if agent file does not exist", () => {
     expect(() => scheduleAdd({ file: path.join(tmpDir, "nope.agency"), every: "daily", baseDir: tmpDir })).toThrow("does not exist");
   });
@@ -62,6 +79,64 @@ describe("scheduleAdd", () => {
   it("throws if neither --every nor --cron is provided", () => {
     expect(() => scheduleAdd({ file: path.join(tmpDir, "agent.agency"), baseDir: tmpDir })).toThrow("--every or --cron");
   });
+
+  it("throws ScheduleExistsError when name already exists", () => {
+    scheduleAdd({ file: path.join(tmpDir, "agent.agency"), every: "daily", baseDir: tmpDir });
+    try {
+      scheduleAdd({ file: path.join(tmpDir, "agent.agency"), every: "hourly", baseDir: tmpDir });
+      expect.unreachable("should have thrown");
+    } catch (err) {
+      expect(err).toBeInstanceOf(ScheduleExistsError);
+      expect((err as ScheduleExistsError).scheduleName).toBe("agent");
+    }
+  });
+
+  it("overwrites when force is true", () => {
+    scheduleAdd({ file: path.join(tmpDir, "agent.agency"), every: "daily", baseDir: tmpDir });
+    scheduleAdd({ file: path.join(tmpDir, "agent.agency"), every: "hourly", force: true, baseDir: tmpDir });
+    const reg = JSON.parse(fs.readFileSync(path.join(tmpDir, "schedules.json"), "utf-8"));
+    expect(reg["agent"].cron).toBe("0 * * * *");
+    expect(mockUninstall).toHaveBeenCalledWith("agent");
+  });
+
+  it("rolls back registry on install failure", () => {
+    mockInstall.mockImplementationOnce(() => { throw new Error("install failed"); });
+    expect(() =>
+      scheduleAdd({ file: path.join(tmpDir, "agent.agency"), every: "daily", baseDir: tmpDir }),
+    ).toThrow("install failed");
+    // Registry should be empty after rollback
+    const reg = JSON.parse(fs.readFileSync(path.join(tmpDir, "schedules.json"), "utf-8"));
+    expect(reg["agent"]).toBeUndefined();
+  });
+
+  it("rolls back to old entry on overwrite install failure", () => {
+    scheduleAdd({ file: path.join(tmpDir, "agent.agency"), every: "daily", baseDir: tmpDir });
+    mockInstall.mockImplementationOnce(() => { throw new Error("install failed"); });
+    expect(() =>
+      scheduleAdd({ file: path.join(tmpDir, "agent.agency"), every: "hourly", force: true, baseDir: tmpDir }),
+    ).toThrow("install failed");
+    // Registry should still have the old entry
+    const reg = JSON.parse(fs.readFileSync(path.join(tmpDir, "schedules.json"), "utf-8"));
+    expect(reg["agent"].cron).toBe("0 9 * * *");
+  });
+
+  it("rejects names with path separators", () => {
+    expect(() =>
+      scheduleAdd({ file: path.join(tmpDir, "agent.agency"), every: "daily", name: "../evil", baseDir: tmpDir }),
+    ).toThrow("Invalid schedule name");
+  });
+
+  it("rejects names with spaces", () => {
+    expect(() =>
+      scheduleAdd({ file: path.join(tmpDir, "agent.agency"), every: "daily", name: "my agent", baseDir: tmpDir }),
+    ).toThrow("Invalid schedule name");
+  });
+
+  it("rejects names with shell metacharacters", () => {
+    expect(() =>
+      scheduleAdd({ file: path.join(tmpDir, "agent.agency"), every: "daily", name: "foo;rm -rf", baseDir: tmpDir }),
+    ).toThrow("Invalid schedule name");
+  });
 });
 
 describe("scheduleList", () => {
@@ -70,6 +145,8 @@ describe("scheduleList", () => {
   beforeEach(() => {
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "agency-sched-test-"));
     fs.writeFileSync(path.join(tmpDir, "agent.agency"), "node main() {}");
+    mockInstall.mockReset();
+    mockUninstall.mockReset();
   });
 
   afterEach(() => fs.rmSync(tmpDir, { recursive: true, force: true }));
@@ -84,6 +161,20 @@ describe("scheduleList", () => {
     expect(result).toHaveLength(1);
     expect(result[0].name).toBe("agent");
   });
+
+  it("marks missing agent files as broken", () => {
+    scheduleAdd({ file: path.join(tmpDir, "agent.agency"), every: "daily", baseDir: tmpDir });
+    // Delete the agent file after scheduling
+    fs.unlinkSync(path.join(tmpDir, "agent.agency"));
+    const result = scheduleList({ baseDir: tmpDir });
+    expect(result[0].broken).toBe(true);
+  });
+
+  it("marks existing agent files as not broken", () => {
+    scheduleAdd({ file: path.join(tmpDir, "agent.agency"), every: "daily", baseDir: tmpDir });
+    const result = scheduleList({ baseDir: tmpDir });
+    expect(result[0].broken).toBe(false);
+  });
 });
 
 describe("scheduleRemove", () => {
@@ -92,6 +183,8 @@ describe("scheduleRemove", () => {
   beforeEach(() => {
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "agency-sched-test-"));
     fs.writeFileSync(path.join(tmpDir, "agent.agency"), "node main() {}");
+    mockInstall.mockReset();
+    mockUninstall.mockReset();
   });
 
   afterEach(() => fs.rmSync(tmpDir, { recursive: true, force: true }));
@@ -100,6 +193,13 @@ describe("scheduleRemove", () => {
     scheduleAdd({ file: path.join(tmpDir, "agent.agency"), every: "daily", baseDir: tmpDir });
     scheduleRemove({ name: "agent", baseDir: tmpDir });
     expect(scheduleList({ baseDir: tmpDir })).toEqual([]);
+  });
+
+  it("calls backend.uninstall", () => {
+    scheduleAdd({ file: path.join(tmpDir, "agent.agency"), every: "daily", baseDir: tmpDir });
+    mockUninstall.mockReset();
+    scheduleRemove({ name: "agent", baseDir: tmpDir });
+    expect(mockUninstall).toHaveBeenCalledWith("agent");
   });
 
   it("throws if name does not exist", () => {
@@ -113,6 +213,8 @@ describe("scheduleEdit", () => {
   beforeEach(() => {
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "agency-sched-test-"));
     fs.writeFileSync(path.join(tmpDir, "agent.agency"), "node main() {}");
+    mockInstall.mockReset();
+    mockUninstall.mockReset();
   });
 
   afterEach(() => fs.rmSync(tmpDir, { recursive: true, force: true }));
@@ -130,6 +232,17 @@ describe("scheduleEdit", () => {
     scheduleEdit({ name: "agent", command: "npx agency-lang", baseDir: tmpDir });
     const reg = JSON.parse(fs.readFileSync(path.join(tmpDir, "schedules.json"), "utf-8"));
     expect(reg["agent"].command).toBe("npx agency-lang");
+    expect(reg["agent"].cron).toBe("0 9 * * *");
+  });
+
+  it("rolls back on install failure", () => {
+    scheduleAdd({ file: path.join(tmpDir, "agent.agency"), every: "daily", baseDir: tmpDir });
+    mockInstall.mockImplementationOnce(() => { throw new Error("install failed"); });
+    expect(() =>
+      scheduleEdit({ name: "agent", cron: "0 8 * * *", baseDir: tmpDir }),
+    ).toThrow("install failed");
+    // Registry should still have the old cron
+    const reg = JSON.parse(fs.readFileSync(path.join(tmpDir, "schedules.json"), "utf-8"));
     expect(reg["agent"].cron).toBe("0 9 * * *");
   });
 

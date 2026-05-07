@@ -29,7 +29,7 @@ function expandField(field: string): number[] {
   return results;
 }
 
-function buildIntervals(cron: string): string {
+export function buildIntervals(cron: string): string {
   const [minute, hour, dom, month, dow] = cron.split(/\s+/);
   const minutes = expandField(minute);
   const hours = expandField(hour);

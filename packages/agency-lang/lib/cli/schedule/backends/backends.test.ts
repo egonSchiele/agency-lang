@@ -1,7 +1,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import * as childProcess from "child_process";
 import * as fs from "fs";
-import { LaunchdBackend } from "./launchd.js";
+import { LaunchdBackend, buildIntervals } from "./launchd.js";
+import { SystemdBackend } from "./systemd.js";
 import { CrontabBackend } from "./crontab.js";
 import { detectBackend } from "./index.js";
 import type { ScheduleEntry } from "../registry.js";
@@ -15,6 +16,14 @@ vi.mock("./writeRunScript.js", () => ({
 
 vi.mock("@/templates/cli/schedule/plist.js", () => ({
   default: (args: any) => `<plist>${args.name}</plist>`,
+}));
+
+vi.mock("@/templates/cli/schedule/service.js", () => ({
+  default: (args: any) => `[Service] ${args.name}`,
+}));
+
+vi.mock("@/templates/cli/schedule/timer.js", () => ({
+  default: (args: any) => `[Timer] ${args.name}`,
 }));
 
 const mockEntry: ScheduleEntry = {
@@ -131,6 +140,74 @@ describe("CrontabBackend", () => {
     const input = (writeCall![1] as any).input as string;
     expect(input).not.toContain("# agency:foo\n");
     expect(input).toContain("# agency:foo-bar");
+  });
+});
+
+describe("SystemdBackend", () => {
+  const backend = new SystemdBackend();
+
+  beforeEach(() => {
+    vi.mocked(fs.existsSync).mockReturnValue(true);
+    vi.mocked(fs.writeFileSync).mockImplementation(() => {});
+    vi.mocked(fs.mkdirSync).mockImplementation(() => undefined as any);
+    vi.mocked(fs.unlinkSync).mockImplementation(() => {});
+    vi.mocked(childProcess.execFileSync).mockImplementation(
+      () => Buffer.from(""),
+    );
+  });
+
+  afterEach(() => vi.restoreAllMocks());
+
+  it("install writes service and timer files and enables timer", () => {
+    backend.install(mockEntry);
+    const writeCalls = vi.mocked(fs.writeFileSync).mock.calls;
+    const paths = writeCalls.map((c) => c[0] as string);
+    expect(paths.some((p) => p.endsWith("agency-schedule-test-agent.service"))).toBe(true);
+    expect(paths.some((p) => p.endsWith("agency-schedule-test-agent.timer"))).toBe(true);
+    expect(vi.mocked(childProcess.execFileSync)).toHaveBeenCalledWith(
+      "systemctl",
+      ["--user", "enable", "--now", "agency-schedule-test-agent.timer"],
+    );
+  });
+
+  it("uninstall disables timer and deletes unit files", () => {
+    backend.uninstall("test-agent");
+    expect(vi.mocked(childProcess.execFileSync)).toHaveBeenCalledWith(
+      "systemctl",
+      ["--user", "disable", "--now", "agency-schedule-test-agent.timer"],
+    );
+  });
+});
+
+describe("buildIntervals", () => {
+  it("generates single dict for simple cron", () => {
+    const result = buildIntervals("0 9 * * *");
+    expect(result).toContain("<dict>");
+    expect(result).toContain("<key>Minute</key>");
+    expect(result).toContain("<integer>0</integer>");
+    expect(result).toContain("<key>Hour</key>");
+    expect(result).toContain("<integer>9</integer>");
+    expect(result).not.toContain("<array>");
+  });
+
+  it("generates array of dicts for weekday range", () => {
+    const result = buildIntervals("0 9 * * 1-5");
+    expect(result).toContain("<array>");
+    // Should have 5 dicts, one per weekday
+    const dictCount = (result.match(/<dict>/g) || []).length;
+    expect(dictCount).toBe(5);
+    expect(result).toContain("<key>Weekday</key>");
+    for (let i = 1; i <= 5; i++) {
+      expect(result).toContain(`<integer>${i}</integer>`);
+    }
+  });
+
+  it("handles wildcard fields by omitting them", () => {
+    const result = buildIntervals("* * * * 1");
+    // Only Weekday should be set, no Minute/Hour/Day/Month
+    expect(result).toContain("<key>Weekday</key>");
+    expect(result).not.toContain("<key>Minute</key>");
+    expect(result).not.toContain("<key>Hour</key>");
   });
 });
 

@@ -60,4 +60,9 @@ describe("Registry", () => {
     expect(registry.has("test-agent")).toBe(true);
     expect(registry.has("nonexistent")).toBe(false);
   });
+
+  it("throws helpful error on corrupted JSON", () => {
+    fs.writeFileSync(path.join(tmpDir, "schedules.json"), "{invalid json");
+    expect(() => registry.getAll()).toThrow("Failed to parse schedule registry");
+  });
 });

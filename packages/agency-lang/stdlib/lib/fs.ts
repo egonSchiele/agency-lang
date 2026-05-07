@@ -9,15 +9,33 @@ export type EditResult = {
   path: string;
 };
 
-export function resolvePath(dir: string, filename: string): string {
+export async function resolvePath(dir: string, filename: string): Promise<string> {
   if (dir) {
     if (path.isAbsolute(filename)) {
       throw new Error(`Filename must not be absolute when dir is specified (got "${filename}").`);
     }
     const baseDir = path.resolve(process.cwd(), dir);
     const full = path.resolve(baseDir, filename);
+    // Lexical check first (catches .. before the file exists)
     if (!full.startsWith(baseDir + path.sep) && full !== baseDir) {
       throw new Error(`Filename "${filename}" escapes directory "${dir}".`);
+    }
+    // Resolve symlinks and recheck to prevent symlink-based escapes
+    let realFull: string;
+    try {
+      realFull = await fs.realpath(full);
+    } catch {
+      // File doesn't exist yet (e.g. write) — lexical check is sufficient
+      return full;
+    }
+    let realBase: string;
+    try {
+      realBase = await fs.realpath(baseDir);
+    } catch {
+      realBase = baseDir;
+    }
+    if (!realFull.startsWith(realBase + path.sep) && realFull !== realBase) {
+      throw new Error(`Filename "${filename}" resolves outside directory "${dir}" via symlink.`);
     }
     return full;
   }
@@ -34,7 +52,7 @@ export async function _edit(
   if (oldText.length === 0) {
     throw new Error("edit: oldText must not be empty");
   }
-  const full = resolvePath(dir, filename);
+  const full = await resolvePath(dir, filename);
   const before = await fs.readFile(full, "utf8");
 
   if (replaceAll) {
@@ -85,7 +103,7 @@ export async function _multiedit(
   filename: string,
   edits: MultiEdit[],
 ): Promise<MultiEditResult> {
-  const full = resolvePath(dir, filename);
+  const full = await resolvePath(dir, filename);
   let contents = await fs.readFile(full, "utf8");
   let total = 0;
 

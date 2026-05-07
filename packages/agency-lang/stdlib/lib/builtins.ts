@@ -49,19 +49,19 @@ export function _round(num: number, precision: number): number {
 export { _fetch, _fetchJSON } from "./http.js";
 
 export async function _read(dir: string, filename: string): Promise<string> {
-  const filePath = resolvePath(dir, filename);
+  const filePath = await resolvePath(dir, filename);
   const data = await readFile(filePath);
   return data.toString("utf8");
 }
 
 export async function _write(dir: string, filename: string, content: string): Promise<boolean> {
-  const filePath = resolvePath(dir, filename);
+  const filePath = await resolvePath(dir, filename);
   await writeFile(filePath, content, "utf8");
   return true;
 }
 
 export async function _readImage(dir: string, filename: string): Promise<string> {
-  const filePath = resolvePath(dir, filename);
+  const filePath = await resolvePath(dir, filename);
   const data = await readFile(filePath);
   return data.toString("base64");
 }

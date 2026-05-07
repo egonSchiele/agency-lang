@@ -10,6 +10,8 @@ const stepTestCompiled = path.join(fixtureDir, "step-test.ts");
 const fnCallAgency = path.join(fixtureDir, "function-call-test.agency");
 const fnCallCompiled = path.join(fixtureDir, "function-call-test.ts");
 
+const framesDir = path.join(fixtureDir, "..", "test-frames");
+
 beforeAll(() => {
   compile({ debugger: true }, stepTestAgency, stepTestCompiled, { ts: true });
   compile({ debugger: true }, fnCallAgency, fnCallCompiled, { ts: true });
@@ -25,8 +27,8 @@ describe("Export frames for visual inspection", () => {
     await session.press("s"); // past z = x + y
     await session.press("c"); // continue to completion
 
-    const outPath = path.resolve("test-frames/step-test-frames.html");
-    fs.mkdirSync(path.dirname(outPath), { recursive: true });
+    const outPath = path.join(framesDir, "step-test-frames.html");
+    fs.mkdirSync(framesDir, { recursive: true });
     session.writeHTML(outPath);
     console.log(`Wrote ${session.recorder.frames.length} frames to ${outPath}`);
   });
@@ -43,8 +45,8 @@ describe("Export frames for visual inspection", () => {
     await session.press("s"); // back in main
     await session.press("c"); // continue
 
-    const outPath = path.resolve("test-frames/function-call-frames.html");
-    fs.mkdirSync(path.dirname(outPath), { recursive: true });
+    const outPath = path.join(framesDir, "function-call-frames.html");
+    fs.mkdirSync(framesDir, { recursive: true });
     session.writeHTML(outPath);
     console.log(`Wrote ${session.recorder.frames.length} frames to ${outPath}`);
   });

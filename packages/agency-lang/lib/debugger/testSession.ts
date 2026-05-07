@@ -9,8 +9,7 @@ import {
 import { DebuggerDriver } from "./driver.js";
 import { DebuggerUI } from "./ui.js";
 import type { Checkpoint } from "../runtime/state/checkpointStore.js";
-import { resetGlobalCheckpointCounter } from "../runtime/state/checkpointStore.js";
-import { hasInterrupts } from "../runtime/interrupts.js";
+import { hasInterrupts, createDebugInterrupt } from "../runtime/interrupts.js";
 
 /**
  * An InputSource that notifies when the consumer (driver) is idle —
@@ -115,8 +114,6 @@ export class DebuggerTestSession {
   }
 
   static async create(opts: TestSessionOpts): Promise<DebuggerTestSession> {
-    resetGlobalCheckpointCounter();
-
     const input = new TestInput();
     const recorder = new FrameRecorder();
     const labelingOutput = new LabelingOutput(recorder);
@@ -151,9 +148,6 @@ export class DebuggerTestSession {
     if (opts.checkpoints?.length) {
       // Trace mode: start at the last checkpoint
       const lastCp = opts.checkpoints[opts.checkpoints.length - 1];
-      const { createDebugInterrupt } = await import(
-        "../runtime/interrupts.js"
-      );
       const interrupt = createDebugInterrupt(
         undefined,
         lastCp.id,
@@ -195,10 +189,6 @@ export class DebuggerTestSession {
     return session;
   }
 
-  /**
-   * Feed a key press and wait for the driver to become idle again.
-   * Accepts single character keys or special key names like "enter", "escape", "tab".
-   */
   async press(key: string, opts?: { times?: number; shift?: boolean }): Promise<void> {
     const times = opts?.times ?? 1;
     for (let i = 0; i < times; i++) {
@@ -208,21 +198,15 @@ export class DebuggerTestSession {
       const suffix = times > 1 ? ` (${i + 1}/${times})` : "";
       this.labelingOutput.label = `#${this.pressCount} press("${displayKey}")${suffix}`;
 
+      // waitForIdle must be registered before feedKey — feedKey may
+      // synchronously resolve the driver's pending nextKey() waiter,
+      // which would miss the idle signal if we registered after.
       const idlePromise = this.input.waitForIdle();
       this.input.feedKey({ key, shift: opts?.shift });
-
-      // Race: either the driver becomes idle again (waiting for next key)
-      // or the driver finishes (run promise resolves)
-      await Promise.race([
-        idlePromise,
-        this.runPromise,
-      ]);
+      await Promise.race([idlePromise, this.runPromise]);
     }
   }
 
-  /**
-   * Type a string character by character, then press Enter.
-   */
   async type(str: string): Promise<void> {
     this.pressCount++;
     this.labelingOutput.label = `#${this.pressCount} type("${str}")`;
@@ -238,9 +222,6 @@ export class DebuggerTestSession {
     await Promise.race([idlePromise, this.runPromise]);
   }
 
-  /**
-   * Return the last rendered Frame for inspection.
-   */
   frame(): Frame {
     if (this.recorder.frames.length === 0) {
       throw new Error("No frames recorded yet");
@@ -248,45 +229,22 @@ export class DebuggerTestSession {
     return this.recorder.frames[this.recorder.frames.length - 1].frame;
   }
 
-  /**
-   * Press "q" to quit the driver and return the program's return value.
-   */
   async quit(): Promise<any> {
     if (!this.finished) {
       this.input.feedKey({ key: "q" });
       await this.runPromise;
     }
-    const rv =
-      this.result?.data !== undefined ? this.result.data : this.result;
-    return rv;
+    return this.returnValue();
   }
 
-  /**
-   * Return the program's return value (only available after quit()).
-   */
   returnValue(): any {
-    const rv =
-      this.result?.data !== undefined ? this.result.data : this.result;
-    return rv;
+    return this.result?.data !== undefined ? this.result.data : this.result;
   }
 
-  /**
-   * Write all recorded frames as an HTML file for visual inspection.
-   */
   writeHTML(path: string): void {
     this.recorder.writeHTML(path);
   }
 
-  /**
-   * Get the DebuggerUI's last frame (same as ui.lastFrame).
-   */
-  get lastFrame(): Frame | null {
-    return this.ui.lastFrame;
-  }
-
-  /**
-   * Check if the driver run has finished.
-   */
   get isFinished(): boolean {
     return this.finished;
   }

@@ -190,11 +190,6 @@ describe("Debugger stepping with function calls", () => {
 
     const result = await session.quit();
     expect(result).toBe(17);
-
-    // Check that we visited the add scope via the source pane
-    const localsPane = session.frame().findByKey("locals");
-    // The source label should have shown function-call-test.agency at some point
-    // We can verify by checking the frame recorded while inside add had add's locals
   });
 
   it("next steps over a function call", async () => {

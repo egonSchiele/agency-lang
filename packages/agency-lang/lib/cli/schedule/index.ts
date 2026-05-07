@@ -62,13 +62,20 @@ export function scheduleAdd(opts: AddOptions): void {
     backend: backendType,
   };
 
-  if (registry.has(name)) backend.uninstall(name);
+  const oldEntry = registry.get(name);
+  if (oldEntry) backend.uninstall(name);
   registry.set(entry);
 
   try {
     backend.install(entry);
   } catch (err) {
-    registry.remove(name);
+    // Rollback: restore old entry or remove new one
+    if (oldEntry) {
+      registry.set(oldEntry);
+      try { backend.install(oldEntry); } catch {}
+    } else {
+      registry.remove(name);
+    }
     throw err;
   }
 }
@@ -150,7 +157,9 @@ export function scheduleEdit(opts: EditOptions): void {
   try {
     backend.install(updated);
   } catch (err) {
+    // Rollback: restore old schedule
     registry.set(existing);
+    try { backend.install(existing); } catch {}
     throw err;
   }
 }

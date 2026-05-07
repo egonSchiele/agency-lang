@@ -31,6 +31,16 @@ describe("validateCron", () => {
     expect(validateCron("")).toBe(false);
     expect(validateCron("* * * * * *")).toBe(false);
   });
+  it("rejects out-of-range values", () => {
+    expect(validateCron("99 * * * *")).toBe(false);
+    expect(validateCron("0 25 * * *")).toBe(false);
+    expect(validateCron("0 0 32 * *")).toBe(false);
+    expect(validateCron("0 0 * 13 *")).toBe(false);
+    expect(validateCron("0 0 * * 8")).toBe(false);
+  });
+  it("rejects step of 0", () => {
+    expect(validateCron("*/0 * * * *")).toBe(false);
+  });
 });
 
 describe("resolveCron", () => {
@@ -87,5 +97,17 @@ describe("cronToOnCalendar", () => {
   });
   it("converts hourly", () => {
     expect(cronToOnCalendar("0 * * * *")).toBe("*-*-* *:00:00");
+  });
+  it("converts every 15 minutes", () => {
+    expect(cronToOnCalendar("*/15 * * * *")).toBe("*-*-* *:*/15:00");
+  });
+  it("converts every 2 hours", () => {
+    expect(cronToOnCalendar("0 */2 * * *")).toBe("*-*-* */2:00:00");
+  });
+  it("converts Sunday as 7", () => {
+    expect(cronToOnCalendar("0 9 * * 7")).toBe("Sun *-*-* 09:00:00");
+  });
+  it("converts Sunday as 0", () => {
+    expect(cronToOnCalendar("0 9 * * 0")).toBe("Sun *-*-* 09:00:00");
   });
 });

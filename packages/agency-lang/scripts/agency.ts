@@ -81,10 +81,17 @@ async function promptOverwrite(name: string): Promise<boolean> {
   return overwrite ?? false;
 }
 
+function displayPath(absolutePath: string): string {
+  const rel = path.relative(process.cwd(), absolutePath);
+  // Use relative if it's shorter and doesn't escape cwd
+  return rel.startsWith("..") ? absolutePath : rel;
+}
+
 function printScheduleTable(entries: ListEntry[]): void {
-  const nameW = Math.max(4, ...entries.map((e) => e.name.length)) + 2;
-  const agentW = Math.max(5, ...entries.map((e) => e.agentFile.length)) + 2;
-  const schedW = Math.max(8, ...entries.map((e) => e.schedule.length)) + 2;
+  const display = entries.map((e) => ({ ...e, displayAgent: displayPath(e.agentFile) }));
+  const nameW = Math.max(4, ...display.map((e) => e.name.length)) + 2;
+  const agentW = Math.max(5, ...display.map((e) => e.displayAgent.length)) + 2;
+  const schedW = Math.max(8, ...display.map((e) => e.schedule.length)) + 2;
 
   console.log(
     "Name".padEnd(nameW) +
@@ -92,7 +99,7 @@ function printScheduleTable(entries: ListEntry[]): void {
       "Schedule".padEnd(schedW) +
       "Next Run",
   );
-  for (const entry of entries) {
+  for (const entry of display) {
     const broken = entry.broken ? color.red(" [broken]") : "";
     const nextRunStr = entry.nextRun.toLocaleString("en-US", {
       weekday: "short",
@@ -104,7 +111,7 @@ function printScheduleTable(entries: ListEntry[]): void {
     });
     console.log(
       entry.name.padEnd(nameW) +
-        (entry.agentFile + broken).padEnd(agentW) +
+        (entry.displayAgent + broken).padEnd(agentW) +
         entry.schedule.padEnd(schedW) +
         nextRunStr,
     );
@@ -642,10 +649,15 @@ export function createProgram(deps: CliDependencies = {}): Command {
           if (err instanceof ScheduleExistsError && process.stdin.isTTY) {
             const confirmed = await promptOverwrite(err.scheduleName);
             if (confirmed) {
-              scheduleAdd({ file, ...opts, force: true });
-              console.log(
-                color.green("Schedule overwritten successfully."),
-              );
+              try {
+                scheduleAdd({ file, ...opts, force: true });
+                console.log(
+                  color.green("Schedule overwritten successfully."),
+                );
+              } catch (overwriteErr: any) {
+                console.error(color.red(overwriteErr.message));
+                process.exit(1);
+              }
             } else {
               console.log("Aborted.");
             }

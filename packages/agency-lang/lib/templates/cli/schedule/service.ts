@@ -9,7 +9,7 @@ Description=Agency scheduled agent: {{{name:string}}}
 [Service]
 Type=oneshot
 WorkingDirectory={{{agentDir:string}}}
-ExecStart=/bin/bash {{{runScriptPath:string}}}
+ExecStart=/bin/bash "{{{runScriptPath:string}}}"
 `;
 
 export type TemplateType = {

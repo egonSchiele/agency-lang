@@ -7,7 +7,9 @@ export const template = `#!/bin/bash
 set -e
 cd "{{{agentDir:string}}}"
 {{#hasEnvFile:boolean}}
-export $(grep -v '^#' "{{{envFile:string}}}" | xargs)
+set -a
+. "{{{envFile:string}}}"
+set +a
 {{/hasEnvFile}}
 LOGFILE="{{{logDir:string}}}/$(date +%Y-%m-%dT%H-%M-%S).log"
 {{{command:string}}} run "{{{agentFile:string}}}" >> "$LOGFILE" 2>&1

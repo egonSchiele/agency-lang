@@ -26,7 +26,13 @@ export class Registry {
 
   getAll(): ScheduleRegistry {
     if (!fs.existsSync(this.filePath)) return {};
-    return JSON.parse(fs.readFileSync(this.filePath, "utf-8"));
+    try {
+      return JSON.parse(fs.readFileSync(this.filePath, "utf-8"));
+    } catch {
+      throw new Error(
+        `Failed to parse schedule registry at ${this.filePath}. The file may be corrupted. Delete it to reset: rm "${this.filePath}"`,
+      );
+    }
   }
 
   get(name: string): ScheduleEntry | undefined {

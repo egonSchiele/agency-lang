@@ -17,9 +17,7 @@ export const template = `<?xml version="1.0" encoding="UTF-8"?>
   <key>WorkingDirectory</key>
   <string>{{{agentDir:string}}}</string>
   <key>StartCalendarInterval</key>
-  <dict>
 {{{intervals:string}}}
-  </dict>
   <key>StandardOutPath</key>
   <string>{{{logDir:string}}}/launchd-stdout.log</string>
   <key>StandardErrorPath</key>

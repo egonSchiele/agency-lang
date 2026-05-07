@@ -15,12 +15,33 @@ export function presetToCron(preset: string): string {
   return cron;
 }
 
+const FIELD_BOUNDS: [number, number][] = [
+  [0, 59],  // minute
+  [0, 23],  // hour
+  [1, 31],  // day of month
+  [1, 12],  // month
+  [0, 7],   // day of week (0 and 7 both mean Sunday)
+];
+
 export function validateCron(expr: string): boolean {
   const fields = expr.trim().split(/\s+/);
   if (fields.length !== 5) return false;
   const fieldPattern =
     /^(\*(\/([0-9]+))?|[0-9]+(-[0-9]+)?(\/[0-9]+)?)(,(\*(\/([0-9]+))?|[0-9]+(-[0-9]+)?(\/[0-9]+)?))*$/;
-  return fields.every((f) => fieldPattern.test(f));
+  return fields.every((f, i) => {
+    if (!fieldPattern.test(f)) return false;
+    // Check bounds and reject step of 0
+    const [min, max] = FIELD_BOUNDS[i];
+    for (const part of f.split(",")) {
+      const [range, stepStr] = part.split("/");
+      if (stepStr && parseInt(stepStr, 10) === 0) return false;
+      if (range !== "*") {
+        const nums = range.split("-").map(Number);
+        if (nums.some((n) => n < min || n > max)) return false;
+      }
+    }
+    return true;
+  });
 }
 
 export function resolveCron(opts: {
@@ -47,6 +68,8 @@ export function formatSchedule(cron: string, preset: string): string {
 
 export function nextRun(cronExpr: string): Date {
   const [minF, hourF, domF, monF, dowF] = cronExpr.trim().split(/\s+/);
+  // Normalize DOW field: replace 7 with 0 (both mean Sunday, but Date.getDay() returns 0-6)
+  const normalizedDowF = dowF.replace(/7/g, "0");
   const candidate = new Date();
   candidate.setSeconds(0, 0);
   candidate.setMinutes(candidate.getMinutes() + 1);
@@ -57,7 +80,7 @@ export function nextRun(cronExpr: string): Date {
       matchField(hourF, candidate.getHours()) &&
       matchField(domF, candidate.getDate()) &&
       matchField(monF, candidate.getMonth() + 1) &&
-      matchField(dowF, candidate.getDay())
+      matchField(normalizedDowF, candidate.getDay())
     ) {
       return candidate;
     }
@@ -91,6 +114,10 @@ function expandDow(dow: string): string {
 
 function field(f: string): string {
   if (f === "*") return "*";
+  // Handle step expressions like */15 → *:00/15 is not valid for systemd;
+  // systemd uses the same */N syntax for time fields
+  if (f.includes("/")) return f;
+  if (f.includes("-") || f.includes(",")) return f;
   return f.padStart(2, "0");
 }
 

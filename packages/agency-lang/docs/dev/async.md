@@ -1,7 +1,7 @@
 # Async Function Calls
 CLAUDE: also read async-info-for-claude.md which contains detailed info.
 
-This document explains how async function calls work in Agency, the problems we encountered, and how they are solved. For the implementation spec, see `docs/superpowers/specs/2026-03-20-runtime-promise-tracking-design.md`.
+This document explains how async function calls work in Agency, the problems we encountered, and how they are solved.
 
 ## Background
 

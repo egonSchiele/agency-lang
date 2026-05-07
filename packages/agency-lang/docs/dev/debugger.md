@@ -16,7 +16,7 @@ Three layers:
 
 ```
 +-----------------------------------------+
-|  UI (blessed)         lib/debugger/ui.ts |
+|  UI (@agency-lang/tui) lib/debugger/ui.ts |
 +-----------------------------------------+
 |  Driver               lib/debugger/driver.ts |
 +-----------------------------------------+
@@ -28,7 +28,7 @@ Three layers:
 
 **Driver**: A loop that catches debug interrupts, feeds state to the UI, waits for user commands, and resumes execution via `approveInterrupt()`.
 
-**UI**: A blessed terminal application with panes for source code, locals/globals, call stack, activity log, and stdout.
+**UI**: A terminal application (using `@agency-lang/tui`) with panes for source code, locals/globals, call stack, activity log, and stdout.
 
 ## How it works
 
@@ -79,7 +79,7 @@ When `debugStep()` pauses, it needs to advance the step counter so that on resum
 
 The naming convention matches the builder's generated code: all path segments except the last form the variable name (`__substep_` + segments joined by `_`), and the value is set to `lastSegment + 1`.
 
-### DebuggerState (`lib/debugger/types.ts`)
+### DebuggerState (`lib/debugger/debuggerState.ts`)
 
 A class that encapsulates all debugger state. Owned by the driver, passed to the runtime via `metadata.debugger` on each interrupt resume. Stored on `RuntimeContext.debugger`.
 
@@ -89,11 +89,9 @@ Key state:
 - `stepTarget`: for next/stepIn/stepOut commands — stores the target depth
 - `checkpoints`: a `DebugCheckpointStore` with rolling window
 
-### DebugCheckpointStore (`lib/runtime/state/debugCheckpointStore.ts`)
+### Debug checkpoints
 
-Separate from the regular `CheckpointStore` so that user-code `rewind` (which calls `invalidateAfter()`) doesn't wipe debugger history. Uses a rolling window (default 30). Pinned checkpoints are exempt from eviction.
-
-Methods: `createRolling()`, `createPinned()`, `pin()`, `get()`, `getAll()`.
+The debugger uses the regular `CheckpointStore` for its rolling checkpoint window. The `DebuggerState` class manages rolling checkpoint creation with a configurable window size (default 30). Pinned checkpoints are exempt from eviction.
 
 ### The driver loop (`lib/debugger/driver.ts`)
 
@@ -153,11 +151,11 @@ This avoids exporting `__globalCtx` directly.
 |------|---------|
 | `lib/cli/debug.ts` | CLI command: compile, load module, pick node, launch driver |
 | `lib/debugger/driver.ts` | Driver loop, command handling, hook subscriptions |
-| `lib/debugger/ui.ts` | Blessed terminal UI, keyboard input, rendering |
+| `lib/debugger/ui.ts` | Terminal UI (@agency-lang/tui), keyboard input, rendering |
 | `lib/debugger/uiState.ts` | UI state management (locals, globals, call stack, activity log) |
-| `lib/debugger/types.ts` | `DebuggerState` class |
+| `lib/debugger/types.ts` | `DebuggerCommand`, `DebuggerIO` types |
+| `lib/debugger/debuggerState.ts` | `DebuggerState` class |
 | `lib/runtime/debugger.ts` | `debugStep()` function |
-| `lib/runtime/state/debugCheckpointStore.ts` | Rolling checkpoint store with pinning |
 
 ## Keyboard commands
 

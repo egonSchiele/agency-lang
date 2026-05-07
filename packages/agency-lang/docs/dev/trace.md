@@ -90,7 +90,7 @@ reader.checkpoints  // Checkpoint[]
 | `lib/runtime/trace/traceReader.ts` | `TraceReader` — reads file, reconstructs `Checkpoint[]` |
 | `lib/runtime/debugger.ts` | `debugStep()` — trace write path (lines 23-28) |
 | `lib/runtime/state/sourceLocation.ts` | `SourceLocation` type used by checkpoints and traces |
-| `lib/templates/backends/typescriptGenerator/traceSetup.mustache` | Template for builder-injected trace setup |
+| `lib/templates/backends/typescriptGenerator/imports.mustache` | Includes trace setup in generated imports |
 
 ## Relationship to the debugger
 

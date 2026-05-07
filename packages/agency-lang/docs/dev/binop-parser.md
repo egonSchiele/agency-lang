@@ -1,6 +1,6 @@
 # Binary Expression Parser
 
-The binary expression parser (`lib/parsers/binop.ts`) uses a technique called **precedence climbing** to parse expressions that can contain nested operators, chained operations, parentheses, and operators at different precedence levels — all in a single pass.
+The binary expression parser (`lib/parsers/binop.test.ts` for tests, `lib/types/binop.ts` for the precedence table) uses a technique called **precedence climbing** to parse expressions that can contain nested operators, chained operations, parentheses, and operators at different precedence levels — all in a single pass.
 
 This document walks through the algorithm in detail.
 
@@ -21,13 +21,15 @@ Every operator has a numeric precedence level. Higher numbers mean tighter bindi
 
 | Level | Operators        | Meaning                  |
 |-------|------------------|--------------------------|
-| 0     | `+=` `-=` `*=` `/=` | Compound assignment    |
-| 1     | `\|\|`           | Logical OR               |
+| -1    | `\|>`            | Pipe                     |
+| 0     | `+=` `-=` `*=` `/=` `??=` `\|\|=` `catch` | Compound assignment / catch |
+| 1     | `\|\|` `??`      | Logical OR / nullish coalescing |
 | 2     | `&&`             | Logical AND              |
-| 3     | `==` `!=`        | Equality                 |
-| 4     | `<` `>` `<=` `>=`| Comparison               |
+| 3     | `==` `===` `!=` `!==` `=~` `!~` | Equality / pattern match |
+| 4     | `<` `>` `<=` `>=` `instanceof` `in` | Comparison         |
 | 5     | `+` `-`          | Addition, subtraction    |
-| 6     | `*` `/`          | Multiplication, division |
+| 6     | `*` `/` `%`      | Multiplication, division, modulo |
+| 7     | `**`             | Exponentiation           |
 
 All operators are left-associative.
 

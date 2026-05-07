@@ -175,10 +175,7 @@ The variable receives a **deep clone** of the thread's accumulated messages (`sm
 | `lib/runtime/node.ts` | setupNode/setupFunction (ThreadStore initialization) |
 | `lib/runtime/prompt.ts` | runPrompt (uses thread for LLM calls), tool call isolation |
 | `lib/backends/typescriptBuilder.ts` | processMessageThread |
-| `lib/templates/backends/typescriptGenerator/promptFunction.mustache` | Prompt function template |
-| `lib/templates/backends/typescriptGenerator/internalFunctionCall.mustache` | Function call with threads |
-| `lib/templates/backends/typescriptGenerator/graphNode.mustache` | Node setup (threads init) |
-| `lib/templates/backends/typescriptGenerator/functionDefinition.mustache` | Function setup (threads init) |
+| `lib/templates/backends/typescriptGenerator/blockSetup.mustache` | Block setup template (includes thread init) |
+| `lib/templates/backends/typescriptGenerator/imports.mustache` | Import template (includes thread setup) |
 | `tests/typescriptGenerator/threadsAndSubthreads.agency` | Thread/subthread fixture |
-| `tests/typescriptGenerator/parallelThread.agency` | Parallel thread fixture |
 | `tests/agency/threads/` | End-to-end thread tests |

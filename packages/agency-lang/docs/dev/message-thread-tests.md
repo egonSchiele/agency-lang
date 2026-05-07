@@ -13,7 +13,7 @@
 - subthread with no parent thread: tests/agency/threads/subthread-no-parent-thread.agency
 
 - Not in a thread, but one LLM call depends on the result of another LLM call.: tests/agency/threads/no-thread-dependent-call.agency
-- In a parallel thread, but one LLM call depends on the result of another LLM call.: tests/agency/threads/parallel-thread-dependent-call.agency
+- In a parallel thread, but one LLM call depends on the result of another LLM call. (test not yet written)
 
 - Another thought: what about tools? What if a func that assumed it will be threaded is called as a tool?
 - If I do want to transfer message history to another node, how would I do that?

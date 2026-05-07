@@ -54,8 +54,8 @@ This lets you prevent specific built-in functions from being generated in the ou
 
 ### Fetch Domain Restrictions
 
-- **`allowedFetchDomains`** (string[]): Whitelist of domains allowed for fetch operations
-- **`disallowedFetchDomains`** (string[]): Blacklist of domains disallowed for fetch operations
+- **`allowedFetchDomains`** (string[]): Safelist of domains allowed for fetch operations
+- **`disallowedFetchDomains`** (string[]): Blocklist of domains disallowed for fetch operations
 
 These options control which domains can be accessed via the `fetch`, `fetchJSON`, and `fetchJson` built-in functions. This is useful for security and compliance requirements.
 

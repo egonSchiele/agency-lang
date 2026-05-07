@@ -41,11 +41,11 @@ if (errors.length > 0) {
 When a function or graph node declares typed parameters, the checker validates that call-site arguments have compatible types.
 
 ```
-def greet(name :: string) {
+def greet(name: string) {
   print(name)
 }
 
-count :: number
+count: number
 count = 5
 greet(count)  // error: Type 'number' is not assignable to parameter type 'string'
 ```
@@ -55,7 +55,7 @@ greet(count)  // error: Type 'number' is not assignable to parameter type 'strin
 The checker errors if a function is called with the wrong number of arguments.
 
 ```
-def add(a :: number, b :: number) {
+def add(a: number, b: number) {
   return a + b
 }
 
@@ -74,10 +74,10 @@ def getName(): string {
 
 ### 4. Variable reassignment consistency
 
-If a variable has a declared type (via `::` or inline type hint), reassigning it to an incompatible type is an error.
+If a variable has a declared type (via `:` type annotation or inline type hint), reassigning it to an incompatible type is an error.
 
 ```
-x :: string
+x: string
 x = "hello"
 x = getNumber()  // error if getNumber() returns number
 ```
@@ -152,7 +152,7 @@ The process exits with code 1 if any errors are found, and prints "No type error
 
 ## Architecture
 
-The `TypeChecker` class in `lib/typeChecker.ts` operates in multiple passes:
+The `TypeChecker` class in `lib/typeChecker/` operates in multiple passes:
 
 1. **`collectTypeAliases()`** — Walks top-level nodes for `typeAlias` definitions, validates that referenced aliases exist.
 2. **`collectFunctionDefs()`** — Collects `function` and `graphNode` definitions into lookup maps.

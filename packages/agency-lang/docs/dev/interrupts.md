@@ -265,10 +265,10 @@ Overrides are applied via the shared `applyOverrides` helper in `lib/runtime/rew
 
 | File | Role |
 |------|------|
-| `lib/ir/tsIR.ts` | IR node definitions: `TsStepBlock`, `TsIfSteps`, `TsThreadSteps`, `TsWhileSteps`, `TsForSteps` |
-| `lib/ir/builders.ts` | Factory functions: `ts.stepBlock()`, `ts.ifSteps()`, `ts.threadSteps()`, `ts.whileSteps()`, `ts.forSteps()` |
+| `lib/ir/tsIR.ts` | IR node definitions (e.g. `TsIf`, `TsFor`, `TsWhile`) |
+| `lib/ir/builders.ts` | Factory functions for IR nodes |
 | `lib/ir/prettyPrint.ts` | Code generation for each IR node kind |
 | `lib/backends/typescriptBuilder.ts` | `processIfElseWithSteps`, `processMessageThread`, `processWhileLoopWithSteps`, `processForLoopWithSteps`, `processMatchBlockWithSteps` |
 | `lib/runtime/state/stateStack.ts` | `State.clearLocalsWithPrefix()` for loop reset |
-| `lib/templates/backends/typescriptGenerator/` | Mustache templates: `substepBlock`, `ifStepsCondbranch`, `ifStepsBranchDispatch`, `threadSteps`, `whileSteps`, `forSteps` |
+| `lib/templates/backends/typescriptGenerator/` | Mustache templates: `blockSetup`, `runnerIfElse`, `imports`, etc. |
 | `tests/agency/substeps/` | Integration tests for all block types |

@@ -65,7 +65,7 @@ node main() {
 - Scoping exception: variables inside `initialize` are implicitly global, unlike every other block where variables are local
 - Doesn't solve cross-module init (imported modules' globals still need `__initializeGlobals`)
 
-Full plan was written at `docs/superpowers/plans/2026-04-01-initialize-block.md`.
+A plan was written but has since been removed.
 
 ### 3. Implicit `__init` graph node (no new syntax)
 
@@ -90,7 +90,7 @@ The builder automatically detects executable top-level statements and compiles t
 
 6. **Rewind across separate graph runs.** If init nodes run as separate `graph.run()` calls (Approach A for cross-module init), rewinding to a checkpoint created during init would re-run the init but not continue to the target node, because they're separate graph traversals.
 
-Full plan was written at `docs/superpowers/plans/2026-04-01-implicit-init-node.md`.
+A plan was written but has since been removed.
 
 ### 4. `FunctionDefinition` instead of graph node
 

@@ -35,10 +35,11 @@ from that file. Any one will do.
 All the state for a function or node is being tracked in one of the frames of the stack.
 When you create a function like this, for example:
 
-```
-def greet(name: string):
-    greeting = "Hello, ${name}!"
-    return greeting
+```agency
+def greet(name: string) {
+  greeting = "Hello, ${name}!"
+  return greeting
+}
 ```
 
 the generated TypeScript code will look similar to this:

@@ -235,5 +235,3 @@ node main() {
 
 - **Unit tests**: `lib/runtime/checkpoint.test.ts`, `lib/runtime/state/checkpointStore.test.ts`
 - **Generator fixture**: `tests/typescriptGenerator/checkpoint-restore.agency` + `.mjs`
-- **Integration tests**: `tests/agency-js/checkpoint-basic/`, `tests/agency-js/checkpoint-shared-vars/`, `tests/agency-js/checkpoint-in-function/`
-- **Design spec**: `docs/superpowers/specs/2026-03-21-checkpointing-and-state-management-design.md`

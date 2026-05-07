@@ -44,6 +44,16 @@ sendWithResend(from: string, to: string, subject: string, html: string, text: st
 
 Send an email using the Resend API. Requires RESEND_API_KEY env var or pass apiKey directly. Parameters: from (sender address), to (recipient), subject, html or text content, and optionally cc, bcc, replyTo.
 
+  @param from - Sender email address
+  @param to - Recipient email address
+  @param subject - Email subject
+  @param html - HTML content
+  @param text - Plain text content
+  @param cc - CC recipients
+  @param bcc - BCC recipients
+  @param replyTo - Reply-to address
+  @param apiKey - Resend API key
+
 Send an email using the Resend API. Requires `RESEND_API_KEY` env var or pass apiKey directly.
 
 **Parameters:**
@@ -72,6 +82,16 @@ sendWithSendGrid(from: string, to: string, subject: string, html: string, text: 
 
 Send an email using the SendGrid API. Requires SENDGRID_API_KEY env var or pass apiKey directly. Parameters: from (sender address), to (recipient), subject, html or text content, and optionally cc, bcc, replyTo.
 
+  @param from - Sender email address
+  @param to - Recipient email address
+  @param subject - Email subject
+  @param html - HTML content
+  @param text - Plain text content
+  @param cc - CC recipients
+  @param bcc - BCC recipients
+  @param replyTo - Reply-to address
+  @param apiKey - SendGrid API key
+
 Send an email using the SendGrid API. Requires `SENDGRID_API_KEY` env var or pass apiKey directly.
 
 **Parameters:**
@@ -90,7 +110,7 @@ Send an email using the SendGrid API. Requires `SENDGRID_API_KEY` env var or pas
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/email.agency#L57))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/email.agency#L67))
 
 ### sendWithMailgun
 
@@ -99,6 +119,18 @@ sendWithMailgun(from: string, to: string, subject: string, html: string, text: s
 ```
 
 Send an email using the Mailgun API. Requires MAILGUN_API_KEY and MAILGUN_DOMAIN env vars, or pass them directly. Set region to "eu" for the EU endpoint. Parameters: from (sender address), to (recipient), subject, html or text content, and optionally cc, bcc, replyTo, domain, region.
+
+  @param from - Sender email address
+  @param to - Recipient email address
+  @param subject - Email subject
+  @param html - HTML content
+  @param text - Plain text content
+  @param cc - CC recipients
+  @param bcc - BCC recipients
+  @param replyTo - Reply-to address
+  @param apiKey - Mailgun API key
+  @param domain - Mailgun domain
+  @param region - Mailgun region ("eu" for EU)
 
 Send an email using the Mailgun API. Requires `MAILGUN_API_KEY` and `MAILGUN_DOMAIN` env vars, or pass them directly. Set region to "eu" for the EU endpoint.
 
@@ -120,4 +152,4 @@ Send an email using the Mailgun API. Requires `MAILGUN_API_KEY` and `MAILGUN_DOM
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/email.agency#L82))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/email.agency#L102))

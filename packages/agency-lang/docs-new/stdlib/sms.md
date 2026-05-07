@@ -39,6 +39,12 @@ sendSms(to: string, body: string, from: string, accountSid: string, authToken: s
 
 Send an SMS text message via the Twilio API. Requires TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, and TWILIO_FROM_NUMBER env vars, or pass them directly. Parameters: to (recipient phone number in E.164 format), body (message text), and optionally from, accountSid, authToken.
 
+  @param to - Recipient phone number (E.164 format)
+  @param body - Message text
+  @param from - Sender phone number
+  @param accountSid - Twilio account SID
+  @param authToken - Twilio auth token
+
 **Parameters:**
 
 | Name | Type | Default |

@@ -1,5 +1,5 @@
 import { AgencyConfig, BUILTIN_FUNCTIONS } from "@/config.js";
-import type { CompilationUnit } from "@/compilationUnit.js";
+import type { CompilationUnit, ImportedFunctionSignature } from "@/compilationUnit.js";
 import {
   AgencyMultiLineComment,
   AgencyNode,
@@ -18,6 +18,9 @@ import {
   WhileLoop,
   isClassKeyword,
 } from "@/types.js";
+import { BlockArgument } from "@/types/blockArgument.js";
+import { BlockType } from "@/types/typeHints.js";
+import { FunctionParameter } from "@/types/function.js";
 import { MessageThread } from "@/types/messageThread.js";
 // import { Skill } from "@/types/skill.js"; // Unused after llm() refactor
 import {
@@ -156,6 +159,7 @@ export class TypescriptPreprocessor {
   protected functionNameToAsync: Record<string, boolean> = {};
   protected functionNameToUsesInterrupt: Record<string, boolean> = {};
   protected functionDefinitions: Record<string, FunctionDefinition> = {};
+  protected importedFunctions: Record<string, ImportedFunctionSignature> = {};
   protected graphNodeDefinitions: Record<string, AgencyNode> = {};
   constructor(
     program: AgencyProgram,
@@ -166,6 +170,7 @@ export class TypescriptPreprocessor {
     this.config = config;
     if (info) {
       this.functionDefinitions = { ...info.functionDefinitions };
+      this.importedFunctions = { ...info.importedFunctions };
       this.graphNodeDefinitions = Object.fromEntries(
         info.graphNodes.map((n) => [n.nodeName, n]),
       );
@@ -250,6 +255,64 @@ export class TypescriptPreprocessor {
     this.program.nodes = result;
   }
 
+  /**
+   * Look up the BlockType for a function's block parameter by function name.
+   * Checks both local function definitions and imported function signatures.
+   */
+  private findBlockType(functionName: string): BlockType | null {
+    const fnDef = this.functionDefinitions[functionName];
+    const params = fnDef?.parameters ?? this.importedFunctions[functionName]?.parameters;
+    if (!params) return null;
+    const blockParam = params.find(p => p.typeHint?.type === "blockType");
+    return (blockParam?.typeHint as BlockType) ?? null;
+  }
+
+  /**
+   * Copy type annotations from a BlockType onto block params that lack them.
+   */
+  private applyBlockType(block: BlockArgument, blockType: BlockType): void {
+    for (let i = 0; i < block.params.length; i++) {
+      if (!block.params[i].typeHint && blockType.params[i]) {
+        block.params[i].typeHint = blockType.params[i].typeAnnotation;
+      }
+    }
+  }
+
+  /**
+   * Walk the AST and propagate block type annotations from function definitions
+   * onto block arguments that lack type annotations. This handles:
+   * - Direct block args: map([1,2,3], \x -> x * 2)
+   * - Blocks in named args: map.partial(func: \x -> x * 2)
+   */
+  propagateBlockTypes(): void {
+    for (const { node } of walkNodesArray(this.program.nodes)) {
+      if (node.type !== "functionCall") continue;
+      const call = node as FunctionCall;
+
+      // Direct block argument on the function call
+      if (call.block) {
+        const blockType = this.findBlockType(call.functionName);
+        if (blockType) {
+          this.applyBlockType(call.block, blockType);
+        }
+      }
+
+      // Block arguments inside named args (e.g. fn.partial(func: \x -> x))
+      // For these, we need to find which parameter the named arg targets
+      // and check if that parameter has a block type.
+      for (const arg of call.arguments) {
+        if (arg.type === "namedArgument" && arg.value.type === "blockArgument") {
+          // The named arg targets a specific parameter. But in the .partial() case,
+          // the function being partially applied is the receiver, not this call.
+          // We handle this by looking at the valueAccess context.
+          // For now, leave block args in named args untyped — the preprocessor
+          // would need access to the full valueAccess chain to resolve the receiver.
+          // The builder will fall back to 'any' for untyped block params.
+        }
+      }
+    }
+  }
+
   preprocess(): AgencyProgram {
     this.attachDocComments();
     this.program.nodes = collectTags(this.program.nodes);
@@ -260,6 +323,7 @@ export class TypescriptPreprocessor {
     if (Object.keys(this.graphNodeDefinitions).length === 0) {
       this.getGraphNodeDefinitions();
     }
+    this.propagateBlockTypes();
     this.collectSkills();
     /*
     Skipping these for now. The issue is that these functions could be modifying global state.

@@ -17,6 +17,9 @@ export safe def resolve(...parts: string[]): string {
 export safe def basename(p: string, ext: string = ""): string {
   """
   Return the last portion of a path. If ext is given and the path ends with it, ext is trimmed off.
+
+  @param p - The file path
+  @param ext - Extension to strip from the result
   """
   return _basename(p, ext)
 }
@@ -38,6 +41,9 @@ export safe def extname(p: string): string {
 export safe def relative(from: string, to: string): string {
   """
   Return the relative path from 'from' to 'to'.
+
+  @param from - The starting path
+  @param to - The target path
   """
   return _relative(from, to)
 }

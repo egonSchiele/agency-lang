@@ -255,8 +255,6 @@ export class AgencyGenerator {
         return this.processKeyword(node);
       case "tag":
         return this.formatTag(node);
-      case "placeholder":
-        return "?";
       case "tryExpression":
         // remove extra indentation
         return `try ${this.processNode(node.call).trim()}`;

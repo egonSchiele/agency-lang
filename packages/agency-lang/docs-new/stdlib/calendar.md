@@ -130,6 +130,9 @@ authorizeCalendar(clientId: string, clientSecret: string): Result
 
 Authorize access to Google Calendar. Opens a browser for the user to sign in and grant permission. Only needs to be run once — tokens are stored locally and refreshed automatically.
 
+  @param clientId - Google OAuth client ID
+  @param clientSecret - Google OAuth client secret
+
 **Parameters:**
 
 | Name | Type | Default |
@@ -151,7 +154,7 @@ Check if Google Calendar has been authorized. Returns true if OAuth tokens exist
 
 **Returns:** `boolean`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/calendar.agency#L128))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/calendar.agency#L131))
 
 ### listEvents
 
@@ -160,6 +163,12 @@ listEvents(maxResults: number, timeMin: string, timeMax: string, query: string, 
 ```
 
 List upcoming events from Google Calendar. Returns an array of events with id, summary, description, location, start, end, and htmlLink. Parameters: maxResults (default 10), timeMin/timeMax (ISO 8601 datetime to filter range), query (free-text search), calendarId (default "primary").
+
+  @param maxResults - Maximum number of events to return
+  @param timeMin - Start of time range (ISO 8601)
+  @param timeMax - End of time range (ISO 8601)
+  @param query - Free-text search query
+  @param calendarId - Calendar ID to query
 
 **Parameters:**
 
@@ -173,7 +182,7 @@ List upcoming events from Google Calendar. Returns an array of events with id, s
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/calendar.agency#L135))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/calendar.agency#L138))
 
 ### createEvent
 
@@ -182,6 +191,13 @@ createEvent(summary: string, start: string, end: string, description: string, lo
 ```
 
 Create a new event on Google Calendar. Parameters: summary (title), start (ISO 8601 datetime or YYYY-MM-DD for all-day), end (same format), description (optional), location (optional), calendarId (default "primary"). Returns the created event.
+
+  @param summary - Event title
+  @param start - Start time (ISO 8601 or YYYY-MM-DD)
+  @param end - End time (ISO 8601 or YYYY-MM-DD)
+  @param description - Event description
+  @param location - Event location
+  @param calendarId - Calendar ID to create on
 
 **Parameters:**
 
@@ -196,7 +212,7 @@ Create a new event on Google Calendar. Parameters: summary (title), start (ISO 8
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/calendar.agency#L154))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/calendar.agency#L163))
 
 ### updateEvent
 
@@ -205,6 +221,14 @@ updateEvent(eventId: string, summary: string, start: string, end: string, descri
 ```
 
 Update an existing event on Google Calendar. Pass the eventId and any fields to change. Empty strings are treated as "don't change". Returns the updated event.
+
+  @param eventId - ID of the event to update
+  @param summary - New title (empty to keep)
+  @param start - New start time (empty to keep)
+  @param end - New end time (empty to keep)
+  @param description - New description (empty to keep)
+  @param location - New location (empty to keep)
+  @param calendarId - Calendar ID
 
 **Parameters:**
 
@@ -220,7 +244,7 @@ Update an existing event on Google Calendar. Pass the eventId and any fields to 
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/calendar.agency#L176))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/calendar.agency#L192))
 
 ### deleteEvent
 
@@ -229,6 +253,9 @@ deleteEvent(eventId: string, calendarId: string): Result
 ```
 
 Delete an event from Google Calendar by its event ID. Returns { deleted: true } on success.
+
+  @param eventId - ID of the event to delete
+  @param calendarId - Calendar ID
 
 **Parameters:**
 
@@ -239,4 +266,4 @@ Delete an event from Google Calendar by its event ID. Returns { deleted: true } 
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/calendar.agency#L198))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/calendar.agency#L222))

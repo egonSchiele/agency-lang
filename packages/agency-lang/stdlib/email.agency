@@ -32,6 +32,16 @@ type EmailResult = {
 export def sendWithResend(from: string, to: string, subject: string, html: string = "", text: string = "", cc: string = "", bcc: string = "", replyTo: string = "", apiKey: string = ""): Result {
   """
   Send an email using the Resend API. Requires RESEND_API_KEY env var or pass apiKey directly. Parameters: from (sender address), to (recipient), subject, html or text content, and optionally cc, bcc, replyTo.
+
+  @param from - Sender email address
+  @param to - Recipient email address
+  @param subject - Email subject
+  @param html - HTML content
+  @param text - Plain text content
+  @param cc - CC recipients
+  @param bcc - BCC recipients
+  @param replyTo - Reply-to address
+  @param apiKey - Resend API key
   """
   return interrupt std::sendEmail("Are you sure you want to send this email via Resend?", {
     from: from,
@@ -57,6 +67,16 @@ export def sendWithResend(from: string, to: string, subject: string, html: strin
 export def sendWithSendGrid(from: string, to: string, subject: string, html: string = "", text: string = "", cc: string = "", bcc: string = "", replyTo: string = "", apiKey: string = ""): Result {
   """
   Send an email using the SendGrid API. Requires SENDGRID_API_KEY env var or pass apiKey directly. Parameters: from (sender address), to (recipient), subject, html or text content, and optionally cc, bcc, replyTo.
+
+  @param from - Sender email address
+  @param to - Recipient email address
+  @param subject - Email subject
+  @param html - HTML content
+  @param text - Plain text content
+  @param cc - CC recipients
+  @param bcc - BCC recipients
+  @param replyTo - Reply-to address
+  @param apiKey - SendGrid API key
   """
   return interrupt std::sendEmail("Are you sure you want to send this email via SendGrid?", {
     from: from,
@@ -82,6 +102,18 @@ export def sendWithSendGrid(from: string, to: string, subject: string, html: str
 export def sendWithMailgun(from: string, to: string, subject: string, html: string = "", text: string = "", cc: string = "", bcc: string = "", replyTo: string = "", apiKey: string = "", domain: string = "", region: string = ""): Result {
   """
   Send an email using the Mailgun API. Requires MAILGUN_API_KEY and MAILGUN_DOMAIN env vars, or pass them directly. Set region to "eu" for the EU endpoint. Parameters: from (sender address), to (recipient), subject, html or text content, and optionally cc, bcc, replyTo, domain, region.
+
+  @param from - Sender email address
+  @param to - Recipient email address
+  @param subject - Email subject
+  @param html - HTML content
+  @param text - Plain text content
+  @param cc - CC recipients
+  @param bcc - BCC recipients
+  @param replyTo - Reply-to address
+  @param apiKey - Mailgun API key
+  @param domain - Mailgun domain
+  @param region - Mailgun region ("eu" for EU)
   """
   return interrupt std::sendEmail("Are you sure you want to send this email via Mailgun?", {
     from: from,

@@ -52,6 +52,9 @@ status(left: string, right: string)
 
 Update the status bar. The left text appears on the left side, the right text on the right.
 
+  @param left - Text for the left side
+  @param right - Text for the right side
+
 **Parameters:**
 
 | Name | Type | Default |
@@ -69,6 +72,9 @@ chat(role: string, message: string)
 
 Print a chat message with a colored role prefix. Built-in colors: "user" (cyan), "agent" (white). Other roles appear dim.
 
+  @param role - The speaker role
+  @param message - The message text
+
 **Parameters:**
 
 | Name | Type | Default |
@@ -76,7 +82,7 @@ Print a chat message with a colored role prefix. Built-in colors: "user" (cyan),
 | role | `string` | "" |
 | message | `string` | "" |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L30))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L33))
 
 ### code
 
@@ -86,6 +92,9 @@ code(filename: string, content: string)
 
 Display a code block with a filename header and line numbers, inside a bordered box.
 
+  @param filename - The filename to display
+  @param content - The code content
+
 **Parameters:**
 
 | Name | Type | Default |
@@ -93,7 +102,7 @@ Display a code block with a filename header and line numbers, inside a bordered 
 | filename | `string` |  |
 | content | `string` |  |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L37))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L43))
 
 ### diff
 
@@ -103,6 +112,9 @@ diff(filename: string, content: string)
 
 Display a diff with colored +/- lines, inside a bordered box with the filename as a header.
 
+  @param filename - The filename to display
+  @param content - The diff content
+
 **Parameters:**
 
 | Name | Type | Default |
@@ -110,7 +122,7 @@ Display a diff with colored +/- lines, inside a bordered box with the filename a
 | filename | `string` |  |
 | content | `string` |  |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L44))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L53))
 
 ### separator
 
@@ -126,7 +138,7 @@ Print a horizontal line with an optional label. Useful for visually grouping out
 |---|---|---|
 | label | `string` | "" |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L51))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L63))
 
 ### startSpinner
 
@@ -142,7 +154,7 @@ Show an animated spinner in the input bar with a label. Useful while the agent i
 |---|---|---|
 | text | `string` | "working" |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L58))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L70))
 
 ### stopSpinner
 
@@ -152,7 +164,7 @@ stopSpinner()
 
 Stop the spinner and clear the input bar.
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L65))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L77))
 
 ### prompt
 
@@ -170,7 +182,7 @@ Prompt the user for text input in the fixed input bar at the bottom of the scree
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L72))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L84))
 
 ### getConfirmation
 
@@ -188,7 +200,7 @@ Ask the user a yes/no question in the input bar. Returns true if the user answer
 
 **Returns:** `boolean`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L79))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L91))
 
 ### emptyLine
 
@@ -198,4 +210,4 @@ emptyLine()
 
 Print an empty line. Useful for adding spacing in the output.
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L90))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L102))

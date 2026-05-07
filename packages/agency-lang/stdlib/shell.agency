@@ -9,6 +9,12 @@ type ExecResult = {
 export def exec(command: string, args: string[] = [], cwd: string = "", timeout: number = 0, stdin: string = ""): ExecResult {
   """
   Run an executable directly with an array of arguments, bypassing the shell. This is safer than bash() because arguments are passed directly to the process without shell interpretation, preventing command injection. Use this when you have a known command and structured arguments. Pass cwd to change the working directory, timeout (seconds) to enforce a time limit, and stdin to feed input to the command.
+
+  @param command - The executable to run
+  @param args - Array of arguments to pass
+  @param cwd - Working directory for the command
+  @param timeout - Time limit in seconds
+  @param stdin - Input to feed to the command
   """
   return interrupt std::exec("Are you sure you want to run this command?", {
     command: command,
@@ -24,6 +30,11 @@ export def exec(command: string, args: string[] = [], cwd: string = "", timeout:
 export def bash(command: string, cwd: string = "", timeout: number = 0, stdin: string = ""): ExecResult {
   """
   Run a shell command string via sh -c and return its stdout, stderr, and exit code. The command is interpreted by the shell, so pipes, redirects, globbing, and other shell features work. However, this means interpolated values are subject to shell interpretation -- use exec() instead when passing untrusted or dynamic arguments. Pass cwd to change the working directory, timeout (seconds) to enforce a time limit, and stdin to feed input to the command.
+
+  @param command - The shell command to run
+  @param cwd - Working directory for the command
+  @param timeout - Time limit in seconds
+  @param stdin - Input to feed to the command
   """
   return interrupt std::bash("Are you sure you want to run this shell command?", {
     command: command,
@@ -45,6 +56,9 @@ type LsEntry = {
 export def ls(dir: string = ".", recursive: boolean = false): Result {
   """
   List entries in a directory. Each entry includes name, path, type ("file", "dir", "symlink", "other"), and size. Set recursive to true to walk subdirectories. Fails if the directory cannot be read (missing, not a directory, permission denied).
+
+  @param dir - The directory to list
+  @param recursive - Whether to walk subdirectories
   """
   return interrupt std::ls("Are you sure you want to list this directory?", {
     dir: dir,
@@ -63,6 +77,11 @@ type GrepMatch = {
 export def grep(pattern: string, dir: string = ".", flags: string = "", maxResults: number = 200): Result {
   """
   Search for a regex pattern in files under a directory. Returns matches with file path, line number, and matched line. Skips node_modules, .git, dist, build. Stops at maxResults. Fails if the pattern is not a valid regex or the directory cannot be read.
+
+  @param pattern - The regex pattern to search for
+  @param dir - The directory to search in
+  @param flags - Regex flags
+  @param maxResults - Maximum number of results to return
   """
   return interrupt std::grep("Are you sure you want to search files with grep?", {
     pattern: pattern,
@@ -77,6 +96,10 @@ export def grep(pattern: string, dir: string = ".", flags: string = "", maxResul
 export def glob(pattern: string, dir: string = ".", maxResults: number = 500): Result {
   """
   Find files whose paths match a glob pattern (e.g. "src/**/*.ts"). Returns paths relative to the current working directory. Stops at maxResults. Fails if the pattern is not valid glob syntax or the directory cannot be read.
+
+  @param pattern - The glob pattern to match
+  @param dir - The directory to search in
+  @param maxResults - Maximum number of results to return
   """
   return interrupt std::glob("Are you sure you want to glob files?", {
     pattern: pattern,

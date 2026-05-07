@@ -13,20 +13,27 @@ class Math {
   }
 }
 
+def divideBy(x: number, divisor: number): Result {
+  if (divisor == 0) {
+    return failure("division by zero")
+  }
+  return success(x / divisor)
+}
+
 node main() {
   let math = new Math(2)
 
   // pipe into method without placeholder
   let r1 = success(5) |> math.multiply
 
-  // pipe into method with placeholder
-  let r2 = success(10) |> math.divide(?, 2)
+  // pipe into function with partial application
+  let r2 = success(10) |> divideBy.partial(divisor: 2)
 
   // chaining multiple method calls
   let r3 = success(3) |> math.multiply |> math.multiply
 
   // short-circuit on failure
-  let r4 = success(10) |> math.divide(?, 0) |> math.multiply
+  let r4 = success(10) |> divideBy.partial(divisor: 0) |> math.multiply
 
   return {
     r1: r1.value,

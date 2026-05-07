@@ -38,6 +38,9 @@ sendIMessage(to: string, message: string): Result
 
 Send an iMessage via the macOS Messages app. Only works on macOS with Messages.app signed in. Parameters: to (phone number or email address of the recipient), message (the text to send). No API key or account required.
 
+  @param to - Phone number or email of the recipient
+  @param message - The text to send
+
 **Parameters:**
 
 | Name | Type | Default |

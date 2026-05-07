@@ -27,6 +27,9 @@ type WeatherResult = {
 export safe def weather(location: string, units: string = "imperial"): Result {
   """
   Get current weather for a city name or zip code. Returns temperature, feels-like temperature, humidity, wind speed/direction, precipitation, cloud cover, and a weather description. Set units to "imperial" (default) for Fahrenheit/mph or "metric" for Celsius/km/h. Weather data provided by Open-Meteo (https://open-meteo.com), licensed under CC BY 4.0. Free API usage is for non-commercial purposes only.
+
+  @param location - City name or zip code
+  @param units - "imperial" for Fahrenheit or "metric" for Celsius
   """
   return try _weather(location, units)
 }

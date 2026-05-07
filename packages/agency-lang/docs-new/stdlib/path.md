@@ -46,6 +46,9 @@ basename(p: string, ext: string): string
 
 Return the last portion of a path. If ext is given and the path ends with it, ext is trimmed off.
 
+  @param p - The file path
+  @param ext - Extension to strip from the result
+
 **Parameters:**
 
 | Name | Type | Default |
@@ -73,7 +76,7 @@ Return the directory portion of a path.
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/path.agency#L24))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/path.agency#L27))
 
 ### extname
 
@@ -91,7 +94,7 @@ Return the extension of a path (including the leading dot), or an empty string i
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/path.agency#L31))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/path.agency#L34))
 
 ### relative
 
@@ -100,6 +103,9 @@ relative(from: string, to: string): string
 ```
 
 Return the relative path from 'from' to 'to'.
+
+  @param from - The starting path
+  @param to - The target path
 
 **Parameters:**
 
@@ -110,7 +116,7 @@ Return the relative path from 'from' to 'to'.
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/path.agency#L38))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/path.agency#L41))
 
 ### isAbsolute
 
@@ -128,4 +134,4 @@ Return true if the path is absolute.
 
 **Returns:** `boolean`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/path.agency#L45))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/path.agency#L51))

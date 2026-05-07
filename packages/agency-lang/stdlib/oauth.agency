@@ -48,6 +48,15 @@ import { _authorize, _getAccessToken, _isAuthorized, _revokeAuth } from "./lib/o
 export def authorize(name: string, authUrl: string, tokenUrl: string, clientId: string, clientSecret: string, scopes: string, port: number = 8914, extraAuthParams: string = ""): Result {
   """
   Start an OAuth 2.0 authorization flow. Opens the user's browser for consent, captures the callback, exchanges the code for tokens, and saves them locally. Only needs to be run once per provider. Parameters: name (identifier like "google-calendar"), authUrl (authorization endpoint), tokenUrl (token endpoint), clientId, clientSecret, scopes (space-separated), port (callback port, default 8914), extraAuthParams (space-separated key=value pairs for provider-specific params like "access_type=offline prompt=consent").
+
+  @param name - Provider identifier
+  @param authUrl - Authorization endpoint URL
+  @param tokenUrl - Token endpoint URL
+  @param clientId - OAuth client ID
+  @param clientSecret - OAuth client secret
+  @param scopes - Space-separated scopes
+  @param port - Callback port
+  @param extraAuthParams - Extra key=value pairs for the auth request
   """
   return interrupt std::authorize("Are you sure you want to start an OAuth authorization flow?", {
     name: name,

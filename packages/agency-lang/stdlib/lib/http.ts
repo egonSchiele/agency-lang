@@ -111,3 +111,27 @@ const ENTITIES: Record<string, string> = {
 function stripTags(s: string): string {
   return s.replace(/<[^>]+>/g, "");
 }
+
+export function resolveUrl(baseUrl: string, path: string): string {
+  if (!path) return baseUrl;
+  const base = baseUrl.endsWith("/") ? baseUrl.slice(0, -1) : baseUrl;
+  const p = path.startsWith("/") ? path : "/" + path;
+  return base + p;
+}
+
+export function checkAllowedDomains(
+  url: string,
+  allowedDomains: string[],
+): string | null {
+  if (allowedDomains.length === 0) return null;
+  try {
+    const hostname = new URL(url).hostname.toLowerCase();
+    const allowed = allowedDomains.map((d) => d.toLowerCase());
+    if (!allowed.includes(hostname)) {
+      return `Domain "${hostname}" is not in allowedDomains.`;
+    }
+    return null;
+  } catch {
+    return `Invalid URL: "${url}"`;
+  }
+}

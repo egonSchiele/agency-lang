@@ -8,6 +8,11 @@ type EditResult = {
 export def edit(filename: string, oldText: string, newText: string, replaceAll: boolean = false): Result {
   """
   Edit a file by replacing oldText with newText. By default oldText must match exactly once in the file; pass replaceAll=true to replace every occurrence. Fails if oldText is not found or appears multiple times (unless replaceAll is set).
+
+  @param filename - The file to edit
+  @param oldText - The text to find
+  @param newText - The replacement text
+  @param replaceAll - Replace all occurrences instead of just the first
   """
   return interrupt std::edit("Are you sure you want to edit this file?", {
     filename: filename,
@@ -34,6 +39,9 @@ type MultiEditResult = {
 export def multiedit(filename: string, edits: Edit[]): Result {
   """
   Apply a sequence of edits to a single file atomically. Each edit has oldText, newText, and replaceAll. Fails if any edit's oldText is not found or is ambiguous; when any edit fails, nothing is written.
+
+  @param filename - The file to edit
+  @param edits - Array of edit objects with oldText, newText, and replaceAll
   """
   return interrupt std::multiedit("Are you sure you want to apply these edits?", {
     filename: filename,
@@ -73,6 +81,9 @@ export def mkdir(dir: string): Result {
 export def copy(src: string, dest: string): Result {
   """
   Copy a file or directory. Directories are copied recursively. Fails if src does not exist or dest cannot be written.
+
+  @param src - The source path
+  @param dest - The destination path
   """
   return interrupt std::copy("Are you sure you want to copy this file or directory?", {
     src: src,
@@ -85,6 +96,9 @@ export def copy(src: string, dest: string): Result {
 export def move(src: string, dest: string): Result {
   """
   Move or rename a file or directory. Falls back to copy+remove if src and dest are on different filesystems. Fails if src does not exist.
+
+  @param src - The source path
+  @param dest - The destination path
   """
   return interrupt std::move("Are you sure you want to move this file or directory?", {
     src: src,

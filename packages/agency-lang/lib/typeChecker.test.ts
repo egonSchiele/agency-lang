@@ -3833,11 +3833,10 @@ describe("TypeChecker", () => {
       expect(typeCheck(program).errors).toHaveLength(0);
     });
 
-    it("pipe with a functionCall RHS resolves to its return type", () => {
-      // const r: Result<string, any> = success(10) |> labeler(?, "tag")
-      // Right is a functionCall (not a bare variableName), so synth flows
-      // through the regular call path rather than the function-reference
-      // shortcut.
+    it("pipe with a valueAccess RHS (.partial()) resolves to its return type", () => {
+      // const r: Result<string, any> = success(10) |> labeler.partial(tag: "tag")
+      // Right is a valueAccess (.partial() call), so synth returns 'any'
+      // and the assignment type check passes.
       const program: AgencyProgram = {
         type: "agencyProgram",
         nodes: [
@@ -3868,11 +3867,17 @@ describe("TypeChecker", () => {
                 arguments: [{ type: "number", value: "10" }],
               },
               right: {
-                type: "functionCall",
-                functionName: "labeler",
-                arguments: [
-                  { type: "placeholder" },
-                  { type: "string", segments: [{ type: "text", value: "tag" }] },
+                type: "valueAccess",
+                base: { type: "variableName", value: "labeler" },
+                chain: [
+                  {
+                    kind: "methodCall",
+                    functionCall: {
+                      type: "functionCall",
+                      functionName: "partial",
+                      arguments: [{ type: "namedArgument", name: "tag", value: { type: "string", segments: [{ type: "text", value: "tag" }] } }],
+                    },
+                  },
                 ],
               },
             },
@@ -5173,68 +5178,6 @@ describe("TypeChecker", () => {
       expect(typeCheck(program).errors).toHaveLength(0);
     });
 
-    it("pipe with placeholder RHS validates LHS against the ? slot", () => {
-      // def add(a: number, b: number): number { return a + b }
-      // "x" |> add(?, 5)  → error: 'string' not assignable to 'number' for slot 0
-      const program: AgencyProgram = {
-        type: "agencyProgram",
-        nodes: [
-          {
-            type: "function",
-            functionName: "add",
-            parameters: [
-              { type: "functionParameter", name: "a", typeHint: num },
-              { type: "functionParameter", name: "b", typeHint: num },
-            ],
-            returnType: num,
-            body: [{ type: "returnStatement", value: { type: "number", value: "0" } }],
-          },
-          {
-            type: "binOpExpression",
-            operator: "|>",
-            left: { type: "string", segments: [{ type: "text", value: "x" }] },
-            right: {
-              type: "functionCall",
-              functionName: "add",
-              arguments: [{ type: "placeholder" }, { type: "number", value: "5" }],
-            },
-          },
-        ],
-      };
-      const errors = typeCheck(program).errors;
-      expect(errors.some((e) => /not assignable/i.test(e.message))).toBe(true);
-    });
-
-    it("pipe with placeholder in second slot validates against that param", () => {
-      // 5 |> add(10, ?)  → ok (number → number)
-      const program: AgencyProgram = {
-        type: "agencyProgram",
-        nodes: [
-          {
-            type: "function",
-            functionName: "add",
-            parameters: [
-              { type: "functionParameter", name: "a", typeHint: num },
-              { type: "functionParameter", name: "b", typeHint: num },
-            ],
-            returnType: num,
-            body: [{ type: "returnStatement", value: { type: "number", value: "0" } }],
-          },
-          {
-            type: "binOpExpression",
-            operator: "|>",
-            left: { type: "number", value: "5" },
-            right: {
-              type: "functionCall",
-              functionName: "add",
-              arguments: [{ type: "number", value: "10" }, { type: "placeholder" }],
-            },
-          },
-        ],
-      };
-      expect(typeCheck(program).errors).toHaveLength(0);
-    });
-
     it("named arg with wrong-typed value is checked against the named param's type, not positional", () => {
       // def greet(name: string, age: number) {}
       // greet(age=1, name=2)  → 'name' should error: 2 is not a string
@@ -5965,68 +5908,6 @@ describe("TypeChecker", () => {
       expect(errors.some((e) => /unknown property 'modle'/i.test(e.message))).toBe(true);
     });
 
-    it("rejects a pipe RHS functionCall with no '?' placeholder", () => {
-      // 5 |> add(10, 20)  ← needs exactly one '?'
-      const program: AgencyProgram = {
-        type: "agencyProgram",
-        nodes: [
-          {
-            type: "function",
-            functionName: "add",
-            parameters: [
-              { type: "functionParameter", name: "a", typeHint: num },
-              { type: "functionParameter", name: "b", typeHint: num },
-            ],
-            returnType: num,
-            body: [{ type: "returnStatement", value: { type: "number", value: "0" } }],
-          },
-          {
-            type: "binOpExpression",
-            operator: "|>",
-            left: { type: "number", value: "5" },
-            right: {
-              type: "functionCall",
-              functionName: "add",
-              arguments: [{ type: "number", value: "10" }, { type: "number", value: "20" }],
-            },
-          },
-        ],
-      };
-      const errors = typeCheck(program).errors;
-      expect(errors.some((e) => /exactly one '\?' placeholder, got 0/.test(e.message))).toBe(true);
-    });
-
-    it("rejects a pipe RHS functionCall with multiple '?' placeholders", () => {
-      // 5 |> add(?, ?)  ← only one '?' allowed
-      const program: AgencyProgram = {
-        type: "agencyProgram",
-        nodes: [
-          {
-            type: "function",
-            functionName: "add",
-            parameters: [
-              { type: "functionParameter", name: "a", typeHint: num },
-              { type: "functionParameter", name: "b", typeHint: num },
-            ],
-            returnType: num,
-            body: [{ type: "returnStatement", value: { type: "number", value: "0" } }],
-          },
-          {
-            type: "binOpExpression",
-            operator: "|>",
-            left: { type: "number", value: "5" },
-            right: {
-              type: "functionCall",
-              functionName: "add",
-              arguments: [{ type: "placeholder" }, { type: "placeholder" }],
-            },
-          },
-        ],
-      };
-      const errors = typeCheck(program).errors;
-      expect(errors.some((e) => /exactly one '\?' placeholder, got 2/.test(e.message))).toBe(true);
-    });
-
     it("named-arg call may omit a default-valued param", () => {
       // def f(a: string, b: string = "x") {}; f(a: "y")  ← b has a default, omittable
       const program: AgencyProgram = {
@@ -6649,6 +6530,179 @@ describe("TypeChecker", () => {
         ],
       };
       expect(typeCheck(program).errors).toEqual([]);
+    });
+  });
+
+  describe(".partial() and .describe() validation", () => {
+    function partialProgram(fnName: string, fnParams: any[], partialArgs: any[]): AgencyProgram {
+      return {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "function",
+            functionName: fnName,
+            parameters: fnParams,
+            body: [],
+          },
+          {
+            type: "graphNode",
+            nodeName: "main",
+            parameters: [],
+            body: [
+              {
+                type: "assignment",
+                variableName: "x",
+                value: {
+                  type: "valueAccess",
+                  base: { type: "variableName", value: fnName },
+                  chain: [
+                    {
+                      kind: "methodCall",
+                      functionCall: {
+                        type: "functionCall",
+                        functionName: "partial",
+                        arguments: partialArgs,
+                      },
+                    },
+                  ],
+                },
+              },
+            ],
+          },
+        ],
+      };
+    }
+
+    it("should not error on valid .partial() call", () => {
+      const program = partialProgram(
+        "add",
+        [
+          { type: "functionParameter", name: "a", typeHint: { type: "primitiveType", value: "number" } },
+          { type: "functionParameter", name: "b", typeHint: { type: "primitiveType", value: "number" } },
+        ],
+        [{ type: "namedArgument", name: "a", value: { type: "number", value: "5" } }],
+      );
+      expect(typeCheck(program).errors).toHaveLength(0);
+    });
+
+    it("should error when .partial() uses unknown param name", () => {
+      const program = partialProgram(
+        "add",
+        [
+          { type: "functionParameter", name: "a", typeHint: { type: "primitiveType", value: "number" } },
+          { type: "functionParameter", name: "b", typeHint: { type: "primitiveType", value: "number" } },
+        ],
+        [{ type: "namedArgument", name: "z", value: { type: "number", value: "5" } }],
+      );
+      const { errors } = typeCheck(program);
+      expect(errors).toHaveLength(1);
+      expect(errors[0].message).toContain("Unknown parameter 'z'");
+    });
+
+    it("should error when .partial() binds a variadic param", () => {
+      const program = partialProgram(
+        "log",
+        [
+          { type: "functionParameter", name: "msgs", variadic: true, typeHint: { type: "arrayType", elementType: { type: "primitiveType", value: "string" } } },
+        ],
+        [{ type: "namedArgument", name: "msgs", value: { type: "string", segments: [{ type: "text", value: "hi" }] } }],
+      );
+      const { errors } = typeCheck(program);
+      expect(errors).toHaveLength(1);
+      expect(errors[0].message).toContain("Variadic parameter 'msgs'");
+    });
+
+    it("should error when .partial() uses positional args", () => {
+      const program = partialProgram(
+        "add",
+        [
+          { type: "functionParameter", name: "a", typeHint: { type: "primitiveType", value: "number" } },
+        ],
+        [{ type: "number", value: "5" }],
+      );
+      const { errors } = typeCheck(program);
+      expect(errors.some(e => e.message.includes("named arguments"))).toBe(true);
+    });
+
+    it("should error when .describe() has no arguments", () => {
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "function",
+            functionName: "add",
+            parameters: [],
+            body: [],
+          },
+          {
+            type: "graphNode",
+            nodeName: "main",
+            parameters: [],
+            body: [
+              {
+                type: "assignment",
+                variableName: "x",
+                value: {
+                  type: "valueAccess",
+                  base: { type: "variableName", value: "add" },
+                  chain: [
+                    {
+                      kind: "methodCall",
+                      functionCall: {
+                        type: "functionCall",
+                        functionName: "describe",
+                        arguments: [],
+                      },
+                    },
+                  ],
+                },
+              },
+            ],
+          },
+        ],
+      };
+      const { errors } = typeCheck(program);
+      expect(errors.some(e => e.message.includes(".describe()"))).toBe(true);
+    });
+
+    it("should not error on valid .describe() call", () => {
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "function",
+            functionName: "add",
+            parameters: [],
+            body: [],
+          },
+          {
+            type: "graphNode",
+            nodeName: "main",
+            parameters: [],
+            body: [
+              {
+                type: "assignment",
+                variableName: "x",
+                value: {
+                  type: "valueAccess",
+                  base: { type: "variableName", value: "add" },
+                  chain: [
+                    {
+                      kind: "methodCall",
+                      functionCall: {
+                        type: "functionCall",
+                        functionName: "describe",
+                        arguments: [{ type: "string", segments: [{ type: "text", value: "my tool" }] }],
+                      },
+                    },
+                  ],
+                },
+              },
+            ],
+          },
+        ],
+      };
+      expect(typeCheck(program).errors).toHaveLength(0);
     });
   });
 });

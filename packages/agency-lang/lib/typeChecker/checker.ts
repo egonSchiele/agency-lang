@@ -504,7 +504,7 @@ function checkExpressionsInScope(
 /**
  * Validate the LHS of `|>` against the slot it flows into on the RHS:
  * - bare variable RHS (`lhs |> half`) — slot is param 0
- * - functionCall RHS with `?` placeholder (`lhs |> add(?, 5)`) — slot is the placeholder's index
+ * - valueAccess RHS with .partial() (`lhs |> add.partial(b: 5)`) — slot is the first unbound param
  *
  * The runtime auto-unwraps a Result LHS to its success value before passing
  * it to the next stage, so we compare against `lhs.successType` when LHS is
@@ -515,22 +515,6 @@ function validatePipeArg(
   scope: Scope,
   ctx: TypeCheckerContext,
 ): void {
-  // Pipe semantics require exactly one `?` placeholder on a functionCall RHS
-  // (the LHS fills it). Catch the wrong count here so the user gets a
-  // typecheck diagnostic instead of a backend codegen throw.
-  if (expr.right.type === "functionCall") {
-    const placeholders = expr.right.arguments.filter(
-      (a) => a.type === "placeholder",
-    ).length;
-    if (placeholders !== 1) {
-      ctx.errors.push({
-        message: `Function call on right side of '|>' must contain exactly one '?' placeholder, got ${placeholders}.`,
-        loc: expr.loc,
-      });
-      return;
-    }
-  }
-
   const slotType = pipeRhsSlotType(expr.right, ctx);
   if (slotType === undefined || slotType === "any") return;
 
@@ -557,16 +541,6 @@ function pipeRhsSlotType(
   if (rhs.type === "variableName") {
     const params = getParamsForNodeOrFunc(rhs.value, ctx);
     return params?.[0]?.typeHint;
-  }
-  if (rhs.type === "functionCall") {
-    const params = getParamsForNodeOrFunc(rhs.functionName, ctx);
-    if (!params) return undefined;
-    // No placeholder = backend will reject; nothing to type-check here.
-    const placeholderIdx = rhs.arguments.findIndex(
-      (a) => a.type === "placeholder",
-    );
-    if (placeholderIdx < 0) return undefined;
-    return params[placeholderIdx]?.typeHint;
   }
   return undefined;
 }

@@ -3,6 +3,11 @@ import { _speak, _transcribe } from "./lib/speech.js"
 export def speak(text: string, voice: string = "", rate: number = 0, outputFile: string = "") {
   """
   A tool for speaking text aloud using text-to-speech. Optionally specify a voice name, rate in words per minute, and an output file to save the audio to instead of playing it.
+
+  @param text - The text to speak
+  @param voice - Voice name
+  @param rate - Words per minute
+  @param outputFile - File path to save audio to
   """
   return interrupt std::speak("Are you sure you want to use text-to-speech?", {
     textLength: text.length
@@ -14,6 +19,9 @@ export def speak(text: string, voice: string = "", rate: number = 0, outputFile:
 export def transcribe(filepath: string, language: string = ""): string {
   """
   A tool for transcribing an audio file to text using OpenAI's Whisper API. Optionally specify a language code (e.g. "en") for better accuracy.
+
+  @param filepath - Path to the audio file
+  @param language - Language code for better accuracy
   """
   return interrupt std::transcribe("Are you sure you want to send this audio file to the OpenAI Whisper API for transcription?", {
     filepath: filepath

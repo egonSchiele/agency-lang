@@ -1,0 +1,18 @@
+import { map } from "std::array"
+
+node testBasic() {
+  const double = map.partial(func: \x -> x * 2)
+  const result = double([1, 2, 3])
+  return result
+}
+
+node testTyped() {
+  const add1 = map.partial(func: \(x: number) -> x + 1)
+  const result = add1([10, 20, 30])
+  return result
+}
+
+node testInPipe() {
+  const result = success([1, 2, 3]) |> map.partial(func: \x -> x * 10)
+  return result
+}

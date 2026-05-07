@@ -15,8 +15,8 @@ def safeDivide(a: number, b: number): Result {
 
 node main() {
   let r1 = success(5) |> double
-  let r2 = success(5) |> multiply(10, ?)
-  let r3 = success(10) |> double |> multiply(3, ?)
+  let r2 = success(5) |> multiply.partial(a: 10)
+  let r3 = success(10) |> double |> multiply.partial(a: 3)
   let r4 = failure("nope") |> double
-  let r5 = success(10) |> safeDivide(?, 2)
+  let r5 = success(10) |> safeDivide.partial(b: 2)
 }

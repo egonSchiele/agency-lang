@@ -231,7 +231,12 @@ const twice = __AgencyFunction.create({
   name: "twice",
   module: "blockBasic.agency",
   fn: __twice_impl,
-  params: [],
+  params: [{
+    name: "block",
+    hasDefault: false,
+    defaultValue: undefined,
+    variadic: false
+  }],
   toolDefinition: {
     name: "twice",
     description: `No description provided.`,

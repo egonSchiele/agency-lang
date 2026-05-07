@@ -64,7 +64,7 @@ export default [
       // Max file length
       "max-lines": [
         "error",
-        { max: 600, skipBlankLines: true, skipComments: true },
+        { max: 1000, skipBlankLines: true, skipComments: true },
       ],
     },
   },

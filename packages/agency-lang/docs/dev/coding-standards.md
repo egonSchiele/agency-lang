@@ -32,20 +32,6 @@ const lookup: Record<string, number> = {};
 
 ---
 
-### Use plain arrays instead of `Set`
-
-```ts
-// Bad
-const seen = new Set<string>();
-
-// Good
-const seen: string[] = [];
-```
-
-**Rationale:** Same as Map — serializability and simplicity.
-
----
-
 ### No dynamic imports
 
 ```ts
@@ -83,9 +69,9 @@ If a function exceeds 100 lines, break it into smaller, focused functions. Blank
 
 ---
 
-### Keep files under 600 lines
+### Keep files under 1000 lines
 
-If a file exceeds 600 lines, consider splitting it into smaller modules. Blank lines and comments don't count toward the limit.
+If a file exceeds 1000 lines, consider splitting it into smaller modules. Blank lines and comments don't count toward the limit.
 
 Some files are exempt from this rule (e.g., `typescriptBuilder.ts`, `parser.ts`) because they are inherently large due to the nature of their work. These are configured as exceptions in the ESLint config.
 

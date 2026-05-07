@@ -16,7 +16,8 @@ export function writeRunScript(entry: ScheduleEntry): string {
     agentFile: entry.agentFile,
   });
 
-  if (!fs.existsSync(scriptDir)) fs.mkdirSync(scriptDir, { recursive: true });
+  fs.mkdirSync(scriptDir, { recursive: true });
+  fs.mkdirSync(entry.logDir, { recursive: true });
   fs.writeFileSync(scriptPath, content, { mode: 0o755 });
   return scriptPath;
 }

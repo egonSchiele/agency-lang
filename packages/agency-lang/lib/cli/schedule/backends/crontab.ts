@@ -1,5 +1,4 @@
 import { execSync } from "child_process";
-import * as fs from "fs";
 import type { ScheduleEntry } from "../registry.js";
 import type { ScheduleBackend } from "./index.js";
 import { writeRunScript } from "./writeRunScript.js";
@@ -28,9 +27,6 @@ export class CrontabBackend implements ScheduleBackend {
   install(entry: ScheduleEntry): void {
     const runScriptPath = writeRunScript(entry);
 
-    if (!fs.existsSync(entry.logDir)) {
-      fs.mkdirSync(entry.logDir, { recursive: true });
-    }
 
     const lines = filterLines(readCrontab(), entry.name);
     lines.push(

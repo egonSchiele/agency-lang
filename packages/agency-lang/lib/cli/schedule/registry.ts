@@ -1,6 +1,8 @@
 import * as fs from "fs";
 import * as path from "path";
 
+export type BackendType = "launchd" | "systemd" | "crontab";
+
 export type ScheduleEntry = {
   name: string;
   agentFile: string;
@@ -10,7 +12,7 @@ export type ScheduleEntry = {
   command: string;
   logDir: string;
   createdAt: string;
-  backend: "launchd" | "systemd" | "crontab";
+  backend: BackendType;
 };
 
 export type ScheduleRegistry = Record<string, ScheduleEntry>;
@@ -48,10 +50,7 @@ export class Registry {
   }
 
   private write(data: ScheduleRegistry): void {
-    const dir = path.dirname(this.filePath);
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
-    }
+    fs.mkdirSync(path.dirname(this.filePath), { recursive: true });
     fs.writeFileSync(this.filePath, JSON.stringify(data, null, 2));
   }
 }

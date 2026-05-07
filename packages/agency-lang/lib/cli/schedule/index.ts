@@ -5,6 +5,14 @@ import { Registry, type ScheduleEntry } from "./registry.js";
 import { resolveCron, formatSchedule, nextRun } from "./cron.js";
 import { detectBackend, getBackend } from "./backends/index.js";
 
+export class ScheduleExistsError extends Error {
+  constructor(public readonly scheduleName: string) {
+    super(
+      `A schedule named "${scheduleName}" already exists. Use --name to pick a different name, or remove the existing one first.`,
+    );
+  }
+}
+
 function defaultBaseDir(): string {
   return path.join(os.homedir(), ".agency", "schedules");
 }
@@ -36,9 +44,7 @@ export function scheduleAdd(opts: AddOptions): void {
   const name = opts.name ?? path.basename(agentFile, ".agency");
 
   if (registry.has(name) && !opts.force) {
-    throw new Error(
-      `A schedule named "${name}" already exists. Use --name to pick a different name, or remove the existing one first.`,
-    );
+    throw new ScheduleExistsError(name);
   }
 
   const backendType = detectBackend();

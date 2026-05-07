@@ -30,10 +30,7 @@ export class SystemdBackend implements ScheduleBackend {
       onCalendar: cronToOnCalendar(entry.cron),
     });
 
-    if (!fs.existsSync(UNIT_DIR))
-      fs.mkdirSync(UNIT_DIR, { recursive: true });
-    if (!fs.existsSync(entry.logDir))
-      fs.mkdirSync(entry.logDir, { recursive: true });
+    fs.mkdirSync(UNIT_DIR, { recursive: true });
 
     fs.writeFileSync(path.join(UNIT_DIR, `${unit}.service`), service);
     fs.writeFileSync(path.join(UNIT_DIR, `${unit}.timer`), timer);

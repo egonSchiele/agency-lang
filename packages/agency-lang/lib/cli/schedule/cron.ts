@@ -66,6 +66,7 @@ export function nextRun(cronExpr: string): Date {
   return candidate;
 }
 
+// Index 7 duplicates "Sun" because cron allows both 0 and 7 to mean Sunday
 const DOW_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
 export function cronToOnCalendar(cron: string): string {

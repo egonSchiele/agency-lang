@@ -32,6 +32,8 @@ import {
   scheduleList,
   scheduleRemove,
   scheduleEdit,
+  ScheduleExistsError,
+  type ListEntry,
 } from "@/cli/schedule/index.js";
 import { loadEnv } from "@/utils/envfile.js";
 import { debug } from "@/cli/debug.js";
@@ -69,30 +71,17 @@ async function defaultLoadMcpStartServer(): Promise<() => void> {
 }
 
 async function promptOverwrite(name: string): Promise<boolean> {
-  const readline = await import("readline");
-  const rl = readline.createInterface({
-    input: process.stdin,
-    output: process.stdout,
+  const prompts = (await import("prompts")).default;
+  const { overwrite } = await prompts({
+    type: "confirm",
+    name: "overwrite",
+    message: `A schedule named "${name}" already exists. Overwrite?`,
+    initial: false,
   });
-  const answer = await new Promise<string>((resolve) => {
-    rl.question(
-      `A schedule named "${name}" already exists. Overwrite? (y/n) `,
-      resolve,
-    );
-  });
-  rl.close();
-  return answer.toLowerCase() === "y";
+  return overwrite ?? false;
 }
 
-function printScheduleTable(
-  entries: {
-    name: string;
-    agentFile: string;
-    schedule: string;
-    nextRun: Date;
-    broken: boolean;
-  }[],
-): void {
+function printScheduleTable(entries: ListEntry[]): void {
   const nameW = Math.max(4, ...entries.map((e) => e.name.length)) + 2;
   const agentW = Math.max(5, ...entries.map((e) => e.agentFile.length)) + 2;
   const schedW = Math.max(8, ...entries.map((e) => e.schedule.length)) + 2;
@@ -610,8 +599,6 @@ export function createProgram(deps: CliDependencies = {}): Command {
       review(config, file);
     });
 
-  // --- Schedule subcommand ---
-
   const scheduleCmd = program
     .command("schedule")
     .description("Manage scheduled agent runs");
@@ -652,13 +639,8 @@ export function createProgram(deps: CliDependencies = {}): Command {
             color.green(`Schedule "${name}" added successfully.`),
           );
         } catch (err: any) {
-          if (
-            err.message.includes("already exists") &&
-            process.stdin.isTTY
-          ) {
-            const confirmed = await promptOverwrite(
-              opts.name || path.basename(file, ".agency"),
-            );
+          if (err instanceof ScheduleExistsError && process.stdin.isTTY) {
+            const confirmed = await promptOverwrite(err.scheduleName);
             if (confirmed) {
               scheduleAdd({ file, ...opts, force: true });
               console.log(

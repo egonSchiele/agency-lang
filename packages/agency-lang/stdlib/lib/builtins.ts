@@ -4,7 +4,7 @@ import { readFile, writeFile } from "fs/promises";
 import { execFile } from "child_process";
 import { promisify } from "util";
 import { detectPlatform } from "./utils.js";
-import { resolvePath } from "./fs.js";
+import { resolvePath } from "./resolvePath.js";
 
 const execFileAsync = promisify(execFile);
 

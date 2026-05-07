@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { resolvePath } from "./fs.js";
+import { resolvePath } from "./resolvePath.js";
 import path from "path";
 
 describe("resolvePath", () => {

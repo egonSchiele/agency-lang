@@ -36,7 +36,7 @@ export safe def round(num: number, precision: number): number {
   return _round(num, precision)
 }
 
-export def fetch(baseUrl: string, path: string = "", headers: object = {}, allowedDomains: string[] = []): string {
+export def fetch(baseUrl: string, path: string = "", headers: object = {}, allowedDomains: string[] = []): Result {
   """
   A tool for fetching a URL and returning the response as text. Provide baseUrl and optionally path (they are joined). Set headers for custom request headers. Set allowedDomains to restrict which domains can be fetched.
 
@@ -49,10 +49,10 @@ export def fetch(baseUrl: string, path: string = "", headers: object = {}, allow
     baseUrl: baseUrl,
     path: path
   })
-  return _fetch(baseUrl, path, headers, allowedDomains)
+  return try _fetch(baseUrl, path, headers, allowedDomains)
 }
 
-export def fetchJSON(baseUrl: string, path: string = "", headers: object = {}, allowedDomains: string[] = []) {
+export def fetchJSON(baseUrl: string, path: string = "", headers: object = {}, allowedDomains: string[] = []): Result {
   """
   A tool for fetching a URL and returning the response as parsed JSON. Provide baseUrl and optionally path (they are joined). Set headers for custom request headers. Set allowedDomains to restrict which domains can be fetched.
 
@@ -65,51 +65,51 @@ export def fetchJSON(baseUrl: string, path: string = "", headers: object = {}, a
     baseUrl: baseUrl,
     path: path
   })
-  return _fetchJSON(baseUrl, path, headers, allowedDomains)
+  return try _fetchJSON(baseUrl, path, headers, allowedDomains)
 }
 
-export def read(dir: string, filename: string): string {
+export def read(filename: string, dir: string = "."): Result {
   """
-  A tool for reading the contents of a file and returning it as a string. The filename is resolved relative to dir. Use "." for the current directory.
+  A tool for reading the contents of a file and returning it as a string. The filename is resolved relative to dir.
 
-  @param dir - The directory to resolve the filename against
   @param filename - The file to read
+  @param dir - The directory to resolve the filename against (defaults to ".")
   """
   return interrupt std::read("Are you sure you want to read this file?", {
     dir: dir,
     filename: filename
   })
-  return _read(dir, filename)
+  return try _read(dir, filename)
 }
 
-export def write(dir: string, filename: string, content: string) {
+export def write(filename: string, content: string, dir: string = "."): Result {
   """
-  A tool for writing content to a file. The filename is resolved relative to dir. Use "." for the current directory.
+  A tool for writing content to a file. The filename is resolved relative to dir.
 
-  @param dir - The directory to resolve the filename against
   @param filename - The file to write
   @param content - The content to write
+  @param dir - The directory to resolve the filename against (defaults to ".")
   """
   return interrupt std::write("Are you sure you want to write to this file?", {
     dir: dir,
     filename: filename,
     content: content
   })
-  _write(dir, filename, content)
+  return try _write(dir, filename, content)
 }
 
-export def readImage(dir: string, filename: string): string {
+export def readImage(filename: string, dir: string = "."): Result {
   """
-  A tool for reading an image file and returning its contents as a Base64-encoded string. The filename is resolved relative to dir. Use "." for the current directory.
+  A tool for reading an image file and returning its contents as a Base64-encoded string. The filename is resolved relative to dir.
 
-  @param dir - The directory to resolve the filename against
   @param filename - The image file to read
+  @param dir - The directory to resolve the filename against (defaults to ".")
   """
   return interrupt std::readImage("Are you sure you want to read this image file?", {
     dir: dir,
     filename: filename
   })
-  return _readImage(dir, filename)
+  return try _readImage(dir, filename)
 }
 
 export def notify(title: string, message: string): boolean {

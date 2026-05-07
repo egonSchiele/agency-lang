@@ -1,16 +1,16 @@
 import { edit } from "std::fs"
 
 node writeFixture(filename: string, content: string) {
-  write(".", filename, content) with approve
+  write(filename, content) with approve
   return true
 }
 
 node readBack(filename: string) {
-  const result = read(".", filename) with approve
+  const result = read(filename) with approve
   return result
 }
 
 node runEdit(filename: string, oldText: string, newText: string, replaceAll: boolean) {
-  const result = edit(".", filename, oldText, newText, replaceAll)
+  const result = edit(filename, oldText, newText, replaceAll)
   return result
 }

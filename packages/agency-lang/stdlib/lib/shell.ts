@@ -72,7 +72,7 @@ type SpawnAsyncOptions = SpawnOptions & { input?: string; timeout?: number };
 function buildSpawnOptions(cwd: string, timeout: number, stdin: string): SpawnAsyncOptions {
   const options: SpawnAsyncOptions = {};
   if (cwd) options.cwd = cwd;
-  if (timeout > 0) options.timeout = timeout * 1000;
+  if (timeout > 0) options.timeout = timeout;
   if (stdin) options.input = stdin;
   return options;
 }

@@ -3,6 +3,7 @@ import { BaseNode } from "./base.js";
 
 export type Literal =
   | NumberLiteral
+  | UnitLiteral
   | MultiLineStringLiteral
   | StringLiteral
   | VariableNameLiteral
@@ -13,6 +14,28 @@ export type NumberLiteral = BaseNode & {
   type: "number";
   value: string;
 };
+
+export type TimeUnitLiteral = BaseNode & {
+  type: "unitLiteral";
+  value: string;
+  unit: "ms" | "s" | "m" | "h" | "d" | "w";
+  canonicalValue: number;
+  dimension: "time";
+};
+
+export type CostUnitLiteral = BaseNode & {
+  type: "unitLiteral";
+  value: string;
+  unit: "$";
+  canonicalValue: number;
+  dimension: "cost";
+};
+
+export type UnitLiteral = TimeUnitLiteral | CostUnitLiteral;
+
+export function formatUnitLiteral(lit: Pick<UnitLiteral, "value" | "unit">): string {
+  return lit.unit === "$" ? `$${lit.value}` : `${lit.value}${lit.unit}`;
+}
 
 export type StringLiteral = BaseNode & {
   type: "string";

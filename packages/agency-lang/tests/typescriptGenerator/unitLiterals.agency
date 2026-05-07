@@ -1,0 +1,10 @@
+node main() {
+  const a = 30s
+  const b = 500ms
+  const c = $5.00
+  const d = 2h
+  const e = 7d
+  const f = 1w
+  const g = 0.5s
+  return a
+}

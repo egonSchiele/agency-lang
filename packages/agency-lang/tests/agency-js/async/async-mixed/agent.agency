@@ -1,12 +1,12 @@
 const log = []
 
 def sideEffect(val: string) {
-  sleep(0.05)
+  sleep(50ms)
   log.push(val)
 }
 
 def compute(val: number): number {
-  sleep(0.05)
+  sleep(50ms)
   return val * 2
 }
 

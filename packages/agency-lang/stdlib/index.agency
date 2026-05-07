@@ -37,11 +37,11 @@ export safe def input(prompt: string): string {
   return _input(prompt)
 }
 
-export safe def sleep(seconds: number) {
+export safe def sleep(ms: number) {
   """
-  A tool for pausing execution for a specified number of seconds.
+  Pause execution for the given duration in milliseconds. Use with unit literals for clarity: sleep(1s), sleep(500ms), sleep(2m).
   """
-  _sleep(seconds)
+  _sleep(ms)
 }
 
 export safe def round(num: number, precision: number): number {

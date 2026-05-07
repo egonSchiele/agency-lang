@@ -6,8 +6,8 @@ import { writeFileSync } from "fs";
 // Both calls hit an interrupt after mutating (or not) the global.
 // We then approve both and check that globals are still isolated.
 
-const result1 = await foo(3, null);
-const result2 = await foo(1, "mutated");
+const result1 = await foo(3000, null);
+const result2 = await foo(1000, "mutated");
 
 if (!hasInterrupts(result1.data))
   throw new Error("Expected interrupt from call 1");

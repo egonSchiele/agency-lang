@@ -1,7 +1,7 @@
 const log = []
 
 def record(val: string) {
-  sleep(0.01)
+  sleep(10ms)
   log.push(val)
 }
 

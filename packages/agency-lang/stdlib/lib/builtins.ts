@@ -35,9 +35,9 @@ export function _input(prompt: string): Promise<string> {
   });
 }
 
-export function _sleep(seconds: number): Promise<void> {
+export function _sleep(ms: number): Promise<void> {
   return new Promise((resolve) => {
-    setTimeout(resolve, seconds * 1000);
+    setTimeout(resolve, ms);
   });
 }
 

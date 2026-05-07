@@ -54,7 +54,7 @@ const __globalCtx = new RuntimeContext({
   },
   dirname: __dirname,
   traceConfig: {
-    program: "asyncAssigned.agency"
+    program: "unitLiterals.agency"
   }
 });
 const graph = __globalCtx.graph;
@@ -104,130 +104,16 @@ function registerTools(tools: any[]) {
 }
 
 async function __initializeGlobals(__ctx) {
-  __ctx.globals.markInitialized("asyncAssigned.agency")
+  __ctx.globals.markInitialized("unitLiterals.agency")
 }
 __toolRegistry["readSkill"] = __AgencyFunction.create({
   name: "readSkill",
-  module: "asyncAssigned.agency",
+  module: "unitLiterals.agency",
   fn: readSkill,
   params: __readSkillToolParams.map(p => ({ name: p, hasDefault: false, defaultValue: undefined, variadic: false })),
   toolDefinition: __readSkillTool,
 }, __toolRegistry);
 __functionRefReviver.registry = __toolRegistry;
-async function __compute_impl(val: number, __state: InternalFunctionState | undefined = undefined) {
-  const __setupData = setupFunction({
-    state: __state
-  });
-  // __state will be undefined if this function is being called as a tool by an llm
-  const __stateStack = __setupData.stateStack;
-const __stack = __setupData.stack;
-const __step = __setupData.step;
-const __self = __setupData.self;
-const __threads = __setupData.threads;
-const __ctx = __state?.ctx || __globalCtx;
-const statelogClient = __ctx.statelogClient;
-const __graph = __ctx.graph;
-let __forked;
-let __functionCompleted = false;
-  if (!__ctx.globals.isInitialized("asyncAssigned.agency")) {
-    await __initializeGlobals(__ctx)
-  }
-  let __funcStartTime: number = performance.now();
-  await callHook({
-    callbacks: __ctx.callbacks,
-    name: "onFunctionStart",
-    data: {
-      functionName: "compute",
-      args: {
-        val: val
-      },
-      isBuiltin: false,
-      moduleId: "asyncAssigned.agency"
-    }
-  })
-  __stack.args["val"] = val;
-  __self.__retryable = __self.__retryable ?? true;
-  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "asyncAssigned.agency", scopeName: "compute" });
-  let __resultCheckpointId = -1;
-if (__ctx.stateStack.currentNodeId()) {
-  __resultCheckpointId = __ctx.checkpoints.createPinned(__stateStack, __ctx, { moduleId: "asyncAssigned.agency", scopeName: "compute", stepPath: "", label: "result-entry" });
-}
-if (__ctx._pendingArgOverrides) {
-  const __overrides = __ctx._pendingArgOverrides;
-  __ctx._pendingArgOverrides = undefined;
-  if ("val" in __overrides) {
-    val = __overrides["val"];
-    __stack.args["val"] = val;
-  }
-
-}
-
-  try {
-    await runner.step(0, async (runner) => {
-const __funcResult = await __call(sleep, {
-        type: "positional",
-        args: [100]
-      }, {
-        ctx: __ctx,
-        threads: __threads,
-        stateStack: __stateStack
-      });
-if (hasInterrupts(__funcResult)) {
-        await __ctx.pendingPromises.awaitAll()
-        runner.halt(__funcResult)
-        return;
-      }
-    });
-    await runner.step(1, async (runner) => {
-__functionCompleted = true;
-runner.halt(__stack.args.val * 2)
-return;
-    });
-    if (runner.halted) { if (isFailure(runner.haltResult)) { runner.haltResult.retryable = runner.haltResult.retryable && __self.__retryable; } return runner.haltResult; }
-  } catch (__error) {
-    if (__error instanceof RestoreSignal) {
-  throw __error;
-}
-return failure(
-  __error instanceof Error ? __error.message : String(__error),
-  {
-    checkpoint: __ctx.getResultCheckpoint(),
-    retryable: __self.__retryable,
-    functionName: "compute",
-    args: __stack.args,
-  }
-);
-
-  } finally {
-    __stateStack.pop()
-    if (__functionCompleted) {
-      await callHook({
-        callbacks: __ctx.callbacks,
-        name: "onFunctionEnd",
-        data: {
-          functionName: "compute",
-          timeTaken: performance.now() - __funcStartTime
-        }
-      })
-    }
-  }
-}
-const compute = __AgencyFunction.create({
-  name: "compute",
-  module: "asyncAssigned.agency",
-  fn: __compute_impl,
-  params: [{
-    name: "val",
-    hasDefault: false,
-    defaultValue: undefined,
-    variadic: false
-  }],
-  toolDefinition: {
-    name: "compute",
-    description: `No description provided.`,
-    schema: z.object({"val": z.number(), })
-  }
-}, __toolRegistry);
 graph.node("main", async (__state: GraphState) => {
   const __setupData = setupNode({
     state: __state
@@ -249,57 +135,33 @@ let __functionCompleted = false;
       nodeName: "main"
     }
   })
-  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "asyncAssigned.agency", scopeName: "main" });
+  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "unitLiterals.agency", scopeName: "main" });
   try {
-    await runner.branchStep(0, "0", async (runner) => {
-if ((__stack.branches && __stack.branches["0"])) {
-        __forked = __stack.branches["0"].stack;
-        __forked.deserializeMode()
-      } else {
-        __forked = __ctx.forkStack();
-      }
-__stack.branches = (__stack.branches || {});
-__stack.branches["0"] = {
-        stack: __forked
-      };
-__stack.locals.x = __call(compute, {
-        type: "positional",
-        args: [5]
-      }, {
-        ctx: __ctx,
-        threads: __threads,
-        stateStack: __forked
-      });
-__self.__pendingKey_x = __ctx.pendingPromises.add(__stack.locals.x, (val) => { __stack.locals.x = val; });
+    await runner.step(0, async (runner) => {
+__stack.locals.a = 30000;
     });
-    await runner.branchStep(1, "1", async (runner) => {
-if ((__stack.branches && __stack.branches["1"])) {
-        __forked = __stack.branches["1"].stack;
-        __forked.deserializeMode()
-      } else {
-        __forked = __ctx.forkStack();
-      }
-__stack.branches = (__stack.branches || {});
-__stack.branches["1"] = {
-        stack: __forked
-      };
-__stack.locals.y = __call(compute, {
-        type: "positional",
-        args: [10]
-      }, {
-        ctx: __ctx,
-        threads: __threads,
-        stateStack: __forked
-      });
-__self.__pendingKey_y = __ctx.pendingPromises.add(__stack.locals.y, (val) => { __stack.locals.y = val; });
+    await runner.step(1, async (runner) => {
+__stack.locals.b = 500;
     });
     await runner.step(2, async (runner) => {
-await __ctx.pendingPromises.awaitPending([__self.__pendingKey_x, __self.__pendingKey_y]);
+__stack.locals.c = 5;
     });
     await runner.step(3, async (runner) => {
+__stack.locals.d = 7200000;
+    });
+    await runner.step(4, async (runner) => {
+__stack.locals.e = 604800000;
+    });
+    await runner.step(5, async (runner) => {
+__stack.locals.f = 604800000;
+    });
+    await runner.step(6, async (runner) => {
+__stack.locals.g = 500;
+    });
+    await runner.step(7, async (runner) => {
 runner.halt({
         messages: __threads,
-        data: [__stack.locals.x, __stack.locals.y]
+        data: __stack.locals.a
       })
 return;
     });
@@ -352,4 +214,4 @@ if (__process.argv[1] === fileURLToPath(import.meta.url)) {
   }
 }
 export default graph
-export const __sourceMap = {"asyncAssigned.agency:compute":{"0":{"line":1,"col":2},"1":{"line":2,"col":2}},"asyncAssigned.agency:main":{"0":{"line":6,"col":2},"1":{"line":7,"col":2},"3":{"line":8,"col":2}}};
+export const __sourceMap = {"unitLiterals.agency:main":{"0":{"line":1,"col":2},"1":{"line":2,"col":2},"2":{"line":3,"col":2},"3":{"line":4,"col":2},"4":{"line":5,"col":2},"5":{"line":6,"col":2},"6":{"line":7,"col":2},"7":{"line":8,"col":2}}};

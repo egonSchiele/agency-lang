@@ -1,0 +1,13 @@
+node main() {
+  print(color.cyan("Welcome to the Agency Agent!"))
+  print(color.cyan("Would you like to create a new agent or modify an existing one?"))
+  userinput = input("(create/modify) ")
+  thread {
+    mode: Mode = llm("categorize this user response as 'create' or 'modify': ${userinput}", config)
+  }
+  print(color.cyan("Great! Let's ${mode} an agent."))
+  match(mode) {
+    "create" => return plan("create", "", null)
+    "modify" => return readExisting()
+  }
+}

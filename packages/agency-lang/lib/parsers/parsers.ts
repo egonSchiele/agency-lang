@@ -72,6 +72,8 @@ import {
   NewLine,
   NullLiteral,
   NumberLiteral,
+  UnitLiteral,
+  TimeUnitLiteral,
   PromptSegment,
   RegexLiteral,
   StringLiteral,
@@ -374,6 +376,55 @@ export const numberParser: Parser<NumberLiteral> = label("a number", (input: str
   return parser(input);
 });
 
+// --- Unit literal parser ---
+const TIME_MULTIPLIERS: Record<TimeUnitLiteral["unit"], number> = {
+  ms: 1,
+  s: 1000,
+  m: 60000,
+  h: 3600000,
+  d: 86400000,
+  w: 604800000,
+};
+
+const unsignedNumberChars = many1WithJoin(or(char("."), digit));
+const timeSuffix = or(str("ms"), str("s"), str("m"), str("h"), str("d"), str("w"));
+
+const timeUnitParser: Parser<UnitLiteral> = label("a time unit literal", (input: string): ParserResult<UnitLiteral> => {
+  const parser = seqC(
+    set("type", "unitLiteral"),
+    set("dimension", "time"),
+    capture(unsignedNumberChars, "value"),
+    capture(timeSuffix, "unit"),
+  );
+  const result = parser(input);
+  if (!result.success) return result;
+  const { value, unit } = result.result;
+  return success({
+    ...result.result,
+    canonicalValue: Math.round(parseFloat(value) * TIME_MULTIPLIERS[unit as TimeUnitLiteral["unit"]]),
+  } as UnitLiteral, result.rest);
+});
+
+const costUnitParser: Parser<UnitLiteral> = label("a cost unit literal", (input: string): ParserResult<UnitLiteral> => {
+  const parser = seqC(
+    set("type", "unitLiteral"),
+    set("dimension", "cost"),
+    set("unit", "$"),
+    char("$"),
+    capture(unsignedNumberChars, "value"),
+  );
+  const result = parser(input);
+  if (!result.success) return result;
+  return success({
+    ...result.result,
+    canonicalValue: parseFloat(result.result.value),
+  } as UnitLiteral, result.rest);
+});
+
+export const unitLiteralParser: Parser<UnitLiteral> = label("a unit literal",
+  or(costUnitParser, timeUnitParser)
+);
+
 export const regexLiteralParser: Parser<RegexLiteral> = label("a regex", (input: string): ParserResult<RegexLiteral> => {
   const parser = seqC(
     set("type", "regex"),
@@ -504,6 +555,7 @@ export const nullParser: Parser<NullLiteral> = label("null", seqC(
 export const literalParser: Parser<Literal> = or(
   nullParser,
   booleanParser,
+  unitLiteralParser,
   numberParser,
   multiLineStringParser,
   stringParser,
@@ -513,6 +565,7 @@ export const literalParser: Parser<Literal> = or(
 export const literalParserNoVarName: Parser<Literal> = or(
   nullParser,
   booleanParser,
+  unitLiteralParser,
   numberParser,
   multiLineStringParser,
   stringParser,
@@ -522,6 +575,7 @@ export const literalParserNoVarName: Parser<Literal> = or(
 export function simpleLiteralParser(input: string): ParserResult<Literal> {
   const parser = or(
     booleanParser,
+    unitLiteralParser,
     numberParser,
     _stringParser,
     variableNameParser,

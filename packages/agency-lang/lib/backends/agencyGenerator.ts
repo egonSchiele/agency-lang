@@ -17,6 +17,7 @@ import {
   StringLiteral,
   TypeAlias,
   VariableType,
+  formatUnitLiteral,
 } from "../types.js";
 
 import { AccessChainElement, ValueAccess } from "../types/access.js";
@@ -207,6 +208,7 @@ export class AgencyGenerator {
       case "matchBlock":
         return this.processMatchBlock(node);
       case "number":
+      case "unitLiteral":
       case "multiLineString":
       case "string":
       case "variableName":
@@ -464,6 +466,8 @@ export class AgencyGenerator {
     switch (literal.type) {
       case "number":
         return literal.value;
+      case "unitLiteral":
+        return formatUnitLiteral(literal);
       case "string":
         return this.generateStringLiteral(literal);
       case "variableName":

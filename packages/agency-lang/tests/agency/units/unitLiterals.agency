@@ -1,0 +1,21 @@
+node main() {
+  const a = 1s
+  const b = 500ms
+  const c = a + b
+  if (c != 1500) {
+    return "FAIL: 1s + 500ms should be 1500, got ${c}"
+  }
+
+  const d = 2h
+  if (d != 7200000) {
+    return "FAIL: 2h should be 7200000, got ${d}"
+  }
+
+  const e = $5.00
+  if (e != 5) {
+    return "FAIL: $5.00 should be 5, got ${e}"
+  }
+
+  sleep(50ms)
+  return "pass"
+}

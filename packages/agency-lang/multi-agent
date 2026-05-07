@@ -1,0 +1,108 @@
+Given that Agency already solves interrupt-resume and checkpointing at the language level, here's what I'd expect a mature version of
+   the language/ecosystem to provide for multi-agent coordination:
+
+  Language-Level Primitives
+
+  1. Agent-to-agent communication channels
+
+  Right now, Agency has fork for parallel isolated execution and nodes for state transitions within a single agent. What's missing is a way for agents
+   to talk to each other. A language-level primitive like a typed channel or mailbox would be natural:
+
+  // hypothetical
+  channel orders: OrderRequest
+
+  node router(msg: string) {
+    send orders <- classify(msg)
+  }
+
+  node fulfillment() {
+    const req = receive orders  // blocks until message arrives
+    // ...
+  }
+
+  This would avoid the "everything through shared state" problem that makes LangGraph multi-agent so awkward. The language could enforce type safety
+  on what flows between agents at compile time — something no existing framework can do.
+
+  2. Handoff as a first-class construct
+
+  Nodes already model permanent state transitions within an agent. The natural extension is handoff between agents — transferring not just control but
+   also context (message history, relevant state). Something like:
+
+  // hypothetical
+  handoff to billing_agent with { history: messages, context: account }
+
+  The language could enforce at compile time that the receiving agent's schema matches what you're handing off — catching the "malformed conversation
+  history" bugs that plague LangGraph swarm handoffs.
+
+  3. Supervision / orchestration keywords
+
+  A supervise or delegate construct that expresses "ask this agent to do this, get back a result, decide what to do next" — without the developer
+  manually wiring up a routing LLM call, parsing its output, and dispatching. The supervisor "translation layer" problem (from LangGraph benchmarks)
+  is fundamentally a problem of the orchestrator re-summarizing sub-agent output. A language could let sub-agents respond directly to the user while
+  the supervisor only handles routing.
+
+  Standard Library / Ecosystem Patterns
+
+  4. Pre-built orchestration strategies
+
+  Agency already has a strategy module in its stdlib. This is the right place for:
+  - Round-robin: Agents take turns on a shared task
+  - Fan-out/fan-in: Dispatch to N specialists, aggregate results (an extension of fork but across agents rather than threads)
+  - Escalation chains: Try agent A, if confidence is low, escalate to agent B
+  - Voting/consensus: Multiple agents propose answers, a resolution strategy picks the winner
+
+  These are the patterns teams build from scratch in every LangGraph project. A stdlib would save weeks.
+
+  5. Agent discovery and registration
+
+  For larger systems, you need agents to discover each other dynamically rather than hard-coding references. A registry pattern — either in the stdlib
+   or as a language feature — where agents declare their capabilities and other agents can query for "who handles billing?" at runtime. This is what
+  Google ADK's A2A protocol does at the protocol level. Agency could do it at the language level with stronger guarantees.
+
+  6. Scoped state visibility
+
+  The shared-state-vs-isolated-state problem in LangGraph is a design gap. Agency should have explicit scoping:
+  - Private state: Only this agent can see it
+  - Shared state: Explicitly declared, typed, and visible to named agents
+  - Broadcast state: Available to all agents in the system
+
+  The language compiler could enforce these boundaries, preventing the "message history leakage" problem that plagues LangGraph's swarm pattern.
+
+  Runtime / Tooling
+
+  7. Multi-agent debugger
+
+  Agency already has a checkpoint debugger. The multi-agent extension would let you visualize the full system: which agent has control, what's in each
+   agent's state, what messages have been exchanged, where handoffs happened. LangGraph Studio does a version of this but can't inspect subgraph state
+   through indirection. A language-level approach could guarantee full visibility because the compiler knows the full topology.
+
+  8. Recursion and cost guards
+
+  Built-in limits on handoff depth, total LLM calls across agents, and token budgets — the things LangGraph forces you to manage manually with
+  separate recursion limits per subgraph. The language runtime could enforce a global budget across the full agent tree.
+
+  9. Testing primitives for multi-agent
+
+  Agency already has testing support. For multi-agent, you'd want to mock individual agents, inject messages into channels, assert on handoff
+  sequences, and test that the full system produces the right result when agents interact. Something like:
+
+  // hypothetical
+  test "billing handoff" {
+    mock billing_agent returns { status: "resolved" }
+    const result = run router("I need a refund")
+    assert result.handoff_to == "billing_agent"
+    assert result.status == "resolved"
+  }
+
+  What This Adds Up To
+
+  The core bet of Agency Lang is that agent primitives belong in the language, not in library code. If that thesis is right, then multi-agent
+  coordination is the most important place to apply it. The bugs we cataloged in LangGraph — parallel interrupt ID collisions, subgraph state amnesia,
+   message history leakage, broken handoff message pairing — are all consequences of trying to express agent coordination in a general-purpose
+  language that has no concept of agents.
+
+  A purpose-built language could make many of these bugs structurally impossible through compile-time checks: typed channels prevent message schema
+  mismatches, scoped state prevents leakage, language-level handoffs prevent broken tool message pairing, and exact-point resume (which Agency already
+   has) eliminates the entire idempotency burden.
+
+  That's the promise. The question is whether Agency invests in this direction or stays focused on single-agent ergonomics.

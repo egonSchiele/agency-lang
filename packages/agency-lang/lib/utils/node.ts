@@ -11,6 +11,7 @@ import {
   globalScope,
   nodeScope,
   Scope,
+  formatUnitLiteral,
 } from "@/types.js";
 import type { BlockArgument } from "@/types/blockArgument.js";
 import { variableTypeToString } from "@/backends/typescriptGenerator/typeToString.js";
@@ -138,6 +139,10 @@ export function expressionToString(expr: Expression): string {
       const paramStr = expr.params.length === 1 && !expr.params[0].typeHint ? params : `(${params})`;
       return `\\${paramStr} -> ...`;
     }
+    case "unitLiteral":
+      return formatUnitLiteral(expr);
+    default:
+      return String((expr as any).value ?? "");
   }
 }
 

@@ -1,6 +1,6 @@
 node main() {
   let x = "before"
-  sleep(0.1)
+  sleep(100ms)
   x = "after"
   return x
 }

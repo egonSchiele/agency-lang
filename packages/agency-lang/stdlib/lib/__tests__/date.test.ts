@@ -3,6 +3,7 @@ import {
   _now,
   _today,
   _tomorrow,
+  _add,
   _addMinutes,
   _addHours,
   _addDays,
@@ -47,6 +48,28 @@ describe("_tomorrow", () => {
     d.setUTCDate(d.getUTCDate() + 1);
     const expected = d.toISOString().slice(0, 10);
     expect(tomorrowDate).toBe(expected);
+  });
+});
+
+describe("_add", () => {
+  it("adds milliseconds to a datetime", () => {
+    const result = _add("2026-05-05T10:00:00-07:00", 7200000); // 2 hours
+    expect(result).toContain("2026-05-05T12:00:00");
+  });
+
+  it("adds negative duration", () => {
+    const result = _add("2026-05-05T10:00:00-07:00", -3600000); // -1 hour
+    expect(result).toContain("2026-05-05T09:00:00");
+  });
+
+  it("adds days worth of milliseconds", () => {
+    const result = _add("2026-05-05T10:00:00-07:00", 86400000); // 1 day
+    expect(result).toContain("2026-05-06T10:00:00");
+  });
+
+  it("preserves timezone offset", () => {
+    const result = _add("2026-05-05T10:00:00-07:00", 60000); // 1 minute
+    expect(result).toBe("2026-05-05T10:01:00-07:00");
   });
 });
 

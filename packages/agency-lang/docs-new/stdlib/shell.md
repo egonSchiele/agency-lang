@@ -25,7 +25,7 @@ type LsEntry = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/shell.agency#L57))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/shell.agency#L60))
 
 ### GrepMatch
 
@@ -37,7 +37,7 @@ type GrepMatch = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/shell.agency#L79))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/shell.agency#L81))
 
 ### StatInfo
 
@@ -60,12 +60,12 @@ type StatInfo = {
 exec(command: string, args: string[], cwd: string, timeout: number, stdin: string, allowedCommands: string[], blockedCommands: string[]): ExecResult
 ```
 
-Run an executable directly with an array of arguments, bypassing the shell. This is safer than bash() because arguments are passed directly to the process without shell interpretation, preventing command injection. Use this when you have a known command and structured arguments. Pass cwd to change the working directory, timeout (seconds) to enforce a time limit, and stdin to feed input to the command. Set allowedCommands to restrict which executables can be run. Set blockedCommands to reject specific executables.
-
+Run an executable directly with an array of arguments, bypassing the shell. This is safer than bash() because arguments are passed directly to the process without shell interpretation, preventing command injection. Use this when you have a known command and structured arguments. Pass cwd to change the working directory, timeout in milliseconds to enforce a time limit (e.g. timeout: 30s), and stdin to feed input to the command. Set allowedCommands to restrict which executables can be run. Set blockedCommands to reject specific executables.
+  
   @param command - The executable to run
   @param args - Array of arguments to pass
   @param cwd - Working directory for the command
-  @param timeout - Time limit in seconds
+  @param timeout - Time limit in milliseconds (e.g. 30s)
   @param stdin - Input to feed to the command
   @param allowedCommands - Only allow running these executables
   @param blockedCommands - Block running these executables
@@ -92,11 +92,15 @@ Run an executable directly with an array of arguments, bypassing the shell. This
 bash(command: string, cwd: string, timeout: number, stdin: string, blockedCommands: string[]): ExecResult
 ```
 
-Run a shell command string via sh -c and return its stdout, stderr, and exit code. The command is interpreted by the shell, so pipes, redirects, globbing, and other shell features work. However, this means interpolated values are subject to shell interpretation -- use exec() instead when passing untrusted or dynamic arguments. Pass cwd to change the working directory, timeout (seconds) to enforce a time limit, and stdin to feed input to the command. Set blockedCommands to reject commands that start with specific strings.
+<<<<<<< HEAD
+  Run a shell command string via sh -c and return its stdout, stderr, and exit code. The command is interpreted by the shell, so pipes, redirects, globbing, and other shell features work. However, this means interpolated values are subject to shell interpretation -- use exec() instead when passing untrusted or dynamic arguments. Pass cwd to change the working directory, timeout (seconds) to enforce a time limit, and stdin to feed input to the command. Set blockedCommands to reject commands that start with specific strings.
+  =======
+  Run a shell command string via sh -c and return its stdout, stderr, and exit code. The command is interpreted by the shell, so pipes, redirects, globbing, and other shell features work. However, this means interpolated values are subject to shell interpretation -- use exec() instead when passing untrusted or dynamic arguments. Pass cwd to change the working directory, timeout in milliseconds to enforce a time limit (e.g. timeout: 30s), and stdin to feed input to the command.
+  >>>>>>> adit/unit-literals
 
   @param command - The shell command to run
   @param cwd - Working directory for the command
-  @param timeout - Time limit in seconds
+  @param timeout - Time limit in milliseconds (e.g. 30s)
   @param stdin - Input to feed to the command
   @param blockedCommands - Block commands that start with these strings
 
@@ -134,7 +138,7 @@ List entries in a directory. Each entry includes name, path, type ("file", "dir"
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/shell.agency#L64))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/shell.agency#L67))
 
 ### grep
 
@@ -160,7 +164,7 @@ Search for a regex pattern in files under a directory. Returns matches with file
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/shell.agency#L85))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/shell.agency#L87))
 
 ### glob
 
@@ -184,7 +188,7 @@ Find files whose paths match a glob pattern (e.g. "src/**/*.ts"). Returns paths 
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/shell.agency#L104))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/shell.agency#L105))
 
 ### stat
 

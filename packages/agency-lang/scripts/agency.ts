@@ -27,6 +27,12 @@ import { TarsecError } from "tarsec";
 import process from "process";
 import { agent } from "@/cli/agent.js";
 import { review } from "@/cli/review.js";
+import {
+  scheduleAdd,
+  scheduleList,
+  scheduleRemove,
+  scheduleEdit,
+} from "@/cli/schedule/index.js";
 import { loadEnv } from "@/utils/envfile.js";
 import { debug } from "@/cli/debug.js";
 import { generateDoc } from "@/cli/doc.js";
@@ -60,6 +66,60 @@ async function defaultLoadLspStartServer(): Promise<() => void> {
 
 async function defaultLoadMcpStartServer(): Promise<() => void> {
   return startMcpServer;
+}
+
+async function promptOverwrite(name: string): Promise<boolean> {
+  const readline = await import("readline");
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout,
+  });
+  const answer = await new Promise<string>((resolve) => {
+    rl.question(
+      `A schedule named "${name}" already exists. Overwrite? (y/n) `,
+      resolve,
+    );
+  });
+  rl.close();
+  return answer.toLowerCase() === "y";
+}
+
+function printScheduleTable(
+  entries: {
+    name: string;
+    agentFile: string;
+    schedule: string;
+    nextRun: Date;
+    broken: boolean;
+  }[],
+): void {
+  const nameW = Math.max(4, ...entries.map((e) => e.name.length)) + 2;
+  const agentW = Math.max(5, ...entries.map((e) => e.agentFile.length)) + 2;
+  const schedW = Math.max(8, ...entries.map((e) => e.schedule.length)) + 2;
+
+  console.log(
+    "Name".padEnd(nameW) +
+      "Agent".padEnd(agentW) +
+      "Schedule".padEnd(schedW) +
+      "Next Run",
+  );
+  for (const entry of entries) {
+    const broken = entry.broken ? color.red(" [broken]") : "";
+    const nextRunStr = entry.nextRun.toLocaleString("en-US", {
+      weekday: "short",
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    });
+    console.log(
+      entry.name.padEnd(nameW) +
+        (entry.agentFile + broken).padEnd(agentW) +
+        entry.schedule.padEnd(schedW) +
+        nextRunStr,
+    );
+  }
 }
 
 export function createProgram(deps: CliDependencies = {}): Command {
@@ -549,6 +609,132 @@ export function createProgram(deps: CliDependencies = {}): Command {
       const config = getConfig();
       review(config, file);
     });
+
+  // --- Schedule subcommand ---
+
+  const scheduleCmd = program
+    .command("schedule")
+    .description("Manage scheduled agent runs");
+
+  scheduleCmd
+    .command("add")
+    .description("Schedule an agent to run on a recurring basis")
+    .argument("<file>", "Path to .agency file")
+    .option(
+      "--every <preset>",
+      "Schedule preset: hourly, daily, weekdays, weekly",
+    )
+    .option("--cron <expression>", "Cron expression (5 fields)")
+    .option(
+      "--name <name>",
+      "Schedule name (default: derived from filename)",
+    )
+    .option("--env-file <path>", "Path to .env file")
+    .option(
+      "--command <cmd>",
+      "Command to run agency (default: agency)",
+    )
+    .action(
+      async (
+        file: string,
+        opts: {
+          every?: string;
+          cron?: string;
+          name?: string;
+          envFile?: string;
+          command?: string;
+        },
+      ) => {
+        try {
+          scheduleAdd({ file, ...opts });
+          const name = opts.name || path.basename(file, ".agency");
+          console.log(
+            color.green(`Schedule "${name}" added successfully.`),
+          );
+        } catch (err: any) {
+          if (
+            err.message.includes("already exists") &&
+            process.stdin.isTTY
+          ) {
+            const confirmed = await promptOverwrite(
+              opts.name || path.basename(file, ".agency"),
+            );
+            if (confirmed) {
+              scheduleAdd({ file, ...opts, force: true });
+              console.log(
+                color.green("Schedule overwritten successfully."),
+              );
+            } else {
+              console.log("Aborted.");
+            }
+          } else {
+            console.error(color.red(err.message));
+            process.exit(1);
+          }
+        }
+      },
+    );
+
+  scheduleCmd
+    .command("list")
+    .alias("ls")
+    .description("List all scheduled agents")
+    .action(() => {
+      const entries = scheduleList({});
+      if (entries.length === 0) {
+        console.log(
+          "No scheduled agents. Use 'agency schedule add' to create one.",
+        );
+        return;
+      }
+      printScheduleTable(entries);
+    });
+
+  scheduleCmd
+    .command("remove")
+    .alias("rm")
+    .description("Remove a scheduled agent")
+    .argument("<name>", "Name of the schedule to remove")
+    .action((name: string) => {
+      try {
+        scheduleRemove({ name });
+        console.log(color.green(`Schedule "${name}" removed.`));
+      } catch (err: any) {
+        console.error(color.red(err.message));
+        process.exit(1);
+      }
+    });
+
+  scheduleCmd
+    .command("edit")
+    .description("Edit an existing scheduled agent")
+    .argument("<name>", "Name of the schedule to edit")
+    .option(
+      "--every <preset>",
+      "Schedule preset: hourly, daily, weekdays, weekly",
+    )
+    .option("--cron <expression>", "Cron expression (5 fields)")
+    .option("--env-file <path>", "Path to .env file")
+    .option("--command <cmd>", "Command to run agency")
+    .action(
+      (
+        name: string,
+        opts: {
+          every?: string;
+          cron?: string;
+          envFile?: string;
+          command?: string;
+        },
+      ) => {
+        try {
+          scheduleEdit({ name, ...opts });
+          console.log(color.green(`Schedule "${name}" updated.`));
+        } catch (err: any) {
+          console.error(color.red(err.message));
+          process.exit(1);
+        }
+      },
+    );
 
   const lspCmd = program
     .command("lsp")

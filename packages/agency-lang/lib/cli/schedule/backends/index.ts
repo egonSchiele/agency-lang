@@ -1,0 +1,37 @@
+import { execSync } from "child_process";
+import type { ScheduleEntry } from "../registry.js";
+import { LaunchdBackend } from "./launchd.js";
+import { SystemdBackend } from "./systemd.js";
+import { CrontabBackend } from "./crontab.js";
+
+export type ScheduleBackend = {
+  install(entry: ScheduleEntry): void;
+  uninstall(name: string): void;
+};
+
+export function detectBackend(): "launchd" | "systemd" | "crontab" {
+  if (process.platform === "darwin") return "launchd";
+  try {
+    execSync("which systemctl", { stdio: "pipe" });
+    return "systemd";
+  } catch {
+    return "crontab";
+  }
+}
+
+export function getBackend(
+  type: "launchd" | "systemd" | "crontab",
+): ScheduleBackend {
+  switch (type) {
+    case "launchd":
+      return new LaunchdBackend();
+    case "systemd":
+      return new SystemdBackend();
+    case "crontab":
+      return new CrontabBackend();
+  }
+}
+
+export { LaunchdBackend } from "./launchd.js";
+export { SystemdBackend } from "./systemd.js";
+export { CrontabBackend } from "./crontab.js";

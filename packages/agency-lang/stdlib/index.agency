@@ -70,9 +70,9 @@ export def fetchJSON(baseUrl: string, path: string = "", headers: object = {}, a
 
 export def read(dir: string, filename: string): string {
   """
-  A tool for reading the contents of a file and returning it as a string. If dir is provided, the filename is resolved relative to that directory.
+  A tool for reading the contents of a file and returning it as a string. The filename is resolved relative to dir. Use "." for the current directory.
 
-  @param dir - The directory containing the file (use "" for current directory)
+  @param dir - The directory to resolve the filename against
   @param filename - The file to read
   """
   return interrupt std::read("Are you sure you want to read this file?", {
@@ -84,9 +84,9 @@ export def read(dir: string, filename: string): string {
 
 export def write(dir: string, filename: string, content: string) {
   """
-  A tool for writing content to a file. If dir is provided, the filename is resolved relative to that directory.
+  A tool for writing content to a file. The filename is resolved relative to dir. Use "." for the current directory.
 
-  @param dir - The directory containing the file (use "" for current directory)
+  @param dir - The directory to resolve the filename against
   @param filename - The file to write
   @param content - The content to write
   """
@@ -100,9 +100,9 @@ export def write(dir: string, filename: string, content: string) {
 
 export def readImage(dir: string, filename: string): string {
   """
-  A tool for reading an image file and returning its contents as a Base64-encoded string. If dir is provided, the filename is resolved relative to that directory.
+  A tool for reading an image file and returning its contents as a Base64-encoded string. The filename is resolved relative to dir. Use "." for the current directory.
 
-  @param dir - The directory containing the file (use "" for current directory)
+  @param dir - The directory to resolve the filename against
   @param filename - The image file to read
   """
   return interrupt std::readImage("Are you sure you want to read this image file?", {

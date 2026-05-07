@@ -3,8 +3,12 @@ import { resolvePath } from "./fs.js";
 import path from "path";
 
 describe("resolvePath", () => {
-  it("resolves filename relative to cwd when dir is empty", async () => {
-    const result = await resolvePath("", "foo.txt");
+  it("rejects empty dir", async () => {
+    await expect(resolvePath("", "foo.txt")).rejects.toThrow("must not be empty");
+  });
+
+  it("resolves '.' as cwd", async () => {
+    const result = await resolvePath(".", "foo.txt");
     expect(result).toBe(path.resolve(process.cwd(), "foo.txt"));
   });
 
@@ -37,8 +41,8 @@ describe("resolvePath", () => {
     expect(result).toBe(path.resolve(process.cwd(), "src", "foo.txt"));
   });
 
-  it("does not restrict traversal when dir is empty", async () => {
-    const result = await resolvePath("", "../foo.txt");
-    expect(result).toBe(path.resolve(process.cwd(), "../foo.txt"));
+  it("allows traversal with '.' since it resolves to cwd", async () => {
+    // "../foo.txt" relative to "." escapes cwd, so this should throw
+    await expect(resolvePath(".", "../foo.txt")).rejects.toThrow("escapes");
   });
 });

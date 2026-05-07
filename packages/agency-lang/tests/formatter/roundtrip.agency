@@ -98,7 +98,7 @@ node main(message: string) {
     return approve()
   }
 
-  const foo = read("", "foo.txt") with reject
+  const foo = read(".", "foo.txt") with reject
 
   const mapped = map(items) as item {
     return item + 1

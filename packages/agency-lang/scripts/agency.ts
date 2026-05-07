@@ -33,7 +33,8 @@ import {
   scheduleRemove,
   scheduleEdit,
   ScheduleExistsError,
-  type ListEntry,
+  promptScheduleOverwrite,
+  formatListTable,
 } from "@/cli/schedule/index.js";
 import { loadEnv } from "@/utils/envfile.js";
 import { debug } from "@/cli/debug.js";
@@ -68,54 +69,6 @@ async function defaultLoadLspStartServer(): Promise<() => void> {
 
 async function defaultLoadMcpStartServer(): Promise<() => void> {
   return startMcpServer;
-}
-
-async function promptOverwrite(name: string): Promise<boolean> {
-  const prompts = (await import("prompts")).default;
-  const { overwrite } = await prompts({
-    type: "confirm",
-    name: "overwrite",
-    message: `A schedule named "${name}" already exists. Overwrite?`,
-    initial: false,
-  });
-  return overwrite ?? false;
-}
-
-function displayPath(absolutePath: string): string {
-  const rel = path.relative(process.cwd(), absolutePath);
-  // Use relative if it's shorter and doesn't escape cwd
-  return rel.startsWith("..") ? absolutePath : rel;
-}
-
-function printScheduleTable(entries: ListEntry[]): void {
-  const display = entries.map((e) => ({ ...e, displayAgent: displayPath(e.agentFile) }));
-  const nameW = Math.max(4, ...display.map((e) => e.name.length)) + 2;
-  const agentW = Math.max(5, ...display.map((e) => e.displayAgent.length)) + 2;
-  const schedW = Math.max(8, ...display.map((e) => e.schedule.length)) + 2;
-
-  console.log(
-    "Name".padEnd(nameW) +
-      "Agent".padEnd(agentW) +
-      "Schedule".padEnd(schedW) +
-      "Next Run",
-  );
-  for (const entry of display) {
-    const broken = entry.broken ? color.red(" [broken]") : "";
-    const nextRunStr = entry.nextRun.toLocaleString("en-US", {
-      weekday: "short",
-      month: "short",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: false,
-    });
-    console.log(
-      entry.name.padEnd(nameW) +
-        (entry.displayAgent + broken).padEnd(agentW) +
-        entry.schedule.padEnd(schedW) +
-        nextRunStr,
-    );
-  }
 }
 
 export function createProgram(deps: CliDependencies = {}): Command {
@@ -647,7 +600,7 @@ export function createProgram(deps: CliDependencies = {}): Command {
           );
         } catch (err: any) {
           if (err instanceof ScheduleExistsError && process.stdin.isTTY) {
-            const confirmed = await promptOverwrite(err.scheduleName);
+            const confirmed = await promptScheduleOverwrite(err.scheduleName);
             if (confirmed) {
               try {
                 scheduleAdd({ file, ...opts, force: true });
@@ -674,14 +627,7 @@ export function createProgram(deps: CliDependencies = {}): Command {
     .alias("ls")
     .description("List all scheduled agents")
     .action(() => {
-      const entries = scheduleList({});
-      if (entries.length === 0) {
-        console.log(
-          "No scheduled agents. Use 'agency schedule add' to create one.",
-        );
-        return;
-      }
-      printScheduleTable(entries);
+      console.log(formatListTable(scheduleList({})));
     });
 
   scheduleCmd

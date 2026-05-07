@@ -66,6 +66,8 @@ export function formatSchedule(cron: string, preset: string): string {
   return preset || cron;
 }
 
+const MINUTES_IN_YEAR = 366 * 24 * 60; // upper bound for next-run search
+
 export function nextRun(cronExpr: string): Date {
   const [minF, hourF, domF, monF, dowF] = cronExpr.trim().split(/\s+/);
   // Normalize DOW field: replace 7 with 0 (both mean Sunday, but Date.getDay() returns 0-6)
@@ -74,7 +76,7 @@ export function nextRun(cronExpr: string): Date {
   candidate.setSeconds(0, 0);
   candidate.setMinutes(candidate.getMinutes() + 1);
 
-  for (let i = 0; i < 527_040; i++) {
+  for (let i = 0; i < MINUTES_IN_YEAR; i++) {
     if (
       matchField(minF, candidate.getMinutes()) &&
       matchField(hourF, candidate.getHours()) &&

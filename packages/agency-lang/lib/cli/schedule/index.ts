@@ -5,6 +5,17 @@ import { Registry, type ScheduleEntry } from "./registry.js";
 import { resolveCron, formatSchedule, nextRun } from "./cron.js";
 import { detectBackend, getBackend } from "./backends/index.js";
 
+export async function promptScheduleOverwrite(name: string): Promise<boolean> {
+  const prompts = (await import("prompts")).default;
+  const { overwrite } = await prompts({
+    type: "confirm",
+    name: "overwrite",
+    message: `A schedule named "${name}" already exists. Overwrite?`,
+    initial: false,
+  });
+  return overwrite ?? false;
+}
+
 export class ScheduleExistsError extends Error {
   constructor(public readonly scheduleName: string) {
     super(
@@ -110,6 +121,48 @@ export function scheduleList(opts: ListOptions): ListEntry[] {
     nextRun: nextRun(entry.cron),
     broken: !fs.existsSync(entry.agentFile),
   }));
+}
+
+function displayPath(absolutePath: string): string {
+  const rel = path.relative(process.cwd(), absolutePath);
+  return rel.startsWith("..") ? absolutePath : rel;
+}
+
+export function formatListTable(entries: ListEntry[]): string {
+  if (entries.length === 0) {
+    return "No scheduled agents. Use 'agency schedule add' to create one.";
+  }
+
+  const display = entries.map((e) => ({ ...e, displayAgent: displayPath(e.agentFile) }));
+  const nameW = Math.max(4, ...display.map((e) => e.name.length)) + 2;
+  const agentW = Math.max(5, ...display.map((e) => e.displayAgent.length)) + 2;
+  const schedW = Math.max(8, ...display.map((e) => e.schedule.length)) + 2;
+
+  const lines: string[] = [];
+  lines.push(
+    "Name".padEnd(nameW) +
+      "Agent".padEnd(agentW) +
+      "Schedule".padEnd(schedW) +
+      "Next Run",
+  );
+  for (const entry of display) {
+    const broken = entry.broken ? " [broken]" : "";
+    const nextRunStr = entry.nextRun.toLocaleString("en-US", {
+      weekday: "short",
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    });
+    lines.push(
+      entry.name.padEnd(nameW) +
+        (entry.displayAgent + broken).padEnd(agentW) +
+        entry.schedule.padEnd(schedW) +
+        nextRunStr,
+    );
+  }
+  return lines.join("\n");
 }
 
 export type RemoveOptions = { name: string; baseDir?: string };

@@ -28,6 +28,8 @@ export class CrontabBackend implements ScheduleBackend {
 
 
     const lines = filterLines(readCrontab(), entry.name);
+    // The "# agency:<name>" suffix is a marker used by filterLines to identify
+    // and remove our entries without affecting the user's other crontab lines.
     lines.push(
       `${entry.cron} /bin/bash "${runScriptPath}" # agency:${entry.name}`,
     );

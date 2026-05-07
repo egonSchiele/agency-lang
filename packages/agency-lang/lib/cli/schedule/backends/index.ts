@@ -14,6 +14,7 @@ export type ScheduleBackend = {
 export function detectBackend(): BackendType {
   if (process.platform === "darwin") return "launchd";
   try {
+    // execFileSync throws if `which` exits non-zero (systemctl not found) or ENOENT
     execFileSync("which", ["systemctl"], { stdio: "pipe" });
     return "systemd";
   } catch {

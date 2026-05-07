@@ -34,16 +34,16 @@ type BrowserUseResult = {
 ### browserUse
 
 ```ts
-browserUse(task: string, model: string, maxCostUsd: number, proxyCountryCode: string, timeoutMs: number, apiKey: string): Result
+browserUse(task: string, model: string, maxCostUsd: number, proxyCountryCode: string, timeout: number, apiKey: string): Result
 ```
 
-Run a browser automation task using natural language via the Browser Use cloud API. Sends the task to a managed browser with stealth capabilities, CAPTCHA solving, and residential proxies. Returns the task output, status, and session ID. Requires a BROWSER_USE_API_KEY environment variable or pass apiKey directly. Available models: "bu-mini" (default), "bu-max", "bu-ultra". Set maxCostUsd to limit spending. Set proxyCountryCode (e.g. "US", "DE") to control geographic routing. Set timeoutMs to control how long to wait for completion (default: 120000ms / 2 minutes).
+Run a browser automation task using natural language via the Browser Use cloud API. Sends the task to a managed browser with stealth capabilities, CAPTCHA solving, and residential proxies. Returns the task output, status, and session ID. Requires a BROWSER_USE_API_KEY environment variable or pass apiKey directly. Available models: "bu-mini" (default), "bu-max", "bu-ultra". Set maxCostUsd to limit spending. Set proxyCountryCode (e.g. "US", "DE") to control geographic routing. Set timeout to control how long to wait for completion (default: 120000ms / 2 minutes).
 
   @param task - Natural language description of the browser task
   @param model - Model to use ("bu-mini", "bu-max", "bu-ultra")
   @param maxCostUsd - Maximum cost limit
   @param proxyCountryCode - Geographic routing code
-  @param timeoutMs - Timeout in milliseconds
+  @param timeout - Timeout in milliseconds (e.g. 2m)
   @param apiKey - Browser Use API key
 
 **Parameters:**
@@ -54,7 +54,7 @@ Run a browser automation task using natural language via the Browser Use cloud A
 | model | `string` | "" |
 | maxCostUsd | `number` | 0 |
 | proxyCountryCode | `string` | "" |
-| timeoutMs | `number` | 0 |
+| timeout | `number` | 0 |
 | apiKey | `string` | "" |
 
 **Returns:** `Result`

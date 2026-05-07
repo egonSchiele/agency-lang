@@ -56,6 +56,11 @@ describe("unitLiteralParser", () => {
       expect(r.result.canonicalValue).toBe(500);
     });
 
+    it("rounds to avoid floating point artifacts", () => {
+      const r = parsed("0.58s");
+      expect(r.result.canonicalValue).toBe(580);
+    });
+
     it("leaves remaining input unconsumed", () => {
       const r = parsed("30s + 5");
       expect(r.result.canonicalValue).toBe(30000);

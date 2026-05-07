@@ -396,7 +396,7 @@ const timeUnitParser: Parser<UnitLiteral> = (input: string): ParserResult<UnitLi
     type: "unitLiteral" as const,
     value: numStr,
     unit: unit as UnitLiteral["unit"],
-    canonicalValue: parseFloat(numStr) * TIME_MULTIPLIERS[unit as Exclude<UnitLiteral["unit"], "$">],
+    canonicalValue: Math.round(parseFloat(numStr) * TIME_MULTIPLIERS[unit as Exclude<UnitLiteral["unit"], "$">]),
     dimension: "time" as const,
   }, input.slice(fullMatch.length));
 };

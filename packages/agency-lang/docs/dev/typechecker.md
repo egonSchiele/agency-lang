@@ -1,6 +1,6 @@
 # Type Checker
 
-The type checker (`lib/typeChecker.ts`) uses **bidirectional type checking** to catch type errors in Agency programs before they are compiled to TypeScript. It can be run standalone via `agency typecheck` or integrated into the compile/run pipeline via config flags.
+The type checker (`lib/typeChecker/`) uses **bidirectional type checking** to catch type errors in Agency programs before they are compiled to TypeScript. It can be run standalone via `agency typecheck` or integrated into the compile/run pipeline via config flags.
 
 This document explains what bidirectional type checking is, how it's implemented for Agency, the special cases required by the language, and how it gets triggered.
 

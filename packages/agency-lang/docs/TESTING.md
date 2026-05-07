@@ -11,7 +11,7 @@ Note: All `agency` commands in this file should be run using `pnpm run agency`.
 | Generator fixtures | `tests/typescriptGenerator/` | `pnpm test:run` |
 | Preprocessor fixtures | `tests/typescriptPreprocessor/` | `pnpm test:run` |
 | Agency execution tests | `tests/agency/` | `agency test tests/agency` |
-| Multi-step TS tests | `tests/agency-ts/` | `agency test --ts tests/agency-ts` |
+| Multi-step JS tests | `tests/agency-js/` | `agency test js tests/agency-js` |
 
 ---
 
@@ -170,13 +170,13 @@ The `fixtures` command walks you through creating test cases:
 
 ```bash
 # Interactive — prompts for file and node
-agency fixtures
+agency test fixtures
 
 # Specify file
-agency fixtures tests/agency/example.agency
+agency test fixtures tests/agency/example.agency
 
 # Specify file and node
-agency fixtures tests/agency/example.agency:categorize
+agency test fixtures tests/agency/example.agency:categorize
 ```
 
 The command will:
@@ -191,16 +191,16 @@ If the node triggers interrupts, you'll be prompted to approve, reject, or modif
 
 ---
 
-## 5. Multi-Step TypeScript Tests (agency-ts)
+## 5. Multi-Step JavaScript Tests (agency-js)
 
-For tests that need to call a compiled Agency agent multiple times, pass results between calls, or run arbitrary imperative logic, use TypeScript integration tests.
+For tests that need to call a compiled Agency agent multiple times, pass results between calls, or run arbitrary imperative logic, use JavaScript integration tests.
 
-**Location:** `tests/agency-ts/`
+**Location:** `tests/agency-js/`
 
 Each test is a directory containing:
 
 ```
-tests/agency-ts/my-test/
+tests/agency-js/my-test/
 ├── agent.agency       # Agency source code
 ├── test.js            # Test script that imports the compiled agent
 └── fixture.json       # Expected result
@@ -229,10 +229,10 @@ You control everything: what arguments to pass, whether to pass `messages` betwe
 
 ```bash
 # Run all tests in the directory
-agency test --js tests/agency-js
+agency test js tests/agency-js
 
 # Run a specific test directory
-agency test --js tests/agency-js/my-test
+agency test js tests/agency-js/my-test
 ```
 
 The runner will:
@@ -247,13 +247,11 @@ If `fixture.json` doesn't exist yet, you'll be prompted to save the result as th
 
 ### Generating fixtures
 
-To auto-generate (or regenerate) fixtures without being prompted:
+To auto-generate fixtures, use the `fixtures` subcommand:
 
 ```bash
-agency test --gen-fixtures tests/agency-ts
+agency test fixtures tests/agency-js
 ```
-
-This compiles and runs each test, then saves the result directly as `fixture.json`.
 
 ---
 
@@ -272,13 +270,10 @@ agency test tests/agency
 agency test tests/agency/example.test.json
 
 # Create test cases interactively
-agency fixtures tests/agency/example.agency
-agency fixtures tests/agency/example.agency:nodeName
+agency test fixtures tests/agency/example.agency
+agency test fixtures tests/agency/example.agency:nodeName
 
 # Multi-step JavaScript tests
-agency test --js tests/agency-js
-agency test --js tests/agency-js/my-test
-
-# Generate JavaScript test fixtures
-agency fixtures tests/agency-js
+agency test js tests/agency-js
+agency test js tests/agency-js/my-test
 ```

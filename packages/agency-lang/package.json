@@ -27,7 +27,8 @@
     "preprocess": "node ./dist/scripts/agency.js preprocess",
     "debug": "node ./dist/scripts/agency.js debug",
     "bundle": "node ./dist/scripts/agency.js bundle",
-    "circular-deps": "npx dpdm --circular lib/parser.ts"
+    "circular-deps": "npx dpdm --circular lib/parser.ts",
+    "lint:structure": "eslint lib/"
   },
   "bin": {
     "agency": "./dist/scripts/agency.js"
@@ -89,8 +90,10 @@
     "@types/node": "^25.0.3",
     "@types/picomatch": "^4.0.3",
     "@types/prompts": "^2.4.9",
+    "eslint": "^10.3.0",
     "tsc-alias": "^1.8.16",
     "typescript": "^5.9.3",
+    "typescript-eslint": "^8.59.2",
     "vitest": "^4.0.16"
   }
 }

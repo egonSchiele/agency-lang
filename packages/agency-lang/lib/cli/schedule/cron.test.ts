@@ -3,7 +3,6 @@ import {
   presetToCron,
   validateCron,
   formatSchedule,
-  nextRun,
   resolveCron,
   cronToOnCalendar,
 } from "./cron.js";
@@ -70,19 +69,6 @@ describe("formatSchedule", () => {
   });
   it("shows raw cron when no preset", () => {
     expect(formatSchedule("*/15 * * * *", "")).toBe("*/15 * * * *");
-  });
-});
-
-describe("nextRun", () => {
-  it("returns a Date in the future", () => {
-    const next = nextRun("* * * * *");
-    expect(next.getTime()).toBeGreaterThan(Date.now());
-  });
-  it("returns within 60s for minutely cron", () => {
-    const next = nextRun("* * * * *");
-    const diffMs = next.getTime() - Date.now();
-    expect(diffMs).toBeLessThanOrEqual(60_000);
-    expect(diffMs).toBeGreaterThan(0);
   });
 });
 

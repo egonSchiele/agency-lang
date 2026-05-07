@@ -2,7 +2,7 @@ import * as path from "path";
 import * as fs from "fs";
 import * as os from "os";
 import { Registry, type ScheduleEntry } from "./registry.js";
-import { resolveCron, formatSchedule, nextRun } from "./cron.js";
+import { resolveCron, formatSchedule } from "./cron.js";
 import { detectBackend, getBackend } from "./backends/index.js";
 
 export async function promptScheduleOverwrite(name: string): Promise<boolean> {
@@ -108,7 +108,6 @@ export type ListEntry = {
   name: string;
   agentFile: string;
   schedule: string;
-  nextRun: Date;
   broken: boolean;
 };
 
@@ -118,7 +117,6 @@ export function scheduleList(opts: ListOptions): ListEntry[] {
     name: entry.name,
     agentFile: entry.agentFile,
     schedule: formatSchedule(entry.cron, entry.preset),
-    nextRun: nextRun(entry.cron),
     broken: !fs.existsSync(entry.agentFile),
   }));
 }
@@ -136,30 +134,15 @@ export function formatListTable(entries: ListEntry[]): string {
   const display = entries.map((e) => ({ ...e, displayAgent: displayPath(e.agentFile) }));
   const nameW = Math.max(4, ...display.map((e) => e.name.length)) + 2;
   const agentW = Math.max(5, ...display.map((e) => e.displayAgent.length)) + 2;
-  const schedW = Math.max(8, ...display.map((e) => e.schedule.length)) + 2;
 
   const lines: string[] = [];
-  lines.push(
-    "Name".padEnd(nameW) +
-      "Agent".padEnd(agentW) +
-      "Schedule".padEnd(schedW) +
-      "Next Run",
-  );
+  lines.push("Name".padEnd(nameW) + "Agent".padEnd(agentW) + "Schedule");
   for (const entry of display) {
     const broken = entry.broken ? " [broken]" : "";
-    const nextRunStr = entry.nextRun.toLocaleString("en-US", {
-      weekday: "short",
-      month: "short",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: false,
-    });
     lines.push(
       entry.name.padEnd(nameW) +
         (entry.displayAgent + broken).padEnd(agentW) +
-        entry.schedule.padEnd(schedW) +
-        nextRunStr,
+        entry.schedule,
     );
   }
   return lines.join("\n");

@@ -66,31 +66,6 @@ export function formatSchedule(cron: string, preset: string): string {
   return preset || cron;
 }
 
-const MINUTES_IN_YEAR = 366 * 24 * 60; // upper bound for next-run search
-
-export function nextRun(cronExpr: string): Date {
-  const [minF, hourF, domF, monF, dowF] = cronExpr.trim().split(/\s+/);
-  // Normalize DOW field: replace 7 with 0 (both mean Sunday, but Date.getDay() returns 0-6)
-  const normalizedDowF = dowF.replace(/7/g, "0");
-  const candidate = new Date();
-  candidate.setSeconds(0, 0);
-  candidate.setMinutes(candidate.getMinutes() + 1);
-
-  for (let i = 0; i < MINUTES_IN_YEAR; i++) {
-    if (
-      matchField(minF, candidate.getMinutes()) &&
-      matchField(hourF, candidate.getHours()) &&
-      matchField(domF, candidate.getDate()) &&
-      matchField(monF, candidate.getMonth() + 1) &&
-      matchField(normalizedDowF, candidate.getDay())
-    ) {
-      return candidate;
-    }
-    candidate.setMinutes(candidate.getMinutes() + 1);
-  }
-  return candidate;
-}
-
 // Index 7 duplicates "Sun" because cron allows both 0 and 7 to mean Sunday
 const DOW_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
@@ -123,20 +98,3 @@ function field(f: string): string {
   return f.padStart(2, "0");
 }
 
-function matchField(field: string, value: number): boolean {
-  return field.split(",").some((part) => matchPart(part, value));
-}
-
-function matchPart(part: string, value: number): boolean {
-  const [range, stepStr] = part.split("/");
-  const step = stepStr ? parseInt(stepStr, 10) : 1;
-
-  if (range === "*") return value % step === 0;
-
-  if (range.includes("-")) {
-    const [low, high] = range.split("-").map(Number);
-    return value >= low && value <= high && (value - low) % step === 0;
-  }
-
-  return parseInt(range, 10) === value;
-}

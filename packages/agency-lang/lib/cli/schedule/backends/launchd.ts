@@ -13,80 +13,54 @@ function plistPath(name: string): string {
   return path.join(PLIST_DIR, `com.agency.schedule.${name}.plist`);
 }
 
+// Declarative mapping: cron field position → launchd StartCalendarInterval key
+const CRON_TO_LAUNCHD = [
+  { index: 0, key: "Minute" },
+  { index: 1, key: "Hour" },
+  { index: 2, key: "Day" },
+  { index: 3, key: "Month" },
+  { index: 4, key: "Weekday" },
+] as const;
+
+// Expand a cron field like "1-5" or "0,30" into an array of integers.
+// Returns [] for wildcards ("*"), meaning "don't constrain this field".
 function expandField(field: string): number[] {
-  const results: number[] = [];
-  for (const part of field.split(",")) {
+  if (field === "*") return [];
+  return field.split(",").flatMap((part) => {
     const [range, stepStr] = part.split("/");
     const step = stepStr ? parseInt(stepStr, 10) : 1;
-    if (range === "*") return []; // wildcard means "don't constrain this field"
     if (range.includes("-")) {
       const [lo, hi] = range.split("-").map(Number);
-      for (let i = lo; i <= hi; i += step) results.push(i);
-    } else {
-      results.push(parseInt(range, 10));
+      return Array.from({ length: Math.floor((hi - lo) / step) + 1 }, (_, i) => lo + i * step);
     }
-  }
-  return results;
+    return [parseInt(range, 10)];
+  });
 }
 
+// launchd requires one dict per unique combination of constrained fields.
+// E.g. "weekdays at 9am" = 5 dicts (one per weekday), each with Hour=9, Minute=0.
 export function buildIntervals(cron: string): string {
-  const [minute, hour, dom, month, dow] = cron.split(/\s+/);
-  const minutes = expandField(minute);
-  const hours = expandField(hour);
-  const days = expandField(dom);
-  const months = expandField(month);
-  const weekdays = expandField(dow);
+  const cronFields = cron.split(/\s+/);
+  const expanded = CRON_TO_LAUNCHD
+    .map(({ index, key }) => ({ key, values: expandField(cronFields[index]) }))
+    .filter(({ values }) => values.length > 0);
 
-  // Generate all combinations that need separate dicts.
-  // launchd requires one dict per unique combination of constrained fields.
-  // For most presets, only weekday varies (e.g. weekdays = 5 dicts).
-  const combos = buildCombos(minutes, hours, days, months, weekdays);
+  // Cartesian product of all constrained fields
+  const combos = expanded.reduce<Record<string, number>[]>(
+    (acc, { key, values }) => acc.flatMap((combo) => values.map((v) => ({ ...combo, [key]: v }))),
+    [{}],
+  );
+
+  const formatDict = (dict: Record<string, number>) =>
+    Object.entries(dict)
+      .map(([k, v]) => `      <key>${k}</key>\n      <integer>${v}</integer>`)
+      .join("\n");
 
   if (combos.length === 1) {
     return `  <dict>\n${formatDict(combos[0])}\n  </dict>`;
   }
-
-  const dicts = combos
-    .map((c) => `    <dict>\n${formatDict(c)}\n    </dict>`)
-    .join("\n");
+  const dicts = combos.map((c) => `    <dict>\n${formatDict(c)}\n    </dict>`).join("\n");
   return `  <array>\n${dicts}\n  </array>`;
-}
-
-type IntervalDict = {
-  Minute?: number;
-  Hour?: number;
-  Day?: number;
-  Month?: number;
-  Weekday?: number;
-};
-
-function buildCombos(
-  minutes: number[],
-  hours: number[],
-  days: number[],
-  months: number[],
-  weekdays: number[],
-): IntervalDict[] {
-  // Start with a single empty dict and expand for each constrained field
-  let combos: IntervalDict[] = [{}];
-
-  if (minutes.length > 0) combos = combos.flatMap((c) => minutes.map((v) => ({ ...c, Minute: v })));
-  if (hours.length > 0) combos = combos.flatMap((c) => hours.map((v) => ({ ...c, Hour: v })));
-  if (days.length > 0) combos = combos.flatMap((c) => days.map((v) => ({ ...c, Day: v })));
-  if (months.length > 0) combos = combos.flatMap((c) => months.map((v) => ({ ...c, Month: v })));
-  if (weekdays.length > 0) combos = combos.flatMap((c) => weekdays.map((v) => ({ ...c, Weekday: v })));
-
-  return combos.length === 0 ? [{}] : combos;
-}
-
-function formatDict(dict: IntervalDict): string {
-  const lines: string[] = [];
-  for (const [key, val] of Object.entries(dict)) {
-    if (val !== undefined) {
-      lines.push(`      <key>${key}</key>\n      <integer>${val}</integer>`);
-    }
-  }
-  return lines.join("\n");
 }
 
 export class LaunchdBackend implements ScheduleBackend {
@@ -102,7 +76,6 @@ export class LaunchdBackend implements ScheduleBackend {
     const dest = plistPath(entry.name);
 
     fs.mkdirSync(PLIST_DIR, { recursive: true });
-
     fs.writeFileSync(dest, plist);
     execFileSync("launchctl", ["load", dest]);
   }

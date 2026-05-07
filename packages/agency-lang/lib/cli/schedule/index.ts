@@ -84,22 +84,10 @@ export function scheduleAdd(opts: AddOptions): void {
     backend: backendType,
   };
 
-  const oldEntry = registry.get(name);
-  if (oldEntry) backend.uninstall(name);
+  // Install first (overwrites existing config files in-place), then update registry.
+  // If install fails, the old config files are still in place and the registry is unchanged.
+  backend.install(entry);
   registry.set(entry);
-
-  try {
-    backend.install(entry);
-  } catch (err) {
-    // Rollback: restore old entry or remove new one
-    if (oldEntry) {
-      registry.set(oldEntry);
-      try { backend.install(oldEntry); } catch {}
-    } else {
-      registry.remove(name);
-    }
-    throw err;
-  }
 }
 
 export type ListOptions = { baseDir?: string };
@@ -197,16 +185,9 @@ export function scheduleEdit(opts: EditOptions): void {
     command: opts.command ?? existing.command,
   };
 
+  // Install first (overwrites existing config files in-place), then update registry.
+  // If install fails, the old config files are still in place and the registry is unchanged.
   const backend = getBackend(existing.backend);
-  backend.uninstall(opts.name);
+  backend.install(updated);
   registry.set(updated);
-
-  try {
-    backend.install(updated);
-  } catch (err) {
-    // Rollback: restore old schedule
-    registry.set(existing);
-    try { backend.install(existing); } catch {}
-    throw err;
-  }
 }

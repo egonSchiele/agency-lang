@@ -96,20 +96,18 @@ describe("scheduleAdd", () => {
     scheduleAdd({ file: path.join(tmpDir, "agent.agency"), every: "hourly", force: true, baseDir: tmpDir });
     const reg = JSON.parse(fs.readFileSync(path.join(tmpDir, "schedules.json"), "utf-8"));
     expect(reg["agent"].cron).toBe("0 * * * *");
-    expect(mockUninstall).toHaveBeenCalledWith("agent");
   });
 
-  it("rolls back registry on install failure", () => {
+  it("does not update registry if install fails", () => {
     mockInstall.mockImplementationOnce(() => { throw new Error("install failed"); });
     expect(() =>
       scheduleAdd({ file: path.join(tmpDir, "agent.agency"), every: "daily", baseDir: tmpDir }),
     ).toThrow("install failed");
-    // Registry should be empty after rollback
-    const reg = JSON.parse(fs.readFileSync(path.join(tmpDir, "schedules.json"), "utf-8"));
-    expect(reg["agent"]).toBeUndefined();
+    // Registry file should not exist (install failed before registry write)
+    expect(fs.existsSync(path.join(tmpDir, "schedules.json"))).toBe(false);
   });
 
-  it("rolls back to old entry on overwrite install failure", () => {
+  it("does not update registry if overwrite install fails", () => {
     scheduleAdd({ file: path.join(tmpDir, "agent.agency"), every: "daily", baseDir: tmpDir });
     mockInstall.mockImplementationOnce(() => { throw new Error("install failed"); });
     expect(() =>
@@ -235,7 +233,7 @@ describe("scheduleEdit", () => {
     expect(reg["agent"].cron).toBe("0 9 * * *");
   });
 
-  it("rolls back on install failure", () => {
+  it("does not update registry if install fails", () => {
     scheduleAdd({ file: path.join(tmpDir, "agent.agency"), every: "daily", baseDir: tmpDir });
     mockInstall.mockImplementationOnce(() => { throw new Error("install failed"); });
     expect(() =>

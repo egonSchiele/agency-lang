@@ -1,3 +1,5 @@
+// --- Presets ---
+
 export const PRESETS: Record<string, string> = {
   hourly: "0 * * * *",
   daily: "0 9 * * *",
@@ -15,6 +17,8 @@ export function presetToCron(preset: string): string {
   return cron;
 }
 
+// --- Cron validation ---
+
 const FIELD_BOUNDS: [number, number][] = [
   [0, 59],  // minute
   [0, 23],  // hour
@@ -23,14 +27,14 @@ const FIELD_BOUNDS: [number, number][] = [
   [0, 7],   // day of week (0 and 7 both mean Sunday)
 ];
 
+const FIELD_PATTERN =
+  /^(\*(\/([0-9]+))?|[0-9]+(-[0-9]+)?(\/[0-9]+)?)(,(\*(\/([0-9]+))?|[0-9]+(-[0-9]+)?(\/[0-9]+)?))*$/;
+
 export function validateCron(expr: string): boolean {
   const fields = expr.trim().split(/\s+/);
   if (fields.length !== 5) return false;
-  const fieldPattern =
-    /^(\*(\/([0-9]+))?|[0-9]+(-[0-9]+)?(\/[0-9]+)?)(,(\*(\/([0-9]+))?|[0-9]+(-[0-9]+)?(\/[0-9]+)?))*$/;
   return fields.every((f, i) => {
-    if (!fieldPattern.test(f)) return false;
-    // Check bounds and reject step of 0
+    if (!FIELD_PATTERN.test(f)) return false;
     const [min, max] = FIELD_BOUNDS[i];
     for (const part of f.split(",")) {
       const [range, stepStr] = part.split("/");
@@ -43,6 +47,8 @@ export function validateCron(expr: string): boolean {
     return true;
   });
 }
+
+// --- Resolution ---
 
 export function resolveCron(opts: {
   every?: string;
@@ -66,35 +72,29 @@ export function formatSchedule(cron: string, preset: string): string {
   return preset || cron;
 }
 
+// --- Cron to systemd OnCalendar conversion ---
+
 // Index 7 duplicates "Sun" because cron allows both 0 and 7 to mean Sunday
 const DOW_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
-export function cronToOnCalendar(cron: string): string {
-  const [min, hour, dom, mon, dow] = cron.split(/\s+/);
-
-  const dowPart = dow === "*" ? "" : expandDow(dow);
-  const datePart = `*-${field(mon)}-${field(dom)}`;
-  const timePart = `${field(hour)}:${field(min)}:00`;
-
-  return dowPart ? `${dowPart} ${datePart} ${timePart}` : `${datePart} ${timePart}`;
+function passThrough(f: string): string {
+  if (f === "*") return "*";
+  if (f.includes("/") || f.includes("-") || f.includes(",")) return f;
+  return f.padStart(2, "0");
 }
 
 function expandDow(dow: string): string {
+  if (dow === "*") return "";
   if (dow.includes("-")) {
     const [lo, hi] = dow.split("-").map(Number);
-    const days = [];
-    for (let i = lo; i <= hi; i++) days.push(DOW_NAMES[i]);
-    return days.join(",");
+    return Array.from({ length: hi - lo + 1 }, (_, i) => DOW_NAMES[lo + i]).join(",");
   }
   return DOW_NAMES[Number(dow)] || dow;
 }
 
-function field(f: string): string {
-  if (f === "*") return "*";
-  // Handle step expressions like */15 → *:00/15 is not valid for systemd;
-  // systemd uses the same */N syntax for time fields
-  if (f.includes("/")) return f;
-  if (f.includes("-") || f.includes(",")) return f;
-  return f.padStart(2, "0");
+export function cronToOnCalendar(cron: string): string {
+  const fields = cron.split(/\s+/);
+  const dow = expandDow(fields[4]);
+  const calendar = `*-${passThrough(fields[3])}-${passThrough(fields[2])} ${passThrough(fields[1])}:${passThrough(fields[0])}:00`;
+  return dow ? `${dow} ${calendar}` : calendar;
 }
-

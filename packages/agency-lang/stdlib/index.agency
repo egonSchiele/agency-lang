@@ -1,5 +1,20 @@
 /** @module
-The imports from this file get auto-imported into every .agency file, so you can use these tools without needing to import them manually. */
+The imports from this file get auto-imported into every .agency file, so you can use these tools without needing to import them manually.
+
+### Partial Application for Safety
+
+```ts
+// Create a constrained API client that only fetches from GitHub
+const githubAPI = fetchJSON.partial(
+  baseUrl: "https://api.github.com",
+  headers: { "Authorization": "Bearer ${token}" },
+  allowedDomains: ["api.github.com"]
+)
+
+// Now the agent can only reach GitHub
+const repos = githubAPI(path: "/user/repos")
+```
+*/
 import { _print, _printJSON, _input, _sleep, _round, _fetch, _fetchJSON, _read, _write, _readImage, _notify, _range, _mostCommon, _keys, _values, _entries } from "./lib/builtins.js"
 export safe def print(...messages) {
   """

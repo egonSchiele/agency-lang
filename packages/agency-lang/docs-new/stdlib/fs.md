@@ -53,26 +53,26 @@ type PatchResult = {
 ### edit
 
 ```ts
-edit(dir: string, filename: string, oldText: string, newText: string, replaceAll: boolean): Result
+edit(filename: string, oldText: string, newText: string, replaceAll: boolean, dir: string): Result
 ```
 
 Edit a file by replacing oldText with newText. By default oldText must match exactly once in the file; pass replaceAll=true to replace every occurrence. Fails if oldText is not found or appears multiple times (unless replaceAll is set).
 
-  @param dir - The directory containing the file (use "" for current directory)
   @param filename - The file to edit
   @param oldText - The text to find
   @param newText - The replacement text
   @param replaceAll - Replace all occurrences instead of just the first
+  @param dir - The directory to resolve the filename against (defaults to ".")
 
 **Parameters:**
 
 | Name | Type | Default |
 |---|---|---|
-| dir | `string` |  |
 | filename | `string` |  |
 | oldText | `string` |  |
 | newText | `string` |  |
 | replaceAll | `boolean` | false |
+| dir | `string` | "." |
 
 **Returns:** `Result`
 
@@ -81,22 +81,22 @@ Edit a file by replacing oldText with newText. By default oldText must match exa
 ### multiedit
 
 ```ts
-multiedit(dir: string, filename: string, edits: Edit[]): Result
+multiedit(filename: string, edits: Edit[], dir: string): Result
 ```
 
 Apply a sequence of edits to a single file atomically. Each edit has oldText, newText, and replaceAll. Fails if any edit's oldText is not found or is ambiguous; when any edit fails, nothing is written.
 
-  @param dir - The directory containing the file (use "" for current directory)
   @param filename - The file to edit
   @param edits - Array of edit objects with oldText, newText, and replaceAll
+  @param dir - The directory to resolve the filename against (defaults to ".")
 
 **Parameters:**
 
 | Name | Type | Default |
 |---|---|---|
-| dir | `string` |  |
 | filename | `string` |  |
 | edits | `Edit[]` |  |
+| dir | `string` | "." |
 
 **Returns:** `Result`
 

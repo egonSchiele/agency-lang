@@ -2,58 +2,6 @@
 
 ## Functions
 
-### fetch
-
-```ts
-fetch(baseUrl: string, path: string, headers: Record<string, any>, allowedDomains: string[]): Result
-```
-
-Fetch a URL and return the response body as text. Provide baseUrl and optionally path (they are joined). Set headers for custom request headers. Set allowedDomains to restrict which domains can be fetched. Fails on network errors, domain violations, or if the response body exceeds 10 MB.
-
-  @param baseUrl - The base URL to fetch
-  @param path - Optional path appended to baseUrl
-  @param headers - Custom request headers
-  @param allowedDomains - Restrict fetches to these domains (empty allows all)
-
-**Parameters:**
-
-| Name | Type | Default |
-|---|---|---|
-| baseUrl | `string` |  |
-| path | `string` | "" |
-| headers | `Record<string, any>` | {} |
-| allowedDomains | `string[]` | [] |
-
-**Returns:** `Result`
-
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/http.agency#L3))
-
-### fetchJSON
-
-```ts
-fetchJSON(baseUrl: string, path: string, headers: Record<string, any>, allowedDomains: string[]): Result
-```
-
-Fetch a URL and parse the response body as JSON. Provide baseUrl and optionally path (they are joined). Set headers for custom request headers. Set allowedDomains to restrict which domains can be fetched. Fails on network errors, invalid JSON, domain violations, or if the response body exceeds 10 MB.
-
-  @param baseUrl - The base URL to fetch
-  @param path - Optional path appended to baseUrl
-  @param headers - Custom request headers
-  @param allowedDomains - Restrict fetches to these domains (empty allows all)
-
-**Parameters:**
-
-| Name | Type | Default |
-|---|---|---|
-| baseUrl | `string` |  |
-| path | `string` | "" |
-| headers | `Record<string, any>` | {} |
-| allowedDomains | `string[]` | [] |
-
-**Returns:** `Result`
-
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/http.agency#L19))
-
 ### webfetch
 
 ```ts
@@ -78,4 +26,4 @@ Fetch a URL and return the body as readable markdown when the response is HTML, 
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/http.agency#L35))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/http.agency#L3))

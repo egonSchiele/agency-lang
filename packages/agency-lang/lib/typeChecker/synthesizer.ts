@@ -341,27 +341,28 @@ function validatePartialOrDescribe(
       });
     }
     const params = fnDef?.parameters ?? importedSig?.parameters ?? null;
-    if (params) {
-      const paramNames = new Set(params.map((p) => p.name));
-      for (const arg of args) {
-        if ("type" in arg && arg.type === "namedArgument") {
-          if (!paramNames.has(arg.name)) {
-            ctx.errors.push({
-              message: `Unknown parameter '${arg.name}' in .partial() call. '${baseName}' has parameters: ${[...paramNames].join(", ")}.`,
-              loc: expr.loc,
-            });
-          } else {
-            const param = params.find((p) => p.name === arg.name);
-            if (param?.variadic) {
-              ctx.errors.push({
-                message: `Variadic parameter '${arg.name}' cannot be bound in .partial().`,
-                loc: expr.loc,
-              });
-            }
-          }
-        }
+    if (!params) return;
+    const paramNames = new Set(params.map((p) => p.name));
+    const namedArgs = args.filter(
+      (a: any) => "type" in a && a.type === "namedArgument",
+    );
+    for (const arg of namedArgs) {
+      if (!paramNames.has(arg.name)) {
+        ctx.errors.push({
+          message: `Unknown parameter '${arg.name}' in .partial() call. '${baseName}' has parameters: ${[...paramNames].join(", ")}.`,
+          loc: expr.loc,
+        });
+        continue;
+      }
+      const param = params.find((p) => p.name === arg.name);
+      if (param?.variadic) {
+        ctx.errors.push({
+          message: `Variadic parameter '${arg.name}' cannot be bound in .partial().`,
+          loc: expr.loc,
+        });
       }
     }
+    return;
   }
 
   if (methodName === "describe") {

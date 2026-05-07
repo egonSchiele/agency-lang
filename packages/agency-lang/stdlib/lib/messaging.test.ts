@@ -1,14 +1,14 @@
 import { describe, it, expect } from "vitest";
-import { checkRecipients } from "./messaging.js";
+import { checkAllowBlockList } from "./allowBlockList.js";
 
-describe("checkRecipients", () => {
+describe("checkAllowBlockList", () => {
   it("passes when no lists are set", () => {
-    const result = checkRecipients(["alice@example.com"], [], []);
+    const result = checkAllowBlockList(["alice@example.com"], [], []);
     expect(result).toBeNull();
   });
 
   it("passes when recipient is in allowList", () => {
-    const result = checkRecipients(
+    const result = checkAllowBlockList(
       ["alice@example.com"],
       ["alice@example.com"],
       [],
@@ -17,7 +17,7 @@ describe("checkRecipients", () => {
   });
 
   it("fails when recipient is not in allowList", () => {
-    const result = checkRecipients(
+    const result = checkAllowBlockList(
       ["bob@example.com"],
       ["alice@example.com"],
       [],
@@ -27,7 +27,7 @@ describe("checkRecipients", () => {
   });
 
   it("fails when recipient is in blockList", () => {
-    const result = checkRecipients(
+    const result = checkAllowBlockList(
       ["alice@example.com"],
       [],
       ["alice@example.com"],
@@ -37,7 +37,7 @@ describe("checkRecipients", () => {
   });
 
   it("checks all recipients (to, cc, bcc)", () => {
-    const result = checkRecipients(
+    const result = checkAllowBlockList(
       ["alice@example.com", "eve@example.com"],
       ["alice@example.com"],
       [],
@@ -46,7 +46,7 @@ describe("checkRecipients", () => {
   });
 
   it("blockList checked before allowList", () => {
-    const result = checkRecipients(
+    const result = checkAllowBlockList(
       ["alice@example.com"],
       ["alice@example.com"],
       ["alice@example.com"],
@@ -55,12 +55,12 @@ describe("checkRecipients", () => {
   });
 
   it("passes with empty recipients array", () => {
-    const result = checkRecipients([], ["alice@example.com"], []);
+    const result = checkAllowBlockList([], ["alice@example.com"], []);
     expect(result).toBeNull();
   });
 
   it("skips whitespace-only recipients", () => {
-    const result = checkRecipients(
+    const result = checkAllowBlockList(
       ["  "],
       ["alice@example.com"],
       [],
@@ -69,7 +69,7 @@ describe("checkRecipients", () => {
   });
 
   it("passes when recipient is not in blockList", () => {
-    const result = checkRecipients(
+    const result = checkAllowBlockList(
       ["bob@example.com"],
       [],
       ["alice@example.com"],
@@ -78,7 +78,7 @@ describe("checkRecipients", () => {
   });
 
   it("is case-insensitive", () => {
-    const result = checkRecipients(
+    const result = checkAllowBlockList(
       ["Alice@Example.COM"],
       ["alice@example.com"],
       [],

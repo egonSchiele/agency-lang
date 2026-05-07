@@ -15,24 +15,30 @@ export async function resolvePath(dir: string, filename: string): Promise<string
   }
   const baseDir = path.resolve(process.cwd(), dir);
   const full = path.resolve(baseDir, filename);
-  // Lexical check first (catches .. before the file exists)
+
+  // Lexical check against the unresolved baseDir (catches .. early)
   if (!full.startsWith(baseDir + path.sep) && full !== baseDir) {
     throw new Error(`Filename "${filename}" escapes directory "${dir}".`);
   }
-  // Resolve symlinks and recheck to prevent symlink-based escapes
-  let realFull: string;
-  try {
-    realFull = await fs.realpath(full);
-  } catch {
-    // File doesn't exist yet (e.g. write) — lexical check is sufficient
-    return full;
-  }
+
+  // Always resolve the real base directory (handles symlinked dirs)
   let realBase: string;
   try {
     realBase = await fs.realpath(baseDir);
   } catch {
     realBase = baseDir;
   }
+
+  // Resolve the target file if it exists
+  let realFull: string;
+  try {
+    realFull = await fs.realpath(full);
+  } catch {
+    // File doesn't exist yet — construct expected real path and check containment
+    const relFromBase = path.relative(baseDir, full);
+    realFull = path.resolve(realBase, relFromBase);
+  }
+
   if (!realFull.startsWith(realBase + path.sep) && realFull !== realBase) {
     throw new Error(`Filename "${filename}" resolves outside directory "${dir}" via symlink.`);
   }

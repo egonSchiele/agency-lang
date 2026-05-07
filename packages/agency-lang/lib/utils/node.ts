@@ -138,6 +138,10 @@ export function expressionToString(expr: Expression): string {
       const paramStr = expr.params.length === 1 && !expr.params[0].typeHint ? params : `(${params})`;
       return `\\${paramStr} -> ...`;
     }
+    case "unitLiteral":
+      return expr.unit === "$" ? `$${expr.value}` : `${expr.value}${expr.unit}`;
+    default:
+      return String((expr as any).value ?? "");
   }
 }
 

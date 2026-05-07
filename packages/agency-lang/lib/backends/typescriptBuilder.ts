@@ -830,6 +830,7 @@ export class TypeScriptBuilder {
           ? this.processBlockPlain(node)
           : this.processMatchBlockWithSteps(node);
       case "number":
+      case "unitLiteral":
       case "multiLineString":
       case "string":
       case "variableName":
@@ -961,6 +962,8 @@ export class TypeScriptBuilder {
     switch (literal.type) {
       case "number":
         return ts.num(parseFloat(literal.value));
+      case "unitLiteral":
+        return ts.num(literal.canonicalValue);
       case "string":
         return this.generateStringLiteralNode(literal.segments);
       case "multiLineString":

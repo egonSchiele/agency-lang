@@ -23,7 +23,7 @@ type Edit = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L27))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L29))
 
 ### MultiEditResult
 
@@ -35,7 +35,7 @@ type MultiEditResult = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L33))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L35))
 
 ### PatchResult
 
@@ -46,18 +46,19 @@ type PatchResult = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L54))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L58))
 
 ## Functions
 
 ### edit
 
 ```ts
-edit(filename: string, oldText: string, newText: string, replaceAll: boolean): Result
+edit(dir: string, filename: string, oldText: string, newText: string, replaceAll: boolean): Result
 ```
 
 Edit a file by replacing oldText with newText. By default oldText must match exactly once in the file; pass replaceAll=true to replace every occurrence. Fails if oldText is not found or appears multiple times (unless replaceAll is set).
 
+  @param dir - The directory containing the file (use "" for current directory)
   @param filename - The file to edit
   @param oldText - The text to find
   @param newText - The replacement text
@@ -67,6 +68,7 @@ Edit a file by replacing oldText with newText. By default oldText must match exa
 
 | Name | Type | Default |
 |---|---|---|
+| dir | `string` |  |
 | filename | `string` |  |
 | oldText | `string` |  |
 | newText | `string` |  |
@@ -79,11 +81,12 @@ Edit a file by replacing oldText with newText. By default oldText must match exa
 ### multiedit
 
 ```ts
-multiedit(filename: string, edits: Edit[]): Result
+multiedit(dir: string, filename: string, edits: Edit[]): Result
 ```
 
 Apply a sequence of edits to a single file atomically. Each edit has oldText, newText, and replaceAll. Fails if any edit's oldText is not found or is ambiguous; when any edit fails, nothing is written.
 
+  @param dir - The directory containing the file (use "" for current directory)
   @param filename - The file to edit
   @param edits - Array of edit objects with oldText, newText, and replaceAll
 
@@ -91,12 +94,13 @@ Apply a sequence of edits to a single file atomically. Each edit has oldText, ne
 
 | Name | Type | Default |
 |---|---|---|
+| dir | `string` |  |
 | filename | `string` |  |
 | edits | `Edit[]` |  |
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L39))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L41))
 
 ### applyPatch
 
@@ -114,7 +118,7 @@ Apply a unified diff to the working tree. Supports file creation (--- /dev/null)
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L59))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L63))
 
 ### mkdir
 
@@ -132,7 +136,7 @@ Create a directory, including any missing parent directories. Idempotent: succee
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L70))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L74))
 
 ### copy
 
@@ -154,7 +158,7 @@ Copy a file or directory. Directories are copied recursively. Fails if src does 
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L81))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L85))
 
 ### move
 
@@ -176,7 +180,7 @@ Move or rename a file or directory. Falls back to copy+remove if src and dest ar
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L96))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L100))
 
 ### remove
 
@@ -194,4 +198,4 @@ Delete a file or directory. Directories are removed recursively. Does not fail i
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L111))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L115))

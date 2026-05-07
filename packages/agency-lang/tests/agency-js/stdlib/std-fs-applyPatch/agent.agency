@@ -11,7 +11,7 @@ node runApply(patch: string) {
 
 node readBack(filename: string) {
   handle {
-    const result = read(filename)
+    const result = read("", filename)
   } with (data) {
     return approve()
   }

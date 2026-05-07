@@ -1,6 +1,6 @@
 node main() {
   handle {
-    const contents = read("tests/agency/builtins/testdata.txt")
+    const contents = read("", "tests/agency/builtins/testdata.txt")
   } with (data) {
     return approve()
   }

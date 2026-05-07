@@ -36,55 +36,80 @@ export safe def round(num: number, precision: number): number {
   return _round(num, precision)
 }
 
-export def fetch(url: string): string {
+export def fetch(baseUrl: string, path: string = "", headers: object = {}, allowedDomains: string[] = []): string {
   """
-  A tool for fetching a URL and returning the response as text.
+  A tool for fetching a URL and returning the response as text. Provide baseUrl and optionally path (they are joined). Set headers for custom request headers. Set allowedDomains to restrict which domains can be fetched.
+
+  @param baseUrl - The base URL to fetch
+  @param path - Optional path appended to baseUrl
+  @param headers - Custom request headers
+  @param allowedDomains - Restrict fetches to these domains (empty allows all)
   """
   return interrupt std::fetch("Are you sure you want to fetch this URL?", {
-    url: url
+    baseUrl: baseUrl,
+    path: path
   })
-  return _fetch(url)
+  return _fetch(baseUrl, path, headers, allowedDomains)
 }
 
-export def fetchJSON(url: string) {
+export def fetchJSON(baseUrl: string, path: string = "", headers: object = {}, allowedDomains: string[] = []) {
   """
-  A tool for fetching a URL and returning the response as parsed JSON.
+  A tool for fetching a URL and returning the response as parsed JSON. Provide baseUrl and optionally path (they are joined). Set headers for custom request headers. Set allowedDomains to restrict which domains can be fetched.
+
+  @param baseUrl - The base URL to fetch
+  @param path - Optional path appended to baseUrl
+  @param headers - Custom request headers
+  @param allowedDomains - Restrict fetches to these domains (empty allows all)
   """
   return interrupt std::fetchJSON("Are you sure you want to fetch this URL and parse it as JSON?", {
-    url: url
+    baseUrl: baseUrl,
+    path: path
   })
-  return _fetchJSON(url)
+  return _fetchJSON(baseUrl, path, headers, allowedDomains)
 }
 
-export def read(filename: string): string {
+export def read(dir: string, filename: string): string {
   """
-  A tool for reading the contents of a file and returning it as a string.
+  A tool for reading the contents of a file and returning it as a string. If dir is provided, the filename is resolved relative to that directory.
+
+  @param dir - The directory containing the file (use "" for current directory)
+  @param filename - The file to read
   """
   return interrupt std::read("Are you sure you want to read this file?", {
+    dir: dir,
     filename: filename
   })
-  return _read(filename)
+  return _read(dir, filename)
 }
 
-export def write(filename: string, content: string) {
+export def write(dir: string, filename: string, content: string) {
   """
-  A tool for writing content to a file.
+  A tool for writing content to a file. If dir is provided, the filename is resolved relative to that directory.
+
+  @param dir - The directory containing the file (use "" for current directory)
+  @param filename - The file to write
+  @param content - The content to write
   """
   return interrupt std::write("Are you sure you want to write to this file?", {
+    dir: dir,
     filename: filename,
     content: content
   })
-  _write(filename, content)
+  _write(dir, filename, content)
 }
 
-export def readImage(filename: string): string {
+export def readImage(dir: string, filename: string): string {
   """
-  A tool for reading an image file and returning its contents as a Base64-encoded string.
+  A tool for reading an image file and returning its contents as a Base64-encoded string. If dir is provided, the filename is resolved relative to that directory.
+
+  @param dir - The directory containing the file (use "" for current directory)
+  @param filename - The image file to read
   """
   return interrupt std::readImage("Are you sure you want to read this image file?", {
+    dir: dir,
     filename: filename
   })
-  return _readImage(filename)
+  return _readImage(dir, filename)
 }
 
 export def notify(title: string, message: string): boolean {

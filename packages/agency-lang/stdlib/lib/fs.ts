@@ -9,7 +9,13 @@ export type EditResult = {
   path: string;
 };
 
+function resolvePath(dir: string, filename: string): string {
+  const combined = dir ? path.join(dir, filename) : filename;
+  return path.resolve(process.cwd(), combined);
+}
+
 export async function _edit(
+  dir: string,
   filename: string,
   oldText: string,
   newText: string,
@@ -18,7 +24,7 @@ export async function _edit(
   if (oldText.length === 0) {
     throw new Error("edit: oldText must not be empty");
   }
-  const full = path.resolve(process.cwd(), filename);
+  const full = resolvePath(dir, filename);
   const before = await fs.readFile(full, "utf8");
 
   if (replaceAll) {
@@ -65,10 +71,11 @@ export type MultiEditResult = {
 };
 
 export async function _multiedit(
+  dir: string,
   filename: string,
   edits: MultiEdit[],
 ): Promise<MultiEditResult> {
-  const full = path.resolve(process.cwd(), filename);
+  const full = resolvePath(dir, filename);
   let contents = await fs.readFile(full, "utf8");
   let total = 0;
 

@@ -33,13 +33,15 @@ type IMessageResult = {
 ### sendIMessage
 
 ```ts
-sendIMessage(to: string, message: string): Result
+sendIMessage(to: string, message: string, allowList: string[], blockList: string[]): Result
 ```
 
-Send an iMessage via the macOS Messages app. Only works on macOS with Messages.app signed in. Parameters: to (phone number or email address of the recipient), message (the text to send). No API key or account required.
+Send an iMessage via the macOS Messages app. Only works on macOS with Messages.app signed in. Set allowList to restrict recipients to specific addresses/numbers. Set blockList to reject specific addresses/numbers.
 
   @param to - Phone number or email of the recipient
   @param message - The text to send
+  @param allowList - Only allow sending to these addresses/numbers
+  @param blockList - Block sending to these addresses/numbers
 
 **Parameters:**
 
@@ -47,6 +49,8 @@ Send an iMessage via the macOS Messages app. Only works on macOS with Messages.a
 |---|---|---|
 | to | `string` |  |
 | message | `string` |  |
+| allowList | `string[]` | [] |
+| blockList | `string[]` | [] |
 
 **Returns:** `Result`
 

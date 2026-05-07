@@ -5,23 +5,25 @@ type EditResult = {
   path: string
 }
 
-export def edit(filename: string, oldText: string, newText: string, replaceAll: boolean = false): Result {
+export def edit(dir: string, filename: string, oldText: string, newText: string, replaceAll: boolean = false): Result {
   """
   Edit a file by replacing oldText with newText. By default oldText must match exactly once in the file; pass replaceAll=true to replace every occurrence. Fails if oldText is not found or appears multiple times (unless replaceAll is set).
 
+  @param dir - The directory containing the file (use "" for current directory)
   @param filename - The file to edit
   @param oldText - The text to find
   @param newText - The replacement text
   @param replaceAll - Replace all occurrences instead of just the first
   """
   return interrupt std::edit("Are you sure you want to edit this file?", {
+    dir: dir,
     filename: filename,
     oldText: oldText,
     newText: newText,
     replaceAll: replaceAll
   })
 
-  return try _edit(filename, oldText, newText, replaceAll)
+  return try _edit(dir, filename, oldText, newText, replaceAll)
 }
 
 type Edit = {
@@ -36,19 +38,21 @@ type MultiEditResult = {
   edits: number
 }
 
-export def multiedit(filename: string, edits: Edit[]): Result {
+export def multiedit(dir: string, filename: string, edits: Edit[]): Result {
   """
   Apply a sequence of edits to a single file atomically. Each edit has oldText, newText, and replaceAll. Fails if any edit's oldText is not found or is ambiguous; when any edit fails, nothing is written.
 
+  @param dir - The directory containing the file (use "" for current directory)
   @param filename - The file to edit
   @param edits - Array of edit objects with oldText, newText, and replaceAll
   """
   return interrupt std::multiedit("Are you sure you want to apply these edits?", {
+    dir: dir,
     filename: filename,
     edits: edits
   })
 
-  return try _multiedit(filename, edits)
+  return try _multiedit(dir, filename, edits)
 }
 
 type PatchResult = {

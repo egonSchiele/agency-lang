@@ -34,16 +34,18 @@ type SmsResult = {
 ### sendSms
 
 ```ts
-sendSms(to: string, body: string, from: string, accountSid: string, authToken: string): Result
+sendSms(to: string, body: string, from: string, accountSid: string, authToken: string, allowList: string[], blockList: string[]): Result
 ```
 
-Send an SMS text message via the Twilio API. Requires TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, and TWILIO_FROM_NUMBER env vars, or pass them directly. Parameters: to (recipient phone number in E.164 format), body (message text), and optionally from, accountSid, authToken.
+Send an SMS text message via the Twilio API. Requires TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, and TWILIO_FROM_NUMBER env vars, or pass them directly. Set allowList to restrict recipients to specific numbers. Set blockList to reject specific numbers.
 
   @param to - Recipient phone number (E.164 format)
   @param body - Message text
   @param from - Sender phone number
   @param accountSid - Twilio account SID
   @param authToken - Twilio auth token
+  @param allowList - Only allow sending to these numbers
+  @param blockList - Block sending to these numbers
 
 **Parameters:**
 
@@ -54,6 +56,8 @@ Send an SMS text message via the Twilio API. Requires TWILIO_ACCOUNT_SID, TWILIO
 | from | `string` | "" |
 | accountSid | `string` | "" |
 | authToken | `string` | "" |
+| allowList | `string[]` | [] |
+| blockList | `string[]` | [] |
 
 **Returns:** `Result`
 

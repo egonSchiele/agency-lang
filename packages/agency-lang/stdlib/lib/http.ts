@@ -30,8 +30,16 @@ async function readBodyCapped(response: Response, url: string): Promise<string> 
   return chunks.join("");
 }
 
-export async function _fetch(url: string): Promise<string> {
-  const result = await fetch(url);
+export async function _fetch(
+  baseUrl: string,
+  urlPath: string,
+  headers: Record<string, string>,
+  allowedDomains: string[],
+): Promise<string> {
+  const url = resolveUrl(baseUrl, urlPath);
+  const domainError = checkAllowedDomains(url, allowedDomains);
+  if (domainError) throw new Error(domainError);
+  const result = await fetch(url, { headers });
   try {
     return await readBodyCapped(result, url);
   } catch (e) {
@@ -39,8 +47,16 @@ export async function _fetch(url: string): Promise<string> {
   }
 }
 
-export async function _fetchJSON(url: string): Promise<any> {
-  const result = await fetch(url);
+export async function _fetchJSON(
+  baseUrl: string,
+  urlPath: string,
+  headers: Record<string, string>,
+  allowedDomains: string[],
+): Promise<any> {
+  const url = resolveUrl(baseUrl, urlPath);
+  const domainError = checkAllowedDomains(url, allowedDomains);
+  if (domainError) throw new Error(domainError);
+  const result = await fetch(url, { headers });
   const text = await readBodyCapped(result, url);
   try {
     return JSON.parse(text);
@@ -49,8 +65,16 @@ export async function _fetchJSON(url: string): Promise<any> {
   }
 }
 
-export async function _webfetch(url: string): Promise<string> {
-  const result = await fetch(url);
+export async function _webfetch(
+  baseUrl: string,
+  urlPath: string,
+  headers: Record<string, string>,
+  allowedDomains: string[],
+): Promise<string> {
+  const url = resolveUrl(baseUrl, urlPath);
+  const domainError = checkAllowedDomains(url, allowedDomains);
+  if (domainError) throw new Error(domainError);
+  const result = await fetch(url, { headers });
   const contentType = result.headers.get("content-type") ?? "";
   const body = await readBodyCapped(result, url);
   if (contentType.includes("text/html")) {

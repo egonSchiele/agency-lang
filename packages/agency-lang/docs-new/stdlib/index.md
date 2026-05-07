@@ -92,16 +92,24 @@ A tool for rounding a number to a specified number of decimal places.
 ### fetch
 
 ```ts
-fetch(url: string): string
+fetch(baseUrl: string, path: string, headers: Record<string, any>, allowedDomains: string[]): string
 ```
 
-A tool for fetching a URL and returning the response as text.
+A tool for fetching a URL and returning the response as text. Provide baseUrl and optionally path (they are joined). Set headers for custom request headers. Set allowedDomains to restrict which domains can be fetched.
+
+  @param baseUrl - The base URL to fetch
+  @param path - Optional path appended to baseUrl
+  @param headers - Custom request headers
+  @param allowedDomains - Restrict fetches to these domains (empty allows all)
 
 **Parameters:**
 
 | Name | Type | Default |
 |---|---|---|
-| url | `string` |  |
+| baseUrl | `string` |  |
+| path | `string` | "" |
+| headers | `Record<string, any>` | {} |
+| allowedDomains | `string[]` | [] |
 
 **Returns:** `string`
 
@@ -110,71 +118,92 @@ A tool for fetching a URL and returning the response as text.
 ### fetchJSON
 
 ```ts
-fetchJSON(url: string)
+fetchJSON(baseUrl: string, path: string, headers: Record<string, any>, allowedDomains: string[])
 ```
 
-A tool for fetching a URL and returning the response as parsed JSON.
+A tool for fetching a URL and returning the response as parsed JSON. Provide baseUrl and optionally path (they are joined). Set headers for custom request headers. Set allowedDomains to restrict which domains can be fetched.
+
+  @param baseUrl - The base URL to fetch
+  @param path - Optional path appended to baseUrl
+  @param headers - Custom request headers
+  @param allowedDomains - Restrict fetches to these domains (empty allows all)
 
 **Parameters:**
 
 | Name | Type | Default |
 |---|---|---|
-| url | `string` |  |
+| baseUrl | `string` |  |
+| path | `string` | "" |
+| headers | `Record<string, any>` | {} |
+| allowedDomains | `string[]` | [] |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L49))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L55))
 
 ### read
 
 ```ts
-read(filename: string): string
+read(dir: string, filename: string): string
 ```
 
-A tool for reading the contents of a file and returning it as a string.
+A tool for reading the contents of a file and returning it as a string. If dir is provided, the filename is resolved relative to that directory.
+
+  @param dir - The directory containing the file (use "" for current directory)
+  @param filename - The file to read
 
 **Parameters:**
 
 | Name | Type | Default |
 |---|---|---|
+| dir | `string` |  |
 | filename | `string` |  |
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L59))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L71))
 
 ### write
 
 ```ts
-write(filename: string, content: string)
+write(dir: string, filename: string, content: string)
 ```
 
-A tool for writing content to a file.
+A tool for writing content to a file. If dir is provided, the filename is resolved relative to that directory.
+
+  @param dir - The directory containing the file (use "" for current directory)
+  @param filename - The file to write
+  @param content - The content to write
 
 **Parameters:**
 
 | Name | Type | Default |
 |---|---|---|
+| dir | `string` |  |
 | filename | `string` |  |
 | content | `string` |  |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L69))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L85))
 
 ### readImage
 
 ```ts
-readImage(filename: string): string
+readImage(dir: string, filename: string): string
 ```
 
-A tool for reading an image file and returning its contents as a Base64-encoded string.
+A tool for reading an image file and returning its contents as a Base64-encoded string. If dir is provided, the filename is resolved relative to that directory.
+
+  @param dir - The directory containing the file (use "" for current directory)
+  @param filename - The image file to read
 
 **Parameters:**
 
 | Name | Type | Default |
 |---|---|---|
+| dir | `string` |  |
 | filename | `string` |  |
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L80))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L101))
 
 ### notify
 
@@ -193,7 +222,7 @@ A tool for showing a native OS notification with a title and message. Returns tr
 
 **Returns:** `boolean`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L90))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L115))
 
 ### range
 
@@ -212,7 +241,7 @@ Generate an array of numbers. With one argument, generates from 0 to start-1. Wi
 
 **Returns:** `number[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L101))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L126))
 
 ### mostCommon
 
@@ -230,7 +259,7 @@ Return the most common element in an array. Uses JSON serialization for comparis
 
 **Returns:** `any`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L111))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L136))
 
 ### keys
 
@@ -248,7 +277,7 @@ Return an array of an object's own enumerable property names.
 
 **Returns:** `string[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L118))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L143))
 
 ### values
 
@@ -266,7 +295,7 @@ Return an array of an object's own enumerable property values.
 
 **Returns:** `any[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L125))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L150))
 
 ### entries
 
@@ -284,7 +313,7 @@ Return an array of an object's own enumerable entries, each as { key, value }.
 
 **Returns:** `any[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L132))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L157))
 
 ### emit
 
@@ -300,4 +329,4 @@ Emit a custom event to the calling TypeScript code via the onEmit callback.
 |---|---|---|
 | data |  |  |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L139))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L164))

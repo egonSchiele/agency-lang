@@ -1,3 +1,5 @@
+import { checkRecipients } from "./messaging.js";
+
 const TWILIO_BASE_URL = "https://api.twilio.com/2010-04-01/Accounts";
 
 export type SmsResult = {
@@ -9,6 +11,8 @@ export type SmsOptions = {
   accountSid?: string;
   authToken?: string;
   from?: string;
+  allowList?: string[];
+  blockList?: string[];
 };
 
 export async function _sendSms(
@@ -48,6 +52,13 @@ export async function _sendSms(
   if (!body) {
     throw new Error("Missing message body.");
   }
+
+  const recipientError = checkRecipients(
+    [to],
+    options?.allowList ?? [],
+    options?.blockList ?? [],
+  );
+  if (recipientError) throw new Error(recipientError);
 
   const formData = new URLSearchParams();
   formData.set("To", to);

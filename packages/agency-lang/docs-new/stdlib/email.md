@@ -39,10 +39,10 @@ type EmailResult = {
 ### sendWithResend
 
 ```ts
-sendWithResend(from: string, to: string, subject: string, html: string, text: string, cc: string, bcc: string, replyTo: string, apiKey: string): Result
+sendWithResend(from: string, to: string, subject: string, html: string, text: string, cc: string, bcc: string, replyTo: string, apiKey: string, allowList: string[], blockList: string[]): Result
 ```
 
-Send an email using the Resend API. Requires RESEND_API_KEY env var or pass apiKey directly. Parameters: from (sender address), to (recipient), subject, html or text content, and optionally cc, bcc, replyTo.
+Send an email using the Resend API. Requires RESEND_API_KEY env var or pass apiKey directly. Set allowList to restrict recipients to specific addresses. Set blockList to reject specific addresses.
 
   @param from - Sender email address
   @param to - Recipient email address
@@ -53,6 +53,8 @@ Send an email using the Resend API. Requires RESEND_API_KEY env var or pass apiK
   @param bcc - BCC recipients
   @param replyTo - Reply-to address
   @param apiKey - Resend API key
+  @param allowList - Only allow sending to these addresses
+  @param blockList - Block sending to these addresses
 
 Send an email using the Resend API. Requires `RESEND_API_KEY` env var or pass apiKey directly.
 
@@ -69,6 +71,8 @@ Send an email using the Resend API. Requires `RESEND_API_KEY` env var or pass ap
 | bcc | `string` | "" |
 | replyTo | `string` | "" |
 | apiKey | `string` | "" |
+| allowList | `string[]` | [] |
+| blockList | `string[]` | [] |
 
 **Returns:** `Result`
 
@@ -77,10 +81,10 @@ Send an email using the Resend API. Requires `RESEND_API_KEY` env var or pass ap
 ### sendWithSendGrid
 
 ```ts
-sendWithSendGrid(from: string, to: string, subject: string, html: string, text: string, cc: string, bcc: string, replyTo: string, apiKey: string): Result
+sendWithSendGrid(from: string, to: string, subject: string, html: string, text: string, cc: string, bcc: string, replyTo: string, apiKey: string, allowList: string[], blockList: string[]): Result
 ```
 
-Send an email using the SendGrid API. Requires SENDGRID_API_KEY env var or pass apiKey directly. Parameters: from (sender address), to (recipient), subject, html or text content, and optionally cc, bcc, replyTo.
+Send an email using the SendGrid API. Requires SENDGRID_API_KEY env var or pass apiKey directly. Set allowList to restrict recipients to specific addresses. Set blockList to reject specific addresses.
 
   @param from - Sender email address
   @param to - Recipient email address
@@ -91,6 +95,8 @@ Send an email using the SendGrid API. Requires SENDGRID_API_KEY env var or pass 
   @param bcc - BCC recipients
   @param replyTo - Reply-to address
   @param apiKey - SendGrid API key
+  @param allowList - Only allow sending to these addresses
+  @param blockList - Block sending to these addresses
 
 Send an email using the SendGrid API. Requires `SENDGRID_API_KEY` env var or pass apiKey directly.
 
@@ -107,18 +113,20 @@ Send an email using the SendGrid API. Requires `SENDGRID_API_KEY` env var or pas
 | bcc | `string` | "" |
 | replyTo | `string` | "" |
 | apiKey | `string` | "" |
+| allowList | `string[]` | [] |
+| blockList | `string[]` | [] |
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/email.agency#L67))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/email.agency#L71))
 
 ### sendWithMailgun
 
 ```ts
-sendWithMailgun(from: string, to: string, subject: string, html: string, text: string, cc: string, bcc: string, replyTo: string, apiKey: string, domain: string, region: string): Result
+sendWithMailgun(from: string, to: string, subject: string, html: string, text: string, cc: string, bcc: string, replyTo: string, apiKey: string, domain: string, region: string, allowList: string[], blockList: string[]): Result
 ```
 
-Send an email using the Mailgun API. Requires MAILGUN_API_KEY and MAILGUN_DOMAIN env vars, or pass them directly. Set region to "eu" for the EU endpoint. Parameters: from (sender address), to (recipient), subject, html or text content, and optionally cc, bcc, replyTo, domain, region.
+Send an email using the Mailgun API. Requires MAILGUN_API_KEY and MAILGUN_DOMAIN env vars, or pass them directly. Set allowList to restrict recipients to specific addresses. Set blockList to reject specific addresses.
 
   @param from - Sender email address
   @param to - Recipient email address
@@ -131,6 +139,8 @@ Send an email using the Mailgun API. Requires MAILGUN_API_KEY and MAILGUN_DOMAIN
   @param apiKey - Mailgun API key
   @param domain - Mailgun domain
   @param region - Mailgun region ("eu" for EU)
+  @param allowList - Only allow sending to these addresses
+  @param blockList - Block sending to these addresses
 
 Send an email using the Mailgun API. Requires `MAILGUN_API_KEY` and `MAILGUN_DOMAIN` env vars, or pass them directly. Set region to "eu" for the EU endpoint.
 
@@ -149,7 +159,9 @@ Send an email using the Mailgun API. Requires `MAILGUN_API_KEY` and `MAILGUN_DOM
 | apiKey | `string` | "" |
 | domain | `string` | "" |
 | region | `string` | "" |
+| allowList | `string[]` | [] |
+| blockList | `string[]` | [] |
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/email.agency#L102))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/email.agency#L110))

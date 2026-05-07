@@ -35,13 +35,25 @@ beforeAll(() => {
   compile({ debugger: true }, nestedAgency, nestedCompiled, { ts: true });
 });
 
-// --- Helper: collect checkpoints by stepping through step-test to completion ---
+// --- Helpers ---
 
 async function collectCheckpoints() {
   const mod = await freshImport(stepTestCompiled);
   const session = await DebuggerTestSession.create({ mod });
   await session.press("s", { times: 20 });
   return session.driver.debuggerState.getCheckpoints();
+}
+
+function sourceText(session: DebuggerTestSession): string {
+  return session.frame().findByKey("source")!.toPlainText();
+}
+
+function localsText(session: DebuggerTestSession): string {
+  return session.frame().findByKey("locals")!.toPlainText();
+}
+
+function activityLog(session: DebuggerTestSession): string[] {
+  return session.ui.state.getActivityLog();
 }
 
 // ============================================================================
@@ -75,8 +87,7 @@ describe("Debugger stepping", () => {
     await session.press("c"); // run to completion
     await session.press("s"); // should be blocked
 
-    const log = session.ui.state.getActivityLog();
-    expect(log).toContainEqual("Already at end of execution.");
+    expect(activityLog(session)).toContainEqual("Already at end of execution.");
   });
 
   it("after program finishes, can step back to an earlier state", async () => {
@@ -84,10 +95,15 @@ describe("Debugger stepping", () => {
     const session = await DebuggerTestSession.create({ mod });
 
     await session.press("c"); // run to completion
-    await session.press("up"); // stepBack (up arrow on source pane)
 
-    const log = session.ui.state.getActivityLog();
-    expect(log).not.toContainEqual("Already at earliest checkpoint");
+    await session.press("up"); // stepBack
+
+    expect(activityLog(session)).not.toContainEqual("Already at earliest checkpoint");
+    // After stepping back, the source pane should still show step-test
+    expect(sourceText(session)).toContain("step-test");
+    // And we should be able to step forward (program not stuck)
+    await session.press("s");
+    expect(activityLog(session)).not.toContainEqual("Already at end of execution.");
   });
 
   it("after stepping back, can step forward again", async () => {
@@ -96,10 +112,44 @@ describe("Debugger stepping", () => {
 
     await session.press("c"); // run to completion
     await session.press("up"); // stepBack
+    const localsBeforeStep = localsText(session);
     await session.press("s"); // should work now
 
-    const log = session.ui.state.getActivityLog();
-    expect(log).not.toContainEqual("Already at end of execution.");
+    expect(activityLog(session)).not.toContainEqual("Already at end of execution.");
+    // The locals should have changed after stepping forward
+    const localsAfterStep = localsText(session);
+    expect(localsAfterStep).not.toBe(localsBeforeStep);
+  });
+
+  it("source pane shows the correct file and current line marker", async () => {
+    const mod = await freshImport(stepTestCompiled);
+    const session = await DebuggerTestSession.create({ mod });
+
+    // Initial state — first line of main
+    const src = sourceText(session);
+    expect(src).toContain("step-test");
+    expect(src).toContain("node main()");
+    // The `>` marker should be on a line
+    expect(src).toMatch(/>\s+\d+\s+/);
+  });
+
+  it("locals pane updates as variables are assigned", async () => {
+    const mod = await freshImport(stepTestCompiled);
+    const session = await DebuggerTestSession.create({ mod });
+
+    // Before any variable is assigned
+    expect(localsText(session)).not.toContain("x = 1");
+
+    await session.press("s"); // past x = 1
+    expect(localsText(session)).toContain("x = 1");
+    expect(localsText(session)).not.toContain("y = 2");
+
+    await session.press("s"); // past y = 2
+    expect(localsText(session)).toContain("x = 1");
+    expect(localsText(session)).toContain("y = 2");
+
+    await session.press("s"); // past z = x + y
+    expect(localsText(session)).toContain("z = 3");
   });
 });
 
@@ -116,8 +166,7 @@ describe("Debugger print and checkpoint", () => {
     await session.press("p");
     await session.type("x");
 
-    const log = session.ui.state.getActivityLog();
-    expect(log).toContainEqual("x = 1");
+    expect(activityLog(session)).toContainEqual("x = 1");
   });
 
   it("print reports not found for nonexistent variable", async () => {
@@ -127,8 +176,7 @@ describe("Debugger print and checkpoint", () => {
     await session.press("p");
     await session.type("doesNotExist");
 
-    const log = session.ui.state.getActivityLog();
-    expect(log).toContainEqual("doesNotExist = (not found)");
+    expect(activityLog(session)).toContainEqual("doesNotExist = (not found)");
   });
 
   it("checkpoint pins with a label", async () => {
@@ -139,7 +187,7 @@ describe("Debugger print and checkpoint", () => {
     await session.press("k");
     await session.type("my-label");
 
-    const log = session.ui.state.getActivityLog();
+    const log = activityLog(session);
     expect(log.some((l) => l.includes("Pinned checkpoint") && l.includes('"my-label"'))).toBe(true);
 
     const checkpoints = session.driver.debuggerState.getCheckpoints();
@@ -167,27 +215,42 @@ describe("Debugger print and checkpoint", () => {
 // ============================================================================
 
 describe("Debugger stepping with function calls", () => {
-  it("stepIn enters a function call", async () => {
+  it("stepIn enters a function call and shows function locals", async () => {
     const mod = await freshImport(fnCallCompiled);
     const session = await DebuggerTestSession.create({ mod });
 
     await session.press("s"); // x = 1
     await session.press("s"); // at y = add(x, 2)
     await session.press("i"); // stepIn to add()
-    await session.press("s", { times: 10 }); // step through add + rest
 
+    // After stepping in, the source should show the add function body
+    expect(sourceText(session)).toContain("result = a + b");
+    // Locals should show add's parameters, not main's
+    const locals = localsText(session);
+    expect(locals).toContain("a = 1");
+    expect(locals).toContain("b = 2");
+
+    await session.press("s", { times: 10 });
     const result = await session.quit();
     expect(result).toBe(17);
   });
 
-  it("next steps over a function call", async () => {
+  it("next steps over a function call without entering it", async () => {
     const mod = await freshImport(fnCallCompiled);
     const session = await DebuggerTestSession.create({ mod });
 
     await session.press("s"); // x = 1
+    // Before next, we're at the line calling add()
     await session.press("n"); // next — step OVER add()
-    await session.press("s", { times: 10 }); // step through rest
 
+    // After stepping over, we should NOT see add's parameters
+    const locals = localsText(session);
+    expect(locals).not.toContain("a = 1");
+    expect(locals).not.toContain("b = 2");
+    // We should still be in the main function's source
+    expect(sourceText(session)).toContain("node main()");
+
+    await session.press("s", { times: 10 });
     const result = await session.quit();
     expect(result).toBe(17);
   });
@@ -198,10 +261,18 @@ describe("Debugger stepping with function calls", () => {
 
     await session.press("s"); // x = 1
     await session.press("i"); // stepIn to add()
+    // Verify we're inside add
+    expect(localsText(session)).toContain("a = 1");
+
     await session.press("s"); // inside add: result = a + b
     await session.press("o"); // stepOut back to main
-    await session.press("s", { times: 10 }); // step through rest
 
+    // After stepOut, we should be back in main (no more add params)
+    const locals = localsText(session);
+    expect(locals).not.toContain("a = 1");
+    expect(sourceText(session)).toContain("node main()");
+
+    await session.press("s", { times: 10 });
     const result = await session.quit();
     expect(result).toBe(17);
   });
@@ -217,8 +288,6 @@ describe("Debugger set (variable overrides)", () => {
     const session = await DebuggerTestSession.create({ mod });
 
     // step-test: x = 1, y = 2, z = x + y, return z
-    // Step past x = 1, set x = 10, then continue.
-    // z should be 10 + 2 = 12 instead of 1 + 2 = 3.
     await session.press("s"); // past x = 1
     await session.press(":"); // command mode
     await session.type("set x = 10");
@@ -241,7 +310,6 @@ describe("Debugger user interrupt handling", () => {
     // interrupt-test: x = 1, y = interrupt("check value"), z = x + y, return z
     await session.press("s"); // past x = 1
     await session.press("s"); // hits interrupt — promptForInput opens
-    // The prompt "approve / reject / resolve <value>" appears as text input
     await session.type("resolve 5");
     await session.press("s", { times: 10 });
 
@@ -257,8 +325,6 @@ describe("Debugger user interrupt handling", () => {
     await session.press("s"); // past x = 1
     await session.press("s"); // hits interrupt — promptForInput opens
     await session.type("reject");
-    // After reject, the program returns a failure result.
-    // Step through remaining debug pauses then quit.
     await session.press("s", { times: 10 });
 
     const result = await session.quit();
@@ -285,25 +351,36 @@ describe("Debugger stepBack and rewind", () => {
     const result = await session.quit();
     expect(result).toBe(3);
 
-    const log = session.ui.state.getActivityLog();
-    expect(log).toContainEqual("Already at earliest checkpoint");
+    expect(activityLog(session)).toContainEqual("Already at earliest checkpoint");
+  });
+
+  it("stepBack moves to an earlier execution state", async () => {
+    const mod = await freshImport(stepTestCompiled);
+    const session = await DebuggerTestSession.create({ mod });
+
+    await session.press("s"); // past x = 1
+    await session.press("s"); // past y = 2
+    // Now we should see y = 2 in locals
+    expect(localsText(session)).toContain("y = 2");
+
+    await session.press("up"); // stepBack
+    // After stepping back, y should no longer be 2 (earlier state)
+    // or at minimum we should be at a different execution point
+    expect(activityLog(session)).not.toContainEqual("Already at earliest checkpoint");
   });
 
   it("stepBack with preserveOverrides keeps pending overrides", async () => {
     const mod = await freshImport(stepTestCompiled);
     const session = await DebuggerTestSession.create({ mod });
 
-    // step-test: x = 1, y = 2, z = x + y, return z
-    // Step past x=1 and y=2, override x=10, then stepBack with preserveOverrides.
     await session.press("s"); // past x = 1
     await session.press("s"); // past y = 2
     await session.press(":"); // command mode
     await session.type("set x = 10");
     await session.press("up", { shift: true }); // stepBack with preserveOverrides
-    await session.press("s", { times: 10 }); // step forward — x override applied
+    await session.press("s", { times: 10 });
 
     const result = await session.quit();
-    // x was overridden to 10, so z = 10 + 2 = 12
     expect(result).toBe(12);
   });
 
@@ -312,10 +389,15 @@ describe("Debugger stepBack and rewind", () => {
     const session = await DebuggerTestSession.create({ mod });
 
     await session.press("s");
+    const localsBefore = localsText(session);
     await session.press("r"); // open rewind selector
     await session.press("escape"); // cancel
-    await session.press("c");
+    const localsAfter = localsText(session);
 
+    // Locals should be unchanged after cancelling rewind
+    expect(localsAfter).toBe(localsBefore);
+
+    await session.press("c");
     const result = await session.quit();
     expect(result).toBe(3);
   });
@@ -390,11 +472,19 @@ describe("Debugger with nested function calls", () => {
     const session = await DebuggerTestSession.create({ mod });
 
     await session.press("i"); // main → enter addAndDouble
+    // Should see addAndDouble's source/params
+    expect(sourceText(session)).toContain("sum = a + b");
+    expect(localsText(session)).toContain("a = 1");
+
     await session.press("s"); // addAndDouble: sum = a + b
     await session.press("s"); // past sum = a + b
     await session.press("i"); // enter double
-    await session.press("s", { times: 20 });
 
+    // Should now see double's source/params
+    expect(sourceText(session)).toContain("result = n * 2");
+    expect(localsText(session)).toContain("n = 3");
+
+    await session.press("s", { times: 20 });
     const result = await session.quit();
     expect(result).toBe(6);
   });
@@ -404,8 +494,14 @@ describe("Debugger with nested function calls", () => {
     const session = await DebuggerTestSession.create({ mod });
 
     await session.press("n"); // step OVER addAndDouble (and double inside it)
-    await session.press("s", { times: 10 });
 
+    // Should still be in main, never see addAndDouble or double params
+    const locals = localsText(session);
+    expect(locals).not.toContain("a = 1");
+    expect(locals).not.toContain("n = 3");
+    expect(sourceText(session)).toContain("node main()");
+
+    await session.press("s", { times: 10 });
     const result = await session.quit();
     expect(result).toBe(6);
   });
@@ -417,10 +513,19 @@ describe("Debugger with nested function calls", () => {
     await session.press("i"); // enter addAndDouble
     await session.press("s"); // addAndDouble: before sum = a + b
     await session.press("i"); // enter double
+    // Verify we're in double
+    expect(localsText(session)).toContain("n = 3");
+
     await session.press("s"); // inside double: result = n * 2
     await session.press("o"); // stepOut → back in addAndDouble
-    await session.press("s", { times: 20 });
 
+    // Should be back in addAndDouble, not in double
+    const locals = localsText(session);
+    expect(locals).not.toContain("n = 3");
+    // Should see addAndDouble's source
+    expect(sourceText(session)).toContain("sum = a + b");
+
+    await session.press("s", { times: 20 });
     const result = await session.quit();
     expect(result).toBe(6);
   });
@@ -431,16 +536,17 @@ describe("Debugger with nested function calls", () => {
 // ============================================================================
 
 describe("Debugger with loaded trace checkpoints", () => {
-  it("starts at the last checkpoint and can interact", async () => {
+  it("starts at the last checkpoint with correct state", async () => {
     const checkpoints = await collectCheckpoints();
     expect(checkpoints.length).toBeGreaterThan(0);
 
     const mod = await freshImport(stepTestCompiled);
     const session = await DebuggerTestSession.create({ mod, checkpoints });
 
-    // Should have rendered — we can inspect the frame
-    const frame = session.frame();
-    expect(frame).toBeDefined();
+    // Should have rendered with the final program state
+    expect(sourceText(session)).toContain("step-test");
+    // The final checkpoint should have z = 3
+    expect(localsText(session)).toContain("z = 3");
   });
 
   it("blocks forward stepping at end of execution", async () => {
@@ -450,8 +556,7 @@ describe("Debugger with loaded trace checkpoints", () => {
 
     await session.press("s"); // should be blocked
 
-    const log = session.ui.state.getActivityLog();
-    expect(log).toContainEqual("Already at end of execution.");
+    expect(activityLog(session)).toContainEqual("Already at end of execution.");
   });
 
   it("can print variables from loaded checkpoints", async () => {
@@ -462,8 +567,7 @@ describe("Debugger with loaded trace checkpoints", () => {
     await session.press("p");
     await session.type("z");
 
-    const log = session.ui.state.getActivityLog();
-    expect(log).toContainEqual("z = 3");
+    expect(activityLog(session)).toContainEqual("z = 3");
   });
 
   it("can step back and then step forward (clears programFinished)", async () => {
@@ -471,12 +575,19 @@ describe("Debugger with loaded trace checkpoints", () => {
     const mod = await freshImport(stepTestCompiled);
     const session = await DebuggerTestSession.create({ mod, checkpoints });
 
-    await session.press("up"); // stepBack
-    await session.press("s"); // step forward (re-executes)
+    // Verify we start at end of execution
+    await session.press("s");
+    expect(activityLog(session)).toContainEqual("Already at end of execution.");
 
-    // Should not see "Already at end" since stepBack cleared programFinished
-    const log = session.ui.state.getActivityLog();
-    expect(log).not.toContainEqual("Already at end of execution.");
+    await session.press("up"); // stepBack
+    await session.press("s"); // step forward — should NOT be blocked now
+
+    // The last log entry should NOT be "Already at end" — stepping worked
+    const log = activityLog(session);
+    const lastEndIdx = log.lastIndexOf("Already at end of execution.");
+    // If there is a second "Already at end", the step didn't work
+    const endCount = log.filter((l) => l === "Already at end of execution.").length;
+    expect(endCount).toBe(1); // only the first attempt, not after stepBack+step
   });
 });
 
@@ -485,7 +596,7 @@ describe("Debugger with loaded trace checkpoints", () => {
 // ============================================================================
 
 describe("Debugger with loaded single checkpoint", () => {
-  it("loads a single checkpoint and renders it", async () => {
+  it("loads a single checkpoint and renders correct state", async () => {
     const checkpoints = await collectCheckpoints();
     const midpoint = checkpoints[Math.floor(checkpoints.length / 2)];
 
@@ -495,25 +606,174 @@ describe("Debugger with loaded single checkpoint", () => {
       checkpoints: [midpoint],
     });
 
+    // Should show step-test source
+    expect(sourceText(session)).toContain("step-test");
+    // Frame should be renderable
     const frame = session.frame();
-    expect(frame).toBeDefined();
+    expect(frame.findByKey("locals")).toBeDefined();
+    expect(frame.findByKey("source")).toBeDefined();
   });
 
-  it("can step back and forward from a single loaded checkpoint", async () => {
+  it("can step back from a loaded checkpoint with multiple checkpoints", async () => {
     const checkpoints = await collectCheckpoints();
-    const firstCp = checkpoints[0];
+    expect(checkpoints.length).toBeGreaterThan(2);
 
     const mod = await freshImport(stepTestCompiled);
+    // Load the last two checkpoints so stepBack has somewhere to go
+    const lastTwo = checkpoints.slice(-2);
     const session = await DebuggerTestSession.create({
       mod,
-      checkpoints: [firstCp],
+      checkpoints: lastTwo,
     });
 
     await session.press("up"); // stepBack — clears programFinished
     await session.press("s"); // step forward
 
-    // Should have rendered at least a couple frames
-    expect(session.recorder.frames.length).toBeGreaterThanOrEqual(2);
+    expect(activityLog(session)).not.toContainEqual("Already at end of execution.");
+    expect(session.recorder.frames.length).toBeGreaterThanOrEqual(3);
+  });
+});
+
+// ============================================================================
+// UI interaction: focus, zoom, text input
+// ============================================================================
+
+describe("Debugger UI interactions", () => {
+  it("tab cycles focus between panes", async () => {
+    const mod = await freshImport(stepTestCompiled);
+    const session = await DebuggerTestSession.create({ mod });
+
+    // Initially source pane is focused (index 0)
+    // After tab, next pane should be focused
+    await session.press("tab");
+
+    // The focused pane should have a white border — check that
+    // the frame rendered successfully (focus is internal state,
+    // but we can verify the render didn't crash)
+    const frame = session.frame();
+    expect(frame).toBeDefined();
+
+    // Tab again to cycle further
+    await session.press("tab");
+    const frame2 = session.frame();
+    expect(frame2).toBeDefined();
+  });
+
+  it("number keys jump to specific panes", async () => {
+    const mod = await freshImport(stepTestCompiled);
+    const session = await DebuggerTestSession.create({ mod });
+
+    // Press "2" to jump to locals pane (index 1)
+    await session.press("2");
+    // Press "up" — should scroll locals, not stepBack (source-only behavior)
+    // This verifies focus actually moved away from source
+    await session.press("up");
+    // If source were focused, "up" would trigger stepBack and we'd see the log message
+    expect(activityLog(session)).not.toContainEqual("Already at earliest checkpoint");
+  });
+
+  it("zoom toggles a pane to full screen and back", async () => {
+    const mod = await freshImport(stepTestCompiled);
+    const session = await DebuggerTestSession.create({ mod });
+
+    const frameBefore = session.frame();
+    // Source, locals, globals, callStack, activity, stdout should all be present
+    expect(frameBefore.findByKey("source")).toBeDefined();
+    expect(frameBefore.findByKey("locals")).toBeDefined();
+    expect(frameBefore.findByKey("activity")).toBeDefined();
+
+    // Zoom the source pane
+    await session.press("z");
+    const frameZoomed = session.frame();
+    // Source should still be present
+    expect(frameZoomed.findByKey("source")).toBeDefined();
+    // Other panes should NOT be present in zoomed mode
+    expect(frameZoomed.findByKey("locals")).toBeUndefined();
+    expect(frameZoomed.findByKey("activity")).toBeUndefined();
+
+    // Unzoom
+    await session.press("z");
+    const frameUnzoomed = session.frame();
+    // All panes should be back
+    expect(frameUnzoomed.findByKey("source")).toBeDefined();
+    expect(frameUnzoomed.findByKey("locals")).toBeDefined();
+    expect(frameUnzoomed.findByKey("activity")).toBeDefined();
+  });
+
+  it("escape during text input cancels without executing", async () => {
+    const mod = await freshImport(stepTestCompiled);
+    const session = await DebuggerTestSession.create({ mod });
+
+    await session.press("s"); // past x = 1
+    // Start print prompt then cancel with escape
+    await session.press("p"); // opens text input
+    await session.press("escape"); // cancel
+
+    // Print was cancelled — no "x = ..." entry in the log
+    const log = activityLog(session);
+    expect(log.every((l) => !l.match(/^\w+ = /))).toBe(true);
+
+    // The debugger should still be functional
+    await session.press("c");
+    const result = await session.quit();
+    expect(result).toBe(3);
+  });
+
+  it("command bar shows key bindings", async () => {
+    const mod = await freshImport(stepTestCompiled);
+    const session = await DebuggerTestSession.create({ mod });
+
+    const cmdBar = session.frame().findByKey("commandBar");
+    expect(cmdBar).toBeDefined();
+    const cmdText = cmdBar!.toPlainText();
+    expect(cmdText).toContain("step");
+    expect(cmdText).toContain("continue");
+    expect(cmdText).toContain("quit");
+  });
+});
+
+// ============================================================================
+// Checkpoints panel (d key)
+// ============================================================================
+
+describe("Debugger checkpoints panel", () => {
+  it("opens and closes with escape", async () => {
+    const mod = await freshImport(stepTestCompiled);
+    const session = await DebuggerTestSession.create({ mod });
+
+    await session.press("s"); // step to create some checkpoints
+    await session.press("s");
+    await session.press("d"); // open checkpoints panel
+
+    // The panel should render — we just verify no crash
+    const frame = session.frame();
+    expect(frame).toBeDefined();
+
+    await session.press("escape"); // close panel
+
+    // Should be back to normal view with all panes
+    const frameAfter = session.frame();
+    expect(frameAfter.findByKey("source")).toBeDefined();
+    expect(frameAfter.findByKey("locals")).toBeDefined();
+  });
+});
+
+// ============================================================================
+// Invalid commands
+// ============================================================================
+
+describe("Debugger invalid commands", () => {
+  it("invalid : command does not crash", async () => {
+    const mod = await freshImport(stepTestCompiled);
+    const session = await DebuggerTestSession.create({ mod });
+
+    await session.press(":");
+    await session.type("not a real command");
+
+    // Should not crash — the debugger should still be functional
+    await session.press("c");
+    const result = await session.quit();
+    expect(result).toBe(3);
   });
 });
 

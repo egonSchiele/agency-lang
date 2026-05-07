@@ -141,51 +141,8 @@ export class DebuggerTestSession {
     opts.mod.__setDebugger(driver.debuggerState);
 
     const session = new DebuggerTestSession(input, labelingOutput, recorder, ui, driver);
-
-    // Get initial interrupt from the program
-    const callbacks = driver.getCallbacks();
-
-    if (opts.checkpoints?.length) {
-      // Trace mode: start at the last checkpoint
-      const lastCp = opts.checkpoints[opts.checkpoints.length - 1];
-      const interrupt = createDebugInterrupt(
-        undefined,
-        lastCp.id,
-        lastCp,
-        "test-run-id",
-      );
-
-      // Start driver in background, wait for first idle
-      const idlePromise = input.waitForIdle();
-      session.runPromise = driver
-        .run({ data: interrupt }, { interceptConsole: false })
-        .then((r) => {
-          session.result = r;
-          session.finished = true;
-        });
-      await idlePromise;
-    } else {
-      // Normal mode: run the entry node
-      const args = opts.args ?? [];
-      const initialResult = await opts.mod.main(...args, { callbacks });
-
-      if (!initialResult?.data || !hasInterrupts(initialResult.data)) {
-        throw new Error(
-          "Program did not produce a debug interrupt. Was it compiled with debugger: true?",
-        );
-      }
-
-      // Start driver in background, wait for first idle
-      const idlePromise = input.waitForIdle();
-      session.runPromise = driver
-        .run(initialResult, { interceptConsole: false })
-        .then((r) => {
-          session.result = r;
-          session.finished = true;
-        });
-      await idlePromise;
-    }
-
+    const initialResult = await getInitialResult(opts, driver);
+    await session.startDriver(initialResult);
     return session;
   }
 
@@ -248,6 +205,46 @@ export class DebuggerTestSession {
   get isFinished(): boolean {
     return this.finished;
   }
+
+  /** Start the driver loop in the background and wait for it to reach its first idle. */
+  private async startDriver(initialResult: any): Promise<void> {
+    const idlePromise = this.input.waitForIdle();
+    this.runPromise = this.driver
+      .run(initialResult, { interceptConsole: false })
+      .then((r) => {
+        this.result = r;
+        this.finished = true;
+      });
+    await idlePromise;
+  }
+}
+
+/**
+ * Get the initial interrupt result — either from loaded checkpoints (trace mode)
+ * or by running the entry node (normal mode).
+ */
+async function getInitialResult(
+  opts: TestSessionOpts,
+  driver: DebuggerDriver,
+): Promise<any> {
+  if (opts.checkpoints?.length) {
+    const lastCp = opts.checkpoints[opts.checkpoints.length - 1];
+    return {
+      data: createDebugInterrupt(undefined, lastCp.id, lastCp, "test-run-id"),
+    };
+  }
+
+  const callbacks = driver.getCallbacks();
+  const args = opts.args ?? [];
+  const result = await opts.mod.main(...args, { callbacks });
+
+  if (!result?.data || !hasInterrupts(result.data)) {
+    throw new Error(
+      "Program did not produce a debug interrupt. Was it compiled with debugger: true?",
+    );
+  }
+
+  return result;
 }
 
 const KEY_LABELS: Record<string, string> = {

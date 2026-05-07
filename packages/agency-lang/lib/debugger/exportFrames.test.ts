@@ -1,4 +1,4 @@
-import { describe, it, beforeAll } from "vitest";
+import { describe, it, expect, beforeAll } from "vitest";
 import * as fs from "fs";
 import * as path from "path";
 import { compile } from "../cli/commands.js";
@@ -17,6 +17,11 @@ beforeAll(() => {
   compile({ debugger: true }, fnCallAgency, fnCallCompiled, { ts: true });
 });
 
+// These tests generate HTML frame exports for visual debugging.
+// Run with EXPORT_FRAMES=1 to write HTML files; otherwise they just
+// verify the session records frames without writing artifacts.
+const shouldExport = !!process.env.EXPORT_FRAMES;
+
 describe("Export frames for visual inspection", () => {
   it("step-test: step through each statement", async () => {
     const mod = await freshImport(stepTestCompiled);
@@ -27,10 +32,13 @@ describe("Export frames for visual inspection", () => {
     await session.press("s"); // past z = x + y
     await session.press("c"); // continue to completion
 
-    const outPath = path.join(framesDir, "step-test-frames.html");
-    fs.mkdirSync(framesDir, { recursive: true });
-    session.writeHTML(outPath);
-    console.log(`Wrote ${session.recorder.frames.length} frames to ${outPath}`);
+    expect(session.recorder.frames.length).toBeGreaterThan(0);
+
+    if (shouldExport) {
+      const outPath = path.join(framesDir, "step-test-frames.html");
+      fs.mkdirSync(framesDir, { recursive: true });
+      session.writeHTML(outPath);
+    }
   });
 
   it("function-call-test: stepIn into a function", async () => {
@@ -45,9 +53,12 @@ describe("Export frames for visual inspection", () => {
     await session.press("s"); // back in main
     await session.press("c"); // continue
 
-    const outPath = path.join(framesDir, "function-call-frames.html");
-    fs.mkdirSync(framesDir, { recursive: true });
-    session.writeHTML(outPath);
-    console.log(`Wrote ${session.recorder.frames.length} frames to ${outPath}`);
+    expect(session.recorder.frames.length).toBeGreaterThan(0);
+
+    if (shouldExport) {
+      const outPath = path.join(framesDir, "function-call-frames.html");
+      fs.mkdirSync(framesDir, { recursive: true });
+      session.writeHTML(outPath);
+    }
   });
 });

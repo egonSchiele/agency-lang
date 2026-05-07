@@ -24,8 +24,8 @@ const nestedAgency = path.join(fixtureDir, "nested-calls-test.agency");
 const nestedCompiled = path.join(fixtureDir, "nested-calls-test.ts");
 
 // Compiled fixtures are shared across test files (testSession.test.ts,
-// exportFrames.test.ts) so we compile but don't clean up — the .gitignore
-// entry for *.ts under tests/debugger/ handles excluding them from git.
+// exportFrames.test.ts) so we compile but don't clean up — tests/debugger/*.ts
+// is in .gitignore to exclude generated files from git.
 beforeAll(() => {
   compile({ debugger: true }, stepTestAgency, stepTestCompiled, { ts: true });
   compile({ debugger: true }, fnCallAgency, fnCallCompiled, { ts: true });

@@ -20,8 +20,12 @@ def joinWithSep(sep: string, ...parts: string[]): string {
   return result
 }
 
+def joinWithDash(...parts: string[]): string {
+  return joinWithSep("-", ...parts)
+}
+
 node main() {
   let r1 = success("hello") |> joinAll
-  let r2 = success("world") |> joinWithSep("-", ?)
+  let r2 = success("world") |> joinWithDash
   return { r1: r1, r2: r2 }
 }

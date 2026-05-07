@@ -1,9 +1,12 @@
-import { mkdtempSync, writeFileSync } from "fs";
-import { tmpdir } from "os";
+import { mkdirSync, rmSync, writeFileSync } from "fs";
 import { join } from "path";
 import { readBack, runMultiedit } from "./agent.js";
 
-const TMP = mkdtempSync(join(tmpdir(), "agency-multiedit-"));
+const TMP_REL = "tmp-multiedit-fixtures";
+const TMP = join(process.cwd(), TMP_REL);
+
+rmSync(TMP, { recursive: true, force: true });
+mkdirSync(TMP, { recursive: true });
 
 async function tryMultiedit(filename, edits) {
   const r = await runMultiedit(filename, edits);
@@ -19,8 +22,8 @@ async function tryMultiedit(filename, edits) {
 }
 
 // --- Case 1: two sequential edits applied in order ---
-const seqPath = join(TMP, "sequential.txt");
-writeFileSync(seqPath, "A B C\n");
+const seqPath = join(TMP_REL, "sequential.txt");
+writeFileSync(join(TMP, "sequential.txt"), "A B C\n");
 const seqResult = await tryMultiedit(seqPath, [
   { oldText: "A", newText: "X", replaceAll: false },
   { oldText: "B", newText: "Y", replaceAll: false },
@@ -28,8 +31,8 @@ const seqResult = await tryMultiedit(seqPath, [
 const seqContents = (await readBack(seqPath)).data;
 
 // --- Case 2: atomicity - second edit fails, file unchanged ---
-const atomicPath = join(TMP, "atomic.txt");
-writeFileSync(atomicPath, "one two three\n");
+const atomicPath = join(TMP_REL, "atomic.txt");
+writeFileSync(join(TMP, "atomic.txt"), "one two three\n");
 const atomicResult = await tryMultiedit(atomicPath, [
   { oldText: "one", newText: "ONE", replaceAll: false },
   { oldText: "MISSING", newText: "Z", replaceAll: false },
@@ -37,8 +40,8 @@ const atomicResult = await tryMultiedit(atomicPath, [
 const atomicContents = (await readBack(atomicPath)).data;
 
 // --- Case 3: empty edits array is a no-op ---
-const emptyPath = join(TMP, "empty.txt");
-writeFileSync(emptyPath, "unchanged\n");
+const emptyPath = join(TMP_REL, "empty.txt");
+writeFileSync(join(TMP, "empty.txt"), "unchanged\n");
 const emptyResult = await tryMultiedit(emptyPath, []);
 const emptyContents = (await readBack(emptyPath)).data;
 
@@ -63,3 +66,5 @@ writeFileSync(
     2,
   ),
 );
+
+rmSync(TMP, { recursive: true, force: true });

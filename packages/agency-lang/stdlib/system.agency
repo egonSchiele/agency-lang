@@ -3,6 +3,12 @@ import { _args, _screenshot, _cwd, _env, _setEnv, _openUrl } from "./lib/system.
 export def screenshot(filepath: string, x: number = -1, y: number = -1, width: number = -1, height: number = -1) {
   """
   A tool for taking a screenshot and saving it to a file. Optionally specify x, y, width, and height to capture a specific region.
+
+  @param filepath - Path to save the screenshot
+  @param x - X coordinate of capture region
+  @param y - Y coordinate of capture region
+  @param width - Width of capture region
+  @param height - Height of capture region
   """
   return interrupt std::screenshot("Are you sure you want to take a screenshot? This will capture the screen contents, which may include sensitive information.", {
     filepath: filepath
@@ -35,6 +41,9 @@ export safe def env(name: string): string | null {
 export def setEnv(name: string, value: string): Result {
   """
   Set an environment variable in the current process. Fails if the name is empty or contains '='. The change is visible to child processes spawned afterward but does not persist outside the current process.
+
+  @param name - The environment variable name
+  @param value - The value to set
   """
   return interrupt std::setEnv("Are you sure you want to set this environment variable?", {
     name: name,

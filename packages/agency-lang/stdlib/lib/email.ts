@@ -1,3 +1,5 @@
+import { checkRecipients } from "./messaging.js";
+
 const RESEND_URL = "https://api.resend.com/emails";
 const SENDGRID_URL = "https://api.sendgrid.com/v3/mail/send";
 
@@ -21,16 +23,36 @@ export type EmailResult = {
   provider: string;
 };
 
+function validateRecipients(
+  params: EmailParams,
+  options?: { allowList?: string[]; blockList?: string[] },
+): void {
+  const recipients: string[] = [];
+  recipients.push(...toArray(params.to));
+  if (params.cc) recipients.push(...toArray(params.cc));
+  if (params.bcc) recipients.push(...toArray(params.bcc));
+  const error = checkRecipients(
+    recipients,
+    options?.allowList ?? [],
+    options?.blockList ?? [],
+  );
+  if (error) throw new Error(error);
+}
+
 // --- Resend ---
 
 export type ResendOptions = {
   apiKey?: string;
+  allowList?: string[];
+  blockList?: string[];
 };
 
 export async function _sendWithResend(
   params: EmailParams,
   options?: ResendOptions
 ): Promise<EmailResult> {
+  validateRecipients(params, options);
+
   const apiKey = options?.apiKey || process.env.RESEND_API_KEY;
   if (!apiKey) {
     throw new Error(
@@ -72,12 +94,16 @@ export async function _sendWithResend(
 
 export type SendGridOptions = {
   apiKey?: string;
+  allowList?: string[];
+  blockList?: string[];
 };
 
 export async function _sendWithSendGrid(
   params: EmailParams,
   options?: SendGridOptions
 ): Promise<EmailResult> {
+  validateRecipients(params, options);
+
   const apiKey = options?.apiKey || process.env.SENDGRID_API_KEY;
   if (!apiKey) {
     throw new Error(
@@ -135,12 +161,16 @@ export type MailgunOptions = {
   apiKey?: string;
   domain?: string;
   region?: string; // "us" (default) or "eu"
+  allowList?: string[];
+  blockList?: string[];
 };
 
 export async function _sendWithMailgun(
   params: EmailParams,
   options?: MailgunOptions
 ): Promise<EmailResult> {
+  validateRecipients(params, options);
+
   const apiKey = options?.apiKey || process.env.MAILGUN_API_KEY;
   if (!apiKey) {
     throw new Error(

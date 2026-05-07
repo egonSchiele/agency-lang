@@ -53,6 +53,15 @@ authorize(name: string, authUrl: string, tokenUrl: string, clientId: string, cli
 
 Start an OAuth 2.0 authorization flow. Opens the user's browser for consent, captures the callback, exchanges the code for tokens, and saves them locally. Only needs to be run once per provider. Parameters: name (identifier like "google-calendar"), authUrl (authorization endpoint), tokenUrl (token endpoint), clientId, clientSecret, scopes (space-separated), port (callback port, default 8914), extraAuthParams (space-separated key=value pairs for provider-specific params like "access_type=offline prompt=consent").
 
+  @param name - Provider identifier
+  @param authUrl - Authorization endpoint URL
+  @param tokenUrl - Token endpoint URL
+  @param clientId - OAuth client ID
+  @param clientSecret - OAuth client secret
+  @param scopes - Space-separated scopes
+  @param port - Callback port
+  @param extraAuthParams - Extra key=value pairs for the auth request
+
 **Parameters:**
 
 | Name | Type | Default |
@@ -86,7 +95,7 @@ Get a valid OAuth access token for a previously authorized provider. Automatical
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/oauth.agency#L69))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/oauth.agency#L78))
 
 ### isAuthorized
 
@@ -104,7 +113,7 @@ Check if OAuth tokens exist for a given provider name. Returns true if tokens ar
 
 **Returns:** `boolean`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/oauth.agency#L80))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/oauth.agency#L89))
 
 ### revokeAuth
 
@@ -122,4 +131,4 @@ Delete stored OAuth tokens for a provider. The user will need to run authorize a
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/oauth.agency#L87))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/oauth.agency#L96))

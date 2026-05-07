@@ -119,8 +119,6 @@ export function expressionToString(expr: Expression): string {
           ? `...${expressionToString(entry.value)}`
           : `${(entry as any).key}: ${expressionToString((entry as any).value)}`
       ).join(", ")}}`;
-    case "placeholder":
-      return "?";
     case "tryExpression":
       return `try ${expressionToString(expr.call)}`;
     case "newExpression": {
@@ -134,6 +132,11 @@ export function expressionToString(expr: Expression): string {
     case "interruptStatement": {
       const args = expr.arguments.map(callArgToString).join(", ");
       return `interrupt ${expr.kind}(${args})`;
+    }
+    case "blockArgument": {
+      const params = expr.params.map(p => p.typeHint ? `${p.name}: ${variableTypeToString(p.typeHint, {})}` : p.name).join(", ");
+      const paramStr = expr.params.length === 1 && !expr.params[0].typeHint ? params : `(${params})`;
+      return `\\${paramStr} -> ...`;
     }
   }
 }

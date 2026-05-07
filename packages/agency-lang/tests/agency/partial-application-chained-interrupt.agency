@@ -1,0 +1,11 @@
+def secureAction(project: string, env: string, action: string): string {
+  const check = interrupt("Confirm: ${action} on ${project}/${env}?")
+  return "${project}/${env}/${action}"
+}
+
+node main() {
+  const step1 = secureAction.partial(project: "myapp")
+  const step2 = step1.partial(env: "prod")
+  const result = step2("deploy")
+  return result
+}

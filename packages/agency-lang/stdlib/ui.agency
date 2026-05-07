@@ -23,6 +23,9 @@ export safe def log(message: string) {
 export safe def status(left: string, right: string = "") {
   """
   Update the status bar. The left text appears on the left side, the right text on the right.
+
+  @param left - Text for the left side
+  @param right - Text for the right side
   """
   _status(left, right)
 }
@@ -30,6 +33,9 @@ export safe def status(left: string, right: string = "") {
 export safe def chat(role: string = "", message: string = "") {
   """
   Print a chat message with a colored role prefix. Built-in colors: "user" (cyan), "agent" (white). Other roles appear dim.
+
+  @param role - The speaker role
+  @param message - The message text
   """
   _chat(role, message)
 }
@@ -37,6 +43,9 @@ export safe def chat(role: string = "", message: string = "") {
 export safe def code(filename: string, content: string) {
   """
   Display a code block with a filename header and line numbers, inside a bordered box.
+
+  @param filename - The filename to display
+  @param content - The code content
   """
   _code(filename, content)
 }
@@ -44,6 +53,9 @@ export safe def code(filename: string, content: string) {
 export safe def diff(filename: string, content: string) {
   """
   Display a diff with colored +/- lines, inside a bordered box with the filename as a header.
+
+  @param filename - The filename to display
+  @param content - The diff content
   """
   _diff(filename, content)
 }

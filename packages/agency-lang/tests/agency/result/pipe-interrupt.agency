@@ -13,6 +13,6 @@ def interruptingAdd(x: number, y: number): number {
 node main() {
   // Chain: countAndDouble runs first, then interruptingAdd pauses.
   // On resume, countAndDouble should NOT re-run (callCount stays 1).
-  let r = success(5) |> countAndDouble |> interruptingAdd(?, 10)
+  let r = success(5) |> countAndDouble |> interruptingAdd.partial(y: 10)
   return { value: r, callCount: getMutable("callCount", 0) }
 }

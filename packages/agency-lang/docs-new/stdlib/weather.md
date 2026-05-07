@@ -34,6 +34,9 @@ weather(location: string, units: string): Result
 
 Get current weather for a city name or zip code. Returns temperature, feels-like temperature, humidity, wind speed/direction, precipitation, cloud cover, and a weather description. Set units to "imperial" (default) for Fahrenheit/mph or "metric" for Celsius/km/h. Weather data provided by Open-Meteo (https://open-meteo.com), licensed under CC BY 4.0. Free API usage is for non-commercial purposes only.
 
+  @param location - City name or zip code
+  @param units - "imperial" for Fahrenheit or "metric" for Celsius
+
 **Parameters:**
 
 | Name | Type | Default |
@@ -59,7 +62,7 @@ celsiusToFahrenheit(celsius: number): number
 
 **Returns:** `number`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/weather.agency#L34))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/weather.agency#L37))
 
 ### fahrenheitToCelsius
 
@@ -75,4 +78,4 @@ fahrenheitToCelsius(fahrenheit: number): number
 
 **Returns:** `number`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/weather.agency#L38))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/weather.agency#L41))

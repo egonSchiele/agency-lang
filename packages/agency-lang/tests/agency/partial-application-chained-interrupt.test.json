@@ -1,0 +1,17 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "\"myapp/prod/deploy\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "chained partial application survives interrupt with both bound values intact",
+      "interruptHandlers": [
+        {
+          "action": "approve",
+          "expectedMessage": "Confirm: deploy on myapp/prod?"
+        }
+      ]
+    }
+  ]
+}

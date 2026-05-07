@@ -1,10 +1,10 @@
 import * as readline from "readline";
 import process from "process";
 import { readFile, writeFile } from "fs/promises";
-import path from "path";
 import { execFile } from "child_process";
 import { promisify } from "util";
 import { detectPlatform } from "./utils.js";
+import { resolvePath } from "./resolvePath.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -46,40 +46,22 @@ export function _round(num: number, precision: number): number {
   return Math.round(num * factor) / factor;
 }
 
-export async function _fetch(url: string): Promise<string> {
-  const result = await fetch(url);
-  try {
-    const text = await result.text();
-    return text;
-  } catch (e) {
-    throw new Error(`Failed to get text from ${url}: ${e}`);
-  }
-}
+export { _fetch, _fetchJSON } from "./http.js";
 
-export async function _fetchJSON(url: string): Promise<any> {
-  const result = await fetch(url);
-  try {
-    const json = await result.json();
-    return json;
-  } catch (e) {
-    throw new Error(`Failed to parse JSON from ${url}: ${e}`);
-  }
-}
-
-export async function _read(filename: string): Promise<string> {
-  const filePath = path.resolve(process.cwd(), filename);
+export async function _read(dir: string, filename: string): Promise<string> {
+  const filePath = await resolvePath(dir, filename);
   const data = await readFile(filePath);
   return data.toString("utf8");
 }
 
-export async function _write(filename: string, content: string): Promise<boolean> {
-  const filePath = path.resolve(process.cwd(), filename);
+export async function _write(dir: string, filename: string, content: string): Promise<boolean> {
+  const filePath = await resolvePath(dir, filename);
   await writeFile(filePath, content, "utf8");
   return true;
 }
 
-export async function _readImage(filename: string): Promise<string> {
-  const filePath = path.resolve(process.cwd(), filename);
+export async function _readImage(dir: string, filename: string): Promise<string> {
+  const filePath = await resolvePath(dir, filename);
   const data = await readFile(filePath);
   return data.toString("base64");
 }

@@ -1,0 +1,25 @@
+{
+  "tests": [
+    {
+      "nodeName": "testBasic",
+      "input": "",
+      "expectedOutput": "[2,4,6]",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "inline block as named arg to .partial()"
+    },
+    {
+      "nodeName": "testTyped",
+      "input": "",
+      "expectedOutput": "[11,21,31]",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "typed inline block as named arg to .partial()"
+    },
+    {
+      "nodeName": "testInPipe",
+      "input": "",
+      "expectedOutput": "{\"__type\":\"resultType\",\"success\":true,\"value\":[10,20,30]}",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "inline block in .partial() used as pipe stage"
+    }
+  ]
+}

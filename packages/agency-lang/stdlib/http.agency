@@ -1,31 +1,17 @@
-import { _fetch, _fetchJSON, _webfetch } from "./lib/http.js"
+import { _webfetch } from "./lib/http.js"
 
-export def fetch(url: string): Result {
+export def webfetch(baseUrl: string, path: string = "", headers: object = {}, allowedDomains: string[] = []): Result {
   """
-  Fetch a URL and return the response body as text. Fails on network errors or if the response body exceeds 10 MB.
-  """
-  return interrupt std::http::fetch("Are you sure you want to fetch this URL?", {
-    url: url
-  })
-  return try _fetch(url)
-}
+  Fetch a URL and return the body as readable markdown when the response is HTML, or as plain text otherwise. Useful for extracting page content for an LLM. Provide baseUrl and optionally path (they are joined). Set headers for custom request headers. Set allowedDomains to restrict which domains can be fetched. Fails on network errors, domain violations, or if the response body exceeds 10 MB.
 
-export def fetchJSON(url: string): Result {
-  """
-  Fetch a URL and parse the response body as JSON. Fails on network errors, invalid JSON, or if the response body exceeds 10 MB.
-  """
-  return interrupt std::http::fetchJSON("Are you sure you want to fetch this URL as JSON?", {
-    url: url
-  })
-  return try _fetchJSON(url)
-}
-
-export def webfetch(url: string): Result {
-  """
-  Fetch a URL and return the body as readable markdown when the response is HTML, or as plain text otherwise. Useful for extracting page content for an LLM. Fails on network errors or if the response body exceeds 10 MB.
+  @param baseUrl - The base URL to fetch
+  @param path - Optional path appended to baseUrl
+  @param headers - Custom request headers
+  @param allowedDomains - Restrict fetches to these domains (empty allows all)
   """
   return interrupt std::http::webfetch("Are you sure you want to fetch this URL?", {
-    url: url
+    baseUrl: baseUrl,
+    path: path
   })
-  return try _webfetch(url)
+  return try _webfetch(baseUrl, path, headers, allowedDomains)
 }

@@ -34,6 +34,10 @@ setSecret(key: string, value: string, service: string): Result
 
 Store a secret in the system keyring (macOS Keychain or Linux Secret Service). The secret is stored under the given service name (default "agency-lang") with the given key. Overwrites any existing value for the same key.
 
+  @param key - The secret key name
+  @param value - The secret value
+  @param service - The service name in the keyring
+
 **Parameters:**
 
 | Name | Type | Default |
@@ -54,6 +58,9 @@ getSecret(key: string, service: string): Result
 
 Retrieve a secret from the system keyring by key. Returns the secret value as a string, or null if not found. Uses the "agency-lang" service by default.
 
+  @param key - The secret key name
+  @param service - The service name in the keyring
+
 **Parameters:**
 
 | Name | Type | Default |
@@ -63,7 +70,7 @@ Retrieve a secret from the system keyring by key. Returns the secret value as a 
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/keyring.agency#L41))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/keyring.agency#L45))
 
 ### deleteSecret
 
@@ -73,6 +80,9 @@ deleteSecret(key: string, service: string): Result
 
 Delete a secret from the system keyring. Returns true if deleted, false if the key did not exist.
 
+  @param key - The secret key name
+  @param service - The service name in the keyring
+
 **Parameters:**
 
 | Name | Type | Default |
@@ -82,7 +92,7 @@ Delete a secret from the system keyring. Returns true if deleted, false if the k
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/keyring.agency#L53))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/keyring.agency#L60))
 
 ### isKeyringAvailable
 
@@ -94,4 +104,4 @@ Check if the system keyring is available on this platform. Returns true on macOS
 
 **Returns:** `boolean`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/keyring.agency#L65))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/keyring.agency#L75))

@@ -25,6 +25,7 @@ import {
   TYPES_THAT_DONT_TRIGGER_NEW_PART,
 } from "@/config.js";
 import type { SourceLocationOpts } from "@/runtime/state/checkpointStore.js";
+import { BlockArgument } from "@/types/blockArgument.js";
 import { DebuggerStatement } from "@/types/debuggerStatement.js";
 import { SchemaExpression } from "@/types/schemaExpression.js";
 import { expressionToString } from "@/utils/node.js";
@@ -881,10 +882,6 @@ export class TypeScriptBuilder {
         return this.processKeyword(node);
       case "debuggerStatement":
         return this.processDebuggerStatement(node);
-      case "placeholder":
-        throw new Error(
-          "Placeholder '?' can only appear on the right side of a |> pipe operator",
-        );
       case "tryExpression":
         return this.processTryExpression(node);
       case "classDefinition":
@@ -897,6 +894,8 @@ export class TypeScriptBuilder {
         return this.processInterruptStatement(node);
       case "regex":
         return ts.raw(`/${node.pattern}/${node.flags}`);
+      case "blockArgument":
+        return this.processBlockAsExpression(node);
       default:
         throw new Error(`Unhandled Agency node type: ${(node as any).type}`);
     }
@@ -1530,6 +1529,50 @@ export class TypeScriptBuilder {
   }
 
   /**
+   * Compile a BlockArgument that appears as a standalone expression
+   * (e.g. as a named arg value in .partial(), or assigned to a variable).
+   * Uses type annotations on the block params if present, falls back to 'any'.
+   */
+  private processBlockAsExpression(block: BlockArgument): TsNode {
+    const blockParams: TsParam[] = block.params.map((p) => ({
+      name: p.name,
+      typeAnnotation: p.typeHint ? formatTypeHintTs(p.typeHint) : "any",
+    }));
+
+    const blockName = `__block_${this._blockCounter++}`;
+    const parentScopeName = this.currentScopeName();
+    this.startScope({ type: "block", blockName });
+    this._sourceMapBuilder.enterScope(this.moduleId, blockName);
+    const bodyParts = this.processBodyAsParts(block.body);
+    this._sourceMapBuilder.enterScope(this.moduleId, parentScopeName);
+    this.endScope();
+
+    const bodyStr = bodyParts.map((n) => printTs(n, 1)).join("\n");
+
+    const blockSetupCode = renderBlockSetup.default({
+      params: block.params.map((p) => ({
+        paramName: p.name,
+        paramNameQuoted: JSON.stringify(p.name),
+      })),
+      moduleId: JSON.stringify(this.moduleId),
+      scopeName: JSON.stringify(blockName),
+      body: bodyStr,
+    });
+
+    const blockFn = ts.arrowFn(
+      blockParams,
+      ts.statements([ts.raw(blockSetupCode)]),
+      { async: true },
+    );
+    return ts.agencyFunctionWrap(
+      blockFn,
+      blockName,
+      this.moduleId,
+      block.params.map((p) => ({ name: p.name })),
+    );
+  }
+
+  /**
    * Build a tool definition TsNode for an Agency function.
    * Returns ts.id("null") if the function has no parameters (no schema needed for tools).
    */
@@ -1826,10 +1869,9 @@ export class TypeScriptBuilder {
     });
 
     // Build AgencyFunction.create() params metadata
-    const nonBlockParams = parameters.filter(
-      (p) => !p.typeHint || p.typeHint.type !== "blockType",
-    );
-    const paramNodes = nonBlockParams.map((p) =>
+    // Include all params (including block-typed) so .partial() can bind them by name.
+    // Block-typed params are separately excluded from the tool schema (buildToolDefinition).
+    const paramNodes = parameters.map((p) =>
       ts.obj({
         name: ts.str(p.name),
         hasDefault: ts.bool(!!p.defaultValue),
@@ -3113,36 +3155,10 @@ export class TypeScriptBuilder {
   private buildPipeLambda(stage: Expression): TsNode {
     const pipeArg = ts.raw("__pipeArg");
 
-    // Method call with placeholder: obj.method(?, args) or obj.foo.method(?, args)
     if (stage.type === "valueAccess") {
       const lastElement = stage.chain[stage.chain.length - 1];
-      if (lastElement?.kind === "methodCall") {
-        const methodArgs = lastElement.functionCall.arguments;
-        const placeholderCount = methodArgs.filter(
-          (a) => a.type === "placeholder",
-        ).length;
 
-        if (placeholderCount > 0) {
-          if (placeholderCount !== 1) {
-            throw new Error(
-              `Method call on right side of |> must contain exactly one ? placeholder, got ${placeholderCount}`,
-            );
-          }
-          const receiver = this.processValueAccessPartial(stage);
-          const argNodes = methodArgs.map((a) =>
-            a.type === "placeholder" ? pipeArg : this.processNode(a as AgencyNode),
-          );
-          const methodName = lastElement.functionCall.functionName;
-          const descriptor = ts.obj({ type: ts.str("positional"), args: ts.arr(argNodes) });
-          const callExpr = ts.call(
-            ts.id("__callMethod"),
-            [receiver, ts.str(methodName), descriptor, this.buildStateConfig()],
-          );
-          return ts.arrowFn([{ name: "__pipeArg" }], ts.await(callExpr), { async: true });
-        }
-      }
-
-      // Method call with args but no placeholder (e.g. multiply.partial(a: 3)):
+      // Method call with args (e.g. multiply.partial(a: 3)):
       // call the method first to produce a function, then invoke with piped value
       if (lastElement?.kind === "methodCall" && lastElement.functionCall.arguments.length > 0) {
         const fnExpr = this.processNode(stage);
@@ -3205,24 +3221,37 @@ export class TypeScriptBuilder {
     }
 
     if (stage.type === "functionCall") {
-      const placeholderCount = stage.arguments.filter(
-        (a) => a.type === "placeholder",
-      ).length;
-      if (placeholderCount !== 1) {
-        throw new Error(
-          `Function call on right side of |> must contain exactly one ? placeholder, got ${placeholderCount}`,
-        );
-      }
-      const argNodes = stage.arguments.map((a) =>
-        a.type === "placeholder" ? pipeArg : this.processNode(a as AgencyNode),
+      throw new Error(
+        `Function call '${stage.functionName}(...)' cannot appear as a pipe stage. Use .partial() to bind arguments, e.g. ${stage.functionName}.partial(...)`,
       );
-      if (stage.block) {
-        argNodes.push(this.processBlockArgument(stage));
+    }
+
+    if (stage.type === "valueAccess") {
+      // Delegate to buildPipeLambda which already handles valueAccess fully,
+      // then extract the body from the resulting arrow function.
+      // Simpler: just process the valueAccess as a callee and invoke with piped arg.
+      const lastElement = stage.chain[stage.chain.length - 1];
+      if (lastElement?.kind === "methodCall" && lastElement.functionCall.arguments.length > 0) {
+        // e.g. map.partial(func: \x -> x * 2) — call the method, then invoke result with piped value
+        const fnExpr = this.processNode(stage);
+        const descriptor = ts.obj({ type: ts.str("positional"), args: ts.arr([pipeArg]) });
+        return ts.await(ts.call(ts.id("__call"), [fnExpr, descriptor, this.buildStateConfig()]));
       }
-      const callee = stage.scope
-        ? ts.scopedVar(mapFunctionName(stage.functionName), stage.scope, this.moduleId)
-        : ts.raw(mapFunctionName(stage.functionName));
-      const descriptor = ts.obj({ type: ts.str("positional"), args: ts.arr(argNodes) });
+      // Bare method/property reference — use __callMethod
+      const receiver = this.processValueAccessPartial(stage);
+      const lastEl = stage.chain[stage.chain.length - 1];
+      const propName = lastEl.kind === "property" ? lastEl.name
+        : lastEl.kind === "methodCall" ? lastEl.functionCall.functionName
+          : null;
+      if (propName) {
+        const descriptor = ts.obj({ type: ts.str("positional"), args: ts.arr([pipeArg]) });
+        return ts.await(ts.call(
+          ts.id("__callMethod"),
+          [receiver, ts.str(propName), descriptor, this.buildStateConfig()],
+        ));
+      }
+      const callee = this.processNode(stage);
+      const descriptor = ts.obj({ type: ts.str("positional"), args: ts.arr([pipeArg]) });
       return ts.await(ts.call(ts.id("__call"), [callee, descriptor, this.buildStateConfig()]));
     }
 

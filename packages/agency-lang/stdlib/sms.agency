@@ -23,9 +23,17 @@ type SmsResult = {
   status: string
 }
 
-export def sendSms(to: string, body: string, from: string = "", accountSid: string = "", authToken: string = ""): Result {
+export def sendSms(to: string, body: string, from: string = "", accountSid: string = "", authToken: string = "", allowList: string[] = [], blockList: string[] = []): Result {
   """
-  Send an SMS text message via the Twilio API. Requires TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, and TWILIO_FROM_NUMBER env vars, or pass them directly. Parameters: to (recipient phone number in E.164 format), body (message text), and optionally from, accountSid, authToken.
+  Send an SMS text message via the Twilio API. Requires TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, and TWILIO_FROM_NUMBER env vars, or pass them directly. Set allowList to restrict recipients to specific numbers. Set blockList to reject specific numbers.
+
+  @param to - Recipient phone number (E.164 format)
+  @param body - Message text
+  @param from - Sender phone number
+  @param accountSid - Twilio account SID
+  @param authToken - Twilio auth token
+  @param allowList - Only allow sending to these numbers
+  @param blockList - Block sending to these numbers
   """
   return interrupt std::sendSms("Are you sure you want to send this SMS?", {
     to: to
@@ -34,6 +42,8 @@ export def sendSms(to: string, body: string, from: string = "", accountSid: stri
   return try _sendSms(to, body, {
     from: from,
     accountSid: accountSid,
-    authToken: authToken
+    authToken: authToken,
+    allowList: allowList,
+    blockList: blockList
   })
 }

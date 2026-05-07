@@ -318,6 +318,77 @@ function synthObject(
   };
 }
 
+function validatePartialOrDescribe(
+  expr: ValueAccess,
+  element: { kind: "methodCall"; functionCall: { type: "functionCall"; functionName: string; arguments: any[] } },
+  methodName: string,
+  ctx: TypeCheckerContext,
+): void {
+  const baseName =
+    expr.base.type === "variableName" ? (expr.base as any).value : null;
+  const fnDef = baseName ? ctx.functionDefs[baseName] ?? null : null;
+  const importedSig = baseName ? ctx.importedFunctions[baseName] ?? null : null;
+
+  if (methodName === "partial") {
+    const args = element.functionCall.arguments;
+    const hasNonNamed = args.some(
+      (a: any) => !("type" in a && a.type === "namedArgument"),
+    );
+    if (hasNonNamed) {
+      ctx.errors.push({
+        message: `.partial() requires named arguments, e.g. fn.partial(a: 5).`,
+        loc: expr.loc,
+      });
+    }
+    const params = fnDef?.parameters ?? importedSig?.parameters ?? null;
+    if (!params) return;
+    const paramNames = new Set(params.map((p) => p.name));
+    const namedArgs = args.filter(
+      (a: any) => "type" in a && a.type === "namedArgument",
+    );
+    for (const arg of namedArgs) {
+      if (!paramNames.has(arg.name)) {
+        ctx.errors.push({
+          message: `Unknown parameter '${arg.name}' in .partial() call. '${baseName}' has parameters: ${[...paramNames].join(", ")}.`,
+          loc: expr.loc,
+        });
+        continue;
+      }
+      const param = params.find((p) => p.name === arg.name);
+      if (param?.variadic) {
+        ctx.errors.push({
+          message: `Variadic parameter '${arg.name}' cannot be bound in .partial().`,
+          loc: expr.loc,
+        });
+      }
+    }
+    return;
+  }
+
+  if (methodName === "describe") {
+    const args = element.functionCall.arguments;
+    if (
+      args.length !== 1 ||
+      ("type" in args[0] && args[0].type === "namedArgument")
+    ) {
+      ctx.errors.push({
+        message: `.describe() requires exactly one string argument.`,
+        loc: expr.loc,
+      });
+    } else if (
+      "type" in args[0] &&
+      args[0].type !== "string" &&
+      args[0].type !== "multiLineString" &&
+      args[0].type !== "variableName"
+    ) {
+      ctx.errors.push({
+        message: `.describe() argument must be a string, got ${args[0].type}.`,
+        loc: expr.loc,
+      });
+    }
+  }
+}
+
 export function synthValueAccess(
   expr: ValueAccess,
   scope: Scope,
@@ -327,6 +398,18 @@ export function synthValueAccess(
   const typeAliases = ctx.getTypeAliases();
 
   for (const element of expr.chain) {
+    // Validate .partial()/.describe() even when the base type is unknown,
+    // since we can check argument structure against the function definition.
+    // Use continue (not return) so chained calls like fn.partial(a: 1).describe("x") are all validated.
+    if (element.kind === "methodCall") {
+      const methodName = element.functionCall.functionName;
+      if (methodName === "partial" || methodName === "describe") {
+        validatePartialOrDescribe(expr, element, methodName, ctx);
+        currentType = "any";
+        continue;
+      }
+    }
+
     if (currentType === "any") return "any";
     const resolved = resolveType(currentType, typeAliases);
     if (resolved.type === "primitiveType" && resolved.value === "any")

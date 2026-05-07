@@ -22,13 +22,21 @@ type IMessageResult = {
   sent: boolean
 }
 
-export def sendIMessage(to: string, message: string): Result {
+export def sendIMessage(to: string, message: string, allowList: string[] = [], blockList: string[] = []): Result {
   """
-  Send an iMessage via the macOS Messages app. Only works on macOS with Messages.app signed in. Parameters: to (phone number or email address of the recipient), message (the text to send). No API key or account required.
+  Send an iMessage via the macOS Messages app. Only works on macOS with Messages.app signed in. Set allowList to restrict recipients to specific addresses/numbers. Set blockList to reject specific addresses/numbers.
+
+  @param to - Phone number or email of the recipient
+  @param message - The text to send
+  @param allowList - Only allow sending to these addresses/numbers
+  @param blockList - Block sending to these addresses/numbers
   """
   return interrupt std::sendIMessage("Are you sure you want to send this iMessage?", {
     to: to
   })
 
-  return try _sendIMessage(to, message)
+  return try _sendIMessage(to, message, {
+    allowList: allowList,
+    blockList: blockList
+  })
 }

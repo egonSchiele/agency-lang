@@ -30,8 +30,25 @@ async function readBodyCapped(response: Response, url: string): Promise<string> 
   return chunks.join("");
 }
 
-export async function _fetch(url: string): Promise<string> {
-  const result = await fetch(url);
+function validateUrl(
+  baseUrl: string,
+  urlPath: string,
+  allowedDomains: string[],
+): string {
+  const url = resolveUrl(baseUrl, urlPath);
+  const domainError = checkAllowedDomains(url, allowedDomains);
+  if (domainError) throw new Error(domainError);
+  return url;
+}
+
+export async function _fetch(
+  baseUrl: string,
+  urlPath: string,
+  headers: Record<string, string>,
+  allowedDomains: string[],
+): Promise<string> {
+  const url = validateUrl(baseUrl, urlPath, allowedDomains);
+  const result = await fetch(url, { headers });
   try {
     return await readBodyCapped(result, url);
   } catch (e) {
@@ -39,8 +56,14 @@ export async function _fetch(url: string): Promise<string> {
   }
 }
 
-export async function _fetchJSON(url: string): Promise<any> {
-  const result = await fetch(url);
+export async function _fetchJSON(
+  baseUrl: string,
+  urlPath: string,
+  headers: Record<string, string>,
+  allowedDomains: string[],
+): Promise<any> {
+  const url = validateUrl(baseUrl, urlPath, allowedDomains);
+  const result = await fetch(url, { headers });
   const text = await readBodyCapped(result, url);
   try {
     return JSON.parse(text);
@@ -49,8 +72,14 @@ export async function _fetchJSON(url: string): Promise<any> {
   }
 }
 
-export async function _webfetch(url: string): Promise<string> {
-  const result = await fetch(url);
+export async function _webfetch(
+  baseUrl: string,
+  urlPath: string,
+  headers: Record<string, string>,
+  allowedDomains: string[],
+): Promise<string> {
+  const url = validateUrl(baseUrl, urlPath, allowedDomains);
+  const result = await fetch(url, { headers });
   const contentType = result.headers.get("content-type") ?? "";
   const body = await readBodyCapped(result, url);
   if (contentType.includes("text/html")) {
@@ -110,4 +139,28 @@ const ENTITIES: Record<string, string> = {
 
 function stripTags(s: string): string {
   return s.replace(/<[^>]+>/g, "");
+}
+
+export function resolveUrl(baseUrl: string, path: string): string {
+  if (!path) return baseUrl;
+  const base = baseUrl.endsWith("/") ? baseUrl.slice(0, -1) : baseUrl;
+  const p = path.startsWith("/") ? path : "/" + path;
+  return base + p;
+}
+
+export function checkAllowedDomains(
+  url: string,
+  allowedDomains: string[],
+): string | null {
+  if (allowedDomains.length === 0) return null;
+  try {
+    const hostname = new URL(url).hostname.toLowerCase();
+    const allowed = allowedDomains.map((d) => d.toLowerCase());
+    if (!allowed.includes(hostname)) {
+      return `Domain "${hostname}" is not in allowedDomains.`;
+    }
+    return null;
+  } catch {
+    return `Invalid URL: "${url}"`;
+  }
 }

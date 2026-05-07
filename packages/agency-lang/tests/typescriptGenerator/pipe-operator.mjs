@@ -484,9 +484,19 @@ __stack.locals.__pipe_0 = await success(5);
     await runner.step(2, async (runner) => {
 __stack.locals.__pipe_1 = await success(5);
     });
-    __stack.locals.r2 = await runner.pipe(3, __stack.locals.__pipe_1, async (__pipeArg) => await __call(multiply, {
+    __stack.locals.r2 = await runner.pipe(3, __stack.locals.__pipe_1, async (__pipeArg) => await __call(await __callMethod(multiply, "partial", {
+      type: "named",
+      positionalArgs: [],
+      namedArgs: {
+        a: 10
+      }
+    }, {
+      ctx: __ctx,
+      threads: __threads,
+      stateStack: __stateStack
+    }), {
       type: "positional",
-      args: [10, __pipeArg]
+      args: [__pipeArg]
     }, {
       ctx: __ctx,
       threads: __threads,
@@ -503,9 +513,19 @@ __stack.locals.__pipe_2 = await success(10);
       threads: __threads,
       stateStack: __stateStack
     }));
-    __stack.locals.r3 = await runner.pipe(6, __stack.locals.__pipe_2, async (__pipeArg) => await __call(multiply, {
+    __stack.locals.r3 = await runner.pipe(6, __stack.locals.__pipe_2, async (__pipeArg) => await __call(await __callMethod(multiply, "partial", {
+      type: "named",
+      positionalArgs: [],
+      namedArgs: {
+        a: 3
+      }
+    }, {
+      ctx: __ctx,
+      threads: __threads,
+      stateStack: __stateStack
+    }), {
       type: "positional",
-      args: [3, __pipeArg]
+      args: [__pipeArg]
     }, {
       ctx: __ctx,
       threads: __threads,
@@ -525,9 +545,19 @@ __stack.locals.__pipe_3 = await failure(`nope`);
     await runner.step(9, async (runner) => {
 __stack.locals.__pipe_4 = await success(10);
     });
-    __stack.locals.r5 = await runner.pipe(10, __stack.locals.__pipe_4, async (__pipeArg) => await __call(safeDivide, {
+    __stack.locals.r5 = await runner.pipe(10, __stack.locals.__pipe_4, async (__pipeArg) => await __call(await __callMethod(safeDivide, "partial", {
+      type: "named",
+      positionalArgs: [],
+      namedArgs: {
+        b: 2
+      }
+    }, {
+      ctx: __ctx,
+      threads: __threads,
+      stateStack: __stateStack
+    }), {
       type: "positional",
-      args: [__pipeArg, 2]
+      args: [__pipeArg]
     }, {
       ctx: __ctx,
       threads: __threads,

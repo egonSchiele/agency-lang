@@ -29,6 +29,10 @@ import { _setSecret, _getSecret, _deleteSecret, _isKeyringAvailable } from "./li
 export def setSecret(key: string, value: string, service: string = "agency-lang"): Result {
   """
   Store a secret in the system keyring (macOS Keychain or Linux Secret Service). The secret is stored under the given service name (default "agency-lang") with the given key. Overwrites any existing value for the same key.
+
+  @param key - The secret key name
+  @param value - The secret value
+  @param service - The service name in the keyring
   """
   return interrupt std::setSecret("Are you sure you want to store a secret in the system keyring?", {
     key: key,
@@ -41,6 +45,9 @@ export def setSecret(key: string, value: string, service: string = "agency-lang"
 export def getSecret(key: string, service: string = "agency-lang"): Result {
   """
   Retrieve a secret from the system keyring by key. Returns the secret value as a string, or null if not found. Uses the "agency-lang" service by default.
+
+  @param key - The secret key name
+  @param service - The service name in the keyring
   """
   return interrupt std::getSecret("Are you sure you want to read a secret from the system keyring?", {
     key: key,
@@ -53,6 +60,9 @@ export def getSecret(key: string, service: string = "agency-lang"): Result {
 export def deleteSecret(key: string, service: string = "agency-lang"): Result {
   """
   Delete a secret from the system keyring. Returns true if deleted, false if the key did not exist.
+
+  @param key - The secret key name
+  @param service - The service name in the keyring
   """
   return interrupt std::deleteSecret("Are you sure you want to delete a secret from the system keyring?", {
     key: key,

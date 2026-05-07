@@ -2,7 +2,8 @@ import { mkdirSync, readFileSync, rmSync, writeFileSync, existsSync } from "fs";
 import { relative, join } from "path";
 import { runApply, readBack } from "./agent.js";
 
-const TMP = join(process.cwd(), "tmp-patch-fixtures");
+const TMP_REL = "tmp-patch-fixtures";
+const TMP = join(process.cwd(), TMP_REL);
 rmSync(TMP, { recursive: true, force: true });
 mkdirSync(TMP, { recursive: true });
 
@@ -16,9 +17,8 @@ async function tryApply(patch) {
 }
 
 // --- Case 1: single-file edit patch ---
-const modifyPath = join(TMP, "modify.txt");
-writeFileSync(modifyPath, "one\ntwo\nthree\n");
-const modifyRel = relative(process.cwd(), modifyPath);
+writeFileSync(join(TMP, "modify.txt"), "one\ntwo\nthree\n");
+const modifyRel = join(TMP_REL, "modify.txt");
 const modifyPatch = [
   `--- a/${modifyRel}`,
   `+++ b/${modifyRel}`,
@@ -30,10 +30,10 @@ const modifyPatch = [
   ``,
 ].join("\n");
 const modifyResult = await tryApply(modifyPatch);
-const modifyContents = (await readBack(modifyPath)).data;
+const modifyContents = (await readBack(modifyRel)).data;
 
 // --- Case 2: new-file patch (/dev/null) ---
-const newRel = relative(process.cwd(), join(TMP, "brand-new.txt"));
+const newRel = join(TMP_REL, "brand-new.txt");
 const newPatch = [
   `--- /dev/null`,
   `+++ b/${newRel}`,
@@ -49,9 +49,8 @@ const newContents = newExists
   : null;
 
 // --- Case 3: context mismatch should fail ---
-const mismatchPath = join(TMP, "mismatch.txt");
-writeFileSync(mismatchPath, "one\ntwo\nthree\n");
-const mismatchRel = relative(process.cwd(), mismatchPath);
+writeFileSync(join(TMP, "mismatch.txt"), "one\ntwo\nthree\n");
+const mismatchRel = join(TMP_REL, "mismatch.txt");
 const mismatchPatch = [
   `--- a/${mismatchRel}`,
   `+++ b/${mismatchRel}`,
@@ -63,7 +62,7 @@ const mismatchPatch = [
   ``,
 ].join("\n");
 const mismatchResult = await tryApply(mismatchPatch);
-const mismatchContents = (await readBack(mismatchPath)).data;
+const mismatchContents = (await readBack(mismatchRel)).data;
 
 writeFileSync(
   "__result.json",

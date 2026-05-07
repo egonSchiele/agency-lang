@@ -1,6 +1,9 @@
 export def mapValues(obj: any, func: (any, string) => any): any {
   """
   Return a new object with the same keys, but with each value transformed by the function. The function receives (value, key).
+
+  @param obj - The object to transform
+  @param func - The function receiving (value, key)
   """
   const result = {}
   for (entry in entries(obj)) {
@@ -12,6 +15,9 @@ export def mapValues(obj: any, func: (any, string) => any): any {
 export def mapEntries(obj: any, func: (any, string) => any): any {
   """
   Return a new object by applying the function to each entry. The function receives (value, key) and should return { key, value }.
+
+  @param obj - The object to transform
+  @param func - The function receiving (value, key) returning {key, value}
   """
   const result = {}
   for (entry in entries(obj)) {
@@ -24,6 +30,9 @@ export def mapEntries(obj: any, func: (any, string) => any): any {
 export def filterEntries(obj: any, func: (any, string) => boolean): any {
   """
   Return a new object containing only the entries for which the function returns true. The function receives (value, key).
+
+  @param obj - The object to filter
+  @param func - The predicate receiving (value, key)
   """
   const result = {}
   for (entry in entries(obj)) {
@@ -37,6 +46,9 @@ export def filterEntries(obj: any, func: (any, string) => boolean): any {
 export def everyEntry(obj: any, func: (any, string) => boolean): boolean {
   """
   Return true if the function returns true for every entry in the object. The function receives (value, key).
+
+  @param obj - The object to test
+  @param func - The predicate receiving (value, key)
   """
   for (k in keys(obj)) {
     if (!func(obj[k], k)) {
@@ -49,6 +61,9 @@ export def everyEntry(obj: any, func: (any, string) => boolean): boolean {
 export def someEntry(obj: any, func: (any, string) => boolean): boolean {
   """
   Return true if the function returns true for at least one entry in the object. The function receives (value, key).
+
+  @param obj - The object to test
+  @param func - The predicate receiving (value, key)
   """
   for (k in keys(obj)) {
     if (func(obj[k], k)) {

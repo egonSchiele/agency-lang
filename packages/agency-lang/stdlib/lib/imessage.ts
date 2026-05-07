@@ -1,5 +1,6 @@
 import { execFile } from "child_process";
 import { promisify } from "util";
+import { checkRecipients } from "./messaging.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -7,9 +8,15 @@ export type IMessageResult = {
   sent: boolean;
 };
 
+export type IMessageOptions = {
+  allowList?: string[];
+  blockList?: string[];
+};
+
 export async function _sendIMessage(
   to: string,
-  message: string
+  message: string,
+  options?: IMessageOptions,
 ): Promise<IMessageResult> {
   if (process.platform !== "darwin") {
     throw new Error("iMessage is only available on macOS.");
@@ -22,6 +29,13 @@ export async function _sendIMessage(
   if (!message) {
     throw new Error("Missing message body.");
   }
+
+  const recipientError = checkRecipients(
+    [to],
+    options?.allowList ?? [],
+    options?.blockList ?? [],
+  );
+  if (recipientError) throw new Error(recipientError);
 
   const script = `
     tell application "Messages"

@@ -35,13 +35,13 @@ node main() {
   }
 
   // Stage 2: pipe with Result-returning function (bind path)
-  let r3 = success(10) |> safeDivide(?, 2)
+  let r3 = success(10) |> safeDivide.partial(b: 2)
 
-  // Stage 2: ? as first argument
-  let r4 = success(7) |> subtract(?, 3)
+  // Stage 2: partial application as first argument
+  let r4 = success(7) |> subtract.partial(b: 3)
 
   // Stage 2: pipe bind that fails mid-chain
-  let r5 = success(10) |> safeDivide(?, 0) |> double
+  let r5 = success(10) |> safeDivide.partial(b: 0) |> double
 
   return { val: val, err: err, r3: r3, r4: r4, r5Success: isSuccess(r5), r5Error: r5.error, r5HasCheckpoint: r5.checkpoint != null }
 }

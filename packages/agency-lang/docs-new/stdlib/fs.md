@@ -23,7 +23,7 @@ type Edit = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L22))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L29))
 
 ### MultiEditResult
 
@@ -35,7 +35,7 @@ type MultiEditResult = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L28))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L35))
 
 ### PatchResult
 
@@ -46,17 +46,23 @@ type PatchResult = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L46))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L58))
 
 ## Functions
 
 ### edit
 
 ```ts
-edit(filename: string, oldText: string, newText: string, replaceAll: boolean): Result
+edit(filename: string, oldText: string, newText: string, replaceAll: boolean, dir: string): Result
 ```
 
 Edit a file by replacing oldText with newText. By default oldText must match exactly once in the file; pass replaceAll=true to replace every occurrence. Fails if oldText is not found or appears multiple times (unless replaceAll is set).
+
+  @param filename - The file to edit
+  @param oldText - The text to find
+  @param newText - The replacement text
+  @param replaceAll - Replace all occurrences instead of just the first
+  @param dir - The directory to resolve the filename against (defaults to ".")
 
 **Parameters:**
 
@@ -66,6 +72,7 @@ Edit a file by replacing oldText with newText. By default oldText must match exa
 | oldText | `string` |  |
 | newText | `string` |  |
 | replaceAll | `boolean` | false |
+| dir | `string` | "." |
 
 **Returns:** `Result`
 
@@ -74,10 +81,14 @@ Edit a file by replacing oldText with newText. By default oldText must match exa
 ### multiedit
 
 ```ts
-multiedit(filename: string, edits: Edit[]): Result
+multiedit(filename: string, edits: Edit[], dir: string): Result
 ```
 
 Apply a sequence of edits to a single file atomically. Each edit has oldText, newText, and replaceAll. Fails if any edit's oldText is not found or is ambiguous; when any edit fails, nothing is written.
+
+  @param filename - The file to edit
+  @param edits - Array of edit objects with oldText, newText, and replaceAll
+  @param dir - The directory to resolve the filename against (defaults to ".")
 
 **Parameters:**
 
@@ -85,10 +96,11 @@ Apply a sequence of edits to a single file atomically. Each edit has oldText, ne
 |---|---|---|
 | filename | `string` |  |
 | edits | `Edit[]` |  |
+| dir | `string` | "." |
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L34))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L41))
 
 ### applyPatch
 
@@ -106,7 +118,7 @@ Apply a unified diff to the working tree. Supports file creation (--- /dev/null)
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L51))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L63))
 
 ### mkdir
 
@@ -124,7 +136,7 @@ Create a directory, including any missing parent directories. Idempotent: succee
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L62))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L74))
 
 ### copy
 
@@ -134,24 +146,8 @@ copy(src: string, dest: string): Result
 
 Copy a file or directory. Directories are copied recursively. Fails if src does not exist or dest cannot be written.
 
-**Parameters:**
-
-| Name | Type | Default |
-|---|---|---|
-| src | `string` |  |
-| dest | `string` |  |
-
-**Returns:** `Result`
-
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L73))
-
-### move
-
-```ts
-move(src: string, dest: string): Result
-```
-
-Move or rename a file or directory. Falls back to copy+remove if src and dest are on different filesystems. Fails if src does not exist.
+  @param src - The source path
+  @param dest - The destination path
 
 **Parameters:**
 
@@ -163,6 +159,28 @@ Move or rename a file or directory. Falls back to copy+remove if src and dest ar
 **Returns:** `Result`
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L85))
+
+### move
+
+```ts
+move(src: string, dest: string): Result
+```
+
+Move or rename a file or directory. Falls back to copy+remove if src and dest are on different filesystems. Fails if src does not exist.
+
+  @param src - The source path
+  @param dest - The destination path
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| src | `string` |  |
+| dest | `string` |  |
+
+**Returns:** `Result`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L100))
 
 ### remove
 
@@ -180,4 +198,4 @@ Delete a file or directory. Directories are removed recursively. Does not fail i
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L97))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L115))

@@ -376,35 +376,6 @@ describe("exprParser", () => {
     });
   });
 
-  describe("placeholder ?", () => {
-    it("parses ? as a placeholder", () => {
-      const result = exprParser("?");
-      expect(result.success).toBe(true);
-      if (result.success) {
-        expect(result.result).toEqualWithoutLoc({ type: "placeholder" });
-      }
-    });
-
-    it("parses ? inside function call arguments", () => {
-      const result = exprParser("foo(10, ?)");
-      expect(result.success).toBe(true);
-      if (result.success && result.result.type === "functionCall") {
-        expect(result.result.arguments[1]).toEqualWithoutLoc({ type: "placeholder" });
-      }
-    });
-
-    it("parses pipe with partial application", () => {
-      const result = exprParser("a |> multiply(10, ?)");
-      expect(result.success).toBe(true);
-      if (result.success && result.result.type === "binOpExpression") {
-        expect(result.result.operator).toBe("|>");
-        if (result.result.right.type === "functionCall") {
-          expect(result.result.right.arguments[1]).toEqualWithoutLoc({ type: "placeholder" });
-        }
-      }
-    });
-  });
-
   describe("schema expressions", () => {
     it("should parse schema(number)", () => {
       const result = exprParser("schema(number)");

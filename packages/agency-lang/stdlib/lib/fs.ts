@@ -3,6 +3,9 @@ import os from "os";
 import path from "path";
 import process from "process";
 import diff_match_patch from "diff-match-patch";
+import { resolvePath } from "./resolvePath.js";
+
+export { resolvePath } from "./resolvePath.js";
 
 export type EditResult = {
   replacements: number;
@@ -10,6 +13,7 @@ export type EditResult = {
 };
 
 export async function _edit(
+  dir: string,
   filename: string,
   oldText: string,
   newText: string,
@@ -18,7 +22,7 @@ export async function _edit(
   if (oldText.length === 0) {
     throw new Error("edit: oldText must not be empty");
   }
-  const full = path.resolve(process.cwd(), filename);
+  const full = await resolvePath(dir, filename);
   const before = await fs.readFile(full, "utf8");
 
   if (replaceAll) {
@@ -65,10 +69,11 @@ export type MultiEditResult = {
 };
 
 export async function _multiedit(
+  dir: string,
   filename: string,
   edits: MultiEdit[],
 ): Promise<MultiEditResult> {
-  const full = path.resolve(process.cwd(), filename);
+  const full = await resolvePath(dir, filename);
   let contents = await fs.readFile(full, "utf8");
   let total = 0;
 

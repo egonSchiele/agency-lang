@@ -1,5 +1,4 @@
 import { applyPatch } from "std::fs"
-
 node runApply(patch: string) {
   handle {
     const result = applyPatch(patch)
@@ -11,7 +10,7 @@ node runApply(patch: string) {
 
 node readBack(filename: string) {
   handle {
-    const result = read(filename)
+    const result = read(filename) catch "error reading file"
   } with (data) {
     return approve()
   }

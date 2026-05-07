@@ -102,7 +102,6 @@ import { IfElse } from "../types/ifElse.js";
 import { ValueAccess } from "../types/access.js";
 import { BlockArgument } from "../types/blockArgument.js";
 import { BinOpExpression, Operator } from "../types/binop.js";
-import { Placeholder } from "../types/placeholder.js";
 import { TryExpression } from "../types/tryExpression.js";
 import { ClassDefinition, ClassField, ClassMethod, NewExpression } from "../types/classDefinition.js";
 import { SchemaExpression } from "../types/schemaExpression.js";
@@ -1165,7 +1164,7 @@ const namedArgumentParser: Parser<NamedArgument> = trace(
     optionalSpaces,
     char(":"),
     optionalSpaces,
-    capture(lazy(() => exprParser), "value"),
+    capture(or(lazy(() => inlineBlockParser), lazy(() => exprParser)), "value"),
   ),
 );
 
@@ -1485,16 +1484,6 @@ function unaryKeywordParser(keyword: string): Parser<Expression> {
 const unaryTypeofParser = unaryKeywordParser("typeof");
 const unaryVoidParser = unaryKeywordParser("void");
 
-// Placeholder parser for `?` in pipe partial application
-const placeholderParser: Parser<Placeholder> = (input: string) => {
-  const result = char("?")(input);
-  if (!result.success) return result;
-  if (result.rest.length > 0 && /[a-zA-Z0-9_]/.test(result.rest[0])) {
-    return failure("placeholder", input);
-  }
-  return success({ type: "placeholder" as const }, result.rest);
-};
-
 // --- try keyword ---
 // Parses: try functionCall(args) or try obj.method(args)
 const tryExpressionParser: Parser<TryExpression> =
@@ -1546,7 +1535,6 @@ const baseAtom: Parser<Expression> = or(
   newExpressionParser,
   schemaExpressionParser,
   lazy(() => interruptExprParser),
-  placeholderParser,
   lazy(() => agencyArrayParser),
   lazy(() => agencyObjectParser),
   lazy(() => booleanParser),
@@ -1803,12 +1791,24 @@ export const binOpParser: Parser<BinOpExpression> = (input: string) => {
 // blockArgument.ts
 // =============================================================================
 
-// Parse a single block parameter (just a name, no type annotation — types come from the function signature)
+// Parse a single block parameter with optional type annotation:
+//   x         — untyped (types inferred from function signature or default to any)
+//   x: number — explicitly typed
 const blockParamParser: Parser<FunctionParameter> = trace(
   "blockParamParser",
   seqC(
     set("type", "functionParameter"),
     capture(many1WithJoin(varNameChar), "name"),
+    optional(
+      captureCaptures(
+        seqC(
+          optionalSpaces,
+          char(":"),
+          optionalSpaces,
+          capture(variableTypeParser, "typeHint"),
+        ),
+      ),
+    ),
   ),
 );
 

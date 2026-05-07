@@ -242,6 +242,11 @@ const mapItems = __AgencyFunction.create({
     hasDefault: false,
     defaultValue: undefined,
     variadic: false
+  }, {
+    name: "block",
+    hasDefault: false,
+    defaultValue: undefined,
+    variadic: false
   }],
   toolDefinition: {
     name: "mapItems",

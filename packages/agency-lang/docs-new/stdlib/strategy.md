@@ -10,6 +10,9 @@ sample(n: number, block: () => any): any[]
 
 Run a block n times in parallel. Returns an array of all results.
 
+  @param n - Number of times to run
+  @param block - The block to execute
+
 **Parameters:**
 
 | Name | Type | Default |
@@ -29,6 +32,9 @@ consensus(n: number, block: () => any): any
 
 Run a block n times in parallel and return the most common result (majority vote).
 
+  @param n - Number of times to run
+  @param block - The block to execute
+
 **Parameters:**
 
 | Name | Type | Default |
@@ -38,7 +44,7 @@ Run a block n times in parallel and return the most common result (majority vote
 
 **Returns:** `any`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/strategy.agency#L10))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/strategy.agency#L13))
 
 ### retry
 
@@ -47,6 +53,10 @@ retry(n: number, test: (any) => boolean, block: () => any): any
 ```
 
 Run a block up to n times. Returns the first result that passes the test function. Returns null if all attempts fail.
+
+  @param n - Maximum number of attempts
+  @param test - The function that returns true when the result is acceptable
+  @param block - The block to execute
 
 **Parameters:**
 
@@ -58,7 +68,7 @@ Run a block up to n times. Returns the first result that passes the test functio
 
 **Returns:** `any`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/strategy.agency#L18))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/strategy.agency#L24))
 
 ### retryWithFeedback
 
@@ -67,6 +77,10 @@ retryWithFeedback(n: number, test: (any) => boolean, block: (any, number) => any
 ```
 
 Run a block up to n times. Each attempt receives the previous result and the attempt number (starting from 1). Returns the first result that passes the test, or the last result if all fail.
+
+  @param n - Maximum number of attempts
+  @param test - The function that returns true when the result is acceptable
+  @param block - The block receiving (previousResult, attemptNumber)
 
 **Parameters:**
 
@@ -78,7 +92,7 @@ Run a block up to n times. Each attempt receives the previous result and the att
 
 **Returns:** `any`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/strategy.agency#L32))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/strategy.agency#L42))
 
 ### firstValid
 
@@ -87,6 +101,10 @@ firstValid(variants: any[], test: (any) => boolean, block: (any) => any): any
 ```
 
 Run a block for each variant in parallel, then return the first result that passes the test. Returns null if none pass.
+
+  @param variants - Array of variants to try
+  @param test - The function that returns true for valid results
+  @param block - The block receiving each variant
 
 **Parameters:**
 
@@ -98,4 +116,4 @@ Run a block for each variant in parallel, then return the first result that pass
 
 **Returns:** `any`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/strategy.agency#L48))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/strategy.agency#L62))

@@ -27,13 +27,13 @@ import { ParallelBlock, SeqBlock } from "./types/parallelBlock.js";
 import { AwaitPending } from "./types/awaitPending.js";
 import { HandleBlock } from "./types/handleBlock.js";
 import { DebuggerStatement } from "./types/debuggerStatement.js";
-import { Placeholder } from "./types/placeholder.js";
 import { WithModifier } from "./types/withModifier.js";
 import { Tag } from "./types/tag.js";
 import { TryExpression } from "./types/tryExpression.js";
 import { ClassDefinition, ClassField, ClassMethod, NewExpression } from "./types/classDefinition.js";
 import { InterruptStatement } from "./types/interruptStatement.js";
 import { SchemaExpression } from "./types/schemaExpression.js";
+import { BlockArgument } from "./types/blockArgument.js";
 export * from "./types/access.js";
 export * from "./types/awaitPending.js";
 export * from "./types/dataStructures.js";
@@ -53,7 +53,6 @@ export * from "./types/handleBlock.js";
 export * from "./types/keyword.js";
 export * from "./types/debuggerStatement.js";
 export * from "./types/blockArgument.js";
-export * from "./types/placeholder.js";
 export * from "./types/withModifier.js";
 export * from "./types/base.js";
 export * from "./types/tag.js";
@@ -69,12 +68,12 @@ export type Expression =
   | BinOpExpression
   | AgencyArray
   | AgencyObject
-  | Placeholder
   | TryExpression
   | NewExpression
   | RegexLiteral
   | SchemaExpression
-  | InterruptStatement;
+  | InterruptStatement
+  | BlockArgument;
 
 /**
  * Scope types for variable resolution.
@@ -228,7 +227,6 @@ export type AgencyNode =
   | HandleBlock
   | WithModifier
   | DebuggerStatement
-  | Placeholder
   | Tag
   | TryExpression
   | ClassDefinition
@@ -237,7 +235,8 @@ export type AgencyNode =
   | NewExpression
   | RegexLiteral
   | SchemaExpression
-  | InterruptStatement;
+  | InterruptStatement
+  | BlockArgument;
 
 export type AgencyProgram = {
   type: "agencyProgram";

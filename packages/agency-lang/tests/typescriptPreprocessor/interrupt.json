@@ -42,7 +42,8 @@
                         "col": 46,
                         "start": 88,
                         "end": 94
-                      }
+                      },
+                      "scope": "args"
                     }
                   }
                 ]

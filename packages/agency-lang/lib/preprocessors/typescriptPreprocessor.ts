@@ -280,34 +280,22 @@ export class TypescriptPreprocessor {
 
   /**
    * Walk the AST and propagate block type annotations from function definitions
-   * onto block arguments that lack type annotations. This handles:
-   * - Direct block args: map([1,2,3], \x -> x * 2)
-   * - Blocks in named args: map.partial(func: \x -> x * 2)
+   * onto direct block arguments that lack type annotations.
+   * e.g. map([1,2,3]) as x { ... } — copies param types from map's block type onto x.
+   *
+   * Note: blocks inside named args (e.g. fn.partial(func: \x -> x)) are not yet
+   * handled — the preprocessor would need valueAccess chain resolution to find
+   * the receiver function. The builder falls back to 'any' for untyped block params.
    */
   propagateBlockTypes(): void {
     for (const { node } of walkNodesArray(this.program.nodes)) {
       if (node.type !== "functionCall") continue;
       const call = node as FunctionCall;
 
-      // Direct block argument on the function call
       if (call.block) {
         const blockType = this.findBlockType(call.functionName);
         if (blockType) {
           this.applyBlockType(call.block, blockType);
-        }
-      }
-
-      // Block arguments inside named args (e.g. fn.partial(func: \x -> x))
-      // For these, we need to find which parameter the named arg targets
-      // and check if that parameter has a block type.
-      for (const arg of call.arguments) {
-        if (arg.type === "namedArgument" && arg.value.type === "blockArgument") {
-          // The named arg targets a specific parameter. But in the .partial() case,
-          // the function being partially applied is the receiver, not this call.
-          // We handle this by looking at the valueAccess context.
-          // For now, leave block args in named args untyped — the preprocessor
-          // would need access to the full valueAccess chain to resolve the receiver.
-          // The builder will fall back to 'any' for untyped block params.
         }
       }
     }

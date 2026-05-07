@@ -10,8 +10,18 @@ export type EditResult = {
 };
 
 export function resolvePath(dir: string, filename: string): string {
-  const combined = dir ? path.join(dir, filename) : filename;
-  return path.resolve(process.cwd(), combined);
+  if (dir) {
+    if (path.isAbsolute(filename)) {
+      throw new Error(`Filename must not be absolute when dir is specified (got "${filename}").`);
+    }
+    const baseDir = path.resolve(process.cwd(), dir);
+    const full = path.resolve(baseDir, filename);
+    if (!full.startsWith(baseDir + path.sep) && full !== baseDir) {
+      throw new Error(`Filename "${filename}" escapes directory "${dir}".`);
+    }
+    return full;
+  }
+  return path.resolve(process.cwd(), filename);
 }
 
 export async function _edit(

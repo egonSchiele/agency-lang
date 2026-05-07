@@ -374,6 +374,16 @@ function validatePartialOrDescribe(
         message: `.describe() requires exactly one string argument.`,
         loc: expr.loc,
       });
+    } else if (
+      "type" in args[0] &&
+      args[0].type !== "string" &&
+      args[0].type !== "multiLineString" &&
+      args[0].type !== "variableName"
+    ) {
+      ctx.errors.push({
+        message: `.describe() argument must be a string, got ${args[0].type}.`,
+        loc: expr.loc,
+      });
     }
   }
 }
@@ -389,11 +399,13 @@ export function synthValueAccess(
   for (const element of expr.chain) {
     // Validate .partial()/.describe() even when the base type is unknown,
     // since we can check argument structure against the function definition.
+    // Use continue (not return) so chained calls like fn.partial(a: 1).describe("x") are all validated.
     if (element.kind === "methodCall") {
       const methodName = element.functionCall.functionName;
       if (methodName === "partial" || methodName === "describe") {
         validatePartialOrDescribe(expr, element, methodName, ctx);
-        return "any";
+        currentType = "any";
+        continue;
       }
     }
 

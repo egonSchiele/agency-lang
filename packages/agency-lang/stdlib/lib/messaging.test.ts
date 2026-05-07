@@ -45,9 +45,13 @@ describe("checkRecipients", () => {
     expect(result).toContain("eve@example.com");
   });
 
-  it("allowList takes precedence when both are empty", () => {
-    const result = checkRecipients(["anyone@example.com"], [], []);
-    expect(result).toBeNull();
+  it("blockList checked before allowList", () => {
+    const result = checkRecipients(
+      ["alice@example.com"],
+      ["alice@example.com"],
+      ["alice@example.com"],
+    );
+    expect(result).toContain("blockList");
   });
 
   it("is case-insensitive", () => {

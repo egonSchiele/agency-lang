@@ -504,7 +504,9 @@ function checkExpressionsInScope(
 /**
  * Validate the LHS of `|>` against the slot it flows into on the RHS:
  * - bare variable RHS (`lhs |> half`) — slot is param 0
- * - valueAccess RHS with .partial() (`lhs |> add.partial(b: 5)`) — slot is the first unbound param
+ *
+ * Note: valueAccess RHS (e.g. `lhs |> add.partial(b: 5)`) is not yet
+ * type-checked — pipeRhsSlotType returns undefined for non-variableName nodes.
  *
  * The runtime auto-unwraps a Result LHS to its success value before passing
  * it to the next stage, so we compare against `lhs.successType` when LHS is

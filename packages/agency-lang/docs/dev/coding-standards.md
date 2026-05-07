@@ -1,6 +1,6 @@
 # Coding Standards
 
-Mechanical rules enforced by the structural linter (`pnpm run lint:structure`). These are not suggestions — they are enforced automatically and will block PRs.
+Rules for writing code in the Agency codebase. Most are enforced by the structural linter (`pnpm run lint:structure`). The last two are conventions that are not mechanically enforced.
 
 ---
 

@@ -224,11 +224,10 @@ for (const node of nodes) {
 
 **Good:**
 ```ts
-const result = [...new Set(
-  nodes
-    .filter(n => n.kind === "functionDefinition" && n.exported)
-    .map(n => n.name)
-)];
+const names = nodes
+  .filter(n => n.kind === "functionDefinition" && n.exported)
+  .map(n => n.name);
+const result = names.filter((name, i) => names.indexOf(name) === i);
 ```
 
 **Why:** The declarative version says *what* we want (exported function names, deduplicated), not *how* to get it. Imperative code should be encapsulated behind a clear declarative interface.

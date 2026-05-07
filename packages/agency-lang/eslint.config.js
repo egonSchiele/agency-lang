@@ -5,7 +5,7 @@ export default [
     ignores: [
       "dist/**",
       "tests/**",
-      "templates/**/*.ts",
+      "lib/templates/**/*.ts",
       "stdlib/**/*.js",
       "node_modules/**",
       "lib/agents/**",

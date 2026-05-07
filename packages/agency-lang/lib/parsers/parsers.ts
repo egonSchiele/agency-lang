@@ -72,6 +72,7 @@ import {
   NewLine,
   NullLiteral,
   NumberLiteral,
+  UnitLiteral,
   PromptSegment,
   RegexLiteral,
   StringLiteral,
@@ -374,6 +375,53 @@ export const numberParser: Parser<NumberLiteral> = label("a number", (input: str
   return parser(input);
 });
 
+// --- Unit literal parser ---
+const TIME_MULTIPLIERS: Record<string, number> = {
+  ms: 1,
+  s: 1000,
+  m: 60000,
+  h: 3600000,
+  d: 86400000,
+  w: 604800000,
+};
+
+// Time unit: digits (with optional decimal) followed immediately by a unit suffix
+// Must try "ms" before "m" (longer match first)
+const timeUnitParser: Parser<UnitLiteral> = (input: string): ParserResult<UnitLiteral> => {
+  const numRegex = /^([0-9]+(?:\.[0-9]+)?)(ms|s|m|h|d|w)\b/;
+  const match = input.match(numRegex);
+  if (!match) return failure("Expected time unit literal", input);
+  const [fullMatch, numStr, unit] = match;
+  const rest = input.slice(fullMatch.length);
+  return success({
+    type: "unitLiteral" as const,
+    value: numStr,
+    unit: unit as UnitLiteral["unit"],
+    canonicalValue: parseFloat(numStr) * TIME_MULTIPLIERS[unit],
+    dimension: "time" as const,
+  }, rest);
+};
+
+// Cost unit: $ followed immediately by a digit (not {) then the rest of the number
+const costUnitParser: Parser<UnitLiteral> = (input: string): ParserResult<UnitLiteral> => {
+  const costRegex = /^\$([0-9]+(?:\.[0-9]+)?)\b/;
+  const match = input.match(costRegex);
+  if (!match) return failure("Expected cost unit literal", input);
+  const [fullMatch, numStr] = match;
+  const rest = input.slice(fullMatch.length);
+  return success({
+    type: "unitLiteral" as const,
+    value: numStr,
+    unit: "$" as const,
+    canonicalValue: parseFloat(numStr),
+    dimension: "cost" as const,
+  }, rest);
+};
+
+export const unitLiteralParser: Parser<UnitLiteral> = label("a unit literal",
+  or(costUnitParser, timeUnitParser)
+);
+
 export const regexLiteralParser: Parser<RegexLiteral> = label("a regex", (input: string): ParserResult<RegexLiteral> => {
   const parser = seqC(
     set("type", "regex"),
@@ -504,6 +552,7 @@ export const nullParser: Parser<NullLiteral> = label("null", seqC(
 export const literalParser: Parser<Literal> = or(
   nullParser,
   booleanParser,
+  unitLiteralParser,
   numberParser,
   multiLineStringParser,
   stringParser,
@@ -513,6 +562,7 @@ export const literalParser: Parser<Literal> = or(
 export const literalParserNoVarName: Parser<Literal> = or(
   nullParser,
   booleanParser,
+  unitLiteralParser,
   numberParser,
   multiLineStringParser,
   stringParser,
@@ -522,6 +572,7 @@ export const literalParserNoVarName: Parser<Literal> = or(
 export function simpleLiteralParser(input: string): ParserResult<Literal> {
   const parser = or(
     booleanParser,
+    unitLiteralParser,
     numberParser,
     _stringParser,
     variableNameParser,

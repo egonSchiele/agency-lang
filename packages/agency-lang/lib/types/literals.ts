@@ -23,6 +23,10 @@ export type UnitLiteral = BaseNode & {
   dimension: "time" | "cost";
 };
 
+export function formatUnitLiteral(lit: Pick<UnitLiteral, "value" | "unit">): string {
+  return lit.unit === "$" ? `$${lit.value}` : `${lit.value}${lit.unit}`;
+}
+
 export type StringLiteral = BaseNode & {
   type: "string";
   segments: PromptSegment[];

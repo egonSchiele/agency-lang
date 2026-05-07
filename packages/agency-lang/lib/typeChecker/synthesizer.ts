@@ -1,4 +1,4 @@
-import { AgencyNode, Expression, VariableType, ValueAccess } from "../types.js";
+import { AgencyNode, Expression, VariableType, ValueAccess, formatUnitLiteral } from "../types.js";
 import type {
   NamedArgument,
   SplatExpression,
@@ -134,7 +134,7 @@ function synthBinOp(
       expr.left.type === "unitLiteral" && expr.right.type === "unitLiteral" &&
       expr.left.dimension !== expr.right.dimension) {
     ctx.errors.push({
-      message: `Cannot ${op} time and cost values: '${expr.left.value}${expr.left.unit === "$" ? "" : expr.left.unit}' and '${expr.right.unit === "$" ? "$" + expr.right.value : expr.right.value + expr.right.unit}' have different dimensions.`,
+      message: `Cannot ${op} time and cost values: '${formatUnitLiteral(expr.left)}' and '${formatUnitLiteral(expr.right)}' have different dimensions.`,
       loc: expr.loc,
     });
   }

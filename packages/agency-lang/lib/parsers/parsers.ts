@@ -376,7 +376,7 @@ export const numberParser: Parser<NumberLiteral> = label("a number", (input: str
 });
 
 // --- Unit literal parser ---
-const TIME_MULTIPLIERS: Record<string, number> = {
+const TIME_MULTIPLIERS: Record<Exclude<UnitLiteral["unit"], "$">, number> = {
   ms: 1,
   s: 1000,
   m: 60000,
@@ -385,37 +385,33 @@ const TIME_MULTIPLIERS: Record<string, number> = {
   w: 604800000,
 };
 
-// Time unit: digits (with optional decimal) followed immediately by a unit suffix
-// Must try "ms" before "m" (longer match first)
+const TIME_UNIT_REGEX = /^([0-9]+(?:\.[0-9]+)?)(ms|s|m|h|d|w)\b/;
+const COST_UNIT_REGEX = /^\$([0-9]+(?:\.[0-9]+)?)\b/;
+
 const timeUnitParser: Parser<UnitLiteral> = (input: string): ParserResult<UnitLiteral> => {
-  const numRegex = /^([0-9]+(?:\.[0-9]+)?)(ms|s|m|h|d|w)\b/;
-  const match = input.match(numRegex);
+  const match = input.match(TIME_UNIT_REGEX);
   if (!match) return failure("Expected time unit literal", input);
   const [fullMatch, numStr, unit] = match;
-  const rest = input.slice(fullMatch.length);
   return success({
     type: "unitLiteral" as const,
     value: numStr,
     unit: unit as UnitLiteral["unit"],
-    canonicalValue: parseFloat(numStr) * TIME_MULTIPLIERS[unit],
+    canonicalValue: parseFloat(numStr) * TIME_MULTIPLIERS[unit as Exclude<UnitLiteral["unit"], "$">],
     dimension: "time" as const,
-  }, rest);
+  }, input.slice(fullMatch.length));
 };
 
-// Cost unit: $ followed immediately by a digit (not {) then the rest of the number
 const costUnitParser: Parser<UnitLiteral> = (input: string): ParserResult<UnitLiteral> => {
-  const costRegex = /^\$([0-9]+(?:\.[0-9]+)?)\b/;
-  const match = input.match(costRegex);
+  const match = input.match(COST_UNIT_REGEX);
   if (!match) return failure("Expected cost unit literal", input);
   const [fullMatch, numStr] = match;
-  const rest = input.slice(fullMatch.length);
   return success({
     type: "unitLiteral" as const,
     value: numStr,
     unit: "$" as const,
     canonicalValue: parseFloat(numStr),
     dimension: "cost" as const,
-  }, rest);
+  }, input.slice(fullMatch.length));
 };
 
 export const unitLiteralParser: Parser<UnitLiteral> = label("a unit literal",

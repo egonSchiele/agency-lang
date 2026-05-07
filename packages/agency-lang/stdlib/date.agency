@@ -1,4 +1,4 @@
-import { _now, _today, _tomorrow, _addMinutes, _addHours, _addDays, _nextDayOfWeek, _atTime, _startOfDay, _endOfDay, _startOfWeek, _endOfWeek, _startOfMonth, _endOfMonth } from "./lib/date.js"
+import { _now, _today, _tomorrow, _add, _addMinutes, _addHours, _addDays, _nextDayOfWeek, _atTime, _startOfDay, _endOfDay, _startOfWeek, _endOfWeek, _startOfMonth, _endOfMonth } from "./lib/date.js"
 
 /** @module
   ## Date and Time Utilities
@@ -97,6 +97,17 @@ export safe def tomorrow(timezone: string = ""): string {
   Get tomorrow's date as a YYYY-MM-DD string (e.g. "2026-05-06"). Uses local timezone by default.
   """
   return _tomorrow(timezone)
+}
+
+/** Add a duration to a datetime string. Use with unit literals: add(now(), 2h), add(start, 7d) */
+export safe def add(datetime: string, ms: number): string {
+  """
+  Add a duration in milliseconds to a datetime string. Returns a new ISO 8601 datetime string. Use with unit literals for clarity: add(now(), 2h), add(start, 30m), add(start, 7d). Negative values subtract.
+
+  @param datetime - The ISO 8601 datetime string
+  @param ms - Duration in milliseconds (e.g. 2h, 30m, 7d)
+  """
+  return _add(datetime, ms)
 }
 
 /** Add minutes to a datetime string and return the new datetime. */

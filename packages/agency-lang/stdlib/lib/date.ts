@@ -70,6 +70,16 @@ export function _tomorrow(timezone?: string): string {
 
 // --- Date arithmetic ---
 
+export function _add(datetime: string, ms: number): string {
+  const d = parseToDate(datetime);
+  d.setTime(d.getTime() + ms);
+  const offset = extractOffset(datetime);
+  if (offset) {
+    return formatWithOffset(d, offset);
+  }
+  return d.toISOString();
+}
+
 export function _addMinutes(datetime: string, minutes: number): string {
   const d = parseToDate(datetime);
   d.setTime(d.getTime() + minutes * 60 * 1000);

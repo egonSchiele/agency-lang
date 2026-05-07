@@ -76,6 +76,10 @@ export class LaunchdBackend implements ScheduleBackend {
     const dest = plistPath(entry.name);
 
     fs.mkdirSync(PLIST_DIR, { recursive: true });
+    // Unload first if already loaded (launchctl load fails on already-loaded plists)
+    if (fs.existsSync(dest)) {
+      try { execFileSync("launchctl", ["unload", dest]); } catch {}
+    }
     fs.writeFileSync(dest, plist);
     execFileSync("launchctl", ["load", dest]);
   }

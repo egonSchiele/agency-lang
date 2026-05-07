@@ -1,10 +1,13 @@
 // --- Presets ---
 
 export const PRESETS: Record<string, string> = {
+  minute: "* * * * *",
   hourly: "0 * * * *",
   daily: "0 9 * * *",
   weekdays: "0 9 * * 1-5",
+  weekends: "0 9 * * 0,6",
   weekly: "0 9 * * 1",
+  monthly: "0 9 1 * *",
 };
 
 export function presetToCron(preset: string): string {

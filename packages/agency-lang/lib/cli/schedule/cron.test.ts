@@ -8,10 +8,13 @@ import {
 } from "./cron.js";
 
 describe("presetToCron", () => {
+  it("maps minute", () => expect(presetToCron("minute")).toBe("* * * * *"));
   it("maps hourly", () => expect(presetToCron("hourly")).toBe("0 * * * *"));
   it("maps daily", () => expect(presetToCron("daily")).toBe("0 9 * * *"));
   it("maps weekdays", () => expect(presetToCron("weekdays")).toBe("0 9 * * 1-5"));
+  it("maps weekends", () => expect(presetToCron("weekends")).toBe("0 9 * * 0,6"));
   it("maps weekly", () => expect(presetToCron("weekly")).toBe("0 9 * * 1"));
+  it("maps monthly", () => expect(presetToCron("monthly")).toBe("0 9 1 * *"));
   it("throws on unknown preset", () => {
     expect(() => presetToCron("biweekly")).toThrow("Unknown preset");
   });

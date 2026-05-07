@@ -569,7 +569,7 @@ export function createProgram(deps: CliDependencies = {}): Command {
     .argument("<file>", "Path to .agency file")
     .option(
       "--every <preset>",
-      "Schedule preset: hourly, daily, weekdays, weekly",
+      "Schedule preset: minute, hourly, daily, weekdays, weekends, weekly, monthly",
     )
     .option("--cron <expression>", "Cron expression (5 fields)")
     .option(
@@ -651,7 +651,7 @@ export function createProgram(deps: CliDependencies = {}): Command {
     .argument("<name>", "Name of the schedule to edit")
     .option(
       "--every <preset>",
-      "Schedule preset: hourly, daily, weekdays, weekly",
+      "Schedule preset: minute, hourly, daily, weekdays, weekends, weekly, monthly",
     )
     .option("--cron <expression>", "Cron expression (5 fields)")
     .option("--env-file <path>", "Path to .env file")

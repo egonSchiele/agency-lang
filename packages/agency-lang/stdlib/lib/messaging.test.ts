@@ -54,6 +54,29 @@ describe("checkRecipients", () => {
     expect(result).toContain("blockList");
   });
 
+  it("passes with empty recipients array", () => {
+    const result = checkRecipients([], ["alice@example.com"], []);
+    expect(result).toBeNull();
+  });
+
+  it("skips whitespace-only recipients", () => {
+    const result = checkRecipients(
+      ["  "],
+      ["alice@example.com"],
+      [],
+    );
+    expect(result).toBeNull();
+  });
+
+  it("passes when recipient is not in blockList", () => {
+    const result = checkRecipients(
+      ["bob@example.com"],
+      [],
+      ["alice@example.com"],
+    );
+    expect(result).toBeNull();
+  });
+
   it("is case-insensitive", () => {
     const result = checkRecipients(
       ["Alice@Example.COM"],

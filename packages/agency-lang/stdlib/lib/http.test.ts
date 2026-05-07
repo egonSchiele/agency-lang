@@ -61,4 +61,15 @@ describe("checkAllowedDomains", () => {
       ]),
     ).toBeNull();
   });
+
+  it("returns error for invalid URL", () => {
+    const result = checkAllowedDomains("not-a-url", ["example.com"]);
+    expect(result).toContain("Invalid URL");
+  });
+
+  it("allows any of multiple domains", () => {
+    expect(
+      checkAllowedDomains("https://b.com/data", ["a.com", "b.com", "c.com"]),
+    ).toBeNull();
+  });
 });

@@ -15,20 +15,25 @@ function plistPath(name: string): string {
 
 // Declarative mapping: cron field position → launchd StartCalendarInterval key
 const CRON_TO_LAUNCHD = [
-  { index: 0, key: "Minute" },
-  { index: 1, key: "Hour" },
-  { index: 2, key: "Day" },
-  { index: 3, key: "Month" },
-  { index: 4, key: "Weekday" },
+  { index: 0, key: "Minute", bounds: [0, 59] as [number, number] },
+  { index: 1, key: "Hour", bounds: [0, 23] as [number, number] },
+  { index: 2, key: "Day", bounds: [1, 31] as [number, number] },
+  { index: 3, key: "Month", bounds: [1, 12] as [number, number] },
+  { index: 4, key: "Weekday", bounds: [0, 6] as [number, number] },
 ] as const;
 
 // Expand a cron field like "1-5" or "0,30" into an array of integers.
 // Returns [] for wildcards ("*"), meaning "don't constrain this field".
-function expandField(field: string): number[] {
+function expandField(field: string, fieldIndex: number): number[] {
   if (field === "*") return [];
+  const [min, max] = CRON_TO_LAUNCHD[fieldIndex].bounds;
   return field.split(",").flatMap((part) => {
     const [range, stepStr] = part.split("/");
     const step = stepStr ? parseInt(stepStr, 10) : 1;
+    if (range === "*") {
+      // */N — expand wildcard with step over the full domain
+      return Array.from({ length: Math.floor((max - min) / step) + 1 }, (_, i) => min + i * step);
+    }
     if (range.includes("-")) {
       const [lo, hi] = range.split("-").map(Number);
       return Array.from({ length: Math.floor((hi - lo) / step) + 1 }, (_, i) => lo + i * step);
@@ -42,7 +47,7 @@ function expandField(field: string): number[] {
 export function buildIntervals(cron: string): string {
   const cronFields = cron.split(/\s+/);
   const expanded = CRON_TO_LAUNCHD
-    .map(({ index, key }) => ({ key, values: expandField(cronFields[index]) }))
+    .map(({ index, key }, i) => ({ key, values: expandField(cronFields[index], i) }))
     .filter(({ values }) => values.length > 0);
 
   // Cartesian product of all constrained fields

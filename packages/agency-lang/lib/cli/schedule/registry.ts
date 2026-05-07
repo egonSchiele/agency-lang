@@ -40,7 +40,7 @@ export class Registry {
   }
 
   has(name: string): boolean {
-    return name in this.getAll();
+    return Object.hasOwn(this.getAll(), name);
   }
 
   set(entry: ScheduleEntry): void {

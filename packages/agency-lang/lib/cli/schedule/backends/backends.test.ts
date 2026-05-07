@@ -202,6 +202,17 @@ describe("buildIntervals", () => {
     }
   });
 
+  it("expands */15 in minute field", () => {
+    const result = buildIntervals("*/15 * * * *");
+    expect(result).toContain("<array>");
+    const dictCount = (result.match(/<dict>/g) || []).length;
+    expect(dictCount).toBe(4); // 0, 15, 30, 45
+    expect(result).toContain("<integer>0</integer>");
+    expect(result).toContain("<integer>15</integer>");
+    expect(result).toContain("<integer>30</integer>");
+    expect(result).toContain("<integer>45</integer>");
+  });
+
   it("handles wildcard fields by omitting them", () => {
     const result = buildIntervals("* * * * 1");
     // Only Weekday should be set, no Minute/Hour/Day/Month

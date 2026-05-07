@@ -18,9 +18,8 @@ function writeCrontab(content: string): void {
 }
 
 function filterLines(crontab: string, name: string): string[] {
-  return crontab
-    .split("\n")
-    .filter((line) => !line.includes(`# agency:${name}`));
+  const marker = new RegExp(`# agency:${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`);
+  return crontab.split("\n").filter((line) => !marker.test(line));
 }
 
 export class CrontabBackend implements ScheduleBackend {

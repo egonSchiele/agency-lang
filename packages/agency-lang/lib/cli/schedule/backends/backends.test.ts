@@ -37,7 +37,7 @@ describe("LaunchdBackend", () => {
     vi.mocked(fs.writeFileSync).mockImplementation(() => {});
     vi.mocked(fs.mkdirSync).mockImplementation(() => undefined as any);
     vi.mocked(fs.unlinkSync).mockImplementation(() => {});
-    vi.mocked(childProcess.execSync).mockImplementation(
+    vi.mocked(childProcess.execFileSync).mockImplementation(
       () => Buffer.from(""),
     );
   });
@@ -49,15 +49,17 @@ describe("LaunchdBackend", () => {
     const writeCall = vi.mocked(fs.writeFileSync).mock.calls[0];
     const plistPath = writeCall[0] as string;
     expect(plistPath).toContain("com.agency.schedule.test-agent.plist");
-    expect(vi.mocked(childProcess.execSync)).toHaveBeenCalledWith(
-      expect.stringContaining("launchctl load"),
+    expect(vi.mocked(childProcess.execFileSync)).toHaveBeenCalledWith(
+      "launchctl",
+      ["load", expect.stringContaining("com.agency.schedule.test-agent.plist")],
     );
   });
 
   it("uninstall calls launchctl unload and deletes plist", () => {
     backend.uninstall("test-agent");
-    expect(vi.mocked(childProcess.execSync)).toHaveBeenCalledWith(
-      expect.stringContaining("launchctl unload"),
+    expect(vi.mocked(childProcess.execFileSync)).toHaveBeenCalledWith(
+      "launchctl",
+      ["unload", expect.stringContaining("com.agency.schedule.test-agent.plist")],
     );
     expect(vi.mocked(fs.unlinkSync)).toHaveBeenCalled();
   });
@@ -109,6 +111,26 @@ describe("CrontabBackend", () => {
     const input = (writeCall![1] as any).input as string;
     expect(input).not.toContain("agency:test-agent");
     expect(input).toContain("other-job");
+  });
+
+  it("uninstall does not remove similar names", () => {
+    vi.mocked(childProcess.execSync).mockReset();
+    vi.mocked(childProcess.execSync).mockImplementation((cmd) => {
+      if (typeof cmd === "string" && cmd.includes("crontab -l")) {
+        return Buffer.from(
+          "0 9 * * * /path/run.sh # agency:foo\n0 9 * * * /path/run2.sh # agency:foo-bar\n",
+        );
+      }
+      return Buffer.from("");
+    });
+    backend.uninstall("foo");
+    const calls = vi.mocked(childProcess.execSync).mock.calls;
+    const writeCall = calls.find(
+      (c) => c[1] && typeof c[1] === "object" && "input" in c[1],
+    );
+    const input = (writeCall![1] as any).input as string;
+    expect(input).not.toContain("# agency:foo\n");
+    expect(input).toContain("# agency:foo-bar");
   });
 });
 

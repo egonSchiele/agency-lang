@@ -1,4 +1,4 @@
-import { execSync } from "child_process";
+import { execFileSync } from "child_process";
 import * as fs from "fs";
 import * as path from "path";
 import * as os from "os";
@@ -34,21 +34,21 @@ export class SystemdBackend implements ScheduleBackend {
 
     fs.writeFileSync(path.join(UNIT_DIR, `${unit}.service`), service);
     fs.writeFileSync(path.join(UNIT_DIR, `${unit}.timer`), timer);
-    execSync("systemctl --user daemon-reload");
-    execSync(`systemctl --user enable --now ${unit}.timer`);
+    execFileSync("systemctl", ["--user", "daemon-reload"]);
+    execFileSync("systemctl", ["--user", "enable", "--now", `${unit}.timer`]);
   }
 
   uninstall(name: string): void {
     const unit = unitName(name);
     try {
-      execSync(`systemctl --user disable --now ${unit}.timer`);
+      execFileSync("systemctl", ["--user", "disable", "--now", `${unit}.timer`]);
     } catch {}
     const servicePath = path.join(UNIT_DIR, `${unit}.service`);
     const timerPath = path.join(UNIT_DIR, `${unit}.timer`);
     if (fs.existsSync(servicePath)) fs.unlinkSync(servicePath);
     if (fs.existsSync(timerPath)) fs.unlinkSync(timerPath);
     try {
-      execSync("systemctl --user daemon-reload");
+      execFileSync("systemctl", ["--user", "daemon-reload"]);
     } catch {}
   }
 }

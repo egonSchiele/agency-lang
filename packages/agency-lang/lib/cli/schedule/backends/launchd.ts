@@ -1,4 +1,4 @@
-import { execSync } from "child_process";
+import { execFileSync } from "child_process";
 import * as fs from "fs";
 import * as path from "path";
 import * as os from "os";
@@ -104,14 +104,14 @@ export class LaunchdBackend implements ScheduleBackend {
     fs.mkdirSync(PLIST_DIR, { recursive: true });
 
     fs.writeFileSync(dest, plist);
-    execSync(`launchctl load "${dest}"`);
+    execFileSync("launchctl", ["load", dest]);
   }
 
   uninstall(name: string): void {
     const dest = plistPath(name);
     if (fs.existsSync(dest)) {
       try {
-        execSync(`launchctl unload "${dest}"`);
+        execFileSync("launchctl", ["unload", dest]);
       } catch {}
       fs.unlinkSync(dest);
     }

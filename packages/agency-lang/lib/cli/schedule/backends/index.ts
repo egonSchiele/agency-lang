@@ -1,4 +1,4 @@
-import { execSync } from "child_process";
+import { execFileSync } from "child_process";
 import type { ScheduleEntry, BackendType } from "../registry.js";
 import { LaunchdBackend } from "./launchd.js";
 import { SystemdBackend } from "./systemd.js";
@@ -14,7 +14,7 @@ export type ScheduleBackend = {
 export function detectBackend(): BackendType {
   if (process.platform === "darwin") return "launchd";
   try {
-    execSync("which systemctl", { stdio: "pipe" });
+    execFileSync("which", ["systemctl"], { stdio: "pipe" });
     return "systemd";
   } catch {
     return "crontab";

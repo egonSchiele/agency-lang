@@ -13,8 +13,18 @@ export class ScheduleExistsError extends Error {
   }
 }
 
+const VALID_NAME = /^[A-Za-z0-9._-]+$/;
+
 function defaultBaseDir(): string {
   return path.join(os.homedir(), ".agency", "schedules");
+}
+
+function validateName(name: string): void {
+  if (!VALID_NAME.test(name)) {
+    throw new Error(
+      `Invalid schedule name "${name}". Names may only contain letters, numbers, dots, hyphens, and underscores.`,
+    );
+  }
 }
 
 export type AddOptions = {
@@ -42,6 +52,7 @@ export function scheduleAdd(opts: AddOptions): void {
 
   const { cron, preset } = resolveCron({ every: opts.every, cron: opts.cron });
   const name = opts.name ?? path.basename(agentFile, ".agency");
+  validateName(name);
 
   if (registry.has(name) && !opts.force) {
     throw new ScheduleExistsError(name);

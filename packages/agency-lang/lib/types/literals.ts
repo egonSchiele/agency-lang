@@ -3,6 +3,7 @@ import { BaseNode } from "./base.js";
 
 export type Literal =
   | NumberLiteral
+  | UnitLiteral
   | MultiLineStringLiteral
   | StringLiteral
   | VariableNameLiteral
@@ -12,6 +13,14 @@ export type Literal =
 export type NumberLiteral = BaseNode & {
   type: "number";
   value: string;
+};
+
+export type UnitLiteral = BaseNode & {
+  type: "unitLiteral";
+  value: string;
+  unit: "ms" | "s" | "m" | "h" | "d" | "w" | "$";
+  canonicalValue: number;
+  dimension: "time" | "cost";
 };
 
 export type StringLiteral = BaseNode & {

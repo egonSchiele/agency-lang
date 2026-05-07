@@ -58,6 +58,7 @@ export function synthType(
       return scope.lookup(expr.value) ?? "any";
     }
     case "number":
+    case "unitLiteral":
       return NUMBER_T;
     case "string": {
       if (expr.segments.length === 1 && expr.segments[0].type === "text") {

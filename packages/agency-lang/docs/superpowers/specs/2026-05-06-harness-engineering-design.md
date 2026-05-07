@@ -31,59 +31,29 @@ The harness consists of 6 components:
 
 ### Overview
 
-An ESLint setup with `@typescript-eslint/parser` and custom rules specific to the Agency codebase. Run via `pnpm run lint:structure`.
+An ESLint setup with `@typescript-eslint/parser` using built-in rules and `no-restricted-syntax` for Agency-specific checks. No custom rule files needed. Run via `pnpm run lint:structure`.
 
 ### Setup
 
-- Add `eslint` and `@typescript-eslint/parser` as dev dependencies
+- Add `eslint`, `@typescript-eslint/parser`, `@typescript-eslint/eslint-plugin`, and `typescript-eslint` as dev dependencies
 - ESLint config at `packages/agency-lang/eslint.config.js` (flat config format)
-- Custom rules in `packages/agency-lang/eslint-rules/`
 - Add `"lint:structure": "eslint lib/"` to `package.json` scripts
 
 ### Rules
 
-#### `no-interface`
-- **Catches:** `interface Foo { ... }`
-- **Remediation message:** "Use `type Foo = { ... }` instead of `interface Foo { ... }`. Agency uses types, not interfaces."
-- **Auto-fixable:** Yes (converts `interface Foo { ... }` to `type Foo = { ... }` and `interface Foo extends Bar { ... }` to `type Foo = Bar & { ... }`)
-- **Implementation:** Check for `TSInterfaceDeclaration` AST node.
+All rules use built-in ESLint or @typescript-eslint rules. No custom rule files.
 
-#### `no-map-set`
-- **Catches:** `new Map()`, `new Set()`
-- **Remediation message:** "Use a plain object instead of Map, or a plain array instead of Set."
-- **Auto-fixable:** No
-- **Implementation:** Check for `TSNewExpression` where the callee identifier is `Map` or `Set`.
+| Rule | ESLint Rule | Auto-fixable? |
+|------|-------------|---------------|
+| No interfaces | `@typescript-eslint/consistent-type-definitions: ["error", "type"]` | Yes |
+| No `new Map()`/`new Set()` | `no-restricted-syntax` with AST selectors | No |
+| No dynamic imports | `no-restricted-syntax` with `ImportExpression` selector | No |
+| Max nesting depth (4) | `max-depth: ["error", { max: 4 }]` | No |
+| Max function lines (100) | `max-lines-per-function: ["error", { max: 100 }]` | No |
+| Prefer const | `prefer-const: "error"` | Yes |
+| Max file lines (600) | `max-lines: ["error", { max: 600 }]` | No |
 
-#### `no-dynamic-import`
-- **Catches:** `import(...)` expressions
-- **Remediation message:** "Dynamic imports are not allowed. Use static import statements."
-- **Auto-fixable:** No
-- **Implementation:** Check for `ImportExpression` AST node (dynamic `import()` calls).
-
-#### `max-nesting-depth`
-- **Catches:** Functions with more than 4 levels of nesting (configurable)
-- **Remediation message:** "Nesting depth exceeds {limit} levels. Extract inner logic into a separate function or use early returns to reduce nesting."
-- **Auto-fixable:** No
-- **Implementation:** Walk function bodies and track brace depth. Count nested block statements (if, for, while, try, etc.).
-
-#### `max-function-lines`
-- **Catches:** Functions exceeding 100 lines (configurable)
-- **Remediation message:** "Function exceeds {limit} lines ({actual} lines). Break it into smaller, focused functions."
-- **Auto-fixable:** No
-- **Implementation:** Check `FunctionDeclaration`, `ArrowFunctionExpression`, and `FunctionExpression` node line spans.
-
-#### `prefer-const`
-- **Catches:** `let` declarations that are never reassigned
-- **Remediation message:** "Variable is never reassigned. Use `const` instead of `let`."
-- **Auto-fixable:** Yes
-- **Implementation:** Use the built-in ESLint `prefer-const` rule (no custom implementation needed).
-
-#### `max-file-lines`
-- **Catches:** Files exceeding a configurable line limit (default: 600)
-- **Remediation message:** "File exceeds {limit} lines ({actual} lines). Consider splitting into smaller, focused modules."
-- **Auto-fixable:** No
-- **Implementation:** Count newlines in the source text.
-- **Config:** Line limit is configurable via ESLint rule options. Per-file overrides can be set in the ESLint config for files that legitimately need to be large (e.g., `typescriptBuilder.ts`, `parser.ts`).
+Per-file overrides in the ESLint config allow legitimately large files (e.g., `typescriptBuilder.ts`, `parser.ts`) to exceed the line limits.
 
 ### Excluded from linting
 

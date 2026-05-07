@@ -27,6 +27,15 @@ import { TarsecError } from "tarsec";
 import process from "process";
 import { agent } from "@/cli/agent.js";
 import { review } from "@/cli/review.js";
+import {
+  scheduleAdd,
+  scheduleList,
+  scheduleRemove,
+  scheduleEdit,
+  ScheduleExistsError,
+  promptScheduleOverwrite,
+  formatListTable,
+} from "@/cli/schedule/index.js";
 import { loadEnv } from "@/utils/envfile.js";
 import { debug } from "@/cli/debug.js";
 import { generateDoc } from "@/cli/doc.js";
@@ -549,6 +558,123 @@ export function createProgram(deps: CliDependencies = {}): Command {
       const config = getConfig();
       review(config, file);
     });
+
+  const scheduleCmd = program
+    .command("schedule")
+    .description("Manage scheduled agent runs");
+
+  scheduleCmd
+    .command("add")
+    .description("Schedule an agent to run on a recurring basis")
+    .argument("<file>", "Path to .agency file")
+    .option(
+      "--every <preset>",
+      "Schedule preset: minute, hourly, daily, weekdays, weekends, weekly, monthly",
+    )
+    .option("--cron <expression>", "Cron expression (5 fields)")
+    .option(
+      "--name <name>",
+      "Schedule name (default: derived from filename)",
+    )
+    .option("--env-file <path>", "Path to .env file")
+    .option(
+      "--command <cmd>",
+      "Command to run agency (default: agency)",
+    )
+    .action(
+      async (
+        file: string,
+        opts: {
+          every?: string;
+          cron?: string;
+          name?: string;
+          envFile?: string;
+          command?: string;
+        },
+      ) => {
+        try {
+          scheduleAdd({ file, ...opts });
+          const name = opts.name || path.basename(file, ".agency");
+          console.log(
+            color.green(`Schedule "${name}" added successfully.`),
+          );
+        } catch (err: any) {
+          if (err instanceof ScheduleExistsError && process.stdin.isTTY) {
+            const confirmed = await promptScheduleOverwrite(err.scheduleName);
+            if (confirmed) {
+              try {
+                scheduleAdd({ file, ...opts, force: true });
+                console.log(
+                  color.green("Schedule overwritten successfully."),
+                );
+              } catch (overwriteErr: any) {
+                console.error(color.red(overwriteErr.message));
+                process.exit(1);
+              }
+            } else {
+              console.log("Aborted.");
+            }
+          } else {
+            console.error(color.red(err.message));
+            process.exit(1);
+          }
+        }
+      },
+    );
+
+  scheduleCmd
+    .command("list")
+    .alias("ls")
+    .description("List all scheduled agents")
+    .action(() => {
+      console.log(formatListTable(scheduleList({})));
+    });
+
+  scheduleCmd
+    .command("remove")
+    .alias("rm")
+    .description("Remove a scheduled agent")
+    .argument("<name>", "Name of the schedule to remove")
+    .action((name: string) => {
+      try {
+        scheduleRemove({ name });
+        console.log(color.green(`Schedule "${name}" removed.`));
+      } catch (err: any) {
+        console.error(color.red(err.message));
+        process.exit(1);
+      }
+    });
+
+  scheduleCmd
+    .command("edit")
+    .description("Edit an existing scheduled agent")
+    .argument("<name>", "Name of the schedule to edit")
+    .option(
+      "--every <preset>",
+      "Schedule preset: minute, hourly, daily, weekdays, weekends, weekly, monthly",
+    )
+    .option("--cron <expression>", "Cron expression (5 fields)")
+    .option("--env-file <path>", "Path to .env file")
+    .option("--command <cmd>", "Command to run agency")
+    .action(
+      (
+        name: string,
+        opts: {
+          every?: string;
+          cron?: string;
+          envFile?: string;
+          command?: string;
+        },
+      ) => {
+        try {
+          scheduleEdit({ name, ...opts });
+          console.log(color.green(`Schedule "${name}" updated.`));
+        } catch (err: any) {
+          console.error(color.red(err.message));
+          process.exit(1);
+        }
+      },
+    );
 
   const lspCmd = program
     .command("lsp")

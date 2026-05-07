@@ -1,0 +1,14 @@
+#!/bin/bash
+set -e
+cd "{{{agentDir:string}}}"
+{{#hasEnvFile:boolean}}
+set -a
+. "{{{envFile:string}}}"
+set +a
+{{/hasEnvFile}}
+LOGFILE="{{{logDir:string}}}/$(date +%Y-%m-%dT%H-%M-%S).log"
+{{{command:string}}} run "{{{agentFile:string}}}" >> "$LOGFILE" 2>&1
+
+# Rotate: keep last 50 logs
+cd "{{{logDir}}}"
+ls -t *.log 2>/dev/null | tail -n +51 | xargs rm -f 2>/dev/null || true

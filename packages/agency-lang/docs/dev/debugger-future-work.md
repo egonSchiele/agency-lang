@@ -48,6 +48,21 @@ The current scroll implementation tracks offsets per pane name, but doesn't clam
 
 These are nice-to-haves, not blockers.
 
+### Layout duplication in overlay methods
+
+`showRewindSelector()` and `showCheckpointsPanel()` each rebuild the top/middle pane layout inline, duplicating the logic in `buildElementTree()`. If the layout changes (e.g., new panes, different proportions), all three must be updated. Extract a shared helper like `buildStandardTopRows()` that both `buildElementTree` and the overlay renderers compose on top of.
+
+### Spinner re-renders the full element tree
+
+`startSpinner()` calls `renderUI()` every 80ms, which rebuilds and re-renders the entire element tree — all panes, all content — just to update one line of spinner text. This is a consequence of immediate-mode rendering. Options:
+1. Partial updates — give the TUI library a way to update a single element without rebuilding the full tree
+2. Coalesce — only run the full render on a slower cadence, update just the command bar text in between
+3. Accept it — for a terminal debugger at 80ms intervals, the perf cost is likely negligible
+
+### Old test helpers still present
+
+`TestDebuggerIO`, `makeDriver`, and `getInitialResult` in `testHelpers.ts` are still exported because `thread.test.ts` and `trace.test.ts` import them (both `describe.skip`). Once those tests are ported to `DebuggerTestSession`, these helpers should be removed.
+
 ## TUI library improvements
 
 ### ANSI code support in text elements

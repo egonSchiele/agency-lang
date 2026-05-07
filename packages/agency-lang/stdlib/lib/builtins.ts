@@ -1,10 +1,10 @@
 import * as readline from "readline";
 import process from "process";
 import { readFile, writeFile } from "fs/promises";
-import path from "path";
 import { execFile } from "child_process";
 import { promisify } from "util";
 import { detectPlatform } from "./utils.js";
+import { resolvePath } from "./fs.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -47,11 +47,6 @@ export function _round(num: number, precision: number): number {
 }
 
 export { _fetch, _fetchJSON } from "./http.js";
-
-function resolvePath(dir: string, filename: string): string {
-  const combined = dir ? path.join(dir, filename) : filename;
-  return path.resolve(process.cwd(), combined);
-}
 
 export async function _read(dir: string, filename: string): Promise<string> {
   const filePath = resolvePath(dir, filename);

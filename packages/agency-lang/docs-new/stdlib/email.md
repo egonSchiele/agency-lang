@@ -16,6 +16,19 @@
   }
   ```
 
+  ## Partial Application for Safety
+
+  ```ts
+  // Create a constrained email sender that only sends to your team
+  const teamEmail = sendWithResend.partial(
+    from: "noreply@myco.com",
+    allowList: ["team@myco.com", "alerts@myco.com"]
+  )
+
+  // Now the agent can only email approved addresses
+  teamEmail(to: "team@myco.com", subject: "Deploy complete", text: "v2.1 is live")
+  ```
+
   ## Environment Variables
   - Resend: `RESEND_API_KEY`
   - SendGrid: `SENDGRID_API_KEY`
@@ -32,7 +45,7 @@ type EmailResult = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/email.agency#L26))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/email.agency#L39))
 
 ## Functions
 
@@ -76,7 +89,7 @@ Send an email using the Resend API. Requires `RESEND_API_KEY` env var or pass ap
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/email.agency#L32))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/email.agency#L45))
 
 ### sendWithSendGrid
 
@@ -118,7 +131,7 @@ Send an email using the SendGrid API. Requires `SENDGRID_API_KEY` env var or pas
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/email.agency#L71))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/email.agency#L84))
 
 ### sendWithMailgun
 
@@ -164,4 +177,4 @@ Send an email using the Mailgun API. Requires `MAILGUN_API_KEY` and `MAILGUN_DOM
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/email.agency#L110))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/email.agency#L123))

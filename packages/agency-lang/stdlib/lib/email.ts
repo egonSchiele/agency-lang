@@ -23,12 +23,20 @@ export type EmailResult = {
   provider: string;
 };
 
-function collectRecipients(params: EmailParams): string[] {
+function validateRecipients(
+  params: EmailParams,
+  options?: { allowList?: string[]; blockList?: string[] },
+): void {
   const recipients: string[] = [];
   recipients.push(...toArray(params.to));
   if (params.cc) recipients.push(...toArray(params.cc));
   if (params.bcc) recipients.push(...toArray(params.bcc));
-  return recipients;
+  const error = checkRecipients(
+    recipients,
+    options?.allowList ?? [],
+    options?.blockList ?? [],
+  );
+  if (error) throw new Error(error);
 }
 
 // --- Resend ---
@@ -43,12 +51,7 @@ export async function _sendWithResend(
   params: EmailParams,
   options?: ResendOptions
 ): Promise<EmailResult> {
-  const recipientError = checkRecipients(
-    collectRecipients(params),
-    options?.allowList ?? [],
-    options?.blockList ?? [],
-  );
-  if (recipientError) throw new Error(recipientError);
+  validateRecipients(params, options);
 
   const apiKey = options?.apiKey || process.env.RESEND_API_KEY;
   if (!apiKey) {
@@ -99,12 +102,7 @@ export async function _sendWithSendGrid(
   params: EmailParams,
   options?: SendGridOptions
 ): Promise<EmailResult> {
-  const recipientError = checkRecipients(
-    collectRecipients(params),
-    options?.allowList ?? [],
-    options?.blockList ?? [],
-  );
-  if (recipientError) throw new Error(recipientError);
+  validateRecipients(params, options);
 
   const apiKey = options?.apiKey || process.env.SENDGRID_API_KEY;
   if (!apiKey) {
@@ -171,12 +169,7 @@ export async function _sendWithMailgun(
   params: EmailParams,
   options?: MailgunOptions
 ): Promise<EmailResult> {
-  const recipientError = checkRecipients(
-    collectRecipients(params),
-    options?.allowList ?? [],
-    options?.blockList ?? [],
-  );
-  if (recipientError) throw new Error(recipientError);
+  validateRecipients(params, options);
 
   const apiKey = options?.apiKey || process.env.MAILGUN_API_KEY;
   if (!apiKey) {

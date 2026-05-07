@@ -9,7 +9,7 @@ export type EditResult = {
   path: string;
 };
 
-function resolvePath(dir: string, filename: string): string {
+export function resolvePath(dir: string, filename: string): string {
   const combined = dir ? path.join(dir, filename) : filename;
   return path.resolve(process.cwd(), combined);
 }

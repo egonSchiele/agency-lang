@@ -116,7 +116,7 @@ function processRetryLogic(node: AgencyNode): TsNode {
 **Good:**
 ```ts
 // In lib/runtime/retry.ts — a real function that's testable and type-safe
-function runWithRetry<T>(fn: () => Promise<T>, maxAttempts: number): Promise<T> {
+async function runWithRetry<T>(fn: () => Promise<T>, maxAttempts: number): Promise<T> {
   let attempts = 0;
   while (attempts < maxAttempts) {
     try {

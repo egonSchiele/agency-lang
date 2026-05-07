@@ -6,7 +6,7 @@
 
 **Architecture:** Six independent components built in dependency order: doc audit first (so docs are accurate), then anti-pattern catalog and coding standards docs, then CLAUDE.md restructuring (which points to those docs), then ESLint structural linter, then CI workflow, then self-review slash command.
 
-**Tech Stack:** ESLint 9 (flat config), @typescript-eslint/parser, GitHub Actions, Claude Code custom commands (.claude/commands/)
+**Tech Stack:** ESLint 10 (flat config), typescript-eslint, GitHub Actions, Claude Code custom commands (.claude/commands/)
 
 **Spec:** `packages/agency-lang/docs/superpowers/specs/2026-05-06-harness-engineering-design.md`
 
@@ -198,7 +198,7 @@ git commit -m "docs: add adding-features guide"
 Slim down the monorepo-root CLAUDE.md to be a map that points to deeper docs.
 
 **Files:**
-- Modify: `CLAUDE.md` (at monorepo root: `/Users/adityabhargava/agency-lang/CLAUDE.md`)
+- Modify: `CLAUDE.md` (at monorepo root)
 
 - [ ] **Step 1: Read the current CLAUDE.md**
 

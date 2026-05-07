@@ -11,7 +11,7 @@ Note: All `agency` commands in this file should be run using `pnpm run agency`.
 | Generator fixtures | `tests/typescriptGenerator/` | `pnpm test:run` |
 | Preprocessor fixtures | `tests/typescriptPreprocessor/` | `pnpm test:run` |
 | Agency execution tests | `tests/agency/` | `agency test tests/agency` |
-| Multi-step JS tests | `tests/agency-js/` | `agency test --js tests/agency-js` |
+| Multi-step JS tests | `tests/agency-js/` | `agency test js tests/agency-js` |
 
 ---
 
@@ -170,13 +170,13 @@ The `fixtures` command walks you through creating test cases:
 
 ```bash
 # Interactive — prompts for file and node
-agency fixtures
+agency test fixtures
 
 # Specify file
-agency fixtures tests/agency/example.agency
+agency test fixtures tests/agency/example.agency
 
 # Specify file and node
-agency fixtures tests/agency/example.agency:categorize
+agency test fixtures tests/agency/example.agency:categorize
 ```
 
 The command will:
@@ -247,13 +247,11 @@ If `fixture.json` doesn't exist yet, you'll be prompted to save the result as th
 
 ### Generating fixtures
 
-To auto-generate (or regenerate) fixtures without being prompted:
+To auto-generate fixtures, use the `fixtures` subcommand:
 
 ```bash
-agency test --gen-fixtures tests/agency-js
+agency test fixtures tests/agency-js
 ```
-
-This compiles and runs each test, then saves the result directly as `fixture.json`.
 
 ---
 
@@ -272,13 +270,10 @@ agency test tests/agency
 agency test tests/agency/example.test.json
 
 # Create test cases interactively
-agency fixtures tests/agency/example.agency
-agency fixtures tests/agency/example.agency:nodeName
+agency test fixtures tests/agency/example.agency
+agency test fixtures tests/agency/example.agency:nodeName
 
 # Multi-step JavaScript tests
 agency test js tests/agency-js
 agency test js tests/agency-js/my-test
-
-# Generate JavaScript test fixtures
-agency fixtures tests/agency-js
 ```

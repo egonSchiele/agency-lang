@@ -15,13 +15,23 @@ export type NumberLiteral = BaseNode & {
   value: string;
 };
 
-export type UnitLiteral = BaseNode & {
+export type TimeUnitLiteral = BaseNode & {
   type: "unitLiteral";
   value: string;
-  unit: "ms" | "s" | "m" | "h" | "d" | "w" | "$";
+  unit: "ms" | "s" | "m" | "h" | "d" | "w";
   canonicalValue: number;
-  dimension: "time" | "cost";
+  dimension: "time";
 };
+
+export type CostUnitLiteral = BaseNode & {
+  type: "unitLiteral";
+  value: string;
+  unit: "$";
+  canonicalValue: number;
+  dimension: "cost";
+};
+
+export type UnitLiteral = TimeUnitLiteral | CostUnitLiteral;
 
 export function formatUnitLiteral(lit: Pick<UnitLiteral, "value" | "unit">): string {
   return lit.unit === "$" ? `$${lit.value}` : `${lit.value}${lit.unit}`;

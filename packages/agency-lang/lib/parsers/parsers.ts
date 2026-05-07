@@ -73,6 +73,7 @@ import {
   NullLiteral,
   NumberLiteral,
   UnitLiteral,
+  TimeUnitLiteral,
   PromptSegment,
   RegexLiteral,
   StringLiteral,
@@ -376,7 +377,7 @@ export const numberParser: Parser<NumberLiteral> = label("a number", (input: str
 });
 
 // --- Unit literal parser ---
-const TIME_MULTIPLIERS: Record<Exclude<UnitLiteral["unit"], "$">, number> = {
+const TIME_MULTIPLIERS: Record<TimeUnitLiteral["unit"], number> = {
   ms: 1,
   s: 1000,
   m: 60000,
@@ -385,34 +386,40 @@ const TIME_MULTIPLIERS: Record<Exclude<UnitLiteral["unit"], "$">, number> = {
   w: 604800000,
 };
 
-const TIME_UNIT_REGEX = /^([0-9]+(?:\.[0-9]+)?)(ms|s|m|h|d|w)\b/;
-const COST_UNIT_REGEX = /^\$([0-9]+(?:\.[0-9]+)?)\b/;
+const unsignedNumberChars = many1WithJoin(or(char("."), digit));
+const timeSuffix = or(str("ms"), str("s"), str("m"), str("h"), str("d"), str("w"));
 
-const timeUnitParser: Parser<UnitLiteral> = (input: string): ParserResult<UnitLiteral> => {
-  const match = input.match(TIME_UNIT_REGEX);
-  if (!match) return failure("Expected time unit literal", input);
-  const [fullMatch, numStr, unit] = match;
+const timeUnitParser: Parser<UnitLiteral> = label("a time unit literal", (input: string): ParserResult<UnitLiteral> => {
+  const parser = seqC(
+    set("type", "unitLiteral"),
+    set("dimension", "time"),
+    capture(unsignedNumberChars, "value"),
+    capture(timeSuffix, "unit"),
+  );
+  const result = parser(input);
+  if (!result.success) return result;
+  const { value, unit } = result.result;
   return success({
-    type: "unitLiteral" as const,
-    value: numStr,
-    unit: unit as UnitLiteral["unit"],
-    canonicalValue: Math.round(parseFloat(numStr) * TIME_MULTIPLIERS[unit as Exclude<UnitLiteral["unit"], "$">]),
-    dimension: "time" as const,
-  }, input.slice(fullMatch.length));
-};
+    ...result.result,
+    canonicalValue: Math.round(parseFloat(value) * TIME_MULTIPLIERS[unit as TimeUnitLiteral["unit"]]),
+  } as UnitLiteral, result.rest);
+});
 
-const costUnitParser: Parser<UnitLiteral> = (input: string): ParserResult<UnitLiteral> => {
-  const match = input.match(COST_UNIT_REGEX);
-  if (!match) return failure("Expected cost unit literal", input);
-  const [fullMatch, numStr] = match;
+const costUnitParser: Parser<UnitLiteral> = label("a cost unit literal", (input: string): ParserResult<UnitLiteral> => {
+  const parser = seqC(
+    set("type", "unitLiteral"),
+    set("dimension", "cost"),
+    set("unit", "$"),
+    char("$"),
+    capture(unsignedNumberChars, "value"),
+  );
+  const result = parser(input);
+  if (!result.success) return result;
   return success({
-    type: "unitLiteral" as const,
-    value: numStr,
-    unit: "$" as const,
-    canonicalValue: parseFloat(numStr),
-    dimension: "cost" as const,
-  }, input.slice(fullMatch.length));
-};
+    ...result.result,
+    canonicalValue: parseFloat(result.result.value),
+  } as UnitLiteral, result.rest);
+});
 
 export const unitLiteralParser: Parser<UnitLiteral> = label("a unit literal",
   or(costUnitParser, timeUnitParser)

@@ -1,0 +1,18 @@
+node main() {
+  if (1s + 500ms != 1500) {
+    return "FAIL: 1s + 500ms"
+  }
+  if (2s * 3 != 6000) {
+    return "FAIL: 2s * 3"
+  }
+  if (1h != 60m) {
+    return "FAIL: 1h != 60m"
+  }
+  if (1d != 24h) {
+    return "FAIL: 1d != 24h"
+  }
+  if (1w != 7d) {
+    return "FAIL: 1w != 7d"
+  }
+  return "pass"
+}

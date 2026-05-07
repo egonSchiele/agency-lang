@@ -118,6 +118,8 @@ const BOOLEAN_OPS = new Set([
   "||",
 ]);
 
+const DIMENSION_CHECK_OPS = new Set(["+", "-", ">", "<", ">=", "<=", "==", "!="]);
+
 function synthBinOp(
   expr: AgencyNode & { type: "binOpExpression" },
   scope: Scope,
@@ -126,6 +128,17 @@ function synthBinOp(
   const op = expr.operator;
   if (op === "catch") return synthCatch(expr, scope, ctx);
   if (op === "|>") return synthPipe(expr, scope, ctx);
+
+  // Dimension mismatch check: only when both sides are direct unit literals
+  if (DIMENSION_CHECK_OPS.has(op) &&
+      expr.left.type === "unitLiteral" && expr.right.type === "unitLiteral" &&
+      expr.left.dimension !== expr.right.dimension) {
+    ctx.errors.push({
+      message: `Cannot ${op} time and cost values: '${expr.left.value}${expr.left.unit === "$" ? "" : expr.left.unit}' and '${expr.right.unit === "$" ? "$" + expr.right.value : expr.right.value + expr.right.unit}' have different dimensions.`,
+      loc: expr.loc,
+    });
+  }
+
   if (BOOLEAN_OPS.has(op)) return BOOLEAN_T;
   if (op === "+") {
     const leftType = synthType(expr.left, scope, ctx);

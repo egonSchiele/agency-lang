@@ -53,7 +53,9 @@ async function callNode(
   hasInterrupts: (data: unknown) => boolean,
 ): Promise<RouteResult> {
   try {
-    const result = (await node.invoke(toArgs(body))) as { data: unknown };
+    const args = toArgs(body);
+    const positional = node.parameters.map((p) => args[p.name]);
+    const result = (await node.invoke(...positional)) as { data: unknown };
     if (hasInterrupts(result.data)) return interruptResult(result.data);
     return ok(result.data);
   } catch (err) {
@@ -82,8 +84,8 @@ async function resumeInterrupts(
   }
 }
 
-const FUNCTION_ROUTE = /^\/functions\/([^/]+)$/;
-const NODE_ROUTE = /^\/nodes\/([^/]+)$/;
+const FUNCTION_ROUTE = /^\/function\/([^/]+)$/;
+const NODE_ROUTE = /^\/node\/([^/]+)$/;
 
 export function createHttpHandler(config: HttpConfig): (
   method: string,
@@ -165,7 +167,7 @@ export function startHttpServer(config: HttpConfig): http.Server {
       logger.info(`${method} ${path} → ${result.status}`);
 
       res.writeHead(result.status, { "Content-Type": "application/json" });
-      res.end(JSON.stringify(result.body));
+      res.end(JSON.stringify(result.body) + "\n");
     } catch (err) {
       const msg = errorMessage(err);
       logger.error(`${method} ${path} → 500: ${msg}`);

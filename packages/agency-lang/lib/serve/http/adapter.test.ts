@@ -39,8 +39,8 @@ function makeExports(): {
       kind: "node",
       name: "main",
       parameters: [{ name: "message" }],
-      invoke: async (args: Record<string, unknown>) => ({
-        data: { echo: args.message },
+      invoke: async (message: unknown) => ({
+        data: { echo: message },
         messages: {},
       }),
     },
@@ -53,7 +53,7 @@ function makeHandler(apiKey?: string) {
   const { exports } = makeExports();
   return createHttpHandler({
     exports,
-    port: 3000,
+    port: 3545,
     apiKey,
     logger: createLogger("error"),
     hasInterrupts: () => false,
@@ -74,29 +74,29 @@ describe("HTTP adapter", () => {
     expect(body.nodes[0].name).toBe("main");
   });
 
-  it("POST /functions/:name calls function", async () => {
-    const result = await handler("POST", "/functions/add", { a: 3, b: 4 });
+  it("POST /function/:name calls function", async () => {
+    const result = await handler("POST", "/function/add", { a: 3, b: 4 });
     expect(result.status).toBe(200);
     const body = result.body as any;
     expect(body.success).toBe(true);
     expect(body.value).toBe(7);
   });
 
-  it("POST /functions/:name returns 404 for unknown", async () => {
-    const result = await handler("POST", "/functions/nope", {});
+  it("POST /function/:name returns 404 for unknown", async () => {
+    const result = await handler("POST", "/function/nope", {});
     expect(result.status).toBe(404);
   });
 
-  it("POST /nodes/:name calls node", async () => {
-    const result = await handler("POST", "/nodes/main", { message: "hello" });
+  it("POST /node/:name calls node", async () => {
+    const result = await handler("POST", "/node/main", { message: "hello" });
     expect(result.status).toBe(200);
     const body = result.body as any;
     expect(body.success).toBe(true);
     expect(body.value).toEqual({ echo: "hello" });
   });
 
-  it("POST /nodes/:name returns 404 for unknown", async () => {
-    const result = await handler("POST", "/nodes/nope", {});
+  it("POST /node/:name returns 404 for unknown", async () => {
+    const result = await handler("POST", "/node/nope", {});
     expect(result.status).toBe(404);
   });
 

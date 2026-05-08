@@ -32,7 +32,7 @@ function toExportedNode(
     kind: "node",
     name: nodeName,
     parameters: params.map((name) => ({ name })),
-    invoke: nodeFn as (args: Record<string, unknown>) => Promise<unknown>,
+    invoke: nodeFn as (...args: unknown[]) => Promise<unknown>,
   };
 }
 

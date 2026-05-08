@@ -11,7 +11,7 @@ export type ExportedNode = {
   kind: "node";
   name: string;
   parameters: Array<{ name: string }>;
-  invoke: (args: Record<string, unknown>) => Promise<unknown>;
+  invoke: (...args: unknown[]) => Promise<unknown>;
 };
 
 export type ExportedItem = ExportedFunction | ExportedNode;

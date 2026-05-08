@@ -54,7 +54,7 @@ agency serve http myagent.agency --api-key my-secret-key
 ```
 
 Options:
-- `--port <port>` — Port to listen on (default: 3000)
+- `--port <port>` — Port to listen on (default: 3545)
 - `--api-key <key>` — Require Bearer token authentication
 - `--standalone` — Generate a bundled `server.js` file instead of starting a server
 
@@ -76,7 +76,7 @@ Options:
 **`POST /functions/:name`** — Call an exported function:
 
 ```bash
-curl -X POST http://localhost:3000/functions/add \
+curl -X POST http://localhost:3545/functions/add \
   -H 'Content-Type: application/json' \
   -d '{"a": 3, "b": 4}'
 ```
@@ -89,7 +89,7 @@ Response:
 **`POST /nodes/:name`** — Run an exported node:
 
 ```bash
-curl -X POST http://localhost:3000/nodes/main \
+curl -X POST http://localhost:3545/nodes/main \
   -H 'Content-Type: application/json' \
   -d '{"message": "hello"}'
 ```
@@ -118,7 +118,7 @@ If a node triggers an interrupt during execution, the response includes the inte
 To resume after an interrupt, use **`POST /resume`** with the interrupts and your responses:
 
 ```bash
-curl -X POST http://localhost:3000/resume \
+curl -X POST http://localhost:3545/resume \
   -H 'Content-Type: application/json' \
   -d '{
     "interrupts": [... the interrupts array from above ...],
@@ -133,7 +133,7 @@ The `responses` array corresponds positionally to the `interrupts` array.
 When `--api-key` is set, all requests must include a Bearer token:
 
 ```bash
-curl -H 'Authorization: Bearer my-secret-key' http://localhost:3000/list
+curl -H 'Authorization: Bearer my-secret-key' http://localhost:3545/list
 ```
 
 Requests without a valid token receive a `401 Unauthorized` response.

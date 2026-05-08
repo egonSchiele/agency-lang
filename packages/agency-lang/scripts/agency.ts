@@ -757,7 +757,7 @@ export function createProgram(deps: CliDependencies = {}): Command {
     .command("http")
     .description("Start an HTTP REST server")
     .argument("<file>", "Agency file to serve")
-    .option("--port <port>", "HTTP port (default: 3000)", "3000")
+    .option("--port <port>", "HTTP port (default: 3545)", "3545")
     .option("--api-key <key>", "API key for authentication")
     .option("--standalone", "Generate a standalone server.js file")
     .action(async (file: string, options: { port?: string; apiKey?: string; standalone?: boolean }) => {

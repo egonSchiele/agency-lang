@@ -85,7 +85,7 @@ export async function serveHttp(
   }
 
   const { exports, moduleExports } = await loadAndDiscover(compileResult);
-  const port = parseInt(options.port ?? "3000", 10);
+  const port = parseInt(options.port ?? "3545", 10);
   const logger = createLogger("info");
 
   startHttpServer({

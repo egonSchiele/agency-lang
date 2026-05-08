@@ -6,17 +6,7 @@ type Foo = {
   capabilities: string[]
 }
 
-node main() {
-  print(color.cyan("Welcome to the Agency Agent!"))
-  print(color.cyan("Would you like to create a new agent or modify an existing one?"))
-  userinput = input("(create/modify) ")
-  thread {
-    mode: Foo = llm("categorize this user response as 'create' or 'modify': ${userinput}", config)
-    greet(mode.name)
-  }
-  print(color.cyan("Great! Let's ${mode} an agent."))
-  match(mode) {
-    "create" => return plan("create", "", null)
-    "modify" => return readExisting()
-  }
+export node main(countryName: string) {
+  const response = llm("What is the capital of " + countryName + "?")
+  return response
 }

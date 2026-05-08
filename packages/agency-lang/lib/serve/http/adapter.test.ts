@@ -6,7 +6,6 @@ import { createLogger } from "../../logger.js";
 
 function makeExports(): {
   exports: ExportedItem[];
-  moduleExports: Record<string, unknown>;
 } {
   const registry: Record<string, AgencyFunction> = {};
   const addFn = AgencyFunction.create(
@@ -47,22 +46,18 @@ function makeExports(): {
     },
   ];
 
-  const moduleExports = {
-    hasInterrupts: () => false,
-    respondToInterrupts: async () => ({ data: "resumed" }),
-  };
-
-  return { exports, moduleExports };
+  return { exports };
 }
 
 function makeHandler(apiKey?: string) {
-  const { exports, moduleExports } = makeExports();
+  const { exports } = makeExports();
   return createHttpHandler({
     exports,
     port: 3000,
     apiKey,
     logger: createLogger("error"),
-    moduleExports,
+    hasInterrupts: () => false,
+    respondToInterrupts: async () => ({ data: "resumed" }),
   });
 }
 

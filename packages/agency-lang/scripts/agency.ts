@@ -740,7 +740,6 @@ export function createProgram(deps: CliDependencies = {}): Command {
       console.log(`  command: ${resolveMcpCommand().join(" ")}`);
     });
 
-  // --- serve command ---
   const serveCmd = program
     .command("serve")
     .description("Serve Agency code over MCP or HTTP");

@@ -1,6 +1,7 @@
 import http from "http";
 import type { ExportedItem, ExportedFunction, ExportedNode } from "../types.js";
 import { checkAuth } from "./auth.js";
+import { errorMessage, toArgs, parseJsonBody } from "../util.js";
 import type { Logger } from "../../logger.js";
 
 export type HttpConfig = {
@@ -8,7 +9,8 @@ export type HttpConfig = {
   port: number;
   apiKey?: string;
   logger: Logger;
-  moduleExports: Record<string, unknown>;
+  hasInterrupts: (data: unknown) => boolean;
+  respondToInterrupts: (interrupts: unknown[], responses: unknown[]) => Promise<unknown>;
 };
 
 type RouteResult = {
@@ -34,15 +36,14 @@ function interruptResult(data: unknown): RouteResult {
 
 async function callFunction(fn: ExportedFunction, body: unknown): Promise<RouteResult> {
   try {
-    const args = (body as Record<string, unknown>) ?? {};
     const result = await fn.agencyFunction.invoke({
       type: "named",
       positionalArgs: [],
-      namedArgs: args,
+      namedArgs: toArgs(body),
     });
     return ok(result);
   } catch (err) {
-    return fail(err instanceof Error ? err.message : String(err));
+    return fail(errorMessage(err));
   }
 }
 
@@ -52,12 +53,11 @@ async function callNode(
   hasInterrupts: (data: unknown) => boolean,
 ): Promise<RouteResult> {
   try {
-    const args = (body as Record<string, unknown>) ?? {};
-    const result = (await node.invoke(args)) as { data: unknown };
+    const result = (await node.invoke(toArgs(body))) as { data: unknown };
     if (hasInterrupts(result.data)) return interruptResult(result.data);
     return ok(result.data);
   } catch (err) {
-    return fail(err instanceof Error ? err.message : String(err));
+    return fail(errorMessage(err));
   }
 }
 
@@ -78,9 +78,12 @@ async function resumeInterrupts(
     if (hasInterrupts(result.data)) return interruptResult(result.data);
     return ok(result.data);
   } catch (err) {
-    return fail(err instanceof Error ? err.message : String(err));
+    return fail(errorMessage(err));
   }
 }
+
+const FUNCTION_ROUTE = /^\/functions\/([^/]+)$/;
+const NODE_ROUTE = /^\/nodes\/([^/]+)$/;
 
 export function createHttpHandler(config: HttpConfig): (
   method: string,
@@ -88,7 +91,7 @@ export function createHttpHandler(config: HttpConfig): (
   body: unknown,
   authHeader?: string,
 ) => Promise<RouteResult> {
-  const { exports, apiKey, moduleExports } = config;
+  const { exports, apiKey, hasInterrupts, respondToInterrupts } = config;
 
   const functions = Object.fromEntries(
     exports.filter((e): e is ExportedFunction => e.kind === "function").map((e) => [e.name, e]),
@@ -96,12 +99,6 @@ export function createHttpHandler(config: HttpConfig): (
   const nodes = Object.fromEntries(
     exports.filter((e): e is ExportedNode => e.kind === "node").map((e) => [e.name, e]),
   );
-
-  const hasInterrupts = moduleExports.hasInterrupts as (data: unknown) => boolean;
-  const respondToInterrupts = moduleExports.respondToInterrupts as (
-    interrupts: unknown[],
-    responses: unknown[],
-  ) => Promise<unknown>;
 
   return async (method, path, body, authHeader): Promise<RouteResult> => {
     if (!checkAuth(apiKey, authHeader)) {
@@ -126,14 +123,14 @@ export function createHttpHandler(config: HttpConfig): (
     }
 
     if (method === "POST") {
-      const functionMatch = path.match(/^\/functions\/([^/]+)$/);
+      const functionMatch = path.match(FUNCTION_ROUTE);
       if (functionMatch) {
         const fn = functions[functionMatch[1]];
         if (!fn) return notFound(`Unknown function '${functionMatch[1]}'`);
         return callFunction(fn, body);
       }
 
-      const nodeMatch = path.match(/^\/nodes\/([^/]+)$/);
+      const nodeMatch = path.match(NODE_ROUTE);
       if (nodeMatch) {
         const node = nodes[nodeMatch[1]];
         if (!node) return notFound(`Unknown node '${nodeMatch[1]}'`);
@@ -152,22 +149,6 @@ export function createHttpHandler(config: HttpConfig): (
   };
 }
 
-function parseBody(req: http.IncomingMessage): Promise<unknown> {
-  return new Promise((resolve, reject) => {
-    let data = "";
-    req.on("data", (chunk) => (data += chunk));
-    req.on("end", () => {
-      if (!data) return resolve({});
-      try {
-        resolve(JSON.parse(data));
-      } catch {
-        reject(new Error("Invalid JSON body"));
-      }
-    });
-    req.on("error", reject);
-  });
-}
-
 export function startHttpServer(config: HttpConfig): http.Server {
   const handler = createHttpHandler(config);
   const { logger, port } = config;
@@ -178,7 +159,7 @@ export function startHttpServer(config: HttpConfig): http.Server {
     const authHeader = req.headers.authorization;
 
     try {
-      const body = method === "POST" ? await parseBody(req) : undefined;
+      const body = method === "POST" ? await parseJsonBody(req) : undefined;
       const result = await handler(method, path, body, authHeader);
 
       logger.info(`${method} ${path} → ${result.status}`);
@@ -186,7 +167,7 @@ export function startHttpServer(config: HttpConfig): http.Server {
       res.writeHead(result.status, { "Content-Type": "application/json" });
       res.end(JSON.stringify(result.body));
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
+      const msg = errorMessage(err);
       logger.error(`${method} ${path} → 500: ${msg}`);
       res.writeHead(500, { "Content-Type": "application/json" });
       res.end(JSON.stringify({ error: "Internal server error" }));

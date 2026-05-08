@@ -93,7 +93,11 @@ export async function serveHttp(
     port,
     apiKey: options.apiKey,
     logger,
-    moduleExports,
+    hasInterrupts: moduleExports.hasInterrupts as (data: unknown) => boolean,
+    respondToInterrupts: moduleExports.respondToInterrupts as (
+      interrupts: unknown[],
+      responses: unknown[],
+    ) => Promise<unknown>,
   });
 }
 

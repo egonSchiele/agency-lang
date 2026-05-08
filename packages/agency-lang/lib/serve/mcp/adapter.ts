@@ -1,5 +1,6 @@
 import process from "process";
 import type { ExportedFunction, ExportedItem } from "../types.js";
+import { errorMessage } from "../util.js";
 
 type JsonRpcId = string | number | null;
 
@@ -43,6 +44,13 @@ export function createMcpHandler(
   const tools = exports.filter((e): e is ExportedFunction => e.kind === "function");
   const toolsByName = Object.fromEntries(tools.map((t) => [t.name, t]));
 
+  const toolsListPayload = tools.map((t) => ({
+    name: t.name,
+    description: t.description,
+    inputSchema: schemaToJsonSchema(t.agencyFunction.toolDefinition?.schema),
+    ...(t.agencyFunction.safe ? { annotations: { readOnlyHint: true } } : {}),
+  }));
+
   return async (message: JsonRpcMessage): Promise<JsonRpcMessage | null> => {
     if (message.jsonrpc !== "2.0") {
       return rpcError(message.id ?? null, -32600, "Expected JSON-RPC 2.0 message");
@@ -63,20 +71,13 @@ export function createMcpHandler(
         return success(message.id ?? null, {});
 
       case "tools/list":
-        return success(message.id ?? null, {
-          tools: tools.map((t) => ({
-            name: t.name,
-            description: t.description,
-            inputSchema: schemaToJsonSchema(t.agencyFunction.toolDefinition?.schema),
-            ...(t.agencyFunction.safe ? { annotations: { readOnlyHint: true } } : {}),
-          })),
-        });
+        return success(message.id ?? null, { tools: toolsListPayload });
 
       case "tools/call": {
         const name = message.params?.name;
         const args = message.params?.arguments ?? {};
         const tool = toolsByName[name];
-        if (!tool || tool.kind !== "function") {
+        if (!tool) {
           return rpcError(message.id ?? null, -32602, `Unknown tool '${name}'`);
         }
         try {
@@ -90,9 +91,8 @@ export function createMcpHandler(
             isError: false,
           });
         } catch (err) {
-          const msg = err instanceof Error ? err.message : String(err);
           return success(message.id ?? null, {
-            content: [{ type: "text", text: msg }],
+            content: [{ type: "text", text: errorMessage(err) }],
             isError: true,
           });
         }
@@ -127,12 +127,10 @@ function processLine(
     handler(JSON.parse(line))
       .then(sendResponse)
       .catch((err: unknown) => {
-        const msg = err instanceof Error ? err.message : String(err);
-        sendResponse(rpcError(null, -32603, `Handler error: ${msg}`));
+        sendResponse(rpcError(null, -32603, `Handler error: ${errorMessage(err)}`));
       });
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    sendResponse(rpcError(null, -32700, `Invalid JSON: ${msg}`));
+    sendResponse(rpcError(null, -32700, `Invalid JSON: ${errorMessage(err)}`));
   }
 }
 

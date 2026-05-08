@@ -1,4 +1,4 @@
-import { execFile } from "child_process";
+import { execFile, spawn } from "child_process";
 import { readFile, writeFile, unlink } from "fs/promises";
 import { promisify } from "util";
 import { nanoid } from "nanoid";
@@ -37,6 +37,78 @@ export async function _speak(text: string, voice: string, rate: number, outputFi
       `Supported platforms: macOS.`
     );
   }
+}
+
+export async function _record(outputFile: string, silenceTimeout: number): Promise<string> {
+  const isTTY = process.stdin.isTTY;
+
+  if (silenceTimeout <= 0 && !isTTY) {
+    throw new Error(
+      "record() with silenceTimeout=0 requires an interactive terminal (TTY) " +
+      "so that Enter can stop the recording. Either run in a TTY or set a positive silenceTimeout."
+    );
+  }
+
+  const outPath = outputFile
+    ? path.resolve(process.cwd(), outputFile)
+    : path.join(os.tmpdir(), `agency-rec-${nanoid()}.wav`);
+
+  const args = [outPath];
+  if (silenceTimeout > 0) {
+    const seconds = String(silenceTimeout / 1000);
+    args.push("silence", "1", "0.1", "3%", "1", seconds, "3%");
+  }
+
+  const proc = spawn("rec", args, { stdio: ["pipe", "ignore", "ignore"] });
+
+  const cleanupStdin = (listener: (data: Buffer) => void) => {
+    if (isTTY) {
+      process.stdin.removeListener("data", listener);
+      process.stdin.setRawMode(false);
+      process.stdin.pause();
+    }
+  };
+
+  let stoppedByUser = false;
+
+  await new Promise<void>((resolve, reject) => {
+    const onData = (data: Buffer) => {
+      const key = data[0];
+      // Only stop on Enter (CR or LF) or Ctrl+C
+      if (key === 0x0d || key === 0x0a || key === 0x03) {
+        stoppedByUser = true;
+        cleanupStdin(onData);
+        proc.kill("SIGTERM");
+      }
+    };
+
+    proc.on("error", (err) => {
+      cleanupStdin(onData);
+      if (!outputFile) unlink(outPath).catch(() => {});
+      reject(new Error(
+        `Failed to start 'rec' command: ${err.message}. ` +
+        `Make sure SoX is installed (e.g. 'brew install sox' on macOS, 'apt install sox' on Linux).`
+      ));
+    });
+
+    proc.on("close", (code) => {
+      cleanupStdin(onData);
+      if (code !== 0 && code !== null && !stoppedByUser) {
+        if (!outputFile) unlink(outPath).catch(() => {});
+        reject(new Error(`'rec' exited with code ${code}`));
+      } else {
+        resolve();
+      }
+    });
+
+    if (isTTY) {
+      process.stdin.setRawMode(true);
+      process.stdin.resume();
+      process.stdin.on("data", onData);
+    }
+  });
+
+  return outPath;
 }
 
 export async function _transcribe(filepath: string, language: string): Promise<string> {

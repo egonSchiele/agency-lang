@@ -19,6 +19,10 @@ import {
   getStdlibDir,
 } from "./importPaths.js";
 
+export type InterruptKind = {
+  kind: string;
+};
+
 export type FunctionSymbol = {
   kind: "function";
   name: string;
@@ -28,6 +32,7 @@ export type FunctionSymbol = {
   parameters: FunctionParameter[];
   returnType: VariableType | null;
   returnTypeValidated?: boolean;
+  interruptKinds?: InterruptKind[];
 };
 
 export type NodeSymbol = {
@@ -38,6 +43,7 @@ export type NodeSymbol = {
   returnType: VariableType | null;
   returnTypeValidated?: boolean;
   exported?: boolean;
+  interruptKinds?: InterruptKind[];
 };
 
 export type TypeSymbol = {

@@ -4,5 +4,7 @@ PACKAGES := $(wildcard packages/*)
 
 all: $(PACKAGES)
 
+packages/agency-lang: packages/tui
+
 $(PACKAGES):
 	@if [ -f $@/makefile ] || [ -f $@/Makefile ]; then $(MAKE) -C $@; fi

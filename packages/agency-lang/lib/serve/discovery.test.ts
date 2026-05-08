@@ -1,0 +1,91 @@
+import { describe, expect, it } from "vitest";
+import { discoverExports } from "./discovery.js";
+import { AgencyFunction } from "../runtime/agencyFunction.js";
+
+describe("discoverExports", () => {
+  it("returns exported functions from tool registry", () => {
+    const registry: Record<string, AgencyFunction> = {};
+    AgencyFunction.create(
+      {
+        name: "publicFn",
+        module: "test",
+        fn: async () => {},
+        params: [],
+        toolDefinition: {
+          name: "publicFn",
+          description: "A public fn",
+          schema: null,
+        },
+        exported: true,
+        safe: false,
+      },
+      registry,
+    );
+    AgencyFunction.create(
+      {
+        name: "privateFn",
+        module: "test",
+        fn: async () => {},
+        params: [],
+        toolDefinition: {
+          name: "privateFn",
+          description: "Private",
+          schema: null,
+        },
+        exported: false,
+      },
+      registry,
+    );
+
+    const exports = discoverExports({
+      toolRegistry: registry,
+      moduleExports: {},
+    });
+    const functions = exports.filter((e) => e.kind === "function");
+    expect(functions).toHaveLength(1);
+    expect(functions[0].name).toBe("publicFn");
+  });
+
+  it("returns exported nodes from module exports", () => {
+    const mockNodeFn = async () => ({ data: "result" });
+    const moduleExports = {
+      main: mockNodeFn,
+      __mainNodeParams: ["message"],
+    };
+
+    const exports = discoverExports({
+      toolRegistry: {},
+      moduleExports,
+      exportedNodeNames: ["main"],
+    });
+    const nodes = exports.filter((e) => e.kind === "node");
+    expect(nodes).toHaveLength(1);
+    expect(nodes[0].name).toBe("main");
+    if (nodes[0].kind === "node") {
+      expect(nodes[0].parameters).toEqual([{ name: "message" }]);
+    }
+  });
+
+  it("skips non-exported nodes", () => {
+    const moduleExports = {
+      main: async () => {},
+      __mainNodeParams: [],
+      helper: async () => {},
+      __helperNodeParams: [],
+    };
+
+    const exports = discoverExports({
+      toolRegistry: {},
+      moduleExports,
+      exportedNodeNames: ["main"],
+    });
+    expect(exports).toHaveLength(1);
+    expect(exports[0].name).toBe("main");
+  });
+
+  it("returns empty array when no exports found", () => {
+    expect(
+      discoverExports({ toolRegistry: {}, moduleExports: {} }),
+    ).toEqual([]);
+  });
+});

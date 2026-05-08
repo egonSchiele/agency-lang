@@ -26,6 +26,7 @@ export const BUILTIN_VARIABLES = ["color"];
  */
 export interface AgencyConfig {
   verbose?: boolean;
+  logLevel?: "debug" | "info" | "warn" | "error";
   outDir?: string;
 
   /**
@@ -160,6 +161,7 @@ export interface AgencyConfig {
 export const AgencyConfigSchema = z
   .object({
     verbose: z.boolean(),
+    logLevel: z.enum(["debug", "info", "warn", "error"]),
     outDir: z.string(),
     excludeNodeTypes: z.array(z.string()),
     excludeBuiltinFunctions: z.array(z.string()),

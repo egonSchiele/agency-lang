@@ -40,7 +40,9 @@ export async function _speak(text: string, voice: string, rate: number, outputFi
 }
 
 export async function _record(outputFile: string, silenceTimeout: number): Promise<string> {
-  const outPath = outputFile || path.join(os.tmpdir(), `agency-rec-${nanoid()}.wav`);
+  const outPath = outputFile
+    ? path.resolve(process.cwd(), outputFile)
+    : path.join(os.tmpdir(), `agency-rec-${nanoid()}.wav`);
 
   const args = [outPath];
   if (silenceTimeout > 0) {
@@ -48,25 +50,41 @@ export async function _record(outputFile: string, silenceTimeout: number): Promi
     args.push("silence", "1", "0.1", "3%", "1", seconds, "3%");
   }
 
-  const proc = spawn("rec", args, { stdio: ["pipe", "pipe", "pipe"] });
+  const proc = spawn("rec", args, { stdio: ["pipe", "ignore", "ignore"] });
+
+  const cleanupStdin = (listener: (...args: unknown[]) => void) => {
+    if (process.stdin.isTTY) {
+      process.stdin.removeListener("data", listener);
+      process.stdin.setRawMode(false);
+      process.stdin.pause();
+    }
+  };
 
   await new Promise<void>((resolve, reject) => {
+    const onData = () => {
+      cleanupStdin(onData);
+      proc.kill("SIGTERM");
+    };
+
     proc.on("error", (err) => {
+      cleanupStdin(onData);
+      if (!outputFile) unlink(outPath).catch(() => {});
       reject(new Error(
         `Failed to start 'rec' command: ${err.message}. ` +
         `Make sure SoX is installed (e.g. 'brew install sox' on macOS, 'apt install sox' on Linux).`
       ));
     });
-    proc.on("close", () => resolve());
+
+    proc.on("close", (code) => {
+      cleanupStdin(onData);
+      if (code !== 0 && !outputFile) unlink(outPath).catch(() => {});
+      resolve();
+    });
 
     if (process.stdin.isTTY) {
       process.stdin.setRawMode(true);
       process.stdin.resume();
-      process.stdin.once("data", () => {
-        process.stdin.setRawMode(false);
-        process.stdin.pause();
-        proc.kill("SIGTERM");
-      });
+      process.stdin.once("data", onData);
     }
   });
 

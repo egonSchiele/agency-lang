@@ -2230,7 +2230,7 @@ const staticKeywordParser: Parser<boolean> = or(
 );
 
 // Parse "export" and "static" in any order before "let"/"const"
-export const modifiedAssignmentParser: Parser<Assignment> = (input: string) => {
+export const modifiedAssignmentParser: Parser<Assignment> = withLoc((input: string) => {
   let rest = input;
   let isExported = false;
   let isStatic = false;
@@ -2266,11 +2266,16 @@ export const modifiedAssignmentParser: Parser<Assignment> = (input: string) => {
     return failure("static requires 'const' (e.g., 'static const x = 1'). Static variables are immutable.", input);
   }
 
+  // export requires a declaration (let or const), not a bare reassignment
+  if (isExported && !result.result.declKind) {
+    return failure("export requires 'let' or 'const' (e.g., 'export const x = 1')", input);
+  }
+
   const out = { ...result.result };
   if (isExported) out.exported = true;
   if (isStatic) out.static = true;
   return success(out, result.rest);
-};
+});
 
 const trim = (s: string) => s.trim();
 export const docStringParser: Parser<DocString> = (input: string) => {

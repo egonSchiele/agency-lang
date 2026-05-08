@@ -32,7 +32,9 @@ describe("export const", () => {
     }
   });
 
-  it("parses export let (parser accepts, typechecker rejects)", () => {
+  // The parser accepts export let syntactically; the typechecker is responsible
+  // for rejecting it (export only makes sense for const declarations).
+  it("parses export let (typechecker rejects this, not parser)", () => {
     const result = modifiedAssignmentParser(`export let x = 5\n`);
     expect(result.success).toBe(true);
     if (result.success) {

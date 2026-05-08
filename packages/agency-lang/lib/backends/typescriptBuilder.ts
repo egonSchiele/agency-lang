@@ -1896,7 +1896,7 @@ export class TypeScriptBuilder {
           fn: ts.id(implName),
           params: ts.arr(paramNodes),
           toolDefinition: toolDef,
-          safe: ts.bool(!!this.compilationUnit.safeFunctions[functionName]),
+          safe: ts.bool(!!node.safe),
           exported: ts.bool(!!node.exported),
         }),
         ts.id("__toolRegistry"),

@@ -1,5 +1,5 @@
 import type { AgencyProgram, AgencyNode } from "./types.js";
-import type { FileSymbols, InterruptKind } from "./symbolTable.js";
+import type { FileSymbols } from "./symbolTable.js";
 import { walkNodes } from "./utils/node.js";
 
 export type FileInput = {
@@ -13,6 +13,12 @@ type KindsByFunction = Record<string, string[]>;
 /** Maps file path to its per-function interrupt kinds. */
 type KindsByFile = Record<string, KindsByFunction>;
 
+/** Maps function/node name to the names of functions it calls. */
+type CallGraph = Record<string, string[]>;
+
+/** Maps file path to its per-function call graph. */
+type CallGraphByFile = Record<string, CallGraph>;
+
 /**
  * Analyze all files and return new FileSymbols with interruptKinds populated
  * on every function and node symbol.
@@ -20,30 +26,39 @@ type KindsByFile = Record<string, KindsByFunction>;
 export function analyzeInterrupts(
   files: Record<string, FileInput>,
 ): Record<string, FileSymbols> {
-  const kindsByFile = collectAllDirectInterrupts(files);
+  const { kindsByFile, callGraphByFile } = collectAll(files);
+  resolveTransitiveInterrupts(kindsByFile, callGraphByFile);
   return attachInterruptKinds(files, kindsByFile);
 }
 
-function collectAllDirectInterrupts(
+function collectAll(
   files: Record<string, FileInput>,
-): KindsByFile {
-  const result: KindsByFile = {};
+): { kindsByFile: KindsByFile; callGraphByFile: CallGraphByFile } {
+  const kindsByFile: KindsByFile = {};
+  const callGraphByFile: CallGraphByFile = {};
   for (const [filePath, { program }] of Object.entries(files)) {
-    result[filePath] = collectDirectInterrupts(program);
+    const { kinds, callGraph } = collectFromProgram(program);
+    kindsByFile[filePath] = kinds;
+    callGraphByFile[filePath] = callGraph;
   }
-  return result;
+  return { kindsByFile, callGraphByFile };
 }
 
-function collectDirectInterrupts(program: AgencyProgram): KindsByFunction {
-  const result: KindsByFunction = {};
+function collectFromProgram(
+  program: AgencyProgram,
+): { kinds: KindsByFunction; callGraph: CallGraph } {
+  const kinds: KindsByFunction = {};
+  const callGraph: CallGraph = {};
   for (const node of program.nodes) {
     if (node.type === "function") {
-      result[node.functionName] = collectInterruptsInBody(node.body);
+      kinds[node.functionName] = collectInterruptsInBody(node.body);
+      callGraph[node.functionName] = collectCalleesInBody(node.body);
     } else if (node.type === "graphNode") {
-      result[node.nodeName] = collectInterruptsInBody(node.body);
+      kinds[node.nodeName] = collectInterruptsInBody(node.body);
+      callGraph[node.nodeName] = collectCalleesInBody(node.body);
     }
   }
-  return result;
+  return { kinds, callGraph };
 }
 
 function collectInterruptsInBody(body: AgencyNode[]): string[] {
@@ -56,6 +71,49 @@ function collectInterruptsInBody(body: AgencyNode[]): string[] {
     }
   }
   return kinds;
+}
+
+function collectCalleesInBody(body: AgencyNode[]): string[] {
+  const callees: string[] = [];
+  for (const { node } of walkNodes(body)) {
+    if (node.type === "functionCall") {
+      if (!callees.includes(node.functionName)) {
+        callees.push(node.functionName);
+      }
+    } else if (node.type === "gotoStatement") {
+      const name = node.nodeCall.functionName;
+      if (!callees.includes(name)) {
+        callees.push(name);
+      }
+    }
+  }
+  return callees;
+}
+
+function resolveTransitiveInterrupts(
+  kindsByFile: KindsByFile,
+  callGraphByFile: CallGraphByFile,
+): void {
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const [filePath, callGraph] of Object.entries(callGraphByFile)) {
+      const kinds = kindsByFile[filePath];
+      for (const [funcName, callees] of Object.entries(callGraph)) {
+        const currentKinds = kinds[funcName] ?? [];
+        for (const calleeName of callees) {
+          const calleeKinds = kinds[calleeName] ?? [];
+          for (const kind of calleeKinds) {
+            if (!currentKinds.includes(kind)) {
+              currentKinds.push(kind);
+              changed = true;
+            }
+          }
+        }
+        kinds[funcName] = currentKinds;
+      }
+    }
+  }
 }
 
 function attachInterruptKinds(

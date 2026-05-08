@@ -120,4 +120,79 @@ describe("interruptAnalyzer", () => {
       expect(interruptKindsFor(files, "doWork")).toEqual([]);
     });
   });
+
+  describe("transitive propagation", () => {
+    it("propagates interrupt kinds through function calls", () => {
+      const files = analyze(`
+        def deploy() {
+          interrupt myapp::deploy("Deploy?")
+        }
+        def orchestrate() {
+          deploy()
+        }
+      `);
+      expect(interruptKindsFor(files, "orchestrate")).toEqual(["myapp::deploy"]);
+    });
+
+    it("propagates through multiple levels", () => {
+      const files = analyze(`
+        def deploy() {
+          interrupt myapp::deploy("Deploy?")
+        }
+        def orchestrate() {
+          deploy()
+        }
+        node main() {
+          orchestrate()
+        }
+      `);
+      expect(interruptKindsFor(files, "main")).toEqual(["myapp::deploy"]);
+    });
+
+    it("propagates through node-to-node calls", () => {
+      const files = analyze(`
+        node checkout() {
+          interrupt payment::charge("Charge?")
+        }
+        node main() {
+          return checkout()
+        }
+      `);
+      expect(interruptKindsFor(files, "main")).toEqual(["payment::charge"]);
+    });
+
+    it("unions interrupt kinds from multiple callees", () => {
+      const files = analyze(`
+        def deploy() {
+          interrupt myapp::deploy("Deploy?")
+        }
+        def notify() {
+          interrupt myapp::notify("Notify?")
+        }
+        def orchestrate() {
+          deploy()
+          notify()
+        }
+      `);
+      expect(interruptKindsFor(files, "orchestrate")).toEqual([
+        "myapp::deploy",
+        "myapp::notify",
+      ]);
+    });
+
+    it("handles cycles (mutual recursion)", () => {
+      const files = analyze(`
+        def ping(n: number) {
+          interrupt myapp::ping("ping")
+          pong(n)
+        }
+        def pong(n: number) {
+          interrupt myapp::pong("pong")
+          ping(n)
+        }
+      `);
+      expect(interruptKindsFor(files, "ping")).toEqual(["myapp::ping", "myapp::pong"]);
+      expect(interruptKindsFor(files, "pong")).toEqual(["myapp::ping", "myapp::pong"]);
+    });
+  });
 });

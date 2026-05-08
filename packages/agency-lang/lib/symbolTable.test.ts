@@ -1,6 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { classifySymbols } from "./symbolTable.js";
+import { classifySymbols, SymbolTable } from "./symbolTable.js";
 import { parseAgency } from "./parser.js";
+import { writeFileSync, unlinkSync } from "fs";
+import path from "path";
+import os from "os";
 
 function parseAndClassify(source: string) {
   const result = parseAgency(source, {}, false);
@@ -71,5 +74,44 @@ def myFunc() {
 `);
     expect(symbols.Inner).toMatchObject({ kind: "type", name: "Inner" });
     expect(symbols.myFunc).toMatchObject({ kind: "function", name: "myFunc" });
+  });
+});
+
+describe("SymbolTable interrupt analysis", () => {
+  it("populates interruptKinds on function and node symbols", () => {
+    const file = path.join(os.tmpdir(), `st-int-${Date.now()}.agency`);
+    writeFileSync(
+      file,
+      `
+      def deploy() {
+        interrupt myapp::deploy("Deploy?")
+      }
+      def orchestrate() {
+        deploy()
+      }
+      node main() {
+        orchestrate()
+      }
+    `,
+    );
+    try {
+      const st = SymbolTable.build(file);
+      const symbols = st.getFile(path.resolve(file))!;
+      expect(symbols).toBeDefined();
+      expect(symbols["deploy"]).toMatchObject({
+        kind: "function",
+        interruptKinds: [{ kind: "myapp::deploy" }],
+      });
+      expect(symbols["orchestrate"]).toMatchObject({
+        kind: "function",
+        interruptKinds: [{ kind: "myapp::deploy" }],
+      });
+      expect(symbols["main"]).toMatchObject({
+        kind: "node",
+        interruptKinds: [{ kind: "myapp::deploy" }],
+      });
+    } finally {
+      unlinkSync(file);
+    }
   });
 });

@@ -18,6 +18,7 @@ import {
   isAgencyImport,
   getStdlibDir,
 } from "./importPaths.js";
+import { analyzeInterrupts } from "./interruptAnalyzer.js";
 
 export type InterruptKind = {
   kind: string;
@@ -97,7 +98,7 @@ export class SymbolTable {
   }
 
   static build(entrypoint: string, config: AgencyConfig = {}): SymbolTable {
-    const files: Record<string, FileSymbols> = {};
+    const parsed: Record<string, { symbols: FileSymbols; program: AgencyProgram }> = {};
     const visited = new Set<string>();
 
     function visit(filePath: string): void {
@@ -125,7 +126,7 @@ export class SymbolTable {
       }
 
       const program = parseResult.result;
-      files[absPath] = classifySymbols(program);
+      parsed[absPath] = { symbols: classifySymbols(program), program };
 
       for (const { node } of walkNodes(program.nodes)) {
         if (node.type === "importNodeStatement") {
@@ -140,7 +141,8 @@ export class SymbolTable {
     }
 
     visit(entrypoint);
-    return new SymbolTable(files);
+    const analyzedFiles = analyzeInterrupts(parsed);
+    return new SymbolTable(analyzedFiles);
   }
 
   has(absPath: string): boolean {

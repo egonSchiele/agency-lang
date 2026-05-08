@@ -1,5 +1,5 @@
 import http from "http";
-import type { ExportedItem } from "../types.js";
+import type { ExportedItem, ExportedFunction, ExportedNode } from "../types.js";
 import { checkAuth } from "./auth.js";
 import type { Logger } from "../../logger.js";
 
@@ -16,6 +16,72 @@ type RouteResult = {
   body: unknown;
 };
 
+function ok(value: unknown): RouteResult {
+  return { status: 200, body: { success: true, value } };
+}
+
+function fail(error: string): RouteResult {
+  return { status: 200, body: { success: false, error } };
+}
+
+function notFound(error: string): RouteResult {
+  return { status: 404, body: { error } };
+}
+
+function interruptResult(data: unknown): RouteResult {
+  return ok({ interrupts: data, state: JSON.stringify(data) });
+}
+
+async function callFunction(fn: ExportedFunction, body: unknown): Promise<RouteResult> {
+  try {
+    const args = (body as Record<string, unknown>) ?? {};
+    const result = await fn.agencyFunction.invoke({
+      type: "named",
+      positionalArgs: [],
+      namedArgs: args,
+    });
+    return ok(result);
+  } catch (err) {
+    return fail(err instanceof Error ? err.message : String(err));
+  }
+}
+
+async function callNode(
+  node: ExportedNode,
+  body: unknown,
+  hasInterrupts: (data: unknown) => boolean,
+): Promise<RouteResult> {
+  try {
+    const args = (body as Record<string, unknown>) ?? {};
+    const result = (await node.invoke(args)) as { data: unknown };
+    if (hasInterrupts(result.data)) return interruptResult(result.data);
+    return ok(result.data);
+  } catch (err) {
+    return fail(err instanceof Error ? err.message : String(err));
+  }
+}
+
+async function resumeInterrupts(
+  respondToInterrupts: (i: unknown[], r: unknown[]) => Promise<unknown>,
+  hasInterrupts: (data: unknown) => boolean,
+  body: unknown,
+): Promise<RouteResult> {
+  const { interrupts, responses } = body as {
+    interrupts: unknown[];
+    responses: unknown[];
+  };
+  if (!Array.isArray(interrupts) || !Array.isArray(responses)) {
+    return { status: 400, body: { error: "interrupts and responses must be arrays" } };
+  }
+  try {
+    const result = (await respondToInterrupts(interrupts, responses)) as { data: unknown };
+    if (hasInterrupts(result.data)) return interruptResult(result.data);
+    return ok(result.data);
+  } catch (err) {
+    return fail(err instanceof Error ? err.message : String(err));
+  }
+}
+
 export function createHttpHandler(config: HttpConfig): (
   method: string,
   path: string,
@@ -24,10 +90,12 @@ export function createHttpHandler(config: HttpConfig): (
 ) => Promise<RouteResult> {
   const { exports, apiKey, moduleExports } = config;
 
-  const itemsByName: Record<string, ExportedItem> = {};
-  for (const item of exports) {
-    itemsByName[item.name] = item;
-  }
+  const functions = Object.fromEntries(
+    exports.filter((e): e is ExportedFunction => e.kind === "function").map((e) => [e.name, e]),
+  );
+  const nodes = Object.fromEntries(
+    exports.filter((e): e is ExportedNode => e.kind === "node").map((e) => [e.name, e]),
+  );
 
   const hasInterrupts = moduleExports.hasInterrupts as (data: unknown) => boolean;
   const respondToInterrupts = moduleExports.respondToInterrupts as (
@@ -35,12 +103,7 @@ export function createHttpHandler(config: HttpConfig): (
     responses: unknown[],
   ) => Promise<unknown>;
 
-  return async (
-    method: string,
-    path: string,
-    body: unknown,
-    authHeader?: string,
-  ): Promise<RouteResult> => {
+  return async (method, path, body, authHeader): Promise<RouteResult> => {
     if (!checkAuth(apiKey, authHeader)) {
       return { status: 401, body: { error: "Unauthorized" } };
     }
@@ -49,20 +112,15 @@ export function createHttpHandler(config: HttpConfig): (
       return {
         status: 200,
         body: {
-          functions: exports
-            .filter((e) => e.kind === "function")
-            .map((e) => ({
-              name: e.name,
-              description: e.kind === "function" ? e.description : undefined,
-              safe: e.kind === "function" ? e.agencyFunction.safe : undefined,
-            })),
-          nodes: exports
-            .filter((e) => e.kind === "node")
-            .map((e) => ({
-              name: e.name,
-              parameters:
-                e.kind === "node" ? e.parameters.map((p) => p.name) : [],
-            })),
+          functions: Object.values(functions).map((f) => ({
+            name: f.name,
+            description: f.description,
+            safe: f.agencyFunction.safe,
+          })),
+          nodes: Object.values(nodes).map((n) => ({
+            name: n.name,
+            parameters: n.parameters.map((p) => p.name),
+          })),
         },
       };
     }
@@ -70,99 +128,27 @@ export function createHttpHandler(config: HttpConfig): (
     if (method === "POST") {
       const functionMatch = path.match(/^\/functions\/([^/]+)$/);
       if (functionMatch) {
-        const name = functionMatch[1];
-        const item = itemsByName[name];
-        if (!item || item.kind !== "function") {
-          return { status: 404, body: { error: `Unknown function '${name}'` } };
-        }
-        try {
-          const args = (body as Record<string, unknown>) ?? {};
-          const result = await item.agencyFunction.invoke({
-            type: "named",
-            positionalArgs: [],
-            namedArgs: args,
-          });
-          return { status: 200, body: { success: true, value: result } };
-        } catch (err) {
-          const msg = err instanceof Error ? err.message : String(err);
-          return { status: 200, body: { success: false, error: msg } };
-        }
+        const fn = functions[functionMatch[1]];
+        if (!fn) return notFound(`Unknown function '${functionMatch[1]}'`);
+        return callFunction(fn, body);
       }
 
       const nodeMatch = path.match(/^\/nodes\/([^/]+)$/);
       if (nodeMatch) {
-        const name = nodeMatch[1];
-        const item = itemsByName[name];
-        if (!item || item.kind !== "node") {
-          return { status: 404, body: { error: `Unknown node '${name}'` } };
-        }
-        try {
-          const args = (body as Record<string, unknown>) ?? {};
-          const result = (await item.invoke(args)) as {
-            data: unknown;
-            messages: unknown;
-          };
-          if (hasInterrupts && hasInterrupts(result.data)) {
-            return {
-              status: 200,
-              body: {
-                success: true,
-                value: {
-                  interrupts: result.data,
-                  state: JSON.stringify(result.data),
-                },
-              },
-            };
-          }
-          return { status: 200, body: { success: true, value: result.data } };
-        } catch (err) {
-          const msg = err instanceof Error ? err.message : String(err);
-          return { status: 200, body: { success: false, error: msg } };
-        }
+        const node = nodes[nodeMatch[1]];
+        if (!node) return notFound(`Unknown node '${nodeMatch[1]}'`);
+        return callNode(node, body, hasInterrupts);
       }
 
       if (path === "/resume") {
         if (!respondToInterrupts) {
-          return {
-            status: 400,
-            body: { error: "Module does not support interrupt resume" },
-          };
+          return { status: 400, body: { error: "Module does not support interrupt resume" } };
         }
-        try {
-          const { interrupts, responses } = body as {
-            interrupts: unknown[];
-            responses: unknown[];
-          };
-          if (!Array.isArray(interrupts) || !Array.isArray(responses)) {
-            return {
-              status: 400,
-              body: { error: "interrupts and responses must be arrays" },
-            };
-          }
-          const result = (await respondToInterrupts(interrupts, responses)) as {
-            data: unknown;
-          };
-          if (hasInterrupts && hasInterrupts(result.data)) {
-            return {
-              status: 200,
-              body: {
-                success: true,
-                value: {
-                  interrupts: result.data,
-                  state: JSON.stringify(result.data),
-                },
-              },
-            };
-          }
-          return { status: 200, body: { success: true, value: result.data } };
-        } catch (err) {
-          const msg = err instanceof Error ? err.message : String(err);
-          return { status: 200, body: { success: false, error: msg } };
-        }
+        return resumeInterrupts(respondToInterrupts, hasInterrupts, body);
       }
     }
 
-    return { status: 404, body: { error: "Not found" } };
+    return notFound("Not found");
   };
 }
 

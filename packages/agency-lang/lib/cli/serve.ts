@@ -27,14 +27,9 @@ function compileForServe(file: string): CompileResult {
   }
 
   const fileSymbols = symbolTable.getFile(absoluteFile);
-  const exportedNodeNames: string[] = [];
-  if (fileSymbols) {
-    for (const sym of Object.values(fileSymbols)) {
-      if (sym.kind === "node" && sym.exported) {
-        exportedNodeNames.push(sym.name);
-      }
-    }
-  }
+  const exportedNodeNames = Object.values(fileSymbols ?? {})
+    .filter((sym) => sym.kind === "node" && sym.exported)
+    .map((sym) => sym.name);
 
   const moduleId = path.relative(process.cwd(), absoluteFile);
   return { outputPath, moduleId, exportedNodeNames };

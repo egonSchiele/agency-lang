@@ -1,5 +1,5 @@
 import process from "process";
-import type { ExportedItem } from "../types.js";
+import type { ExportedFunction, ExportedItem } from "../types.js";
 
 type JsonRpcId = string | number | null;
 
@@ -22,6 +22,13 @@ function rpcError(id: JsonRpcId, code: number, message: string): JsonRpcMessage 
   return { jsonrpc: "2.0", id, error: { code, message } };
 }
 
+function schemaToJsonSchema(schema: unknown): unknown {
+  const s = schema as { toJSONSchema?: () => unknown } | null | undefined;
+  return s && typeof s.toJSONSchema === "function"
+    ? s.toJSONSchema()
+    : { type: "object", properties: {} };
+}
+
 export type McpConfig = {
   serverName: string;
   serverVersion: string;
@@ -33,7 +40,7 @@ export function createMcpHandler(
 ): (message: JsonRpcMessage) => Promise<JsonRpcMessage | null> {
   const { serverName, serverVersion, exports } = config;
 
-  const tools = exports.filter((e) => e.kind === "function");
+  const tools = exports.filter((e): e is ExportedFunction => e.kind === "function");
   const toolsByName = Object.fromEntries(tools.map((t) => [t.name, t]));
 
   return async (message: JsonRpcMessage): Promise<JsonRpcMessage | null> => {
@@ -57,27 +64,12 @@ export function createMcpHandler(
 
       case "tools/list":
         return success(message.id ?? null, {
-          tools: tools.map((t) => {
-            if (t.kind !== "function") return null;
-            const schema = t.agencyFunction.toolDefinition?.schema as
-              | { toJSONSchema?: () => unknown }
-              | null
-              | undefined;
-            const inputSchema =
-              schema && typeof schema.toJSONSchema === "function"
-                ? schema.toJSONSchema()
-                : { type: "object", properties: {} };
-            const annotations: Record<string, boolean> = {};
-            if (t.agencyFunction.safe) {
-              annotations.readOnlyHint = true;
-            }
-            return {
-              name: t.name,
-              description: t.description,
-              inputSchema,
-              ...(Object.keys(annotations).length > 0 ? { annotations } : {}),
-            };
-          }).filter(Boolean),
+          tools: tools.map((t) => ({
+            name: t.name,
+            description: t.description,
+            inputSchema: schemaToJsonSchema(t.agencyFunction.toolDefinition?.schema),
+            ...(t.agencyFunction.safe ? { annotations: { readOnlyHint: true } } : {}),
+          })),
         });
 
       case "tools/call": {

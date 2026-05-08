@@ -2152,6 +2152,11 @@ export const importStatmentParser: Parser<ImportStatement> = map(
 // =============================================================================
 
 const _assignmentParserInner: Parser<Assignment> = (input: string) => {
+  // Check for export keyword
+  const exportResult = exportKeywordParser(input);
+  if (!exportResult.success) return exportResult;
+  const isExported = exportResult.result;
+
   const parser = trace(
     "assignmentParser",
     seqC(
@@ -2185,7 +2190,7 @@ const _assignmentParserInner: Parser<Assignment> = (input: string) => {
       optionalSpacesOrNewline,
     ),
   );
-  const result = parser(input);
+  const result = parser(exportResult.rest);
   if (!result.success) return result;
 
   const target = result.result.target;
@@ -2217,9 +2222,15 @@ const _assignmentParserInner: Parser<Assignment> = (input: string) => {
     );
   }
 
+  // Only const can be exported
+  if (isExported && parsed.declKind !== "const") {
+    throw new Error("Only const declarations can be exported");
+  }
+
   const { target: _target, validated: _validated, value, ...rest } = parsed;
   const out: Assignment = { ...rest, variableName, value, accessChain };
   if (_validated) out.validated = true;
+  if (isExported) out.exported = true;
   return success(out, result.rest);
 };
 export const assignmentParser: Parser<Assignment> = label("an assignment", withLoc(_assignmentParserInner));

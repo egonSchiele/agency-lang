@@ -28,7 +28,7 @@ import {
   AgencyObjectKV,
 } from "../types/dataStructures.js";
 import { FunctionCall, FunctionDefinition, FunctionParameter } from "../types/function.js";
-import { GraphNodeDefinition, Visibility } from "../types/graphNode.js";
+import { GraphNodeDefinition } from "../types/graphNode.js";
 import { IfElse } from "../types/ifElse.js";
 import {
   ImportNameType,
@@ -450,6 +450,7 @@ export class AgencyGenerator {
     const varName = node.typeHint
       ? `${node.variableName}${chainStr}: ${variableTypeToString(node.typeHint, this.typeAliases)}${bangSuffix}`
       : `${node.variableName}${chainStr}`;
+    const exportPrefix = node.exported ? "export " : "";
     const staticPrefix = node.static ? "static " : "";
     const declPrefix = node.declKind ? `${node.declKind} ` : "";
     let valueCode =
@@ -458,7 +459,7 @@ export class AgencyGenerator {
         : this.processNode(node.value).trim();
     return (
       tags +
-      this.indentStr(`${staticPrefix}${declPrefix}${varName} = ${valueCode}`)
+      this.indentStr(`${exportPrefix}${staticPrefix}${declPrefix}${varName} = ${valueCode}`)
     );
   }
 
@@ -890,17 +891,6 @@ export class AgencyGenerator {
   }
 
 
-  protected visibilityToString(vis: Visibility): string {
-    switch (vis) {
-      case "public":
-        return "public ";
-      case "private":
-        return "private ";
-      case undefined:
-        return "";
-    }
-  }
-
   protected processGraphNode(node: GraphNodeDefinition): string {
     const tags = this.formatAttachedTags(node);
     const { nodeName, body, parameters } = node;
@@ -908,8 +898,8 @@ export class AgencyGenerator {
     const returnTypeStr = node.returnType
       ? ": " + variableTypeToString(node.returnType, this.typeAliases) + returnTypeBang
       : "";
-    const visibilityStr = this.visibilityToString(node.visibility);
-    const prefix = `${visibilityStr}node ${nodeName}`;
+    const exportPrefix = node.exported ? "export " : "";
+    const prefix = `${exportPrefix}node ${nodeName}`;
     const renderedParams = this.renderParams(parameters);
     const signature = this.wrapList(renderedParams, prefix, "(", ")", `${returnTypeStr} {`);
 

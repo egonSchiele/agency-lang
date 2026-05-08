@@ -1,4 +1,5 @@
 import { AgencyNode } from "./types.js";
+import type { LogLevel } from "./logger.js";
 import { z } from "zod";
 import * as fs from "fs";
 import * as path from "path";
@@ -26,6 +27,7 @@ export const BUILTIN_VARIABLES = ["color"];
  */
 export interface AgencyConfig {
   verbose?: boolean;
+  logLevel?: LogLevel;
   outDir?: string;
 
   /**
@@ -160,6 +162,7 @@ export interface AgencyConfig {
 export const AgencyConfigSchema = z
   .object({
     verbose: z.boolean(),
+    logLevel: z.enum(["debug", "info", "warn", "error"]),
     outDir: z.string(),
     excludeNodeTypes: z.array(z.string()),
     excludeBuiltinFunctions: z.array(z.string()),

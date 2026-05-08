@@ -53,7 +53,14 @@ export type ClassSymbol = {
   loc?: SourceLocation;
 };
 
-export type SymbolInfo = FunctionSymbol | NodeSymbol | TypeSymbol | ClassSymbol;
+export type ConstantSymbol = {
+  kind: "constant";
+  name: string;
+  loc?: SourceLocation;
+  exported: boolean;
+};
+
+export type SymbolInfo = FunctionSymbol | NodeSymbol | TypeSymbol | ClassSymbol | ConstantSymbol;
 export type SymbolKind = SymbolInfo["kind"];
 
 /** Maps symbol name → info for a single file. */
@@ -240,6 +247,16 @@ export function classifySymbols(program: AgencyProgram): FileSymbols {
           name: node.className,
           loc: node.loc,
         };
+        break;
+      case "assignment":
+        if (node.exported && node.static && node.declKind === "const") {
+          symbols[node.variableName] = {
+            kind: "constant",
+            name: node.variableName,
+            loc: node.loc,
+            exported: true,
+          };
+        }
         break;
     }
   }

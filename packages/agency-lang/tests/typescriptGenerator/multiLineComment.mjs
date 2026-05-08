@@ -202,7 +202,9 @@ const greet = __AgencyFunction.create({
     name: "greet",
     description: `No description provided.`,
     schema: z.object({})
-  }
+  },
+  safe: false,
+  exported: false
 }, __toolRegistry);
 export default graph
 export const __sourceMap = {"multiLineComment.agency:greet":{"0":{"line":8,"col":2}}};

@@ -28,6 +28,8 @@ export type AgencyFunctionOpts = {
   fn: Function;
   params: FuncParam[];
   toolDefinition: ToolDefinition | null;
+  exported?: boolean;
+  safe?: boolean;
 };
 
 export class AgencyFunction {
@@ -41,6 +43,8 @@ export class AgencyFunction {
   private readonly _nonVariadicUnbound: FuncParam[];
   private readonly _hasVariadic: boolean;
   private readonly _isBound: boolean;
+  readonly exported: boolean;
+  readonly safe: boolean;
 
   constructor(opts: AgencyFunctionOpts) {
     this.name = opts.name;
@@ -48,6 +52,8 @@ export class AgencyFunction {
     this._fn = opts.fn;
     this.params = opts.params;
     this.toolDefinition = opts.toolDefinition;
+    this.exported = opts.exported ?? false;
+    this.safe = opts.safe ?? false;
     this._unboundParams = opts.params.filter(p => !p.isBound);
     this._nonVariadicUnbound = this._unboundParams.filter(p => !p.variadic);
     this._hasVariadic = this._unboundParams.length > 0 && this._unboundParams[this._unboundParams.length - 1].variadic;
@@ -74,6 +80,8 @@ export class AgencyFunction {
       fn: this._fn,
       params: this.params,
       toolDefinition,
+      exported: this.exported,
+      safe: this.safe,
     });
   }
 
@@ -138,6 +146,8 @@ export class AgencyFunction {
       fn: this._fn,
       params: newParams,
       toolDefinition: newToolDef,
+      exported: this.exported,
+      safe: this.safe,
     });
   }
 

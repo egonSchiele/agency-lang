@@ -241,7 +241,9 @@ const twice = __AgencyFunction.create({
     name: "twice",
     description: `No description provided.`,
     schema: z.object({})
-  }
+  },
+  safe: false,
+  exported: false
 }, __toolRegistry);
 graph.node("main", async (__state: GraphState) => {
   const __setupData = setupNode({

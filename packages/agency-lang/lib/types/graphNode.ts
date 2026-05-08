@@ -5,19 +5,6 @@ import { DocString, FunctionParameter } from "./function.js";
 import { Literal } from "./literals.js";
 import { Tag } from "./tag.js";
 
-/*
-export type FunctionDefinition = {
-  type: "function";
-  functionName: string;
-  parameters: FunctionParameter[];
-  body: AgencyNode[];
-  returnType?: VariableType | null;
-  docString?: DocString;
-};
-*/
-
-export type Visibility = "public" | "private" | undefined;
-
 export type GraphNodeDefinition = BaseNode & {
   type: "graphNode";
   nodeName: string;
@@ -25,7 +12,7 @@ export type GraphNodeDefinition = BaseNode & {
   body: AgencyNode[];
   returnType?: VariableType | null;
   returnTypeValidated?: boolean;
-  visibility?: Visibility;
+  exported?: boolean;
   tags?: Tag[];
   docComment?: AgencyMultiLineComment;
   docString?: DocString;

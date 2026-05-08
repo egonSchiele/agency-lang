@@ -502,10 +502,12 @@ export class TypeScriptBuilder {
     // a separate `__initializeStatic(__ctx)` function (called once from __initializeGlobals).
     // This gives them access to __ctx for handlers and function dispatch.
     const staticVarNames = new Set<string>();
+    const exportedStaticVarNames = new Set<string>();
     const staticInitStatements: TsNode[] = [];
     for (const node of program.nodes) {
       if (node.type === "assignment" && node.scope === "static") {
         staticVarNames.add(node.variableName);
+        if (node.exported) exportedStaticVarNames.add(node.variableName);
         const valueNode = this.processNodeInGlobalInit(node.value);
         staticInitStatements.push(
           ts.assign(ts.id(node.variableName), ts.call(ts.id("__deepFreeze"), [valueNode]))
@@ -517,6 +519,7 @@ export class TypeScriptBuilder {
       ) {
         const stmt = node.statement;
         staticVarNames.add(stmt.variableName);
+        if (stmt.exported) exportedStaticVarNames.add(stmt.variableName);
         const valueNode = this.processNodeInGlobalInit(stmt.value);
         const handler = this.buildHandlerArrow(node.handlerName);
         staticInitStatements.push(
@@ -598,7 +601,9 @@ export class TypeScriptBuilder {
 
     // Emit static variable `let` declarations at module level + __initializeStatic function
     if (staticVarNames.size > 0) {
-      const staticLetDecls = [...staticVarNames].map(name => ts.letDecl(name));
+      const staticLetDecls = [...staticVarNames].map(name =>
+        exportedStaticVarNames.has(name) ? ts.export(ts.letDecl(name)) : ts.letDecl(name)
+      );
       sections.push(ts.statements([
         ts.raw("let __staticInitPromise = null"),
         ...staticLetDecls,
@@ -1896,6 +1901,8 @@ export class TypeScriptBuilder {
           fn: ts.id(implName),
           params: ts.arr(paramNodes),
           toolDefinition: toolDef,
+          safe: ts.bool(!!node.safe),
+          exported: ts.bool(!!node.exported),
         }),
         ts.id("__toolRegistry"),
       ])

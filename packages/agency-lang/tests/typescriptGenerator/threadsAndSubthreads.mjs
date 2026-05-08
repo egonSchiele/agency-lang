@@ -389,7 +389,9 @@ const foo = __AgencyFunction.create({
     name: "foo",
     description: `No description provided.`,
     schema: z.object({})
-  }
+  },
+  safe: false,
+  exported: false
 }, __toolRegistry);
 graph.node("main", async (__state: GraphState) => {
   const __setupData = setupNode({

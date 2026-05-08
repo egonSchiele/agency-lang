@@ -225,7 +225,9 @@ const checkValue = __AgencyFunction.create({
     name: "checkValue",
     description: `No description provided.`,
     schema: z.object({"r": z.union([z.object({ __type: z.literal("resultType"), success: z.literal(true), value: z.any() }), z.object({ __type: z.literal("resultType"), success: z.literal(false), error: z.any() })]), })
-  }
+  },
+  safe: false,
+  exported: false
 }, __toolRegistry);
 export default graph
 export const __sourceMap = {"result-guards.agency:checkValue":{"0":{"line":1,"col":2},"1":{"line":4,"col":2},"0.0":{"line":2,"col":4}}};

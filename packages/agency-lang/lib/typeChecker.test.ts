@@ -6705,4 +6705,60 @@ describe("TypeChecker", () => {
       expect(typeCheck(program).errors).toHaveLength(0);
     });
   });
+
+  describe("export validation", () => {
+    it("rejects export const (must be static)", () => {
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "assignment",
+            variableName: "x",
+            declKind: "const",
+            exported: true,
+            value: { type: "number", value: "5" },
+          },
+        ],
+      };
+      const { errors } = typeCheck(program);
+      expect(errors).toHaveLength(1);
+      expect(errors[0].message).toContain("static const");
+    });
+
+    it("rejects export let", () => {
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "assignment",
+            variableName: "x",
+            declKind: "let",
+            exported: true,
+            value: { type: "number", value: "5" },
+          },
+        ],
+      };
+      const { errors } = typeCheck(program);
+      expect(errors).toHaveLength(1);
+      expect(errors[0].message).toContain("static const");
+    });
+
+    it("allows export static const", () => {
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "assignment",
+            variableName: "x",
+            declKind: "const",
+            static: true,
+            exported: true,
+            value: { type: "number", value: "5" },
+          },
+        ],
+      };
+      const { errors } = typeCheck(program);
+      expect(errors).toHaveLength(0);
+    });
+  });
 });

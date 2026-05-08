@@ -241,7 +241,9 @@ const add = __AgencyFunction.create({
     name: "add",
     description: `Adds two numbers together`,
     schema: z.object({"x": z.number(), "y": z.number(), })
-  }
+  },
+  safe: false,
+  exported: false
 }, __toolRegistry);
 async function __greet_impl(name: string, __state: InternalFunctionState | undefined = undefined) {
   const __setupData = setupFunction({
@@ -359,7 +361,9 @@ const greet = __AgencyFunction.create({
     name: "greet",
     description: `Greets a person by name`,
     schema: z.object({"name": z.string(), })
-  }
+  },
+  safe: false,
+  exported: false
 }, __toolRegistry);
 async function __mixed_impl(count: number, label: any, __state: InternalFunctionState | undefined = undefined) {
   const __setupData = setupFunction({
@@ -488,7 +492,9 @@ const mixed = __AgencyFunction.create({
     name: "mixed",
     description: `Mixed typed and untyped parameters`,
     schema: z.object({"count": z.number(), "label": z.string(), })
-  }
+  },
+  safe: false,
+  exported: false
 }, __toolRegistry);
 async function __processArray_impl(items: number[], __state: InternalFunctionState | undefined = undefined) {
   const __setupData = setupFunction({
@@ -606,7 +612,9 @@ const processArray = __AgencyFunction.create({
     name: "processArray",
     description: `Processes an array of numbers`,
     schema: z.object({"items": z.array(z.number()), })
-  }
+  },
+  safe: false,
+  exported: false
 }, __toolRegistry);
 async function __flexible_impl(value: string | number, __state: InternalFunctionState | undefined = undefined) {
   const __setupData = setupFunction({
@@ -724,7 +732,9 @@ const flexible = __AgencyFunction.create({
     name: "flexible",
     description: `Handles either a string or number`,
     schema: z.object({"value": z.union([z.string(), z.number()]), })
-  }
+  },
+  safe: false,
+  exported: false
 }, __toolRegistry);
 graph.node("foo", async (__state: GraphState) => {
   const __setupData = setupNode({

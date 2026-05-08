@@ -165,6 +165,7 @@ export type Assignment = BaseNode & {
   declKind?: "let" | "const";
   value: Expression | MessageThread;
   tags?: Tag[];
+  exported?: boolean;
 };
 
 export function globalScope(): Scope {

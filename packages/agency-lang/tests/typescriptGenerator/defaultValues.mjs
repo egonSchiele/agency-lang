@@ -244,7 +244,9 @@ const greet = __AgencyFunction.create({
     name: "greet",
     description: `No description provided.`,
     schema: z.object({"name": z.string(), "greeting": z.string().nullable().describe("Default: Hello"), })
-  }
+  },
+  safe: false,
+  exported: false
 }, __toolRegistry);
 export default graph
 export const __sourceMap = {"defaultValues.agency:greet":{"0":{"line":1,"col":2}}};

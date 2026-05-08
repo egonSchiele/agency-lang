@@ -82,6 +82,14 @@ export function declareVariable(
   ctx: TypeCheckerContext,
 ): void {
   if (node.type !== "assignment") return;
+
+  if (node.exported && !(node.static && node.declKind === "const")) {
+    ctx.errors.push({
+      message: `Only 'static const' declarations can be exported. Use 'export static const ${node.variableName} = ...' instead.`,
+      loc: node.loc,
+    });
+  }
+
   const newType = node.typeHint;
   const existingType = scope.lookup(node.variableName);
 

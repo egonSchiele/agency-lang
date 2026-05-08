@@ -1,4 +1,5 @@
 import path from "path";
+import process from "process";
 import { pathToFileURL } from "url";
 import { compile, loadConfig } from "./commands.js";
 import { SymbolTable } from "../symbolTable.js";
@@ -11,6 +12,7 @@ import type { ExportedItem } from "../serve/types.js";
 
 type CompileResult = {
   outputPath: string;
+  moduleId: string;
   exportedNodeNames: string[];
 };
 
@@ -34,7 +36,8 @@ function compileForServe(file: string): CompileResult {
     }
   }
 
-  return { outputPath, exportedNodeNames };
+  const moduleId = path.relative(process.cwd(), absoluteFile);
+  return { outputPath, moduleId, exportedNodeNames };
 }
 
 async function loadAndDiscover(
@@ -50,6 +53,7 @@ async function loadAndDiscover(
   const exports = discoverExports({
     toolRegistry,
     moduleExports,
+    moduleId: compileResult.moduleId,
     exportedNodeNames: compileResult.exportedNodeNames,
   });
 

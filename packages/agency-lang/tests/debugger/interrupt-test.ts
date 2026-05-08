@@ -80,7 +80,7 @@ export const __setDebugger = (dbg: any) => { __globalCtx.debuggerState = dbg; };
 export const __setTraceWriter = (tw: any) => { __globalCtx.traceWriter = tw; };
 export const __getCheckpoints = () => __globalCtx.checkpoints;
 
-const __toolRegistry: Record<string, any> = {};
+export const __toolRegistry: Record<string, any> = {};
 
 function __registerTool(value: unknown, name?: string) {
   if (__AgencyFunction.isAgencyFunction(value)) {

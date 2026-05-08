@@ -1,4 +1,4 @@
-import { execFile } from "child_process";
+import { execFile, spawn } from "child_process";
 import { readFile, writeFile, unlink } from "fs/promises";
 import { promisify } from "util";
 import { nanoid } from "nanoid";
@@ -37,6 +37,40 @@ export async function _speak(text: string, voice: string, rate: number, outputFi
       `Supported platforms: macOS.`
     );
   }
+}
+
+export async function _record(outputFile: string, silenceTimeout: number): Promise<string> {
+  const outPath = outputFile || path.join(os.tmpdir(), `agency-rec-${nanoid()}.wav`);
+
+  const args = [outPath];
+  if (silenceTimeout > 0) {
+    const seconds = String(silenceTimeout / 1000);
+    args.push("silence", "1", "0.1", "3%", "1", seconds, "3%");
+  }
+
+  const proc = spawn("rec", args, { stdio: ["pipe", "pipe", "pipe"] });
+
+  await new Promise<void>((resolve, reject) => {
+    proc.on("error", (err) => {
+      reject(new Error(
+        `Failed to start 'rec' command: ${err.message}. ` +
+        `Make sure SoX is installed (e.g. 'brew install sox' on macOS, 'apt install sox' on Linux).`
+      ));
+    });
+    proc.on("close", () => resolve());
+
+    if (process.stdin.isTTY) {
+      process.stdin.setRawMode(true);
+      process.stdin.resume();
+      process.stdin.once("data", () => {
+        process.stdin.setRawMode(false);
+        process.stdin.pause();
+        proc.kill("SIGTERM");
+      });
+    }
+  });
+
+  return outPath;
 }
 
 export async function _transcribe(filepath: string, language: string): Promise<string> {

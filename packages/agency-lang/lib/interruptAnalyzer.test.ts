@@ -195,4 +195,37 @@ describe("interruptAnalyzer", () => {
       expect(interruptKindsFor(files, "pong")).toEqual(["myapp::ping", "myapp::pong"]);
     });
   });
+
+  describe("llm tools analysis", () => {
+    it("collects interrupt kinds from tools in llm() call", () => {
+      const files = analyze(`
+        def deploy() {
+          interrupt myapp::deploy("Deploy?")
+        }
+        def cleanup() {
+          interrupt myapp::cleanup("Clean?")
+        }
+        node main() {
+          const result = llm("do stuff", { tools: [deploy, cleanup] })
+        }
+      `);
+      expect(interruptKindsFor(files, "main")).toEqual([
+        "myapp::cleanup",
+        "myapp::deploy",
+      ]);
+    });
+
+    it("traces tools variable to array literal", () => {
+      const files = analyze(`
+        def deploy() {
+          interrupt myapp::deploy("Deploy?")
+        }
+        node main() {
+          const tools = [deploy]
+          const result = llm("do stuff", { tools: tools })
+        }
+      `);
+      expect(interruptKindsFor(files, "main")).toEqual(["myapp::deploy"]);
+    });
+  });
 });

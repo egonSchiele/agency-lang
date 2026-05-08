@@ -1,4 +1,6 @@
-import type { AgencyProgram, AgencyNode } from "./types.js";
+import type { AgencyProgram, AgencyNode, Expression } from "./types.js";
+import type { AgencyArray } from "./types/dataStructures.js";
+import type { FunctionCall } from "./types/function.js";
 import type { FileSymbols } from "./symbolTable.js";
 import { walkNodes } from "./utils/node.js";
 
@@ -73,21 +75,84 @@ function collectInterruptsInBody(body: AgencyNode[]): string[] {
   return kinds;
 }
 
+function addCallee(callees: string[], name: string): void {
+  if (!callees.includes(name)) {
+    callees.push(name);
+  }
+}
+
 function collectCalleesInBody(body: AgencyNode[]): string[] {
   const callees: string[] = [];
   for (const { node } of walkNodes(body)) {
     if (node.type === "functionCall") {
-      if (!callees.includes(node.functionName)) {
-        callees.push(node.functionName);
+      addCallee(callees, node.functionName);
+      if (node.functionName === "llm") {
+        for (const name of extractToolsFromLlmCall(node, body)) {
+          addCallee(callees, name);
+        }
       }
     } else if (node.type === "gotoStatement") {
-      const name = node.nodeCall.functionName;
-      if (!callees.includes(name)) {
-        callees.push(name);
-      }
+      addCallee(callees, node.nodeCall.functionName);
     }
   }
   return callees;
+}
+
+function extractToolsFromLlmCall(
+  call: FunctionCall,
+  enclosingBody: AgencyNode[],
+): string[] {
+  if (call.arguments.length < 2) return [];
+  const optionsArg = call.arguments[1];
+  if (optionsArg.type !== "agencyObject") return [];
+  const toolsEntry = optionsArg.entries.find(
+    (e) => !("type" in e && e.type === "splat") && (e as { key: string }).key === "tools",
+  );
+  if (!toolsEntry || ("type" in toolsEntry && toolsEntry.type === "splat")) return [];
+  const toolsValue = (toolsEntry as { value: Expression }).value;
+  return extractFunctionNamesFromArray(toolsValue, enclosingBody);
+}
+
+function extractFunctionNamesFromArray(
+  expr: Expression,
+  enclosingBody: AgencyNode[],
+): string[] {
+  if (expr.type === "agencyArray") {
+    return extractNamesFromArrayItems(expr);
+  }
+  if (expr.type === "variableName") {
+    const resolved = traceVariableToArray(expr.value, enclosingBody);
+    if (resolved) return extractNamesFromArrayItems(resolved);
+  }
+  return [];
+}
+
+function extractNamesFromArrayItems(arr: AgencyArray): string[] {
+  const names: string[] = [];
+  for (const item of arr.items) {
+    if (item.type === "variableName") {
+      names.push(item.value);
+    } else if (item.type === "valueAccess" && item.base.type === "variableName") {
+      names.push(item.base.value);
+    }
+  }
+  return names;
+}
+
+function traceVariableToArray(
+  varName: string,
+  body: AgencyNode[],
+): AgencyArray | null {
+  for (const node of body) {
+    if (
+      node.type === "assignment" &&
+      node.variableName === varName &&
+      node.value.type === "agencyArray"
+    ) {
+      return node.value as AgencyArray;
+    }
+  }
+  return null;
 }
 
 function resolveTransitiveInterrupts(

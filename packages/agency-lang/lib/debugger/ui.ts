@@ -8,7 +8,7 @@ import {
   type Element,
   type Frame,
   type KeyEvent,
-} from "@agency-lang/tui";
+} from "@/tui/index.js";
 import { readFileSync } from "fs";
 import { formatTypeHint } from "../cli/util.js";
 import type { Checkpoint } from "../runtime/state/checkpointStore.js";

@@ -6,7 +6,7 @@ type Foo = {
   capabilities: string[]
 }
 
-export node main(countryName: string) {
-  const response = llm("What is the capital of " + countryName + "?")
+export def main(countryName: string) {
+  const response = llm("What is the capital of ${countryName}?")
   return response
 }

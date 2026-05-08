@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { toHTML } from "../lib/render/html.js";
-import { Frame } from "../lib/frame.js";
+import { toHTML } from "../render/html.js";
+import { Frame } from "../frame.js";
 
 describe("toHTML", () => {
   it("produces HTML with monospace font", () => {

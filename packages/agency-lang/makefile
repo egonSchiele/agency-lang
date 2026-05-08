@@ -11,7 +11,7 @@ test:
 	pnpm run test
 
 publish:
-	npm publish
+	pnpm publish --no-git-checks
 
 fixtures:
 	pnpm run templates && pnpm run build

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseStyledText, escapeStyleTags } from "../lib/styleParser.js";
+import { parseStyledText, escapeStyleTags } from "../styleParser.js";
 
 describe("parseStyledText", () => {
   it("returns plain text as a single span", () => {

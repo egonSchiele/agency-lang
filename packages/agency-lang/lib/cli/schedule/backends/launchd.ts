@@ -75,6 +75,8 @@ export class LaunchdBackend implements ScheduleBackend {
       name: entry.name,
       runScriptPath,
       agentDir: path.dirname(entry.agentFile),
+      path: process.env.PATH ?? "/usr/local/bin:/usr/bin:/bin",
+      home: os.homedir(),
       intervals: buildIntervals(entry.cron),
       logDir: entry.logDir,
     });

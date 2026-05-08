@@ -7,7 +7,7 @@ import { getNodesOfType } from "@/utils/node.js";
 import { GraphNodeDefinition } from "@/types.js";
 import { DebuggerDriver } from "@/debugger/driver.js";
 import { DebuggerUI } from "@/debugger/ui.js";
-import { Screen, TerminalInput, TerminalOutput } from "@agency-lang/tui";
+import { Screen, TerminalInput, TerminalOutput } from "@/tui/index.js";
 import { TraceReader } from "@/runtime/trace/traceReader.js";
 import type { TraceHeader } from "@/runtime/trace/types.js";
 import { Checkpoint } from "@/runtime/state/checkpointStore.js";

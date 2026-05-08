@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { ScriptedInput } from "../lib/input/scripted.js";
+import { ScriptedInput } from "../input/scripted.js";
 
 describe("ScriptedInput", () => {
   it("replays key events in order", async () => {

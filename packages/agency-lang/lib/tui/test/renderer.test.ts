@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
-import { render } from "../lib/render/renderer.js";
-import { layout } from "../lib/layout.js";
-import { box, text, list, textInput, column, row } from "../lib/builders.js";
+import { render } from "../render/renderer.js";
+import { layout } from "../layout.js";
+import { box, text, list, textInput, column, row } from "../builders.js";
 
 function renderElement(element: ReturnType<typeof box>, width = 80, height = 24) {
   const positioned = layout(element, width, height);

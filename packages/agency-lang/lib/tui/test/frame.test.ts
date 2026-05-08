@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { Frame } from "../lib/frame.js";
+import { Frame } from "../frame.js";
 
 describe("Frame", () => {
   it("findByKey returns matching child", () => {

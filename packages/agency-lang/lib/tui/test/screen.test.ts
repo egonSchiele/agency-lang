@@ -1,8 +1,8 @@
 import { describe, it, expect } from "vitest";
-import { Screen } from "../lib/screen.js";
-import { ScriptedInput } from "../lib/input/scripted.js";
-import { FrameRecorder } from "../lib/output/recorder.js";
-import { box, text } from "../lib/builders.js";
+import { Screen } from "../screen.js";
+import { ScriptedInput } from "../input/scripted.js";
+import { FrameRecorder } from "../output/recorder.js";
+import { box, text } from "../builders.js";
 
 describe("Screen", () => {
   it("render produces a frame and writes to output", () => {

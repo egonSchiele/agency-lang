@@ -36,6 +36,7 @@ import {
   promptScheduleOverwrite,
   formatListTable,
 } from "@/cli/schedule/index.js";
+import { scheduleTest } from "@/cli/schedule/test.js";
 import { loadEnv } from "@/utils/envfile.js";
 import { debug } from "@/cli/debug.js";
 import { generateDoc } from "@/cli/doc.js";
@@ -669,6 +670,52 @@ export function createProgram(deps: CliDependencies = {}): Command {
         }
       },
     );
+
+  scheduleCmd
+    .command("test")
+    .description(
+      "Verify cron functionality by scheduling a test agent that runs every minute",
+    )
+    .action(() => {
+      try {
+        const result = scheduleTest();
+        console.log(
+          color.green(`Schedule "${result.name}" added successfully.`),
+        );
+        console.log("");
+        console.log(`Wrote test agent: ${result.agentFile}`);
+        console.log(
+          `It will run every minute and write the current time to:`,
+        );
+        console.log(`  ${result.outputFile}`);
+        console.log("");
+        console.log(
+          "Wait at least one minute, then check that file. If it contains a",
+        );
+        console.log("recent timestamp, cron is working.");
+        console.log("");
+        console.log(
+          "If the file is missing, check the run logs for errors:",
+        );
+        console.log(`  ${result.logDir}`);
+        if (process.platform === "darwin") {
+          console.log("");
+          console.log(
+            "On macOS, scheduled jobs may need Full Disk Access. If logs show",
+          );
+          console.log(
+            "permission errors, grant access to /bin/bash in System Settings →",
+          );
+          console.log("Privacy & Security → Full Disk Access.");
+        }
+        console.log("");
+        console.log("To remove the test schedule when you're done, run:");
+        console.log(color.cyan(`  agency schedule remove ${result.name}`));
+      } catch (err: any) {
+        console.error(color.red(err.message));
+        process.exit(1);
+      }
+    });
 
   const lspCmd = program
     .command("lsp")

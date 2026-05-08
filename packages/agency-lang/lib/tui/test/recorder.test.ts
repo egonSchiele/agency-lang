@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { FrameRecorder } from "../lib/output/recorder.js";
-import { Frame } from "../lib/frame.js";
+import { FrameRecorder } from "../output/recorder.js";
+import { Frame } from "../frame.js";
 
 describe("FrameRecorder", () => {
   it("records frames with labels", () => {

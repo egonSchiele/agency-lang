@@ -16,6 +16,13 @@ export const template = `<?xml version="1.0" encoding="UTF-8"?>
   </array>
   <key>WorkingDirectory</key>
   <string>{{{agentDir:string}}}</string>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key>
+    <string>{{{path:string}}}</string>
+    <key>HOME</key>
+    <string>{{{home:string}}}</string>
+  </dict>
   <key>StartCalendarInterval</key>
 {{{intervals:string}}}
   <key>StandardOutPath</key>
@@ -30,6 +37,8 @@ export type TemplateType = {
   name: string;
   runScriptPath: string;
   agentDir: string;
+  path: string;
+  home: string;
   intervals: string;
   logDir: string;
 };

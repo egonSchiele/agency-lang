@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { toPlainText } from "../lib/render/plaintext.js";
-import { Frame } from "../lib/frame.js";
+import { toPlainText } from "../render/plaintext.js";
+import { Frame } from "../frame.js";
 
 describe("toPlainText", () => {
   it("renders content cells as text", () => {

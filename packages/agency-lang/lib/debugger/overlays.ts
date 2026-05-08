@@ -6,7 +6,7 @@ import {
   escapeStyleTags,
   type Screen,
   type Element,
-} from "@agency-lang/tui";
+} from "@/tui/index.js";
 import type { Checkpoint } from "../runtime/state/checkpointStore.js";
 import type { UIState } from "./uiState.js";
 import { formatValue } from "./util.js";

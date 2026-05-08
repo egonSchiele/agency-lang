@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { box, row, column, text, list, textInput } from "../lib/builders.js";
+import { box, row, column, text, list, textInput } from "../builders.js";
 
 describe("builders", () => {
   it("text() creates a text element", () => {

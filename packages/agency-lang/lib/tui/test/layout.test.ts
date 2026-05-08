@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { layout } from "../lib/layout.js";
-import { box, row, column, text } from "../lib/builders.js";
+import { layout } from "../layout.js";
+import { box, row, column, text } from "../builders.js";
 
 describe("layout", () => {
   it("single box fills available space", () => {

@@ -1,6 +1,6 @@
 {
   "name": "agency-lang",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "The Agency language",
   "main": "lib/index.js",
   "scripts": {
@@ -66,7 +66,6 @@
   },
   "homepage": "https://github.com/egonSchiele/agency-lang#readme",
   "dependencies": {
-    "@agency-lang/tui": "workspace:*",
     "chalk": "^5.6.2",
     "chokidar": "^4",
     "cli-highlight": "^2.1.11",

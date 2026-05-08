@@ -5,7 +5,7 @@ import {
   type InputSource,
   type KeyEvent,
   type OutputTarget,
-} from "@agency-lang/tui";
+} from "@/tui/index.js";
 import { DebuggerDriver } from "./driver.js";
 import { DebuggerUI } from "./ui.js";
 import type { Checkpoint } from "../runtime/state/checkpointStore.js";

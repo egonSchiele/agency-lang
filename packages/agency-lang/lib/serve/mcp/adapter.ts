@@ -113,6 +113,29 @@ export function createMcpHandler(
   };
 }
 
+function sendResponse(response: JsonRpcMessage | null): void {
+  if (response) {
+    process.stdout.write(`${JSON.stringify(response)}\n`);
+  }
+}
+
+function processLine(
+  line: string,
+  handler: (message: JsonRpcMessage) => Promise<JsonRpcMessage | null>,
+): void {
+  try {
+    handler(JSON.parse(line))
+      .then(sendResponse)
+      .catch((err: unknown) => {
+        const msg = err instanceof Error ? err.message : String(err);
+        sendResponse(rpcError(null, -32603, `Handler error: ${msg}`));
+      });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    sendResponse(rpcError(null, -32700, `Invalid JSON: ${msg}`));
+  }
+}
+
 export function startStdioServer(
   handler: (message: JsonRpcMessage) => Promise<JsonRpcMessage | null>,
 ): void {
@@ -125,28 +148,7 @@ export function startStdioServer(
     while (newlineIndex !== -1) {
       const line = buffer.slice(0, newlineIndex).trim();
       buffer = buffer.slice(newlineIndex + 1);
-      if (line.length > 0) {
-        try {
-          const parsed = JSON.parse(line);
-          handler(parsed)
-            .then((response) => {
-              if (response) {
-                process.stdout.write(`${JSON.stringify(response)}\n`);
-              }
-            })
-            .catch((err: unknown) => {
-              const msg = err instanceof Error ? err.message : String(err);
-              process.stdout.write(
-                `${JSON.stringify(rpcError(null, -32603, `Handler error: ${msg}`))}\n`,
-              );
-            });
-        } catch (err) {
-          const msg = err instanceof Error ? err.message : String(err);
-          process.stdout.write(
-            `${JSON.stringify(rpcError(null, -32700, `Invalid JSON: ${msg}`))}\n`,
-          );
-        }
-      }
+      if (line.length > 0) processLine(line, handler);
       newlineIndex = buffer.indexOf("\n");
     }
   });

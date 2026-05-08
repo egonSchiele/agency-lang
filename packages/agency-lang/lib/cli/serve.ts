@@ -9,6 +9,7 @@ import { startHttpServer } from "../serve/http/adapter.js";
 import { createLogger } from "../logger.js";
 import { VERSION } from "../version.js";
 import type { ExportedItem } from "../serve/types.js";
+import * as esbuild from "esbuild";
 
 type CompileResult = {
   outputPath: string;
@@ -100,7 +101,6 @@ async function generateStandalone(
   compiledPath: string,
   originalFile: string,
 ): Promise<void> {
-  const esbuild = await import("esbuild");
   const outfile = path.basename(originalFile, ".agency") + ".server.js";
 
   await esbuild.build({

@@ -8,33 +8,44 @@ export type DiscoverOptions = {
   exportedNodeNames?: string[];
 };
 
+function isExportedFromModule(fn: AgencyFunction, moduleId: string): boolean {
+  return !!fn.exported && !!fn.toolDefinition && fn.module === moduleId;
+}
+
+function toExportedFunction(fn: AgencyFunction): ExportedFunction {
+  return {
+    kind: "function",
+    name: fn.name,
+    description: fn.toolDefinition!.description,
+    agencyFunction: fn,
+  };
+}
+
+function toExportedNode(
+  nodeName: string,
+  moduleExports: Record<string, unknown>,
+): ExportedNode | null {
+  const nodeFn = moduleExports[nodeName];
+  if (typeof nodeFn !== "function") return null;
+  const params = (moduleExports[`__${nodeName}NodeParams`] as string[] | undefined) ?? [];
+  return {
+    kind: "node",
+    name: nodeName,
+    parameters: params.map((name) => ({ name })),
+    invoke: nodeFn as (args: Record<string, unknown>) => Promise<unknown>,
+  };
+}
+
 export function discoverExports(options: DiscoverOptions): ExportedItem[] {
   const { toolRegistry, moduleExports, moduleId, exportedNodeNames = [] } = options;
-  const items: ExportedItem[] = [];
 
-  for (const fn of Object.values(toolRegistry)) {
-    if (fn.exported && fn.toolDefinition && fn.module === moduleId) {
-      items.push({
-        kind: "function",
-        name: fn.name,
-        description: fn.toolDefinition.description,
-        agencyFunction: fn,
-      });
-    }
-  }
+  const functions = Object.values(toolRegistry)
+    .filter((fn) => isExportedFromModule(fn, moduleId))
+    .map(toExportedFunction);
 
-  for (const nodeName of exportedNodeNames) {
-    const nodeFn = moduleExports[nodeName];
-    if (typeof nodeFn !== "function") continue;
-    const paramsKey = `__${nodeName}NodeParams`;
-    const params = (moduleExports[paramsKey] as string[] | undefined) ?? [];
-    items.push({
-      kind: "node",
-      name: nodeName,
-      parameters: params.map((name) => ({ name })),
-      invoke: nodeFn as (args: Record<string, unknown>) => Promise<unknown>,
-    });
-  }
+  const nodes = exportedNodeNames
+    .map((name) => toExportedNode(name, moduleExports))
+    .filter((n): n is ExportedNode => n !== null);
 
-  return items;
+  return [...functions, ...nodes];
 }

@@ -65,6 +65,8 @@ Tests that require API keys run in a **separate CI job** gated by a GitHub Envir
 
 All integration tests and stdlib sandbox tests should set `AGENCY_HOME` (or equivalent) to a temp directory so they never read from or write to the real `~/.agency/` directory. This prevents tests from accidentally using real user tokens or mutating real config. On CI, use a fresh temp directory under `$RUNNER_TEMP`.
 
+**Implementation note:** `AGENCY_HOME` does not exist in the codebase yet. Currently, individual features use specific env vars (e.g., `AGENCY_OAUTH_TOKEN_DIR`) or hardcode `~/.agency/` paths. A single `AGENCY_HOME` override needs to be implemented as a prerequisite for this isolation to work.
+
 ### Credential safety
 
 API keys for credential-based tests are only available as environment variables. Tests must not write credentials to disk. Any tokens produced during OAuth tests (against the mock server) are written to the temp `AGENCY_HOME` and cleaned up after the test.

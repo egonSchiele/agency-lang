@@ -11,12 +11,10 @@ const tarball = resolve(getTarballPath());
 const dir = createTempProject("smoke");
 
 try {
-  // 1. Create fresh project and install Agency
   initProject(dir);
   installTarball(dir, tarball);
   installDev(dir, "tsx");
 
-  // 2. Write a simple .agency file (no LLM calls)
   writeFile(dir, "hello.agency", `
 node main(name: string) {
   const greeting = "Hello, " + name + "!"
@@ -25,12 +23,9 @@ node main(name: string) {
 }
 `);
 
-  // 3. Compile it
   run(dir, "npx agency compile hello.agency");
 
-  // 4. Write a TS test file that imports the compiled output and the runtime
-  // Agency nodes return a result object with { data, messages, tokens }.
-  // The actual return value is in .data.
+  // Agency nodes return { data, messages, tokens } — the return value is in .data
   writeFile(dir, "test.ts", `
 import { main } from "./hello.js";
 
@@ -47,11 +42,10 @@ async function test() {
 test();
 `);
 
-  // 5. Run the test
   const output = run(dir, "npx tsx test.ts");
   assertIncludes(output, "SMOKE TEST PASSED");
 
-  // 6. Also verify runtime import works
+  // Verify runtime export works independently
   writeFile(dir, "test-runtime.ts", `
 import "agency-lang/runtime";
 console.log("RUNTIME IMPORT PASSED");

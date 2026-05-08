@@ -89,4 +89,35 @@ describe("interruptAnalyzer", () => {
       expect(interruptKindsFor(files, "main")).toEqual(["std::read"]);
     });
   });
+
+  describe("block arguments", () => {
+    it("attributes trailing block interrupts to the calling function", () => {
+      const files = analyze(`
+        def doWork(items: string[], block: (string) => any): any[] {
+          return []
+        }
+        node main() {
+          const result = doWork(["a"]) as item {
+            interrupt myapp::process("Process item?")
+            return item
+          }
+        }
+      `);
+      expect(interruptKindsFor(files, "main")).toEqual(["myapp::process"]);
+      expect(interruptKindsFor(files, "doWork")).toEqual([]);
+    });
+
+    it("attributes inline block interrupts to the calling function", () => {
+      const files = analyze(`
+        def doWork(items: string[], block: (string) => any): any[] {
+          return []
+        }
+        node main() {
+          const result = doWork(["a"], \\item -> interrupt myapp::process("Process?"))
+        }
+      `);
+      expect(interruptKindsFor(files, "main")).toEqual(["myapp::process"]);
+      expect(interruptKindsFor(files, "doWork")).toEqual([]);
+    });
+  });
 });

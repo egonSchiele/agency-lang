@@ -96,7 +96,7 @@ import {
   UnionType,
   Tag,
 } from "../types.js";
-import { GraphNodeDefinition, Visibility } from "../types/graphNode.js";
+import { GraphNodeDefinition } from "../types/graphNode.js";
 import { ForLoop } from "../types/forLoop.js";
 import { WhileLoop } from "../types/whileLoop.js";
 import { ParallelBlock, SeqBlock } from "../types/parallelBlock.js";
@@ -2793,18 +2793,13 @@ const _functionParserInner: Parser<FunctionDefinition> = (input: string) => {
 };
 export const functionParser: Parser<FunctionDefinition> = label("a function definition", withLoc(_functionParserInner));
 
-const visibilityParser: Parser<Visibility> = or(
-  str("public" as const),
-  str("private" as const),
-  succeed(undefined),
-);
 
 export const graphNodeParser: Parser<GraphNodeDefinition> = label("a node definition", withLoc(trace(
   "graphNodeParser",
   map(
     seqC(
       set("type", "graphNode"),
-      capture(visibilityParser, "visibility"),
+      capture(exportKeywordParser, "exported"),
       optionalSpaces,
       str("node"),
       many1(space),
@@ -2839,8 +2834,9 @@ export const graphNodeParser: Parser<GraphNodeDefinition> = label("a node defini
       ),
     ),
     (result: any) => {
-      const { returnTypeValidated: _rtv, ...rest } = result;
+      const { returnTypeValidated: _rtv, exported: _exp, ...rest } = result;
       if (_rtv) rest.returnTypeValidated = true;
+      if (_exp) rest.exported = true;
       return rest;
     },
   ),

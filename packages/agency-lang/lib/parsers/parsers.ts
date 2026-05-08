@@ -1229,7 +1229,7 @@ const argumentListParser = seqC(
   optionalSpacesOrNewline,
   capture(
     sepBy(
-      comma,
+      commaWithNewline,
       or(
         namedArgumentParser,
         splatParser,
@@ -2721,10 +2721,10 @@ const _baseFunctionParser: Parser<any> = trace(
     many1(space),
     capture(many1Till(char("(")), "functionName"),
     char("("),
-    optionalSpaces,
+    optionalSpacesOrNewline,
     capture(
       sepBy(
-        comma,
+        seqC(commaWithNewline, optionalSpaces),
         or(variadicParameterParser, functionParameterParser),
       ),
       "parameters",

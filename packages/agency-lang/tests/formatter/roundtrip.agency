@@ -123,3 +123,27 @@ node main(message: string) {
 node other() {
   return main("test")
 }
+
+// multiline arg list
+export def bash(
+  command: string,
+  cwd: string = "",
+  timeout: number = 0,
+  stdin: string = "",
+  blockedCommands: string[] = [],
+): ExecResult {
+  """
+  Run a shell command string via sh -c and return its stdout, stderr, and exit code. The command is interpreted by the shell, so pipes, redirects, globbing, and other shell features work. However, this means interpolated values are subject to shell interpretation -- use exec() instead when passing untrusted or dynamic arguments. Pass cwd to change the working directory, timeout in milliseconds to enforce a time limit (e.g. timeout: 30s), and stdin to feed input to the command. Set blockedCommands to reject commands that start with specific strings.
+  """
+
+  // multiline function call with trailing comma
+  return _bash(
+    command,
+    cwd,
+    timeout,
+    stdin,
+    {
+    blockedCommands: blockedCommands
+  },
+  )
+}

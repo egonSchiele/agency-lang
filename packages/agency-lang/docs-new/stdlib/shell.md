@@ -12,7 +12,7 @@ type ExecResult = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/shell.agency#L3))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/shell.agency#L12))
 
 ### LsEntry
 
@@ -25,7 +25,7 @@ type LsEntry = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/shell.agency#L60))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/shell.agency#L93))
 
 ### GrepMatch
 
@@ -37,7 +37,7 @@ type GrepMatch = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/shell.agency#L81))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/shell.agency#L115))
 
 ### StatInfo
 
@@ -50,7 +50,7 @@ type StatInfo = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/shell.agency#L121))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/shell.agency#L166))
 
 ## Functions
 
@@ -61,7 +61,7 @@ exec(command: string, args: string[], cwd: string, timeout: number, stdin: strin
 ```
 
 Run an executable directly with an array of arguments, bypassing the shell. This is safer than bash() because arguments are passed directly to the process without shell interpretation, preventing command injection. Use this when you have a known command and structured arguments. Pass cwd to change the working directory, timeout in milliseconds to enforce a time limit (e.g. timeout: 30s), and stdin to feed input to the command. Set allowedCommands to restrict which executables can be run. Set blockedCommands to reject specific executables.
-  
+
   @param command - The executable to run
   @param args - Array of arguments to pass
   @param cwd - Working directory for the command
@@ -84,7 +84,7 @@ Run an executable directly with an array of arguments, bypassing the shell. This
 
 **Returns:** [ExecResult](#execresult)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/shell.agency#L9))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/shell.agency#L18))
 
 ### bash
 
@@ -92,11 +92,7 @@ Run an executable directly with an array of arguments, bypassing the shell. This
 bash(command: string, cwd: string, timeout: number, stdin: string, blockedCommands: string[]): ExecResult
 ```
 
-<<<<<<< HEAD
-  Run a shell command string via sh -c and return its stdout, stderr, and exit code. The command is interpreted by the shell, so pipes, redirects, globbing, and other shell features work. However, this means interpolated values are subject to shell interpretation -- use exec() instead when passing untrusted or dynamic arguments. Pass cwd to change the working directory, timeout (seconds) to enforce a time limit, and stdin to feed input to the command. Set blockedCommands to reject commands that start with specific strings.
-  =======
-  Run a shell command string via sh -c and return its stdout, stderr, and exit code. The command is interpreted by the shell, so pipes, redirects, globbing, and other shell features work. However, this means interpolated values are subject to shell interpretation -- use exec() instead when passing untrusted or dynamic arguments. Pass cwd to change the working directory, timeout in milliseconds to enforce a time limit (e.g. timeout: 30s), and stdin to feed input to the command.
-  >>>>>>> adit/unit-literals
+Run a shell command string via sh -c and return its stdout, stderr, and exit code. The command is interpreted by the shell, so pipes, redirects, globbing, and other shell features work. However, this means interpolated values are subject to shell interpretation -- use exec() instead when passing untrusted or dynamic arguments. Pass cwd to change the working directory, timeout in milliseconds to enforce a time limit (e.g. timeout: 30s), and stdin to feed input to the command. Set blockedCommands to reject commands that start with specific strings.
 
   @param command - The shell command to run
   @param cwd - Working directory for the command
@@ -116,7 +112,7 @@ bash(command: string, cwd: string, timeout: number, stdin: string, blockedComman
 
 **Returns:** [ExecResult](#execresult)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/shell.agency#L35))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/shell.agency#L59))
 
 ### ls
 
@@ -138,7 +134,7 @@ List entries in a directory. Each entry includes name, path, type ("file", "dir"
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/shell.agency#L67))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/shell.agency#L100))
 
 ### grep
 
@@ -164,7 +160,7 @@ Search for a regex pattern in files under a directory. Returns matches with file
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/shell.agency#L87))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/shell.agency#L121))
 
 ### glob
 
@@ -188,7 +184,7 @@ Find files whose paths match a glob pattern (e.g. "src/**/*.ts"). Returns paths 
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/shell.agency#L105))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/shell.agency#L145))
 
 ### stat
 
@@ -206,7 +202,7 @@ Return metadata about a filesystem entry: whether it exists, its type ("file", "
 
 **Returns:** [StatInfo](#statinfo)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/shell.agency#L128))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/shell.agency#L173))
 
 ### exists
 
@@ -224,7 +220,7 @@ Return true if a file or directory exists at the given path.
 
 **Returns:** `boolean`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/shell.agency#L135))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/shell.agency#L180))
 
 ### which
 
@@ -242,4 +238,4 @@ Locate an executable in PATH and return its absolute path. Returns an empty stri
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/shell.agency#L142))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/shell.agency#L187))

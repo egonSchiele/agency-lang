@@ -86,6 +86,9 @@ export async function serveHttp(
 
   const { exports, moduleExports } = await loadAndDiscover(compileResult);
   const port = parseInt(options.port ?? "3545", 10);
+  if (isNaN(port) || port < 1 || port > 65535) {
+    throw new Error(`Invalid port: ${options.port}`);
+  }
   const logger = createLogger("info");
 
   startHttpServer({

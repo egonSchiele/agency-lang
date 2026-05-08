@@ -68,6 +68,9 @@ async function resumeInterrupts(
   hasInterrupts: (data: unknown) => boolean,
   body: unknown,
 ): Promise<RouteResult> {
+  if (body == null || typeof body !== "object" || Array.isArray(body)) {
+    return { status: 400, body: { error: "Request body must be a JSON object" } };
+  }
   const { interrupts, responses } = body as {
     interrupts: unknown[];
     responses: unknown[];
@@ -157,22 +160,32 @@ export function startHttpServer(config: HttpConfig): http.Server {
 
   const server = http.createServer(async (req, res) => {
     const method = req.method ?? "GET";
-    const path = req.url ?? "/";
+    const rawUrl = req.url ?? "/";
+    const path = rawUrl.split("?")[0];
     const authHeader = req.headers.authorization;
+
+    const sendJson = (status: number, body: unknown) => {
+      res.writeHead(status, { "Content-Type": "application/json" });
+      res.end(JSON.stringify(body) + "\n");
+    };
 
     try {
       const body = method === "POST" ? await parseJsonBody(req) : undefined;
       const result = await handler(method, path, body, authHeader);
-
       logger.info(`${method} ${path} → ${result.status}`);
-
-      res.writeHead(result.status, { "Content-Type": "application/json" });
-      res.end(JSON.stringify(result.body) + "\n");
+      sendJson(result.status, result.body);
     } catch (err) {
       const msg = errorMessage(err);
-      logger.error(`${method} ${path} → 500: ${msg}`);
-      res.writeHead(500, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ error: "Internal server error" }));
+      if (msg === "Invalid JSON body") {
+        logger.error(`${method} ${path} → 400: ${msg}`);
+        sendJson(400, { error: msg });
+      } else if (msg === "Request body too large") {
+        logger.error(`${method} ${path} → 413: ${msg}`);
+        sendJson(413, { error: msg });
+      } else {
+        logger.error(`${method} ${path} → 500: ${msg}`);
+        sendJson(500, { error: "Internal server error" });
+      }
     }
   });
 

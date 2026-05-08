@@ -3,7 +3,10 @@ export function errorMessage(err: unknown): string {
 }
 
 export function toArgs(body: unknown): Record<string, unknown> {
-  return (body as Record<string, unknown>) ?? {};
+  if (body != null && typeof body === "object" && !Array.isArray(body)) {
+    return body as Record<string, unknown>;
+  }
+  return {};
 }
 
 const MAX_BODY_BYTES = 10 * 1024 * 1024; // 10 MB

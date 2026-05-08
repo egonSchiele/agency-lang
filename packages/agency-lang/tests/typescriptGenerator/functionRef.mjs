@@ -211,7 +211,9 @@ const greet = __AgencyFunction.create({
     name: "greet",
     description: `No description provided.`,
     schema: z.object({"name": z.string(), })
-  }
+  },
+  safe: false,
+  exported: false
 }, __toolRegistry);
 async function __double_impl(x: number, __state: InternalFunctionState | undefined = undefined) {
   const __setupData = setupFunction({
@@ -310,7 +312,9 @@ const double = __AgencyFunction.create({
     name: "double",
     description: `No description provided.`,
     schema: z.object({"x": z.number(), })
-  }
+  },
+  safe: false,
+  exported: false
 }, __toolRegistry);
 async function __applyToAll_impl(items: number[], transform: (number) => number, __state: InternalFunctionState | undefined = undefined) {
   const __setupData = setupFunction({
@@ -442,7 +446,9 @@ const applyToAll = __AgencyFunction.create({
     name: "applyToAll",
     description: `No description provided.`,
     schema: z.object({"items": z.array(z.number()), })
-  }
+  },
+  safe: false,
+  exported: false
 }, __toolRegistry);
 graph.node("main", async (__state: GraphState) => {
   const __setupData = setupNode({

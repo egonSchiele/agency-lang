@@ -238,7 +238,9 @@ const log = __AgencyFunction.create({
     name: "log",
     description: `No description provided.`,
     schema: z.object({"prefix": z.string(), "messages": z.array(z.string()), })
-  }
+  },
+  safe: false,
+  exported: false
 }, __toolRegistry);
 export default graph
 export const __sourceMap = {"variadic.agency:log":{"0":{"line":1,"col":2}}};

@@ -197,7 +197,9 @@ const test = __AgencyFunction.create({
     name: "test",
     description: `No description provided.`,
     schema: z.object({})
-  }
+  },
+  safe: false,
+  exported: false
 }, __toolRegistry);
 async function __add_impl(a: any, b: any, __state: InternalFunctionState | undefined = undefined) {
   const __setupData = setupFunction({
@@ -305,7 +307,9 @@ const add = __AgencyFunction.create({
     name: "add",
     description: `No description provided.`,
     schema: z.object({"a": z.string(), "b": z.string(), })
-  }
+  },
+  safe: false,
+  exported: false
 }, __toolRegistry);
 graph.node("main", async (__state: GraphState) => {
   const __setupData = setupNode({

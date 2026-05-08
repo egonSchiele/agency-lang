@@ -252,7 +252,9 @@ const mapItems = __AgencyFunction.create({
     name: "mapItems",
     description: `No description provided.`,
     schema: z.object({"items": z.array(z.any()), })
-  }
+  },
+  safe: false,
+  exported: false
 }, __toolRegistry);
 graph.node("main", async (__state: GraphState) => {
   const __setupData = setupNode({

@@ -231,7 +231,9 @@ const process = __AgencyFunction.create({
     name: "process",
     description: `No description provided.`,
     schema: z.object({"data": z.number(), })
-  }
+  },
+  safe: false,
+  exported: false
 }, __toolRegistry);
 graph.node("main", async (__state: GraphState) => {
   const __setupData = setupNode({

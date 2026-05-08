@@ -219,7 +219,9 @@ const add = __AgencyFunction.create({
     description: `Add two numbers together.
   This is a simple addition function.`,
     schema: z.object({"a": z.string(), "b": z.string(), })
-  }
+  },
+  safe: false,
+  exported: false
 }, __toolRegistry);
 async function __greet_impl(name: any, __state: InternalFunctionState | undefined = undefined) {
   const __setupData = setupFunction({
@@ -313,7 +315,9 @@ const greet = __AgencyFunction.create({
     name: "greet",
     description: `Generate a greeting message for the given name.`,
     schema: z.object({"name": z.string(), })
-  }
+  },
+  safe: false,
+  exported: false
 }, __toolRegistry);
 async function __calculateArea_impl(width: any, height: any, __state: InternalFunctionState | undefined = undefined) {
   const __setupData = setupFunction({
@@ -424,7 +428,9 @@ const calculateArea = __AgencyFunction.create({
 
   Returns: the area as a number`,
     schema: z.object({"width": z.string(), "height": z.string(), })
-  }
+  },
+  safe: false,
+  exported: false
 }, __toolRegistry);
 async function __processData_impl(__state: InternalFunctionState | undefined = undefined) {
   const __setupData = setupFunction({
@@ -506,7 +512,9 @@ const processData = __AgencyFunction.create({
     name: "processData",
     description: `Single line docstring`,
     schema: z.object({})
-  }
+  },
+  safe: false,
+  exported: false
 }, __toolRegistry);
 export default graph
 export const __sourceMap = {"docstrings.agency:add":{},"docstrings.agency:greet":{},"docstrings.agency:calculateArea":{},"docstrings.agency:processData":{}};

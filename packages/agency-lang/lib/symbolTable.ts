@@ -37,6 +37,7 @@ export type NodeSymbol = {
   parameters: FunctionParameter[];
   returnType: VariableType | null;
   returnTypeValidated?: boolean;
+  exported?: boolean;
 };
 
 export type TypeSymbol = {
@@ -218,6 +219,7 @@ export function classifySymbols(program: AgencyProgram): FileSymbols {
           parameters: node.parameters,
           returnType: node.returnType ?? null,
           returnTypeValidated: node.returnTypeValidated,
+          exported: !!node.exported,
         };
         break;
       case "function":

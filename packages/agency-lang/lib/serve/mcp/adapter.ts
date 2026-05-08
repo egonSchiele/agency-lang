@@ -59,9 +59,14 @@ export function createMcpHandler(
         return success(message.id ?? null, {
           tools: tools.map((t) => {
             if (t.kind !== "function") return null;
-            const inputSchema = t.agencyFunction.toolDefinition?.schema
-              ? t.agencyFunction.toolDefinition.schema.toJSONSchema()
-              : { type: "object", properties: {} };
+            const schema = t.agencyFunction.toolDefinition?.schema as
+              | { toJSONSchema?: () => unknown }
+              | null
+              | undefined;
+            const inputSchema =
+              schema && typeof schema.toJSONSchema === "function"
+                ? schema.toJSONSchema()
+                : { type: "object", properties: {} };
             const annotations: Record<string, boolean> = {};
             if (t.agencyFunction.safe) {
               annotations.readOnlyHint = true;

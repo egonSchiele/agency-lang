@@ -228,6 +228,8 @@ function formatSignature(symbol: SemanticSymbol): string {
         : `type ${symbol.name}`;
     case "class":
       return `class ${symbol.name}`;
+    case "constant":
+      return `static const ${symbol.name}`;
   }
 }
 

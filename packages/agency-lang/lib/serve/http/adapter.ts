@@ -190,7 +190,7 @@ export function startHttpServer(config: HttpConfig): http.Server {
   });
 
   server.listen(port, () => {
-    logger.info(`Agency HTTP server listening on port ${port}`);
+    logger.info(`Agency HTTP server listening on http://localhost:${port}`);
   });
 
   return server;

@@ -23,36 +23,6 @@ const names: string[] = ["Alice", "Bob", "Charlie"]
 const person: { name: string, age: number } = { name: "Alice", age: 30 }
 ```
 
-### Unit literals
-
-Agency supports unit literals for time and cost values. They compile to plain numbers at compile time:
-
-```ts
-const timeout = 30s       // compiles to 30000 (milliseconds)
-const delay = 500ms       // compiles to 500
-const duration = 2h       // compiles to 7200000
-const week = 1w           // compiles to 604800000
-const budget = $5.00      // compiles to 5.00
-```
-
-Supported time units: `ms` (milliseconds), `s` (seconds), `m` (minutes), `h` (hours), `d` (days), `w` (weeks). All time units normalize to milliseconds.
-
-Supported cost units: `$` (dollars).
-
-Unit math works because both sides normalize to the same base unit:
-
-```ts
-1s + 500ms       // 1000 + 500 = 1500
-2s * 3           // 2000 * 3 = 6000
-if (elapsed > 30s) { ... }
-```
-
-Mixing dimensions is a type error:
-
-```ts
-1s + $5.00    // ERROR: cannot add time and cost
-```
-
 You can define functions:
 
 ```ts
@@ -135,6 +105,36 @@ const slicedToEnd = arr[2:] // slicedToEnd is [3, 4, 5]
 const slicedFromStart = arr[:3] // slicedFromStart is [1, 2, 3]
 const negativeSlice = arr[-3:-1] // negativeSlice is [3, 4]
 arr[:3] = [10, 20, 30] // arr is now [10, 20, 30, 4, 5]
+```
+
+### Unit literals
+
+Agency supports unit literals for time and cost values. They compile to plain numbers at compile time:
+
+```ts
+const timeout = 30s       // compiles to 30000 (milliseconds)
+const delay = 500ms       // compiles to 500
+const duration = 2h       // compiles to 7200000
+const week = 1w           // compiles to 604800000
+const budget = $5.00      // compiles to 5.00
+```
+
+Supported time units: `ms` (milliseconds), `s` (seconds), `m` (minutes), `h` (hours), `d` (days), `w` (weeks). All time units normalize to milliseconds.
+
+Supported cost units: `$` (dollars).
+
+Unit math works because both sides normalize to the same base unit:
+
+```ts
+1s + 500ms       // 1000 + 500 = 1500
+2s * 3           // 2000 * 3 = 6000
+if (elapsed > 30s) { ... }
+```
+
+Mixing dimensions is a type error:
+
+```ts
+1s + $5.00    // ERROR: cannot add time and cost
 ```
 
 ### JavaScript features that don't exist in Agency

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { assignmentParser, staticAssignmentParser } from "./parsers.js";
+import { assignmentParser, modifiedAssignmentParser } from "./parsers.js";
 
 describe("assignmentParser", () => {
   const testCases = [
@@ -586,9 +586,9 @@ describe("assignmentParser", () => {
   });
 });
 
-describe("staticAssignmentParser", () => {
+describe("modifiedAssignmentParser", () => {
   it("should parse static const with a number", () => {
-    const result = staticAssignmentParser("static const x = 42");
+    const result = modifiedAssignmentParser("static const x = 42");
     expect(result.success).toBe(true);
     if (result.success) {
       expect(result.result.type).toBe("assignment");
@@ -600,7 +600,7 @@ describe("staticAssignmentParser", () => {
   });
 
   it("should parse static const with a string", () => {
-    const result = staticAssignmentParser('static const name = "Alice"');
+    const result = modifiedAssignmentParser('static const name = "Alice"');
     expect(result.success).toBe(true);
     if (result.success) {
       expect(result.result.static).toBe(true);
@@ -610,7 +610,7 @@ describe("staticAssignmentParser", () => {
   });
 
   it("should parse static const with a function call", () => {
-    const result = staticAssignmentParser('static const myPrompt = read("prompt.md")');
+    const result = modifiedAssignmentParser('static const myPrompt = read("prompt.md")');
     expect(result.success).toBe(true);
     if (result.success) {
       expect(result.result.static).toBe(true);
@@ -621,22 +621,22 @@ describe("staticAssignmentParser", () => {
   });
 
   it("should reject static let", () => {
-    const result = staticAssignmentParser("static let x = 42");
+    const result = modifiedAssignmentParser("static let x = 42");
     expect(result.success).toBe(false);
   });
 
   it("should reject static without const", () => {
-    const result = staticAssignmentParser("static x = 42");
+    const result = modifiedAssignmentParser("static x = 42");
     expect(result.success).toBe(false);
   });
 
   it("should not parse a regular assignment", () => {
-    const result = staticAssignmentParser("x = 42");
+    const result = modifiedAssignmentParser("x = 42");
     expect(result.success).toBe(false);
   });
 
   it("should not parse const without static", () => {
-    const result = staticAssignmentParser("const x = 42");
+    const result = modifiedAssignmentParser("const x = 42");
     expect(result.success).toBe(false);
   });
 

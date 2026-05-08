@@ -2152,11 +2152,6 @@ export const importStatmentParser: Parser<ImportStatement> = map(
 // =============================================================================
 
 const _assignmentParserInner: Parser<Assignment> = (input: string) => {
-  // Check for export keyword
-  const exportResult = exportKeywordParser(input);
-  if (!exportResult.success) return exportResult;
-  const isExported = exportResult.result;
-
   const parser = trace(
     "assignmentParser",
     seqC(
@@ -2190,7 +2185,7 @@ const _assignmentParserInner: Parser<Assignment> = (input: string) => {
       optionalSpacesOrNewline,
     ),
   );
-  const result = parser(exportResult.rest);
+  const result = parser(input);
   if (!result.success) return result;
 
   const target = result.result.target;
@@ -2222,27 +2217,59 @@ const _assignmentParserInner: Parser<Assignment> = (input: string) => {
     );
   }
 
-  // Only const can be exported
-  if (isExported && parsed.declKind !== "const") {
-    throw new Error("Only const declarations can be exported");
-  }
-
   const { target: _target, validated: _validated, value, ...rest } = parsed;
   const out: Assignment = { ...rest, variableName, value, accessChain };
   if (_validated) out.validated = true;
-  if (isExported) out.exported = true;
   return success(out, result.rest);
 };
 export const assignmentParser: Parser<Assignment> = label("an assignment", withLoc(_assignmentParserInner));
 
-export const staticAssignmentParser: Parser<Assignment> = (input: string) => {
-  const parser = seqC(str("static"), spaces, captureCaptures(assignmentParser));
-  const result = parser(input);
+const staticKeywordParser: Parser<boolean> = or(
+  map(seqC(str("static"), spaces), () => true),
+  succeed(false),
+);
+
+// Parse "export" and "static" in any order before "let"/"const"
+export const modifiedAssignmentParser: Parser<Assignment> = (input: string) => {
+  let rest = input;
+  let isExported = false;
+  let isStatic = false;
+
+  // Try up to 2 modifiers in any order
+  for (let i = 0; i < 2; i++) {
+    if (!isExported) {
+      const exportResult = exportKeywordParser(rest);
+      if (exportResult.success && exportResult.result) {
+        isExported = true;
+        rest = exportResult.rest;
+        continue;
+      }
+    }
+    if (!isStatic) {
+      const staticResult = staticKeywordParser(rest);
+      if (staticResult.success && staticResult.result) {
+        isStatic = true;
+        rest = staticResult.rest;
+        continue;
+      }
+    }
+    break;
+  }
+
+  // If no modifiers found, this parser doesn't match
+  if (!isExported && !isStatic) return failure("expected 'export' or 'static'", input);
+
+  const result = assignmentParser(rest);
   if (!result.success) return result;
-  if (result.result.declKind !== "const") {
+
+  if (isStatic && result.result.declKind !== "const") {
     return failure("static requires 'const' (e.g., 'static const x = 1'). Static variables are immutable.", input);
   }
-  return success({ ...result.result, static: true }, result.rest);
+
+  const out = { ...result.result };
+  if (isExported) out.exported = true;
+  if (isStatic) out.static = true;
+  return success(out, result.rest);
 };
 
 const trim = (s: string) => s.trim();
@@ -2407,7 +2434,7 @@ export const handleBlockParser: Parser<HandleBlock> = withLoc(trace(
 
 export const withModifierParser: Parser<WithModifier> = withLoc((input: string) => {
   // Try to parse a static assignment, regular assignment, or bare function call as the inner statement.
-  const stmtResult = or(staticAssignmentParser, assignmentParser, functionCallParser)(input);
+  const stmtResult = or(modifiedAssignmentParser, assignmentParser, functionCallParser)(input);
   if (!stmtResult.success) return failure("expected statement before 'with'", input);
 
   // Look for "with <builtin>" on remaining input.
@@ -2730,16 +2757,42 @@ const safeKeywordParser: Parser<boolean> = or(
   succeed(false),
 );
 
+// Parse "export" and "safe" in any order before "def"/"callback"
+function parseFunctionModifiers(input: string): { success: true; rest: string; isExported: boolean; isSafe: boolean } | { success: false } {
+  let rest = input;
+  let isExported = false;
+  let isSafe = false;
+
+  // Try up to 2 modifiers in any order
+  for (let i = 0; i < 2; i++) {
+    if (!isExported) {
+      const exportResult = exportKeywordParser(rest);
+      if (exportResult.success && exportResult.result) {
+        isExported = true;
+        rest = exportResult.rest;
+        continue;
+      }
+    }
+    if (!isSafe) {
+      const safeResult = safeKeywordParser(rest);
+      if (safeResult.success && safeResult.result) {
+        isSafe = true;
+        rest = safeResult.rest;
+        continue;
+      }
+    }
+    break;
+  }
+
+  return { success: true, rest, isExported, isSafe };
+}
+
 const _functionParserInner: Parser<FunctionDefinition> = (input: string) => {
-  const exportResult = exportKeywordParser(input);
-  if (!exportResult.success) return exportResult;
-  const isExported = exportResult.result;
+  const mods = parseFunctionModifiers(input);
+  if (!mods.success) return failure("unexpected modifier", input);
+  const { isExported, isSafe } = mods;
 
-  const safeResult = safeKeywordParser(exportResult.rest);
-  if (!safeResult.success) return safeResult;
-  const isSafe = safeResult.result;
-
-  const baseResult = _baseFunctionParser(safeResult.rest);
+  const baseResult = _baseFunctionParser(mods.rest);
   if (!baseResult.success) return baseResult;
 
   const { keyword, returnTypeValidated: _rtv, ...rest } = baseResult.result as any;

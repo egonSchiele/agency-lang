@@ -234,7 +234,9 @@ const double = __AgencyFunction.create({
     name: "double",
     description: `No description provided.`,
     schema: z.object({"n": z.number(), })
-  }
+  },
+  safe: false,
+  exported: false
 }, __toolRegistry);
 async function __addAndDouble_impl(a: any, b: number, __state: InternalFunctionState | undefined = undefined) {
   const __setupData = setupFunction({
@@ -362,7 +364,9 @@ const addAndDouble = __AgencyFunction.create({
     name: "addAndDouble",
     description: `No description provided.`,
     schema: z.object({"a": z.string(), "b": z.number(), })
-  }
+  },
+  safe: false,
+  exported: false
 }, __toolRegistry);
 graph.node("main", async (__state: GraphState) => {
   const __setupData = setupNode({

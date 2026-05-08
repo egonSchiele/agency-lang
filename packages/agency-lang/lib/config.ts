@@ -1,4 +1,5 @@
 import { AgencyNode } from "./types.js";
+import type { LogLevel } from "./logger.js";
 import { z } from "zod";
 import * as fs from "fs";
 import * as path from "path";
@@ -26,7 +27,7 @@ export const BUILTIN_VARIABLES = ["color"];
  */
 export interface AgencyConfig {
   verbose?: boolean;
-  logLevel?: "debug" | "info" | "warn" | "error";
+  logLevel?: LogLevel;
   outDir?: string;
 
   /**

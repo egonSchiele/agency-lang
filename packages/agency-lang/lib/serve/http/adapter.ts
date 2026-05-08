@@ -1,5 +1,5 @@
 import http from "http";
-import type { ExportedItem, ExportedFunction, ExportedNode } from "../types.js";
+import type { ExportedItem, ExportedFunction, ExportedNode, ExportedConstant } from "../types.js";
 import { checkAuth } from "./auth.js";
 import { errorMessage, toArgs, parseJsonBody } from "../util.js";
 import type { Logger } from "../../logger.js";
@@ -104,6 +104,7 @@ export function createHttpHandler(config: HttpConfig): (
   const nodes = Object.fromEntries(
     exports.filter((e): e is ExportedNode => e.kind === "node").map((e) => [e.name, e]),
   );
+  const constants = exports.filter((e): e is ExportedConstant => e.kind === "constant");
 
   return async (method, path, body, authHeader): Promise<RouteResult> => {
     if (!checkAuth(apiKey, authHeader)) {
@@ -122,6 +123,10 @@ export function createHttpHandler(config: HttpConfig): (
           nodes: Object.values(nodes).map((n) => ({
             name: n.name,
             parameters: n.parameters.map((p) => p.name),
+          })),
+          constants: constants.map((c) => ({
+            name: c.name,
+            value: c.value,
           })),
         },
       };

@@ -1,5 +1,5 @@
 import process from "process";
-import type { ExportedFunction, ExportedItem } from "../types.js";
+import type { ExportedFunction, ExportedNode, ExportedItem } from "../types.js";
 import { errorMessage } from "../util.js";
 
 type JsonRpcId = string | number | null;
@@ -41,15 +41,29 @@ export function createMcpHandler(
 ): (message: JsonRpcMessage) => Promise<JsonRpcMessage | null> {
   const { serverName, serverVersion, exports } = config;
 
-  const tools = exports.filter((e): e is ExportedFunction => e.kind === "function");
-  const toolsByName = Object.fromEntries(tools.map((t) => [t.name, t]));
+  const functions = exports.filter((e): e is ExportedFunction => e.kind === "function");
+  const nodes = exports.filter((e): e is ExportedNode => e.kind === "node");
+  const functionsByName = Object.fromEntries(functions.map((f) => [f.name, f]));
+  const nodesByName = Object.fromEntries(nodes.map((n) => [n.name, n]));
 
-  const toolsListPayload = tools.map((t) => ({
-    name: t.name,
-    description: t.description,
-    inputSchema: schemaToJsonSchema(t.agencyFunction.toolDefinition?.schema),
-    ...(t.agencyFunction.safe ? { annotations: { readOnlyHint: true } } : {}),
+  const functionToolEntries = functions.map((f) => ({
+    name: f.name,
+    description: f.description,
+    inputSchema: schemaToJsonSchema(f.agencyFunction.toolDefinition?.schema),
+    ...(f.agencyFunction.safe ? { annotations: { readOnlyHint: true } } : {}),
   }));
+
+  const nodeToolEntries = nodes.map((n) => ({
+    name: n.name,
+    description: `Run the '${n.name}' node`,
+    inputSchema: {
+      type: "object",
+      properties: Object.fromEntries(n.parameters.map((p) => [p.name, { type: "string" }])),
+      required: n.parameters.map((p) => p.name),
+    },
+  }));
+
+  const toolsListPayload = [...functionToolEntries, ...nodeToolEntries];
 
   return async (message: JsonRpcMessage): Promise<JsonRpcMessage | null> => {
     if (message.jsonrpc !== "2.0") {
@@ -76,26 +90,46 @@ export function createMcpHandler(
       case "tools/call": {
         const name = message.params?.name;
         const args = message.params?.arguments ?? {};
-        const tool = toolsByName[name];
-        if (!tool) {
-          return rpcError(message.id ?? null, -32602, `Unknown tool '${name}'`);
+        const id = message.id ?? null;
+
+        const fn = functionsByName[name];
+        if (fn) {
+          try {
+            const result = await fn.agencyFunction.invoke({
+              type: "named",
+              positionalArgs: [],
+              namedArgs: args,
+            });
+            return success(id, {
+              content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+              isError: false,
+            });
+          } catch (err) {
+            return success(id, {
+              content: [{ type: "text", text: errorMessage(err) }],
+              isError: true,
+            });
+          }
         }
-        try {
-          const result = await tool.agencyFunction.invoke({
-            type: "named",
-            positionalArgs: [],
-            namedArgs: args,
-          });
-          return success(message.id ?? null, {
-            content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
-            isError: false,
-          });
-        } catch (err) {
-          return success(message.id ?? null, {
-            content: [{ type: "text", text: errorMessage(err) }],
-            isError: true,
-          });
+
+        const node = nodesByName[name];
+        if (node) {
+          try {
+            const positional = node.parameters.map((p) => args[p.name]);
+            const result = (await node.invoke(...positional)) as { data: unknown };
+            return success(id, {
+              content: [{ type: "text", text: JSON.stringify(result.data, null, 2) }],
+              isError: false,
+            });
+          } catch (err) {
+            return success(id, {
+              content: [{ type: "text", text: errorMessage(err) }],
+              isError: true,
+            });
+          }
         }
+
+        return rpcError(id, -32602, `Unknown tool '${name}'`);
       }
 
       case "shutdown":

@@ -120,6 +120,17 @@ describe("discoverExports", () => {
     expect(exports[0].name).toBe("main");
   });
 
+  it("returns exported constants from module exports", () => {
+    const exports = discoverExports({
+      toolRegistry: {},
+      moduleExports: { API_URL: "https://example.com", _internal: "hidden" },
+      moduleId: "test",
+      exportedConstantNames: ["API_URL"],
+    });
+    expect(exports).toHaveLength(1);
+    expect(exports[0]).toEqual({ kind: "constant", name: "API_URL", value: "https://example.com" });
+  });
+
   it("returns empty array when no exports found", () => {
     expect(
       discoverExports({ toolRegistry: {}, moduleExports: {}, moduleId: "test" }),

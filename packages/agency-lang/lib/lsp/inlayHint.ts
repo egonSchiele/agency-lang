@@ -2,7 +2,7 @@ import { InlayHint, InlayHintKind } from "vscode-languageserver-protocol";
 import type { AgencyProgram } from "../types.js";
 import type { ScopeInfo } from "../typeChecker/types.js";
 import { walkNodes } from "../utils/node.js";
-import { formatTypeHint } from "../cli/util.js";
+import { formatTypeHint } from "../utils/formatType.js";
 import { findContainingScope } from "./scopeResolution.js";
 
 export function getInlayHints(

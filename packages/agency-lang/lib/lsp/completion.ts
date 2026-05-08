@@ -2,7 +2,7 @@ import path from "path";
 import fs from "fs";
 import { CompletionItem, CompletionItemKind, InsertTextFormat } from "vscode-languageserver-protocol";
 import { CompilationUnit, GLOBAL_SCOPE_KEY } from "../compilationUnit.js";
-import { formatTypeHint } from "../cli/util.js";
+import { formatTypeHint } from "../utils/formatType.js";
 import { resolveType } from "../typeChecker/assignability.js";
 import type { AgencyProgram, FunctionParameter, VariableType } from "../types.js";
 import type { ScopeInfo } from "../typeChecker/types.js";

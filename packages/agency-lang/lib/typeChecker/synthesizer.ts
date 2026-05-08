@@ -3,7 +3,7 @@ import type {
   NamedArgument,
   SplatExpression,
 } from "../types/dataStructures.js";
-import { formatTypeHint } from "../cli/util.js";
+import { formatTypeHint } from "../utils/formatType.js";
 import { BUILTIN_FUNCTION_TYPES } from "./builtins.js";
 import { isAssignable, resolveType } from "./assignability.js";
 import { resultTypeForValidation } from "./validation.js";

@@ -749,7 +749,8 @@ export function createProgram(deps: CliDependencies = {}): Command {
     .description("Start an MCP server (stdio)")
     .argument("<file>", "Agency file to serve")
     .option("--name <name>", "Server name (defaults to filename)")
-    .action(async (file: string, options: { name?: string }) => {
+    .option("--standalone", "Generate a standalone server.js file")
+    .action(async (file: string, options: { name?: string; standalone?: boolean }) => {
       await serveMcp(file, options);
     });
 
@@ -759,8 +760,9 @@ export function createProgram(deps: CliDependencies = {}): Command {
     .argument("<file>", "Agency file to serve")
     .option("--port <port>", "HTTP port (default: 3545)", "3545")
     .option("--api-key <key>", "API key for authentication")
+    .option("--api-key-env <name>", "Env var name for API key in standalone mode (default: API_KEY)")
     .option("--standalone", "Generate a standalone server.js file")
-    .action(async (file: string, options: { port?: string; apiKey?: string; standalone?: boolean }) => {
+    .action(async (file: string, options: { port?: string; apiKey?: string; apiKeyEnv?: string; standalone?: boolean }) => {
       await serveHttp(file, options);
     });
 

@@ -33,6 +33,12 @@ function makeTestExports(): ExportedItem[] {
       description: "Add two numbers",
       agencyFunction: addFn,
     },
+    {
+      kind: "node",
+      name: "main",
+      parameters: [{ name: "city" }, { name: "country" }],
+      invoke: async (...args: unknown[]) => ({ data: `${args[0]}, ${args[1]}` }),
+    },
   ];
 }
 
@@ -67,11 +73,11 @@ describe("MCP adapter", () => {
     });
     expect(response).toBeTruthy();
     const tools = response!.result.tools;
-    expect(tools).toHaveLength(1);
-    expect(tools[0].name).toBe("add");
-    expect(tools[0].description).toBe("Add two numbers");
-    expect(tools[0].inputSchema).toBeTruthy();
-    expect(tools[0].annotations.readOnlyHint).toBe(true);
+    expect(tools).toHaveLength(2);
+    const addTool = tools.find((t: any) => t.name === "add");
+    expect(addTool.description).toBe("Add two numbers");
+    expect(addTool.inputSchema).toBeTruthy();
+    expect(addTool.annotations.readOnlyHint).toBe(true);
   });
 
   it("calls a tool and returns result", async () => {
@@ -106,6 +112,36 @@ describe("MCP adapter", () => {
       method: "notifications/initialized",
     });
     expect(response).toBeNull();
+  });
+
+  it("lists nodes as tools", async () => {
+    const response = await handler({
+      jsonrpc: "2.0",
+      id: 10,
+      method: "tools/list",
+    });
+    const tools = response!.result.tools;
+    const nodeTool = tools.find((t: any) => t.name === "main");
+    expect(nodeTool).toBeTruthy();
+    expect(nodeTool.inputSchema).toEqual({
+      type: "object",
+      properties: {
+        city: { type: "string" },
+        country: { type: "string" },
+      },
+      required: ["city", "country"],
+    });
+  });
+
+  it("calls a node via tools/call with positional arg mapping", async () => {
+    const response = await handler({
+      jsonrpc: "2.0",
+      id: 11,
+      method: "tools/call",
+      params: { name: "main", arguments: { city: "Paris", country: "France" } },
+    });
+    expect(response!.result.isError).toBe(false);
+    expect(JSON.parse(response!.result.content[0].text)).toBe("Paris, France");
   });
 
   it("returns method not found for unknown methods", async () => {

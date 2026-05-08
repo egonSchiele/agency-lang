@@ -14,4 +14,10 @@ export type ExportedNode = {
   invoke: (...args: unknown[]) => Promise<unknown>;
 };
 
-export type ExportedItem = ExportedFunction | ExportedNode;
+export type ExportedConstant = {
+  kind: "constant";
+  name: string;
+  value: unknown;
+};
+
+export type ExportedItem = ExportedFunction | ExportedNode | ExportedConstant;

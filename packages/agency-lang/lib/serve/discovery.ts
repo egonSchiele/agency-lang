@@ -1,12 +1,13 @@
 import { z } from "zod";
 import type { AgencyFunction } from "../runtime/agencyFunction.js";
-import type { ExportedFunction, ExportedNode, ExportedItem } from "./types.js";
+import type { ExportedConstant, ExportedFunction, ExportedNode, ExportedItem } from "./types.js";
 
 export type DiscoverOptions = {
   toolRegistry: Record<string, AgencyFunction>;
   moduleExports: Record<string, unknown>;
   moduleId: string;
   exportedNodeNames?: string[];
+  exportedConstantNames?: string[];
 };
 
 function isExportedFromModule(fn: AgencyFunction, moduleId: string): boolean {
@@ -39,7 +40,7 @@ function toExportedNode(
 }
 
 export function discoverExports(options: DiscoverOptions): ExportedItem[] {
-  const { toolRegistry, moduleExports, moduleId, exportedNodeNames = [] } = options;
+  const { toolRegistry, moduleExports, moduleId, exportedNodeNames = [], exportedConstantNames = [] } = options;
 
   const functions = Object.values(toolRegistry)
     .filter((fn) => isExportedFromModule(fn, moduleId))
@@ -49,5 +50,9 @@ export function discoverExports(options: DiscoverOptions): ExportedItem[] {
     .map((name) => toExportedNode(name, moduleExports))
     .filter((n): n is ExportedNode => n !== null);
 
-  return [...functions, ...nodes];
+  const constants: ExportedConstant[] = exportedConstantNames
+    .filter((name) => name in moduleExports)
+    .map((name) => ({ kind: "constant", name, value: moduleExports[name] }));
+
+  return [...functions, ...nodes, ...constants];
 }

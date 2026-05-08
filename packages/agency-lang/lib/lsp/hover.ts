@@ -2,7 +2,7 @@ import { Hover, HoverParams } from "vscode-languageserver-protocol";
 import { TextDocument } from "vscode-languageserver-textdocument";
 import { formatSemanticHover, lookupSemanticSymbol, type SemanticIndex } from "./semantics.js";
 import { resolveTypeAtPosition } from "./typeResolution.js";
-import { formatTypeHint } from "../cli/util.js";
+import { formatTypeHint } from "../utils/formatType.js";
 import { getWordAtPosition } from "../cli/definition.js";
 import type { AgencyProgram } from "../types.js";
 import type { ScopeInfo } from "../typeChecker/types.js";

@@ -9,7 +9,7 @@ export function toArgs(body: unknown): Record<string, unknown> {
   return {};
 }
 
-const MAX_BODY_BYTES = 10 * 1024 * 1024; // 10 MB
+import { MAX_BODY_BYTES } from "./constants.js";
 
 export function parseJsonBody(
   req: { on: (event: string, cb: (...args: any[]) => void) => void; destroy?: () => void },

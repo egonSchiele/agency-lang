@@ -171,8 +171,9 @@ export function startHttpServer(config: HttpConfig): http.Server {
 
     try {
       const body = method === "POST" ? await parseJsonBody(req) : undefined;
+      const start = Date.now();
       const result = await handler(method, path, body, authHeader);
-      logger.info(`${method} ${path} → ${result.status}`);
+      logger.info(`${method} ${path} → ${result.status} (${Date.now() - start}ms)`);
       sendJson(result.status, result.body);
     } catch (err) {
       const msg = errorMessage(err);

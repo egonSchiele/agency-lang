@@ -1,3 +1,4 @@
+import { z } from "zod";
 import type { AgencyFunction } from "../runtime/agencyFunction.js";
 import type { ExportedFunction, ExportedNode, ExportedItem } from "./types.js";
 
@@ -27,7 +28,8 @@ function toExportedNode(
 ): ExportedNode | null {
   const nodeFn = moduleExports[nodeName];
   if (typeof nodeFn !== "function") return null;
-  const params = (moduleExports[`__${nodeName}NodeParams`] as string[] | undefined) ?? [];
+  const raw = moduleExports[`__${nodeName}NodeParams`];
+  const params = raw != null ? z.array(z.string()).parse(raw) : [];
   return {
     kind: "node",
     name: nodeName,

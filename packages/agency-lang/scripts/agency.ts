@@ -50,6 +50,7 @@ import { setupCodexMcp, codexConfigPath } from "@/mcp/setup.js";
 import { startServer } from "@/lsp/index.js";
 import { startMcpServer } from "@/mcp/server.js";
 import { pathToFileURL } from "url";
+import { serveMcp, serveHttp } from "@/cli/serve.js";
 
 type RunOptions = { resume?: string; trace?: string | true };
 
@@ -737,6 +738,30 @@ export function createProgram(deps: CliDependencies = {}): Command {
       );
       console.log(result.message);
       console.log(`  command: ${resolveMcpCommand().join(" ")}`);
+    });
+
+  const serveCmd = program
+    .command("serve")
+    .description("Serve Agency code over MCP or HTTP");
+
+  serveCmd
+    .command("mcp")
+    .description("Start an MCP server (stdio)")
+    .argument("<file>", "Agency file to serve")
+    .option("--name <name>", "Server name (defaults to filename)")
+    .action(async (file: string, options: { name?: string }) => {
+      await serveMcp(file, options);
+    });
+
+  serveCmd
+    .command("http")
+    .description("Start an HTTP REST server")
+    .argument("<file>", "Agency file to serve")
+    .option("--port <port>", "HTTP port (default: 3545)", "3545")
+    .option("--api-key <key>", "API key for authentication")
+    .option("--standalone", "Generate a standalone server.js file")
+    .action(async (file: string, options: { port?: string; apiKey?: string; standalone?: boolean }) => {
+      await serveHttp(file, options);
     });
 
   addRunOptions(

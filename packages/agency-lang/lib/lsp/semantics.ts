@@ -229,7 +229,7 @@ function formatSignature(symbol: SemanticSymbol): string {
     case "class":
       return `class ${symbol.name}`;
     case "constant":
-      return `const ${symbol.name}${symbol.returnType ? `: ${formatTypeHint(symbol.returnType)}` : ""}`;
+      return `static const ${symbol.name}${symbol.returnType ? `: ${formatTypeHint(symbol.returnType)}` : ""}`;
   }
 }
 

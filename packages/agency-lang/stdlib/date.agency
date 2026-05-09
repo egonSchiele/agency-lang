@@ -1,4 +1,4 @@
-import { _now, _today, _tomorrow, _add, _addMinutes, _addHours, _addDays, _nextDayOfWeek, _atTime, _startOfDay, _endOfDay, _startOfWeek, _endOfWeek, _startOfMonth, _endOfMonth } from "./lib/date.js"
+import { _now, _today, _tomorrow, _add, _addMinutes, _addHours, _addDays, _nextDayOfWeek, _atTime, _startOfDay, _endOfDay, _startOfWeek, _endOfWeek, _startOfMonth, _endOfMonth } from "agency-lang/stdlib-lib/date.js"
 
 /** @module
   ## Date and Time Utilities

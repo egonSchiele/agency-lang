@@ -1,4 +1,4 @@
-import { _sendSms } from "./lib/sms.js"
+import { _sendSms } from "agency-lang/stdlib-lib/sms.js"
 
 /** @module
   ## Usage

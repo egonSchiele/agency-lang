@@ -1,4 +1,4 @@
-import { _checkPolicy, _validatePolicy } from "./lib/policy.js"
+import { _checkPolicy, _validatePolicy } from "agency-lang/stdlib-lib/policy.js"
 
 export def checkPolicy(policy: object, interrupt: object) {
   """

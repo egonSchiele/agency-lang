@@ -1,4 +1,4 @@
-import { _compile } from "./lib/agency.js"
+import { _compile, _run } from "agency-lang/stdlib-lib/agency.js"
 
 type CompiledProgram = {
   moduleId: string
@@ -10,4 +10,19 @@ export def compile(source: string): Result {
   @param source - Agency source code as a string
   """
   return try _compile(source)
+}
+
+export def run(compiled: CompiledProgram, options: { node: string, args: object }): Result {
+  """
+  Execute a compiled Agency program in a subprocess. The parent's handler chain extends to the subprocess — subprocess interrupts must be approved by both subprocess and parent handlers. Returns the subprocess node's result on success.
+  @param compiled - A CompiledProgram from compile()
+  @param options - Which node to run and what arguments to pass
+  """
+  return interrupt std::run("Running agent-generated code in subprocess", {
+    moduleId: compiled.moduleId,
+    node: options.node,
+    args: options.args
+  })
+
+  return try _run(compiled, options)
 }

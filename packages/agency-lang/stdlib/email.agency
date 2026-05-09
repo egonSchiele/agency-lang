@@ -1,4 +1,4 @@
-import { _sendWithResend, _sendWithSendGrid, _sendWithMailgun } from "./lib/email.js"
+import { _sendWithResend, _sendWithSendGrid, _sendWithMailgun } from "agency-lang/stdlib-lib/email.js"
 
 /** @module
   ## Usage

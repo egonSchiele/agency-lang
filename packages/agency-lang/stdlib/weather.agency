@@ -1,4 +1,4 @@
-import { _weather } from "./lib/weather.js"
+import { _weather } from "agency-lang/stdlib-lib/weather.js"
 type WeatherResult = {
   location: string;
   country: string;

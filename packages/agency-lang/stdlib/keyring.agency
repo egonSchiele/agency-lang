@@ -1,4 +1,4 @@
-import { _setSecret, _getSecret, _deleteSecret, _isKeyringAvailable } from "./lib/keyring.js"
+import { _setSecret, _getSecret, _deleteSecret, _isKeyringAvailable } from "agency-lang/stdlib-lib/keyring.js"
 
 /** @module
   ## Usage

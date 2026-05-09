@@ -1,4 +1,4 @@
-import { _authorizeCalendar, _listEvents, _createEvent, _updateEvent, _deleteEvent, _isCalendarAuthorized } from "./lib/calendar.js"
+import { _authorizeCalendar, _listEvents, _createEvent, _updateEvent, _deleteEvent, _isCalendarAuthorized } from "agency-lang/stdlib-lib/calendar.js"
 
 /** @module
   ## Usage

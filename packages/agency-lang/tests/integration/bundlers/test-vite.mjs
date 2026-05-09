@@ -8,7 +8,7 @@ import {
 const MARKER = "VITE TEST PASSED";
 
 withTestProject("vite", (dir) => {
-  installDev(dir, "vite");
+  installDev(dir, "vite@6");
   writeHelloAgency(dir);
   writeHelloEntryPoint(dir, "entry.mjs", "vite", MARKER);
 
@@ -16,6 +16,7 @@ withTestProject("vite", (dir) => {
 export default defineConfig({
   build: {
     ssr: true,
+    target: "esnext",
     rollupOptions: {
       input: "./entry.mjs",
       output: { format: "esm" },

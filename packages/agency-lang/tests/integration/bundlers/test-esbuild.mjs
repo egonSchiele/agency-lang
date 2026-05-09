@@ -8,7 +8,7 @@ import {
 const MARKER = "ESBUILD TEST PASSED";
 
 withTestProject("esbuild", (dir) => {
-  installDev(dir, "esbuild");
+  installDev(dir, "esbuild@0");
   writeHelloAgency(dir);
   writeHelloEntryPoint(dir, "entry.mjs", "esbuild", MARKER);
   run(dir, "npx esbuild entry.mjs --bundle --outfile=out.mjs --platform=node --format=esm --packages=external");

@@ -29,9 +29,8 @@ try {
   // --- Test 2: Stdlib imports ---
   console.log("--- Test 2: Stdlib imports ---");
   writeFile(dir, "stdlib-test.agency", `import { map } from "std::array"
-import { add } from "std::math"
+import { add, multiply } from "std::math"
 import { join } from "std::path"
-import { now } from "std::date"
 import { mapValues } from "std::object"
 
 node main() {
@@ -44,11 +43,11 @@ node main() {
   const sum = add(10, 20)
   print(sum)
 
+  const product = multiply(3, 7)
+  print(product)
+
   const p = join("foo", "bar", "baz.txt")
   print(p)
-
-  const t = now()
-  print(t)
 
   const obj = { a: 1, b: 2 }
   const doubled2 = mapValues(obj) as (v, k) {
@@ -60,11 +59,11 @@ node main() {
 }
 `);
   const stdlibOutput = run(dir, "npx agency run stdlib-test.agency");
-  // Verify stdlib functions produced correct output
-  assertIncludes(stdlibOutput, "[ 2, 4, 6 ]");  // map doubled
-  assertIncludes(stdlibOutput, "30");             // add(10, 20)
-  assertIncludes(stdlibOutput, "foo/bar/baz.txt"); // join
-  assertIncludes(stdlibOutput, "{ a: 2, b: 4 }"); // mapValues doubled
+  assertIncludes(stdlibOutput, "[ 2, 4, 6 ]");
+  assertIncludes(stdlibOutput, "30");
+  assertIncludes(stdlibOutput, "21");
+  assertIncludes(stdlibOutput, "foo/bar/baz.txt"); // CI runs on Linux; Windows would use backslashes
+  assertIncludes(stdlibOutput, "{ a: 2, b: 4 }");
   console.log("Test 2 passed");
 
   // --- Test 3: Interrupts and handlers ---

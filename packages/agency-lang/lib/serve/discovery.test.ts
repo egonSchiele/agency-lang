@@ -99,6 +99,7 @@ describe("discoverExports", () => {
     expect(nodes[0].name).toBe("main");
     if (nodes[0].kind === "node") {
       expect(nodes[0].parameters).toEqual([{ name: "message" }]);
+      expect(nodes[0].interruptKinds).toEqual([]);
     }
   });
 

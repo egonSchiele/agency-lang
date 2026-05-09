@@ -32,6 +32,7 @@ function makeTestExports(): ExportedItem[] {
       name: "add",
       description: "Add two numbers",
       agencyFunction: addFn,
+      interruptKinds: [],
     },
   ];
 }

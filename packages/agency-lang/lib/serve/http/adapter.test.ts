@@ -34,6 +34,7 @@ function makeExports(): {
       name: "add",
       description: "Add two numbers",
       agencyFunction: addFn,
+      interruptKinds: [],
     },
     {
       kind: "node",
@@ -43,6 +44,7 @@ function makeExports(): {
         data: { echo: message },
         messages: {},
       }),
+      interruptKinds: [],
     },
   ];
 

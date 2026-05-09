@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "compile() returns failure for invalid Agency source",
+      "input": "",
+      "expectedOutput": "\"correctly failed\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

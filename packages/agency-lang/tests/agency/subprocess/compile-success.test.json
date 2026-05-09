@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "compile() returns success for valid Agency source",
+      "input": "",
+      "expectedOutput": "\"compiled\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

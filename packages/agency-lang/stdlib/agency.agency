@@ -1,0 +1,13 @@
+import { _compile } from "./lib/agency.js"
+
+type CompiledProgram = {
+  moduleId: string
+}
+
+export def compile(source: string): Result {
+  """
+  Compile Agency source code. Returns a CompiledProgram on success, or a failure with compilation errors. Only standard library (std::) imports are allowed in the compiled code.
+  @param source - Agency source code as a string
+  """
+  return try _compile(source)
+}

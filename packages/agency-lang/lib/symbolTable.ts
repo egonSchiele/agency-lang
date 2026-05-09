@@ -3,6 +3,7 @@ import * as path from "path";
 import { parseAgency } from "./parser.js";
 import type { AgencyConfig } from "./config.js";
 import type {
+  AgencyNode,
   AgencyProgram,
   FunctionParameter,
   VariableType,

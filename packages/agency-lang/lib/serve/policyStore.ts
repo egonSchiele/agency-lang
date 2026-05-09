@@ -2,13 +2,9 @@ import { readFileSync, writeFileSync, mkdirSync, existsSync } from "fs";
 import path from "path";
 import os from "os";
 import { validatePolicy } from "../runtime/policy.js";
+import type { Policy } from "../runtime/policy.js";
 
-type PolicyRule = {
-  match?: Record<string, string>;
-  action: "approve" | "reject" | "propagate";
-};
-
-export type Policy = Record<string, PolicyRule[]>;
+export type { Policy } from "../runtime/policy.js";
 
 export class PolicyStore {
   private policy: Policy = {};
@@ -20,7 +16,7 @@ export class PolicyStore {
     this.load();
   }
 
-  get(): Policy {
+  get(): Readonly<Policy> {
     return this.policy;
   }
 

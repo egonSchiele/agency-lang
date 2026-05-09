@@ -40,22 +40,32 @@ function schemaToJsonSchema(schema: unknown): unknown {
     : { type: "object", properties: {} };
 }
 
+export type PolicyConfig = {
+  policyStore: PolicyStore;
+  interruptHandlers: InterruptHandlers;
+};
+
 export type McpConfig = {
   serverName: string;
   serverVersion: string;
   exports: ExportedItem[];
-  policyStore?: PolicyStore;
-  interruptHandlers?: InterruptHandlers;
+  policyConfig?: PolicyConfig;
 };
+
+const POLICY_TOOL_NAMES = {
+  GET: "agencyGetPolicy",
+  SET: "agencySetPolicy",
+  CLEAR: "agencyClearPolicy",
+} as const;
 
 const POLICY_TOOL_DEFINITIONS = [
   {
-    name: "agencyGetPolicy",
+    name: POLICY_TOOL_NAMES.GET,
     description: "Get the current interrupt policy for this agent. Returns a JSON object keyed by interrupt kind.",
     inputSchema: { type: "object" as const, properties: {} },
   },
   {
-    name: "agencySetPolicy",
+    name: POLICY_TOOL_NAMES.SET,
     description: `Set the interrupt policy for this agent. The policy controls which actions the agent is allowed to take autonomously. Each tool lists its interrupt kinds — use those as keys in the policy object. Example: {"email::send": [{"match": {"recipient": "*@company.com"}, "action": "approve"}, {"action": "reject"}]} approves sending emails to company.com addresses and rejects all others.`,
     inputSchema: {
       type: "object" as const,
@@ -69,7 +79,7 @@ const POLICY_TOOL_DEFINITIONS = [
     },
   },
   {
-    name: "agencyClearPolicy",
+    name: POLICY_TOOL_NAMES.CLEAR,
     description: "Clear the interrupt policy, resetting to reject-all. After clearing, all interrupt-producing actions will be rejected until a new policy is set.",
     inputSchema: { type: "object" as const, properties: {} },
   },
@@ -81,16 +91,16 @@ function handlePolicyTool(
   policyStore: PolicyStore,
 ): { content: Array<{ type: string; text: string }>; isError: boolean } | null {
   switch (name) {
-    case "agencyGetPolicy":
+    case POLICY_TOOL_NAMES.GET:
       return { content: [{ type: "text", text: JSON.stringify(policyStore.get(), null, 2) }], isError: false };
-    case "agencySetPolicy":
+    case POLICY_TOOL_NAMES.SET:
       try {
         policyStore.set(args.policy);
         return { content: [{ type: "text", text: "Policy updated successfully." }], isError: false };
       } catch (err) {
         return { content: [{ type: "text", text: errorMessage(err) }], isError: true };
       }
-    case "agencyClearPolicy":
+    case POLICY_TOOL_NAMES.CLEAR:
       policyStore.clear();
       return { content: [{ type: "text", text: "Policy cleared." }], isError: false };
     default:
@@ -113,8 +123,8 @@ export function createMcpHandler(
     ...(t.agencyFunction.safe ? { annotations: { readOnlyHint: true } } : {}),
   }));
 
-  const { policyStore } = config;
-  if (policyStore) {
+  const { policyConfig } = config;
+  if (policyConfig) {
     toolsListPayload.push(...POLICY_TOOL_DEFINITIONS);
   }
 
@@ -145,8 +155,8 @@ export function createMcpHandler(
         const args = message.params?.arguments ?? {};
         const id = message.id ?? null;
 
-        if (policyStore) {
-          const policyResult = handlePolicyTool(name, args, policyStore);
+        if (policyConfig) {
+          const policyResult = handlePolicyTool(name, args, policyConfig.policyStore);
           if (policyResult) return success(id, policyResult);
         }
 
@@ -156,8 +166,8 @@ export function createMcpHandler(
         }
         try {
           const invoke = () => tool.agencyFunction.invoke({ type: "named", positionalArgs: [], namedArgs: args });
-          const result = policyStore && config.interruptHandlers
-            ? await runWithPolicy(invoke, policyStore, config.interruptHandlers)
+          const result = policyConfig
+            ? await runWithPolicy(invoke, policyConfig.policyStore, policyConfig.interruptHandlers)
             : await invoke();
           return success(id, {
             content: [{ type: "text", text: JSON.stringify(result, null, 2) }],

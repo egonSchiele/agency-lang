@@ -172,8 +172,10 @@ describe("MCP adapter — policy tools", () => {
       serverName: "test-server",
       serverVersion: "1.0.0",
       exports: makeTestExports(),
-      policyStore: new PolicyStore("test-server", tmpDir),
-      interruptHandlers: { hasInterrupts: () => false, respondToInterrupts: async () => "done" },
+      policyConfig: {
+        policyStore: new PolicyStore("test-server", tmpDir),
+        interruptHandlers: { hasInterrupts: () => false, respondToInterrupts: async () => "done" },
+      },
     });
   });
 
@@ -283,13 +285,15 @@ describe("MCP adapter — policy tools", () => {
       exports: [
         { kind: "function", name: "greet", description: "Greet someone", agencyFunction: greetFn, interruptKinds: [{ kind: "test::greet" }] },
       ],
-      policyStore: new PolicyStore("test", tmpDir),
-      interruptHandlers: {
-        hasInterrupts: (data) => Array.isArray(data) && data.length > 0 && data[0]?.type === "interrupt",
-        respondToInterrupts: async (_interrupts, responses) => {
-          respondCalled = true;
-          expect((responses[0] as any).type).toBe("reject");
-          return "rejected";
+      policyConfig: {
+        policyStore: new PolicyStore("test", tmpDir),
+        interruptHandlers: {
+          hasInterrupts: (data) => Array.isArray(data) && data.length > 0 && data[0]?.type === "interrupt",
+          respondToInterrupts: async (_interrupts, responses) => {
+            respondCalled = true;
+            expect((responses[0] as any).type).toBe("reject");
+            return "rejected";
+          },
         },
       },
     });
@@ -332,12 +336,14 @@ describe("MCP adapter — policy tools", () => {
       exports: [
         { kind: "function", name: "sendEmail", description: "Send an email", agencyFunction: sendFn, interruptKinds: [{ kind: "email::send" }] },
       ],
-      policyStore: store,
-      interruptHandlers: {
-        hasInterrupts: (data) => Array.isArray(data) && data.length > 0 && data[0]?.type === "interrupt",
-        respondToInterrupts: async (_interrupts, responses) => {
-          expect((responses[0] as any).type).toBe("approve");
-          return "sent";
+      policyConfig: {
+        policyStore: store,
+        interruptHandlers: {
+          hasInterrupts: (data) => Array.isArray(data) && data.length > 0 && data[0]?.type === "interrupt",
+          respondToInterrupts: async (_interrupts, responses) => {
+            expect((responses[0] as any).type).toBe("approve");
+            return "sent";
+          },
         },
       },
     });

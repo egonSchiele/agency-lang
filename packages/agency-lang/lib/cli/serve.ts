@@ -99,8 +99,7 @@ export async function serveMcp(
     serverName,
     serverVersion: VERSION,
     exports,
-    policyStore,
-    interruptHandlers,
+    policyConfig: { policyStore, interruptHandlers },
   });
 
   startStdioServer(handler);

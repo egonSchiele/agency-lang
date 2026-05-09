@@ -191,7 +191,8 @@ describe("MCP adapter — policy tools", () => {
     });
     const names = response!.result.tools.map((t: any) => t.name);
     expect(names).toContain("agencyGetPolicy");
-    expect(names).toContain("agencySetPolicy");
+    expect(names).toContain("agencyAddRule");
+    expect(names).toContain("agencyRemoveRule");
     expect(names).toContain("agencyClearPolicy");
     expect(names).toContain("add");
   });
@@ -207,15 +208,14 @@ describe("MCP adapter — policy tools", () => {
     expect(JSON.parse(response!.result.content[0].text)).toEqual({});
   });
 
-  it("agencySetPolicy sets and persists a policy", async () => {
-    const policy = { "test::x": [{ action: "approve" }] };
-    const setResponse = await handler({
+  it("agencyAddRule adds a rule and agencyGetPolicy returns it", async () => {
+    const addResponse = await handler({
       jsonrpc: "2.0",
       id: 3,
       method: "tools/call",
-      params: { name: "agencySetPolicy", arguments: { policy } },
+      params: { name: "agencyAddRule", arguments: { kind: "email::send", action: "approve", match: { recipient: "*@co.com" } } },
     });
-    expect(setResponse!.result.isError).toBe(false);
+    expect(addResponse!.result.isError).toBe(false);
 
     const getResponse = await handler({
       jsonrpc: "2.0",
@@ -223,15 +223,50 @@ describe("MCP adapter — policy tools", () => {
       method: "tools/call",
       params: { name: "agencyGetPolicy", arguments: {} },
     });
-    expect(JSON.parse(getResponse!.result.content[0].text)).toEqual(policy);
+    expect(JSON.parse(getResponse!.result.content[0].text)).toEqual({
+      "email::send": [{ match: { recipient: "*@co.com" }, action: "approve" }],
+    });
   });
 
-  it("agencySetPolicy rejects invalid policies", async () => {
-    const response = await handler({
+  it("agencyRemoveRule removes a rule by index", async () => {
+    await handler({
       jsonrpc: "2.0",
       id: 5,
       method: "tools/call",
-      params: { name: "agencySetPolicy", arguments: { policy: { "x": [{ action: "yolo" }] } } },
+      params: { name: "agencyAddRule", arguments: { kind: "x::y", action: "approve" } },
+    });
+    await handler({
+      jsonrpc: "2.0",
+      id: 6,
+      method: "tools/call",
+      params: { name: "agencyAddRule", arguments: { kind: "x::y", action: "reject" } },
+    });
+
+    const removeResponse = await handler({
+      jsonrpc: "2.0",
+      id: 7,
+      method: "tools/call",
+      params: { name: "agencyRemoveRule", arguments: { kind: "x::y", ruleIndex: 0 } },
+    });
+    expect(removeResponse!.result.isError).toBe(false);
+
+    const getResponse = await handler({
+      jsonrpc: "2.0",
+      id: 8,
+      method: "tools/call",
+      params: { name: "agencyGetPolicy", arguments: {} },
+    });
+    expect(JSON.parse(getResponse!.result.content[0].text)).toEqual({
+      "x::y": [{ action: "reject" }],
+    });
+  });
+
+  it("agencyRemoveRule returns error for invalid index", async () => {
+    const response = await handler({
+      jsonrpc: "2.0",
+      id: 9,
+      method: "tools/call",
+      params: { name: "agencyRemoveRule", arguments: { kind: "x::y", ruleIndex: 0 } },
     });
     expect(response!.result.isError).toBe(true);
   });
@@ -239,9 +274,9 @@ describe("MCP adapter — policy tools", () => {
   it("agencyClearPolicy resets to empty", async () => {
     await handler({
       jsonrpc: "2.0",
-      id: 6,
+      id: 10,
       method: "tools/call",
-      params: { name: "agencySetPolicy", arguments: { policy: { "x::y": [{ action: "approve" }] } } },
+      params: { name: "agencyAddRule", arguments: { kind: "x::y", action: "approve" } },
     });
 
     const clearResponse = await handler({

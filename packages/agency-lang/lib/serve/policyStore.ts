@@ -38,8 +38,12 @@ export class PolicyStore {
     if (!rules || index < 0 || index >= rules.length) {
       throw new Error(`No rule at index ${index} for kind '${kind}'`);
     }
-    rules.splice(index, 1);
-    if (rules.length === 0) delete this.policy[kind];
+    const updated = rules.filter((_, i) => i !== index);
+    if (updated.length === 0) {
+      delete this.policy[kind];
+    } else {
+      this.policy[kind] = updated;
+    }
     this.save();
   }
 

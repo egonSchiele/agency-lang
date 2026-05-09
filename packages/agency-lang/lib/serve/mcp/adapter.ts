@@ -107,9 +107,7 @@ function handlePolicyTool(
       return { content: [{ type: "text", text: JSON.stringify(policyStore.get(), null, 2) }], isError: false };
     case POLICY_TOOL_NAMES.ADD_RULE:
       try {
-        const rule: { action: "approve" | "reject"; match?: Record<string, string> } = { action: args.action };
-        if (args.match) rule.match = args.match;
-        policyStore.addRule(args.kind, rule);
+        policyStore.addRule(args.kind, { action: args.action, ...(args.match && { match: args.match }) });
         return { content: [{ type: "text", text: `Rule added for '${args.kind}'.` }], isError: false };
       } catch (err) {
         return { content: [{ type: "text", text: errorMessage(err) }], isError: true };
@@ -122,8 +120,12 @@ function handlePolicyTool(
         return { content: [{ type: "text", text: errorMessage(err) }], isError: true };
       }
     case POLICY_TOOL_NAMES.CLEAR:
-      policyStore.clear();
-      return { content: [{ type: "text", text: "Policy cleared." }], isError: false };
+      try {
+        policyStore.clear();
+        return { content: [{ type: "text", text: "Policy cleared." }], isError: false };
+      } catch (err) {
+        return { content: [{ type: "text", text: errorMessage(err) }], isError: true };
+      }
     default:
       return null;
   }

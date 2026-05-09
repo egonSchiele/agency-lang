@@ -235,5 +235,37 @@ export function isAssignable(
     return true;
   }
 
+  // functionRefType is assignable to the "function" primitive
+  if (
+    resolvedSource.type === "functionRefType" &&
+    resolvedTarget.type === "primitiveType" &&
+    resolvedTarget.value === "function"
+  ) {
+    return true;
+  }
+
+  // Two functionRefTypes: compatible if same arity and compatible param/return types
+  if (
+    resolvedSource.type === "functionRefType" &&
+    resolvedTarget.type === "functionRefType"
+  ) {
+    const sourceVariadic = resolvedSource.params.some((p) => p.variadic);
+    const targetVariadic = resolvedTarget.params.some((p) => p.variadic);
+    if (sourceVariadic !== targetVariadic) return false;
+    const sourceParams = resolvedSource.params.filter((p) => !p.variadic);
+    const targetParams = resolvedTarget.params.filter((p) => !p.variadic);
+    if (sourceParams.length !== targetParams.length) return false;
+    for (let i = 0; i < sourceParams.length; i++) {
+      const sourceHint = sourceParams[i].typeHint;
+      const targetHint = targetParams[i].typeHint;
+      if (!sourceHint || !targetHint) continue;
+      if (!isAssignable(targetHint, sourceHint, typeAliases)) return false;
+    }
+    if (resolvedSource.returnType && resolvedTarget.returnType) {
+      return isAssignable(resolvedSource.returnType, resolvedTarget.returnType, typeAliases);
+    }
+    return true;
+  }
+
   return false;
 }

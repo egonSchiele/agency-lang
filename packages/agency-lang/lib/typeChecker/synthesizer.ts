@@ -55,7 +55,38 @@ export function synthType(
 ): VariableType | "any" {
   switch (expr.type) {
     case "variableName": {
-      return scope.lookup(expr.value) ?? "any";
+      const scopeType = scope.lookup(expr.value);
+      if (scopeType) return scopeType;
+      const fnDef = ctx.functionDefs[expr.value];
+      if (fnDef) {
+        return {
+          type: "functionRefType",
+          name: expr.value,
+          params: fnDef.parameters,
+          returnType: fnDef.returnType ?? null,
+          returnTypeValidated: fnDef.returnTypeValidated,
+        };
+      }
+      const nodeDef = ctx.nodeDefs[expr.value];
+      if (nodeDef) {
+        return {
+          type: "functionRefType",
+          name: expr.value,
+          params: nodeDef.parameters,
+          returnType: nodeDef.returnType ?? null,
+          returnTypeValidated: nodeDef.returnTypeValidated,
+        };
+      }
+      const imported = ctx.importedFunctions[expr.value];
+      if (imported) {
+        return {
+          type: "functionRefType",
+          name: expr.value,
+          params: imported.parameters,
+          returnType: imported.returnType ?? null,
+        };
+      }
+      return "any";
     }
     case "number":
     case "unitLiteral":
@@ -198,33 +229,25 @@ function synthPipe(
 }
 
 /**
- * The RHS of `|>` may be a function reference (`variableName`) — synthType
- * on a bare identifier only consults `scope.lookup`, which returns "any"
- * for top-level function names. Resolve via functionDefs / nodeDefs /
- * importedFunctions so `... |> half` types as `Result<halfReturn>` rather
- * than `any`. Other RHS forms (function calls, etc.) fall through to
- * regular synth.
+ * The RHS of `|>` may be a function reference — synthType now produces a
+ * functionRefType for bare identifiers, so we extract the return type from
+ * it and apply Result wrapping.
  */
 function synthPipeRhs(
   rhs: AgencyNode,
   scope: Scope,
   ctx: TypeCheckerContext,
 ): VariableType | "any" {
-  if (rhs.type === "variableName") {
-    const name = rhs.value;
-    const def = ctx.functionDefs[name] ?? ctx.nodeDefs[name];
-    const importedSig = ctx.importedFunctions[name];
-    // Pipes inherit Result wrapping like direct calls — apply the bang at
-    // the call-site read so `... |> half` types as `Result<halfReturn>`.
-    const fnReturn =
-      (def?.returnType &&
-        resultTypeForValidation(def.returnType, def.returnTypeValidated)) ??
-      ctx.inferredReturnTypes[name] ??
-      (importedSig?.returnType &&
-        resultTypeForValidation(importedSig.returnType, undefined));
-    if (fnReturn) return fnReturn;
+  const rhsType = synthType(rhs, scope, ctx);
+  if (rhsType !== "any" && rhsType.type === "functionRefType") {
+    const returnType =
+      rhsType.returnType ??
+      (ctx.inferredReturnTypes[rhsType.name] !== "any"
+        ? (ctx.inferredReturnTypes[rhsType.name] as VariableType | undefined)
+        : undefined);
+    if (returnType) return resultTypeForValidation(returnType, rhsType.returnTypeValidated);
   }
-  return synthType(rhs, scope, ctx);
+  return rhsType;
 }
 
 function synthFunctionCall(
@@ -289,17 +312,20 @@ function synthArray(
   }
   const concreteTypes = itemTypes.filter((t) => t !== "any");
   if (concreteTypes.length === 0) return "any";
-  const typeAliases = ctx.getTypeAliases();
-  const first = concreteTypes[0];
-  const allSame = concreteTypes.every(
-    (t) =>
-      isAssignable(t, first, typeAliases) &&
-      isAssignable(first, t, typeAliases),
-  );
-  if (allSame) {
-    return { type: "arrayType", elementType: first };
+  if (concreteTypes.length === 1) {
+    return { type: "arrayType", elementType: concreteTypes[0] };
   }
-  return "any";
+  // Deduplicate structurally identical types
+  const seen = new Map<string, VariableType>();
+  for (const t of concreteTypes) {
+    const key = JSON.stringify(t);
+    if (!seen.has(key)) seen.set(key, t);
+  }
+  const unique = Array.from(seen.values());
+  const elementType = unique.length === 1
+    ? unique[0]
+    : { type: "unionType" as const, types: unique };
+  return { type: "arrayType", elementType };
 }
 
 function synthObject(

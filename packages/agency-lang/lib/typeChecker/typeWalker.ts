@@ -28,6 +28,11 @@ export function visitTypes(
       for (const p of t.params)
         if (visitTypes(p.typeAnnotation, visit)) return true;
       return visitTypes(t.returnType, visit);
+    case "functionRefType":
+      for (const p of t.params) {
+        if (p.typeHint && visitTypes(p.typeHint, visit)) return true;
+      }
+      return t.returnType ? visitTypes(t.returnType, visit) : false;
     default:
       return false;
   }

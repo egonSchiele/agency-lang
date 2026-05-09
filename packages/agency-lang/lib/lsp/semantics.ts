@@ -171,9 +171,10 @@ export function buildSemanticIndex(
   program: AgencyProgram,
   fsPath: string,
   symbolTable: SymbolTable,
+  interruptKindsByFunction?: Record<string, InterruptKind[]>,
 ): SemanticIndex {
   const index: SemanticIndex = {};
-  const fileSymbols = symbolTable.getFile(fsPath);
+  const fileSymbols = enrichWithInterruptKinds(symbolTable.getFile(fsPath), interruptKindsByFunction);
 
   for (const node of program.nodes) {
     if (
@@ -188,7 +189,33 @@ export function buildSemanticIndex(
 
   Object.assign(index, collectImportedSymbols(program, fsPath, symbolTable));
 
+  // Overlay transitive interrupt kinds onto imported symbols
+  if (interruptKindsByFunction) {
+    for (const [name, sym] of Object.entries(index)) {
+      if (sym.source === "imported" && interruptKindsByFunction[name]) {
+        index[name] = { ...sym, interruptKinds: interruptKindsByFunction[name] };
+      }
+    }
+  }
+
   return index;
+}
+
+/** Merge transitive interrupt kinds into a copy of file symbols. */
+function enrichWithInterruptKinds(
+  fileSymbols: FileSymbols | undefined,
+  interruptKindsByFunction?: Record<string, InterruptKind[]>,
+): FileSymbols | undefined {
+  if (!fileSymbols || !interruptKindsByFunction) return fileSymbols;
+  const enriched: FileSymbols = {};
+  for (const [name, sym] of Object.entries(fileSymbols)) {
+    if ((sym.kind === "function" || sym.kind === "node") && interruptKindsByFunction[name]) {
+      enriched[name] = { ...sym, interruptKinds: interruptKindsByFunction[name] };
+    } else {
+      enriched[name] = sym;
+    }
+  }
+  return enriched;
 }
 
 export function lookupSemanticSymbol(

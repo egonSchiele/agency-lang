@@ -143,6 +143,44 @@ greet("world")`;
     }
   });
 
+  it("shows transitive interrupt kinds in hover", () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "agency-hover-trans-"));
+    try {
+      const mainFile = path.join(tmpDir, "main.agency");
+      const source = [
+        "def deploy() {",
+        '  interrupt myapp::deploy("Deploy?")',
+        "}",
+        "def orchestrate() {",
+        "  deploy()",
+        "}",
+        "",
+        "node main() {",
+        "  orchestrate()",
+        "}",
+        "",
+      ].join("\n");
+      fs.writeFileSync(mainFile, source);
+
+      const doc = makeDoc(source, `file://${mainFile}`);
+      const symbolTable = SymbolTable.build(mainFile, {});
+      const { semanticIndex } = runDiagnostics(doc, mainFile, {}, symbolTable);
+      // Hover over "orchestrate" in main — should show transitive interrupt kinds
+      const result = handleHover(
+        { textDocument: { uri: doc.uri }, position: { line: 8, character: 2 } },
+        doc,
+        semanticIndex,
+      );
+
+      const value = (result?.contents as any)?.value ?? "";
+      expect(value).toContain("def orchestrate()");
+      expect(value).toContain("**Interrupts:**");
+      expect(value).toContain("`myapp::deploy`");
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
   it("returns null when not on an identifier", () => {
     const doc = makeDoc("let x: number = 5");
     const { semanticIndex } = runDiagnostics(

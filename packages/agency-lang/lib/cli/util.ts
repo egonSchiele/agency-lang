@@ -341,6 +341,13 @@ export function formatTypeHint(
       if (s === "any" && f === "any") return "Result";
       return `Result<${s}, ${f}>`;
     }
+    case "functionRefType": {
+      const params = vt.params
+        .map((p) => `${p.name}${p.typeHint ? `: ${recurse(p.typeHint)}` : ""}`)
+        .join(", ");
+      const ret = vt.returnType ? `: ${recurse(vt.returnType)}` : "";
+      return `function ${vt.name}(${params})${ret}`;
+    }
     default:
       throw new Error(`Unknown variable type: ${(vt as any).type}`);
   }

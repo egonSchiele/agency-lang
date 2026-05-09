@@ -49,6 +49,13 @@ describe("primitiveTypeParser", () => {
       },
     },
     {
+      input: "function",
+      expected: {
+        success: true,
+        result: { type: "primitiveType", value: "function" },
+      },
+    },
+    {
       input: "invalid",
       expected: { success: false },
     },

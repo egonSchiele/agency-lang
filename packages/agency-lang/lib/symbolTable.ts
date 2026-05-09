@@ -3,6 +3,7 @@ import * as path from "path";
 import { parseAgency } from "./parser.js";
 import type { AgencyConfig } from "./config.js";
 import type {
+  AgencyNode,
   AgencyProgram,
   FunctionParameter,
   VariableType,
@@ -18,7 +19,6 @@ import {
   isAgencyImport,
   getStdlibDir,
 } from "./importPaths.js";
-import { analyzeInterrupts } from "./interruptAnalyzer.js";
 
 export type InterruptKind = {
   kind: string;
@@ -141,8 +141,11 @@ export class SymbolTable {
     }
 
     visit(entrypoint);
-    const analyzedFiles = analyzeInterrupts(parsed);
-    return new SymbolTable(analyzedFiles);
+    const files: Record<string, FileSymbols> = {};
+    for (const [filePath, { symbols }] of Object.entries(parsed)) {
+      files[filePath] = symbols;
+    }
+    return new SymbolTable(files);
   }
 
   has(absPath: string): boolean {
@@ -228,6 +231,7 @@ export function classifySymbols(program: AgencyProgram): FileSymbols {
           returnType: node.returnType ?? null,
           returnTypeValidated: node.returnTypeValidated,
           exported: !!node.exported,
+          interruptKinds: collectDirectInterruptKinds(node.body),
         };
         break;
       case "function":
@@ -240,6 +244,7 @@ export function classifySymbols(program: AgencyProgram): FileSymbols {
           parameters: node.parameters,
           returnType: node.returnType ?? null,
           returnTypeValidated: node.returnTypeValidated,
+          interruptKinds: collectDirectInterruptKinds(node.body),
         };
         break;
       case "typeAlias":
@@ -272,4 +277,14 @@ export function classifySymbols(program: AgencyProgram): FileSymbols {
   }
 
   return symbols;
+}
+
+function collectDirectInterruptKinds(body: AgencyNode[]): InterruptKind[] {
+  const kinds: string[] = [];
+  for (const { node } of walkNodes(body)) {
+    if (node.type === "interruptStatement" && !kinds.includes(node.kind)) {
+      kinds.push(node.kind);
+    }
+  }
+  return kinds.map((k) => ({ kind: k }));
 }

@@ -1283,9 +1283,9 @@ describe("TypeChecker", () => {
         ],
       };
 
-      // Mixed array infers any, so no type error (any is assignable to number)
+      // Mixed array infers (number | string)[], which is not assignable to number[]
       const { errors } = typeCheck(program);
-      expect(errors).toHaveLength(0);
+      expect(errors).toHaveLength(1);
     });
   });
 

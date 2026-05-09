@@ -1,6 +1,6 @@
 import { getWordAtPosition } from "../cli/definition.js";
 import { formatTypeHint } from "../cli/util.js";
-import type { InterruptKind, SymbolInfo, SymbolKind, SymbolTable } from "../symbolTable.js";
+import type { FileSymbols, InterruptKind, SymbolInfo, SymbolKind, SymbolTable } from "../symbolTable.js";
 import type {
   AgencyProgram,
   ClassDefinition,
@@ -31,16 +31,20 @@ function addSymbol(index: SemanticIndex, symbol: SemanticSymbol): void {
   index[symbol.name] = symbol;
 }
 
+function interruptKindsFor(fileSymbols: FileSymbols | undefined, name: string): InterruptKind[] | undefined {
+  const sym = fileSymbols?.[name];
+  if (sym?.kind === "function" || sym?.kind === "node") return sym.interruptKinds;
+  return undefined;
+}
+
 function addLocalDefinition(
   index: SemanticIndex,
   fsPath: string,
   node: FunctionDefinition | GraphNodeDefinition | TypeAlias | ClassDefinition,
-  symbolTable: SymbolTable,
+  fileSymbols: FileSymbols | undefined,
 ): void {
-  const fileSymbols = symbolTable.getFile(fsPath);
   switch (node.type) {
-    case "function": {
-      const sym = fileSymbols?.[node.functionName];
+    case "function":
       addSymbol(index, {
         name: node.functionName,
         originalName: node.functionName,
@@ -50,12 +54,10 @@ function addLocalDefinition(
         loc: node.loc,
         parameters: node.parameters,
         returnType: node.returnType,
-        interruptKinds: sym?.kind === "function" ? sym.interruptKinds : undefined,
+        interruptKinds: interruptKindsFor(fileSymbols, node.functionName),
       });
       break;
-    }
-    case "graphNode": {
-      const sym = fileSymbols?.[node.nodeName];
+    case "graphNode":
       addSymbol(index, {
         name: node.nodeName,
         originalName: node.nodeName,
@@ -65,10 +67,9 @@ function addLocalDefinition(
         loc: node.loc,
         parameters: node.parameters,
         returnType: node.returnType,
-        interruptKinds: sym?.kind === "node" ? sym.interruptKinds : undefined,
+        interruptKinds: interruptKindsFor(fileSymbols, node.nodeName),
       });
       break;
-    }
     case "typeAlias":
       addSymbol(index, {
         name: node.aliasName,
@@ -172,6 +173,7 @@ export function buildSemanticIndex(
   symbolTable: SymbolTable,
 ): SemanticIndex {
   const index: SemanticIndex = {};
+  const fileSymbols = symbolTable.getFile(fsPath);
 
   for (const node of program.nodes) {
     if (
@@ -180,7 +182,7 @@ export function buildSemanticIndex(
       node.type === "typeAlias" ||
       node.type === "classDefinition"
     ) {
-      addLocalDefinition(index, fsPath, node, symbolTable);
+      addLocalDefinition(index, fsPath, node, fileSymbols);
     }
   }
 

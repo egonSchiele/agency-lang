@@ -127,32 +127,40 @@ export async function _run(
       if (msg.type === "interrupt") {
         const { kind, message, data, origin } = msg.interrupt;
 
-        const handlerResult = await interruptWithHandlers(
-          kind,
-          message,
-          data,
-          origin,
-          ctx,
-          stateStack,
-        );
+        try {
+          const handlerResult = await interruptWithHandlers(
+            kind,
+            message,
+            data,
+            origin,
+            ctx,
+            stateStack,
+          );
 
-        if (isApproved(handlerResult)) {
-          child.send({
-            type: "decision",
-            approved: true,
-            value: (handlerResult as any).value,
-          });
-        } else if (hasInterrupts(handlerResult)) {
+          if (isApproved(handlerResult)) {
+            child.send({
+              type: "decision",
+              approved: true,
+              value: (handlerResult as any).value,
+            });
+          } else if (hasInterrupts(handlerResult)) {
+            child.send({
+              type: "decision",
+              approved: false,
+              value: "Interrupt propagated to user (subprocess slow-path not yet supported)",
+            });
+          } else {
+            child.send({
+              type: "decision",
+              approved: false,
+              value: (handlerResult as any).value,
+            });
+          }
+        } catch (err) {
           child.send({
             type: "decision",
             approved: false,
-            value: "Interrupt propagated to user (subprocess slow-path not yet supported)",
-          });
-        } else {
-          child.send({
-            type: "decision",
-            approved: false,
-            value: (handlerResult as any).value,
+            value: `Parent handler error: ${err instanceof Error ? err.message : String(err)}`,
           });
         }
       } else if (msg.type === "result") {

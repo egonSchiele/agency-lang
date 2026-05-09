@@ -75,17 +75,26 @@ function propagateTransitively(profiles: Record<string, FunctionProfile>): void 
   while (changed) {
     changed = false;
     for (const profile of Object.values(profiles)) {
-      for (const callee of profile.callees) {
-        const calleeKinds = profiles[callee]?.kinds ?? [];
-        for (const kind of calleeKinds) {
-          if (!profile.kinds.includes(kind)) {
-            profile.kinds.push(kind);
-            changed = true;
-          }
-        }
+      if (propagateFromCallees(profile, profiles)) changed = true;
+    }
+  }
+}
+
+function propagateFromCallees(
+  profile: FunctionProfile,
+  profiles: Record<string, FunctionProfile>,
+): boolean {
+  let grew = false;
+  for (const callee of profile.callees) {
+    const calleeKinds = profiles[callee]?.kinds ?? [];
+    for (const kind of calleeKinds) {
+      if (!profile.kinds.includes(kind)) {
+        profile.kinds.push(kind);
+        grew = true;
       }
     }
   }
+  return grew;
 }
 
 // -- Phase 3: Format --

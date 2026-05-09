@@ -59,9 +59,12 @@ const bootstrapHandler = async (msg: RunInstruction) => {
     }
 
     ipcLog("send", { type: "log", detail: `calling node ${msg.node}` });
-    // Call the exported node function (e.g., main({ data, callbacks }))
-    // This calls runNode() internally, which uses __globalCtx.
-    const result = await nodeFn({ data: msg.args });
+    // Compiled nodes export a params list as __<nodeName>NodeParams.
+    // Node args are positional: main(name, { messages, callbacks }).
+    const paramsKey = `__${msg.node}NodeParams`;
+    const paramNames: string[] = mod[paramsKey] ?? [];
+    const positionalArgs = paramNames.map((p: string) => msg.args[p]);
+    const result = await nodeFn(...positionalArgs);
     ipcLog("send", { type: "log", detail: `node ${msg.node} returned` });
 
     const resultMsg = {

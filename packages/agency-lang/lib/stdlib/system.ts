@@ -19,6 +19,10 @@ export function _env(name: string): string | null {
   return v === undefined ? null : v;
 }
 
+export function _exit(code: number): void {
+  process.exit(code);
+}
+
 export function _setEnv(name: string, value: string): void {
   if (name.length === 0) {
     throw new Error("setEnv: name must not be empty");

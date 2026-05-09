@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Subprocess with two sequential interrupts both get approved via IPC",
+      "input": "",
+      "expectedOutput": "\"first\\nsecond\\n\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

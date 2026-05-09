@@ -1,0 +1,33 @@
+import { compile, run } from "std::agency"
+
+// Subprocess hits two sequential bash interrupts.
+// Verifies the IPC loop handles multiple round-trips.
+node main() {
+  const source = """
+import { bash } from "std::shell"
+node main() {
+  handle {
+    let r1 = bash("echo first")
+    let r2 = bash("echo second")
+    return r1.stdout + r2.stdout
+  } with (data) {
+    return approve()
+  }
+}
+"""
+  const compileResult = compile(source)
+  if (isFailure(compileResult)) {
+    return "compile failed"
+  }
+  const compiled = compileResult.value
+
+  handle {
+    const result = run(compiled, { node: "main", args: {} })
+    if (isSuccess(result)) {
+      return result.value.data
+    }
+    return "run failed"
+  } with (data) {
+    return approve()
+  }
+}

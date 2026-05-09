@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Arguments are passed through to the subprocess node",
+      "input": "",
+      "expectedOutput": "\"hello world\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

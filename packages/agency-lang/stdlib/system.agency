@@ -1,4 +1,4 @@
-import { _args, _screenshot, _cwd, _env, _setEnv, _openUrl } from "agency-lang/stdlib-lib/system.js"
+import { _args, _screenshot, _cwd, _env, _setEnv, _openUrl, _exit } from "agency-lang/stdlib-lib/system.js"
 
 export def screenshot(filepath: string, x: number = -1, y: number = -1, width: number = -1, height: number = -1) {
   """
@@ -15,6 +15,17 @@ export def screenshot(filepath: string, x: number = -1, y: number = -1, width: n
   })
 
   _screenshot(filepath, x, y, width, height)
+}
+
+export def exit(code: number = 0) {
+  """
+  Terminate the process immediately with the given exit code. Use with caution — this skips any cleanup or pending operations.
+  @param code - Exit code (0 for success, non-zero for failure)
+  """
+  return interrupt std::exit("Are you sure you want to exit the process?", {
+    code: code
+  })
+  _exit(code)
 }
 
 export safe def args(): string[] {

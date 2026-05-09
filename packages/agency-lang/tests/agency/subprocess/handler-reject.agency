@@ -1,18 +1,16 @@
 import { compile, run } from "std::agency"
 
+// The subprocess has NO handler — it relies entirely on IPC to reach the parent.
+// The parent rejects std::bash, proving rejection crosses the process boundary.
 node main() {
   const source = """
 import { bash } from "std::shell"
 node main() {
-  handle {
-    let result = bash("echo hi")
-    if (isFailure(result)) {
-      return "bash was rejected"
-    }
-    return "bash succeeded"
-  } with (data) {
-    return approve()
+  let result = bash("echo hi")
+  if (isFailure(result)) {
+    return "bash was rejected"
   }
+  return "bash succeeded"
 }
 """
   const compileResult = compile(source)

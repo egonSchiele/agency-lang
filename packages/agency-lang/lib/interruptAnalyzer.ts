@@ -9,20 +9,14 @@ export type FileInput = {
   program: AgencyProgram;
 };
 
-/** Maps function/node name to its interrupt kind strings. */
-type KindsByFunction = Record<string, string[]>;
+type FunctionName = string;
+type FilePath = string;
 
-/** Maps file path to its per-function interrupt kinds. */
-type KindsByFile = Record<string, KindsByFunction>;
-
-/** Maps function/node name to the names of functions it calls. */
-type CallGraph = Record<string, string[]>;
-
-/** Maps file path to its per-function call graph. */
-type CallGraphByFile = Record<string, CallGraph>;
-
-/** Maps local alias name to original function name. */
-type AliasMap = Record<string, string>;
+type KindsByFunction = Record<FunctionName, string[]>;
+type KindsByFile = Record<FilePath, KindsByFunction>;
+type CallGraph = Record<FunctionName, FunctionName[]>;
+type CallGraphByFile = Record<FilePath, CallGraph>;
+type AliasMap = Record<FunctionName, FunctionName>;
 
 /**
  * Analyze all files and return new FileSymbols with interruptKinds populated
@@ -80,32 +74,26 @@ function collectFromProgram(
   return { kinds, callGraph };
 }
 
-function addUnique(arr: string[], value: string): void {
-  if (!arr.includes(value)) {
-    arr.push(value);
-  }
-}
-
 function collectFromBody(
   body: AgencyNode[],
 ): { interruptKinds: string[]; callees: string[] } {
-  const interruptKinds: string[] = [];
-  const callees: string[] = [];
+  const interruptKinds = new Set<string>();
+  const callees = new Set<string>();
   for (const { node } of walkNodes(body)) {
     if (node.type === "interruptStatement") {
-      addUnique(interruptKinds, node.kind);
+      interruptKinds.add(node.kind);
     } else if (node.type === "functionCall") {
-      addUnique(callees, node.functionName);
+      callees.add(node.functionName);
       if (node.functionName === "llm") {
         for (const name of extractToolsFromLlmCall(node, body)) {
-          addUnique(callees, name);
+          callees.add(name);
         }
       }
     } else if (node.type === "gotoStatement") {
-      addUnique(callees, node.nodeCall.functionName);
+      callees.add(node.nodeCall.functionName);
     }
   }
-  return { interruptKinds, callees };
+  return { interruptKinds: [...interruptKinds], callees: [...callees] };
 }
 
 function isSplatEntry(e: AgencyObjectKV | SplatExpression): e is SplatExpression {
@@ -146,6 +134,7 @@ function extractNamesFromArrayItems(arr: AgencyArray): string[] {
     if (item.type === "variableName") {
       names.push(item.value);
     } else if (item.type === "valueAccess" && item.base.type === "variableName") {
+      // Handles deploy.partial(env: "prod") — base is the original function name
       names.push(item.base.value);
     }
   }
@@ -184,10 +173,15 @@ function lookupCalleeKinds(
   return [];
 }
 
+/**
+ * Fixed-point iteration: for each function, union in the interrupt kinds of
+ * all its callees. Repeat until no function gains new kinds. Converges because
+ * sets only grow and the total number of distinct kinds is finite.
+ */
 function resolveTransitiveInterrupts(
   kindsByFile: KindsByFile,
   callGraphByFile: CallGraphByFile,
-  aliasMaps: Record<string, AliasMap>,
+  aliasMaps: Record<FilePath, AliasMap>,
 ): void {
   let changed = true;
   while (changed) {
@@ -196,21 +190,35 @@ function resolveTransitiveInterrupts(
       const kinds = kindsByFile[filePath];
       const aliasMap = aliasMaps[filePath] ?? {};
       for (const [funcName, callees] of Object.entries(callGraph)) {
-        const currentKinds = kinds[funcName] ?? [];
-        for (const calleeName of callees) {
-          const resolved = resolveCalleeName(calleeName, aliasMap);
-          const calleeKinds = lookupCalleeKinds(resolved, kinds, kindsByFile);
-          for (const kind of calleeKinds) {
-            if (!currentKinds.includes(kind)) {
-              currentKinds.push(kind);
-              changed = true;
-            }
-          }
+        if (propagateFromCallees(funcName, callees, aliasMap, kinds, kindsByFile)) {
+          changed = true;
         }
-        kinds[funcName] = currentKinds;
       }
     }
   }
+}
+
+function propagateFromCallees(
+  funcName: FunctionName,
+  callees: FunctionName[],
+  aliasMap: AliasMap,
+  localKinds: KindsByFunction,
+  kindsByFile: KindsByFile,
+): boolean {
+  const currentKinds = localKinds[funcName] ?? [];
+  let grew = false;
+  for (const calleeName of callees) {
+    const resolved = resolveCalleeName(calleeName, aliasMap);
+    const calleeKinds = lookupCalleeKinds(resolved, localKinds, kindsByFile);
+    for (const kind of calleeKinds) {
+      if (!currentKinds.includes(kind)) {
+        currentKinds.push(kind);
+        grew = true;
+      }
+    }
+  }
+  localKinds[funcName] = currentKinds;
+  return grew;
 }
 
 function attachInterruptKinds(

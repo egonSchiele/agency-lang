@@ -121,8 +121,10 @@ function functionRefsInArgs(
 ): string[] {
   const names: string[] = [];
   for (const arg of args) {
-    if (arg.type === "splat" || arg.type === "namedArgument") continue;
-    functionNamesFromType(synthType(arg, scope, ctx), names);
+    const expr = arg.type === "splat" ? arg.value
+      : arg.type === "namedArgument" ? arg.value
+      : arg;
+    functionNamesFromType(synthType(expr, scope, ctx), names);
   }
   return names;
 }

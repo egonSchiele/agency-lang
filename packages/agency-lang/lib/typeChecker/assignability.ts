@@ -249,6 +249,9 @@ export function isAssignable(
     resolvedSource.type === "functionRefType" &&
     resolvedTarget.type === "functionRefType"
   ) {
+    const sourceVariadic = resolvedSource.params.some((p) => p.variadic);
+    const targetVariadic = resolvedTarget.params.some((p) => p.variadic);
+    if (sourceVariadic !== targetVariadic) return false;
     const sourceParams = resolvedSource.params.filter((p) => !p.variadic);
     const targetParams = resolvedTarget.params.filter((p) => !p.variadic);
     if (sourceParams.length !== targetParams.length) return false;

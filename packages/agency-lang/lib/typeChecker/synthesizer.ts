@@ -240,7 +240,11 @@ function synthPipeRhs(
 ): VariableType | "any" {
   const rhsType = synthType(rhs, scope, ctx);
   if (rhsType !== "any" && rhsType.type === "functionRefType") {
-    const returnType = rhsType.returnType;
+    const returnType =
+      rhsType.returnType ??
+      (ctx.inferredReturnTypes[rhsType.name] !== "any"
+        ? (ctx.inferredReturnTypes[rhsType.name] as VariableType | undefined)
+        : undefined);
     if (returnType) return resultTypeForValidation(returnType, rhsType.returnTypeValidated);
   }
   return rhsType;

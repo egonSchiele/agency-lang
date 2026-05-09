@@ -1,6 +1,13 @@
 import process from "process";
+import type { InterruptKind } from "../../symbolTable.js";
 import type { ExportedFunction, ExportedItem } from "../types.js";
 import { errorMessage } from "../util.js";
+
+function formatToolDescription(description: string, interruptKinds: InterruptKind[]): string {
+  if (interruptKinds.length === 0) return description;
+  const kinds = interruptKinds.map((ik) => ik.kind).join(", ");
+  return `${description}\n\nInterrupt kinds: ${kinds}`;
+}
 
 type JsonRpcId = string | number | null;
 
@@ -46,7 +53,7 @@ export function createMcpHandler(
 
   const toolsListPayload = tools.map((t) => ({
     name: t.name,
-    description: t.description,
+    description: formatToolDescription(t.description, t.interruptKinds),
     inputSchema: schemaToJsonSchema(t.agencyFunction.toolDefinition?.schema),
     ...(t.agencyFunction.safe ? { annotations: { readOnlyHint: true } } : {}),
   }));

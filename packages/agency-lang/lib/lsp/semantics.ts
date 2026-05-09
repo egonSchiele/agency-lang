@@ -1,6 +1,6 @@
 import { getWordAtPosition } from "../cli/definition.js";
 import { formatTypeHint } from "../cli/util.js";
-import type { SymbolInfo, SymbolKind, SymbolTable } from "../symbolTable.js";
+import type { FileSymbols, InterruptKind, SymbolInfo, SymbolKind, SymbolTable } from "../symbolTable.js";
 import type {
   AgencyProgram,
   ClassDefinition,
@@ -22,6 +22,7 @@ export type SemanticSymbol = {
   returnType?: VariableType | null;
   aliasedType?: VariableType;
   importPath?: string;
+  interruptKinds?: InterruptKind[];
 };
 
 export type SemanticIndex = Record<string, SemanticSymbol>;
@@ -30,10 +31,17 @@ function addSymbol(index: SemanticIndex, symbol: SemanticSymbol): void {
   index[symbol.name] = symbol;
 }
 
+function interruptKindsFor(fileSymbols: FileSymbols | undefined, name: string): InterruptKind[] | undefined {
+  const sym = fileSymbols?.[name];
+  if (sym?.kind === "function" || sym?.kind === "node") return sym.interruptKinds;
+  return undefined;
+}
+
 function addLocalDefinition(
   index: SemanticIndex,
   fsPath: string,
   node: FunctionDefinition | GraphNodeDefinition | TypeAlias | ClassDefinition,
+  fileSymbols: FileSymbols | undefined,
 ): void {
   switch (node.type) {
     case "function":
@@ -46,6 +54,7 @@ function addLocalDefinition(
         loc: node.loc,
         parameters: node.parameters,
         returnType: node.returnType,
+        interruptKinds: interruptKindsFor(fileSymbols, node.functionName),
       });
       break;
     case "graphNode":
@@ -58,6 +67,7 @@ function addLocalDefinition(
         loc: node.loc,
         parameters: node.parameters,
         returnType: node.returnType,
+        interruptKinds: interruptKindsFor(fileSymbols, node.nodeName),
       });
       break;
     case "typeAlias":
@@ -107,6 +117,7 @@ function addImportedSymbol(
     returnType: isCallable ? sym.returnType : undefined,
     aliasedType: sym.kind === "type" ? sym.aliasedType : undefined,
     importPath: opts.importPath,
+    interruptKinds: isCallable ? sym.interruptKinds : undefined,
   });
 }
 
@@ -162,6 +173,7 @@ export function buildSemanticIndex(
   symbolTable: SymbolTable,
 ): SemanticIndex {
   const index: SemanticIndex = {};
+  const fileSymbols = symbolTable.getFile(fsPath);
 
   for (const node of program.nodes) {
     if (
@@ -170,7 +182,7 @@ export function buildSemanticIndex(
       node.type === "typeAlias" ||
       node.type === "classDefinition"
     ) {
-      addLocalDefinition(index, fsPath, node);
+      addLocalDefinition(index, fsPath, node, fileSymbols);
     }
   }
 
@@ -233,15 +245,22 @@ function formatSignature(symbol: SemanticSymbol): string {
   }
 }
 
+function formatInterruptKinds(interruptKinds: InterruptKind[] | undefined): string {
+  if (!interruptKinds || interruptKinds.length === 0) return "";
+  const kinds = interruptKinds.map((ik) => `\`${ik.kind}\``).join(", ");
+  return `\n\n**Interrupts:** ${kinds}`;
+}
+
 export function formatSemanticHover(symbol: SemanticSymbol): string {
   const signature = formatSignature(symbol);
   const codeBlock = `\`\`\`typescript\n${signature}\n\`\`\``;
+  const interrupts = formatInterruptKinds(symbol.interruptKinds);
   if (symbol.source === "local") {
-    return codeBlock;
+    return `${codeBlock}${interrupts}`;
   }
 
   const aliasNote = symbol.originalName !== symbol.name
     ? ` as \`${symbol.originalName}\``
     : "";
-  return `${codeBlock}\n\nImported from \`${symbol.importPath}\`${aliasNote}`;
+  return `${codeBlock}\n\nImported from \`${symbol.importPath}\`${aliasNote}${interrupts}`;
 }

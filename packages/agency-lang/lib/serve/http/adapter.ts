@@ -118,10 +118,12 @@ export function createHttpHandler(config: HttpConfig): (
             name: f.name,
             description: f.description,
             safe: f.agencyFunction.safe,
+            interruptKinds: f.interruptKinds.map((ik) => ik.kind),
           })),
           nodes: Object.values(nodes).map((n) => ({
             name: n.name,
             parameters: n.parameters.map((p) => p.name),
+            interruptKinds: n.interruptKinds.map((ik) => ik.kind),
           })),
         },
       };

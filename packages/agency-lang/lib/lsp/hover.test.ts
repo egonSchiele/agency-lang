@@ -109,6 +109,40 @@ greet("world")`;
     expect(value).toContain("name");
   });
 
+  it("shows interrupt kinds in hover for function with interrupts", () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "agency-hover-int-"));
+    try {
+      const mainFile = path.join(tmpDir, "main.agency");
+      const source = [
+        "def deploy() {",
+        '  interrupt myapp::deploy("Deploy?")',
+        "}",
+        "",
+        "node main() {",
+        "  deploy()",
+        "}",
+        "",
+      ].join("\n");
+      fs.writeFileSync(mainFile, source);
+
+      const doc = makeDoc(source, `file://${mainFile}`);
+      const symbolTable = SymbolTable.build(mainFile, {});
+      const { semanticIndex } = runDiagnostics(doc, mainFile, {}, symbolTable);
+      const result = handleHover(
+        { textDocument: { uri: doc.uri }, position: { line: 5, character: 2 } },
+        doc,
+        semanticIndex,
+      );
+
+      const value = (result?.contents as any)?.value ?? "";
+      expect(value).toContain("def deploy()");
+      expect(value).toContain("**Interrupts:**");
+      expect(value).toContain("`myapp::deploy`");
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
   it("returns null when not on an identifier", () => {
     const doc = makeDoc("let x: number = 5");
     const { semanticIndex } = runDiagnostics(

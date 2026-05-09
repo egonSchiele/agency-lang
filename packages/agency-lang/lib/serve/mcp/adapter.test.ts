@@ -32,6 +32,7 @@ function makeTestExports(): ExportedItem[] {
       name: "add",
       description: "Add two numbers",
       agencyFunction: addFn,
+      interruptKinds: [],
     },
   ];
 }
@@ -116,5 +117,43 @@ describe("MCP adapter", () => {
     });
     expect(response).toBeTruthy();
     expect(response!.error.code).toBe(-32601);
+  });
+
+  it("appends interrupt kinds to tool description", async () => {
+    const registry: Record<string, AgencyFunction> = {};
+    const deployFn = AgencyFunction.create(
+      {
+        name: "deploy",
+        module: "test",
+        fn: async () => {},
+        params: [],
+        toolDefinition: { name: "deploy", description: "Deploy app", schema: null },
+        exported: true,
+        safe: false,
+      },
+      registry,
+    );
+    const interruptHandler = createMcpHandler({
+      serverName: "test",
+      serverVersion: "1.0.0",
+      exports: [
+        {
+          kind: "function",
+          name: "deploy",
+          description: "Deploy app",
+          agencyFunction: deployFn,
+          interruptKinds: [{ kind: "myapp::deploy" }, { kind: "myapp::approve" }],
+        },
+      ],
+    });
+    const response = await interruptHandler({
+      jsonrpc: "2.0",
+      id: 10,
+      method: "tools/list",
+    });
+    const tools = response!.result.tools;
+    expect(tools[0].description).toBe(
+      "Deploy app\n\nInterrupt kinds: myapp::deploy, myapp::approve",
+    );
   });
 });

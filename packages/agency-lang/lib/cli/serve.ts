@@ -9,12 +9,14 @@ import { startHttpServer } from "../serve/http/adapter.js";
 import { createLogger } from "../logger.js";
 import { VERSION } from "../version.js";
 import type { ExportedItem } from "../serve/types.js";
+import type { InterruptKind } from "../symbolTable.js";
 import * as esbuild from "esbuild";
 
 type CompileResult = {
   outputPath: string;
   moduleId: string;
   exportedNodeNames: string[];
+  interruptKindsByName: Record<string, InterruptKind[]>;
 };
 
 function compileForServe(file: string): CompileResult {
@@ -32,8 +34,15 @@ function compileForServe(file: string): CompileResult {
     .filter((sym) => sym.kind === "node" && sym.exported)
     .map((sym) => sym.name);
 
+  const interruptKindsByName: Record<string, InterruptKind[]> = {};
+  for (const [name, sym] of Object.entries(fileSymbols ?? {})) {
+    if ((sym.kind === "function" || sym.kind === "node") && sym.interruptKinds) {
+      interruptKindsByName[name] = sym.interruptKinds;
+    }
+  }
+
   const moduleId = path.relative(process.cwd(), absoluteFile);
-  return { outputPath, moduleId, exportedNodeNames };
+  return { outputPath, moduleId, exportedNodeNames, interruptKindsByName };
 }
 
 async function loadAndDiscover(
@@ -51,6 +60,7 @@ async function loadAndDiscover(
     moduleExports,
     moduleId: compileResult.moduleId,
     exportedNodeNames: compileResult.exportedNodeNames,
+    interruptKindsByName: compileResult.interruptKindsByName,
   });
 
   return { exports, moduleExports };

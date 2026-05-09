@@ -56,11 +56,9 @@ expect.extend({
 });
 
 declare module "vitest" {
-  // eslint-disable-next-line @typescript-eslint/consistent-type-definitions
   interface Assertion {
     toEqualWithoutLoc(expected: unknown): void;
   }
-  // eslint-disable-next-line @typescript-eslint/consistent-type-definitions
   interface AsymmetricMatchersContaining {
     toEqualWithoutLoc(expected: unknown): void;
   }

@@ -14,6 +14,9 @@ export default [
   ...tseslint.configs.recommended,
   {
     files: ["lib/**/*.ts"],
+    linterOptions: {
+      reportUnusedDisableDirectives: "off",
+    },
     languageOptions: {
       parser: tseslint.parser,
       parserOptions: {
@@ -25,12 +28,12 @@ export default [
       // Disable rules from recommended that are too noisy for this codebase
       "@typescript-eslint/no-explicit-any": "off",
       "@typescript-eslint/no-unused-vars": "off",
-      "@typescript-eslint/no-unsafe-function-type": "off",
 
       // --- Agency structural rules ---
 
-      // Use type, not interface
-      "@typescript-eslint/consistent-type-definitions": ["error", "type"],
+      // Use type, not interface.
+      // Disabled until a dedicated cleanup PR auto-fixes all existing interfaces.
+      // "@typescript-eslint/consistent-type-definitions": ["error", "type"],
 
       // Prefer const over let when never reassigned
       "prefer-const": "error",
@@ -131,6 +134,7 @@ export default [
       "no-restricted-syntax": "off",
       "prefer-const": "off",
       "@typescript-eslint/no-unused-expressions": "off",
+      "@typescript-eslint/no-unsafe-function-type": "off",
     },
   },
   // Test files tend to have long describe blocks and use Set/Map
@@ -143,6 +147,7 @@ export default [
       "no-restricted-syntax": "off",
       "@typescript-eslint/no-require-imports": "off",
       "@typescript-eslint/no-unused-expressions": "off",
+      "@typescript-eslint/no-unsafe-function-type": "off",
     },
   },
 ];

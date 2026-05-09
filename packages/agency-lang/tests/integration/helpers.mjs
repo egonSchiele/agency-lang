@@ -4,7 +4,7 @@
 
 import { mkdtempSync, readFileSync, writeFileSync, mkdirSync, rmSync } from "node:fs";
 import { execSync } from "node:child_process";
-import { join, dirname } from "node:path";
+import { join, dirname, resolve } from "node:path";
 import { tmpdir } from "node:os";
 
 export function createTempProject(name) {
@@ -75,6 +75,50 @@ export function assertIncludes(haystack, needle, message) {
 export function cleanup(dir) {
   rmSync(dir, { recursive: true, force: true });
   console.log(`[cleanup] Removed ${dir}`);
+}
+
+// Runs a test in an isolated temp project with tarball installed.
+// Handles setup, cleanup on success, and preserves dir on failure.
+export function withTestProject(name, fn) {
+  const tarball = resolve(process.argv[2] || "");
+  if (!tarball) {
+    console.error(`Usage: node ${process.argv[1]} <path-to-tarball>`);
+    process.exit(1);
+  }
+  const dir = createTempProject(name);
+  try {
+    initProject(dir);
+    installTarball(dir, tarball);
+    fn(dir, tarball);
+    console.log(`=== ${name} test passed ===`);
+    cleanup(dir);
+  } catch (err) {
+    console.error(`${name} test failed:`, err);
+    console.error("Temp directory preserved at:", dir);
+    process.exit(1);
+  }
+}
+
+// Writes and compiles the standard hello.agency fixture.
+export function writeHelloAgency(dir) {
+  writeFile(dir, "hello.agency", `node main(name: string) {
+  return "Hello, " + name + "!"
+}
+`);
+  run(dir, "npx agency compile hello.agency");
+}
+
+// Writes an entry point that imports a compiled node, calls it, and asserts the result.
+export function writeHelloEntryPoint(dir, filename, arg, marker) {
+  writeFile(dir, filename, `import { main } from "./hello.js";
+const result = await main("${arg}");
+const value = result?.data ?? result;
+if (value !== "Hello, ${arg}!") {
+  console.error("Expected 'Hello, ${arg}!' but got:", JSON.stringify(result, null, 2));
+  process.exit(1);
+}
+console.log("${marker}");
+`);
 }
 
 export function getTarballPath() {

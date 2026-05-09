@@ -42,7 +42,7 @@ jobs:
     - run: pnpm install
     - run: make
     - run: pnpm test:run
-    - name: Smoke test (tarball install)
+    - name: Integration tests (tarball install, bundlers, CLI)
       if: matrix.node-version == '22.x'
       env:
         TMPDIR: ${{ runner.temp }}
@@ -50,6 +50,9 @@ jobs:
         cd packages/agency-lang
         npm pack
         node tests/integration/smoke/test.mjs ./agency-lang-*.tgz
+        node tests/integration/bundlers/test-esbuild.mjs ./agency-lang-*.tgz
+        node tests/integration/bundlers/test-vite.mjs ./agency-lang-*.tgz
+        node tests/integration/cli/test.mjs ./agency-lang-*.tgz
         rm -f agency-lang-*.tgz
     # - run: pnpm run test:agency
     #   env:

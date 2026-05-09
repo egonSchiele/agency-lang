@@ -69,4 +69,60 @@ describe("PolicyStore", () => {
     const content = readFileSync(filePath, "utf-8");
     expect(JSON.parse(content)).toEqual({ "x::y": [{ action: "approve" }] });
   });
+
+  it("addRule appends a rule to an existing kind", () => {
+    const store = new PolicyStore("test-server", tmpDir);
+    store.addRule("email::send", { match: { recipient: "*@co.com" }, action: "approve" });
+    store.addRule("email::send", { action: "reject" });
+    expect(store.get()).toEqual({
+      "email::send": [
+        { match: { recipient: "*@co.com" }, action: "approve" },
+        { action: "reject" },
+      ],
+    });
+  });
+
+  it("addRule creates a new kind if needed", () => {
+    const store = new PolicyStore("test-server", tmpDir);
+    store.addRule("shell::exec", { action: "reject" });
+    expect(store.get()).toEqual({
+      "shell::exec": [{ action: "reject" }],
+    });
+  });
+
+  it("addRule persists to disk", () => {
+    const store1 = new PolicyStore("test-server", tmpDir);
+    store1.addRule("x::y", { action: "approve" });
+
+    const store2 = new PolicyStore("test-server", tmpDir);
+    expect(store2.get()).toEqual({ "x::y": [{ action: "approve" }] });
+  });
+
+  it("removeRule removes by index", () => {
+    const store = new PolicyStore("test-server", tmpDir);
+    store.addRule("email::send", { match: { recipient: "*@a.com" }, action: "approve" });
+    store.addRule("email::send", { match: { recipient: "*@b.com" }, action: "approve" });
+    store.addRule("email::send", { action: "reject" });
+    store.removeRule("email::send", 1);
+    expect(store.get()).toEqual({
+      "email::send": [
+        { match: { recipient: "*@a.com" }, action: "approve" },
+        { action: "reject" },
+      ],
+    });
+  });
+
+  it("removeRule deletes the kind when last rule is removed", () => {
+    const store = new PolicyStore("test-server", tmpDir);
+    store.addRule("x::y", { action: "approve" });
+    store.removeRule("x::y", 0);
+    expect(store.get()).toEqual({});
+  });
+
+  it("removeRule throws for invalid index", () => {
+    const store = new PolicyStore("test-server", tmpDir);
+    expect(() => store.removeRule("x::y", 0)).toThrow("No rule at index 0");
+    store.addRule("x::y", { action: "approve" });
+    expect(() => store.removeRule("x::y", 5)).toThrow("No rule at index 5");
+  });
 });

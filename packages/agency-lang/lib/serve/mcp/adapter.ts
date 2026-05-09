@@ -54,33 +54,45 @@ export type McpConfig = {
 
 const POLICY_TOOL_NAMES = {
   GET: "agencyGetPolicy",
-  SET: "agencySetPolicy",
+  ADD_RULE: "agencyAddRule",
+  REMOVE_RULE: "agencyRemoveRule",
   CLEAR: "agencyClearPolicy",
 } as const;
 
 const POLICY_TOOL_DEFINITIONS = [
   {
     name: POLICY_TOOL_NAMES.GET,
-    description: "Get the current interrupt policy for this agent. Returns a JSON object keyed by interrupt kind.",
+    description: "Get the current interrupt policy for this agent. Returns a JSON object keyed by interrupt kind, where each kind maps to an ordered array of rules.",
     inputSchema: { type: "object" as const, properties: {} },
   },
   {
-    name: POLICY_TOOL_NAMES.SET,
-    description: `Set the interrupt policy for this agent. The policy controls which actions the agent is allowed to take autonomously. Each tool lists its interrupt kinds — use those as keys in the policy object. Example: {"email::send": [{"match": {"recipient": "*@company.com"}, "action": "approve"}, {"action": "reject"}]} approves sending emails to company.com addresses and rejects all others.`,
+    name: POLICY_TOOL_NAMES.ADD_RULE,
+    description: "Add a rule to the interrupt policy. Rules control which actions the agent can take autonomously. Each tool lists its interrupt kinds — use those as the 'kind' parameter. Rules are evaluated in order; the first match wins. A rule with no 'match' field is a catch-all.",
     inputSchema: {
       type: "object" as const,
       properties: {
-        policy: {
-          type: "object" as const,
-          description: "Policy object keyed by interrupt kind. Each kind maps to an ordered array of rules. Each rule has an 'action' field ('approve', 'reject', or 'propagate') and an optional 'match' field — an object whose keys are interrupt data field names and whose values are glob patterns. Rules are evaluated in order; the first match wins. A rule with no 'match' field is a catch-all. In MCP context, 'propagate' is treated as 'reject' since there is no interactive user to propagate to.",
-        },
+        kind: { type: "string" as const, description: "The interrupt kind to add a rule for (e.g. 'email::send')" },
+        action: { type: "string" as const, enum: ["approve", "reject"], description: "What to do when this rule matches" },
+        match: { type: "object" as const, description: "Optional. Keys are interrupt data field names, values are glob patterns (e.g. '*@company.com'). If omitted, the rule is a catch-all." },
       },
-      required: ["policy"],
+      required: ["kind", "action"],
+    },
+  },
+  {
+    name: POLICY_TOOL_NAMES.REMOVE_RULE,
+    description: "Remove a rule from the interrupt policy by index. Use agencyGetPolicy to see current rules and their indices.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        kind: { type: "string" as const, description: "The interrupt kind to remove a rule from" },
+        ruleIndex: { type: "number" as const, description: "Zero-based index of the rule to remove" },
+      },
+      required: ["kind", "ruleIndex"],
     },
   },
   {
     name: POLICY_TOOL_NAMES.CLEAR,
-    description: "Clear the interrupt policy, resetting to reject-all. After clearing, all interrupt-producing actions will be rejected until a new policy is set.",
+    description: "Clear the entire interrupt policy, resetting to reject-all. After clearing, all interrupt-producing actions will be rejected until new rules are added.",
     inputSchema: { type: "object" as const, properties: {} },
   },
 ];
@@ -93,10 +105,19 @@ function handlePolicyTool(
   switch (name) {
     case POLICY_TOOL_NAMES.GET:
       return { content: [{ type: "text", text: JSON.stringify(policyStore.get(), null, 2) }], isError: false };
-    case POLICY_TOOL_NAMES.SET:
+    case POLICY_TOOL_NAMES.ADD_RULE:
       try {
-        policyStore.set(args.policy);
-        return { content: [{ type: "text", text: "Policy updated successfully." }], isError: false };
+        const rule: { action: "approve" | "reject"; match?: Record<string, string> } = { action: args.action };
+        if (args.match) rule.match = args.match;
+        policyStore.addRule(args.kind, rule);
+        return { content: [{ type: "text", text: `Rule added for '${args.kind}'.` }], isError: false };
+      } catch (err) {
+        return { content: [{ type: "text", text: errorMessage(err) }], isError: true };
+      }
+    case POLICY_TOOL_NAMES.REMOVE_RULE:
+      try {
+        policyStore.removeRule(args.kind, args.ruleIndex);
+        return { content: [{ type: "text", text: `Rule removed from '${args.kind}'.` }], isError: false };
       } catch (err) {
         return { content: [{ type: "text", text: errorMessage(err) }], isError: true };
       }

@@ -58,6 +58,7 @@ export class TypeChecker {
   private functionDefs: Record<string, FunctionDefinition> = {};
   private nodeDefs: Record<string, GraphNodeDefinition> = {};
   private importedFunctions: Record<string, ImportedFunctionSignature> = {};
+  private interruptKindsByFunction: Record<string, import("../symbolTable.js").InterruptKind[]> = {};
   private errors: TypeCheckError[] = [];
   private inferredReturnTypes: Record<string, VariableType | "any"> = {};
   private inferringReturnType = new Set<string>();
@@ -73,6 +74,7 @@ export class TypeChecker {
       resolved.graphNodes.map((n) => [n.nodeName, n]),
     );
     this.importedFunctions = { ...resolved.importedFunctions };
+    this.interruptKindsByFunction = resolved.interruptKindsByFunction ?? {};
     this.sourceText = resolved.sourceText;
   }
 
@@ -98,6 +100,7 @@ export class TypeChecker {
       functionDefs: this.functionDefs,
       nodeDefs: this.nodeDefs,
       importedFunctions: this.importedFunctions,
+      interruptKindsByFunction: this.interruptKindsByFunction,
       errors: this.errors,
       inferredReturnTypes: this.inferredReturnTypes,
       inferringReturnType: this.inferringReturnType,

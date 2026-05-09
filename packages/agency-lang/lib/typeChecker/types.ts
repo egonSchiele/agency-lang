@@ -11,6 +11,7 @@ import type {
   ImportedFunctionSignature,
   ScopedTypeAliases,
 } from "../compilationUnit.js";
+import type { InterruptKind } from "../symbolTable.js";
 
 export type TypeCheckError = {
   message: string;
@@ -48,6 +49,7 @@ export type TypeCheckerContext = {
   functionDefs: Record<string, FunctionDefinition>;
   nodeDefs: Record<string, GraphNodeDefinition>;
   importedFunctions: Record<string, ImportedFunctionSignature>;
+  interruptKindsByFunction: Record<string, InterruptKind[]>;
   errors: TypeCheckError[];
   inferredReturnTypes: Record<string, VariableType | "any">;
   inferringReturnType: Set<string>;

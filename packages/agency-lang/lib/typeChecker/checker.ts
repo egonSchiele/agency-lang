@@ -106,11 +106,37 @@ function checkFunctionCallsInScope(
   info: ScopeInfo,
   ctx: TypeCheckerContext,
 ): void {
-  for (const { node } of walkNodes(info.body)) {
+  for (const { node, ancestors } of walkNodes(info.body)) {
     if (node.type === "functionCall") {
       checkSingleFunctionCall(node, info.scope, ctx);
+      checkUnhandledInterrupts(node, ancestors, ctx);
     }
   }
+}
+
+function isInsideHandler(ancestors: WalkAncestor[]): boolean {
+  return ancestors.some((a) => {
+    if (a.type === "handleBlock") return true;
+    if (a.type === "withModifier" && (a as any).handlerName !== "propagate") return true;
+    return false;
+  });
+}
+
+function checkUnhandledInterrupts(
+  call: FunctionCall,
+  ancestors: WalkAncestor[],
+  ctx: TypeCheckerContext,
+): void {
+  const kinds = ctx.interruptKindsByFunction[call.functionName];
+  if (!kinds || kinds.length === 0) return;
+  if (isInsideHandler(ancestors)) return;
+
+  const kindList = kinds.map((ik) => ik.kind).join(", ");
+  ctx.errors.push({
+    message: `Function '${call.functionName}' may throw interrupts [${kindList}] but is not inside a handler.`,
+    severity: "warning",
+    loc: call.loc,
+  });
 }
 
 function checkSingleFunctionCall(

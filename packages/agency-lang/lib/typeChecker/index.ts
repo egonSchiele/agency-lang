@@ -22,6 +22,7 @@ import { checkScopes } from "./checker.js";
 import { isAssignable as _isAssignable } from "./assignability.js";
 import { inferReturnTypeFor } from "./inference.js";
 import { effectiveReturnType } from "./validation.js";
+import { analyzeInterruptsFromScopes, checkUnhandledInterruptWarnings } from "./interruptAnalysis.js";
 
 export type { TypeCheckError, TypeCheckResult } from "./types.js";
 
@@ -201,7 +202,13 @@ export class TypeChecker {
     // 4. Check function calls, return types, and expressions
     checkScopes(scopes, ctx);
 
-    return { errors: this.applySuppressions(this.deduplicateErrors()), scopes };
+    // 5. Analyze interrupts using functionRefType
+    const interruptKindsByFunction = analyzeInterruptsFromScopes(scopes, ctx);
+
+    // 6. Check for unhandled interrupt warnings (uses transitive results)
+    checkUnhandledInterruptWarnings(scopes, interruptKindsByFunction, ctx);
+
+    return { errors: this.applySuppressions(this.deduplicateErrors()), scopes, interruptKindsByFunction };
   }
 
   private applySuppressions(errors: TypeCheckError[]): TypeCheckError[] {

@@ -308,17 +308,20 @@ function synthArray(
   }
   const concreteTypes = itemTypes.filter((t) => t !== "any");
   if (concreteTypes.length === 0) return "any";
-  const typeAliases = ctx.getTypeAliases();
-  const first = concreteTypes[0];
-  const allSame = concreteTypes.every(
-    (t) =>
-      isAssignable(t, first, typeAliases) &&
-      isAssignable(first, t, typeAliases),
-  );
-  if (allSame) {
-    return { type: "arrayType", elementType: first };
+  if (concreteTypes.length === 1) {
+    return { type: "arrayType", elementType: concreteTypes[0] };
   }
-  return "any";
+  // Deduplicate structurally identical types
+  const seen = new Map<string, VariableType>();
+  for (const t of concreteTypes) {
+    const key = JSON.stringify(t);
+    if (!seen.has(key)) seen.set(key, t);
+  }
+  const unique = Array.from(seen.values());
+  const elementType = unique.length === 1
+    ? unique[0]
+    : { type: "unionType" as const, types: unique };
+  return { type: "arrayType", elementType };
 }
 
 function synthObject(

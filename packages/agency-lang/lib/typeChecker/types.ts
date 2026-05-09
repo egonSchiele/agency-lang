@@ -25,6 +25,7 @@ export type TypeCheckError = {
 export type TypeCheckResult = {
   errors: TypeCheckError[];
   scopes: ScopeInfo[];
+  interruptKindsByFunction: Record<string, InterruptKind[]>;
 };
 
 export type ScopeInfo = {

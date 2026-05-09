@@ -140,6 +140,9 @@ export async function _run(
   options: { node: string; args: Record<string, any> },
   __state: InternalFunctionState,
 ): Promise<any> {
+  if (isIpcMode()) {
+    throw new Error("Nested subprocess execution is not supported.");
+  }
   const ctx = __state.ctx;
   const stateStack = __state.stateStack ?? ctx.stateStack;
 

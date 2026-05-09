@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Nested subprocess execution is blocked in MVP",
+      "input": "",
+      "expectedOutput": "\"nested blocked\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

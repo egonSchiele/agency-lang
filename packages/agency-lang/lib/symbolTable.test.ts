@@ -149,4 +149,56 @@ describe("SymbolTable interrupt analysis", () => {
       unlinkSync(libFile);
     }
   });
+
+  it("propagates interrupt kinds through aliased imports", () => {
+    const suffix = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const libFile = path.join(os.tmpdir(), `st-lib-alias-${suffix}.agency`);
+    const mainFile = path.join(os.tmpdir(), `st-main-alias-${suffix}.agency`);
+    writeFileSync(libFile, `
+      export def deploy() {
+        interrupt myapp::deploy("Deploy?")
+      }
+    `);
+    writeFileSync(mainFile, `
+      import { deploy as d } from "${libFile}"
+      node main() {
+        d()
+      }
+    `);
+    try {
+      const st = SymbolTable.build(mainFile);
+      const mainSymbols = st.getFile(path.resolve(mainFile))!;
+      expect(mainSymbols["main"].kind).toBe("node");
+      expect((mainSymbols["main"] as any).interruptKinds).toEqual([{ kind: "myapp::deploy" }]);
+    } finally {
+      unlinkSync(mainFile);
+      unlinkSync(libFile);
+    }
+  });
+
+  it("propagates interrupt kinds through imported nodes", () => {
+    const suffix = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const libFile = path.join(os.tmpdir(), `st-lib-node-${suffix}.agency`);
+    const mainFile = path.join(os.tmpdir(), `st-main-node-${suffix}.agency`);
+    writeFileSync(libFile, `
+      export node checkout() {
+        interrupt payment::charge("Charge?")
+      }
+    `);
+    writeFileSync(mainFile, `
+      import node { checkout } from "${libFile}"
+      node main() {
+        return checkout()
+      }
+    `);
+    try {
+      const st = SymbolTable.build(mainFile);
+      const mainSymbols = st.getFile(path.resolve(mainFile))!;
+      expect(mainSymbols["main"].kind).toBe("node");
+      expect((mainSymbols["main"] as any).interruptKinds).toEqual([{ kind: "payment::charge" }]);
+    } finally {
+      unlinkSync(mainFile);
+      unlinkSync(libFile);
+    }
+  });
 });

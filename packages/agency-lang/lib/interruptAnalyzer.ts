@@ -21,6 +21,9 @@ type CallGraph = Record<string, string[]>;
 /** Maps file path to its per-function call graph. */
 type CallGraphByFile = Record<string, CallGraph>;
 
+/** Maps local alias name to original function name. */
+type AliasMap = Record<string, string>;
+
 /**
  * Analyze all files and return new FileSymbols with interruptKinds populated
  * on every function and node symbol.
@@ -28,22 +31,38 @@ type CallGraphByFile = Record<string, CallGraph>;
 export function analyzeInterrupts(
   files: Record<string, FileInput>,
 ): Record<string, FileSymbols> {
-  const { kindsByFile, callGraphByFile } = collectAll(files);
-  resolveTransitiveInterrupts(kindsByFile, callGraphByFile);
+  const { kindsByFile, callGraphByFile, aliasMaps } = collectAll(files);
+  resolveTransitiveInterrupts(kindsByFile, callGraphByFile, aliasMaps);
   return attachInterruptKinds(files, kindsByFile);
 }
 
 function collectAll(
   files: Record<string, FileInput>,
-): { kindsByFile: KindsByFile; callGraphByFile: CallGraphByFile } {
+): { kindsByFile: KindsByFile; callGraphByFile: CallGraphByFile; aliasMaps: Record<string, AliasMap> } {
   const kindsByFile: KindsByFile = {};
   const callGraphByFile: CallGraphByFile = {};
+  const aliasMaps: Record<string, AliasMap> = {};
   for (const [filePath, { program }] of Object.entries(files)) {
     const { kinds, callGraph } = collectFromProgram(program);
     kindsByFile[filePath] = kinds;
     callGraphByFile[filePath] = callGraph;
+    aliasMaps[filePath] = buildAliasMap(program);
   }
-  return { kindsByFile, callGraphByFile };
+  return { kindsByFile, callGraphByFile, aliasMaps };
+}
+
+function buildAliasMap(program: AgencyProgram): AliasMap {
+  const aliasMap: AliasMap = {};
+  for (const node of program.nodes) {
+    if (node.type !== "importStatement") continue;
+    for (const nameType of node.importedNames) {
+      if (nameType.type !== "namedImport") continue;
+      for (const [originalName, alias] of Object.entries(nameType.aliases)) {
+        aliasMap[alias] = originalName;
+      }
+    }
+  }
+  return aliasMap;
 }
 
 function collectFromProgram(
@@ -149,6 +168,10 @@ function traceVariableToArray(
   return null;
 }
 
+function resolveCalleeName(calleeName: string, aliasMap: AliasMap): string {
+  return aliasMap[calleeName] ?? calleeName;
+}
+
 function lookupCalleeKinds(
   calleeName: string,
   localKinds: KindsByFunction,
@@ -164,16 +187,19 @@ function lookupCalleeKinds(
 function resolveTransitiveInterrupts(
   kindsByFile: KindsByFile,
   callGraphByFile: CallGraphByFile,
+  aliasMaps: Record<string, AliasMap>,
 ): void {
   let changed = true;
   while (changed) {
     changed = false;
     for (const [filePath, callGraph] of Object.entries(callGraphByFile)) {
       const kinds = kindsByFile[filePath];
+      const aliasMap = aliasMaps[filePath] ?? {};
       for (const [funcName, callees] of Object.entries(callGraph)) {
         const currentKinds = kinds[funcName] ?? [];
         for (const calleeName of callees) {
-          const calleeKinds = lookupCalleeKinds(calleeName, kinds, kindsByFile);
+          const resolved = resolveCalleeName(calleeName, aliasMap);
+          const calleeKinds = lookupCalleeKinds(resolved, kinds, kindsByFile);
           for (const kind of calleeKinds) {
             if (!currentKinds.includes(kind)) {
               currentKinds.push(kind);

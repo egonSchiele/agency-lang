@@ -250,6 +250,13 @@ export function buildCompilationUnit(
         }
       }
     }
+    for (const stmt of unit.importedNodes) {
+      for (const r of symbolTable.resolveImportedNodes(stmt, fromFile)) {
+        if (r.symbol.kind === "node" && r.symbol.interruptKinds) {
+          interruptKindsByFunction[r.localName] = r.symbol.interruptKinds;
+        }
+      }
+    }
     unit.interruptKindsByFunction = interruptKindsByFunction;
   }
 

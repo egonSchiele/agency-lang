@@ -177,6 +177,38 @@ describe("interrupt kind warnings", () => {
     }
   });
 
+  it("warns for imported nodes with interrupts", () => {
+    const suffix = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const libFile = path.join(os.tmpdir(), `tc-lib-node-${suffix}.agency`);
+    const mainFile = path.join(os.tmpdir(), `tc-main-node-${suffix}.agency`);
+    const mainSource = `
+      import node { checkout } from "${libFile}"
+      node main() {
+        return checkout()
+      }
+    `;
+    writeFileSync(libFile, `
+      export node checkout() {
+        interrupt payment::charge("Charge?")
+      }
+    `);
+    writeFileSync(mainFile, mainSource);
+    try {
+      const absPath = path.resolve(mainFile);
+      const symbolTable = SymbolTable.build(absPath);
+      const parseResult = parseAgency(mainSource, {});
+      if (!parseResult.success) throw new Error("Parse failed");
+      const info = buildCompilationUnit(parseResult.result, symbolTable, absPath, mainSource);
+      const { errors } = typeCheck(parseResult.result, {}, info);
+      const warnings = errors.filter((e) => e.severity === "warning");
+      expect(warnings).toHaveLength(1);
+      expect(warnings[0].message).toContain("payment::charge");
+    } finally {
+      unlinkSync(mainFile);
+      unlinkSync(libFile);
+    }
+  });
+
   it("warns for imported functions with alias", () => {
     const suffix = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
     const libFile = path.join(os.tmpdir(), `tc-lib-alias-${suffix}.agency`);

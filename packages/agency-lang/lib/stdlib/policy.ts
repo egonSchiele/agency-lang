@@ -1,1 +1,1 @@
-export { checkPolicy as _checkPolicy, validatePolicy as _validatePolicy } from "agency-lang/runtime";
+export { checkPolicy as _checkPolicy, validatePolicy as _validatePolicy } from "../runtime/index.js";

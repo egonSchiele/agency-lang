@@ -1,6 +1,6 @@
-import { compileSource } from "agency-lang/compiler";
-import { interruptWithHandlers, isApproved, hasInterrupts } from "agency-lang/runtime";
-import { subprocessBootstrapPath } from "agency-lang/internal/runtime/ipc.js";
+import { compileSource } from "../compiler/compile.js";
+import { interruptWithHandlers, isApproved, hasInterrupts } from "../runtime/index.js";
+import { subprocessBootstrapPath } from "../runtime/ipc.js";
 import { writeFileSync, mkdtempSync, rmSync } from "fs";
 import { join, dirname } from "path";
 import { tmpdir } from "os";

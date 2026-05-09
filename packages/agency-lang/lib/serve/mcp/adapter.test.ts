@@ -261,6 +261,17 @@ describe("MCP adapter — policy tools", () => {
     expect(JSON.parse(getResponse!.result.content[0].text)).toEqual({});
   });
 
+  it("agent tools still work when policyConfig is set", async () => {
+    const response = await handler({
+      jsonrpc: "2.0",
+      id: 10,
+      method: "tools/call",
+      params: { name: "add", arguments: { a: 10, b: 20 } },
+    });
+    expect(response!.result.isError).toBe(false);
+    expect(JSON.parse(response!.result.content[0].text)).toBe(30);
+  });
+
   it("automatically rejects interrupts when no policy is set", async () => {
     const registry: Record<string, AgencyFunction> = {};
     const greetFn = AgencyFunction.create(

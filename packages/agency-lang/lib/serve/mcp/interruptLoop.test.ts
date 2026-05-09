@@ -108,6 +108,26 @@ describe("runWithPolicy", () => {
     }
   });
 
+  it("propagates errors from respondToInterrupts", async () => {
+    const { store, cleanup } = makeTmpStore({
+      "test::x": [{ action: "approve" }],
+    });
+    try {
+      await expect(
+        runWithPolicy(
+          async () => [makeInterrupt("test::x")],
+          store,
+          {
+            hasInterrupts: isInterrupts,
+            respondToInterrupts: async () => { throw new Error("agent crashed"); },
+          },
+        ),
+      ).rejects.toThrow("agent crashed");
+    } finally {
+      cleanup();
+    }
+  });
+
   it("approves some and rejects others in a mixed batch", async () => {
     const { store, cleanup } = makeTmpStore({
       "test::allowed": [{ action: "approve" }],

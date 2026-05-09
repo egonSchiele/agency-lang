@@ -48,6 +48,15 @@ describe("PolicyStore", () => {
     expect(store.get()).toEqual({});
   });
 
+  it("clear persists to disk", () => {
+    const store1 = new PolicyStore("test-server", tmpDir);
+    store1.set({ "x::y": [{ action: "approve" as const }] });
+    store1.clear();
+
+    const store2 = new PolicyStore("test-server", tmpDir);
+    expect(store2.get()).toEqual({});
+  });
+
   it("rejects invalid policies", () => {
     const store = new PolicyStore("test-server", tmpDir);
     expect(() => store.set({ "x::y": [{ action: "yolo" as any }] })).toThrow();

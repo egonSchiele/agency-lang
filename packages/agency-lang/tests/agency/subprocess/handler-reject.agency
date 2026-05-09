@@ -1,0 +1,36 @@
+import { compile, run } from "std::agency"
+
+node main() {
+  const source = """
+import { bash } from "std::shell"
+node main() {
+  handle {
+    let result = bash("echo hi")
+    if (isFailure(result)) {
+      return "bash was rejected"
+    }
+    return "bash succeeded"
+  } with (data) {
+    return approve()
+  }
+}
+"""
+  const compileResult = compile(source)
+  if (isFailure(compileResult)) {
+    return "compile failed: " + compileResult.error
+  }
+  const compiled = compileResult.value
+
+  handle {
+    const result = run(compiled, { node: "main", args: {} })
+    if (isSuccess(result)) {
+      return result.value.data
+    }
+    return "run failed: " + result.error
+  } with (data) {
+    if (data.kind == "std::run") {
+      return approve()
+    }
+    return reject()
+  }
+}

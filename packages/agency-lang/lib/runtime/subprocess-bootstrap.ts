@@ -20,7 +20,14 @@ type RunInstruction = {
   args: Record<string, any>;
 };
 
-process.on("message", async (msg: RunInstruction) => {
+// Listen for the initial run instruction, then remove the listener
+// so it doesn't interfere with sendInterruptToParent's decision handler.
+const bootstrapHandler = async (msg: RunInstruction) => {
+  if ((msg as any).type === "decision") {
+    // Decision messages are for sendInterruptToParent, not for us
+    return;
+  }
+  process.removeListener("message", bootstrapHandler);
   ipcLog("recv", msg);
 
   if (msg.mode !== "run") {
@@ -78,4 +85,5 @@ process.on("message", async (msg: RunInstruction) => {
     process.send!(errMsg);
     process.exit(1);
   }
-});
+};
+process.on("message", bootstrapHandler);

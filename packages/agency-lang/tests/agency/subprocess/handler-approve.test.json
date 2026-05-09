@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Parent handler approves subprocess interrupt, subprocess proceeds",
+      "input": "",
+      "expectedOutput": "\"hello\\n\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

@@ -55,6 +55,11 @@
       "import": "./dist/lib/runtime/index.js",
       "require": "./dist/lib/runtime/index.js"
     },
+    "./compiler": {
+      "types": "./dist/lib/compiler/compile.d.ts",
+      "import": "./dist/lib/compiler/compile.js",
+      "require": "./dist/lib/compiler/compile.js"
+    },
     "./stdlib/*": "./stdlib/*"
   },
   "type": "module",

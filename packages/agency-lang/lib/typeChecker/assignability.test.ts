@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { isAssignable } from "./assignability.js";
+import { formatTypeHint } from "../cli/util.js";
 import type { VariableType } from "../types.js";
 
 describe("functionRefType assignability", () => {
@@ -64,6 +65,17 @@ describe("functionRefType assignability", () => {
     expect(
       isAssignable({ type: "primitiveType", value: "function" }, fnRef, {}),
     ).toBe(false);
+  });
+
+  it("formats functionRefType with formatTypeHint", () => {
+    expect(formatTypeHint(fnRef)).toBe("function deploy(env: string): void");
+    const noParams: VariableType = {
+      type: "functionRefType",
+      name: "ping",
+      params: [],
+      returnType: null,
+    };
+    expect(formatTypeHint(noParams)).toBe("function ping()");
   });
 
   it("two functionRefTypes with incompatible return types are not assignable", () => {

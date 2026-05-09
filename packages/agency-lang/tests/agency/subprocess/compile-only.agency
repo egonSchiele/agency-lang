@@ -1,0 +1,10 @@
+import { compile } from "std::agency"
+
+node main() {
+  const source = "node main() { return 42 }"
+  const compiled = compile(source)
+  if (isSuccess(compiled)) {
+    return "compiled ok"
+  }
+  return "compile failed"
+}

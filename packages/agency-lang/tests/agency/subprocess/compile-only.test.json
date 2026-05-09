@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "compile() works",
+      "input": "",
+      "expectedOutput": "\"compiled ok\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

@@ -9,6 +9,7 @@ import { StateStack, StateStackJSON } from "./state/stateStack.js";
 import { Approved, GraphState, Rejected } from "./types.js";
 import { createReturnObject, deepClone } from "./utils.js";
 import { reviveWithClasses } from "./classReviver.js";
+import { isIpcMode, sendInterruptToParent } from "./ipc.js";
 export {
   type ClassRegistry,
   createClassReviver,
@@ -132,6 +133,19 @@ export async function interruptWithHandlers<T = any>(
   stack?: StateStack,
 ): Promise<Interrupt<T>[] | Approved | Rejected> {
   const interruptObj = { kind, message, data, origin };
+
+  // IPC mode with no local handlers: consult parent directly
+  if (isIpcMode() && ctx.handlers.length === 0) {
+    const parentDecision = await sendInterruptToParent(
+      { kind, message, data, origin },
+      { approved: false, rejected: false, propagated: false, approvedValue: undefined },
+    );
+    if (parentDecision.type === "approve") {
+      return { type: "approve", value: parentDecision.value };
+    }
+    return { type: "reject", value: parentDecision.value };
+  }
+
   if (ctx.handlers.length === 0) {
     return [interrupt({ kind, message, data, origin, runId: ctx.getRunId() })];
   }
@@ -171,6 +185,24 @@ export async function interruptWithHandlers<T = any>(
       `Handler returned invalid result type: ${JSON.stringify(result)}. Expected "approve", "reject", "propagate", or undefined.`,
     );
   }
+  // IPC mode: always consult parent (unless local handler rejected — that already returned above)
+  if (isIpcMode()) {
+    const parentDecision = await sendInterruptToParent(
+      { kind, message, data, origin },
+      {
+        approved: hasApproval,
+        rejected: false, // if rejected, we already returned above
+        propagated: hasPropagation,
+        approvedValue,
+      },
+    );
+    if (parentDecision.type === "approve") {
+      return { type: "approve", value: parentDecision.value ?? approvedValue };
+    }
+    return { type: "reject", value: parentDecision.value };
+  }
+
+  // Normal mode (non-IPC)
   if (hasPropagation) {
     return [interrupt({ kind, message, data, origin, runId: ctx.getRunId() })];
   }

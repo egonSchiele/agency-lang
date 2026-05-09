@@ -11,6 +11,7 @@
  */
 
 import type { IpcResultMessage, IpcErrorMessage } from "./ipc.js";
+import { ipcLog } from "./ipc.js";
 
 type RunInstruction = {
   mode: "run";
@@ -20,34 +21,43 @@ type RunInstruction = {
 };
 
 process.on("message", async (msg: RunInstruction) => {
+  ipcLog("recv", msg);
+
   if (msg.mode !== "run") {
-    process.send!({
+    const errMsg = {
       type: "error",
       error: `Unknown mode: ${(msg as any).mode}`,
-    } satisfies IpcErrorMessage);
+    } satisfies IpcErrorMessage;
+    ipcLog("send", errMsg);
+    process.send!(errMsg);
     process.exit(1);
   }
 
   try {
+    ipcLog("send", { type: "log", detail: `importing ${msg.scriptPath}` });
     const mod = await import(msg.scriptPath);
 
     // The compiled Agency module exports a `main()` (or named node) function
     // and a `__globalCtx`. The node function is exported by name.
     const nodeFn = mod[msg.node];
     if (typeof nodeFn !== "function") {
-      process.send!({
+      const errMsg = {
         type: "error",
         error: `Node "${msg.node}" not found in compiled module. Available exports: ${Object.keys(mod).join(", ")}`,
-      } satisfies IpcErrorMessage);
+      } satisfies IpcErrorMessage;
+      ipcLog("send", errMsg);
+      process.send!(errMsg);
       process.exit(1);
       return;
     }
 
+    ipcLog("send", { type: "log", detail: `calling node ${msg.node}` });
     // Call the exported node function (e.g., main({ data, callbacks }))
     // This calls runNode() internally, which uses __globalCtx.
     const result = await nodeFn({ data: msg.args });
+    ipcLog("send", { type: "log", detail: `node ${msg.node} returned` });
 
-    process.send!({
+    const resultMsg = {
       type: "result",
       value: {
         data: result.data,
@@ -55,13 +65,17 @@ process.on("message", async (msg: RunInstruction) => {
         // messages are ThreadStore instances — serialize them
         messages: result.messages?.toJSON?.() ?? result.messages,
       },
-    } satisfies IpcResultMessage);
+    } satisfies IpcResultMessage;
+    ipcLog("send", resultMsg);
+    process.send!(resultMsg);
     process.exit(0);
   } catch (err: any) {
-    process.send!({
+    const errMsg = {
       type: "error",
       error: err instanceof Error ? err.message : String(err),
-    } satisfies IpcErrorMessage);
+    } satisfies IpcErrorMessage;
+    ipcLog("send", errMsg);
+    process.send!(errMsg);
     process.exit(1);
   }
 });

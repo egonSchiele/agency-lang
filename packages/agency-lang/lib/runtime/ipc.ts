@@ -9,7 +9,6 @@ import { dirname } from "path";
 import { fileURLToPath } from "url";
 import { fork } from "child_process";
 import { rmSync } from "fs";
-import { tmpdir } from "os";
 import type { InternalFunctionState } from "./types.js";
 import { interruptWithHandlers, isApproved, hasInterrupts } from "./interrupts.js";
 
@@ -20,6 +19,37 @@ export const subprocessBootstrapPath = path.join(__dirname, "subprocess-bootstra
 
 export function isIpcMode(): boolean {
   return process.env.AGENCY_IPC === "1";
+}
+
+// ── IPC Debug Logger ──
+// Toggle with AGENCY_IPC_DEBUG=1. Logs every IPC message to stderr
+// with direction, timestamp, and message type. Truncates large payloads.
+
+const ipcDebug = process.env.AGENCY_IPC_DEBUG === "1";
+const role = isIpcMode() ? "child" : "parent";
+
+function truncate(val: any, maxLen = 200): string {
+  const s = typeof val === "string" ? val : JSON.stringify(val);
+  if (s == null) return "undefined";
+  return s.length > maxLen ? s.slice(0, maxLen) + "..." : s;
+}
+
+export function ipcLog(direction: "send" | "recv", msg: any): void {
+  if (!ipcDebug) return;
+  const ts = new Date().toISOString().slice(11, 23); // HH:MM:SS.mmm
+  const type = msg?.type ?? msg?.mode ?? "unknown";
+  const detail = type === "interrupt"
+    ? `kind=${msg.interrupt?.kind}`
+    : type === "decision"
+      ? `approved=${msg.approved}`
+      : type === "result"
+        ? `data=${truncate(msg.value?.data)}`
+        : type === "error"
+          ? `error=${truncate(msg.error)}`
+          : type === "run"
+            ? `node=${msg.node} script=${msg.scriptPath}`
+            : truncate(msg);
+  process.stderr.write(`[ipc:${role}] ${ts} ${direction} ${type} ${detail}\n`);
 }
 
 export type SubprocessVotes = {
@@ -77,10 +107,17 @@ export async function sendInterruptToParent(
       "sendInterruptToParent called without an IPC channel. This function can only be used inside a forked subprocess (AGENCY_IPC=1).",
     );
   }
+  const outMsg = {
+    type: "interrupt",
+    interrupt: interruptData,
+    subprocessVotes: votes,
+  } satisfies IpcInterruptMessage;
+  ipcLog("send", outMsg);
   return new Promise((resolve) => {
     const handler = (msg: any) => {
       if (msg.type === "decision") {
         process.removeListener("message", handler);
+        ipcLog("recv", msg);
         if (msg.approved) {
           resolve({ type: "approve", value: msg.value });
         } else {
@@ -89,11 +126,8 @@ export async function sendInterruptToParent(
       }
     };
     process.on("message", handler);
-    process.send({
-      type: "interrupt",
-      interrupt: interruptData,
-      subprocessVotes: votes,
-    } satisfies IpcInterruptMessage);
+    // Safe to assert — guarded by typeof check at function entry
+    process.send!(outMsg);
   });
 }
 
@@ -120,7 +154,7 @@ export async function _run(
     const cleanup = () => {
       try {
         const tempDir = dirname(compiled.path);
-        if (tempDir.startsWith(tmpdir())) {
+        if (tempDir.includes(".agency-tmp")) {
           rmSync(tempDir, { recursive: true });
         }
       } catch (_) {
@@ -129,6 +163,7 @@ export async function _run(
     };
 
     child.on("message", async (msg: any) => {
+      ipcLog("recv", msg);
       if (msg.type === "interrupt") {
         const { kind, message, data, origin } = msg.interrupt;
 
@@ -142,31 +177,24 @@ export async function _run(
             stateStack,
           );
 
+          let decision: any;
           if (isApproved(handlerResult)) {
-            child.send({
-              type: "decision",
-              approved: true,
-              value: (handlerResult as any).value,
-            });
+            decision = { type: "decision", approved: true, value: (handlerResult as any).value };
           } else if (hasInterrupts(handlerResult)) {
-            child.send({
-              type: "decision",
-              approved: false,
-              value: "Interrupt propagated to user (subprocess slow-path not yet supported)",
-            });
+            decision = { type: "decision", approved: false, value: "Interrupt propagated to user (subprocess slow-path not yet supported)" };
           } else {
-            child.send({
-              type: "decision",
-              approved: false,
-              value: (handlerResult as any).value,
-            });
+            decision = { type: "decision", approved: false, value: (handlerResult as any).value };
           }
+          ipcLog("send", decision);
+          child.send(decision);
         } catch (err) {
-          child.send({
+          const decision = {
             type: "decision",
             approved: false,
             value: `Parent handler error: ${err instanceof Error ? err.message : String(err)}`,
-          });
+          };
+          ipcLog("send", decision);
+          child.send(decision);
         }
       } else if (msg.type === "result") {
         if (!settled) {
@@ -201,11 +229,13 @@ export async function _run(
       }
     });
 
-    child.send({
+    const runMsg = {
       mode: "run",
       scriptPath: compiled.path,
       node: options.node,
       args: options.args,
-    });
+    };
+    ipcLog("send", runMsg);
+    child.send(runMsg);
   });
 }

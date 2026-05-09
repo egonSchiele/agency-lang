@@ -126,4 +126,43 @@ describe("discoverExports", () => {
       discoverExports({ toolRegistry: {}, moduleExports: {}, moduleId: "test" }),
     ).toEqual([]);
   });
+
+  it("attaches interruptKinds from interruptKindsByName", () => {
+    const registry: Record<string, AgencyFunction> = {};
+    AgencyFunction.create(
+      {
+        name: "deploy",
+        module: "test",
+        fn: async () => {},
+        params: [],
+        toolDefinition: { name: "deploy", description: "Deploy", schema: null },
+        exported: true,
+        safe: false,
+      },
+      registry,
+    );
+
+    const exports = discoverExports({
+      toolRegistry: registry,
+      moduleExports: {
+        checkout: async () => ({ data: "ok" }),
+        __checkoutNodeParams: [],
+      },
+      moduleId: "test",
+      exportedNodeNames: ["checkout"],
+      interruptKindsByName: {
+        deploy: [{ kind: "myapp::deploy" }],
+        checkout: [{ kind: "payment::charge" }, { kind: "payment::refund" }],
+      },
+    });
+
+    const fn = exports.find((e) => e.name === "deploy")!;
+    expect(fn.interruptKinds).toEqual([{ kind: "myapp::deploy" }]);
+
+    const node = exports.find((e) => e.name === "checkout")!;
+    expect(node.interruptKinds).toEqual([
+      { kind: "payment::charge" },
+      { kind: "payment::refund" },
+    ]);
+  });
 });

@@ -72,8 +72,10 @@ describe("HTTP adapter", () => {
     const body = result.body as any;
     expect(body.functions).toHaveLength(1);
     expect(body.functions[0].name).toBe("add");
+    expect(body.functions[0].interruptKinds).toEqual([]);
     expect(body.nodes).toHaveLength(1);
     expect(body.nodes[0].name).toBe("main");
+    expect(body.nodes[0].interruptKinds).toEqual([]);
   });
 
   it("POST /function/:name calls function", async () => {
@@ -123,6 +125,40 @@ describe("HTTP adapter", () => {
   it("returns 404 for unknown routes", async () => {
     const result = await handler("GET", "/unknown", undefined);
     expect(result.status).toBe(404);
+  });
+
+  it("GET /list includes interruptKinds as string arrays", async () => {
+    const registry: Record<string, AgencyFunction> = {};
+    const deployFn = AgencyFunction.create(
+      {
+        name: "deploy",
+        module: "test",
+        fn: async () => {},
+        params: [],
+        toolDefinition: { name: "deploy", description: "Deploy", schema: null },
+        exported: true,
+        safe: false,
+      },
+      registry,
+    );
+    const h = createHttpHandler({
+      exports: [
+        {
+          kind: "function",
+          name: "deploy",
+          description: "Deploy",
+          agencyFunction: deployFn,
+          interruptKinds: [{ kind: "myapp::deploy" }],
+        },
+      ],
+      port: 3545,
+      logger: createLogger("error"),
+      hasInterrupts: () => false,
+      respondToInterrupts: async () => ({ data: "ok" }),
+    });
+    const result = await h("GET", "/list", undefined);
+    const body = result.body as any;
+    expect(body.functions[0].interruptKinds).toEqual(["myapp::deploy"]);
   });
 });
 

@@ -28,7 +28,8 @@
     "debug": "node ./dist/scripts/agency.js debug",
     "bundle": "node ./dist/scripts/agency.js bundle",
     "circular-deps": "npx dpdm --circular lib/parser.ts",
-    "lint:structure": "eslint lib/"
+    "lint:structure": "eslint lib/",
+    "lint:fix": "eslint lib/ --fix"
   },
   "bin": {
     "agency": "./dist/scripts/agency.js"

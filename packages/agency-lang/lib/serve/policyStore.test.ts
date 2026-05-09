@@ -125,4 +125,28 @@ describe("PolicyStore", () => {
     store.addRule("x::y", { action: "approve" });
     expect(() => store.removeRule("x::y", 5)).toThrow("No rule at index 5");
   });
+
+  it("removeRule throws for non-integer index", () => {
+    const store = new PolicyStore("test-server", tmpDir);
+    store.addRule("x::y", { action: "approve" });
+    expect(() => store.removeRule("x::y", 0.5)).toThrow("Invalid index");
+    expect(() => store.removeRule("x::y", NaN)).toThrow("Invalid index");
+    expect(() => store.removeRule("x::y", -1)).toThrow("Invalid index");
+  });
+
+  it("addRule rejects invalid action", () => {
+    const store = new PolicyStore("test-server", tmpDir);
+    expect(() => store.addRule("x::y", { action: "yolo" as any })).toThrow("Invalid action");
+  });
+
+  it("addRule rejects dangerous kind names", () => {
+    const store = new PolicyStore("test-server", tmpDir);
+    expect(() => store.addRule("__proto__", { action: "approve" })).toThrow("Invalid kind");
+    expect(() => store.addRule("constructor", { action: "approve" })).toThrow("Invalid kind");
+  });
+
+  it("addRule rejects non-string match values", () => {
+    const store = new PolicyStore("test-server", tmpDir);
+    expect(() => store.addRule("x::y", { action: "approve", match: { foo: 123 as any } })).toThrow("match values must be strings");
+  });
 });

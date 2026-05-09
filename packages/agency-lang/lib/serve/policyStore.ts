@@ -28,14 +28,29 @@ export class PolicyStore {
   }
 
   addRule(kind: string, rule: PolicyRule): void {
+    if (!kind || typeof kind !== "string") throw new Error("kind must be a non-empty string");
+    if (kind === "__proto__" || kind === "constructor") throw new Error(`Invalid kind: '${kind}'`);
+    if (!rule || typeof rule !== "object") throw new Error("rule must be an object");
+    if (rule.action !== "approve" && rule.action !== "reject") {
+      throw new Error(`Invalid action: '${rule.action}'. Must be 'approve' or 'reject'.`);
+    }
+    if (rule.match !== undefined) {
+      if (typeof rule.match !== "object" || rule.match === null) throw new Error("match must be an object");
+      for (const v of Object.values(rule.match)) {
+        if (typeof v !== "string") throw new Error("match values must be strings (glob patterns)");
+      }
+    }
     if (!this.policy[kind]) this.policy[kind] = [];
     this.policy[kind].push(rule);
     this.save();
   }
 
   removeRule(kind: string, index: number): void {
+    if (!Number.isFinite(index) || !Number.isInteger(index) || index < 0) {
+      throw new Error(`Invalid index: ${index}. Must be a non-negative integer.`);
+    }
     const rules = this.policy[kind];
-    if (!rules || index < 0 || index >= rules.length) {
+    if (!rules || index >= rules.length) {
       throw new Error(`No rule at index ${index} for kind '${kind}'`);
     }
     const updated = rules.filter((_, i) => i !== index);

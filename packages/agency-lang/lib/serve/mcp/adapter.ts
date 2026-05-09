@@ -73,7 +73,7 @@ const POLICY_TOOL_DEFINITIONS = [
       properties: {
         kind: { type: "string" as const, description: "The interrupt kind to add a rule for (e.g. 'email::send')" },
         action: { type: "string" as const, enum: ["approve", "reject"], description: "What to do when this rule matches" },
-        match: { type: "object" as const, description: "Optional. Keys are interrupt data field names, values are glob patterns (e.g. '*@company.com'). If omitted, the rule is a catch-all." },
+        match: { type: "object" as const, additionalProperties: { type: "string" as const }, description: "Optional. Keys are interrupt data field names, values are glob patterns (e.g. '*@company.com'). If omitted, the rule is a catch-all." },
       },
       required: ["kind", "action"],
     },
@@ -85,7 +85,7 @@ const POLICY_TOOL_DEFINITIONS = [
       type: "object" as const,
       properties: {
         kind: { type: "string" as const, description: "The interrupt kind to remove a rule from" },
-        ruleIndex: { type: "number" as const, description: "Zero-based index of the rule to remove" },
+        ruleIndex: { type: "integer" as const, minimum: 0, description: "Zero-based index of the rule to remove" },
       },
       required: ["kind", "ruleIndex"],
     },

@@ -18,12 +18,11 @@ export def run(compiled: CompiledProgram, options: { node: string, args: object 
   @param compiled - A CompiledProgram from compile()
   @param options - Which node to run and what arguments to pass
   """
-  // TODO: restore interrupt gate before shipping
-  // return interrupt std::run("Running agent-generated code in subprocess", {
-  //   moduleId: compiled.moduleId,
-  //   node: options.node,
-  //   args: options.args
-  // })
+  return interrupt std::run("Running agent-generated code in subprocess", {
+    moduleId: compiled.moduleId,
+    node: options.node,
+    args: options.args
+  })
 
   return try _run(compiled, options)
 }

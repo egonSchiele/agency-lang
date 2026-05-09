@@ -1,4 +1,5 @@
 import { AgencyMultiLineComment } from "../types.js";
+import type { FunctionParameter } from "./function.js";
 import { BaseNode } from "./base.js";
 
 export type VariableType =
@@ -11,7 +12,8 @@ export type VariableType =
   | ObjectType
   | TypeAliasVariable
   | BlockType
-  | ResultType;
+  | ResultType
+  | FunctionRefType;
 
 export type ResultType = {
   type: "resultType";
@@ -72,6 +74,14 @@ export type TypeAlias = BaseNode & {
   aliasedType: VariableType;
   exported?: boolean;
   docComment?: AgencyMultiLineComment;
+};
+
+export type FunctionRefType = {
+  type: "functionRefType";
+  name: string;
+  params: FunctionParameter[];
+  returnType: VariableType | null;
+  returnTypeValidated?: boolean;
 };
 
 export type TypeAliasVariable = {

@@ -72,7 +72,7 @@ const POLICY_TOOL_DEFINITIONS = [
       properties: {
         policy: {
           type: "object" as const,
-          description: "Policy object keyed by interrupt kind. Each kind maps to an ordered array of rules. Each rule has an 'action' field ('approve' or 'reject') and an optional 'match' field — an object whose keys are interrupt data field names and whose values are glob patterns. Rules are evaluated in order; the first match wins. A rule with no 'match' field is a catch-all.",
+          description: "Policy object keyed by interrupt kind. Each kind maps to an ordered array of rules. Each rule has an 'action' field ('approve', 'reject', or 'propagate') and an optional 'match' field — an object whose keys are interrupt data field names and whose values are glob patterns. Rules are evaluated in order; the first match wins. A rule with no 'match' field is a catch-all. In MCP context, 'propagate' is treated as 'reject' since there is no interactive user to propagate to.",
         },
       },
       required: ["policy"],

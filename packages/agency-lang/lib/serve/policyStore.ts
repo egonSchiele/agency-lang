@@ -34,7 +34,17 @@ export class PolicyStore {
 
   private load(): void {
     if (!existsSync(this.filePath)) return;
-    this.policy = JSON.parse(readFileSync(this.filePath, "utf-8"));
+    try {
+      const parsed = JSON.parse(readFileSync(this.filePath, "utf-8"));
+      const result = validatePolicy(parsed);
+      if (result.success) {
+        this.policy = parsed;
+      } else {
+        console.error(`Invalid policy file at ${this.filePath}: ${result.error}. Using empty policy.`);
+      }
+    } catch {
+      console.error(`Failed to parse policy file at ${this.filePath}. Using empty policy.`);
+    }
   }
 
   private save(): void {

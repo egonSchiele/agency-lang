@@ -62,7 +62,7 @@ describe("PolicyStore", () => {
     expect(() => store.set({ "x::y": [{ action: "yolo" as any }] })).toThrow();
   });
 
-  it("writes policy file with restricted permissions", () => {
+  it("writes policy file to disk", () => {
     const store = new PolicyStore("test-server", tmpDir);
     store.set({ "x::y": [{ action: "approve" as const }] });
     const filePath = path.join(tmpDir, "test-server", "policy.json");

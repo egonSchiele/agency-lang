@@ -13,7 +13,7 @@ The MCP server uses Agency's existing policy system to pre-authorize interrupts.
 ### User experience
 
 1. Client calls `tools/list` — each tool's description includes its interrupt kinds (e.g. `Interrupt kinds: email::send, shell::exec`), surfaced from static analysis
-2. Client calls the `setPolicy` tool to pre-authorize actions:
+2. Client calls the `agencySetPolicy` tool to pre-authorize actions:
    ```json
    {
      "email::send": [
@@ -94,7 +94,7 @@ Policies are persisted to `~/.agency/serve/<server-name>/policy.json`, following
 - The directory is created on first write with mode `0o700`
 - The policy file is written with mode `0o600` (user-readable only)
 - On server startup, the persisted policy is loaded if it exists
-- `setPolicy` and `clearPolicy` write through to disk immediately
+- `agencySetPolicy` and `agencyClearPolicy` write through to disk immediately
 - The `server-name` is the `--name` flag value, or the filename without `.agency`
 
 ### Implementation

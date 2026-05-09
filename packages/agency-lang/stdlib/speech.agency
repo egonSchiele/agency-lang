@@ -1,4 +1,4 @@
-import { _speak, _record, _transcribe } from "./lib/speech.js"
+import { _speak, _record, _transcribe } from "agency-lang/stdlib-lib/speech.js"
 
 export def speak(text: string, voice: string = "", rate: number = 0, outputFile: string = "") {
   """

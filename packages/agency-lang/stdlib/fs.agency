@@ -1,4 +1,4 @@
-import { _edit, _multiedit, _applyPatch, _mkdir, _copy, _move, _remove } from "./lib/fs.js"
+import { _edit, _multiedit, _applyPatch, _mkdir, _copy, _move, _remove } from "agency-lang/stdlib-lib/fs.js"
 
 type EditResult = {
   replacements: number;

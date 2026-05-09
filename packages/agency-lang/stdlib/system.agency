@@ -1,4 +1,4 @@
-import { _args, _screenshot, _cwd, _env, _setEnv, _openUrl } from "./lib/system.js"
+import { _args, _screenshot, _cwd, _env, _setEnv, _openUrl } from "agency-lang/stdlib-lib/system.js"
 
 export def screenshot(filepath: string, x: number = -1, y: number = -1, width: number = -1, height: number = -1) {
   """

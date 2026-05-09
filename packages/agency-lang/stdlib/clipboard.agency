@@ -1,4 +1,4 @@
-import { _copy, _paste } from "./lib/clipboard.js"
+import { _copy, _paste } from "agency-lang/stdlib-lib/clipboard.js"
 
 export def copy(text: string) {
   """

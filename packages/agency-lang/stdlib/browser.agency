@@ -1,4 +1,4 @@
-import { _browserUse } from "./lib/browserUse.js"
+import { _browserUse } from "agency-lang/stdlib-lib/browserUse.js"
 
 /** @module
   Usage from Agency code:

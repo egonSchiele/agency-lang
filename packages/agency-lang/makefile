@@ -1,11 +1,14 @@
-.PHONY: all test stdlib doc packages-doc
+.PHONY: all test stdlib agents doc packages-doc
 
 all:
-	pnpm run templates && pnpm run build && $(MAKE) stdlib && $(MAKE) doc
+	pnpm run templates && pnpm run build && $(MAKE) stdlib && $(MAKE) agents && $(MAKE) doc
 
 stdlib:
-	pnpm run agency compile stdlib/ && \
-	pnpm exec tsc -p tsconfig.stdlib.json
+	pnpm run agency compile stdlib/
+
+agents:
+	pnpm run agency compile dist/lib/agents/review/ && \
+	pnpm run agency compile dist/lib/agents/judge.agency
 
 test:
 	pnpm run test

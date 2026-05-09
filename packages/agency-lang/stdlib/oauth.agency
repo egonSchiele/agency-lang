@@ -1,4 +1,4 @@
-import { _authorize, _getAccessToken, _isAuthorized, _revokeAuth } from "./lib/oauth.js"
+import { _authorize, _getAccessToken, _isAuthorized, _revokeAuth } from "agency-lang/stdlib-lib/oauth.js"
 
 /** @module
   ## Usage

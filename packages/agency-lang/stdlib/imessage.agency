@@ -1,4 +1,4 @@
-import { _sendIMessage } from "./lib/imessage.js"
+import { _sendIMessage } from "agency-lang/stdlib-lib/imessage.js"
 
 /** @module
   ## Usage

@@ -1,4 +1,4 @@
-import { _join, _resolve, _basename, _dirname, _extname, _relative, _isAbsolute } from "./lib/path.js"
+import { _join, _resolve, _basename, _dirname, _extname, _relative, _isAbsolute } from "agency-lang/stdlib-lib/path.js"
 
 export safe def join(...parts: string[]): string {
   """

@@ -1,4 +1,4 @@
-import { _search, _summary, _article } from "./lib/wikipedia.js"
+import { _search, _summary, _article } from "agency-lang/stdlib-lib/wikipedia.js"
 
 type WikiSearchResult = {
   title: string;

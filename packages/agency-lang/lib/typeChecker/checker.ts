@@ -117,7 +117,7 @@ function checkFunctionCallsInScope(
 function isInsideHandler(ancestors: WalkAncestor[]): boolean {
   return ancestors.some((a) => {
     if (a.type === "handleBlock") return true;
-    if (a.type === "withModifier" && (a as any).handlerName !== "propagate") return true;
+    if (a.type === "withModifier" && a.handlerName !== "propagate") return true;
     return false;
   });
 }

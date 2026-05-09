@@ -3,6 +3,7 @@ import type {
   CompilationUnit,
   ImportedFunctionSignature,
 } from "../compilationUnit.js";
+import type { InterruptKind } from "../symbolTable.js";
 import { GLOBAL_SCOPE_KEY, ScopedTypeAliases, scopeKey, buildCompilationUnit } from "../compilationUnit.js";
 import { AgencyConfig } from "../config.js";
 import {
@@ -58,7 +59,7 @@ export class TypeChecker {
   private functionDefs: Record<string, FunctionDefinition> = {};
   private nodeDefs: Record<string, GraphNodeDefinition> = {};
   private importedFunctions: Record<string, ImportedFunctionSignature> = {};
-  private interruptKindsByFunction: Record<string, import("../symbolTable.js").InterruptKind[]> = {};
+  private interruptKindsByFunction: Record<string, InterruptKind[]> = {};
   private errors: TypeCheckError[] = [];
   private inferredReturnTypes: Record<string, VariableType | "any"> = {};
   private inferringReturnType = new Set<string>();

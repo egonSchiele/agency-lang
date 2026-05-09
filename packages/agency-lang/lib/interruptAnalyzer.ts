@@ -1,5 +1,5 @@
 import type { AgencyProgram, AgencyNode, Expression } from "./types.js";
-import type { AgencyArray } from "./types/dataStructures.js";
+import type { AgencyArray, AgencyObjectKV, SplatExpression } from "./types/dataStructures.js";
 import type { FunctionCall } from "./types/function.js";
 import type { FileSymbols } from "./symbolTable.js";
 import { walkNodes } from "./utils/node.js";
@@ -52,50 +52,45 @@ function collectFromProgram(
   const kinds: KindsByFunction = {};
   const callGraph: CallGraph = {};
   for (const node of program.nodes) {
-    if (node.type === "function") {
-      kinds[node.functionName] = collectInterruptsInBody(node.body);
-      callGraph[node.functionName] = collectCalleesInBody(node.body);
-    } else if (node.type === "graphNode") {
-      kinds[node.nodeName] = collectInterruptsInBody(node.body);
-      callGraph[node.nodeName] = collectCalleesInBody(node.body);
-    }
+    if (node.type !== "function" && node.type !== "graphNode") continue;
+    const name = node.type === "function" ? node.functionName : node.nodeName;
+    const collected = collectFromBody(node.body);
+    kinds[name] = collected.interruptKinds;
+    callGraph[name] = collected.callees;
   }
   return { kinds, callGraph };
 }
 
-function collectInterruptsInBody(body: AgencyNode[]): string[] {
-  const kinds: string[] = [];
-  for (const { node } of walkNodes(body)) {
-    if (node.type === "interruptStatement") {
-      if (!kinds.includes(node.kind)) {
-        kinds.push(node.kind);
-      }
-    }
-  }
-  return kinds;
-}
-
-function addCallee(callees: string[], name: string): void {
-  if (!callees.includes(name)) {
-    callees.push(name);
+function addUnique(arr: string[], value: string): void {
+  if (!arr.includes(value)) {
+    arr.push(value);
   }
 }
 
-function collectCalleesInBody(body: AgencyNode[]): string[] {
+function collectFromBody(
+  body: AgencyNode[],
+): { interruptKinds: string[]; callees: string[] } {
+  const interruptKinds: string[] = [];
   const callees: string[] = [];
   for (const { node } of walkNodes(body)) {
-    if (node.type === "functionCall") {
-      addCallee(callees, node.functionName);
+    if (node.type === "interruptStatement") {
+      addUnique(interruptKinds, node.kind);
+    } else if (node.type === "functionCall") {
+      addUnique(callees, node.functionName);
       if (node.functionName === "llm") {
         for (const name of extractToolsFromLlmCall(node, body)) {
-          addCallee(callees, name);
+          addUnique(callees, name);
         }
       }
     } else if (node.type === "gotoStatement") {
-      addCallee(callees, node.nodeCall.functionName);
+      addUnique(callees, node.nodeCall.functionName);
     }
   }
-  return callees;
+  return { interruptKinds, callees };
+}
+
+function isSplatEntry(e: AgencyObjectKV | SplatExpression): e is SplatExpression {
+  return "type" in e && e.type === "splat";
 }
 
 function extractToolsFromLlmCall(
@@ -106,11 +101,10 @@ function extractToolsFromLlmCall(
   const optionsArg = call.arguments[1];
   if (optionsArg.type !== "agencyObject") return [];
   const toolsEntry = optionsArg.entries.find(
-    (e) => !("type" in e && e.type === "splat") && (e as { key: string }).key === "tools",
+    (e) => !isSplatEntry(e) && e.key === "tools",
   );
-  if (!toolsEntry || ("type" in toolsEntry && toolsEntry.type === "splat")) return [];
-  const toolsValue = (toolsEntry as { value: Expression }).value;
-  return extractFunctionNamesFromArray(toolsValue, enclosingBody);
+  if (!toolsEntry || isSplatEntry(toolsEntry)) return [];
+  return extractFunctionNamesFromArray(toolsEntry.value, enclosingBody);
 }
 
 function extractFunctionNamesFromArray(

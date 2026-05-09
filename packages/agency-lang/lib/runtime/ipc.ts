@@ -72,6 +72,11 @@ export async function sendInterruptToParent(
   },
   votes: SubprocessVotes,
 ): Promise<{ type: "approve"; value?: any } | { type: "reject"; value?: any }> {
+  if (typeof process.send !== "function") {
+    throw new Error(
+      "sendInterruptToParent called without an IPC channel. This function can only be used inside a forked subprocess (AGENCY_IPC=1).",
+    );
+  }
   return new Promise((resolve) => {
     const handler = (msg: any) => {
       if (msg.type === "decision") {
@@ -84,7 +89,7 @@ export async function sendInterruptToParent(
       }
     };
     process.on("message", handler);
-    process.send!({
+    process.send({
       type: "interrupt",
       interrupt: interruptData,
       subprocessVotes: votes,

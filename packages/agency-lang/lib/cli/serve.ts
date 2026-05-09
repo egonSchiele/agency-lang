@@ -1,8 +1,12 @@
+import fs from "fs";
 import path from "path";
 import process from "process";
 import { pathToFileURL } from "url";
 import { compile, loadConfig } from "./commands.js";
 import { SymbolTable } from "../symbolTable.js";
+import { parseAgency } from "../parser.js";
+import { buildCompilationUnit } from "../compilationUnit.js";
+import { typeCheck, formatErrors } from "../typeChecker/index.js";
 import { discoverExports } from "../serve/discovery.js";
 import { createMcpHandler, startStdioServer } from "../serve/mcp/adapter.js";
 import { startHttpServer } from "../serve/http/adapter.js";
@@ -36,11 +40,22 @@ function compileForServe(file: string): CompileResult {
     .filter((sym) => sym.kind === "node" && sym.exported)
     .map((sym) => sym.name);
 
+  // Run type checker to get transitive interrupt kinds and report errors
+  const source = fs.readFileSync(absoluteFile, "utf-8");
+  const parseResult = parseAgency(source, config);
   const interruptKindsByName: Record<string, InterruptKind[]> = {};
-  for (const [name, sym] of Object.entries(fileSymbols ?? {})) {
-    if ((sym.kind === "function" || sym.kind === "node") && sym.interruptKinds) {
-      interruptKindsByName[name] = sym.interruptKinds;
+  if (parseResult.success) {
+    const info = buildCompilationUnit(parseResult.result, symbolTable, absoluteFile, source);
+    const result = typeCheck(parseResult.result, config, info);
+    const typeErrors = result.errors.filter((e) => e.severity !== "warning");
+    const warnings = result.errors.filter((e) => e.severity === "warning");
+    if (typeErrors.length > 0) {
+      console.error(formatErrors(typeErrors));
     }
+    if (warnings.length > 0) {
+      console.error(formatErrors(warnings, "warning"));
+    }
+    Object.assign(interruptKindsByName, result.interruptKindsByFunction);
   }
 
   const moduleId = path.relative(process.cwd(), absoluteFile);

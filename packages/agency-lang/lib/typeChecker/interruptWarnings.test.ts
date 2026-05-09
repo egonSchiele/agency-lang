@@ -51,11 +51,13 @@ describe("interrupt kind warnings", () => {
         orchestrate()
       }
     `);
-    const orchestrateWarnings = warnings.filter((w) =>
-      w.message.includes("orchestrate"),
-    );
-    expect(orchestrateWarnings.length).toBeGreaterThanOrEqual(1);
-    expect(orchestrateWarnings[0].message).toContain("myapp::deploy");
+    expect(warnings).toHaveLength(2);
+    const deployWarning = warnings.find((w) => w.message.includes("'deploy'"));
+    const orchestrateWarning = warnings.find((w) => w.message.includes("'orchestrate'"));
+    expect(deployWarning).toBeDefined();
+    expect(deployWarning!.message).toContain("myapp::deploy");
+    expect(orchestrateWarning).toBeDefined();
+    expect(orchestrateWarning!.message).toContain("myapp::deploy");
   });
 
   it("does not warn when call is inside a handleBlock", () => {
@@ -123,6 +125,26 @@ describe("interrupt kind warnings", () => {
     expect(warnings).toHaveLength(0);
   });
 
+  it("does not warn when call is inside a nested handleBlock", () => {
+    const warnings = warningsFrom(`
+      def deploy() {
+        interrupt myapp::deploy("Deploy?")
+      }
+      node main() {
+        handle {
+          handle {
+            deploy()
+          } with (interrupt) {
+            return approve()
+          }
+        } with (interrupt) {
+          return reject()
+        }
+      }
+    `);
+    expect(warnings).toHaveLength(0);
+  });
+
   it("warns for imported functions with interrupts", () => {
     const suffix = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
     const libFile = path.join(os.tmpdir(), `tc-lib-${suffix}.agency`);
@@ -131,6 +153,38 @@ describe("interrupt kind warnings", () => {
       import { deploy } from "${libFile}"
       node main() {
         deploy()
+      }
+    `;
+    writeFileSync(libFile, `
+      export def deploy() {
+        interrupt myapp::deploy("Deploy?")
+      }
+    `);
+    writeFileSync(mainFile, mainSource);
+    try {
+      const absPath = path.resolve(mainFile);
+      const symbolTable = SymbolTable.build(absPath);
+      const parseResult = parseAgency(mainSource, {});
+      if (!parseResult.success) throw new Error("Parse failed");
+      const info = buildCompilationUnit(parseResult.result, symbolTable, absPath, mainSource);
+      const { errors } = typeCheck(parseResult.result, {}, info);
+      const warnings = errors.filter((e) => e.severity === "warning");
+      expect(warnings).toHaveLength(1);
+      expect(warnings[0].message).toContain("myapp::deploy");
+    } finally {
+      unlinkSync(mainFile);
+      unlinkSync(libFile);
+    }
+  });
+
+  it("warns for imported functions with alias", () => {
+    const suffix = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const libFile = path.join(os.tmpdir(), `tc-lib-alias-${suffix}.agency`);
+    const mainFile = path.join(os.tmpdir(), `tc-main-alias-${suffix}.agency`);
+    const mainSource = `
+      import { deploy as d } from "${libFile}"
+      node main() {
+        d()
       }
     `;
     writeFileSync(libFile, `

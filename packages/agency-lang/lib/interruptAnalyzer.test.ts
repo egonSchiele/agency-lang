@@ -227,5 +227,73 @@ describe("interruptAnalyzer", () => {
       `);
       expect(interruptKindsFor(files, "main")).toEqual(["myapp::deploy"]);
     });
+
+    it("handles llm() with no tools option", () => {
+      const files = analyze(`
+        node main() {
+          const result = llm("do stuff")
+        }
+      `);
+      expect(interruptKindsFor(files, "main")).toEqual([]);
+    });
+
+    it("handles llm() with tools containing partial applications", () => {
+      const files = analyze(`
+        def deploy(env: string) {
+          interrupt myapp::deploy("Deploy?")
+        }
+        node main() {
+          const result = llm("do stuff", { tools: [deploy.partial(env: "prod")] })
+        }
+      `);
+      expect(interruptKindsFor(files, "main")).toEqual(["myapp::deploy"]);
+    });
+  });
+
+  describe("interrupts in control flow", () => {
+    it("collects interrupts inside if/else branches", () => {
+      const files = analyze(`
+        def riskyOp(flag: boolean) {
+          if (flag) {
+            interrupt myapp::deploy("Deploy?")
+          } else {
+            interrupt myapp::rollback("Rollback?")
+          }
+        }
+      `);
+      expect(interruptKindsFor(files, "riskyOp")).toEqual([
+        "myapp::deploy",
+        "myapp::rollback",
+      ]);
+    });
+
+    it("collects interrupts inside loops", () => {
+      const files = analyze(`
+        def processAll(items: string[]) {
+          for (item in items) {
+            interrupt myapp::process("Process item?")
+          }
+        }
+      `);
+      expect(interruptKindsFor(files, "processAll")).toEqual(["myapp::process"]);
+    });
+  });
+
+  describe("combined direct and transitive", () => {
+    it("collects both direct and transitive interrupt kinds", () => {
+      const files = analyze(`
+        def deploy() {
+          interrupt myapp::deploy("Deploy?")
+        }
+        def orchestrate() {
+          interrupt myapp::start("Starting?")
+          deploy()
+        }
+      `);
+      expect(interruptKindsFor(files, "orchestrate")).toEqual([
+        "myapp::deploy",
+        "myapp::start",
+      ]);
+    });
   });
 });

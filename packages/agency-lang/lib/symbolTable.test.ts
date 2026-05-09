@@ -140,13 +140,10 @@ describe("SymbolTable interrupt analysis", () => {
       const st = SymbolTable.build(mainFile);
       const mainSymbols = st.getFile(path.resolve(mainFile))!;
       const libSymbols = st.getFile(path.resolve(libFile))!;
-      expect(libSymbols["deploy"]).toMatchObject({
-        interruptKinds: [{ kind: "myapp::deploy" }],
-      });
-      expect(mainSymbols["main"]).toMatchObject({
-        kind: "node",
-        interruptKinds: [{ kind: "myapp::deploy" }],
-      });
+      expect(libSymbols["deploy"].kind).toBe("function");
+      expect((libSymbols["deploy"] as any).interruptKinds).toEqual([{ kind: "myapp::deploy" }]);
+      expect(mainSymbols["main"].kind).toBe("node");
+      expect((mainSymbols["main"] as any).interruptKinds).toEqual([{ kind: "myapp::deploy" }]);
     } finally {
       unlinkSync(mainFile);
       unlinkSync(libFile);

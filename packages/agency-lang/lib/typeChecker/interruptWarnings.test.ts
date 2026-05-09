@@ -122,4 +122,36 @@ describe("interrupt kind warnings", () => {
     `);
     expect(warnings).toHaveLength(0);
   });
+
+  it("warns for imported functions with interrupts", () => {
+    const suffix = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const libFile = path.join(os.tmpdir(), `tc-lib-${suffix}.agency`);
+    const mainFile = path.join(os.tmpdir(), `tc-main-${suffix}.agency`);
+    const mainSource = `
+      import { deploy } from "${libFile}"
+      node main() {
+        deploy()
+      }
+    `;
+    writeFileSync(libFile, `
+      export def deploy() {
+        interrupt myapp::deploy("Deploy?")
+      }
+    `);
+    writeFileSync(mainFile, mainSource);
+    try {
+      const absPath = path.resolve(mainFile);
+      const symbolTable = SymbolTable.build(absPath);
+      const parseResult = parseAgency(mainSource, {});
+      if (!parseResult.success) throw new Error("Parse failed");
+      const info = buildCompilationUnit(parseResult.result, symbolTable, absPath, mainSource);
+      const { errors } = typeCheck(parseResult.result, {}, info);
+      const warnings = errors.filter((e) => e.severity === "warning");
+      expect(warnings).toHaveLength(1);
+      expect(warnings[0].message).toContain("myapp::deploy");
+    } finally {
+      unlinkSync(mainFile);
+      unlinkSync(libFile);
+    }
+  });
 });

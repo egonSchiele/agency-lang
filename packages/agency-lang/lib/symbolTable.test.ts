@@ -79,7 +79,7 @@ def myFunc() {
 
 describe("SymbolTable interrupt analysis", () => {
   it("populates interruptKinds on function and node symbols", () => {
-    const file = path.join(os.tmpdir(), `st-int-${Date.now()}.agency`);
+    const file = path.join(os.tmpdir(), `st-int-${Date.now()}-${Math.random().toString(36).slice(2)}.agency`);
     writeFileSync(
       file,
       `
@@ -112,6 +112,44 @@ describe("SymbolTable interrupt analysis", () => {
       });
     } finally {
       unlinkSync(file);
+    }
+  });
+
+  it("propagates interrupt kinds across imported files", () => {
+    const suffix = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const libFile = path.join(os.tmpdir(), `st-lib-${suffix}.agency`);
+    const mainFile = path.join(os.tmpdir(), `st-main-${suffix}.agency`);
+    writeFileSync(
+      libFile,
+      `
+      export def deploy() {
+        interrupt myapp::deploy("Deploy?")
+      }
+    `,
+    );
+    writeFileSync(
+      mainFile,
+      `
+      import { deploy } from "${libFile}"
+      node main() {
+        deploy()
+      }
+    `,
+    );
+    try {
+      const st = SymbolTable.build(mainFile);
+      const mainSymbols = st.getFile(path.resolve(mainFile))!;
+      const libSymbols = st.getFile(path.resolve(libFile))!;
+      expect(libSymbols["deploy"]).toMatchObject({
+        interruptKinds: [{ kind: "myapp::deploy" }],
+      });
+      expect(mainSymbols["main"]).toMatchObject({
+        kind: "node",
+        interruptKinds: [{ kind: "myapp::deploy" }],
+      });
+    } finally {
+      unlinkSync(mainFile);
+      unlinkSync(libFile);
     }
   });
 });

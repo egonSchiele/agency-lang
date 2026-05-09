@@ -149,6 +149,18 @@ function traceVariableToArray(
   return null;
 }
 
+function lookupCalleeKinds(
+  calleeName: string,
+  localKinds: KindsByFunction,
+  kindsByFile: KindsByFile,
+): string[] {
+  if (localKinds[calleeName]) return localKinds[calleeName];
+  for (const fileKinds of Object.values(kindsByFile)) {
+    if (fileKinds[calleeName]) return fileKinds[calleeName];
+  }
+  return [];
+}
+
 function resolveTransitiveInterrupts(
   kindsByFile: KindsByFile,
   callGraphByFile: CallGraphByFile,
@@ -161,7 +173,7 @@ function resolveTransitiveInterrupts(
       for (const [funcName, callees] of Object.entries(callGraph)) {
         const currentKinds = kinds[funcName] ?? [];
         for (const calleeName of callees) {
-          const calleeKinds = kinds[calleeName] ?? [];
+          const calleeKinds = lookupCalleeKinds(calleeName, kinds, kindsByFile);
           for (const kind of calleeKinds) {
             if (!currentKinds.includes(kind)) {
               currentKinds.push(kind);

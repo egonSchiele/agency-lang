@@ -234,16 +234,23 @@ export function buildCompilationUnit(
     // was never imported.
     pullTransitiveAliases(unit, symbolTable, aliasSeeds);
 
+    const interruptKindsByFunction: Record<string, InterruptKind[]> = {};
     const fileSymbols = symbolTable.getFile(fromFile);
     if (fileSymbols) {
-      const interruptKindsByFunction: Record<string, InterruptKind[]> = {};
       for (const [name, sym] of Object.entries(fileSymbols)) {
         if ((sym.kind === "function" || sym.kind === "node") && sym.interruptKinds) {
           interruptKindsByFunction[name] = sym.interruptKinds;
         }
       }
-      unit.interruptKindsByFunction = interruptKindsByFunction;
     }
+    for (const stmt of unit.importStatements) {
+      for (const r of symbolTable.resolveImport(stmt, fromFile)) {
+        if ((r.symbol.kind === "function" || r.symbol.kind === "node") && r.symbol.interruptKinds) {
+          interruptKindsByFunction[r.localName] = r.symbol.interruptKinds;
+        }
+      }
+    }
+    unit.interruptKindsByFunction = interruptKindsByFunction;
   }
 
   return unit;

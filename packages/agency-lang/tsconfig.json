@@ -100,5 +100,5 @@
     "skipLibCheck": true /* Skip type checking all .d.ts files. */
   },
   "include": ["lib", "scripts", "test.ts"],
-  "exclude": ["node_modules", "references", "tests", "*.mts", "examples", "lib/tui/test"]
+  "exclude": ["node_modules", "references", "tests", "*.mts", "examples", "lib/tui/test", "lib/stdlib/__tests__/**", "lib/stdlib/**/*.test.ts"]
 }

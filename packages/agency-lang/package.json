@@ -60,6 +60,7 @@
       "import": "./dist/lib/compiler/compile.js",
       "require": "./dist/lib/compiler/compile.js"
     },
+    "./stdlib-lib/*": "./dist/lib/stdlib/*",
     "./stdlib/*": "./stdlib/*"
   },
   "type": "module",

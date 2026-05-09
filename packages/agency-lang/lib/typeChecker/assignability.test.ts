@@ -59,4 +59,22 @@ describe("functionRefType assignability", () => {
   it("functionRefType is not assignable to string", () => {
     expect(isAssignable(fnRef, { type: "primitiveType", value: "string" }, {})).toBe(false);
   });
+
+  it("function primitive is not assignable to functionRefType", () => {
+    expect(
+      isAssignable({ type: "primitiveType", value: "function" }, fnRef, {}),
+    ).toBe(false);
+  });
+
+  it("two functionRefTypes with incompatible return types are not assignable", () => {
+    const other: VariableType = {
+      type: "functionRefType",
+      name: "deploy2",
+      params: [
+        { type: "functionParameter", name: "env", typeHint: { type: "primitiveType", value: "string" } },
+      ],
+      returnType: { type: "primitiveType", value: "number" },
+    };
+    expect(isAssignable(fnRef, other, {})).toBe(false);
+  });
 });

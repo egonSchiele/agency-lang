@@ -139,6 +139,80 @@ describe("interrupt analysis via type checker", () => {
     ).toEqual([]);
   });
 
+  it("collects multiple interrupt kinds from one function", () => {
+    expect(
+      interruptKindsFor(
+        `
+      def riskyOp() {
+        interrupt myapp::deploy("Deploy?")
+        interrupt myapp::validate("Validate?")
+      }
+    `,
+        "riskyOp",
+      ),
+    ).toEqual(["myapp::deploy", "myapp::validate"]);
+  });
+
+  it("propagates through goto statements", () => {
+    expect(
+      interruptKindsFor(
+        `
+      node checkout() {
+        interrupt payment::charge("Charge?")
+      }
+      node main() {
+        return checkout()
+      }
+    `,
+        "main",
+      ),
+    ).toEqual(["payment::charge"]);
+  });
+
+  it("collects from node definitions", () => {
+    expect(
+      interruptKindsFor(
+        `
+      node checkout() {
+        interrupt payment::charge("Charge?")
+      }
+    `,
+        "checkout",
+      ),
+    ).toEqual(["payment::charge"]);
+  });
+
+  it("propagates through cross-file imports", () => {
+    const suffix = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const libFile = path.join(os.tmpdir(), `int-lib-${suffix}.agency`);
+    const mainFile = path.join(os.tmpdir(), `int-main-${suffix}.agency`);
+    writeFileSync(libFile, `
+      export def deploy() {
+        interrupt myapp::deploy("Deploy?")
+      }
+    `);
+    const mainSource = `
+      import { deploy } from "${libFile}"
+      def main() {
+        deploy()
+      }
+    `;
+    writeFileSync(mainFile, mainSource);
+    try {
+      const absPath = path.resolve(mainFile);
+      const symbolTable = SymbolTable.build(absPath);
+      const parseResult = parseAgency(mainSource, {});
+      if (!parseResult.success) throw new Error("Parse failed");
+      const info = buildCompilationUnit(parseResult.result, symbolTable, absPath, mainSource);
+      const { interruptKindsByFunction } = typeCheck(parseResult.result, {}, info);
+      const kinds = (interruptKindsByFunction["main"] ?? []).map((ik) => ik.kind).sort();
+      expect(kinds).toEqual(["myapp::deploy"]);
+    } finally {
+      unlinkSync(mainFile);
+      unlinkSync(libFile);
+    }
+  });
+
   it("propagates through multiple levels", () => {
     expect(
       interruptKindsFor(

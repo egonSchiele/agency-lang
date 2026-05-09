@@ -11,7 +11,7 @@ import type {
   ImportNodeStatement,
   ImportStatement,
 } from "./types/importStatement.js";
-import type { SymbolTable } from "./symbolTable.js";
+import type { SymbolTable, InterruptKind } from "./symbolTable.js";
 import { walkNodes } from "./utils/node.js";
 import { resultTypeForValidation } from "./typeChecker/validation.js";
 import { visitTypes } from "./typeChecker/typeWalker.js";
@@ -93,6 +93,8 @@ export type CompilationUnit = {
    * `// @tc-nocheck` / `// @tc-ignore` directives. Optional because
    * many callers (including most tests) construct the AST directly. */
   sourceText?: string;
+  /** Transitive interrupt kinds per function/node, populated from the symbol table. */
+  interruptKindsByFunction?: Record<string, InterruptKind[]>;
 };
 
 export function scopeKey(scope: Scope): string {
@@ -231,6 +233,31 @@ export function buildCompilationUnit(
     // 'ExecResult'" because the alias body lives in the source module and
     // was never imported.
     pullTransitiveAliases(unit, symbolTable, aliasSeeds);
+
+    const interruptKindsByFunction: Record<string, InterruptKind[]> = {};
+    const fileSymbols = symbolTable.getFile(fromFile);
+    if (fileSymbols) {
+      for (const [name, sym] of Object.entries(fileSymbols)) {
+        if ((sym.kind === "function" || sym.kind === "node") && sym.interruptKinds) {
+          interruptKindsByFunction[name] = sym.interruptKinds;
+        }
+      }
+    }
+    for (const stmt of unit.importStatements) {
+      for (const r of symbolTable.resolveImport(stmt, fromFile)) {
+        if ((r.symbol.kind === "function" || r.symbol.kind === "node") && r.symbol.interruptKinds) {
+          interruptKindsByFunction[r.localName] = r.symbol.interruptKinds;
+        }
+      }
+    }
+    for (const stmt of unit.importedNodes) {
+      for (const r of symbolTable.resolveImportedNodes(stmt, fromFile)) {
+        if (r.symbol.kind === "node" && r.symbol.interruptKinds) {
+          interruptKindsByFunction[r.localName] = r.symbol.interruptKinds;
+        }
+      }
+    }
+    unit.interruptKindsByFunction = interruptKindsByFunction;
   }
 
   return unit;

@@ -1,6 +1,9 @@
 import process from "process";
 import type { InterruptKind } from "../../symbolTable.js";
 import type { ExportedFunction, ExportedItem } from "../types.js";
+import type { PolicyStore } from "../policyStore.js";
+import type { InterruptHandlers } from "./interruptLoop.js";
+import { runWithPolicy } from "./interruptLoop.js";
 import { errorMessage } from "../util.js";
 
 function formatToolDescription(description: string, interruptKinds: InterruptKind[]): string {
@@ -41,7 +44,59 @@ export type McpConfig = {
   serverName: string;
   serverVersion: string;
   exports: ExportedItem[];
+  policyStore?: PolicyStore;
+  interruptHandlers?: InterruptHandlers;
 };
+
+const POLICY_TOOL_DEFINITIONS = [
+  {
+    name: "agencyGetPolicy",
+    description: "Get the current interrupt policy for this agent. Returns a JSON object keyed by interrupt kind.",
+    inputSchema: { type: "object" as const, properties: {} },
+  },
+  {
+    name: "agencySetPolicy",
+    description: `Set the interrupt policy for this agent. The policy controls which actions the agent is allowed to take autonomously. Each tool lists its interrupt kinds — use those as keys in the policy object. Example: {"email::send": [{"match": {"recipient": "*@company.com"}, "action": "approve"}, {"action": "reject"}]} approves sending emails to company.com addresses and rejects all others.`,
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        policy: {
+          type: "object" as const,
+          description: "Policy object keyed by interrupt kind. Each kind maps to an ordered array of rules. Each rule has an 'action' field ('approve' or 'reject') and an optional 'match' field — an object whose keys are interrupt data field names and whose values are glob patterns. Rules are evaluated in order; the first match wins. A rule with no 'match' field is a catch-all.",
+        },
+      },
+      required: ["policy"],
+    },
+  },
+  {
+    name: "agencyClearPolicy",
+    description: "Clear the interrupt policy, resetting to reject-all. After clearing, all interrupt-producing actions will be rejected until a new policy is set.",
+    inputSchema: { type: "object" as const, properties: {} },
+  },
+];
+
+function handlePolicyTool(
+  name: string,
+  args: Record<string, any>,
+  policyStore: PolicyStore,
+): { content: Array<{ type: string; text: string }>; isError: boolean } | null {
+  switch (name) {
+    case "agencyGetPolicy":
+      return { content: [{ type: "text", text: JSON.stringify(policyStore.get(), null, 2) }], isError: false };
+    case "agencySetPolicy":
+      try {
+        policyStore.set(args.policy);
+        return { content: [{ type: "text", text: "Policy updated successfully." }], isError: false };
+      } catch (err) {
+        return { content: [{ type: "text", text: errorMessage(err) }], isError: true };
+      }
+    case "agencyClearPolicy":
+      policyStore.clear();
+      return { content: [{ type: "text", text: "Policy cleared." }], isError: false };
+    default:
+      return null;
+  }
+}
 
 export function createMcpHandler(
   config: McpConfig,
@@ -57,6 +112,11 @@ export function createMcpHandler(
     inputSchema: schemaToJsonSchema(t.agencyFunction.toolDefinition?.schema),
     ...(t.agencyFunction.safe ? { annotations: { readOnlyHint: true } } : {}),
   }));
+
+  const { policyStore } = config;
+  if (policyStore) {
+    toolsListPayload.push(...POLICY_TOOL_DEFINITIONS);
+  }
 
   return async (message: JsonRpcMessage): Promise<JsonRpcMessage | null> => {
     if (message.jsonrpc !== "2.0") {
@@ -83,22 +143,28 @@ export function createMcpHandler(
       case "tools/call": {
         const name = message.params?.name;
         const args = message.params?.arguments ?? {};
+        const id = message.id ?? null;
+
+        if (policyStore) {
+          const policyResult = handlePolicyTool(name, args, policyStore);
+          if (policyResult) return success(id, policyResult);
+        }
+
         const tool = toolsByName[name];
         if (!tool) {
-          return rpcError(message.id ?? null, -32602, `Unknown tool '${name}'`);
+          return rpcError(id, -32602, `Unknown tool '${name}'`);
         }
         try {
-          const result = await tool.agencyFunction.invoke({
-            type: "named",
-            positionalArgs: [],
-            namedArgs: args,
-          });
-          return success(message.id ?? null, {
+          const invoke = () => tool.agencyFunction.invoke({ type: "named", positionalArgs: [], namedArgs: args });
+          const result = policyStore && config.interruptHandlers
+            ? await runWithPolicy(invoke, policyStore, config.interruptHandlers)
+            : await invoke();
+          return success(id, {
             content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
             isError: false,
           });
         } catch (err) {
-          return success(message.id ?? null, {
+          return success(id, {
             content: [{ type: "text", text: errorMessage(err) }],
             isError: true,
           });

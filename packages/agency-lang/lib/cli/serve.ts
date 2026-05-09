@@ -10,6 +10,8 @@ import { createLogger } from "../logger.js";
 import { VERSION } from "../version.js";
 import type { ExportedItem } from "../serve/types.js";
 import type { InterruptKind } from "../symbolTable.js";
+import type { InterruptHandlers } from "../serve/mcp/interruptLoop.js";
+import { PolicyStore } from "../serve/policyStore.js";
 import * as esbuild from "esbuild";
 
 type CompileResult = {
@@ -71,13 +73,33 @@ export async function serveMcp(
   options: { name?: string },
 ): Promise<void> {
   const compileResult = compileForServe(file);
-  const { exports } = await loadAndDiscover(compileResult);
+  const { exports, moduleExports } = await loadAndDiscover(compileResult);
 
   const serverName = options.name ?? path.basename(file, ".agency");
+  const policyStore = new PolicyStore(serverName);
+
+  // The compiled module's hasInterrupts checks raw data, but respondToInterrupts
+  // returns { data: ... }. We normalize here so the interrupt loop sees a
+  // consistent shape.
+  const rawHasInterrupts = moduleExports.hasInterrupts as (data: unknown) => boolean;
+  const rawRespondToInterrupts = moduleExports.respondToInterrupts as (
+    interrupts: unknown[],
+    responses: unknown[],
+  ) => Promise<{ data: unknown }>;
+
+  const interruptHandlers: InterruptHandlers = {
+    hasInterrupts: rawHasInterrupts,
+    respondToInterrupts: async (interrupts, responses) => {
+      const wrapped = await rawRespondToInterrupts(interrupts, responses);
+      return wrapped.data;
+    },
+  };
+
   const handler = createMcpHandler({
     serverName,
     serverVersion: VERSION,
     exports,
+    policyConfig: { policyStore, interruptHandlers },
   });
 
   startStdioServer(handler);

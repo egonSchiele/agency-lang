@@ -1,11 +1,11 @@
 import picomatch from "picomatch";
 
-type PolicyRule = {
+export type PolicyRule = {
   match?: Record<string, string>;
   action: "approve" | "reject" | "propagate";
 };
 
-type Policy = Record<string, PolicyRule[]>;
+export type Policy = Record<string, PolicyRule[]>;
 
 type PolicyResult =
   | { type: "approve" }

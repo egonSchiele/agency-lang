@@ -245,12 +245,17 @@ export async function executeNodeAsync({
       resultsFilename: resultsFile,
     });
     fs.writeFileSync(evaluateFile, evaluateScript);
-    // SIGKILL (not SIGTERM) for timeout: these can be spinning subprocesses
-    // (`while(true)`) where SIGTERM might be ignored. SIGKILL is uncatchable.
+    // SIGKILL (not SIGTERM) for both the `timeout` AND `signal` paths:
+    // these can be spinning subprocesses (`while(true)`) where SIGTERM
+    // might be ignored. SIGKILL is uncatchable. Setting `killSignal`
+    // covers both the per-call `timeout` option and the AbortSignal
+    // (suite-ceiling/SIGINT) path, which otherwise default to SIGTERM.
+    const wantsKill = timeoutMs !== undefined || signal !== undefined;
     const { stdout, stderr } = await execFileAsync("node", [evaluateFile], {
       maxBuffer: 10 * 1024 * 1024,
-      ...(timeoutMs !== undefined ? { timeout: timeoutMs, killSignal: "SIGKILL" as const } : {}),
+      ...(timeoutMs !== undefined ? { timeout: timeoutMs } : {}),
       ...(signal !== undefined ? { signal } : {}),
+      ...(wantsKill ? { killSignal: "SIGKILL" as const } : {}),
     });
     const results = readFileSync(resultsFile, "utf-8");
     return { data: JSON.parse(results).data, stdout, stderr };

@@ -61,8 +61,11 @@ type Tests = {
 // clamp any user-supplied value so a stray `"timeoutMs": 9999999999` in a
 // fixture cannot exceed our per-test or suite-wide caps.
 const TIMEOUT_CEILINGS = {
-  // A single test cannot consume more than the entire suite budget.
-  perTestMs: 30 * 60 * 1000, // 30 minutes
+  // A single test cannot consume more than 5 minutes — keeps a single
+  // misconfigured test from monopolizing the suite budget. The default
+  // (DEFAULT_PER_TEST_MS) sits well under this so most fixtures are
+  // untouched.
+  perTestMs: 5 * 60 * 1000, // 5 minutes
   // Suite-wide ceiling. Not currently user-configurable.
   suiteMs: 30 * 60 * 1000, // 30 minutes
 } as const;
@@ -72,7 +75,10 @@ const DEFAULT_PER_TEST_MS = 2 * 60 * 1000; // 2 minutes
 function resolveTimeoutMs(testCase: TestCase, fileDefaults: Tests): number {
   const requested =
     testCase.timeoutMs ?? fileDefaults.defaultTimeoutMs ?? DEFAULT_PER_TEST_MS;
-  return Math.min(requested, TIMEOUT_CEILINGS.perTestMs);
+  // Clamp to >= 1ms: Node treats `timeout: 0` (and negative) as "no
+  // timeout", which would defeat the entire defensive-timeout goal.
+  // Clamp to <= ceiling so a stray huge value can't escape the cap.
+  return Math.min(Math.max(1, requested), TIMEOUT_CEILINGS.perTestMs);
 }
 
 // Format a millisecond duration as the largest unit that yields an integer.
@@ -122,6 +128,11 @@ type SuiteContext = {
   // Files that exist in the input set but have not yet been picked up.
   // Mutated by workers as they pull items.
   pending: Set<string>;
+  // Snapshot of `inFlight` taken at the moment of abort. Needed for the
+  // summary because `runTestFile` removes itself from `inFlight` in its
+  // `finally` — so by the time the summary prints (after the runner has
+  // drained), `inFlight` is empty.
+  inFlightAtAbort: string[];
 };
 
 function createSuiteContext(allFiles: string[]): SuiteContext {
@@ -132,6 +143,7 @@ function createSuiteContext(allFiles: string[]): SuiteContext {
     completed: [],
     inFlight: new Set(),
     pending: new Set(allFiles),
+    inFlightAtAbort: [],
   };
 }
 
@@ -139,6 +151,8 @@ function triggerSuiteAbort(suite: SuiteContext, reason: AbortReason): void {
   if (suite.aborted) return;
   suite.aborted = true;
   suite.abortReason = reason;
+  // Snapshot in-flight files NOW, before workers' `finally` blocks drain.
+  suite.inFlightAtAbort = [...suite.inFlight];
   suite.abortController.abort();
 }
 
@@ -470,14 +484,18 @@ function sanitizeParallel(parallel: number): number {
     : 1;
 }
 
+// Returns `(R | undefined)[]` (not `R[]`) because workers can exit
+// early when `shouldAbort()` becomes true, leaving holes in the result
+// array. Callers must handle `undefined` entries (typically: skip them
+// during result aggregation).
 async function runWithConcurrency<T, R>(
   items: T[],
   concurrency: number,
   fn: (item: T) => Promise<R>,
   onError: (item: T, error: unknown) => R,
   shouldAbort?: () => boolean,
-): Promise<R[]> {
-  const results: R[] = new Array(items.length);
+): Promise<(R | undefined)[]> {
+  const results: (R | undefined)[] = new Array(items.length);
   let nextIndex = 0;
 
   async function worker() {
@@ -775,9 +793,9 @@ function printSuiteAbortSummary(suite: SuiteContext): void {
     console.log("Completed test files:");
     for (const f of suite.completed) console.log(`  ✓ ${f}`);
   }
-  if (suite.inFlight.size > 0) {
+  if (suite.inFlightAtAbort.length > 0) {
     console.log("\nTest files in flight when aborted:");
-    for (const f of suite.inFlight) console.log(color.yellow(`  - ${f}`));
+    for (const f of suite.inFlightAtAbort) console.log(color.yellow(`  - ${f}`));
   }
   if (suite.pending.size > 0) {
     console.log("\nTest files that did not start:");
@@ -816,7 +834,7 @@ export async function test(
   };
   process.once("SIGINT", sigintHandler);
 
-  let results: TestStats[] = [];
+  let results: (TestStats | undefined)[] = [];
   try {
     results = await runWithConcurrency(
       testFiles,
@@ -985,7 +1003,9 @@ export async function testTs(config: AgencyConfig, inputPaths: string[], paralle
     }
   }
 
-  const results = await runWithConcurrency(
+  // testTs doesn't pass `shouldAbort`, so no entries can be undefined,
+  // but `runWithConcurrency`'s type allows for it — drop them defensively.
+  const rawResults = await runWithConcurrency(
     allDirs,
     sanitizeParallel(parallel),
     (dir) => runTsTestDir(config, dir),
@@ -994,6 +1014,7 @@ export async function testTs(config: AgencyConfig, inputPaths: string[], paralle
       return { success: false, dir };
     },
   );
+  const results = rawResults.filter((r): r is { success: boolean; dir: string } => r !== undefined);
 
   const successes = results.filter((r) => r.success);
   const failures = results.filter((r) => !r.success);

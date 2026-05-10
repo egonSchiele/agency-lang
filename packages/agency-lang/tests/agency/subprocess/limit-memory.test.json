@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "memory limit kills allocator-bomb subprocess",
+      "input": "",
+      "expectedOutput": "\"memory limit hit\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

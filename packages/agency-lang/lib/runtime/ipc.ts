@@ -205,9 +205,11 @@ export async function _run(
   const stateStack = __state.stateStack ?? ctx.stateStack;
   const limits = clampLimits({ wallClock, memory, ipcPayload, stdout });
 
+  const memoryMb = Math.max(1, Math.floor(limits.memory / (1024 * 1024)));
   const child = fork(subprocessBootstrapPath, [], {
     stdio: ["pipe", "inherit", "inherit", "ipc"],
     env: { ...process.env, AGENCY_IPC: "1" },
+    execArgv: [`--max-old-space-size=${memoryMb}`],
   });
 
   return new Promise((resolvePromise, rejectPromise) => {
@@ -297,10 +299,24 @@ export async function _run(
       }
     });
 
-    child.on("close", (code: number | null) => {
-      settle(rejectPromise, new Error(
-        `Subprocess exited unexpectedly with code ${code}`,
-      ));
+    child.on("close", (code: number | null, signal: NodeJS.Signals | null) => {
+      if (settled) return;
+      // V8 OOM signatures: SIGABRT (V8 abort on OOM), or exit code 134
+      // (SIGABRT translated to 128+6 by Node on Unix). We classify
+      // conservatively — only when one of these signatures is present do we
+      // report a memory limit violation; other crashes get the generic
+      // "exited unexpectedly" failure.
+      const isLikelyOom = signal === "SIGABRT" || code === 134;
+      if (isLikelyOom) {
+        settled = true;
+        clearWallClockTimer();
+        cleanup();
+        resolvePromise(makeLimitFailure("memory", limits.memory, limits.memory));
+      } else {
+        settle(rejectPromise, new Error(
+          `Subprocess exited unexpectedly with code ${code}${signal ? ` signal ${signal}` : ""}`,
+        ));
+      }
     });
 
     child.on("error", (err: Error) => {

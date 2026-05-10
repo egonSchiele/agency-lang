@@ -1,3 +1,4 @@
+import process from "process";
 import {
   AgencyComment,
   AgencyMultiLineComment,
@@ -72,12 +73,18 @@ export class AgencyGenerator {
 
   private indentLevel: number = 0;
   private indentSize: number = 2;
+  private debug: boolean = !!process.env.AGENCY_DEBUG;
 
   constructor(args: { config?: AgencyConfig } = {}) {
     this.agencyConfig = mergeDeep(this.configDefaults(), args.config || {});
     if (this.agencyConfig.verbose) {
       console.log("Generator config:", this.agencyConfig);
     }
+  }
+
+  protected trace(methodName: string, result: string): string {
+    if (!this.debug || result === "") return result;
+    return `[${methodName}]${result}[/${methodName}]`;
   }
 
   configDefaults(): Partial<AgencyConfig> {
@@ -190,6 +197,11 @@ export class AgencyGenerator {
   protected processGraphNodeName(node: GraphNodeDefinition): void { }
 
   public processNode(node: AgencyNode): string {
+    const result = this.processNodeInner(node);
+    return this.trace(node.type, result);
+  }
+
+  private processNodeInner(node: AgencyNode): string {
     switch (node.type) {
       case "typeAlias":
         return this.processTypeAlias(node);

@@ -36,6 +36,10 @@ type TestCase = {
   description?: string;
   retry?: number;
   skip?: boolean;
+  // Per-test timeout in milliseconds. Overrides the file-level
+  // `defaultTimeoutMs`. Falls back to DEFAULT_PER_TEST_MS when unset.
+  // Clamped to TIMEOUT_CEILINGS.perTestMs.
+  timeoutMs?: number;
 };
 type Tests = {
   sourceFile?: string;
@@ -46,7 +50,97 @@ type Tests = {
   // Optional human-readable reason for the skip; printed when the file is
   // skipped. No semantic effect.
   skipReason?: string;
+  // File-level default timeout (ms) applied to every test in this file
+  // unless the individual TestCase sets its own `timeoutMs`. Falls back
+  // to DEFAULT_PER_TEST_MS when unset.
+  defaultTimeoutMs?: number;
 };
+
+// ── Test runner timeout limits ──
+// Pattern mirrors LIMIT_CEILINGS in lib/runtime/ipc.ts: hardcoded ceilings
+// clamp any user-supplied value so a stray `"timeoutMs": 9999999999` in a
+// fixture cannot exceed our per-test or suite-wide caps.
+const TIMEOUT_CEILINGS = {
+  // A single test cannot consume more than the entire suite budget.
+  perTestMs: 30 * 60 * 1000, // 30 minutes
+  // Suite-wide ceiling. Not currently user-configurable.
+  suiteMs: 30 * 60 * 1000, // 30 minutes
+} as const;
+
+const DEFAULT_PER_TEST_MS = 2 * 60 * 1000; // 2 minutes
+
+function resolveTimeoutMs(testCase: TestCase, fileDefaults: Tests): number {
+  const requested =
+    testCase.timeoutMs ?? fileDefaults.defaultTimeoutMs ?? DEFAULT_PER_TEST_MS;
+  return Math.min(requested, TIMEOUT_CEILINGS.perTestMs);
+}
+
+// Format a millisecond duration as the largest unit that yields an integer.
+// 120000 → "2 minutes", 90000 → "90 seconds", 500 → "500 milliseconds".
+function formatTimeout(ms: number): string {
+  if (ms % 60000 === 0) {
+    const m = ms / 60000;
+    return `${m} minute${m === 1 ? "" : "s"}`;
+  }
+  if (ms % 1000 === 0) {
+    const s = ms / 1000;
+    return `${s} second${s === 1 ? "" : "s"}`;
+  }
+  return `${ms} millisecond${ms === 1 ? "" : "s"}`;
+}
+
+// Detect the rejection shape produced when execFile kills the child due to
+// our `timeout` option. Promisified execFile attaches `killed` and `signal`
+// to the error.
+function isTimeoutError(e: unknown): boolean {
+  if (!(e instanceof Error)) return false;
+  const err = e as any;
+  return err.killed === true && err.signal === "SIGKILL";
+}
+
+// Detect the rejection shape produced when execFile is killed via the
+// AbortSignal (suite ceiling or SIGINT). Node sets `code === "ABORT_ERR"`
+// or surfaces the abort via `signal`.
+function isAbortError(e: unknown): boolean {
+  if (!(e instanceof Error)) return false;
+  const err = e as any;
+  return err.name === "AbortError" || err.code === "ABORT_ERR";
+}
+
+// ── Suite-wide context ──
+// Bundled per the RunSession pattern in lib/runtime/ipc.ts so helpers can
+// be passed one object instead of N closure parameters.
+type AbortReason = "sigint" | "ceiling";
+type SuiteContext = {
+  aborted: boolean;
+  abortReason: AbortReason | null;
+  abortController: AbortController;
+  // Files that started running and whose runTestFile() returned normally.
+  completed: string[];
+  // Files currently being processed by a worker.
+  inFlight: Set<string>;
+  // Files that exist in the input set but have not yet been picked up.
+  // Mutated by workers as they pull items.
+  pending: Set<string>;
+};
+
+function createSuiteContext(allFiles: string[]): SuiteContext {
+  return {
+    aborted: false,
+    abortReason: null,
+    abortController: new AbortController(),
+    completed: [],
+    inFlight: new Set(),
+    pending: new Set(allFiles),
+  };
+}
+
+function triggerSuiteAbort(suite: SuiteContext, reason: AbortReason): void {
+  if (suite.aborted) return;
+  suite.aborted = true;
+  suite.abortReason = reason;
+  suite.abortController.abort();
+}
 
 function readFile(filename: string): string {
   console.log("Trying to read file", filename, "...");
@@ -381,6 +475,7 @@ async function runWithConcurrency<T, R>(
   concurrency: number,
   fn: (item: T) => Promise<R>,
   onError: (item: T, error: unknown) => R,
+  shouldAbort?: () => boolean,
 ): Promise<R[]> {
   const results: R[] = new Array(items.length);
   let nextIndex = 0;
@@ -390,6 +485,10 @@ async function runWithConcurrency<T, R>(
       // Safe: nextIndex++ is synchronous and JS is single-threaded,
       // so no two workers can read the same value before the increment.
       const index = nextIndex++;
+      // Suite abort: stop pulling new items. Items already in flight
+      // continue to settle (via their own AbortSignal-killed children),
+      // but no new files start.
+      if (shouldAbort && shouldAbort()) return;
       try {
         results[index] = await fn(items[index]);
       } catch (e) {
@@ -406,12 +505,20 @@ async function runWithConcurrency<T, R>(
   return results;
 }
 
+// Outcome of a single test attempt. "aborted" means the suite-wide
+// AbortSignal fired (ceiling or SIGINT) — distinct from a per-test
+// timeout, because the runner shouldn't keep retrying or print a per-test
+// failure message in that case.
+type SingleTestOutcome = "passed" | "failed" | "aborted";
+
 async function runSingleTest(
   config: AgencyConfig,
   testFile: string,
   testCase: TestCase,
+  timeoutMs: number,
+  signal: AbortSignal,
   log: Logger,
-): Promise<boolean> {
+): Promise<SingleTestOutcome> {
   const hasArgs = testCase.input !== "";
   const relativeSourceFilePath = testFile.replace(".test.json", ".agency");
   let result: { data: any; stdout: string; stderr: string };
@@ -423,13 +530,23 @@ async function runSingleTest(
       hasArgs,
       argsString: testCase.input,
       interruptHandlers: testCase.interruptHandlers,
+      timeoutMs,
+      signal,
     });
     if (result.stdout) log(result.stdout.trimEnd());
     if (result.stderr) log(result.stderr.trimEnd(), "stderr");
   } catch (e) {
+    if (isAbortError(e)) {
+      // Don't print a failure — the suite-abort summary will explain.
+      return "aborted";
+    }
+    if (isTimeoutError(e)) {
+      log(color.red(`  ✗ Test exceeded ${formatTimeout(timeoutMs)} timeout`));
+      return "failed";
+    }
     exitIfSignal(e);
     log(color.red(`  ✗ Test execution error: ${e}`));
-    return false;
+    return "failed";
   }
 
   let testPassed = true;
@@ -478,7 +595,7 @@ async function runSingleTest(
       }
     }
   }
-  return testPassed;
+  return testPassed ? "passed" : "failed";
 }
 
 function collectTestFiles(inputPath: string): string[] {
@@ -501,12 +618,45 @@ function collectTestFiles(inputPath: string): string[] {
   return files;
 }
 
+// Run a single test through its retry loop. Returns the final outcome.
+// "aborted" short-circuits the retry loop — no point retrying when the
+// suite is shutting down.
+async function runTestWithRetries(
+  config: AgencyConfig,
+  testFile: string,
+  testCase: TestCase,
+  timeoutMs: number,
+  signal: AbortSignal,
+  log: Logger,
+): Promise<SingleTestOutcome> {
+  const maxAttempts = (testCase.retry ?? 0) + 1;
+  let outcome: SingleTestOutcome = "failed";
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    if (attempt > 1) {
+      log(color.yellow(`  Retry ${attempt - 1}/${testCase.retry}...`));
+    }
+    try {
+      outcome = await runSingleTest(config, testFile, testCase, timeoutMs, signal, log);
+      if (outcome === "passed" || outcome === "aborted") break;
+    } catch (e) {
+      exitIfSignal(e);
+      log(color.red(`  ✗ Test error: ${e}`));
+      outcome = "failed";
+    }
+  }
+  return outcome;
+}
+
 async function runTestFile(
   config: AgencyConfig,
   testFile: string,
+  suite: SuiteContext,
 ): Promise<TestStats> {
   const logger = createBufferedLogger();
   const log = logger.log;
+
+  suite.inFlight.add(testFile);
+  suite.pending.delete(testFile);
 
   try {
     log(color.yellow(`Running tests for ${testFile}...`));
@@ -535,8 +685,16 @@ async function runTestFile(
 
     let skipped = 0;
     const slowTests: SlowTest[] = [];
+    let aborted = false;
 
     for (let i = 0; i < total; i++) {
+      // Bail between test cases if the suite is aborting. The currently
+      // in-flight execFile (if any) is killed via its AbortSignal.
+      if (suite.aborted) {
+        aborted = true;
+        break;
+      }
+
       const testCase = tests.tests[i];
       const interruptInfo = testCase.interruptHandlers
         ? ` interrupts=${testCase.interruptHandlers.length}`
@@ -555,37 +713,40 @@ async function runTestFile(
         continue;
       }
 
-      const maxAttempts = (testCase.retry ?? 0) + 1;
-      let testPassed = false;
-
+      const timeoutMs = resolveTimeoutMs(testCase, tests);
       const startTime = performance.now();
-      for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-        if (attempt > 1) {
-          log(color.yellow(`  Retry ${attempt - 1}/${testCase.retry}...`));
-        }
-        try {
-          testPassed = await runSingleTest(config, testFile, testCase, log);
-          if (testPassed) break;
-        } catch (e) {
-          exitIfSignal(e);
-          log(color.red(`  ✗ Test error: ${e}`));
-          testPassed = false;
-        }
-      }
+      const outcome = await runTestWithRetries(
+        config,
+        testFile,
+        testCase,
+        timeoutMs,
+        suite.abortController.signal,
+        log,
+      );
       const durationMs = performance.now() - startTime;
+
+      if (outcome === "aborted") {
+        aborted = true;
+        break;
+      }
 
       const testName = testCase.description
         ? `${testFile} > ${testCase.nodeName} > ${testCase.description}`
         : `${testFile} > ${testCase.nodeName}(${testCase.input || ""})`;
       slowTests.push({ name: testName, durationMs });
 
-      if (testPassed) passed++;
+      if (outcome === "passed") passed++;
     }
 
     const ran = total - skipped;
     const failed = ran - passed;
     const skipMsg = skipped > 0 ? ` (${skipped} skipped)` : "";
-    log(`\n${passed}/${ran} tests passed${skipMsg}`);
+    if (!aborted) {
+      log(`\n${passed}/${ran} tests passed${skipMsg}`);
+      suite.completed.push(testFile);
+    } else {
+      log(color.yellow(`\n  ⚠️  ${testFile} aborted (${passed}/${ran} tests passed before abort)`));
+    }
 
     return {
       passed,
@@ -596,7 +757,31 @@ async function runTestFile(
       slowTests,
     };
   } finally {
+    suite.inFlight.delete(testFile);
     logger.flush();
+  }
+}
+
+// Print the suite-abort summary after the runner has drained.
+// Three categories: completed, in-flight when abort fired, never started.
+function printSuiteAbortSummary(suite: SuiteContext): void {
+  const header =
+    suite.abortReason === "sigint"
+      ? "⚠️  Interrupted by user"
+      : `⚠️  Suite-wide timeout of ${formatTimeout(TIMEOUT_CEILINGS.suiteMs)} exceeded`;
+  console.log(color.yellow(`\n${header}. Aborting.\n`));
+
+  if (suite.completed.length > 0) {
+    console.log("Completed test files:");
+    for (const f of suite.completed) console.log(`  ✓ ${f}`);
+  }
+  if (suite.inFlight.size > 0) {
+    console.log("\nTest files in flight when aborted:");
+    for (const f of suite.inFlight) console.log(color.yellow(`  - ${f}`));
+  }
+  if (suite.pending.size > 0) {
+    console.log("\nTest files that did not start:");
+    for (const f of suite.pending) console.log(color.yellow(`  - ${f}`));
   }
 }
 
@@ -610,27 +795,58 @@ export async function test(
     testFiles.push(...collectTestFiles(inputPath));
   }
 
-  const results = await runWithConcurrency(
-    testFiles,
-    sanitizeParallel(parallel),
-    (testFile) => runTestFile(config, testFile),
-    (testFile, error) => {
-      console.error(color.red(`  ✗ Test file error: ${testFile}: ${error}`));
-      return {
-        passed: 0,
-        failed: 1,
-        filesPassed: 0,
-        filesFailed: 1,
-        failedFiles: [testFile],
-        slowTests: [],
-      };
-    },
-  );
+  const suite = createSuiteContext(testFiles);
+
+  // Suite-wide ceiling. When fired, flips the abort flag, which causes:
+  //   - workers to stop pulling new files (runWithConcurrency check)
+  //   - in-flight execFile children to be SIGKILL'd (AbortSignal)
+  //   - runTestFile loops to break between cases
+  const ceilingTimer = setTimeout(() => {
+    triggerSuiteAbort(suite, "ceiling");
+  }, TIMEOUT_CEILINGS.suiteMs);
+  // Don't keep the process alive just for this timer.
+  ceilingTimer.unref?.();
+
+  // Graceful Ctrl+C: first SIGINT triggers the same drain-and-summarize
+  // flow as the ceiling. A SECOND SIGINT falls through to Node's default
+  // handler (immediate exit) — critical safety valve so the user can
+  // always escape if our drain logic itself hangs.
+  const sigintHandler = () => {
+    triggerSuiteAbort(suite, "sigint");
+  };
+  process.once("SIGINT", sigintHandler);
+
+  let results: TestStats[] = [];
+  try {
+    results = await runWithConcurrency(
+      testFiles,
+      sanitizeParallel(parallel),
+      (testFile) => runTestFile(config, testFile, suite),
+      (testFile, error) => {
+        console.error(color.red(`  ✗ Test file error: ${testFile}: ${error}`));
+        return {
+          passed: 0,
+          failed: 1,
+          filesPassed: 0,
+          filesFailed: 1,
+          failedFiles: [testFile],
+          slowTests: [],
+        };
+      },
+      () => suite.aborted,
+    );
+  } finally {
+    clearTimeout(ceilingTimer);
+    process.removeListener("SIGINT", sigintHandler);
+  }
 
   let stats = emptyStats();
   for (const result of results) {
-    stats = mergeStats(stats, result);
+    if (result) stats = mergeStats(stats, result);
   }
+
+  if (suite.aborted) printSuiteAbortSummary(suite);
+
   return stats;
 }
 

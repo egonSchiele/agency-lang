@@ -94,7 +94,6 @@ function waitForCallback(
 ): Promise<{ code: string; state: string }> {
   return new Promise((resolve, reject) => {
     let settled = false;
-    let timer: ReturnType<typeof setTimeout>;
 
     const server = http.createServer((req, res) => {
       if (settled) {
@@ -154,7 +153,7 @@ function waitForCallback(
 
     server.listen(port, "127.0.0.1");
 
-    timer = setTimeout(() => {
+    const timer = setTimeout(() => {
       if (!settled) {
         settled = true;
         server.close();

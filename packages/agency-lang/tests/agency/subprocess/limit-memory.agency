@@ -1,0 +1,31 @@
+import { compile, run } from "std::agency"
+
+node main() {
+  const source = """
+node main() {
+  // Push numbers into an array until V8 OOMs. The 32mb heap limit
+  // (--max-old-space-size) should kill the subprocess with SIGABRT
+  // long before this loop completes naturally.
+  let xs = []
+  for (i in range(0, 10000000)) {
+    xs.push(i)
+  }
+  return "done"
+}
+"""
+  const c = compile(source)
+  if (isFailure(c)) { return "compile failed" }
+
+  handle {
+    const result = run(compiled: c.value, node: "main", args: {}, memory: 32mb)
+    if (isFailure(result)) {
+      if (result.error.reason == "limit_exceeded" && result.error.limit == "memory") {
+        return "memory limit hit"
+      }
+      return "wrong failure: " + result.error
+    }
+    return "unexpected success"
+  } with (data) {
+    return approve()
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "ipcPayload limit fails when subprocess returns oversized result",
+      "input": "",
+      "expectedOutput": "\"ipc_payload limit hit\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

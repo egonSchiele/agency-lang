@@ -83,6 +83,50 @@ describe("unitLiteralParser", () => {
     });
   });
 
+  describe("byte units", () => {
+    it("parses bytes (b)", () => {
+      const r = parsed("100b");
+      expect(r.result.type).toBe("unitLiteral");
+      expect(r.result.dimension).toBe("bytes");
+      expect(r.result.unit).toBe("b");
+      expect(r.result.value).toBe("100");
+      expect(r.result.canonicalValue).toBe(100);
+    });
+
+    it("parses kilobytes (kb)", () => {
+      const r = parsed("1kb");
+      expect(r.result.unit).toBe("kb");
+      expect(r.result.canonicalValue).toBe(1024);
+    });
+
+    it("parses megabytes (mb)", () => {
+      const r = parsed("1mb");
+      expect(r.result.unit).toBe("mb");
+      expect(r.result.canonicalValue).toBe(1048576);
+    });
+
+    it("parses gigabytes (gb)", () => {
+      const r = parsed("4gb");
+      expect(r.result.unit).toBe("gb");
+      expect(r.result.canonicalValue).toBe(4 * 1024 * 1024 * 1024);
+    });
+
+    it("parses fractional bytes (e.g. 1.5mb)", () => {
+      const r = parsed("1.5mb");
+      expect(r.result.canonicalValue).toBe(Math.round(1.5 * 1024 * 1024));
+    });
+
+    it("does not collide with time minutes (5m vs 5mb)", () => {
+      const r1 = parsed("5m");
+      expect(r1.result.unit).toBe("m");
+      expect(r1.result.dimension).toBe("time");
+
+      const r2 = parsed("5mb");
+      expect(r2.result.unit).toBe("mb");
+      expect(r2.result.dimension).toBe("bytes");
+    });
+  });
+
   describe("negative cases", () => {
     it("does not parse plain numbers", () => {
       expect(unitLiteralParser("42").success).toBe(false);

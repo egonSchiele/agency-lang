@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "wallClock threshold below ceiling is preserved (no clamping)",
+      "input": "",
+      "expectedOutput": "\"threshold preserved\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

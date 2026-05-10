@@ -1,0 +1,29 @@
+import { compile, run } from "std::agency"
+
+node main() {
+  const source = """
+node main() {
+  while (true) {}
+}
+"""
+  const c = compile(source)
+  if (isFailure(c)) { return "compile failed" }
+
+  // Bind compiled and wallClock via partial application — the resulting
+  // safeRun has wallClock pre-bound to 1s, so even though node/args are
+  // chosen later, the limit is enforced.
+  const safeRun = run.partial(compiled: c.value, wallClock: 1s)
+
+  handle {
+    const result = safeRun(node: "main", args: {})
+    if (isFailure(result)) {
+      if (result.error.reason == "limit_exceeded" && result.error.limit == "wall_clock") {
+        return "partial-applied limit hit"
+      }
+      return "wrong failure"
+    }
+    return "unexpected success"
+  } with (data) {
+    return approve()
+  }
+}

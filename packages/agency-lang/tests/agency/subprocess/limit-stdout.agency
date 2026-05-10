@@ -1,0 +1,34 @@
+import { compile, run } from "std::agency"
+
+node main() {
+  const source = """
+import { sleep } from "std::index"
+
+node main() {
+  // Print 64kb then sleep so the parent can read it and trigger the
+  // 1kb stdout limit before the subprocess exits.
+  let s = "x"
+  for (i in range(0, 16)) {
+    s = s + s
+  }
+  print(s)
+  sleep(2000)
+  return "done"
+}
+"""
+  const c = compile(source)
+  if (isFailure(c)) { return "compile failed" }
+
+  handle {
+    const result = run(compiled: c.value, node: "main", args: {}, stdout: 1kb)
+    if (isFailure(result)) {
+      if (result.error.reason == "limit_exceeded" && result.error.limit == "stdout") {
+        return "stdout limit hit"
+      }
+      return "wrong failure: " + result.error
+    }
+    return "unexpected success"
+  } with (data) {
+    return approve()
+  }
+}

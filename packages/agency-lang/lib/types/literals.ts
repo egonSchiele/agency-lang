@@ -31,7 +31,15 @@ export type CostUnitLiteral = BaseNode & {
   dimension: "cost";
 };
 
-export type UnitLiteral = TimeUnitLiteral | CostUnitLiteral;
+export type ByteUnitLiteral = BaseNode & {
+  type: "unitLiteral";
+  value: string;
+  unit: "b" | "kb" | "mb" | "gb";
+  canonicalValue: number;
+  dimension: "bytes";
+};
+
+export type UnitLiteral = TimeUnitLiteral | CostUnitLiteral | ByteUnitLiteral;
 
 export function formatUnitLiteral(lit: Pick<UnitLiteral, "value" | "unit">): string {
   return lit.unit === "$" ? `$${lit.value}` : `${lit.value}${lit.unit}`;

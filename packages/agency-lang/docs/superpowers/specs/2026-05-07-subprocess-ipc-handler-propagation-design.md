@@ -39,11 +39,15 @@ const compiled = compile(source)
 ### run()
 
 ```
+// Run compiled source (from compile())
 const result = run(compiled, { node: "main", args: { query: "hello" } })
+
+// Run an existing .agency file
+const result = run("./agents/greeter.agency", { node: "main", args: { name: "Alice" } })
 ```
 
 - **Input**:
-  - `compiled: CompiledProgram` — output of `compile()`
+  - `source: CompiledProgram | string` — either a `CompiledProgram` from `compile()`, or a path to an existing `.agency` file. When given a file path, `run()` compiles it first (equivalent to calling `compile()` then `run()`).
   - `options: { node: string, args: object }` — which node to execute and what arguments to pass
 - **Output**: `Result<RunNodeResult>` — same shape as calling a node from TypeScript. On success, contains:
   - `data` — the node's return value
@@ -124,39 +128,58 @@ The subprocess runtime knows it's in IPC mode via the `AGENCY_IPC=1` environment
     data: any,         // interrupt payload
     origin: string,    // module origin
   },
-  subprocessVotes: {
-    approved: boolean,   // did any subprocess handler approve?
-    rejected: boolean,   // did any subprocess handler reject? (note: if true, this message is informational only — the subprocess already short-circuited)
-    propagated: boolean, // did any subprocess handler propagate?
-    approvedValue: any,  // value from the last (outermost) approving subprocess handler, matching single-process semantics
-  }
+  propagated: boolean, // did any subprocess handler propagate?
 }
 
-// Execution completed successfully
+// input() call — subprocess needs user input
 {
-  type: "result",
-  value: RunNodeResult  // { data, messages, tokens }
+  type: "input",
+  prompt: string       // the prompt to display to the user
 }
 
-// Execution failed
+// Execution completed (uses Agency's existing Result type)
 {
-  type: "error",
-  error: string
+  type: "done",
+  value: Result  // success(RunNodeResult) or failure(errorMessage)
+}
+
+// Serialized checkpoint (sent when parent requests serialization)
+{
+  type: "checkpoint",
+  checkpoint: Checkpoint,  // serialized execution state
+  interrupt: Interrupt,    // the interrupt that triggered serialization
 }
 ```
 
 **Parent to subprocess:**
 
 ```typescript
-// Handler decision (always a final approve or reject — never propagate)
+// Handler decision
 {
   type: "decision",
   approved: boolean,
   value: any  // resolve value if approved with data
 }
+
+// Request subprocess to serialize its state and exit
+{
+  type: "serialize"
+}
+
+// Response to input() request
+{
+  type: "inputResponse",
+  value: string
+}
 ```
 
-When the combined handler result is "propagate to user," the parent pauses and presents the interrupt to its own caller (the TypeScript code, or the user via the CLI). The subprocess remains blocked on IPC until the parent receives the user's final decision. The parent then sends the resolved approve or reject decision to the subprocess. From the subprocess's perspective, it only ever sees a final approve or reject — never propagate.
+### Two interrupt resolution paths
+
+**Fast path**: Parent's handlers resolve the interrupt (approve or reject). Parent sends a `decision` message. Subprocess continues or aborts. No serialization needed.
+
+**Slow path**: Parent's handlers can't resolve the interrupt (propagate to user, or no handlers). Parent sends a `serialize` message. Subprocess serializes its full execution state as a checkpoint, sends it back via the `checkpoint` message, and exits. The parent's `_run()` embeds the serialized checkpoint in the Interrupt's `data` field and returns `Interrupt[]`, participating in the parent's normal interrupt flow (fork batching, state serialization, etc.). On resume, `_run()` spawns a fresh subprocess in "resume mode," sends the checkpoint + interrupt response, and the subprocess restores from the checkpoint and continues.
+
+This preserves Agency's foundational guarantee that execution state is fully serializable at any point. No unserializable process references are held across interrupt/resume cycles.
 
 ## Handler Propagation
 
@@ -168,17 +191,28 @@ All handlers across all processes form one unified chain. The process boundary i
 
 1. Subprocess code hits an interrupt (e.g., `bash("rm -rf /")`)
 2. Subprocess runs `interruptWithHandlers` against its own `ctx.handlers`
-3. **Exception**: If a subprocess handler **rejected**, the interrupt is rejected immediately (reject is final and short-circuits, matching current semantics). The subprocess does not consult the parent. It notifies the parent that a rejection occurred, but the parent cannot override it.
-4. **Otherwise** (subprocess handlers approved, propagated, or didn't respond), the interrupt data and subprocess handler votes are sent to the parent over IPC. The subprocess blocks until it receives a decision.
-5. Parent receives the interrupt and runs it through its own `ctx.handlers`
+3. **If a subprocess handler rejected**: the interrupt is rejected immediately (reject is final and short-circuits, matching current semantics). The subprocess does not consult the parent.
+4. **Otherwise** (subprocess handlers approved, propagated, or didn't respond), the interrupt data is sent to the parent over IPC. The subprocess blocks until it receives a response.
+5. Parent's `_run()` receives the interrupt and calls `interruptWithHandlers` on the parent's `ctx`
 6. Combined result across all handlers follows the standard rules:
    - If any handler (subprocess or parent) rejected: **rejected**
    - If any handler (subprocess or parent) propagated: **propagate to user** (propagate beats approve, matching current single-process semantics)
    - If all handlers approved: **approved**
    - If no handler responded: **propagate to user**
-7. If the combined result is "propagate to user," the parent presents the interrupt to the user (or returns it as an `Interrupt[]` to its TypeScript caller) and waits for the user's decision. The subprocess remains blocked on IPC during this time.
-8. Parent sends the final decision (always approve or reject, never propagate) back to the subprocess over IPC
-9. Subprocess resumes (if approved) or aborts (if rejected)
+
+**Fast path** (handlers resolve):
+
+7. Parent sends `{ type: "decision" }` back to subprocess
+8. Subprocess resumes (if approved) or aborts (if rejected)
+
+**Slow path** (propagate to user):
+
+7. Parent sends `{ type: "serialize" }` to subprocess
+8. Subprocess serializes its full execution state as a checkpoint, sends `{ type: "checkpoint" }` to parent, and exits
+9. Parent's `_run()` creates an `Interrupt` object with the subprocess checkpoint embedded in the interrupt data, and returns `Interrupt[]`
+10. The parent's normal interrupt machinery takes over: fork batching, state serialization, propagation to user
+11. On resume, `_run()` spawns a fresh subprocess in "resume mode," sends the serialized checkpoint + the user's interrupt response
+12. The subprocess builds a `RuntimeContext` from scratch, restores state from the checkpoint, applies the response, and continues execution
 
 ### Why subprocess approval doesn't short-circuit
 
@@ -261,12 +295,17 @@ The parent monitors both the IPC `message` event and the subprocess `close`/`exi
 
 The runtime needs a new code path for IPC mode. When `AGENCY_IPC=1` is set:
 
-1. At startup, the subprocess runtime reads this env var
+1. At startup, the subprocess runtime reads this env var and awaits an initialization message from the parent specifying the startup mode:
+   - **Fresh mode**: `{ mode: "run", node: "main", args: { ... } }` — normal execution from scratch
+   - **Resume mode**: `{ mode: "resume", checkpoint: { ... }, interrupt: { ... }, response: { ... } }` — restore from a serialized checkpoint with an interrupt response. The subprocess builds a `RuntimeContext`, loads the compiled graph, calls `restoreState(checkpoint)`, sets the interrupt response, and re-runs. This is the same logic as `respondToInterrupts` but in a fresh process.
 2. The `interruptWithHandlers` function (or a wrapper) changes behavior:
-   - Instead of returning `Interrupt[]` to the caller when unhandled, it sends the interrupt over IPC and awaits a response
-   - Even when handlers approve, it sends the interrupt + votes to the parent and awaits final decision
-   - Only when a local handler rejects does it short-circuit without consulting the parent
-3. The subprocess's entry point sends the final `RunNodeResult` back over IPC when the node completes
+   - Runs local handlers as normal
+   - If a local handler rejects: short-circuit, no IPC
+   - Otherwise: sends the interrupt data to the parent over IPC and awaits a response
+   - On `decision` response: returns approved or rejected accordingly
+   - On `serialize` response: serializes full execution state, sends checkpoint to parent, exits
+3. `input()` calls are proxied to the parent over IPC. The subprocess sends `{ type: "input", prompt }`, the parent collects user input (it has terminal access), and sends the response back. This prevents deadlock since the subprocess's stdin is piped, not connected to a terminal.
+4. The subprocess's entry point sends the final result back over IPC as `{ type: "done", value: success(RunNodeResult) }` or `{ type: "done", value: failure(error) }` when the node completes
 
 ### Stdlib implementation
 
@@ -289,31 +328,53 @@ export def compile(source: string): Result {
   return try _compile(source)
 }
 
-export def run(compiled: CompiledProgram, options: { node: string, args: object }): Result {
+export def run(source: CompiledProgram | string, options: { node: string, args: object }): Result {
   """
-  Execute a compiled Agency program in a subprocess. The parent's handler chain extends to the subprocess. Returns the subprocess node's result on success.
-  @param compiled - A CompiledProgram from compile()
+  Execute an Agency program in a subprocess. Accepts either a CompiledProgram from compile() or a path to an .agency file. The parent's handler chain extends to the subprocess. Returns the subprocess node's result on success.
+  @param source - A CompiledProgram from compile(), or a file path to an .agency file
   @param options - Which node to run and what arguments to pass
   """
-  return interrupt std::run("Are you sure you want to run this agent-generated code?", {
-    moduleId: compiled.moduleId,
+  return interrupt std::run("Are you sure you want to run this Agency program?", {
+    source: source,
     node: options.node,
     args: options.args
   })
 
-  return try _run(compiled, options)
+  return try _run(source, options)
 }
 ```
 
 `stdlib/lib/agency.ts` contains the TypeScript implementation:
 - `_compile(source)`: Runs the Agency compilation pipeline in-process, writes compiled JS to a temp file, returns `{ path, moduleId }`
-- `_run(compiled, options)`: Forks the compiled JS with IPC, manages the interrupt protocol, returns `RunNodeResult`
+- `_run(source, options)`: If `source` is a string (file path), compiles it first. Then forks the compiled JS with IPC, manages the interrupt protocol, returns `RunNodeResult`. When given a file path, the file's own module ID and local imports work normally (unlike `compile()` which restricts to stdlib-only imports).
 
 ### Dependencies
 
 - Refactoring `lib/cli/commands.ts` to extract the compilation pipeline into a reusable function that doesn't call `process.exit` or `console.log`
 - New IPC-mode code path in the runtime's interrupt handling
 - New `stdlib/agency.agency` and `stdlib/lib/agency.ts` files
+
+## Parallel Execution
+
+Multiple subprocesses can run in parallel using `parallel` blocks or `fork`:
+
+```
+import { compile, run } from "std::agency"
+
+node main() {
+  parallel {
+    let resultA = run("./agent-a.agency", { node: "main", args: {} })
+    let resultB = run("./agent-b.agency", { node: "main", args: {} })
+  }
+  return { a: resultA, b: resultB }
+}
+```
+
+This works because `parallel` blocks desugar to `fork` at compile time, and `run()` is a regular function. No special handling is needed — each `run()` call spawns its own subprocess with its own IPC channel, and the existing concurrent interrupt machinery handles batching and multi-cycle resume automatically.
+
+If multiple subprocesses hit interrupts simultaneously, the interrupts are batched into a single `Interrupt[]` and presented to the user (or handler chain) together, exactly as fork already does for concurrent interrupts.
+
+The Runner (`runner.ts`) does not need modification. From its perspective, `run()` is an opaque function call. All subprocess and IPC management is encapsulated in `stdlib/lib/agency.ts`.
 
 ## Isolation and State
 
@@ -328,6 +389,7 @@ export def run(compiled: CompiledProgram, options: { node: string, args: object 
 - **Hot-reload / self-modification (Model B)**: Agent rewriting its own code and restarting. Requires static analysis infrastructure to be safe. Separate future feature.
 - **Nesting**: A subprocess spawning its own subprocess. Works in principle (handlers chain transitively), but not implemented in MVP. When `AGENCY_IPC=1` is set, calling `run()` immediately returns a failure: "Nested subprocess execution is not supported." The `compile()` function still works normally in a subprocess.
 - **Debugger integration**: Stepping into subprocess code from the parent's debugger. Future work — initially, the debugger just sees `run()` as an opaque step with inputs and outputs.
+- **Trace integration**: When the parent is in trace mode, the subprocess's execution is currently invisible (opaque call). Future work: the subprocess should generate its own trace that can be nested into the parent's trace, giving full visibility into subprocess execution. This is important for debugging agent-generated code.
 - **Policy checking on generated code**: Declarative rules about what generated code can/can't do, enforced at compile time. Separate idea with its own spec.
 - **Handler coverage analysis**: Static check that generated code handles all interrupts. Separate idea.
 - **Dry-run execution**: Execute generated code with mocked tools first. Separate idea.

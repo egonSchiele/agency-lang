@@ -8,7 +8,7 @@ node main() {
   if (isFailure(compileResult)) {
     return "inner compile failed"
   }
-  const result = run(compileResult.value, "main", {})
+  const result = run(compiled: compileResult.value, node: "main", args: {})
   if (isFailure(result)) {
     return "nested blocked"
   }
@@ -22,7 +22,7 @@ node main() {
   const compiled = compileResult.value
 
   handle {
-    const result = run(compiled, "main", {})
+    const result = run(compiled: compiled, node: "main", args: {})
     if (isSuccess(result)) {
       return result.value.data
     }

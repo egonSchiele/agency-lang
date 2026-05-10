@@ -11,7 +11,7 @@ node main() {
   if (isFailure(c)) { return "compile failed" }
 
   handle {
-    const result = run(c.value, "main", {}, wallClock: 1s)
+    const result = run(compiled: c.value, node: "main", args: {}, wallClock: 1s)
     if (isFailure(result)) {
       if (result.error.reason == "limit_exceeded" && result.error.limit == "wall_clock") {
         return "wall_clock limit hit"

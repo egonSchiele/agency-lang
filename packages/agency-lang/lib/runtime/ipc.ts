@@ -204,6 +204,22 @@ type RunSession = {
   stoppedForwarding: boolean;
 };
 
+/**
+ * Best-effort delete of the per-run compile output directory.
+ *
+ * SAFETY: we only delete `tempDir` if it resolves to a *strict descendant*
+ * of `<cwd>/.agency-tmp/`. The `path.resolve` collapses any `..` segments,
+ * so a malicious `compiledPath` like `/anything/../../../etc/passwd` ends
+ * up outside the allowed prefix and the rmSync is skipped. The trailing
+ * `+ path.sep` on the prefix prevents two attacks:
+ *   - deleting `.agency-tmp/` itself (tempDir == allowedPrefix would fail
+ *     the strict-prefix check),
+ *   - matching a sibling directory like `.agency-tmpevil/` that shares
+ *     the prefix string but is a different path.
+ * Even if a malicious caller bypassed everything else, the worst they can
+ * do is recursively rm a subdirectory of `<cwd>/.agency-tmp/` — never
+ * `~`, `/`, or anything outside the project's tmp area.
+ */
 function cleanupTempDir(compiledPath: string): void {
   try {
     const tempDir = path.resolve(dirname(compiledPath));

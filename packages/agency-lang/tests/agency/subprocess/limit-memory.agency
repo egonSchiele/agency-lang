@@ -17,7 +17,7 @@ node main() {
   if (isFailure(c)) { return "compile failed" }
 
   handle {
-    const result = run(c.value, "main", {}, memory: 32mb)
+    const result = run(compiled: c.value, node: "main", args: {}, memory: 32mb)
     if (isFailure(result)) {
       if (result.error.reason == "limit_exceeded" && result.error.limit == "memory") {
         return "memory limit hit"

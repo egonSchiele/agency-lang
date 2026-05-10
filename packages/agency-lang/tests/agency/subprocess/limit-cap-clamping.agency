@@ -14,7 +14,7 @@ node main() {
     // therefore be exactly 1000 (not clamped). This verifies the
     // non-clamping path of clampLimits — the ceiling clamping itself is
     // covered by lib/runtime/ipc.test.ts unit tests.
-    const result = run(c.value, "main", {}, wallClock: 1s)
+    const result = run(compiled: c.value, node: "main", args: {}, wallClock: 1s)
     if (isFailure(result)) {
       if (result.error.reason == "limit_exceeded" && result.error.limit == "wall_clock") {
         if (result.error.threshold == 1000) {

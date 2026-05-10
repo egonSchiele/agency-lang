@@ -38,7 +38,7 @@ export default [
       // Prefer const over let when never reassigned
       "prefer-const": "error",
 
-      // No dynamic imports, no new Map(), no new Set()
+      // No dynamic imports, no new Map()
       "no-restricted-syntax": [
         "error",
         {
@@ -49,10 +49,6 @@ export default [
         {
           selector: "NewExpression[callee.name='Map']",
           message: "Use a plain object instead of Map.",
-        },
-        {
-          selector: "NewExpression[callee.name='Set']",
-          message: "Use a plain array instead of Set.",
         },
       ],
 

@@ -24,13 +24,23 @@ type RunInstruction = {
 
 let ipcPayloadLimit = Infinity;
 
-function sendOrDie(msg: IpcResultMessage | IpcErrorMessage): void {
+/**
+ * Send an IPC message and wait for the channel to flush before resolving.
+ * Callers that follow with `process.exit(...)` MUST `await` this — otherwise
+ * the immediate exit can race with the async send and the parent will see
+ * only an abnormal close, missing the structured message entirely.
+ */
+function sendOrDie(msg: IpcResultMessage | IpcErrorMessage): Promise<void> {
   if (typeof process.send !== "function") {
     console.error("[bootstrap] No IPC channel — was this script run directly? It should only be forked by _run().");
     process.exit(1);
   }
   ipcLog("send", msg);
-  process.send(msg);
+  return new Promise<void>((resolve) => {
+    // Errors here mean the IPC channel is already gone; resolve anyway so
+    // the caller can proceed to exit instead of hanging.
+    process.send!(msg, undefined, undefined, () => resolve());
+  });
 }
 
 /**
@@ -40,11 +50,11 @@ function sendOrDie(msg: IpcResultMessage | IpcErrorMessage): void {
  * them back to the same Result.failure shape that wall_clock and memory
  * limits produce.
  */
-function sendResultOrLimitError(msg: IpcResultMessage): void {
+async function sendResultOrLimitError(msg: IpcResultMessage): Promise<void> {
   const serialized = JSON.stringify(msg);
   if (serialized.length > ipcPayloadLimit) {
     const samplePrefix = serialized.slice(0, 1024);
-    sendOrDie({
+    await sendOrDie({
       type: "error",
       error: JSON.stringify({
         reason: "limit_exceeded",
@@ -57,7 +67,7 @@ function sendResultOrLimitError(msg: IpcResultMessage): void {
     });
     process.exit(1);
   }
-  sendOrDie(msg);
+  await sendOrDie(msg);
 }
 
 // Listen for the initial run instruction, then remove the listener
@@ -71,7 +81,7 @@ const bootstrapHandler = async (msg: RunInstruction) => {
   ipcLog("recv", msg);
 
   if (msg.type !== "run") {
-    sendOrDie({
+    await sendOrDie({
       type: "error",
       error: `Unknown message type: ${(msg as any).type ?? "undefined"}`,
     });
@@ -90,7 +100,7 @@ const bootstrapHandler = async (msg: RunInstruction) => {
 
     const nodeFn = mod[msg.node];
     if (typeof nodeFn !== "function") {
-      sendOrDie({
+      await sendOrDie({
         type: "error",
         error: `Node "${msg.node}" not found in compiled module. Available exports: ${Object.keys(mod).join(", ")}`,
       });
@@ -102,7 +112,7 @@ const bootstrapHandler = async (msg: RunInstruction) => {
     // Node args are positional: main(name, { messages, callbacks }).
     const paramsKey = `__${msg.node}NodeParams`;
     if (!(paramsKey in mod)) {
-      sendOrDie({
+      await sendOrDie({
         type: "error",
         error: `Node params metadata "${paramsKey}" not found in compiled module. The module may have been compiled with an incompatible version.`,
       });
@@ -116,7 +126,7 @@ const bootstrapHandler = async (msg: RunInstruction) => {
     const result = await nodeFn(...positionalArgs);
     ipcLog("send", { type: "log", detail: `node ${msg.node} returned` });
 
-    sendResultOrLimitError({
+    await sendResultOrLimitError({
       type: "result",
       value: {
         data: result.data,
@@ -126,7 +136,7 @@ const bootstrapHandler = async (msg: RunInstruction) => {
     });
     process.exit(0);
   } catch (err: any) {
-    sendOrDie({
+    await sendOrDie({
       type: "error",
       error: err instanceof Error ? err.message : String(err),
     });

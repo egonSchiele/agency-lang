@@ -198,6 +198,7 @@ type RunSession = {
   resolvePromise: (v: any) => void;
   rejectPromise: (v: any) => void;
   settled: boolean;
+  startedAt: number;
   wallClockTimer: NodeJS.Timeout | null;
   stdoutBytes: number;
   stoppedForwarding: boolean;
@@ -338,10 +339,21 @@ function handleErrorMessage(s: RunSession, msg: any): void {
 
 async function handleChildMessage(s: RunSession, msg: any): Promise<void> {
   ipcLog("recv", msg);
-  const serializedSize = JSON.stringify(msg).length;
-  if (serializedSize > s.limits.ipcPayload) {
-    settleWithLimitFailure(s, "ipc_payload", s.limits.ipcPayload, serializedSize, {
-      samplePrefix: JSON.stringify(msg).slice(0, 1024),
+  // Defensively serialize once: a non-serializable value (circular refs,
+  // BigInt) would otherwise throw inside the event handler and leave the
+  // session unsettled, hanging _run's Promise.
+  let serialized: string;
+  try {
+    serialized = JSON.stringify(msg);
+  } catch (err) {
+    settle(s, s.rejectPromise, new Error(
+      `Failed to serialize subprocess message: ${err instanceof Error ? err.message : String(err)}`,
+    ));
+    return;
+  }
+  if (serialized.length > s.limits.ipcPayload) {
+    settleWithLimitFailure(s, "ipc_payload", s.limits.ipcPayload, serialized.length, {
+      samplePrefix: serialized.slice(0, 1024),
     });
     return;
   }
@@ -379,7 +391,8 @@ function attachSessionHandlers(s: RunSession, node: string, args: Record<string,
 
   s.wallClockTimer = setTimeout(() => {
     s.wallClockTimer = null;
-    settleWithLimitFailure(s, "wall_clock", s.limits.wallClock, s.limits.wallClock);
+    const elapsed = Date.now() - s.startedAt;
+    settleWithLimitFailure(s, "wall_clock", s.limits.wallClock, elapsed);
   }, s.limits.wallClock);
 
   s.child.on("message", (msg: any) => { void handleChildMessage(s, msg); });
@@ -438,6 +451,7 @@ export async function _run(
       resolvePromise,
       rejectPromise,
       settled: false,
+      startedAt: Date.now(),
       wallClockTimer: null,
       stdoutBytes: 0,
       stoppedForwarding: false,

@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "runFile() reads a .agency file from dir, compiles it under stdlib-only restriction, and runs it in a subprocess",
+      "input": "",
+      "expectedOutput": "42",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

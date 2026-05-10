@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "runFile() rejects a filename containing '..' that resolves outside the dir argument, proving the realpath sandbox containment check surfaces end-to-end as a Result failure",
+      "input": "",
+      "expectedOutput": "\"rejected\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

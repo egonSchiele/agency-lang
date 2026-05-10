@@ -1,0 +1,5 @@
+import { readFileSync } from "fs"
+
+node main() {
+  return "should not compile"
+}

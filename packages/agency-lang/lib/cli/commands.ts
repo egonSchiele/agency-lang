@@ -177,17 +177,6 @@ export function compile(
     if (isStdlibImport(importPath) || isPkgImport(importPath)) continue;
 
     const absPath = resolveAgencyImportPath(importPath, absoluteInputFile);
-    if (config.restrictImports) {
-      const projectRoot = process.cwd();
-      if (
-        !absPath.startsWith(projectRoot + path.sep) &&
-        absPath !== projectRoot
-      ) {
-        throw new Error(
-          `Import path '${importPath}' resolves to '${absPath}' which is outside the project directory '${projectRoot}'.`,
-        );
-      }
-    }
     compile(config, absPath, undefined, { ...options, symbolTable });
   }
 

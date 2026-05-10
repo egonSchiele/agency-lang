@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "runFile() rejects a target file that imports a non-stdlib module (e.g. 'fs'), proving the stdlib-only restriction is inherited from compile()",
+      "input": "",
+      "expectedOutput": "\"rejected\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

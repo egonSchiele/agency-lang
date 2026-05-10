@@ -528,3 +528,21 @@ export function getImports(program: AgencyProgram): string[] {
 
   return [...toolAndNodeImports, ...importStatements];
 }
+
+// Returns EVERY import in the program, regardless of whether it points to
+// agency code (`.agency` / `std::` / `pkg::`) or a raw npm/Node module
+// (e.g. `fs`, `child_process`). Use this when you need to inspect or
+// validate the full import surface — `getImports` filters out non-agency
+// imports, which is the wrong behavior for restriction checks.
+export type AnyImport = { path: string; kind: "module" | "node" };
+export function getAllImports(program: AgencyProgram): AnyImport[] {
+  return program.nodes.flatMap((node): AnyImport[] => {
+    if (node.type === "importStatement") {
+      return [{ path: node.modulePath.trim(), kind: "module" }];
+    }
+    if (node.type === "importNodeStatement") {
+      return [{ path: node.agencyFile.trim(), kind: "node" }];
+    }
+    return [];
+  });
+}

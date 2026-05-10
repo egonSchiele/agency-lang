@@ -38,7 +38,21 @@ node main() { return foo() }
     const result = compileSource(source, { restrictImports: true });
     expect(result.success).toBe(false);
     if (!result.success) {
-      expect(result.errors[0].toLowerCase()).toContain("import");
+      expect(result.errors[0]).toContain(".agency file import");
+      expect(result.errors[0]).toContain("'./bar.agency'");
+    }
+  });
+
+  it("rejects absolute-path .agency imports when restrictImports is set", () => {
+    const source = `
+import { foo } from "/abs/path/bar.agency"
+node main() { return foo() }
+`;
+    const result = compileSource(source, { restrictImports: true });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.errors[0]).toContain(".agency file import");
+      expect(result.errors[0]).toContain("'/abs/path/bar.agency'");
     }
   });
 
@@ -49,5 +63,70 @@ node main() { return exists("/tmp") }
 `;
     const result = compileSource(source, { restrictImports: true });
     expect(result.success).toBe(true);
+  });
+
+  // --- Coverage for the previously-undetected hole: getImports() filters
+  // out non-agency imports, which let raw npm/Node modules sail past the
+  // restriction. compileSource now uses getAllImports() instead.
+  it("rejects raw npm/Node module imports when restrictImports is set", () => {
+    const source = `
+import * as fs from "fs"
+node main() { return "hi" }
+`;
+    const result = compileSource(source, { restrictImports: true });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.errors[0]).toContain("npm/Node module import");
+      expect(result.errors[0]).toContain("'fs'");
+    }
+  });
+
+  it("rejects child_process imports when restrictImports is set", () => {
+    const source = `
+import { execSync } from "child_process"
+node main() { return "hi" }
+`;
+    const result = compileSource(source, { restrictImports: true });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.errors[0]).toContain("'child_process'");
+    }
+  });
+
+  it("rejects pkg:: imports when restrictImports is set", () => {
+    const source = `
+import { foo } from "pkg::some-package"
+node main() { return foo() }
+`;
+    const result = compileSource(source, { restrictImports: true });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.errors[0]).toContain("package import");
+      expect(result.errors[0]).toContain("'pkg::some-package'");
+    }
+  });
+
+  // Negative control: without restrictImports, raw npm/Node imports must
+  // be allowed. This proves the rejection in the tests above is gated by
+  // the flag, not happening unconditionally.
+  it("allows raw npm/Node module imports when restrictImports is NOT set", () => {
+    const source = `
+import * as fs from "fs"
+node main() { return "hi" }
+`;
+    const result = compileSource(source, {});
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects 'import nodes' (importNodeStatement) when restrictImports is set", () => {
+    const source = `
+import nodes { helper } from "./helpers.agency"
+node main() { return "hi" }
+`;
+    const result = compileSource(source, { restrictImports: true });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.errors[0].toLowerCase()).toContain("tool/node import");
+    }
   });
 });

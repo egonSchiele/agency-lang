@@ -1,0 +1,17 @@
+import { runFile } from "std::agency"
+
+node main() {
+  handle {
+    const result = runFile(
+      filename: "bad-import.agency",
+      node: "main",
+      dir: "tests/agency/subprocess/runfile-target",
+    )
+    if (isFailure(result)) {
+      return "rejected"
+    }
+    return "should have been rejected"
+  } with (data) {
+    return approve()
+  }
+}

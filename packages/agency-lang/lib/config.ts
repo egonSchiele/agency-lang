@@ -107,12 +107,6 @@ export interface AgencyConfig {
    */
   typeCheckStrict?: boolean;
 
-  /**
-   * If true, validate that import paths resolve within the project directory.
-   * Prevents path traversal attacks via imports like `../../etc/passwd`.
-   */
-  restrictImports?: boolean;
-
   /** Enable debugger mode — auto-inserts breakpoints before every step */
   debugger?: boolean;
 
@@ -196,7 +190,6 @@ export const AgencyConfigSchema = z
     strictTypes: z.boolean(),
     typeCheck: z.boolean(),
     typeCheckStrict: z.boolean(),
-    restrictImports: z.boolean(),
     debugger: z.boolean(),
     instrument: z.boolean(),
     checkpoints: z.object({ maxRestores: z.number() }).partial(),

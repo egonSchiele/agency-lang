@@ -232,8 +232,10 @@ function settle(s: RunSession, fn: (v: any) => void, value: any): void {
 }
 
 /**
- * Hard-kill path used when a limit violation is detected: kill child, clean
- * up, and resolve with the structured limit failure.
+ * Hard-kill path used when a limit violation is detected: kill child, then
+ * settle by resolving with the structured limit failure. Skips the kill if
+ * we've already settled so we don't signal a process the parent has lost
+ * track of.
  */
 function settleWithLimitFailure(
   s: RunSession,
@@ -243,11 +245,8 @@ function settleWithLimitFailure(
   extras: Record<string, any> = {},
 ): void {
   if (s.settled) return;
-  s.settled = true;
-  clearTimer(s);
   try { s.child.kill("SIGKILL"); } catch (_) { /* already gone */ }
-  cleanupTempDir(s.compiledPath);
-  s.resolvePromise(makeLimitFailure(limit, threshold, value, extras));
+  settle(s, s.resolvePromise, makeLimitFailure(limit, threshold, value, extras));
 }
 
 function trySendDecision(s: RunSession, msg: any): void {
@@ -322,11 +321,7 @@ function handleErrorMessage(s: RunSession, msg: any): void {
   let parsed: any = null;
   try { parsed = JSON.parse(msg.error); } catch (_) { /* not JSON */ }
   if (parsed?.reason === "limit_exceeded") {
-    if (s.settled) return;
-    s.settled = true;
-    clearTimer(s);
-    cleanupTempDir(s.compiledPath);
-    s.resolvePromise(makeLimitFailure(
+    settle(s, s.resolvePromise, makeLimitFailure(
       parsed.limit,
       parsed.threshold,
       parsed.value,

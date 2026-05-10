@@ -10,6 +10,7 @@
  * them as Interrupt[] objects.
  */
 
+import { pathToFileURL } from "url";
 import type { IpcResultMessage, IpcErrorMessage } from "./ipc.js";
 import { ipcLog } from "./ipc.js";
 
@@ -41,8 +42,9 @@ const bootstrapHandler = async (msg: RunInstruction) => {
   }
 
   try {
-    ipcLog("send", { type: "log", detail: `importing ${msg.scriptPath}` });
-    const mod = await import(msg.scriptPath);
+    const scriptUrl = pathToFileURL(msg.scriptPath).href;
+    ipcLog("send", { type: "log", detail: `importing ${scriptUrl}` });
+    const mod = await import(scriptUrl);
 
     // The compiled Agency module exports a `main()` (or named node) function
     // and a `__globalCtx`. The node function is exported by name.

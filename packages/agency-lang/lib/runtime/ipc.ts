@@ -154,14 +154,34 @@ export async function _run(
   return new Promise((resolvePromise, rejectPromise) => {
     let settled = false;
 
+    const settle = (fn: typeof resolvePromise | typeof rejectPromise, value: any) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      fn(value);
+    };
+
     const cleanup = () => {
       try {
-        const tempDir = dirname(compiled.path);
-        if (tempDir.includes(".agency-tmp")) {
-          rmSync(tempDir, { recursive: true });
+        const tempDir = path.resolve(dirname(compiled.path));
+        const allowedPrefix = path.resolve(process.cwd(), ".agency-tmp");
+        if (tempDir.startsWith(allowedPrefix + path.sep)) {
+          rmSync(tempDir, { recursive: true, force: true });
         }
       } catch (_) {
         // Ignore cleanup failures
+      }
+    };
+
+    const trySend = (msg: any) => {
+      try {
+        if (child.connected) {
+          ipcLog("send", msg);
+          child.send(msg);
+        }
+      } catch (_) {
+        // IPC channel closed — subprocess is gone
+        settle(rejectPromise, new Error("IPC channel closed while sending decision to subprocess"));
       }
     };
 
@@ -188,48 +208,30 @@ export async function _run(
           } else {
             decision = { type: "decision", approved: false, value: (handlerResult as any).value };
           }
-          ipcLog("send", decision);
-          child.send(decision);
+          trySend(decision);
         } catch (err) {
           const decision = {
             type: "decision",
             approved: false,
             value: `Parent handler error: ${err instanceof Error ? err.message : String(err)}`,
           };
-          ipcLog("send", decision);
-          child.send(decision);
+          trySend(decision);
         }
       } else if (msg.type === "result") {
-        if (!settled) {
-          settled = true;
-          cleanup();
-          resolvePromise(msg.value);
-        }
+        settle(resolvePromise, msg.value);
       } else if (msg.type === "error") {
-        if (!settled) {
-          settled = true;
-          cleanup();
-          rejectPromise(new Error(msg.error));
-        }
+        settle(rejectPromise, new Error(msg.error));
       }
     });
 
     child.on("close", (code: number | null) => {
-      if (!settled) {
-        settled = true;
-        cleanup();
-        rejectPromise(new Error(
-          `Subprocess exited unexpectedly with code ${code}`,
-        ));
-      }
+      settle(rejectPromise, new Error(
+        `Subprocess exited unexpectedly with code ${code}`,
+      ));
     });
 
     child.on("error", (err: Error) => {
-      if (!settled) {
-        settled = true;
-        cleanup();
-        rejectPromise(new Error(`Subprocess error: ${err.message}`));
-      }
+      settle(rejectPromise, new Error(`Subprocess error: ${err.message}`));
     });
 
     const runMsg = {

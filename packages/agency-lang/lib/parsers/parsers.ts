@@ -74,6 +74,7 @@ import {
   NumberLiteral,
   UnitLiteral,
   TimeUnitLiteral,
+  ByteUnitLiteral,
   PromptSegment,
   RegexLiteral,
   StringLiteral,
@@ -421,8 +422,37 @@ const costUnitParser: Parser<UnitLiteral> = label("a cost unit literal", (input:
   } as UnitLiteral, result.rest);
 });
 
+const BYTE_MULTIPLIERS: Record<ByteUnitLiteral["unit"], number> = {
+  b: 1,
+  kb: 1024,
+  mb: 1024 * 1024,
+  gb: 1024 * 1024 * 1024,
+};
+
+// Order matters — longest match first so "mb" matches before "b"
+const byteSuffix = or(str("kb"), str("mb"), str("gb"), str("b"));
+
+const byteUnitParser: Parser<UnitLiteral> = label("a byte unit literal", (input: string): ParserResult<UnitLiteral> => {
+  const parser = seqC(
+    set("type", "unitLiteral"),
+    set("dimension", "bytes"),
+    capture(unsignedNumberChars, "value"),
+    capture(byteSuffix, "unit"),
+  );
+  const result = parser(input);
+  if (!result.success) return result;
+  const { value, unit } = result.result;
+  return success({
+    ...result.result,
+    canonicalValue: Math.round(parseFloat(value) * BYTE_MULTIPLIERS[unit as ByteUnitLiteral["unit"]]),
+  } as UnitLiteral, result.rest);
+});
+
 export const unitLiteralParser: Parser<UnitLiteral> = label("a unit literal",
-  or(costUnitParser, timeUnitParser)
+  // Order matters: byteUnitParser before timeUnitParser so "1kb" doesn't match
+  // as time "1k" (which would fail anyway, but more importantly "5mb" matches
+  // as bytes rather than as time "5m" with leftover "b").
+  or(costUnitParser, byteUnitParser, timeUnitParser)
 );
 
 export const regexLiteralParser: Parser<RegexLiteral> = label("a regex", (input: string): ParserResult<RegexLiteral> => {

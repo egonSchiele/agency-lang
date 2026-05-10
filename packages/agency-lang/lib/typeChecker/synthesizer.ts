@@ -165,7 +165,7 @@ function synthBinOp(
       expr.left.type === "unitLiteral" && expr.right.type === "unitLiteral" &&
       expr.left.dimension !== expr.right.dimension) {
     ctx.errors.push({
-      message: `Cannot ${op} time and cost values: '${formatUnitLiteral(expr.left)}' and '${formatUnitLiteral(expr.right)}' have different dimensions.`,
+      message: `Cannot ${op} values of different dimensions (${expr.left.dimension} and ${expr.right.dimension}): '${formatUnitLiteral(expr.left)}' and '${formatUnitLiteral(expr.right)}'.`,
       loc: expr.loc,
     });
   }

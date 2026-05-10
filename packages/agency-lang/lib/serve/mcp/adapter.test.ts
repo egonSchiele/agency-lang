@@ -38,6 +38,13 @@ function makeTestExports(): ExportedItem[] {
       agencyFunction: addFn,
       interruptKinds: [],
     },
+    {
+      kind: "node",
+      name: "main",
+      parameters: [{ name: "city" }, { name: "country" }],
+      invoke: async (...args: unknown[]) => ({ data: `${args[0]}, ${args[1]}` }),
+      interruptKinds: [],
+    },
   ];
 }
 
@@ -64,7 +71,7 @@ describe("MCP adapter", () => {
     expect(response!.result.capabilities.tools).toBeTruthy();
   });
 
-  it("lists tools with schema and annotations", async () => {
+  it("lists functions and nodes as tools", async () => {
     const response = await handler({
       jsonrpc: "2.0",
       id: 2,
@@ -72,14 +79,24 @@ describe("MCP adapter", () => {
     });
     expect(response).toBeTruthy();
     const tools = response!.result.tools;
-    expect(tools).toHaveLength(1);
-    expect(tools[0].name).toBe("add");
-    expect(tools[0].description).toBe("Add two numbers");
-    expect(tools[0].inputSchema).toBeTruthy();
-    expect(tools[0].annotations.readOnlyHint).toBe(true);
+    expect(tools).toHaveLength(2);
+    const addTool = tools.find((t: any) => t.name === "add");
+    expect(addTool.description).toBe("Add two numbers");
+    expect(addTool.inputSchema).toBeTruthy();
+    expect(addTool.annotations.readOnlyHint).toBe(true);
+    const mainTool = tools.find((t: any) => t.name === "main");
+    expect(mainTool.description).toContain("main");
+    expect(mainTool.inputSchema).toEqual({
+      type: "object",
+      properties: {
+        city: { type: "string" },
+        country: { type: "string" },
+      },
+      required: ["city", "country"],
+    });
   });
 
-  it("calls a tool and returns result", async () => {
+  it("calls a function tool and returns result", async () => {
     const response = await handler({
       jsonrpc: "2.0",
       id: 3,
@@ -91,6 +108,17 @@ describe("MCP adapter", () => {
     const content = response!.result.content;
     expect(content).toHaveLength(1);
     expect(JSON.parse(content[0].text)).toBe(7);
+  });
+
+  it("calls a node tool with positional arg mapping", async () => {
+    const response = await handler({
+      jsonrpc: "2.0",
+      id: 10,
+      method: "tools/call",
+      params: { name: "main", arguments: { city: "Paris", country: "France" } },
+    });
+    expect(response!.result.isError).toBe(false);
+    expect(JSON.parse(response!.result.content[0].text)).toBe("Paris, France");
   });
 
   it("returns error for unknown tool", async () => {

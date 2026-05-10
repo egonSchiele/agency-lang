@@ -1,4 +1,4 @@
-import { _checkPolicy, _validatePolicy } from "agency-lang/stdlib-lib/policy.js"
+import { _checkPolicy, _validatePolicy, _writePolicyFile } from "agency-lang/stdlib-lib/policy.js"
 
 export def checkPolicy(policy: object, interrupt: object) {
   """
@@ -12,4 +12,11 @@ export def validatePolicy(policy: object) {
   Validate that a policy object is well-formed. Returns { success: true } if valid, or { success: false, error: "..." } with a description of the problem.
   """
   return _validatePolicy(policy)
+}
+
+export def writePolicyFile(path: string, policy: object) {
+  """
+  Validate and write a policy to a JSON file. Throws if the policy is invalid.
+  """
+  return _writePolicyFile(path, policy)
 }

@@ -27,6 +27,7 @@ import { TarsecError } from "tarsec";
 import process from "process";
 import { agent } from "@/cli/agent.js";
 import { review } from "@/cli/review.js";
+import { policyGen } from "@/cli/policy.js";
 import {
   scheduleAdd,
   scheduleList,
@@ -809,6 +810,21 @@ export function createProgram(deps: CliDependencies = {}): Command {
     .option("--standalone", "Generate a standalone server.js file")
     .action(async (file: string, options: { port?: string; apiKey?: string; standalone?: boolean }) => {
       await serveHttp(file, options);
+    });
+
+  const policyCmd = program
+    .command("policy")
+    .description("Policy management tools");
+
+  policyCmd
+    .command("gen")
+    .description("Generate an interrupt policy for an Agency agent")
+    .argument("<file>", "The .agency file to analyze")
+    .option("-o, --output <path>", "Output path for the policy file (default: policy.json)")
+    .option("-p, --existing <path>", "Existing policy file to modify")
+    .action((file: string, options: { output?: string; existing?: string }) => {
+      const config = getConfig();
+      policyGen(config, file, options);
     });
 
   addRunOptions(

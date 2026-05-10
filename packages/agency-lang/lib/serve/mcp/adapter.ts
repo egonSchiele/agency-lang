@@ -1,6 +1,6 @@
 import process from "process";
 import type { InterruptKind } from "../../symbolTable.js";
-import type { ExportedFunction, ExportedItem } from "../types.js";
+import type { ExportedFunction, ExportedNode, ExportedItem } from "../types.js";
 import type { PolicyStore } from "../policyStore.js";
 import type { InterruptHandlers } from "./interruptLoop.js";
 import { runWithPolicy } from "./interruptLoop.js";
@@ -136,15 +136,29 @@ export function createMcpHandler(
 ): (message: JsonRpcMessage) => Promise<JsonRpcMessage | null> {
   const { serverName, serverVersion, exports } = config;
 
-  const tools = exports.filter((e): e is ExportedFunction => e.kind === "function");
-  const toolsByName = Object.fromEntries(tools.map((t) => [t.name, t]));
+  const functions = exports.filter((e): e is ExportedFunction => e.kind === "function");
+  const nodes = exports.filter((e): e is ExportedNode => e.kind === "node");
+  const functionsByName = Object.fromEntries(functions.map((f) => [f.name, f]));
+  const nodesByName = Object.fromEntries(nodes.map((n) => [n.name, n]));
 
-  const toolsListPayload = tools.map((t) => ({
-    name: t.name,
-    description: formatToolDescription(t.description, t.interruptKinds),
-    inputSchema: schemaToJsonSchema(t.agencyFunction.toolDefinition?.schema),
-    ...(t.agencyFunction.safe ? { annotations: { readOnlyHint: true } } : {}),
+  const functionToolEntries = functions.map((f) => ({
+    name: f.name,
+    description: formatToolDescription(f.description, f.interruptKinds),
+    inputSchema: schemaToJsonSchema(f.agencyFunction.toolDefinition?.schema),
+    ...(f.agencyFunction.safe ? { annotations: { readOnlyHint: true } } : {}),
   }));
+
+  const nodeToolEntries = nodes.map((n) => ({
+    name: n.name,
+    description: formatToolDescription(`Run the '${n.name}' node`, n.interruptKinds),
+    inputSchema: {
+      type: "object",
+      properties: Object.fromEntries(n.parameters.map((p) => [p.name, { type: "string" }])),
+      required: n.parameters.map((p) => p.name),
+    },
+  }));
+
+  const toolsListPayload = [...functionToolEntries, ...nodeToolEntries];
 
   const { policyConfig } = config;
   if (policyConfig) {
@@ -183,25 +197,47 @@ export function createMcpHandler(
           if (policyResult) return success(id, policyResult);
         }
 
-        const tool = toolsByName[name];
-        if (!tool) {
-          return rpcError(id, -32602, `Unknown tool '${name}'`);
+        const fn = functionsByName[name];
+        if (fn) {
+          try {
+            const invoke = () => fn.agencyFunction.invoke({ type: "named", positionalArgs: [], namedArgs: args });
+            const result = policyConfig
+              ? await runWithPolicy(invoke, policyConfig.policyStore, policyConfig.interruptHandlers)
+              : await invoke();
+            return success(id, {
+              content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+              isError: false,
+            });
+          } catch (err) {
+            return success(id, {
+              content: [{ type: "text", text: errorMessage(err) }],
+              isError: true,
+            });
+          }
         }
-        try {
-          const invoke = () => tool.agencyFunction.invoke({ type: "named", positionalArgs: [], namedArgs: args });
-          const result = policyConfig
-            ? await runWithPolicy(invoke, policyConfig.policyStore, policyConfig.interruptHandlers)
-            : await invoke();
-          return success(id, {
-            content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
-            isError: false,
-          });
-        } catch (err) {
-          return success(id, {
-            content: [{ type: "text", text: errorMessage(err) }],
-            isError: true,
-          });
+
+        const node = nodesByName[name];
+        if (node) {
+          try {
+            const positional = node.parameters.map((p) => args[p.name]);
+            const invoke = () => node.invoke(...positional);
+            const result = policyConfig
+              ? await runWithPolicy(invoke, policyConfig.policyStore, policyConfig.interruptHandlers)
+              : await invoke();
+            const data = result && typeof result === "object" && "data" in result ? (result as any).data : result;
+            return success(id, {
+              content: [{ type: "text", text: JSON.stringify(data, null, 2) }],
+              isError: false,
+            });
+          } catch (err) {
+            return success(id, {
+              content: [{ type: "text", text: errorMessage(err) }],
+              isError: true,
+            });
+          }
         }
+
+        return rpcError(id, -32602, `Unknown tool '${name}'`);
       }
 
       case "shutdown":

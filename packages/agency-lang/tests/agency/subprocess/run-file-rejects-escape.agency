@@ -1,0 +1,22 @@
+import { runFile } from "std::agency"
+
+node main() {
+  handle {
+    // Try to escape the sandbox via "../" — runFile's _compileFile must
+    // realpath both dir and target, then refuse a target that doesn't
+    // live inside dir. This proves the unit-level sandbox check surfaces
+    // as a clean Result failure end-to-end (and doesn't, e.g., crash the
+    // parent or quietly compile the outside file).
+    const result = runFile(
+      filename: "../run-file.agency",
+      node: "main",
+      dir: "tests/agency/subprocess/runfile-target",
+    )
+    if (isFailure(result)) {
+      return "rejected"
+    }
+    return "should have been rejected"
+  } with (data) {
+    return approve()
+  }
+}

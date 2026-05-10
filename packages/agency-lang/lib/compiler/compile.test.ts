@@ -106,6 +106,18 @@ node main() { return foo() }
     }
   });
 
+  // Negative control: without restrictImports, raw npm/Node imports must
+  // be allowed. This proves the rejection in the tests above is gated by
+  // the flag, not happening unconditionally.
+  it("allows raw npm/Node module imports when restrictImports is NOT set", () => {
+    const source = `
+import * as fs from "fs"
+node main() { return "hi" }
+`;
+    const result = compileSource(source, {});
+    expect(result.success).toBe(true);
+  });
+
   it("rejects 'import nodes' (importNodeStatement) when restrictImports is set", () => {
     const source = `
 import nodes { helper } from "./helpers.agency"

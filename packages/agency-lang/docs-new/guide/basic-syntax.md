@@ -109,7 +109,7 @@ arr[:3] = [10, 20, 30] // arr is now [10, 20, 30, 4, 5]
 
 ### Unit literals
 
-Agency supports unit literals for time and cost values. They compile to plain numbers at compile time:
+Agency supports unit literals for time, cost, and size values. They compile to plain numbers at compile time:
 
 ```ts
 const timeout = 30s       // compiles to 30000 (milliseconds)
@@ -117,6 +117,8 @@ const delay = 500ms       // compiles to 500
 const duration = 2h       // compiles to 7200000
 const week = 1w           // compiles to 604800000
 const budget = $5.00      // compiles to 5.00
+const size = 100KB        // compiles to 102400 (bytes)
+
 ```
 
 Supported time units: `ms` (milliseconds), `s` (seconds), `m` (minutes), `h` (hours), `d` (days), `w` (weeks). All time units normalize to milliseconds.

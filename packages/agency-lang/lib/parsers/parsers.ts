@@ -16,6 +16,7 @@ import {
   digit,
   fail,
   failure,
+  istr,
   label,
   lazy,
   letter,
@@ -430,7 +431,7 @@ const BYTE_MULTIPLIERS: Record<ByteUnitLiteral["unit"], number> = {
 };
 
 // Order matters — longest match first so "mb" matches before "b"
-const byteSuffix = or(str("kb"), str("mb"), str("gb"), str("b"));
+const byteSuffix = or(istr("kb"), istr("mb"), istr("gb"), istr("b"));
 
 const byteUnitParser: Parser<UnitLiteral> = label("a byte unit literal", (input: string): ParserResult<UnitLiteral> => {
   const parser = seqC(
@@ -442,9 +443,10 @@ const byteUnitParser: Parser<UnitLiteral> = label("a byte unit literal", (input:
   const result = parser(input);
   if (!result.success) return result;
   const { value, unit } = result.result;
+  const normalizedUnit = unit.toLowerCase() as ByteUnitLiteral["unit"];
   return success({
     ...result.result,
-    canonicalValue: Math.round(parseFloat(value) * BYTE_MULTIPLIERS[unit as ByteUnitLiteral["unit"]]),
+    canonicalValue: Math.round(parseFloat(value) * BYTE_MULTIPLIERS[normalizedUnit]),
   } as UnitLiteral, result.rest);
 });
 

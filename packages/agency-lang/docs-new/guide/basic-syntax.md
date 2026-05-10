@@ -112,18 +112,28 @@ arr[:3] = [10, 20, 30] // arr is now [10, 20, 30, 4, 5]
 Agency supports unit literals for time, cost, and size values. They compile to plain numbers at compile time:
 
 ```ts
+// time
 const timeout = 30s       // compiles to 30000 (milliseconds)
 const delay = 500ms       // compiles to 500
 const duration = 2h       // compiles to 7200000
 const week = 1w           // compiles to 604800000
+
+// cost
 const budget = $5.00      // compiles to 5.00
-const size = 100KB        // compiles to 102400 (bytes)
+
+// size
+const size = 100KB        // compiles to bytes
+const mediumSize = 500MB  // compiles to bytes
+const bigSize = 2GB       // compiles to bytes
+
 
 ```
 
 Supported time units: `ms` (milliseconds), `s` (seconds), `m` (minutes), `h` (hours), `d` (days), `w` (weeks). All time units normalize to milliseconds.
 
 Supported cost units: `$` (dollars).
+
+Supported size units: `kb` (kilobytes), `mb` (megabytes), `gb` (gigabytes). Case insensitive. All size units normalize to bytes.
 
 Unit math works because both sides normalize to the same base unit:
 

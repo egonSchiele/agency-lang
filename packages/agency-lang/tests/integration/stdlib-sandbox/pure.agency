@@ -22,10 +22,10 @@ node main() {
     return n % 2 == 0
   }
   if (evens[0] != 2) {
-    return "filter failed"
+    return "filter failed: first even"
   }
   if (evens[1] != 4) {
-    return "filter failed"
+    return "filter failed: second even"
   }
 
   const total = reduce(nums, 0) as (acc, n) {
@@ -52,7 +52,6 @@ node main() {
 
   // Agent
   const todos = todoList()
-  // todoList returns an empty array initially
   if (length(todos) != 0) {
     return "todoList failed"
   }

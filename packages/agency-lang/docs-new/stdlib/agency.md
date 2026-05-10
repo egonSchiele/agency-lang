@@ -66,3 +66,41 @@ Execute a compiled Agency program in a subprocess. The parent's handler chain ex
 **Returns:** `Result`
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/agency.agency#L15))
+
+### runFile
+
+```ts
+runFile(filename: string, node: string, args: Record<string, any>, dir: string, wallClock: number, memory: number, ipcPayload: number, stdout: number): Result
+```
+
+Compile and execute an Agency file in a subprocess. The file is read from dir/filename and compiled with the same stdlib-only import restrictions as compile() before being handed to run() — so the subprocess code can only call into the Agency standard library, not local files, npm packages, or Node modules.
+
+  The (filename, dir) split mirrors std::read and std::write so callers can use partial application to bind a sandbox directory, e.g. const safeRun = runFile.bind(dir: "/safe/dir").
+
+  Resource limits clamp the subprocess: see run() for the full list of caps.
+
+  @param filename - The agency file to compile and run, resolved relative to dir
+  @param node - Which exported node to run
+  @param args - Arguments to pass to the node (defaults to no args)
+  @param dir - The directory to resolve the filename against (defaults to ".")
+  @param wallClock - Max wall-clock time before SIGKILL (default 60s, max 1h)
+  @param memory - Max V8 heap size (default 512mb, max 4gb)
+  @param ipcPayload - Max single IPC message size (default 100mb, max 1gb)
+  @param stdout - Max combined stdout+stderr bytes (default 1mb, max 100mb)
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| filename | `string` |  |
+| node | `string` |  |
+| args | `Record<string, any>` | {} |
+| dir | `string` | "." |
+| wallClock | `number` | 60s |
+| memory | `number` | 512mb |
+| ipcPayload | `number` | 100mb |
+| stdout | `number` | 1mb |
+
+**Returns:** `Result`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/agency.agency#L47))

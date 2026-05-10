@@ -1,0 +1,17 @@
+import { runFile } from "std::agency"
+
+node main() {
+  handle {
+    const result = runFile(
+      filename: "sub.agency",
+      node: "main",
+      dir: "tests/agency/subprocess/runfile-target",
+    )
+    if (isSuccess(result)) {
+      return result.value.data
+    }
+    return "run failed: " + result.error
+  } with (data) {
+    return approve()
+  }
+}

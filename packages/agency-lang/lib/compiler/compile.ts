@@ -19,7 +19,7 @@ import {
   isPkgImport,
 } from "../importPaths.js";
 import { CompileStrategy } from "../importStrategy.js";
-import { getImports } from "../cli/util.js";
+import { getAllImports } from "../cli/util.js";
 
 type CompileSuccess = {
   success: true;
@@ -34,9 +34,22 @@ type CompileFailure = {
 
 export type CompileResult = CompileSuccess | CompileFailure;
 
+// Options accepted by compileSource. Mostly the standard AgencyConfig that
+// the rest of the pipeline takes, plus one compileSource-specific knob:
+// `restrictImports`. We keep `restrictImports` out of the global AgencyConfig
+// because it's only meaningful at this entry point — used when compiling
+// agent-supplied source destined for subprocess execution.
+export type CompileSourceOptions = AgencyConfig & {
+  /** When true, reject every import that isn't a std:: import. This includes
+   *  relative .agency files, pkg:: imports, and raw npm/Node modules
+   *  (`fs`, `child_process`, etc.). Set by std::agency.compile so that the
+   *  compiled subprocess code can only call into the standard library. */
+  restrictImports?: boolean;
+};
+
 export function compileSource(
   source: string,
-  config: AgencyConfig,
+  config: CompileSourceOptions,
 ): CompileResult {
   const moduleId = `agency_${nanoid()}`;
   // Write source to a temp file so SymbolTable.build() can read it.
@@ -56,14 +69,31 @@ export function compileSource(
     }
     const program: AgencyProgram = parseResult.result;
 
-    // 2. Check for restricted imports — only stdlib allowed
+    // 2. Check for restricted imports — only std:: allowed.
+    // Use getAllImports (NOT getImports) so we see EVERY import, including
+    // raw npm/Node modules. getImports filters those out and would let
+    // `import fs from "fs"` slip past the check.
     if (config.restrictImports) {
-      const imports = getImports(program);
-      for (const importPath of imports) {
-        if (!isStdlibImport(importPath)) {
+      for (const { path: importPath, kind } of getAllImports(program)) {
+        if (kind === "node") {
+          // tool/node imports always reference a relative .agency file
           return {
             success: false,
-            errors: [`Import '${importPath}' is not allowed. Only standard library (std::) imports are permitted.`],
+            errors: [`Tool/node import '${importPath}' is not allowed when restrictImports is set. Only standard library (std::) imports are permitted.`],
+          };
+        }
+        if (!isStdlibImport(importPath)) {
+          let what: string;
+          if (isPkgImport(importPath)) {
+            what = "package import";
+          } else if (importPath.endsWith(".agency")) {
+            what = "relative .agency import";
+          } else {
+            what = "npm/Node module import";
+          }
+          return {
+            success: false,
+            errors: [`${what} '${importPath}' is not allowed. Only standard library (std::) imports are permitted.`],
           };
         }
       }

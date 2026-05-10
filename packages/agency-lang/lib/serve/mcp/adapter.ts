@@ -131,6 +131,72 @@ function handlePolicyTool(
   }
 }
 
+/**
+ * Run a tool invocation through the policy store (if configured) and wrap
+ * the result/error into the MCP `tools/call` response shape. `extractData`
+ * lets callers unwrap node results that are `{ data, ... }` envelopes
+ * before serializing.
+ */
+async function runToolInvocation(
+  id: string | number | null,
+  invoke: () => Promise<unknown>,
+  policyConfig: McpConfig["policyConfig"],
+  extractData: (result: unknown) => unknown = (r) => r,
+): Promise<JsonRpcMessage> {
+  try {
+    const result = policyConfig
+      ? await runWithPolicy(invoke, policyConfig.policyStore, policyConfig.interruptHandlers)
+      : await invoke();
+    return success(id, {
+      content: [{ type: "text", text: JSON.stringify(extractData(result), null, 2) }],
+      isError: false,
+    });
+  } catch (err) {
+    return success(id, {
+      content: [{ type: "text", text: errorMessage(err) }],
+      isError: true,
+    });
+  }
+}
+
+async function handleToolCall(
+  message: JsonRpcMessage,
+  functionsByName: Record<string, ExportedFunction>,
+  nodesByName: Record<string, ExportedNode>,
+  policyConfig: McpConfig["policyConfig"],
+): Promise<JsonRpcMessage> {
+  const name = message.params?.name;
+  const args = message.params?.arguments ?? {};
+  const id = message.id ?? null;
+
+  if (policyConfig) {
+    const policyResult = handlePolicyTool(name, args, policyConfig.policyStore);
+    if (policyResult) return success(id, policyResult);
+  }
+
+  const fn = functionsByName[name];
+  if (fn) {
+    return runToolInvocation(
+      id,
+      () => fn.agencyFunction.invoke({ type: "named", positionalArgs: [], namedArgs: args }),
+      policyConfig,
+    );
+  }
+
+  const node = nodesByName[name];
+  if (node) {
+    const positional = node.parameters.map((p) => args[p.name]);
+    return runToolInvocation(
+      id,
+      () => node.invoke(...positional),
+      policyConfig,
+      (r) => (r && typeof r === "object" && "data" in r ? (r as any).data : r),
+    );
+  }
+
+  return rpcError(id, -32602, `Unknown tool '${name}'`);
+}
+
 export function createMcpHandler(
   config: McpConfig,
 ): (message: JsonRpcMessage) => Promise<JsonRpcMessage | null> {
@@ -187,58 +253,8 @@ export function createMcpHandler(
       case "tools/list":
         return success(message.id ?? null, { tools: toolsListPayload });
 
-      case "tools/call": {
-        const name = message.params?.name;
-        const args = message.params?.arguments ?? {};
-        const id = message.id ?? null;
-
-        if (policyConfig) {
-          const policyResult = handlePolicyTool(name, args, policyConfig.policyStore);
-          if (policyResult) return success(id, policyResult);
-        }
-
-        const fn = functionsByName[name];
-        if (fn) {
-          try {
-            const invoke = () => fn.agencyFunction.invoke({ type: "named", positionalArgs: [], namedArgs: args });
-            const result = policyConfig
-              ? await runWithPolicy(invoke, policyConfig.policyStore, policyConfig.interruptHandlers)
-              : await invoke();
-            return success(id, {
-              content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
-              isError: false,
-            });
-          } catch (err) {
-            return success(id, {
-              content: [{ type: "text", text: errorMessage(err) }],
-              isError: true,
-            });
-          }
-        }
-
-        const node = nodesByName[name];
-        if (node) {
-          try {
-            const positional = node.parameters.map((p) => args[p.name]);
-            const invoke = () => node.invoke(...positional);
-            const result = policyConfig
-              ? await runWithPolicy(invoke, policyConfig.policyStore, policyConfig.interruptHandlers)
-              : await invoke();
-            const data = result && typeof result === "object" && "data" in result ? (result as any).data : result;
-            return success(id, {
-              content: [{ type: "text", text: JSON.stringify(data, null, 2) }],
-              isError: false,
-            });
-          } catch (err) {
-            return success(id, {
-              content: [{ type: "text", text: errorMessage(err) }],
-              isError: true,
-            });
-          }
-        }
-
-        return rpcError(id, -32602, `Unknown tool '${name}'`);
-      }
+      case "tools/call":
+        return handleToolCall(message, functionsByName, nodesByName, policyConfig);
 
       case "shutdown":
         return success(message.id ?? null, {});

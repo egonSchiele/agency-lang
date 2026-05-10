@@ -188,6 +188,14 @@ type ExecuteNodeArgs = {
   hasArgs: boolean;
   argsString: string;
   interruptHandlers?: InterruptHandler[];
+  // Per-call timeout (ms). When exceeded, execFile sends `killSignal` to
+  // the child (we use SIGKILL — these are spinning subprocesses we want
+  // dead, not given a chance to handle SIGTERM).
+  timeoutMs?: number;
+  // Suite-wide AbortSignal. When aborted (suite ceiling hit, or SIGINT
+  // from user), the in-flight child is killed via execFile's signal
+  // handling. Used by the test runner; safe to omit elsewhere.
+  signal?: AbortSignal;
 };
 
 export async function executeNodeAsync({
@@ -197,6 +205,8 @@ export async function executeNodeAsync({
   hasArgs,
   argsString,
   interruptHandlers,
+  timeoutMs,
+  signal,
 }: ExecuteNodeArgs): Promise<{ data: any; stdout: string; stderr: string }> {
   let evaluateFile = "";
   let resultsFile = "";
@@ -235,8 +245,17 @@ export async function executeNodeAsync({
       resultsFilename: resultsFile,
     });
     fs.writeFileSync(evaluateFile, evaluateScript);
+    // SIGKILL (not SIGTERM) for both the `timeout` AND `signal` paths:
+    // these can be spinning subprocesses (`while(true)`) where SIGTERM
+    // might be ignored. SIGKILL is uncatchable. Setting `killSignal`
+    // covers both the per-call `timeout` option and the AbortSignal
+    // (suite-ceiling/SIGINT) path, which otherwise default to SIGTERM.
+    const wantsKill = timeoutMs !== undefined || signal !== undefined;
     const { stdout, stderr } = await execFileAsync("node", [evaluateFile], {
       maxBuffer: 10 * 1024 * 1024,
+      ...(timeoutMs !== undefined ? { timeout: timeoutMs } : {}),
+      ...(signal !== undefined ? { signal } : {}),
+      ...(wantsKill ? { killSignal: "SIGKILL" as const } : {}),
     });
     const results = readFileSync(resultsFile, "utf-8");
     return { data: JSON.parse(results).data, stdout, stderr };

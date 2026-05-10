@@ -6,6 +6,6 @@ node main() {
     return "compile failed"
   }
   const compiled = compileResult.value
-  const result = run(compiled, { node: "main", args: {} })
+  const result = run(compiled: compiled, node: "main")
   return result
 }

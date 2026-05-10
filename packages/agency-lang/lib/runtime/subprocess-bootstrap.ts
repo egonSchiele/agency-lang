@@ -51,6 +51,7 @@ const bootstrapHandler = async (msg: RunInstruction) => {
   try {
     const scriptUrl = pathToFileURL(msg.scriptPath).href;
     ipcLog("send", { type: "log", detail: `importing ${scriptUrl}` });
+    // eslint-disable-next-line no-restricted-syntax -- dynamic import required: script path is determined at runtime by the parent process
     const mod = await import(scriptUrl);
 
     const nodeFn = mod[msg.node];

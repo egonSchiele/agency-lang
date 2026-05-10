@@ -134,25 +134,10 @@ export async function interruptWithHandlers<T = any>(
 ): Promise<Interrupt<T>[] | Approved | Rejected> {
   const interruptObj = { kind, message, data, origin };
 
-  // IPC mode with no local handlers: consult parent directly
-  if (isIpcMode() && ctx.handlers.length === 0) {
-    const parentDecision = await sendInterruptToParent(
-      { kind, message, data, origin },
-      { approved: false, rejected: false, propagated: false, approvedValue: undefined },
-    );
-    if (parentDecision.type === "approve") {
-      return { type: "approve", value: parentDecision.value };
-    }
-    return { type: "reject", value: parentDecision.value };
-  }
-
-  if (ctx.handlers.length === 0) {
-    return [interrupt({ kind, message, data, origin, runId: ctx.getRunId() })];
-  }
   let approvedValue: any = undefined;
   let hasApproval = false;
   let hasPropagation = false;
-  for (let i = ctx.handlers.length - 1; i >= 0; i--) {
+  for (let i = (ctx.handlers ?? []).length - 1; i >= 0; i--) {
     if (ctx.isCancelled(stack)) {
       throw new AgencyCancelledError();
     }
@@ -189,12 +174,7 @@ export async function interruptWithHandlers<T = any>(
   if (isIpcMode()) {
     const parentDecision = await sendInterruptToParent(
       { kind, message, data, origin },
-      {
-        approved: hasApproval,
-        rejected: false, // if rejected, we already returned above
-        propagated: hasPropagation,
-        approvedValue,
-      },
+      { propagated: hasPropagation },
     );
     if (parentDecision.type === "approve") {
       return { type: "approve", value: parentDecision.value ?? approvedValue };

@@ -37,26 +37,19 @@ function truncate(val: any, maxLen = 200): string {
 export function ipcLog(direction: "send" | "recv", msg: any): void {
   if (!ipcDebug) return;
   const ts = new Date().toISOString().slice(11, 23); // HH:MM:SS.mmm
-  const type = msg?.type ?? msg?.mode ?? "unknown";
-  const detail = type === "interrupt"
-    ? `kind=${msg.interrupt?.kind}`
-    : type === "decision"
-      ? `approved=${msg.approved}`
-      : type === "result"
-        ? `data=${truncate(msg.value?.data)}`
-        : type === "error"
-          ? `error=${truncate(msg.error)}`
-          : type === "run"
-            ? `node=${msg.node} script=${msg.scriptPath}`
-            : truncate(msg);
+  const type = msg?.type ?? "unknown";
+  let detail: string;
+  if (type === "interrupt") detail = `kind=${msg.interrupt?.kind}`;
+  else if (type === "decision") detail = `approved=${msg.approved}`;
+  else if (type === "result") detail = `data=${truncate(msg.value?.data)}`;
+  else if (type === "error") detail = `error=${truncate(msg.error)}`;
+  else if (type === "run") detail = `node=${msg.node} script=${msg.scriptPath}`;
+  else detail = truncate(msg);
   process.stderr.write(`[ipc:${role}] ${ts} ${direction} ${type} ${detail}\n`);
 }
 
 export type SubprocessVotes = {
-  approved: boolean;
-  rejected: boolean;
   propagated: boolean;
-  approvedValue: any;
 };
 
 export type IpcInterruptMessage = {

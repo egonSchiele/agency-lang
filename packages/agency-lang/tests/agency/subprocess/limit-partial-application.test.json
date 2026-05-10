@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "wallClock limit binds correctly through partial application",
+      "input": "",
+      "expectedOutput": "\"partial-applied limit hit\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

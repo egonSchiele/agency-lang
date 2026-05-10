@@ -1,0 +1,30 @@
+import { compile, run } from "std::agency"
+
+node main() {
+  const source = """
+node main() {
+  while (true) {}
+}
+"""
+  const c = compile(source)
+  if (isFailure(c)) { return "compile failed" }
+
+  handle {
+    // wallClock=1s is well under the 1h ceiling; failure threshold should
+    // therefore be exactly 1000 (not clamped). This verifies the
+    // non-clamping path of clampLimits — the ceiling clamping itself is
+    // covered by lib/runtime/ipc.test.ts unit tests.
+    const result = run(c.value, "main", {}, wallClock: 1s)
+    if (isFailure(result)) {
+      if (result.error.reason == "limit_exceeded" && result.error.limit == "wall_clock") {
+        if (result.error.threshold == 1000) {
+          return "threshold preserved"
+        }
+        return "wrong threshold"
+      }
+    }
+    return "wrong outcome"
+  } with (data) {
+    return approve()
+  }
+}

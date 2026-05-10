@@ -1,9 +1,20 @@
 import { AgencyConfig } from "@/config.js";
 import { runBundledAgent } from "./runBundledAgent.js";
 import { SymbolTable } from "../symbolTable.js";
+import type { FileSymbols } from "../symbolTable.js";
 import { existsSync, readFileSync } from "fs";
 import { validatePolicy } from "../runtime/policy.js";
 import path from "path";
+
+function uniqueInterruptKinds(fileSymbols: FileSymbols | undefined): string[] {
+  const kinds = Object.values(fileSymbols ?? {})
+    .flatMap((sym) =>
+      (sym.kind === "function" || sym.kind === "node") && sym.interruptKinds
+        ? sym.interruptKinds.map((ik) => ik.kind)
+        : [],
+    );
+  return [...new Set(kinds)];
+}
 
 export function policyGen(
   config: AgencyConfig,
@@ -24,16 +35,7 @@ export function policyGen(
 
   const symbolTable = SymbolTable.build(absoluteFile, config);
   const fileSymbols = symbolTable.getFile(absoluteFile);
-  const interruptKinds: string[] = [];
-  for (const sym of Object.values(fileSymbols ?? {})) {
-    if ((sym.kind === "function" || sym.kind === "node") && sym.interruptKinds) {
-      for (const ik of sym.interruptKinds) {
-        if (!interruptKinds.includes(ik.kind)) {
-          interruptKinds.push(ik.kind);
-        }
-      }
-    }
-  }
+  const interruptKinds = uniqueInterruptKinds(fileSymbols);
 
   if (interruptKinds.length === 0) {
     console.log("No interrupt kinds found in this agent. No policy needed.");
@@ -47,13 +49,12 @@ export function policyGen(
       console.error(`Existing policy file not found: ${options.existing}`);
       process.exit(1);
     }
-    const parsed = JSON.parse(readFileSync(existingPath, "utf-8"));
-    const result = validatePolicy(parsed);
+    existingPolicyJson = readFileSync(existingPath, "utf-8");
+    const result = validatePolicy(JSON.parse(existingPolicyJson));
     if (!result.success) {
       console.error(`Invalid existing policy: ${result.error}`);
       process.exit(1);
     }
-    existingPolicyJson = JSON.stringify(parsed);
   }
 
   const agentArgs = [

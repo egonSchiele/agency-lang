@@ -431,3 +431,44 @@ The user is expected to check `isSuccess(compiled)` first, which narrows the typ
 - `lib/typeChecker/` — type checker implementation, specifically narrowing logic
 - `tests/agency/subprocess/run-basic.agency` — test file that triggers the warning
 - `docs/dev/typechecker.md` — type checker documentation
+
+### 6. `try` swallows structured failure data by stringifying rejections
+
+**The problem:** Agency's `try _foo(...)` wraps backing-function rejections by calling `String(err)` (or reading `err.message`) and stuffing the result into a `Result.failure({ error: <string> })`. This is fine for genuine errors but destroys the structured fields on a deliberate `Result.failure({ reason: "limit_exceeded", limit: "...", value: ..., threshold: ... })` returned by the runtime — by the time it reaches the Agency caller, all of `reason`, `limit`, `threshold`, `value`, and `samplePrefix` are gone.
+
+**What we learned:** Backing functions that need to deliver a structured failure to Agency code should **resolve** with the failure object, not reject. `_run()` in `lib/runtime/ipc.ts` returns the limit failure via `resolvePromise(makeLimitFailure(...))` rather than `rejectPromise(...)`; the value flows through `try` as the success branch (because the Promise resolved) and Agency code can pattern-match `result.error.reason == "limit_exceeded"` directly. Genuine subprocess errors (crashes, IPC channel loss, abnormal exits) still reject — those are correctly stringified by `try`.
+
+**Where to look:**
+- `lib/runtime/ipc.ts` — `settleWithLimitFailure()` resolves with `Result.failure`; other settle paths still reject
+- `lib/runtime/result.ts` — `failure()` factory and the structured failure shape
+- `tests/agency/subprocess/limit-*.agency` — tests assert on `result.error.reason == "limit_exceeded" && result.error.limit == "..."`
+
+### 7. Object shorthand `{ wallClock }` does not parse inside `interrupt` argument lists
+
+**The problem:** Writing `interrupt std::run("...", { wallClock, memory, ipcPayload, stdout })` failed to parse. Expanding to explicit `{ wallClock: wallClock, memory: memory, ... }` worked.
+
+**What we learned:** Object shorthand support is incomplete in at least one expression context (`interrupt` argument lists). The workaround is trivial — use explicit `key: value` form — but anyone wiring up new `interrupt` payloads should expect to spell things out. A future cleanup pass on the parser should make shorthand work uniformly with the rest of the grammar.
+
+**Where to look:**
+- `stdlib/agency.agency` — `run()` builds its `interrupt std::run(...)` payload with explicit `key: value` pairs
+- `lib/parsers/parsers.ts` — object literal and interrupt-call parsers
+
+### 8. Stale generated `.js` files in `lib/parsers/` shadow the `.ts` source
+
+**The problem:** A `lib/parsers/parsers.js` file (left over from a previous build) was being preferred over `lib/parsers/parsers.ts` by the test runner, causing tests to use stale parser logic and fail mysteriously after edits to the `.ts`.
+
+**What we learned:** When a TypeScript module under `lib/` has a sibling `.js` file with the same basename, several toolchains will pick the `.js` first. Treat any `.js` next to a `.ts` in `lib/` as suspect and remove it before debugging further. A `.gitignore` rule or a `make clean` step that also wipes `lib/**/*.js` would prevent the trap from recurring.
+
+**Where to look:**
+- `lib/parsers/` — verify no stray `.js` siblings of `.ts` files
+- `makefile` — clean target should remove generated `.js` artifacts under `lib/`
+
+### 9. Structural linter caps function size, forcing event-handler extraction
+
+**The problem:** `lib/runtime/ipc.ts`'s `_run` was a single async function whose body wired together a `fork()` call and an inner `new Promise((resolve, reject) => { ... })` with a half-dozen event handlers (stdout forwarder, wall-clock timer, message handler, close handler, error handler). The structural linter's `max-lines-per-function: 100` rule fires on both the outer function and the inner Promise-executor arrow.
+
+**What we learned:** When the inner Promise body shares mutable state across handlers (a `settled` flag, the wall-clock timer reference, byte counters), splitting handlers into module-level functions requires bundling that state into an object the helpers can mutate. The pattern in `_run` introduces a `RunSession` type carrying everything the helpers need (`child`, `limits`, `ctx`, `stateStack`, `compiledPath`, both promise resolvers, and the mutable counters) and a small set of helpers (`settle`, `settleWithLimitFailure`, `attachStdoutForwarder`, `handleChildMessage`, `handleChildClose`). This keeps each helper under 100 lines and surfaces "what changes when a limit fires" as named functions rather than inline branches.
+
+**Where to look:**
+- `lib/runtime/ipc.ts` — `RunSession` type, `attachSessionHandlers`, and the per-event helpers
+- `eslint.config.js` — the `max-lines-per-function` rule and its threshold

@@ -1,5 +1,7 @@
 # Subprocess Resource Limits: Design Spec
 
+**Implementation plan:** [docs/superpowers/plans/2026-05-09-subprocess-resource-limits.md](../plans/2026-05-09-subprocess-resource-limits.md)
+
 ## Overview
 
 Add per-call resource limits to `std::agency`'s `run()` function so a parent

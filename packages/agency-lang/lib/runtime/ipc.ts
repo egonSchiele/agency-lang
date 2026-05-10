@@ -21,6 +21,35 @@ export function isIpcMode(): boolean {
   return process.env.AGENCY_IPC === "1";
 }
 
+// ── Resource limits ──
+// Hardcoded ceilings clamp any user-supplied limit value to a safe maximum.
+// See docs/superpowers/specs/2026-05-09-subprocess-resource-limits-design.md.
+
+const LIMIT_CEILINGS = {
+  wallClock: 60 * 60 * 1000,           // 1h in ms
+  memory: 4 * 1024 * 1024 * 1024,      // 4gb in bytes
+  ipcPayload: 1024 * 1024 * 1024,      // 1gb in bytes
+  stdout: 100 * 1024 * 1024,           // 100mb in bytes
+} as const;
+
+export type RunLimits = {
+  wallClock: number;
+  memory: number;
+  ipcPayload: number;
+  stdout: number;
+};
+
+export function clampLimits(input: RunLimits): RunLimits {
+  const out = { ...input };
+  for (const key of Object.keys(LIMIT_CEILINGS) as (keyof typeof LIMIT_CEILINGS)[]) {
+    if (input[key] > LIMIT_CEILINGS[key]) {
+      ipcLog("send", { type: "limit_clamped", limit: key, requested: input[key], clamped: LIMIT_CEILINGS[key] });
+      out[key] = LIMIT_CEILINGS[key];
+    }
+  }
+  return out;
+}
+
 // ── IPC Debug Logger ──
 // Toggle with AGENCY_IPC_DEBUG=1. Logs every IPC message to stderr
 // with direction, timestamp, and message type. Truncates large payloads.
@@ -132,10 +161,10 @@ export async function _run(
   compiled: { path: string; moduleId: string },
   node: string,
   args: Record<string, any>,
-  _wallClock: number,
-  _memory: number,
-  _ipcPayload: number,
-  _stdout: number,
+  wallClock: number,
+  memory: number,
+  ipcPayload: number,
+  stdout: number,
   __state: InternalFunctionState,
 ): Promise<any> {
   if (isIpcMode()) {
@@ -143,8 +172,11 @@ export async function _run(
   }
   const ctx = __state.ctx;
   const stateStack = __state.stateStack ?? ctx.stateStack;
-  // Limits parameters are accepted now but not enforced yet — that's added
-  // in the subsequent commits (clamp, wall-clock, memory, ipcPayload, stdout).
+  const limits = clampLimits({ wallClock, memory, ipcPayload, stdout });
+  // limits.wallClock / limits.memory / limits.ipcPayload / limits.stdout are
+  // not enforced yet — that's the next set of commits. We clamp here so that
+  // by the time enforcement lands, callers already see clamping behavior.
+  void limits;
 
   const child = fork(subprocessBootstrapPath, [], {
     stdio: ["pipe", "inherit", "inherit", "ipc"],

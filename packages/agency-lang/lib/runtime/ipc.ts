@@ -185,6 +185,219 @@ export async function sendInterruptToParent(
 }
 
 /**
+ * Mutable per-call state shared by all the subprocess event handlers.
+ * Bundled into one object so helpers can be extracted to module scope
+ * without each one needing 8 closure parameters.
+ */
+type RunSession = {
+  child: ReturnType<typeof fork>;
+  limits: RunLimits;
+  ctx: any;
+  stateStack: any;
+  compiledPath: string;
+  resolvePromise: (v: any) => void;
+  rejectPromise: (v: any) => void;
+  settled: boolean;
+  wallClockTimer: NodeJS.Timeout | null;
+  stdoutBytes: number;
+  stoppedForwarding: boolean;
+};
+
+function cleanupTempDir(compiledPath: string): void {
+  try {
+    const tempDir = path.resolve(dirname(compiledPath));
+    const allowedPrefix = path.resolve(process.cwd(), ".agency-tmp");
+    if (tempDir.startsWith(allowedPrefix + path.sep)) {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+  } catch (_) {
+    // Ignore cleanup failures
+  }
+}
+
+function clearTimer(s: RunSession): void {
+  if (s.wallClockTimer) {
+    clearTimeout(s.wallClockTimer);
+    s.wallClockTimer = null;
+  }
+}
+
+function settle(s: RunSession, fn: (v: any) => void, value: any): void {
+  if (s.settled) return;
+  s.settled = true;
+  clearTimer(s);
+  cleanupTempDir(s.compiledPath);
+  fn(value);
+}
+
+/**
+ * Hard-kill path used when a limit violation is detected: kill child, clean
+ * up, and resolve with the structured limit failure.
+ */
+function settleWithLimitFailure(
+  s: RunSession,
+  limit: string,
+  threshold: number,
+  value: number,
+  extras: Record<string, any> = {},
+): void {
+  if (s.settled) return;
+  s.settled = true;
+  clearTimer(s);
+  try { s.child.kill("SIGKILL"); } catch (_) { /* already gone */ }
+  cleanupTempDir(s.compiledPath);
+  s.resolvePromise(makeLimitFailure(limit, threshold, value, extras));
+}
+
+function trySendDecision(s: RunSession, msg: any): void {
+  try {
+    if (s.child.connected) {
+      ipcLog("send", msg);
+      s.child.send(msg);
+    }
+  } catch (_) {
+    // IPC channel closed — subprocess is gone
+    settle(s, s.rejectPromise, new Error("IPC channel closed while sending decision to subprocess"));
+  }
+}
+
+/**
+ * Attach a byte-counting forwarder to one of the child's pipe streams. Bytes
+ * pass through to `dst` until the cumulative `stdout` limit is hit, at which
+ * point we write a truncation marker, stop forwarding, kill the child, and
+ * settle with a stdout limit failure.
+ */
+function attachStdoutForwarder(
+  s: RunSession,
+  src: NodeJS.ReadableStream | null,
+  dst: NodeJS.WriteStream,
+): void {
+  if (!src) return;
+  src.on("data", (chunk: Buffer) => {
+    if (s.stoppedForwarding) return;
+    const remaining = s.limits.stdout - s.stdoutBytes;
+    if (chunk.length <= remaining) {
+      s.stdoutBytes += chunk.length;
+      dst.write(chunk);
+      return;
+    }
+    if (remaining > 0) dst.write(chunk.subarray(0, remaining));
+    const overflow = chunk.length - remaining;
+    s.stdoutBytes = s.limits.stdout + overflow;
+    dst.write(`\n... [output truncated: stdout limit of ${s.limits.stdout} bytes exceeded]\n`);
+    s.stoppedForwarding = true;
+    settleWithLimitFailure(s, "stdout", s.limits.stdout, s.stdoutBytes);
+  });
+}
+
+async function handleInterruptMessage(s: RunSession, msg: any): Promise<void> {
+  const { kind, message, data, origin } = msg.interrupt;
+  try {
+    const handlerResult = await interruptWithHandlers(kind, message, data, origin, s.ctx, s.stateStack);
+    let decision: any;
+    if (isApproved(handlerResult)) {
+      decision = { type: "decision", approved: true, value: (handlerResult as any).value };
+    } else if (hasInterrupts(handlerResult)) {
+      decision = { type: "decision", approved: false, value: "Interrupt propagated to user (subprocess slow-path not yet supported)" };
+    } else {
+      decision = { type: "decision", approved: false, value: (handlerResult as any).value };
+    }
+    trySendDecision(s, decision);
+  } catch (err) {
+    trySendDecision(s, {
+      type: "decision",
+      approved: false,
+      value: `Parent handler error: ${err instanceof Error ? err.message : String(err)}`,
+    });
+  }
+}
+
+/**
+ * Subprocess sent a structured `error` message; if it parses as a
+ * limit_exceeded payload, surface it as the same Result.failure shape that
+ * the parent-detected limits produce. Otherwise propagate as a plain error.
+ */
+function handleErrorMessage(s: RunSession, msg: any): void {
+  let parsed: any = null;
+  try { parsed = JSON.parse(msg.error); } catch (_) { /* not JSON */ }
+  if (parsed?.reason === "limit_exceeded") {
+    if (s.settled) return;
+    s.settled = true;
+    clearTimer(s);
+    cleanupTempDir(s.compiledPath);
+    s.resolvePromise(makeLimitFailure(
+      parsed.limit,
+      parsed.threshold,
+      parsed.value,
+      parsed.samplePrefix !== undefined ? { samplePrefix: parsed.samplePrefix } : {},
+    ));
+  } else {
+    settle(s, s.rejectPromise, new Error(msg.error));
+  }
+}
+
+async function handleChildMessage(s: RunSession, msg: any): Promise<void> {
+  ipcLog("recv", msg);
+  const serializedSize = JSON.stringify(msg).length;
+  if (serializedSize > s.limits.ipcPayload) {
+    settleWithLimitFailure(s, "ipc_payload", s.limits.ipcPayload, serializedSize, {
+      samplePrefix: JSON.stringify(msg).slice(0, 1024),
+    });
+    return;
+  }
+  if (msg.type === "interrupt") {
+    await handleInterruptMessage(s, msg);
+  } else if (msg.type === "result") {
+    settle(s, s.resolvePromise, msg.value);
+  } else if (msg.type === "error") {
+    handleErrorMessage(s, msg);
+  }
+}
+
+function handleChildClose(s: RunSession, code: number | null, signal: NodeJS.Signals | null): void {
+  if (s.settled) return;
+  // V8 OOM signatures: SIGABRT (V8 abort on OOM), or exit code 134
+  // (SIGABRT translated to 128+6 by Node on Unix). Conservative: only those
+  // signatures count as memory limit; other crashes are generic failures.
+  const isLikelyOom = signal === "SIGABRT" || code === 134;
+  if (isLikelyOom) {
+    settleWithLimitFailure(s, "memory", s.limits.memory, s.limits.memory);
+  } else {
+    settle(s, s.rejectPromise, new Error(
+      `Subprocess exited unexpectedly with code ${code}${signal ? ` signal ${signal}` : ""}`,
+    ));
+  }
+}
+
+/**
+ * Wire up all event handlers on the child process and kick off execution by
+ * sending the initial `run` instruction over IPC.
+ */
+function attachSessionHandlers(s: RunSession, node: string, args: Record<string, any>): void {
+  attachStdoutForwarder(s, s.child.stdout, process.stdout);
+  attachStdoutForwarder(s, s.child.stderr, process.stderr);
+
+  s.wallClockTimer = setTimeout(() => {
+    s.wallClockTimer = null;
+    settleWithLimitFailure(s, "wall_clock", s.limits.wallClock, s.limits.wallClock);
+  }, s.limits.wallClock);
+
+  s.child.on("message", (msg: any) => { void handleChildMessage(s, msg); });
+  s.child.on("close", (code, signal) => handleChildClose(s, code, signal));
+  s.child.on("error", (err: Error) => settle(s, s.rejectPromise, new Error(`Subprocess error: ${err.message}`)));
+
+  const runMsg = {
+    type: "run",
+    scriptPath: s.compiledPath,
+    node,
+    args,
+    ipcPayload: s.limits.ipcPayload,
+  };
+  ipcLog("send", runMsg);
+  s.child.send(runMsg);
+}
+
+/**
  * Fork a compiled Agency program as a subprocess and manage the IPC protocol.
  * Relays subprocess interrupts through the parent's handler chain via interruptWithHandlers.
  */
@@ -216,189 +429,19 @@ export async function _run(
   });
 
   return new Promise((resolvePromise, rejectPromise) => {
-    let settled = false;
-
-    // ── stdout/stderr byte-counting forwarder ──
-    let stdoutBytes = 0;
-    let stoppedForwarding = false;
-    const makeForwarder = (src: NodeJS.ReadableStream | null, dst: NodeJS.WriteStream) => {
-      if (!src) return;
-      src.on("data", (chunk: Buffer) => {
-        if (stoppedForwarding) return;
-        const remaining = limits.stdout - stdoutBytes;
-        if (chunk.length <= remaining) {
-          stdoutBytes += chunk.length;
-          dst.write(chunk);
-          return;
-        }
-        // Write what fits, then a truncation marker, then stop.
-        if (remaining > 0) dst.write(chunk.subarray(0, remaining));
-        const overflow = chunk.length - remaining;
-        stdoutBytes = limits.stdout + overflow;
-        dst.write(`\n... [output truncated: stdout limit of ${limits.stdout} bytes exceeded]\n`);
-        stoppedForwarding = true;
-        if (settled) return;
-        settled = true;
-        clearWallClockTimer();
-        try { child.kill("SIGKILL"); } catch (_) { /* already gone */ }
-        cleanup();
-        resolvePromise(makeLimitFailure("stdout", limits.stdout, stdoutBytes));
-      });
+    const session: RunSession = {
+      child,
+      limits,
+      ctx,
+      stateStack,
+      compiledPath: compiled.path,
+      resolvePromise,
+      rejectPromise,
+      settled: false,
+      wallClockTimer: null,
+      stdoutBytes: 0,
+      stoppedForwarding: false,
     };
-    makeForwarder(child.stdout, process.stdout);
-    makeForwarder(child.stderr, process.stderr);
-
-    let wallClockTimer: NodeJS.Timeout | null = setTimeout(() => {
-      wallClockTimer = null;
-      if (settled) return;
-      settled = true;
-      try { child.kill("SIGKILL"); } catch (_) { /* already gone */ }
-      cleanup();
-      resolvePromise(makeLimitFailure("wall_clock", limits.wallClock, limits.wallClock));
-    }, limits.wallClock);
-
-    const clearWallClockTimer = () => {
-      if (wallClockTimer) { clearTimeout(wallClockTimer); wallClockTimer = null; }
-    };
-
-    const settle = (fn: typeof resolvePromise | typeof rejectPromise, value: any) => {
-      if (settled) return;
-      settled = true;
-      clearWallClockTimer();
-      cleanup();
-      fn(value);
-    };
-
-    const cleanup = () => {
-      try {
-        const tempDir = path.resolve(dirname(compiled.path));
-        const allowedPrefix = path.resolve(process.cwd(), ".agency-tmp");
-        if (tempDir.startsWith(allowedPrefix + path.sep)) {
-          rmSync(tempDir, { recursive: true, force: true });
-        }
-      } catch (_) {
-        // Ignore cleanup failures
-      }
-    };
-
-    const trySend = (msg: any) => {
-      try {
-        if (child.connected) {
-          ipcLog("send", msg);
-          child.send(msg);
-        }
-      } catch (_) {
-        // IPC channel closed — subprocess is gone
-        settle(rejectPromise, new Error("IPC channel closed while sending decision to subprocess"));
-      }
-    };
-
-    child.on("message", async (msg: any) => {
-      ipcLog("recv", msg);
-      // Parent-side IPC payload check: any message bigger than the limit
-      // means the subprocess is sending too much. (For result messages this
-      // is also caught by the child before sending, but interrupt and other
-      // messages can still be oversized — fail closed.)
-      const serializedSize = JSON.stringify(msg).length;
-      if (serializedSize > limits.ipcPayload) {
-        if (settled) return;
-        settled = true;
-        clearWallClockTimer();
-        try { child.kill("SIGKILL"); } catch (_) { /* already gone */ }
-        cleanup();
-        resolvePromise(makeLimitFailure("ipc_payload", limits.ipcPayload, serializedSize, {
-          samplePrefix: JSON.stringify(msg).slice(0, 1024),
-        }));
-        return;
-      }
-      if (msg.type === "interrupt") {
-        const { kind, message, data, origin } = msg.interrupt;
-
-        try {
-          const handlerResult = await interruptWithHandlers(
-            kind,
-            message,
-            data,
-            origin,
-            ctx,
-            stateStack,
-          );
-
-          let decision: any;
-          if (isApproved(handlerResult)) {
-            decision = { type: "decision", approved: true, value: (handlerResult as any).value };
-          } else if (hasInterrupts(handlerResult)) {
-            decision = { type: "decision", approved: false, value: "Interrupt propagated to user (subprocess slow-path not yet supported)" };
-          } else {
-            decision = { type: "decision", approved: false, value: (handlerResult as any).value };
-          }
-          trySend(decision);
-        } catch (err) {
-          const decision = {
-            type: "decision",
-            approved: false,
-            value: `Parent handler error: ${err instanceof Error ? err.message : String(err)}`,
-          };
-          trySend(decision);
-        }
-      } else if (msg.type === "result") {
-        settle(resolvePromise, msg.value);
-      } else if (msg.type === "error") {
-        // Subprocess may send a structured limit_exceeded error (e.g. when
-        // its result payload exceeds ipcPayload before send). Recognize and
-        // propagate it as a Result.failure with the same shape that
-        // wall_clock and memory limits produce.
-        let parsedLimit: any = null;
-        try { parsedLimit = JSON.parse(msg.error); } catch (_) { /* not JSON */ }
-        if (parsedLimit?.reason === "limit_exceeded") {
-          if (settled) return;
-          settled = true;
-          clearWallClockTimer();
-          cleanup();
-          resolvePromise(makeLimitFailure(
-            parsedLimit.limit,
-            parsedLimit.threshold,
-            parsedLimit.value,
-            parsedLimit.samplePrefix !== undefined ? { samplePrefix: parsedLimit.samplePrefix } : {},
-          ));
-        } else {
-          settle(rejectPromise, new Error(msg.error));
-        }
-      }
-    });
-
-    child.on("close", (code: number | null, signal: NodeJS.Signals | null) => {
-      if (settled) return;
-      // V8 OOM signatures: SIGABRT (V8 abort on OOM), or exit code 134
-      // (SIGABRT translated to 128+6 by Node on Unix). We classify
-      // conservatively — only when one of these signatures is present do we
-      // report a memory limit violation; other crashes get the generic
-      // "exited unexpectedly" failure.
-      const isLikelyOom = signal === "SIGABRT" || code === 134;
-      if (isLikelyOom) {
-        settled = true;
-        clearWallClockTimer();
-        cleanup();
-        resolvePromise(makeLimitFailure("memory", limits.memory, limits.memory));
-      } else {
-        settle(rejectPromise, new Error(
-          `Subprocess exited unexpectedly with code ${code}${signal ? ` signal ${signal}` : ""}`,
-        ));
-      }
-    });
-
-    child.on("error", (err: Error) => {
-      settle(rejectPromise, new Error(`Subprocess error: ${err.message}`));
-    });
-
-    const runMsg = {
-      type: "run",
-      scriptPath: compiled.path,
-      node,
-      args,
-      ipcPayload: limits.ipcPayload,
-    };
-    ipcLog("send", runMsg);
-    child.send(runMsg);
+    attachSessionHandlers(session, node, args);
   });
 }

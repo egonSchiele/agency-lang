@@ -45,7 +45,7 @@ Execute a compiled Agency program in a subprocess. The parent's handler chain ex
 
   @param compiled - A CompiledProgram from compile()
   @param node - Which exported node to run
-  @param args - Arguments to pass to the node
+  @param args - Arguments to pass to the node (defaults to no args)
   @param wallClock - Max wall-clock time before SIGKILL (default 60s, max 1h)
   @param memory - Max V8 heap size (default 512mb, max 4gb)
   @param ipcPayload - Max single IPC message size (default 100mb, max 1gb)
@@ -57,7 +57,7 @@ Execute a compiled Agency program in a subprocess. The parent's handler chain ex
 |---|---|---|
 | compiled | [CompiledProgram](#compiledprogram) |  |
 | node | `string` |  |
-| args | `Record<string, any>` |  |
+| args | `Record<string, any>` | {} |
 | wallClock | `number` | 60s |
 | memory | `number` | 512mb |
 | ipcPayload | `number` | 100mb |

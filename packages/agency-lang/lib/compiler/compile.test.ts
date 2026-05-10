@@ -38,7 +38,21 @@ node main() { return foo() }
     const result = compileSource(source, { restrictImports: true });
     expect(result.success).toBe(false);
     if (!result.success) {
-      expect(result.errors[0].toLowerCase()).toContain("import");
+      expect(result.errors[0]).toContain(".agency file import");
+      expect(result.errors[0]).toContain("'./bar.agency'");
+    }
+  });
+
+  it("rejects absolute-path .agency imports when restrictImports is set", () => {
+    const source = `
+import { foo } from "/abs/path/bar.agency"
+node main() { return foo() }
+`;
+    const result = compileSource(source, { restrictImports: true });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.errors[0]).toContain(".agency file import");
+      expect(result.errors[0]).toContain("'/abs/path/bar.agency'");
     }
   });
 

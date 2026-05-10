@@ -49,10 +49,12 @@ export type CompileSourceOptions = AgencyConfig & {
 
 // Human-readable label for the kind of disallowed import. Used in error
 // messages so the user knows whether they wrote an npm import, a pkg::
-// import, or a relative .agency import.
+// import, or a path-based .agency import. Note: ".agency file import"
+// covers both relative and absolute paths — we don't distinguish because
+// both are equally rejected here.
 function classifyImport(importPath: string): string {
   if (isPkgImport(importPath)) return "package import";
-  if (importPath.endsWith(".agency")) return "relative .agency import";
+  if (importPath.endsWith(".agency")) return ".agency file import";
   return "npm/Node module import";
 }
 
@@ -67,7 +69,9 @@ function classifyImport(importPath: string): string {
 function checkRestrictedImports(program: AgencyProgram): CompileFailure | null {
   for (const { path: importPath, kind } of getAllImports(program)) {
     if (kind === "node") {
-      // tool/node imports always reference a relative .agency file
+      // `import nodes { ... }` always references another .agency file.
+      // The path can be relative or absolute — we reject both forms here
+      // since neither is a stdlib import.
       return {
         success: false,
         errors: [`Tool/node import '${importPath}' is not allowed when restrictImports is set. Only standard library (std::) imports are permitted.`],

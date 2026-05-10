@@ -58,6 +58,7 @@ export default defineConfig({
       {
         text: "Standard Library",
         items: [
+          { text: "agency", link: "/stdlib/agency" },
           { text: "agent", link: "/stdlib/agent" },
           { text: "array", link: "/stdlib/array" },
           { text: "browser", link: "/stdlib/browser" },

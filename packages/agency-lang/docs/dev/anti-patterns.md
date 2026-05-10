@@ -186,3 +186,29 @@ if (isLoading) {
 ```
 
 **Why:** Nested ternaries can be hard to read and understand at a glance. Using if/else statements improves readability, especially for more complex conditions.
+
+### Using a try-catch block without logging anything in the catch block
+
+**Why:** This is bad because it can make errors really difficult to trace since you're not logging anything when the exception is caught. Those errors will be swallowed.
+
+**Bad:**
+
+```ts
+try {
+  // some code that might throw an error
+} catch (e) {
+  // do nothing, not even logging the error
+}
+```
+
+**Good:**
+
+```ts
+try {
+  // some code that might throw an error
+} catch (e) {
+  console.error("An error occurred:", e);
+  // optionally rethrow the error if it should be handled by an outer layer
+  throw e;
+}
+```

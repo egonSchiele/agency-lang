@@ -26,11 +26,13 @@ node main() {
 
   let contextMessage = "This agent can produce the following interrupts:\n"
   for (kind in interruptKinds) {
-    contextMessage = contextMessage + "- `${kind}`\n"
+    contextMessage = contextMessage + "- ${kind}\n"
   }
 
   if (existingPolicy != null) {
-    contextMessage = contextMessage + "\nCurrent policy:\n```json\n${printJSON(existingPolicy)}\n```\n\nWhat would you like to change?"
+    contextMessage = contextMessage + """
+    Current policy:\n```json\n${printJSON(existingPolicy)}\n```\n\nWhat would you like to change?
+    """
   } else {
     contextMessage = contextMessage + "\nWhat actions would you like to allow?"
   }
@@ -46,7 +48,9 @@ node main() {
 
     thread {
       system(systemPrompt)
-      let step: NextStep = llm("${conversationHistory}\n\nCurrent policy: ${printJSON(policy)}\n\nDecide the next step. If the user is describing what they want, build or update the policy and use showPolicy. If the user approves the shown policy, use writePolicy. If you need clarification, use askQuestion.")
+      let step: NextStep = llm("""
+      ${conversationHistory}\n\nCurrent policy: ${printJSON(policy)}\n\nDecide the next step. If the user is describing what they want, build or update the policy and use showPolicy. If the user approves the shown policy, use writePolicy. If you need clarification, use askQuestion.
+      """)
     }
 
     if (step.type == "showPolicy") {

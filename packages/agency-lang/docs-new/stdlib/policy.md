@@ -34,3 +34,20 @@ Validate that a policy object is well-formed. Returns { success: true } if valid
 | policy | `Record<string, any>` |  |
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/policy.agency#L10))
+
+### writePolicyFile
+
+```ts
+writePolicyFile(path: string, policy: Record<string, any>)
+```
+
+Validate and write a policy to a JSON file. Throws if the policy is invalid.
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| path | `string` |  |
+| policy | `Record<string, any>` |  |
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/policy.agency#L17))

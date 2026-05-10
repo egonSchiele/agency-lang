@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "stdout limit kills subprocess that floods output",
+      "input": "",
+      "expectedOutput": "\"stdout limit hit\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

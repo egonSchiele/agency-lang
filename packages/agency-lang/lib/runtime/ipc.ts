@@ -206,14 +206,47 @@ export async function _run(
   const limits = clampLimits({ wallClock, memory, ipcPayload, stdout });
 
   const memoryMb = Math.max(1, Math.floor(limits.memory / (1024 * 1024)));
+  // stdio fds 1/2 piped (was inherit) so we can byte-count and truncate
+  // when stdout limit is exceeded; we still forward bytes through to the
+  // parent's own stdout/stderr until the limit hits.
   const child = fork(subprocessBootstrapPath, [], {
-    stdio: ["pipe", "inherit", "inherit", "ipc"],
+    stdio: ["pipe", "pipe", "pipe", "ipc"],
     env: { ...process.env, AGENCY_IPC: "1" },
     execArgv: [`--max-old-space-size=${memoryMb}`],
   });
 
   return new Promise((resolvePromise, rejectPromise) => {
     let settled = false;
+
+    // ── stdout/stderr byte-counting forwarder ──
+    let stdoutBytes = 0;
+    let stoppedForwarding = false;
+    const makeForwarder = (src: NodeJS.ReadableStream | null, dst: NodeJS.WriteStream) => {
+      if (!src) return;
+      src.on("data", (chunk: Buffer) => {
+        if (stoppedForwarding) return;
+        const remaining = limits.stdout - stdoutBytes;
+        if (chunk.length <= remaining) {
+          stdoutBytes += chunk.length;
+          dst.write(chunk);
+          return;
+        }
+        // Write what fits, then a truncation marker, then stop.
+        if (remaining > 0) dst.write(chunk.subarray(0, remaining));
+        const overflow = chunk.length - remaining;
+        stdoutBytes = limits.stdout + overflow;
+        dst.write(`\n... [output truncated: stdout limit of ${limits.stdout} bytes exceeded]\n`);
+        stoppedForwarding = true;
+        if (settled) return;
+        settled = true;
+        clearWallClockTimer();
+        try { child.kill("SIGKILL"); } catch (_) { /* already gone */ }
+        cleanup();
+        resolvePromise(makeLimitFailure("stdout", limits.stdout, stdoutBytes));
+      });
+    };
+    makeForwarder(child.stdout, process.stdout);
+    makeForwarder(child.stderr, process.stderr);
 
     let wallClockTimer: NodeJS.Timeout | null = setTimeout(() => {
       wallClockTimer = null;

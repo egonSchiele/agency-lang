@@ -28,6 +28,23 @@ A tool for taking a screenshot and saving it to a file. Optionally specify x, y,
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/system.agency#L3))
 
+### exit
+
+```ts
+exit(code: number)
+```
+
+Terminate the process immediately with the given exit code. Use with caution — this skips any cleanup or pending operations.
+  @param code - Exit code (0 for success, non-zero for failure)
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| code | `number` | 0 |
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/system.agency#L20))
+
 ### args
 
 ```ts
@@ -38,7 +55,7 @@ Return the command-line arguments passed to the Agency program (excluding the no
 
 **Returns:** `string[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/system.agency#L20))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/system.agency#L31))
 
 ### cwd
 
@@ -50,7 +67,7 @@ Return the absolute path of the current working directory of the Agency process.
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/system.agency#L27))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/system.agency#L38))
 
 ### env
 
@@ -68,7 +85,7 @@ Read an environment variable. Returns null if the variable is not set.
 
 **Returns:** `string | null`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/system.agency#L34))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/system.agency#L45))
 
 ### setEnv
 
@@ -90,7 +107,7 @@ Set an environment variable in the current process. Fails if the name is empty o
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/system.agency#L41))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/system.agency#L52))
 
 ### openUrl
 
@@ -108,4 +125,4 @@ Open a URL in the user's default browser. Currently macOS-only.
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/system.agency#L55))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/system.agency#L66))

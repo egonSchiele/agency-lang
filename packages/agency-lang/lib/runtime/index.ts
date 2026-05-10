@@ -78,6 +78,7 @@ export {
 export type { RestoreOptions } from "./errors.js";
 
 export { checkpoint, getCheckpoint, restore } from "./checkpoint.js";
+export { _run } from "./ipc.js";
 
 export {
   CheckpointStore,

@@ -1,4 +1,4 @@
-import { _compile, _run } from "agency-lang/stdlib-lib/agency.js"
+import { _compile } from "agency-lang/stdlib-lib/agency.js"
 
 type CompiledProgram = {
   moduleId: string

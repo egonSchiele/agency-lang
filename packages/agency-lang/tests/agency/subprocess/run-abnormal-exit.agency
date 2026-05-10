@@ -1,0 +1,32 @@
+import { compile, run } from "std::agency"
+
+// Subprocess exits abruptly via process.exit without sending an IPC result.
+// Verifies the parent's close handler catches this and returns a failure.
+node main() {
+  const source = """
+import { exit } from "std::system"
+node main() {
+  handle {
+    exit(1)
+  } with (data) {
+    return approve()
+  }
+  return "unreachable"
+}
+"""
+  const compileResult = compile(source)
+  if (isFailure(compileResult)) {
+    return "compile failed"
+  }
+  const compiled = compileResult.value
+
+  handle {
+    const result = run(compiled, { node: "main", args: {} })
+    if (isFailure(result)) {
+      return "caught exit"
+    }
+    return "unexpected success"
+  } with (data) {
+    return approve()
+  }
+}

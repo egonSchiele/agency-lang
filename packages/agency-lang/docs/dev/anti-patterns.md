@@ -121,3 +121,68 @@ function resumeExecution(checkpoint: Checkpoint) {
 ```
 
 **Why:** Good abstractions have clear boundaries. You should be able to understand what a unit does without reading its internals, and change the internals without breaking consumers.
+
+### Useless special cases
+
+**Bad:**
+```ts
+if (arr.length === 0) {
+  return [];
+} else {
+  return arr.map(x => x * 2);
+}
+```
+
+**Good:**
+```ts
+return arr.map(x => x * 2);
+```
+
+**Why:** Special cases add cognitive overhead. If the code works correctly without the special case, don't add it.
+
+### Inconsistent patterns
+
+**What it looks like:** Similar operations are implemented in different ways across the codebase, making it harder to read and maintain.
+
+**Bad:**
+```ts// In one file
+function getUser(id: string): User {
+  // implementation A
+}
+
+// In another file
+function fetchUser(id: string): User {
+  // implementation B
+}
+```
+
+**Good:**
+```ts
+// Standardize on one pattern for fetching users
+function getUser(id: string): User {
+  // consistent implementation
+}
+```
+
+**Why:** Consistency makes it easier to understand and predict code behavior. When similar operations follow the same pattern, developers can quickly grasp new code by relating it to what they already know.
+
+### Nested ternaries
+
+**Bad:**
+```ts
+const status = isLoading ? "loading" : isError ? "error" : "success";
+```
+
+**Good:**
+```ts
+let status: "loading" | "error" | "success";
+if (isLoading) {
+  status = "loading";
+} else if (isError) {
+  status = "error";
+} else {
+  status = "success";
+}
+```
+
+**Why:** Nested ternaries can be hard to read and understand at a glance. Using if/else statements improves readability, especially for more complex conditions.

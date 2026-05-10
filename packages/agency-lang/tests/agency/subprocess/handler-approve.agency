@@ -1,0 +1,30 @@
+import { compile, run } from "std::agency"
+
+node main() {
+  const source = """
+import { bash } from "std::shell"
+node main() {
+  handle {
+    let result = bash("echo hello")
+    return result.stdout
+  } with (data) {
+    return approve()
+  }
+}
+"""
+  const compileResult = compile(source)
+  if (isFailure(compileResult)) {
+    return "compile failed: " + compileResult.error
+  }
+  const compiled = compileResult.value
+
+  handle {
+    const result = run(compiled, { node: "main", args: {} })
+    if (isSuccess(result)) {
+      return result.value.data
+    }
+    return "failed: " + result.error
+  } with (data) {
+    return approve()
+  }
+}

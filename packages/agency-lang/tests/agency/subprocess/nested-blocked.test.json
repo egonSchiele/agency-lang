@@ -2,9 +2,9 @@
   "tests": [
     {
       "nodeName": "main",
-      "description": "compile() returns success for valid Agency source",
+      "description": "Nested subprocess execution is blocked in MVP",
       "input": "",
-      "expectedOutput": "\"compiled\"",
+      "expectedOutput": "\"nested blocked\"",
       "evaluationCriteria": [{ "type": "exact" }]
     }
   ]

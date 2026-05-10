@@ -1,0 +1,33 @@
+import { compile, run } from "std::agency"
+
+node main() {
+  const innerSource = """
+import { compile, run } from "std::agency"
+node main() {
+  const compileResult = compile("node main() { return 1 }")
+  if (isFailure(compileResult)) {
+    return "inner compile failed"
+  }
+  const result = run(compileResult.value, { node: "main", args: {} })
+  if (isFailure(result)) {
+    return "nested blocked"
+  }
+  return "nested succeeded unexpectedly"
+}
+"""
+  const compileResult = compile(innerSource)
+  if (isFailure(compileResult)) {
+    return "compile failed"
+  }
+  const compiled = compileResult.value
+
+  handle {
+    const result = run(compiled, { node: "main", args: {} })
+    if (isSuccess(result)) {
+      return result.value.data
+    }
+    return "run failed: " + result.error
+  } with (data) {
+    return approve()
+  }
+}

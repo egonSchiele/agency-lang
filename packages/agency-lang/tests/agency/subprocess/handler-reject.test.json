@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Parent handler rejects subprocess interrupt even when subprocess handler approves",
+      "input": "",
+      "expectedOutput": "\"bash was rejected\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

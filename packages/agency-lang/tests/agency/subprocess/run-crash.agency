@@ -1,0 +1,28 @@
+import { compile, run } from "std::agency"
+
+node main() {
+  const source = """
+node main() {
+  const x = null
+  return x.foo.bar
+}
+"""
+  const compileResult = compile(source)
+  if (isFailure(compileResult)) {
+    return "compile failed"
+  }
+  const compiled = compileResult.value
+
+  handle {
+    const result = run(compiled, { node: "main", args: {} })
+    if (isFailure(result)) {
+      return "run itself failed"
+    }
+    if (isFailure(result.value.data)) {
+      return "caught error"
+    }
+    return "unexpected success"
+  } with (data) {
+    return approve()
+  }
+}

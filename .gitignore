@@ -33,3 +33,4 @@ tests/debugger/*.ts
 !**/docs-new/.vitepress
 **/docs-new/.vitepress/dist
 **/docs-new/.vitepress/cache
+.agency-tmp/

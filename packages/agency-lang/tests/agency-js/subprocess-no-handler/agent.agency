@@ -1,0 +1,11 @@
+import { compile, run } from "std::agency"
+
+node main() {
+  const compileResult = compile("node main() { return 42 }")
+  if (isFailure(compileResult)) {
+    return "compile failed"
+  }
+  const compiled = compileResult.value
+  const result = run(compiled, { node: "main", args: {} })
+  return result
+}

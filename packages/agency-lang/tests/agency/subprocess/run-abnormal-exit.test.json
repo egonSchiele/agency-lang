@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "run() returns failure when subprocess exits abruptly without sending a result",
+      "input": "",
+      "expectedOutput": "\"caught exit\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

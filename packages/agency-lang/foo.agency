@@ -1,12 +1,5 @@
-import { greet } from "./bar.agency"
-import { map } from "std::array"
-type Foo = {
-  name: string;
-  description: string;
-  capabilities: string[]
-}
-
-export def main(countryName: string) {
+node main() {
+  const countryName = "France"
   const response = llm("What is the capital of ${countryName}?")
-  return response
+  print(response)
 }

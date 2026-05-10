@@ -15,11 +15,20 @@ import type { IpcResultMessage, IpcErrorMessage } from "./ipc.js";
 import { ipcLog } from "./ipc.js";
 
 type RunInstruction = {
-  mode: "run";
+  type: "run";
   scriptPath: string;
   node: string;
   args: Record<string, any>;
 };
+
+function sendOrDie(msg: IpcResultMessage | IpcErrorMessage): void {
+  if (typeof process.send !== "function") {
+    console.error("[bootstrap] No IPC channel — was this script run directly? It should only be forked by _run().");
+    process.exit(1);
+  }
+  ipcLog("send", msg);
+  process.send(msg);
+}
 
 // Listen for the initial run instruction, then remove the listener
 // so it doesn't interfere with sendInterruptToParent's decision handler.
@@ -31,13 +40,11 @@ const bootstrapHandler = async (msg: RunInstruction) => {
   process.removeListener("message", bootstrapHandler);
   ipcLog("recv", msg);
 
-  if (msg.mode !== "run") {
-    const errMsg = {
+  if (msg.type !== "run") {
+    sendOrDie({
       type: "error",
-      error: `Unknown mode: ${(msg as any).mode}`,
-    } satisfies IpcErrorMessage;
-    ipcLog("send", errMsg);
-    process.send!(errMsg);
+      error: `Unknown message type: ${(msg as any).type ?? "undefined"}`,
+    });
     process.exit(1);
   }
 
@@ -46,48 +53,48 @@ const bootstrapHandler = async (msg: RunInstruction) => {
     ipcLog("send", { type: "log", detail: `importing ${scriptUrl}` });
     const mod = await import(scriptUrl);
 
-    // The compiled Agency module exports a `main()` (or named node) function
-    // and a `__globalCtx`. The node function is exported by name.
     const nodeFn = mod[msg.node];
     if (typeof nodeFn !== "function") {
-      const errMsg = {
+      sendOrDie({
         type: "error",
         error: `Node "${msg.node}" not found in compiled module. Available exports: ${Object.keys(mod).join(", ")}`,
-      } satisfies IpcErrorMessage;
-      ipcLog("send", errMsg);
-      process.send!(errMsg);
+      });
       process.exit(1);
       return;
     }
 
-    ipcLog("send", { type: "log", detail: `calling node ${msg.node}` });
     // Compiled nodes export a params list as __<nodeName>NodeParams.
     // Node args are positional: main(name, { messages, callbacks }).
     const paramsKey = `__${msg.node}NodeParams`;
-    const paramNames: string[] = mod[paramsKey] ?? [];
+    if (!(paramsKey in mod)) {
+      sendOrDie({
+        type: "error",
+        error: `Node params metadata "${paramsKey}" not found in compiled module. The module may have been compiled with an incompatible version.`,
+      });
+      process.exit(1);
+      return;
+    }
+    const paramNames: string[] = mod[paramsKey];
     const positionalArgs = paramNames.map((p: string) => msg.args[p]);
+
+    ipcLog("send", { type: "log", detail: `calling node ${msg.node}` });
     const result = await nodeFn(...positionalArgs);
     ipcLog("send", { type: "log", detail: `node ${msg.node} returned` });
 
-    const resultMsg = {
+    sendOrDie({
       type: "result",
       value: {
         data: result.data,
         tokens: result.tokens,
-        // messages are ThreadStore instances — serialize them
         messages: result.messages?.toJSON?.() ?? result.messages,
       },
-    } satisfies IpcResultMessage;
-    ipcLog("send", resultMsg);
-    process.send!(resultMsg);
+    });
     process.exit(0);
   } catch (err: any) {
-    const errMsg = {
+    sendOrDie({
       type: "error",
       error: err instanceof Error ? err.message : String(err),
-    } satisfies IpcErrorMessage;
-    ipcLog("send", errMsg);
-    process.send!(errMsg);
+    });
     process.exit(1);
   }
 };

@@ -332,3 +332,102 @@ export def run(compiled: CompiledProgram, options: { node: string, args: object 
 - **Handler coverage analysis**: Static check that generated code handles all interrupts. Separate idea.
 - **Dry-run execution**: Execute generated code with mocked tools first. Separate idea.
 - **Guards integration**: Budget/timeout limits applying across subprocess boundary. Depends on the guards feature being implemented first.
+
+## Unplanned/Unplanned
+
+Issues discovered during implementation that the spec and plan did not anticipate. Each entry includes what was learned and where to look for more context.
+
+### 1. stdlib cannot import from `lib/` due to separate tsconfig compilation units
+
+**The problem:** `tsconfig.stdlib.json` has `rootDir: "./stdlib"` and `outDir: "./stdlib"`, meaning stdlib TypeScript files compile in-place (e.g., `stdlib/lib/agency.ts` → `stdlib/lib/agency.js`). The main tsconfig compiles `lib/**/*.ts` into `dist/lib/`. These are separate compilation units with different output trees, so a relative import like `import { foo } from "../../lib/runtime/ipc.js"` in `stdlib/lib/agency.ts` resolves to `lib/runtime/ipc.js` at runtime — which doesn't exist (the compiled JS is at `dist/lib/runtime/ipc.js`).
+
+**What we did:** For `_compile`, we added a `"./compiler"` package export in `package.json` so stdlib could `import { compileSource } from "agency-lang/compiler"`. When this problem recurred for the bootstrap script path, we generalized to a catch-all `"./internal/*": "./dist/lib/*"` export so stdlib can import anything from `lib/` via `import { ... } from "agency-lang/internal/..."`. This scales without adding per-feature exports.
+
+**Current state:** The `./internal/*` catch-all export is in `package.json`. The `./compiler` per-feature export also remains (it was shipped in PR #112). Both work. Future stdlib backing code should use `agency-lang/internal/...` to import from `lib/`.
+
+**Where to look:**
+- `tsconfig.stdlib.json` — stdlib compilation config
+- `tsconfig.json` — main compilation config (rootDir `.`, outDir `./dist`)
+- `package.json` `"exports"` field — all package exports including `./internal/*`
+- `stdlib/lib/agency.ts` — the stdlib backing file that needs these imports
+- PR #112 — the original `./compiler` export and discussion of this problem
+
+### 2. Bootstrap script path resolution across build output trees
+
+**The problem:** The subprocess bootstrap script (`lib/runtime/subprocess-bootstrap.ts`) compiles to `dist/lib/runtime/subprocess-bootstrap.js`. But `stdlib/lib/agency.ts` compiles to `stdlib/lib/agency.js` (in-place). At runtime, resolving the bootstrap path relative to the stdlib file (`resolve(__dirname, "../../lib/runtime/subprocess-bootstrap.js")`) yields `lib/runtime/subprocess-bootstrap.js` — the TypeScript source, not the compiled JS in `dist/`.
+
+**What we did:** Used the `./internal/*` catch-all export (from issue #1 above). The `ipc.ts` module exports a `subprocessBootstrapPath` constant computed via `path.join(__dirname, "subprocess-bootstrap.js")` — since `ipc.ts` and `subprocess-bootstrap.ts` are in the same directory (`lib/runtime/`), the relative path works within that compilation unit. Then `stdlib/lib/agency.ts` imports it: `import { subprocessBootstrapPath } from "agency-lang/internal/runtime/ipc.js"`.
+
+**Current state:** This approach works but is partially implemented — the `subprocessBootstrapPath` export was added to `ipc.ts` and the import was added to `stdlib/lib/agency.ts`, but the full build/test cycle hasn't been completed yet.
+
+**Where to look:**
+- `lib/runtime/ipc.ts` — exports `subprocessBootstrapPath`
+- `lib/runtime/subprocess-bootstrap.ts` — the bootstrap entry point that gets forked
+- `stdlib/lib/agency.ts` — imports the bootstrap path
+- `package.json` `"exports"` field — the `./internal/*` catch-all
+
+### 3. Stdlib backing functions cannot receive RuntimeContext (`ctx`)
+
+**The problem:** `_run()` needs access to the parent's `RuntimeContext` (`ctx`) to call `interruptWithHandlers()` on incoming subprocess interrupts. But raw TypeScript functions imported in `.agency` files do not receive the runtime state parameter.
+
+The call chain: Agency code `return try _run(compiled, options)` generates `__call(_run, { type: "positional", args: [compiled, options] }, { ctx, threads, stateStack })`. The `__call` function in `lib/runtime/call.ts` checks if the target is an `AgencyFunction` — if yes, it passes `state` as the last argument via `AgencyFunction.invoke()`. If the target is a raw function (like `_run`), it calls `target(...descriptor.args)` and **drops the state entirely** (line 24 of `call.ts`).
+
+**What we learned:** The codebase already has a pattern for functions that need `ctx`: `checkpoint`, `getCheckpoint`, and `restore` in `lib/runtime/checkpoint.ts`. These are:
+1. Imported with an alias in the imports template (`checkpoint as __checkpoint_impl`)
+2. Wrapped as `AgencyFunction` instances at module init (`__AgencyFunction.create({ fn: __checkpoint_impl, params: [...] })`)
+3. This wrapping makes `AgencyFunction.invoke()` pass `state` (including `ctx`) as the last argument
+
+The challenge is that this wrapping happens in `lib/templates/backends/typescriptGenerator/imports.mustache`, which is included in **every** compiled module. It's hardcoded for those three specific runtime functions. There's no general mechanism for stdlib backing functions to opt into receiving state.
+
+**Options considered but not yet decided:**
+- **Apply the same AgencyFunction wrapping pattern** — Move `_run` to `lib/runtime/`, export from `agency-lang/runtime`, add wrapping to `imports.mustache`. Works mechanically but mixes stdlib and runtime concerns, and doesn't scale to future stdlib functions that need ctx.
+- **Pass state to all raw functions in `__call`** — Change line 24 of `call.ts` to `target(...descriptor.args, state)`. JS functions ignore extra arguments. Simple but leaky — every raw function silently receives internal runtime state. Rejected as too broad.
+- **AsyncLocalStorage** — Store execution-specific `RuntimeContext` in Node's `AsyncLocalStorage` during `runNode()`. Any function can call `getExecutionContext()` to access it. Standard Node.js pattern, solves the problem for all future functions. But it's a new pattern for the codebase and adds implicit state.
+- **Teach the compiler to wrap specific backing imports** — A naming convention or annotation that tells the compiler "this imported function needs state, wrap it as AgencyFunction." Most principled long-term solution but requires compiler work.
+
+**Current state:** Unresolved. This is the primary blocker for Task A.
+
+**Where to look:**
+- `lib/runtime/call.ts` — `__call()` function, line 24 is where state is dropped for raw functions
+- `lib/runtime/agencyFunction.ts` — `AgencyFunction.invoke()` (line 96-104) shows how state is passed as last arg
+- `lib/runtime/checkpoint.ts` — example of functions that receive `__state: InternalFunctionState` as last param
+- `lib/templates/backends/typescriptGenerator/imports.mustache` — lines 12, 66-68 show the import aliasing and AgencyFunction wrapping pattern
+- `lib/runtime/types.ts` — `InternalFunctionState` type definition (has `ctx`, `threads`, `stateStack`, `moduleId`, `scopeName`, `stepPath`)
+- Compiled output `stdlib/agency.js` — line ~331 shows `__call(_run, { type: "positional", args: [...] }, { ctx: __ctx, ... })` — the state IS available at the call site, it's just not forwarded
+
+### 4. The AgencyFunction wrapping pattern is hardcoded in the imports template
+
+**The problem:** The imports template (`imports.mustache`) is the only place where raw functions get wrapped as `AgencyFunction` instances to receive state. It's a hardcoded list: `checkpoint`, `getCheckpoint`, `restore`. There's no mechanism for a stdlib author to say "this backing function needs runtime context."
+
+This is a subset of issue #3 but worth calling out separately because it reveals an architectural gap: the compiler has no concept of "state-aware backing functions." All backing functions (functions imported from `.ts` files in `.agency` code) are treated as raw functions that take only their declared parameters.
+
+**What we learned:** The wrapping happens at module initialization time, not at call time. The imports template generates code like:
+```typescript
+import { checkpoint as __checkpoint_impl } from "agency-lang/runtime";
+const checkpoint = __AgencyFunction.create({ name: "checkpoint", fn: __checkpoint_impl, params: [...] }, __toolRegistry);
+```
+This runs once when the module loads. At call time, `__call(checkpoint, descriptor, state)` sees an `AgencyFunction` and routes through `invoke()`, which appends `state`.
+
+For stdlib functions defined with `def` in `.agency` files (like `run`), the compiler automatically generates an `AgencyFunction` wrapper (see `stdlib/agency.js` line ~378: `const run = __AgencyFunction.create({ fn: __run_impl, ... })`). The issue is only with **imported backing functions** called from within those `def` functions.
+
+**Where to look:**
+- `lib/templates/backends/typescriptGenerator/imports.mustache` — the template with hardcoded wrapping
+- `lib/templates/backends/typescriptGenerator/imports.ts` — the compiled template
+- `lib/backends/typescriptBuilder.ts` — the builder that renders this template (search for `runtimeContextCode`)
+- `stdlib/agency.js` — generated output showing how Agency `def` functions ARE wrapped but their imported backing functions are NOT
+
+### 5. Type mismatch: `compile()` returns `Result` but `run()` expects `CompiledProgram`
+
+**The problem:** In Agency code, `compile(source)` returns `Result` (because the function body uses `return try _compile(source)`, which wraps the return in a `Result`). But `run(compiled, options)` declares its first parameter as `CompiledProgram`. When the user writes `run(compiled, ...)` where `compiled` is the return value of `compile()`, the type checker warns: "Argument type 'Result' is not assignable to parameter type 'CompiledProgram'".
+
+The user is expected to check `isSuccess(compiled)` first, which narrows the type to the success value (`CompiledProgram`). But Agency's type narrowing may not be sophisticated enough to track this through if-blocks (needs investigation).
+
+**What we learned:** This is a minor ergonomic issue — the warning appears but doesn't block execution. The actual runtime value works fine because `compiled` is indeed a `CompiledProgram` after the `isSuccess` check. But it signals that either:
+- Agency's type narrowing doesn't propagate through if/return control flow
+- Or the `Result` type needs special handling in the type checker for this pattern
+
+**Where to look:**
+- `stdlib/agency.agency` — the `compile()` and `run()` function signatures
+- `lib/typeChecker/` — type checker implementation, specifically narrowing logic
+- `tests/agency/subprocess/run-basic.agency` — test file that triggers the warning
+- `docs/dev/typechecker.md` — type checker documentation

@@ -235,7 +235,7 @@ export async function _run(
     });
 
     const runMsg = {
-      mode: "run",
+      type: "run",
       scriptPath: compiled.path,
       node: options.node,
       args: options.args,

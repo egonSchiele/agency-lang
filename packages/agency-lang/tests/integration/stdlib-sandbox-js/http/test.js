@@ -17,5 +17,5 @@ try {
   const body = result?.data ?? result;
   writeFileSync("__result.json", JSON.stringify({ body }, null, 2));
 } finally {
-  server.close();
+  await new Promise((resolve) => server.close(resolve));
 }

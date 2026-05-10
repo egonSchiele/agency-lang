@@ -9,26 +9,36 @@ node main() {
     bash("echo -n 'test content' > " + base + "/file.txt")
 
     // Test exists
-    const dirExists = exists(base)
-    print(dirExists)
+    if (!exists(base)) {
+      return "exists failed: dir not found"
+    }
 
     // Test stat
     const info = stat(base + "/file.txt")
-    print(info.type)
-    print(info.exists)
+    if (info.type != "file") {
+      return "stat failed: expected file type"
+    }
+    if (!info.exists) {
+      return "stat failed: exists is false"
+    }
 
     // Test which
     const nodePath = which("node")
-    const hasNode = nodePath != ""
-    print(hasNode)
+    if (nodePath == "") {
+      return "which failed: node not found"
+    }
 
     // Test exec
     const echoResult = exec("echo", args: ["-n", "hello from exec"])
-    print(echoResult.stdout)
+    if (echoResult.stdout != "hello from exec") {
+      return "exec failed: unexpected stdout"
+    }
 
     // Test ls
     const entries = ls(base)
-    print(isSuccess(entries))
+    if (isFailure(entries)) {
+      return "ls failed"
+    }
 
     // Clean up
     bash("rm -rf " + base)

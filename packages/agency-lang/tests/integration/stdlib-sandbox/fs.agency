@@ -10,37 +10,57 @@ node main() {
     remove(base)
 
     // Create sandbox directory
-    mkdir(base)
+    const mkdirResult = mkdir(base)
+    if (isFailure(mkdirResult)) {
+      return "mkdir failed"
+    }
 
     // Create a test file using bash
     const testFile = join(base, "hello.txt")
     bash("echo -n 'hello world' > " + testFile)
 
     // Verify file exists
-    const fileExists = exists(testFile)
-    print(fileExists)
+    if (!exists(testFile)) {
+      return "file not created"
+    }
 
     // Edit the file
-    edit(testFile, "hello", "goodbye")
+    const editResult = edit(testFile, "hello", "goodbye")
+    if (isFailure(editResult)) {
+      return "edit failed"
+    }
 
     // Copy the file
     const copyDest = join(base, "hello-copy.txt")
-    copy(testFile, copyDest)
-    const copyExists = exists(copyDest)
-    print(copyExists)
+    const copyResult = copy(testFile, copyDest)
+    if (isFailure(copyResult)) {
+      return "copy failed"
+    }
+    if (!exists(copyDest)) {
+      return "copy dest missing"
+    }
 
     // Move the copy
     const moveDest = join(base, "hello-moved.txt")
-    move(copyDest, moveDest)
-    const moveExists = exists(moveDest)
-    const copyGone = exists(copyDest)
-    print(moveExists)
-    print(copyGone)
+    const moveResult = move(copyDest, moveDest)
+    if (isFailure(moveResult)) {
+      return "move failed"
+    }
+    if (!exists(moveDest)) {
+      return "move dest missing"
+    }
+    if (exists(copyDest)) {
+      return "move src still exists"
+    }
 
     // Clean up
-    remove(base)
-    const baseGone = exists(base)
-    print(baseGone)
+    const removeResult = remove(base)
+    if (isFailure(removeResult)) {
+      return "remove failed"
+    }
+    if (exists(base)) {
+      return "remove did not delete"
+    }
 
     return "fs ok"
   } with (data) {

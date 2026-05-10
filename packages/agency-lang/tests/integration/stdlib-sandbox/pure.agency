@@ -1,45 +1,61 @@
-import { todoWrite, todoList } from "std::agent"
-import { cwd, env } from "std::system"
-import { add, subtract, multiply, divide } from "std::math"
-import { map, filter, reduce } from "std::array"
+import { todoList } from "std::agent"
+import { cwd } from "std::system"
+import { add, subtract, multiply } from "std::math"
+import { filter, reduce } from "std::array"
 import { join, basename, dirname } from "std::path"
 
 node main() {
   // Math
-  const sum = add(10, 20)
-  const diff = subtract(20, 5)
-  const prod = multiply(3, 7)
-  print(sum)
-  print(diff)
-  print(prod)
+  if (add(10, 20) != 30) {
+    return "add failed"
+  }
+  if (subtract(20, 5) != 15) {
+    return "subtract failed"
+  }
+  if (multiply(3, 7) != 21) {
+    return "multiply failed"
+  }
 
   // Array
   const nums = [1, 2, 3, 4, 5]
   const evens = filter(nums) as n {
     return n % 2 == 0
   }
-  print(evens)
+  if (evens[0] != 2) {
+    return "filter failed"
+  }
+  if (evens[1] != 4) {
+    return "filter failed"
+  }
 
   const total = reduce(nums, 0) as (acc, n) {
     return acc + n
   }
-  print(total)
+  if (total != 15) {
+    return "reduce failed"
+  }
 
   // Path
   const p = join("src", "lib", "index.ts")
-  const b = basename(p)
-  const d = dirname(p)
-  print(b)
-  print(d)
+  if (basename(p) != "index.ts") {
+    return "basename failed"
+  }
+  if (dirname(p) != "src/lib") {
+    return "dirname failed"
+  }
 
-  // System (safe, read-only functions)
+  // System
   const dir = cwd()
-  const hasDir = dir != ""
-  print(hasDir)
+  if (dir == "") {
+    return "cwd failed"
+  }
 
-  // Agent (todo state)
+  // Agent
   const todos = todoList()
-  print(todos)
+  // todoList returns an empty array initially
+  if (length(todos) != 0) {
+    return "todoList failed"
+  }
 
   return "pure ok"
 }

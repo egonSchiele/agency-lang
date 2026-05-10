@@ -9,7 +9,7 @@ import { fileURLToPath } from "node:url";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const rootDir = join(__dirname, "..", "..", "..");
 
-if (!process.env.CI && !process.env.AGENCY_SANDBOX_TESTS) {
+if (!process.env.CI && process.env.AGENCY_SANDBOX_TESTS !== "1") {
   console.log("Skipping stdlib sandbox tests (set CI=true or AGENCY_SANDBOX_TESTS=1 to run)");
   process.exit(0);
 }

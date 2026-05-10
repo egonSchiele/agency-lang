@@ -1,0 +1,28 @@
+import { getMutable, setMutable } from "../../helpers/mutableVar.js"
+
+def dangerous() {
+  return interrupt("danger")
+  return "action completed"
+}
+
+// Regression test: handlers must survive checkpoint/restore.
+// If the handler disappears after restore, the interrupt on the second
+// pass would be unhandled and propagate to the user, failing the test.
+node main() {
+  let cp = checkpoint()
+  let count = getMutable("count", 0)
+
+  handle {
+    let result = dangerous()
+    setMutable("log", getMutable("log", "") + result + ",")
+  } with (data) {
+    return approve()
+  }
+
+  if (count == 0) {
+    setMutable("count", 1)
+    restore(cp, {})
+  }
+
+  return getMutable("log", "")
+}

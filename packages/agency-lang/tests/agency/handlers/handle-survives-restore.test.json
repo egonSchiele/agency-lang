@@ -1,0 +1,15 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Handler survives checkpoint/restore — interrupt is handled on both passes, not just the first",
+      "input": "",
+      "expectedOutput": "\"action completed,action completed,\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    }
+  ]
+}

@@ -262,6 +262,22 @@ export async function _run(
 
     child.on("message", async (msg: any) => {
       ipcLog("recv", msg);
+      // Parent-side IPC payload check: any message bigger than the limit
+      // means the subprocess is sending too much. (For result messages this
+      // is also caught by the child before sending, but interrupt and other
+      // messages can still be oversized — fail closed.)
+      const serializedSize = JSON.stringify(msg).length;
+      if (serializedSize > limits.ipcPayload) {
+        if (settled) return;
+        settled = true;
+        clearWallClockTimer();
+        try { child.kill("SIGKILL"); } catch (_) { /* already gone */ }
+        cleanup();
+        resolvePromise(makeLimitFailure("ipc_payload", limits.ipcPayload, serializedSize, {
+          samplePrefix: JSON.stringify(msg).slice(0, 1024),
+        }));
+        return;
+      }
       if (msg.type === "interrupt") {
         const { kind, message, data, origin } = msg.interrupt;
 
@@ -295,7 +311,26 @@ export async function _run(
       } else if (msg.type === "result") {
         settle(resolvePromise, msg.value);
       } else if (msg.type === "error") {
-        settle(rejectPromise, new Error(msg.error));
+        // Subprocess may send a structured limit_exceeded error (e.g. when
+        // its result payload exceeds ipcPayload before send). Recognize and
+        // propagate it as a Result.failure with the same shape that
+        // wall_clock and memory limits produce.
+        let parsedLimit: any = null;
+        try { parsedLimit = JSON.parse(msg.error); } catch (_) { /* not JSON */ }
+        if (parsedLimit?.reason === "limit_exceeded") {
+          if (settled) return;
+          settled = true;
+          clearWallClockTimer();
+          cleanup();
+          resolvePromise(makeLimitFailure(
+            parsedLimit.limit,
+            parsedLimit.threshold,
+            parsedLimit.value,
+            parsedLimit.samplePrefix !== undefined ? { samplePrefix: parsedLimit.samplePrefix } : {},
+          ));
+        } else {
+          settle(rejectPromise, new Error(msg.error));
+        }
       }
     });
 
@@ -328,6 +363,7 @@ export async function _run(
       scriptPath: compiled.path,
       node,
       args,
+      ipcPayload: limits.ipcPayload,
     };
     ipcLog("send", runMsg);
     child.send(runMsg);

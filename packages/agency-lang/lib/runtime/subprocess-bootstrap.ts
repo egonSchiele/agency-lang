@@ -19,7 +19,10 @@ type RunInstruction = {
   scriptPath: string;
   node: string;
   args: Record<string, any>;
+  ipcPayload?: number;
 };
+
+let ipcPayloadLimit = Infinity;
 
 function sendOrDie(msg: IpcResultMessage | IpcErrorMessage): void {
   if (typeof process.send !== "function") {
@@ -28,6 +31,33 @@ function sendOrDie(msg: IpcResultMessage | IpcErrorMessage): void {
   }
   ipcLog("send", msg);
   process.send(msg);
+}
+
+/**
+ * Send a result message, but first verify it fits under the parent's
+ * ipcPayload limit. If too big, send a structured error and exit instead.
+ * The parent recognizes `reason: "limit_exceeded"` errors and converts
+ * them back to the same Result.failure shape that wall_clock and memory
+ * limits produce.
+ */
+function sendResultOrLimitError(msg: IpcResultMessage): void {
+  const serialized = JSON.stringify(msg);
+  if (serialized.length > ipcPayloadLimit) {
+    const samplePrefix = serialized.slice(0, 1024);
+    sendOrDie({
+      type: "error",
+      error: JSON.stringify({
+        reason: "limit_exceeded",
+        limit: "ipc_payload",
+        threshold: ipcPayloadLimit,
+        value: serialized.length,
+        message: `Result payload (${serialized.length} bytes) exceeded ipcPayload limit of ${ipcPayloadLimit}`,
+        samplePrefix,
+      }),
+    });
+    process.exit(1);
+  }
+  sendOrDie(msg);
 }
 
 // Listen for the initial run instruction, then remove the listener
@@ -46,6 +76,10 @@ const bootstrapHandler = async (msg: RunInstruction) => {
       error: `Unknown message type: ${(msg as any).type ?? "undefined"}`,
     });
     process.exit(1);
+  }
+
+  if (typeof msg.ipcPayload === "number") {
+    ipcPayloadLimit = msg.ipcPayload;
   }
 
   try {
@@ -82,7 +116,7 @@ const bootstrapHandler = async (msg: RunInstruction) => {
     const result = await nodeFn(...positionalArgs);
     ipcLog("send", { type: "log", detail: `node ${msg.node} returned` });
 
-    sendOrDie({
+    sendResultOrLimitError({
       type: "result",
       value: {
         data: result.data,

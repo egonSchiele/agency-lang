@@ -52,6 +52,13 @@ jobs:
         node tests/integration/bundlers/test-vite.mjs ./agency-lang-*.tgz
         node tests/integration/cli/test.mjs ./agency-lang-*.tgz
         rm -f agency-lang-*.tgz
+    - name: Stdlib sandbox tests
+      if: matrix.node-version == '22.x'
+      working-directory: packages/agency-lang
+      env:
+        CI: "true"
+      run: node tests/integration/stdlib-sandbox/run.mjs
+      timeout-minutes: 10
     # - run: pnpm run test:agency
     #   env:
     #     OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}

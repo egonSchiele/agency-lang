@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Filesystem operations: mkdir, edit, copy, move, remove",
+      "input": "",
+      "expectedOutput": "\"fs ok\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

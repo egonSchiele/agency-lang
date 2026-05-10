@@ -1,0 +1,45 @@
+import { todoWrite, todoList } from "std::agent"
+import { cwd, env } from "std::system"
+import { add, subtract, multiply, divide } from "std::math"
+import { map, filter, reduce } from "std::array"
+import { join, basename, dirname } from "std::path"
+
+node main() {
+  // Math
+  const sum = add(10, 20)
+  const diff = subtract(20, 5)
+  const prod = multiply(3, 7)
+  print(sum)
+  print(diff)
+  print(prod)
+
+  // Array
+  const nums = [1, 2, 3, 4, 5]
+  const evens = filter(nums) as n {
+    return n % 2 == 0
+  }
+  print(evens)
+
+  const total = reduce(nums, 0) as (acc, n) {
+    return acc + n
+  }
+  print(total)
+
+  // Path
+  const p = join("src", "lib", "index.ts")
+  const b = basename(p)
+  const d = dirname(p)
+  print(b)
+  print(d)
+
+  // System (safe, read-only functions)
+  const dir = cwd()
+  const hasDir = dir != ""
+  print(hasDir)
+
+  // Agent (todo state)
+  const todos = todoList()
+  print(todos)
+
+  return "pure ok"
+}

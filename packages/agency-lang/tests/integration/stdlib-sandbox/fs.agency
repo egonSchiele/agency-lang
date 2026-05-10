@@ -1,0 +1,49 @@
+import { mkdir, copy, move, remove, edit } from "std::fs"
+import { exists, bash } from "std::shell"
+import { join } from "std::path"
+
+node main() {
+  const base = "/tmp/agency-fs-sandbox-test"
+
+  handle {
+    // Clean up from any previous run
+    remove(base)
+
+    // Create sandbox directory
+    mkdir(base)
+
+    // Create a test file using bash
+    const testFile = join(base, "hello.txt")
+    bash("echo -n 'hello world' > " + testFile)
+
+    // Verify file exists
+    const fileExists = exists(testFile)
+    print(fileExists)
+
+    // Edit the file
+    edit(testFile, "hello", "goodbye")
+
+    // Copy the file
+    const copyDest = join(base, "hello-copy.txt")
+    copy(testFile, copyDest)
+    const copyExists = exists(copyDest)
+    print(copyExists)
+
+    // Move the copy
+    const moveDest = join(base, "hello-moved.txt")
+    move(copyDest, moveDest)
+    const moveExists = exists(moveDest)
+    const copyGone = exists(copyDest)
+    print(moveExists)
+    print(copyGone)
+
+    // Clean up
+    remove(base)
+    const baseGone = exists(base)
+    print(baseGone)
+
+    return "fs ok"
+  } with (data) {
+    return approve()
+  }
+}

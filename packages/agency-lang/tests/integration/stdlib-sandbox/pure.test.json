@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Pure stdlib modules: math, array, path, system, agent",
+      "input": "",
+      "expectedOutput": "\"pure ok\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

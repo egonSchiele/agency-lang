@@ -130,7 +130,12 @@ export async function sendInterruptToParent(
  */
 export async function _run(
   compiled: { path: string; moduleId: string },
-  options: { node: string; args: Record<string, any> },
+  node: string,
+  args: Record<string, any>,
+  _wallClock: number,
+  _memory: number,
+  _ipcPayload: number,
+  _stdout: number,
   __state: InternalFunctionState,
 ): Promise<any> {
   if (isIpcMode()) {
@@ -138,6 +143,8 @@ export async function _run(
   }
   const ctx = __state.ctx;
   const stateStack = __state.stateStack ?? ctx.stateStack;
+  // Limits parameters are accepted now but not enforced yet — that's added
+  // in the subsequent commits (clamp, wall-clock, memory, ipcPayload, stdout).
 
   const child = fork(subprocessBootstrapPath, [], {
     stdio: ["pipe", "inherit", "inherit", "ipc"],
@@ -230,8 +237,8 @@ export async function _run(
     const runMsg = {
       type: "run",
       scriptPath: compiled.path,
-      node: options.node,
-      args: options.args,
+      node,
+      args,
     };
     ipcLog("send", runMsg);
     child.send(runMsg);

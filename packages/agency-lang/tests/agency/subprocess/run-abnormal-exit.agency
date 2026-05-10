@@ -21,7 +21,7 @@ node main() {
   const compiled = compileResult.value
 
   handle {
-    const result = run(compiled, { node: "main", args: {} })
+    const result = run(compiled, "main", {})
     if (isFailure(result)) {
       return "caught exit"
     }

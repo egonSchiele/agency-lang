@@ -13,7 +13,7 @@ node main(name: string) {
   const compiled = compileResult.value
 
   handle {
-    const result = run(compiled, { node: "main", args: { name: "world" } })
+    const result = run(compiled, "main", { name: "world" })
     if (isSuccess(result)) {
       return result.value.data
     }

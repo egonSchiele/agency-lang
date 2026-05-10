@@ -19,7 +19,7 @@ node main() {
   const compiled = compileResult.value
 
   handle {
-    const result = run(compiled, { node: "main", args: {} })
+    const result = run(compiled, "main", {})
     if (isSuccess(result)) {
       return result.value.data
     }

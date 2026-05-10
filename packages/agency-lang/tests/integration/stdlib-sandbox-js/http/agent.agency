@@ -1,0 +1,17 @@
+import { webfetch } from "std::http"
+import { env } from "std::system"
+
+node main() {
+  const port = env("TEST_HTTP_PORT")
+  if (port == null) {
+    return "TEST_HTTP_PORT not set"
+  }
+  const url = "http://127.0.0.1:" + port
+
+  handle {
+    const result = webfetch(url)
+    return result catch "fetch failed"
+  } with (data) {
+    return approve()
+  }
+}

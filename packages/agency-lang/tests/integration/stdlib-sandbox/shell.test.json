@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Shell operations: exec, bash, ls, stat, exists, which",
+      "input": "",
+      "expectedOutput": "\"shell ok\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

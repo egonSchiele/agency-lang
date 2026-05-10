@@ -1,0 +1,60 @@
+import { todoList } from "std::agent"
+import { cwd } from "std::system"
+import { add, subtract, multiply } from "std::math"
+import { filter, reduce } from "std::array"
+import { join, basename, dirname } from "std::path"
+
+node main() {
+  // Math
+  if (add(10, 20) != 30) {
+    return "add failed"
+  }
+  if (subtract(20, 5) != 15) {
+    return "subtract failed"
+  }
+  if (multiply(3, 7) != 21) {
+    return "multiply failed"
+  }
+
+  // Array
+  const nums = [1, 2, 3, 4, 5]
+  const evens = filter(nums) as n {
+    return n % 2 == 0
+  }
+  if (evens[0] != 2) {
+    return "filter failed: first even"
+  }
+  if (evens[1] != 4) {
+    return "filter failed: second even"
+  }
+
+  const total = reduce(nums, 0) as (acc, n) {
+    return acc + n
+  }
+  if (total != 15) {
+    return "reduce failed"
+  }
+
+  // Path
+  const p = join("src", "lib", "index.ts")
+  if (basename(p) != "index.ts") {
+    return "basename failed"
+  }
+  if (dirname(p) != "src/lib") {
+    return "dirname failed"
+  }
+
+  // System
+  const dir = cwd()
+  if (dir == "") {
+    return "cwd failed"
+  }
+
+  // Agent
+  const todos = todoList()
+  if (length(todos) != 0) {
+    return "todoList failed"
+  }
+
+  return "pure ok"
+}

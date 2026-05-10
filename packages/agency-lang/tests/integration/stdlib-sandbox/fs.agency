@@ -1,0 +1,69 @@
+import { mkdir, copy, move, remove, edit } from "std::fs"
+import { exists, bash } from "std::shell"
+import { join } from "std::path"
+
+node main() {
+  const base = "/tmp/agency-fs-sandbox-test"
+
+  handle {
+    // Clean up from any previous run
+    remove(base)
+
+    // Create sandbox directory
+    const mkdirResult = mkdir(base)
+    if (isFailure(mkdirResult)) {
+      return "mkdir failed"
+    }
+
+    // Create a test file using bash
+    const testFile = join(base, "hello.txt")
+    bash("echo -n 'hello world' > " + testFile)
+
+    // Verify file exists
+    if (!exists(testFile)) {
+      return "file not created"
+    }
+
+    // Edit the file
+    const editResult = edit(testFile, "hello", "goodbye")
+    if (isFailure(editResult)) {
+      return "edit failed"
+    }
+
+    // Copy the file
+    const copyDest = join(base, "hello-copy.txt")
+    const copyResult = copy(testFile, copyDest)
+    if (isFailure(copyResult)) {
+      return "copy failed"
+    }
+    if (!exists(copyDest)) {
+      return "copy dest missing"
+    }
+
+    // Move the copy
+    const moveDest = join(base, "hello-moved.txt")
+    const moveResult = move(copyDest, moveDest)
+    if (isFailure(moveResult)) {
+      return "move failed"
+    }
+    if (!exists(moveDest)) {
+      return "move dest missing"
+    }
+    if (exists(copyDest)) {
+      return "move src still exists"
+    }
+
+    // Clean up
+    const removeResult = remove(base)
+    if (isFailure(removeResult)) {
+      return "remove failed"
+    }
+    if (exists(base)) {
+      return "remove did not delete"
+    }
+
+    return "fs ok"
+  } with (data) {
+    return approve()
+  }
+}

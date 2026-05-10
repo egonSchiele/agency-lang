@@ -1,0 +1,50 @@
+import { exec, bash, ls, stat, exists, which } from "std::shell"
+
+node main() {
+  const base = "/tmp/agency-shell-sandbox-test"
+
+  handle {
+    // Set up sandbox
+    bash("rm -rf " + base + " && mkdir -p " + base)
+    bash("echo -n 'test content' > " + base + "/file.txt")
+
+    // Test exists
+    if (!exists(base)) {
+      return "exists failed: dir not found"
+    }
+
+    // Test stat
+    const info = stat(base + "/file.txt")
+    if (info.type != "file") {
+      return "stat failed: expected file type"
+    }
+    if (!info.exists) {
+      return "stat failed: exists is false"
+    }
+
+    // Test which
+    const nodePath = which("node")
+    if (nodePath == "") {
+      return "which failed: node not found"
+    }
+
+    // Test exec
+    const echoResult = exec("echo", args: ["-n", "hello from exec"])
+    if (echoResult.stdout != "hello from exec") {
+      return "exec failed: unexpected stdout"
+    }
+
+    // Test ls
+    const entries = ls(base)
+    if (isFailure(entries)) {
+      return "ls failed"
+    }
+
+    // Clean up
+    bash("rm -rf " + base)
+
+    return "shell ok"
+  } with (data) {
+    return approve()
+  }
+}

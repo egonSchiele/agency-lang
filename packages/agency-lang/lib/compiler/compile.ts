@@ -47,6 +47,43 @@ export type CompileSourceOptions = AgencyConfig & {
   restrictImports?: boolean;
 };
 
+// Human-readable label for the kind of disallowed import. Used in error
+// messages so the user knows whether they wrote an npm import, a pkg::
+// import, or a relative .agency import.
+function classifyImport(importPath: string): string {
+  if (isPkgImport(importPath)) return "package import";
+  if (importPath.endsWith(".agency")) return "relative .agency import";
+  return "npm/Node module import";
+}
+
+// Walk every import in the program and reject anything that isn't a std::
+// import. Returns null if all imports pass, or a CompileFailure describing
+// the offender.
+//
+// IMPORTANT: uses getAllImports (NOT getImports) so we see EVERY import,
+// including raw npm/Node modules. getImports filters those out and would
+// let `import fs from "fs"` slip past the check — that was the bug this
+// helper exists to close.
+function checkRestrictedImports(program: AgencyProgram): CompileFailure | null {
+  for (const { path: importPath, kind } of getAllImports(program)) {
+    if (kind === "node") {
+      // tool/node imports always reference a relative .agency file
+      return {
+        success: false,
+        errors: [`Tool/node import '${importPath}' is not allowed when restrictImports is set. Only standard library (std::) imports are permitted.`],
+      };
+    }
+    if (!isStdlibImport(importPath)) {
+      const what = classifyImport(importPath);
+      return {
+        success: false,
+        errors: [`${what} '${importPath}' is not allowed. Only standard library (std::) imports are permitted.`],
+      };
+    }
+  }
+  return null;
+}
+
 export function compileSource(
   source: string,
   config: CompileSourceOptions,
@@ -70,33 +107,9 @@ export function compileSource(
     const program: AgencyProgram = parseResult.result;
 
     // 2. Check for restricted imports — only std:: allowed.
-    // Use getAllImports (NOT getImports) so we see EVERY import, including
-    // raw npm/Node modules. getImports filters those out and would let
-    // `import fs from "fs"` slip past the check.
     if (config.restrictImports) {
-      for (const { path: importPath, kind } of getAllImports(program)) {
-        if (kind === "node") {
-          // tool/node imports always reference a relative .agency file
-          return {
-            success: false,
-            errors: [`Tool/node import '${importPath}' is not allowed when restrictImports is set. Only standard library (std::) imports are permitted.`],
-          };
-        }
-        if (!isStdlibImport(importPath)) {
-          let what: string;
-          if (isPkgImport(importPath)) {
-            what = "package import";
-          } else if (importPath.endsWith(".agency")) {
-            what = "relative .agency import";
-          } else {
-            what = "npm/Node module import";
-          }
-          return {
-            success: false,
-            errors: [`${what} '${importPath}' is not allowed. Only standard library (std::) imports are permitted.`],
-          };
-        }
-      }
+      const failure = checkRestrictedImports(program);
+      if (failure) return failure;
     }
 
     // 3. Build symbol table and resolve imports

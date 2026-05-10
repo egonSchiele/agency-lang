@@ -536,13 +536,13 @@ export function getImports(program: AgencyProgram): string[] {
 // imports, which is the wrong behavior for restriction checks.
 export type AnyImport = { path: string; kind: "module" | "node" };
 export function getAllImports(program: AgencyProgram): AnyImport[] {
-  const out: AnyImport[] = [];
-  for (const node of program.nodes) {
+  return program.nodes.flatMap((node): AnyImport[] => {
     if (node.type === "importStatement") {
-      out.push({ path: node.modulePath.trim(), kind: "module" });
-    } else if (node.type === "importNodeStatement") {
-      out.push({ path: node.agencyFile.trim(), kind: "node" });
+      return [{ path: node.modulePath.trim(), kind: "module" }];
     }
-  }
-  return out;
+    if (node.type === "importNodeStatement") {
+      return [{ path: node.agencyFile.trim(), kind: "node" }];
+    }
+    return [];
+  });
 }

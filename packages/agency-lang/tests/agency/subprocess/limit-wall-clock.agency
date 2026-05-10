@@ -1,0 +1,25 @@
+import { compile, run } from "std::agency"
+
+node main() {
+  const source = """
+node main() {
+  // Spin forever
+  while (true) {}
+}
+"""
+  const c = compile(source)
+  if (isFailure(c)) { return "compile failed" }
+
+  handle {
+    const result = run(c.value, "main", {}, wallClock: 1s)
+    if (isFailure(result)) {
+      if (result.error.reason == "limit_exceeded" && result.error.limit == "wall_clock") {
+        return "wall_clock limit hit"
+      }
+      return "wrong failure: " + result.error
+    }
+    return "unexpected success"
+  } with (data) {
+    return approve()
+  }
+}

@@ -11,6 +11,7 @@ import { fork } from "child_process";
 import { rmSync } from "fs";
 import type { InternalFunctionState } from "./types.js";
 import { interruptWithHandlers, isApproved, hasInterrupts } from "./interrupts.js";
+import { failure, type ResultFailure } from "./result.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -48,6 +49,36 @@ export function clampLimits(input: RunLimits): RunLimits {
     }
   }
   return out;
+}
+
+/**
+ * Build a structured limit-exceeded Result.failure that the Agency-side
+ * `try _run(...)` will pass through (without converting to an Error string).
+ * `limit` is the canonical name (e.g. "wall_clock", "memory", "ipc_payload",
+ * "stdout"). `threshold` is the configured cap; `value` is what was observed
+ * when the violation was detected. `extras` carries optional fields like
+ * `samplePrefix` for IPC payload violations.
+ */
+export function makeLimitFailure(
+  limit: string,
+  threshold: number,
+  value: number,
+  extras: Record<string, any> = {},
+): ResultFailure {
+  const message = `Subprocess exceeded ${limit} limit of ${threshold} (used ${value})`;
+  // Always emit an ipcLog line on violation, regardless of AGENCY_IPC_DEBUG.
+  // Per spec: the failure value AND the log line are both observability
+  // channels for limit violations.
+  const line = `[ipc:${role}] ${new Date().toISOString().slice(11, 23)} send limit_violation limit=${limit} value=${value} threshold=${threshold}\n`;
+  process.stderr.write(line);
+  return failure({
+    reason: "limit_exceeded",
+    limit,
+    threshold,
+    value,
+    message,
+    ...extras,
+  });
 }
 
 // ── IPC Debug Logger ──
@@ -173,10 +204,6 @@ export async function _run(
   const ctx = __state.ctx;
   const stateStack = __state.stateStack ?? ctx.stateStack;
   const limits = clampLimits({ wallClock, memory, ipcPayload, stdout });
-  // limits.wallClock / limits.memory / limits.ipcPayload / limits.stdout are
-  // not enforced yet — that's the next set of commits. We clamp here so that
-  // by the time enforcement lands, callers already see clamping behavior.
-  void limits;
 
   const child = fork(subprocessBootstrapPath, [], {
     stdio: ["pipe", "inherit", "inherit", "ipc"],
@@ -186,9 +213,23 @@ export async function _run(
   return new Promise((resolvePromise, rejectPromise) => {
     let settled = false;
 
+    let wallClockTimer: NodeJS.Timeout | null = setTimeout(() => {
+      wallClockTimer = null;
+      if (settled) return;
+      settled = true;
+      try { child.kill("SIGKILL"); } catch (_) { /* already gone */ }
+      cleanup();
+      resolvePromise(makeLimitFailure("wall_clock", limits.wallClock, limits.wallClock));
+    }, limits.wallClock);
+
+    const clearWallClockTimer = () => {
+      if (wallClockTimer) { clearTimeout(wallClockTimer); wallClockTimer = null; }
+    };
+
     const settle = (fn: typeof resolvePromise | typeof rejectPromise, value: any) => {
       if (settled) return;
       settled = true;
+      clearWallClockTimer();
       cleanup();
       fn(value);
     };

@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "wall-clock limit kills runaway loop",
+      "input": "",
+      "expectedOutput": "\"wall_clock limit hit\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

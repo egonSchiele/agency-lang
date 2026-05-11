@@ -143,4 +143,18 @@ describe("formatSource", () => {
     const formatted = formatSource(input);
     expect(formatted).toBe(input.trimEnd() + "\n");
   });
+
+  describe("export-from re-export round-trip", () => {
+    it.each([
+      'export { foo } from "./tools.agency"',
+      'export { foo as bar } from "./tools.agency"',
+      'export { search as wikipediaSearch, fetch } from "std::wikipedia"',
+      'export { safe foo, bar } from "std::wikipedia"',
+      'export { safe foo as bar } from "std::wikipedia"',
+      'export * from "std::wikipedia"',
+    ])("round-trips: %s", (input) => {
+      const formatted = formatSource(input + "\n");
+      expect(formatted!.trimEnd()).toBe(input);
+    });
+  });
 });

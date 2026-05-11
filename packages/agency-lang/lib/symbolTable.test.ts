@@ -152,3 +152,262 @@ describe("SymbolTable direct interrupt collection", () => {
     }
   });
 });
+
+/** Create temp .agency files keyed by a stable name; returns absolute paths and a cleanup fn. */
+function withTempFiles(
+  files: Record<string, string>,
+): { paths: Record<string, string>; cleanup: () => void } {
+  const suffix = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  const paths: Record<string, string> = {};
+  for (const name of Object.keys(files)) {
+    paths[name] = path.join(os.tmpdir(), `st-${name}-${suffix}.agency`);
+  }
+  // Substitute @name@ placeholders in file contents with the actual paths.
+  for (const [name, contents] of Object.entries(files)) {
+    let resolved = contents;
+    for (const [other, otherPath] of Object.entries(paths)) {
+      resolved = resolved.replaceAll(`@${other}@`, otherPath);
+    }
+    writeFileSync(paths[name], resolved);
+  }
+  return {
+    paths,
+    cleanup: () => {
+      for (const p of Object.values(paths)) {
+        try {
+          unlinkSync(p);
+        } catch {
+          /* ignore */
+        }
+      }
+    },
+  };
+}
+
+describe("SymbolTable: re-export reachability and merging", () => {
+  it("parses a file only reachable through an exportFromStatement", () => {
+    const { paths, cleanup } = withTempFiles({
+      source: `export def foo() { return 1 }`,
+      reexporter: `export { foo } from "@source@"`,
+    });
+    try {
+      const st = SymbolTable.build(paths.reexporter);
+      expect(st.has(path.resolve(paths.source))).toBe(true);
+    } finally {
+      cleanup();
+    }
+  });
+
+  it("merges a named function re-export with reExportedFrom metadata", () => {
+    const { paths, cleanup } = withTempFiles({
+      source: `export def foo(x: number): string { return "" }`,
+      reexporter: `export { foo } from "@source@"`,
+    });
+    try {
+      const st = SymbolTable.build(paths.reexporter);
+      const reSyms = st.getFile(path.resolve(paths.reexporter))!;
+      const foo = reSyms["foo"] as any;
+      expect(foo.kind).toBe("function");
+      expect(foo.exported).toBe(true);
+      expect(foo.parameters).toHaveLength(1);
+      expect(foo.reExportedFrom).toEqual({
+        sourceFile: path.resolve(paths.source),
+        originalName: "foo",
+      });
+    } finally {
+      cleanup();
+    }
+  });
+
+  it("aliases via `as`", () => {
+    const { paths, cleanup } = withTempFiles({
+      source: `export def foo() { return 1 }`,
+      reexporter: `export { foo as bar } from "@source@"`,
+    });
+    try {
+      const st = SymbolTable.build(paths.reexporter);
+      const reSyms = st.getFile(path.resolve(paths.reexporter))!;
+      expect(reSyms["foo"]).toBeUndefined();
+      expect(reSyms["bar"]).toBeDefined();
+      expect(reSyms["bar"].name).toBe("bar");
+      expect((reSyms["bar"] as any).reExportedFrom?.originalName).toBe("foo");
+    } finally {
+      cleanup();
+    }
+  });
+
+  it("per-name `safe` overrides source's safe flag", () => {
+    const { paths, cleanup } = withTempFiles({
+      source: `export def foo() { return 1 }`,
+      reexporter: `export { safe foo } from "@source@"`,
+    });
+    try {
+      const st = SymbolTable.build(paths.reexporter);
+      const foo = st.getFile(path.resolve(paths.reexporter))!["foo"];
+      expect(foo.kind).toBe("function");
+      expect((foo as any).safe).toBe(true);
+    } finally {
+      cleanup();
+    }
+  });
+
+  it("per-name safe leaves siblings unchanged", () => {
+    const { paths, cleanup } = withTempFiles({
+      source: `export def foo() { return 1 }
+        export def bar() { return 2 }`,
+      reexporter: `export { safe foo, bar } from "@source@"`,
+    });
+    try {
+      const st = SymbolTable.build(paths.reexporter);
+      const reSyms = st.getFile(path.resolve(paths.reexporter))!;
+      expect((reSyms["foo"] as any).safe).toBe(true);
+      expect((reSyms["bar"] as any).safe).toBe(false);
+    } finally {
+      cleanup();
+    }
+  });
+
+  it("hard errors when source symbol is missing", () => {
+    const { paths, cleanup } = withTempFiles({
+      source: `export def foo() { return 1 }`,
+      reexporter: `export { nope } from "@source@"`,
+    });
+    try {
+      expect(() => SymbolTable.build(paths.reexporter)).toThrow(
+        /Symbol 'nope' is not defined/,
+      );
+    } finally {
+      cleanup();
+    }
+  });
+
+  it("hard errors when source symbol is not exported", () => {
+    const { paths, cleanup } = withTempFiles({
+      source: `def foo() { return 1 }`,
+      reexporter: `export { foo } from "@source@"`,
+    });
+    try {
+      expect(() => SymbolTable.build(paths.reexporter)).toThrow(/not exported/);
+    } finally {
+      cleanup();
+    }
+  });
+
+  it("re-exported entry's loc points at the exportFromStatement", () => {
+    const { paths, cleanup } = withTempFiles({
+      source: `export def foo() { return 1 }`,
+      reexporter: `\nexport { foo } from "@source@"\n`,
+    });
+    try {
+      const st = SymbolTable.build(paths.reexporter);
+      const foo = st.getFile(path.resolve(paths.reexporter))!["foo"];
+      // The reexporter's first line is blank (line 0); export-from is on line 1.
+      // Just assert the loc isn't the source's loc.
+      expect(foo.loc).toBeDefined();
+      // Source's foo is on the first line (line 0)
+      const sourceFoo = st.getFile(path.resolve(paths.source))!["foo"];
+      expect(foo.loc).not.toEqual(sourceFoo.loc);
+    } finally {
+      cleanup();
+    }
+  });
+});
+
+describe("SymbolTable: star and transitive re-exports", () => {
+  it("star merges all exported symbols from source", () => {
+    const { paths, cleanup } = withTempFiles({
+      source: `export def foo() { return 1 }
+        export def bar() { return 2 }
+        def hidden() { return 3 }`,
+      reexporter: `export * from "@source@"`,
+    });
+    try {
+      const st = SymbolTable.build(paths.reexporter);
+      const reSyms = st.getFile(path.resolve(paths.reexporter))!;
+      expect(reSyms["foo"]).toBeDefined();
+      expect((reSyms["foo"] as any).reExportedFrom?.originalName).toBe("foo");
+      expect(reSyms["bar"]).toBeDefined();
+      expect(reSyms["hidden"]).toBeUndefined();
+    } finally {
+      cleanup();
+    }
+  });
+
+  it("transitive a → b → c star resolves", () => {
+    const { paths, cleanup } = withTempFiles({
+      c: `export def foo() { return 1 }`,
+      b: `export * from "@c@"`,
+      a: `export * from "@b@"`,
+    });
+    try {
+      const st = SymbolTable.build(paths.a);
+      const aSyms = st.getFile(path.resolve(paths.a))!;
+      expect(aSyms["foo"]).toBeDefined();
+      // The immediate source for a's foo should be b's path.
+      expect((aSyms["foo"] as any).reExportedFrom?.sourceFile).toBe(path.resolve(paths.b));
+    } finally {
+      cleanup();
+    }
+  });
+
+  it("detects re-export cycle a → b → a", () => {
+    const { paths, cleanup } = withTempFiles({
+      a: `export * from "@b@"`,
+      b: `export * from "@a@"`,
+    });
+    try {
+      expect(() => SymbolTable.build(paths.a)).toThrow(
+        /Re-export cycle detected/,
+      );
+    } finally {
+      cleanup();
+    }
+  });
+
+  it("collides when two sources re-export the same name via star", () => {
+    const { paths, cleanup } = withTempFiles({
+      a: `export def foo() { return 1 }`,
+      b: `export def foo() { return 2 }`,
+      reexporter: `export * from "@a@"
+        export * from "@b@"`,
+    });
+    try {
+      expect(() => SymbolTable.build(paths.reexporter)).toThrow(
+        /re-exported from both/,
+      );
+    } finally {
+      cleanup();
+    }
+  });
+
+  it("collides when explicit named re-export shadows a star", () => {
+    const { paths, cleanup } = withTempFiles({
+      a: `export def foo() { return 1 }`,
+      b: `export def foo() { return 2 }`,
+      reexporter: `export * from "@a@"
+        export { foo } from "@b@"`,
+    });
+    try {
+      expect(() => SymbolTable.build(paths.reexporter)).toThrow(
+        /re-exported from both/,
+      );
+    } finally {
+      cleanup();
+    }
+  });
+
+  it("collides with local declaration", () => {
+    const { paths, cleanup } = withTempFiles({
+      source: `export def foo() { return 1 }`,
+      reexporter: `def foo() { return 2 }
+        export { foo } from "@source@"`,
+    });
+    try {
+      expect(() => SymbolTable.build(paths.reexporter)).toThrow(
+        /collides with local declaration/,
+      );
+    } finally {
+      cleanup();
+    }
+  });
+});

@@ -13,6 +13,7 @@ import {
   ImportNodeStatement,
   ImportStatement,
 } from "./types/importStatement.js";
+import { ExportFromStatement } from "./types/exportFromStatement.js";
 import { ForLoop } from "./types/forLoop.js";
 import { Keyword } from "./types/keyword.js";
 import { Literal, RawCode, RegexLiteral } from "./types/literals.js";
@@ -41,6 +42,7 @@ export * from "./types/function.js";
 export * from "./types/graphNode.js";
 export * from "./types/ifElse.js";
 export * from "./types/importStatement.js";
+export * from "./types/exportFromStatement.js";
 export * from "./types/literals.js";
 export * from "./types/matchBlock.js";
 export * from "./types/returnStatement.js";
@@ -213,6 +215,7 @@ export type AgencyNode =
   | AgencyArray
   | ImportStatement
   | ImportNodeStatement
+  | ExportFromStatement
   | WhileLoop
   | ParallelBlock
   | SeqBlock

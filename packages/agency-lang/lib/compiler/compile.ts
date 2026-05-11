@@ -5,6 +5,7 @@
 import { AgencyConfig } from "@/config.js";
 import { AgencyProgram, generateTypeScript } from "@/index.js";
 import { resolveImports } from "@/preprocessors/importResolver.js";
+import { resolveReExports } from "@/preprocessors/resolveReExports.js";
 import { buildCompilationUnit } from "@/compilationUnit.js";
 import { SymbolTable } from "@/symbolTable.js";
 import { formatErrors, typeCheck } from "@/typeChecker/index.js";
@@ -118,7 +119,8 @@ export function compileSource(
 
     // 3. Build symbol table and resolve imports
     const symbolTable = SymbolTable.build(syntheticPath, config);
-    const resolvedProgram = resolveImports(program, symbolTable, syntheticPath);
+    const reExportedProgram = resolveReExports(program, symbolTable, syntheticPath);
+    const resolvedProgram = resolveImports(reExportedProgram, symbolTable, syntheticPath);
 
     // 4. Build compilation unit
     const info = buildCompilationUnit(

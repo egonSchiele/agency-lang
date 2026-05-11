@@ -89,3 +89,29 @@ import { animalFacts } from "pkg::animals/mammals"
 ```
 
 Note that to import any functions, you need to export them using the `export` keyword. All nodes are automatically exported.
+
+## Re-exporting from another module
+
+Use `export ... from` to re-export symbols defined in another Agency module. This is the idiomatic way to expose stdlib tools (or symbols from any other Agency package) as your own module's tools — for example, when serving a curated set of tools through `agency serve mcp`.
+
+```
+// Re-export by name
+export { search } from "std::wikipedia"
+
+// Re-export with a different name
+export { search as wikipediaSearch } from "std::wikipedia"
+
+// Re-export multiple names
+export { search, fetch } from "std::wikipedia"
+
+// Re-export everything that the source module exports
+export * from "std::wikipedia"
+
+// Mark a re-exported function as `safe` (per-name)
+export { safe search } from "std::wikipedia"
+export { safe search, fetch } from "std::wikipedia"
+```
+
+Re-exports work for functions, nodes, types, and `static const` constants. Classes cannot be re-exported.
+
+When two re-exports would produce the same local name (for example, two `export *` statements that both export `foo`, or a `*` and a named export of the same symbol), you must disambiguate explicitly with `as` — there is no implicit precedence.

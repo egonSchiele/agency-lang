@@ -4,7 +4,12 @@ import type {
   ImportedFunctionSignature,
 } from "../compilationUnit.js";
 import type { InterruptKind } from "../symbolTable.js";
-import { GLOBAL_SCOPE_KEY, ScopedTypeAliases, scopeKey, buildCompilationUnit } from "../compilationUnit.js";
+import {
+  GLOBAL_SCOPE_KEY,
+  ScopedTypeAliases,
+  scopeKey,
+  buildCompilationUnit,
+} from "../compilationUnit.js";
 import { AgencyConfig } from "../config.js";
 import {
   AgencyProgram,
@@ -13,7 +18,11 @@ import {
   VariableType,
 } from "../types.js";
 import type { SourceLocation } from "../types/base.js";
-import { TypeCheckError, TypeCheckResult, TypeCheckerContext } from "./types.js";
+import {
+  TypeCheckError,
+  TypeCheckResult,
+  TypeCheckerContext,
+} from "./types.js";
 import { validateTypeReferences } from "./validate.js";
 import { applySuppressions, parseSuppressions } from "./suppression.js";
 import { inferReturnTypes } from "./inference.js";
@@ -22,14 +31,17 @@ import { checkScopes } from "./checker.js";
 import { isAssignable as _isAssignable } from "./assignability.js";
 import { inferReturnTypeFor } from "./inference.js";
 import { effectiveReturnType } from "./validation.js";
-import { analyzeInterruptsFromScopes, checkUnhandledInterruptWarnings } from "./interruptAnalysis.js";
+import {
+  analyzeInterruptsFromScopes,
+  checkUnhandledInterruptWarnings,
+} from "./interruptAnalysis.js";
 
 export type { TypeCheckError, TypeCheckResult } from "./types.js";
 
 /**
  * Function/node names that are part of the language itself or whose
  * semantics the typechecker hardcodes. Keep in sync with
- * docs-new/appendix/agency-stdlib.md. `interrupt` and `debugger` are also
+ * docs/site/appendix/agency-stdlib.md. `interrupt` and `debugger` are also
  * statements at the parse level — listing them here is belt-and-suspenders.
  */
 const RESERVED_FUNCTION_NAMES = new Set<string>([
@@ -66,7 +78,11 @@ export class TypeChecker {
   private inferringReturnType = new Set<string>();
   private sourceText: string | undefined;
 
-  constructor(program: AgencyProgram, config: AgencyConfig = {}, info?: CompilationUnit) {
+  constructor(
+    program: AgencyProgram,
+    config: AgencyConfig = {},
+    info?: CompilationUnit,
+  ) {
     this.program = program;
     this.config = config;
     const resolved = info ?? buildCompilationUnit(program);
@@ -122,7 +138,12 @@ export class TypeChecker {
     for (const [sk, scopeAliases] of this.scopedTypeAliases.scopes()) {
       this.withScope(sk, () => {
         for (const [name, aliasedType] of Object.entries(scopeAliases)) {
-          validateTypeReferences(aliasedType, name, this.typeAliases, this.errors);
+          validateTypeReferences(
+            aliasedType,
+            name,
+            this.typeAliases,
+            this.errors,
+          );
         }
       });
     }
@@ -208,7 +229,11 @@ export class TypeChecker {
     // 6. Check for unhandled interrupt warnings (uses transitive results)
     checkUnhandledInterruptWarnings(scopes, interruptKindsByFunction, ctx);
 
-    return { errors: this.applySuppressions(this.deduplicateErrors()), scopes, interruptKindsByFunction };
+    return {
+      errors: this.applySuppressions(this.deduplicateErrors()),
+      scopes,
+      interruptKindsByFunction,
+    };
   }
 
   private applySuppressions(errors: TypeCheckError[]): TypeCheckError[] {

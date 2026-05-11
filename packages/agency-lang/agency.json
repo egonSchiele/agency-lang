@@ -11,7 +11,7 @@
   "traceDir": "traces",
   "typeCheck": true,
   "doc": {
-    "outDir": "docs-new/stdlib",
+    "outDir": "docs/site/stdlib",
     "baseUrl": "https://github.com/egonSchiele/agency-lang/tree/main/stdlib"
   }
 }

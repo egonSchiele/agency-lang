@@ -21,13 +21,13 @@ fixtures:
 	node dist/scripts/regenerate-fixtures.js
 
 doc:
-	rm -rf docs-new/stdlib/ && pnpm run agency doc stdlib -o docs-new/stdlib/
+	rm -rf docs/site/stdlib/ && pnpm run agency doc stdlib -o docs/site/stdlib/
 
 packages-doc:
-	rm -rf docs-new/packages/
-	pnpm run agency doc ../brave-search -o docs-new/packages/brave-search/ --ignore tests --base-url https://github.com/egonSchiele/agency-lang/blob/main/packages/brave-search/
-	pnpm run agency doc ../web-fetch -o docs-new/packages/web-fetch/ --ignore tests --base-url https://github.com/egonSchiele/agency-lang/blob/main/packages/web-fetch/
-	pnpm run agency doc ../mcp -o docs-new/packages/mcp/ --ignore tests --base-url https://github.com/egonSchiele/agency-lang/blob/main/packages/mcp/
+	rm -rf docs/site/packages/
+	pnpm run agency doc ../brave-search -o docs/site/packages/brave-search/ --ignore tests --base-url https://github.com/egonSchiele/agency-lang/blob/main/packages/brave-search/
+	pnpm run agency doc ../web-fetch -o docs/site/packages/web-fetch/ --ignore tests --base-url https://github.com/egonSchiele/agency-lang/blob/main/packages/web-fetch/
+	pnpm run agency doc ../mcp -o docs/site/packages/mcp/ --ignore tests --base-url https://github.com/egonSchiele/agency-lang/blob/main/packages/mcp/
 
 test-log:
 	rm -f test-output

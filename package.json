@@ -7,6 +7,6 @@
     "test:run": "pnpm -r --if-present --stream run test:run",
     "test:agency": "pnpm -r --if-present --stream run test:agency",
     "test:agency-js": "pnpm -r --if-present --stream run test:agency-js",
-    "docs": "pnpm -C packages/agency-lang/docs-new run build"
+    "docs": "pnpm -C packages/agency-lang/docs/site run build"
   }
 }

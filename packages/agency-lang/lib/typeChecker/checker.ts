@@ -121,7 +121,6 @@ export function isInsideHandler(ancestors: WalkAncestor[]): boolean {
   });
 }
 
-
 function checkSingleFunctionCall(
   call: FunctionCall,
   scope: Scope,
@@ -270,13 +269,17 @@ function checkNamedArgStructure(
     const arg = call.arguments[i];
     if (arg.type !== "namedArgument") continue;
     if (seen.has(arg.name)) {
-      pushErr(`Duplicate named argument '${arg.name}' in call to '${call.functionName}'.`);
+      pushErr(
+        `Duplicate named argument '${arg.name}' in call to '${call.functionName}'.`,
+      );
       continue;
     }
     seen.add(arg.name);
     const paramIdx = nameableParams.findIndex((p) => p.name === arg.name);
     if (paramIdx < 0) {
-      pushErr(`Unknown named argument '${arg.name}' in call to '${call.functionName}'.`);
+      pushErr(
+        `Unknown named argument '${arg.name}' in call to '${call.functionName}'.`,
+      );
     } else if (paramIdx < namedStartIdx) {
       pushErr(
         `Named argument '${arg.name}' conflicts with positional argument at position ${paramIdx + 1} in call to '${call.functionName}'.`,
@@ -366,7 +369,7 @@ function checkArgsAgainstParams(
       continue;
     }
     // Validated params accept either the un-bang'd type T or any Result —
-    // failures pass through unvalidated per docs-new/guide/schemas.md.
+    // failures pass through unvalidated per docs/site/guide/schemas.md.
     if (slot?.validated && argType.type === "resultType") {
       continue;
     }

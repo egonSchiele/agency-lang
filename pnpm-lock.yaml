@@ -90,7 +90,7 @@ importers:
         specifier: ^4.0.16
         version: 4.0.17(@types/node@25.0.6)
 
-  packages/agency-lang/docs-new:
+  packages/agency-lang/docs/site:
     dependencies:
       tarsec:
         specifier: ^0.2.1

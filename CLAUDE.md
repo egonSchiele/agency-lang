@@ -4,7 +4,7 @@
 
 Agency is a domain-specific language for defining AI agent workflows. It compiles Agency code to executable TypeScript that calls OpenAI's structured output API.
 
-Please read the guide at docs-new/guide/ to get up to speed on the language.
+Please read the guide at docs/site/guide/ to get up to speed on the language.
 
 NOTE! Most of the file paths you'll see in this CLAUDE.md are relative to the packages/agency-lang directory, as that is the main package and contains all the code for agency lang.
 
@@ -31,7 +31,7 @@ pnpm run lint:structure # Run structural linter
 
 ## Testing
 
-See `docs/TESTING.md` for the full testing guide.
+See `docs/misc/TESTING.md` for the full testing guide.
 
 Agency execution tests (`tests/agency/`) do NOT require LLM calls. They can test pure logic, interrupts, async calls, etc. without any LLM involvement. Use them for any runtime behavior test.
 
@@ -45,7 +45,7 @@ IMPORTANT! When you run tests, save the output to a file so that if the tests fa
 Handlers (`handle` blocks) are a crucial part of what makes Agency safe. They must NEVER be accidentally skipped or left unregistered. Any feature that affects execution flow (rewind, interrupts, checkpoints, state restoration) must ensure handlers are correctly registered and invoked. If there is any risk of a handler being skipped, treat it as a critical issue and flag it immediately. Handlers are registered on `__ctx.handlers` via `pushHandler()` in the generated code and are NOT serialized as part of checkpoint state — be aware of this when working on state restoration features.
 
 ## VERY IMPORTANT: Agency syntax rules
-When writing Agency code (in plans, specs, tests, or examples), you MUST use the correct syntax. Verify against `docs-new/guide/basic-syntax.md` and existing test fixtures when unsure.
+When writing Agency code (in plans, specs, tests, or examples), you MUST use the correct syntax. Verify against `docs/site/guide/basic-syntax.md` and existing test fixtures when unsure.
 
 **Correct syntax:**
 - Functions use `def`, curly braces, and optional `: ReturnType` after params: `def foo(x: number): string { ... }`
@@ -61,7 +61,7 @@ When writing Agency code (in plans, specs, tests, or examples), you MUST use the
 - `result = foo()` without `let`/`const` — WRONG unless already declared.
 - Using Python-style colon+indentation for blocks — WRONG. Always use `{ ... }`
 
-**When writing plans or specs:** Always verify Agency code snippets by checking docs-new/guide/basic-syntax.md and existing test fixtures (tests/agency/, tests/typescriptGenerator/). If unsure about syntax, run `pnpm run ast` on a test file to confirm it parses.
+**When writing plans or specs:** Always verify Agency code snippets by checking docs/site/guide/basic-syntax.md and existing test fixtures (tests/agency/, tests/typescriptGenerator/). If unsure about syntax, run `pnpm run ast` on a test file to confirm it parses.
 
 ## General code Guidelines
 - NEVER use dynamic imports
@@ -105,12 +105,12 @@ Pipeline and architecture:
 - `docs/dev/locations.md` — How `loc.line` / `loc.col` / parse-mode template offset interact
 
 Other references:
-- `docs/TESTING.md` — Full testing guide (unit tests, fixtures, execution tests, agency-js tests)
-- `docs/config.md` — `agency.json` configuration file
-- `docs/lifecycleHooks.md` — Lifecycle hooks and callbacks
-- `docs/stateStack.md` — State stack serialization/deserialization for interrupts
-- `docs/typeChecker.md` — Type checker usage
-- `docs/envFiles.md` — Environment variables and .env files
+- `docs/misc/TESTING.md` — Full testing guide (unit tests, fixtures, execution tests, agency-js tests)
+- `docs/misc/config.md` — `agency.json` configuration file
+- `docs/misc/lifecycleHooks.md` — Lifecycle hooks and callbacks
+- `docs/misc/stateStack.md` — State stack serialization/deserialization for interrupts
+- `docs/misc/typeChecker.md` — Type checker usage
+- `docs/misc/envFiles.md` — Environment variables and .env files
 
 Parsers use the **tarsec** parser combinator library. Parser files live in `lib/parsers/` with co-located `.test.ts` files. See Tarsec docs: https://egonschiele.github.io/tarsec/. Debug parser errors with `DEBUG=1 pnpm run ast foo.agency > foo.debuglog`.
 

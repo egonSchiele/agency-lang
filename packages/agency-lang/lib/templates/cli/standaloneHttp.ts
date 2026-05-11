@@ -25,16 +25,23 @@ if (isNaN(port) || port < 1 || port > 65535) {
   console.error("Invalid PORT: " + rawPort + ". Must be an integer between 1 and 65535.");
   process.exit(1);
 }
+const host = process.env.HOST ?? {{{defaultHost:string}}};
 const apiKey = process.env[{{{apiKeyEnv:string}}}];
 
-startHttpServer({
-  exports,
-  port,
-  apiKey,
-  logger: createLogger("info"),
-  hasInterrupts: mod.hasInterrupts,
-  respondToInterrupts: mod.respondToInterrupts,
-});
+try {
+  startHttpServer({
+    exports,
+    port,
+    host,
+    apiKey,
+    logger: createLogger("info"),
+    hasInterrupts: mod.hasInterrupts,
+    respondToInterrupts: mod.respondToInterrupts,
+  });
+} catch (err) {
+  console.error(err instanceof Error ? err.message : String(err));
+  process.exit(1);
+}
 `;
 
 export type TemplateType = {
@@ -46,6 +53,7 @@ export type TemplateType = {
   interruptKindsByNameJson: string;
   moduleId: string;
   defaultPort: string;
+  defaultHost: string;
   apiKeyEnv: string;
 };
 

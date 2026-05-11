@@ -809,10 +809,17 @@ export function createProgram(deps: CliDependencies = {}): Command {
     .description("Start an HTTP REST server")
     .argument("<file>", "Agency file to serve")
     .option("--port <port>", "HTTP port (default: 3545)", "3545")
-    .option("--api-key <key>", "API key for authentication")
+    .option(
+      "--host <host>",
+      "Interface to bind to (default: 127.0.0.1, loopback only). Use 0.0.0.0 to expose externally — requires --api-key/--api-key-env.",
+    )
+    .option(
+      "--api-key <key>",
+      "API key for authentication. NOT recommended: visible in process listings. Prefer --api-key-env.",
+    )
     .option(
       "--api-key-env <name>",
-      "Name of the environment variable to read the API key from (standalone only, default: API_KEY)",
+      "Name of the environment variable to read the API key from. For --standalone, the bundle reads this env var at runtime (default: API_KEY). Without --standalone, the key is read from the env var at serve time.",
     )
     .option("--standalone", "Generate a standalone server.js file")
     .action(
@@ -820,6 +827,7 @@ export function createProgram(deps: CliDependencies = {}): Command {
         file: string,
         options: {
           port?: string;
+          host?: string;
           apiKey?: string;
           apiKeyEnv?: string;
           standalone?: boolean;

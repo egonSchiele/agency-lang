@@ -292,6 +292,13 @@ function processLine(
   }
 }
 
+/**
+ * Maximum size of an unterminated stdio line. A peer that streams data
+ * without ever sending a newline would otherwise grow the buffer
+ * unboundedly and OOM the process.
+ */
+const MAX_STDIO_LINE_BYTES = 10 * 1024 * 1024; // 10 MB
+
 export function startStdioServer(
   handler: (message: JsonRpcMessage) => Promise<JsonRpcMessage | null>,
 ): void {
@@ -306,6 +313,14 @@ export function startStdioServer(
       buffer = buffer.slice(newlineIndex + 1);
       if (line.length > 0) processLine(line, handler);
       newlineIndex = buffer.indexOf("\n");
+    }
+    if (buffer.length > MAX_STDIO_LINE_BYTES) {
+      // Drop the oversized partial and continue reading. We can't reply
+      // because we have no message id; surface the problem to stderr.
+      process.stderr.write(
+        `MCP stdio: discarding partial input of ${buffer.length} bytes (no newline within ${MAX_STDIO_LINE_BYTES} bytes)\n`,
+      );
+      buffer = "";
     }
   });
 }

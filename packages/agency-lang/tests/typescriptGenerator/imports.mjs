@@ -40,6 +40,7 @@ import {
   AgencyFunction as __AgencyFunction, UNSET as __UNSET,
   __call, __callMethod,
   functionRefReviver as __functionRefReviver,
+  DeterministicClient as __DeterministicClient,
 } from "agency-lang/runtime";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -91,7 +92,19 @@ export const rewindFrom = (checkpoint: Checkpoint, overrides: Record<string, unk
 
 export const __setDebugger = (dbg: any) => { __globalCtx.debuggerState = dbg; };
 export const __setTraceWriter = (tw: any) => { __globalCtx.traceWriter = tw; };
+export const __setLLMClient = (client: LLMClient) => { __globalCtx.setLLMClient(client); };
 export const __getCheckpoints = () => __globalCtx.checkpoints;
+
+// Auto-activate the deterministic LLM client when AGENCY_LLM_MOCKS is set.
+// The test runner (lib/cli/util.ts) populates this env var as a JSON string
+// when AGENCY_USE_TEST_LLM_PROVIDER=1. Both the agency evaluate template
+// and the agency-js test.js paths import this module, so this single block
+// covers both code paths.
+if (__process.env.AGENCY_LLM_MOCKS) {
+  __globalCtx.setLLMClient(
+    new __DeterministicClient(JSON.parse(__process.env.AGENCY_LLM_MOCKS))
+  );
+}
 
 export const __toolRegistry: Record<string, any> = {};
 

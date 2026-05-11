@@ -1,16 +1,14 @@
 import type {
+  CostEstimate,
   MessageJSON,
+  ModelName,
   PromptResult,
   TokenUsage,
-  CostEstimate,
   ToolCallJSON,
-  ModelName,
-  Strategy,
-  StrategyJSON,
 } from "smoltalk";
-import type { RunNodeResult } from "./types.js";
-import type { TraceEvent } from "./trace/types.js";
 import type { CallbackName } from "../types/function.js";
+import type { TraceEvent } from "./trace/types.js";
+import type { RunNodeResult } from "./types.js";
 
 export type CallbackMap = {
   onAgentStart: {
@@ -25,7 +23,7 @@ export type CallbackMap = {
   onLLMCallStart: {
     prompt: string;
     tools: { name: string; description?: string; schema: any }[];
-    model: ModelName | Strategy | StrategyJSON | undefined;
+    model: ModelName | undefined;
     messages: MessageJSON[];
   };
   onLLMCallEnd: {
@@ -46,10 +44,10 @@ export type CallbackMap = {
   onToolCallStart: { toolName: string; args: Record<string, unknown> };
   onToolCallEnd: { toolName: string; result: any; timeTaken: number };
   onStream:
-    | { type: "text"; text: string }
-    | { type: "tool_call"; toolCall: ToolCallJSON }
-    | { type: "done"; result: PromptResult }
-    | { type: "error"; error: any };
+  | { type: "text"; text: string }
+  | { type: "tool_call"; toolCall: ToolCallJSON }
+  | { type: "done"; result: PromptResult }
+  | { type: "error"; error: any };
   onTrace: TraceEvent;
   onOAuthRequired: {
     serverName: string;

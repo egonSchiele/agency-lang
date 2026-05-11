@@ -26,3 +26,7 @@ export function resetCounters() {
   safeCallCount = 0;
   flakyWriteCount = 0;
 }
+
+export function throwError() {
+  throw new Error(`This tool always fails`);
+}

@@ -129,3 +129,15 @@ import * from std::array into every file
 nested fork blocks, inner block can't access the variables of the outer block (the arg vars at least)
 
 Need to add cron agent jobs that periodically check for out-of-date documentation and to check for files in the standard library that are missing from the docs-new config.
+
+
+`+=` doesn;t work with globals:
+
+```
+let foo = 0
+def func(id: string) {
+  foo += 1
+}
+```
+
+tool-retry test skipped - one test failing

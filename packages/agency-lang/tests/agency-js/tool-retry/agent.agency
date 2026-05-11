@@ -1,4 +1,4 @@
-import { safe lookupItem, saveItem, flakyWrite, resetCounters } from "./tools.js"
+import { safe lookupItem, saveItem, flakyWrite, resetCounters, throwError } from "./tools.js"
 
 // --- Helper functions ---
 
@@ -96,22 +96,13 @@ def safeNestedTool(id: string) {
   return safeNestedWrite(id)
 }
 
-// A class with a safe method that has an impure call (flakyWrite)
-// inside an if block. Same scenario as above but for class methods.
-class NestedService {
-  prefix: string
-
-  safe nestedWrite(id: string): any {
-    if (id != "") {
-      return flakyWrite("${this.prefix}-${id}")
-    }
-    return id
-  }
-}
-
+let safeNestedMethodToolCount = 0
 def safeNestedMethodTool(id: string) {
-  let svc = new NestedService("nsvc")
-  return svc.nestedWrite(id)
+  safeNestedMethodToolCount = safeNestedMethodToolCount + 1
+  if (safeNestedMethodToolCount < 3) {
+    return throwError()
+  }
+  return id
 }
 
 // --- Nested impure calls inside for/while loops ---

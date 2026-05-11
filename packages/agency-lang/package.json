@@ -82,7 +82,7 @@
     "nanoid": "^5.1.6",
     "picomatch": "^4.0.4",
     "prompts": "^2.4.2",
-    "smoltalk": "^0.0.67",
+    "smoltalk": "^0.2.2",
     "tarsec": "^0.2.2",
     "termcolors": "github:egonSchiele/termcolors",
     "typestache": "^0.5.0",

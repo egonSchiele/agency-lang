@@ -1,14 +1,11 @@
-import type { State, BranchState, StateStackJSON } from "./state/stateStack.js";
-import { StateStack } from "./state/stateStack.js";
-import type { RuntimeContext } from "./state/context.js";
-import type { SourceLocationOpts } from "./state/checkpointStore.js";
-import type { HandlerFn } from "./types.js";
+import { debugStep } from "./debugger.js";
 import { hasInterrupts } from "./interrupts.js";
 import { __pipeBind } from "./result.js";
-import { debugStep } from "./debugger.js";
-import { color } from "termcolors";
-import { id } from "smoltalk";
-import { exit } from "process";
+import type { SourceLocationOpts } from "./state/checkpointStore.js";
+import type { RuntimeContext } from "./state/context.js";
+import type { State } from "./state/stateStack.js";
+import { StateStack } from "./state/stateStack.js";
+import type { HandlerFn } from "./types.js";
 
 /**
  * Runner centralizes step execution logic for generated Agency code.

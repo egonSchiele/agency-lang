@@ -1,23 +1,22 @@
-import { StateStack } from "../state/stateStack.js";
-import { GlobalStore } from "../state/globalStore.js";
-import { PendingPromiseStore } from "./pendingPromiseStore.js";
-import { CheckpointStore, RESULT_ENTRY_LABEL } from "./checkpointStore.js";
-import type { Checkpoint } from "./checkpointStore.js";
-import { StatelogClient, StatelogConfig } from "../../statelogClient.js";
-import { SimpleMachine } from "../../simplemachine/index.js";
 import { nanoid } from "nanoid";
-import { SmolPromptConfig } from "smoltalk";
-import { callHook } from "../hooks.js";
-import type { AgencyCallbacks } from "../hooks.js";
-import { AgencyFunction } from "../agencyFunction.js";
-import type { HandlerFn } from "../types.js";
+import { SmolConfig } from "smoltalk";
 import type { DebuggerState } from "../../debugger/debuggerState.js";
-import { TraceWriter } from "../trace/traceWriter.js";
-import type { TraceConfig } from "../trace/types.js";
+import { SimpleMachine } from "../../simplemachine/index.js";
+import { StatelogClient, StatelogConfig } from "../../statelogClient.js";
+import { AgencyFunction } from "../agencyFunction.js";
 import { reviveWithClasses, type ClassRegistry } from "../classReviver.js";
 import { AgencyCancelledError } from "../errors.js";
-import { LLMClient, SmoltalkClient } from "../llmClient.js";
+import type { AgencyCallbacks } from "../hooks.js";
 import type { InterruptResponse } from "../interrupts.js";
+import { LLMClient, SmoltalkClient } from "../llmClient.js";
+import { GlobalStore } from "../state/globalStore.js";
+import { StateStack } from "../state/stateStack.js";
+import { TraceWriter } from "../trace/traceWriter.js";
+import type { TraceConfig } from "../trace/types.js";
+import type { HandlerFn } from "../types.js";
+import type { Checkpoint } from "./checkpointStore.js";
+import { CheckpointStore, RESULT_ENTRY_LABEL } from "./checkpointStore.js";
+import { PendingPromiseStore } from "./pendingPromiseStore.js";
 
 /* bunch of stuff that every node/function in the runtime needs access to,
 that we don't want to pass as individual arguments everywhere */
@@ -53,7 +52,7 @@ export class RuntimeContext<T> {
   // we need a single statelog client instance that can be used across the entire execution of the graph,
   // so that all the logs share the same traceId, so they all show up in the same trace in the Statelog dashboard.
   statelogClient: StatelogClient;
-  smoltalkDefaults: Partial<SmolPromptConfig>;
+  smoltalkDefaults: Partial<SmolConfig>;
   private _llmClient: LLMClient;
   private _interruptResponses: Record<string, { response: InterruptResponse }> = {};
 
@@ -98,7 +97,7 @@ export class RuntimeContext<T> {
 
   constructor(args: {
     statelogConfig: StatelogConfig;
-    smoltalkDefaults: Partial<SmolPromptConfig>;
+    smoltalkDefaults: Partial<SmolConfig>;
     dirname: string;
     maxRestores?: number;
     traceConfig?: TraceConfig;
@@ -368,8 +367,8 @@ export class RuntimeContext<T> {
   }
   /* Get smoltalk config with missing keys populated with defaults */
   getSmoltalkConfig(
-    config: Partial<SmolPromptConfig> = {},
-  ): Partial<SmolPromptConfig> {
+    config: Partial<SmolConfig> = {},
+  ): Partial<SmolConfig> {
     return { ...this.smoltalkDefaults, ...config };
   }
 

@@ -1,23 +1,20 @@
 import * as smoltalk from "smoltalk";
-import { MessageThread } from "./state/messageThread.js";
-import { Interrupt, hasInterrupts, isRejected } from "./interrupts.js";
-import { updateTokenStats, extractResponse } from "./utils.js";
-import { callHook } from "./hooks.js";
-import { handleStreamingResponse, isGenerator } from "./streaming.js";
-import type { RuntimeContext } from "./state/context.js";
-import type { PromptConfig } from "./llmClient.js";
-import type { SourceLocationOpts } from "./state/checkpointStore.js";
-import { color } from "@/utils/termcolors.js";
-import { GraphState } from "./types.js";
 import { PromptResult, Result, StreamChunk, ToolCallJSON } from "smoltalk";
-import { ZodType } from "zod/v3";
+import { AgencyFunction } from "./agencyFunction.js";
+import { AgencyCancelledError, isAbortError } from "./errors.js";
+import { callHook } from "./hooks.js";
+import { Interrupt, hasInterrupts, isRejected } from "./interrupts.js";
+import type { PromptConfig } from "./llmClient.js";
+import { setupFunction } from "./node.js";
+import { isFailure } from "./result.js";
+import type { SourceLocationOpts } from "./state/checkpointStore.js";
+import type { RuntimeContext } from "./state/context.js";
+import { MessageThread } from "./state/messageThread.js";
 import { StateStack } from "./state/stateStack.js";
 import { ThreadStore } from "./state/threadStore.js";
-import { isFailure } from "./result.js";
-import { AgencyCancelledError, isAbortError } from "./errors.js";
-import { AgencyFunction } from "./agencyFunction.js";
-import { setupFunction } from "./node.js";
-import { exit } from "node:process";
+import { handleStreamingResponse } from "./streaming.js";
+import { GraphState } from "./types.js";
+import { extractResponse, updateTokenStats } from "./utils.js";
 
 type Tool = {
   name: string;
@@ -39,7 +36,7 @@ async function _runPrompt({
   tools: Tool[];
   prompt: string;
   responseFormat?: any;
-  clientConfig: Partial<smoltalk.SmolPromptConfig>;
+  clientConfig: Partial<smoltalk.SmolConfig>;
   /** The branch-local stack, if this _runPrompt call is running inside a
    * fork/race branch. Used for branch-aware cancellation checks and for
    * scoping the LLM HTTP abort signal to the current branch. */
@@ -168,7 +165,7 @@ export async function runPrompt(args: {
   prompt: string;
   messages: MessageThread;
   responseFormat?: any;
-  clientConfig: Partial<smoltalk.SmolPromptConfig> & { tools?: any[] };
+  clientConfig: Partial<smoltalk.SmolConfig> & { tools?: any[] };
   maxToolCallRounds?: number;
   stateStack?: StateStack;
   removedTools?: string[];
@@ -186,10 +183,10 @@ export async function runPrompt(args: {
   const { stateStack, stack } = setupFunction({
     state: args.stateStack
       ? {
-          stateStack: args.stateStack,
-          ctx: args.ctx,
-          threads: new ThreadStore(),
-        }
+        stateStack: args.stateStack,
+        ctx: args.ctx,
+        threads: new ThreadStore(),
+      }
       : undefined,
   });
   const self = stack.locals;

@@ -1,11 +1,11 @@
-import * as smoltalk from "smoltalk";
 import type {
-  SmolPromptConfig,
-  PromptResult,
-  StreamChunk,
   Message,
+  PromptResult,
+  Result,
+  SmolConfig,
+  StreamChunk,
 } from "smoltalk";
-import type { Result } from "smoltalk";
+import * as smoltalk from "smoltalk";
 import type { ZodType } from "zod";
 
 export type ToolDefinition = {
@@ -58,7 +58,7 @@ export class SmoltalkClient implements LLMClient {
     yield* smoltalk.text({ ...this.toSmolConfig(config), stream: true });
   }
 
-  private toSmolConfig(config: PromptConfig): Omit<SmolPromptConfig, "stream"> {
+  private toSmolConfig(config: PromptConfig): Omit<SmolConfig, "stream"> {
     const {
       messages, tools, responseFormat, abortSignal,
       model, apiKey, maxTokens, temperature, provider,
@@ -70,6 +70,6 @@ export class SmoltalkClient implements LLMClient {
       messages, tools, responseFormat, abortSignal,
       model, maxTokens, temperature, provider, thinking, reasoningEffort,
       openAiApiKey: apiKey,
-    } as Omit<SmolPromptConfig, "stream">;
+    } as Omit<SmolConfig, "stream">;
   }
 }

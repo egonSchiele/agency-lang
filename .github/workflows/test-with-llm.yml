@@ -1,0 +1,55 @@
+# Runs the agency and agency-js test suites against the real OpenAI
+# provider. Triggered only on pushes to `main` (i.e. after a PR is
+# merged), NOT on pull requests — this prevents PR authors from forking
+# the repo, opening a PR that prints/exfiltrates secrets, and grabbing
+# the OPENAI_API_KEY. The PR-triggered workflow (`test.yml`) covers the
+# same suites under the deterministic LLM provider, so PR authors still
+# get coverage without needing the secret.
+#
+# Security: all actions pinned to SHA. Do not use pull_request_target.
+name: Real-LLM tests (post-merge)
+
+on:
+  push:
+    branches: [ "main" ]
+
+permissions:
+  contents: read
+
+jobs:
+  real-llm-tests:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: [22.x]
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+    - name: Set up pnpm
+      uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
+      with:
+        version: 9
+        run_install: false
+
+    - name: Set up Node.js ${{ matrix.node-version }}
+      uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+      with:
+        node-version: ${{ matrix.node-version }}
+        cache: 'pnpm'
+
+    - run: pnpm install
+    - run: make
+
+    - name: Agency execution tests (real LLM)
+      working-directory: packages/agency-lang
+      env:
+        OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      run: pnpm run test:agency
+
+    - name: Agency-JS integration tests (real LLM)
+      working-directory: packages/agency-lang
+      env:
+        OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      run: pnpm run test:agency-js

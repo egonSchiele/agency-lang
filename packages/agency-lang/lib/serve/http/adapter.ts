@@ -1,8 +1,14 @@
 import http from "http";
 import type { ExportedItem, ExportedFunction, ExportedNode } from "../types.js";
-import { checkAuth } from "./auth.js";
 import { errorMessage, toArgs, parseJsonBody } from "../util.js";
 import type { Logger } from "../../logger.js";
+import {
+  DEFAULT_HOST,
+  defaultAllowedHosts,
+  enforceNoKeyOnNonLoopback,
+  logServerStart,
+  makeGuardedRequestListener,
+} from "./security.js";
 
 export type HttpConfig = {
   exports: ExportedItem[];
@@ -177,115 +183,29 @@ export function createHttpHandler(config: HttpConfig): (
   };
 }
 
-const DEFAULT_HOST = "127.0.0.1";
-const LOOPBACK_HOSTS = ["127.0.0.1", "::1", "localhost"];
-
-function isLoopbackHost(host: string): boolean {
-  return LOOPBACK_HOSTS.includes(host);
-}
-
-function defaultAllowedHosts(host: string): string[] | undefined {
-  if (isLoopbackHost(host)) return ["localhost", "127.0.0.1", "[::1]"];
-  // Non-loopback bind: skip Host validation by default. The mandatory API
-  // key (enforced below) is what mitigates DNS rebinding in this case.
-  // Operators can still pass an explicit `allowedHosts` to lock things down.
-  return undefined;
-}
-
-/**
- * Validate the Host header against an allowlist (DNS-rebinding defense).
- * Strips the port before comparison; matches case-insensitively. If
- * `allowed` is undefined, validation is skipped.
- */
-function isHostAllowed(
-  hostHeader: string | undefined,
-  allowed: string[] | undefined,
-): boolean {
-  if (allowed === undefined) return true;
-  if (!hostHeader) return false;
-  const hostOnly = stripPort(hostHeader).toLowerCase();
-  return allowed.some((a) => a.toLowerCase() === hostOnly);
-}
-
-function stripPort(hostHeader: string): string {
-  // IPv6 literal: "[::1]:3545" → "[::1]"
-  if (hostHeader.startsWith("[")) {
-    const end = hostHeader.indexOf("]");
-    return end === -1 ? hostHeader : hostHeader.slice(0, end + 1);
-  }
-  const colon = hostHeader.indexOf(":");
-  return colon === -1 ? hostHeader : hostHeader.slice(0, colon);
-}
-
 export function startHttpServer(config: HttpConfig): http.Server {
   const handler = createHttpHandler(config);
   const { logger, port, apiKey } = config;
   const host = config.host ?? DEFAULT_HOST;
   const allowedHosts = config.allowedHosts ?? defaultAllowedHosts(host);
 
-  if (!apiKey && !isLoopbackHost(host)) {
-    throw new Error(
-      `Refusing to start: no API key configured but bind host is "${host}" (non-loopback). ` +
-      `Either configure an API key, or bind to 127.0.0.1.`,
-    );
-  }
+  enforceNoKeyOnNonLoopback(host, apiKey);
 
-  const server = http.createServer(async (req, res) => {
-    const method = req.method ?? "GET";
-    const rawUrl = req.url ?? "/";
-    const path = rawUrl.split("?")[0];
-    const start = Date.now();
-
-    const sendJson = (status: number, body: unknown) => {
-      res.writeHead(status, { "Content-Type": "application/json" });
-      res.end(JSON.stringify(body) + "\n");
-      logger.info(`${method} ${path} → ${status} (${Date.now() - start}ms)`);
-    };
-
-    // 1. Host header validation (DNS-rebinding defense). Done first so a
-    //    rebinding attacker cannot reach any server logic, including auth.
-    if (!isHostAllowed(req.headers.host, allowedHosts)) {
-      sendJson(403, { error: "Forbidden host" });
-      return;
-    }
-
-    // 2. Authentication. Done before body parsing so an unauthenticated
-    //    client cannot force the server to buffer up to MAX_BODY_BYTES.
-    if (!checkAuth(apiKey, req.headers.authorization)) {
-      sendJson(401, { error: "Unauthorized" });
-      return;
-    }
-
-    try {
-      const body = method === "POST" ? await parseJsonBody(req) : undefined;
-      const result = await handler(method, path, body);
-      sendJson(result.status, result.body);
-    } catch (err) {
-      const msg = errorMessage(err);
-      if (msg === "Invalid JSON body") {
-        sendJson(400, { error: msg });
-      } else if (msg === "Request body too large") {
-        sendJson(413, { error: msg });
-      } else {
-        logger.error(`${method} ${path} → 500: ${msg}`);
-        sendJson(500, { error: "Internal server error" });
-      }
-    }
+  const listener = makeGuardedRequestListener({
+    logger,
+    apiKey,
+    allowedHosts,
+    inner: async (req, _res, ctx) => {
+      const body = ctx.method === "POST" ? await parseJsonBody(req) : undefined;
+      const result = await handler(ctx.method, ctx.path, body);
+      ctx.sendJson(result.status, result.body);
+    },
   });
 
+  const server = http.createServer(listener);
+
   server.listen(port, host, () => {
-    const displayHost = host.includes(":") ? `[${host}]` : host;
-    logger.info(`Agency HTTP server listening on http://${displayHost}:${port}`);
-    if (!isLoopbackHost(host)) {
-      logger.info(
-        `WARNING: bound to ${host} (non-loopback). Server is reachable from the network.`,
-      );
-    }
-    if (!apiKey) {
-      logger.info(
-        "WARNING: no API key configured. All requests are accepted without authentication.",
-      );
-    }
+    logServerStart(logger, "Agency HTTP server", host, port, apiKey);
   });
 
   return server;

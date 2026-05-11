@@ -794,13 +794,56 @@ export function createProgram(deps: CliDependencies = {}): Command {
 
   serveCmd
     .command("mcp")
-    .description("Start an MCP server (stdio)")
+    .description("Start an MCP server (stdio by default; --transport http for Streamable HTTP)")
     .argument("<file>", "Agency file to serve")
     .option("--name <name>", "Server name (defaults to filename)")
+    .option(
+      "--transport <transport>",
+      "Transport: 'stdio' (default) or 'http' (Streamable HTTP)",
+    )
+    .option("--port <port>", "HTTP port (http transport only, default: 3545)", "3545")
+    .option(
+      "--host <host>",
+      "Interface to bind to (http transport only, default: 127.0.0.1, loopback only). Use 0.0.0.0 to expose externally — requires --api-key/--api-key-env.",
+    )
+    .option(
+      "--path <path>",
+      "Endpoint path the MCP server is mounted at (http transport only, default: /mcp)",
+    )
+    .option(
+      "--api-key <key>",
+      "API key for authentication (http transport only). NOT recommended: visible in process listings. Prefer --api-key-env.",
+    )
+    .option(
+      "--api-key-env <name>",
+      "Name of the environment variable to read the API key from (http transport only). For --standalone, the bundle reads this env var at runtime (default: API_KEY).",
+    )
     .option("--standalone", "Generate a standalone server.js file")
     .action(
-      async (file: string, options: { name?: string; standalone?: boolean }) => {
-        await serveMcp(file, options);
+      async (
+        file: string,
+        options: {
+          name?: string;
+          standalone?: boolean;
+          transport?: string;
+          port?: string;
+          host?: string;
+          path?: string;
+          apiKey?: string;
+          apiKeyEnv?: string;
+        },
+      ) => {
+        // commander always assigns the default port string even when --port
+        // wasn't passed; strip it for the stdio path so the cross-flag
+        // validator doesn't complain about an http-only flag.
+        const cleanedOptions = { ...options };
+        if (
+          (options.transport === undefined || options.transport === "stdio") &&
+          options.port === "3545"
+        ) {
+          delete cleanedOptions.port;
+        }
+        await serveMcp(file, cleanedOptions);
       },
     );
 

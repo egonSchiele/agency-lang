@@ -7,6 +7,9 @@
       "expectedOutput": "\"operation completed\"",
       "evaluationCriteria": [{ "type": "exact" }],
       "interruptHandlers": [],
+      "llmMocks": [
+        { "return": { "is_safe": true } }
+      ],
       "retry": 2
     }
   ]

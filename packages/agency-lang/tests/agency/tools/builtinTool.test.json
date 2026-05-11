@@ -8,6 +8,10 @@
         {
           "type": "exact"
         }
+      ],
+      "llmMocks": [
+        { "toolCall": { "name": "round", "args": { "num": 3.14159, "precision": 4 } } },
+        { "return": 3.1416 }
       ]
     }
   ]

@@ -8,6 +8,10 @@
         {
           "type": "exact"
         }
+      ],
+      "llmMocks": [
+        { "toolCall": { "name": "greet", "args": { "name": "Adit" } } },
+        { "return": "Howdy, Adit!!!!!!" }
       ]
     }
   ]

@@ -11,6 +11,10 @@
         { "action": "reject", "expectedMessage": "approve b?" },
         { "action": "approve", "expectedMessage": "approve c?" }
       ],
+      "llmMocks": [
+        { "toolCall": { "name": "cleanup", "args": { "files": ["a", "b", "c"] } } },
+        { "return": { "results": ["deleted: a", "FAILED: interrupt rejected", "deleted: c"] } }
+      ],
       "retry": 2
     }
   ]

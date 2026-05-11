@@ -8,6 +8,10 @@
         {
           "type": "exact"
         }
+      ],
+      "llmMocks": [
+        { "return": [101] },
+        { "return": [103, 107] }
       ]
     }
   ]

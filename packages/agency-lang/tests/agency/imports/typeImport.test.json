@@ -9,7 +9,10 @@
           "type": "exact"
         }
       ],
-      "description": "imported type used as structured LLM response"
+      "description": "imported type used as structured LLM response",
+      "llmMocks": [
+        { "return": { "answer": 5 } }
+      ]
     }
   ]
 }

@@ -15,17 +15,20 @@ node main() {
       return "mkdir failed"
     }
 
-    // Create a test file using bash
+    // Create a test file using bash. printf is portable across `sh`
+    // implementations (the underlying _bash uses `sh -c`, where `echo -n`
+    // is non-portable: dash treats `-n` as a literal argument).
     const testFile = join(base, "hello.txt")
-    bash("echo -n 'hello world' > " + testFile)
+    bash("printf 'hello world' > " + testFile)
 
     // Verify file exists
     if (!exists(testFile)) {
       return "file not created"
     }
 
-    // Edit the file
-    const editResult = edit(testFile, "hello", "goodbye")
+    // Edit the file. `edit` validates that filename is not absolute when
+    // `dir` is specified (defaults to "."), so pass `dir` explicitly.
+    const editResult = edit("hello.txt", "hello", "goodbye", false, base)
     if (isFailure(editResult)) {
       return "edit failed"
     }

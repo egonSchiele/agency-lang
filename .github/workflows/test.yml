@@ -59,9 +59,13 @@ jobs:
         CI: "true"
       run: node tests/integration/stdlib-sandbox/run.mjs
       timeout-minutes: 10
-    # - run: pnpm run test:agency
-    #   env:
-    #     OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-    # - run: pnpm run test:agency-js
-    #   env:
-    #     OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+    - name: Agency execution tests
+      working-directory: packages/agency-lang
+      env:
+        AGENCY_USE_TEST_LLM_PROVIDER: "1"
+      run: pnpm run test:agency
+    - name: Agency-JS integration tests
+      working-directory: packages/agency-lang
+      env:
+        AGENCY_USE_TEST_LLM_PROVIDER: "1"
+      run: pnpm run test:agency-js

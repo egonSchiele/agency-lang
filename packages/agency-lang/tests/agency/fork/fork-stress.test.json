@@ -10,6 +10,12 @@
         { "action": "approve", "expectedMessage": "really delete 'important'?" },
         { "action": "reject", "expectedMessage": "really delete 'important'?" }
       ],
+      "llmMocks": [
+        { "toolCall": { "name": "cleanup", "args": { "files": ["safe", "important", "safe2"] } } },
+        { "return": { "results": ["deleted: safe (fast: safe)", "deleted: important (fast: important)", "deleted: safe2 (fast: safe2)"] } },
+        { "toolCall": { "name": "cleanup", "args": { "files": ["safe", "important", "safe2"] } } },
+        { "return": { "results": ["deleted: safe (fast: safe)", "FAILED: interrupt rejected", "deleted: safe2 (fast: safe2)"] } }
+      ],
       "retry": 2
     }
   ]

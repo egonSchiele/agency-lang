@@ -7,6 +7,11 @@
       "expectedOutput": "25",
       "evaluationCriteria": [{ "type": "exact" }],
       "interruptHandlers": [],
+      "llmMocks": [
+        { "toolCall": { "name": "divideBy", "args": { "divisor": 0 } } },
+        { "toolCall": { "name": "divideBy", "args": { "divisor": 4 } } },
+        { "return": { "value": 25 } }
+      ],
       "retry": 2
     }
   ]

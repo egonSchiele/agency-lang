@@ -42,7 +42,10 @@
           "type": "exact"
         }
       ],
-      "description": "round should work as a tool via uses without explicit import"
+      "description": "round should work as a tool via uses without explicit import",
+      "llmMocks": [
+        { "return": 2.718 }
+      ]
     }
   ]
 }

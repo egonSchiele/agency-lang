@@ -9,6 +9,11 @@
       "interruptHandlers": [
         { "action": "approve", "expectedMessage": "approve number?" }
       ],
+      "llmMocks": [
+        { "toolCall": { "name": "confirmNumber", "args": {} } },
+        { "return": { "value": 42 } },
+        { "return": { "value": "subthread-ok" } }
+      ],
       "retry": 2
     }
   ]

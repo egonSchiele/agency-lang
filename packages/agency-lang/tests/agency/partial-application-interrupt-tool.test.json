@@ -16,6 +16,10 @@
           "action": "approve",
           "expectedMessage": "Confirm adding 5 + 7?"
         }
+      ],
+      "llmMocks": [
+        { "toolCall": { "name": "add", "args": { "b": 7 } } },
+        { "return": 12 }
       ]
     }
   ]

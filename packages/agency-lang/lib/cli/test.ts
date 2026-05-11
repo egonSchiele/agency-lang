@@ -20,6 +20,7 @@ import { formatDiff } from "@/utils/diff.js";
 import { AgencyConfig } from "@/config.js";
 import path from "path";
 import { compile, loadConfig } from "./commands.js";
+import type { LLMMock } from "../runtime/deterministicClient.js";
 type Exact = { type: "exact" };
 type LLMJudge = {
   type: "llmJudge";
@@ -36,10 +37,19 @@ type TestCase = {
   description?: string;
   retry?: number;
   skip?: boolean;
+  // If true, skip this test when running in CI (i.e. when the CI=true
+  // env var is set, the standard GitHub Actions / generic CI marker).
+  // Use for tests that depend on a developer machine's environment, such
+  // as macOS-only builtins (notify) or interactive prompts.
+  skipOnCI?: boolean;
   // Per-test timeout in milliseconds. Overrides the file-level
   // `defaultTimeoutMs`. Falls back to DEFAULT_PER_TEST_MS when unset.
   // Clamped to TIMEOUT_CEILINGS.perTestMs.
   timeoutMs?: number;
+  // Ordered list of LLM mocks consumed by the deterministic LLM client
+  // when running under AGENCY_USE_TEST_LLM_PROVIDER=1. Each entry maps to
+  // one llm() call in the agency code, in source order.
+  llmMocks?: LLMMock[];
 };
 type Tests = {
   sourceFile?: string;
@@ -47,6 +57,9 @@ type Tests = {
   // If true, skip every test in this file. Equivalent to setting `skip: true`
   // on each test case individually.
   skip?: boolean;
+  // If true, skip every test in this file when running in CI. Equivalent
+  // to setting `skipOnCI: true` on each test case.
+  skipOnCI?: boolean;
   // Optional human-readable reason for the skip; printed when the file is
   // skipped. No semantic effect.
   skipReason?: string;
@@ -550,6 +563,7 @@ async function runSingleTest(
       interruptHandlers: testCase.interruptHandlers,
       timeoutMs,
       signal,
+      llmMocks: testCase.llmMocks,
     });
     if (result.stdout) log(result.stdout.trimEnd());
     if (result.stderr) log(result.stderr.trimEnd(), "stderr");
@@ -688,9 +702,10 @@ async function runTestFile(
     // level, skip every test in the file. This makes top-level skip work
     // the way authors typically expect (skip the whole file). The same
     // `skip` field can also be set per test case for finer-grained control.
-    if (tests.skip) {
+    if (tests.skip || (tests.skipOnCI && process.env.CI)) {
+      const skipKind = tests.skip ? "" : " on CI";
       const reasonStr = tests.skipReason ? ` (${tests.skipReason})` : "";
-      log(color.yellow(`  ⊘ Skipped ${total} test(s) in ${testFile}${reasonStr}`));
+      log(color.yellow(`  ⊘ Skipped${skipKind} ${total} test(s) in ${testFile}${reasonStr}`));
       return {
         passed: 0,
         failed: 0,
@@ -727,6 +742,25 @@ async function runTestFile(
 
       if (testCase.skip) {
         log(color.yellow(`  ⊘ Skipped`));
+        skipped++;
+        continue;
+      }
+
+      if (testCase.skipOnCI && process.env.CI) {
+        log(color.yellow(`  ⊘ Skipped on CI`));
+        skipped++;
+        continue;
+      }
+
+      // Under deterministic LLM mode, llmJudge tests cannot run because
+      // the judge itself is an LLM call without a mock. Skip these so CI
+      // gets a clear `skipped` rather than a confusing "no mock provided"
+      // failure.
+      if (
+        process.env.AGENCY_USE_TEST_LLM_PROVIDER &&
+        testCase.evaluationCriteria.some((c) => c.type === "llmJudge")
+      ) {
+        log(color.yellow(`  ⊘ Skipped (LLM-as-judge requires real client)`));
         skipped++;
         continue;
       }
@@ -941,11 +975,27 @@ async function runTsTestDir(
     const resultFile = path.join(dir, "__result.json");
     try { fs.unlinkSync(resultFile); } catch { }
 
+    // Under deterministic mode, look for an optional llmMocks.json next
+    // to fixture.json. Pass its contents to the subprocess via the
+    // AGENCY_LLM_MOCKS env var; the imports template auto-activates the
+    // DeterministicClient. When the file is absent under deterministic
+    // mode we still set the env var to "[]" so any llm() call fails
+    // cleanly instead of falling through to the real OpenAI client.
+    const mocksFile = path.join(dir, "llmMocks.json");
+    let mocksEnv: Record<string, string> = {};
+    if (process.env.AGENCY_USE_TEST_LLM_PROVIDER) {
+      const mocks = fs.existsSync(mocksFile)
+        ? fs.readFileSync(mocksFile, "utf-8")
+        : "[]";
+      mocksEnv = { AGENCY_LLM_MOCKS: mocks };
+    }
+
     const testFile = "test.js";
     try {
       const { stdout, stderr } = await execFileAsync("node", [testFile], {
         cwd: dir,
         maxBuffer: 10 * 1024 * 1024,
+        env: { ...process.env, ...mocksEnv },
       });
       if (stdout) log(stdout.trimEnd());
       if (stderr) log(stderr.trimEnd(), "stderr");

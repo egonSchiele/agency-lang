@@ -9,7 +9,11 @@
           "type": "exact"
         }
       ],
-      "retry": 2
+      "retry": 2,
+      "llmMocks": [
+        { "return": 42 },
+        { "return": 50 }
+      ]
     }
   ]
 }

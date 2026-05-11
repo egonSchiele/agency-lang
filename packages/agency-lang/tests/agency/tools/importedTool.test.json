@@ -8,6 +8,10 @@
         {
           "type": "exact"
         }
+      ],
+      "llmMocks": [
+        { "toolCall": { "name": "mogrify", "args": { "a": 4, "b": 7 } } },
+        { "return": 33 }
       ]
     }
   ]

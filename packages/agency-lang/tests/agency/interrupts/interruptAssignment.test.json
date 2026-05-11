@@ -15,6 +15,10 @@
           "expectedMessage": "Who do you want to say hi to?",
           "resolvedValue": "michaelangelo"
         }
+      ],
+      "llmMocks": [
+        { "toolCall": { "name": "greet", "args": {} } },
+        { "return": "Kya chal raha jai, michaelangelo!" }
       ]
     }
   ]

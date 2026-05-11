@@ -26,6 +26,7 @@ import { compile } from "./commands.js";
 import { RunStrategy } from "../importStrategy.js";
 import { AgencyConfig } from "@/config.js";
 import { parseAgency } from "@/parser.js";
+import type { LLMMock } from "../runtime/deterministicClient.js";
 export function parseTarget(target: string): {
   filename: string;
   nodeName: string;
@@ -196,6 +197,12 @@ type ExecuteNodeArgs = {
   // from user), the in-flight child is killed via execFile's signal
   // handling. Used by the test runner; safe to omit elsewhere.
   signal?: AbortSignal;
+  // Optional ordered list of LLM mocks for the deterministic LLM client.
+  // Passed to the subprocess as a JSON string in AGENCY_LLM_MOCKS env var
+  // when AGENCY_USE_TEST_LLM_PROVIDER is set. The compiled module's
+  // imports template auto-activates DeterministicClient when this env var
+  // is present.
+  llmMocks?: LLMMock[];
 };
 
 export async function executeNodeAsync({
@@ -207,6 +214,7 @@ export async function executeNodeAsync({
   interruptHandlers,
   timeoutMs,
   signal,
+  llmMocks,
 }: ExecuteNodeArgs): Promise<{ data: any; stdout: string; stderr: string }> {
   let evaluateFile = "";
   let resultsFile = "";
@@ -251,11 +259,19 @@ export async function executeNodeAsync({
     // covers both the per-call `timeout` option and the AbortSignal
     // (suite-ceiling/SIGINT) path, which otherwise default to SIGTERM.
     const wantsKill = timeoutMs !== undefined || signal !== undefined;
+    // Pass mocks to the subprocess as a JSON string in an env var. The
+    // compiled module's imports template auto-activates DeterministicClient
+    // when AGENCY_LLM_MOCKS is set. No temp file, no cleanup needed.
+    const mocksEnv =
+      process.env.AGENCY_USE_TEST_LLM_PROVIDER && llmMocks
+        ? { AGENCY_LLM_MOCKS: JSON.stringify(llmMocks) }
+        : {};
     const { stdout, stderr } = await execFileAsync("node", [evaluateFile], {
       maxBuffer: 10 * 1024 * 1024,
       ...(timeoutMs !== undefined ? { timeout: timeoutMs } : {}),
       ...(signal !== undefined ? { signal } : {}),
       ...(wantsKill ? { killSignal: "SIGKILL" as const } : {}),
+      env: { ...process.env, ...mocksEnv },
     });
     const results = readFileSync(resultsFile, "utf-8");
     return { data: JSON.parse(results).data, stdout, stderr };

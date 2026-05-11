@@ -1,4 +1,5 @@
 import type { PromptResult, StreamChunk, Result } from "smoltalk";
+import { ToolCall } from "smoltalk";
 import type { LLMClient, PromptConfig } from "./llmClient.js";
 
 export type ReturnMock = {
@@ -62,7 +63,7 @@ export class DeterministicClient implements LLMClient {
       success: true,
       value: {
         output: null,
-        toolCalls: [{ id: `mock-tool-${this.callIndex}`, name, arguments: args }],
+        toolCalls: [new ToolCall(`mock-tool-${this.callIndex}`, name, args)],
         model: "deterministic",
       },
     };

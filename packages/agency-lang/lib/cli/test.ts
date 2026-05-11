@@ -20,6 +20,7 @@ import { formatDiff } from "@/utils/diff.js";
 import { AgencyConfig } from "@/config.js";
 import path from "path";
 import { compile, loadConfig } from "./commands.js";
+import type { LLMMock } from "../runtime/deterministicClient.js";
 type Exact = { type: "exact" };
 type LLMJudge = {
   type: "llmJudge";
@@ -40,6 +41,10 @@ type TestCase = {
   // `defaultTimeoutMs`. Falls back to DEFAULT_PER_TEST_MS when unset.
   // Clamped to TIMEOUT_CEILINGS.perTestMs.
   timeoutMs?: number;
+  // Ordered list of LLM mocks consumed by the deterministic LLM client
+  // when running under AGENCY_USE_TEST_LLM_PROVIDER=1. Each entry maps to
+  // one llm() call in the agency code, in source order.
+  llmMocks?: LLMMock[];
 };
 type Tests = {
   sourceFile?: string;
@@ -550,6 +555,7 @@ async function runSingleTest(
       interruptHandlers: testCase.interruptHandlers,
       timeoutMs,
       signal,
+      llmMocks: testCase.llmMocks,
     });
     if (result.stdout) log(result.stdout.trimEnd());
     if (result.stderr) log(result.stderr.trimEnd(), "stderr");
@@ -727,6 +733,19 @@ async function runTestFile(
 
       if (testCase.skip) {
         log(color.yellow(`  ⊘ Skipped`));
+        skipped++;
+        continue;
+      }
+
+      // Under deterministic LLM mode, llmJudge tests cannot run because
+      // the judge itself is an LLM call without a mock. Skip these so CI
+      // gets a clear `skipped` rather than a confusing "no mock provided"
+      // failure.
+      if (
+        process.env.AGENCY_USE_TEST_LLM_PROVIDER &&
+        testCase.evaluationCriteria.some((c) => c.type === "llmJudge")
+      ) {
+        log(color.yellow(`  ⊘ Skipped (LLM-as-judge requires real client)`));
         skipped++;
         continue;
       }

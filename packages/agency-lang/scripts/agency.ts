@@ -801,7 +801,7 @@ export function createProgram(deps: CliDependencies = {}): Command {
       "--transport <transport>",
       "Transport: 'stdio' (default) or 'http' (Streamable HTTP)",
     )
-    .option("--port <port>", "HTTP port (http transport only, default: 3545)", "3545")
+    .option("--port <port>", "HTTP port (http transport only, default: 3545)")
     .option(
       "--host <host>",
       "Interface to bind to (http transport only, default: 127.0.0.1, loopback only). Use 0.0.0.0 to expose externally — requires --api-key/--api-key-env.",
@@ -833,17 +833,7 @@ export function createProgram(deps: CliDependencies = {}): Command {
           apiKeyEnv?: string;
         },
       ) => {
-        // commander always assigns the default port string even when --port
-        // wasn't passed; strip it for the stdio path so the cross-flag
-        // validator doesn't complain about an http-only flag.
-        const cleanedOptions = { ...options };
-        if (
-          (options.transport === undefined || options.transport === "stdio") &&
-          options.port === "3545"
-        ) {
-          delete cleanedOptions.port;
-        }
-        await serveMcp(file, cleanedOptions);
+        await serveMcp(file, options);
       },
     );
 

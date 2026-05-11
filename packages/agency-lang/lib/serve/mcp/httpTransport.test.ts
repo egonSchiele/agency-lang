@@ -62,7 +62,7 @@ function request(
     headers?: Record<string, string>;
     body?: string;
   } = {},
-): Promise<{ status: number; body: string }> {
+): Promise<{ status: number; body: string; headers: Record<string, string> }> {
   return new Promise((resolve, reject) => {
     const req = http.request(
       {
@@ -75,9 +75,19 @@ function request(
       (res) => {
         const chunks: Buffer[] = [];
         res.on("data", (c) => chunks.push(c));
-        res.on("end", () =>
-          resolve({ status: res.statusCode ?? 0, body: Buffer.concat(chunks).toString() }),
-        );
+        res.on("end", () => {
+          // Normalize header values to strings (node may give us string[]).
+          const headers: Record<string, string> = {};
+          for (const [k, v] of Object.entries(res.headers)) {
+            if (Array.isArray(v)) headers[k] = v.join(", ");
+            else if (v !== undefined) headers[k] = v;
+          }
+          resolve({
+            status: res.statusCode ?? 0,
+            body: Buffer.concat(chunks).toString(),
+            headers,
+          });
+        });
       },
     );
     req.on("error", reject);
@@ -162,10 +172,12 @@ describe("MCP HTTP transport", () => {
     });
   });
 
-  it("GET on the MCP endpoint returns 405", async () => {
+  it("GET on the MCP endpoint returns 405 with Allow: POST and an empty body", async () => {
     await withServer(baseConfig(), async (port) => {
       const res = await request(port, { method: "GET" });
       expect(res.status).toBe(405);
+      expect(res.body).toBe("");
+      expect(res.headers["allow"]).toBe("POST");
     });
   });
 
@@ -179,19 +191,30 @@ describe("MCP HTTP transport", () => {
     });
   });
 
-  it("notification (no id) returns 204 with no body content", async () => {
+  it("notification (no id) returns 202 with an empty body", async () => {
     await withServer(baseConfig(), async (port) => {
       const res = await request(port, {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized" }),
       });
-      expect(res.status).toBe(204);
+      expect(res.status).toBe(202);
+      expect(res.body).toBe("");
     });
   });
 
-  it("rejects unauthorized request when API key is configured", async () => {
+  it("rejects unauthorized request (no Authorization header) when API key is configured", async () => {
     await withServer(baseConfig({ apiKey: "shh" }), async (port) => {
       const res = await request(port, {
+        body: JSON.stringify({ jsonrpc: "2.0", id: 6, method: "ping" }),
+      });
+      expect(res.status).toBe(401);
+    });
+  });
+
+  it("rejects request with the wrong Bearer token", async () => {
+    await withServer(baseConfig({ apiKey: "shh" }), async (port) => {
+      const res = await request(port, {
+        headers: { authorization: "Bearer wrong" },
         body: JSON.stringify({ jsonrpc: "2.0", id: 6, method: "ping" }),
       });
       expect(res.status).toBe(401);
@@ -205,6 +228,64 @@ describe("MCP HTTP transport", () => {
         body: JSON.stringify({ jsonrpc: "2.0", id: 7, method: "ping" }),
       });
       expect(res.status).toBe(200);
+    });
+  });
+
+  it("processes a JSON-RPC batch and returns an array of responses", async () => {
+    await withServer(baseConfig(), async (port) => {
+      const res = await request(port, {
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify([
+          { jsonrpc: "2.0", id: "a", method: "ping" },
+          {
+            jsonrpc: "2.0",
+            id: "b",
+            method: "tools/call",
+            params: { name: "add", arguments: { a: 10, b: 5 } },
+          },
+        ]),
+      });
+      expect(res.status).toBe(200);
+      const body = JSON.parse(res.body);
+      expect(Array.isArray(body)).toBe(true);
+      expect(body).toHaveLength(2);
+      const byId = Object.fromEntries(body.map((r: any) => [r.id, r]));
+      expect(byId.a.result).toEqual({});
+      expect(byId.b.result.content[0].text).toBe("15");
+    });
+  });
+
+  it("returns 202 with an empty body for a batch of only notifications", async () => {
+    await withServer(baseConfig(), async (port) => {
+      const res = await request(port, {
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify([
+          { jsonrpc: "2.0", method: "notifications/initialized" },
+          { jsonrpc: "2.0", method: "notifications/initialized" },
+        ]),
+      });
+      expect(res.status).toBe(202);
+      expect(res.body).toBe("");
+    });
+  });
+
+  it("rejects an empty batch with 400", async () => {
+    await withServer(baseConfig(), async (port) => {
+      const res = await request(port, {
+        headers: { "content-type": "application/json" },
+        body: "[]",
+      });
+      expect(res.status).toBe(400);
+    });
+  });
+
+  it("rejects a batch containing a non-object entry with 400", async () => {
+    await withServer(baseConfig(), async (port) => {
+      const res = await request(port, {
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify([{ jsonrpc: "2.0", id: 1, method: "ping" }, 7]),
+      });
+      expect(res.status).toBe(400);
     });
   });
 

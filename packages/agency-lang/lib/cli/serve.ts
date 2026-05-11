@@ -9,8 +9,13 @@ import { buildCompilationUnit } from "../compilationUnit.js";
 import { typeCheck, formatErrors } from "../typeChecker/index.js";
 import { discoverExports } from "../serve/discovery.js";
 import { createMcpHandler, startStdioServer } from "../serve/mcp/adapter.js";
-import { startMcpHttpServer } from "../serve/mcp/httpTransport.js";
+import {
+  startMcpHttpServer,
+  DEFAULT_MCP_PATH,
+  DEFAULT_MCP_PORT,
+} from "../serve/mcp/httpTransport.js";
 import { startHttpServer } from "../serve/http/adapter.js";
+import { DEFAULT_HOST } from "../serve/http/security.js";
 import { createLogger } from "../logger.js";
 import { VERSION } from "../version.js";
 import type { ExportedItem } from "../serve/types.js";
@@ -219,13 +224,13 @@ function resolveMcpHttpOptions(
   },
   resolveOpts: { readApiKeyAtServeTime?: boolean } = {},
 ): ResolvedMcpHttpOptions {
-  const port = parseInt(options.port ?? "3545", 10);
+  const port = parseInt(options.port ?? String(DEFAULT_MCP_PORT), 10);
   if (isNaN(port) || port < 1 || port > 65535) {
     throw new Error(`Invalid port: ${options.port}`);
   }
 
-  const host = options.host ?? "127.0.0.1";
-  const mcpPath = options.path ?? "/mcp";
+  const host = options.host ?? DEFAULT_HOST;
+  const mcpPath = options.path ?? DEFAULT_MCP_PATH;
 
   if (options.apiKey !== undefined && options.apiKeyEnv !== undefined) {
     throw new Error("--api-key and --api-key-env are mutually exclusive.");
@@ -285,7 +290,7 @@ export async function serveHttp(
     }
     await generateStandalone("http", compileResult, file, {
       port,
-      host: options.host ?? "127.0.0.1",
+      host: options.host ?? DEFAULT_HOST,
       apiKeyEnv: options.apiKeyEnv ?? "API_KEY",
     });
     return;

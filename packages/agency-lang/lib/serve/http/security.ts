@@ -95,6 +95,12 @@ export type GuardedRequestContext = {
   path: string;
   start: number;
   sendJson: (status: number, body: unknown) => void;
+  /**
+   * Send an empty-body response (e.g. 202, 204, 405). Use this instead of
+   * `sendJson` when the HTTP status forbids a body or when extra headers
+   * (such as `Allow:` on a 405) need to be set without a JSON envelope.
+   */
+  sendStatus: (status: number, headers?: Record<string, string>) => void;
 };
 
 /**
@@ -129,6 +135,12 @@ export function makeGuardedRequestListener(opts: {
       logger.info(`${method} ${path} → ${status} (${Date.now() - start}ms)`);
     };
 
+    const sendStatus = (status: number, headers: Record<string, string> = {}) => {
+      res.writeHead(status, headers);
+      res.end();
+      logger.info(`${method} ${path} → ${status} (${Date.now() - start}ms)`);
+    };
+
     if (!isHostAllowed(req.headers.host, allowedHosts)) {
       sendJson(403, { error: "Forbidden host" });
       return;
@@ -140,7 +152,7 @@ export function makeGuardedRequestListener(opts: {
     }
 
     try {
-      await inner(req, res, { method, path, start, sendJson });
+      await inner(req, res, { method, path, start, sendJson, sendStatus });
     } catch (err) {
       const msg = errorMessage(err);
       if (msg === "Invalid JSON body") {

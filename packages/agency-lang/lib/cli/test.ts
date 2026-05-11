@@ -37,6 +37,11 @@ type TestCase = {
   description?: string;
   retry?: number;
   skip?: boolean;
+  // If true, skip this test when running in CI (i.e. when the CI=true
+  // env var is set, the standard GitHub Actions / generic CI marker).
+  // Use for tests that depend on a developer machine's environment, such
+  // as macOS-only builtins (notify) or interactive prompts.
+  skipOnCI?: boolean;
   // Per-test timeout in milliseconds. Overrides the file-level
   // `defaultTimeoutMs`. Falls back to DEFAULT_PER_TEST_MS when unset.
   // Clamped to TIMEOUT_CEILINGS.perTestMs.
@@ -52,6 +57,9 @@ type Tests = {
   // If true, skip every test in this file. Equivalent to setting `skip: true`
   // on each test case individually.
   skip?: boolean;
+  // If true, skip every test in this file when running in CI. Equivalent
+  // to setting `skipOnCI: true` on each test case.
+  skipOnCI?: boolean;
   // Optional human-readable reason for the skip; printed when the file is
   // skipped. No semantic effect.
   skipReason?: string;
@@ -694,9 +702,10 @@ async function runTestFile(
     // level, skip every test in the file. This makes top-level skip work
     // the way authors typically expect (skip the whole file). The same
     // `skip` field can also be set per test case for finer-grained control.
-    if (tests.skip) {
+    if (tests.skip || (tests.skipOnCI && process.env.CI)) {
+      const skipKind = tests.skip ? "" : " on CI";
       const reasonStr = tests.skipReason ? ` (${tests.skipReason})` : "";
-      log(color.yellow(`  ⊘ Skipped ${total} test(s) in ${testFile}${reasonStr}`));
+      log(color.yellow(`  ⊘ Skipped${skipKind} ${total} test(s) in ${testFile}${reasonStr}`));
       return {
         passed: 0,
         failed: 0,
@@ -733,6 +742,12 @@ async function runTestFile(
 
       if (testCase.skip) {
         log(color.yellow(`  ⊘ Skipped`));
+        skipped++;
+        continue;
+      }
+
+      if (testCase.skipOnCI && process.env.CI) {
+        log(color.yellow(`  ⊘ Skipped on CI`));
         skipped++;
         continue;
       }

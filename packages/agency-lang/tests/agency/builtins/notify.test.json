@@ -1,4 +1,6 @@
 {
+  "skipOnCI": true,
+  "skipReason": "notify uses macOS-specific osascript; not available on Linux CI runners",
   "tests": [
     {
       "nodeName": "main",

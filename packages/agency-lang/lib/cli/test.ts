@@ -967,13 +967,13 @@ async function runTsTestDir(
     // mode we still set the env var to "[]" so any llm() call fails
     // cleanly instead of falling through to the real OpenAI client.
     const mocksFile = path.join(dir, "llmMocks.json");
-    const mocksEnv = process.env.AGENCY_USE_TEST_LLM_PROVIDER
-      ? {
-          AGENCY_LLM_MOCKS: fs.existsSync(mocksFile)
-            ? fs.readFileSync(mocksFile, "utf-8")
-            : "[]",
-        }
-      : {};
+    let mocksEnv: Record<string, string> = {};
+    if (process.env.AGENCY_USE_TEST_LLM_PROVIDER) {
+      const mocks = fs.existsSync(mocksFile)
+        ? fs.readFileSync(mocksFile, "utf-8")
+        : "[]";
+      mocksEnv = { AGENCY_LLM_MOCKS: mocks };
+    }
 
     const testFile = "test.js";
     try {

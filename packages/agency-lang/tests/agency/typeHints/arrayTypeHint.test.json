@@ -9,7 +9,10 @@
           "type": "exact"
         }
       ],
-      "retry": 1
+      "retry": 1,
+      "llmMocks": [
+        { "return": ["apple", "banana", "cherry"] }
+      ]
     }
   ]
 }

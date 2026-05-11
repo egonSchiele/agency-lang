@@ -9,6 +9,9 @@
         {
           "type": "exact"
         }
+      ],
+      "llmMocks": [
+        { "return": "alice wants hot spicy coffee" }
       ]
     }
   ]

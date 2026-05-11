@@ -8,6 +8,10 @@
         {
           "type": "exact"
         }
+      ],
+      "llmMocks": [
+        { "return": [101, 103, 107] },
+        { "return": [109, 113, 127] }
       ]
     },
     {
@@ -18,6 +22,10 @@
         {
           "type": "exact"
         }
+      ],
+      "llmMocks": [
+        { "return": [2, 3, 5] },
+        { "return": [7, 11, 13] }
       ]
     }
   ]

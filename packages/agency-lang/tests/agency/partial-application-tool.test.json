@@ -10,7 +10,11 @@
           "type": "exact"
         }
       ],
-      "description": "partial function works as LLM tool with bound value applied"
+      "description": "partial function works as LLM tool with bound value applied",
+      "llmMocks": [
+        { "toolCall": { "name": "add", "args": { "b": 7 } } },
+        { "return": 12 }
+      ]
     }
   ]
 }

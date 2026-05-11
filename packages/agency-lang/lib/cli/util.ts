@@ -262,10 +262,12 @@ export async function executeNodeAsync({
     // Pass mocks to the subprocess as a JSON string in an env var. The
     // compiled module's imports template auto-activates DeterministicClient
     // when AGENCY_LLM_MOCKS is set. No temp file, no cleanup needed.
-    const mocksEnv =
-      process.env.AGENCY_USE_TEST_LLM_PROVIDER && llmMocks
-        ? { AGENCY_LLM_MOCKS: JSON.stringify(llmMocks) }
-        : {};
+    // When AGENCY_USE_TEST_LLM_PROVIDER=1, always set the env var (even to
+    // an empty list) so the deterministic client takes over — otherwise a
+    // missing llmMocks would silently fall through to the real OpenAI client.
+    const mocksEnv = process.env.AGENCY_USE_TEST_LLM_PROVIDER
+      ? { AGENCY_LLM_MOCKS: JSON.stringify(llmMocks ?? []) }
+      : {};
     const { stdout, stderr } = await execFileAsync("node", [evaluateFile], {
       maxBuffer: 10 * 1024 * 1024,
       ...(timeoutMs !== undefined ? { timeout: timeoutMs } : {}),

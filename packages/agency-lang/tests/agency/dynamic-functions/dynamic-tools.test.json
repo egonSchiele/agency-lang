@@ -11,6 +11,10 @@
           "prompt": "Does the output contain 'Sunny and 72F in Paris'? Score 80 if yes.",
           "threshold": 70
         }
+      ],
+      "llmMocks": [
+        { "toolCall": { "name": "getWeather", "args": { "city": "Paris" } } },
+        { "return": "Sunny and 72F in Paris" }
       ]
     }
   ]

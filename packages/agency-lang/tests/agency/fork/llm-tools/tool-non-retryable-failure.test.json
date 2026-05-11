@@ -7,6 +7,10 @@
       "expectedOutput": "\"tool-removed\"",
       "evaluationCriteria": [{ "type": "exact" }],
       "interruptHandlers": [],
+      "llmMocks": [
+        { "toolCall": { "name": "alwaysFail", "args": {} } },
+        { "return": { "msg": "tool-removed" } }
+      ],
       "retry": 2
     }
   ]

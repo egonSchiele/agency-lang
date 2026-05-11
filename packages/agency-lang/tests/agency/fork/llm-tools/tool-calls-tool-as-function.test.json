@@ -9,6 +9,10 @@
       "interruptHandlers": [
         { "action": "approve", "expectedMessage": "approve helper for 5?" }
       ],
+      "llmMocks": [
+        { "toolCall": { "name": "outerTool", "args": { "x": 5 } } },
+        { "return": { "value": 10 } }
+      ],
       "retry": 2
     }
   ]

@@ -15,6 +15,10 @@
           "action": "approve",
           "expectedMessage": "Agent wants to call the greet function with name: Adit"
         }
+      ],
+      "llmMocks": [
+        { "toolCall": { "name": "greet", "args": { "name": "Adit" } } },
+        { "return": "Kya chal raha jai, Adit!" }
       ]
     },
     {

@@ -10,7 +10,7 @@ import {
   type KeyEvent,
 } from "@/tui/index.js";
 import { readFileSync } from "fs";
-import { formatTypeHint } from "../cli/util.js";
+import { formatTypeHint } from "../utils/formatType.js";
 import type { Checkpoint } from "../runtime/state/checkpointStore.js";
 import type { FunctionParameter } from "../types.js";
 import type { DebuggerCommand, DebuggerIO } from "./types.js";

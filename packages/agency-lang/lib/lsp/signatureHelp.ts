@@ -6,7 +6,7 @@ import {
 } from "vscode-languageserver-protocol";
 import { TextDocument } from "vscode-languageserver-textdocument";
 import type { SemanticIndex } from "./semantics.js";
-import { formatTypeHint } from "../cli/util.js";
+import { formatTypeHint } from "../utils/formatType.js";
 
 export function handleSignatureHelp(
   params: SignatureHelpParams,

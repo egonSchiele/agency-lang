@@ -1,7 +1,7 @@
 import fs from "fs";
 import path from "path";
 import process from "process";
-import { pathToFileURL } from "url";
+import { fileURLToPath, pathToFileURL } from "url";
 import { compile, loadConfig } from "./commands.js";
 import { SymbolTable } from "../symbolTable.js";
 import { parseAgency } from "../parser.js";
@@ -85,12 +85,18 @@ async function loadAndDiscover(
 
 export async function serveMcp(
   file: string,
-  options: { name?: string },
+  options: { name?: string; standalone?: boolean },
 ): Promise<void> {
   const compileResult = compileForServe(file);
-  const { exports, moduleExports } = await loadAndDiscover(compileResult);
 
   const serverName = options.name ?? path.basename(file, ".agency");
+
+  if (options.standalone) {
+    await generateStandalone("mcp", compileResult, file, { serverName });
+    return;
+  }
+
+  const { exports, moduleExports } = await loadAndDiscover(compileResult);
   const policyStore = new PolicyStore(serverName);
 
   // The compiled module's hasInterrupts checks raw data, but respondToInterrupts
@@ -122,20 +128,29 @@ export async function serveMcp(
 
 export async function serveHttp(
   file: string,
-  options: { port?: string; apiKey?: string; standalone?: boolean },
+  options: {
+    port?: string;
+    apiKey?: string;
+    apiKeyEnv?: string;
+    standalone?: boolean;
+  },
 ): Promise<void> {
   const compileResult = compileForServe(file);
 
-  if (options.standalone) {
-    await generateStandalone(compileResult.outputPath, file);
-    return;
-  }
-
-  const { exports, moduleExports } = await loadAndDiscover(compileResult);
   const port = parseInt(options.port ?? "3545", 10);
   if (isNaN(port) || port < 1 || port > 65535) {
     throw new Error(`Invalid port: ${options.port}`);
   }
+
+  if (options.standalone) {
+    await generateStandalone("http", compileResult, file, {
+      port,
+      apiKeyEnv: options.apiKeyEnv ?? "API_KEY",
+    });
+    return;
+  }
+
+  const { exports, moduleExports } = await loadAndDiscover(compileResult);
   const logger = createLogger("info");
 
   startHttpServer({
@@ -151,22 +166,162 @@ export async function serveHttp(
   });
 }
 
+type StandaloneHttpOptions = { port: number; apiKeyEnv: string };
+type StandaloneMcpOptions = { serverName: string };
+
+/**
+ * Resolve an absolute path inside `dist/` from the currently running compiled
+ * file. At runtime this file lives at `dist/lib/cli/serve.js`, so we go up two
+ * levels to reach `dist/` and then join the requested path.
+ */
+function distPath(relativeToDist: string): string {
+  const here = fileURLToPath(import.meta.url);
+  const distDir = path.resolve(path.dirname(here), "..", "..");
+  return path.join(distDir, relativeToDist);
+}
+
+function buildHttpEntrypoint(
+  compiledAbsPath: string,
+  compileResult: CompileResult,
+  options: StandaloneHttpOptions,
+): string {
+  const discoveryPath = distPath("lib/serve/discovery.js");
+  const httpAdapterPath = distPath("lib/serve/http/adapter.js");
+  const loggerPath = distPath("lib/logger.js");
+
+  return `import * as mod from ${JSON.stringify(compiledAbsPath)};
+import { discoverExports } from ${JSON.stringify(discoveryPath)};
+import { startHttpServer } from ${JSON.stringify(httpAdapterPath)};
+import { createLogger } from ${JSON.stringify(loggerPath)};
+
+const exportedNodeNames = ${JSON.stringify(compileResult.exportedNodeNames)};
+const interruptKindsByName = ${JSON.stringify(compileResult.interruptKindsByName)};
+
+const exports = discoverExports({
+  toolRegistry: mod.__toolRegistry ?? {},
+  moduleExports: mod,
+  moduleId: ${JSON.stringify(compileResult.moduleId)},
+  exportedNodeNames,
+  interruptKindsByName,
+});
+
+const port = parseInt(process.env.PORT ?? ${JSON.stringify(String(options.port))}, 10);
+const apiKey = process.env[${JSON.stringify(options.apiKeyEnv)}];
+
+startHttpServer({
+  exports,
+  port,
+  apiKey,
+  logger: createLogger("info"),
+  hasInterrupts: mod.hasInterrupts,
+  respondToInterrupts: mod.respondToInterrupts,
+});
+`;
+}
+
+function buildMcpEntrypoint(
+  compiledAbsPath: string,
+  compileResult: CompileResult,
+  options: StandaloneMcpOptions,
+  serverVersion: string,
+): string {
+  const discoveryPath = distPath("lib/serve/discovery.js");
+  const mcpAdapterPath = distPath("lib/serve/mcp/adapter.js");
+  const policyStorePath = distPath("lib/serve/policyStore.js");
+
+  return `import * as mod from ${JSON.stringify(compiledAbsPath)};
+import { discoverExports } from ${JSON.stringify(discoveryPath)};
+import { createMcpHandler, startStdioServer } from ${JSON.stringify(mcpAdapterPath)};
+import { PolicyStore } from ${JSON.stringify(policyStorePath)};
+
+const exportedNodeNames = ${JSON.stringify(compileResult.exportedNodeNames)};
+const interruptKindsByName = ${JSON.stringify(compileResult.interruptKindsByName)};
+
+const exports = discoverExports({
+  toolRegistry: mod.__toolRegistry ?? {},
+  moduleExports: mod,
+  moduleId: ${JSON.stringify(compileResult.moduleId)},
+  exportedNodeNames,
+  interruptKindsByName,
+});
+
+const serverName = ${JSON.stringify(options.serverName)};
+const policyStore = new PolicyStore(serverName);
+
+const interruptHandlers = {
+  hasInterrupts: mod.hasInterrupts,
+  respondToInterrupts: async (interrupts, responses) => {
+    const wrapped = await mod.respondToInterrupts(interrupts, responses);
+    return wrapped.data;
+  },
+};
+
+const handler = createMcpHandler({
+  serverName,
+  serverVersion: ${JSON.stringify(serverVersion)},
+  exports,
+  policyConfig: { policyStore, interruptHandlers },
+});
+
+startStdioServer(handler);
+`;
+}
+
 async function generateStandalone(
-  compiledPath: string,
+  mode: "http" | "mcp",
+  compileResult: CompileResult,
   originalFile: string,
+  options: StandaloneHttpOptions | StandaloneMcpOptions,
 ): Promise<void> {
-  const outfile = path.basename(originalFile, ".agency") + ".server.js";
+  const baseName = path.basename(originalFile, ".agency");
+  const outfile = baseName + ".server.js";
+  const compiledAbsPath = path.resolve(compileResult.outputPath);
+  const entrypointPath = path.join(
+    path.dirname(compiledAbsPath),
+    `${baseName}.standalone-entry.mjs`,
+  );
 
-  await esbuild.build({
-    entryPoints: [compiledPath],
-    bundle: true,
-    platform: "node",
-    format: "esm",
-    outfile,
-    banner: {
-      js: "// Generated by Agency — standalone HTTP server\n",
-    },
-  });
+  const entrypointSource =
+    mode === "http"
+      ? buildHttpEntrypoint(
+          compiledAbsPath,
+          compileResult,
+          options as StandaloneHttpOptions,
+        )
+      : buildMcpEntrypoint(
+          compiledAbsPath,
+          compileResult,
+          options as StandaloneMcpOptions,
+          VERSION,
+        );
 
-  console.log(`Standalone server written to ${outfile}`);
+  fs.writeFileSync(entrypointPath, entrypointSource);
+
+  try {
+    await esbuild.build({
+      entryPoints: [entrypointPath],
+      bundle: true,
+      platform: "node",
+      format: "esm",
+      outfile,
+      external: [
+        "node-llama-cpp",
+        "node-llama-cpp/*",
+        "@node-llama-cpp/*",
+        "@reflink/*",
+      ],
+      banner: {
+        js:
+          '// Generated by Agency — standalone ' +
+          mode +
+          ' server\n' +
+          'import { createRequire as __createRequire } from "module"; const require = __createRequire(import.meta.url);',
+      },
+    });
+  } finally {
+    if (fs.existsSync(entrypointPath)) fs.unlinkSync(entrypointPath);
+    if (fs.existsSync(compiledAbsPath)) fs.unlinkSync(compiledAbsPath);
+  }
+
+  console.log(`Standalone ${mode} server written to ${outfile}`);
 }

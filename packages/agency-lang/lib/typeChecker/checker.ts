@@ -5,7 +5,7 @@ import {
   VariableType,
 } from "../types.js";
 import { walkNodes, isInsideBlock, type WalkAncestor } from "../utils/node.js";
-import { formatTypeHint } from "../cli/util.js";
+import { formatTypeHint } from "../utils/formatType.js";
 import { BUILTIN_FUNCTION_TYPES } from "./builtins.js";
 import { isAssignable } from "./assignability.js";
 import { synthType } from "./synthesizer.js";

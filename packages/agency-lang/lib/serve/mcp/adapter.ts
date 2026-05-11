@@ -14,7 +14,7 @@ function formatToolDescription(description: string, interruptKinds: InterruptKin
 
 type JsonRpcId = string | number | null;
 
-type JsonRpcMessage = {
+export type JsonRpcMessage = {
   jsonrpc?: string;
   id?: JsonRpcId;
   method?: string;
@@ -22,6 +22,9 @@ type JsonRpcMessage = {
   result?: any;
   error?: any;
 };
+
+/** The transport-agnostic handler returned by createMcpHandler. */
+export type McpHandler = (message: JsonRpcMessage) => Promise<JsonRpcMessage | null>;
 
 const MCP_PROTOCOL_VERSION = "2025-06-18";
 
@@ -197,9 +200,7 @@ async function handleToolCall(
   return rpcError(id, -32602, `Unknown tool '${name}'`);
 }
 
-export function createMcpHandler(
-  config: McpConfig,
-): (message: JsonRpcMessage) => Promise<JsonRpcMessage | null> {
+export function createMcpHandler(config: McpConfig): McpHandler {
   const { serverName, serverVersion, exports } = config;
 
   const functions = exports.filter((e): e is ExportedFunction => e.kind === "function");
@@ -277,10 +278,7 @@ function sendResponse(response: JsonRpcMessage | null): void {
   }
 }
 
-function processLine(
-  line: string,
-  handler: (message: JsonRpcMessage) => Promise<JsonRpcMessage | null>,
-): void {
+function processLine(line: string, handler: McpHandler): void {
   try {
     handler(JSON.parse(line))
       .then(sendResponse)
@@ -299,9 +297,7 @@ function processLine(
  */
 const MAX_STDIO_LINE_BYTES = 10 * 1024 * 1024; // 10 MB
 
-export function startStdioServer(
-  handler: (message: JsonRpcMessage) => Promise<JsonRpcMessage | null>,
-): void {
+export function startStdioServer(handler: McpHandler): void {
   process.stdin.setEncoding("utf-8");
 
   let buffer = "";

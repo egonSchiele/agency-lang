@@ -9,7 +9,13 @@ import { buildCompilationUnit } from "../compilationUnit.js";
 import { typeCheck, formatErrors } from "../typeChecker/index.js";
 import { discoverExports } from "../serve/discovery.js";
 import { createMcpHandler, startStdioServer } from "../serve/mcp/adapter.js";
+import {
+  startMcpHttpServer,
+  DEFAULT_MCP_PATH,
+  DEFAULT_MCP_PORT,
+} from "../serve/mcp/httpTransport.js";
 import { startHttpServer } from "../serve/http/adapter.js";
+import { DEFAULT_HOST } from "../serve/http/security.js";
 import { createLogger } from "../logger.js";
 import { VERSION } from "../version.js";
 import type { ExportedItem } from "../serve/types.js";
@@ -19,6 +25,7 @@ import { PolicyStore } from "../serve/policyStore.js";
 import * as esbuild from "esbuild";
 import renderStandaloneHttp from "../templates/cli/standaloneHttp.js";
 import renderStandaloneMcp from "../templates/cli/standaloneMcp.js";
+import renderStandaloneMcpHttp from "../templates/cli/standaloneMcpHttp.js";
 
 type CompileResult = {
   outputPath: string;
@@ -85,16 +92,43 @@ async function loadAndDiscover(
   return { exports, moduleExports };
 }
 
+export type McpTransport = "stdio" | "http";
+
 export async function serveMcp(
   file: string,
-  options: { name?: string; standalone?: boolean },
+  options: {
+    name?: string;
+    standalone?: boolean;
+    transport?: string;
+    port?: string;
+    host?: string;
+    path?: string;
+    apiKey?: string;
+    apiKeyEnv?: string;
+  },
 ): Promise<void> {
-  const compileResult = compileForServe(file);
+  const transport = parseTransport(options.transport);
 
+  if (transport === "stdio") {
+    rejectHttpOnlyOptions(options);
+  }
+
+  const compileResult = compileForServe(file);
   const serverName = options.name ?? path.basename(file, ".agency");
 
   if (options.standalone) {
-    await generateStandalone("mcp", compileResult, file, { serverName });
+    if (transport === "http") {
+      const httpOpts = resolveMcpHttpOptions(options);
+      await generateStandalone("mcp-http", compileResult, file, {
+        serverName,
+        port: httpOpts.port,
+        host: httpOpts.host,
+        mcpPath: httpOpts.mcpPath,
+        apiKeyEnv: httpOpts.apiKeyEnv,
+      });
+    } else {
+      await generateStandalone("mcp", compileResult, file, { serverName });
+    }
     return;
   }
 
@@ -125,7 +159,106 @@ export async function serveMcp(
     policyConfig: { policyStore, interruptHandlers },
   });
 
+  if (transport === "http") {
+    const { port, host, mcpPath, apiKey } = resolveMcpHttpOptions(options, {
+      readApiKeyAtServeTime: true,
+    });
+    startMcpHttpServer({
+      handler,
+      port,
+      host,
+      path: mcpPath,
+      apiKey,
+      logger: createLogger("info"),
+    });
+    return;
+  }
+
   startStdioServer(handler);
+}
+
+function parseTransport(value: string | undefined): McpTransport {
+  if (value === undefined || value === "stdio") return "stdio";
+  if (value === "http") return "http";
+  throw new Error(`Unknown MCP transport '${value}'. Expected 'stdio' or 'http'.`);
+}
+
+function rejectHttpOnlyOptions(options: {
+  port?: string;
+  host?: string;
+  path?: string;
+  apiKey?: string;
+  apiKeyEnv?: string;
+}): void {
+  const httpFlags = ["port", "host", "path", "apiKey", "apiKeyEnv"] as const;
+  for (const flag of httpFlags) {
+    if (options[flag] !== undefined) {
+      throw new Error(
+        `--${kebab(flag)} requires --transport http (the default stdio transport ignores network options).`,
+      );
+    }
+  }
+}
+
+function kebab(name: string): string {
+  return name.replace(/([A-Z])/g, "-$1").toLowerCase();
+}
+
+type ResolvedMcpHttpOptions = {
+  port: number;
+  host: string;
+  mcpPath: string;
+  /** Only populated when readApiKeyAtServeTime is true (non-standalone). */
+  apiKey: string | undefined;
+  apiKeyEnv: string;
+};
+
+function resolveMcpHttpOptions(
+  options: {
+    port?: string;
+    host?: string;
+    path?: string;
+    apiKey?: string;
+    apiKeyEnv?: string;
+    standalone?: boolean;
+  },
+  resolveOpts: { readApiKeyAtServeTime?: boolean } = {},
+): ResolvedMcpHttpOptions {
+  const port = parseInt(options.port ?? String(DEFAULT_MCP_PORT), 10);
+  if (isNaN(port) || port < 1 || port > 65535) {
+    throw new Error(`Invalid port: ${options.port}`);
+  }
+
+  const host = options.host ?? DEFAULT_HOST;
+  const mcpPath = options.path ?? DEFAULT_MCP_PATH;
+
+  if (options.apiKey !== undefined && options.apiKeyEnv !== undefined) {
+    throw new Error("--api-key and --api-key-env are mutually exclusive.");
+  }
+
+  if (options.standalone && options.apiKey !== undefined) {
+    throw new Error(
+      "--api-key cannot be used with --standalone. Use --api-key-env <name> so the bundle reads the key from the named environment variable at runtime (default: API_KEY).",
+    );
+  }
+
+  const apiKeyEnv = options.apiKeyEnv ?? "API_KEY";
+
+  let apiKey: string | undefined;
+  if (resolveOpts.readApiKeyAtServeTime) {
+    if (options.apiKeyEnv !== undefined) {
+      apiKey = process.env[options.apiKeyEnv];
+      if (!apiKey) {
+        throw new Error(
+          `Environment variable '${options.apiKeyEnv}' is not set or empty (required by --api-key-env).`,
+        );
+      }
+    } else {
+      apiKey = options.apiKey;
+    }
+  }
+
+  return { port, host, mcpPath, apiKey, apiKeyEnv };
 }
 
 export async function serveHttp(
@@ -157,7 +290,7 @@ export async function serveHttp(
     }
     await generateStandalone("http", compileResult, file, {
       port,
-      host: options.host ?? "127.0.0.1",
+      host: options.host ?? DEFAULT_HOST,
       apiKeyEnv: options.apiKeyEnv ?? "API_KEY",
     });
     return;
@@ -201,6 +334,14 @@ type StandaloneHttpOptions = {
   apiKeyEnv: string;
 };
 type StandaloneMcpOptions = { serverName: string };
+type StandaloneMcpHttpOptions = {
+  serverName: string;
+  port: number;
+  host: string;
+  mcpPath: string;
+  apiKeyEnv: string;
+};
+type StandaloneMode = "http" | "mcp" | "mcp-http";
 
 /**
  * Resolve an absolute path inside `dist/` from the currently running compiled
@@ -257,11 +398,36 @@ function buildMcpEntrypoint(
   });
 }
 
+function buildMcpHttpEntrypoint(
+  compiledAbsPath: string,
+  compileResult: CompileResult,
+  options: StandaloneMcpHttpOptions,
+  serverVersion: string,
+): string {
+  return renderStandaloneMcpHttp({
+    compiledModulePath: JSON.stringify(toPosixPath(compiledAbsPath)),
+    discoveryPath: JSON.stringify(distPath("lib/serve/discovery.js")),
+    mcpAdapterPath: JSON.stringify(distPath("lib/serve/mcp/adapter.js")),
+    mcpHttpTransportPath: JSON.stringify(distPath("lib/serve/mcp/httpTransport.js")),
+    policyStorePath: JSON.stringify(distPath("lib/serve/policyStore.js")),
+    loggerPath: JSON.stringify(distPath("lib/logger.js")),
+    moduleId: JSON.stringify(compileResult.moduleId),
+    exportedNodeNamesJson: JSON.stringify(compileResult.exportedNodeNames),
+    interruptKindsByNameJson: JSON.stringify(compileResult.interruptKindsByName),
+    serverName: JSON.stringify(options.serverName),
+    serverVersion: JSON.stringify(serverVersion),
+    defaultPort: JSON.stringify(String(options.port)),
+    defaultHost: JSON.stringify(options.host),
+    defaultPath: JSON.stringify(options.mcpPath),
+    apiKeyEnv: JSON.stringify(options.apiKeyEnv),
+  });
+}
+
 async function generateStandalone(
-  mode: "http" | "mcp",
+  mode: StandaloneMode,
   compileResult: CompileResult,
   originalFile: string,
-  options: StandaloneHttpOptions | StandaloneMcpOptions,
+  options: StandaloneHttpOptions | StandaloneMcpOptions | StandaloneMcpHttpOptions,
 ): Promise<void> {
   const baseName = path.basename(originalFile, ".agency");
   const outfile = baseName + ".server.js";
@@ -271,19 +437,7 @@ async function generateStandalone(
     `${baseName}.standalone-entry.mjs`,
   );
 
-  const entrypointSource =
-    mode === "http"
-      ? buildHttpEntrypoint(
-          compiledAbsPath,
-          compileResult,
-          options as StandaloneHttpOptions,
-        )
-      : buildMcpEntrypoint(
-          compiledAbsPath,
-          compileResult,
-          options as StandaloneMcpOptions,
-          VERSION,
-        );
+  const entrypointSource = buildEntrypoint(mode, compiledAbsPath, compileResult, options);
 
   fs.writeFileSync(entrypointPath, entrypointSource);
 
@@ -325,6 +479,36 @@ async function generateStandalone(
   }
 
   console.log(`Standalone ${mode} server written to ${outfile}`);
+}
+
+function buildEntrypoint(
+  mode: StandaloneMode,
+  compiledAbsPath: string,
+  compileResult: CompileResult,
+  options: StandaloneHttpOptions | StandaloneMcpOptions | StandaloneMcpHttpOptions,
+): string {
+  switch (mode) {
+    case "http":
+      return buildHttpEntrypoint(
+        compiledAbsPath,
+        compileResult,
+        options as StandaloneHttpOptions,
+      );
+    case "mcp":
+      return buildMcpEntrypoint(
+        compiledAbsPath,
+        compileResult,
+        options as StandaloneMcpOptions,
+        VERSION,
+      );
+    case "mcp-http":
+      return buildMcpHttpEntrypoint(
+        compiledAbsPath,
+        compileResult,
+        options as StandaloneMcpHttpOptions,
+        VERSION,
+      );
+  }
 }
 
 function safeUnlink(p: string): void {

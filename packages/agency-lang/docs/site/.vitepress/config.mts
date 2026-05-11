@@ -1,0 +1,103 @@
+import { defineConfig } from "vitepress";
+
+export default defineConfig({
+  title: "Agency",
+  description: "A language for creating agents.",
+  themeConfig: {
+    nav: [
+      { text: "Home", link: "/" },
+      { text: "Guide", link: "/guide/getting-started" },
+    ],
+    sidebar: [
+      {
+        text: "Guide",
+        items: [
+          { text: "Getting Started", link: "/guide/getting-started" },
+          { text: "Basic Syntax", link: "/guide/basic-syntax" },
+          { text: "Types", link: "/guide/types" },
+          { text: "Nodes", link: "/guide/nodes" },
+          { text: "LLMs", link: "/guide/llm" },
+          { text: "Functions", link: "/guide/functions" },
+          { text: "Interrupts", link: "/guide/interrupts" },
+          { text: "Handlers", link: "/guide/handlers" },
+          { text: "Testing", link: "/guide/testing" },
+          { text: "TypeScript Interoperability", link: "/guide/ts-interop" },
+          {
+            text: "Message History and Threads",
+            link: "/guide/message-history-and-threads",
+          },
+          { text: "Error Handling", link: "/guide/error-handling" },
+          { text: "Debugger", link: "/guide/debugger" },
+          { text: "Traces and Bundles", link: "/guide/traces-and-bundles" },
+          { text: "Blocks", link: "/guide/blocks" },
+          { text: "Fork", link: "/guide/fork" },
+          { text: "Execution Model", link: "/guide/execution-model" },
+          { text: "Imports and Packages", link: "/guide/imports-and-packages" },
+          { text: "Schemas", link: "/guide/schemas" },
+          { text: "Checkpointing", link: "/guide/checkpointing" },
+          { text: "MCP", link: "/guide/mcp" },
+        ],
+      },
+      {
+        text: "Appendix",
+        items: [
+          { text: "Agency CLI", link: "/appendix/cli" },
+          { text: "VSCode Extension", link: "/appendix/vscode-extension" },
+          { text: "Generating Docs", link: "/appendix/docs" },
+          { text: "Callbacks", link: "/appendix/callbacks" },
+          {
+            text: "Agency vs TypeScript",
+            link: "/appendix/agency-vs-typescript",
+          },
+          {
+            text: "Agency's Standard Library",
+            link: "/appendix/agency-stdlib",
+          },
+        ],
+      },
+      {
+        text: "Standard Library",
+        items: [
+          { text: "agency", link: "/stdlib/agency" },
+          { text: "agent", link: "/stdlib/agent" },
+          { text: "array", link: "/stdlib/array" },
+          { text: "browser", link: "/stdlib/browser" },
+          { text: "calendar", link: "/stdlib/calendar" },
+          { text: "clipboard", link: "/stdlib/clipboard" },
+          { text: "date", link: "/stdlib/date" },
+          { text: "email", link: "/stdlib/email" },
+          { text: "fs", link: "/stdlib/fs" },
+          { text: "http", link: "/stdlib/http" },
+          { text: "imessage", link: "/stdlib/imessage" },
+          { text: "index", link: "/stdlib/index" },
+          { text: "keyring", link: "/stdlib/keyring" },
+          { text: "math", link: "/stdlib/math" },
+          { text: "oauth", link: "/stdlib/oauth" },
+          { text: "object", link: "/stdlib/object" },
+          { text: "path", link: "/stdlib/path" },
+          { text: "policy", link: "/stdlib/policy" },
+          { text: "retry", link: "/stdlib/retry" },
+          { text: "shell", link: "/stdlib/shell" },
+          { text: "sms", link: "/stdlib/sms" },
+          { text: "speech", link: "/stdlib/speech" },
+          { text: "strategy", link: "/stdlib/strategy" },
+          { text: "system", link: "/stdlib/system" },
+          { text: "ui", link: "/stdlib/ui" },
+          { text: "weather", link: "/stdlib/weather" },
+          { text: "wikipedia", link: "/stdlib/wikipedia" },
+        ],
+      },
+      {
+        text: "Packages",
+        items: [
+          { text: "brave-search", link: "/packages/brave-search/" },
+          { text: "web-fetch", link: "/packages/web-fetch/" },
+          { text: "mcp", link: "/packages/mcp/" },
+        ],
+      },
+    ],
+    socialLinks: [
+      { icon: "github", link: "https://github.com/egonSchiele/agency-lang" },
+    ],
+  },
+});

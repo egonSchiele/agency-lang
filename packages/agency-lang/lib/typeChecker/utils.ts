@@ -1,6 +1,6 @@
 import { AgencyNode, FunctionParameter, VariableType } from "../types.js";
 import type { BlockType } from "../types/typeHints.js";
-import { formatTypeHint } from "../cli/util.js";
+import { formatTypeHint } from "../utils/formatType.js";
 import { isAssignable, resolveType } from "./assignability.js";
 import { synthType } from "./synthesizer.js";
 import { TypeCheckerContext } from "./types.js";

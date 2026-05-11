@@ -15,7 +15,7 @@ import { resultTypeForValidation } from "./validation.js";
 import { validateTypeReferences } from "./validate.js";
 import { ScopeInfo, TypeCheckerContext } from "./types.js";
 import { Scope } from "./scope.js";
-import { formatTypeHint } from "../cli/util.js";
+import { formatTypeHint } from "../utils/formatType.js";
 import { checkType, getBlockSlot } from "./utils.js";
 import { NUMBER_T } from "./primitives.js";
 

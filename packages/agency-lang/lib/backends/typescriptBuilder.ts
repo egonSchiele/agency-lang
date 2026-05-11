@@ -17,7 +17,7 @@ import {
   VariableType,
 } from "../types.js";
 import path from "path";
-import { formatTypeHint, formatTypeHintTs } from "@/cli/util.js";
+import { formatTypeHint, formatTypeHintTs } from "@/utils/formatType.js";
 import {
   BUILTIN_FUNCTIONS,
   BUILTIN_TOOLS,

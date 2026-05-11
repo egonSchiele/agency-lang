@@ -1,5 +1,5 @@
 import { getWordAtPosition } from "../cli/definition.js";
-import { formatTypeHint } from "../cli/util.js";
+import { formatTypeHint } from "../utils/formatType.js";
 import type { FileSymbols, InterruptKind, SymbolInfo, SymbolKind, SymbolTable } from "../symbolTable.js";
 import type {
   AgencyProgram,

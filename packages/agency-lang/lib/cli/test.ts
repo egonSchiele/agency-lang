@@ -960,11 +960,27 @@ async function runTsTestDir(
     const resultFile = path.join(dir, "__result.json");
     try { fs.unlinkSync(resultFile); } catch { }
 
+    // Under deterministic mode, look for an optional llmMocks.json next
+    // to fixture.json. Pass its contents to the subprocess via the
+    // AGENCY_LLM_MOCKS env var; the imports template auto-activates the
+    // DeterministicClient. When the file is absent under deterministic
+    // mode we still set the env var to "[]" so any llm() call fails
+    // cleanly instead of falling through to the real OpenAI client.
+    const mocksFile = path.join(dir, "llmMocks.json");
+    const mocksEnv = process.env.AGENCY_USE_TEST_LLM_PROVIDER
+      ? {
+          AGENCY_LLM_MOCKS: fs.existsSync(mocksFile)
+            ? fs.readFileSync(mocksFile, "utf-8")
+            : "[]",
+        }
+      : {};
+
     const testFile = "test.js";
     try {
       const { stdout, stderr } = await execFileAsync("node", [testFile], {
         cwd: dir,
         maxBuffer: 10 * 1024 * 1024,
+        env: { ...process.env, ...mocksEnv },
       });
       if (stdout) log(stdout.trimEnd());
       if (stderr) log(stderr.trimEnd(), "stderr");

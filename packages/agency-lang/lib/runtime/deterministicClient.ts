@@ -15,6 +15,23 @@ export type ToolCallMock = {
 
 export type LLMMock = ReturnMock | ToolCallMock;
 
+// Synthetic non-zero usage/cost so tests that only assert "value is
+// nonzero" still pass under the deterministic client. Tests that assert
+// on exact token counts or precise costs are using a real LLM and won't
+// hit this code path.
+const SYNTHETIC_USAGE = {
+  inputTokens: 1,
+  outputTokens: 1,
+  cachedInputTokens: 0,
+  totalTokens: 2,
+};
+const SYNTHETIC_COST = {
+  inputCost: 0.000001,
+  outputCost: 0.000001,
+  totalCost: 0.000002,
+  currency: "USD",
+};
+
 export class DeterministicClient implements LLMClient {
   private mocks: LLMMock[];
   private callIndex = 0;
@@ -48,6 +65,8 @@ export class DeterministicClient implements LLMClient {
           output,
           toolCalls: [],
           model: "deterministic",
+          usage: SYNTHETIC_USAGE,
+          cost: SYNTHETIC_COST,
         },
       };
     }
@@ -65,6 +84,8 @@ export class DeterministicClient implements LLMClient {
         output: null,
         toolCalls: [new ToolCall(`mock-tool-${this.callIndex}`, name, args)],
         model: "deterministic",
+        usage: SYNTHETIC_USAGE,
+        cost: SYNTHETIC_COST,
       },
     };
   }

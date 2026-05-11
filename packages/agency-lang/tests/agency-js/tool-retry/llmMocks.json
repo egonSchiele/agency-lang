@@ -1,0 +1,42 @@
+[
+  { "toolCall": { "name": "lookupTool", "args": { "id": "abc" } } },
+  { "toolCall": { "name": "lookupTool", "args": { "id": "abc" } } },
+  { "return": "Found item abc: Widget" },
+
+  { "toolCall": { "name": "saveAndLookupTool", "args": { "id": "xyz" } } },
+  { "return": "Could not save and look up xyz" },
+
+  { "toolCall": { "name": "safeWrapperTool", "args": { "id": "def" } } },
+  { "toolCall": { "name": "safeWrapperTool", "args": { "id": "def" } } },
+  { "return": "Found item def: Widget" },
+
+  { "toolCall": { "name": "derivedSafeWrapperTool", "args": { "id": "ghi" } } },
+  { "toolCall": { "name": "derivedSafeWrapperTool", "args": { "id": "ghi" } } },
+  { "return": "Found item ghi: Widget" },
+
+  { "toolCall": { "name": "unsafeChainTool", "args": { "id": "jkl" } } },
+  { "return": "Could not save and look up jkl" },
+
+  { "toolCall": { "name": "safeMethodTool", "args": { "id": "mno" } } },
+  { "toolCall": { "name": "safeMethodTool", "args": { "id": "mno" } } },
+  { "return": "Found item mno: Widget" },
+
+  { "toolCall": { "name": "unsafeMethodTool", "args": { "id": "pqr" } } },
+  { "return": "Could not save and look up pqr" },
+
+  { "toolCall": { "name": "safeNestedTool", "args": { "id": "stu" } } },
+  { "toolCall": { "name": "safeNestedTool", "args": { "id": "stu" } } },
+  { "return": "Found item stu" },
+
+  { "toolCall": { "name": "safeNestedMethodTool", "args": { "id": "vwx" } } },
+  { "toolCall": { "name": "safeNestedMethodTool", "args": { "id": "vwx" } } },
+  { "return": "Found item vwx" },
+
+  { "toolCall": { "name": "safeForLoopTool", "args": { "id": "for1" } } },
+  { "toolCall": { "name": "safeForLoopTool", "args": { "id": "for1" } } },
+  { "return": "Found item for1" },
+
+  { "toolCall": { "name": "safeWhileLoopTool", "args": { "id": "whl1" } } },
+  { "toolCall": { "name": "safeWhileLoopTool", "args": { "id": "whl1" } } },
+  { "return": "Found item whl1" }
+]

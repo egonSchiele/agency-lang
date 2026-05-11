@@ -17,6 +17,8 @@ import type { InterruptKind } from "../symbolTable.js";
 import type { InterruptHandlers } from "../serve/mcp/interruptLoop.js";
 import { PolicyStore } from "../serve/policyStore.js";
 import * as esbuild from "esbuild";
+import renderStandaloneHttp from "../templates/cli/standaloneHttp.js";
+import renderStandaloneMcp from "../templates/cli/standaloneMcp.js";
 
 type CompileResult = {
   outputPath: string;
@@ -143,11 +145,22 @@ export async function serveHttp(
   }
 
   if (options.standalone) {
+    if (options.apiKey !== undefined) {
+      throw new Error(
+        "--api-key cannot be used with --standalone. The standalone bundle reads the key from an environment variable at runtime; use --api-key-env <name> to choose which one (default: API_KEY).",
+      );
+    }
     await generateStandalone("http", compileResult, file, {
       port,
       apiKeyEnv: options.apiKeyEnv ?? "API_KEY",
     });
     return;
+  }
+
+  if (options.apiKeyEnv !== undefined) {
+    console.warn(
+      "--api-key-env is only used with --standalone; it is ignored when serving directly.",
+    );
   }
 
   const { exports, moduleExports } = await loadAndDiscover(compileResult);
@@ -172,12 +185,18 @@ type StandaloneMcpOptions = { serverName: string };
 /**
  * Resolve an absolute path inside `dist/` from the currently running compiled
  * file. At runtime this file lives at `dist/lib/cli/serve.js`, so we go up two
- * levels to reach `dist/` and then join the requested path.
+ * levels to reach `dist/` and then join the requested path. The result is
+ * normalized to forward slashes so it works as an import specifier on Windows
+ * (esbuild does not accept backslash-separated import paths).
  */
 function distPath(relativeToDist: string): string {
   const here = fileURLToPath(import.meta.url);
   const distDir = path.resolve(path.dirname(here), "..", "..");
-  return path.join(distDir, relativeToDist);
+  return toPosixPath(path.join(distDir, relativeToDist));
+}
+
+function toPosixPath(p: string): string {
+  return p.replace(/\\/g, "/");
 }
 
 function buildHttpEntrypoint(
@@ -185,38 +204,17 @@ function buildHttpEntrypoint(
   compileResult: CompileResult,
   options: StandaloneHttpOptions,
 ): string {
-  const discoveryPath = distPath("lib/serve/discovery.js");
-  const httpAdapterPath = distPath("lib/serve/http/adapter.js");
-  const loggerPath = distPath("lib/logger.js");
-
-  return `import * as mod from ${JSON.stringify(compiledAbsPath)};
-import { discoverExports } from ${JSON.stringify(discoveryPath)};
-import { startHttpServer } from ${JSON.stringify(httpAdapterPath)};
-import { createLogger } from ${JSON.stringify(loggerPath)};
-
-const exportedNodeNames = ${JSON.stringify(compileResult.exportedNodeNames)};
-const interruptKindsByName = ${JSON.stringify(compileResult.interruptKindsByName)};
-
-const exports = discoverExports({
-  toolRegistry: mod.__toolRegistry ?? {},
-  moduleExports: mod,
-  moduleId: ${JSON.stringify(compileResult.moduleId)},
-  exportedNodeNames,
-  interruptKindsByName,
-});
-
-const port = parseInt(process.env.PORT ?? ${JSON.stringify(String(options.port))}, 10);
-const apiKey = process.env[${JSON.stringify(options.apiKeyEnv)}];
-
-startHttpServer({
-  exports,
-  port,
-  apiKey,
-  logger: createLogger("info"),
-  hasInterrupts: mod.hasInterrupts,
-  respondToInterrupts: mod.respondToInterrupts,
-});
-`;
+  return renderStandaloneHttp({
+    compiledModulePath: JSON.stringify(toPosixPath(compiledAbsPath)),
+    discoveryPath: JSON.stringify(distPath("lib/serve/discovery.js")),
+    httpAdapterPath: JSON.stringify(distPath("lib/serve/http/adapter.js")),
+    loggerPath: JSON.stringify(distPath("lib/logger.js")),
+    moduleId: JSON.stringify(compileResult.moduleId),
+    exportedNodeNamesJson: JSON.stringify(compileResult.exportedNodeNames),
+    interruptKindsByNameJson: JSON.stringify(compileResult.interruptKindsByName),
+    defaultPort: JSON.stringify(String(options.port)),
+    apiKeyEnv: JSON.stringify(options.apiKeyEnv),
+  });
 }
 
 function buildMcpEntrypoint(
@@ -225,46 +223,17 @@ function buildMcpEntrypoint(
   options: StandaloneMcpOptions,
   serverVersion: string,
 ): string {
-  const discoveryPath = distPath("lib/serve/discovery.js");
-  const mcpAdapterPath = distPath("lib/serve/mcp/adapter.js");
-  const policyStorePath = distPath("lib/serve/policyStore.js");
-
-  return `import * as mod from ${JSON.stringify(compiledAbsPath)};
-import { discoverExports } from ${JSON.stringify(discoveryPath)};
-import { createMcpHandler, startStdioServer } from ${JSON.stringify(mcpAdapterPath)};
-import { PolicyStore } from ${JSON.stringify(policyStorePath)};
-
-const exportedNodeNames = ${JSON.stringify(compileResult.exportedNodeNames)};
-const interruptKindsByName = ${JSON.stringify(compileResult.interruptKindsByName)};
-
-const exports = discoverExports({
-  toolRegistry: mod.__toolRegistry ?? {},
-  moduleExports: mod,
-  moduleId: ${JSON.stringify(compileResult.moduleId)},
-  exportedNodeNames,
-  interruptKindsByName,
-});
-
-const serverName = ${JSON.stringify(options.serverName)};
-const policyStore = new PolicyStore(serverName);
-
-const interruptHandlers = {
-  hasInterrupts: mod.hasInterrupts,
-  respondToInterrupts: async (interrupts, responses) => {
-    const wrapped = await mod.respondToInterrupts(interrupts, responses);
-    return wrapped.data;
-  },
-};
-
-const handler = createMcpHandler({
-  serverName,
-  serverVersion: ${JSON.stringify(serverVersion)},
-  exports,
-  policyConfig: { policyStore, interruptHandlers },
-});
-
-startStdioServer(handler);
-`;
+  return renderStandaloneMcp({
+    compiledModulePath: JSON.stringify(toPosixPath(compiledAbsPath)),
+    discoveryPath: JSON.stringify(distPath("lib/serve/discovery.js")),
+    mcpAdapterPath: JSON.stringify(distPath("lib/serve/mcp/adapter.js")),
+    policyStorePath: JSON.stringify(distPath("lib/serve/policyStore.js")),
+    moduleId: JSON.stringify(compileResult.moduleId),
+    exportedNodeNamesJson: JSON.stringify(compileResult.exportedNodeNames),
+    interruptKindsByNameJson: JSON.stringify(compileResult.interruptKindsByName),
+    serverName: JSON.stringify(options.serverName),
+    serverVersion: JSON.stringify(serverVersion),
+  });
 }
 
 async function generateStandalone(
@@ -320,7 +289,6 @@ async function generateStandalone(
     });
   } finally {
     if (fs.existsSync(entrypointPath)) fs.unlinkSync(entrypointPath);
-    if (fs.existsSync(compiledAbsPath)) fs.unlinkSync(compiledAbsPath);
   }
 
   console.log(`Standalone ${mode} server written to ${outfile}`);

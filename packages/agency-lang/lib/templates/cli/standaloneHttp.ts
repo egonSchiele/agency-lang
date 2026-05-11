@@ -1,0 +1,57 @@
+// THIS FILE WAS AUTO-GENERATED
+// Source: lib/templates/cli/standaloneHttp.mustache
+// Any manual changes will be lost.
+import { apply } from "typestache";
+
+export const template = `import * as mod from {{{compiledModulePath:string}}};
+import { discoverExports } from {{{discoveryPath:string}}};
+import { startHttpServer } from {{{httpAdapterPath:string}}};
+import { createLogger } from {{{loggerPath:string}}};
+
+const exportedNodeNames = {{{exportedNodeNamesJson:string}}};
+const interruptKindsByName = {{{interruptKindsByNameJson:string}}};
+
+const exports = discoverExports({
+  toolRegistry: mod.__toolRegistry ?? {},
+  moduleExports: mod,
+  moduleId: {{{moduleId:string}}},
+  exportedNodeNames,
+  interruptKindsByName,
+});
+
+const rawPort = process.env.PORT ?? {{{defaultPort:string}}};
+const port = parseInt(rawPort, 10);
+if (isNaN(port) || port < 1 || port > 65535) {
+  console.error("Invalid PORT: " + rawPort + ". Must be an integer between 1 and 65535.");
+  process.exit(1);
+}
+const apiKey = process.env[{{{apiKeyEnv:string}}}];
+
+startHttpServer({
+  exports,
+  port,
+  apiKey,
+  logger: createLogger("info"),
+  hasInterrupts: mod.hasInterrupts,
+  respondToInterrupts: mod.respondToInterrupts,
+});
+`;
+
+export type TemplateType = {
+  compiledModulePath: string;
+  discoveryPath: string;
+  httpAdapterPath: string;
+  loggerPath: string;
+  exportedNodeNamesJson: string;
+  interruptKindsByNameJson: string;
+  moduleId: string;
+  defaultPort: string;
+  apiKeyEnv: string;
+};
+
+const render = (args: TemplateType) => {
+  return apply(template, args);
+}
+
+export default render;
+    

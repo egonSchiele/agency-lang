@@ -13,6 +13,8 @@ Note: All `agency` commands in this file should be run using `pnpm run agency`.
 | Agency execution tests | `tests/agency/` | `agency test tests/agency` |
 | Multi-step JS tests | `tests/agency-js/` | `agency test js tests/agency-js` |
 
+> The agency and agency-js suites can be run without an `OPENAI_API_KEY` by setting `AGENCY_USE_TEST_LLM_PROVIDER=1` — see [Deterministic LLM mode](#deterministic-llm-mode-no-api-key). This is what CI uses on every PR.
+
 ---
 
 ## 1. Unit Tests (Vitest)
@@ -126,13 +128,27 @@ Each test is a pair:
 
 **Fields:**
 
-- `sourceFile` — the `.agency` file (relative to the `.test.json` file)
+Per test case (entries inside `tests`):
+
 - `nodeName` — the node to call
 - `input` — arguments as a string (empty string `""` for no args)
 - `expectedOutput` — expected result as a JSON string
 - `evaluationCriteria` — how to compare results (see below)
 - `description` (optional) — displayed when the test runs
 - `interruptHandlers` (optional) — see [Interrupt Testing](./INTERRUPT_TESTING.md)
+- `retry` (optional) — how many times to retry a failing test before declaring failure
+- `timeoutMs` (optional) — per-test timeout in milliseconds; clamped to a hard ceiling
+- `skip` (optional) — `true` to unconditionally skip this test
+- `skipOnCI` (optional) — `true` to skip when running in CI (`process.env.CI` is set)
+- `llmMocks` (optional) — see [Deterministic LLM mode](#deterministic-llm-mode-no-api-key) below
+
+File-level fields (siblings of `tests`):
+
+- `sourceFile` (optional) — the `.agency` file (relative to the `.test.json` file)
+- `skip` (optional) — `true` to skip every test in the file
+- `skipOnCI` (optional) — `true` to skip every test in the file when running in CI
+- `skipReason` (optional) — human-readable reason printed when a file is skipped
+- `defaultTimeoutMs` (optional) — file-level default timeout, overridden by per-test `timeoutMs`
 
 ### Evaluation criteria
 
@@ -157,12 +173,48 @@ The judge returns a score from 0-100. The test passes if the score meets or exce
 ### Running tests
 
 ```bash
-# Run all tests in a directory
+# Run all tests in a directory (uses real OpenAI client by default)
 agency test tests/agency
 
 # Run a single test file
 agency test tests/agency/categorize.test.json
 ```
+
+### Deterministic LLM mode (no API key)
+
+Set `AGENCY_USE_TEST_LLM_PROVIDER=1` to swap the real OpenAI client for a `DeterministicClient` that returns canned responses from each test case's `llmMocks` array. This is what CI uses on every PR — no `OPENAI_API_KEY` required.
+
+```bash
+AGENCY_USE_TEST_LLM_PROVIDER=1 pnpm run test:agency
+```
+
+Each `llm()` call in the agency code consumes one entry from `llmMocks`, in order:
+
+```json
+{
+  "nodeName": "categorize",
+  "input": "\"Remind me to buy milk\"",
+  "expectedOutput": "\"reminder\"",
+  "evaluationCriteria": [{ "type": "exact" }],
+  "llmMocks": [
+    { "return": "reminder" }
+  ]
+}
+```
+
+**Mock entry types:**
+
+- `{ "return": <value> }` — the LLM returns `<value>`. Strings are returned as-is; non-strings are JSON-stringified (the agency runtime parses them back per the response type annotation).
+- `{ "toolCall": { "name": "...", "args": { ... } } }` — the LLM emits a tool call. Use this when an `llm(..., { tools: [...] })` call should invoke a function. Tool-using flows usually need a sequence like `[toolCall, toolCall, ..., return]` — one mock per LLM round-trip.
+
+**Behavior under deterministic mode:**
+
+- Tests with `evaluationCriteria.type === "llmJudge"` are auto-skipped (the judge itself is an LLM call without a mock).
+- A test that calls `llm()` more times than there are mocks fails with `DeterministicClient: no mock provided for llm() call #N`.
+- The deterministic client returns synthetic non-zero `usage` and `cost` so tests that only assert "value is non-zero" pass.
+- `textStream` collapses to a single `done` chunk; tests that assert on intermediate streaming events won't see them.
+
+The post-merge workflow ([`.github/workflows/test-with-llm.yml`](../../.github/workflows/test-with-llm.yml)) re-runs the same suites against the real OpenAI provider after a PR lands on `main`.
 
 ### Creating test cases interactively
 
@@ -203,7 +255,8 @@ Each test is a directory containing:
 tests/agency-js/my-test/
 ├── agent.agency       # Agency source code
 ├── test.js            # Test script that imports the compiled agent
-└── fixture.json       # Expected result
+├── fixture.json       # Expected result
+└── llmMocks.json      # (optional) Deterministic LLM mocks (see below)
 ```
 
 ### Writing a test script
@@ -245,6 +298,23 @@ The runner will:
 
 If `fixture.json` doesn't exist yet, you'll be prompted to save the result as the new fixture.
 
+### Deterministic LLM mode (no API key)
+
+Agency-js tests pick up the same `AGENCY_USE_TEST_LLM_PROVIDER=1` flag as agency tests. Mocks live in a separate `llmMocks.json` file in the test directory (because `fixture.json` is the diff target). The file is a JSON array of mock entries — same format as `llmMocks` in agency `.test.json`:
+
+```json
+[
+  { "return": "reminder" },
+  { "return": "todo" }
+]
+```
+
+```bash
+AGENCY_USE_TEST_LLM_PROVIDER=1 pnpm run test:agency-js
+```
+
+When `llmMocks.json` is missing under deterministic mode, an empty mock list is used and any `llm()` call throws `no mock provided` rather than falling through to the real OpenAI client.
+
 ### Generating fixtures
 
 To auto-generate fixtures, use the `fixtures` subcommand:
@@ -265,9 +335,12 @@ pnpm test:run                # Vitest run once
 # Regenerate generator/preprocessor fixtures
 make fixtures
 
-# Agency execution tests
+# Agency execution tests (real OpenAI client)
 agency test tests/agency
 agency test tests/agency/example.test.json
+
+# Agency execution tests (deterministic — no API key required)
+AGENCY_USE_TEST_LLM_PROVIDER=1 pnpm run test:agency
 
 # Create test cases interactively
 agency test fixtures tests/agency/example.agency
@@ -276,4 +349,7 @@ agency test fixtures tests/agency/example.agency:nodeName
 # Multi-step JavaScript tests
 agency test js tests/agency-js
 agency test js tests/agency-js/my-test
+
+# Multi-step JS tests (deterministic — reads tests/agency-js/<dir>/llmMocks.json)
+AGENCY_USE_TEST_LLM_PROVIDER=1 pnpm run test:agency-js
 ```

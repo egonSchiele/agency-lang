@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Policy validation: valid policy, non-array rules, invalid action",
+      "input": "",
+      "expectedOutput": "\"policy ok\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

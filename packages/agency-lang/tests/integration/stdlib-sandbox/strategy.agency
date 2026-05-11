@@ -1,0 +1,32 @@
+import { retry, firstValid } from "std::strategy"
+
+def isGreaterThan2(x: any): boolean {
+  return x > 2
+}
+
+def isGreaterThan3(x: any): boolean {
+  return x > 3
+}
+
+node main() {
+  // retry: returns first result that passes the test
+  let attempts = 0
+  const retryResult = retry(5, isGreaterThan2) as {
+    attempts = attempts + 1
+    return attempts
+  }
+  if (retryResult != 3) {
+    return "retry failed"
+  }
+
+  // firstValid: runs block for each variant, returns first passing result
+  const variants = [1, 2, 3, 4, 5]
+  const valid = firstValid(variants, isGreaterThan3) as v {
+    return v * 10
+  }
+  if (valid != 40) {
+    return "firstValid failed"
+  }
+
+  return "strategy ok"
+}

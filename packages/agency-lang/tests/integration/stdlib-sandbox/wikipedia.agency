@@ -1,0 +1,20 @@
+import { search, summary } from "std::wikipedia"
+
+node main() {
+  // search returns an array of results
+  const results = search("Albert Einstein", limit: 3)
+  if (length(results) == 0) {
+    return "search failed: no results"
+  }
+
+  // summary returns a WikiSummary with title and extract
+  const s = summary("Albert Einstein")
+  if (s.title == "") {
+    return "summary failed: empty title"
+  }
+  if (s.extract == "") {
+    return "summary failed: empty extract"
+  }
+
+  return "wikipedia ok"
+}

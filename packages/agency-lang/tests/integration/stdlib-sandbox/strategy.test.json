@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Strategy functions: retry and firstValid with pure blocks",
+      "input": "",
+      "expectedOutput": "\"strategy ok\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

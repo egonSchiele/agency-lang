@@ -1,0 +1,30 @@
+import { validatePolicy } from "std::policy"
+
+node main() {
+  // A valid policy: { "interrupt-kind": [{ action: "approve"|"reject"|"propagate" }] }
+  const policy = {
+    "std::fs": [{ action: "approve" }],
+    "std::shell": [{ action: "reject" }]
+  }
+
+  const result = validatePolicy(policy)
+  if (isFailure(result)) {
+    return "validatePolicy failed on valid policy"
+  }
+
+  // Invalid: rules must be an array
+  const badPolicy = { "std::fs": "approve" }
+  const badResult = validatePolicy(badPolicy)
+  if (isSuccess(badResult)) {
+    return "validatePolicy should reject non-array rules"
+  }
+
+  // Invalid: action must be approve/reject/propagate
+  const badAction = { "std::fs": [{ action: "delete" }] }
+  const badActionResult = validatePolicy(badAction)
+  if (isSuccess(badActionResult)) {
+    return "validatePolicy should reject invalid action"
+  }
+
+  return "policy ok"
+}

@@ -1,0 +1,11 @@
+import { log, status, separator, emptyLine } from "std::ui"
+
+node main() {
+  // These are output-only functions — just verify they don't crash
+  log("test log message")
+  status("left text", "right text")
+  separator("section")
+  emptyLine()
+
+  return "ui ok"
+}

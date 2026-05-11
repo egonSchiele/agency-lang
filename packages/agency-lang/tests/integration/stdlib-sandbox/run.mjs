@@ -30,9 +30,35 @@ function run(label, command) {
   }
 }
 
-// Agency tests (.agency + .test.json)
-run("Stdlib sandbox (agency tests)",
-  "node ./dist/scripts/agency.js test tests/integration/stdlib-sandbox/");
+function runAllowFail(label, command) {
+  console.log(`\n=== ${label} (allow fail) ===`);
+  try {
+    execSync(command, {
+      cwd: rootDir,
+      encoding: "utf-8",
+      stdio: "inherit",
+      timeout: 300_000,
+    });
+    console.log(`${label}: PASSED`);
+  } catch {
+    console.error(`${label}: FAILED (allowed)`);
+  }
+}
+
+// Agency tests (.agency + .test.json) — run each file individually so one failure
+// doesn't block the rest, and we can allow specific tests to fail (e.g. wikipedia).
+const agencyTests = [
+  "fs", "shell", "pure", "date", "policy", "ui", "strategy",
+];
+
+for (const name of agencyTests) {
+  run(`Stdlib sandbox: ${name}`,
+    `node ./dist/scripts/agency.js test tests/integration/stdlib-sandbox/${name}.agency`);
+}
+
+// Wikipedia hits a live API — allow it to fail without blocking CI
+runAllowFail("Stdlib sandbox: wikipedia",
+  "node ./dist/scripts/agency.js test tests/integration/stdlib-sandbox/wikipedia.agency");
 
 // Agency-JS tests (test.js + fixture.json)
 run("Stdlib sandbox (agency-js tests)",

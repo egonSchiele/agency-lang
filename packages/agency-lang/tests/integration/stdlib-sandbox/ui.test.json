@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "UI output functions: log, status, separator, emptyLine",
+      "input": "",
+      "expectedOutput": "\"ui ok\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Date operations: now, today, tomorrow, addDays, addHours, addMinutes, startOfDay, endOfDay",
+      "input": "",
+      "expectedOutput": "\"date ok\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

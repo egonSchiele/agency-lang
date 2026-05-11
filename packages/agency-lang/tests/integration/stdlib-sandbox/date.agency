@@ -1,0 +1,58 @@
+import { now, today, tomorrow, addDays, addHours, addMinutes, startOfDay, endOfDay } from "std::date"
+
+node main() {
+  // now() returns an ISO 8601 string
+  const n = now()
+  if (n == "") {
+    return "now failed: empty string"
+  }
+
+  // today() returns a date string
+  const t = today()
+  if (t == "") {
+    return "today failed: empty string"
+  }
+
+  // tomorrow() returns a date string
+  const tm = tomorrow()
+  if (tm == "") {
+    return "tomorrow failed: empty string"
+  }
+
+  // addDays should shift the date
+  const plusOne = addDays(t, 1)
+  if (plusOne == "") {
+    return "addDays failed: empty string"
+  }
+  if (plusOne == t) {
+    return "addDays failed: same as today"
+  }
+
+  // addHours should shift the time
+  const plusHour = addHours(n, 1)
+  if (plusHour == "") {
+    return "addHours failed: empty string"
+  }
+  if (plusHour == n) {
+    return "addHours failed: same as now"
+  }
+
+  // addMinutes should shift the time
+  const plusMin = addMinutes(n, 30)
+  if (plusMin == "") {
+    return "addMinutes failed: empty string"
+  }
+
+  // startOfDay and endOfDay should return valid strings
+  const sod = startOfDay(t)
+  if (sod == "") {
+    return "startOfDay failed: empty string"
+  }
+
+  const eod = endOfDay(t)
+  if (eod == "") {
+    return "endOfDay failed: empty string"
+  }
+
+  return "date ok"
+}

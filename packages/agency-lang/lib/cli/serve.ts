@@ -132,7 +132,6 @@ export async function serveHttp(
   file: string,
   options: {
     port?: string;
-    host?: string;
     apiKey?: string;
     apiKeyEnv?: string;
     standalone?: boolean;
@@ -145,10 +144,6 @@ export async function serveHttp(
     throw new Error(`Invalid port: ${options.port}`);
   }
 
-  if (options.apiKey !== undefined && options.apiKeyEnv !== undefined) {
-    throw new Error("--api-key and --api-key-env are mutually exclusive.");
-  }
-
   if (options.standalone) {
     if (options.apiKey !== undefined) {
       throw new Error(
@@ -157,25 +152,15 @@ export async function serveHttp(
     }
     await generateStandalone("http", compileResult, file, {
       port,
-      host: options.host ?? "127.0.0.1",
       apiKeyEnv: options.apiKeyEnv ?? "API_KEY",
     });
     return;
   }
 
-  // Non-standalone: --api-key-env reads the key from the named env var at
-  // serve time (preferred — the key never appears in argv). --api-key is
-  // still accepted for ad-hoc use but exposes the key in process listings.
-  let apiKey: string | undefined;
   if (options.apiKeyEnv !== undefined) {
-    apiKey = process.env[options.apiKeyEnv];
-    if (!apiKey) {
-      throw new Error(
-        `Environment variable '${options.apiKeyEnv}' is not set or empty (required by --api-key-env).`,
-      );
-    }
-  } else {
-    apiKey = options.apiKey;
+    console.warn(
+      "--api-key-env is only used with --standalone; it is ignored when serving directly.",
+    );
   }
 
   const { exports, moduleExports } = await loadAndDiscover(compileResult);
@@ -184,8 +169,7 @@ export async function serveHttp(
   startHttpServer({
     exports,
     port,
-    host: options.host,
-    apiKey,
+    apiKey: options.apiKey,
     logger,
     hasInterrupts: moduleExports.hasInterrupts as (data: unknown) => boolean,
     respondToInterrupts: moduleExports.respondToInterrupts as (
@@ -195,11 +179,7 @@ export async function serveHttp(
   });
 }
 
-type StandaloneHttpOptions = {
-  port: number;
-  host: string;
-  apiKeyEnv: string;
-};
+type StandaloneHttpOptions = { port: number; apiKeyEnv: string };
 type StandaloneMcpOptions = { serverName: string };
 
 /**
@@ -233,7 +213,6 @@ function buildHttpEntrypoint(
     exportedNodeNamesJson: JSON.stringify(compileResult.exportedNodeNames),
     interruptKindsByNameJson: JSON.stringify(compileResult.interruptKindsByName),
     defaultPort: JSON.stringify(String(options.port)),
-    defaultHost: JSON.stringify(options.host),
     apiKeyEnv: JSON.stringify(options.apiKeyEnv),
   });
 }
@@ -287,7 +266,6 @@ async function generateStandalone(
 
   fs.writeFileSync(entrypointPath, entrypointSource);
 
-  let bundleSucceeded = false;
   try {
     await esbuild.build({
       entryPoints: [entrypointPath],
@@ -309,31 +287,9 @@ async function generateStandalone(
           'import { createRequire as __createRequire } from "module"; const require = __createRequire(import.meta.url);',
       },
     });
-    bundleSucceeded = true;
   } finally {
-    // Always remove the temp entrypoint we created.
-    safeUnlink(entrypointPath);
-    // Only delete the intermediate compiled JS on success, and only if the
-    // basename matches what compile() would produce (defends against an
-    // accidentally-misconfigured outputPath pointing at a hand-written file).
-    if (
-      bundleSucceeded &&
-      path.basename(compiledAbsPath) === `${baseName}.js`
-    ) {
-      safeUnlink(compiledAbsPath);
-    }
+    if (fs.existsSync(entrypointPath)) fs.unlinkSync(entrypointPath);
   }
 
   console.log(`Standalone ${mode} server written to ${outfile}`);
-}
-
-function safeUnlink(p: string): void {
-  if (!fs.existsSync(p)) return;
-  try {
-    fs.unlinkSync(p);
-  } catch (err) {
-    console.warn(
-      `Failed to remove temporary file ${p}: ${err instanceof Error ? err.message : String(err)}`,
-    );
-  }
 }

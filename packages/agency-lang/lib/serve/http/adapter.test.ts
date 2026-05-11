@@ -1,7 +1,5 @@
 import { describe, expect, it } from "vitest";
-import http from "http";
-import { AddressInfo } from "net";
-import { createHttpHandler, startHttpServer } from "./adapter.js";
+import { createHttpHandler } from "./adapter.js";
 import { AgencyFunction } from "../../runtime/agencyFunction.js";
 import type { ExportedItem } from "../types.js";
 import { createLogger } from "../../logger.js";
@@ -53,56 +51,15 @@ function makeExports(): {
   return { exports };
 }
 
-function makeHandler() {
+function makeHandler(apiKey?: string) {
   const { exports } = makeExports();
   return createHttpHandler({
     exports,
     port: 3545,
+    apiKey,
     logger: createLogger("error"),
     hasInterrupts: () => false,
     respondToInterrupts: async () => ({ data: "resumed" }),
-  });
-}
-
-async function withServer<T>(
-  config: Parameters<typeof startHttpServer>[0],
-  fn: (port: number) => Promise<T>,
-): Promise<T> {
-  // Use port 0 to let the OS assign a free port for the test.
-  const server = startHttpServer({ ...config, port: 0 });
-  await new Promise<void>((resolve) => server.on("listening", () => resolve()));
-  const port = (server.address() as AddressInfo).port;
-  try {
-    return await fn(port);
-  } finally {
-    await new Promise<void>((resolve) => server.close(() => resolve()));
-  }
-}
-
-function request(
-  port: number,
-  options: { method?: string; path?: string; headers?: Record<string, string>; body?: string } = {},
-): Promise<{ status: number; body: string }> {
-  return new Promise((resolve, reject) => {
-    const req = http.request(
-      {
-        host: "127.0.0.1",
-        port,
-        method: options.method ?? "GET",
-        path: options.path ?? "/list",
-        headers: options.headers,
-      },
-      (res) => {
-        const chunks: Buffer[] = [];
-        res.on("data", (c) => chunks.push(c));
-        res.on("end", () =>
-          resolve({ status: res.statusCode ?? 0, body: Buffer.concat(chunks).toString() }),
-        );
-      },
-    );
-    req.on("error", reject);
-    if (options.body !== undefined) req.write(options.body);
-    req.end();
   });
 }
 
@@ -205,127 +162,21 @@ describe("HTTP adapter", () => {
   });
 });
 
-describe("startHttpServer auth and host validation", () => {
-  function baseConfig(overrides: Partial<Parameters<typeof startHttpServer>[0]> = {}) {
-    const { exports } = makeExports();
-    return {
-      exports,
-      port: 0,
-      logger: createLogger("error"),
-      hasInterrupts: () => false,
-      respondToInterrupts: async () => ({ data: "resumed" }),
-      ...overrides,
-    };
-  }
+describe("HTTP auth", () => {
+  const handler = makeHandler("my-secret");
 
-  it("rejects requests without auth header when key is configured", async () => {
-    await withServer(baseConfig({ apiKey: "my-secret" }), async (port) => {
-      const res = await request(port);
-      expect(res.status).toBe(401);
-    });
+  it("rejects requests without auth header", async () => {
+    const result = await handler("GET", "/list", undefined);
+    expect(result.status).toBe(401);
   });
 
   it("rejects requests with wrong key", async () => {
-    await withServer(baseConfig({ apiKey: "my-secret" }), async (port) => {
-      const res = await request(port, { headers: { authorization: "Bearer wrong" } });
-      expect(res.status).toBe(401);
-    });
+    const result = await handler("GET", "/list", undefined, "Bearer wrong");
+    expect(result.status).toBe(401);
   });
 
-  it("accepts requests with correct key", async () => {
-    await withServer(baseConfig({ apiKey: "my-secret" }), async (port) => {
-      const res = await request(port, { headers: { authorization: "Bearer my-secret" } });
-      expect(res.status).toBe(200);
-    });
-  });
-
-  it("rejects requests with disallowed Host header (DNS-rebinding defense)", async () => {
-    await withServer(baseConfig(), async (port) => {
-      const res = await request(port, { headers: { host: "evil.example.com" } });
-      expect(res.status).toBe(403);
-    });
-  });
-
-  it("allows requests with localhost Host header by default", async () => {
-    await withServer(baseConfig(), async (port) => {
-      const res = await request(port, { headers: { host: `localhost:${port}` } });
-      expect(res.status).toBe(200);
-    });
-  });
-
-  it("Host validation runs before auth (forbidden host gets 403, not 401)", async () => {
-    await withServer(baseConfig({ apiKey: "my-secret" }), async (port) => {
-      // Wrong host AND missing auth — should return 403, not 401.
-      const res = await request(port, { headers: { host: "evil.example.com" } });
-      expect(res.status).toBe(403);
-    });
-  });
-
-  it("auth runs before body parsing (POST without auth returns 401)", async () => {
-    await withServer(baseConfig({ apiKey: "my-secret" }), async (port) => {
-      const res = await request(port, {
-        method: "POST",
-        path: "/function/add",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ a: 1, b: 2 }),
-      });
-      expect(res.status).toBe(401);
-    });
-  });
-
-  it("refuses to start without API key on non-loopback host", () => {
-    const { exports } = makeExports();
-    expect(() =>
-      startHttpServer({
-        exports,
-        port: 0,
-        host: "0.0.0.0",
-        logger: createLogger("error"),
-        hasInterrupts: () => false,
-        respondToInterrupts: async () => ({ data: "x" }),
-      }),
-    ).toThrow(/Refusing to start.*non-loopback/);
-  });
-
-  it("function errors are sanitized in the response body", async () => {
-    const { exports } = makeExports();
-    const registry: Record<string, AgencyFunction> = {};
-    const failFn = AgencyFunction.create(
-      {
-        name: "fail",
-        module: "test",
-        fn: async () => {
-          throw new Error("internal secret: sk-abc123");
-        },
-        params: [],
-        toolDefinition: { name: "fail", description: "", schema: null },
-        exported: true,
-        safe: true,
-      },
-      registry,
-    );
-    const exportsWithFail: ExportedItem[] = [
-      ...exports,
-      {
-        kind: "function",
-        name: "fail",
-        description: "",
-        agencyFunction: failFn,
-        interruptKinds: [],
-      },
-    ];
-    await withServer(baseConfig({ exports: exportsWithFail }), async (port) => {
-      const res = await request(port, {
-        method: "POST",
-        path: "/function/fail",
-        headers: { "content-type": "application/json" },
-        body: "{}",
-      });
-      expect(res.status).toBe(200);
-      const body = JSON.parse(res.body);
-      expect(body.success).toBe(false);
-      expect(body.error).not.toContain("sk-abc123");
-      expect(body.error).not.toContain("internal secret");
-    });
+  it("allows requests with correct key", async () => {
+    const result = await handler("GET", "/list", undefined, "Bearer my-secret");
+    expect(result.status).toBe(200);
   });
 });

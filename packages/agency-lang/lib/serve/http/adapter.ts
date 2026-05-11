@@ -12,9 +12,10 @@ export type HttpConfig = {
   host?: string;
   /**
    * Allowed Host: header values (DNS-rebinding defense). If unset, defaults
-   * are derived from `host`: loopback addresses are allowed, plus the
-   * "localhost" hostname. For non-loopback hosts, callers must opt in
-   * explicitly.
+   * are derived from `host`: loopback binds get an allowlist of loopback
+   * names. Non-loopback binds skip Host validation by default (the strict
+   * API key requirement mitigates DNS rebinding there); pass an explicit
+   * array to lock the server down to specific hostnames.
    */
   allowedHosts?: string[];
   logger: Logger;
@@ -183,17 +184,24 @@ function isLoopbackHost(host: string): boolean {
   return LOOPBACK_HOSTS.includes(host);
 }
 
-function defaultAllowedHosts(host: string): string[] {
+function defaultAllowedHosts(host: string): string[] | undefined {
   if (isLoopbackHost(host)) return ["localhost", "127.0.0.1", "[::1]"];
-  // Non-loopback bind: only the exact bound host is allowed by default.
-  return [host];
+  // Non-loopback bind: skip Host validation by default. The mandatory API
+  // key (enforced below) is what mitigates DNS rebinding in this case.
+  // Operators can still pass an explicit `allowedHosts` to lock things down.
+  return undefined;
 }
 
 /**
  * Validate the Host header against an allowlist (DNS-rebinding defense).
- * Strips the port before comparison; matches case-insensitively.
+ * Strips the port before comparison; matches case-insensitively. If
+ * `allowed` is undefined, validation is skipped.
  */
-function isHostAllowed(hostHeader: string | undefined, allowed: string[]): boolean {
+function isHostAllowed(
+  hostHeader: string | undefined,
+  allowed: string[] | undefined,
+): boolean {
+  if (allowed === undefined) return true;
   if (!hostHeader) return false;
   const hostOnly = stripPort(hostHeader).toLowerCase();
   return allowed.some((a) => a.toLowerCase() === hostOnly);

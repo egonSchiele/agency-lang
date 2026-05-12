@@ -1,6 +1,7 @@
 import type { RestEndpointMethodTypes } from "@octokit/rest";
 import { success, failure } from "agency-lang/runtime";
 import { withCtx, type BaseCtxArgs } from "./internal/withCtx.js";
+import { formatError } from "./internal/errors.js";
 import type { Result } from "./internal/result.js";
 import type { Issue } from "./types.js";
 
@@ -35,7 +36,7 @@ export async function listIssues(
       const onlyIssues = list.data.filter((item) => !("pull_request" in item) || !item.pull_request);
       return success(onlyIssues.map(toIssue)) as Result<Issue[]>;
     } catch (e) {
-      return failure(`listIssues failed: ${(e as Error).message}`) as Result<Issue[]>;
+      return failure(`listIssues failed: ${formatError(e)}`) as Result<Issue[]>;
     }
   });
 }
@@ -46,7 +47,7 @@ export async function commentOnIssue(args: { number: number; body: string } & Ba
       await octokit.rest.issues.createComment({ owner, repo, issue_number: args.number, body: args.body });
       return success(undefined) as Result<void>;
     } catch (e) {
-      return failure(`commentOnIssue failed: ${(e as Error).message}`) as Result<void>;
+      return failure(`commentOnIssue failed: ${formatError(e)}`) as Result<void>;
     }
   });
 }
@@ -61,7 +62,7 @@ export async function createIssue(
       });
       return success(toIssue(created.data)) as Result<Issue>;
     } catch (e) {
-      return failure(`createIssue failed: ${(e as Error).message}`) as Result<Issue>;
+      return failure(`createIssue failed: ${formatError(e)}`) as Result<Issue>;
     }
   });
 }

@@ -1,6 +1,7 @@
 import { execFile } from "child_process";
 import { promisify } from "util";
 import { success, failure } from "agency-lang/runtime";
+import { formatError } from "./errors.js";
 import type { Result } from "./result.js";
 
 const execFileAsync = promisify(execFile);
@@ -50,6 +51,6 @@ export async function resolveRepo(override?: { owner?: string; repo?: string }):
     if (!parsed) return failure(`Could not parse GitHub owner/repo from remote URL: ${redactUrl(url)}`) as Result<RepoCoord>;
     return success(parsed) as Result<RepoCoord>;
   } catch (e) {
-    return failure(`Could not read git remote 'origin': ${(e as Error).message}`) as Result<RepoCoord>;
+    return failure(`Could not read git remote 'origin': ${formatError(e)}`) as Result<RepoCoord>;
   }
 }

@@ -114,6 +114,51 @@ describe("commitFiles", () => {
     expect(invocations).toEqual([]);
   });
 
+  // ─── author identity validation (defends `git -c key=value` injection) ───
+
+  it("rejects newline in author name (would inject extra git -c entry)", async () => {
+    const result = await commitFiles({
+      message: "m",
+      author: { name: "Eve\ncore.sshCommand=/tmp/evil", email: "eve@example.com" },
+      push: false,
+    });
+    expect(isFailure(result)).toBe(true);
+    if (isFailure(result)) expect(String(result.error)).toContain("control character");
+    expect(invocations).toEqual([]);
+  });
+
+  it("rejects carriage return in author email", async () => {
+    const result = await commitFiles({
+      message: "m",
+      author: { name: "Eve", email: "eve@example.com\rcore.sshCommand=evil" },
+      push: false,
+    });
+    expect(isFailure(result)).toBe(true);
+    if (isFailure(result)) expect(String(result.error)).toContain("control character");
+    expect(invocations).toEqual([]);
+  });
+
+  it("rejects null byte in author identity", async () => {
+    const result = await commitFiles({
+      message: "m",
+      author: { name: "Eve\u0000evil", email: "eve@example.com" },
+      push: false,
+    });
+    expect(isFailure(result)).toBe(true);
+    expect(invocations).toEqual([]);
+  });
+
+  it("rejects whitespace-only author name", async () => {
+    const result = await commitFiles({
+      message: "m",
+      author: { name: "   ", email: "eve@example.com" },
+      push: false,
+    });
+    expect(isFailure(result)).toBe(true);
+    if (isFailure(result)) expect(String(result.error)).toContain("name is empty");
+    expect(invocations).toEqual([]);
+  });
+
   // ─── currentBranch helper (no-branch + push path) ────────────────────────
 
   it("uses currentBranch from rev-parse when branch is omitted and push is enabled", async () => {

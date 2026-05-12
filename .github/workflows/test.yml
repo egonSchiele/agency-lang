@@ -70,10 +70,16 @@ jobs:
         AGENCY_USE_TEST_LLM_PROVIDER: "1"
       run: pnpm run test:agency-js
     - name: github stdlib smoke test
-      # Reference the secret directly. Step-level `env` is not reliably
-      # available in step `if` expressions, so the previous form using
-      # `env.GITHUB_TEST_TOKEN` could silently always evaluate false.
-      if: matrix.node-version == '22.x' && secrets.GITHUB_TEST_TOKEN != ''
+      # Only run on `push` to main, NEVER on `pull_request` events.
+      #
+      # Even though `pull_request` from forks does not expose secrets,
+      # `pull_request` from same-repo branches DOES — anyone with push
+      # access could open a PR that modifies smoke.agency to dump
+      # `GITHUB_TEST_TOKEN` to the run logs. Restricting to `push` to
+      # `main` means only commits already on the protected branch can
+      # exercise this step (so the token is only readable by code that
+      # has already been merged).
+      if: github.event_name == 'push' && github.ref == 'refs/heads/main' && matrix.node-version == '22.x' && secrets.GITHUB_TEST_TOKEN != ''
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TEST_TOKEN }}
       run: pnpm -F @agency-lang/github test:agency

@@ -1,6 +1,7 @@
 import type { RestEndpointMethodTypes } from "@octokit/rest";
 import { success, failure } from "agency-lang/runtime";
 import { withCtx, type BaseCtxArgs } from "./internal/withCtx.js";
+import { formatError } from "./internal/errors.js";
 import type { Result } from "./internal/result.js";
 import type { PullRequest } from "./types.js";
 
@@ -39,7 +40,7 @@ export async function openPullRequest(
       }
       return success({ number: created.data.number, url: created.data.html_url }) as Result<{ number: number; url: string }>;
     } catch (e) {
-      return failure(`openPullRequest failed: ${(e as Error).message}`) as Result<{ number: number; url: string }>;
+      return failure(`openPullRequest failed: ${formatError(e)}`) as Result<{ number: number; url: string }>;
     }
   });
 }
@@ -60,7 +61,7 @@ export async function listPullRequests(
       });
       return success(list.data.map(toPullRequest)) as Result<PullRequest[]>;
     } catch (e) {
-      return failure(`listPullRequests failed: ${(e as Error).message}`) as Result<PullRequest[]>;
+      return failure(`listPullRequests failed: ${formatError(e)}`) as Result<PullRequest[]>;
     }
   });
 }
@@ -71,7 +72,7 @@ export async function commentOnPullRequest(args: { number: number; body: string 
       await octokit.rest.issues.createComment({ owner, repo, issue_number: args.number, body: args.body });
       return success(undefined) as Result<void>;
     } catch (e) {
-      return failure(`commentOnPullRequest failed: ${(e as Error).message}`) as Result<void>;
+      return failure(`commentOnPullRequest failed: ${formatError(e)}`) as Result<void>;
     }
   });
 }
@@ -82,7 +83,7 @@ export async function addLabel(args: { number: number; labels: string[] } & Base
       await octokit.rest.issues.addLabels({ owner, repo, issue_number: args.number, labels: args.labels });
       return success(undefined) as Result<void>;
     } catch (e) {
-      return failure(`addLabel failed: ${(e as Error).message}`) as Result<void>;
+      return failure(`addLabel failed: ${formatError(e)}`) as Result<void>;
     }
   });
 }
@@ -97,7 +98,7 @@ export async function requestReview(
       });
       return success(undefined) as Result<void>;
     } catch (e) {
-      return failure(`requestReview failed: ${(e as Error).message}`) as Result<void>;
+      return failure(`requestReview failed: ${formatError(e)}`) as Result<void>;
     }
   });
 }

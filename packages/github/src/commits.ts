@@ -1,8 +1,23 @@
 import { success, failure, isFailure } from "agency-lang/runtime";
 import { runGit, assertValidRefName } from "./internal/git.js";
+import { formatError } from "./internal/errors.js";
 import type { Result } from "./internal/result.js";
 
 const DEFAULT_AUTHOR = { name: "Agency Lang Agent", email: "agency-bot@agency-lang.com" };
+
+// Reject control characters and other delimiters that could let an attacker
+// inject additional `-c key=value` config entries when the author identity
+// is interpolated into `git -c user.name=... -c user.email=... commit`.
+// `execFile` already prevents shell injection, but `git -c` parses
+// `key=value`; an embedded newline could terminate one entry and start
+// another (e.g. `name=Eve\ncore.sshCommand=...`).
+function validateAuthorIdentity(author: { name: string; email: string }): string | undefined {
+  if (!author.name || author.name.trim() === "") return "author name is empty";
+  if (!author.email || author.email.trim() === "") return "author email is empty";
+  if (/[\n\r\0]/.test(author.name)) return "author name contains a control character";
+  if (/[\n\r\0]/.test(author.email)) return "author email contains a control character";
+  return undefined;
+}
 
 function trailer(): string {
   const version = process.env.AGENCY_RUN_ACTION_VERSION;
@@ -27,7 +42,7 @@ export async function commitFiles(args: {
     try {
       assertValidRefName(args.branch);
     } catch (e) {
-      return failure((e as Error).message) as Result<{ sha: string }>;
+      return failure(formatError(e)) as Result<{ sha: string }>;
     }
   }
 
@@ -42,6 +57,11 @@ export async function commitFiles(args: {
     return failure("commitFiles: authorName provided without authorEmail") as Result<{ sha: string }>;
   }
   const author = args.author ?? authorFromNames ?? DEFAULT_AUTHOR;
+
+  const authorError = validateAuthorIdentity(author);
+  if (authorError) {
+    return failure(`commitFiles: ${authorError}`) as Result<{ sha: string }>;
+  }
 
   if (args.branch && args.branch !== "") {
     const checkout = await runGit(["checkout", "-B", args.branch]);

@@ -1,6 +1,7 @@
 import { success, failure } from "agency-lang/runtime";
 import { withCtx, type BaseCtxArgs } from "./internal/withCtx.js";
 import { assertValidRefName } from "./internal/git.js";
+import { formatError } from "./internal/errors.js";
 import type { Result } from "./internal/result.js";
 
 export async function createBranch(
@@ -10,7 +11,7 @@ export async function createBranch(
     assertValidRefName(args.name);
     if (args.from) assertValidRefName(args.from);
   } catch (e) {
-    return failure((e as Error).message) as Result<void>;
+    return failure(formatError(e)) as Result<void>;
   }
 
   return withCtx(args, async (octokit, owner, repo) => {
@@ -22,7 +23,7 @@ export async function createBranch(
       await octokit.rest.git.createRef({ owner, repo, ref: `refs/heads/${args.name}`, sha: fromRef.data.object.sha });
       return success(undefined) as Result<void>;
     } catch (e) {
-      return failure(`createBranch failed: ${(e as Error).message}`) as Result<void>;
+      return failure(`createBranch failed: ${formatError(e)}`) as Result<void>;
     }
   });
 }
@@ -31,14 +32,14 @@ export async function deleteBranch(args: { name: string } & BaseCtxArgs): Promis
   try {
     assertValidRefName(args.name);
   } catch (e) {
-    return failure((e as Error).message) as Result<void>;
+    return failure(formatError(e)) as Result<void>;
   }
   return withCtx(args, async (octokit, owner, repo) => {
     try {
       await octokit.rest.git.deleteRef({ owner, repo, ref: `heads/${args.name}` });
       return success(undefined) as Result<void>;
     } catch (e) {
-      return failure(`deleteBranch failed: ${(e as Error).message}`) as Result<void>;
+      return failure(`deleteBranch failed: ${formatError(e)}`) as Result<void>;
     }
   });
 }
@@ -47,7 +48,7 @@ export async function branchExists(args: { name: string } & BaseCtxArgs): Promis
   try {
     assertValidRefName(args.name);
   } catch (e) {
-    return failure((e as Error).message) as Result<boolean>;
+    return failure(formatError(e)) as Result<boolean>;
   }
   return withCtx(args, async (octokit, owner, repo) => {
     try {
@@ -56,7 +57,7 @@ export async function branchExists(args: { name: string } & BaseCtxArgs): Promis
     } catch (e) {
       // 404 means the branch doesn't exist — that's a successful "false" result.
       if ((e as { status?: number }).status === 404) return success(false) as Result<boolean>;
-      return failure(`branchExists failed: ${(e as Error).message}`) as Result<boolean>;
+      return failure(`branchExists failed: ${formatError(e)}`) as Result<boolean>;
     }
   });
 }

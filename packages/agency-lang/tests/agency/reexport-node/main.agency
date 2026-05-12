@@ -1,0 +1,14 @@
+export * from "./source.agency"
+export { safe safeable as renamedSafe } from "./source.agency"
+
+node callNode() {
+  return srcNode(21)
+}
+
+node callFn() {
+  return srcFn(7)
+}
+
+node callRenamedSafe() {
+  return renamedSafe(5)
+}

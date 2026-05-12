@@ -1,0 +1,25 @@
+{
+  "tests": [
+    {
+      "nodeName": "callNode",
+      "description": "Re-exported node is invoked locally and returns its result (no SimpleMachine collision)",
+      "input": "",
+      "expectedOutput": "42",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "callFn",
+      "description": "Re-exported function is invoked through the synthesized wrapper and returns its result",
+      "input": "",
+      "expectedOutput": "107",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "callRenamedSafe",
+      "description": "Aliased + safe-marked function re-export resolves under its local alias",
+      "input": "",
+      "expectedOutput": "50",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

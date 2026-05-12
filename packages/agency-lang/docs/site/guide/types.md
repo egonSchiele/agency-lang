@@ -106,7 +106,7 @@ def foo(x: number) {
 }
 ```
 
-**`// @tc-ignore`** — silences typecheck errors on the *next* line only. Must be on its own line; trailing comments don't count.
+**`// @tc-ignore`** — silences typecheck errors on the *next* line only. Must be on its own line, Agency does not allow trailing comments.
 
 ```ts
 def take(x: number): void { print(x) }

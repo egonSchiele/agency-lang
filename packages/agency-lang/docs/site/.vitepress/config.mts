@@ -13,29 +13,49 @@ export default defineConfig({
     sidebar: {
       "/guide/": [
         {
-          text: "Guide",
+          text: "Basic",
           items: [
             { text: "Getting Started", link: "/guide/getting-started" },
+            { text: "Agents 101", link: "/guide/agents-101" },
             { text: "Basic Syntax", link: "/guide/basic-syntax" },
             { text: "Types", link: "/guide/types" },
             { text: "Nodes", link: "/guide/nodes" },
             { text: "LLMs", link: "/guide/llm" },
             { text: "Functions", link: "/guide/functions" },
+            {
+              text: "Imports and Packages",
+              link: "/guide/imports-and-packages",
+            },
+            { text: "TypeScript Interoperability", link: "/guide/ts-interop" },
+          ],
+        },
+        {
+          text: "Intermediate",
+          items: [
             { text: "Interrupts", link: "/guide/interrupts" },
             { text: "Handlers", link: "/guide/handlers" },
-            { text: "Testing", link: "/guide/testing" },
-            { text: "TypeScript Interoperability", link: "/guide/ts-interop" },
+            {
+              text: "Structured Interrupts",
+              link: "/guide/structured-interrupts",
+            },
+            { text: "PFAs", link: "/guide/partial-application" },
             {
               text: "Message History and Threads",
               link: "/guide/message-history-and-threads",
             },
             { text: "Error Handling", link: "/guide/error-handling" },
+            { text: "Blocks", link: "/guide/blocks" },
+            { text: "Execution Model", link: "/guide/execution-model" },
+            { text: "Testing", link: "/guide/testing" },
+          ],
+        },
+        {
+          text: "Advanced",
+          items: [
+            { text: "Concurrency", link: "/guide/concurrency" },
+            { text: "Policies", link: "/guide/policies" },
             { text: "Debugger", link: "/guide/debugger" },
             { text: "Traces and Bundles", link: "/guide/traces-and-bundles" },
-            { text: "Blocks", link: "/guide/blocks" },
-            { text: "Fork", link: "/guide/fork" },
-            { text: "Execution Model", link: "/guide/execution-model" },
-            { text: "Imports and Packages", link: "/guide/imports-and-packages" },
             { text: "Schemas", link: "/guide/schemas" },
             { text: "Checkpointing", link: "/guide/checkpointing" },
             { text: "MCP", link: "/guide/mcp" },
@@ -83,7 +103,10 @@ export default defineConfig({
             { text: "Blocks", link: "/guide/blocks" },
             { text: "Fork", link: "/guide/fork" },
             { text: "Execution Model", link: "/guide/execution-model" },
-            { text: "Imports and Packages", link: "/guide/imports-and-packages" },
+            {
+              text: "Imports and Packages",
+              link: "/guide/imports-and-packages",
+            },
             { text: "Schemas", link: "/guide/schemas" },
             { text: "Checkpointing", link: "/guide/checkpointing" },
             { text: "MCP", link: "/guide/mcp" },

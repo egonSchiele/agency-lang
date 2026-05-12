@@ -3,7 +3,7 @@
 One of Agency's standout features is its ability to pause and serialize execution state at any point. This ability is used for:
 - [resuming from interrupts](./interrupts)
 - [adding a checkpoint to failures](./error-handling)
-- [creating parallel threads with isolated state in the fork primitive](./fork)
+- [creating parallel threads with isolated state in the fork primitive](./concurrency)
 - [the time-travel debugger](./debugger)
 - [traces](./traces-and-bundles)
 

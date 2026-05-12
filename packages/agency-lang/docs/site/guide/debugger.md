@@ -1,4 +1,7 @@
 # The Agency debugger
+
+*Still a work in progress*
+
 Agency has a very good built-in debugger. Lets try using it. Put the following code in a file called `test.agency`:
 
 ```ts

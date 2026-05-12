@@ -14,7 +14,7 @@ import { createIssue as createIssueImpl } from "./dist/src/issues.js";
 import { defaultBranch as defaultBranchImpl } from "./dist/src/meta.js";
 import { fileURLToPath } from "url";
 import __process from "process";
-import { z } from "zod";
+import { z } from "agency-lang/zod";
 import { nanoid } from "agency-lang";
 import path from "path";
 import {
@@ -52,7 +52,7 @@ const __globalCtx = new RuntimeContext({
   statelogConfig: {
     host: "https://statelog.adit.io",
     apiKey: __process.env["STATELOG_API_KEY"] || "",
-    projectId: "agency-lang",
+    projectId: "",
     debugMode: false
   },
   smoltalkDefaults: {
@@ -69,8 +69,7 @@ const __globalCtx = new RuntimeContext({
   },
   dirname: __dirname,
   traceConfig: {
-    program: "../github/index.agency",
-    traceDir: "traces"
+    program: "index.agency"
   }
 });
 const graph = __globalCtx.graph;
@@ -141,11 +140,11 @@ __registerTool(values);
 __registerTool(entries);
 __registerTool(emit);
 async function __initializeGlobals(__ctx) {
-  __ctx.globals.markInitialized("../github/index.agency");
+  __ctx.globals.markInitialized("index.agency");
 }
 __toolRegistry["readSkill"] = __AgencyFunction.create({
   name: "readSkill",
-  module: "../github/index.agency",
+  module: "index.agency",
   fn: readSkill,
   params: __readSkillToolParams.map((p) => ({ name: p, hasDefault: false, defaultValue: void 0, variadic: false })),
   toolDefinition: __readSkillTool
@@ -165,7 +164,7 @@ async function __createBranch_impl(name, from = __UNSET, owner = __UNSET, repo =
   const __graph = __ctx.graph;
   let __forked;
   let __functionCompleted = false;
-  if (!__ctx.globals.isInitialized("../github/index.agency")) {
+  if (!__ctx.globals.isInitialized("index.agency")) {
     await __initializeGlobals(__ctx);
   }
   let __funcStartTime = performance.now();
@@ -182,7 +181,7 @@ async function __createBranch_impl(name, from = __UNSET, owner = __UNSET, repo =
         token
       },
       isBuiltin: false,
-      moduleId: "../github/index.agency"
+      moduleId: "index.agency"
     }
   });
   __stack.args["name"] = name;
@@ -191,10 +190,10 @@ async function __createBranch_impl(name, from = __UNSET, owner = __UNSET, repo =
   __stack.args["repo"] = repo === __UNSET ? `` : repo;
   __stack.args["token"] = token === __UNSET ? `` : token;
   __self.__retryable = __self.__retryable ?? true;
-  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "../github/index.agency", scopeName: "createBranch" });
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "index.agency", scopeName: "createBranch" });
   let __resultCheckpointId = -1;
   if (__ctx.stateStack.currentNodeId()) {
-    __resultCheckpointId = __ctx.checkpoints.createPinned(__stateStack, __ctx, { moduleId: "../github/index.agency", scopeName: "createBranch", stepPath: "", label: "result-entry" });
+    __resultCheckpointId = __ctx.checkpoints.createPinned(__stateStack, __ctx, { moduleId: "index.agency", scopeName: "createBranch", stepPath: "", label: "result-entry" });
   }
   if (__ctx._pendingArgOverrides) {
     const __overrides = __ctx._pendingArgOverrides;
@@ -275,7 +274,7 @@ async function __createBranch_impl(name, from = __UNSET, owner = __UNSET, repo =
 }
 const createBranch = __AgencyFunction.create({
   name: "createBranch",
-  module: "../github/index.agency",
+  module: "index.agency",
   fn: __createBranch_impl,
   params: [{
     name: "name",
@@ -325,7 +324,7 @@ async function __deleteBranch_impl(name, owner = __UNSET, repo = __UNSET, token 
   const __graph = __ctx.graph;
   let __forked;
   let __functionCompleted = false;
-  if (!__ctx.globals.isInitialized("../github/index.agency")) {
+  if (!__ctx.globals.isInitialized("index.agency")) {
     await __initializeGlobals(__ctx);
   }
   let __funcStartTime = performance.now();
@@ -341,7 +340,7 @@ async function __deleteBranch_impl(name, owner = __UNSET, repo = __UNSET, token 
         token
       },
       isBuiltin: false,
-      moduleId: "../github/index.agency"
+      moduleId: "index.agency"
     }
   });
   __stack.args["name"] = name;
@@ -349,10 +348,10 @@ async function __deleteBranch_impl(name, owner = __UNSET, repo = __UNSET, token 
   __stack.args["repo"] = repo === __UNSET ? `` : repo;
   __stack.args["token"] = token === __UNSET ? `` : token;
   __self.__retryable = __self.__retryable ?? true;
-  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "../github/index.agency", scopeName: "deleteBranch" });
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "index.agency", scopeName: "deleteBranch" });
   let __resultCheckpointId = -1;
   if (__ctx.stateStack.currentNodeId()) {
-    __resultCheckpointId = __ctx.checkpoints.createPinned(__stateStack, __ctx, { moduleId: "../github/index.agency", scopeName: "deleteBranch", stepPath: "", label: "result-entry" });
+    __resultCheckpointId = __ctx.checkpoints.createPinned(__stateStack, __ctx, { moduleId: "index.agency", scopeName: "deleteBranch", stepPath: "", label: "result-entry" });
   }
   if (__ctx._pendingArgOverrides) {
     const __overrides = __ctx._pendingArgOverrides;
@@ -428,7 +427,7 @@ async function __deleteBranch_impl(name, owner = __UNSET, repo = __UNSET, token 
 }
 const deleteBranch = __AgencyFunction.create({
   name: "deleteBranch",
-  module: "../github/index.agency",
+  module: "index.agency",
   fn: __deleteBranch_impl,
   params: [{
     name: "name",
@@ -473,7 +472,7 @@ async function __branchExists_impl(name, owner = __UNSET, repo = __UNSET, token 
   const __graph = __ctx.graph;
   let __forked;
   let __functionCompleted = false;
-  if (!__ctx.globals.isInitialized("../github/index.agency")) {
+  if (!__ctx.globals.isInitialized("index.agency")) {
     await __initializeGlobals(__ctx);
   }
   let __funcStartTime = performance.now();
@@ -489,7 +488,7 @@ async function __branchExists_impl(name, owner = __UNSET, repo = __UNSET, token 
         token
       },
       isBuiltin: false,
-      moduleId: "../github/index.agency"
+      moduleId: "index.agency"
     }
   });
   __stack.args["name"] = name;
@@ -497,10 +496,10 @@ async function __branchExists_impl(name, owner = __UNSET, repo = __UNSET, token 
   __stack.args["repo"] = repo === __UNSET ? `` : repo;
   __stack.args["token"] = token === __UNSET ? `` : token;
   __self.__retryable = __self.__retryable ?? true;
-  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "../github/index.agency", scopeName: "branchExists" });
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "index.agency", scopeName: "branchExists" });
   let __resultCheckpointId = -1;
   if (__ctx.stateStack.currentNodeId()) {
-    __resultCheckpointId = __ctx.checkpoints.createPinned(__stateStack, __ctx, { moduleId: "../github/index.agency", scopeName: "branchExists", stepPath: "", label: "result-entry" });
+    __resultCheckpointId = __ctx.checkpoints.createPinned(__stateStack, __ctx, { moduleId: "index.agency", scopeName: "branchExists", stepPath: "", label: "result-entry" });
   }
   if (__ctx._pendingArgOverrides) {
     const __overrides = __ctx._pendingArgOverrides;
@@ -575,7 +574,7 @@ async function __branchExists_impl(name, owner = __UNSET, repo = __UNSET, token 
 }
 const branchExists = __AgencyFunction.create({
   name: "branchExists",
-  module: "../github/index.agency",
+  module: "index.agency",
   fn: __branchExists_impl,
   params: [{
     name: "name",
@@ -620,7 +619,7 @@ async function __commitFiles_impl(message, files = __UNSET, authorName = __UNSET
   const __graph = __ctx.graph;
   let __forked;
   let __functionCompleted = false;
-  if (!__ctx.globals.isInitialized("../github/index.agency")) {
+  if (!__ctx.globals.isInitialized("index.agency")) {
     await __initializeGlobals(__ctx);
   }
   let __funcStartTime = performance.now();
@@ -638,7 +637,7 @@ async function __commitFiles_impl(message, files = __UNSET, authorName = __UNSET
         branch
       },
       isBuiltin: false,
-      moduleId: "../github/index.agency"
+      moduleId: "index.agency"
     }
   });
   __stack.args["message"] = message;
@@ -648,10 +647,10 @@ async function __commitFiles_impl(message, files = __UNSET, authorName = __UNSET
   __stack.args["push"] = push === __UNSET ? true : push;
   __stack.args["branch"] = branch === __UNSET ? `` : branch;
   __self.__retryable = __self.__retryable ?? true;
-  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "../github/index.agency", scopeName: "commitFiles" });
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "index.agency", scopeName: "commitFiles" });
   let __resultCheckpointId = -1;
   if (__ctx.stateStack.currentNodeId()) {
-    __resultCheckpointId = __ctx.checkpoints.createPinned(__stateStack, __ctx, { moduleId: "../github/index.agency", scopeName: "commitFiles", stepPath: "", label: "result-entry" });
+    __resultCheckpointId = __ctx.checkpoints.createPinned(__stateStack, __ctx, { moduleId: "index.agency", scopeName: "commitFiles", stepPath: "", label: "result-entry" });
   }
   if (__ctx._pendingArgOverrides) {
     const __overrides = __ctx._pendingArgOverrides;
@@ -737,7 +736,7 @@ async function __commitFiles_impl(message, files = __UNSET, authorName = __UNSET
 }
 const commitFiles = __AgencyFunction.create({
   name: "commitFiles",
-  module: "../github/index.agency",
+  module: "index.agency",
   fn: __commitFiles_impl,
   params: [{
     name: "message",
@@ -792,7 +791,7 @@ async function __openPullRequest_impl(title, body, head2, base = __UNSET, draft 
   const __graph = __ctx.graph;
   let __forked;
   let __functionCompleted = false;
-  if (!__ctx.globals.isInitialized("../github/index.agency")) {
+  if (!__ctx.globals.isInitialized("index.agency")) {
     await __initializeGlobals(__ctx);
   }
   let __funcStartTime = performance.now();
@@ -813,7 +812,7 @@ async function __openPullRequest_impl(title, body, head2, base = __UNSET, draft 
         token
       },
       isBuiltin: false,
-      moduleId: "../github/index.agency"
+      moduleId: "index.agency"
     }
   });
   __stack.args["title"] = title;
@@ -826,10 +825,10 @@ async function __openPullRequest_impl(title, body, head2, base = __UNSET, draft 
   __stack.args["repo"] = repo === __UNSET ? `` : repo;
   __stack.args["token"] = token === __UNSET ? `` : token;
   __self.__retryable = __self.__retryable ?? true;
-  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "../github/index.agency", scopeName: "openPullRequest" });
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "index.agency", scopeName: "openPullRequest" });
   let __resultCheckpointId = -1;
   if (__ctx.stateStack.currentNodeId()) {
-    __resultCheckpointId = __ctx.checkpoints.createPinned(__stateStack, __ctx, { moduleId: "../github/index.agency", scopeName: "openPullRequest", stepPath: "", label: "result-entry" });
+    __resultCheckpointId = __ctx.checkpoints.createPinned(__stateStack, __ctx, { moduleId: "index.agency", scopeName: "openPullRequest", stepPath: "", label: "result-entry" });
   }
   if (__ctx._pendingArgOverrides) {
     const __overrides = __ctx._pendingArgOverrides;
@@ -930,7 +929,7 @@ async function __openPullRequest_impl(title, body, head2, base = __UNSET, draft 
 }
 const openPullRequest = __AgencyFunction.create({
   name: "openPullRequest",
-  module: "../github/index.agency",
+  module: "index.agency",
   fn: __openPullRequest_impl,
   params: [{
     name: "title",
@@ -1000,7 +999,7 @@ async function __listPullRequests_impl(state = __UNSET, base = __UNSET, head2 = 
   const __graph = __ctx.graph;
   let __forked;
   let __functionCompleted = false;
-  if (!__ctx.globals.isInitialized("../github/index.agency")) {
+  if (!__ctx.globals.isInitialized("index.agency")) {
     await __initializeGlobals(__ctx);
   }
   let __funcStartTime = performance.now();
@@ -1018,7 +1017,7 @@ async function __listPullRequests_impl(state = __UNSET, base = __UNSET, head2 = 
         token
       },
       isBuiltin: false,
-      moduleId: "../github/index.agency"
+      moduleId: "index.agency"
     }
   });
   __stack.args["state"] = state === __UNSET ? `open` : state;
@@ -1028,10 +1027,10 @@ async function __listPullRequests_impl(state = __UNSET, base = __UNSET, head2 = 
   __stack.args["repo"] = repo === __UNSET ? `` : repo;
   __stack.args["token"] = token === __UNSET ? `` : token;
   __self.__retryable = __self.__retryable ?? true;
-  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "../github/index.agency", scopeName: "listPullRequests" });
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "index.agency", scopeName: "listPullRequests" });
   let __resultCheckpointId = -1;
   if (__ctx.stateStack.currentNodeId()) {
-    __resultCheckpointId = __ctx.checkpoints.createPinned(__stateStack, __ctx, { moduleId: "../github/index.agency", scopeName: "listPullRequests", stepPath: "", label: "result-entry" });
+    __resultCheckpointId = __ctx.checkpoints.createPinned(__stateStack, __ctx, { moduleId: "index.agency", scopeName: "listPullRequests", stepPath: "", label: "result-entry" });
   }
   if (__ctx._pendingArgOverrides) {
     const __overrides = __ctx._pendingArgOverrides;
@@ -1116,7 +1115,7 @@ async function __listPullRequests_impl(state = __UNSET, base = __UNSET, head2 = 
 }
 const listPullRequests = __AgencyFunction.create({
   name: "listPullRequests",
-  module: "../github/index.agency",
+  module: "index.agency",
   fn: __listPullRequests_impl,
   params: [{
     name: "state",
@@ -1171,7 +1170,7 @@ async function __commentOnPullRequest_impl(number, body, owner = __UNSET, repo =
   const __graph = __ctx.graph;
   let __forked;
   let __functionCompleted = false;
-  if (!__ctx.globals.isInitialized("../github/index.agency")) {
+  if (!__ctx.globals.isInitialized("index.agency")) {
     await __initializeGlobals(__ctx);
   }
   let __funcStartTime = performance.now();
@@ -1188,7 +1187,7 @@ async function __commentOnPullRequest_impl(number, body, owner = __UNSET, repo =
         token
       },
       isBuiltin: false,
-      moduleId: "../github/index.agency"
+      moduleId: "index.agency"
     }
   });
   __stack.args["number"] = number;
@@ -1197,10 +1196,10 @@ async function __commentOnPullRequest_impl(number, body, owner = __UNSET, repo =
   __stack.args["repo"] = repo === __UNSET ? `` : repo;
   __stack.args["token"] = token === __UNSET ? `` : token;
   __self.__retryable = __self.__retryable ?? true;
-  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "../github/index.agency", scopeName: "commentOnPullRequest" });
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "index.agency", scopeName: "commentOnPullRequest" });
   let __resultCheckpointId = -1;
   if (__ctx.stateStack.currentNodeId()) {
-    __resultCheckpointId = __ctx.checkpoints.createPinned(__stateStack, __ctx, { moduleId: "../github/index.agency", scopeName: "commentOnPullRequest", stepPath: "", label: "result-entry" });
+    __resultCheckpointId = __ctx.checkpoints.createPinned(__stateStack, __ctx, { moduleId: "index.agency", scopeName: "commentOnPullRequest", stepPath: "", label: "result-entry" });
   }
   if (__ctx._pendingArgOverrides) {
     const __overrides = __ctx._pendingArgOverrides;
@@ -1281,7 +1280,7 @@ async function __commentOnPullRequest_impl(number, body, owner = __UNSET, repo =
 }
 const commentOnPullRequest = __AgencyFunction.create({
   name: "commentOnPullRequest",
-  module: "../github/index.agency",
+  module: "index.agency",
   fn: __commentOnPullRequest_impl,
   params: [{
     name: "number",
@@ -1331,7 +1330,7 @@ async function __addLabel_impl(number, labels, owner = __UNSET, repo = __UNSET, 
   const __graph = __ctx.graph;
   let __forked;
   let __functionCompleted = false;
-  if (!__ctx.globals.isInitialized("../github/index.agency")) {
+  if (!__ctx.globals.isInitialized("index.agency")) {
     await __initializeGlobals(__ctx);
   }
   let __funcStartTime = performance.now();
@@ -1348,7 +1347,7 @@ async function __addLabel_impl(number, labels, owner = __UNSET, repo = __UNSET, 
         token
       },
       isBuiltin: false,
-      moduleId: "../github/index.agency"
+      moduleId: "index.agency"
     }
   });
   __stack.args["number"] = number;
@@ -1357,10 +1356,10 @@ async function __addLabel_impl(number, labels, owner = __UNSET, repo = __UNSET, 
   __stack.args["repo"] = repo === __UNSET ? `` : repo;
   __stack.args["token"] = token === __UNSET ? `` : token;
   __self.__retryable = __self.__retryable ?? true;
-  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "../github/index.agency", scopeName: "addLabel" });
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "index.agency", scopeName: "addLabel" });
   let __resultCheckpointId = -1;
   if (__ctx.stateStack.currentNodeId()) {
-    __resultCheckpointId = __ctx.checkpoints.createPinned(__stateStack, __ctx, { moduleId: "../github/index.agency", scopeName: "addLabel", stepPath: "", label: "result-entry" });
+    __resultCheckpointId = __ctx.checkpoints.createPinned(__stateStack, __ctx, { moduleId: "index.agency", scopeName: "addLabel", stepPath: "", label: "result-entry" });
   }
   if (__ctx._pendingArgOverrides) {
     const __overrides = __ctx._pendingArgOverrides;
@@ -1441,7 +1440,7 @@ async function __addLabel_impl(number, labels, owner = __UNSET, repo = __UNSET, 
 }
 const addLabel = __AgencyFunction.create({
   name: "addLabel",
-  module: "../github/index.agency",
+  module: "index.agency",
   fn: __addLabel_impl,
   params: [{
     name: "number",
@@ -1491,7 +1490,7 @@ async function __requestReview_impl(number, reviewers = __UNSET, teamReviewers =
   const __graph = __ctx.graph;
   let __forked;
   let __functionCompleted = false;
-  if (!__ctx.globals.isInitialized("../github/index.agency")) {
+  if (!__ctx.globals.isInitialized("index.agency")) {
     await __initializeGlobals(__ctx);
   }
   let __funcStartTime = performance.now();
@@ -1509,7 +1508,7 @@ async function __requestReview_impl(number, reviewers = __UNSET, teamReviewers =
         token
       },
       isBuiltin: false,
-      moduleId: "../github/index.agency"
+      moduleId: "index.agency"
     }
   });
   __stack.args["number"] = number;
@@ -1519,10 +1518,10 @@ async function __requestReview_impl(number, reviewers = __UNSET, teamReviewers =
   __stack.args["repo"] = repo === __UNSET ? `` : repo;
   __stack.args["token"] = token === __UNSET ? `` : token;
   __self.__retryable = __self.__retryable ?? true;
-  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "../github/index.agency", scopeName: "requestReview" });
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "index.agency", scopeName: "requestReview" });
   let __resultCheckpointId = -1;
   if (__ctx.stateStack.currentNodeId()) {
-    __resultCheckpointId = __ctx.checkpoints.createPinned(__stateStack, __ctx, { moduleId: "../github/index.agency", scopeName: "requestReview", stepPath: "", label: "result-entry" });
+    __resultCheckpointId = __ctx.checkpoints.createPinned(__stateStack, __ctx, { moduleId: "index.agency", scopeName: "requestReview", stepPath: "", label: "result-entry" });
   }
   if (__ctx._pendingArgOverrides) {
     const __overrides = __ctx._pendingArgOverrides;
@@ -1608,7 +1607,7 @@ async function __requestReview_impl(number, reviewers = __UNSET, teamReviewers =
 }
 const requestReview = __AgencyFunction.create({
   name: "requestReview",
-  module: "../github/index.agency",
+  module: "index.agency",
   fn: __requestReview_impl,
   params: [{
     name: "number",
@@ -1663,7 +1662,7 @@ async function __listIssues_impl(state = __UNSET, labels = __UNSET, owner = __UN
   const __graph = __ctx.graph;
   let __forked;
   let __functionCompleted = false;
-  if (!__ctx.globals.isInitialized("../github/index.agency")) {
+  if (!__ctx.globals.isInitialized("index.agency")) {
     await __initializeGlobals(__ctx);
   }
   let __funcStartTime = performance.now();
@@ -1680,7 +1679,7 @@ async function __listIssues_impl(state = __UNSET, labels = __UNSET, owner = __UN
         token
       },
       isBuiltin: false,
-      moduleId: "../github/index.agency"
+      moduleId: "index.agency"
     }
   });
   __stack.args["state"] = state === __UNSET ? `open` : state;
@@ -1689,10 +1688,10 @@ async function __listIssues_impl(state = __UNSET, labels = __UNSET, owner = __UN
   __stack.args["repo"] = repo === __UNSET ? `` : repo;
   __stack.args["token"] = token === __UNSET ? `` : token;
   __self.__retryable = __self.__retryable ?? true;
-  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "../github/index.agency", scopeName: "listIssues" });
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "index.agency", scopeName: "listIssues" });
   let __resultCheckpointId = -1;
   if (__ctx.stateStack.currentNodeId()) {
-    __resultCheckpointId = __ctx.checkpoints.createPinned(__stateStack, __ctx, { moduleId: "../github/index.agency", scopeName: "listIssues", stepPath: "", label: "result-entry" });
+    __resultCheckpointId = __ctx.checkpoints.createPinned(__stateStack, __ctx, { moduleId: "index.agency", scopeName: "listIssues", stepPath: "", label: "result-entry" });
   }
   if (__ctx._pendingArgOverrides) {
     const __overrides = __ctx._pendingArgOverrides;
@@ -1772,7 +1771,7 @@ async function __listIssues_impl(state = __UNSET, labels = __UNSET, owner = __UN
 }
 const listIssues = __AgencyFunction.create({
   name: "listIssues",
-  module: "../github/index.agency",
+  module: "index.agency",
   fn: __listIssues_impl,
   params: [{
     name: "state",
@@ -1822,7 +1821,7 @@ async function __commentOnIssue_impl(number, body, owner = __UNSET, repo = __UNS
   const __graph = __ctx.graph;
   let __forked;
   let __functionCompleted = false;
-  if (!__ctx.globals.isInitialized("../github/index.agency")) {
+  if (!__ctx.globals.isInitialized("index.agency")) {
     await __initializeGlobals(__ctx);
   }
   let __funcStartTime = performance.now();
@@ -1839,7 +1838,7 @@ async function __commentOnIssue_impl(number, body, owner = __UNSET, repo = __UNS
         token
       },
       isBuiltin: false,
-      moduleId: "../github/index.agency"
+      moduleId: "index.agency"
     }
   });
   __stack.args["number"] = number;
@@ -1848,10 +1847,10 @@ async function __commentOnIssue_impl(number, body, owner = __UNSET, repo = __UNS
   __stack.args["repo"] = repo === __UNSET ? `` : repo;
   __stack.args["token"] = token === __UNSET ? `` : token;
   __self.__retryable = __self.__retryable ?? true;
-  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "../github/index.agency", scopeName: "commentOnIssue" });
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "index.agency", scopeName: "commentOnIssue" });
   let __resultCheckpointId = -1;
   if (__ctx.stateStack.currentNodeId()) {
-    __resultCheckpointId = __ctx.checkpoints.createPinned(__stateStack, __ctx, { moduleId: "../github/index.agency", scopeName: "commentOnIssue", stepPath: "", label: "result-entry" });
+    __resultCheckpointId = __ctx.checkpoints.createPinned(__stateStack, __ctx, { moduleId: "index.agency", scopeName: "commentOnIssue", stepPath: "", label: "result-entry" });
   }
   if (__ctx._pendingArgOverrides) {
     const __overrides = __ctx._pendingArgOverrides;
@@ -1932,7 +1931,7 @@ async function __commentOnIssue_impl(number, body, owner = __UNSET, repo = __UNS
 }
 const commentOnIssue = __AgencyFunction.create({
   name: "commentOnIssue",
-  module: "../github/index.agency",
+  module: "index.agency",
   fn: __commentOnIssue_impl,
   params: [{
     name: "number",
@@ -1982,7 +1981,7 @@ async function __createIssue_impl(title, body, labels = __UNSET, owner = __UNSET
   const __graph = __ctx.graph;
   let __forked;
   let __functionCompleted = false;
-  if (!__ctx.globals.isInitialized("../github/index.agency")) {
+  if (!__ctx.globals.isInitialized("index.agency")) {
     await __initializeGlobals(__ctx);
   }
   let __funcStartTime = performance.now();
@@ -2000,7 +1999,7 @@ async function __createIssue_impl(title, body, labels = __UNSET, owner = __UNSET
         token
       },
       isBuiltin: false,
-      moduleId: "../github/index.agency"
+      moduleId: "index.agency"
     }
   });
   __stack.args["title"] = title;
@@ -2010,10 +2009,10 @@ async function __createIssue_impl(title, body, labels = __UNSET, owner = __UNSET
   __stack.args["repo"] = repo === __UNSET ? `` : repo;
   __stack.args["token"] = token === __UNSET ? `` : token;
   __self.__retryable = __self.__retryable ?? true;
-  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "../github/index.agency", scopeName: "createIssue" });
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "index.agency", scopeName: "createIssue" });
   let __resultCheckpointId = -1;
   if (__ctx.stateStack.currentNodeId()) {
-    __resultCheckpointId = __ctx.checkpoints.createPinned(__stateStack, __ctx, { moduleId: "../github/index.agency", scopeName: "createIssue", stepPath: "", label: "result-entry" });
+    __resultCheckpointId = __ctx.checkpoints.createPinned(__stateStack, __ctx, { moduleId: "index.agency", scopeName: "createIssue", stepPath: "", label: "result-entry" });
   }
   if (__ctx._pendingArgOverrides) {
     const __overrides = __ctx._pendingArgOverrides;
@@ -2099,7 +2098,7 @@ async function __createIssue_impl(title, body, labels = __UNSET, owner = __UNSET
 }
 const createIssue = __AgencyFunction.create({
   name: "createIssue",
-  module: "../github/index.agency",
+  module: "index.agency",
   fn: __createIssue_impl,
   params: [{
     name: "title",
@@ -2154,7 +2153,7 @@ async function __defaultBranch_impl(owner = __UNSET, repo = __UNSET, token = __U
   const __graph = __ctx.graph;
   let __forked;
   let __functionCompleted = false;
-  if (!__ctx.globals.isInitialized("../github/index.agency")) {
+  if (!__ctx.globals.isInitialized("index.agency")) {
     await __initializeGlobals(__ctx);
   }
   let __funcStartTime = performance.now();
@@ -2169,17 +2168,17 @@ async function __defaultBranch_impl(owner = __UNSET, repo = __UNSET, token = __U
         token
       },
       isBuiltin: false,
-      moduleId: "../github/index.agency"
+      moduleId: "index.agency"
     }
   });
   __stack.args["owner"] = owner === __UNSET ? `` : owner;
   __stack.args["repo"] = repo === __UNSET ? `` : repo;
   __stack.args["token"] = token === __UNSET ? `` : token;
   __self.__retryable = __self.__retryable ?? true;
-  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "../github/index.agency", scopeName: "defaultBranch" });
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "index.agency", scopeName: "defaultBranch" });
   let __resultCheckpointId = -1;
   if (__ctx.stateStack.currentNodeId()) {
-    __resultCheckpointId = __ctx.checkpoints.createPinned(__stateStack, __ctx, { moduleId: "../github/index.agency", scopeName: "defaultBranch", stepPath: "", label: "result-entry" });
+    __resultCheckpointId = __ctx.checkpoints.createPinned(__stateStack, __ctx, { moduleId: "index.agency", scopeName: "defaultBranch", stepPath: "", label: "result-entry" });
   }
   if (__ctx._pendingArgOverrides) {
     const __overrides = __ctx._pendingArgOverrides;
@@ -2249,7 +2248,7 @@ async function __defaultBranch_impl(owner = __UNSET, repo = __UNSET, token = __U
 }
 const defaultBranch = __AgencyFunction.create({
   name: "defaultBranch",
-  module: "../github/index.agency",
+  module: "index.agency",
   fn: __defaultBranch_impl,
   params: [{
     name: "owner",
@@ -2276,7 +2275,7 @@ const defaultBranch = __AgencyFunction.create({
   exported: true
 }, __toolRegistry);
 var stdin_default = graph;
-const __sourceMap = { "../github/index.agency:createBranch": { "0": { "line": 20, "col": 2 } }, "../github/index.agency:deleteBranch": { "0": { "line": 25, "col": 2 } }, "../github/index.agency:branchExists": { "0": { "line": 30, "col": 2 } }, "../github/index.agency:commitFiles": { "0": { "line": 35, "col": 2 } }, "../github/index.agency:openPullRequest": { "0": { "line": 47, "col": 2 } }, "../github/index.agency:listPullRequests": { "0": { "line": 52, "col": 2 } }, "../github/index.agency:commentOnPullRequest": { "0": { "line": 57, "col": 2 } }, "../github/index.agency:addLabel": { "0": { "line": 62, "col": 2 } }, "../github/index.agency:requestReview": { "0": { "line": 67, "col": 2 } }, "../github/index.agency:listIssues": { "0": { "line": 72, "col": 2 } }, "../github/index.agency:commentOnIssue": { "0": { "line": 77, "col": 2 } }, "../github/index.agency:createIssue": { "0": { "line": 82, "col": 2 } }, "../github/index.agency:defaultBranch": { "0": { "line": 87, "col": 2 } } };
+const __sourceMap = { "index.agency:createBranch": { "0": { "line": 20, "col": 2 } }, "index.agency:deleteBranch": { "0": { "line": 25, "col": 2 } }, "index.agency:branchExists": { "0": { "line": 30, "col": 2 } }, "index.agency:commitFiles": { "0": { "line": 35, "col": 2 } }, "index.agency:openPullRequest": { "0": { "line": 47, "col": 2 } }, "index.agency:listPullRequests": { "0": { "line": 52, "col": 2 } }, "index.agency:commentOnPullRequest": { "0": { "line": 57, "col": 2 } }, "index.agency:addLabel": { "0": { "line": 62, "col": 2 } }, "index.agency:requestReview": { "0": { "line": 67, "col": 2 } }, "index.agency:listIssues": { "0": { "line": 72, "col": 2 } }, "index.agency:commentOnIssue": { "0": { "line": 77, "col": 2 } }, "index.agency:createIssue": { "0": { "line": 82, "col": 2 } }, "index.agency:defaultBranch": { "0": { "line": 87, "col": 2 } } };
 export {
   __getCheckpoints,
   __setDebugger,

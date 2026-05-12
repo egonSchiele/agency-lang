@@ -35,6 +35,7 @@ export async function openPullRequest(
       }
       return success({ number: created.data.number, url: created.data.html_url }) as Result<{ number: number; url: string }>;
     } catch (e) {
+      console.error("openPullRequest failed:", e);
       return failure(`openPullRequest failed: ${(e as Error).message}`) as Result<{ number: number; url: string }>;
     }
   });
@@ -50,6 +51,7 @@ export async function listPullRequests(
       });
       return success(list.data.map(toPullRequest)) as Result<PullRequest[]>;
     } catch (e) {
+      console.error("listPullRequests failed:", e);
       return failure(`listPullRequests failed: ${(e as Error).message}`) as Result<PullRequest[]>;
     }
   });
@@ -61,6 +63,7 @@ export async function commentOnPullRequest(args: { number: number; body: string 
       await octokit.rest.issues.createComment({ owner, repo, issue_number: args.number, body: args.body });
       return success(undefined) as Result<void>;
     } catch (e) {
+      console.error("commentOnPullRequest failed:", e);
       return failure(`commentOnPullRequest failed: ${(e as Error).message}`) as Result<void>;
     }
   });
@@ -72,6 +75,7 @@ export async function addLabel(args: { number: number; labels: string[] } & Base
       await octokit.rest.issues.addLabels({ owner, repo, issue_number: args.number, labels: args.labels });
       return success(undefined) as Result<void>;
     } catch (e) {
+      console.error("addLabel failed:", e);
       return failure(`addLabel failed: ${(e as Error).message}`) as Result<void>;
     }
   });
@@ -87,6 +91,7 @@ export async function requestReview(
       });
       return success(undefined) as Result<void>;
     } catch (e) {
+      console.error("requestReview failed:", e);
       return failure(`requestReview failed: ${(e as Error).message}`) as Result<void>;
     }
   });

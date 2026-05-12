@@ -1,13 +1,13 @@
 import { describe, it, expect, vi } from "vitest";
+import { promisify } from "util";
 import { isSuccess, isFailure } from "agency-lang/runtime";
 
-vi.mock("child_process", async () => {
-  const util = await import("util");
+vi.mock("child_process", () => {
   let impl: ((args: string[]) => { stdout: string; stderr: string } | { error: Error & { stderr?: string } }) | null = null;
   const execFile = (..._args: unknown[]): unknown => undefined;
   // Make promisify(execFile) resolve to { stdout, stderr } and reject with the
   // mock's error (mirroring node's real child_process.execFile behavior).
-  Object.defineProperty(execFile, util.promisify.custom, {
+  Object.defineProperty(execFile, promisify.custom, {
     value: async (_cmd: string, args: string[]) => {
       if (!impl) throw new Error("execFile mock not initialized");
       const out = impl(args);

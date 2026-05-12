@@ -12,6 +12,7 @@ export async function runGit(args: string[], opts?: { cwd?: string }): Promise<R
     const { stdout, stderr } = await execFileAsync("git", args, { cwd: opts?.cwd });
     return success({ stdout, stderr }) as Result<GitOutput>;
   } catch (e) {
+    console.error(`runGit failed: git ${args.join(" ")}:`, e);
     const err = e as { stderr?: string; message: string };
     return failure(`git ${args.join(" ")} failed: ${(err.stderr ?? err.message).trim()}`) as Result<GitOutput>;
   }

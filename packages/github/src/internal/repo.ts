@@ -26,6 +26,7 @@ export async function resolveRepo(override?: { owner?: string; repo?: string }):
     if (!parsed) return failure(`Could not parse GitHub owner/repo from remote URL: ${url}`) as Result<RepoCoord>;
     return success(parsed) as Result<RepoCoord>;
   } catch (e) {
+    console.error("resolveRepo: could not read git remote 'origin':", e);
     return failure(`Could not read git remote 'origin': ${(e as Error).message}`) as Result<RepoCoord>;
   }
 }

@@ -27,6 +27,7 @@ export async function commitFiles(args: {
     try {
       assertValidRefName(args.branch);
     } catch (e) {
+      console.error("commitFiles: invalid branch name:", e);
       return failure((e as Error).message) as Result<{ sha: string }>;
     }
   }

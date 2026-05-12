@@ -4,8 +4,8 @@ def isGreaterThan2(x: any): boolean {
   return x > 2
 }
 
-def isGreaterThan3(x: any): boolean {
-  return x > 3
+def isGreaterThan35(x: any): boolean {
+  return x > 35
 }
 
 node main() {
@@ -21,7 +21,7 @@ node main() {
 
   // firstValid: runs block for each variant, returns first passing result
   const variants = [1, 2, 3, 4, 5]
-  const valid = firstValid(variants, isGreaterThan3) as v {
+  const valid = firstValid(variants, isGreaterThan35) as v {
     return v * 10
   }
   if (valid != 40) {

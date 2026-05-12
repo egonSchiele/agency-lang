@@ -26,6 +26,7 @@ import { MessageThread } from "@/types/messageThread.js";
 import {
   expressionToString,
   getAllVariablesInBodyArray,
+  isInsideBlock,
   walkNodesArray,
 } from "@/utils/node.js";
 import { desugarParallelInBody } from "./parallelDesugar.js";
@@ -1522,6 +1523,23 @@ export class TypescriptPreprocessor {
         // Parameters are in the function's scope
         funcArgs[nodeName] = [...node.parameters.map((p) => p.name)];
         localVarsInFunction[nodeName] = new Set();
+
+        // Pre-register `let`/`const` declarations from the function/node body
+        // (but NOT from inside block bodies) so that Phase 1's `lookupScope`
+        // calls can correctly resolve outer-scope variables that are captured
+        // by closures inside blocks. Without this, a block referencing an
+        // outer `let`/`const` would treat the variable as block-local because
+        // Phase 2 (which populates localVarsInFunction) hasn't run yet.
+        for (const { node: declNode, ancestors } of walkNodesArray(node.body)) {
+          if (
+            declNode.type === "assignment" &&
+            declNode.declKind &&
+            !isInsideBlock(ancestors) &&
+            !isClassKeyword(declNode.variableName)
+          ) {
+            localVarsInFunction[nodeName].add(declNode.variableName);
+          }
+        }
 
         // Phase 1: Resolve block body variables first.
         // Block params get "blockArgs" scope, new variables inside blocks get "block" scope,

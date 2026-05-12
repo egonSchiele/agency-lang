@@ -1,0 +1,4 @@
+// Re-exports everything from source. Acts as the public surface for
+// `agency serve mcp lib.agency` and for cross-file `import` consumers.
+export * from "./source.agency"
+export { safe safeable as renamedSafe } from "./source.agency"

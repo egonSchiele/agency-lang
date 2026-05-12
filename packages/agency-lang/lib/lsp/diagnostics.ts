@@ -5,6 +5,7 @@ import {
 import { TextDocument } from "vscode-languageserver-textdocument";
 import { parseAgency } from "../parser.js";
 import { resolveImports } from "../preprocessors/importResolver.js";
+import { resolveReExports } from "../preprocessors/resolveReExports.js";
 import { buildCompilationUnit } from "../compilationUnit.js";
 import { typeCheck } from "../typeChecker/index.js";
 import { AgencyConfig } from "../config.js";
@@ -58,6 +59,7 @@ export function runDiagnostics(
   let program = parseResult.result;
 
   try {
+    program = resolveReExports(program, symbolTable, fsPath);
     program = resolveImports(program, symbolTable, fsPath);
   } catch (err) {
     diagnostics.push({

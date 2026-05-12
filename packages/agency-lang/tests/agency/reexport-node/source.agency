@@ -1,0 +1,11 @@
+export node srcNode(x: number) {
+  return x * 2
+}
+
+export def srcFn(x: number): number {
+  return x + 100
+}
+
+export def safeable(x: number): number {
+  return x * 10
+}

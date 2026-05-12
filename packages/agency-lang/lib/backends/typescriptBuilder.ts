@@ -3495,6 +3495,17 @@ export class TypeScriptBuilder {
       nodes.push(
         ts.importDecl({ importKind: "named", names: nodeParamNames, from }),
       );
+      // Re-exported nodes (synthesized by `resolveReExports`): also emit a
+      // JS-level re-export of `__<name>NodeParams` from the source so other
+      // files can `import node { ... } from "this-file"`. The default graph
+      // is already chained through via `graph.merge(...)` in postprocess.
+      if (importNode.reExport && nodeParamNames.length > 0) {
+        nodes.push(
+          ts.raw(
+            `export { ${nodeParamNames.join(", ")} } from ${JSON.stringify(from)}`,
+          ),
+        );
+      }
     });
     return nodes;
   }

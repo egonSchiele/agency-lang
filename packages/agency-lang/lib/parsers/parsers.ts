@@ -130,6 +130,7 @@ import {
   NamedImport,
   NamespaceImport,
 } from "../types/importStatement.js";
+import { ExportFromStatement } from "../types/exportFromStatement.js";
 import { DefaultCase, MatchBlockCase } from "../types/matchBlock.js";
 import { MessageThread } from "@/types/messageThread.js";
 import { HandleBlock } from "@/types/handleBlock.js";
@@ -2178,6 +2179,64 @@ export const importStatmentParser: Parser<ImportStatement> = map(
     ),
   ),
   (result) => ({ ...result, isAgencyImport: isAgencyImport(result.modulePath) }),
+);
+
+// =============================================================================
+// exportFromStatement.ts — `export { x } from "..."` and `export * from "..."`
+// =============================================================================
+
+const namedExportBodyParser = map(
+  seqC(
+    char("{"),
+    optionalSpacesOrNewline,
+    capture(sepBy1(commaWithNewline, safeNameItem), "items"),
+    optional(commaWithNewline),
+    optionalSpacesOrNewline,
+    char("}"),
+  ),
+  (result) => {
+    const names: string[] = [];
+    const safeNames: string[] = [];
+    const aliases: Record<string, string> = {};
+    for (const item of result.items) {
+      names.push(item.name);
+      if (item.alias) aliases[item.name] = item.alias;
+      if (item.isSafe) safeNames.push(item.name);
+    }
+    return { kind: "namedExport" as const, names, safeNames, aliases };
+  },
+);
+
+const starExportBodyParser = map(char("*"), () => ({
+  kind: "starExport" as const,
+}));
+
+const exportBodyParser = or(namedExportBodyParser, starExportBodyParser);
+
+// Note: deliberately uses plain `seqC` (not `parseError`) so that the parser
+// fails cleanly on inputs like `export def foo()` and `or` falls through to
+// functionParser, graphNodeParser, etc.
+export const exportFromStatementParser: Parser<ExportFromStatement> = withLoc(
+  map(
+    trace(
+      "exportFromStatement",
+      seqC(
+        set("type", "exportFromStatement"),
+        str("export"),
+        spaces,
+        capture(exportBodyParser, "body"),
+        spaces,
+        str("from"),
+        spaces,
+        oneOf(`'"`),
+        capture(many1Till(oneOf(`'"`)), "modulePath"),
+        oneOf(`'"`),
+        optionalSemicolon,
+        optional(newline),
+      ),
+    ),
+    (result) => ({ ...result, isAgencyImport: isAgencyImport(result.modulePath) }),
+  ),
 );
 
 // =============================================================================

@@ -13,6 +13,7 @@ import type {
   ImportNodeStatement,
   ImportStatement,
 } from "./types/importStatement.js";
+import type { ExportFromStatement } from "./types/exportFromStatement.js";
 import { walkNodes } from "./utils/node.js";
 import {
   resolveAgencyImportPath,
@@ -22,6 +23,12 @@ import {
 
 export type InterruptKind = {
   kind: string;
+};
+
+/** Marker on a SymbolInfo that entered FileSymbols via an `export from` re-export. */
+export type ReExportedFrom = {
+  sourceFile: string;
+  originalName: string;
 };
 
 export type FunctionSymbol = {
@@ -34,6 +41,7 @@ export type FunctionSymbol = {
   returnType: VariableType | null;
   returnTypeValidated?: boolean;
   interruptKinds?: InterruptKind[];
+  reExportedFrom?: ReExportedFrom;
 };
 
 export type NodeSymbol = {
@@ -45,6 +53,7 @@ export type NodeSymbol = {
   returnTypeValidated?: boolean;
   exported?: boolean;
   interruptKinds?: InterruptKind[];
+  reExportedFrom?: ReExportedFrom;
 };
 
 export type TypeSymbol = {
@@ -53,6 +62,7 @@ export type TypeSymbol = {
   loc?: SourceLocation;
   exported: boolean;
   aliasedType: VariableType;
+  reExportedFrom?: ReExportedFrom;
 };
 
 export type ClassSymbol = {
@@ -66,6 +76,7 @@ export type ConstantSymbol = {
   name: string;
   loc?: SourceLocation;
   exported: boolean;
+  reExportedFrom?: ReExportedFrom;
 };
 
 export type SymbolInfo = FunctionSymbol | NodeSymbol | TypeSymbol | ClassSymbol | ConstantSymbol;
@@ -136,6 +147,11 @@ export class SymbolTable {
           isAgencyImport(node.modulePath)
         ) {
           visit(resolveAgencyImportPath(node.modulePath, absPath));
+        } else if (
+          node.type === "exportFromStatement" &&
+          isAgencyImport(node.modulePath)
+        ) {
+          visit(resolveAgencyImportPath(node.modulePath, absPath));
         }
       }
     }
@@ -145,6 +161,42 @@ export class SymbolTable {
     for (const [filePath, { symbols }] of Object.entries(parsed)) {
       files[filePath] = symbols;
     }
+
+    // Merge re-exports (exportFromStatement) in dependency order with cycle detection.
+    const reExportResolved = new Set<string>();
+
+    function resolveReExports(filePath: string, visiting: string[]): void {
+      if (reExportResolved.has(filePath)) return;
+      if (visiting.includes(filePath)) {
+        const chain = [...visiting, filePath].join(" → ");
+        throw new Error(`Re-export cycle detected: ${chain}`);
+      }
+      const entry = parsed[filePath];
+      if (!entry) {
+        reExportResolved.add(filePath);
+        return;
+      }
+      const newVisiting = [...visiting, filePath];
+
+      for (const node of entry.program.nodes) {
+        if (node.type !== "exportFromStatement") continue;
+        if (!isAgencyImport(node.modulePath)) {
+          throw new Error(
+            `Re-export source must be an Agency module (std::, pkg::, or .agency path): '${node.modulePath}'`,
+          );
+        }
+        const sourcePath = resolveAgencyImportPath(node.modulePath, filePath);
+        resolveReExports(sourcePath, newVisiting);
+        mergeExportsFrom(files, filePath, sourcePath, node);
+      }
+
+      reExportResolved.add(filePath);
+    }
+
+    for (const filePath of Object.keys(parsed)) {
+      resolveReExports(filePath, []);
+    }
+
     return new SymbolTable(files);
   }
 
@@ -287,4 +339,156 @@ function collectDirectInterruptKinds(body: AgencyNode[]): InterruptKind[] {
     }
   }
   return kinds.map((k) => ({ kind: k }));
+}
+
+function isExportedSymbol(sym: SymbolInfo): boolean {
+  if (sym.kind === "class") return false;
+  // Nodes are importable without an explicit `export` keyword (see importResolver
+  // — node imports skip the assertExported check). Treat them as exported for
+  // re-export purposes so `export { main } from "..."` and `export * from "..."`
+  // pick them up regardless of whether the source wrote `export node`.
+  if (sym.kind === "node") return true;
+  return !!sym.exported;
+}
+
+function symbolKindLabel(sym: SymbolInfo): string {
+  switch (sym.kind) {
+    case "function":
+      return "Function";
+    case "node":
+      return "Node";
+    case "type":
+      return "Type";
+    // The "constant" and "class" branches below are defensive — the only
+    // current caller (the namedExport "not exported" error path) cannot reach
+    // them: ConstantSymbol is only ever added when `exported && static && const`,
+    // and class re-exports are rejected earlier with their own error message.
+    case "constant":
+      return "Constant";
+    case "class":
+      return "Class";
+  }
+}
+
+/**
+ * Merge symbols flowing through one `exportFromStatement` from `sourcePath`
+ * into the re-exporter's `FileSymbols`. Hard errors on missing symbols,
+ * class re-exports, non-exported sources, and collisions.
+ */
+export function mergeExportsFrom(
+  files: Record<string, FileSymbols>,
+  reExporterPath: string,
+  sourcePath: string,
+  stmt: ExportFromStatement,
+): void {
+  const sourceSymbols = files[sourcePath];
+  if (!sourceSymbols) {
+    throw new Error(
+      `Re-export source '${stmt.modulePath}' could not be resolved`,
+    );
+  }
+  const targetSymbols: FileSymbols = files[reExporterPath] ?? {};
+  files[reExporterPath] = targetSymbols;
+
+  if (stmt.body.kind === "starExport") {
+    for (const [name, sym] of Object.entries(sourceSymbols)) {
+      if (sym.kind === "class") continue; // silently skip classes in star
+      if (!isExportedSymbol(sym)) continue;
+      mergeOne(targetSymbols, name, name, sym, false, sourcePath, stmt);
+    }
+    return;
+  }
+
+  // namedExport
+  for (const originalName of stmt.body.names) {
+    const sym = sourceSymbols[originalName];
+    if (!sym) {
+      throw new Error(
+        `Symbol '${originalName}' is not defined in '${stmt.modulePath}'`,
+      );
+    }
+    if (sym.kind === "class") {
+      throw new Error(
+        `Classes cannot be re-exported (symbol '${originalName}' in '${stmt.modulePath}')`,
+      );
+    }
+    if (!isExportedSymbol(sym)) {
+      throw new Error(
+        `${symbolKindLabel(sym)} '${originalName}' in '${stmt.modulePath}' is not exported. Add the 'export' keyword to its definition.`,
+      );
+    }
+    const localName = stmt.body.aliases[originalName] ?? originalName;
+    if (sym.kind === "node" && localName !== originalName) {
+      throw new Error(
+        `Node '${originalName}' from '${stmt.modulePath}' cannot be re-exported under a different name. ` +
+          `Re-exported nodes preserve their original name because the source graph is merged wholesale.`,
+      );
+    }
+    const isSafe = stmt.body.safeNames.includes(originalName);
+    mergeOne(targetSymbols, localName, originalName, sym, isSafe, sourcePath, stmt);
+  }
+}
+
+function mergeOne(
+  targetSymbols: FileSymbols,
+  localName: string,
+  originalName: string,
+  sourceSym: SymbolInfo,
+  forceSafe: boolean,
+  sourcePath: string,
+  stmt: ExportFromStatement,
+): void {
+  const existing = targetSymbols[localName];
+  if (existing) {
+    if (!("reExportedFrom" in existing) || !existing.reExportedFrom) {
+      const at = existing.loc ? ` at line ${existing.loc.line + 1}` : "";
+      throw new Error(
+        `Re-exported name '${localName}' collides with local declaration${at}`,
+      );
+    }
+    const sameSource =
+      existing.reExportedFrom.sourceFile === sourcePath &&
+      existing.reExportedFrom.originalName === originalName;
+    if (!sameSource) {
+      throw new Error(
+        `Name '${localName}' is re-exported from both '${existing.reExportedFrom.sourceFile}' and '${sourcePath}'. Disambiguate with explicit 'export { ${localName} as ... } from ...'.`,
+      );
+    }
+    return; // idempotent re-merge
+  }
+
+  // Build the merged entry. We copy the source's SymbolInfo fields and
+  // override name, loc, exported, and (for functions) safe.
+  if (sourceSym.kind === "class") {
+    // Defensive: callers must filter classes out before this point.
+    throw new Error(`Cannot re-export class '${originalName}'`);
+  }
+
+  const base = {
+    name: localName,
+    loc: stmt.loc,
+    reExportedFrom: { sourceFile: sourcePath, originalName },
+  };
+
+  let copied: SymbolInfo;
+  switch (sourceSym.kind) {
+    case "function":
+      copied = {
+        ...sourceSym,
+        ...base,
+        exported: true,
+        safe: forceSafe ? true : sourceSym.safe,
+      };
+      break;
+    case "node":
+      copied = { ...sourceSym, ...base, exported: true };
+      break;
+    case "type":
+      copied = { ...sourceSym, ...base, exported: true };
+      break;
+    case "constant":
+      copied = { ...sourceSym, ...base, exported: true };
+      break;
+  }
+  targetSymbols[localName] = copied;
 }

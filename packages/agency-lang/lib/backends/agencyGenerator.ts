@@ -36,6 +36,7 @@ import {
   ImportNodeStatement,
   ImportStatement,
 } from "../types/importStatement.js";
+import { ExportFromStatement } from "../types/exportFromStatement.js";
 import { MatchBlock } from "../types/matchBlock.js";
 import { ReturnStatement } from "../types/returnStatement.js";
 import { GotoStatement } from "../types/gotoStatement.js";
@@ -245,6 +246,8 @@ export class AgencyGenerator {
       case "importNodeStatement":
         this.importedNodes.push(node);
         return "";
+      case "exportFromStatement":
+        return this.processExportFromStatement(node);
       case "forLoop":
         return this.processForLoop(node);
       case "whileLoop":
@@ -866,6 +869,19 @@ export class AgencyGenerator {
 
   protected processImportNodeStatement(node: ImportNodeStatement): string {
     return `import node { ${node.importedNodes.join(", ")} } from "${node.agencyFile}"`;
+  }
+
+  protected processExportFromStatement(node: ExportFromStatement): string {
+    if (node.body.kind === "starExport") {
+      return this.indentStr(`export * from "${node.modulePath}"`);
+    }
+    const items = node.body.names.map((name) => {
+      const alias = node.body.kind === "namedExport" ? node.body.aliases[name] : undefined;
+      const safe = node.body.kind === "namedExport" && node.body.safeNames.includes(name);
+      const base = alias ? `${name} as ${alias}` : name;
+      return safe ? `safe ${base}` : base;
+    });
+    return this.indentStr(`export { ${items.join(", ")} } from "${node.modulePath}"`);
   }
 
   private sortAndRenderImports(): string {

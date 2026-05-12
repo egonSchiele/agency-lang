@@ -46,6 +46,13 @@ export type ImportNodeStatement = BaseNode & {
   type: "importNodeStatement";
   importedNodes: string[];
   agencyFile: string;
+  /**
+   * When true, the typescript builder also emits a JS-level re-export of each
+   * node's `__<name>NodeParams` from the source file, so consumers of THIS
+   * file can `import node` from it transitively. Set by `resolveReExports`.
+   * Always undefined for user-written `import node { ... }` statements.
+   */
+  reExport?: boolean;
 };
 
 export type ImportToolStatement = BaseNode & {

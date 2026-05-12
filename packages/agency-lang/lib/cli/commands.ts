@@ -2,6 +2,7 @@ import { generateAgency } from "@/backends/agencyGenerator.js";
 import { AgencyConfig, loadConfigSafe } from "@/config.js";
 import { AgencyProgram, generateTypeScript } from "@/index.js";
 import { resolveImports } from "@/preprocessors/importResolver.js";
+import { resolveReExports } from "@/preprocessors/resolveReExports.js";
 import { buildCompilationUnit } from "@/compilationUnit.js";
 import { SymbolTable } from "@/symbolTable.js";
 import { formatErrors, typeCheck } from "@/typeChecker/index.js";
@@ -146,8 +147,13 @@ export function compile(
   const symbolTable =
     options?.symbolTable ?? SymbolTable.build(absoluteInputFile, config);
 
-  const resolvedProgram = resolveImports(
+  const reExportedProgram = resolveReExports(
     parsedProgram,
+    symbolTable,
+    absoluteInputFile,
+  );
+  const resolvedProgram = resolveImports(
+    reExportedProgram,
     symbolTable,
     absoluteInputFile,
   );

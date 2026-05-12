@@ -270,3 +270,21 @@ MCP tools are external and cannot throw Agency interrupts. If you want safety ch
 
 - Filter out dangerous tools before passing them to `llm()`
 - Wrap the `llm()` call in a `handle` block to intercept any interrupts from your own tools
+
+## Bundling another module's tools into your server
+
+To expose every tool from `std::wikipedia` (or any Agency module) through `agency serve mcp`, re-export them:
+
+```
+// my-server.agency
+export * from "std::wikipedia"
+```
+
+Then `agency serve mcp my-server.agency` exposes `search`, `fetch`, etc. as MCP tools. To rename or mark them safe, use the explicit form:
+
+```
+export { search as wikipediaSearch } from "std::wikipedia"
+export { safe fetch } from "std::wikipedia"
+```
+
+See [Re-exporting from another module](./imports-and-packages.md#re-exporting-from-another-module) for the full syntax.

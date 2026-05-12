@@ -14,11 +14,16 @@ function trailer(): string {
 export async function commitFiles(args: {
   message: string;
   files?: string[];
+  // Either pass `author: { name, email }` (TS callers) or `authorName`/`authorEmail`
+  // (Agency wrappers — Agency lacks a clean null-default for object args).
+  // An empty `authorName` means "use the default author".
   author?: { name: string; email: string };
+  authorName?: string;
+  authorEmail?: string;
   push?: boolean;
   branch?: string;
 }): Promise<Result<{ sha: string }>> {
-  if (args.branch !== undefined) {
+  if (args.branch !== undefined && args.branch !== "") {
     try {
       assertValidRefName(args.branch);
     } catch (e) {
@@ -27,9 +32,12 @@ export async function commitFiles(args: {
   }
 
   const shouldPush = args.push ?? true;
-  const author = args.author ?? DEFAULT_AUTHOR;
+  const authorFromNames = args.authorName
+    ? { name: args.authorName, email: args.authorEmail ?? "" }
+    : undefined;
+  const author = args.author ?? authorFromNames ?? DEFAULT_AUTHOR;
 
-  if (args.branch) {
+  if (args.branch && args.branch !== "") {
     const checkout = await runGit(["checkout", "-B", args.branch]);
     if (isFailure(checkout)) return checkout as Result<{ sha: string }>;
   }
@@ -47,7 +55,7 @@ export async function commitFiles(args: {
   if (isFailure(commit)) return commit as Result<{ sha: string }>;
 
   if (shouldPush) {
-    const branchResult = args.branch
+    const branchResult = (args.branch && args.branch !== "")
       ? { ok: true as const, name: args.branch }
       : await currentBranch();
     if (!branchResult.ok) return branchResult.failure as Result<{ sha: string }>;

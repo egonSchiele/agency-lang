@@ -2,7 +2,7 @@ import { print, printJSON, input, sleep, round, fetch, fetchJSON, read, write, r
 import { fetchPage as fetchPageImpl } from "./dist/src/fetchPage.js";
 import { fileURLToPath } from "url";
 import __process from "process";
-import { z } from "zod";
+import { z } from "agency-lang/zod";
 import { nanoid } from "agency-lang";
 import path from "path";
 import {
@@ -13,6 +13,7 @@ import {
   checkpoint as __checkpoint_impl,
   getCheckpoint as __getCheckpoint_impl,
   restore as __restore_impl,
+  _run as __runtime_run_impl,
   interrupt,
   isInterrupt,
   hasInterrupts,
@@ -28,7 +29,8 @@ import {
   AgencyFunction as __AgencyFunction,
   UNSET as __UNSET,
   __call,
-  functionRefReviver as __functionRefReviver
+  functionRefReviver as __functionRefReviver,
+  DeterministicClient as __DeterministicClient
 } from "agency-lang/runtime";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -80,7 +82,15 @@ const __setDebugger = (dbg) => {
 const __setTraceWriter = (tw) => {
   __globalCtx.traceWriter = tw;
 };
+const __setLLMClient = (client) => {
+  __globalCtx.setLLMClient(client);
+};
 const __getCheckpoints = () => __globalCtx.checkpoints;
+if (__process.env.AGENCY_LLM_MOCKS) {
+  __globalCtx.setLLMClient(
+    new __DeterministicClient(JSON.parse(__process.env.AGENCY_LLM_MOCKS))
+  );
+}
 const __toolRegistry = {};
 function __registerTool(value, name) {
   if (__AgencyFunction.isAgencyFunction(value)) {
@@ -90,6 +100,7 @@ function __registerTool(value, name) {
 const checkpoint = __AgencyFunction.create({ name: "checkpoint", module: "__runtime", fn: __checkpoint_impl, params: [], toolDefinition: null }, __toolRegistry);
 const getCheckpoint = __AgencyFunction.create({ name: "getCheckpoint", module: "__runtime", fn: __getCheckpoint_impl, params: [{ name: "checkpointId", hasDefault: false, defaultValue: void 0, variadic: false }], toolDefinition: null }, __toolRegistry);
 const restore = __AgencyFunction.create({ name: "restore", module: "__runtime", fn: __restore_impl, params: [{ name: "checkpointIdOrCheckpoint", hasDefault: false, defaultValue: void 0, variadic: false }, { name: "options", hasDefault: false, defaultValue: void 0, variadic: false }], toolDefinition: null }, __toolRegistry);
+const _run = __AgencyFunction.create({ name: "_run", module: "__runtime", fn: __runtime_run_impl, params: [{ name: "compiled", hasDefault: false, defaultValue: void 0, variadic: false }, { name: "node", hasDefault: false, defaultValue: void 0, variadic: false }, { name: "args", hasDefault: false, defaultValue: void 0, variadic: false }, { name: "wallClock", hasDefault: false, defaultValue: void 0, variadic: false }, { name: "memory", hasDefault: false, defaultValue: void 0, variadic: false }, { name: "ipcPayload", hasDefault: false, defaultValue: void 0, variadic: false }, { name: "stdout", hasDefault: false, defaultValue: void 0, variadic: false }], toolDefinition: null }, __toolRegistry);
 function setLLMClient(client) {
   __globalCtx.setLLMClient(client);
 }
@@ -259,15 +270,19 @@ const fetchPage = __AgencyFunction.create({
     name: "fetchPage",
     description: `No description provided.`,
     schema: z.object({ "url": z.string(), "maxChars": z.number().nullable().describe("Default: 20000"), "timeout": z.number().nullable().describe("Default: 15000") })
-  }
+  },
+  safe: false,
+  exported: true
 }, __toolRegistry);
 var stdin_default = graph;
-const __sourceMap = { "../web-fetch/index.agency:fetchPage": { "0": { "line": 4, "col": 2 } } };
+const __sourceMap = { "../web-fetch/index.agency:fetchPage": { "0": { "line": 24, "col": 2 } } };
 export {
   __getCheckpoints,
   __setDebugger,
+  __setLLMClient,
   __setTraceWriter,
   __sourceMap,
+  __toolRegistry,
   approve,
   stdin_default as default,
   fetchPage,

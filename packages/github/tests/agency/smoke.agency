@@ -1,0 +1,10 @@
+import { defaultBranch } from "../../index.agency"
+
+node main() {
+  const result = defaultBranch(owner: "octocat", repo: "Hello-World")
+  if (isFailure(result)) {
+    print("FAIL: ${result.error}")
+  } else {
+    print("default branch: ${result.value}")
+  }
+}

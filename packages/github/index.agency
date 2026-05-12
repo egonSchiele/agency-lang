@@ -1,0 +1,89 @@
+/**
+GitHub stdlib for Agency.
+*/
+
+import { createBranch as createBranchImpl } from "./dist/src/branches.js"
+import { deleteBranch as deleteBranchImpl } from "./dist/src/branches.js"
+import { branchExists as branchExistsImpl } from "./dist/src/branches.js"
+import { commitFiles as commitFilesImpl } from "./dist/src/commits.js"
+import { openPullRequest as openPullRequestImpl } from "./dist/src/prs.js"
+import { listPullRequests as listPullRequestsImpl } from "./dist/src/prs.js"
+import { commentOnPullRequest as commentOnPullRequestImpl } from "./dist/src/prs.js"
+import { addLabel as addLabelImpl } from "./dist/src/prs.js"
+import { requestReview as requestReviewImpl } from "./dist/src/prs.js"
+import { listIssues as listIssuesImpl } from "./dist/src/issues.js"
+import { commentOnIssue as commentOnIssueImpl } from "./dist/src/issues.js"
+import { createIssue as createIssueImpl } from "./dist/src/issues.js"
+import { defaultBranch as defaultBranchImpl } from "./dist/src/meta.js"
+
+/// Create a new branch from `from` (default: repo's default branch).
+export def createBranch(name: string, from: string = "", owner: string = "", repo: string = "", token: string = "") {
+  return createBranchImpl({ name: name, from: from, owner: owner, repo: repo, token: token })
+}
+
+/// Delete a branch.
+export def deleteBranch(name: string, owner: string = "", repo: string = "", token: string = "") {
+  return deleteBranchImpl({ name: name, owner: owner, repo: repo, token: token })
+}
+
+/// Check whether a branch exists.
+export safe def branchExists(name: string, owner: string = "", repo: string = "", token: string = "") {
+  return branchExistsImpl({ name: name, owner: owner, repo: repo, token: token })
+}
+
+/// Stage and commit local working-tree changes, optionally checking out a branch and pushing.
+export def commitFiles(message: string, files: string[] = [], authorName: string = "", authorEmail: string = "", push: boolean = true, branch: string = "") {
+  return commitFilesImpl({
+    message: message,
+    files: files,
+    authorName: authorName,
+    authorEmail: authorEmail,
+    push: push,
+    branch: branch
+  })
+}
+
+/// Open a pull request. Returns the new PR's number and URL.
+export def openPullRequest(title: string, body: string, head: string, base: string = "", draft: boolean = false, labels: string[] = [], owner: string = "", repo: string = "", token: string = "") {
+  return openPullRequestImpl({ title: title, body: body, head: head, base: base, draft: draft, labels: labels, owner: owner, repo: repo, token: token })
+}
+
+/// List pull requests.
+export safe def listPullRequests(state: string = "open", base: string = "", head: string = "", owner: string = "", repo: string = "", token: string = "") {
+  return listPullRequestsImpl({ state: state, base: base, head: head, owner: owner, repo: repo, token: token })
+}
+
+/// Comment on a pull request.
+export def commentOnPullRequest(number: number, body: string, owner: string = "", repo: string = "", token: string = "") {
+  return commentOnPullRequestImpl({ number: number, body: body, owner: owner, repo: repo, token: token })
+}
+
+/// Add labels to an issue or PR.
+export def addLabel(number: number, labels: string[], owner: string = "", repo: string = "", token: string = "") {
+  return addLabelImpl({ number: number, labels: labels, owner: owner, repo: repo, token: token })
+}
+
+/// Request reviewers for a pull request.
+export def requestReview(number: number, reviewers: string[] = [], teamReviewers: string[] = [], owner: string = "", repo: string = "", token: string = "") {
+  return requestReviewImpl({ number: number, reviewers: reviewers, teamReviewers: teamReviewers, owner: owner, repo: repo, token: token })
+}
+
+/// List issues (excludes pull requests).
+export safe def listIssues(state: string = "open", labels: string[] = [], owner: string = "", repo: string = "", token: string = "") {
+  return listIssuesImpl({ state: state, labels: labels, owner: owner, repo: repo, token: token })
+}
+
+/// Comment on an issue.
+export def commentOnIssue(number: number, body: string, owner: string = "", repo: string = "", token: string = "") {
+  return commentOnIssueImpl({ number: number, body: body, owner: owner, repo: repo, token: token })
+}
+
+/// Create an issue.
+export def createIssue(title: string, body: string, labels: string[] = [], owner: string = "", repo: string = "", token: string = "") {
+  return createIssueImpl({ title: title, body: body, labels: labels, owner: owner, repo: repo, token: token })
+}
+
+/// Get the repo's default branch name.
+export safe def defaultBranch(owner: string = "", repo: string = "", token: string = "") {
+  return defaultBranchImpl({ owner: owner, repo: repo, token: token })
+}

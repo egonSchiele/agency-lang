@@ -55,6 +55,11 @@
       "import": "./dist/lib/runtime/index.js",
       "require": "./dist/lib/runtime/index.js"
     },
+    "./zod": {
+      "types": "./dist/lib/zod.d.ts",
+      "import": "./dist/lib/zod.js",
+      "require": "./dist/lib/zod.js"
+    },
     "./compiler": {
       "types": "./dist/lib/compiler/compile.d.ts",
       "import": "./dist/lib/compiler/compile.js",

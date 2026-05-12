@@ -151,5 +151,5 @@ Mixing dimensions is a type error:
 
 ### JavaScript features that don't exist in Agency
 - lambdas
-- async/await. Everything is awaited by default, and there are specific constructs for async, such as [fork](/guide/fork)
+- async/await. Everything is awaited by default, and there are specific constructs for [concurrency](/guide/concurrency).
 - classes.

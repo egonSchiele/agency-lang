@@ -16,7 +16,7 @@
     },
     {
       "nodeName": "callRenamedSafe",
-      "description": "Aliased + safe-marked function re-export resolves under its local alias",
+      "description": "Aliased function re-export resolves under its local alias and is callable. NOTE: this test does not verify the `safe` flag at runtime — it only proves the renamed wrapper compiles and dispatches correctly.",
       "input": "",
       "expectedOutput": "50",
       "evaluationCriteria": [{ "type": "exact" }]

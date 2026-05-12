@@ -309,21 +309,55 @@ describe("SymbolTable: re-export reachability and merging", () => {
     }
   });
 
-  it("re-exports an unexported node (nodes don't require 'export' to be importable)", () => {
+  it("re-exports an unexported node via named export (nodes don't require 'export')", () => {
     // Nodes are importable without `export` (see importResolver). Re-exports
     // should follow the same rule, otherwise plain `node main()` declarations
-    // would be invisible to `export { main } from ...` and `export *`.
+    // would be invisible to `export { main } from ...`.
     const { paths, cleanup } = withTempFiles({
       source: `node main() { return 1 }`,
-      named: `export { main } from "@source@"`,
-      star: `export * from "@source@"`,
+      reexporter: `export { main } from "@source@"`,
     });
     try {
-      const stNamed = SymbolTable.build(paths.named);
-      expect(stNamed.getFile(path.resolve(paths.named))!["main"]).toBeDefined();
+      const st = SymbolTable.build(paths.reexporter);
+      const main = st.getFile(path.resolve(paths.reexporter))!["main"];
+      expect(main).toBeDefined();
+      expect(main.kind).toBe("node");
+      expect((main as any).reExportedFrom).toEqual({
+        sourceFile: path.resolve(paths.source),
+        originalName: "main",
+      });
+    } finally {
+      cleanup();
+    }
+  });
 
-      const stStar = SymbolTable.build(paths.star);
-      expect(stStar.getFile(path.resolve(paths.star))!["main"]).toBeDefined();
+  it("re-exports an unexported node via star export", () => {
+    const { paths, cleanup } = withTempFiles({
+      source: `node main() { return 1 }`,
+      reexporter: `export * from "@source@"`,
+    });
+    try {
+      const st = SymbolTable.build(paths.reexporter);
+      const main = st.getFile(path.resolve(paths.reexporter))!["main"];
+      expect(main).toBeDefined();
+      expect(main.kind).toBe("node");
+      expect((main as any).reExportedFrom?.originalName).toBe("main");
+    } finally {
+      cleanup();
+    }
+  });
+
+  it("rejects aliasing a re-exported node", () => {
+    // Re-exported nodes preserve their original name because the source
+    // graph is merged wholesale; renaming would silently desync.
+    const { paths, cleanup } = withTempFiles({
+      source: `export node srcNode() { return 1 }`,
+      reexporter: `export { srcNode as renamed } from "@source@"`,
+    });
+    try {
+      expect(() => SymbolTable.build(paths.reexporter)).toThrow(
+        /Node 'srcNode' .* cannot be re-exported under a different name/,
+      );
     } finally {
       cleanup();
     }

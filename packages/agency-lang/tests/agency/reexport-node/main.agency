@@ -1,5 +1,7 @@
-export * from "./source.agency"
-export { safe safeable as renamedSafe } from "./source.agency"
+// Consumer file: imports re-exported symbols FROM the re-exporter (lib.agency),
+// not from source. Exercises the JS-level re-export of `__<name>NodeParams`.
+import node { srcNode } from "./lib.agency"
+import { srcFn, renamedSafe } from "./lib.agency"
 
 node callNode() {
   return srcNode(21)

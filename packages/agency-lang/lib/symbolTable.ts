@@ -359,6 +359,10 @@ function symbolKindLabel(sym: SymbolInfo): string {
       return "Node";
     case "type":
       return "Type";
+    // The "constant" and "class" branches below are defensive — the only
+    // current caller (the namedExport "not exported" error path) cannot reach
+    // them: ConstantSymbol is only ever added when `exported && static && const`,
+    // and class re-exports are rejected earlier with their own error message.
     case "constant":
       return "Constant";
     case "class":

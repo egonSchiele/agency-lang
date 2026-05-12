@@ -151,6 +151,9 @@ function buildNodeImport(
     type: "importNodeStatement",
     importedNodes,
     agencyFile: modulePath,
+    // Tells the typescript builder to JS-re-export `__<name>NodeParams` from
+    // the source so other files can `import node { ... } from "this-file"`.
+    reExport: true,
   };
 }
 

@@ -1,1 +1,0 @@
-Let's do a little post-mortem. As you were working on this, what surprised you? What didn't go how you expected? What are some tasks that you decided to defer for later? What are some places where you realized that you needed to deviate from the spec? What are some test failures that surprised you? What are some issues that you spent the most time on?

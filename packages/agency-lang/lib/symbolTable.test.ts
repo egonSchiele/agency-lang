@@ -287,7 +287,43 @@ describe("SymbolTable: re-export reachability and merging", () => {
       reexporter: `export { foo } from "@source@"`,
     });
     try {
-      expect(() => SymbolTable.build(paths.reexporter)).toThrow(/not exported/);
+      expect(() => SymbolTable.build(paths.reexporter)).toThrow(
+        /Function 'foo' .* is not exported/,
+      );
+    } finally {
+      cleanup();
+    }
+  });
+
+  it("uses kind-specific label in 'not exported' error for types", () => {
+    const { paths, cleanup } = withTempFiles({
+      source: `type Foo = string`,
+      reexporter: `export { Foo } from "@source@"`,
+    });
+    try {
+      expect(() => SymbolTable.build(paths.reexporter)).toThrow(
+        /Type 'Foo' .* is not exported/,
+      );
+    } finally {
+      cleanup();
+    }
+  });
+
+  it("re-exports an unexported node (nodes don't require 'export' to be importable)", () => {
+    // Nodes are importable without `export` (see importResolver). Re-exports
+    // should follow the same rule, otherwise plain `node main()` declarations
+    // would be invisible to `export { main } from ...` and `export *`.
+    const { paths, cleanup } = withTempFiles({
+      source: `node main() { return 1 }`,
+      named: `export { main } from "@source@"`,
+      star: `export * from "@source@"`,
+    });
+    try {
+      const stNamed = SymbolTable.build(paths.named);
+      expect(stNamed.getFile(path.resolve(paths.named))!["main"]).toBeDefined();
+
+      const stStar = SymbolTable.build(paths.star);
+      expect(stStar.getFile(path.resolve(paths.star))!["main"]).toBeDefined();
     } finally {
       cleanup();
     }

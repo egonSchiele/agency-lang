@@ -12,7 +12,6 @@ import {
 import type { ExportFromStatement } from "../types/exportFromStatement.js";
 import type { ImportStatement } from "../types/importStatement.js";
 import type { FunctionDefinition } from "../types/function.js";
-import type { GraphNodeDefinition } from "../types/graphNode.js";
 import type { TypeAlias } from "../types/typeHints.js";
 import type { Assignment } from "../types.js";
 
@@ -100,7 +99,7 @@ describe("resolveReExports: function form", () => {
     expect(namedImport.type).toBe("namedImport");
     if (namedImport.type === "namedImport") {
       expect(namedImport.importedNames).toEqual(["search"]);
-      expect(namedImport.aliases).toEqual({ search: "__reexport_search" });
+      expect(namedImport.aliases).toEqual({ search: "_reexport_search" });
     }
 
     const fns = result.nodes.filter(
@@ -115,7 +114,7 @@ describe("resolveReExports: function form", () => {
       type: "returnStatement",
       value: {
         type: "functionCall",
-        functionName: "__reexport_search",
+        functionName: "_reexport_search",
       },
     });
   });
@@ -154,7 +153,7 @@ describe("resolveReExports: function form", () => {
     expect(fns[0].functionName).toBe("wikiSearch");
     expect(fns[0].body[0]).toMatchObject({
       type: "returnStatement",
-      value: { type: "functionCall", functionName: "__reexport_search" },
+      value: { type: "functionCall", functionName: "_reexport_search" },
     });
   });
 
@@ -195,7 +194,9 @@ describe("resolveReExports: function form", () => {
 });
 
 describe("resolveReExports: per-kind synthesis", () => {
-  it("synthesizes a node wrapper for a re-exported node", () => {
+  it("re-exported node emits an importNodeStatement and no wrapper", () => {
+    // Nodes are merged wholesale via importNodeStatement; emitting a wrapper
+    // graphNode would collide with the merged source node in SimpleMachine.
     const sourcePath = "/project/source.agency";
     const reexporterPath = "/project/reexporter.agency";
     const program: AgencyProgram = {
@@ -230,15 +231,25 @@ describe("resolveReExports: per-kind synthesis", () => {
     });
 
     const result = resolveReExports(program, symbolTable, reexporterPath);
-    const nodes = result.nodes.filter(
-      (n) => n.type === "graphNode",
-    ) as GraphNodeDefinition[];
-    expect(nodes).toHaveLength(1);
-    expect(nodes[0].nodeName).toBe("main");
-    expect(nodes[0].body[0]).toMatchObject({
-      type: "returnStatement",
-      value: { type: "functionCall", functionName: "__reexport_main" },
-    });
+
+    // No wrapper graphNode is synthesized.
+    const graphNodes = result.nodes.filter((n) => n.type === "graphNode");
+    expect(graphNodes).toHaveLength(0);
+
+    // No regular importStatement either — nodes get importNodeStatement.
+    const fnImports = result.nodes.filter((n) => n.type === "importStatement");
+    expect(fnImports).toHaveLength(0);
+
+    const nodeImports = result.nodes.filter(
+      (n) => n.type === "importNodeStatement",
+    );
+    expect(nodeImports).toHaveLength(1);
+    expect((nodeImports[0] as { importedNodes: string[] }).importedNodes).toEqual([
+      "main",
+    ]);
+    expect((nodeImports[0] as { agencyFile: string }).agencyFile).toBe(
+      "./source.agency",
+    );
   });
 
   it("synthesizes a type alias for a re-exported type", () => {
@@ -283,7 +294,7 @@ describe("resolveReExports: per-kind synthesis", () => {
     expect(aliases[0].exported).toBe(true);
     expect(aliases[0].aliasedType).toEqual({
       type: "typeAliasVariable",
-      aliasName: "__reexport_Foo",
+      aliasName: "_reexport_Foo",
     });
   });
 
@@ -329,7 +340,7 @@ describe("resolveReExports: per-kind synthesis", () => {
     expect(assigns[0].exported).toBe(true);
     expect(assigns[0].value).toMatchObject({
       type: "variableName",
-      value: "__reexport_PROMPT",
+      value: "_reexport_PROMPT",
     });
   });
 });

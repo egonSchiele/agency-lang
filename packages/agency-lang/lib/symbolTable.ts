@@ -343,7 +343,27 @@ function collectDirectInterruptKinds(body: AgencyNode[]): InterruptKind[] {
 
 function isExportedSymbol(sym: SymbolInfo): boolean {
   if (sym.kind === "class") return false;
+  // Nodes are importable without an explicit `export` keyword (see importResolver
+  // — node imports skip the assertExported check). Treat them as exported for
+  // re-export purposes so `export { main } from "..."` and `export * from "..."`
+  // pick them up regardless of whether the source wrote `export node`.
+  if (sym.kind === "node") return true;
   return !!sym.exported;
+}
+
+function symbolKindLabel(sym: SymbolInfo): string {
+  switch (sym.kind) {
+    case "function":
+      return "Function";
+    case "node":
+      return "Node";
+    case "type":
+      return "Type";
+    case "constant":
+      return "Constant";
+    case "class":
+      return "Class";
+  }
 }
 
 /**
@@ -390,10 +410,16 @@ export function mergeExportsFrom(
     }
     if (!isExportedSymbol(sym)) {
       throw new Error(
-        `Function '${originalName}' in '${stmt.modulePath}' is not exported. Add the 'export' keyword to its definition.`,
+        `${symbolKindLabel(sym)} '${originalName}' in '${stmt.modulePath}' is not exported. Add the 'export' keyword to its definition.`,
       );
     }
     const localName = stmt.body.aliases[originalName] ?? originalName;
+    if (sym.kind === "node" && localName !== originalName) {
+      throw new Error(
+        `Node '${originalName}' from '${stmt.modulePath}' cannot be re-exported under a different name. ` +
+          `Re-exported nodes preserve their original name because the source graph is merged wholesale.`,
+      );
+    }
     const isSafe = stmt.body.safeNames.includes(originalName);
     mergeOne(targetSymbols, localName, originalName, sym, isSafe, sourcePath, stmt);
   }

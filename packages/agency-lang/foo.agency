@@ -1,5 +1,1 @@
-node main() {
-  const countryName = "France"
-  const response = llm("What is the capital of ${countryName}?")
-  print(response)
-}
+export * from "std::math"

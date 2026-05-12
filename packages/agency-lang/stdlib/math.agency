@@ -1,16 +1,16 @@
-export def add(a: number, b: number): number {
+export safe def add(a: number, b: number): number {
   return a + b
 }
 
-export def subtract(a: number, b: number): number {
+export safe def subtract(a: number, b: number): number {
   return a - b
 }
 
-export def multiply(a: number, b: number): number {
+export safe def multiply(a: number, b: number): number {
   return a * b
 }
 
-export def divide(a: number, b: number): Result<number> {
+export safe def divide(a: number, b: number): Result<number> {
   if (b == 0) {
     return failure("Cannot divide by zero")
   }

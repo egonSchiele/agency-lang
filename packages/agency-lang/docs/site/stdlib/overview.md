@@ -1,2 +1,0 @@
-# Agency Standard Library
-This section describes all the modules available in the Agency Standard Library. The Agency standard library is large and allows you to do many interesting things such as send emails or texts, search Wikipedia, etc.

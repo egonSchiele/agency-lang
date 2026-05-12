@@ -12,10 +12,16 @@
     },
     "./package.json": "./package.json"
   },
-  "files": ["dist/", "index.agency", "index.js"],
+  "files": [
+    "dist/",
+    "index.agency",
+    "index.js"
+  ],
   "author": "Aditya Bhargava",
   "license": "ISC",
-  "bugs": { "url": "https://github.com/egonSchiele/agency-lang/issues" },
+  "bugs": {
+    "url": "https://github.com/egonSchiele/agency-lang/issues"
+  },
   "homepage": "https://github.com/egonSchiele/agency-lang",
   "scripts": {
     "build": "tsc",
@@ -23,11 +29,15 @@
     "test:run": "vitest run",
     "test:agency": "agency tests/agency"
   },
-  "peerDependencies": { "agency-lang": "workspace:*" },
-  "dependencies": { "@octokit/rest": "^21.0.0" },
+  "peerDependencies": {
+    "agency-lang": "workspace:*"
+  },
+  "dependencies": {
+    "@octokit/rest": "^21.0.0"
+  },
   "devDependencies": {
     "@types/node": "^25.0.0",
-    "nock": "^13.5.0",
+    "nock": "^14.0.15",
     "typescript": "^5.0.0",
     "vitest": "^3.0.0"
   }

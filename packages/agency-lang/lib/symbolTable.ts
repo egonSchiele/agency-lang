@@ -425,6 +425,12 @@ export function mergeExportsFrom(
       );
     }
     const isSafe = stmt.body.safeNames.includes(originalName);
+    if (sym.kind === "node" && isSafe) {
+      throw new Error(
+        `The 'safe' modifier cannot be applied to node '${originalName}' from '${stmt.modulePath}'. ` +
+          `'safe' is only meaningful for functions; nodes do not carry a safe flag.`,
+      );
+    }
     mergeOne(targetSymbols, localName, originalName, sym, isSafe, sourcePath, stmt);
   }
 }

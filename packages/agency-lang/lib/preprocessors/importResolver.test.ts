@@ -307,4 +307,33 @@ describe("resolveImports", () => {
     const result = resolveImports(program, new SymbolTable(), "/project/main.agency");
     expect(result.nodes).toEqual([nodeImport]);
   });
+
+  it("rejects 'safe' modifier on an imported node", () => {
+    // `safe` is meaningful only for functions; nodes have no safe flag.
+    // Silently dropping the modifier would mislead the user.
+    const program: AgencyProgram = {
+      type: "agencyProgram",
+      nodes: [
+        {
+          type: "importStatement",
+          modulePath: "./other.agency",
+          isAgencyImport: true,
+          importedNames: [
+            {
+              type: "namedImport",
+              importedNames: ["greet"],
+              safeNames: ["greet"],
+              aliases: {},
+            },
+          ],
+        },
+      ],
+    };
+    const symbolTable = table({
+      "/project/other.agency": { greet: nodeSym("greet") },
+    });
+    expect(() =>
+      resolveImports(program, symbolTable, "/project/main.agency"),
+    ).toThrow(/'safe' modifier cannot be applied to node 'greet'/);
+  });
 });

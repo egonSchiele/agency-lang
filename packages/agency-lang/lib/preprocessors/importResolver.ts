@@ -73,6 +73,12 @@ export function resolveImports(
         }
         switch (symbol.kind) {
           case "node":
+            if (nameType.safeNames.includes(name)) {
+              throw new Error(
+                `The 'safe' modifier cannot be applied to node '${name}' from '${node.modulePath}'. ` +
+                  `'safe' is only meaningful for functions; nodes do not carry a safe flag.`,
+              );
+            }
             nodeNames.push(name);
             break;
           case "function":

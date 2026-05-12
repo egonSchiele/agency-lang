@@ -347,6 +347,22 @@ describe("SymbolTable: re-export reachability and merging", () => {
     }
   });
 
+  it("rejects 'safe' on a re-exported node", () => {
+    // Nodes don't carry a `safe` flag; silently dropping the user's modifier
+    // would mislead them about what was actually applied.
+    const { paths, cleanup } = withTempFiles({
+      source: `export node srcNode() { return 1 }`,
+      reexporter: `export { safe srcNode } from "@source@"`,
+    });
+    try {
+      expect(() => SymbolTable.build(paths.reexporter)).toThrow(
+        /'safe' modifier cannot be applied to node 'srcNode'/,
+      );
+    } finally {
+      cleanup();
+    }
+  });
+
   it("rejects aliasing a re-exported node", () => {
     // Re-exported nodes preserve their original name because the source
     // graph is merged wholesale; renaming would silently desync.

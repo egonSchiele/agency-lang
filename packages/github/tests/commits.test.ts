@@ -106,6 +106,14 @@ describe("commitFiles", () => {
     expect(commit).toContain("user.name=Agency Lang Agent");
   });
 
+  it("authorName without authorEmail is rejected with a clear failure", async () => {
+    const result = await commitFiles({ message: "m", authorName: "Alice", push: false });
+    expect(isFailure(result)).toBe(true);
+    if (isFailure(result)) expect(String(result.error)).toContain("authorEmail");
+    // never even tries to call git
+    expect(invocations).toEqual([]);
+  });
+
   // ─── currentBranch helper (no-branch + push path) ────────────────────────
 
   it("uses currentBranch from rev-parse when branch is omitted and push is enabled", async () => {

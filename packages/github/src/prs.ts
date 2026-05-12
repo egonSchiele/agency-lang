@@ -26,7 +26,11 @@ export async function openPullRequest(
 ): Promise<Result<{ number: number; url: string }>> {
   return withCtx(args, async (octokit, owner, repo) => {
     try {
-      const baseBranch = args.base ?? (await octokit.rest.repos.get({ owner, repo })).data.default_branch;
+      // Treat empty-string `base` as unset so the Agency wrapper's
+      // `base: string = ""` default falls through to the repo default branch.
+      const baseBranch = (args.base && args.base !== "")
+        ? args.base
+        : (await octokit.rest.repos.get({ owner, repo })).data.default_branch;
       const created = await octokit.rest.pulls.create({
         owner, repo, title: args.title, body: args.body, head: args.head, base: baseBranch, draft: args.draft,
       });
@@ -35,7 +39,6 @@ export async function openPullRequest(
       }
       return success({ number: created.data.number, url: created.data.html_url }) as Result<{ number: number; url: string }>;
     } catch (e) {
-      console.error("openPullRequest failed:", e);
       return failure(`openPullRequest failed: ${(e as Error).message}`) as Result<{ number: number; url: string }>;
     }
   });
@@ -46,12 +49,17 @@ export async function listPullRequests(
 ): Promise<Result<PullRequest[]>> {
   return withCtx(args, async (octokit, owner, repo) => {
     try {
+      // Normalize empty-string filters to undefined so they aren't sent to the API
+      // (the Agency wrapper passes "" as default for omitted filters).
       const list = await octokit.rest.pulls.list({
-        owner, repo, state: args.state ?? "open", base: args.base, head: args.head,
+        owner,
+        repo,
+        state: args.state ?? "open",
+        base: args.base || undefined,
+        head: args.head || undefined,
       });
       return success(list.data.map(toPullRequest)) as Result<PullRequest[]>;
     } catch (e) {
-      console.error("listPullRequests failed:", e);
       return failure(`listPullRequests failed: ${(e as Error).message}`) as Result<PullRequest[]>;
     }
   });
@@ -63,7 +71,6 @@ export async function commentOnPullRequest(args: { number: number; body: string 
       await octokit.rest.issues.createComment({ owner, repo, issue_number: args.number, body: args.body });
       return success(undefined) as Result<void>;
     } catch (e) {
-      console.error("commentOnPullRequest failed:", e);
       return failure(`commentOnPullRequest failed: ${(e as Error).message}`) as Result<void>;
     }
   });
@@ -75,7 +82,6 @@ export async function addLabel(args: { number: number; labels: string[] } & Base
       await octokit.rest.issues.addLabels({ owner, repo, issue_number: args.number, labels: args.labels });
       return success(undefined) as Result<void>;
     } catch (e) {
-      console.error("addLabel failed:", e);
       return failure(`addLabel failed: ${(e as Error).message}`) as Result<void>;
     }
   });
@@ -91,7 +97,6 @@ export async function requestReview(
       });
       return success(undefined) as Result<void>;
     } catch (e) {
-      console.error("requestReview failed:", e);
       return failure(`requestReview failed: ${(e as Error).message}`) as Result<void>;
     }
   });

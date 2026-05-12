@@ -27,15 +27,20 @@ export async function commitFiles(args: {
     try {
       assertValidRefName(args.branch);
     } catch (e) {
-      console.error("commitFiles: invalid branch name:", e);
       return failure((e as Error).message) as Result<{ sha: string }>;
     }
   }
 
   const shouldPush = args.push ?? true;
-  const authorFromNames = args.authorName
-    ? { name: args.authorName, email: args.authorEmail ?? "" }
+  // Only treat authorName/authorEmail as an override if BOTH are non-empty.
+  // Git rejects empty author identity, and silently using "" for one would
+  // produce a confusing low-level git failure.
+  const authorFromNames = (args.authorName && args.authorEmail)
+    ? { name: args.authorName, email: args.authorEmail }
     : undefined;
+  if (args.authorName && !args.authorEmail) {
+    return failure("commitFiles: authorName provided without authorEmail") as Result<{ sha: string }>;
+  }
   const author = args.author ?? authorFromNames ?? DEFAULT_AUTHOR;
 
   if (args.branch && args.branch !== "") {

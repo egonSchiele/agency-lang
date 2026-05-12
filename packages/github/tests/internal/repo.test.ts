@@ -49,6 +49,13 @@ describe("parseRemoteUrl", () => {
   it("returns undefined for malformed URL", () => {
     expect(parseRemoteUrl("not a url at all")).toBeUndefined();
   });
+  it("allows dots in repo names (HTTPS)", () => {
+    expect(parseRemoteUrl("https://github.com/owner/foo.bar.git")).toEqual({ owner: "owner", repo: "foo.bar" });
+    expect(parseRemoteUrl("https://github.com/owner/foo.bar")).toEqual({ owner: "owner", repo: "foo.bar" });
+  });
+  it("allows dots in repo names (SSH)", () => {
+    expect(parseRemoteUrl("git@github.com:owner/foo.bar.git")).toEqual({ owner: "owner", repo: "foo.bar" });
+  });
 });
 
 describe("resolveRepo", () => {
@@ -88,6 +95,16 @@ describe("resolveRepo", () => {
     const result = await resolveRepo();
     expect(isFailure(result)).toBe(true);
     if (isFailure(result)) expect(String(result.error)).toContain("Could not parse");
+  });
+
+  it("redacts credentials embedded in the origin URL when emitting failure", async () => {
+    setExecFile(() => ({ stdout: "https://x-access-token:hunter2@gitlab.com/foo/bar.git\n", stderr: "" }));
+    const result = await resolveRepo();
+    expect(isFailure(result)).toBe(true);
+    if (isFailure(result)) {
+      expect(String(result.error)).not.toContain("hunter2");
+      expect(String(result.error)).not.toContain("x-access-token");
+    }
   });
 
   it("falls back to shell-out when override is partial (only owner)", async () => {

@@ -8,7 +8,6 @@ export async function defaultBranch(args: BaseCtxArgs): Promise<Result<string>> 
       const meta = await octokit.rest.repos.get({ owner, repo });
       return success(meta.data.default_branch) as Result<string>;
     } catch (e) {
-      console.error("defaultBranch failed:", e);
       return failure(`defaultBranch failed: ${(e as Error).message}`) as Result<string>;
     }
   });

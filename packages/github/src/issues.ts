@@ -25,14 +25,16 @@ export async function listIssues(
 ): Promise<Result<Issue[]>> {
   return withCtx(args, async (octokit, owner, repo) => {
     try {
+      // Only pass the labels filter when non-empty — the Agency wrapper
+      // defaults to `[]`, which would otherwise become `labels: ""`.
+      const labelsFilter = args.labels && args.labels.length > 0 ? args.labels.join(",") : undefined;
       const list = await octokit.rest.issues.listForRepo({
-        owner, repo, state: args.state ?? "open", labels: args.labels?.join(","),
+        owner, repo, state: args.state ?? "open", labels: labelsFilter,
       });
       // The issues endpoint also returns PRs; filter them out.
       const onlyIssues = list.data.filter((item) => !("pull_request" in item) || !item.pull_request);
       return success(onlyIssues.map(toIssue)) as Result<Issue[]>;
     } catch (e) {
-      console.error("listIssues failed:", e);
       return failure(`listIssues failed: ${(e as Error).message}`) as Result<Issue[]>;
     }
   });
@@ -44,7 +46,6 @@ export async function commentOnIssue(args: { number: number; body: string } & Ba
       await octokit.rest.issues.createComment({ owner, repo, issue_number: args.number, body: args.body });
       return success(undefined) as Result<void>;
     } catch (e) {
-      console.error("commentOnIssue failed:", e);
       return failure(`commentOnIssue failed: ${(e as Error).message}`) as Result<void>;
     }
   });
@@ -60,7 +61,6 @@ export async function createIssue(
       });
       return success(toIssue(created.data)) as Result<Issue>;
     } catch (e) {
-      console.error("createIssue failed:", e);
       return failure(`createIssue failed: ${(e as Error).message}`) as Result<Issue>;
     }
   });

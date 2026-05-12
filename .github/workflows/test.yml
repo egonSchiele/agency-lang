@@ -70,8 +70,10 @@ jobs:
         AGENCY_USE_TEST_LLM_PROVIDER: "1"
       run: pnpm run test:agency-js
     - name: github stdlib smoke test
-      if: matrix.node-version == '22.x' && env.GITHUB_TEST_TOKEN != ''
+      # Reference the secret directly. Step-level `env` is not reliably
+      # available in step `if` expressions, so the previous form using
+      # `env.GITHUB_TEST_TOKEN` could silently always evaluate false.
+      if: matrix.node-version == '22.x' && secrets.GITHUB_TEST_TOKEN != ''
       env:
-        GITHUB_TEST_TOKEN: ${{ secrets.GITHUB_TEST_TOKEN }}
         GITHUB_TOKEN: ${{ secrets.GITHUB_TEST_TOKEN }}
       run: pnpm -F @agency-lang/github test:agency

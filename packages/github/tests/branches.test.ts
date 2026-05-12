@@ -47,4 +47,14 @@ describe("branches", () => {
     const result = await createBranch({ name: "--upload-pack=evil", owner: "o", repo: "r", token: TOKEN });
     expect(isFailure(result)).toBe(true);
   });
+
+  it("deleteBranch rejects an injected ref name", async () => {
+    const result = await deleteBranch({ name: "--upload-pack=evil", owner: "o", repo: "r", token: TOKEN });
+    expect(isFailure(result)).toBe(true);
+  });
+
+  it("branchExists rejects an injected ref name", async () => {
+    const result = await branchExists({ name: "--upload-pack=evil", owner: "o", repo: "r", token: TOKEN });
+    expect(isFailure(result)).toBe(true);
+  });
 });

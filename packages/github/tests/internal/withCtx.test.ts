@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { success, isSuccess, isFailure } from "agency-lang/runtime";
 import { withCtx } from "../../src/internal/withCtx.js";
 import type { Result } from "../../src/internal/result.js";
@@ -11,6 +11,12 @@ describe("withCtx", () => {
   it("propagates failure when no token", async () => {
     const result = await withCtx({ owner: "o", repo: "r" }, async () => success(1) as Result<number>);
     expect(isFailure(result)).toBe(true);
+  });
+
+  it("does NOT invoke fn when token is missing", async () => {
+    const fn = vi.fn(async () => success(1) as Result<number>);
+    await withCtx({ owner: "o", repo: "r" }, fn);
+    expect(fn).not.toHaveBeenCalled();
   });
 
   it("calls fn with octokit + owner + repo on full happy path", async () => {

@@ -21,7 +21,6 @@
     "vendor/",
     "CMakeLists.txt",
     "index.agency",
-    "index.js",
     "models.lock.json",
     "README.md"
   ],

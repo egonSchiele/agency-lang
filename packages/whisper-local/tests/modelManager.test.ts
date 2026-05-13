@@ -92,6 +92,24 @@ describe("parseLockfile", () => {
     expect(lock.models).toEqual({});
   });
 
+  it("rejects a lockfile missing the 'models' object", () => {
+    // Without this guard, ensureModel would later fail with a confusing
+    // TypeError ("cannot read properties of undefined") when accessing
+    // lock.models[name]. Catching it here gives an actionable error.
+    expect(() => parseLockfile('{"schemaVersion": 1}')).toThrow(
+      /missing a 'models' object \(got undefined\)/,
+    );
+    expect(() => parseLockfile('{"schemaVersion": 1, "models": null}')).toThrow(
+      /missing a 'models' object \(got null\)/,
+    );
+    expect(() =>
+      parseLockfile('{"schemaVersion": 1, "models": []}'),
+    ).toThrow(/missing a 'models' object \(got array\)/);
+    expect(() =>
+      parseLockfile('{"schemaVersion": 1, "models": "nope"}'),
+    ).toThrow(/missing a 'models' object \(got string\)/);
+  });
+
   it("includes the source label in error messages", () => {
     expect(() => parseLockfile("{ bad", "/some/path.json")).toThrow(
       /\/some\/path\.json/,

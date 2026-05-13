@@ -51,15 +51,27 @@ jobs:
         working-directory: packages/whisper-local
         run: node dist/src/cli.js build
 
-      - name: Run unit tests (modelManager, ffmpeg, transcribe)
+      # Pre-download the tiny.en model BEFORE the unit-test step so the
+      # addon-memory.test.ts suite actually runs (it skips itself unless the
+      # model is on disk; running unit tests first would make those tests
+      # silently skip in CI, defeating the point of having them).
+      - name: Pre-download tiny.en model (so addon-memory tests can run)
         working-directory: packages/whisper-local
+        run: node dist/src/cli.js pull tiny.en
+        timeout-minutes: 5
+
+      - name: Run unit tests (modelManager, ffmpeg, transcribe, addon-memory)
+        working-directory: packages/whisper-local
+        # --expose-gc enables the best-effort Persistent-ref GC test in
+        # addon-memory.test.ts (skipped without the flag).
+        env:
+          NODE_OPTIONS: "--expose-gc"
         run: pnpm test:run
 
-      # The slow integration test downloads ~75 MB and runs whisper inference.
-      # We do run it in CI because it's the only end-to-end check that the
-      # native build, model download, ffmpeg pipe, and addon together work.
-      # If this becomes a CI-time problem, gate behind a workflow_dispatch.
-      - name: Run integration test (downloads tiny.en model)
+      # The slow integration test runs whisper inference end-to-end. The
+      # model is already on disk from the pre-download step above, so this
+      # is purely the inference + decode path.
+      - name: Run integration test (transcription end-to-end)
         working-directory: packages/whisper-local
         env:
           AGENCY_RUN_SLOW: "1"

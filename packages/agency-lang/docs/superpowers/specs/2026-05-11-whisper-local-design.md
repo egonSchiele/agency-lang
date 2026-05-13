@@ -1,5 +1,30 @@
 # Local Whisper package design
 
+> **Status: shipped — historical design document.** This spec records the
+> design as initially proposed. The implementation has since diverged in
+> several places. **Authoritative current behavior lives in
+> [`packages/whisper-local/README.md`](../../../whisper-local/README.md)
+> and [`packages/whisper-local/docs/DEV.md`](../../../whisper-local/docs/DEV.md).**
+>
+> Notable differences from this spec as shipped:
+> - **Default model is `base.en`** (this spec says `base`); only `tiny`,
+>   `tiny.en`, and `base.en` are in `KNOWN_MODELS` until the lockfile is
+>   filled out for the larger models.
+> - **No `install` / `postinstall` script.** Users explicitly run
+>   `npx agency-whisper build` after install. (This spec's "Build and
+>   install" section pre-dates that decision.)
+> - **No final-file `chmod 0644`.** The downloader writes via
+>   `createWriteStream` + `rename`; permissions are whatever the user's
+>   umask produces.
+> - **No `tests/agency-js/transcribe.test.ts`.** That harness style does
+>   not exist in agency-lang; see `tests/agency-js/README.md` in the
+>   package for the rationale.
+> - **No `index.js`.** The `package.json` points `main` directly at
+>   `dist/src/transcribe.js`.
+> - **Additional ffmpeg hardening** (protocol whitelist, timeout, output
+>   cap, path validation) and a **bounded LRU handle cache** were added
+>   during code review; see DEV.md §7 and §7a.
+
 ## Motivation
 
 Agency's stdlib `transcribe(filepath, language)` sends audio to OpenAI's Whisper API. That's the right default for most users, but it has three drawbacks for some:

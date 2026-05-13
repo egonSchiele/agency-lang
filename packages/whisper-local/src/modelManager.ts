@@ -70,6 +70,14 @@ export function parseLockfile(text: string, source = "<inline>"): Lockfile {
       `unsupported lockfile schema version ${String(schemaVersion)} in ${source}`,
     );
   }
+  const models = (parsed as { models?: unknown }).models;
+  if (typeof models !== "object" || models === null || Array.isArray(models)) {
+    throw new ModelManagerError(
+      `${source} is missing a 'models' object (got ${
+        models === null ? "null" : Array.isArray(models) ? "array" : typeof models
+      })`,
+    );
+  }
   return parsed as Lockfile;
 }
 

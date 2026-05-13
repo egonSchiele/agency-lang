@@ -400,6 +400,72 @@ describe("AgencyGenerator - Result type formatting", () => {
   });
 });
 
+describe("AgencyGenerator - object type formatting", () => {
+  function formatAgency(input: string): string {
+    const parseResult = parseAgency(input, {}, false);
+    expect(parseResult.success).toBe(true);
+    if (!parseResult.success) return "";
+    const generator = new AgencyGenerator();
+    return generator.generate(parseResult.result).output.trim();
+  }
+
+  it("should format object type as 'object' not 'Record<string, any>'", () => {
+    const input = `def process(data: object) {\n  print(data)\n}`;
+    const output = formatAgency(input);
+    expect(output).toContain("data: object");
+    expect(output).not.toContain("Record<string, any>");
+  });
+
+  it("should format object type in type aliases", () => {
+    const input = `type NextStep = { type: "showPolicy"; policy: object }`;
+    const output = formatAgency(input);
+    expect(output).toContain("policy: object");
+    expect(output).not.toContain("Record<string, any>");
+  });
+
+  it("should format object type in union type aliases", () => {
+    const input = `type NextStep =\n  | { type: "showPolicy"; policy: object }\n  | { type: "writePolicy"; policy: object }`;
+    const output = formatAgency(input);
+    expect(output).toContain("policy: object");
+    expect(output).not.toContain("Record<string, any>");
+  });
+
+  it("should format object type in variable declarations", () => {
+    const input = `node main() {\n  const x: object = {}\n}`;
+    const output = formatAgency(input);
+    expect(output).toContain("const x: object");
+    expect(output).not.toContain("Record<string, any>");
+  });
+
+  it("should format object type in return types", () => {
+    const input = `def getData(): object {\n  return {}\n}`;
+    const output = formatAgency(input);
+    expect(output).toContain("): object");
+    expect(output).not.toContain("Record<string, any>");
+  });
+
+  it("should format object type in node return types", () => {
+    const input = `node main(): object {\n  return {}\n}`;
+    const output = formatAgency(input);
+    expect(output).toContain("(): object");
+    expect(output).not.toContain("Record<string, any>");
+  });
+
+  it("should format object[] array type", () => {
+    const input = `def process(items: object[]) {\n  print(items)\n}`;
+    const output = formatAgency(input);
+    expect(output).toContain("items: object[]");
+    expect(output).not.toContain("Record<string, any>");
+  });
+
+  it("should format object type in schema expressions", () => {
+    const input = `node main() {\n  const s = schema(object)\n}`;
+    const output = formatAgency(input);
+    expect(output).toContain("schema(object)");
+    expect(output).not.toContain("Record<string, any>");
+  });
+});
+
 describe("AgencyGenerator - schema(Type) expressions", () => {
   function formatAgency(input: string): string {
     const parseResult = parseAgency(input, {}, false);

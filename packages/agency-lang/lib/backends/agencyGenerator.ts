@@ -280,7 +280,7 @@ export class AgencyGenerator {
       case "newExpression":
         return this.processNewExpression(node);
       case "schemaExpression":
-        return `schema(${variableTypeToString(node.typeArg, this.typeAliases)})`;
+        return `schema(${variableTypeToString(node.typeArg, this.typeAliases, true)})`;
       case "regex":
         return `re/${node.pattern}/${node.flags}`;
       case "interruptStatement":
@@ -381,7 +381,7 @@ export class AgencyGenerator {
         ? ` = ${this.processNode(p.defaultValue).trim()}`
         : "";
       if (p.typeHint) {
-        const typeStr = variableTypeToString(p.typeHint, this.typeAliases);
+        const typeStr = variableTypeToString(p.typeHint, this.typeAliases, true);
         const bang = p.validated ? "!" : "";
         return `${prefix}${p.name}: ${typeStr}${bang}${defaultSuffix}`;
       } else {
@@ -408,14 +408,14 @@ export class AgencyGenerator {
         nonUndefinedTypes.length === 1
           ? nonUndefinedTypes[0]
           : { type: "unionType", types: nonUndefinedTypes };
-      let str = `${prop.key}?: ${variableTypeToString(unionWithoutUndefined, this.typeAliases)}`;
+      let str = `${prop.key}?: ${variableTypeToString(unionWithoutUndefined, this.typeAliases, true)}`;
       if (prop.description) {
         str += ` # ${prop.description}`;
       }
       return str;
     }
 
-    let str = `${prop.key}: ${variableTypeToString(prop.value, this.typeAliases)}`;
+    let str = `${prop.key}: ${variableTypeToString(prop.value, this.typeAliases, true)}`;
     if (prop.description) {
       str += ` # ${prop.description}`;
     }
@@ -438,7 +438,7 @@ export class AgencyGenerator {
       result += this.indentStr("}");
       return result;
     }
-    return variableTypeToString(aliasedType, this.typeAliases);
+    return variableTypeToString(aliasedType, this.typeAliases, true);
   }
 
   protected processTypeAlias(node: TypeAlias): string {
@@ -463,7 +463,7 @@ export class AgencyGenerator {
         .join("") ?? "";
     const bangSuffix = node.validated ? "!" : "";
     const varName = node.typeHint
-      ? `${node.variableName}${chainStr}: ${variableTypeToString(node.typeHint, this.typeAliases)}${bangSuffix}`
+      ? `${node.variableName}${chainStr}: ${variableTypeToString(node.typeHint, this.typeAliases, true)}${bangSuffix}`
       : `${node.variableName}${chainStr}`;
     const exportPrefix = node.exported ? "export " : "";
     const staticPrefix = node.static ? "static " : "";
@@ -536,7 +536,7 @@ export class AgencyGenerator {
 
     const returnTypeBang = node.returnTypeValidated ? "!" : "";
     const returnTypeStr = node.returnType
-      ? ": " + variableTypeToString(node.returnType, this.typeAliases) + returnTypeBang
+      ? ": " + variableTypeToString(node.returnType, this.typeAliases, true) + returnTypeBang
       : "";
 
     const prefixes: string[] = [];
@@ -924,7 +924,7 @@ export class AgencyGenerator {
     const { nodeName, body, parameters } = node;
     const returnTypeBang = node.returnTypeValidated ? "!" : "";
     const returnTypeStr = node.returnType
-      ? ": " + variableTypeToString(node.returnType, this.typeAliases) + returnTypeBang
+      ? ": " + variableTypeToString(node.returnType, this.typeAliases, true) + returnTypeBang
       : "";
     const exportPrefix = node.exported ? "export " : "";
     const prefix = `${exportPrefix}node ${nodeName}`;
@@ -958,7 +958,7 @@ export class AgencyGenerator {
     // Fields
     for (const field of node.fields) {
       result += this.indentStr(
-        `${field.name}: ${variableTypeToString(field.typeHint, this.typeAliases)}\n`,
+        `${field.name}: ${variableTypeToString(field.typeHint, this.typeAliases, true)}\n`,
       );
     }
 
@@ -968,12 +968,12 @@ export class AgencyGenerator {
         .map((p) => {
           if (p.typeHint) {
             const bang = p.validated ? "!" : "";
-            return `${p.name}: ${variableTypeToString(p.typeHint, this.typeAliases)}${bang}`;
+            return `${p.name}: ${variableTypeToString(p.typeHint, this.typeAliases, true)}${bang}`;
           }
           return p.name;
         })
         .join(", ");
-      const returnTypeStr = `: ${variableTypeToString(method.returnType, this.typeAliases)}`;
+      const returnTypeStr = `: ${variableTypeToString(method.returnType, this.typeAliases, true)}`;
       result +=
         "\n" + this.indentStr(`${method.name}(${params})${returnTypeStr} {\n`);
       this.increaseIndent();
@@ -1049,7 +1049,7 @@ export class AgencyGenerator {
     if (node.handler.kind === "inline") {
       const handlerBang = node.handler.param.validated ? "!" : "";
       const paramStr = node.handler.param.typeHint
-        ? `${node.handler.param.name}: ${variableTypeToString(node.handler.param.typeHint, this.typeAliases)}${handlerBang}`
+        ? `${node.handler.param.name}: ${variableTypeToString(node.handler.param.typeHint, this.typeAliases, true)}${handlerBang}`
         : node.handler.param.name;
       this.increaseIndent();
       const handlerBodyStr = this.renderBody(node.handler.body);

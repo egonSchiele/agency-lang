@@ -240,4 +240,58 @@ describe("interrupt kind warnings", () => {
       unlinkSync(libFile);
     }
   });
+
+  it("does not warn when function is called via .preapprove()", () => {
+    const warnings = warningsFrom(`
+      def deploy() {
+        interrupt myapp::deploy("Deploy?")
+      }
+      node main() {
+        const fn = deploy.preapprove()
+        fn()
+      }
+    `);
+    // fn() is a dynamic call to a variable, not a direct call to deploy,
+    // so no warning is expected
+    expect(warnings).toHaveLength(0);
+  });
+
+  it("does not warn when preapproved function is in tools array", () => {
+    const warnings = warningsFrom(`
+      def deploy() {
+        interrupt myapp::deploy("Deploy?")
+      }
+      node main() {
+        llm("do it", { tools: [deploy.preapprove()] })
+      }
+    `);
+    // deploy.preapprove() synthesizes as "any", so the function ref
+    // is not extracted and no warning is generated
+    expect(warnings).toHaveLength(0);
+  });
+
+  it("produces error when .preapprove() is called with arguments", () => {
+    const file = path.join(os.tmpdir(), `tc-preapprove-${Date.now()}-${Math.random().toString(36).slice(2)}.agency`);
+    const source = `
+      def deploy() {
+        interrupt myapp::deploy("Deploy?")
+      }
+      node main() {
+        const fn = deploy.preapprove("bad")
+      }
+    `;
+    writeFileSync(file, source);
+    try {
+      const absPath = path.resolve(file);
+      const symbolTable = SymbolTable.build(absPath);
+      const parseResult = parseAgency(source, {});
+      if (!parseResult.success) throw new Error("Parse failed");
+      const info = buildCompilationUnit(parseResult.result, symbolTable, absPath, source);
+      const { errors } = typeCheck(parseResult.result, {}, info);
+      const errs = errors.filter((e) => !e.severity || e.severity === "error");
+      expect(errs.some((e) => e.message.includes(".preapprove()"))).toBe(true);
+    } finally {
+      unlinkSync(file);
+    }
+  });
 });

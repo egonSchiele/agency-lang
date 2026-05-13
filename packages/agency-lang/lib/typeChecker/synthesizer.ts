@@ -358,7 +358,7 @@ function synthObject(
   };
 }
 
-function validatePartialOrDescribe(
+function validateAgencyFunctionMethod(
   expr: ValueAccess,
   element: { kind: "methodCall"; functionCall: { type: "functionCall"; functionName: string; arguments: any[] } },
   methodName: string,
@@ -427,6 +427,16 @@ function validatePartialOrDescribe(
       });
     }
   }
+
+  if (methodName === "preapprove") {
+    const args = element.functionCall.arguments;
+    if (args.length > 0) {
+      ctx.errors.push({
+        message: `.preapprove() takes no arguments.`,
+        loc: expr.loc,
+      });
+    }
+  }
 }
 
 export function synthValueAccess(
@@ -443,8 +453,8 @@ export function synthValueAccess(
     // Use continue (not return) so chained calls like fn.partial(a: 1).describe("x") are all validated.
     if (element.kind === "methodCall") {
       const methodName = element.functionCall.functionName;
-      if (methodName === "partial" || methodName === "describe") {
-        validatePartialOrDescribe(expr, element, methodName, ctx);
+      if (methodName === "partial" || methodName === "describe" || methodName === "preapprove") {
+        validateAgencyFunctionMethod(expr, element, methodName, ctx);
         currentType = "any";
         continue;
       }

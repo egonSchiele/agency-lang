@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { stripBoundParams } from "./stripBoundParams.js";
+import { approve } from "./interrupts.js";
 
 export const UNSET: unique symbol = Symbol("UNSET");
 
@@ -30,6 +31,7 @@ export type AgencyFunctionOpts = {
   toolDefinition: ToolDefinition | null;
   exported?: boolean;
   safe?: boolean;
+  isPreapproved?: boolean;
 };
 
 export class AgencyFunction {
@@ -45,6 +47,7 @@ export class AgencyFunction {
   private readonly _isBound: boolean;
   readonly exported: boolean;
   readonly safe: boolean;
+  private readonly _isPreapproved: boolean;
 
   constructor(opts: AgencyFunctionOpts) {
     this.name = opts.name;
@@ -54,10 +57,15 @@ export class AgencyFunction {
     this.toolDefinition = opts.toolDefinition;
     this.exported = opts.exported ?? false;
     this.safe = opts.safe ?? false;
+    this._isPreapproved = opts.isPreapproved ?? false;
     this._unboundParams = opts.params.filter(p => !p.isBound);
     this._nonVariadicUnbound = this._unboundParams.filter(p => !p.variadic);
     this._hasVariadic = this._unboundParams.length > 0 && this._unboundParams[this._unboundParams.length - 1].variadic;
     this._isBound = opts.params.some(p => p.isBound);
+  }
+
+  get isPreapproved(): boolean {
+    return this._isPreapproved;
   }
 
   get boundArgs(): { indices: number[]; values: unknown[]; originalParams: FuncParam[] } | null {
@@ -82,6 +90,7 @@ export class AgencyFunction {
       toolDefinition,
       exported: this.exported,
       safe: this.safe,
+      isPreapproved: this._isPreapproved,
     });
   }
 
@@ -94,6 +103,19 @@ export class AgencyFunction {
   }
 
   async invoke(descriptor: CallType, state?: unknown): Promise<unknown> {
+    const ctx = (state as any)?.ctx;
+    if (this._isPreapproved && ctx) {
+      ctx.pushHandler(async () => approve());
+      try {
+        return await this._invokeInner(descriptor, state);
+      } finally {
+        ctx.popHandler();
+      }
+    }
+    return this._invokeInner(descriptor, state);
+  }
+
+  private async _invokeInner(descriptor: CallType, state?: unknown): Promise<unknown> {
     if (this._isBound) {
       const callArgs = this.resolveArgs(descriptor);
       const fullArgs = this.mergeWithBound(callArgs);
@@ -148,6 +170,21 @@ export class AgencyFunction {
       toolDefinition: newToolDef,
       exported: this.exported,
       safe: this.safe,
+      isPreapproved: this._isPreapproved,
+    });
+  }
+
+  preapprove(): AgencyFunction {
+    if (this._isPreapproved) return this;
+    return new AgencyFunction({
+      name: this.name,
+      module: this.module,
+      fn: this._fn,
+      params: this.params,
+      toolDefinition: this.toolDefinition,
+      exported: this.exported,
+      safe: this.safe,
+      isPreapproved: true,
     });
   }
 

@@ -1,0 +1,10 @@
+export def guardedAdd(a: number, b: number): number {
+  const check = interrupt("Confirm adding ${a} + ${b}?")
+  return a + b
+}
+
+node main() {
+  const tool = guardedAdd.partial(a: 5).preapprove()
+  const result: number = llm("Use the guardedAdd tool to add 5 and 7. Return ONLY the number.", { tools: [tool] })
+  return result
+}

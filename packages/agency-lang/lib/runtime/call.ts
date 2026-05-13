@@ -49,6 +49,9 @@ export async function __callMethod(
       }
       return obj.describe(descriptor.args[0] as string);
     }
+    if (prop === "preapprove") {
+      return obj.preapprove();
+    }
   }
 
   const target = (obj as any)[prop];

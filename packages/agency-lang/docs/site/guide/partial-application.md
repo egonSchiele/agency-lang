@@ -123,6 +123,33 @@ const result = success(10) |> half |> multiply.partial(a: 3)
 
 The piped value fills the remaining unbound parameter.
 
+## Auto-approving interrupts with `.preapprove()`
+
+If you trust a function and want to auto-approve all its interrupts, use `.preapprove()`:
+
+```ts
+const tool = readFile.preapprove()
+llm("Read the config", { tools: [tool] })
+```
+
+This is equivalent to wrapping every call in a handler that approves:
+
+```ts
+handle {
+  readFile(filename)
+} with (data) {
+  return approve()
+}
+```
+
+`.preapprove()` works on any function, not just PFAs, and chains with `.partial()` and `.describe()` in any order:
+
+```ts
+const safeTool = readFile.partial(dir: "/tmp").preapprove().describe("Read temp files")
+```
+
+Outer handlers still take precedence. If a handler further up the chain rejects the interrupt, it stays rejected — `.preapprove()` can't override an outer rejection. This follows the normal [handler rules](./handlers).
+
 ## Rules and restrictions
 
 - You can only bind parameters by name: `fn.partial(x: 5)`, not by position.

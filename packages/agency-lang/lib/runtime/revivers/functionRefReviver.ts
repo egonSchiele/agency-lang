@@ -29,6 +29,9 @@ export class FunctionRefReviver implements BaseReviver<AgencyFunction> {
     if (value.toolDefinition) {
       result.toolDescription = value.toolDefinition.description;
     }
+    if (value.isPreapproved) {
+      result.isPreapproved = true;
+    }
     return result;
   }
 
@@ -47,6 +50,8 @@ export class FunctionRefReviver implements BaseReviver<AgencyFunction> {
 
     const original = this.findInRegistry(name, module);
 
+    let result: AgencyFunction;
+
     // If serialized params have bound values, reconstruct the bound function
     if (Array.isArray(value.params) && value.params.some((p: any) => p.isBound)) {
       const params = value.params as FuncParam[];
@@ -57,28 +62,32 @@ export class FunctionRefReviver implements BaseReviver<AgencyFunction> {
           bindings[p.name] = p.boundValue;
         }
       }
-      let revived = original.partial(bindings);
+      result = original.partial(bindings);
 
       // Restore tool description if it was customized via .describe()
-      if (typeof value.toolDescription === "string" && revived.toolDefinition) {
-        revived = revived.withToolDefinition({
-          ...revived.toolDefinition,
+      if (typeof value.toolDescription === "string" && result.toolDefinition) {
+        result = result.withToolDefinition({
+          ...result.toolDefinition,
           description: value.toolDescription,
         });
       }
-      return revived;
-    }
-
-    // Restore tool description for non-bound functions that used .describe()
-    if (typeof value.toolDescription === "string" && original.toolDefinition &&
+    } else if (typeof value.toolDescription === "string" && original.toolDefinition &&
         value.toolDescription !== original.toolDefinition.description) {
-      return original.withToolDefinition({
+      // Restore tool description for non-bound functions that used .describe()
+      result = original.withToolDefinition({
         ...original.toolDefinition,
         description: value.toolDescription,
       });
+    } else {
+      result = original;
     }
 
-    return original;
+    // Restore preapproved state
+    if (value.isPreapproved) {
+      result = result.preapprove();
+    }
+
+    return result;
   }
 
   private findInRegistry(name: string, module: string): AgencyFunction {

@@ -1,0 +1,17 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "[42,10]",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "preapproved function survives interrupt serialization cycle",
+      "interruptHandlers": [
+        {
+          "action": "approve",
+          "expectedMessage": "Other interrupt"
+        }
+      ]
+    }
+  ]
+}

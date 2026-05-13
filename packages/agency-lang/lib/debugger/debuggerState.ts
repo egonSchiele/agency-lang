@@ -1,7 +1,7 @@
 // lib/debugger/types.ts
 import { Checkpoint, CheckpointStore, RuntimeContext } from "@/index.js";
 import { CheckpointArgs, SourceLocationOpts } from "@/runtime/state/checkpointStore.js";
-import { color } from "termcolors";
+import { color } from "@/utils/termcolors.js";
 
 export class DebuggerState {
   private mode: "stepping" | "running" = "stepping";

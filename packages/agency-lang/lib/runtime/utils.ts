@@ -1,4 +1,4 @@
-import { color } from "termcolors";
+import { color } from "@/utils/termcolors.js";
 import { GlobalStore } from "./state/globalStore.js";
 import { ThreadStore } from "./index.js";
 import { RunNodeResult } from "./types.js";

@@ -11,6 +11,7 @@ import {
 } from "@/cli/commands.js";
 import { evaluate } from "@/cli/evaluate.js";
 import { fixtures, test, testTs, SlowTest } from "@/cli/test.js";
+import { generateReport, cleanCoverage } from "@/cli/coverage.js";
 import { createBundle, extractBundle } from "@/cli/bundle.js";
 import { traceLog } from "@/cli/events.js";
 import { AgencyConfig } from "@/config.js";
@@ -289,8 +290,20 @@ export function createProgram(deps: CliDependencies = {}): Command {
       "Number of test files to run in parallel",
       parseInt,
     )
-    .action(async (testFile: string[], opts: { parallel?: number }) => {
+    .option("--coverage", "Enable coverage collection and report")
+    .option("--accumulate", "Preserve existing coverage data (use with --coverage)")
+    .action(async (testFile: string[], opts: { parallel?: number; coverage?: boolean; accumulate?: boolean }) => {
       const config = getConfig();
+      if (opts.coverage) {
+        process.env.AGENCY_COVERAGE = "1";
+        // Resolve to an absolute path so subprocesses spawned with a different
+        // cwd (e.g., `test js` uses execFileAsync({ cwd: dir })) all write to
+        // the same `.coverage/` directory.
+        process.env.AGENCY_COVERAGE_OUTDIR = path.resolve(config.coverage?.outDir ?? ".coverage");
+        if (!opts.accumulate) {
+          cleanCoverage(config);
+        }
+      }
       const parallel = opts.parallel ?? config.test?.parallel ?? 1;
       const totals = await test(config, testFile, parallel);
       const totalFiles = totals.filesPassed + totals.filesFailed;
@@ -319,6 +332,10 @@ export function createProgram(deps: CliDependencies = {}): Command {
         console.log(colorFn(`      Tests  ${testsStatus} (${totalTests})`));
       }
       printSlowestTests(totals.slowTests);
+      if (opts.coverage) {
+        const reportTargets = testFile.length > 0 ? testFile : ["."];
+        await generateReport(config, reportTargets);
+      }
       if (totals.failed > 0) {
         process.exit(1);
       }
@@ -333,10 +350,23 @@ export function createProgram(deps: CliDependencies = {}): Command {
       "Number of test dirs to run in parallel",
       parseInt,
     )
-    .action(async (testFile: string[], opts: { parallel?: number }) => {
+    .option("--coverage", "Enable coverage collection and report")
+    .option("--accumulate", "Preserve existing coverage data (use with --coverage)")
+    .action(async (testFile: string[], opts: { parallel?: number; coverage?: boolean; accumulate?: boolean }) => {
       const config = getConfig();
+      if (opts.coverage) {
+        process.env.AGENCY_COVERAGE = "1";
+        process.env.AGENCY_COVERAGE_OUTDIR = path.resolve(config.coverage?.outDir ?? ".coverage");
+        if (!opts.accumulate) {
+          cleanCoverage(config);
+        }
+      }
       const parallel = opts.parallel ?? config.test?.parallel ?? 1;
       await testTs(config, testFile, parallel);
+      if (opts.coverage) {
+        const reportTargets = testFile.length > 0 ? testFile : ["."];
+        await generateReport(config, reportTargets);
+      }
     });
 
   testCmd
@@ -361,6 +391,35 @@ export function createProgram(deps: CliDependencies = {}): Command {
         await evaluate(getConfig(), target, opts.args, opts.results);
       },
     );
+
+  const coverageCmd = program
+    .command("coverage")
+    .description("View test coverage reports");
+
+  coverageCmd
+    .command("report")
+    .description("Generate coverage report from collected data")
+    .argument("<target>", "Directory or .agency file to report on")
+    .option("--html", "Generate HTML report")
+    .option("--detail", "List uncovered line ranges per file")
+    .action(
+      async (
+        target: string,
+        opts: { detail?: boolean; html?: boolean },
+      ) => {
+        await generateReport(getConfig(), target, {
+          detail: opts.detail,
+          html: opts.html,
+        });
+      },
+    );
+
+  coverageCmd
+    .command("clean")
+    .description("Delete collected coverage data")
+    .action(() => {
+      cleanCoverage(getConfig());
+    });
 
   program
     .command("definition")

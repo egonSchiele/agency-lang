@@ -5,6 +5,7 @@ import { SimpleMachine } from "../../simplemachine/index.js";
 import { StatelogClient, StatelogConfig } from "../../statelogClient.js";
 import { AgencyFunction } from "../agencyFunction.js";
 import { reviveWithClasses, type ClassRegistry } from "../classReviver.js";
+import { CoverageCollector } from "../coverageCollector.js";
 import { AgencyCancelledError } from "../errors.js";
 import type { AgencyCallbacks } from "../hooks.js";
 import type { InterruptResponse } from "../interrupts.js";
@@ -17,6 +18,34 @@ import type { HandlerFn } from "../types.js";
 import type { Checkpoint } from "./checkpointStore.js";
 import { CheckpointStore, RESULT_ENTRY_LABEL } from "./checkpointStore.js";
 import { PendingPromiseStore } from "./pendingPromiseStore.js";
+
+/**
+ * Process-wide singleton CoverageCollector used when AGENCY_COVERAGE is set.
+ * One collector per process — multiple RuntimeContext instances created within
+ * the same process all share it, and a single `process.on("exit")` listener
+ * writes the merged data once. AGENCY_COVERAGE_OUTDIR is set by the CLI from
+ * agency.json's coverage.outDir; defaults to ".coverage" otherwise.
+ */
+let _processCoverageCollector: CoverageCollector | null = null;
+function getProcessCoverageCollector(): CoverageCollector {
+  if (_processCoverageCollector) return _processCoverageCollector;
+  const collector = new CoverageCollector();
+  _processCoverageCollector = collector;
+  const outDir = process.env.AGENCY_COVERAGE_OUTDIR ?? ".coverage";
+  process.on("exit", () => {
+    // process.on("exit") handlers are sync-only and any throw is unhelpful at
+    // shutdown — log a warning and move on so coverage failures never make
+    // test runs flaky or noisy.
+    try {
+      collector.write(outDir);
+    } catch (err) {
+      console.warn(
+        `[coverage] failed to write to ${outDir}: ${(err as Error).message}`,
+      );
+    }
+  });
+  return collector;
+}
 
 /* bunch of stuff that every node/function in the runtime needs access to,
 that we don't want to pass as individual arguments everywhere */
@@ -90,6 +119,7 @@ export class RuntimeContext<T> {
   runId: string | null;
   verbose: boolean;
   getStaticVars?: () => Record<string, unknown>;
+  coverageCollector: CoverageCollector | null = null;
 
   // stored so createExecutionContext can create new StatelogClients
   private statelogConfig: StatelogConfig;
@@ -144,6 +174,10 @@ export class RuntimeContext<T> {
     this._llmClient = new SmoltalkClient();
     this.classRegistry = {};
     this.abortController = new AbortController();
+
+    if (process.env.AGENCY_COVERAGE) {
+      this.coverageCollector = getProcessCoverageCollector();
+    }
   }
 
   getRunId(): string {
@@ -189,6 +223,7 @@ export class RuntimeContext<T> {
       ...this.statelogConfig,
       traceId: runId,
     });
+    execCtx.coverageCollector = this.coverageCollector;
     return execCtx;
   }
 

@@ -149,6 +149,11 @@ export interface AgencyConfig {
     /** Base URL for source links in generated docs */
     baseUrl?: string;
   };
+
+  coverage?: {
+    /** Output directory for collected coverage data (default: ".coverage") */
+    outDir?: string;
+  };
 }
 
 // --- Zod schema for runtime validation of agency.json ---
@@ -199,6 +204,7 @@ export const AgencyConfigSchema = z
     distDir: z.string(),
     test: z.object({ parallel: z.number() }).partial(),
     doc: z.object({ outDir: z.string(), baseUrl: z.string() }).partial(),
+    coverage: z.object({ outDir: z.string() }).partial(),
   })
   .partial()
   .passthrough();

@@ -3,7 +3,7 @@ import { Checkpoint, type ThreadMessages } from "../runtime/state/checkpointStor
 import { GlobalStore } from "../runtime/state/globalStore.js";
 import { checkpointSchema } from "../runtime/state/schemas.js";
 import { getStdlibDir } from "../importPaths.js";
-import { color } from "termcolors";
+import { color } from "@/utils/termcolors.js";
 import { uniq } from "@/utils.js";
 import fs from "fs";
 import path from "path";

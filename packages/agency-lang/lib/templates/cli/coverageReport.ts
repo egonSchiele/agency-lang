@@ -1,0 +1,55 @@
+// THIS FILE WAS AUTO-GENERATED
+// Source: lib/templates/cli/coverageReport.mustache
+// Any manual changes will be lost.
+import { apply } from "typestache";
+
+export const template = `<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Agency Coverage Report</title>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; margin: 2em; background: #1a1a2e; color: #e0e0e0; }
+  h1 { color: #fff; }
+  table { border-collapse: collapse; width: 100%; margin-bottom: 2em; }
+  th, td { padding: 8px 12px; text-align: left; border-bottom: 1px solid #333; }
+  th { color: #888; }
+  a { color: #7aa2f7; }
+  .bar { background: #333; height: 16px; border-radius: 3px; width: 200px; }
+  .bar-fill { background: #9ece6a; height: 100%; border-radius: 3px; }
+  .file-section { margin-bottom: 3em; }
+  .pct { color: #888; font-size: 0.8em; }
+  pre { background: #16161e; padding: 1em; border-radius: 6px; overflow-x: auto; line-height: 1.5; }
+  .line { display: block; }
+  .ln { color: #555; margin-right: 1em; user-select: none; }
+  .covered { background: rgba(158, 206, 106, 0.1); }
+  .uncovered { background: rgba(247, 118, 142, 0.15); }
+  .neutral { }
+</style>
+</head>
+<body>
+<h1>Agency Coverage Report</h1>
+<p>Total: {{{totalPercentage:string}}}% ({{totalCovered:number}}/{{totalSteps:number}} steps)</p>
+<table>
+  <tr><th>File</th><th>Coverage</th><th>Steps</th><th></th></tr>
+  {{{fileRowsHtml:string}}}
+</table>
+{{{fileSectionsHtml:string}}}
+</body>
+</html>
+`;
+
+export type TemplateType = {
+  totalPercentage: string;
+  totalCovered: number;
+  totalSteps: number;
+  fileRowsHtml: string;
+  fileSectionsHtml: string;
+};
+
+const render = (args: TemplateType) => {
+  return apply(template, args);
+}
+
+export default render;
+    

@@ -107,3 +107,4 @@ export {
 } from "./result.js";
 export type { ResultValue, ResultSuccess, ResultFailure } from "./result.js";
 export { Schema, __validateType } from "./schema.js";
+export { CoverageCollector } from "./coverageCollector.js";

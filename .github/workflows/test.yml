@@ -9,6 +9,10 @@ on:
 
 permissions:
   contents: read
+  # Required so the coverage step can post a sticky comment on PRs.
+  # `pull_request` events from forks still receive a read-only token, in which
+  # case the post step degrades to "log only" via continue-on-error.
+  pull-requests: write
 
 jobs:
   build:
@@ -63,12 +67,65 @@ jobs:
       working-directory: packages/agency-lang
       env:
         AGENCY_USE_TEST_LLM_PROVIDER: "1"
-      run: pnpm run test:agency
+      # On node 22 we collect step coverage so the next step can report on
+      # stdlib. `--coverage` (without `--accumulate`) cleans `.coverage/` first,
+      # so the runner does not need to be otherwise prepared.
+      run: |
+        if [ "${{ matrix.node-version }}" = "22.x" ]; then
+          time node ./dist/scripts/agency.js test tests/agency -p 12 --coverage
+        else
+          pnpm run test:agency
+        fi
     - name: Agency-JS integration tests
       working-directory: packages/agency-lang
       env:
         AGENCY_USE_TEST_LLM_PROVIDER: "1"
-      run: pnpm run test:agency-js
+      run: |
+        if [ "${{ matrix.node-version }}" = "22.x" ]; then
+          time node ./dist/scripts/agency.js test js tests/agency-js -p 12 --coverage --accumulate
+        else
+          pnpm run test:agency-js
+        fi
+    - name: Generate stdlib coverage report
+      if: matrix.node-version == '22.x' && always() && !cancelled()
+      working-directory: packages/agency-lang
+      # `coverage report` triggers a recompile of every target .agency file:
+      # type warnings go to stderr (silenced) and "file.agency → file.js"
+      # progress lines go to stdout interleaved with the report itself
+      # (filtered out with grep).
+      run: |
+        node ./dist/scripts/agency.js coverage report stdlib 2>/dev/null \
+          | grep -v ' → ' \
+          | tee coverage-summary.txt
+        node ./dist/scripts/agency.js coverage report --detail stdlib 2>/dev/null \
+          | grep -v ' → ' \
+          | tee coverage-detail.txt
+    - name: Post stdlib coverage comment
+      if: matrix.node-version == '22.x' && github.event_name == 'pull_request' && always() && !cancelled()
+      continue-on-error: true
+      uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+      with:
+        script: |
+          const fs = require('fs');
+          const summary = fs.readFileSync('packages/agency-lang/coverage-summary.txt', 'utf8');
+          const detail = fs.readFileSync('packages/agency-lang/coverage-detail.txt', 'utf8');
+          const marker = '<!-- agency-stdlib-coverage -->';
+          const body = `${marker}\n## Standard Library Coverage\n\nFrom \`agency test\` + \`agency test js\` (run \`${context.runId}\`).\n\n<details open><summary>Summary</summary>\n\n\`\`\`\n${summary}\n\`\`\`\n\n</details>\n\n<details><summary>Per-file uncovered ranges</summary>\n\n\`\`\`\n${detail}\n\`\`\`\n\n</details>\n`;
+          const { owner, repo } = context.repo;
+          const issue_number = context.issue.number;
+          const { data: comments } = await github.rest.issues.listComments({
+            owner, repo, issue_number, per_page: 100,
+          });
+          const existing = comments.find((c) => c.body && c.body.includes(marker));
+          if (existing) {
+            await github.rest.issues.updateComment({
+              owner, repo, comment_id: existing.id, body,
+            });
+          } else {
+            await github.rest.issues.createComment({
+              owner, repo, issue_number, body,
+            });
+          }
     - name: github stdlib smoke test
       # Only run on `push` to main, NEVER on `pull_request` events.
       #

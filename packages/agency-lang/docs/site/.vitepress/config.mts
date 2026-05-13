@@ -173,6 +173,7 @@ export default defineConfig({
             { text: "fs", link: "/stdlib/fs" },
             { text: "http", link: "/stdlib/http" },
             { text: "imessage", link: "/stdlib/imessage" },
+            { text: "index", link: "/stdlib/index" },
             { text: "keyring", link: "/stdlib/keyring" },
             { text: "math", link: "/stdlib/math" },
             { text: "oauth", link: "/stdlib/oauth" },

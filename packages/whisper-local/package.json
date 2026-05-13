@@ -1,0 +1,50 @@
+{
+  "name": "@agency-lang/whisper-local",
+  "version": "0.0.1",
+  "description": "Local Whisper transcription for Agency using vendored whisper.cpp",
+  "type": "module",
+  "agency": "./index.agency",
+  "main": "./dist/src/transcribe.js",
+  "bin": {
+    "agency-whisper": "./dist/src/cli.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/src/transcribe.d.ts",
+      "import": "./dist/src/transcribe.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist/",
+    "build/Release/whisper_addon.node",
+    "vendor/",
+    "CMakeLists.txt",
+    "index.agency",
+    "models.lock.json",
+    "README.md"
+  ],
+  "scripts": {
+    "build:ts": "tsc",
+    "build:native": "cmake-js compile --runtime=node",
+    "build": "pnpm run build:native && pnpm run build:ts",
+    "test": "vitest",
+    "test:run": "vitest run"
+  },
+  "peerDependencies": {
+    "agency-lang": "workspace:*"
+  },
+  "dependencies": {
+    "cmake-js": "^7.3.0",
+    "node-addon-api": "^8.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^25.0.6",
+    "typescript": "^5.0.0",
+    "vitest": "^3.0.0"
+  },
+  "author": "Aditya Bhargava",
+  "license": "ISC",
+  "bugs": { "url": "https://github.com/egonSchiele/agency-lang/issues" },
+  "homepage": "https://github.com/egonSchiele/agency-lang"
+}

@@ -1,0 +1,79 @@
+# Security: all third-party actions pinned to SHA. Mirrors the policy in test.yml.
+name: whisper-local CI
+
+on:
+  push:
+    branches: [ "main" ]
+    paths:
+      - "packages/whisper-local/**"
+      - ".github/workflows/whisper-local.yml"
+  pull_request:
+    branches: [ "main" ]
+    paths:
+      - "packages/whisper-local/**"
+      - ".github/workflows/whisper-local.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
+        with:
+          version: 9
+          run_install: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22.x
+          cache: 'pnpm'
+
+      - name: Install system dependencies (cmake, ffmpeg, build-essential)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends cmake build-essential ffmpeg
+
+      - name: Install npm dependencies (no native build runs — no install hook)
+        run: pnpm install
+
+      - name: Build TypeScript
+        working-directory: packages/whisper-local
+        run: pnpm run build:ts
+
+      - name: Build native addon (explicit; mirrors what users run)
+        working-directory: packages/whisper-local
+        run: node dist/src/cli.js build
+
+      # Pre-download the tiny.en model BEFORE the unit-test step so the
+      # addon-memory.test.ts suite actually runs (it skips itself unless the
+      # model is on disk; running unit tests first would make those tests
+      # silently skip in CI, defeating the point of having them).
+      - name: Pre-download tiny.en model (so addon-memory tests can run)
+        working-directory: packages/whisper-local
+        run: node dist/src/cli.js pull tiny.en
+        timeout-minutes: 5
+
+      - name: Run unit tests (modelManager, ffmpeg, transcribe, addon-memory)
+        working-directory: packages/whisper-local
+        # --expose-gc enables the best-effort Persistent-ref GC test in
+        # addon-memory.test.ts (skipped without the flag).
+        env:
+          NODE_OPTIONS: "--expose-gc"
+        run: pnpm test:run
+
+      # The slow integration test runs whisper inference end-to-end. The
+      # model is already on disk from the pre-download step above, so this
+      # is purely the inference + decode path.
+      - name: Run integration test (transcription end-to-end)
+        working-directory: packages/whisper-local
+        env:
+          AGENCY_RUN_SLOW: "1"
+        run: pnpm test:run tests/integration.test.ts
+        timeout-minutes: 10

@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "testGlobalPreapprovedPFA",
+      "input": "",
+      "expectedOutput": "12",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "PFA constructed and preapproved in global scope auto-approves interrupts"
+    }
+  ]
+}

@@ -7,9 +7,10 @@ import { randomUUID } from "crypto";
  *
  * Hits are keyed by `${moduleId}:${scopeName}` -> { stepPath: true }.
  *
- * Modules imported from npm packages (`pkg::` prefix or paths under
- * `node_modules`) are intentionally excluded from coverage. They are not
- * user-authored code in this workspace.
+ * `moduleId` is the source file path relative to cwd (set in
+ * `lib/cli/commands.ts` via `path.relative(process.cwd(), absoluteInputFile)`).
+ * Modules whose path lives under a `node_modules` directory are intentionally
+ * excluded from coverage — they are not user-authored code in this workspace.
  */
 export class CoverageCollector {
   private hits: Record<string, Record<string, true>> = {};
@@ -33,7 +34,7 @@ export class CoverageCollector {
 }
 
 function isExternalModule(moduleId: string): boolean {
-  if (moduleId.startsWith("pkg::")) return true;
-  if (moduleId.includes("/node_modules/")) return true;
-  return false;
+  // Normalize Windows backslashes so the check works cross-platform.
+  const normalized = moduleId.replace(/\\/g, "/");
+  return normalized.includes("/node_modules/") || normalized.startsWith("node_modules/");
 }

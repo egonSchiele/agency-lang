@@ -14,6 +14,8 @@ You can pass `.test.json` files or directories; directories are scanned recursiv
 ### Options
 
 - `-p, --parallel <number>` — number of test files to run in parallel.
+- `--coverage` — collect step coverage and print a summary report after the run. See [coverage](./coverage.html).
+- `--accumulate` — preserve any existing coverage data instead of cleaning it first (use with `--coverage`).
 
 ## Generating fixtures
 
@@ -32,6 +34,8 @@ agency test js tests/
 Runs JavaScript integration tests (Agency code paired with `.test.ts` files that exercise it from TypeScript).
 
 - `-p, --parallel <number>` — number of test directories to run in parallel.
+- `--coverage` — collect step coverage and print a summary report after the run. See [coverage](./coverage.html).
+- `--accumulate` — preserve any existing coverage data instead of cleaning it first (use with `--coverage`).
 
 ## Evals
 

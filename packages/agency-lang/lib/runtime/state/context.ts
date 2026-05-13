@@ -33,7 +33,16 @@ function getProcessCoverageCollector(): CoverageCollector {
   _processCoverageCollector = collector;
   const outDir = process.env.AGENCY_COVERAGE_OUTDIR ?? ".coverage";
   process.on("exit", () => {
-    collector.write(outDir);
+    // process.on("exit") handlers are sync-only and any throw is unhelpful at
+    // shutdown — log a warning and move on so coverage failures never make
+    // test runs flaky or noisy.
+    try {
+      collector.write(outDir);
+    } catch (err) {
+      console.warn(
+        `[coverage] failed to write to ${outDir}: ${(err as Error).message}`,
+      );
+    }
   });
   return collector;
 }

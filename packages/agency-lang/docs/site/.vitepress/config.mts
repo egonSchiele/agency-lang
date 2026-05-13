@@ -140,6 +140,7 @@ export default defineConfig({
             { text: "Overview", link: "/cli/index" },
             { text: "agent", link: "/cli/agent" },
             { text: "compile", link: "/cli/compile" },
+            { text: "coverage", link: "/cli/coverage" },
             { text: "debug", link: "/cli/debug" },
             { text: "doc", link: "/cli/doc" },
             { text: "format", link: "/cli/format" },

@@ -98,3 +98,32 @@ function createColorFunction(codes: string[] = []): ColorFunction {
  * ```
  */
 export const color = createColorFunction();
+
+/**
+ * Creates a chainable function with the same shape as the color function,
+ * but emits no ANSI codes. Used by `ttyColor` when stdout is not a TTY.
+ */
+function createNoopColorFunction(): ColorFunction {
+  const applyNoop = (...args: any[]): string => args.join(" ");
+  return new Proxy(applyNoop as ColorFunction, {
+    get(target, prop: string) {
+      if (prop in styles) return createNoopColorFunction();
+      return target[prop as keyof typeof target];
+    },
+  });
+}
+
+/**
+ * Like `color`, but emits no ANSI codes when stdout is not a TTY (e.g., when
+ * output is piped to a file or another process). Use this anywhere you want
+ * conditional coloring without manually checking `process.stdout.isTTY`.
+ *
+ * @example
+ * ```ts
+ * import { ttyColor } from 'termcolors';
+ * console.log(ttyColor.green("colored on a terminal, plain when piped"));
+ * ```
+ */
+export const ttyColor: ColorFunction = process.stdout.isTTY
+  ? color
+  : createNoopColorFunction();

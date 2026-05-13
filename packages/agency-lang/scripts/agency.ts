@@ -296,7 +296,10 @@ export function createProgram(deps: CliDependencies = {}): Command {
       const config = getConfig();
       if (opts.coverage) {
         process.env.AGENCY_COVERAGE = "1";
-        process.env.AGENCY_COVERAGE_OUTDIR = config.coverage?.outDir ?? ".coverage";
+        // Resolve to an absolute path so subprocesses spawned with a different
+        // cwd (e.g., `test js` uses execFileAsync({ cwd: dir })) all write to
+        // the same `.coverage/` directory.
+        process.env.AGENCY_COVERAGE_OUTDIR = path.resolve(config.coverage?.outDir ?? ".coverage");
         if (!opts.accumulate) {
           cleanCoverage(config);
         }
@@ -330,7 +333,8 @@ export function createProgram(deps: CliDependencies = {}): Command {
       }
       printSlowestTests(totals.slowTests);
       if (opts.coverage) {
-        await generateReport(config);
+        const reportTargets = testFile.length > 0 ? testFile : ["."];
+        await generateReport(config, reportTargets);
       }
       if (totals.failed > 0) {
         process.exit(1);
@@ -352,7 +356,7 @@ export function createProgram(deps: CliDependencies = {}): Command {
       const config = getConfig();
       if (opts.coverage) {
         process.env.AGENCY_COVERAGE = "1";
-        process.env.AGENCY_COVERAGE_OUTDIR = config.coverage?.outDir ?? ".coverage";
+        process.env.AGENCY_COVERAGE_OUTDIR = path.resolve(config.coverage?.outDir ?? ".coverage");
         if (!opts.accumulate) {
           cleanCoverage(config);
         }
@@ -360,7 +364,8 @@ export function createProgram(deps: CliDependencies = {}): Command {
       const parallel = opts.parallel ?? config.test?.parallel ?? 1;
       await testTs(config, testFile, parallel);
       if (opts.coverage) {
-        await generateReport(config);
+        const reportTargets = testFile.length > 0 ? testFile : ["."];
+        await generateReport(config, reportTargets);
       }
     });
 
@@ -394,12 +399,12 @@ export function createProgram(deps: CliDependencies = {}): Command {
   coverageCmd
     .command("report")
     .description("Generate coverage report from collected data")
-    .argument("[target]", "Directory to report on (default: stdlib)")
+    .argument("<target>", "Directory or .agency file to report on")
     .option("--html", "Generate HTML report")
-    .option("--detail", "Show annotated source")
+    .option("--detail", "List uncovered line ranges per file")
     .action(
       async (
-        target: string | undefined,
+        target: string,
         opts: { detail?: boolean; html?: boolean },
       ) => {
         await generateReport(getConfig(), target, {

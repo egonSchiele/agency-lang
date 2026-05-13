@@ -1,8 +1,11 @@
 import * as fs from "fs";
 import * as path from "path";
+import { pathToFileURL } from "url";
 import { AgencyConfig } from "../config.js";
 import { compile } from "./commands.js";
 import { RunStrategy } from "../importStrategy.js";
+import { ttyColor } from "../utils/termcolors.js";
+import renderCoverageHtml from "../templates/cli/coverageReport.js";
 
 type CoverageData = Record<string, Record<string, true>>;
 type SourceMap = Record<string, Record<string, { line: number; col: number }>>;
@@ -14,6 +17,8 @@ type FileCoverage = {
   percentage: number;
   /** Keyed by 1-indexed line number for display. */
   lineStatus: Record<number, "covered" | "uncovered">;
+  /** 1-indexed line ranges of uncovered steps, e.g. [[14, 15], [22, 22]]. */
+  uncoveredRanges: [number, number][];
 };
 
 const SKIP_DIRS = new Set([
@@ -45,9 +50,18 @@ function loadCoverageData(outDir: string): CoverageData {
   const merged: CoverageData = {};
   for (const file of fs.readdirSync(outDir)) {
     if (!file.startsWith("cov-") || !file.endsWith(".json")) continue;
-    const data: CoverageData = JSON.parse(
-      fs.readFileSync(path.join(outDir, file), "utf-8"),
-    );
+    const fullPath = path.join(outDir, file);
+    let data: CoverageData;
+    try {
+      data = JSON.parse(fs.readFileSync(fullPath, "utf-8"));
+    } catch (err) {
+      // A subprocess killed mid-write can leave a corrupt file; skip with a
+      // warning so a single bad file does not tank the whole report.
+      console.warn(
+        `[coverage] skipping invalid coverage file ${file}: ${(err as Error).message}`,
+      );
+      continue;
+    }
     for (const [scope, steps] of Object.entries(data)) {
       if (!merged[scope]) merged[scope] = {};
       for (const step of Object.keys(steps)) {
@@ -68,15 +82,37 @@ async function getSourceMap(
     });
     if (!compiled) return null;
     const absPath = path.resolve(compiled);
-    // Dynamically import the compiled module to read its __sourceMap export
-    // safely (mirrors lib/cli/debug.ts). Cache-bust with a query string so
-    // repeated calls during the same process pick up fresh compiles.
-    const mod = await import(`${absPath}?t=${Date.now()}`);
+    // Dynamically import the compiled module to read its `__sourceMap` export
+    // (mirrors lib/cli/debug.ts). pathToFileURL handles platform-specific
+    // file URL formatting; the cache-busting query forces a fresh import on
+    // repeated calls within the same process.
+    const fileUrl = pathToFileURL(absPath).href;
+    // eslint-disable-next-line no-restricted-syntax
+    const mod = await import(`${fileUrl}?t=${Date.now()}`);
     return (mod.__sourceMap ?? null) as SourceMap | null;
   } catch (err) {
     console.warn(`Could not load source map for ${agencyFile}: ${(err as Error).message}`);
     return null;
   }
+}
+
+function computeUncoveredRanges(
+  lineStatus: Record<number, "covered" | "uncovered">,
+): [number, number][] {
+  const uncoveredLines = Object.entries(lineStatus)
+    .filter(([, status]) => status === "uncovered")
+    .map(([line]) => Number(line))
+    .sort((a, b) => a - b);
+  const ranges: [number, number][] = [];
+  for (const line of uncoveredLines) {
+    const last = ranges[ranges.length - 1];
+    if (last && line === last[1] + 1) {
+      last[1] = line;
+    } else {
+      ranges.push([line, line]);
+    }
+  }
+  return ranges;
 }
 
 function computeFileCoverage(
@@ -111,24 +147,25 @@ function computeFileCoverage(
     coveredSteps,
     percentage: totalSteps === 0 ? 100 : (coveredSteps / totalSteps) * 100,
     lineStatus,
+    uncoveredRanges: computeUncoveredRanges(lineStatus),
   };
 }
 
 export async function generateReport(
   config: AgencyConfig,
-  targetDir?: string,
+  target: string | string[],
   opts?: { detail?: boolean; html?: boolean },
 ): Promise<void> {
   const outDir = getCoverageOutDir(config);
   const hits = loadCoverageData(outDir);
 
   if (Object.keys(hits).length === 0) {
-    console.log("No coverage data found. Run tests with AGENCY_COVERAGE=1 first.");
+    console.log("No coverage data found. Run tests with --coverage first.");
     return;
   }
 
-  const searchDir = targetDir ?? "stdlib";
-  const agencyFiles = findAgencyFiles(searchDir);
+  const targets = Array.isArray(target) ? target : [target];
+  const agencyFiles = Array.from(new Set(targets.flatMap(findAgencyFiles)));
 
   const results: FileCoverage[] = [];
   for (const file of agencyFiles) {
@@ -154,41 +191,58 @@ export async function generateReport(
   }
 }
 
+/** Color a percentage by coverage band: red <50, yellow <80, green ≥80. */
+function colorPct(pct: number, text: string): string {
+  if (pct < 50) return ttyColor.red(text);
+  if (pct < 80) return ttyColor.yellow(text);
+  return ttyColor.green(text);
+}
+
 function printSummaryReport(results: FileCoverage[]): void {
-  console.log("\nAgency Coverage Report");
+  console.log(ttyColor.bold("\nAgency Coverage Report"));
   console.log("======================");
 
   let totalSteps = 0;
   let totalCovered = 0;
 
   for (const r of results) {
-    const pct = r.percentage.toFixed(1).padStart(5);
+    const pctStr = r.percentage.toFixed(1).padStart(5);
     const counts = `(${r.coveredSteps}/${r.totalSteps} steps)`;
-    console.log(`${r.file.padEnd(40)} ${pct}%  ${counts}`);
+    console.log(`${r.file.padEnd(40)} ${colorPct(r.percentage, pctStr + "%")}  ${ttyColor.dim(counts)}`);
     totalSteps += r.totalSteps;
     totalCovered += r.coveredSteps;
   }
 
   const totalPct = totalSteps === 0 ? 100 : (totalCovered / totalSteps) * 100;
   console.log("─".repeat(60));
+  const totalStr = totalPct.toFixed(1).padStart(5);
   console.log(
-    `${"Total".padEnd(40)} ${totalPct.toFixed(1).padStart(5)}%  (${totalCovered}/${totalSteps} steps)`,
+    `${ttyColor.bold("Total".padEnd(40))} ${colorPct(totalPct, totalStr + "%")}  ${ttyColor.dim(`(${totalCovered}/${totalSteps} steps)`)}`,
   );
 }
 
+function formatRanges(ranges: [number, number][]): string {
+  return ranges
+    .map(([a, b]) => (a === b ? String(a) : `${a}-${b}`))
+    .join(", ");
+}
+
+/**
+ * Detail report: one line per file with its uncovered line ranges. Modeled
+ * after how `c8` / `nyc` / `istanbul` summarize uncovered regions — full
+ * annotated source dumps are reserved for the HTML report.
+ */
 function printDetailReport(results: FileCoverage[]): void {
+  console.log(ttyColor.bold("\nAgency Coverage Report (detail)"));
+  console.log("================================");
   for (const r of results) {
-    const source = fs.readFileSync(r.file, "utf-8");
-    const lines = source.split("\n");
-    console.log(`\n── ${r.file} (${r.percentage.toFixed(1)}%) ──\n`);
-    for (let i = 0; i < lines.length; i++) {
-      const lineNum = i + 1;
-      const status = r.lineStatus[lineNum];
-      let prefix: string;
-      if (status === "covered") prefix = " ✓ ";
-      else if (status === "uncovered") prefix = " ✗ ";
-      else prefix = "   ";
-      console.log(`${prefix}${String(lineNum).padStart(4)}| ${lines[i]}`);
+    const pctStr = r.percentage.toFixed(1).padStart(5);
+    const counts = `(${r.coveredSteps}/${r.totalSteps})`;
+    const header = `${r.file.padEnd(40)} ${colorPct(r.percentage, pctStr + "%")}  ${ttyColor.dim(counts)}`;
+    if (r.uncoveredRanges.length === 0) {
+      console.log(`${header}`);
+    } else {
+      console.log(`${header}  uncovered: ${ttyColor.red(formatRanges(r.uncoveredRanges))}`);
     }
   }
 }
@@ -209,103 +263,50 @@ function generateHtmlReport(
   }
   const totalPct = totalSteps === 0 ? 100 : (totalCovered / totalSteps) * 100;
 
-  const fileSections = results.map((r) => {
-    const source = fs.readFileSync(r.file, "utf-8");
-    const lines = source.split("\n");
-    const annotatedLines = lines.map((line, i) => {
-      const lineNum = i + 1;
-      const status = r.lineStatus[lineNum] ?? "neutral";
-      return { lineNum, text: escapeHtml(line), status };
-    });
-    return {
-      file: r.file,
-      percentage: r.percentage.toFixed(1),
-      coveredSteps: r.coveredSteps,
-      totalSteps: r.totalSteps,
-      lines: annotatedLines,
-    };
-  });
+  const fileRowsHtml = results
+    .map((r) => {
+      const anchor = cssId(r.file);
+      const pct = r.percentage.toFixed(1);
+      return `  <tr>
+    <td><a href="#${anchor}">${escapeHtml(r.file)}</a></td>
+    <td>${pct}%</td>
+    <td>${r.coveredSteps}/${r.totalSteps}</td>
+    <td><div class="bar"><div class="bar-fill" style="width:${pct}%"></div></div></td>
+  </tr>`;
+    })
+    .join("\n");
+
+  const fileSectionsHtml = results
+    .map((r) => {
+      const source = fs.readFileSync(r.file, "utf-8");
+      const lines = source.split("\n");
+      const linesHtml = lines
+        .map((line, i) => {
+          const lineNum = i + 1;
+          const status = r.lineStatus[lineNum] ?? "neutral";
+          return `<span class="line ${status}"><span class="ln">${String(lineNum).padStart(4)}</span> ${escapeHtml(line)}</span>`;
+        })
+        .join("\n");
+      const anchor = cssId(r.file);
+      const pct = r.percentage.toFixed(1);
+      return `<div id="${anchor}" class="file-section">
+  <h2>${escapeHtml(r.file)} <span class="pct">${pct}%</span></h2>
+  <pre>${linesHtml}</pre>
+</div>`;
+    })
+    .join("\n");
 
   const html = renderCoverageHtml({
     totalPercentage: totalPct.toFixed(1),
     totalCovered,
     totalSteps,
-    files: fileSections,
+    fileRowsHtml,
+    fileSectionsHtml,
   });
 
   const outPath = path.join(reportDir, "index.html");
   fs.writeFileSync(outPath, html);
   console.log(`HTML report written to ${outPath}`);
-}
-
-function renderCoverageHtml(data: {
-  totalPercentage: string;
-  totalCovered: number;
-  totalSteps: number;
-  files: {
-    file: string;
-    percentage: string;
-    coveredSteps: number;
-    totalSteps: number;
-    lines: { lineNum: number; text: string; status: string }[];
-  }[];
-}): string {
-  const fileRows = data.files
-    .map(
-      (f) => `
-    <tr>
-      <td><a href="#${cssId(f.file)}">${escapeHtml(f.file)}</a></td>
-      <td>${f.percentage}%</td>
-      <td>${f.coveredSteps}/${f.totalSteps}</td>
-      <td><div class="bar"><div class="bar-fill" style="width:${f.percentage}%"></div></div></td>
-    </tr>`,
-    )
-    .join("\n");
-
-  const fileSections = data.files
-    .map(
-      (f) => `
-    <div id="${cssId(f.file)}" class="file-section">
-      <h2>${escapeHtml(f.file)} <span class="pct">${f.percentage}%</span></h2>
-      <pre>${f.lines.map((l) => `<span class="line ${l.status}"><span class="ln">${String(l.lineNum).padStart(4)}</span> ${l.text}</span>`).join("\n")}</pre>
-    </div>`,
-    )
-    .join("\n");
-
-  return `<!DOCTYPE html>
-<html>
-<head>
-<meta charset="utf-8">
-<title>Agency Coverage Report</title>
-<style>
-  body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; margin: 2em; background: #1a1a2e; color: #e0e0e0; }
-  h1 { color: #fff; }
-  table { border-collapse: collapse; width: 100%; margin-bottom: 2em; }
-  th, td { padding: 8px 12px; text-align: left; border-bottom: 1px solid #333; }
-  th { color: #888; }
-  a { color: #7aa2f7; }
-  .bar { background: #333; height: 16px; border-radius: 3px; width: 200px; }
-  .bar-fill { background: #9ece6a; height: 100%; border-radius: 3px; }
-  .file-section { margin-bottom: 3em; }
-  .pct { color: #888; font-size: 0.8em; }
-  pre { background: #16161e; padding: 1em; border-radius: 6px; overflow-x: auto; line-height: 1.5; }
-  .line { display: block; }
-  .ln { color: #555; margin-right: 1em; user-select: none; }
-  .covered { background: rgba(158, 206, 106, 0.1); }
-  .uncovered { background: rgba(247, 118, 142, 0.15); }
-  .neutral { }
-</style>
-</head>
-<body>
-<h1>Agency Coverage Report</h1>
-<p>Total: ${data.totalPercentage}% (${data.totalCovered}/${data.totalSteps} steps)</p>
-<table>
-  <tr><th>File</th><th>Coverage</th><th>Steps</th><th></th></tr>
-  ${fileRows}
-</table>
-${fileSections}
-</body>
-</html>`;
 }
 
 function cssId(file: string): string {
@@ -325,6 +326,13 @@ function findAgencyFiles(dir: string): string[] {
   if (!fs.existsSync(dir)) return results;
   const stat = fs.statSync(dir);
   if (stat.isFile() && dir.endsWith(".agency")) return [dir];
+  // For convenience, accept a `.test.json` path and map it to its sibling
+  // `.agency` file. Lets `agency test --coverage tests/agency/foo.test.json`
+  // produce a useful auto-report.
+  if (stat.isFile() && dir.endsWith(".test.json")) {
+    const sibling = dir.replace(/\.test\.json$/, ".agency");
+    return fs.existsSync(sibling) ? [sibling] : [];
+  }
   if (!stat.isDirectory()) return results;
   for (const entry of fs.readdirSync(dir)) {
     if (SKIP_DIRS.has(entry)) continue;

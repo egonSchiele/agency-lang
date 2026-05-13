@@ -36,15 +36,18 @@ describe("CoverageCollector", () => {
     expect(Object.keys(hits["mod:fn"])).toHaveLength(1);
   });
 
-  it("ignores hits for pkg:: imported modules", () => {
+  it("ignores hits for modules under node_modules (cross-platform)", () => {
     const collector = new CoverageCollector();
-    collector.hit("pkg::some-pkg/foo.agency", "fn", "0");
     collector.hit("/abs/path/node_modules/some-pkg/foo.agency", "fn", "0");
+    collector.hit("node_modules/some-pkg/foo.agency", "fn", "0");
+    // Windows-style backslash separators
+    collector.hit("C:\\abs\\path\\node_modules\\some-pkg\\foo.agency", "fn", "0");
     collector.hit("real/module.agency", "fn", "0");
 
     const hits = collector.getHits();
-    expect(hits["pkg::some-pkg/foo.agency:fn"]).toBeUndefined();
     expect(hits["/abs/path/node_modules/some-pkg/foo.agency:fn"]).toBeUndefined();
+    expect(hits["node_modules/some-pkg/foo.agency:fn"]).toBeUndefined();
+    expect(hits["C:\\abs\\path\\node_modules\\some-pkg\\foo.agency:fn"]).toBeUndefined();
     expect(hits["real/module.agency:fn"]).toEqual({ "0": true });
   });
 

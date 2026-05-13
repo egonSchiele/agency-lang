@@ -8,7 +8,7 @@ export default defineConfig({
       { text: "Home", link: "/" },
       { text: "Guide", link: "/guide/getting-started" },
       { text: "CLI", link: "/cli/index" },
-      { text: "Standard Library", link: "/stdlib/overview" },
+      { text: "Standard Library", link: "/stdlib/index" },
       { text: "Packages", link: "/packages/" },
     ],
     sidebar: {
@@ -56,8 +56,6 @@ export default defineConfig({
           items: [
             { text: "Concurrency", link: "/guide/concurrency" },
             { text: "Policies", link: "/guide/policies" },
-            { text: "Debugger", link: "/guide/debugger" },
-            { text: "Traces and Bundles", link: "/guide/traces-and-bundles" },
             { text: "Schemas", link: "/guide/schemas" },
             { text: "Checkpointing", link: "/guide/checkpointing" },
             { text: "MCP", link: "/guide/mcp" },
@@ -68,7 +66,6 @@ export default defineConfig({
           items: [
             { text: "Agency CLI", link: "/appendix/cli" },
             { text: "VSCode Extension", link: "/appendix/vscode-extension" },
-            { text: "Generating Docs", link: "/appendix/docs" },
             { text: "Callbacks", link: "/appendix/callbacks" },
             {
               text: "Agency vs TypeScript",

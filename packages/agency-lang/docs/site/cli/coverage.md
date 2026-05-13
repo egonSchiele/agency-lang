@@ -47,6 +47,14 @@ A target argument is required — it can be a directory (scanned recursively for
 
 - `--detail` — list uncovered line ranges per file.
 - `--html` — write a self-contained HTML report to `.coverage/report/index.html` with annotated source for every file.
+- `--threshold <percent>` — exit with code `1` when total coverage falls below the given value (0–100). Useful in CI to block merges that would drop coverage.
+- `--per-file-threshold <percent>` — exit with code `1` when any individual file falls below the given value. Combine with `--threshold` to enforce both an overall minimum and a per-file minimum.
+
+When a threshold is set, the report ends with either `✓ Coverage thresholds met` or one or more `✗` lines listing the failing files / overall percentage.
+
+```
+agency coverage report stdlib --threshold 80 --per-file-threshold 60
+```
 
 ### Cleaning collected data
 
@@ -58,17 +66,31 @@ Removes the `.coverage/` directory.
 
 ## Configuration
 
-The output directory can be configured in `agency.json`:
+All options can be set in `agency.json` so you don't have to repeat them on the command line:
 
 ```json
 {
   "coverage": {
-    "outDir": ".coverage"
+    "outDir": ".coverage",
+    "threshold": 80,
+    "perFileThreshold": 60,
+    "exclude": [
+      "examples/**",
+      "stdlib/legacy/**",
+      "**/*.generated.agency"
+    ]
   }
 }
 ```
 
-Defaults to `.coverage` if not set.
+| Field | Type | Description |
+|-------|------|-------------|
+| `outDir` | string | Directory for collected coverage data. Defaults to `.coverage`. |
+| `threshold` | number (0–100) | Overall coverage minimum. Equivalent to passing `--threshold`. |
+| `perFileThreshold` | number (0–100) | Per-file coverage minimum. Equivalent to passing `--per-file-threshold`. |
+| `exclude` | string[] | [picomatch](https://github.com/micromatch/picomatch) globs of source files to drop from reports and threshold checks. Both absolute and cwd-relative paths are matched, so you can write either form. |
+
+CLI flags always override the corresponding config values for that single invocation.
 
 ## Environment variables
 

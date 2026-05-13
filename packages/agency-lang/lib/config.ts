@@ -153,6 +153,28 @@ export interface AgencyConfig {
   coverage?: {
     /** Output directory for collected coverage data (default: ".coverage") */
     outDir?: string;
+
+    /**
+     * Minimum acceptable total coverage percentage (0–100).
+     * `agency coverage report` exits with code 1 when total coverage falls
+     * below this value. Overridden by the CLI `--threshold` flag.
+     */
+    threshold?: number;
+
+    /**
+     * Per-file minimum coverage percentage (0–100). Each individual file
+     * must be at or above this value, in addition to the overall threshold.
+     */
+    perFileThreshold?: number;
+
+    /**
+     * Glob patterns of source files to exclude from coverage reports
+     * (relative to the project root, picomatch syntax). Useful for
+     * generated code, examples, or files you intentionally do not test.
+     *
+     * Example: ["examples/**", "stdlib/legacy/**"]
+     */
+    exclude?: string[];
   };
 }
 
@@ -204,7 +226,14 @@ export const AgencyConfigSchema = z
     distDir: z.string(),
     test: z.object({ parallel: z.number() }).partial(),
     doc: z.object({ outDir: z.string(), baseUrl: z.string() }).partial(),
-    coverage: z.object({ outDir: z.string() }).partial(),
+    coverage: z
+      .object({
+        outDir: z.string(),
+        threshold: z.number().min(0).max(100),
+        perFileThreshold: z.number().min(0).max(100),
+        exclude: z.array(z.string()),
+      })
+      .partial(),
   })
   .partial()
   .passthrough();

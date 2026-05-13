@@ -7,9 +7,9 @@
 > and [`packages/whisper-local/docs/DEV.md`](../../../whisper-local/docs/DEV.md).**
 >
 > Notable differences from this spec as shipped:
-> - **Default model is `base.en`** (this spec says `base`); only `tiny`,
->   `tiny.en`, and `base.en` are in `KNOWN_MODELS` until the lockfile is
->   filled out for the larger models.
+> - **Default model is `base.en`** (this spec says `base`). All ten upstream
+>   whisper.cpp models (`tiny` through `large-v3-turbo`) are in
+>   `KNOWN_MODELS` and pinned in `models.lock.json` with verified SHAs.
 > - **No `install` / `postinstall` script.** Users explicitly run
 >   `npx agency-whisper build` after install. (This spec's "Build and
 >   install" section pre-dates that decision.)

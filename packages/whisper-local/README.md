@@ -52,13 +52,22 @@ Returns the joined transcript text. Throws on missing ffmpeg, unknown model, cor
 
 ## Models
 
+All ten upstream whisper.cpp models are pinned in `models.lock.json` against HuggingFace commit [`5359861c…`](https://huggingface.co/ggerganov/whisper.cpp/tree/5359861c739e955e79d9a303bcbc70fb988958b1) with verified SHA-256 hashes.
+
 | Name | Size | English-only | Notes |
 |------|------|--------------|-------|
-| `tiny` | 75 MB | no | Fastest, lowest accuracy. Good for quick prototypes. |
-| `tiny.en` | 75 MB | yes | English-only variant of `tiny`; slightly more accurate. |
-| `base.en` | 142 MB | yes | Recommended default. Good accuracy/speed trade-off. |
+| `tiny`           | 75 MB  | no  | Fastest, lowest accuracy. Good for quick prototypes. |
+| `tiny.en`        | 75 MB  | yes | English-only variant of `tiny`; slightly more accurate. |
+| `base`           | 142 MB | no  | Multilingual base model. |
+| `base.en`        | 142 MB | yes | **Default.** Good accuracy/speed trade-off for English. |
+| `small`          | 466 MB | no  | Noticeable accuracy bump over `base`. |
+| `small.en`       | 466 MB | yes | English-only variant of `small`. |
+| `medium`         | 1.5 GB | no  | Slow on CPU; usable on Apple Silicon. |
+| `medium.en`      | 1.5 GB | yes | English-only variant of `medium`. |
+| `large-v3`       | 2.9 GB | no  | Best accuracy. Use only with adequate RAM (~5 GB peak). |
+| `large-v3-turbo` | 1.6 GB | no  | Approaches `large-v3` quality at ~half the size. |
 
-Other whisper.cpp models (`base`, `small`, `small.en`, `medium`, `medium.en`, `large-v3`, `large-v3-turbo`) are supported by the underlying engine but are not yet pinned in `models.lock.json`. They will be added as we verify each upstream release. To add one yourself, see [`docs/DEV.md`](./docs/DEV.md#adding-a-model).
+`.en` variants are slightly more accurate on English-only audio. To add a model from a newer upstream release, see [`docs/DEV.md`](./docs/DEV.md#adding-a-model).
 
 ## Pre-downloading models
 

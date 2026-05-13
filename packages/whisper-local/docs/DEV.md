@@ -217,21 +217,27 @@ HF_COMMIT=<sha> MODELS="tiny tiny.en base.en" bash scripts/generate-lockfile.sh
 <a id="adding-a-model"></a>
 ### Adding a model
 
-The shipped lockfile and `KNOWN_MODELS` list (in `src/types.ts`) carry only
-the three models we have actually verified end-to-end: `tiny`, `tiny.en`,
-and `base.en`. To add another (e.g. `large-v3`):
+The shipped lockfile and `KNOWN_MODELS` list (in `src/types.ts`) carry all
+ten upstream whisper.cpp models, pinned to the HuggingFace commit recorded
+in `models.lock.json`. To add a model that ships in a newer upstream
+release (e.g. a hypothetical `large-v4`):
 
-1. Pick the upstream HuggingFace commit you want to pin to.
-2. Run `HF_COMMIT=<sha> MODELS="large-v3" bash scripts/generate-lockfile.sh`.
-3. Confirm the printed SHA against the upstream HuggingFace UI.
+1. Identify the new HuggingFace commit that includes the model.
+2. Run `HF_COMMIT=<sha> MODELS="large-v4" bash scripts/generate-lockfile.sh`.
+   The script downloads the file once to compute its SHA-256 and size.
+   Alternatively — much faster — fetch the LFS pointer directly:
+   `curl https://huggingface.co/ggerganov/whisper.cpp/raw/<sha>/ggml-large-v4.bin`
+   returns the `oid sha256:…` and `size` without downloading the model.
+3. Confirm the SHA against the HuggingFace UI (a separate browser session
+   guards against a compromised mirror).
 4. Add the model name to `KNOWN_MODELS` in `src/types.ts`.
 5. Add a row to the Models table in `README.md`.
 
 `ensureModel` retains a defensive guard: any lockfile entry with
 `sha256: "0".repeat(64)` is rejected with a clear "lockfile not populated
-yet" message. This is unreachable in shipped code (because such entries are
-not in `KNOWN_MODELS`) but stays as belt-and-suspenders against a future
-regression.
+yet" message. This is unreachable in shipped code today (every
+`KNOWN_MODELS` entry has a real hash) but stays as belt-and-suspenders
+against a future regression.
 
 ## 5. Vendoring procedure
 

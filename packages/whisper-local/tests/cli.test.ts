@@ -98,9 +98,20 @@ describe("CLI", () => {
       const r = await runCli(["list"], { AGENCY_WHISPER_MODELS_DIR: tmp });
       expect(r.code).toBe(0);
       expect(r.stdout).toMatch(/Models directory:/);
-      // Every model in the shipped lockfile should appear. Currently we only
-      // ship the three with verified hashes; see types.ts KNOWN_MODELS.
-      for (const name of ["tiny", "tiny.en", "base.en"]) {
+      // Every model in the shipped lockfile should appear; see KNOWN_MODELS
+      // in src/types.ts (the lockfile and KNOWN_MODELS are kept in sync).
+      for (const name of [
+        "tiny",
+        "tiny.en",
+        "base",
+        "base.en",
+        "small",
+        "small.en",
+        "medium",
+        "medium.en",
+        "large-v3",
+        "large-v3-turbo",
+      ]) {
         expect(r.stdout).toContain(name);
       }
     });

@@ -203,6 +203,8 @@ export class Runner {
 
     if (await this.maybeDebugHook(id)) return;
 
+    this.ctx.coverageCollector?.hit(this.moduleId, this.scopeName, this.stepPath(id));
+
     this.path.push(id);
     try {
       await callback(this);
@@ -234,6 +236,8 @@ export class Runner {
 
     if (await this.maybeDebugHook(id)) return input;
 
+    this.ctx.coverageCollector?.hit(this.moduleId, this.scopeName, this.stepPath(id));
+
     const result = await __pipeBind(input, fn);
     this.frame.locals[`__pipe_result_${this.stepPath(id)}`] = result;
 
@@ -264,6 +268,8 @@ export class Runner {
     if (this.getCounter() > id) return;
 
     if (await this.maybeDebugHook(id)) return;
+
+    this.ctx.coverageCollector?.hit(this.moduleId, this.scopeName, this.stepPath(id));
 
     // Guard thread creation so it only happens once. On resume from a
     // debug pause inside the callback, the entire thread() method
@@ -305,6 +311,8 @@ export class Runner {
 
     if (await this.maybeDebugHook(id)) return;
 
+    this.ctx.coverageCollector?.hit(this.moduleId, this.scopeName, this.stepPath(id));
+
     this.ctx.pushHandler(handlerFn);
     this.path.push(id);
     try {
@@ -333,6 +341,8 @@ export class Runner {
     if (this.getCounter() > id) return;
 
     if (await this.maybeDebugHook(id)) return;
+
+    this.ctx.coverageCollector?.hit(this.moduleId, this.scopeName, this.stepPath(id));
 
     // Derive condbranch key from current path
     const condKey =
@@ -381,6 +391,8 @@ export class Runner {
     if (this.getCounter() > id) return;
 
     if (await this.maybeDebugHook(id)) return;
+
+    this.ctx.coverageCollector?.hit(this.moduleId, this.scopeName, this.stepPath(id));
 
     const iterKey =
       this.path.length === 0
@@ -437,6 +449,8 @@ export class Runner {
     if (this.getCounter() > id) return;
 
     if (await this.maybeDebugHook(id)) return;
+
+    this.ctx.coverageCollector?.hit(this.moduleId, this.scopeName, this.stepPath(id));
 
     const iterKey =
       this.path.length === 0
@@ -499,6 +513,8 @@ export class Runner {
     if (this.getCounter() > id && !hasExistingBranch) return;
 
     if (await this.maybeDebugHook(id)) return;
+
+    this.ctx.coverageCollector?.hit(this.moduleId, this.scopeName, this.stepPath(id));
 
     this.path.push(id);
     try {

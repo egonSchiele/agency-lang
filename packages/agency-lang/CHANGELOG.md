@@ -1,3 +1,51 @@
+## May 12 2026 — v0.1.2
+
+### New: Serve Command
+- Add `agency serve` command — HTTP server for Agency programs
+- Standalone mode for serve
+- Expose nodes in MCP server
+- Add Streamable HTTP transport for MCP server
+- More granular policy tools for MCP server
+- Add MCP interrupt policies
+- Harden HTTP serve and MCP stdio against security issues
+
+### New: Subprocess Execution
+- Add `run()` function to execute Agency code in a subprocess
+- Per-call resource limits for `run()`
+- Timeouts for agency runner
+- Restrict subprocess imports to stdlib files only
+
+### New: Standard Library
+- Add `@agency-lang/github` stdlib package
+- Add `std::agency` with a `compile()` function
+- Add `record()` function to speech stdlib
+- Re-export zod from agency
+
+### New: Static Analysis
+- Add static interrupt analysis
+- Surface interrupt kinds in serve and LSP hover
+- Add trace mode to agency generator
+
+### Language
+- Add `export { foo } from "bar"` syntax
+- Error on importing/exporting nodes with `safe` keyword
+- Fix parser for multi-line parameter lists in function definitions and calls
+
+### CI & Testing
+- Add DeterministicClient for running agency/agency-js tests without OpenAI API key
+- Add sandboxed stdlib tests (CI only)
+- Add bundler and CLI integration tests
+- Add `--coverage` flag
+- Add docs build to CI, re-enable lint, harden GitHub Actions
+
+### Other
+- Fix phase ordering bug in TypeScript preprocessor (blocks not reading local variables)
+- Move stdlib backing TS into `lib/` for clean three-phase build
+- Function identity tracking
+- Inline termcolors and remove as dependency
+- Initial work on policy command
+- Docs improvements and reorganization
+
 ## May 7 2026 — v0.1.0
 
 ### New: Standard Library Modules

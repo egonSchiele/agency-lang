@@ -36,13 +36,14 @@ describe("ensureModel", () => {
   });
 
   it("rejects with ModelManagerError for a model not in KNOWN_MODELS", async () => {
-    // "small" was removed from KNOWN_MODELS until its lockfile entry is
-    // populated. resolveModelPath rejects unknown names up front.
+    // resolveModelPath rejects unknown names up front (before the file
+    // existence check or the lockfile lookup), so ensureModel inherits
+    // that rejection. Use a name that cannot ever be a real whisper model.
     await expect(
-      ensureModel("small" as never, tmp),
+      ensureModel("definitely-not-a-real-whisper-model" as never, tmp),
     ).rejects.toBeInstanceOf(ModelManagerError);
     await expect(
-      ensureModel("small" as never, tmp),
+      ensureModel("definitely-not-a-real-whisper-model" as never, tmp),
     ).rejects.toThrow(/unknown model/);
   });
 });

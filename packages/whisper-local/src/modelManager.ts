@@ -50,16 +50,33 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const PACKAGE_ROOT = findPackageRoot(__dirname);
 
-export async function loadLockfile(): Promise<Lockfile> {
-  const lockPath = path.join(PACKAGE_ROOT, "models.lock.json");
-  const text = await fs.readFile(lockPath, "utf8");
-  const parsed = JSON.parse(text);
-  if (parsed.schemaVersion !== 1) {
+// Parse + validate lockfile text. Pulled out from loadLockfile so the
+// schema-rejection branch is testable without writing to PACKAGE_ROOT.
+export function parseLockfile(text: string, source = "<inline>"): Lockfile {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch (err) {
     throw new ModelManagerError(
-      `unsupported lockfile schema version ${parsed.schemaVersion}`,
+      `failed to parse ${source}: ${(err as Error).message}`,
+    );
+  }
+  if (typeof parsed !== "object" || parsed === null) {
+    throw new ModelManagerError(`${source} is not a JSON object`);
+  }
+  const schemaVersion = (parsed as { schemaVersion?: unknown }).schemaVersion;
+  if (schemaVersion !== 1) {
+    throw new ModelManagerError(
+      `unsupported lockfile schema version ${String(schemaVersion)} in ${source}`,
     );
   }
   return parsed as Lockfile;
+}
+
+export async function loadLockfile(): Promise<Lockfile> {
+  const lockPath = path.join(PACKAGE_ROOT, "models.lock.json");
+  const text = await fs.readFile(lockPath, "utf8");
+  return parseLockfile(text, lockPath);
 }
 
 export async function sha256OfFile(filepath: string): Promise<string> {

@@ -58,24 +58,28 @@ export function acquireHandle(
     return existing.instance;
   }
   const max = configuredMax();
+  // Failure-atomic: construct *first*, then evict + insert. If factory()
+  // throws (corrupt model, OOM, missing GPU, …) we leave the existing
+  // cache contents untouched. A transient load failure must not cost the
+  // user the model they already had loaded.
+  const instance = factory();
+  if (max === 0) {
+    // max=0 means "don't cache" — hand the instance back without storing.
+    // The caller is responsible for free() (transcribe.ts wraps this path
+    // so the model is freed after each call).
+    return instance;
+  }
   // Evict from the front (least-recently-used) until we have room. We only
   // need to evict 1 in steady state, but a runtime decrease in max via env
   // re-read could leave the cache larger than max — handle it generally.
-  while (max > 0 && Object.keys(handleCache).length >= max) {
+  while (Object.keys(handleCache).length >= max) {
     const oldestKey = Object.keys(handleCache)[0];
     if (oldestKey === undefined) break;
     const oldest = handleCache[oldestKey];
     delete handleCache[oldestKey];
     freeQuiet(oldestKey, oldest.instance);
   }
-  const instance = factory();
-  if (max > 0) {
-    handleCache[key] = { instance };
-  } else {
-    // max=0 means "don't cache" — we hand the instance back but don't store
-    // it. The caller is responsible for free() in this case (transcribe.ts
-    // wraps this path so the model is freed after each call).
-  }
+  handleCache[key] = { instance };
   return instance;
 }
 

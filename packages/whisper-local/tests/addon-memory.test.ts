@@ -146,6 +146,44 @@ describe.skipIf(!READY)("addon: memory safety", () => {
     expect(() => m.transcribe(ONE_SECOND_SILENCE)).toThrow(/freed/);
   });
 
+  it.skipIf(typeof globalThis.gc !== "function")(
+    "Persistent ref keeps the model alive after JS drops its reference (best-effort GC test)",
+    async () => {
+      // The C++ TranscribeWorker holds a Napi::Persistent (ObjectReference)
+      // to its parent WhisperModel JS object. Without that ref, this
+      // sequence is a use-after-free: drop the JS reference, force GC,
+      // worker thread is still running whisper_full on a freed context.
+      //
+      // We can't test "without the ref" (the bug would crash the test
+      // process), but we *can* test that *with* the ref the transcribe
+      // resolves cleanly even after we drop our reference and force GC.
+      //
+      // This is a best-effort test:
+      //   - global.gc is a hint, not a command. V8 may delay collection.
+      //   - Run with `NODE_OPTIONS=--expose-gc pnpm vitest run` to enable.
+      //   - Without --expose-gc this test is skipped (visibly) via skipIf.
+      let m: WhisperModelInstance | null = new WhisperModel(MODEL_PATH);
+      // Start a transcribe and immediately discard our JS reference.
+      const promise = m.transcribe(ONE_SECOND_SILENCE);
+      m = null;
+
+      // Force GC several times and wait between cycles to give V8 every
+      // opportunity to collect what we just orphaned. If the Persistent
+      // ref were missing, the next call into the worker thread would
+      // touch freed memory.
+      for (let i = 0; i < 5; i++) {
+        (globalThis as { gc?: () => void }).gc?.();
+        await new Promise<void>((r) => setTimeout(r, 10));
+      }
+
+      const result = await promise;
+      expect(Array.isArray(result)).toBe(true);
+      // The model is freed automatically when the worker finishes and the
+      // Persistent ref drops; nothing for us to push to toFree here.
+    },
+    30_000,
+  );
+
   it("two separate model instances do not share state", async () => {
     // This guards against any accidental static / global state in the addon.
     const m1 = new WhisperModel(MODEL_PATH);

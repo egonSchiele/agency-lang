@@ -12,6 +12,15 @@ const __filename = fileURLToPath(import.meta.url);
 const PKG_ROOT = findPackageRoot(path.dirname(__filename));
 const CLI = path.join(PKG_ROOT, "dist", "src", "cli.js");
 
+// Some CLI tests need a real downloaded model file to verify the SHA-match
+// path. We compute this once at module load so `it.skipIf` can mark the
+// test as skipped in vitest output rather than silently passing.
+const REAL_TINY_EN = path.join(
+  os.homedir(),
+  ".agency/models/whisper/ggml-tiny.en.bin",
+);
+const HAVE_REAL_TINY_EN = existsSync(REAL_TINY_EN);
+
 // We invoke the compiled CLI as a subprocess. This catches integration
 // failures the unit tests can't (wrong exit codes, missing flag handling,
 // argv parsing bugs) and exercises the same code path users hit.
@@ -142,25 +151,22 @@ describe("CLI", () => {
       expect(r.stderr).toMatch(/actual/);
     });
 
-    it("exits 0 and prints OK when SHA matches", async () => {
-      // Generate a file and a synthetic lockfile entry that matches its SHA.
-      // Easier: use a real installed model if present in the user's cache.
-      const realModel = path.join(
-        os.homedir(),
-        ".agency/models/whisper/ggml-tiny.en.bin",
-      );
-      if (!existsSync(realModel)) {
-        // Skip this case if the integration test hasn't downloaded the model.
-        return;
-      }
-      const planted = path.join(tmp, "ggml-tiny.en.bin");
-      await fs.copyFile(realModel, planted);
-      const r = await runCli(["verify", "tiny.en"], {
-        AGENCY_WHISPER_MODELS_DIR: tmp,
-      });
-      expect(r.code).toBe(0);
-      expect(r.stdout).toMatch(/^OK: tiny\.en /);
-    });
+    // Requires a real downloaded model: we copy it into a tmp dir and ask
+    // verify to re-hash and compare against the lockfile. Without the model
+    // on disk there is no honest way to exercise the SHA-match path, so we
+    // skip visibly (skipIf at module load) rather than silently returning.
+    it.skipIf(!HAVE_REAL_TINY_EN)(
+      "exits 0 and prints OK when SHA matches",
+      async () => {
+        const planted = path.join(tmp, "ggml-tiny.en.bin");
+        await fs.copyFile(REAL_TINY_EN, planted);
+        const r = await runCli(["verify", "tiny.en"], {
+          AGENCY_WHISPER_MODELS_DIR: tmp,
+        });
+        expect(r.code).toBe(0);
+        expect(r.stdout).toMatch(/^OK: tiny\.en /);
+      },
+    );
 
     it("exits 4 (Error:) when given an unknown model name", async () => {
       const r = await runCli(["verify", "definitely-not-a-model"], {

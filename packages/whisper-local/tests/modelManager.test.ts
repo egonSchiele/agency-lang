@@ -9,6 +9,7 @@ import {
   resolveModelDir,
   resolveModelPath,
   loadLockfile,
+  parseLockfile,
   isModelInstalled,
   sha256OfFile,
   downloadModel,
@@ -54,6 +55,47 @@ describe("loadLockfile", () => {
     expect(lock.models["base.en"]).toBeDefined();
     expect(lock.models["base.en"].url).toMatch(/^https:\/\/huggingface\.co\//);
     expect(lock.models["base.en"].sha256).toMatch(/^[0-9a-f]{64}$/);
+  });
+});
+
+describe("parseLockfile", () => {
+  // Splitting parse out from loadLockfile lets us exercise the rejection
+  // branches without round-tripping a temp file through PACKAGE_ROOT.
+
+  it("rejects malformed JSON with a clear error", () => {
+    expect(() => parseLockfile("{ not valid json")).toThrow(ModelManagerError);
+    expect(() => parseLockfile("{ not valid json")).toThrow(/failed to parse/);
+  });
+
+  it("rejects non-object JSON (array, null, primitive)", () => {
+    expect(() => parseLockfile("null")).toThrow(/not a JSON object/);
+    expect(() => parseLockfile("[1, 2, 3]")).toThrow(/unsupported lockfile schema version/);
+    // Note: arrays *are* objects in JS; the schemaVersion check catches them.
+    expect(() => parseLockfile('"a string"')).toThrow(/not a JSON object/);
+  });
+
+  it("rejects unsupported schemaVersion", () => {
+    expect(() =>
+      parseLockfile('{"schemaVersion": 2, "models": {}}'),
+    ).toThrow(/unsupported lockfile schema version 2/);
+    expect(() =>
+      parseLockfile('{"schemaVersion": "1", "models": {}}'),
+    ).toThrow(/unsupported lockfile schema version 1/);
+    expect(() => parseLockfile('{"models": {}}')).toThrow(
+      /unsupported lockfile schema version undefined/,
+    );
+  });
+
+  it("accepts a minimal valid lockfile", () => {
+    const lock = parseLockfile('{"schemaVersion": 1, "models": {}}');
+    expect(lock.schemaVersion).toBe(1);
+    expect(lock.models).toEqual({});
+  });
+
+  it("includes the source label in error messages", () => {
+    expect(() => parseLockfile("{ bad", "/some/path.json")).toThrow(
+      /\/some\/path\.json/,
+    );
   });
 });
 
@@ -150,6 +192,50 @@ describe("downloadModel", () => {
     };
     const dest = path.join(tmp, "ggml-base.en.bin");
     await expect(downloadModel(entry, dest)).rejects.toThrow(/non-HTTPS/);
+  });
+
+  it("refuses a redirect that downgrades to a non-allowed scheme", async () => {
+    // Defense in depth: even though the lockfile URL passes the up-front
+    // scheme check, fetch follows redirects by default. A compromised
+    // upstream could 302 us to http://attacker/ — we re-validate
+    // response.url (the *final* URL after following redirects) and reject.
+    //
+    // We can't easily stand up a server that "redirects" to a real
+    // attacker host, so we stub global.fetch to return a fake Response
+    // whose url is a disallowed scheme. This exercises exactly the branch
+    // that re-checks response.url after the initial fetch resolves.
+    const realFetch = globalThis.fetch;
+    // Fresh body per call (a ReadableStream can only be consumed once).
+    const makeFakeResp = () => ({
+      ok: true,
+      url: "http://attacker.example/model.bin", // <-- the dangerous part
+      status: 200,
+      body: new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(payload);
+          controller.close();
+        },
+      }),
+    });
+    globalThis.fetch = (async () => makeFakeResp()) as unknown as typeof fetch;
+    try {
+      const entry = { url, sha256: payloadSha, sizeBytes: payload.length };
+      const dest = path.join(tmp, "ggml-base.en.bin");
+      // One call, both substring assertions on the same rejection.
+      let caught: Error | null = null;
+      try {
+        await downloadModel(entry, dest);
+      } catch (e) {
+        caught = e as Error;
+      }
+      expect(caught).not.toBeNull();
+      expect(caught!.message).toMatch(/refusing to follow redirect to non-HTTPS URL/);
+      expect(caught!.message).toMatch(/attacker\.example/);
+      // No partial file should remain after the rejection.
+      expect(await fs.readdir(tmp)).toEqual([]);
+    } finally {
+      globalThis.fetch = realFetch;
+    }
   });
 
   it("rejects HTTP error responses (5xx)", async () => {

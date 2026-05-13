@@ -38,6 +38,11 @@ describe("transcribe", () => {
   beforeEach(() => {
     _clearHandleCache();
     delete process.env.AGENCY_WHISPER_HANDLE_CACHE_MAX;
+    // Clear call history on every mock so each test sees a clean slate.
+    // Without this, `toHaveBeenCalledWith("base.en")` would pass spuriously
+    // any time *any earlier test in this file* called transcribe with the
+    // default model, regardless of what the current test does.
+    vi.clearAllMocks();
     vi.mocked(modelManager.ensureModel).mockResolvedValue(
       "/path/to/ggml-base.bin",
     );
@@ -46,7 +51,6 @@ describe("transcribe", () => {
     );
     mockInstance = newMockInstance();
     const { WhisperModel } = addonMod.loadAddon();
-    (WhisperModel as unknown as Mocked).mockReset();
     (WhisperModel as unknown as Mocked).mockImplementation(() => mockInstance);
   });
 
@@ -57,8 +61,10 @@ describe("transcribe", () => {
 
   it("forwards language and uses default model", async () => {
     await transcribe("audio.m4a", "en");
-    expect(modelManager.ensureModel).toHaveBeenCalledWith("base.en");
-    expect(mockInstance.transcribe).toHaveBeenCalledWith(
+    // toHaveBeenLastCalledWith (not toHaveBeenCalledWith) so we verify the
+    // call this test made, not that "base.en" appears anywhere in history.
+    expect(modelManager.ensureModel).toHaveBeenLastCalledWith("base.en");
+    expect(mockInstance.transcribe).toHaveBeenLastCalledWith(
       expect.any(Float32Array),
       { language: "en", translate: false },
     );
@@ -125,6 +131,45 @@ describe("handleCache LRU eviction", () => {
     for (let i = 47; i < 50; i++) {
       expect(made[i].free).not.toHaveBeenCalled();
     }
+  });
+
+  it("does not pollute the cache when the factory throws", () => {
+    // If `new WhisperModel(...)` throws (corrupt model file, OOM, missing
+    // GPU, etc.), acquireHandle must not leave a half-initialized entry
+    // behind. Otherwise a subsequent transcribe() would reuse an
+    // undefined/null instance and crash mysteriously.
+    process.env.AGENCY_WHISPER_HANDLE_CACHE_MAX = "2";
+    const boom = (): never => {
+      throw new Error("model load failed");
+    };
+    expect(() => acquireHandle("FAIL", boom)).toThrow(/model load failed/);
+    expect(Object.keys(handleCache)).toEqual([]);
+
+    // After the failure, a successful acquire should work normally.
+    const good = newMockInstance();
+    const inst = acquireHandle("OK", () => good);
+    expect(inst).toBe(good);
+    expect(Object.keys(handleCache)).toEqual(["OK"]);
+  });
+
+  it("does not evict an existing entry when the factory for a new key throws", () => {
+    // A transient model-load failure must not cost the user their already-
+    // loaded models. acquireHandle is failure-atomic: it constructs the new
+    // instance *first* and only then evicts to make room. If construction
+    // throws, the cache is untouched.
+    process.env.AGENCY_WHISPER_HANDLE_CACHE_MAX = "1";
+    const a = newMockInstance();
+    acquireHandle("A", () => a);
+    expect(Object.keys(handleCache)).toEqual(["A"]);
+
+    expect(() =>
+      acquireHandle("B", () => {
+        throw new Error("B failed");
+      }),
+    ).toThrow(/B failed/);
+    // "A" must still be cached and not freed.
+    expect(a.free).not.toHaveBeenCalled();
+    expect(Object.keys(handleCache)).toEqual(["A"]);
   });
 
   it("logs a warning but still evicts when free() throws (busy)", () => {

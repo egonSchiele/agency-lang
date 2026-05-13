@@ -1928,6 +1928,19 @@ const blockParamsParser: Parser<FunctionParameter[]> = (input: string): ParserRe
   return success([], input);
 };
 
+export const asParser = (input: string): ParserResult<FunctionParameter[]> => {
+
+  const parser = seqC(
+    str("as"),
+    spaces,
+    capture(blockParamsParser, "params"),
+  )
+  const result = parser(input);
+  if (!result.success) return success([], input); // "as" is optional, so if it doesn't match, return empty params and original input
+  return success(result.result.params, result.rest);
+}
+
+
 // Parse a block argument. Always requires "as" keyword:
 //   as params { body }     — with params
 //   as { body }            — no params
@@ -1936,9 +1949,7 @@ export const blockArgumentParser: Parser<BlockArgument> = trace(
   seqC(
     set("type", "blockArgument"),
     set("inline", false),
-    str("as"),
-    spaces,
-    capture(blockParamsParser, "params"),
+    capture(asParser, "params"),
     optionalSpaces,
     char("{"),
     optionalSpacesOrNewline,

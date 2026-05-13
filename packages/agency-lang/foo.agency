@@ -1,1 +1,7 @@
-export * from "std::math"
+import { map } from "std::array"
+
+node main() {
+  map(range(5)) as {
+    print("hello")
+  }
+}

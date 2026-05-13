@@ -113,9 +113,8 @@ type defined in a node doesn't work
 handle multiple interrupts in debugger
 better debugger test harness
 
-async keyword and interrupts?
-`with reject` cant be used in a return statement?
-
+`with approve` cant be used in a return statement?
+`with reject` seems useless
 
 tool-retry test failure:
 ```
@@ -141,8 +140,6 @@ def func(id: string) {
 ```
 
 tool-retry test skipped - one test failing
-
-cli docs section
 
 
 `race` example doesn't work:

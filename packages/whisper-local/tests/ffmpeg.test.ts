@@ -5,7 +5,30 @@ import { Readable, Writable } from "node:stream";
 vi.mock("node:child_process");
 import { spawn } from "node:child_process";
 
+vi.mock("node:fs/promises", async () => {
+  const actual = await vi.importActual<typeof import("node:fs/promises")>(
+    "node:fs/promises",
+  );
+  return {
+    ...actual,
+    stat: vi.fn(),
+  };
+});
+import * as fsp from "node:fs/promises";
+
 import { buildFfmpegArgs, decodeToPcm } from "../src/ffmpeg.js";
+
+function fakeFileStat(): import("node:fs").Stats {
+  return {
+    isFile: () => true,
+    isDirectory: () => false,
+    isBlockDevice: () => false,
+    isCharacterDevice: () => false,
+    isFIFO: () => false,
+    isSocket: () => false,
+    isSymbolicLink: () => false,
+  } as unknown as import("node:fs").Stats;
+}
 
 describe("buildFfmpegArgs", () => {
   it("emits the expected pipeline for a given input", () => {
@@ -13,6 +36,8 @@ describe("buildFfmpegArgs", () => {
       "-hide_banner",
       "-loglevel",
       "error",
+      "-protocol_whitelist",
+      "file",
       "-i",
       "/path/to/input.m4a",
       "-ac",
@@ -32,11 +57,14 @@ describe("decodeToPcm", () => {
     stdoutChunks?: Buffer[];
     stderrText?: string;
     emitError?: Error;
+    closeDelayMs?: number;
+    neverClose?: boolean;
   }) {
     const proc = new EventEmitter() as unknown as {
       stdout: Readable;
       stderr: Readable;
       stdin: Writable;
+      kill: (sig?: string) => void;
       emit: (event: string, ...args: unknown[]) => boolean;
     };
     (proc as unknown as { stdout: Readable }).stdout = Readable.from(
@@ -50,16 +78,30 @@ describe("decodeToPcm", () => {
         cb();
       },
     });
-    setImmediate(() => {
-      if (opts.emitError) proc.emit("error", opts.emitError);
-      else proc.emit("close", opts.exitCode);
-    });
+    let killed = false;
+    (proc as unknown as { kill: (sig?: string) => void }).kill = () => {
+      if (killed) return;
+      killed = true;
+      // Mimic the real child_process behavior: a killed process eventually
+      // fires "close" with a null exit code. The kill() handler in the
+      // production code tags killReason; we just need the close to happen.
+      setImmediate(() => proc.emit("close", null));
+    };
+    if (opts.emitError) {
+      setImmediate(() => proc.emit("error", opts.emitError!));
+    } else if (!opts.neverClose) {
+      const fire = () => proc.emit("close", opts.exitCode);
+      if (opts.closeDelayMs) setTimeout(fire, opts.closeDelayMs);
+      else setImmediate(fire);
+    }
     (spawn as unknown as { mockReturnValue: (v: unknown) => void }).mockReturnValue(proc);
     return proc;
   }
 
   beforeEach(() => {
     vi.mocked(spawn).mockReset();
+    vi.mocked(fsp.stat).mockReset();
+    vi.mocked(fsp.stat).mockResolvedValue(fakeFileStat());
   });
 
   it("returns a Float32Array from ffmpeg stdout", async () => {
@@ -107,5 +149,47 @@ describe("decodeToPcm", () => {
     mockSpawn({ exitCode: 0, stdoutChunks: [chunkA, chunkB] });
     const out = await decodeToPcm("/in.wav");
     expect(Array.from(out)).toEqual([1.5, -2.5, 3.5, -4.5]);
+  });
+
+  it("rejects paths starting with '-' before spawning ffmpeg", async () => {
+    await expect(decodeToPcm("-version")).rejects.toThrow(/starts with '-'/);
+    expect(spawn).not.toHaveBeenCalled();
+  });
+
+  it("rejects when input is not a regular file (e.g. directory or device)", async () => {
+    vi.mocked(fsp.stat).mockResolvedValueOnce({
+      ...fakeFileStat(),
+      isFile: () => false,
+    } as unknown as import("node:fs").Stats);
+    await expect(decodeToPcm("/tmp")).rejects.toThrow(/not a regular file/);
+    expect(spawn).not.toHaveBeenCalled();
+  });
+
+  it("rejects when input file does not exist", async () => {
+    vi.mocked(fsp.stat).mockRejectedValueOnce(
+      Object.assign(new Error("ENOENT"), { code: "ENOENT" }),
+    );
+    await expect(decodeToPcm("/no/such/file.wav")).rejects.toThrow(
+      /input file not found/,
+    );
+    expect(spawn).not.toHaveBeenCalled();
+  });
+
+  it("kills ffmpeg and rejects on timeout", async () => {
+    mockSpawn({ exitCode: 0, neverClose: true });
+    await expect(decodeToPcm("/in.wav", { timeoutMs: 25 })).rejects.toThrow(
+      /exceeded timeout of 25 ms/,
+    );
+  });
+
+  it("kills ffmpeg and rejects when decoded output exceeds the cap", async () => {
+    // Each chunk is 8 bytes (= 2 floats). Cap at 4 bytes so the first chunk
+    // already trips the threshold; production code calls kill() which fires a
+    // synthetic close with no exit code.
+    const chunk = Buffer.from(new Float32Array([1.0, 2.0]).buffer);
+    mockSpawn({ exitCode: 0, stdoutChunks: [chunk] });
+    await expect(
+      decodeToPcm("/in.wav", { maxPcmBytes: 4 }),
+    ).rejects.toThrow(/exceeded cap of 4 bytes/);
   });
 });

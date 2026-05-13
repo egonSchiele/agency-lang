@@ -19,9 +19,9 @@ node main() {
 }
 ```
 
-The first call downloads the requested model (~150 MB for "base", more for
-larger sizes) into `~/.agency/models/whisper/`. Subsequent calls reuse the
-local file with no network access.
+The first call downloads the requested model (~150 MB for "base.en", less
+for "tiny" / "tiny.en") into `~/.agency/models/whisper/`. Subsequent calls
+reuse the local file with no network access.
 */
 
 import { transcribe as transcribeImpl } from "./dist/src/transcribe.js"

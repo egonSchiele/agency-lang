@@ -174,6 +174,10 @@ export async function ensureModel(
   if (!entry) {
     throw new ModelManagerError(`no lockfile entry for model "${name}"`);
   }
+  // Defensive: refuse to "download" a placeholder. KNOWN_MODELS is kept in
+  // sync with models.lock.json so this branch should be unreachable in
+  // shipped code; it stays as belt-and-suspenders against a future regression
+  // where a placeholder slips back into the lockfile.
   if (entry.sha256 === "0".repeat(64)) {
     throw new ModelManagerError(
       `model "${name}" has a placeholder hash in models.lock.json. ` +

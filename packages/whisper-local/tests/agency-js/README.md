@@ -11,7 +11,7 @@ sketched.
 The wrapper in `index.agency` is a one-line passthrough:
 
 ```
-export def transcribe(filepath: string, language: string = "", model: string = "base"): string {
+export def transcribe(filepath: string, language: string = "", model: string = "base.en"): string {
   return transcribeImpl(filepath, language, model)
 }
 ```

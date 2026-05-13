@@ -20,6 +20,7 @@
 #include <napi.h>
 #include <whisper.h>
 #include <atomic>
+#include <limits>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -233,8 +234,19 @@ void TranscribeWorker::Execute() {
   params.translate = translate_;
   params.language = language_.empty() ? "auto" : language_.c_str();
 
-  int rc =
-      whisper_full(ctx, params, pcm_.data(), static_cast<int>(pcm_.size()));
+  // whisper_full takes the sample count as int. With 16 kHz mono float32 input
+  // INT_MAX samples is ~37 hours, so this is unlikely to fire in practice, but
+  // a silent narrowing cast would be undefined behavior if it ever did. The
+  // ffmpeg layer also enforces a byte cap that translates to a much smaller
+  // sample count by default; this is the last-line defense.
+  if (pcm_.size() > static_cast<size_t>(std::numeric_limits<int>::max())) {
+    SetError("audio length " + std::to_string(pcm_.size()) +
+             " samples exceeds whisper_full's int sample-count limit");
+    return;
+  }
+  int n_samples = static_cast<int>(pcm_.size());
+
+  int rc = whisper_full(ctx, params, pcm_.data(), n_samples);
   if (rc != 0) {
     SetError("whisper_full returned non-zero status " + std::to_string(rc));
     return;

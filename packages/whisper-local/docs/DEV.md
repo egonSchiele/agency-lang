@@ -214,10 +214,24 @@ HF_COMMIT=<40-char-sha> bash scripts/generate-lockfile.sh
 HF_COMMIT=<sha> MODELS="tiny tiny.en base.en" bash scripts/generate-lockfile.sh
 ```
 
-When this package was first set up, `tiny`, `tiny.en`, and `base.en` were
-populated; the rest are placeholder hashes (`0`*64) which `ensureModel`
-rejects with a clear "lockfile not populated yet" message. To unlock those
-models, re-run the script with the desired model names.
+<a id="adding-a-model"></a>
+### Adding a model
+
+The shipped lockfile and `KNOWN_MODELS` list (in `src/types.ts`) carry only
+the three models we have actually verified end-to-end: `tiny`, `tiny.en`,
+and `base.en`. To add another (e.g. `large-v3`):
+
+1. Pick the upstream HuggingFace commit you want to pin to.
+2. Run `HF_COMMIT=<sha> MODELS="large-v3" bash scripts/generate-lockfile.sh`.
+3. Confirm the printed SHA against the upstream HuggingFace UI.
+4. Add the model name to `KNOWN_MODELS` in `src/types.ts`.
+5. Add a row to the Models table in `README.md`.
+
+`ensureModel` retains a defensive guard: any lockfile entry with
+`sha256: "0".repeat(64)` is rejected with a clear "lockfile not populated
+yet" message. This is unreachable in shipped code (because such entries are
+not in `KNOWN_MODELS`) but stays as belt-and-suspenders against a future
+regression.
 
 ## 5. Vendoring procedure
 
@@ -284,15 +298,70 @@ absolute model path. The first call to `transcribe(model)` constructs a
 `new WhisperModel(modelPath)` (which loads the weights — slow); subsequent
 calls reuse the cached instance.
 
+The cache is an **LRU with a default cap of 2 entries**. When the cap is
+exceeded, the least-recently-used entry is evicted and `instance.free()` is
+called on it. Override the cap via `AGENCY_WHISPER_HANDLE_CACHE_MAX`
+(set to `0` to disable caching entirely — every `transcribe()` loads + frees).
+
+**Why a cap?** A `large-v3` whisper context is ~3 GB; an unbounded cache
+in a long-running web server that switches models on user input is a
+straightforward OOM vector.
+
+**Why default 2?** Most Agency programs use one model. Two leaves headroom
+for "switch from base.en to large-v3 mid-program" without thrashing.
+
 **Implications:**
-- A long-running process holds model weights in memory until exit. Each
-  cached `large-v3` model uses ~3 GB. Use `_clearHandleCache()` (exported
-  for tests and explicit teardown) to reclaim.
+- A long-running process holds at most `cap` model contexts in memory at
+  any time. Use `_clearHandleCache()` (exported for tests and explicit
+  teardown) to reclaim everything.
+- LRU promotion is implemented as `delete + reinsert`, which is O(1) on
+  V8's hash map and preserves insertion order for `Object.keys()`.
+- Eviction respects the in-flight counter: if `free()` throws "WhisperModel
+  busy" we log a warning and drop the cache entry; the C++ Persistent ref
+  keeps the model alive until the worker thread finishes, then JS GC
+  reclaims it.
 - Concurrent `transcribe()` calls on the same model serialize via the
   per-context mutex in C++ (see §3). Callers who want true concurrency
-  should structure their code to use multiple model paths.
+  should use multiple distinct model paths (each on its own libuv worker
+  thread) — see the README's "Operational notes" for `UV_THREADPOOL_SIZE`.
 - The cache uses `Record` (not `Map`) per the project convention from
   `AGENTS.md` ("Use objects instead of maps").
+
+## 7a. ffmpeg pipeline hardening (`ffmpeg.ts`)
+
+The decode step shells out to ffmpeg. Several hardening guards exist
+because `transcribe(filepath)` is commonly called with an LLM-driven tool
+argument in Agency programs — i.e. attacker-influenceable input.
+
+- **Protocol whitelist.** `buildFfmpegArgs` includes
+  `-protocol_whitelist file` so ffmpeg refuses any non-`file:` URL. Without
+  this, a `filepath` of `http://evil/x` would make ffmpeg perform an
+  outbound HTTP request (SSRF), and `concat:` / `subfile:` could read
+  arbitrary local files via ffmpeg's input demuxers.
+- **Path validation.** `decodeToPcm` rejects any `filepath` starting with
+  `-` (defense in depth against argument-position confusion if the command
+  line is ever reordered) and `fs.stat`'s the path to confirm it is a
+  regular file before spawning. Directories, FIFOs, devices, and missing
+  files are rejected with a clear error.
+- **Timeout.** Each invocation has a 10-minute wall clock cap (override via
+  `decodeToPcm({ timeoutMs })`). On expiry the child is `SIGKILL`-ed
+  (intentionally not `SIGTERM`: a stuck ffmpeg may ignore TERM, and we'd
+  rather strand a partial decode than hold a worker forever). The kill
+  handler synthesizes a tagged rejection so the caller sees a clear
+  "exceeded timeout of N ms" message rather than a generic "exit code null".
+- **Decoded-output cap.** A running byte counter on stdout kills ffmpeg if
+  the decoded PCM exceeds 2 GB (override via `decodeToPcm({ maxPcmBytes })`).
+  This is mid-stream — we don't accumulate the whole buffer first and then
+  check. ffmpeg has no way to know our cap, so the producer keeps writing
+  until kill() lands; in the steady state the over-cap window is bounded
+  by one stdout chunk (typically tens of KB).
+- **Float32 assembly.** After successful decode, we wrap the bytes as
+  `Float32Array` via a one-shot `Uint8Array.set(buf)` into a freshly
+  allocated `ArrayBuffer`, rather than `for (i...) buf.readFloatLE(i*4)`.
+  The loop form is ~100× slower on long audio. The freshly allocated
+  buffer is guaranteed 4-byte aligned (Float32Array requires it) and
+  byte-equal to ffmpeg's output (Node only ships on little-endian hosts;
+  ffmpeg's `f32le` output is also little-endian).
 
 ## 8. The Agency wrapper conventions
 

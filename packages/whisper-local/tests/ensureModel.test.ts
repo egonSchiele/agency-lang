@@ -4,10 +4,17 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { ensureModel, ModelManagerError } from "../src/modelManager.js";
 
-// ensureModel is the entry point for the download pipeline. It has three
-// non-trivial branches: file already on disk, lockfile placeholder hash, and
-// the actual download. We exercise the first two here; the third is covered
-// by the integration test (which actually downloads tiny.en).
+// ensureModel is the entry point for the download pipeline. The three
+// non-trivial branches it has are:
+//   1. file already on disk (no download)             — tested here
+//   2. unknown model name (rejected by resolveModelPath) — tested here
+//   3. actual download                                 — covered by the gated
+//      integration test in tests/integration.test.ts
+//
+// The placeholder-hash branch in the source is intentionally dead in shipped
+// code (KNOWN_MODELS only lists models whose lockfile entries have real
+// hashes). It is kept as a defensive guard against future regressions; we
+// do not exercise it here.
 
 describe("ensureModel", () => {
   let tmp: string;
@@ -19,34 +26,23 @@ describe("ensureModel", () => {
   });
 
   it("returns the existing path without downloading when the file is on disk", async () => {
-    const dest = path.join(tmp, "ggml-base.bin");
+    const dest = path.join(tmp, "ggml-base.en.bin");
     await fs.writeFile(dest, "pretend this is a real model");
-    const out = await ensureModel("base", tmp);
+    const out = await ensureModel("base.en", tmp);
     expect(out).toBe(dest);
     // File should still exist and be untouched (size matches what we wrote).
     const stat = await fs.stat(dest);
     expect(stat.size).toBe("pretend this is a real model".length);
   });
 
-  it("rejects when the lockfile entry has a placeholder hash", async () => {
-    // The shipped lockfile has `base` (no .en) as a placeholder. ensureModel
-    // should refuse to download it rather than treat 0*64 as a valid hash.
-    await expect(ensureModel("base", tmp)).rejects.toThrow(
-      /placeholder hash/,
-    );
-  });
-
-  it("rejects placeholder error includes the model name and a setup hint", async () => {
-    await expect(ensureModel("small", tmp)).rejects.toThrow(/small/);
-    await expect(ensureModel("small", tmp)).rejects.toThrow(/setup bug/);
-  });
-
-  it("rejects errors are typed as ModelManagerError", async () => {
-    try {
-      await ensureModel("medium", tmp);
-      expect.fail("expected throw");
-    } catch (e) {
-      expect(e).toBeInstanceOf(ModelManagerError);
-    }
+  it("rejects with ModelManagerError for a model not in KNOWN_MODELS", async () => {
+    // "small" was removed from KNOWN_MODELS until its lockfile entry is
+    // populated. resolveModelPath rejects unknown names up front.
+    await expect(
+      ensureModel("small" as never, tmp),
+    ).rejects.toBeInstanceOf(ModelManagerError);
+    await expect(
+      ensureModel("small" as never, tmp),
+    ).rejects.toThrow(/unknown model/);
   });
 });

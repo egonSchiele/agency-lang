@@ -85,23 +85,13 @@ describe("CLI", () => {
       await fs.rm(tmp, { recursive: true, force: true });
     });
 
-    it("exits 0 and prints all 10 models with installation status", async () => {
+    it("exits 0 and prints all known models with installation status", async () => {
       const r = await runCli(["list"], { AGENCY_WHISPER_MODELS_DIR: tmp });
       expect(r.code).toBe(0);
       expect(r.stdout).toMatch(/Models directory:/);
-      // All 10 known model names should appear in the output.
-      for (const name of [
-        "tiny",
-        "tiny.en",
-        "base",
-        "base.en",
-        "small",
-        "small.en",
-        "medium",
-        "medium.en",
-        "large-v3",
-        "large-v3-turbo",
-      ]) {
+      // Every model in the shipped lockfile should appear. Currently we only
+      // ship the three with verified hashes; see types.ts KNOWN_MODELS.
+      for (const name of ["tiny", "tiny.en", "base.en"]) {
         expect(r.stdout).toContain(name);
       }
     });

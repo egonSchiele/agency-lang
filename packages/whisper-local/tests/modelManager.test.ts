@@ -51,9 +51,9 @@ describe("loadLockfile", () => {
   it("parses the shipped lockfile", async () => {
     const lock = await loadLockfile();
     expect(lock.schemaVersion).toBe(1);
-    expect(lock.models["base"]).toBeDefined();
-    expect(lock.models["base"].url).toMatch(/^https:\/\/huggingface\.co\//);
-    expect(lock.models["base"].sha256).toMatch(/^[0-9a-f]{64}$/);
+    expect(lock.models["base.en"]).toBeDefined();
+    expect(lock.models["base.en"].url).toMatch(/^https:\/\/huggingface\.co\//);
+    expect(lock.models["base.en"].sha256).toMatch(/^[0-9a-f]{64}$/);
   });
 });
 

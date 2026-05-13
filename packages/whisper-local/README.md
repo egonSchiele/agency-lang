@@ -41,10 +41,10 @@ The first call downloads `ggml-base.en.bin` (~150 MB) into `~/.agency/models/whi
 ## API
 
 ```
-transcribe(filepath: string, language: string = "", model: string = "base"): string
+transcribe(filepath: string, language: string = "", model: string = "base.en"): string
 ```
 
-- `filepath` — any audio file ffmpeg can read (mp3, m4a, wav, flac, ogg, webm, mp4, …)
+- `filepath` — any audio file ffmpeg can read (mp3, m4a, wav, flac, ogg, webm, mp4, …). Must be a regular file on the local filesystem; URLs and ffmpeg pseudo-protocols (`http://`, `concat:`, `subfile:`, …) are explicitly rejected. See [Operational notes](#operational-notes).
 - `language` — ISO 639-1 code (e.g. `"en"`, `"fr"`, `"de"`). Empty string → whisper.cpp auto-detects.
 - `model` — model name. See the table below.
 
@@ -54,14 +54,11 @@ Returns the joined transcript text. Throws on missing ffmpeg, unknown model, cor
 
 | Name | Size | English-only | Notes |
 |------|------|--------------|-------|
-| `tiny`, `tiny.en` | 75 MB | optional | Fastest, lowest accuracy. Good for quick prototypes. |
-| `base`, `base.en` | 142 MB | optional | Recommended default. |
-| `small`, `small.en` | 466 MB | optional | Noticeable accuracy bump. |
-| `medium`, `medium.en` | 1.5 GB | optional | Slow on CPU; usable on Apple Silicon. |
-| `large-v3` | 2.9 GB | no (multilingual) | Best accuracy. Use only with adequate RAM. |
-| `large-v3-turbo` | 1.5 GB | no | Approaches large-v3 quality at ~half the size. |
+| `tiny` | 75 MB | no | Fastest, lowest accuracy. Good for quick prototypes. |
+| `tiny.en` | 75 MB | yes | English-only variant of `tiny`; slightly more accurate. |
+| `base.en` | 142 MB | yes | Recommended default. Good accuracy/speed trade-off. |
 
-`.en` variants are slightly more accurate on English-only audio. The default `base` is the multilingual variant.
+Other whisper.cpp models (`base`, `small`, `small.en`, `medium`, `medium.en`, `large-v3`, `large-v3-turbo`) are supported by the underlying engine but are not yet pinned in `models.lock.json`. They will be added as we verify each upstream release. To add one yourself, see [`docs/DEV.md`](./docs/DEV.md#adding-a-model).
 
 ## Pre-downloading models
 
@@ -82,6 +79,22 @@ npx -p @agency-lang/whisper-local agency-whisper verify <name>
 ## Custom model directory
 
 Set `AGENCY_WHISPER_MODELS_DIR` to use a directory other than `~/.agency/models/whisper/`.
+
+## Operational notes
+
+**Threading.** The native addon runs whisper inference on a libuv worker thread (`Napi::AsyncWorker`), so the JavaScript event loop is *not* blocked during a `transcribe()` call. Other JS work — HTTP requests, timers, etc. — continues to run.
+
+**Per-model serialization.** A `whisper_context` is mutable internal state. We hold a per-model mutex around `whisper_full`, so concurrent `transcribe()` calls on the *same* model serialize cleanly (no races, no corruption) but do not run in parallel. Throughput per model is single-threaded.
+
+**Cross-model parallelism.** Calls on *different* model instances run concurrently on separate libuv worker threads. By default Node sizes the libuv pool at 4 threads. If you run many concurrent transcriptions in the same process (e.g. an Agency program serving multiple users), bump the pool: `UV_THREADPOOL_SIZE=16 node ...` Do this *before* node starts; the pool size is locked at startup.
+
+**Loaded-model cache.** Loaded model contexts are kept in an in-process LRU cache. The default cap is 2 entries (a `large-v3` context can use ~3 GB, so an unbounded cache is dangerous in long-lived processes). Override via `AGENCY_WHISPER_HANDLE_CACHE_MAX`. Set to `0` to disable the cache (load + free per `transcribe()`).
+
+**Memory profile.** The audio decode step buffers the entire decoded PCM in memory before handing it to whisper. At 16 kHz mono float32 that is ~230 MB per hour of audio. Peak RSS during a transcribe is roughly 3× the decoded size (decoded buffer + Float32Array copy + C++ `std::vector` copy). The package rejects any single decode that exceeds 2 GB by default; override per-call via the lower-level `decodeToPcm({ maxPcmBytes })` API or chunk long audio client-side.
+
+**Timeout.** Each ffmpeg invocation has a 10-minute wall-clock cap (configurable via `decodeToPcm({ timeoutMs })`). On expiry the ffmpeg process is `SIGKILL`-ed and the call rejects, so a stuck or pathological input cannot hold the worker forever.
+
+**Input restriction.** `transcribe(filepath)` validates that `filepath` is a regular file before spawning ffmpeg, and the spawn is restricted to ffmpeg's `file` protocol. Inputs starting with `-` or specifying any other protocol (`http://`, `tcp://`, `concat:`, `subfile:`, …) are rejected up front. This matters because Agency programs often pass LLM-driven tool arguments straight into `transcribe()`; without this guard, a crafted "filepath" could turn a transcription into an outbound HTTP fetch or a read of an arbitrary local file.
 
 ## Troubleshooting
 

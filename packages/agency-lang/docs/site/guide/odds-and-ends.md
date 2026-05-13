@@ -7,7 +7,7 @@ Agency has a large standard library with all kinds of useful functionality. You 
 import { search } from "std::wikipedia"
 ```
 
-See [here](/appendix/agency-stdlib) for more information, or see the [standard library docs](/stdlib/overview). 
+See [here](/appendix/agency-stdlib) for more information, or see the [standard library docs](/stdlib/index). 
 
 If any of the functions are marked as throwing an interrupt, you will need some special syntax to call them. For example, the `read` and `write` functions throw interrupts, so you will need to call them like this:
 

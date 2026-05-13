@@ -1,0 +1,32 @@
+/**
+## Installation
+
+```
+npm install @agency-lang/whisper-local
+npx -p @agency-lang/whisper-local agency-whisper build
+```
+
+Requires `cmake`, a C++17 compiler, and `ffmpeg` on PATH.
+
+## Usage
+
+```ts
+import { transcribe } from "pkg::@agency-lang/whisper-local"
+
+node main() {
+  const text = transcribe("interview.m4a", "en", "base.en")
+  print(text)
+}
+```
+
+The first call downloads the requested model (~150 MB for "base", more for
+larger sizes) into `~/.agency/models/whisper/`. Subsequent calls reuse the
+local file with no network access.
+*/
+
+import { transcribe as transcribeImpl } from "./dist/src/transcribe.js"
+
+/// Transcribe an audio file locally using whisper.cpp. No network at runtime.
+export def transcribe(filepath: string, language: string = "", model: string = "base"): string {
+  return transcribeImpl(filepath, language, model)
+}

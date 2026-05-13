@@ -61,4 +61,6 @@ Run a browser automation task using natural language via the Browser Use cloud A
 
 **Returns:** `Result`
 
+**Throws:** `std::browserUse`
+
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/browser.agency#L23))

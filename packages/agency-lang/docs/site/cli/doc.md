@@ -68,6 +68,24 @@ The `@module` doc comment must appear at the top of the file, or right after the
 
 In the generated documentation, the module doc comment appears at the top of the page, before the types and functions sections.
 
+## Interrupts
+
+For each function and node, the generated docs include a `Throws:` line listing the kinds of structured interrupts the function may raise. This list is computed by static analysis: it includes interrupts the function raises directly as well as interrupts raised transitively through any functions or nodes it calls. Interrupts raised by `llm()` tools are also included.
+
+For example:
+
+```ts
+def deploy() {
+  interrupt myapp::deploy("Deploy?")
+}
+
+def helper() {
+  return deploy()
+}
+```
+
+Both `deploy` and `helper` will be documented as throwing `myapp::deploy`.
+
 ## Options
 
 - `-o, --output <dir>` — output directory for the generated docs.

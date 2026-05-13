@@ -26,4 +26,6 @@ Fetch a URL and return the body as readable markdown when the response is HTML, 
 
 **Returns:** `Result`
 
+**Throws:** `std::http::webfetch`
+
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/http.agency#L3))

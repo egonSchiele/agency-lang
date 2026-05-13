@@ -65,6 +65,8 @@ Execute a compiled Agency program in a subprocess. The parent's handler chain ex
 
 **Returns:** `Result`
 
+**Throws:** `std::run`
+
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/agency.agency#L15))
 
 ### runFile
@@ -104,5 +106,7 @@ Compile and execute an Agency file in a subprocess. The file is read from dir/fi
 | stdout | `number` | 1mb |
 
 **Returns:** `Result`
+
+**Throws:** `std::run`
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/agency.agency#L47))

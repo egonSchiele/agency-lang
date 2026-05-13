@@ -142,6 +142,8 @@ Authorize access to Google Calendar. Opens a browser for the user to sign in and
 
 **Returns:** `Result`
 
+**Throws:** `std::authorizeCalendar`
+
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/calendar.agency#L117))
 
 ### isCalendarAuthorized
@@ -182,6 +184,8 @@ List upcoming events from Google Calendar. Returns an array of events with id, s
 
 **Returns:** `Result`
 
+**Throws:** `std::listEvents`
+
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/calendar.agency#L138))
 
 ### createEvent
@@ -211,6 +215,8 @@ Create a new event on Google Calendar. Parameters: summary (title), start (ISO 8
 | calendarId | `string` | "primary" |
 
 **Returns:** `Result`
+
+**Throws:** `std::createEvent`
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/calendar.agency#L163))
 
@@ -244,6 +250,8 @@ Update an existing event on Google Calendar. Pass the eventId and any fields to 
 
 **Returns:** `Result`
 
+**Throws:** `std::updateEvent`
+
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/calendar.agency#L192))
 
 ### deleteEvent
@@ -265,5 +273,7 @@ Delete an event from Google Calendar by its event ID. Returns { deleted: true } 
 | calendarId | `string` | "primary" |
 
 **Returns:** `Result`
+
+**Throws:** `std::deleteEvent`
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/calendar.agency#L222))

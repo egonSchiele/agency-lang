@@ -77,6 +77,8 @@ Start an OAuth 2.0 authorization flow. Opens the user's browser for consent, cap
 
 **Returns:** `Result`
 
+**Throws:** `std::authorize`
+
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/oauth.agency#L48))
 
 ### getAccessToken
@@ -94,6 +96,8 @@ Get a valid OAuth access token for a previously authorized provider. Automatical
 | name | `string` |  |
 
 **Returns:** `Result`
+
+**Throws:** `std::getAccessToken`
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/oauth.agency#L78))
 
@@ -130,5 +134,7 @@ Delete stored OAuth tokens for a provider. The user will need to run authorize a
 | name | `string` |  |
 
 **Returns:** `Result`
+
+**Throws:** `std::revokeAuth`
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/oauth.agency#L96))

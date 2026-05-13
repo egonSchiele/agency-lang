@@ -26,6 +26,8 @@ A tool for taking a screenshot and saving it to a file. Optionally specify x, y,
 | width | `number` | -1 |
 | height | `number` | -1 |
 
+**Throws:** `std::screenshot`
+
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/system.agency#L3))
 
 ### exit
@@ -42,6 +44,8 @@ Terminate the process immediately with the given exit code. Use with caution —
 | Name | Type | Default |
 |---|---|---|
 | code | `number` | 0 |
+
+**Throws:** `std::exit`
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/system.agency#L20))
 
@@ -107,6 +111,8 @@ Set an environment variable in the current process. Fails if the name is empty o
 
 **Returns:** `Result`
 
+**Throws:** `std::setEnv`
+
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/system.agency#L52))
 
 ### openUrl
@@ -124,5 +130,7 @@ Open a URL in the user's default browser. Currently macOS-only.
 | url | `string` |  |
 
 **Returns:** `Result`
+
+**Throws:** `std::openUrl`
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/system.agency#L66))

@@ -353,6 +353,56 @@ def getCategory(): Category {
     expect(typesOutput).toContain("### User");
   });
 
+  it("documents the interrupt kinds a function or node may throw", () => {
+    const inputDir = path.join(tmpDir, "input");
+    const outputDir = path.join(tmpDir, "output");
+    fs.mkdirSync(inputDir, { recursive: true });
+
+    fs.writeFileSync(
+      path.join(inputDir, "throws.agency"),
+      `
+def deploy(): string {
+  interrupt myapp::deploy("deploying")
+  return "ok"
+}
+
+def helper(): string {
+  return deploy()
+}
+
+def safe(): string {
+  return "no interrupts here"
+}
+
+node main() {
+  interrupt myapp::confirm("confirm?")
+  const r = helper()
+  print(r)
+}
+`,
+    );
+
+    generateDoc({}, path.join(inputDir, "throws.agency"), outputDir);
+    const output = fs.readFileSync(
+      path.join(outputDir, "throws.md"),
+      "utf-8",
+    );
+
+    // Direct interrupt
+    expect(output).toMatch(/### deploy[\s\S]*?\*\*Throws:\*\* `myapp::deploy`/);
+    // Transitive — helper calls deploy
+    expect(output).toMatch(/### helper[\s\S]*?\*\*Throws:\*\* `myapp::deploy`/);
+    // Function with no interrupts has no Throws line — between `### safe`
+    // and the next heading, "Throws:" must not appear.
+    const safeBlock = output.match(/### safe[\s\S]*?(?=###|## )/);
+    expect(safeBlock).not.toBeNull();
+    expect(safeBlock![0]).not.toContain("Throws:");
+    // Node combines its own + transitive
+    expect(output).toMatch(
+      /### main[\s\S]*?\*\*Throws:\*\* `myapp::confirm`, `myapp::deploy`/,
+    );
+  });
+
   it("does not add source links when baseUrl is not configured", () => {
     const inputDir = path.join(tmpDir, "input");
     const outputDir = path.join(tmpDir, "output");

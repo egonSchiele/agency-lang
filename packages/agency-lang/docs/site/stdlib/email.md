@@ -89,6 +89,8 @@ Send an email using the Resend API. Requires `RESEND_API_KEY` env var or pass ap
 
 **Returns:** `Result`
 
+**Throws:** `std::sendEmail`
+
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/email.agency#L45))
 
 ### sendWithSendGrid
@@ -130,6 +132,8 @@ Send an email using the SendGrid API. Requires `SENDGRID_API_KEY` env var or pas
 | blockList | `string[]` | [] |
 
 **Returns:** `Result`
+
+**Throws:** `std::sendEmail`
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/email.agency#L84))
 
@@ -176,5 +180,7 @@ Send an email using the Mailgun API. Requires `MAILGUN_API_KEY` and `MAILGUN_DOM
 | blockList | `string[]` | [] |
 
 **Returns:** `Result`
+
+**Throws:** `std::sendEmail`
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/email.agency#L123))

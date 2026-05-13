@@ -48,6 +48,8 @@ Store a secret in the system keyring (macOS Keychain or Linux Secret Service). T
 
 **Returns:** `Result`
 
+**Throws:** `std::setSecret`
+
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/keyring.agency#L29))
 
 ### getSecret
@@ -70,6 +72,8 @@ Retrieve a secret from the system keyring by key. Returns the secret value as a 
 
 **Returns:** `Result`
 
+**Throws:** `std::getSecret`
+
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/keyring.agency#L45))
 
 ### deleteSecret
@@ -91,6 +95,8 @@ Delete a secret from the system keyring. Returns true if deleted, false if the k
 | service | `string` | "agency-lang" |
 
 **Returns:** `Result`
+
+**Throws:** `std::deleteSecret`
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/keyring.agency#L60))
 

@@ -62,4 +62,6 @@ Ask the user a question and wait for their reply. Unlike input(), this raises an
 
 **Returns:** `string`
 
+**Throws:** `std::question`
+
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/agent.agency#L24))

@@ -76,6 +76,8 @@ Edit a file by replacing oldText with newText. By default oldText must match exa
 
 **Returns:** `Result`
 
+**Throws:** `std::edit`
+
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L8))
 
 ### multiedit
@@ -100,6 +102,8 @@ Apply a sequence of edits to a single file atomically. Each edit has oldText, ne
 
 **Returns:** `Result`
 
+**Throws:** `std::multiedit`
+
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L41))
 
 ### applyPatch
@@ -118,6 +122,8 @@ Apply a unified diff to the working tree. Supports file creation (--- /dev/null)
 
 **Returns:** `Result`
 
+**Throws:** `std::applyPatch`
+
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L63))
 
 ### mkdir
@@ -135,6 +141,8 @@ Create a directory, including any missing parent directories. Idempotent: succee
 | dir | `string` |  |
 
 **Returns:** `Result`
+
+**Throws:** `std::mkdir`
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L74))
 
@@ -160,6 +168,8 @@ Copy a file or directory. Directories are copied recursively. Fails if src does 
 
 **Returns:** `Result`
 
+**Throws:** `std::copy`
+
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L85))
 
 ### move
@@ -184,6 +194,8 @@ Move or rename a file or directory. Falls back to copy+remove if src and dest ar
 
 **Returns:** `Result`
 
+**Throws:** `std::move`
+
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L101))
 
 ### remove
@@ -205,5 +217,7 @@ Delete a file or directory. Directories are removed recursively. Does not fail i
 | allowedPaths | `string[]` | [] |
 
 **Returns:** `Result`
+
+**Throws:** `std::remove`
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L117))

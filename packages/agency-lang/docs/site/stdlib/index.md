@@ -127,6 +127,8 @@ A tool for fetching a URL and returning the response as text. Provide baseUrl an
 
 **Returns:** `Result`
 
+**Throws:** `std::fetch`
+
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L54))
 
 ### fetchJSON
@@ -153,6 +155,8 @@ A tool for fetching a URL and returning the response as parsed JSON. Provide bas
 
 **Returns:** `Result`
 
+**Throws:** `std::fetchJSON`
+
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L70))
 
 ### read
@@ -174,6 +178,8 @@ A tool for reading the contents of a file and returning it as a string. The file
 | dir | `string` | "." |
 
 **Returns:** `Result`
+
+**Throws:** `std::read`
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L86))
 
@@ -199,6 +205,8 @@ A tool for writing content to a file. The filename is resolved relative to dir.
 
 **Returns:** `Result`
 
+**Throws:** `std::write`
+
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L100))
 
 ### readImage
@@ -221,6 +229,8 @@ A tool for reading an image file and returning its contents as a Base64-encoded 
 
 **Returns:** `Result`
 
+**Throws:** `std::readImage`
+
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L116))
 
 ### notify
@@ -239,6 +249,8 @@ A tool for showing a native OS notification with a title and message. Returns tr
 | message | `string` |  |
 
 **Returns:** `boolean`
+
+**Throws:** `std::notify`
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L130))
 

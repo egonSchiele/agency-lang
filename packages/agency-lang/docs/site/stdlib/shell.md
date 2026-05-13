@@ -84,6 +84,8 @@ Run an executable directly with an array of arguments, bypassing the shell. This
 
 **Returns:** [ExecResult](#execresult)
 
+**Throws:** `std::exec`
+
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/shell.agency#L18))
 
 ### bash
@@ -112,6 +114,8 @@ Run a shell command string via sh -c and return its stdout, stderr, and exit cod
 
 **Returns:** [ExecResult](#execresult)
 
+**Throws:** `std::bash`
+
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/shell.agency#L59))
 
 ### ls
@@ -133,6 +137,8 @@ List entries in a directory. Each entry includes name, path, type ("file", "dir"
 | recursive | `boolean` | false |
 
 **Returns:** `Result`
+
+**Throws:** `std::ls`
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/shell.agency#L100))
 
@@ -160,6 +166,8 @@ Search for a regex pattern in files under a directory. Returns matches with file
 
 **Returns:** `Result`
 
+**Throws:** `std::grep`
+
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/shell.agency#L121))
 
 ### glob
@@ -183,6 +191,8 @@ Find files whose paths match a glob pattern (e.g. "src/**/*.ts"). Returns paths 
 | maxResults | `number` | 500 |
 
 **Returns:** `Result`
+
+**Throws:** `std::glob`
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/shell.agency#L145))
 

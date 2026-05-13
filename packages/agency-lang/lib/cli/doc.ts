@@ -9,6 +9,8 @@ import { FunctionDefinition, FunctionParameter } from "@/types/function.js";
 import { GraphNodeDefinition } from "@/types/graphNode.js";
 import { TypescriptPreprocessor } from "@/preprocessors/typescriptPreprocessor.js";
 import { buildCompilationUnit, GLOBAL_SCOPE_KEY } from "@/compilationUnit.js";
+import { typeCheck } from "@/typeChecker/index.js";
+import type { InterruptKind } from "@/symbolTable.js";
 import {
   heading,
   codeFence,
@@ -27,6 +29,7 @@ type DocContext = {
   sourceRelPath?: string;
   symbolRegistry: SymbolRegistry;
   currentMdPath?: string;
+  config: AgencyConfig;
 };
 
 export function generateDoc(
@@ -85,6 +88,7 @@ export function generateDoc(
           sourceRelPath: relativePath,
           symbolRegistry,
           currentMdPath: mdRelPath,
+          config,
         },
         program,
       );
@@ -104,6 +108,7 @@ export function generateDoc(
         baseUrl,
         sourceRelPath: path.basename(inputPath),
         symbolRegistry: {},
+        config,
       },
       program,
     );
@@ -126,6 +131,18 @@ function generateDocForFile(
   program: AgencyProgram,
 ): void {
   const info = buildCompilationUnit(program);
+
+  // Run the type checker (without a SymbolTable) to compute the
+  // transitive interrupt kinds each function/node may throw. We
+  // intentionally ignore type errors here — the doc command should
+  // produce output even for files that don't fully type-check.
+  let interruptKindsByFunction: Record<string, InterruptKind[]> = {};
+  try {
+    const result = typeCheck(program, ctx.config, info);
+    interruptKindsByFunction = result.interruptKindsByFunction;
+  } catch {
+    // Fall back to no interrupt info if the type checker crashes.
+  }
 
   const typeAliases: TypeAlias[] = [];
   for (const node of program.nodes) {
@@ -150,10 +167,18 @@ function generateDocForFile(
   if (typeSection) sections.push(typeSection);
 
   const functions = Object.values(info.functionDefinitions);
-  const functionSection = generateFunctionSection(functions, ctx);
+  const functionSection = generateFunctionSection(
+    functions,
+    ctx,
+    interruptKindsByFunction,
+  );
   if (functionSection) sections.push(functionSection);
 
-  const nodeSection = generateNodeSection(info.graphNodes, ctx);
+  const nodeSection = generateNodeSection(
+    info.graphNodes,
+    ctx,
+    interruptKindsByFunction,
+  );
   if (nodeSection) sections.push(nodeSection);
 
   fs.writeFileSync(outputPath, sections.join("\n\n") + "\n");
@@ -263,9 +288,18 @@ function generateTypeSection(
   );
 }
 
+function formatThrows(kinds: InterruptKind[] | undefined): string | null {
+  if (!kinds || kinds.length === 0) return null;
+  const formatted = kinds
+    .map((k) => "`" + (k.kind || "unknown") + "`")
+    .join(", ");
+  return `${bold("Throws:")} ${formatted}`;
+}
+
 function generateFunctionSection(
   fns: FunctionDefinition[],
   ctx: DocContext,
+  interruptKindsByFunction: Record<string, InterruptKind[]>,
 ): string | null {
   if (fns.length === 0) return null;
   const parts = fns.map((fn) => {
@@ -279,6 +313,7 @@ function generateFunctionSection(
       fn.returnType
         ? `${bold("Returns:")} ${formatTypeLinked(fn.returnType, ctx)}`
         : null,
+      formatThrows(interruptKindsByFunction[fn.functionName]),
       sourceLink(fn.loc, ctx),
     );
   });
@@ -288,6 +323,7 @@ function generateFunctionSection(
 function generateNodeSection(
   nodes: GraphNodeDefinition[],
   ctx: DocContext,
+  interruptKindsByFunction: Record<string, InterruptKind[]>,
 ): string | null {
   if (nodes.length === 0) return null;
   const parts = nodes.map((node) => {
@@ -305,6 +341,7 @@ function generateNodeSection(
       node.returnType
         ? `${bold("Returns:")} ${formatTypeLinked(node.returnType, ctx)}`
         : null,
+      formatThrows(interruptKindsByFunction[node.nodeName]),
       sourceLink(node.loc, ctx),
     );
   });

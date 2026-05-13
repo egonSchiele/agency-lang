@@ -24,6 +24,8 @@ A tool for speaking text aloud using text-to-speech. Optionally specify a voice 
 | rate | `number` | 0 |
 | outputFile | `string` | "" |
 
+**Throws:** `std::speak`
+
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/speech.agency#L3))
 
 ### record
@@ -52,6 +54,8 @@ Record audio from the microphone. Stops when the user presses Enter,
 
 **Returns:** `string`
 
+**Throws:** `std::record`
+
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/speech.agency#L19))
 
 ### transcribe
@@ -73,5 +77,7 @@ A tool for transcribing an audio file to text using OpenAI's Whisper API. Option
 | language | `string` | "" |
 
 **Returns:** `string`
+
+**Throws:** `std::transcribe`
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/speech.agency#L37))

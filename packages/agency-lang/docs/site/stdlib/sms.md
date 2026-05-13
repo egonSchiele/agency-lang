@@ -61,4 +61,6 @@ Send an SMS text message via the Twilio API. Requires TWILIO_ACCOUNT_SID, TWILIO
 
 **Returns:** `Result`
 
+**Throws:** `std::sendSms`
+
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/sms.agency#L26))

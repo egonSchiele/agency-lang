@@ -53,12 +53,17 @@ describe("blockArgumentParser", () => {
     }
   });
 
-  it("fails without as keyword", () => {
+  it("parses block without as keyword", () => {
     const input = `{
   print("hello")
 }`;
     const result = blockArgumentParser(input);
-    expect(result.success).toBe(false);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.result.type).toBe("blockArgument");
+      expect(result.result.params).toEqual([]);
+      expect(result.result.body.length).toBe(1);
+    }
   });
 });
 

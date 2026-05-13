@@ -13,7 +13,7 @@ import type { FunctionParameter } from "../types.js";
 import type { TraceHeader } from "../runtime/trace/types.js";
 
 import type { InterruptResponse } from "../runtime/interrupts.js";
-import { color } from "termcolors";
+import { color } from "@/utils/termcolors.js";
 import { round } from "@/utils.js";
 
 // Functions from the compiled module that are bound to __globalCtx

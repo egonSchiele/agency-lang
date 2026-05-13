@@ -1,4 +1,4 @@
-import { color } from "termcolors";
+import { color } from "@/utils/termcolors.js";
 import { VariableType } from "../../types.js";
 import { escape } from "../../utils.js";
 

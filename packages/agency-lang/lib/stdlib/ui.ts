@@ -1,6 +1,6 @@
 import * as readline from "readline";
 import process from "process";
-import { color } from "termcolors";
+import { color } from "../utils/termcolors.js";
 import { syntaxHighlight } from "./syntax.js";
 import { _input } from "./builtins.js";
 

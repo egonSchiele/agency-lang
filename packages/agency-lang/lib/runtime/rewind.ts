@@ -4,7 +4,7 @@ import { RuntimeContext } from "./state/context.js";
 import { StateStack } from "./state/stateStack.js";
 import type { GraphState } from "./types.js";
 import { createReturnObject, deepClone } from "./utils.js";
-import { color } from "termcolors";
+import { color } from "@/utils/termcolors.js";
 
 export function applyOverrides(
   checkpoint: Checkpoint,

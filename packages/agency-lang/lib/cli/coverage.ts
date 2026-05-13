@@ -1,6 +1,7 @@
 import * as fs from "fs";
 import * as path from "path";
 import { pathToFileURL } from "url";
+import picomatch from "picomatch";
 import { AgencyConfig } from "../config.js";
 import { compile } from "./commands.js";
 import { RunStrategy } from "../importStrategy.js";
@@ -151,21 +152,49 @@ function computeFileCoverage(
   };
 }
 
+export type GenerateReportOptions = {
+  detail?: boolean;
+  html?: boolean;
+  /**
+   * Override `coverage.threshold` from config. Total coverage % below this
+   * value causes generateReport to return `passed: false`.
+   */
+  threshold?: number;
+  /**
+   * Override `coverage.perFileThreshold` from config. Any file below this
+   * value causes generateReport to return `passed: false`.
+   */
+  perFileThreshold?: number;
+};
+
+export type GenerateReportResult = {
+  /** False when any configured threshold was not met. */
+  passed: boolean;
+  /** Files that fell below the per-file threshold (if any). */
+  failingFiles: string[];
+  /** Total coverage percentage across all reported files. */
+  totalPercentage: number;
+};
+
 export async function generateReport(
   config: AgencyConfig,
   target: string | string[],
-  opts?: { detail?: boolean; html?: boolean },
-): Promise<void> {
+  opts?: GenerateReportOptions,
+): Promise<GenerateReportResult> {
   const outDir = getCoverageOutDir(config);
   const hits = loadCoverageData(outDir);
 
   if (Object.keys(hits).length === 0) {
     console.log("No coverage data found. Run tests with --coverage first.");
-    return;
+    return { passed: true, failingFiles: [], totalPercentage: 0 };
   }
 
   const targets = Array.isArray(target) ? target : [target];
-  const agencyFiles = Array.from(new Set(targets.flatMap(findAgencyFiles)));
+  const exclude = config.coverage?.exclude ?? [];
+  const isExcluded = makeExcludeMatcher(exclude);
+  const agencyFiles = Array.from(
+    new Set(targets.flatMap(findAgencyFiles)),
+  ).filter((f) => !isExcluded(f));
 
   const results: FileCoverage[] = [];
   for (const file of agencyFiles) {
@@ -189,6 +218,70 @@ export async function generateReport(
   } else {
     printSummaryReport(results);
   }
+
+  return checkThresholds(results, config, opts);
+}
+
+/**
+ * Build a predicate that returns true when a path matches any of the supplied
+ * picomatch glob patterns. Both the absolute and the cwd-relative form of the
+ * path are tested so users can write either style in `coverage.exclude`.
+ */
+function makeExcludeMatcher(patterns: string[]): (file: string) => boolean {
+  if (patterns.length === 0) return () => false;
+  const matchers = patterns.map((p) => picomatch(p));
+  return (file: string) => {
+    const rel = path.relative(process.cwd(), file);
+    return matchers.some((m) => m(file) || m(rel));
+  };
+}
+
+function checkThresholds(
+  results: FileCoverage[],
+  config: AgencyConfig,
+  opts: GenerateReportOptions | undefined,
+): GenerateReportResult {
+  let totalSteps = 0;
+  let totalCovered = 0;
+  for (const r of results) {
+    totalSteps += r.totalSteps;
+    totalCovered += r.coveredSteps;
+  }
+  const totalPercentage = totalSteps === 0 ? 100 : (totalCovered / totalSteps) * 100;
+
+  const overall = opts?.threshold ?? config.coverage?.threshold;
+  const perFile = opts?.perFileThreshold ?? config.coverage?.perFileThreshold;
+
+  const failingFiles =
+    perFile === undefined
+      ? []
+      : results.filter((r) => r.percentage < perFile).map((r) => r.file);
+  const overallFails = overall !== undefined && totalPercentage < overall;
+  const passed = !overallFails && failingFiles.length === 0;
+
+  if (overall !== undefined || perFile !== undefined) {
+    console.log("");
+    if (overallFails) {
+      console.log(
+        ttyColor.red(
+          `✗ Overall coverage ${totalPercentage.toFixed(1)}% is below threshold ${overall}%`,
+        ),
+      );
+    }
+    if (failingFiles.length > 0 && perFile !== undefined) {
+      console.log(
+        ttyColor.red(
+          `✗ ${failingFiles.length} file(s) below per-file threshold ${perFile}%:`,
+        ),
+      );
+      for (const f of failingFiles) console.log(ttyColor.red(`    ${f}`));
+    }
+    if (passed) {
+      console.log(ttyColor.green("✓ Coverage thresholds met"));
+    }
+  }
+
+  return { passed, failingFiles, totalPercentage };
 }
 
 /** Color a percentage by coverage band: red <50, yellow <80, green ≥80. */

@@ -1,0 +1,37 @@
+name: Agency coverage comment
+description: >
+  Render a parsed Agency coverage report as a markdown table and post (or
+  update) a sticky comment on the current pull request.
+
+inputs:
+  summary-path:
+    description: Path to the plain-text coverage summary file produced by `agency coverage report`.
+    required: true
+  detail-path:
+    description: Path to the plain-text coverage detail file (optional, omit to skip the per-file uncovered table).
+    required: false
+    default: ""
+  title:
+    description: Heading shown at the top of the comment.
+    required: false
+    default: Standard Library Coverage
+  marker:
+    description: Hidden HTML marker used to identify and update the comment across runs.
+    required: false
+    default: "<!-- agency-stdlib-coverage -->"
+
+runs:
+  using: composite
+  steps:
+    - name: Render and post coverage comment
+      uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+      env:
+        SUMMARY_PATH: ${{ inputs.summary-path }}
+        DETAIL_PATH: ${{ inputs.detail-path }}
+        TITLE: ${{ inputs.title }}
+        MARKER: ${{ inputs.marker }}
+      with:
+        script: |
+          const path = require('path');
+          const render = require(path.join(process.env.GITHUB_ACTION_PATH, 'render.js'));
+          await render({ github, context, core });

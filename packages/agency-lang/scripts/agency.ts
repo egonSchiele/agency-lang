@@ -402,15 +402,33 @@ export function createProgram(deps: CliDependencies = {}): Command {
     .argument("<target>", "Directory or .agency file to report on")
     .option("--html", "Generate HTML report")
     .option("--detail", "List uncovered line ranges per file")
+    .option(
+      "--threshold <percent>",
+      "Fail (exit 1) when total coverage falls below this percent (0–100)",
+      (v) => parseFloat(v),
+    )
+    .option(
+      "--per-file-threshold <percent>",
+      "Fail (exit 1) when any file falls below this percent (0–100)",
+      (v) => parseFloat(v),
+    )
     .action(
       async (
         target: string,
-        opts: { detail?: boolean; html?: boolean },
+        opts: {
+          detail?: boolean;
+          html?: boolean;
+          threshold?: number;
+          perFileThreshold?: number;
+        },
       ) => {
-        await generateReport(getConfig(), target, {
+        const result = await generateReport(getConfig(), target, {
           detail: opts.detail,
           html: opts.html,
+          threshold: opts.threshold,
+          perFileThreshold: opts.perFileThreshold,
         });
+        if (!result.passed) process.exit(1);
       },
     );
 

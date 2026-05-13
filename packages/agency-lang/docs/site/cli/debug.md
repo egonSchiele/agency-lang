@@ -26,3 +26,11 @@ Here are some things you may want to do with the debugger:
 - Override the value of a variable: Enter `:set varName=newValue`. Then when you press `s`, the next statement will execute with the variable's value overwritten.
 - Cycle between all the different panels: `tab` and `shift+tab`. Once a panel has focus, you can press the up or down arrow keys to scroll, or press `z` to zoom, temporarily making that panel full screen. 
 - In the threads panel, you can press `[` or `]` to cycle between the different threads.
+
+## Options
+
+- `--node <name>` — node to execute (defaults to `main`).
+- `--rewind-size <n>` — size of the rolling checkpoint window. Defaults to 30. Larger values let you rewind further at the cost of memory.
+- `--trace <file>` — load and inspect an existing `.trace` file instead of running the program live.
+- `--checkpoint <file>` — load a saved checkpoint file and start the debugger from that point.
+- `--dist-dir <dir>` — import pre-compiled JS from this directory instead of compiling the `.agency` file on the fly. Useful when you've already built your project and want to skip the compile step.

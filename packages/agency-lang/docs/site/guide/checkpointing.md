@@ -4,8 +4,8 @@ One of Agency's standout features is its ability to pause and serialize executio
 - [resuming from interrupts](./interrupts)
 - [adding a checkpoint to failures](./error-handling)
 - [creating parallel threads with isolated state in the fork primitive](./concurrency)
-- [the time-travel debugger](./debugger)
-- [traces](./traces-and-bundles)
+- [the time-travel debugger](/cli/debug)
+- [traces](/cli/trace-and-bundle)
 
 You can also manually create checkpoints and restore from them yourself.
 

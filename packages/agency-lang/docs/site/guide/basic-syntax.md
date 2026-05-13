@@ -59,7 +59,7 @@ This is a multi-line comment
 */
 ```
 
-Or doc comments for [documentation generation](/appendix/docs):
+Or doc comments for [documentation generation](/cli/doc):
 
 ```ts
 /** This is a doc comment for the Person type */

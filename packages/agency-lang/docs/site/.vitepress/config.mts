@@ -7,6 +7,7 @@ export default defineConfig({
     nav: [
       { text: "Home", link: "/" },
       { text: "Guide", link: "/guide/getting-started" },
+      { text: "CLI", link: "/cli/index" },
       { text: "Standard Library", link: "/stdlib/overview" },
       { text: "Packages", link: "/packages/" },
     ],
@@ -27,6 +28,7 @@ export default defineConfig({
               link: "/guide/imports-and-packages",
             },
             { text: "TypeScript Interoperability", link: "/guide/ts-interop" },
+            { text: "Odds and Ends", link: "/guide/odds-and-ends" },
           ],
         },
         {
@@ -130,6 +132,33 @@ export default defineConfig({
           ],
         },
       ],
+
+      "/cli/": [
+        {
+          text: "CLI",
+          items: [
+            { text: "Overview", link: "/cli/index" },
+            { text: "agent", link: "/cli/agent" },
+            { text: "compile", link: "/cli/compile" },
+            { text: "debug", link: "/cli/debug" },
+            { text: "doc", link: "/cli/doc" },
+            { text: "format", link: "/cli/format" },
+            { text: "lsp / mcp", link: "/cli/editor-integration" },
+            { text: "optimize", link: "/cli/optimize" },
+            { text: "preprocess / ast", link: "/cli/preprocess-and-ast" },
+            { text: "policy", link: "/cli/policy" },
+            { text: "review", link: "/cli/review" },
+            { text: "run", link: "/cli/run" },
+            { text: "schedule", link: "/cli/schedule" },
+            { text: "serve", link: "/cli/serve" },
+            { text: "test", link: "/cli/test" },
+            { text: "trace", link: "/cli/trace-and-bundle" },
+            { text: "bundle", link: "/cli/trace-and-bundle" },
+            { text: "typecheck", link: "/cli/typecheck" },
+          ],
+        },
+      ],
+
       "/stdlib/": [
         {
           text: "Standard Library",

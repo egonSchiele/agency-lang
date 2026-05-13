@@ -67,3 +67,9 @@ def now(timezone: string = ""): string {
 The `@module` doc comment must appear at the top of the file, or right after the imports. If it appears after any other code (type aliases, functions, nodes), the compiler will throw an error.
 
 In the generated documentation, the module doc comment appears at the top of the page, before the types and functions sections.
+
+## Options
+
+- `-o, --output <dir>` — output directory for the generated docs.
+- `--ignore <dirs...>` — directory names to ignore when scanning recursively. Useful for skipping things like `node_modules` or `dist`.
+- `--base-url <url>` — base URL for source links in the generated docs. Equivalent to setting `doc.baseUrl` in the config file.

@@ -5,20 +5,8 @@ import * as path from "node:path";
 import * as crypto from "node:crypto";
 import { fileURLToPath } from "node:url";
 import type { ModelName, Lockfile, LockfileEntry } from "./types.js";
+import { KNOWN_MODELS } from "./types.js";
 import { findPackageRoot } from "./packageRoot.js";
-
-const KNOWN_MODELS: readonly ModelName[] = [
-  "tiny",
-  "tiny.en",
-  "base",
-  "base.en",
-  "small",
-  "small.en",
-  "medium",
-  "medium.en",
-  "large-v3",
-  "large-v3-turbo",
-];
 
 export class ModelManagerError extends Error {
   constructor(message: string) {
@@ -86,6 +74,12 @@ export async function sha256OfFile(filepath: string): Promise<string> {
   return hash.digest("hex");
 }
 
+function isAllowedScheme(url: string): boolean {
+  // Allow https everywhere; allow http only for localhost test fixtures.
+  if (url.startsWith("https://")) return true;
+  return /^http:\/\/(127\.0\.0\.1|localhost)(:|\/|$)/.test(url);
+}
+
 export async function downloadModel(
   entry: LockfileEntry,
   dest: string,
@@ -95,10 +89,7 @@ export async function downloadModel(
   // but rejecting non-HTTPS up front avoids exposing the user's network to a
   // downgrade attack and makes lockfile-tampering review easier.
   // Allow http://127.0.0.1 and http://localhost for tests.
-  const isLocalTest = /^http:\/\/(127\.0\.0\.1|localhost)(:|\/|$)/.test(
-    entry.url,
-  );
-  if (!entry.url.startsWith("https://") && !isLocalTest) {
+  if (!isAllowedScheme(entry.url)) {
     throw new ModelManagerError(
       `refusing to download model over non-HTTPS URL: ${entry.url}`,
     );
@@ -117,8 +108,28 @@ export async function downloadModel(
     );
   }
 
+  // fetch() follows redirects by default. Re-check the *final* URL's scheme
+  // so a compromised endpoint can't downgrade us from https to http.
+  if (response.url && !isAllowedScheme(response.url)) {
+    throw new ModelManagerError(
+      `refusing to follow redirect to non-HTTPS URL: ${response.url} (started from ${entry.url})`,
+    );
+  }
+
   const hash = crypto.createHash("sha256");
   const out = createWriteStream(partial);
+
+  // Helper: close the WriteStream cleanly before unlinking the partial file.
+  // On Windows an open handle can prevent fs.rm from deleting the file.
+  const closeStream = (err?: Error): Promise<void> =>
+    new Promise<void>((resolve) => {
+      if (out.closed || out.destroyed) {
+        resolve();
+        return;
+      }
+      out.once("close", () => resolve());
+      out.destroy(err);
+    });
 
   try {
     const reader = response.body.getReader();
@@ -134,6 +145,7 @@ export async function downloadModel(
       out.end((err: unknown) => (err ? reject(err) : resolve()));
     });
   } catch (err) {
+    await closeStream(err as Error);
     await fs.rm(partial, { force: true });
     throw err;
   }

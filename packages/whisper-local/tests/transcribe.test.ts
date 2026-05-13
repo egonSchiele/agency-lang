@@ -14,7 +14,8 @@ vi.mock("../src/addon.js", () => {
 
 import * as modelManager from "../src/modelManager.js";
 import * as ffmpeg from "../src/ffmpeg.js";
-import { transcribe, _clearHandleCache } from "../src/transcribe.js";
+import { transcribe } from "../src/transcribe.js";
+import { _clearHandleCache } from "../src/handleCache.js";
 import * as addonMod from "../src/addon.js";
 
 describe("transcribe", () => {

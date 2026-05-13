@@ -1,33 +1,13 @@
 import { decodeToPcm } from "./ffmpeg.js";
 import { ensureModel } from "./modelManager.js";
-import { loadAddon, type WhisperModelInstance } from "./addon.js";
+import { loadAddon } from "./addon.js";
+import { handleCache } from "./handleCache.js";
 import type { ModelName } from "./types.js";
-
-type CachedHandle = { instance: WhisperModelInstance };
-
-const handleCache: Record<string, CachedHandle> = {};
-
-export function _clearHandleCache(): void {
-  for (const key of Object.keys(handleCache)) {
-    try {
-      handleCache[key].instance.free();
-    } catch (err) {
-      // free() can throw "WhisperModel busy" if a transcribe is still in
-      // flight. Log but continue clearing — the Persistent ref in the addon
-      // will keep the model alive until the worker finishes; we just drop
-      // our handle cache entry so the next transcribe creates a fresh one.
-      console.warn(
-        `whisper-local: failed to free model "${key}": ${(err as Error).message}`,
-      );
-    }
-    delete handleCache[key];
-  }
-}
 
 export async function transcribe(
   filepath: string,
   language: string = "",
-  model: ModelName = "base",
+  model: ModelName = "base.en",
 ): Promise<string> {
   if (!filepath) {
     throw new Error("transcribe: filepath is required");

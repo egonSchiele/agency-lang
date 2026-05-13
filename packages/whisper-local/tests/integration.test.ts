@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { transcribe, _clearHandleCache } from "../src/transcribe.js";
+import { transcribe } from "../src/transcribe.js";
+import { _clearHandleCache } from "../src/handleCache.js";
 
 const SLOW = process.env.AGENCY_RUN_SLOW === "1";
 

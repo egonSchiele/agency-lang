@@ -30,8 +30,7 @@
     "build:native": "cmake-js compile --runtime=node",
     "build": "pnpm run build:native && pnpm run build:ts",
     "test": "vitest",
-    "test:run": "vitest run",
-    "test:agency": "agency tests/agency"
+    "test:run": "vitest run"
   },
   "peerDependencies": {
     "agency-lang": "workspace:*"

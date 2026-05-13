@@ -2,7 +2,7 @@ import { lookupItem, saveItem } from "./tools.js";
 import { fileURLToPath } from "url";
 import __process from "process";
 import { readFileSync, writeFileSync } from "fs";
-import { z } from "zod";
+import { z } from "agency-lang/zod";
 import { goToNode, color, nanoid } from "agency-lang";
 import { smoltalk } from "agency-lang";
 import path from "path";

@@ -61,6 +61,8 @@ Inline blocks are single-line only, and the expression is implicitly returned. F
 
 Blocks work correctly with [interrupts](./interrupts). If a block throws an interrupt (or calls a function that throws one), Agency can serialize the execution state, and when the user responds, resume from the exact point the block left off. Blocks can also close over variables from their enclosing scope, and this works correctly across interrupts too.
 
+## A limitation of blocks and interrupts
+
 However, there is one limitation. If a function receives a block parameter and copies it to a local variable, and then calls it from a later step, the block will not resume correctly after an interrupt. For example:
 
 ```ts
@@ -83,3 +85,15 @@ def foo(block: () => any) {
 ```
 
 The reason the parameter works is that on resume, the calling function re-executes (since its step didn't complete), re-creates the block inline, and passes the fresh block as an argument — overwriting the deserialized value.
+
+## Blocks and functions
+
+You can use a function or a PFA anywhere you can pass in a block:
+
+```ts
+def add(a: number, b: number): number {
+  return a + b
+}
+
+const result = map(range(10), add.partial(b: 5))
+```

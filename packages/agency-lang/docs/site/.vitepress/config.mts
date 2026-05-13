@@ -7,35 +7,57 @@ export default defineConfig({
     nav: [
       { text: "Home", link: "/" },
       { text: "Guide", link: "/guide/getting-started" },
+      { text: "CLI", link: "/cli/index" },
       { text: "Standard Library", link: "/stdlib/overview" },
       { text: "Packages", link: "/packages/" },
     ],
     sidebar: {
       "/guide/": [
         {
-          text: "Guide",
+          text: "Basic",
           items: [
             { text: "Getting Started", link: "/guide/getting-started" },
+            { text: "Agents 101", link: "/guide/agents-101" },
             { text: "Basic Syntax", link: "/guide/basic-syntax" },
             { text: "Types", link: "/guide/types" },
             { text: "Nodes", link: "/guide/nodes" },
             { text: "LLMs", link: "/guide/llm" },
             { text: "Functions", link: "/guide/functions" },
+            {
+              text: "Imports and Packages",
+              link: "/guide/imports-and-packages",
+            },
+            { text: "TypeScript Interoperability", link: "/guide/ts-interop" },
+            { text: "Odds and Ends", link: "/guide/odds-and-ends" },
+          ],
+        },
+        {
+          text: "Intermediate",
+          items: [
             { text: "Interrupts", link: "/guide/interrupts" },
             { text: "Handlers", link: "/guide/handlers" },
-            { text: "Testing", link: "/guide/testing" },
-            { text: "TypeScript Interoperability", link: "/guide/ts-interop" },
+            {
+              text: "Structured Interrupts",
+              link: "/guide/structured-interrupts",
+            },
+            { text: "PFAs", link: "/guide/partial-application" },
             {
               text: "Message History and Threads",
               link: "/guide/message-history-and-threads",
             },
             { text: "Error Handling", link: "/guide/error-handling" },
+            { text: "Blocks", link: "/guide/blocks" },
+            { text: "Execution Model", link: "/guide/execution-model" },
+            { text: "Testing", link: "/guide/testing" },
+          ],
+        },
+        {
+          text: "Advanced",
+          items: [
+            { text: "Concurrency", link: "/guide/concurrency" },
+            { text: "Policies", link: "/guide/policies" },
             { text: "Debugger", link: "/guide/debugger" },
             { text: "Traces and Bundles", link: "/guide/traces-and-bundles" },
-            { text: "Blocks", link: "/guide/blocks" },
-            { text: "Fork", link: "/guide/fork" },
-            { text: "Execution Model", link: "/guide/execution-model" },
-            { text: "Imports and Packages", link: "/guide/imports-and-packages" },
             { text: "Schemas", link: "/guide/schemas" },
             { text: "Checkpointing", link: "/guide/checkpointing" },
             { text: "MCP", link: "/guide/mcp" },
@@ -83,7 +105,10 @@ export default defineConfig({
             { text: "Blocks", link: "/guide/blocks" },
             { text: "Fork", link: "/guide/fork" },
             { text: "Execution Model", link: "/guide/execution-model" },
-            { text: "Imports and Packages", link: "/guide/imports-and-packages" },
+            {
+              text: "Imports and Packages",
+              link: "/guide/imports-and-packages",
+            },
             { text: "Schemas", link: "/guide/schemas" },
             { text: "Checkpointing", link: "/guide/checkpointing" },
             { text: "MCP", link: "/guide/mcp" },
@@ -107,6 +132,33 @@ export default defineConfig({
           ],
         },
       ],
+
+      "/cli/": [
+        {
+          text: "CLI",
+          items: [
+            { text: "Overview", link: "/cli/index" },
+            { text: "agent", link: "/cli/agent" },
+            { text: "compile", link: "/cli/compile" },
+            { text: "debug", link: "/cli/debug" },
+            { text: "doc", link: "/cli/doc" },
+            { text: "format", link: "/cli/format" },
+            { text: "lsp / mcp", link: "/cli/editor-integration" },
+            { text: "optimize", link: "/cli/optimize" },
+            { text: "preprocess / ast", link: "/cli/preprocess-and-ast" },
+            { text: "policy", link: "/cli/policy" },
+            { text: "review", link: "/cli/review" },
+            { text: "run", link: "/cli/run" },
+            { text: "schedule", link: "/cli/schedule" },
+            { text: "serve", link: "/cli/serve" },
+            { text: "test", link: "/cli/test" },
+            { text: "trace", link: "/cli/trace-and-bundle" },
+            { text: "bundle", link: "/cli/trace-and-bundle" },
+            { text: "typecheck", link: "/cli/typecheck" },
+          ],
+        },
+      ],
+
       "/stdlib/": [
         {
           text: "Standard Library",

@@ -59,7 +59,7 @@ This is a multi-line comment
 */
 ```
 
-Or doc comments for [documentation generation](/appendix/docs):
+Or doc comments for [documentation generation](/cli/doc):
 
 ```ts
 /** This is a doc comment for the Person type */
@@ -151,5 +151,5 @@ Mixing dimensions is a type error:
 
 ### JavaScript features that don't exist in Agency
 - lambdas
-- async/await. Everything is awaited by default, and there are specific constructs for async, such as [fork](/guide/fork)
+- async/await. Everything is awaited by default, and there are specific constructs for [concurrency](/guide/concurrency).
 - classes.

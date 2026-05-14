@@ -605,13 +605,16 @@ describe("TypeChecker", () => {
       expect(errors).toHaveLength(0);
     });
 
-    it("should error sleep with a string argument", () => {
+    it("should error builtin call with wrong arg type", () => {
+      // `getCheckpoint` is a real language primitive that takes a number.
+      // Stdlib functions (sleep, write, …) used to be hardcoded here too
+      // but now resolve through the SymbolTable from stdlib/index.agency.
       const program: AgencyProgram = {
         type: "agencyProgram",
         nodes: [
           {
             type: "functionCall",
-            functionName: "sleep",
+            functionName: "getCheckpoint",
             arguments: [
               { type: "string", segments: [{ type: "text", value: "hello" }] },
             ],
@@ -622,18 +625,19 @@ describe("TypeChecker", () => {
       const { errors } = typeCheck(program);
       expect(errors).toHaveLength(1);
       expect(errors[0].message).toContain("not assignable to parameter type");
-      expect(errors[0].message).toContain("sleep");
+      expect(errors[0].message).toContain("getCheckpoint");
     });
 
-    it("should error write with wrong arity", () => {
+    it("should error builtin call with wrong arity", () => {
+      // `restore` takes 2 args. Calling with 1 should error.
       const program: AgencyProgram = {
         type: "agencyProgram",
         nodes: [
           {
             type: "functionCall",
-            functionName: "write",
+            functionName: "restore",
             arguments: [
-              { type: "string", segments: [{ type: "text", value: "file.txt" }] },
+              { type: "number", value: "1" },
             ],
           },
         ],
@@ -645,7 +649,7 @@ describe("TypeChecker", () => {
       expect(errors[0].message).toContain("but got 1");
     });
 
-    it("should infer builtin return type (round returns number)", () => {
+    it("should infer builtin return type (checkpoint returns number)", () => {
       const program: AgencyProgram = {
         type: "agencyProgram",
         nodes: [
@@ -667,11 +671,8 @@ describe("TypeChecker", () => {
             arguments: [
               {
                 type: "functionCall",
-                functionName: "round",
-                arguments: [
-                  { type: "number", value: "3.14" },
-                  { type: "number", value: "2" },
-                ],
+                functionName: "checkpoint",
+                arguments: [],
               },
             ],
           },
@@ -2144,7 +2145,10 @@ describe("TypeChecker", () => {
   });
 
   describe("builtin return type inference", () => {
-    it("should infer string from input() return type", () => {
+    it("should infer string from a builtin's declared return type (llm)", () => {
+      // `llm` is a true language primitive whose signature lives in
+      // BUILTIN_FUNCTION_TYPES. Stdlib (input, read) used to be hardcoded
+      // here too but now resolves through the SymbolTable.
       const program: AgencyProgram = {
         type: "agencyProgram",
         nodes: [
@@ -2166,47 +2170,9 @@ describe("TypeChecker", () => {
             arguments: [
               {
                 type: "functionCall",
-                functionName: "input",
+                functionName: "llm",
                 arguments: [
                   { type: "string", segments: [{ type: "text", value: "Enter name: " }] },
-                ],
-              },
-            ],
-          },
-        ],
-      };
-
-      const { errors } = typeCheck(program);
-      expect(errors).toHaveLength(1);
-      expect(errors[0].actualType).toBe("string");
-      expect(errors[0].expectedType).toBe("number");
-    });
-
-    it("should infer string from read() return type", () => {
-      const program: AgencyProgram = {
-        type: "agencyProgram",
-        nodes: [
-          {
-            type: "function",
-            functionName: "expectNum",
-            parameters: [
-              {
-                type: "functionParameter",
-                name: "n",
-                typeHint: { type: "primitiveType", value: "number" },
-              },
-            ],
-            body: [],
-          },
-          {
-            type: "functionCall",
-            functionName: "expectNum",
-            arguments: [
-              {
-                type: "functionCall",
-                functionName: "read",
-                arguments: [
-                  { type: "string", segments: [{ type: "text", value: "file.txt" }] },
                 ],
               },
             ],
@@ -5496,13 +5462,13 @@ describe("TypeChecker", () => {
     });
 
     it("named args on a builtin call error with a clear message", () => {
-      // print(x="hi")  ← builtins don't accept named args
+      // success(x="hi")  ← language primitives don't accept named args
       const program: AgencyProgram = {
         type: "agencyProgram",
         nodes: [
           {
             type: "functionCall",
-            functionName: "print",
+            functionName: "success",
             arguments: [
               { type: "namedArgument", name: "x", value: { type: "string", segments: [{ type: "text", value: "hi" }] } },
             ],
@@ -6481,13 +6447,13 @@ describe("TypeChecker", () => {
     });
 
     it("a builtin call is rejected when given a block argument", () => {
-      // print(1) as x { return 2 }  ← `print` is a builtin, not a block-taker.
+      // success(1) as x { return 2 }  ← `success` is a primitive, not a block-taker.
       const program: AgencyProgram = {
         type: "agencyProgram",
         nodes: [
           {
             type: "functionCall",
-            functionName: "print",
+            functionName: "success",
             arguments: [{ type: "number", value: "1" }],
             block: {
               type: "blockArgument",
@@ -6498,7 +6464,7 @@ describe("TypeChecker", () => {
         ],
       };
       const errors = typeCheck(program).errors;
-      expect(errors.some((e) => /'print' does not accept a block/.test(e.message))).toBe(true);
+      expect(errors.some((e) => /'success' does not accept a block/.test(e.message))).toBe(true);
     });
 
     it("accepts a block argument when the last param is untyped", () => {

@@ -256,13 +256,12 @@ type ResolveCallInput = {
  *                   (`import { foo } from "./other.agency"` or
  *                   `import node { foo } from "./other.agency"`).
  *   builtin       — has a typed signature in `BUILTIN_FUNCTION_TYPES`.
- *                   Includes both true language primitives (`success`,
- *                   `failure`, `llm`, `approve`, `reject`, `propagate`,
- *                   `checkpoint`, `getCheckpoint`, `restore`,
- *                   `isSuccess`, `isFailure`) AND stdlib functions whose
- *                   signatures are hardcoded for typechecker convenience
- *                   (`print`, `fetch`, `read`, etc. — see the NOTE in
- *                   `builtins.ts` flagging this as tech debt).
+ *                   True language primitives only: `success`, `failure`,
+ *                   `llm`, `approve`, `reject`, `propagate`, `checkpoint`,
+ *                   `getCheckpoint`, `restore`, `isSuccess`, `isFailure`.
+ *                   Stdlib functions (`print`, `fetch`, `read`, etc.)
+ *                   resolve as `imported` instead, via the auto-injected
+ *                   `import { ... } from "std::index"` statement.
  *   reserved      — listed in `RESERVED_FUNCTION_NAMES` but NOT in
  *                   `BUILTIN_FUNCTION_TYPES`. In practice these are the
  *                   three names parsed into their own AST node type
@@ -299,9 +298,11 @@ const has = (obj: object, name: string): boolean =>
  * Resolution order matters:
  *
  *   1. Local `def`/`node`             — user code wins.
- *   2. Imported from another file     — cross-file `def`/`node`.
- *   3. `BUILTIN_FUNCTION_TYPES`       — language primitives + hardcoded
- *                                       stdlib signatures.
+ *   2. Imported from another file     — cross-file `def`/`node`. Stdlib
+ *                                       functions (print, fetch, read,
+ *                                       …) resolve here via the
+ *                                       auto-injected std::index import.
+ *   3. `BUILTIN_FUNCTION_TYPES`       — Agency language primitives.
  *   4. `RESERVED_FUNCTION_NAMES`      — defensive fallback for the three
  *                                       names parsed into their own AST
  *                                       node type (schema / interrupt /
@@ -310,10 +311,6 @@ const has = (obj: object, name: string): boolean =>
  *   5. Local scope binding            — lambdas, `partial`, `for` vars.
  *   6. Flat JS global callable        — parseInt, setTimeout, etc.
  *   7. Otherwise: unresolved.
- *
- * Imports take precedence over builtins so a real stdlib `def print()`
- * shadows the hardcoded BUILTIN_FUNCTION_TYPES signature when the
- * SymbolTable wires it through. See the NOTE in `builtins.ts`.
  */
 export function resolveCall(
   name: string,

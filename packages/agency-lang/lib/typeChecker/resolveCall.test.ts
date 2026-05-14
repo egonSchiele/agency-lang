@@ -28,7 +28,10 @@ describe("resolveCall", () => {
   });
 
   it("resolves a builtin function", () => {
-    const result = resolveCall("print", emptyInput);
+    // `success` is a true language primitive — kept in BUILTIN_FUNCTION_TYPES.
+    // Stdlib functions (print, fetch, …) used to resolve here too but now
+    // resolve as `imported` via the auto-injected std::index import.
+    const result = resolveCall("success", emptyInput);
     expect(result.kind).toBe("builtin");
   });
 

@@ -275,7 +275,7 @@ export class SymbolTable {
 export function classifySymbols(program: AgencyProgram): FileSymbols {
   const symbols: FileSymbols = {};
 
-  for (const { node } of walkNodes(program.nodes)) {
+  for (const { node, ancestors } of walkNodes(program.nodes)) {
     switch (node.type) {
       case "graphNode":
         symbols[node.nodeName] = {
@@ -307,6 +307,29 @@ export function classifySymbols(program: AgencyProgram): FileSymbols {
           throw new Error(
             `'${node.aliasName}' is a reserved built-in type; cannot be redefined.`,
           );
+        }
+        // Type aliases are only allowed at the top (module) level.
+        // Declaring them inside a function/node/class body is not
+        // supported because Agency types are runtime zod schemas
+        // shared across all runner.step closures, so a "local" alias
+        // wouldn't actually be local — moving it to the top level is
+        // the right fix.
+        for (const a of ancestors) {
+          if (
+            a.type === "function" ||
+            a.type === "graphNode" ||
+            a.type === "classDefinition"
+          ) {
+            const where =
+              a.type === "function"
+                ? `function '${a.functionName}'`
+                : a.type === "graphNode"
+                  ? `node '${a.nodeName}'`
+                  : `class '${a.className}'`;
+            throw new Error(
+              `Type alias '${node.aliasName}' must be declared at the top level, not inside ${where}.`,
+            );
+          }
         }
         symbols[node.aliasName] = {
           kind: "type",

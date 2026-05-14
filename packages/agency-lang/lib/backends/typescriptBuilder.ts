@@ -50,7 +50,7 @@ import {
   PRECEDENCE,
 } from "@/types/binop.js";
 import { MessageThread } from "@/types/messageThread.js";
-import { walkNodes, walkNodesArray } from "@/utils/node.js";
+import { walkNodesArray } from "@/utils/node.js";
 import { AccessChainElement, ValueAccess } from "../types/access.js";
 import {
   AgencyArray,
@@ -132,13 +132,6 @@ export class TypeScriptBuilder {
   // Output assembly
   private generatedStatements: TsNode[] = [];
   private generatedTypeAliases: TsNode[] = [];
-  /**
-   * TypeAlias AST nodes whose declaration has been hoisted to the
-   * containing function/node's outer scope (so it's visible to every
-   * runner.step closure). When processNode sees one of these inside a
-   * body, it returns ts.empty() to avoid a redeclaration.
-   */
-  private hoistedTypeAliasNodes: Set<TypeAlias> = new Set();
 
   // Import tracking
   private importStatements: TsNode[] = [];
@@ -843,7 +836,6 @@ export class TypeScriptBuilder {
   private processNode(node: AgencyNode): TsNode {
     switch (node.type) {
       case "typeAlias":
-        if (this.hoistedTypeAliasNodes.has(node)) return ts.empty();
         return this.processTypeAlias(node);
       case "assignment":
         return this.processAssignment(node);
@@ -949,59 +941,6 @@ export class TypeScriptBuilder {
       $(ts.id("runner")).prop(method).call().done(),
       ts.raw("return"),
     ]);
-  }
-
-  // ------- Type system (side effects only) -------
-
-  /**
-   * Walk a function/node body and collect every typeAlias declaration
-   * that belongs to this body's scope. Used to hoist body-local type
-   * aliases up to the enclosing function/node's outer scope so the
-   * generated zod schemas are visible to every runner.step closure.
-   *
-   * Delegates body recursion to `walkNodes` so any new body-bearing
-   * AST node (thread, parallelBlock, seqBlock, …) is automatically
-   * handled. Aliases nested inside a function/graphNode/class method
-   * are skipped — those defs hoist their own aliases when their bodies
-   * are built.
-   */
-  private collectBodyTypeAliases(body: AgencyNode[]): TypeAlias[] {
-    const collected: TypeAlias[] = [];
-    for (const { node, ancestors } of walkNodes(body)) {
-      if (node.type !== "typeAlias") continue;
-      const inNestedDef = ancestors.some(
-        (a) =>
-          a.type === "function" ||
-          a.type === "graphNode" ||
-          a.type === "classDefinition",
-      );
-      if (inNestedDef) continue;
-      collected.push(node);
-    }
-    return collected;
-  }
-
-  /**
-   * Hoist body-local type aliases. Returns the generated TS declarations
-   * (to be inserted at the top of the enclosing function/node body) and
-   * marks each AST node so processNode skips its in-body emission.
-   *
-   * Coalesces duplicates by alias name: if the same name appears in
-   * multiple branches/blocks, only the first declaration is emitted to
-   * avoid redeclaration errors at the function scope. (The Agency
-   * typechecker is responsible for diagnosing genuine name collisions.)
-   */
-  private hoistBodyTypeAliases(body: AgencyNode[]): TsNode[] {
-    const aliases = this.collectBodyTypeAliases(body);
-    const out: TsNode[] = [];
-    const seen = new Set<string>();
-    for (const alias of aliases) {
-      this.hoistedTypeAliasNodes.add(alias);
-      if (seen.has(alias.aliasName)) continue;
-      seen.add(alias.aliasName);
-      out.push(this.processTypeAlias(alias));
-    }
-    return out;
   }
 
   private processTypeAlias(node: TypeAlias): TsNode {
@@ -1347,8 +1286,6 @@ export class TypeScriptBuilder {
     this._sourceMapBuilder.enterScope(this.moduleId, methodScopeName);
     const prevSafe = this._isInSafeFunction;
     this._isInSafeFunction = !!method.safe;
-    // Hoist body-local type aliases to the method's outer scope.
-    const hoistedAliases = this.hoistBodyTypeAliases(method.body);
     const bodyCode = this.processBodyAsParts(method.body);
     this._isInSafeFunction = prevSafe;
     this.endScope();
@@ -1358,7 +1295,6 @@ export class TypeScriptBuilder {
       functionName: methodScopeName,
       parameters: method.parameters,
       bodyCode,
-      hoistedAliases,
     });
 
     // Build as an async method with __state as last param
@@ -1817,10 +1753,8 @@ export class TypeScriptBuilder {
     parameters: FunctionParameter[];
     bodyCode: TsNode[];
     skipHooks?: boolean;
-    hoistedAliases?: TsNode[];
   }): TsNode[] {
     const { functionName, parameters, bodyCode, skipHooks } = opts;
-    const hoistedAliases = opts.hoistedAliases ?? [];
     const args = parameters.map((p) => p.name);
 
     // Build args object for hook data
@@ -1934,7 +1868,6 @@ export class TypeScriptBuilder {
       ts.tryCatch(
         ts.statements([
           ...validationGuards,
-          ...hoistedAliases,
           ...bodyCode,
           ts.raw(
             "if (runner.halted) { if (isFailure(runner.haltResult)) { runner.haltResult.retryable = runner.haltResult.retryable && __self.__retryable; } return runner.haltResult; }",
@@ -1976,9 +1909,6 @@ export class TypeScriptBuilder {
 
     const prevSafe = this._isInSafeFunction;
     this._isInSafeFunction = !!node.safe;
-    // Hoist body-local type aliases to the function's outer scope so
-    // every runner.step closure can reference the generated zod schemas.
-    const hoistedAliases = this.hoistBodyTypeAliases(node.body);
     const bodyCode = this.processBodyAsParts(node.body);
     this._isInSafeFunction = prevSafe;
     this.endScope();
@@ -2002,7 +1932,7 @@ export class TypeScriptBuilder {
     });
 
     const implName = `__${functionName}_impl`;
-    const setupStmts = this.buildFunctionBody({ functionName, parameters, bodyCode, skipHooks: node.callback, hoistedAliases });
+    const setupStmts = this.buildFunctionBody({ functionName, parameters, bodyCode, skipHooks: node.callback });
 
     const funcDecl = ts.functionDecl(implName, fnParams, ts.statements(setupStmts), {
       async: true,
@@ -2488,10 +2418,6 @@ export class TypeScriptBuilder {
       }
     }
 
-    // Hoist body-local type aliases to the outer arrow body so every
-    // runner.step closure can reference the generated zod schemas.
-    const hoistedAliases = this.hoistBodyTypeAliases(body);
-
     const bodyCode = this.processBodyAsParts(body);
 
     this.adjacentNodes[nodeName] = [...this.currentAdjacentNodes];
@@ -2523,7 +2449,6 @@ export class TypeScriptBuilder {
       ts.raw(
         `const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: ${JSON.stringify(this.moduleId)}, scopeName: ${JSON.stringify(nodeName)} });`,
       ),
-      ...hoistedAliases,
     ];
 
     // Param assignments (only when not resuming)

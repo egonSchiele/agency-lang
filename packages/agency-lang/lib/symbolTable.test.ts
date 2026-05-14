@@ -65,15 +65,26 @@ node main() {
     });
   });
 
-  it("finds type aliases nested inside functions", () => {
-    const symbols = parseAndClassify(`
+  it("rejects type aliases declared inside a function", () => {
+    expect(() =>
+      parseAndClassify(`
 def myFunc() {
   type Inner = number
   return 1
 }
-`);
-    expect(symbols.Inner).toMatchObject({ kind: "type", name: "Inner" });
-    expect(symbols.myFunc).toMatchObject({ kind: "function", name: "myFunc" });
+`),
+    ).toThrow(/Type alias 'Inner' must be declared at the top level, not inside function 'myFunc'/);
+  });
+
+  it("rejects type aliases declared inside a node", () => {
+    expect(() =>
+      parseAndClassify(`
+node main() {
+  type Inner = number
+  return 1
+}
+`),
+    ).toThrow(/Type alias 'Inner' must be declared at the top level, not inside node 'main'/);
   });
 });
 

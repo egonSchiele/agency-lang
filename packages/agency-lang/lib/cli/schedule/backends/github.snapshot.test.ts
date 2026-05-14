@@ -28,28 +28,21 @@ function entry(repo: string, github: GithubOpts): ScheduleEntry {
   };
 }
 
-describe.each<[string, GithubOpts]>([
-  ["readonly-sha", { secrets: [], write: false, noPin: false, force: false }],
-  ["write-sha", { secrets: [], write: true, noPin: false, force: false }],
-  [
-    "with-secrets-sha",
-    { secrets: ["FOO", "BAR"], write: false, noPin: false, force: false },
-  ],
-  [
-    "all-sha",
-    { secrets: ["FOO"], write: true, noPin: false, force: false },
-  ],
-  ["readonly-tag", { secrets: [], write: false, noPin: true, force: false }],
-  ["write-tag", { secrets: [], write: true, noPin: true, force: false }],
-  [
-    "with-secrets-tag",
-    { secrets: ["FOO", "BAR"], write: false, noPin: true, force: false },
-  ],
-  [
-    "all-tag",
-    { secrets: ["FOO"], write: true, noPin: true, force: false },
-  ],
-])("snapshot: %s", (_label, github) => {
+// Snapshot file naming convention: each case maps to a single readable
+// `.yml` snapshot in `__snapshots__/`. This keeps the snapshots browseable
+// as actual YAML rather than escaped strings inside a single `.snap` file.
+const CASES: Array<{ label: string; github: GithubOpts }> = [
+  { label: "readonly-sha", github: { secrets: [], write: false, noPin: false, force: false } },
+  { label: "write-sha", github: { secrets: [], write: true, noPin: false, force: false } },
+  { label: "with-secrets-sha", github: { secrets: ["FOO", "BAR"], write: false, noPin: false, force: false } },
+  { label: "all-sha", github: { secrets: ["FOO"], write: true, noPin: false, force: false } },
+  { label: "readonly-tag", github: { secrets: [], write: false, noPin: true, force: false } },
+  { label: "write-tag", github: { secrets: [], write: true, noPin: true, force: false } },
+  { label: "with-secrets-tag", github: { secrets: ["FOO", "BAR"], write: false, noPin: true, force: false } },
+  { label: "all-tag", github: { secrets: ["FOO"], write: true, noPin: true, force: false } },
+];
+
+describe.each(CASES)("snapshot: $label", ({ label, github }) => {
   let repo: string;
   let cwd: string;
   beforeEach(() => {
@@ -62,12 +55,13 @@ describe.each<[string, GithubOpts]>([
     fs.rmSync(repo, { recursive: true, force: true });
   });
 
-  it("matches snapshot", () => {
+  it("matches snapshot", async () => {
     new GithubBackend().install(entry(repo, github));
     const yml = fs.readFileSync(
       path.join(repo, ".github/workflows/snap.yml"),
       "utf-8",
     );
-    expect(yml).toMatchSnapshot();
+    // Each snapshot lives in its own readable `.yml` file under `__snapshots__/`.
+    await expect(yml).toMatchFileSnapshot(`./__snapshots__/${label}.yml`);
   });
 });

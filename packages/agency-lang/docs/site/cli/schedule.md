@@ -62,6 +62,8 @@ agency schedule add agents/foo.agency \
 
 This generates `.github/workflows/foo.yml` in your repo. Commit and push it; the agent will run on GitHub's runners on the chosen cadence.
 
+You don't need to add agency-lang as a dependency to the repo — the workflow uses [`egonSchiele/run-agency-action`](https://github.com/egonSchiele/run-agency-action) which installs and runs agency-lang on the runner. You only need agency-lang locally to *generate* the workflow file (`agency schedule add ...`).
+
 ### GitHub-specific options
 
 - `--secret NAME` (repeatable) wires a secret into the workflow's `env:` block.

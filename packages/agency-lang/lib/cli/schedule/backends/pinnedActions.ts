@@ -1,7 +1,9 @@
-// Hand-maintained. To bump versions:
-//   1. Run `make refresh-action-pins` (which prints up-to-date SHAs).
-//   2. Paste the new SHAs and tags here.
-//   3. Commit. The diff should be small and reviewable.
+// Hand-maintained pins for the actions used by `agency schedule add --backend github`.
+//
+// To bump a version, follow the procedure in `docs/dev/updating-pinned-actions.md`.
+// The short version: `make refresh-action-pins` to look up SHAs, paste them
+// here, also update the matching tags in the `refresh-action-pins` target in
+// the Makefile, regenerate the snapshot YAMLs, and commit.
 
 export type PinnedAction = { sha: string; tag: string };
 

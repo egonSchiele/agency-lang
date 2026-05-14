@@ -15,6 +15,18 @@ const DEFAULT_GITHUB_OPTS: NonNullable<ScheduleEntry["github"]> = {
   force: false,
 };
 
+/**
+ * The github backend needs a "repo root" for two things:
+ *   1. The workflow file MUST live at `<root>/.github/workflows/<name>.yml`
+ *      for GitHub Actions to discover it.
+ *   2. The agent file is referenced by a path *relative to the repo root*
+ *      because `actions/checkout` checks the repo out at the runner's cwd.
+ *
+ * We use `git rev-parse --show-toplevel` rather than `process.cwd()` so the
+ * workflow ends up in the right place even when the user runs this command
+ * from a subdirectory. Requiring git also catches the common mistake of
+ * running `--backend github` outside of any repo.
+ */
 function repoRoot(): string {
   try {
     return execFileSync("git", ["rev-parse", "--show-toplevel"], {
@@ -24,7 +36,7 @@ function repoRoot(): string {
       .trim();
   } catch (e) {
     throw new Error(
-      `'agency schedule add --backend github' must be run inside a git repo. (${(e as Error).message})`,
+      `'agency schedule add --backend github' needs a git repo to know where to write '.github/workflows/<name>.yml' and to compute the agent file's path relative to the repo root. Run 'git init' first, or run from inside an existing git repo. (${(e as Error).message})`,
     );
   }
 }

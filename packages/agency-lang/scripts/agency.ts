@@ -702,14 +702,10 @@ export function createProgram(deps: CliDependencies = {}): Command {
           process.exit(1);
         }
         const addOpts = {
+          ...opts,
           file,
-          every: opts.every,
-          cron: opts.cron,
-          name: opts.name,
-          envFile: opts.envFile,
           backend: opts.backend as "github" | undefined,
           secrets: opts.secret,
-          write: opts.write,
           noPin: opts.pin === false,
         };
         try {

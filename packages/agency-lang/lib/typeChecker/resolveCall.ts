@@ -245,6 +245,39 @@ type ResolveCallInput = {
   scopeHas: (name: string) => boolean;
 };
 
+/**
+ * Tagged union describing where a call name resolved to. The diagnostic
+ * only cares whether `kind === "unresolved"`; the other kinds are
+ * informational so future analyses can distinguish "user code" from
+ * "language built-in" from "JS interop" without re-running the lookup.
+ *
+ *   def           — locally-defined `def` or `node` in this file.
+ *   imported      — function or node imported from another `.agency` file
+ *                   (`import { foo } from "./other.agency"` or
+ *                   `import node { foo } from "./other.agency"`).
+ *   builtin       — has a typed signature in `BUILTIN_FUNCTION_TYPES`.
+ *                   Includes both true language primitives (`success`,
+ *                   `failure`, `llm`, `approve`, `reject`, `propagate`,
+ *                   `checkpoint`, `getCheckpoint`, `restore`,
+ *                   `isSuccess`, `isFailure`) AND stdlib functions whose
+ *                   signatures are hardcoded for typechecker convenience
+ *                   (`print`, `fetch`, `read`, etc. — see the NOTE in
+ *                   `builtins.ts` flagging this as tech debt).
+ *   reserved      — listed in `RESERVED_FUNCTION_NAMES` but NOT in
+ *                   `BUILTIN_FUNCTION_TYPES`. In practice these are the
+ *                   three names parsed into their own AST node type
+ *                   (`schema` → SchemaExpression, `interrupt` →
+ *                   InterruptStatement, `debugger` → DebuggerStatement),
+ *                   so they don't normally reach this function as a
+ *                   `functionCall`. Defensive — if the parser ever
+ *                   emits one anyway, we don't want a false positive.
+ *   scopeBinding  — bound in the local scope (lambda, `partial`,
+ *                   `for` variable, etc.).
+ *   jsGlobal      — flat callable JS global (`parseInt`, `setTimeout`).
+ *                   Namespace member calls like `JSON.parse(...)` are
+ *                   handled separately via `lookupJsMember`.
+ *   unresolved    — none of the above. The diagnostic emits.
+ */
 export type CallResolution =
   | { kind: "def" }
   | { kind: "imported" }
@@ -262,6 +295,26 @@ export type CallResolution =
 const has = (obj: object, name: string): boolean =>
   Object.prototype.hasOwnProperty.call(obj, name);
 
+/**
+ * Resolution order matters:
+ *
+ *   1. Local `def`/`node`             — user code wins.
+ *   2. Imported from another file     — cross-file `def`/`node`.
+ *   3. `BUILTIN_FUNCTION_TYPES`       — language primitives + hardcoded
+ *                                       stdlib signatures.
+ *   4. `RESERVED_FUNCTION_NAMES`      — defensive fallback for the three
+ *                                       names parsed into their own AST
+ *                                       node type (schema / interrupt /
+ *                                       debugger). Should never fire in
+ *                                       practice.
+ *   5. Local scope binding            — lambdas, `partial`, `for` vars.
+ *   6. Flat JS global callable        — parseInt, setTimeout, etc.
+ *   7. Otherwise: unresolved.
+ *
+ * Imports take precedence over builtins so a real stdlib `def print()`
+ * shadows the hardcoded BUILTIN_FUNCTION_TYPES signature when the
+ * SymbolTable wires it through. See the NOTE in `builtins.ts`.
+ */
 export function resolveCall(
   name: string,
   input: ResolveCallInput,

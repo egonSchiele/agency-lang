@@ -1,21 +1,29 @@
 // Regression test for "+= doesn't work with globals". Compound
-// assignments (+=, -=, *=, /=) on a global LHS used to emit invalid
-// JS like `__ctx.globals.get(...) += rhs`. Now they lower to a
-// get/set pair.
+// assignments on a global LHS used to emit invalid JS like
+// `__ctx.globals.get(...) += rhs`. Now they lower to a get/set pair
+// via an IIFE that preserves the new value as the expression result,
+// matching JS semantics for `let x = g += 1`.
 
 let counter = 0
+let mult = 8
 
-def bump() {
+node main(): number[] {
+  counter = 0
   counter += 3
-}
-
-def shrink() {
+  counter += 3
   counter -= 1
-}
+  counter *= 2
+  counter /= 2
+  // counter is now: ((0 + 3 + 3 - 1) * 2) / 2 = 5
 
-node main(): number {
-  bump()
-  bump()
-  shrink()
-  return counter
+  mult = 8
+  mult *= 3
+  // mult = 24
+
+  // Use the new value of `counter += rhs` as an expression — verifies
+  // the IIFE returns the updated value, not undefined.
+  let viaExpr = (counter += 10)
+  // counter went 5 → 15; viaExpr should also be 15
+
+  return [counter, mult, viaExpr]
 }

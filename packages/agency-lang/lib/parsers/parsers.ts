@@ -1509,9 +1509,51 @@ const chainElementParser: Parser<AccessChainElement> = or(
   indexChainParser,
 );
 
+/**
+ * Parse `( expr ) chain` as a value-access expression. This is what
+ * lets a parenthesized expression appear at the start of a body
+ * statement (e.g. `(new Foo()).bump()`) and be parsed as a chained
+ * call. Only succeeds when there is at least one chain element —
+ * bare `(expr)` with no chain falls through so other parsers (like
+ * the expression parser's own paren handling) can take over.
+ */
+const parenAccessParser = (
+  input: string,
+): ParserResult<ValueAccess> => {
+  const openResult = char("(")(input);
+  if (!openResult.success) return openResult as ParserResult<ValueAccess>;
+  const ws1 = optionalSpaces(openResult.rest);
+  if (!ws1.success) return ws1 as ParserResult<ValueAccess>;
+  const exprResult = lazy(() => exprParser)(ws1.rest);
+  if (!exprResult.success)
+    return failure("expected expression inside parentheses", input);
+  const ws2 = optionalSpaces(exprResult.rest);
+  if (!ws2.success) return ws2 as ParserResult<ValueAccess>;
+  const closeResult = char(")")(ws2.rest);
+  if (!closeResult.success)
+    return failure("expected closing parenthesis", input);
+  const chainResult = many1(chainElementParser)(closeResult.rest);
+  if (!chainResult.success)
+    return failure("expected access chain after parenthesized expression", input);
+  return success(
+    {
+      type: "valueAccess" as const,
+      base: exprResult.result as unknown as AgencyNode,
+      chain: chainResult.result,
+    } as ValueAccess,
+    chainResult.rest,
+  );
+};
+
 export const _valueAccessParser = (
   input: string,
 ): ParserResult<VariableNameLiteral | FunctionCall | ValueAccess> => {
+  // First try the parenthesized form so `(expr).chain` and `(expr)[i]`
+  // work as standalone statements (the bodyParser calls _valueAccessParser
+  // directly, bypassing the exprParser's own paren handling).
+  const parenResult = parenAccessParser(input);
+  if (parenResult.success) return parenResult;
+
   const parser = seqC(
     capture(or(_functionCallParser, variableNameParser), "base"),
     capture(many(chainElementParser), "chain"),

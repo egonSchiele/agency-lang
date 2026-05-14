@@ -1,4 +1,4 @@
-import { safe lookupItem, saveItem, flakyWrite, resetCounters, throwError } from "./tools.js"
+import { safe lookupItem, saveItem, flakyWrite, resetCounters } from "./tools.js"
 
 // --- Helper functions ---
 

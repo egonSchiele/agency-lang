@@ -121,13 +121,31 @@ export function checkScopes(
  * ScopeInfo, the body passed to walkNodes is the def's body, so direct
  * children appear with scopes=[globalScope] — accept those when info is
  * a per-def scope.
+ *
+ * Class methods don't currently get their own ScopeInfo (buildScopes
+ * only iterates functionDefs/nodeDefs), so the global pass owns them —
+ * accept method-body nodes when info is the global scope, otherwise
+ * those expressions never get checked.
  */
 function isInScope(scopes: WalkScope[], info: ScopeInfo): boolean {
   if (scopes.length === 0) return true;
   const innermostKey = getScopeKey(scopes[scopes.length - 1]);
   if (innermostKey === info.scopeKey) return true;
   if (info.scopeKey !== "global" && innermostKey === "global") return true;
+  // Class-method bodies have their own scope chain in walkNodes but no
+  // dedicated ScopeInfo — fall through to the global pass to ensure
+  // they still get type-checked.
+  if (info.scopeKey === "global" && isClassMethodScope(innermostKey)) {
+    return true;
+  }
   return false;
+}
+
+function isClassMethodScope(key: string): boolean {
+  // walkNodes tags method bodies with `function:Class.method` (note the
+  // `.` between class and method names). Function defs use plain
+  // `function:foo`, so the dot is the discriminator.
+  return key.startsWith("function:") && key.includes(".");
 }
 
 function checkFunctionCallsInScope(

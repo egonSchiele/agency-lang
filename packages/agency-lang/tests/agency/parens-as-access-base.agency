@@ -20,18 +20,18 @@ node main(): number[] {
 
   // (var).field
   let len1 = (s).length
-  // (call()).field
+  // (binop).field
   let len2 = ("foo" + "bar").length
-  // (arr)[i]
+  // (var)[i]
   let first = (arr)[0]
-  // (arr)[expr]
+  // (var)[expr]
   let second = (arr)[0 + 1]
-  // (binop)[i] — string indexing
-  let firstChar = ("ab" + "cd").length
+  // (binop)[i] — index into the result of a string concatenation
+  let charCode = ("ab" + "cd")[2].charCodeAt(0)
   // (new Foo()).method()
   let bumped = (new Counter(5)).bump()
   // (call()).method()
   let bumped2 = (makeCounter(10)).bump()
 
-  return [len1, len2, first, second, firstChar, bumped, bumped2]
+  return [len1, len2, first, second, charCode, bumped, bumped2]
 }

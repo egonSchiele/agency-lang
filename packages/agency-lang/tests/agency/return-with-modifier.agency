@@ -1,0 +1,14 @@
+// Regression test for "with approve in a return statement". Before
+// the parser fix, `return foo() with approve` failed to parse — the
+// returnStatementParser consumed `return foo()` and left `with approve`
+// dangling. Now withModifierParser runs first and accepts a return
+// as the inner statement.
+
+def maybeRisky(): string {
+  interrupt("approve")
+  return "ok"
+}
+
+node main(): string {
+  return maybeRisky() with approve
+}

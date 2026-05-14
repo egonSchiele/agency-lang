@@ -105,13 +105,17 @@ import { SourceMapBuilder } from "./sourceMap.js";
 const DEFAULT_PROMPT_NAME = "__promptVar";
 
 /** Maps Agency compound-assignment operators to their underlying binary
- *  operator. Used to lower `foo += rhs` into a get/set pair when `foo`
- *  is a global, since globals can't appear on the LHS of an assignment. */
+ *  operator. Used to lower `foo <op>= rhs` into a get/set pair when `foo`
+ *  is a global, since globals can't appear on the LHS of an assignment.
+ *  Covers every compound operator the parser recognizes. */
 const COMPOUND_ASSIGN_TO_BINARY: Record<string, string> = {
   "+=": "+",
   "-=": "-",
   "*=": "*",
   "/=": "/",
+  "??=": "??",
+  "||=": "||",
+  "&&=": "&&",
 };
 
 /** Runner IR node kinds that already manage their own step counter/path and
@@ -999,12 +1003,20 @@ export class TypeScriptBuilder {
    * Hoist body-local type aliases. Returns the generated TS declarations
    * (to be inserted at the top of the enclosing function/node body) and
    * marks each AST node so processNode skips its in-body emission.
+   *
+   * Coalesces duplicates by alias name: if the same name appears in
+   * multiple branches/blocks, only the first declaration is emitted to
+   * avoid redeclaration errors at the function scope. (The Agency
+   * typechecker is responsible for diagnosing genuine name collisions.)
    */
   private hoistBodyTypeAliases(body: AgencyNode[]): TsNode[] {
     const aliases = this.collectBodyTypeAliases(body);
     const out: TsNode[] = [];
+    const seen = new Set<string>();
     for (const alias of aliases) {
       this.hoistedTypeAliasNodes.add(alias);
+      if (seen.has(alias.aliasName)) continue;
+      seen.add(alias.aliasName);
       out.push(this.processTypeAlias(alias));
     }
     return out;
@@ -1193,8 +1205,13 @@ export class TypeScriptBuilder {
     }
     // Compound assignment to a global variable: globals are accessed via
     // `__ctx.globals.get(...)`, which is not a valid assignment target,
-    // so `foo += rhs` would emit invalid JS. Lower to
-    // `__ctx.globals.set(file, name, __ctx.globals.get(file, name) <op> rhs)`.
+    // so `foo <op>= rhs` would emit invalid JS. Lower it to an IIFE so
+    // the expression still evaluates to the new value (matching JS
+    // semantics for `let x = foo += 1`, `return foo += 1`, etc.):
+    //
+    //   ((__v) => (__ctx.globals.set(file, name, __v), __v))(
+    //     __ctx.globals.get(file, name) <op> rhs
+    //   )
     const compoundOp = COMPOUND_ASSIGN_TO_BINARY[node.operator];
     if (
       compoundOp !== undefined &&
@@ -1204,10 +1221,17 @@ export class TypeScriptBuilder {
       const name = node.left.value;
       const getNode = ts.scopedVar(name, "global", this.moduleId);
       const rightNode = this.processNode(node.right);
-      const newValue = ts.binOp(getNode, compoundOp, rightNode, {
+      const newValueExpr = ts.binOp(getNode, compoundOp, rightNode, {
         parenRight: true,
       });
-      return ts.globalSet(this.moduleId, name, newValue);
+      const setCall = ts.globalSet(this.moduleId, name, ts.id("__v"));
+      // Arrow-fn IIFE: `((__v) => (set(...), __v))(newValueExpr)`. The
+      // outer parens around the arrow are required — without them JS
+      // parses `(__v) => (...)(args)` as an arrow whose body invokes
+      // `__v(args)`, never running the IIFE.
+      return ts.raw(
+        `((__v) => (${this.str(setCall)}, __v))(${this.str(newValueExpr)})`,
+      );
     }
     const leftNode = this.processNode(node.left);
     const rightNode = this.processNode(node.right);

@@ -10,6 +10,11 @@ const CURSOR_HOME = "\x1b[H";
 
 export class TerminalOutput implements OutputTarget {
   private inAltScreen = false;
+  // Tracks whether our SIGTSTP listener is currently installed. We
+  // remove it during the suspend handoff and re-install it on resume,
+  // and SIGCONT can be delivered independently of our SIGTSTP path
+  // (e.g. from a foreign SIGSTOP), so the resume path must be idempotent.
+  private sigtstpInstalled = false;
   private exitHandler = () => this.destroy();
   private sigintHandler = () => { this.destroy(); process.exit(130); };
   private sigtermHandler = () => { this.destroy(); process.exit(143); };
@@ -17,13 +22,19 @@ export class TerminalOutput implements OutputTarget {
     // Remove our handler before re-raising so the default handler can
     // actually suspend the process; otherwise we'd recurse into ourselves.
     this.suspend();
-    process.removeListener("SIGTSTP", this.sigtstpHandler);
+    if (this.sigtstpInstalled) {
+      process.removeListener("SIGTSTP", this.sigtstpHandler);
+      this.sigtstpInstalled = false;
+    }
     process.kill(process.pid, "SIGTSTP");
   };
   private sigcontHandler = () => {
     this.resume();
-    // Re-install the SIGTSTP handler that we removed before suspending.
-    process.on("SIGTSTP", this.sigtstpHandler);
+    // Re-install only if we don't currently have it registered.
+    if (!this.sigtstpInstalled) {
+      process.on("SIGTSTP", this.sigtstpHandler);
+      this.sigtstpInstalled = true;
+    }
   };
 
   init(): void {
@@ -33,6 +44,7 @@ export class TerminalOutput implements OutputTarget {
     process.on("SIGINT", this.sigintHandler);
     process.on("SIGTERM", this.sigtermHandler);
     process.on("SIGTSTP", this.sigtstpHandler);
+    this.sigtstpInstalled = true;
     process.on("SIGCONT", this.sigcontHandler);
   }
 
@@ -72,5 +84,6 @@ export class TerminalOutput implements OutputTarget {
     process.removeListener("SIGTERM", this.sigtermHandler);
     process.removeListener("SIGTSTP", this.sigtstpHandler);
     process.removeListener("SIGCONT", this.sigcontHandler);
+    this.sigtstpInstalled = false;
   }
 }

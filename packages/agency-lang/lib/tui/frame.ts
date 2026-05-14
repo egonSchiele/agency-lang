@@ -24,11 +24,6 @@ export class Frame {
   content?: Cell[][];
   children?: Frame[];
 
-  // Lazily computed flat 2D cell grid; reset whenever the frame is mutated.
-  // Frames are not currently mutated post-construction, but this cache
-  // makes toPlainText/toHTML/toANSI on the same frame O(1) for repeat calls.
-  private _flatCache?: Cell[][];
-
   constructor(args: FrameArgs) {
     this.key = args.key;
     this.x = args.x;
@@ -38,12 +33,6 @@ export class Frame {
     this.style = args.style;
     this.content = args.content;
     this.children = args.children;
-  }
-
-  /** Internal: get cached flattened grid, computing it on first access. */
-  getFlattened(compute: () => Cell[][]): Cell[][] {
-    if (!this._flatCache) this._flatCache = compute();
-    return this._flatCache;
   }
 
   findByKey(key: string): Frame | undefined {

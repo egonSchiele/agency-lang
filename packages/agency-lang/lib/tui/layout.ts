@@ -1,15 +1,18 @@
 import type { Element, PositionedElement } from "./elements.js";
 import { innerArea, resolveEdges, type Edges } from "./utils.js";
 
+// Strict percentage form: digits, optional fractional part, single trailing %.
+const PERCENTAGE_RE = /^(\d+(?:\.\d+)?)%$/;
+
 function resolveDimension(
   value: number | string | undefined,
   available: number,
 ): number | undefined {
   if (value === undefined) return undefined;
   if (typeof value === "number") return value;
-  if (typeof value === "string" && value.endsWith("%")) {
-    const pct = parseFloat(value) / 100;
-    return Math.floor(available * pct);
+  if (typeof value === "string") {
+    const m = PERCENTAGE_RE.exec(value);
+    if (m) return Math.floor(available * (parseFloat(m[1]) / 100));
   }
   throw new Error(
     `Invalid dimension value: ${JSON.stringify(value)}. Expected a number or a percentage string like "50%".`,

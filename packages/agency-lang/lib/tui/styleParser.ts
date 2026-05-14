@@ -8,10 +8,12 @@ export type StyledSpan = {
   bold?: boolean;
 };
 
+type Origin = "tag" | "ansi";
+
 type StyleEntry =
-  | { type: "bold" }
-  | { type: "fg"; color: string }
-  | { type: "bg"; color: string };
+  | { type: "bold"; origin: Origin }
+  | { type: "fg"; color: string; origin: Origin }
+  | { type: "bg"; color: string; origin: Origin };
 
 // Matches either a `{tag}` (not preceded by a backslash) or an ANSI SGR
 // escape sequence `ESC[<params>m`. Tag bodies may not contain `}`, so an
@@ -43,74 +45,85 @@ function rgbToHex(r: number, g: number, b: number): string {
   return `#${h(r)}${h(g)}${h(b)}`;
 }
 
+function removeWhere(stack: StyleEntry[], pred: (e: StyleEntry) => boolean): void {
+  for (let i = stack.length - 1; i >= 0; i--) {
+    if (pred(stack[i])) stack.splice(i, 1);
+  }
+}
+
 /**
- * Apply a sequence of ANSI SGR codes to the style stack in-place.
+ * Apply a sequence of ANSI SGR codes to the style stack in-place. ANSI
+ * codes only modify ANSI-origin entries: resets and color-defaults will
+ * not clobber styles applied via `{tag}` syntax.
+ *
  * Recognized codes:
- *   0       — reset (clears the stack)
+ *   0       — reset (clears all ANSI-origin entries)
  *   1       — bold
- *   22      — bold off
+ *   22      — bold off (clears all ANSI-origin bold entries)
  *   30-37   — standard fg color
- *   38;5;N  — 256-color fg (mapped to nearest hex; we just emit indexed gray for non-cube)
+ *   38;5;N  — 256-color fg
  *   38;2;R;G;B — true-color fg
- *   39      — default fg (pops fg styles)
+ *   39      — default fg (clears all ANSI-origin fg entries, per spec)
  *   40-47   — standard bg color
  *   48;5;N  / 48;2;R;G;B — 256/true-color bg
- *   49      — default bg (pops bg styles)
+ *   49      — default bg (clears all ANSI-origin bg entries)
  *   90-97, 100-107 — bright variants
- * Unknown codes are ignored.
+ * Unknown or malformed codes are ignored.
  */
 function applyAnsiCodes(stack: StyleEntry[], codes: number[]): void {
   // Empty parameters mean ESC[m which is equivalent to reset.
   if (codes.length === 0) {
-    stack.length = 0;
+    removeWhere(stack, (e) => e.origin === "ansi");
     return;
   }
   let i = 0;
   while (i < codes.length) {
     const code = codes[i];
     if (code === 0) {
-      stack.length = 0;
+      removeWhere(stack, (e) => e.origin === "ansi");
       i++;
     } else if (code === 1) {
-      stack.push({ type: "bold" });
+      stack.push({ type: "bold", origin: "ansi" });
       i++;
     } else if (code === 22) {
-      // Pop the most-recent bold entry.
-      for (let j = stack.length - 1; j >= 0; j--) {
-        if (stack[j].type === "bold") { stack.splice(j, 1); break; }
-      }
+      removeWhere(stack, (e) => e.origin === "ansi" && e.type === "bold");
       i++;
     } else if (code === 39) {
-      for (let j = stack.length - 1; j >= 0; j--) {
-        if (stack[j].type === "fg") { stack.splice(j, 1); break; }
-      }
+      removeWhere(stack, (e) => e.origin === "ansi" && e.type === "fg");
       i++;
     } else if (code === 49) {
-      for (let j = stack.length - 1; j >= 0; j--) {
-        if (stack[j].type === "bg") { stack.splice(j, 1); break; }
-      }
+      removeWhere(stack, (e) => e.origin === "ansi" && e.type === "bg");
       i++;
     } else if (code === 38 || code === 48) {
       const target: "fg" | "bg" = code === 38 ? "fg" : "bg";
       const mode = codes[i + 1];
       if (mode === 2) {
-        const color = rgbToHex(codes[i + 2] ?? 0, codes[i + 3] ?? 0, codes[i + 4] ?? 0);
-        stack.push({ type: target, color });
-        i += 5;
+        // Need three additional params (R, G, B). If any are missing the
+        // sequence is malformed; skip the whole introducer.
+        if (codes.length < i + 5) {
+          i = codes.length;
+        } else {
+          const color = rgbToHex(codes[i + 2], codes[i + 3], codes[i + 4]);
+          stack.push({ type: target, color, origin: "ansi" });
+          i += 5;
+        }
       } else if (mode === 5) {
-        // 256-color: convert to hex via standard xterm palette.
-        const idx = codes[i + 2] ?? 0;
-        stack.push({ type: target, color: xterm256ToHex(idx) });
-        i += 3;
+        // Need one additional param (palette index). Otherwise malformed.
+        if (codes.length < i + 3) {
+          i = codes.length;
+        } else {
+          stack.push({ type: target, color: xterm256ToHex(codes[i + 2]), origin: "ansi" });
+          i += 3;
+        }
       } else {
-        // Unknown extended color form; skip the introducer.
-        i += 2;
+        // Unknown extended color form (or missing mode); skip rest of run.
+        i = codes.length;
       }
     } else {
       const fgName = ANSI_FG_NAMES[code];
       const bgName = ANSI_BG_NAMES[code];
-      if (fgName) stack.push({ type: "fg", color: fgName });
-      else if (bgName) stack.push({ type: "bg", color: bgName });
+      if (fgName) stack.push({ type: "fg", color: fgName, origin: "ansi" });
+      else if (bgName) stack.push({ type: "bg", color: bgName, origin: "ansi" });
       // Unknown codes are silently ignored.
       i++;
     }
@@ -163,15 +176,16 @@ function makeSpan(text: string, style: Omit<StyledSpan, "text">): StyledSpan {
 }
 
 function matchesEntry(a: StyleEntry, b: StyleEntry): boolean {
+  if (a.origin !== "tag") return false;
   if (a.type !== b.type) return false;
   if (a.type === "bold") return true;
   return (a as { color: string }).color === (b as { color: string }).color;
 }
 
 function parseTag(tag: string): StyleEntry | null {
-  if (tag === "bold") return { type: "bold" };
-  if (tag.endsWith("-fg")) return { type: "fg", color: tag.slice(0, -3) };
-  if (tag.endsWith("-bg")) return { type: "bg", color: tag.slice(0, -3) };
+  if (tag === "bold") return { type: "bold", origin: "tag" };
+  if (tag.endsWith("-fg")) return { type: "fg", color: tag.slice(0, -3), origin: "tag" };
+  if (tag.endsWith("-bg")) return { type: "bg", color: tag.slice(0, -3), origin: "tag" };
   return null;
 }
 

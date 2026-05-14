@@ -520,13 +520,17 @@ export class DebuggerUI implements DebuggerIO {
   private scrollPane(paneName: string | undefined, direction: number): void {
     if (!paneName) return;
     const current = this.scrollOffsets[paneName] || 0;
-    // Cap the offset by the pane's content length so scrolling past the end
-    // doesn't push the offset to infinity. The viewport size isn't known
-    // here, so we clamp to (lines - 1); the renderer additionally clamps
-    // visually to the last screenful.
+
+    // Clamp by the pane's actual viewport so the stored offset stays
+    // in lockstep with the renderer's visual cap. We get the viewport
+    // height from the most recently rendered frame for this pane, and
+    // the total line count from the pane's content function.
     const pane = this.getPanes().find((p) => p.name === paneName);
     const totalLines = pane ? pane.content().split("\n").length : 0;
-    const maxOffset = Math.max(0, totalLines - 1);
+    const paneFrame = this.lastFrame?.findByKey(paneName);
+    // Inner viewport height = frame height minus the border (1 row top + 1 bottom).
+    const viewportHeight = paneFrame ? Math.max(0, paneFrame.height - 2) : 0;
+    const maxOffset = Math.max(0, totalLines - viewportHeight);
     const next = Math.max(0, Math.min(current + direction, maxOffset));
     if (next !== current) {
       this.scrollOffsets[paneName] = next;

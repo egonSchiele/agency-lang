@@ -17,11 +17,13 @@ export const ansiBgColors: Record<string, string> = {
 };
 
 /**
- * SECURITY: `cssColors` is the only sanitization boundary between style
- * names and the HTML output. The HTML adapter (`render/html.ts`) MUST only
- * emit colors that appear as keys in this object, otherwise an attacker
- * controlling a Style.fg/bg/borderColor/labelColor value could inject
- * arbitrary CSS. Do not bypass the lookup.
+ * SECURITY: this map plus a strict hex-color regex are the only allowed
+ * sources for color values in HTML output. The HTML adapter
+ * (`render/html.ts`) MUST only emit a CSS color that is either a value
+ * from this object (named colors) or a literal hex string matching
+ * `^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$`. Any other value (e.g. an
+ * attacker-controlled Style.fg/bg/borderColor/labelColor) must be
+ * dropped silently. Do not bypass either check.
  */
 export const cssColors: Record<string, string> = {
   black: "#000", red: "#c00", green: "#0a0", yellow: "#aa0",

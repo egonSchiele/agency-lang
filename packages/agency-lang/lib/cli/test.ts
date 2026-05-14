@@ -695,6 +695,15 @@ async function runTestFile(
 
     const tests: Tests = JSON.parse(fs.readFileSync(testFile, "utf-8"));
 
+    // Merge a sibling agency.json (next to the .test.json) on top of the
+    // project-level config. Keeps default behavior intact for tests that
+    // don't ship one, but lets fixtures opt into config-driven features
+    // like the memory layer with a directory-scoped override.
+    const localConfigPath = path.join(path.dirname(testFile), "agency.json");
+    if (fs.existsSync(localConfigPath)) {
+      config = { ...config, ...loadConfig(localConfigPath) };
+    }
+
     let passed = 0;
     const total = tests.tests.length;
 

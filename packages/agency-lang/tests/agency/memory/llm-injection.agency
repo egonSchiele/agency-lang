@@ -1,0 +1,15 @@
+import { setMemoryId, remember } from "std::memory"
+
+// Stores a fact, then makes an llm() call with memory: true. The
+// memory layer should inject a "Relevant context from memory:" system
+// message before the user prompt; we verify by checking the LLM mock
+// was consumed (the deterministic client returns "ok") rather than
+// inspecting the injected prompt directly.
+node main(): string {
+  setMemoryId("llm-injection-test")
+  remember("Mom likes pottery")
+  // Use a short query so structuredLookup's substring match matches
+  // "Mom" deterministically without needing live embeddings.
+  const reply: string = llm("mom", { memory: true })
+  return reply
+}

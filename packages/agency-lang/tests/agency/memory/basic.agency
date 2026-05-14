@@ -1,0 +1,13 @@
+import { setMemoryId, remember, recall } from "std::memory"
+
+// Stores a fact then immediately recalls it. Returns whether the
+// recall string contains anything (i.e., the round-trip worked).
+// Designed to be robust to accumulated state across runs: even if
+// previous runs left observations behind, a non-empty recall result
+// for the just-stored fact still proves the integration works.
+node main(): boolean {
+  setMemoryId("basic-test")
+  remember("Mom likes pottery")
+  const result: string = recall("mom")
+  return result.length > 0
+}

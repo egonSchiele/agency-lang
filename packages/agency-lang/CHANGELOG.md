@@ -1,3 +1,35 @@
+## May 13 2026 — v0.1.3
+
+### Language
+- `with approve` works on `return` statements
+- `.preapprove()` method on AgencyFunction — wraps function in implicit approve handler; works with PFAs, global functions, imports, and the interrupt/resume cycle
+- Parenthesized type expressions: `(name | serving_size)[]`, `(string | number)[]`
+- Access chains on parenthesized expressions: `(a + b).foo`, `(foo()).length`, `(new Foo()).method()`
+- Type aliases can be declared inside node/function bodies (hoisted at codegen)
+- Compound assignment (`+=`, `-=`, `*=`, `/=`) to globals now lowers correctly
+- Nested `fork`/`race` blocks can see outer block args
+- Reserved `Result` type — cannot be redefined
+- `as` not needed in blocks if no param
+
+### TUI
+- Syntax highlighting in TUI
+- Remove `chalk` dependency (folded into termcolors)
+- Various TUI fixes
+
+### New: Stdlib
+- Add `@agency-lang/whisper-local` package (vendors whisper.cpp v1.7.6, pins SHA-256 hashes for all whisper models)
+
+### Scheduling
+- `schedule` command supports GitHub Actions as a backend
+
+### Docs
+- `doc` command lists interrupts thrown by a function
+
+### Other
+- Don't format object type as `Record`
+- Coverage: thresholds, file exclusions, nicer PR comment
+- Fix tool-retry test (safe nested method)
+
 ## May 12 2026 — v0.1.2
 
 ### New: Serve Command

@@ -184,6 +184,32 @@ function reportNotAssignable(
   });
 }
 
+// Operators that mutate their left operand. Compound assigns (`+=` etc.)
+// and postfix `++`/`--` all desugar to writes back to the left side, so a
+// const target is just as illegal as bare reassignment.
+const MUTATING_OPERATORS = [
+  "+=", "-=", "*=", "/=", "&&=", "||=", "??=", "++", "--",
+];
+
+function checkConstMutation(
+  node: AgencyNode,
+  scope: Scope,
+  ctx: TypeCheckerContext,
+): void {
+  if (
+    node.type === "binOpExpression" &&
+    MUTATING_OPERATORS.includes(node.operator) &&
+    node.left.type === "variableName" &&
+    scope.isConst(node.left.value)
+  ) {
+    ctx.errors.push({
+      message: `Cannot reassign to constant '${node.left.value}'.`,
+      variableName: node.left.value,
+      loc: node.loc,
+    });
+  }
+}
+
 /**
  * Walk a body of statements and declare every binding into the given scope.
  * Recurses into nested blocks using the same scope, which preserves today's
@@ -195,6 +221,7 @@ export function walkScopeBody(
   ctx: TypeCheckerContext,
 ): void {
   for (const node of nodes) {
+    checkConstMutation(node, scope, ctx);
     switch (node.type) {
       case "assignment":
         declareVariable(node, scope, ctx);

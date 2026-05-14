@@ -5,7 +5,7 @@ import { nanoid } from "nanoid";
 
 function compileAndPersist(source: string): { moduleId: string; path: string } {
   const result = compileSource(source, {
-    typeCheck: true,
+    typechecker: { enabled: true },
     restrictImports: true,
   });
 

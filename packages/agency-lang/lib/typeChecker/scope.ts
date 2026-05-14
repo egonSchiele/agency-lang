@@ -24,7 +24,11 @@ export class Scope {
   }
 
   lookup(name: string): ScopeType | undefined {
-    if (name in this.vars) return this.vars[name];
+    // Own-property check — `name in this.vars` walks the prototype chain
+    // and would falsely match names like "toString" / "constructor".
+    if (Object.prototype.hasOwnProperty.call(this.vars, name)) {
+      return this.vars[name];
+    }
     return this.parent?.lookup(name);
   }
 

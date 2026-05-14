@@ -152,7 +152,7 @@ describe("TypeChecker", () => {
         ],
       };
 
-      const { errors } = typeCheck(program, { strictTypes: true });
+      const { errors } = typeCheck(program, { typechecker: { strictTypes: true } });
       expect(errors).toHaveLength(1);
       expect(errors[0].message).toContain("no type annotation");
       expect(errors[0].message).toContain("strict mode");

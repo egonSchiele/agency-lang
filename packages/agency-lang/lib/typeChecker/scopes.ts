@@ -155,7 +155,7 @@ export function declareVariable(
     return;
   }
 
-  if (ctx.config.strictTypes) {
+  if (ctx.config.typechecker?.strictTypes) {
     ctx.errors.push({
       message: `Variable '${node.variableName}' has no type annotation (strict mode).`,
       variableName: node.variableName,

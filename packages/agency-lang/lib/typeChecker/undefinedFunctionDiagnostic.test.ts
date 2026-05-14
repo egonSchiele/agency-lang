@@ -35,12 +35,12 @@ describe("undefined function diagnostic", () => {
     const errors = errorsFrom(
       `
       node main() {
-        let x = parseJSON("{}")
+        let x = totallyMadeUpFn("{}")
       }
     `,
       WARN,
     );
-    const undef = errors.filter((e) => e.message.includes("parseJSON"));
+    const undef = errors.filter((e) => e.message.includes("totallyMadeUpFn"));
     expect(undef).toHaveLength(1);
     expect(undef[0].severity).toBe("warning");
   });
@@ -151,22 +151,22 @@ describe("undefined function diagnostic", () => {
   it("respects undefinedFunctions: silent (default)", () => {
     const errors = errorsFrom(`
       node main() {
-        parseJSON("{}")
+        totallyMadeUpFn("{}")
       }
     `);
-    expect(errors.filter((e) => e.message.includes("parseJSON"))).toHaveLength(0);
+    expect(errors.filter((e) => e.message.includes("totallyMadeUpFn"))).toHaveLength(0);
   });
 
   it("respects undefinedFunctions: error", () => {
     const errors = errorsFrom(
       `
       node main() {
-        parseJSON("{}")
+        totallyMadeUpFn("{}")
       }
     `,
       { typechecker: { undefinedFunctions: "error" } },
     );
-    const undef = errors.filter((e) => e.message.includes("parseJSON"));
+    const undef = errors.filter((e) => e.message.includes("totallyMadeUpFn"));
     expect(undef).toHaveLength(1);
     expect(undef[0].severity).toBe("error");
   });

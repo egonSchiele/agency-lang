@@ -37,6 +37,7 @@ import {
 } from "./interruptAnalysis.js";
 import { checkUndefinedFunctions } from "./undefinedFunctionDiagnostic.js";
 import { RESERVED_FUNCTION_NAMES } from "./resolveCall.js";
+import { walkNodes } from "../utils/node.js";
 
 export type { TypeCheckError, TypeCheckResult } from "./types.js";
 
@@ -165,6 +166,24 @@ export class TypeChecker {
             message: `'${name}' is a reserved built-in type; cannot be redefined.`,
           });
         }
+      }
+    }
+
+    // 1d. Reserved names cannot be `let`/`const` / `static const` declared
+    // either. The variable would be unusable as a function (e.g. `schema(X)`
+    // always parses as a SchemaExpression regardless of scope), and shadowing
+    // primitives like `success`/`failure` silently changes semantics.
+    // Walk every assignment in the program — top-level and inside function /
+    // graphNode bodies — and check the variable name. Only fires on actual
+    // declarations (where `declKind` is set), not reassignments.
+    for (const { node } of walkNodes(this.program.nodes)) {
+      if (node.type !== "assignment") continue;
+      if (!node.declKind) continue;
+      if (RESERVED_FUNCTION_NAMES.has(node.variableName)) {
+        this.errors.push({
+          message: `'${node.variableName}' is a reserved built-in; cannot be redefined.`,
+          loc: node.loc,
+        });
       }
     }
 

@@ -33,7 +33,10 @@ export class Scope {
   }
 
   isConst(name: string): boolean {
-    if (name in this.vars) return this.consts[name] === true;
+    // Own-property check — `name in this.vars` walks the prototype chain.
+    if (Object.prototype.hasOwnProperty.call(this.vars, name)) {
+      return this.consts[name] === true;
+    }
     return this.parent?.isConst(name) ?? false;
   }
 

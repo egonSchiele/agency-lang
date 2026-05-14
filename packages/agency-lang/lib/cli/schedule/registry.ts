@@ -12,6 +12,13 @@ export type ScheduleEntry = {
   logDir: string;
   createdAt: string;
   backend: BackendType;
+  /** Github-only options. Never persisted to the registry. */
+  github?: {
+    secrets: string[];
+    write: boolean;
+    noPin: boolean;
+    force: boolean;
+  };
 };
 
 export type ScheduleRegistry = Record<string, ScheduleEntry>;

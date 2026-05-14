@@ -657,6 +657,24 @@ export function createProgram(deps: CliDependencies = {}): Command {
       "Schedule name (default: derived from filename)",
     )
     .option("--env-file <path>", "Path to .env file")
+    .option(
+      "--backend <type>",
+      "Force a non-default backend. Currently only 'github' is supported; local backends (launchd, systemd, crontab) are auto-detected.",
+    )
+    .option(
+      "--secret <name>",
+      "github backend: add a GitHub Actions secret to the workflow env (repeatable)",
+      (value: string, prev: string[] = []) => [...prev, value],
+      [] as string[],
+    )
+    .option(
+      "--write",
+      "github backend: grant contents: write + pull-requests: write permissions",
+    )
+    .option(
+      "--no-pin",
+      "github backend: emit @<tag> instead of @<sha> for action references",
+    )
     .action(
       async (
         file: string,
@@ -665,10 +683,33 @@ export function createProgram(deps: CliDependencies = {}): Command {
           cron?: string;
           name?: string;
           envFile?: string;
+          backend?: string;
+          secret?: string[];
+          write?: boolean;
+          // commander exposes `--no-pin` as `pin: false` (defaults to true).
+          pin?: boolean;
         },
       ) => {
+        // Only `--backend github` is supported today; local backends are
+        // auto-detected. Reject any other value with a clear error rather
+        // than silently routing to auto-detect.
+        if (opts.backend !== undefined && opts.backend !== "github") {
+          console.error(
+            color.red(
+              `Unknown --backend value: "${opts.backend}". The only value accepted today is "github". Local backends (launchd, systemd, crontab) are auto-detected.`,
+            ),
+          );
+          process.exit(1);
+        }
+        const addOpts = {
+          ...opts,
+          file,
+          backend: opts.backend as "github" | undefined,
+          secrets: opts.secret,
+          noPin: opts.pin === false,
+        };
         try {
-          scheduleAdd({ file, ...opts });
+          scheduleAdd(addOpts);
           const name = opts.name || path.basename(file, ".agency");
           console.log(
             color.green(`Schedule "${name}" added successfully.`),
@@ -678,7 +719,7 @@ export function createProgram(deps: CliDependencies = {}): Command {
             const confirmed = await promptScheduleOverwrite(err.scheduleName);
             if (confirmed) {
               try {
-                scheduleAdd({ file, ...opts, force: true });
+                scheduleAdd({ ...addOpts, force: true });
                 console.log(
                   color.green("Schedule overwritten successfully."),
                 );

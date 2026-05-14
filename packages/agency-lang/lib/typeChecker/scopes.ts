@@ -90,8 +90,23 @@ export function declareVariable(
     });
   }
 
+  // Reassignment to a const binding (no accessChain — property writes on
+  // const objects are allowed, matching JS semantics).
+  if (
+    !node.declKind &&
+    !node.accessChain &&
+    scope.isConst(node.variableName)
+  ) {
+    ctx.errors.push({
+      message: `Cannot reassign to constant '${node.variableName}'.`,
+      variableName: node.variableName,
+      loc: node.loc,
+    });
+  }
+
   const newType = node.typeHint;
   const existingType = scope.lookup(node.variableName);
+  const isConst = node.declKind === "const";
 
   if (newType) {
     validateTypeReferences(
@@ -123,6 +138,7 @@ export function declareVariable(
     scope.declare(
       node.variableName,
       resultTypeForValidation(newType, node.validated),
+      isConst,
     );
     return;
   }
@@ -147,7 +163,7 @@ export function declareVariable(
     });
   }
   const inferred = synthType(node.value, scope, ctx);
-  scope.declare(node.variableName, widenType(inferred));
+  scope.declare(node.variableName, widenType(inferred), isConst);
 }
 
 function reportNotAssignable(

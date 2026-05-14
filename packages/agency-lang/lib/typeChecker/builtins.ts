@@ -100,4 +100,13 @@ export const BUILTIN_FUNCTION_TYPES: Record<string, BuiltinSignature> = {
 
   // --- Checkpoint / rewind ---
   restore: { params: ["any", "any"], returnType: voidT },
+
+  // --- Handler outcomes (reserved names) ---
+  approve:    { params: ["any"], minParams: 0, returnType: "any" },
+  reject:     { params: ["any"], minParams: 0, returnType: "any" },
+  propagate:  { params: [],                    returnType: "any" },
+
+  // --- Checkpointing ---
+  checkpoint:    { params: [],         returnType: number },
+  getCheckpoint: { params: [number],   returnType: "any" },
 };

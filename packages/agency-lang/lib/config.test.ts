@@ -16,3 +16,29 @@ describe("AgencyConfigSchema", () => {
     expect(result.success).toBe(true);
   });
 });
+
+describe("AgencyConfig typechecker key", () => {
+  it("accepts the new typechecker object", () => {
+    const result = AgencyConfigSchema.safeParse({
+      typechecker: {
+        enabled: true,
+        strict: true,
+        strictTypes: true,
+        undefinedFunctions: "warn",
+      },
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects invalid undefinedFunctions value", () => {
+    const result = AgencyConfigSchema.safeParse({
+      typechecker: { undefinedFunctions: "banana" },
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("accepts an empty typechecker object", () => {
+    const result = AgencyConfigSchema.safeParse({ typechecker: {} });
+    expect(result.success).toBe(true);
+  });
+});

@@ -35,31 +35,10 @@ import {
   analyzeInterruptsFromScopes,
   checkUnhandledInterruptWarnings,
 } from "./interruptAnalysis.js";
+import { checkUndefinedFunctions } from "./undefinedFunctionDiagnostic.js";
+import { RESERVED_FUNCTION_NAMES } from "./resolveCall.js";
 
 export type { TypeCheckError, TypeCheckResult } from "./types.js";
-
-/**
- * Function/node names that are part of the language itself or whose
- * semantics the typechecker hardcodes. Keep in sync with
- * docs/site/appendix/agency-stdlib.md. `interrupt` and `debugger` are also
- * statements at the parse level — listing them here is belt-and-suspenders.
- */
-const RESERVED_FUNCTION_NAMES = new Set<string>([
-  "success",
-  "failure",
-  "isSuccess",
-  "isFailure",
-  "interrupt",
-  "approve",
-  "reject",
-  "propagate",
-  "schema",
-  "llm",
-  "checkpoint",
-  "getCheckpoint",
-  "restore",
-  "debugger",
-]);
 
 /** Type-alias names that resolve to built-in types. */
 const RESERVED_TYPE_NAMES = new Set<string>(["Result"]);
@@ -228,6 +207,9 @@ export class TypeChecker {
 
     // 6. Check for unhandled interrupt warnings (uses transitive results)
     checkUnhandledInterruptWarnings(scopes, interruptKindsByFunction, ctx);
+
+    // 7. Check for undefined function calls (config-controlled severity).
+    checkUndefinedFunctions(scopes, ctx);
 
     return {
       errors: this.applySuppressions(this.deduplicateErrors()),

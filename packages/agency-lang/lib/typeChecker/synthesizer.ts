@@ -115,6 +115,22 @@ export function synthType(
       return synthValueAccess(expr, scope, ctx);
     case "tryExpression":
       return synthTryExpression(expr, scope, ctx);
+    case "schemaExpression":
+      // `schema(Type)` is a language built-in that bridges *type space* and
+      // *value space*: the parser captures `Type` as a VariableType (not as a
+      // value expression — see schemaExpressionParser in parsers.ts), and at
+      // runtime the SchemaExpression node compiles to a zod schema constructed
+      // from that type.
+      //
+      // We currently synthesize its result as "any" because there's no
+      // structured `Schema<T>` type in Agency's type system yet. Adding one
+      // would let downstream code see e.g. `Schema<MyType>` and validate
+      // .parse() / .safeParse() return types — that's future work, deliberately
+      // out of scope here.
+      //
+      // `schema` is listed in RESERVED_FUNCTION_NAMES so users can't define
+      // their own `def schema()` (which would create parse ambiguity).
+      return "any";
     default:
       return "any";
   }

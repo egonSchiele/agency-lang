@@ -131,7 +131,7 @@ export function compileSource(
     );
 
     // 5. Type check
-    if (config.typeCheck || config.typeCheckStrict) {
+    if (config.typechecker?.enabled || config.typechecker?.strict) {
       const { errors } = typeCheck(resolvedProgram, config, info);
       if (errors.length > 0) {
         const hasFatal = errors.some(

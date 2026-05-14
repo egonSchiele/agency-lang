@@ -164,10 +164,11 @@ export function compile(
     contents,
   );
 
-  if (config.typeCheck || config.typeCheckStrict) {
+  const tc = config.typechecker;
+  if (tc?.enabled || tc?.strict) {
     const { errors } = typeCheck(resolvedProgram, config, info);
     if (errors.length > 0) {
-      if (config.typeCheckStrict) {
+      if (tc?.strict) {
         console.error(formatErrors(errors));
         const hasFatal = errors.some((e) => (e.severity ?? "error") === "error");
         if (hasFatal) process.exit(1);

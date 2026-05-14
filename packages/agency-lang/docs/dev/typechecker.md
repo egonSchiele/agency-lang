@@ -135,22 +135,51 @@ Check mode is used in two places:
 - **Annotated assignments**: `x: number = someExpr()` checks `someExpr()` against `number`
 - **Return statements**: `return someExpr()` checks `someExpr()` against the function's declared return type
 
-## Builtin function signatures
+## Builtin and stdlib function signatures
 
-Builtin functions have type signatures defined in the `BUILTIN_FUNCTION_TYPES` constant. These are checked just like user-defined functions (arity + argument types), but their signatures come from the constant rather than from AST parameter nodes.
+Two distinct categories of Agency function — **conceptually**:
+
+- **Built-in functions** (language primitives, no `def` source): `success`,
+  `failure`, `isSuccess`, `isFailure`, `llm`, `interrupt`, `approve`,
+  `reject`, `propagate`, `checkpoint`, `getCheckpoint`, `restore`, `schema`,
+  `debugger`. Their semantics are hardcoded in the type checker and
+  runtime, and users cannot redefine them (see `RESERVED_FUNCTION_NAMES`
+  in `lib/typeChecker/resolveCall.ts`).
+- **Stdlib functions** (regular Agency code): `print`, `printJSON`, `read`,
+  `fetch`, `notify`, `sleep`, `range`, `keys`, etc. — defined in
+  `stdlib/index.agency` like any user function. Users may shadow them.
+
+`BUILTIN_FUNCTION_TYPES` in `lib/typeChecker/builtins.ts` holds typed
+signatures for both categories. Stdlib entries are duplicated there for
+typechecker convenience — see the `NOTE` comment in that file. Long term,
+stdlib signatures should come from the symbol table via `importedFunctions`.
+
+The signatures are checked just like user-defined functions (arity +
+argument types), but come from the constant rather than from AST parameter
+nodes.
 
 | Function | Parameters | Return type |
 |----------|-----------|-------------|
-| `print`, `printJSON` | `(any)` | `void` |
+| `print`, `printJSON` | `(any...)` | `void` |
 | `input` | `(string)` | `string` |
 | `read`, `readImage` | `(string)` | `string` |
 | `write` | `(string, string)` | `void` |
 | `fetch` | `(string)` | `string` |
-| `fetchJSON`, `fetchJson` | `(string)` | `any` |
+| `fetchJSON` | `(string)` | `any` |
 | `sleep` | `(number)` | `void` |
-| `round` | `(number)` | `number` |
+| `round` | `(number, number)` | `number` |
+| `success` | `(any)` | `any` |
+| `failure` | `(any, any?)` | `any` |
+| `isSuccess`, `isFailure` | `(any)` | `boolean` |
+| `restore` | `(any, any)` | `void` |
+| `approve`, `reject` | `(any?)` | `any` |
+| `propagate` | `()` | `any` |
+| `checkpoint` | `()` | `number` |
+| `getCheckpoint` | `(number)` | `any` |
 
-Note that `print` accepts `any`, so passing any type to it is always valid. `fetchJSON` returns `any` because JSON responses have unknown structure.
+Note that `print` accepts variadic `any` arguments, so passing any types to it is
+always valid. `fetchJSON` returns `any` because JSON responses have unknown
+structure.
 
 ## Type assignability: `isAssignable`
 
@@ -197,6 +226,64 @@ for name, i in names {
 
 If the iterable isn't a known array type, both the item and index variables are `"any"`.
 
+### `schema(Type)`
+
+`schema(Type)` is a language built-in that bridges *type space* and *value
+space*: the parser captures `Type` as a `VariableType` (not a value
+expression — see `schemaExpressionParser` in `lib/parsers/parsers.ts`),
+and at runtime the resulting `SchemaExpression` AST node compiles to a
+zod schema constructed from that type.
+
+The type checker currently synthesizes its result as `"any"` — populating
+it with a structured `Schema<T>` type is future work that would let
+downstream code see e.g. `Schema<MyType>` and validate `.parse()` /
+`.safeParse()` return types.
+
+`schema` is listed in `RESERVED_FUNCTION_NAMES` so users can't define
+their own `def schema()` (which would create parse ambiguity).
+
+## Diagnostics
+
+Diagnostics are checks that emit warnings or errors but don't affect type
+synthesis or assignability. Each diagnostic lives in its own module and is
+invoked once from `TypeChecker.check()`'s main loop after scopes are
+collected and the core synth/check passes have run.
+
+This separation keeps the core synth/check code focused on type correctness,
+lets each diagnostic be enabled/disabled and tested as a unit, and makes it
+cheap to add new diagnostics without entangling unrelated code.
+
+### Existing diagnostics
+
+| Module | Public function | Purpose |
+|---|---|---|
+| `lib/typeChecker/interruptAnalysis.ts` | `checkUnhandledInterruptWarnings` | Warn when a function calls something that may throw an interrupt outside a handler. |
+| `lib/typeChecker/undefinedFunctionDiagnostic.ts` | `checkUndefinedFunctions` | Warn (or error) when a `functionCall` or `Namespace.method(...)` chain doesn't resolve to anything known. Uses the pure `resolveCall` / `lookupJsMember` / `JS_GLOBALS` data from `lib/typeChecker/resolveCall.ts`. |
+
+### Adding a new diagnostic
+
+Follow the existing module shape:
+
+1. One module under `lib/typeChecker/`.
+2. One public function taking `(scopes: ScopeInfo[], ctx: TypeCheckerContext): void`.
+3. Walk the AST with `walkNodes` from `lib/utils/node.ts`.
+4. Push diagnostics to `ctx.errors`.
+5. Add one call from `TypeChecker.check()` after the existing diagnostic calls.
+6. Add a config knob under `typechecker.<name>` if the diagnostic should be opt-in or opt-out.
+
+Keep the public surface narrow (one function), keep lookup data in a
+separate pure module so it can be reused, and don't reach into `checker.ts`
+or `synthesizer.ts` from the diagnostic — they have a different job.
+
+### Resolving call sites
+
+`lib/typeChecker/resolveCall.ts` exports `resolveCall(name, input)` and
+`lookupJsMember(path)` — pure functions answering "what does this call
+site refer to?" Returns a tagged union of `def | imported | builtin |
+reserved | scopeBinding | jsGlobal | unresolved`. The undefined-function
+diagnostic uses these; future analyses asking the same question should use
+them too.
+
 ## Return type inference
 
 Functions and graph nodes without an explicit return type annotation have their return types inferred from `return` statements. This happens in the `inferReturnTypes()` phase, before scopes are checked, so that call sites get proper type checking.
@@ -240,19 +327,19 @@ Add to your `agency.json`:
 
 ```json
 {
-  "typeCheck": true
+  "typechecker": { "enabled": true }
 }
 ```
 
-With `typeCheck: true`, type errors are printed as **warnings** during compilation (and by extension during `run`, since `run` calls `compile`). Compilation continues and the output file is still generated. This is useful during development when you want to see type issues without blocking your workflow.
+With `typechecker.enabled: true`, type errors are printed as **warnings** during compilation (and by extension during `run`, since `run` calls `compile`). Compilation continues and the output file is still generated. This is useful during development when you want to see type issues without blocking your workflow.
 
 ```json
 {
-  "typeCheckStrict": true
+  "typechecker": { "strict": true }
 }
 ```
 
-With `typeCheckStrict: true`, type errors are **fatal**. They are printed to stderr and the process exits with code 1 before any code is generated. This is useful for CI or for catching errors before deployment.
+With `typechecker.strict: true`, type errors are **fatal**. They are printed to stderr and the process exits with code 1 before any code is generated. This is useful for CI or for catching errors before deployment.
 
 Both flags are checked in the `compile()` function in `lib/cli/commands.ts`, after parsing and before code generation.
 

@@ -57,9 +57,11 @@ export class TerminalInput implements InputSource {
   private keyWaiters: ((key: KeyEvent) => void)[] = [];
   private keyQueue: KeyEvent[] = [];
   private dataHandler: ((data: Buffer) => void) | null = null;
+  private sigcontHandler: (() => void) | null = null;
   private wasRaw = false;
   private initialized = false;
   private inLineMode = false;
+  private suspended = false;
 
   private ensureInitialized(): void {
     if (this.initialized) return;
@@ -78,6 +80,13 @@ export class TerminalInput implements InputSource {
 
     this.dataHandler = (data: Buffer) => {
       const str = data.toString("utf-8");
+      // In raw mode the TTY does not translate Ctrl+Z (0x1a) into SIGTSTP;
+      // the byte is delivered to us. Trigger suspend manually so the user's
+      // expectation of "Ctrl+Z suspends" still works.
+      if (str.length === 1 && str.charCodeAt(0) === 0x1a) {
+        this.handleSuspendKeypress();
+        return;
+      }
       const key = parseKeypress(str);
       const waiter = this.keyWaiters.shift();
       if (waiter) {
@@ -88,6 +97,43 @@ export class TerminalInput implements InputSource {
     };
 
     process.stdin.on("data", this.dataHandler);
+
+    // SIGCONT can be delivered after our Ctrl+Z handoff or after a foreign
+    // SIGSTOP; either way we need to put stdin back into raw mode.
+    this.sigcontHandler = () => this.resumeFromSuspend();
+    process.on("SIGCONT", this.sigcontHandler);
+  }
+
+  // Called when 0x1a arrives in raw mode. Suspend our own stdin handling,
+  // then re-raise SIGTSTP to the process so the OS (and TerminalOutput's
+  // SIGTSTP handler) can suspend us cleanly.
+  private handleSuspendKeypress(): void {
+    this.suspendForSigtstp();
+    process.kill(process.pid, "SIGTSTP");
+  }
+
+  private suspendForSigtstp(): void {
+    if (this.suspended) return;
+    this.suspended = true;
+    if (this.dataHandler) {
+      process.stdin.removeListener("data", this.dataHandler);
+    }
+    if (process.stdin.isTTY && process.stdin.isRaw) {
+      process.stdin.setRawMode(false);
+    }
+  }
+
+  private resumeFromSuspend(): void {
+    if (!this.suspended) return;
+    this.suspended = false;
+    if (this.inLineMode) return; // readline owns stdin; don't re-grab it
+    if (process.stdin.isTTY) {
+      process.stdin.setRawMode(true);
+      process.stdin.resume();
+    }
+    if (this.dataHandler) {
+      process.stdin.on("data", this.dataHandler);
+    }
   }
 
   nextKey(): Promise<KeyEvent> {
@@ -151,11 +197,17 @@ export class TerminalInput implements InputSource {
       process.stdin.removeListener("data", this.dataHandler);
       this.dataHandler = null;
     }
+    if (this.sigcontHandler) {
+      process.removeListener("SIGCONT", this.sigcontHandler);
+      this.sigcontHandler = null;
+    }
     if (process.stdin.isTTY) {
       process.stdin.setRawMode(this.wasRaw);
     }
     process.stdin.pause();
     this.keyQueue = [];
     this.keyWaiters = [];
+    this.suspended = false;
+    this.initialized = false;
   }
 }

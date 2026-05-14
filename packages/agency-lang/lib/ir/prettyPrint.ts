@@ -133,9 +133,18 @@ export function printTs(node: TsNode, indent = 0): string {
     }
 
     case "templateLit": {
+      // Escape only the two sequences that would terminate the template or
+      // start an unintended interpolation:
+      //   `` ` `` → `\``  (otherwise closes the template)
+      //   `${`    → `\${` (otherwise starts an interpolation)
+      // We deliberately do NOT escape `\` — agency strings pass backslash
+      // sequences through to the JS template literal so `\n`, `\t`, etc.
+      // get interpreted as escape sequences at runtime.
+      const escapeForTemplate = (text: string): string =>
+        text.replace(/`/g, "\\`").replace(/\$\{/g, "\\${");
       let s = "`";
       for (const part of node.parts) {
-        s += part.text.replace(/`/g, "\\`");
+        s += escapeForTemplate(part.text);
         if (part.expr) s += `\${${printTs(part.expr, indent)}}`;
       }
       s += "`";

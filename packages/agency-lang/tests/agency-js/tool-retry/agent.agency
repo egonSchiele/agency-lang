@@ -1,4 +1,4 @@
-import { safe lookupItem, saveItem, flakyWrite, resetCounters, throwError } from "./tools.js"
+import { safe lookupItem, saveItem, flakyWrite, resetCounters } from "./tools.js"
 
 // --- Helper functions ---
 
@@ -65,6 +65,13 @@ class ItemService {
     saveItem(id)
     return lookupItem("${this.prefix}-${id}")
   }
+
+  safe nestedFlakyWrite(id: string): any {
+    if (id != "") {
+      return flakyWrite("${this.prefix}-${id}")
+    }
+    return id
+  }
 }
 
 // Tool wrappers for class methods
@@ -96,13 +103,9 @@ def safeNestedTool(id: string) {
   return safeNestedWrite(id)
 }
 
-let safeNestedMethodToolCount = 0
 def safeNestedMethodTool(id: string) {
-  safeNestedMethodToolCount = safeNestedMethodToolCount + 1
-  if (safeNestedMethodToolCount < 3) {
-    return throwError()
-  }
-  return id
+  let svc = new ItemService("nsvc")
+  return svc.nestedFlakyWrite(id)
 }
 
 // --- Nested impure calls inside for/while loops ---

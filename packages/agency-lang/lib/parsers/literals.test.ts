@@ -422,8 +422,39 @@ describe("literals parsers", () => {
           },
         },
       },
-      // backticks are now string delimiters, so they can't be embedded in double-quoted strings
-      // (this test case removed as the parser partially succeeds in a misleading way)
+      // Backticks are allowed inside double-quoted strings (and vice versa):
+      // the parser remembers the opening delimiter and only terminates on a
+      // matching one. This mirrors the way `'` already works inside `"…"`.
+      {
+        input: '"contains `backticks` inside"',
+        expected: {
+          success: true,
+          result: {
+            type: "string",
+            segments: [{ type: "text", value: "contains `backticks` inside" }],
+          },
+        },
+      },
+      {
+        input: '"```json"',
+        expected: {
+          success: true,
+          result: {
+            type: "string",
+            segments: [{ type: "text", value: "```json" }],
+          },
+        },
+      },
+      {
+        input: '`contains "double quotes" inside`',
+        expected: {
+          success: true,
+          result: {
+            type: "string",
+            segments: [{ type: "text", value: 'contains "double quotes" inside' }],
+          },
+        },
+      },
 
       // Strings with interpolation
       {

@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Compound assignment (+=, -=) to a global must lower to a get/set pair (regression test for invalid LHS bug).",
+      "input": "",
+      "expectedOutput": "[15,24,15]",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

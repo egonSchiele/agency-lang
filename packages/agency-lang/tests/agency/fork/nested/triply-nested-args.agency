@@ -1,0 +1,16 @@
+// Triply-nested fork: each inner block must see ALL outer iter-args
+// via closure, not just its immediate parent. With 3 levels we have
+// 2 * 2 * 2 = 8 leaf invocations, each combining the three iter vars.
+
+node main(): string[][][] {
+  let result = fork(["a", "b"]) as o {
+    let r1 = fork(["1", "2"]) as m {
+      let r2 = fork(["x", "y"]) as i {
+        return "${o}-${m}-${i}"
+      }
+      return r2
+    }
+    return r1
+  }
+  return result
+}

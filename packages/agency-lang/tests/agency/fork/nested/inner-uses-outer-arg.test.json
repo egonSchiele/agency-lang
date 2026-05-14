@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Inner fork block must see the outer fork block's iter-arg via closure (regression test for nested fork variable access).",
+      "input": "",
+      "expectedOutput": "[[\"a-1\",\"a-2\"],[\"b-1\",\"b-2\"]]",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

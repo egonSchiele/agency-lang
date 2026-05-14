@@ -30,6 +30,7 @@ packages-doc:
 	pnpm run agency doc ../mcp -o docs/site/packages/mcp/ --ignore tests --base-url https://github.com/egonSchiele/agency-lang/blob/main/packages/mcp/
 	pnpm run agency doc ../email -o docs/site/packages/email/ --ignore tests --base-url https://github.com/egonSchiele/agency-lang/blob/main/packages/email/
 	pnpm run agency doc ../github -o docs/site/packages/github/ --ignore tests --base-url https://github.com/egonSchiele/agency-lang/blob/main/packages/github/
+	pnpm run agency doc ../whisper-local -o docs/site/packages/whisper-local/ --ignore tests --base-url https://github.com/egonSchiele/agency-lang/blob/main/packages/whisper-local/
 
 test-log:
 	rm -f test-output

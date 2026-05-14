@@ -410,4 +410,67 @@ describe("exprParser", () => {
       }
     });
   });
+
+  describe("parens followed by an access chain", () => {
+    it("parses (a + b).foo as ValueAccess { base: binOp, chain: [property foo] }", () => {
+      const result = exprParser("(a + b).foo");
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.result.type).toBe("valueAccess");
+        if (result.result.type === "valueAccess") {
+          expect(result.result.base.type).toBe("binOpExpression");
+          expect(result.result.chain).toHaveLength(1);
+          expect(result.result.chain[0].kind).toBe("property");
+          if (result.result.chain[0].kind === "property") {
+            expect(result.result.chain[0].name).toBe("foo");
+          }
+        }
+      }
+    });
+
+    it("parses (arr)[0] as ValueAccess { base: variableName, chain: [index 0] }", () => {
+      const result = exprParser("(arr)[0]");
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.result.type).toBe("valueAccess");
+        if (result.result.type === "valueAccess") {
+          expect(result.result.chain).toHaveLength(1);
+          expect(result.result.chain[0].kind).toBe("index");
+        }
+      }
+    });
+
+    it("parses (foo()).length as ValueAccess { base: functionCall, chain: [property length] }", () => {
+      const result = exprParser("(foo()).length");
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.result.type).toBe("valueAccess");
+        if (result.result.type === "valueAccess") {
+          expect(result.result.base.type).toBe("functionCall");
+          expect(result.result.chain).toHaveLength(1);
+        }
+      }
+    });
+
+    it("parses (new Foo()).bump() with a method-call chain element", () => {
+      const result = exprParser("(new Foo()).bump()");
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.result.type).toBe("valueAccess");
+        if (result.result.type === "valueAccess") {
+          expect(result.result.base.type).toBe("newExpression");
+          expect(result.result.chain).toHaveLength(1);
+          expect(result.result.chain[0].kind).toBe("methodCall");
+        }
+      }
+    });
+
+    it("bare (a + b) (no chain) still parses as the inner binOp", () => {
+      const result = exprParser("(a + b)");
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.result.type).toBe("binOpExpression");
+      }
+    });
+  });
 });

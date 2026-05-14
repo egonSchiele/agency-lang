@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "return statement with inline `with approve` handler — the parser must let withModifier wrap a return statement so the handler auto-approves the interrupt before propagating the return value.",
+      "input": "",
+      "expectedOutput": "\"ok\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

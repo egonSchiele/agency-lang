@@ -52,18 +52,22 @@ function collectFromScope(info: ScopeInfo, ctx: TypeCheckerContext): FunctionPro
   const kinds: string[] = [];
   const callees: string[] = [];
 
-  for (const { node } of walkNodes(info.body)) {
-    if (node.type === "interruptStatement") {
-      addUnique(kinds, node.kind);
-    } else if (node.type === "functionCall") {
-      addUnique(callees, node.functionName);
-      for (const name of functionRefsInArgs(node.arguments, info.scope, ctx)) {
-        addUnique(callees, name);
+  // Set the typechecker's current scope so synthType (called via
+  // functionRefsInArgs) can resolve scope-local type aliases.
+  ctx.withScope(info.scopeKey, () => {
+    for (const { node } of walkNodes(info.body)) {
+      if (node.type === "interruptStatement") {
+        addUnique(kinds, node.kind);
+      } else if (node.type === "functionCall") {
+        addUnique(callees, node.functionName);
+        for (const name of functionRefsInArgs(node.arguments, info.scope, ctx)) {
+          addUnique(callees, name);
+        }
+      } else if (node.type === "gotoStatement") {
+        addUnique(callees, node.nodeCall.functionName);
       }
-    } else if (node.type === "gotoStatement") {
-      addUnique(callees, node.nodeCall.functionName);
     }
-  }
+  });
 
   return { kinds, callees };
 }

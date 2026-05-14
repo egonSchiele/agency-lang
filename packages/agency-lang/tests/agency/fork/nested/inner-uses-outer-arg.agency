@@ -1,0 +1,16 @@
+// Regression test for "nested fork blocks: inner block can't access
+// the variables of the outer block" (the iter-arg vars at least).
+//
+// Without the fix, the inner block's __bstack.args only contains `i`,
+// so reading `o` from inside the inner block resolved against an empty
+// scope and produced "undefined-1", "undefined-2", etc.
+
+node main(): string[][] {
+  let result = fork(["a", "b"]) as o {
+    let r = fork([1, 2]) as i {
+      return "${o}-${i}"
+    }
+    return r
+  }
+  return result
+}

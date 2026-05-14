@@ -297,6 +297,16 @@ export const stringTextSegmentParser: Parser<TextSegment> = map(
   }),
 );
 
+// Delimiter-aware text segment: stops only on the matching closing quote
+// (the one that opened the string) or `${`. Lets the *other* quote character
+// appear unescaped inside, just like single quotes already do — e.g. a
+// double-quoted string can contain backticks, and vice versa.
+const stringTextSegmentParserFor = (delim: '"' | "`"): Parser<TextSegment> =>
+  map(
+    many1Till(or(char(delim), str("${"))),
+    (text) => ({ type: "text", value: text }),
+  );
+
 export const multiLineStringTextSegmentParser: Parser<TextSegment> = map(
   many1Till(or(str('"""'), str("${"))),
   (text) => ({
@@ -472,25 +482,41 @@ export const regexLiteralParser: Parser<RegexLiteral> = label("a regex", (input:
   return parser(input);
 });
 
-export const simpleStringParser: Parser<StringLiteral> = seqC(
-  set("type", "string"),
-  oneOf('"`'),
-  capture(
-    map(stringTextSegmentParser, (x) => [x]),
-    "segments",
-  ),
-  oneOf('"`'),
-);
+// `_stringParser` is written as a plain function (rather than `seqC`) so it
+// can capture the opening delimiter and require the *same* character to
+// close. This is what allows the other quote character to appear unescaped
+// inside the string — e.g. backticks inside `"…"`, or double quotes inside
+// `` `…` ``.
+//
+// `simpleStringParser` (no interpolation) just reuses tarsec's `quotedString`
+// (which already enforces matching open/close delimiters) and filters out
+// single-quoted strings, since Agency only uses `"` and `` ` `` for string
+// literals.
+export const simpleStringParser: Parser<StringLiteral> = (input: string) => {
+  if (input[0] !== '"' && input[0] !== "`") {
+    return failure(`expected '"' or '\`'`, input);
+  }
+  return map(quotedString, (s) => ({
+    type: "string" as const,
+    segments: [{ type: "text" as const, value: s.slice(1, -1) }],
+  }))(input);
+};
 
-export const _stringParser: Parser<StringLiteral> = seqC(
-  set("type", "string"),
-  oneOf('"`'),
-  capture(
-    many(or(stringTextSegmentParser, interpolationSegmentParser)),
-    "segments",
-  ),
-  oneOf('"`'),
-);
+export const _stringParser: Parser<StringLiteral> = (input: string) => {
+  const open = oneOf('"`')(input);
+  if (!open.success) return open as ParserResult<StringLiteral>;
+  const delim = open.result as '"' | "`";
+  const segments = many(
+    or(stringTextSegmentParserFor(delim), interpolationSegmentParser),
+  )(open.rest);
+  if (!segments.success) return segments as ParserResult<StringLiteral>;
+  const close = char(delim)(segments.rest);
+  if (!close.success) return failure(`expected closing ${delim}`, input);
+  return success(
+    { type: "string" as const, segments: segments.result },
+    close.rest,
+  );
+};
 
 export const stringParser: Parser<StringLiteral> = label("a string", (input: string) => {
   const parser = sepBy1(plusSign, or(_stringParser, variableNameParser));
@@ -651,13 +677,37 @@ export const typeAliasVariableParser: Parser<TypeAliasVariable> = trace(
   ),
 );
 
+/**
+ * `(T)` — a parenthesized type expression. Lets users write things like
+ * `(name | serving_size)[]` or `(string | number)[]` where the union
+ * needs to be grouped before the array suffix can apply.
+ */
+export const parenthesizedTypeParser: Parser<VariableType> = trace(
+  "parenthesizedTypeParser",
+  map(
+    seqC(
+      char("("),
+      optionalSpaces,
+      capture(lazy(() => variableTypeParser), "inner"),
+      optionalSpaces,
+      char(")"),
+    ),
+    (result) => result.inner,
+  ),
+);
+
 export const arrayTypeParser: Parser<ArrayType> = (input: string) => {
   const parser = trace(
     "arrayTypeParser",
     seqC(
       set("type", "arrayType"),
       capture(
-        or(objectTypeParser, primitiveTypeParser, typeAliasVariableParser),
+        or(
+          parenthesizedTypeParser,
+          objectTypeParser,
+          primitiveTypeParser,
+          typeAliasVariableParser,
+        ),
         "elementType",
       ),
       capture(count(str("[]")), "arrayDepth"),
@@ -869,6 +919,7 @@ export const unionItemParser: Parser<VariableType> = trace(
     booleanLiteralTypeParser,
     primitiveTypeParser,
     typeAliasVariableParser,
+    parenthesizedTypeParser,
   ),
 );
 
@@ -994,6 +1045,7 @@ export const variableTypeParser: Parser<VariableType> = trace(
     booleanLiteralTypeParser,
     primitiveTypeParser,
     typeAliasVariableParser,
+    parenthesizedTypeParser,
   ),
 );
 
@@ -1448,9 +1500,40 @@ const chainElementParser: Parser<AccessChainElement> = or(
   indexChainParser,
 );
 
+/**
+ * Parse `( expr ) chain` as a value-access expression. This is what
+ * lets a parenthesized expression appear at the start of a body
+ * statement (e.g. `(new Foo()).bump()`) and be parsed as a chained
+ * call. Only succeeds when there is at least one chain element —
+ * bare `(expr)` with no chain falls through so other parsers (like
+ * the expression parser's own paren handling) can take over.
+ */
+const parenAccessParser: Parser<ValueAccess> = map(
+  seqC(
+    char("("),
+    optionalSpaces,
+    capture(lazy(() => exprParser), "base"),
+    optionalSpaces,
+    char(")"),
+    capture(many1(chainElementParser), "chain"),
+  ),
+  (result) =>
+    ({
+      type: "valueAccess" as const,
+      base: result.base as unknown as AgencyNode,
+      chain: result.chain,
+    }) as ValueAccess,
+);
+
 export const _valueAccessParser = (
   input: string,
 ): ParserResult<VariableNameLiteral | FunctionCall | ValueAccess> => {
+  // First try the parenthesized form so `(expr).chain` and `(expr)[i]`
+  // work as standalone statements (the bodyParser calls _valueAccessParser
+  // directly, bypassing the exprParser's own paren handling).
+  const parenResult = parenAccessParser(input);
+  if (parenResult.success) return parenResult;
+
   const parser = seqC(
     capture(or(_functionCallParser, variableNameParser), "base"),
     capture(many(chainElementParser), "chain"),
@@ -1683,6 +1766,11 @@ function makeBinOp(op: string): (left: Expression, right: Expression) => Express
 // Custom paren parser with whitespace handling.
 // The default paren parser in buildExpressionParser does input[0] === "("
 // with no whitespace skipping. This handles optional whitespace inside parens.
+//
+// After the closing `)`, try to parse an access chain (`.field`, `[i]`,
+// `.method()`, `(...)`, etc.). If any chain element matches, wrap the
+// result in a ValueAccess so things like `(a + b).toString()`,
+// `(arr)[0]`, and `(new Foo()).method()` work as expected.
 let _exprParser: Parser<Expression>;
 const parenParser: Parser<Expression> = (input: string) => {
   const openResult = char("(")(input);
@@ -1695,6 +1783,19 @@ const parenParser: Parser<Expression> = (input: string) => {
   if (!ws2.success) return ws2;
   const closeResult = char(")")(ws2.rest);
   if (!closeResult.success) return failure("expected closing parenthesis", input);
+
+  // Try to attach an access chain to the parenthesized expression.
+  const chainResult = many(chainElementParser)(closeResult.rest);
+  if (chainResult.success && chainResult.result.length > 0) {
+    return success(
+      {
+        type: "valueAccess" as const,
+        base: exprResult.result as unknown as AgencyNode,
+        chain: chainResult.result,
+      } as ValueAccess as unknown as Expression,
+      chainResult.rest,
+    );
+  }
   return success(exprResult.result, closeResult.rest);
 };
 
@@ -2403,6 +2504,12 @@ export const bodyParser = (input: string): ParserResult<AgencyNode[]> => {
     keywordParser,
     debug(typeAliasParser, "error in typeAliasParser"),
     tagParser,
+    // withModifierParser must be tried before returnStatementParser/
+    // assignmentParser so that `return foo() with approve` and
+    // `const x = foo() with approve` don't get partially consumed by
+    // the inner statement parser, which would leave `with approve`
+    // dangling and unparseable.
+    withModifierParser,
     returnStatementParser,
     gotoStatementParser,
     interruptStatementParser,
@@ -2418,7 +2525,6 @@ export const bodyParser = (input: string): ParserResult<AgencyNode[]> => {
     multiLineCommentParser,
     commentParser,
     skillParser,
-    withModifierParser,
     assignmentParser,
     binOpParser,
     booleanParser,
@@ -2541,8 +2647,8 @@ export const handleBlockParser: Parser<HandleBlock> = withLoc(trace(
 ));
 
 export const withModifierParser: Parser<WithModifier> = withLoc((input: string) => {
-  // Try to parse a static assignment, regular assignment, or bare function call as the inner statement.
-  const stmtResult = or(modifiedAssignmentParser, assignmentParser, functionCallParser)(input);
+  // Try to parse a static assignment, regular assignment, return, or bare function call as the inner statement.
+  const stmtResult = or(modifiedAssignmentParser, assignmentParser, returnStatementParser, functionCallParser)(input);
   if (!stmtResult.success) return failure("expected statement before 'with'", input);
 
   // Look for "with <builtin>" on remaining input.

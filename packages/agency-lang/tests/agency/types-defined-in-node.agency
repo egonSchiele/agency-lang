@@ -1,0 +1,11 @@
+// Regression test for "types defined inside a node body". The local
+// type alias must be visible at runtime in every runner.step closure
+// so the LLM call below can reference its zod schema for structured
+// output.
+
+node main() {
+  type Category = "reminder" | "todo" | "general" | "quit"
+
+  const category: Category = llm("Pick a category for this message: 'remind me to buy milk'")
+  return category
+}

@@ -147,6 +147,10 @@ const BOOLEAN_OPS = new Set([
   ">=",
   "&&",
   "||",
+  // Unary `!` is desugared by the parser into a binOpExpression of the form
+  // `{ op: "!", left: true, right: x }` (see unaryNotParser in parsers.ts).
+  // It always yields a boolean.
+  "!",
 ]);
 
 const DIMENSION_CHECK_OPS = new Set(["+", "-", ">", "<", ">=", "<=", "==", "!="]);

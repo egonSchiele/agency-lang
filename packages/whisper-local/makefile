@@ -1,3 +1,5 @@
+.PHONY: all build clean publish
+
 all: build
 
 # Default `make` target only builds TypeScript so it stays usable in CI and

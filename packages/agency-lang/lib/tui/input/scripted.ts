@@ -26,7 +26,7 @@ export class ScriptedInput implements InputSource {
 
   nextKey(): Promise<KeyEvent> {
     const queued = this.keyQueue.shift();
-    if (queued) return Promise.resolve(queued);
+    if (queued !== undefined) return Promise.resolve(queued);
     return new Promise((resolve) => {
       this.keyWaiters.push(resolve);
     });
@@ -34,7 +34,7 @@ export class ScriptedInput implements InputSource {
 
   nextLine(_prompt: string): Promise<string> {
     const queued = this.lineQueue.shift();
-    if (queued) return Promise.resolve(queued);
+    if (queued !== undefined) return Promise.resolve(queued);
     return new Promise((resolve) => {
       this.lineWaiters.push(resolve);
     });

@@ -1,4 +1,4 @@
-import type { Element, StyleProps } from "./elements.js";
+import type { Element, Style, StyleProps } from "./elements.js";
 
 function isStyleProps(arg: StyleProps | Element): arg is StyleProps {
   return arg !== null && typeof arg === "object" && !("type" in arg);
@@ -9,47 +9,39 @@ function splitStyleAndKey(props: StyleProps): { style: Element["style"]; key?: s
   return { style: Object.keys(style).length > 0 ? style : undefined, key };
 }
 
-export function box(styleOrChild?: StyleProps | Element, ...children: Element[]): Element {
+function makeBox(
+  extraStyle: Partial<Style>,
+  styleOrChild: StyleProps | Element | undefined,
+  rest: Element[],
+): Element {
+  const baseStyle = Object.keys(extraStyle).length > 0 ? extraStyle : undefined;
+
   if (styleOrChild === undefined) {
-    return { type: "box" };
+    return { type: "box", style: baseStyle };
   }
   if (isStyleProps(styleOrChild)) {
     const { style, key } = splitStyleAndKey(styleOrChild);
-    return { type: "box", style, key, children: children.length > 0 ? children : undefined };
+    const mergedStyle = style || baseStyle ? { ...style, ...extraStyle } : undefined;
+    return {
+      type: "box",
+      style: mergedStyle,
+      key,
+      children: rest.length > 0 ? rest : undefined,
+    };
   }
-  return { type: "box", children: [styleOrChild, ...children] };
+  return { type: "box", style: baseStyle, children: [styleOrChild, ...rest] };
+}
+
+export function box(styleOrChild?: StyleProps | Element, ...children: Element[]): Element {
+  return makeBox({}, styleOrChild, children);
 }
 
 export function row(styleOrChild?: StyleProps | Element, ...children: Element[]): Element {
-  if (styleOrChild === undefined) {
-    return { type: "box", style: { flexDirection: "row" } };
-  }
-  if (isStyleProps(styleOrChild)) {
-    const { style, key } = splitStyleAndKey(styleOrChild);
-    return {
-      type: "box",
-      style: { ...style, flexDirection: "row" },
-      key,
-      children: children.length > 0 ? children : undefined,
-    };
-  }
-  return { type: "box", style: { flexDirection: "row" }, children: [styleOrChild, ...children] };
+  return makeBox({ flexDirection: "row" }, styleOrChild, children);
 }
 
 export function column(styleOrChild?: StyleProps | Element, ...children: Element[]): Element {
-  if (styleOrChild === undefined) {
-    return { type: "box", style: { flexDirection: "column" } };
-  }
-  if (isStyleProps(styleOrChild)) {
-    const { style, key } = splitStyleAndKey(styleOrChild);
-    return {
-      type: "box",
-      style: { ...style, flexDirection: "column" },
-      key,
-      children: children.length > 0 ? children : undefined,
-    };
-  }
-  return { type: "box", style: { flexDirection: "column" }, children: [styleOrChild, ...children] };
+  return makeBox({ flexDirection: "column" }, styleOrChild, children);
 }
 
 export function text(content: string): Element {

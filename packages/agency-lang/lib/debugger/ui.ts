@@ -16,6 +16,7 @@ import type { FunctionParameter } from "../types.js";
 import type { DebuggerCommand, DebuggerIO } from "./types.js";
 import { UIState } from "./uiState.js";
 import { coerceArg, formatValue, parseCommandInput } from "./util.js";
+import { syntaxHighlight } from "@/stdlib/syntax.js";
 import {
   showRewindSelector,
   showCheckpointsPanel,
@@ -27,6 +28,9 @@ import {
 // ---------------------------------------------------------------------------
 
 const fileCache: Record<string, string> = {};
+// Caches highlighted source as an array of lines so we don't re-run the
+// (relatively expensive) syntax highlighter on every keypress.
+const highlightedLineCache: Record<string, string[]> = {};
 
 function readSourceFile(filePath: string): string {
   if (fileCache[filePath]) return fileCache[filePath];
@@ -39,6 +43,18 @@ function readSourceFile(filePath: string): string {
     fileCache[filePath] = fallback;
     return fallback;
   }
+}
+
+function readHighlightedSourceLines(filePath: string): string[] {
+  const cached = highlightedLineCache[filePath];
+  if (cached) return cached;
+  const content = readSourceFile(filePath);
+  // syntaxHighlight returns ANSI-styled text. Split into lines first so
+  // that downstream per-line formatting (line numbers, current-line marker)
+  // is straightforward; the renderer's ANSI passthrough handles the styling.
+  const highlighted = syntaxHighlight(content, "agency").split("\n");
+  highlightedLineCache[filePath] = highlighted;
+  return highlighted;
 }
 
 const COMMAND_BAR_CONTENT = Object.entries({
@@ -172,7 +188,7 @@ export class DebuggerUI implements DebuggerIO {
     const currentLine = this.state.getCurrentLine();
     const filePath =
       this.state.resolveModulePath(moduleId, [".agency"]) ?? moduleId;
-    const lines = readSourceFile(filePath).split("\n");
+    const lines = readHighlightedSourceLines(filePath);
 
     const windowSize = 20;
     const center = currentLine ? currentLine - 1 : 0;
@@ -182,6 +198,10 @@ export class DebuggerUI implements DebuggerIO {
     return lines.slice(start, end).map((line, i) => {
       const lineNum = start + i + 1;
       const numStr = String(lineNum).padStart(4, " ");
+      // The highlighted line already contains ANSI escapes for styling.
+      // escapeStyleTags only escapes literal `{` / `}` characters; ANSI
+      // sequences (which contain `[` and `m`, not braces) pass through
+      // unchanged and are picked up by the renderer's ANSI parser.
       const lineText = escapeStyleTags(line);
       return currentLine !== null && lineNum === currentLine
         ? `{magenta-bg}{bold}> ${numStr}  ${lineText}{/bold}{/magenta-bg}`
@@ -500,8 +520,19 @@ export class DebuggerUI implements DebuggerIO {
   private scrollPane(paneName: string | undefined, direction: number): void {
     if (!paneName) return;
     const current = this.scrollOffsets[paneName] || 0;
-    const next = current + direction;
-    if (next >= 0) {
+
+    // Clamp by the pane's actual viewport so the stored offset stays
+    // in lockstep with the renderer's visual cap. We get the viewport
+    // height from the most recently rendered frame for this pane, and
+    // the total line count from the pane's content function.
+    const pane = this.getPanes().find((p) => p.name === paneName);
+    const totalLines = pane ? pane.content().split("\n").length : 0;
+    const paneFrame = this.lastFrame?.findByKey(paneName);
+    // Inner viewport height = frame height minus the border (1 row top + 1 bottom).
+    const viewportHeight = paneFrame ? Math.max(0, paneFrame.height - 2) : 0;
+    const maxOffset = Math.max(0, totalLines - viewportHeight);
+    const next = Math.max(0, Math.min(current + direction, maxOffset));
+    if (next !== current) {
       this.scrollOffsets[paneName] = next;
       this.renderUI();
     }

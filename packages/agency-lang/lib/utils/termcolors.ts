@@ -54,10 +54,50 @@ const styles = { ...colors, ...bgColors, ...modifiers } as const;
 
 type StyleName = keyof typeof styles;
 
+// Methods that accept arguments and return a new chainable function.
+// Unlike static style names, these need to be invoked with parameters
+// (a hex string or RGB triple) before they emit a code.
+type ColorMethods = {
+  hex(value: string): ColorFunction;
+  bgHex(value: string): ColorFunction;
+  rgb(r: number, g: number, b: number): ColorFunction;
+  bgRgb(r: number, g: number, b: number): ColorFunction;
+};
+
 // Type for the chainable color function
 type ColorFunction = ((...args: any[]) => string) & {
   [K in StyleName]: ColorFunction;
-};
+} & ColorMethods;
+
+const HEX_RE = /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/;
+
+function parseHex(value: string): [number, number, number] {
+  if (!HEX_RE.test(value)) {
+    throw new Error(`Invalid hex color: ${JSON.stringify(value)}. Expected "#rgb" or "#rrggbb".`);
+  }
+  const h = value.slice(1);
+  if (h.length === 3) {
+    return [
+      parseInt(h[0] + h[0], 16),
+      parseInt(h[1] + h[1], 16),
+      parseInt(h[2] + h[2], 16),
+    ];
+  }
+  return [
+    parseInt(h.slice(0, 2), 16),
+    parseInt(h.slice(2, 4), 16),
+    parseInt(h.slice(4, 6), 16),
+  ];
+}
+
+function clampByte(n: number): number {
+  return Math.max(0, Math.min(255, Math.round(n)));
+}
+
+function rgbCode(r: number, g: number, b: number, kind: "fg" | "bg"): string {
+  const introducer = kind === "fg" ? 38 : 48;
+  return `\x1b[${introducer};2;${clampByte(r)};${clampByte(g)};${clampByte(b)}m`;
+}
 
 /**
  * Creates a chainable color function that accumulates ANSI codes
@@ -79,6 +119,22 @@ function createColorFunction(codes: string[] = []): ColorFunction {
         // Add this style's code and return a new chainable function
         const newCodes = [...codes, styles[prop as StyleName]];
         return createColorFunction(newCodes);
+      }
+      if (prop === "hex") {
+        return (value: string) =>
+          createColorFunction([...codes, rgbCode(...parseHex(value), "fg")]);
+      }
+      if (prop === "bgHex") {
+        return (value: string) =>
+          createColorFunction([...codes, rgbCode(...parseHex(value), "bg")]);
+      }
+      if (prop === "rgb") {
+        return (r: number, g: number, b: number) =>
+          createColorFunction([...codes, rgbCode(r, g, b, "fg")]);
+      }
+      if (prop === "bgRgb") {
+        return (r: number, g: number, b: number) =>
+          createColorFunction([...codes, rgbCode(r, g, b, "bg")]);
       }
       return target[prop as keyof typeof target];
     },
@@ -108,6 +164,12 @@ function createNoopColorFunction(): ColorFunction {
   return new Proxy(applyNoop as ColorFunction, {
     get(target, prop: string) {
       if (prop in styles) return createNoopColorFunction();
+      if (prop === "hex" || prop === "bgHex") {
+        return (_value: string) => createNoopColorFunction();
+      }
+      if (prop === "rgb" || prop === "bgRgb") {
+        return (_r: number, _g: number, _b: number) => createNoopColorFunction();
+      }
       return target[prop as keyof typeof target];
     },
   });

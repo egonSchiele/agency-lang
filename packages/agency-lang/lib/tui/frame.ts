@@ -37,7 +37,8 @@ export class Frame {
 
   findByKey(key: string): Frame | undefined {
     if (this.key === key) return this;
-    for (const child of this.children ?? []) {
+    if (!this.children) return undefined;
+    for (const child of this.children) {
       const found = child.findByKey(key);
       if (found) return found;
     }
@@ -52,6 +53,12 @@ export class Frame {
     return toHTMLAdapter(this);
   }
 
+  /**
+   * Writes the frame's HTML rendering to a file.
+   *
+   * NOTE: `path` is written verbatim. This method is intended for
+   * developer/test use; do not pass user-controlled paths.
+   */
   image(path: string): void {
     fs.writeFileSync(path, this.toHTML());
   }

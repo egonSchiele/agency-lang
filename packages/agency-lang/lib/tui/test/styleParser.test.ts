@@ -59,6 +59,72 @@ describe("parseStyledText", () => {
   });
 });
 
+describe("parseStyledText: ANSI passthrough", () => {
+  it("parses a basic ANSI fg color escape", () => {
+    expect(parseStyledText("\x1b[31mred\x1b[0m")).toEqual([
+      { text: "red", fg: "red" },
+    ]);
+  });
+
+  it("parses bright fg color codes", () => {
+    expect(parseStyledText("\x1b[91mhi\x1b[0m")).toEqual([
+      { text: "hi", fg: "bright-red" },
+    ]);
+  });
+
+  it("parses 24-bit truecolor as a hex string", () => {
+    expect(parseStyledText("\x1b[38;2;86;156;214mtok\x1b[0m")).toEqual([
+      { text: "tok", fg: "#569cd6" },
+    ]);
+  });
+
+  it("treats ESC[m and ESC[0m as full reset", () => {
+    const result = parseStyledText("\x1b[1m\x1b[31mhi\x1b[mafter");
+    expect(result).toEqual([
+      { text: "hi", bold: true, fg: "red" },
+      { text: "after" },
+    ]);
+  });
+
+  it("intermixes ANSI and {tag} forms", () => {
+    const result = parseStyledText("\x1b[31m{bold}hi{/bold}\x1b[0m");
+    expect(result).toEqual([{ text: "hi", bold: true, fg: "red" }]);
+  });
+
+  it("ESC[39m clears all ANSI fg styles", () => {
+    const result = parseStyledText("\x1b[1m\x1b[31mhi\x1b[39mafter");
+    expect(result).toEqual([
+      { text: "hi", bold: true, fg: "red" },
+      { text: "after", bold: true },
+    ]);
+  });
+
+  it("ESC[0m clears ANSI styles but preserves outer {tag} styles", () => {
+    // This is the current-line marker case: outer {tag} wraps a string
+    // containing chalk-style ANSI escapes. The outer styles must persist.
+    const result = parseStyledText(
+      "{magenta-bg}{bold}> \x1b[31mlet\x1b[0m foo{/bold}{/magenta-bg}",
+    );
+    expect(result).toEqual([
+      { text: "> ", bold: true, bg: "magenta" },
+      { text: "let", bold: true, bg: "magenta", fg: "red" },
+      { text: " foo", bold: true, bg: "magenta" },
+    ]);
+  });
+
+  it("malformed truecolor sequence (missing components) is ignored", () => {
+    // ESC[38;2m has no R;G;B params — must not push a color or treat
+    // missing components as zero (which would render text as black).
+    const result = parseStyledText("\x1b[38;2mhi");
+    expect(result).toEqual([{ text: "hi" }]);
+  });
+
+  it("malformed 256-color sequence (missing index) is ignored", () => {
+    const result = parseStyledText("\x1b[38;5mhi");
+    expect(result).toEqual([{ text: "hi" }]);
+  });
+});
+
 describe("escapeStyleTags", () => {
   it("escapes curly braces", () => {
     expect(escapeStyleTags("{bold}")).toBe("\\{bold\\}");

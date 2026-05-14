@@ -32,7 +32,13 @@ const KEY_MAP: Record<string, KeyEvent> = {
   "\x1b[1;2B": { key: "down", shift: true },
   "\x1b[1;2C": { key: "right", shift: true },
   "\x1b[1;2D": { key: "left", shift: true },
+  // Shift+Tab (CSI Z) — used for reverse focus cycling
+  "\x1b[Z": { key: "tab", shift: true },
 };
+
+// Sentinel used to wake up nextKey() waiters with a rejection when the
+// terminal is being handed over to readline for nextLine().
+const LINE_MODE_CANCEL: KeyEvent = { key: "__line_mode_cancel__" };
 
 function parseKeypress(data: string): KeyEvent {
   const mapped = KEY_MAP[data];
@@ -87,9 +93,15 @@ export class TerminalInput implements InputSource {
   nextKey(): Promise<KeyEvent> {
     this.ensureInitialized();
     const queued = this.keyQueue.shift();
-    if (queued) return Promise.resolve(queued);
-    return new Promise((resolve) => {
-      this.keyWaiters.push(resolve);
+    if (queued !== undefined) return Promise.resolve(queued);
+    return new Promise((resolve, reject) => {
+      this.keyWaiters.push((key) => {
+        if (key === LINE_MODE_CANCEL) {
+          reject(new Error("nextKey() cancelled by nextLine()"));
+        } else {
+          resolve(key);
+        }
+      });
     });
   }
 
@@ -98,6 +110,12 @@ export class TerminalInput implements InputSource {
       return Promise.reject(new Error("nextLine() already in progress"));
     }
     this.inLineMode = true;
+    // Cancel any pending nextKey() waiters: readline is about to take over
+    // stdin, so they will never receive a keypress through our data handler.
+    for (const waiter of this.keyWaiters) {
+      waiter(LINE_MODE_CANCEL);
+    }
+    this.keyWaiters = [];
     if (process.stdin.isTTY && process.stdin.isRaw) {
       process.stdin.setRawMode(false);
     }

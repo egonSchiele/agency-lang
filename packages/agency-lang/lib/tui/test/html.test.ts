@@ -41,6 +41,25 @@ describe("toHTML", () => {
     expect(html).toContain("font-weight:bold");
   });
 
+  it("renders hex color values directly", () => {
+    const frame = new Frame({
+      x: 0, y: 0, width: 1, height: 1, style: {},
+      content: [[{ char: "x", fg: "#569cd6" }]],
+    });
+    const html = toHTML(frame);
+    expect(html).toContain("color:#569cd6");
+  });
+
+  it("drops untrusted color strings (CSS injection guard)", () => {
+    const frame = new Frame({
+      x: 0, y: 0, width: 1, height: 1, style: {},
+      content: [[{ char: "x", fg: "red;background:url(http://evil)" }]],
+    });
+    const html = toHTML(frame);
+    expect(html).not.toContain("evil");
+    expect(html).not.toContain("background");
+  });
+
   it("renders nested children", () => {
     const frame = new Frame({
       x: 0, y: 0, width: 10, height: 2, style: {},

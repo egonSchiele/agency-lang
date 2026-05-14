@@ -3,10 +3,20 @@
 // Any manual changes will be lost.
 import { apply } from "typestache";
 
-export const template = `const __bstack = __forkBranchStack.getNewState();
+export const template = `{{#isNested}}
+// Capture the parent fork-block's args via closure BEFORE the inner
+// block scope opens; otherwise the inner \`const __bstack = ...\` would
+// put __bstack in TDZ for this entire arrow function's body.
+const __parentForkArgs = __bstack.args;
+{
+{{/isNested}}
+const __bstack = __forkBranchStack.getNewState();
 const __self = __bstack.locals;
 const __stateStack = __forkBranchStack;
 const {{{paramName:string}}} = __forkItem;
+{{#isNested}}
+Object.assign(__bstack.args, __parentForkArgs);
+{{/isNested}}
 __bstack.args[{{{paramNameQuoted}}}] = __forkItem;
 const runner = new Runner(__ctx, __bstack, { state: __bstack, moduleId: {{{moduleId}}}, scopeName: {{{scopeName}}}, stack: __forkBranchStack });
 try {
@@ -15,9 +25,13 @@ return runner.halted ? runner.haltResult : undefined;
 } finally {
 __forkBranchStack.pop();
 }
+{{#isNested}}
+}
+{{/isNested}}
 `;
 
 export type TemplateType = {
+  isNested: boolean;
   paramName: string;
   paramNameQuoted: string | boolean | number;
   moduleId: string | boolean | number;

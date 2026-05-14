@@ -1,0 +1,37 @@
+// Regression test: a parenthesized expression must be a valid head of
+// an access chain (`.field`, `[i]`, `.method()`). Previously the parser
+// did not recognize chain elements after `)`, so `(s).length` silently
+// became `let n = (s)` followed by a stray `length` statement.
+
+class Counter {
+  n: number
+  bump(): number { return this.n + 1 }
+}
+
+def makeCounter(start: number): Counter {
+  return new Counter(start)
+}
+
+node main(): number[] {
+  let s = "hello"
+  let arr = [10, 20, 30]
+  let a = 1
+  let b = 2
+
+  // (var).field
+  let len1 = (s).length
+  // (call()).field
+  let len2 = ("foo" + "bar").length
+  // (arr)[i]
+  let first = (arr)[0]
+  // (arr)[expr]
+  let second = (arr)[0 + 1]
+  // (binop)[i] — string indexing
+  let firstChar = ("ab" + "cd").length
+  // (new Foo()).method()
+  let bumped = (new Counter(5)).bump()
+  // (call()).method()
+  let bumped2 = (makeCounter(10)).bump()
+
+  return [len1, len2, first, second, firstChar, bumped, bumped2]
+}

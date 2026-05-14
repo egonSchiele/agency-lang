@@ -5,6 +5,8 @@ import {
   VariableType,
 } from "../types.js";
 import { walkNodes, isInsideBlock, type WalkAncestor } from "../utils/node.js";
+import { scopeKey as getScopeKey } from "../compilationUnit.js";
+import type { Scope as WalkScope } from "../types.js";
 import { formatTypeHint } from "../utils/formatType.js";
 import { BUILTIN_FUNCTION_TYPES } from "./builtins.js";
 import { isAssignable } from "./assignability.js";
@@ -102,11 +104,38 @@ export function checkScopes(
   }
 }
 
+/**
+ * `walkNodes` descends into nested function/graphNode/method bodies,
+ * yielding their inner expressions with their own scope chain. When we're
+ * checking a single scope, we want to skip items that belong to nested
+ * scopes — they get checked separately when their own ScopeInfo is
+ * processed. Without this filter, an expression inside `node main()`
+ * would also be checked under the global scope, which would lose any
+ * type aliases declared inside the node body.
+ *
+ * Items inside intra-def constructs that don't open a new scope (if /
+ * while / for / handle / fork bodies) keep the parent's scope chain, so
+ * they pass through.
+ *
+ * walkNodes seeds an empty scopes list with [globalScope]. For a per-def
+ * ScopeInfo, the body passed to walkNodes is the def's body, so direct
+ * children appear with scopes=[globalScope] — accept those when info is
+ * a per-def scope.
+ */
+function isInScope(scopes: WalkScope[], info: ScopeInfo): boolean {
+  if (scopes.length === 0) return true;
+  const innermostKey = getScopeKey(scopes[scopes.length - 1]);
+  if (innermostKey === info.scopeKey) return true;
+  if (info.scopeKey !== "global" && innermostKey === "global") return true;
+  return false;
+}
+
 function checkFunctionCallsInScope(
   info: ScopeInfo,
   ctx: TypeCheckerContext,
 ): void {
-  for (const { node, ancestors } of walkNodes(info.body)) {
+  for (const { node, ancestors, scopes } of walkNodes(info.body)) {
+    if (!isInScope(scopes, info)) continue;
     if (node.type === "functionCall") {
       checkSingleFunctionCall(node, info.scope, ctx);
     }
@@ -439,7 +468,8 @@ function checkReturnTypesInScope(
 ): void {
   if (!info.returnType) return;
 
-  for (const { node, ancestors } of walkNodes(info.body)) {
+  for (const { node, ancestors, scopes } of walkNodes(info.body)) {
+    if (!isInScope(scopes, info)) continue;
     if (node.type !== "returnStatement" || !node.value) continue;
     // Returns inside a block belong to the block, not the enclosing function;
     // they're checked against the slot's return type by checkExpressionsInScope.
@@ -478,7 +508,8 @@ function checkExpressionsInScope(
   info: ScopeInfo,
   ctx: TypeCheckerContext,
 ): void {
-  for (const { node, ancestors } of walkNodes(info.body)) {
+  for (const { node, ancestors, scopes } of walkNodes(info.body)) {
+    if (!isInScope(scopes, info)) continue;
     if (node.type === "valueAccess") {
       synthType(node, info.scope, ctx);
     } else if (node.type === "returnStatement" && node.value) {

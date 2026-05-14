@@ -68,4 +68,15 @@ describe("withModifierParser", () => {
     const result = withModifierParser(normalizeCode(input));
     expect(result.success).toBe(false);
   });
+
+  it("should parse return with approve", () => {
+    const input = 'return read("file.txt") with approve';
+    const result = withModifierParser(normalizeCode(input));
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.result.type).toBe("withModifier");
+      expect(result.result.handlerName).toBe("approve");
+      expect(result.result.statement.type).toBe("returnStatement");
+    }
+  });
 });

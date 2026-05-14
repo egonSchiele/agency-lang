@@ -25,6 +25,9 @@ export type InterruptKind = {
   kind: string;
 };
 
+/** Type-alias names that resolve to built-in types. */
+const RESERVED_TYPE_NAMES = new Set<string>(["Result"]);
+
 /** Marker on a SymbolInfo that entered FileSymbols via an `export from` re-export. */
 export type ReExportedFrom = {
   sourceFile: string;
@@ -300,6 +303,11 @@ export function classifySymbols(program: AgencyProgram): FileSymbols {
         };
         break;
       case "typeAlias":
+        if (RESERVED_TYPE_NAMES.has(node.aliasName)) {
+          throw new Error(
+            `'${node.aliasName}' is a reserved built-in type; cannot be redefined.`,
+          );
+        }
         symbols[node.aliasName] = {
           kind: "type",
           name: node.aliasName,

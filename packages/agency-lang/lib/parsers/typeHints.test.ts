@@ -2661,3 +2661,41 @@ describe("blockTypeParser", () => {
   });
 });
 
+describe("parenthesized type", () => {
+  it("parses (string | number)[] as an array of a parenthesized union", () => {
+    const result = variableTypeParser("(string | number)[]");
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.result).toEqual({
+        type: "arrayType",
+        elementType: {
+          type: "unionType",
+          types: [
+            { type: "primitiveType", value: "string" },
+            { type: "primitiveType", value: "number" },
+          ],
+        },
+      });
+    }
+  });
+
+  it("parses (string)[] as a string array (parens are transparent)", () => {
+    const result = variableTypeParser("(string)[]");
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.result).toEqual({
+        type: "arrayType",
+        elementType: { type: "primitiveType", value: "string" },
+      });
+    }
+  });
+
+  it("parses a parenthesized union inside another union", () => {
+    const result = variableTypeParser("boolean | (string | number)");
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.result.type).toBe("unionType");
+    }
+  });
+});
+

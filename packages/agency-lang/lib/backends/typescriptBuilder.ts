@@ -104,6 +104,16 @@ import { SourceMapBuilder } from "./sourceMap.js";
 
 const DEFAULT_PROMPT_NAME = "__promptVar";
 
+/** Maps Agency compound-assignment operators to their underlying binary
+ *  operator. Used to lower `foo += rhs` into a get/set pair when `foo`
+ *  is a global, since globals can't appear on the LHS of an assignment. */
+const COMPOUND_ASSIGN_TO_BINARY: Record<string, string> = {
+  "+=": "+",
+  "-=": "-",
+  "*=": "*",
+  "/=": "/",
+};
+
 /** Runner IR node kinds that already manage their own step counter/path and
  *  must NOT be wrapped inside a runnerStep by processBodyAsParts. */
 const COMPOUND_RUNNER_KINDS: ReadonlySet<TsNode["kind"]> = new Set([
@@ -118,6 +128,13 @@ export class TypeScriptBuilder {
   // Output assembly
   private generatedStatements: TsNode[] = [];
   private generatedTypeAliases: TsNode[] = [];
+  /**
+   * TypeAlias AST nodes whose declaration has been hoisted to the
+   * containing function/node's outer scope (so it's visible to every
+   * runner.step closure). When processNode sees one of these inside a
+   * body, it returns ts.empty() to avoid a redeclaration.
+   */
+  private hoistedTypeAliasNodes: Set<TypeAlias> = new Set();
 
   // Import tracking
   private importStatements: TsNode[] = [];
@@ -143,6 +160,11 @@ export class TypeScriptBuilder {
   private insideGlobalInit: boolean = false;
   private _isInSafeFunction: boolean = false;
   private _blockCounter: number = 0;
+  /** Nesting depth of fork/race block bodies currently being generated.
+   * Used to detect when a fork is nested inside another fork's block, so
+   * the inner block can carry forward the outer block's args (otherwise
+   * the inner __bstack only contains the inner iteration variable). */
+  private _forkBlockDepth: number = 0;
 
   /** Stack of loop subKeys for generating break/continue cleanup code.
    * Pushed when entering a stepped loop, popped when leaving. */
@@ -817,6 +839,7 @@ export class TypeScriptBuilder {
   private processNode(node: AgencyNode): TsNode {
     switch (node.type) {
       case "typeAlias":
+        if (this.hoistedTypeAliasNodes.has(node)) return ts.empty();
         return this.processTypeAlias(node);
       case "assignment":
         return this.processAssignment(node);
@@ -926,6 +949,67 @@ export class TypeScriptBuilder {
 
   // ------- Type system (side effects only) -------
 
+  /**
+   * Walk a function/node body recursively (without crossing nested
+   * function/graphNode/method boundaries) and collect every typeAlias
+   * declaration encountered. Used to hoist body-local type aliases up
+   * to the enclosing function/node's outer scope so the generated zod
+   * schemas are visible to every runner.step closure.
+   */
+  private collectBodyTypeAliases(body: AgencyNode[]): TypeAlias[] {
+    const collected: TypeAlias[] = [];
+    const visit = (nodes: AgencyNode[]): void => {
+      for (const n of nodes) {
+        if (n.type === "typeAlias") {
+          collected.push(n);
+          continue;
+        }
+        // Don't cross function/graphNode/method boundaries — those have
+        // their own hoist passes when they're built.
+        if (
+          n.type === "function" ||
+          n.type === "graphNode" ||
+          n.type === "classDefinition"
+        ) {
+          continue;
+        }
+        // Recurse into known body-bearing constructs.
+        const anyN = n as any;
+        if (Array.isArray(anyN.body)) visit(anyN.body);
+        if (Array.isArray(anyN.thenBody)) visit(anyN.thenBody);
+        if (Array.isArray(anyN.elseBody)) visit(anyN.elseBody);
+        if (anyN.handler && Array.isArray(anyN.handler.body)) {
+          visit(anyN.handler.body);
+        }
+        if (anyN.block && Array.isArray(anyN.block.body)) {
+          visit(anyN.block.body);
+        }
+        if (Array.isArray(anyN.cases)) {
+          for (const c of anyN.cases) {
+            if (c && c.body) visit([c.body]);
+          }
+        }
+      }
+    };
+    visit(body);
+    return collected;
+  }
+
+  /**
+   * Hoist body-local type aliases. Returns the generated TS declarations
+   * (to be inserted at the top of the enclosing function/node body) and
+   * marks each AST node so processNode skips its in-body emission.
+   */
+  private hoistBodyTypeAliases(body: AgencyNode[]): TsNode[] {
+    const aliases = this.collectBodyTypeAliases(body);
+    const out: TsNode[] = [];
+    for (const alias of aliases) {
+      this.hoistedTypeAliasNodes.add(alias);
+      out.push(this.processTypeAlias(alias));
+    }
+    return out;
+  }
+
   private processTypeAlias(node: TypeAlias): TsNode {
     const exportPrefix = node.exported ? "export " : "";
     const zodSchema = mapTypeToValidationSchema(node.aliasedType, this.getVisibleTypeAliases());
@@ -996,15 +1080,19 @@ export class TypeScriptBuilder {
 
     for (const segment of segments) {
       if (segment.type === "text") {
-        const escaped = escape(segment.value);
+        // Pass raw text — the templateLit printer (prettyPrint.ts) handles
+        // all template-literal escaping (\, `, ${). Escaping here would
+        // cause the printer to escape our escapes, producing broken output
+        // (e.g. a literal `\\\`` instead of `\``).
+        const text = segment.value;
         if (parts.length > 0 && parts[parts.length - 1].expr) {
           // Previous part had an expr; start a new part for this text
-          parts.push({ text: escaped });
+          parts.push({ text });
         } else if (parts.length > 0) {
           // Previous part is text-only, append to it
-          parts[parts.length - 1].text += escaped;
+          parts[parts.length - 1].text += text;
         } else {
-          parts.push({ text: escaped });
+          parts.push({ text });
         }
       } else {
         // Interpolation segment
@@ -1028,6 +1116,17 @@ export class TypeScriptBuilder {
     // .trim() on the Promise instead of the resolved value.
     if (node.base.type === "functionCall" && node.chain.length > 0) {
       result = ts.raw(`(${this.str(ts.await(result))})`);
+    } else if (
+      node.chain.length > 0 &&
+      node.base.type !== "functionCall" &&
+      node.base.type !== "variableName" &&
+      node.base.type !== "valueAccess"
+    ) {
+      // For any non-trivial base (binOp, tryExpression, newExpression,
+      // unary, object/array literals, etc.) wrap in parens before
+      // applying the chain so `.foo` / `[i]` / `.method()` bind to the
+      // whole base expression.
+      result = ts.raw(`(${this.str(result)})`);
     }
     for (const element of node.chain) {
       switch (element.kind) {
@@ -1091,6 +1190,24 @@ export class TypeScriptBuilder {
     }
     if (node.operator === "typeof" || node.operator === "void") {
       return ts.unaryOp(node.operator, this.processNode(node.right));
+    }
+    // Compound assignment to a global variable: globals are accessed via
+    // `__ctx.globals.get(...)`, which is not a valid assignment target,
+    // so `foo += rhs` would emit invalid JS. Lower to
+    // `__ctx.globals.set(file, name, __ctx.globals.get(file, name) <op> rhs)`.
+    const compoundOp = COMPOUND_ASSIGN_TO_BINARY[node.operator];
+    if (
+      compoundOp !== undefined &&
+      node.left.type === "variableName" &&
+      node.left.scope === "global"
+    ) {
+      const name = node.left.value;
+      const getNode = ts.scopedVar(name, "global", this.moduleId);
+      const rightNode = this.processNode(node.right);
+      const newValue = ts.binOp(getNode, compoundOp, rightNode, {
+        parenRight: true,
+      });
+      return ts.globalSet(this.moduleId, name, newValue);
     }
     const leftNode = this.processNode(node.left);
     const rightNode = this.processNode(node.right);
@@ -1224,6 +1341,8 @@ export class TypeScriptBuilder {
     this._sourceMapBuilder.enterScope(this.moduleId, methodScopeName);
     const prevSafe = this._isInSafeFunction;
     this._isInSafeFunction = !!method.safe;
+    // Hoist body-local type aliases to the method's outer scope.
+    const hoistedAliases = this.hoistBodyTypeAliases(method.body);
     const bodyCode = this.processBodyAsParts(method.body);
     this._isInSafeFunction = prevSafe;
     this.endScope();
@@ -1233,6 +1352,7 @@ export class TypeScriptBuilder {
       functionName: methodScopeName,
       parameters: method.parameters,
       bodyCode,
+      hoistedAliases,
     });
 
     // Build as an async method with __state as last param
@@ -1691,8 +1811,10 @@ export class TypeScriptBuilder {
     parameters: FunctionParameter[];
     bodyCode: TsNode[];
     skipHooks?: boolean;
+    hoistedAliases?: TsNode[];
   }): TsNode[] {
     const { functionName, parameters, bodyCode, skipHooks } = opts;
+    const hoistedAliases = opts.hoistedAliases ?? [];
     const args = parameters.map((p) => p.name);
 
     // Build args object for hook data
@@ -1806,6 +1928,7 @@ export class TypeScriptBuilder {
       ts.tryCatch(
         ts.statements([
           ...validationGuards,
+          ...hoistedAliases,
           ...bodyCode,
           ts.raw(
             "if (runner.halted) { if (isFailure(runner.haltResult)) { runner.haltResult.retryable = runner.haltResult.retryable && __self.__retryable; } return runner.haltResult; }",
@@ -1847,6 +1970,9 @@ export class TypeScriptBuilder {
 
     const prevSafe = this._isInSafeFunction;
     this._isInSafeFunction = !!node.safe;
+    // Hoist body-local type aliases to the function's outer scope so
+    // every runner.step closure can reference the generated zod schemas.
+    const hoistedAliases = this.hoistBodyTypeAliases(node.body);
     const bodyCode = this.processBodyAsParts(node.body);
     this._isInSafeFunction = prevSafe;
     this.endScope();
@@ -1870,7 +1996,7 @@ export class TypeScriptBuilder {
     });
 
     const implName = `__${functionName}_impl`;
-    const setupStmts = this.buildFunctionBody({ functionName, parameters, bodyCode, skipHooks: node.callback });
+    const setupStmts = this.buildFunctionBody({ functionName, parameters, bodyCode, skipHooks: node.callback, hoistedAliases });
 
     const funcDecl = ts.functionDecl(implName, fnParams, ts.statements(setupStmts), {
       async: true,
@@ -2258,11 +2384,18 @@ export class TypeScriptBuilder {
 
     const blockName = `__block_${this._blockCounter++}`;
     const parentScopeName = this.currentScopeName();
+    // Track that we're now generating code inside a fork-block body so
+    // any nested fork can carry parent block args forward. Capture the
+    // depth value the inner fork will see, then increment for the body
+    // walk and restore after.
+    const isNestedInForkBlock = this._forkBlockDepth > 0;
+    this._forkBlockDepth++;
     this.startScope({ type: "block", blockName });
     this._sourceMapBuilder.enterScope(this.moduleId, blockName);
     const bodyParts = this.processBodyAsParts(block.body);
     this._sourceMapBuilder.enterScope(this.moduleId, parentScopeName);
     this.endScope();
+    this._forkBlockDepth--;
 
     const bodyStr = bodyParts.map((n) => printTs(n, 1)).join("\n");
 
@@ -2272,6 +2405,7 @@ export class TypeScriptBuilder {
       moduleId: JSON.stringify(this.moduleId),
       scopeName: JSON.stringify(blockName),
       body: bodyStr,
+      isNested: isNestedInForkBlock,
     });
 
     const blockFn = ts.arrowFn(
@@ -2348,6 +2482,10 @@ export class TypeScriptBuilder {
       }
     }
 
+    // Hoist body-local type aliases to the outer arrow body so every
+    // runner.step closure can reference the generated zod schemas.
+    const hoistedAliases = this.hoistBodyTypeAliases(body);
+
     const bodyCode = this.processBodyAsParts(body);
 
     this.adjacentNodes[nodeName] = [...this.currentAdjacentNodes];
@@ -2379,6 +2517,7 @@ export class TypeScriptBuilder {
       ts.raw(
         `const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: ${JSON.stringify(this.moduleId)}, scopeName: ${JSON.stringify(nodeName)} });`,
       ),
+      ...hoistedAliases,
     ];
 
     // Param assignments (only when not resuming)

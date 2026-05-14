@@ -1,0 +1,21 @@
+// Regression test for "+= doesn't work with globals". Compound
+// assignments (+=, -=, *=, /=) on a global LHS used to emit invalid
+// JS like `__ctx.globals.get(...) += rhs`. Now they lower to a
+// get/set pair.
+
+let counter = 0
+
+def bump() {
+  counter += 3
+}
+
+def shrink() {
+  counter -= 1
+}
+
+node main(): number {
+  bump()
+  bump()
+  shrink()
+  return counter
+}

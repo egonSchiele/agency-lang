@@ -6,7 +6,7 @@ export default defineConfig({
     globals: true,
     environment: 'node',
     include: ['**/*.test.ts'],
-    exclude: ['node_modules', 'dist', 'tests'],
+    exclude: ['**/node_modules/**', '**/dist/**', 'tests', '.worktrees/**'],
     setupFiles: ['./lib/parsers/vitest.setup.ts'],
   },
   resolve: {

@@ -2,22 +2,15 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
-import { execFileSync } from "child_process";
 import { GithubBackend } from "./github.js";
 import type { ScheduleEntry } from "../registry.js";
 
 type GithubOpts = NonNullable<ScheduleEntry["github"]>;
 
-function setupRepo(): string {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "agency-gh-snap-"));
-  execFileSync("git", ["init"], { cwd: dir, stdio: "ignore" });
-  return dir;
-}
-
-function entry(repo: string, github: GithubOpts): ScheduleEntry {
+function entry(github: GithubOpts): ScheduleEntry {
   return {
     name: "snap",
-    agentFile: path.join(repo, "agents/foo.agency"),
+    agentFile: "agents/foo.agency",
     cron: "0 * * * *",
     preset: "hourly",
     envFile: "",
@@ -43,24 +36,21 @@ const CASES: Array<{ label: string; github: GithubOpts }> = [
 ];
 
 describe.each(CASES)("snapshot: $label", ({ label, github }) => {
-  let repo: string;
+  let workdir: string;
   let cwd: string;
   beforeEach(() => {
-    repo = setupRepo();
+    workdir = fs.mkdtempSync(path.join(os.tmpdir(), "agency-gh-snap-"));
     cwd = process.cwd();
-    process.chdir(repo);
+    process.chdir(workdir);
   });
   afterEach(() => {
     process.chdir(cwd);
-    fs.rmSync(repo, { recursive: true, force: true });
+    fs.rmSync(workdir, { recursive: true, force: true });
   });
 
   it("matches snapshot", async () => {
-    new GithubBackend().install(entry(repo, github));
-    const yml = fs.readFileSync(
-      path.join(repo, ".github/workflows/snap.yml"),
-      "utf-8",
-    );
+    new GithubBackend().install(entry(github));
+    const yml = fs.readFileSync(path.join(workdir, "snap.yml"), "utf-8");
     // Each snapshot lives in its own readable `.yml` file under `__snapshots__/`.
     await expect(yml).toMatchFileSnapshot(`./__snapshots__/${label}.yml`);
   });

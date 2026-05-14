@@ -71,21 +71,22 @@ export type AddOptions = {
 };
 
 export function scheduleAdd(opts: AddOptions): void {
-  const baseDir = opts.baseDir ?? defaultBaseDir();
-
-  const agentFile = path.resolve(opts.file);
-  if (!fs.existsSync(agentFile)) {
-    throw new Error(`Agent file does not exist: ${agentFile}`);
-  }
   if (opts.envFile && !fs.existsSync(opts.envFile)) {
     throw new Error(`Env file does not exist: ${opts.envFile}`);
   }
 
   const { cron, preset } = resolveCron({ every: opts.every, cron: opts.cron });
-  const name = opts.name ?? path.basename(agentFile, ".agency");
-  validateName(name);
 
   if (opts.backend === "github") {
+    // GitHub backend deliberately treats `opts.file` as the path that will
+    // appear in the generated workflow's `file:` line. We do NOT resolve it
+    // against cwd or check that it exists locally, because the user may be
+    // generating a workflow for an agent that lives in a different repo or
+    // hasn't been written yet. The user is told to verify/edit the path in
+    // the next-steps message printed by GithubBackend.install.
+    const name = opts.name ?? path.basename(opts.file, ".agency");
+    validateName(name);
+
     // GitHub Actions enforces a 5-minute minimum cron granularity (it silently
     // coarsens tighter schedules and runs are routinely delayed by 15+min).
     // Refuse to generate a workflow whose stated cadence GitHub will not honor.
@@ -100,10 +101,10 @@ export function scheduleAdd(opts: AddOptions): void {
 
     const entry: ScheduleEntry = {
       name,
-      agentFile,
+      agentFile: opts.file, // verbatim -- becomes the workflow's `file:` value
       cron,
       preset,
-      envFile: opts.envFile ? path.resolve(opts.envFile) : "",
+      envFile: "", // unused for github backend
       logDir: "",
       createdAt: new Date().toISOString(),
       backend: "launchd", // unused; github backend is not registry-stored
@@ -121,6 +122,14 @@ export function scheduleAdd(opts: AddOptions): void {
   }
 
   // --- non-github (existing behavior) ---
+  const baseDir = opts.baseDir ?? defaultBaseDir();
+  const agentFile = path.resolve(opts.file);
+  if (!fs.existsSync(agentFile)) {
+    throw new Error(`Agent file does not exist: ${agentFile}`);
+  }
+  const name = opts.name ?? path.basename(agentFile, ".agency");
+  validateName(name);
+
   const registry = new Registry(baseDir);
   if (registry.has(name) && !opts.force) {
     throw new ScheduleExistsError(name);

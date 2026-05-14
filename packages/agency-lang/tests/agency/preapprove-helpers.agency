@@ -1,0 +1,4 @@
+export def guardedAdd(a: number, b: number): number {
+  const check = interrupt("Confirm ${a} + ${b}?")
+  return a + b
+}

@@ -1,0 +1,39 @@
+{
+  "tests": [
+    {
+      "nodeName": "testBasic",
+      "input": "",
+      "expectedOutput": "10",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "preapprove auto-approves interrupt"
+    },
+    {
+      "nodeName": "testChainPartialThenPreapprove",
+      "input": "",
+      "expectedOutput": "13",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "partial then preapprove chains correctly"
+    },
+    {
+      "nodeName": "testChainPreapproveThenPartial",
+      "input": "",
+      "expectedOutput": "13",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "preapprove then partial chains correctly"
+    },
+    {
+      "nodeName": "testChainPreapproveThenDescribe",
+      "input": "",
+      "expectedOutput": "10",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "preapprove then describe chains correctly"
+    },
+    {
+      "nodeName": "testIdempotent",
+      "input": "",
+      "expectedOutput": "10",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "calling preapprove twice is idempotent"
+    }
+  ]
+}

@@ -1,0 +1,11 @@
+import { guardedAdd } from "./preapprove-helpers.agency"
+
+node testImportedPreapprove() {
+  const fn = guardedAdd.preapprove()
+  return fn(3, 4)
+}
+
+node testImportedPartialThenPreapprove() {
+  const fn = guardedAdd.partial(a: 10).preapprove()
+  return fn(5)
+}

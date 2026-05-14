@@ -1,0 +1,17 @@
+def guardedAction(x: number): number {
+  const check = interrupt("Confirm action on ${x}?")
+  return x * 2
+}
+
+node main() {
+  const fn = guardedAction.preapprove()
+  handle {
+    const result = fn(5)
+    if (isFailure(result)) {
+      return "rejected"
+    }
+    return "approved"
+  } with (data) {
+    return reject()
+  }
+}

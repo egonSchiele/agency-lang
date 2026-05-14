@@ -1,0 +1,16 @@
+def guardedAction(x: number): number {
+  const check = interrupt("Confirm action on ${x}?")
+  return x * 2
+}
+
+def otherInterrupt(): number {
+  const check = interrupt("Other interrupt")
+  return 42
+}
+
+node main() {
+  const fn = guardedAction.preapprove()
+  const other = otherInterrupt()
+  const result = fn(5)
+  return [other, result]
+}

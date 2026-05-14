@@ -1,0 +1,18 @@
+{
+  "tests": [
+    {
+      "nodeName": "testImportedPreapprove",
+      "input": "",
+      "expectedOutput": "7",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "imported function with .preapprove() auto-approves interrupts"
+    },
+    {
+      "nodeName": "testImportedPartialThenPreapprove",
+      "input": "",
+      "expectedOutput": "15",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "imported function with .partial().preapprove() auto-approves interrupts"
+    }
+  ]
+}

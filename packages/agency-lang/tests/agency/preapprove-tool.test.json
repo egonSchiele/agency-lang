@@ -1,0 +1,15 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "12",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "preapproved partial function as LLM tool auto-approves interrupt",
+      "llmMocks": [
+        { "toolCall": { "name": "guardedAdd", "args": { "b": 7 } } },
+        { "return": 12 }
+      ]
+    }
+  ]
+}

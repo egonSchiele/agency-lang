@@ -82,4 +82,25 @@ describe("__callMethod", () => {
       __callMethod(obj, "fn", { type: "named", positionalArgs: [], namedArgs: { a: 1 } }),
     ).rejects.toThrow("Named arguments are not supported");
   });
+
+  it("dispatches .preapprove() with no args", async () => {
+    const fn = makeAgencyFn(async (x: number) => x);
+    const result = await __callMethod(fn, "preapprove", { type: "positional", args: [] });
+    expect(AgencyFunction.isAgencyFunction(result)).toBe(true);
+    expect((result as AgencyFunction).isPreapproved).toBe(true);
+  });
+
+  it("throws when .preapprove() is called with positional args", async () => {
+    const fn = makeAgencyFn(async (x: number) => x);
+    await expect(
+      __callMethod(fn, "preapprove", { type: "positional", args: ["bad"] }),
+    ).rejects.toThrow(".preapprove() takes no arguments");
+  });
+
+  it("throws when .preapprove() is called with named args", async () => {
+    const fn = makeAgencyFn(async (x: number) => x);
+    await expect(
+      __callMethod(fn, "preapprove", { type: "named", positionalArgs: [], namedArgs: { foo: 1 } }),
+    ).rejects.toThrow(".preapprove() takes no arguments");
+  });
 });

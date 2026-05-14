@@ -138,6 +138,27 @@ export function isAssignable(
     return true;
   }
 
+  // The `object` primitive is assignable to the empty objectType `{}`. The
+  // empty target imposes no structural requirements, so any object value
+  // trivially satisfies it. This mirrors TypeScript, where `object` is a
+  // subtype of `{}`.
+  //
+  // Example:
+  //   let policy: object = someApiCall();
+  //   let bag: {} = policy;            // OK: {} requires no properties
+  //
+  // The reverse and the non-empty cases (e.g., `object` -> `{ foo: string }`)
+  // remain unsafe and are correctly rejected: an arbitrary object isn't
+  // guaranteed to have specific properties.
+  if (
+    resolvedSource.type === "primitiveType" &&
+    resolvedSource.value === "object" &&
+    resolvedTarget.type === "objectType" &&
+    resolvedTarget.properties.length === 0
+  ) {
+    return true;
+  }
+
   // Same kind matching
   if (
     resolvedSource.type === "primitiveType" &&

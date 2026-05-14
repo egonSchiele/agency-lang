@@ -78,6 +78,32 @@ describe("functionRefType assignability", () => {
     expect(formatTypeHint(noParams)).toBe("function ping()");
   });
 
+  describe("object primitive ↔ objectType", () => {
+    const objectPrim: VariableType = { type: "primitiveType", value: "object" };
+    const emptyStruct: VariableType = { type: "objectType", properties: [] };
+    const nonEmptyStruct: VariableType = {
+      type: "objectType",
+      properties: [
+        { key: "foo", value: { type: "primitiveType", value: "string" } },
+      ],
+    };
+
+    it("objectType is assignable to object primitive", () => {
+      expect(isAssignable(emptyStruct, objectPrim, {})).toBe(true);
+      expect(isAssignable(nonEmptyStruct, objectPrim, {})).toBe(true);
+    });
+
+    it("object primitive is assignable to the empty objectType {}", () => {
+      // {} imposes no structural requirements, so any object satisfies it.
+      expect(isAssignable(objectPrim, emptyStruct, {})).toBe(true);
+    });
+
+    it("object primitive is NOT assignable to a non-empty objectType", () => {
+      // An arbitrary object isn't guaranteed to have specific properties.
+      expect(isAssignable(objectPrim, nonEmptyStruct, {})).toBe(false);
+    });
+  });
+
   it("two functionRefTypes with incompatible return types are not assignable", () => {
     const other: VariableType = {
       type: "functionRefType",

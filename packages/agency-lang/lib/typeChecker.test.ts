@@ -2963,6 +2963,34 @@ describe("TypeChecker", () => {
       expect(errors).toHaveLength(1);
       expect(errors[0].message).toMatch(/not assignable.*boolean/);
     });
+
+    it("accepts unary `!` in a while condition (boolean-typed)", () => {
+      // The parser desugars `!done` into a binOpExpression with operator `!`,
+      // which the synthesizer must recognize as boolean-yielding. Without this
+      // it falsely reported `Type 'number' is not assignable to type 'boolean'`.
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "assignment",
+            variableName: "done",
+            typeHint: { type: "primitiveType", value: "boolean" },
+            value: { type: "boolean", value: false },
+          },
+          {
+            type: "whileLoop",
+            condition: {
+              type: "binOpExpression",
+              operator: "!",
+              left: { type: "boolean", value: true },
+              right: { type: "variableName", value: "done" },
+            },
+            body: [],
+          },
+        ],
+      };
+      expect(typeCheck(program).errors).toHaveLength(0);
+    });
   });
 
   describe("v2: splat argument checking", () => {

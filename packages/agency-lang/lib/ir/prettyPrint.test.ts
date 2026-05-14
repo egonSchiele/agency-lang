@@ -260,6 +260,30 @@ describe("prettyPrint", () => {
     expect(printTs(node)).toBe("`Hello, ${name}! You are ${age} years old.`");
   });
 
+  it("TsTemplateLit escapes backticks in text so the template stays open", () => {
+    // A literal `` ` `` in a template literal must be escaped as `` \` ``,
+    // otherwise it would terminate the template. Caller passes raw text.
+    const node = ts.template([{ text: "```json" }]);
+    expect(printTs(node)).toBe("`\\`\\`\\`json`");
+  });
+
+  it("TsTemplateLit escapes ${ so it doesn't open an interpolation", () => {
+    // A literal `${` would otherwise be interpreted as the start of an
+    // interpolation by the JS template literal parser.
+    const node = ts.template([{ text: "price: ${5}" }]);
+    expect(printTs(node)).toBe("`price: \\${5}`");
+  });
+
+  it("TsTemplateLit passes backslash escape sequences through unmodified", () => {
+    // Agency relies on JS template-literal escape interpretation at runtime,
+    // so `\n`, `\t`, etc. must reach the output verbatim (NOT be re-escaped
+    // to `\\n`, which would print a literal backslash + n).
+    const node = ts.template([{ text: "line1\\nline2" }]);
+    // The JS string literal `"line1\\nline2"` is the 12 chars
+    // `l i n e 1 \ n l i n e 2`. The template printer should emit them as-is.
+    expect(printTs(node)).toBe("`line1\\nline2`");
+  });
+
   it("TsComment line", () => {
     expect(printTs(ts.comment("TODO: fix this"))).toBe("// TODO: fix this");
   });

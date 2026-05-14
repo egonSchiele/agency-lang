@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Triply-nested fork: innermost branch must see ALL outer iter args (o, m, i) via closure (regression test for nested fork variable access at depth 3).",
+      "input": "",
+      "expectedOutput": "[[[\"a-1-x\",\"a-1-y\"],[\"a-2-x\",\"a-2-y\"]],[[\"b-1-x\",\"b-1-y\"],[\"b-2-x\",\"b-2-y\"]]]",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

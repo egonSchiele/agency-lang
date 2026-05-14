@@ -482,23 +482,24 @@ export const regexLiteralParser: Parser<RegexLiteral> = label("a regex", (input:
   return parser(input);
 });
 
-// Both `simpleStringParser` and `_stringParser` are written as plain function
-// parsers (rather than `seqC`) so they can capture the opening delimiter and
-// require the *same* character to close. This is what allows the other quote
-// character to appear unescaped inside the string — e.g. backticks inside
-// `"…"`, or double quotes inside `` `…` ``.
+// `_stringParser` is written as a plain function (rather than `seqC`) so it
+// can capture the opening delimiter and require the *same* character to
+// close. This is what allows the other quote character to appear unescaped
+// inside the string — e.g. backticks inside `"…"`, or double quotes inside
+// `` `…` ``.
+//
+// `simpleStringParser` (no interpolation) just reuses tarsec's `quotedString`
+// (which already enforces matching open/close delimiters) and filters out
+// single-quoted strings, since Agency only uses `"` and `` ` `` for string
+// literals.
 export const simpleStringParser: Parser<StringLiteral> = (input: string) => {
-  const open = oneOf('"`')(input);
-  if (!open.success) return open as ParserResult<StringLiteral>;
-  const delim = open.result as '"' | "`";
-  const text = stringTextSegmentParserFor(delim)(open.rest);
-  if (!text.success) return text as ParserResult<StringLiteral>;
-  const close = char(delim)(text.rest);
-  if (!close.success) return failure(`expected closing ${delim}`, input);
-  return success(
-    { type: "string" as const, segments: [text.result] },
-    close.rest,
-  );
+  if (input[0] !== '"' && input[0] !== "`") {
+    return failure(`expected '"' or '\`'`, input);
+  }
+  return map(quotedString, (s) => ({
+    type: "string" as const,
+    segments: [{ type: "text" as const, value: s.slice(1, -1) }],
+  }))(input);
 };
 
 export const _stringParser: Parser<StringLiteral> = (input: string) => {
@@ -681,11 +682,9 @@ export const typeAliasVariableParser: Parser<TypeAliasVariable> = trace(
  * `(name | serving_size)[]` or `(string | number)[]` where the union
  * needs to be grouped before the array suffix can apply.
  */
-export const parenthesizedTypeParser: Parser<VariableType> = (
-  input: string,
-): ParserResult<VariableType> => {
-  const parser = trace(
-    "parenthesizedTypeParser",
+export const parenthesizedTypeParser: Parser<VariableType> = trace(
+  "parenthesizedTypeParser",
+  map(
     seqC(
       char("("),
       optionalSpaces,
@@ -693,17 +692,9 @@ export const parenthesizedTypeParser: Parser<VariableType> = (
       optionalSpaces,
       char(")"),
     ),
-  );
-  const result = parser(input);
-  if (result.success) {
-    return {
-      success: true,
-      rest: result.rest,
-      result: (result.result as { inner: VariableType }).inner,
-    };
-  }
-  return result as ParserResult<VariableType>;
-};
+    (result) => result.inner,
+  ),
+);
 
 export const arrayTypeParser: Parser<ArrayType> = (input: string) => {
   const parser = trace(
@@ -1517,33 +1508,22 @@ const chainElementParser: Parser<AccessChainElement> = or(
  * bare `(expr)` with no chain falls through so other parsers (like
  * the expression parser's own paren handling) can take over.
  */
-const parenAccessParser = (
-  input: string,
-): ParserResult<ValueAccess> => {
-  const openResult = char("(")(input);
-  if (!openResult.success) return openResult as ParserResult<ValueAccess>;
-  const ws1 = optionalSpaces(openResult.rest);
-  if (!ws1.success) return ws1 as ParserResult<ValueAccess>;
-  const exprResult = lazy(() => exprParser)(ws1.rest);
-  if (!exprResult.success)
-    return failure("expected expression inside parentheses", input);
-  const ws2 = optionalSpaces(exprResult.rest);
-  if (!ws2.success) return ws2 as ParserResult<ValueAccess>;
-  const closeResult = char(")")(ws2.rest);
-  if (!closeResult.success)
-    return failure("expected closing parenthesis", input);
-  const chainResult = many1(chainElementParser)(closeResult.rest);
-  if (!chainResult.success)
-    return failure("expected access chain after parenthesized expression", input);
-  return success(
-    {
+const parenAccessParser: Parser<ValueAccess> = map(
+  seqC(
+    char("("),
+    optionalSpaces,
+    capture(lazy(() => exprParser), "base"),
+    optionalSpaces,
+    char(")"),
+    capture(many1(chainElementParser), "chain"),
+  ),
+  (result) =>
+    ({
       type: "valueAccess" as const,
-      base: exprResult.result as unknown as AgencyNode,
-      chain: chainResult.result,
-    } as ValueAccess,
-    chainResult.rest,
-  );
-};
+      base: result.base as unknown as AgencyNode,
+      chain: result.chain,
+    }) as ValueAccess,
+);
 
 export const _valueAccessParser = (
   input: string,

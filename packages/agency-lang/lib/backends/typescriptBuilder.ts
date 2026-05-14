@@ -50,7 +50,7 @@ import {
   PRECEDENCE,
 } from "@/types/binop.js";
 import { MessageThread } from "@/types/messageThread.js";
-import { walkNodesArray } from "@/utils/node.js";
+import { walkNodes, walkNodesArray } from "@/utils/node.js";
 import { AccessChainElement, ValueAccess } from "../types/access.js";
 import {
   AgencyArray,
@@ -954,48 +954,30 @@ export class TypeScriptBuilder {
   // ------- Type system (side effects only) -------
 
   /**
-   * Walk a function/node body recursively (without crossing nested
-   * function/graphNode/method boundaries) and collect every typeAlias
-   * declaration encountered. Used to hoist body-local type aliases up
-   * to the enclosing function/node's outer scope so the generated zod
-   * schemas are visible to every runner.step closure.
+   * Walk a function/node body and collect every typeAlias declaration
+   * that belongs to this body's scope. Used to hoist body-local type
+   * aliases up to the enclosing function/node's outer scope so the
+   * generated zod schemas are visible to every runner.step closure.
+   *
+   * Delegates body recursion to `walkNodes` so any new body-bearing
+   * AST node (thread, parallelBlock, seqBlock, …) is automatically
+   * handled. Aliases nested inside a function/graphNode/class method
+   * are skipped — those defs hoist their own aliases when their bodies
+   * are built.
    */
   private collectBodyTypeAliases(body: AgencyNode[]): TypeAlias[] {
     const collected: TypeAlias[] = [];
-    const visit = (nodes: AgencyNode[]): void => {
-      for (const n of nodes) {
-        if (n.type === "typeAlias") {
-          collected.push(n);
-          continue;
-        }
-        // Don't cross function/graphNode/method boundaries — those have
-        // their own hoist passes when they're built.
-        if (
-          n.type === "function" ||
-          n.type === "graphNode" ||
-          n.type === "classDefinition"
-        ) {
-          continue;
-        }
-        // Recurse into known body-bearing constructs.
-        const anyN = n as any;
-        if (Array.isArray(anyN.body)) visit(anyN.body);
-        if (Array.isArray(anyN.thenBody)) visit(anyN.thenBody);
-        if (Array.isArray(anyN.elseBody)) visit(anyN.elseBody);
-        if (anyN.handler && Array.isArray(anyN.handler.body)) {
-          visit(anyN.handler.body);
-        }
-        if (anyN.block && Array.isArray(anyN.block.body)) {
-          visit(anyN.block.body);
-        }
-        if (Array.isArray(anyN.cases)) {
-          for (const c of anyN.cases) {
-            if (c && c.body) visit([c.body]);
-          }
-        }
-      }
-    };
-    visit(body);
+    for (const { node, ancestors } of walkNodes(body)) {
+      if (node.type !== "typeAlias") continue;
+      const inNestedDef = ancestors.some(
+        (a) =>
+          a.type === "function" ||
+          a.type === "graphNode" ||
+          a.type === "classDefinition",
+      );
+      if (inNestedDef) continue;
+      collected.push(node);
+    }
     return collected;
   }
 

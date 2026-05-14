@@ -24,24 +24,6 @@ function toMemoryMessages(messages: smoltalk.Message[]): MemoryMessage[] {
   }));
 }
 
-function toSmoltalkMessage(m: MemoryMessage): smoltalk.Message {
-  switch (m.role) {
-    case "user":
-      return smoltalk.userMessage(m.content);
-    case "assistant":
-      return smoltalk.assistantMessage(m.content);
-    case "system":
-      return smoltalk.systemMessage(m.content);
-    case "developer":
-      return smoltalk.developerMessage(m.content);
-    case "tool":
-      // Compaction strips tool messages, so this branch should be
-      // unreachable. If it ever fires, fall back to a system message
-      // rather than crashing the run.
-      return smoltalk.systemMessage(m.content);
-  }
-}
-
 type Tool = {
   name: string;
   description?: string;
@@ -175,11 +157,19 @@ async function _runPrompt({
   // never break the LLM call.
   if (ctx.memoryManager) {
     try {
-      const memMessages = toMemoryMessages(messages.getMessages());
+      const original = messages.getMessages();
+      const memMessages = toMemoryMessages(original);
       await ctx.memoryManager.onTurn(memMessages);
-      const compacted = await ctx.memoryManager.compactIfNeeded(memMessages);
-      if (compacted) {
-        messages.setMessages(compacted.map(toSmoltalkMessage));
+      const plan = await ctx.memoryManager.compactIfNeeded(memMessages);
+      if (plan) {
+        // Reassemble the thread from the ORIGINAL smoltalk Message
+        // instances so tool_call metadata, ids, and other class-level
+        // fields survive — round-tripping via MemoryMessage would drop
+        // them (memory's view of a thread is just role + content).
+        const head = plan.systemPrefixIndices.map((i) => original[i]);
+        const tail = plan.tailIndices.map((i) => original[i]);
+        const summary = smoltalk.systemMessage(plan.summaryMessageContent);
+        messages.setMessages([...head, summary, ...tail]);
       }
     } catch (err) {
       console.warn(
@@ -323,13 +313,21 @@ export async function runPrompt(args: {
     // Memory injection (resolved decision #6): only retrieves and
     // injects when the caller passed `memory: true` (or an object) on
     // this llm() call. Best-effort: failures don't block the LLM call.
+    //
+    // The injected system message is transient — it's for THIS llm()
+    // call only and must not persist into the shared thread, otherwise
+    // subsequent llm() calls would see stacked stale context blobs (and
+    // recallForInjection would re-add a fresh one on top each turn).
+    // We track the exact injected content so we can strip it after the
+    // LLM call resolves, even if compaction (which can reshape indices)
+    // ran inside _runPrompt.
+    let injectedFactsContent: string | null = null;
     if (memoryOption && ctx.memoryManager) {
       try {
         const facts = await ctx.memoryManager.recallForInjection(prompt);
         if (facts) {
-          messages.push(
-            smoltalk.systemMessage(`Relevant context from memory:\n${facts}`),
-          );
+          injectedFactsContent = `Relevant context from memory:\n${facts}`;
+          messages.push(smoltalk.systemMessage(injectedFactsContent));
         }
       } catch (err) {
         console.warn(
@@ -349,7 +347,25 @@ export async function runPrompt(args: {
     });
     messages = result.messages;
     toolCalls = result.toolCalls;
-    // Save to frame
+
+    // Strip the transient memory injection (most recent matching system
+    // message). If compaction inside _runPrompt already removed it, this
+    // is a no-op.
+    if (injectedFactsContent !== null) {
+      const all = messages.getMessages();
+      for (let i = all.length - 1; i >= 0; i--) {
+        if (
+          all[i].role === "system" &&
+          all[i].content === injectedFactsContent
+        ) {
+          messages.setMessages([...all.slice(0, i), ...all.slice(i + 1)]);
+          break;
+        }
+      }
+    }
+
+    // Save to frame (after stripping the injection so resume sees the
+    // cleaned thread, not a duplicate-injection-on-resume).
     self.messagesJSON = messages.toJSON().messages;
     self.pendingToolCalls = toolCalls.length > 0 ? toolCalls : null;
   }

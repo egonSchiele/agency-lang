@@ -60,6 +60,9 @@ export type MemoryManagerOptions = {
 };
 
 type CacheEntry = {
+  // Captured at load time so persists go to the same id even if a
+  // concurrent setMemoryId() runs while an LLM/embed call is in flight.
+  memoryId: string;
   graph: MemoryGraph;
   embeddings: EmbeddingManager;
   summary: ConversationSummary | null;
@@ -68,6 +71,28 @@ type CacheEntry = {
 
 const DEFAULT_RECALL_K = 10;
 const DEFAULT_EMBEDDING_THRESHOLD = 0.3;
+const SUMMARY_MESSAGE_PREFIX = "Previous conversation summary:\n";
+
+/**
+ * Plan describing how the caller should reshape its message thread
+ * after compaction. The MemoryManager intentionally does not return
+ * the new messages directly: callers like prompt.ts hold smoltalk
+ * Message instances that carry tool_call metadata, and round-tripping
+ * through `MemoryMessage` would drop that. The caller assembles the
+ * new thread from its own message instances using these indices, then
+ * inserts a single fresh system message containing the new summary.
+ */
+export type CompactionPlan = {
+  /** Indices in the original messages array to keep at the head, in order.
+   *  Excludes any prior summary message — that gets replaced, not stacked. */
+  systemPrefixIndices: number[];
+  /** Indices in the original messages array to keep verbatim at the tail,
+   *  in order. These are the most recent messages preserved across the split. */
+  tailIndices: number[];
+  /** Full content for the new summary system message (already includes the
+   *  SUMMARY_MESSAGE_PREFIX so callers can pass it straight to systemMessage). */
+  summaryMessageContent: string;
+};
 
 export class MemoryManager {
   private store: MemoryStoreType;
@@ -77,8 +102,10 @@ export class MemoryManager {
   private memoryIdRef: MemoryIdRef;
 
   // Per-memoryId cache; switching id selects a different entry rather
-  // than discarding state (resolved decision #2).
-  private cache: Record<string, CacheEntry> = {};
+  // than discarding state (resolved decision #2). We use a null-prototype
+  // object so user-controlled memoryIds like "__proto__" or "constructor"
+  // can't collide with Object.prototype methods or pollute the prototype.
+  private cache: Record<string, CacheEntry> = Object.create(null);
 
   constructor(options: MemoryManagerOptions) {
     this.store = options.store;
@@ -126,16 +153,27 @@ export class MemoryManager {
     const graphData = await this.store.loadGraph(id);
     const graph = MemoryGraph.fromJSON(graphData);
 
+    const configuredModel = this.config.embeddings?.model;
     const embeddingIndex = await this.store.loadEmbeddings(id);
-    const embeddings = embeddingIndex
-      ? EmbeddingManager.fromIndex(embeddingIndex)
-      : new EmbeddingManager();
-    if (this.config.embeddings?.model) {
-      embeddings.setModel(this.config.embeddings.model);
+    let embeddings: EmbeddingManager;
+    if (
+      embeddingIndex &&
+      (!configuredModel || embeddingIndex.model === configuredModel)
+    ) {
+      embeddings = EmbeddingManager.fromIndex(embeddingIndex);
+    } else {
+      // Model mismatch (or no prior index): discard stale entries —
+      // comparing query vectors from one model to stored vectors from
+      // another (or different dimensions) yields garbage similarities.
+      embeddings = new EmbeddingManager();
+    }
+    if (configuredModel) {
+      embeddings.setModel(configuredModel);
     }
 
     const summary = await this.store.loadSummary(id);
     const entry: CacheEntry = {
+      memoryId: id,
       graph,
       embeddings,
       summary,
@@ -154,10 +192,13 @@ export class MemoryManager {
     const messages: MemoryMessage[] = [{ role: "user", content }];
     const prompt = buildExtractionPrompt(messages, entry.graph);
     const response = await this.llmClient.text(prompt, { model: this.model() });
-    const result = parseJSON<ExtractionResult>(response);
+    const result = parseExtractionResult(response);
     if (!result) return;
-    const newObsIds = applyExtractionResult(entry.graph, result, this.source);
-    await this.generateEmbeddings(entry, newObsIds);
+    const outcome = applyExtractionResult(entry.graph, result, this.source);
+    for (const id of outcome.expiredObservationIds) {
+      entry.embeddings.removeEntry(id);
+    }
+    await this.generateEmbeddings(entry, outcome.newObservationIds);
     await this.persist(entry);
   }
 
@@ -178,10 +219,16 @@ export class MemoryManager {
       if (!orderedIds.includes(id)) orderedIds.push(id);
     }
 
+    // Tier 3 is best-effort like Tier 2: a provider error here must not
+    // throw away results we already have from tiers 1 and 2.
     const model = options?.model ?? this.model();
-    const tier3EntityIds = await this.llmRecallEntityIds(entry, query, model);
-    for (const id of tier3EntityIds) {
-      if (!orderedIds.includes(id)) orderedIds.push(id);
+    try {
+      const tier3EntityIds = await this.llmRecallEntityIds(entry, query, model);
+      for (const id of tier3EntityIds) {
+        if (!orderedIds.includes(id)) orderedIds.push(id);
+      }
+    } catch {
+      // swallow — tier 1 + 2 results still get returned below
     }
 
     const topK = orderedIds.slice(0, DEFAULT_RECALL_K);
@@ -216,22 +263,24 @@ export class MemoryManager {
 
   async forget(query: string): Promise<void> {
     const entry = await this.getEntry();
-    const prompt = `Given the following knowledge graph, identify which observations should be expired based on the user's request.
+    const prompt = `Given the following knowledge graph, identify which facts should be expired based on the user's request.
 
 Knowledge graph:
 ${entry.graph.toCompactIndex()}
 
 User wants to forget: ${query}
 
-Return a JSON array of { entityName, observationContent } for observations to expire. Return [] if nothing matches.`;
+Return a JSON object with two fields:
+- "observations": array of { entityName, observationContent } to expire (substring match)
+- "relations":    array of { fromName, toName, type } to expire
+
+Return { "observations": [], "relations": [] } if nothing matches.`;
     const response = await this.llmClient.text(prompt, { model: this.model() });
-    const expirations = parseJSON<
-      Array<{ entityName: string; observationContent: string }>
-    >(response);
-    if (!expirations) return;
+    const parsed = parseForgetResult(response);
+    if (!parsed) return;
 
     // forget uses substring matching, case-insensitive (resolved decision #7)
-    for (const exp of expirations) {
+    for (const exp of parsed.observations) {
       const entity = entry.graph.findEntityByName(exp.entityName);
       if (!entity) continue;
       const obs = entity.observations.find(
@@ -239,10 +288,31 @@ Return a JSON array of { entityName, observationContent } for observations to ex
           o.validTo === null &&
           o.content
             .toLowerCase()
-            .includes(exp.observationContent.toLowerCase())
+            .includes(exp.observationContent.toLowerCase()),
       );
-      if (obs) entry.graph.expireObservation(obs.id);
+      if (obs) {
+        entry.graph.expireObservation(obs.id);
+        entry.embeddings.removeEntry(obs.id);
+      }
     }
+
+    for (const exp of parsed.relations) {
+      const fromEntity = entry.graph.findEntityByName(exp.fromName);
+      const toEntity = entry.graph.findEntityByName(exp.toName);
+      if (!fromEntity || !toEntity) continue;
+      const lowerType = exp.type.toLowerCase();
+      const rel = entry.graph
+        .getRelations()
+        .find(
+          (r) =>
+            r.validTo === null &&
+            r.from === fromEntity.id &&
+            r.to === toEntity.id &&
+            r.type.toLowerCase().includes(lowerType),
+        );
+      if (rel) entry.graph.expireRelation(rel.id);
+    }
+
     await this.persist(entry);
   }
 
@@ -258,7 +328,7 @@ Return a JSON array of { entityName, observationContent } for observations to ex
 
   async compactIfNeeded(
     messages: MemoryMessage[]
-  ): Promise<MemoryMessage[] | null> {
+  ): Promise<CompactionPlan | null> {
     const entry = await this.getEntry();
     const compactionConfig = {
       trigger: this.config.compaction?.trigger ?? ("token" as const),
@@ -266,7 +336,10 @@ Return a JSON array of { entityName, observationContent } for observations to ex
     };
     if (!shouldCompact(messages, compactionConfig)) return null;
 
-    // Preserve any system messages at the head verbatim.
+    // Preserve system messages at the head verbatim — but exclude any
+    // previously-injected summary message. We replace it rather than
+    // stack a new one beside it, so the head doesn't grow on every
+    // compaction.
     let systemPrefixEnd = 0;
     while (
       systemPrefixEnd < messages.length &&
@@ -274,7 +347,12 @@ Return a JSON array of { entityName, observationContent } for observations to ex
     ) {
       systemPrefixEnd++;
     }
-    const systemPrefix = messages.slice(0, systemPrefixEnd);
+    const systemPrefixIndices: number[] = [];
+    for (let i = 0; i < systemPrefixEnd; i++) {
+      if (!messages[i].content.startsWith(SUMMARY_MESSAGE_PREFIX)) {
+        systemPrefixIndices.push(i);
+      }
+    }
     const conversation = messages.slice(systemPrefixEnd);
 
     // Find a clean split point that does not break a tool_call/tool sequence.
@@ -282,18 +360,20 @@ Return a JSON array of { entityName, observationContent } for observations to ex
     if (splitInConv === -1) return null;
 
     const toCompact = conversation.slice(0, splitInConv);
-    const toKeep = conversation.slice(splitInConv);
+    const tailStart = systemPrefixEnd + splitInConv;
+    const tailIndices: number[] = [];
+    for (let i = tailStart; i < messages.length; i++) {
+      tailIndices.push(i);
+    }
 
-    // Drop tool_call / tool messages from the prefix; their info will be
-    // captured in the natural-language summary (resolved decision #5).
-    const naturalForSummary = toCompact.filter(
-      (m) => m.role !== "tool"
-    );
-
-    // Extract facts from the prefix before compacting.
+    // Extract facts from the prefix before compacting. Note: tool
+    // messages stay in `toCompact` here so the summarizer below sees
+    // tool outputs (the summary then captures any facts from them);
+    // the role mapping inside buildCompactionPrompt prefixes tool
+    // messages naturally so the LLM can read them.
     await this.autoExtract(entry, toCompact);
 
-    const compactionPrompt = buildCompactionPrompt(naturalForSummary);
+    const compactionPrompt = buildCompactionPrompt(toCompact);
     let newSummary = await this.llmClient.text(compactionPrompt, {
       model: this.model(),
     });
@@ -317,27 +397,28 @@ Return a JSON array of { entityName, observationContent } for observations to ex
 
     await this.persist(entry);
 
-    const summaryMessage: MemoryMessage = {
-      role: "system",
-      content: `Previous conversation summary:\n${newSummary}`,
+    return {
+      systemPrefixIndices,
+      tailIndices,
+      summaryMessageContent: `${SUMMARY_MESSAGE_PREFIX}${newSummary}`,
     };
-    return [...systemPrefix, summaryMessage, ...toKeep];
   }
 
   /** Persist all cached memoryIds to disk. */
   async save(): Promise<void> {
-    for (const [id, entry] of Object.entries(this.cache)) {
-      await this.persistEntry(id, entry);
+    for (const entry of Object.values(this.cache)) {
+      await this.persist(entry);
     }
   }
 
   // ---- internals ----
 
   private async persist(entry: CacheEntry): Promise<void> {
-    await this.persistEntry(this.getMemoryId(), entry);
-  }
-
-  private async persistEntry(id: string, entry: CacheEntry): Promise<void> {
+    // Always persist using the id captured when the entry was loaded,
+    // never `this.getMemoryId()` — a concurrent setMemoryId() during an
+    // in-flight LLM/embed call would otherwise route this user's data
+    // to a different memory namespace.
+    const id = entry.memoryId;
     await this.store.saveGraph(id, entry.graph.toJSON());
     await this.store.saveEmbeddings(id, entry.embeddings.toIndex());
     if (entry.summary) {
@@ -351,10 +432,13 @@ Return a JSON array of { entityName, observationContent } for observations to ex
   ): Promise<void> {
     const prompt = buildExtractionPrompt(messages, entry.graph);
     const response = await this.llmClient.text(prompt, { model: this.model() });
-    const result = parseJSON<ExtractionResult>(response);
+    const result = parseExtractionResult(response);
     if (!result) return;
-    const newObsIds = applyExtractionResult(entry.graph, result, this.source);
-    await this.generateEmbeddings(entry, newObsIds);
+    const outcome = applyExtractionResult(entry.graph, result, this.source);
+    for (const id of outcome.expiredObservationIds) {
+      entry.embeddings.removeEntry(id);
+    }
+    await this.generateEmbeddings(entry, outcome.newObservationIds);
     await this.persist(entry);
   }
 
@@ -417,7 +501,7 @@ Return a JSON array of { entityName, observationContent } for observations to ex
     if (entry.graph.getEntities().length === 0) return [];
     const retrievalPrompt = buildRetrievalPrompt(query, entry.graph);
     const response = await this.llmClient.text(retrievalPrompt, { model });
-    const entityNames = parseJSON<string[]>(response);
+    const entityNames = parseStringArray(response);
     if (!entityNames) return [];
     const ids: string[] = [];
     for (const name of entityNames) {
@@ -428,12 +512,67 @@ Return a JSON array of { entityName, observationContent } for observations to ex
   }
 }
 
-function parseJSON<T>(text: string): T | null {
+function safeParseJSON(text: string): unknown {
   try {
-    return JSON.parse(text) as T;
+    return JSON.parse(text);
   } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Validate that an LLM extraction response has the shape we expect.
+ * Returns null on any structural mismatch so the caller can safely
+ * skip rather than throw.
+ */
+function parseExtractionResult(text: string): ExtractionResult | null {
+  const raw = safeParseJSON(text);
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const obj = raw as Record<string, unknown>;
+  if (
+    !Array.isArray(obj.entities) ||
+    !Array.isArray(obj.relations) ||
+    !Array.isArray(obj.expirations)
+  ) {
     return null;
   }
+  return obj as unknown as ExtractionResult;
+}
+
+function parseStringArray(text: string): string[] | null {
+  const raw = safeParseJSON(text);
+  if (!Array.isArray(raw)) return null;
+  if (!raw.every((v) => typeof v === "string")) return null;
+  return raw as string[];
+}
+
+type ForgetResult = {
+  observations: Array<{ entityName: string; observationContent: string }>;
+  relations: Array<{ fromName: string; toName: string; type: string }>;
+};
+
+function parseForgetResult(text: string): ForgetResult | null {
+  const raw = safeParseJSON(text);
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const obj = raw as Record<string, unknown>;
+  const observations = Array.isArray(obj.observations) ? obj.observations : [];
+  const relations = Array.isArray(obj.relations) ? obj.relations : [];
+  const validObs = observations.filter(
+    (o): o is { entityName: string; observationContent: string } =>
+      !!o &&
+      typeof o === "object" &&
+      typeof (o as any).entityName === "string" &&
+      typeof (o as any).observationContent === "string",
+  );
+  const validRels = relations.filter(
+    (r): r is { fromName: string; toName: string; type: string } =>
+      !!r &&
+      typeof r === "object" &&
+      typeof (r as any).fromName === "string" &&
+      typeof (r as any).toName === "string" &&
+      typeof (r as any).type === "string",
+  );
+  return { observations: validObs, relations: validRels };
 }
 
 function findObservationContent(

@@ -72,7 +72,7 @@ describe("applyExtractionResult", () => {
   it("expires old observations on contradiction", () => {
     const graph = new MemoryGraph();
     const mom = graph.addEntity("Mom", "person", "test");
-    graph.addObservation(mom.id, "Favorite color is blue");
+    const oldObs = graph.addObservation(mom.id, "Favorite color is blue");
     const result = {
       entities: [
         { name: "Mom", type: "person", observations: ["Favorite color is red"] },
@@ -82,9 +82,11 @@ describe("applyExtractionResult", () => {
         { entityName: "Mom", observationContent: "Favorite color is blue" },
       ],
     };
-    applyExtractionResult(graph, result, "test-agent");
+    const outcome = applyExtractionResult(graph, result, "test-agent");
     const current = graph.getCurrentObservations(mom.id);
     expect(current).toHaveLength(1);
     expect(current[0].content).toBe("Favorite color is red");
+    expect(outcome.expiredObservationIds).toEqual([oldObs.id]);
+    expect(outcome.newObservationIds).toHaveLength(1);
   });
 });

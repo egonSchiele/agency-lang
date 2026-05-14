@@ -1,6 +1,12 @@
 import type { PromptResult, StreamChunk, TokenUsage, CostEstimate } from "smoltalk";
 import type { Result } from "smoltalk";
-import type { LLMClient, PromptConfig, ToolCall } from "./llmClient.js";
+import type {
+  EmbedConfig,
+  EmbedResult,
+  LLMClient,
+  PromptConfig,
+  ToolCall,
+} from "./llmClient.js";
 
 export class SimpleOpenAIClient implements LLMClient {
   private apiKey: string;
@@ -61,6 +67,39 @@ export class SimpleOpenAIClient implements LLMClient {
       yield { type: "done", result: result.value } as StreamChunk;
     } else {
       yield { type: "error", error: result.error } as StreamChunk;
+    }
+  }
+
+  async embed(
+    input: string | string[],
+    config?: EmbedConfig,
+  ): Promise<Result<EmbedResult>> {
+    const apiKey = config?.apiKey ?? this.apiKey;
+    const model = config?.model ?? "text-embedding-3-small";
+    const body: Record<string, unknown> = { model, input };
+    if (config?.dimensions) body.dimensions = config.dimensions;
+    try {
+      const response = await fetch("https://api.openai.com/v1/embeddings", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify(body),
+      });
+      if (!response.ok) {
+        const errorText = await response.text();
+        return {
+          success: false,
+          error: `OpenAI embeddings error (${response.status}): ${errorText}`,
+        };
+      }
+      const data = await response.json();
+      const embeddings = (data.data || []).map((d: any) => d.embedding);
+      return { success: true, value: { embeddings, model } };
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      return { success: false, error: message };
     }
   }
 

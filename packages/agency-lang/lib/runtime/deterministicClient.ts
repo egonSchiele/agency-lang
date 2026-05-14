@@ -1,6 +1,11 @@
 import type { PromptResult, StreamChunk, Result } from "smoltalk";
 import { ToolCall } from "smoltalk";
-import type { LLMClient, PromptConfig } from "./llmClient.js";
+import type {
+  EmbedConfig,
+  EmbedResult,
+  LLMClient,
+  PromptConfig,
+} from "./llmClient.js";
 
 export type ReturnMock = {
   return: any;
@@ -105,5 +110,22 @@ export class DeterministicClient implements LLMClient {
     } else {
       yield { type: "error", error: result.error };
     }
+  }
+
+  // The deterministic client never makes network calls. Returning a
+  // failure here lets the MemoryManager's best-effort try/catch silently
+  // skip Tier 2 (vector) recall in tests rather than dialing a real
+  // embedding provider when AGENCY_LLM_MOCKS is set. Tests that need to
+  // exercise vector recall should register a custom client via
+  // setLLMClient() with their own embed implementation.
+  async embed(
+    _input: string | string[],
+    _config?: EmbedConfig,
+  ): Promise<Result<EmbedResult>> {
+    return {
+      success: false,
+      error:
+        "DeterministicClient does not implement embed. Register a client with embed() support via setLLMClient() if your test needs vector recall.",
+    };
   }
 }

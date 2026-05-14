@@ -9,12 +9,14 @@ type AdapterDeps = {
 };
 
 /**
- * Adapt the runtime LLMClient + smoltalk.embed to the minimal interface
- * the MemoryManager depends on.
+ * Adapt the runtime LLMClient to the minimal interface the MemoryManager
+ * depends on.
  *
- * Failures from `embed` (no API key, network error, non-embedding provider)
- * are caught and rethrown as plain Errors so the MemoryManager's `try/catch`
- * can silently no-op Tier 2 (resolved decision #8).
+ * Embedding calls go through `deps.llmClient.embed` rather than calling
+ * `smoltalk.embed` directly, so anyone who registers a custom client via
+ * `setLLMClient()` (including the deterministic test client) controls
+ * the embedding path too. Failures bubble up as plain Errors so the
+ * MemoryManager's `try/catch` can silently no-op Tier 2.
  */
 export function createMemoryLlmAdapter(deps: AdapterDeps): MemoryLlmClient {
   return {
@@ -38,12 +40,13 @@ export function createMemoryLlmAdapter(deps: AdapterDeps): MemoryLlmClient {
       text: string,
       options?: { model?: string }
     ): Promise<number[]> {
-      const model =
-        options?.model ?? deps.smoltalkDefaults.model ?? "text-embedding-3-small";
-      const result = await smoltalk.embed(text, {
-        model,
-        openAiApiKey: (deps.smoltalkDefaults as any).openAiApiKey,
-        googleApiKey: (deps.smoltalkDefaults as any).googleApiKey,
+      // Never fall back to `smoltalkDefaults.model` here: that's the chat
+      // model (e.g. gpt-4o-mini), which embed providers will reject.
+      // SmoltalkClient.embed already supplies a sensible default if no
+      // model is passed.
+      const result = await deps.llmClient.embed(text, {
+        model: options?.model,
+        apiKey: (deps.smoltalkDefaults as any).openAiApiKey,
       });
       if (!result.success) {
         throw new Error(`memory embed call failed: ${result.error}`);

@@ -3,7 +3,7 @@
     {
       "nodeName": "main",
       "input": "",
-      "expectedOutput": "\"ok\"",
+      "expectedOutput": "true",
       "evaluationCriteria": [{ "type": "exact" }],
       "llmMocks": [
         {

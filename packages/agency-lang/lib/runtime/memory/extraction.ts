@@ -49,12 +49,18 @@ Return a JSON object with:
 Only extract facts that are clearly stated or strongly implied. Do not speculate.`;
 }
 
+export type ApplyExtractionOutcome = {
+  newObservationIds: string[];
+  expiredObservationIds: string[];
+};
+
 export function applyExtractionResult(
   graph: MemoryGraph,
   result: ExtractionResult,
   source: string
-): string[] {
+): ApplyExtractionOutcome {
   const newObservationIds: string[] = [];
+  const expiredObservationIds: string[] = [];
 
   // Apply expirations first. Per resolved decision #7, extraction
   // expirations use exact-equality matching (case-insensitive).
@@ -66,7 +72,10 @@ export function applyExtractionResult(
         o.validTo === null &&
         o.content.toLowerCase() === exp.observationContent.toLowerCase()
     );
-    if (obs) graph.expireObservation(obs.id);
+    if (obs) {
+      graph.expireObservation(obs.id);
+      expiredObservationIds.push(obs.id);
+    }
   }
 
   // Add/merge entities and observations
@@ -90,5 +99,5 @@ export function applyExtractionResult(
     }
   }
 
-  return newObservationIds;
+  return { newObservationIds, expiredObservationIds };
 }

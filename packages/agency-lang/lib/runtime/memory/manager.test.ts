@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { MemoryManager } from "./manager.js";
 import { FileMemoryStore } from "./store.js";
 import fs from "node:fs";
@@ -23,6 +23,10 @@ describe("MemoryManager", () => {
 
   beforeEach(() => {
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "memory-mgr-test-"));
+  });
+
+  afterEach(() => {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 
   it("defaults to 'default' memoryId", () => {
@@ -203,7 +207,12 @@ describe("MemoryManager", () => {
     await manager.remember("Mom's favorite color is blue");
     // forget asks the LLM what to expire — return a substring that should match.
     client.text.mockResolvedValueOnce(
-      JSON.stringify([{ entityName: "Mom", observationContent: "favorite color" }])
+      JSON.stringify({
+        observations: [
+          { entityName: "Mom", observationContent: "favorite color" },
+        ],
+        relations: [],
+      })
     );
     await manager.forget("forget mom's favorite color");
     const mom = manager.getGraph().findEntityByName("Mom")!;

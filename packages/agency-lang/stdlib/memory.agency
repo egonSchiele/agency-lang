@@ -1,6 +1,6 @@
 import { _setMemoryId, _remember, _recall, _forget } from "agency-lang/stdlib-lib/memory.js"
 
-export safe def setMemoryId(id: string) {
+export def setMemoryId(id: string) {
   """
   Set the memory scope for this agent run. Call this before other
   memory operations to scope reads and writes to a specific user,
@@ -14,7 +14,7 @@ export safe def setMemoryId(id: string) {
   _setMemoryId(id)
 }
 
-export safe def remember(content: string) {
+export def remember(content: string) {
   """
   Extract and store structured facts from the given text into the
   knowledge graph. Uses the LLM to identify entities, observations,
@@ -39,7 +39,7 @@ export safe def recall(query: string): string {
   return _recall(query)
 }
 
-export safe def forget(query: string) {
+export def forget(query: string) {
   """
   Soft-delete facts matching the query from the knowledge graph.
   Does not erase data — affected observations are marked with a

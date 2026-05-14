@@ -54,19 +54,10 @@ const llmOptions: VariableType = {
       }),
     },
     { key: "tools", value: optional(anyArray) },
-    {
-      key: "memory",
-      value: optional({
-        type: "unionType",
-        types: [
-          boolean,
-          {
-            type: "objectType",
-            properties: [{ key: "model", value: optional(string) }],
-          },
-        ],
-      }),
-    },
+    // `memory: true` enables retrieval/injection on this llm() call.
+    // The object form is reserved for future config (e.g. per-call
+    // model override); for now only the boolean form is wired.
+    { key: "memory", value: optional(boolean) },
     // `any` already accepts undefined, so no need to wrap in optional.
     { key: "metadata", value: ANY_T },
   ],

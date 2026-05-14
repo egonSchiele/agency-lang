@@ -9,7 +9,7 @@
     "defaultModel": "gpt-4o-mini"
   },
   "traceDir": "traces",
-  "typeCheck": true,
+  "typechecker": { "enabled": true },
   "doc": {
     "outDir": "docs/site/stdlib",
     "baseUrl": "https://github.com/egonSchiele/agency-lang/tree/main/stdlib"

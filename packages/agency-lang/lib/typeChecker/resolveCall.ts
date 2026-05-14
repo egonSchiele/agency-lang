@@ -202,14 +202,15 @@ export const JS_GLOBALS: Record<string, JsRegistryEntry> = {
     isBuffer: callable(),
     byteLength: callable(),
   }),
-  // Error constructors (used like `new Error(...)` in agency? Currently namespaces
-  // — calling them as Error("...") works in JS but is anti-pattern; included to
-  // prevent false positives on existing code).
-  Error: namespace({}),
-  TypeError: namespace({}),
-  RangeError: namespace({}),
-  ReferenceError: namespace({}),
-  SyntaxError: namespace({}),
+  // Error constructors — registered as callables so `Error("msg")` and
+  // `TypeError("msg")` (callable form, equivalent to `new Error(...)` in JS)
+  // don't false-positive. Phase 2 may add member entries (e.g. Error.captureStackTrace)
+  // by promoting these to namespaces with `members` once we need them.
+  Error: callable(),
+  TypeError: callable(),
+  RangeError: callable(),
+  ReferenceError: callable(),
+  SyntaxError: callable(),
 };
 
 /**

@@ -251,6 +251,29 @@ describe("undefined function diagnostic — JS namespaces", () => {
     expect(errors.filter((e) => e.message.includes("process"))).toHaveLength(0);
   });
 
+  it("warns on undefined calls in top-level static const declarations", () => {
+    const errors = errorsFrom(
+      `
+      static const x = doesNotExist()
+      node main() { print(x) }
+    `,
+      WARN,
+    );
+    expect(errors.filter((e) => e.message.includes("doesNotExist"))).toHaveLength(1);
+  });
+
+  it("does not double-fire on calls inside function bodies (top-level + per-scope passes)", () => {
+    const errors = errorsFrom(
+      `
+      def helper() { doesNotExist() }
+      node main() { helper() }
+    `,
+      WARN,
+    );
+    // Should be reported exactly once (from helper's own scope), not twice.
+    expect(errors.filter((e) => e.message.includes("doesNotExist"))).toHaveLength(1);
+  });
+
   it("does not warn on inherited Object prototype names", () => {
     const errors = errorsFrom(
       `

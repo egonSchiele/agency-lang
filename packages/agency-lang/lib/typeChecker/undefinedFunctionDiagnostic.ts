@@ -39,9 +39,17 @@ export function checkUndefinedFunctions(
   }
 
   for (const info of scopes) {
-    if (!info.name || info.name === "top-level") continue;
+    if (!info.name) continue;
+    const isTopLevel = info.name === "top-level";
     ctx.withScope(info.scopeKey, () => {
       for (const { node, ancestors } of walkNodes(info.body)) {
+        // When walking the top-level scope, skip anything inside a
+        // function or graphNode body — those have their own ScopeInfo
+        // and would double-fire. Class methods are NOT skipped: they
+        // currently lack their own scope, so the top-level pass is
+        // their only coverage.
+        if (isTopLevel && hasFunctionOrNodeAncestor(ancestors)) continue;
+
         if (node.type === "functionCall") {
           // `walkNodes` descends into a `valueAccess`'s methodCall.functionCall.
           // That method-call is already covered by checkAccessChain on its
@@ -56,6 +64,14 @@ export function checkUndefinedFunctions(
       }
     });
   }
+}
+
+function hasFunctionOrNodeAncestor(ancestors: readonly unknown[]): boolean {
+  for (const a of ancestors) {
+    const t = (a as AgencyNode | undefined)?.type;
+    if (t === "function" || t === "graphNode") return true;
+  }
+  return false;
 }
 
 // --- Internal helpers ---

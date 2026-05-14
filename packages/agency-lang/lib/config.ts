@@ -150,6 +150,32 @@ export interface AgencyConfig {
     baseUrl?: string;
   };
 
+  /**
+   * Enables the memory layer for this project. When set, every agent run
+   * receives a `MemoryManager` on its RuntimeContext, std::memory becomes
+   * usable, and `llm({ memory: true })` injects relevant facts.
+   */
+  memory?: {
+    /** Directory where per-memoryId subdirectories of JSON files are stored. */
+    dir: string;
+    /** Default model used for extraction / compaction / LLM-tier recall. */
+    model?: string;
+    autoExtract?: {
+      /** Number of LLM turns between auto-extraction passes. Default: 5. */
+      interval?: number;
+    };
+    compaction?: {
+      /** Trigger metric: "token" estimates or raw "messages" count. */
+      trigger?: "token" | "messages";
+      /** Threshold above which compaction runs. */
+      threshold?: number;
+    };
+    embeddings?: {
+      /** Embedding model name (forwarded to smoltalk.embed). */
+      model?: string;
+    };
+  };
+
   coverage?: {
     /** Output directory for collected coverage data (default: ".coverage") */
     outDir?: string;
@@ -234,6 +260,22 @@ export const AgencyConfigSchema = z
         exclude: z.array(z.string()),
       })
       .partial(),
+    memory: z.object({
+      dir: z.string(),
+      model: z.string().optional(),
+      autoExtract: z
+        .object({ interval: z.number().optional() })
+        .optional(),
+      compaction: z
+        .object({
+          trigger: z.enum(["token", "messages"]).optional(),
+          threshold: z.number().optional(),
+        })
+        .optional(),
+      embeddings: z
+        .object({ model: z.string().optional() })
+        .optional(),
+    }),
   })
   .partial()
   .passthrough();

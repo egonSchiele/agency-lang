@@ -505,7 +505,9 @@ export class AgencyGenerator {
       if (segment.type === "text") {
         result += segment.value;
       } else if (segment.type === "interpolation") {
-        result += `\${${expressionToString(segment.expression)}}`;
+        // processNode (not expressionToString) so nested function calls with
+        // block arguments and quoted string literals round-trip correctly.
+        result += `\${${this.processNode(segment.expression).trim()}}`;
       }
     }
     result += '"';
@@ -518,7 +520,7 @@ export class AgencyGenerator {
       if (segment.type === "text") {
         result += segment.value;
       } else if (segment.type === "interpolation") {
-        result += `\${${expressionToString(segment.expression)}}`;
+        result += `\${${this.processNode(segment.expression).trim()}}`;
       }
     }
     result += '"""';

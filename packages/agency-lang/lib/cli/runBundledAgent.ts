@@ -12,9 +12,15 @@ export function runBundledAgent(
 ): void {
   const agentDir = path.resolve(currentDir, `../agents/${agentName}`);
   const agencyFile = path.join(agentDir, "agent.agency");
-  const runFile = path.join(agentDir, "run.js");
 
-  compile(config, agencyFile);
+  // The compiled agent.js already includes a top-level invocation of `main()`,
+  // so we run it directly. (Older code expected a hand-written run.js wrapper
+  // that no longer exists.)
+  const runFile = compile(config, agencyFile);
+  if (runFile === null) {
+    console.error(`Failed to compile agent ${agentName}.`);
+    process.exit(1);
+  }
 
   console.log("---");
   const nodeProcess = spawn("node", [runFile, ...args], {

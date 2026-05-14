@@ -519,25 +519,29 @@ export const _stringParser: Parser<StringLiteral> = (input: string) => {
 };
 
 export const stringParser: Parser<StringLiteral> = label("a string", (input: string) => {
-  const parser = sepBy1(plusSign, or(_stringParser, variableNameParser));
+  // Allow `_valueAccessParser` on the right of `+` so function calls and
+  // chained accesses (`foo()`, `foo.bar`, `foo.bar()`, `foo[0]`) interpolate
+  // correctly. Without this, `"hi" + foo()` would parse `"hi" + foo` as a
+  // string with `foo` interpolated and leave `()` unparsed.
+  const parser = sepBy1(plusSign, or(_stringParser, lazy(() => _valueAccessParser)));
   const result = parser(input);
   if (!result.success) {
     return result;
   }
 
   const parsed = result.result;
-  if (parsed.length === 1 && parsed[0].type === "variableName") {
-    return failure("Expected string literal, got variable name", input);
+  if (parsed.length === 1 && parsed[0].type !== "string") {
+    return failure("Expected string literal", input);
   }
 
   const segments: (TextSegment | InterpolationSegment)[] = [];
   parsed.forEach((part) => {
     if (part.type === "string") {
       segments.push(...part.segments);
-    } else if (part.type === "variableName") {
+    } else {
       segments.push({
         type: "interpolation",
-        expression: part,
+        expression: part as Expression,
       });
     }
   });

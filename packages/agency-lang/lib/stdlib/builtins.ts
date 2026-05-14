@@ -16,6 +16,10 @@ export function _printJSON(obj: any): void {
   console.log(JSON.stringify(obj, null, 2));
 }
 
+export function _parseJSON(text: string): any {
+  return JSON.parse(text);
+}
+
 export function _input(prompt: string): Promise<string> {
   const override = (globalThis as any).__agencyInputOverride as
     | ((prompt: string) => Promise<string>)

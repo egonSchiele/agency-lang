@@ -1,7 +1,5 @@
-import { map } from "std::array"
-
 node main() {
-  map(range(5)) as {
-    print("hello")
-  }
+  const interruptKinds = ["showPolicy", "writePolicy", "askQuestion"]
+  let contextMessage = "This agent can produce the following interrupts:\n" + map(interruptKinds, \kind -> `- ${kind}\n`).join("")
 }
+

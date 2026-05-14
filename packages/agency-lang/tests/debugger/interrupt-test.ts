@@ -1,5 +1,5 @@
 // @ts-nocheck
-import { print, printJSON, input, sleep, round, fetch, fetchJSON, read, write, readImage, notify, range, mostCommon, keys, values, entries, emit } from "agency-lang/stdlib/index.js";
+import { print, printJSON, parseJSON, input, sleep, round, fetch, fetchJSON, read, write, readImage, notify, range, mostCommon, keys, values, entries, emit } from "agency-lang/stdlib/index.js";
 import { fileURLToPath } from "url";
 import __process from "process";
 import { readFileSync, writeFileSync } from "fs";
@@ -121,6 +121,7 @@ function registerTools(tools: any[]) {
 
 __registerTool(print);
 __registerTool(printJSON);
+__registerTool(parseJSON);
 __registerTool(input);
 __registerTool(sleep);
 __registerTool(round);

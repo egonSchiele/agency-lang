@@ -90,8 +90,23 @@ export function declareVariable(
     });
   }
 
+  // Reassignment to a const binding (no accessChain — property writes on
+  // const objects are allowed, matching JS semantics).
+  if (
+    !node.declKind &&
+    !node.accessChain &&
+    scope.isConst(node.variableName)
+  ) {
+    ctx.errors.push({
+      message: `Cannot reassign to constant '${node.variableName}'.`,
+      variableName: node.variableName,
+      loc: node.loc,
+    });
+  }
+
   const newType = node.typeHint;
   const existingType = scope.lookup(node.variableName);
+  const isConst = node.declKind === "const";
 
   if (newType) {
     validateTypeReferences(
@@ -123,6 +138,7 @@ export function declareVariable(
     scope.declare(
       node.variableName,
       resultTypeForValidation(newType, node.validated),
+      isConst,
     );
     return;
   }
@@ -147,7 +163,7 @@ export function declareVariable(
     });
   }
   const inferred = synthType(node.value, scope, ctx);
-  scope.declare(node.variableName, widenType(inferred));
+  scope.declare(node.variableName, widenType(inferred), isConst);
 }
 
 function reportNotAssignable(
@@ -168,6 +184,121 @@ function reportNotAssignable(
   });
 }
 
+// Operators that mutate their left operand. Compound assigns (`+=` etc.)
+// and postfix `++`/`--` all desugar to writes back to the left side, so a
+// const target is just as illegal as bare reassignment.
+const MUTATING_OPERATORS = [
+  "+=", "-=", "*=", "/=", "&&=", "||=", "??=", "++", "--",
+];
+
+// Recursively walks `node` and reports any binOpExpression that mutates a
+// const variable. Catches nested cases like `return x++`, `if (x++ > 0)`,
+// `foo(x += 1)`, and mutations inside string interpolations / array items
+// / object values. Does NOT cross into nested function/graphNode bodies —
+// those have their own scopes built separately by buildDefScope.
+function checkConstMutations(
+  node: AgencyNode | null | undefined,
+  scope: Scope,
+  ctx: TypeCheckerContext,
+): void {
+  if (!node) return;
+  if (node.type === "function" || node.type === "graphNode") return;
+
+  if (
+    node.type === "binOpExpression" &&
+    MUTATING_OPERATORS.includes(node.operator) &&
+    node.left.type === "variableName" &&
+    scope.isConst(node.left.value)
+  ) {
+    ctx.errors.push({
+      message: `Cannot reassign to constant '${node.left.value}'.`,
+      variableName: node.left.value,
+      loc: node.loc,
+    });
+  }
+
+  switch (node.type) {
+    case "binOpExpression":
+      checkConstMutations(node.left as AgencyNode, scope, ctx);
+      checkConstMutations(node.right as AgencyNode, scope, ctx);
+      break;
+    case "assignment":
+      checkConstMutations(node.value as AgencyNode, scope, ctx);
+      break;
+    case "returnStatement":
+      checkConstMutations(node.value as AgencyNode | undefined, scope, ctx);
+      break;
+    case "ifElse":
+      checkConstMutations(node.condition as AgencyNode, scope, ctx);
+      break;
+    case "whileLoop":
+      checkConstMutations(node.condition as AgencyNode, scope, ctx);
+      break;
+    case "forLoop":
+      checkConstMutations(node.iterable as AgencyNode, scope, ctx);
+      break;
+    case "functionCall":
+      for (const arg of node.arguments) {
+        const value =
+          arg.type === "splat" || arg.type === "namedArgument"
+            ? arg.value
+            : arg;
+        checkConstMutations(value as AgencyNode, scope, ctx);
+      }
+      break;
+    case "valueAccess":
+      checkConstMutations(node.base as AgencyNode, scope, ctx);
+      for (const element of node.chain) {
+        if (element.kind === "index") {
+          checkConstMutations(element.index as AgencyNode, scope, ctx);
+        } else if (element.kind === "methodCall") {
+          checkConstMutations(element.functionCall as AgencyNode, scope, ctx);
+        }
+      }
+      break;
+    case "agencyArray":
+      for (const item of node.items) {
+        const value = item.type === "splat" ? item.value : item;
+        checkConstMutations(value as AgencyNode, scope, ctx);
+      }
+      break;
+    case "agencyObject":
+      for (const entry of node.entries) {
+        const value =
+          "type" in entry && entry.type === "splat"
+            ? entry.value
+            : (entry as { value: AgencyNode }).value;
+        checkConstMutations(value as AgencyNode, scope, ctx);
+      }
+      break;
+    case "string":
+    case "multiLineString":
+      for (const seg of node.segments) {
+        if (seg.type === "interpolation") {
+          checkConstMutations(seg.expression as AgencyNode, scope, ctx);
+        }
+      }
+      break;
+    case "tryExpression":
+      checkConstMutations(node.call as AgencyNode, scope, ctx);
+      break;
+    case "newExpression":
+      for (const arg of node.arguments) {
+        checkConstMutations(arg as AgencyNode, scope, ctx);
+      }
+      break;
+    case "interruptStatement":
+      for (const arg of node.arguments) {
+        const value =
+          arg.type === "splat" || arg.type === "namedArgument"
+            ? arg.value
+            : arg;
+        checkConstMutations(value as AgencyNode, scope, ctx);
+      }
+      break;
+  }
+}
+
 /**
  * Walk a body of statements and declare every binding into the given scope.
  * Recurses into nested blocks using the same scope, which preserves today's
@@ -179,6 +310,7 @@ export function walkScopeBody(
   ctx: TypeCheckerContext,
 ): void {
   for (const node of nodes) {
+    checkConstMutations(node, scope, ctx);
     switch (node.type) {
       case "assignment":
         declareVariable(node, scope, ctx);

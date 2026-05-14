@@ -77,4 +77,19 @@ node main() {
 `);
     expect(errs.filter((m) => m.includes("Cannot reassign"))).toEqual([]);
   });
+
+  it("catches mutations nested inside other expressions", () => {
+    // Each of these has the binOpExpression below the statement node, so
+    // the original body-level-only check missed them.
+    const cases = [
+      `node main() {\n  const x = 1\n  return x++\n}`,
+      `node main() {\n  const x = 1\n  if (x++ > 0) { return 1 }\n}`,
+      `def foo(n: number) { return n }\nnode main() {\n  const x = 1\n  foo(x += 1)\n}`,
+      `node main() {\n  const x = 1\n  let s = "v=\${x++}"\n}`,
+    ];
+    for (const src of cases) {
+      const errs = check(src);
+      expect(errs, src).toContain("Cannot reassign to constant 'x'.");
+    }
+  });
 });

@@ -57,6 +57,37 @@ type User = {
 }
 ```
 
+## Where you can declare a type
+
+Type aliases must be declared at the **top (module) level** — not
+inside a `def`, `node`, or `class` body. Trying to do so produces:
+
+```
+Type alias 'User' must be declared at the top level, not inside node 'main'.
+```
+
+If you want a type to live next to the code that uses it, just put it
+directly above the function/node in the same file:
+
+```ts
+// ✅ ok — declared at the top level
+type Category = "reminder" | "todo" | "general"
+
+node main() {
+  let c: Category = llm("Pick a category")
+  return c
+}
+```
+
+```ts
+// ❌ not allowed
+node main() {
+  type Category = "reminder" | "todo" | "general"
+  let c: Category = llm("Pick a category")
+  return c
+}
+```
+
 ## Optional properties
 
 Suffix a property's name with `?` to make it optional:

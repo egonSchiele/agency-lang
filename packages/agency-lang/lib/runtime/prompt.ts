@@ -5,6 +5,7 @@ import { AgencyCancelledError, isAbortError } from "./errors.js";
 import { callHook } from "./hooks.js";
 import { Interrupt, hasInterrupts, isRejected } from "./interrupts.js";
 import type { PromptConfig } from "./llmClient.js";
+import type { MemoryMessage, MemoryMessageRole } from "./memory/types.js";
 import { setupFunction } from "./node.js";
 import { isFailure } from "./result.js";
 import type { SourceLocationOpts } from "./state/checkpointStore.js";
@@ -15,6 +16,31 @@ import { ThreadStore } from "./state/threadStore.js";
 import { handleStreamingResponse } from "./streaming.js";
 import { GraphState } from "./types.js";
 import { extractResponse, updateTokenStats } from "./utils.js";
+
+function toMemoryMessages(messages: smoltalk.Message[]): MemoryMessage[] {
+  return messages.map((m) => ({
+    role: m.role as MemoryMessageRole,
+    content: typeof m.content === "string" ? m.content : "",
+  }));
+}
+
+function toSmoltalkMessage(m: MemoryMessage): smoltalk.Message {
+  switch (m.role) {
+    case "user":
+      return smoltalk.userMessage(m.content);
+    case "assistant":
+      return smoltalk.assistantMessage(m.content);
+    case "system":
+      return smoltalk.systemMessage(m.content);
+    case "developer":
+      return smoltalk.developerMessage(m.content);
+    case "tool":
+      // Compaction strips tool messages, so this branch should be
+      // unreachable. If it ever fires, fall back to a system message
+      // rather than crashing the run.
+      return smoltalk.systemMessage(m.content);
+  }
+}
 
 type Tool = {
   name: string;
@@ -141,6 +167,27 @@ async function _runPrompt({
     usage: completion.usage,
     cost: completion.cost,
   });
+
+  // Memory layer: auto-extraction and compaction run unconditionally
+  // whenever a MemoryManager is attached (resolved decision #6).
+  // Tool-call results have not been pushed yet, so we operate on the
+  // current message slice. Compaction is a best-effort hint — failures
+  // never break the LLM call.
+  if (ctx.memoryManager) {
+    try {
+      const memMessages = toMemoryMessages(messages.getMessages());
+      await ctx.memoryManager.onTurn(memMessages);
+      const compacted = await ctx.memoryManager.compactIfNeeded(memMessages);
+      if (compacted) {
+        messages.setMessages(compacted.map(toSmoltalkMessage));
+      }
+    } catch (err) {
+      console.warn(
+        `[memory] post-turn hook failed: ${(err as Error).message}`,
+      );
+    }
+  }
+
   const endHookResult = await callHook({
     callbacks: ctx.callbacks,
     name: "onLLMCallEnd",
@@ -223,9 +270,17 @@ export async function runPrompt(args: {
     (fn) => !removedTools.includes(fn.name),
   );
 
-  // Remove tools key from clientConfig before passing to smoltalk
-  const { tools: _extractedTools, ...restClientConfig } =
-    args.clientConfig || {};
+  // Remove tools key from clientConfig before passing to smoltalk.
+  // Also strip `memory` — it's a runtime-only directive that smoltalk
+  // doesn't understand.
+  const {
+    tools: _extractedTools,
+    memory: memoryOption,
+    ...restClientConfig
+  } = (args.clientConfig || {}) as Partial<smoltalk.SmolConfig> & {
+    tools?: any[];
+    memory?: boolean | { model?: string };
+  };
   const clientConfig = ctx.getSmoltalkConfig(restClientConfig);
 
   // Restore or initialize messages.
@@ -265,6 +320,23 @@ export async function runPrompt(args: {
   if (self.pendingToolCalls) {
     toolCalls = self.pendingToolCalls;
   } else {
+    // Memory injection (resolved decision #6): only retrieves and
+    // injects when the caller passed `memory: true` (or an object) on
+    // this llm() call. Best-effort: failures don't block the LLM call.
+    if (memoryOption && ctx.memoryManager) {
+      try {
+        const facts = await ctx.memoryManager.recallForInjection(prompt);
+        if (facts) {
+          messages.push(
+            smoltalk.systemMessage(`Relevant context from memory:\n${facts}`),
+          );
+        }
+      } catch (err) {
+        console.warn(
+          `[memory] recall injection failed: ${(err as Error).message}`,
+        );
+      }
+    }
     messages.push(smoltalk.userMessage(prompt));
     const result = await _runPrompt({
       ctx,

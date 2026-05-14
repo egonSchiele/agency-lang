@@ -13,6 +13,7 @@ import { GraphState, InternalFunctionState, RunNodeResult } from "./types.js";
 import { createReturnObject } from "./utils.js";
 import { color } from "@/utils/termcolors.js";
 import { nanoid } from "nanoid";
+import { setCurrentContext } from "./currentContext.js";
 import { hasInterrupts } from "./interrupts.js";
 
 export function setupNode(args: { state: GraphState }): {
@@ -138,6 +139,9 @@ export async function runNode({
   });
   let isResume = false;
   let threadStore = ThreadStore.withDefaultActive();
+  // Make execCtx visible to stdlib functions (e.g. std::memory) that
+  // don't receive __ctx as a parameter. Cleared in the finally block.
+  setCurrentContext(execCtx);
   try {
     while (true) {
       try {
@@ -205,6 +209,19 @@ export async function runNode({
       }
     }
   } finally {
+    // Persist any in-memory MemoryManager state. Writes are best-effort —
+    // we never fail the run because of a save error, but we do log it so
+    // disk problems are visible.
+    if (execCtx.memoryManager) {
+      try {
+        await execCtx.memoryManager.save();
+      } catch (err) {
+        console.warn(
+          `[memory] save failed: ${(err as Error).message}`,
+        );
+      }
+    }
+    setCurrentContext(null);
     execCtx.cleanup();
   }
 }

@@ -111,14 +111,12 @@ describe("Debugger stepping", () => {
     const session = await DebuggerTestSession.create({ mod });
 
     await session.press("c"); // run to completion
-    await session.press("up"); // stepBack
-    const localsBeforeStep = localsText(session);
-    await session.press("s"); // should work now
+    await session.press("up"); // stepBack — programFinished must be cleared
+    await session.press("s"); // step forward should now be unblocked
 
+    // The contract: after stepping back from end-of-program, the
+    // program is no longer "finished" and forward stepping works.
     expect(activityLog(session)).not.toContainEqual("Already at end of execution.");
-    // The locals should have changed after stepping forward
-    const localsAfterStep = localsText(session);
-    expect(localsAfterStep).not.toBe(localsBeforeStep);
   });
 
   it("source pane shows the correct file and current line marker", async () => {
@@ -317,8 +315,7 @@ describe("Debugger user interrupt handling", () => {
     expect(result).toBe(6);
   });
 
-  // TODO: reject hangs — the interrupt prompt timing needs investigation
-  it.skip("reject causes the function to return a failure", async () => {
+  it("reject causes the function to return a failure", async () => {
     const mod = await freshImport(interruptCompiled);
     const session = await DebuggerTestSession.create({ mod });
 
@@ -333,7 +330,7 @@ describe("Debugger user interrupt handling", () => {
       error: "interrupt rejected",
       retryable: false,
     });
-  }, 15000);
+  });
 });
 
 // ============================================================================
@@ -382,6 +379,37 @@ describe("Debugger stepBack and rewind", () => {
 
     const result = await session.quit();
     expect(result).toBe(12);
+  });
+
+  it("stepBack actually rewinds: locals reflect an earlier state", async () => {
+    const mod = await freshImport(stepTestCompiled);
+    const session = await DebuggerTestSession.create({ mod });
+
+    await session.press("s"); // past x = 1
+    await session.press("s"); // past y = 2
+    expect(localsText(session)).toContain("x = 1");
+    expect(localsText(session)).toContain("y = 2");
+
+    await session.press("up"); // stepBack one checkpoint
+    // We should be back to a state where y is no longer set
+    expect(localsText(session)).not.toContain("y = 2");
+  });
+
+  it("stepBack then step forward replays correctly", async () => {
+    const mod = await freshImport(stepTestCompiled);
+    const session = await DebuggerTestSession.create({ mod });
+
+    // step-test: x = 1, y = 2, z = x + y, return z
+    await session.press("s"); // past x = 1
+    await session.press("s"); // past y = 2
+    await session.press("s"); // past z = x + y
+    expect(localsText(session)).toContain("z = 3");
+
+    await session.press("up"); // back to before z = x + y
+    expect(localsText(session)).not.toContain("z = 3");
+
+    await session.press("s"); // step forward — z should be 3 again
+    expect(localsText(session)).toContain("z = 3");
   });
 
   it("rewind cancelled by escape stays put", async () => {
@@ -779,12 +807,9 @@ describe("Debugger invalid commands", () => {
 
 // ============================================================================
 // Save and load
-// (Kept as .skip — the save/load commands require `:save <path>` and
-// `:load <path>` which need file paths typed into the command bar.
-// The original test was also .skip.)
 // ============================================================================
 
-describe.skip("Debugger save and load", () => {
+describe("Debugger save and load", () => {
   const saveFile = path.join(fixtureDir, "__test-checkpoint.json");
 
   afterAll(() => {

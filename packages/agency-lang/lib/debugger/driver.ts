@@ -191,7 +191,12 @@ export class DebuggerDriver {
         }
         const interrupt = result.data as Interrupt;
         lastInterrupt = interrupt;
-        if (isDebugger(interrupt)) {
+        // After the program finishes, even a restored user interrupt is no
+        // longer a live request for input — the response has already been
+        // delivered. Fall through to the debug-command branch so the user
+        // can step back, quit, or inspect state instead of being re-prompted
+        // in an infinite loop.
+        if (isDebugger(interrupt) || this.programFinished) {
           // Debug pause — show state and accept stepping commands
           this.ui.state.setMode(this.debuggerState.getMode());
           // Only pass checkpoint when execution has moved to a new position.
@@ -202,12 +207,11 @@ export class DebuggerDriver {
           await this.ui.render(skipCheckpoint ? undefined : interrupt.checkpoint);
           const command = await this.ui.waitForCommand();
           lastCommand = command;
-          try {
-            result = await this.handleCommand(command, interrupt);
-          } catch (e) {
-            this.ui.state.log(`Error: ${e}`);
-            continue;
-          }
+          // No broad try/catch: per-command handlers narrow their own catches
+          // (e.g. :save / :load handle file errors and log them via
+          // ui.state.log). Anything that escapes is an internal bug that
+          // should crash the driver, not silently continue with stale state.
+          result = await this.handleCommand(command, interrupt);
           if (result && result.__debuggerQuit) {
             return finalResult;
           }
@@ -218,12 +222,7 @@ export class DebuggerDriver {
           );
           this.ui.state.setMode(this.debuggerState.getMode());
           await this.ui.render(interrupt);
-          try {
-            result = await this.handleInterrupt(interrupt);
-          } catch (e) {
-            this.ui.state.log(`Error: ${e}`);
-            continue;
-          }
+          result = await this.handleInterrupt(interrupt);
           if (result && result.__debuggerQuit) {
             return finalResult;
           }

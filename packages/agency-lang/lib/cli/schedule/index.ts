@@ -3,17 +3,16 @@ import * as fs from "fs";
 import * as os from "os";
 import { Registry, type ScheduleEntry } from "./registry.js";
 import { resolveCron, formatSchedule } from "./cron.js";
-import {
-  detectBackend,
-  getBackend,
-  type InstallableBackendType,
-} from "./backends/index.js";
+import { detectBackend, getBackend } from "./backends/index.js";
 
 function cronIntervalMinutes(cron: string): number {
   const minutesField = cron.split(/\s+/)[0] ?? "";
+  // `*` means every minute -> 1-minute interval.
+  if (minutesField === "*") return 1;
   const m = minutesField.match(/^\*\/(\d+)$/);
   if (m) return Number(m[1]);
-  // Anything else (specific minute, list, range, *) isn't a sub-5min step.
+  // Anything else (specific minute, list, range) is at most a 1/hour cadence
+  // for the minutes column. Skip the warning.
   return Number.POSITIVE_INFINITY;
 }
 
@@ -58,7 +57,11 @@ export type AddOptions = {
   envFile?: string;
   baseDir?: string;
   force?: boolean;
-  backend?: InstallableBackendType;
+  /**
+   * Force the github backend. Local backends (launchd / systemd / crontab)
+   * are auto-detected and cannot be overridden via this option today.
+   */
+  backend?: "github";
   /** github backend: extra secrets to wire into the workflow's env block. */
   secrets?: string[];
   /** github backend: grant `contents: write` + `pull-requests: write`. */
@@ -83,11 +86,15 @@ export function scheduleAdd(opts: AddOptions): void {
   validateName(name);
 
   if (opts.backend === "github") {
-    // GitHub Actions cron has 5-minute granularity; warn on tighter cadence.
+    // GitHub Actions enforces a 5-minute minimum cron granularity (it silently
+    // coarsens tighter schedules and runs are routinely delayed by 15+min).
+    // Refuse to generate a workflow whose stated cadence GitHub will not honor.
+    // See: https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions#onschedule
     if (cronIntervalMinutes(cron) < 5) {
-      console.warn(
-        `Warning: GitHub Actions cron has a 5-minute minimum granularity. ` +
-          `The cadence "${preset || cron}" will be coarsened to ~5min by GitHub's scheduler.`,
+      throw new Error(
+        `GitHub Actions enforces a 5-minute minimum cron interval. ` +
+          `The cadence "${preset || cron}" is shorter than that and will not run as scheduled. ` +
+          `Use --every hourly, --every daily, or a cron expression with a >= 5min step (e.g. "*/5 * * * *").`,
       );
     }
 

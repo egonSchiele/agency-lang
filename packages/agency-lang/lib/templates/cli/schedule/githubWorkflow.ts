@@ -22,7 +22,7 @@ jobs:
       - uses: actions/checkout@{{checkoutRef:string}}
       - uses: egonSchiele/run-agency-action@{{runAgentActionRef:string}}
         with:
-          file: {{agentFile:string}}
+          file: {{{agentFile:string}}}
 {{{envBlock:string}}}
 `;
 

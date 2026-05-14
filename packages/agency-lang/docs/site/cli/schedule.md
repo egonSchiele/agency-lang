@@ -62,7 +62,7 @@ agency schedule add agents/foo.agency \
 
 This generates `.github/workflows/foo.yml` in your repo. Commit and push it; the agent will run on GitHub's runners on the chosen cadence.
 
-### Github-specific options
+### GitHub-specific options
 
 - `--secret NAME` (repeatable) wires a secret into the workflow's `env:` block.
 - `--write` grants `contents: write` + `pull-requests: write` (e.g. for agents that open PRs).
@@ -72,5 +72,5 @@ This generates `.github/workflows/foo.yml` in your repo. Commit and push it; the
 ### Notes
 
 - The agent file must live inside the git repo — it is referenced by relative path from the generated workflow.
-- Cadences faster than 5 minutes will be coarsened by GitHub's scheduler. `agency-lang` prints a warning when this happens.
-- To remove a github schedule, `git rm` the workflow file. Github schedules are not tracked by `agency schedule list` / `remove` — the workflow file in your repo is the source of truth.
+- GitHub Actions enforces a 5-minute minimum cron interval. `agency schedule add --backend github` refuses cadences shorter than that (`--every minute` and any `*/N` for N < 5) since GitHub will not honor them. Use `--every hourly`, `--every daily`, or `--cron "*/5 * * * *"` or longer.
+- To remove a GitHub schedule, `git rm` the workflow file. GitHub schedules are not tracked by `agency schedule list` / `remove` — the workflow file in your repo is the source of truth.

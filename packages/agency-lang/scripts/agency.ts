@@ -659,7 +659,7 @@ export function createProgram(deps: CliDependencies = {}): Command {
     .option("--env-file <path>", "Path to .env file")
     .option(
       "--backend <type>",
-      "Backend: launchd, systemd, crontab, or github (default: auto-detect)",
+      "Force a non-default backend. Currently only 'github' is supported; local backends (launchd, systemd, crontab) are auto-detected.",
     )
     .option(
       "--secret <name>",
@@ -690,18 +690,24 @@ export function createProgram(deps: CliDependencies = {}): Command {
           pin?: boolean;
         },
       ) => {
+        // Only `--backend github` is supported today; local backends are
+        // auto-detected. Reject any other value with a clear error rather
+        // than silently routing to auto-detect.
+        if (opts.backend !== undefined && opts.backend !== "github") {
+          console.error(
+            color.red(
+              `Unknown --backend value: "${opts.backend}". The only value accepted today is "github". Local backends (launchd, systemd, crontab) are auto-detected.`,
+            ),
+          );
+          process.exit(1);
+        }
         const addOpts = {
           file,
           every: opts.every,
           cron: opts.cron,
           name: opts.name,
           envFile: opts.envFile,
-          backend: opts.backend as
-            | "launchd"
-            | "systemd"
-            | "crontab"
-            | "github"
-            | undefined,
+          backend: opts.backend as "github" | undefined,
           secrets: opts.secret,
           write: opts.write,
           noPin: opts.pin === false,

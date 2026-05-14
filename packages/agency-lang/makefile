@@ -37,9 +37,15 @@ test-log:
 
 # Print the current SHAs for the actions used by `agency schedule add --backend github`.
 # Manually paste into lib/cli/schedule/backends/pinnedActions.ts.
+#
+# IMPORTANT: the tags below MUST stay in sync with the `tag:` values in
+# pinnedActions.ts. They reference *exact* tags (not moving major-version
+# aliases like `v4` or `v1`) so that the SHA we print is for the same
+# version the workflow file says it pins. To bump a version, edit both
+# this list and pinnedActions.ts in the same commit.
 refresh-action-pins:
 	@echo "Look up these SHAs and update lib/cli/schedule/backends/pinnedActions.ts by hand:"
-	@for spec in actions/checkout@v4 egonSchiele/run-agency-action@v1; do \
+	@for spec in actions/checkout@v4.1.7 egonSchiele/run-agency-action@v1.0.2; do \
 	  repo=$${spec%@*}; tag=$${spec#*@}; \
 	  ref_obj=$$(gh api repos/$$repo/git/ref/tags/$$tag --jq '.object'); \
 	  type=$$(echo "$$ref_obj" | jq -r '.type'); \

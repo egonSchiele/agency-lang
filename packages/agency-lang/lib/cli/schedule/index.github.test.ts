@@ -58,40 +58,47 @@ describe("scheduleAdd --backend github", () => {
     expect(Object.keys(reg.getAll())).toHaveLength(0);
   });
 
-  it("warns on cron interval < 5min", () => {
-    const warns: string[] = [];
-    const origWarn = console.warn;
-    console.warn = (...a: unknown[]) => warns.push(a.map(String).join(" "));
-    try {
+  it("rejects cron interval < 5min (step expression)", () => {
+    expect(() =>
       scheduleAdd({
         file: path.join(repo, "agents/foo.agency"),
         cron: "*/2 * * * *",
         backend: "github",
         baseDir,
         noPin: true,
-      });
-      expect(warns.join("\n")).toMatch(/5.?min/i);
-    } finally {
-      console.warn = origWarn;
-    }
+      }),
+    ).toThrow(/5-minute minimum/i);
+    // No partial workflow file written.
+    expect(fs.existsSync(path.join(repo, ".github/workflows/foo.yml"))).toBe(
+      false,
+    );
   });
 
-  it("does NOT warn on cron interval >= 5min", () => {
-    const warns: string[] = [];
-    const origWarn = console.warn;
-    console.warn = (...a: unknown[]) => warns.push(a.map(String).join(" "));
-    try {
+  it("rejects --every minute (a `*` minutes field)", () => {
+    expect(() =>
+      scheduleAdd({
+        file: path.join(repo, "agents/foo.agency"),
+        every: "minute",
+        backend: "github",
+        baseDir,
+        noPin: true,
+      }),
+    ).toThrow(/5-minute minimum/i);
+  });
+
+  it("accepts cron interval >= 5min", () => {
+    expect(() =>
       scheduleAdd({
         file: path.join(repo, "agents/foo.agency"),
         cron: "*/5 * * * *",
         backend: "github",
         baseDir,
         noPin: true,
-      });
-      expect(warns.join("\n")).not.toMatch(/5.?min/i);
-    } finally {
-      console.warn = origWarn;
-    }
+      }),
+    ).not.toThrow();
+    expect(fs.existsSync(path.join(repo, ".github/workflows/foo.yml"))).toBe(
+      true,
+    );
   });
 
   it("passes secrets/write/noPin through to the backend", () => {

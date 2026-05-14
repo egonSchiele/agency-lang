@@ -60,6 +60,30 @@ function realPathOrResolve(p: string): string {
   return abs;
 }
 
+// GitHub Actions secret names: alphanumerics + underscore, must not start
+// with a digit, must not start with `GITHUB_`. We're more permissive about
+// the prefix rule here (we just need to avoid YAML-injection) and let
+// GitHub itself reject the secret name on push if it's reserved.
+const SECRET_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
+
+function validateSecretName(name: string): void {
+  if (!SECRET_NAME.test(name)) {
+    throw new Error(
+      `Invalid secret name "${name}". Secret names must match /^[A-Za-z_][A-Za-z0-9_]*$/ (letters, digits, underscore; no leading digit).`,
+    );
+  }
+}
+
+/** Quote a string as a YAML single-quoted scalar (escapes `'` by doubling). */
+function yamlQuote(s: string): string {
+  return `'${s.replace(/'/g, "''")}'`;
+}
+
+/** Normalize a relative path to POSIX separators (workflows always run on Linux). */
+function toPosix(p: string): string {
+  return p.split(path.sep).join("/");
+}
+
 function actionRef(name: string, noPin: boolean): string {
   const pin = PINNED_ACTIONS[name];
   if (!pin) throw new Error(`No pinned SHA for action: ${name}`);
@@ -99,6 +123,9 @@ function renderEnvBlock(secrets: string[]): string {
 export class GithubBackend implements ScheduleBackend {
   install(entry: ScheduleEntry): void {
     const opts = entry.github ?? DEFAULT_GITHUB_OPTS;
+    // Validate secret names early so we fail before writing any file.
+    for (const s of opts.secrets) validateSecretName(s);
+
     const root = repoRoot();
     // `git rev-parse --show-toplevel` returns a real (symlink-resolved) path,
     // so we resolve the agent file the same way for a meaningful comparison.
@@ -125,7 +152,9 @@ export class GithubBackend implements ScheduleBackend {
     const yaml = renderGithubWorkflow({
       name: entry.name,
       cron: entry.cron,
-      agentFile: agentRel,
+      // Normalize to POSIX separators because the workflow runs on ubuntu,
+      // and quote as YAML to handle paths containing special characters.
+      agentFile: yamlQuote(toPosix(agentRel)),
       checkoutRef: actionRef("actions/checkout", opts.noPin),
       runAgentActionRef: actionRef("egonSchiele/run-agency-action", opts.noPin),
       permissionsBlock: renderPermissionsBlock(opts.write),

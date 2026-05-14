@@ -117,7 +117,7 @@ describe("GithubBackend.install", () => {
     expect(yml).toContain("GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}");
   });
 
-  it("computes agent path relative to repo root", () => {
+  it("computes agent path relative to repo root and YAML-quotes it", () => {
     const e = entry({
       agentFile: path.join(repo, "agents/foo.agency"),
       github: { secrets: [], write: false, noPin: true, force: false },
@@ -127,7 +127,41 @@ describe("GithubBackend.install", () => {
       path.join(repo, ".github/workflows/test-sched.yml"),
       "utf-8",
     );
-    expect(yml).toContain("file: agents/foo.agency");
+    expect(yml).toContain("file: 'agents/foo.agency'");
+  });
+
+  it("YAML-escapes single quotes in the agent path", () => {
+    const subdir = path.join(repo, "weird's dir");
+    fs.mkdirSync(subdir, { recursive: true });
+    fs.writeFileSync(path.join(subdir, "x.agency"), "");
+    const e = entry({
+      agentFile: path.join(subdir, "x.agency"),
+      github: { secrets: [], write: false, noPin: true, force: false },
+    });
+    new GithubBackend().install(e);
+    const yml = fs.readFileSync(
+      path.join(repo, ".github/workflows/test-sched.yml"),
+      "utf-8",
+    );
+    // Single quote inside a YAML single-quoted scalar is escaped by doubling.
+    expect(yml).toContain("file: 'weird''s dir/x.agency'");
+  });
+
+  it("rejects invalid secret names before writing the file", () => {
+    const e = entry({
+      agentFile: path.join(repo, "agents/foo.agency"),
+      github: {
+        secrets: ["valid_NAME", "with-dash"], // dash invalid
+        write: false,
+        noPin: true,
+        force: false,
+      },
+    });
+    expect(() => new GithubBackend().install(e)).toThrow(/invalid secret name/i);
+    // No partial workflow file written.
+    expect(
+      fs.existsSync(path.join(repo, ".github/workflows/test-sched.yml")),
+    ).toBe(false);
   });
 
   it("throws when not in a git repo", () => {

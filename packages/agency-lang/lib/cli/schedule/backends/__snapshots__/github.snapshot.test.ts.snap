@@ -21,7 +21,7 @@ jobs:
       - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # v4.1.7
       - uses: egonSchiele/run-agency-action@2a3030d846ce45a7c9d5eafad345e86db4f83a38  # v1.0.2
         with:
-          file: agents/foo.agency
+          file: 'agents/foo.agency'
         env:
           OPENAI_API_KEY: \${{ secrets.OPENAI_API_KEY }}
           GITHUB_TOKEN: \${{ secrets.GITHUB_TOKEN }}
@@ -50,7 +50,7 @@ jobs:
       - uses: actions/checkout@v4.1.7
       - uses: egonSchiele/run-agency-action@v1.0.2
         with:
-          file: agents/foo.agency
+          file: 'agents/foo.agency'
         env:
           OPENAI_API_KEY: \${{ secrets.OPENAI_API_KEY }}
           GITHUB_TOKEN: \${{ secrets.GITHUB_TOKEN }}
@@ -78,7 +78,7 @@ jobs:
       - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # v4.1.7
       - uses: egonSchiele/run-agency-action@2a3030d846ce45a7c9d5eafad345e86db4f83a38  # v1.0.2
         with:
-          file: agents/foo.agency
+          file: 'agents/foo.agency'
         env:
           OPENAI_API_KEY: \${{ secrets.OPENAI_API_KEY }}
           GITHUB_TOKEN: \${{ secrets.GITHUB_TOKEN }}
@@ -105,7 +105,7 @@ jobs:
       - uses: actions/checkout@v4.1.7
       - uses: egonSchiele/run-agency-action@v1.0.2
         with:
-          file: agents/foo.agency
+          file: 'agents/foo.agency'
         env:
           OPENAI_API_KEY: \${{ secrets.OPENAI_API_KEY }}
           GITHUB_TOKEN: \${{ secrets.GITHUB_TOKEN }}
@@ -132,7 +132,7 @@ jobs:
       - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # v4.1.7
       - uses: egonSchiele/run-agency-action@2a3030d846ce45a7c9d5eafad345e86db4f83a38  # v1.0.2
         with:
-          file: agents/foo.agency
+          file: 'agents/foo.agency'
         env:
           OPENAI_API_KEY: \${{ secrets.OPENAI_API_KEY }}
           GITHUB_TOKEN: \${{ secrets.GITHUB_TOKEN }}
@@ -161,7 +161,7 @@ jobs:
       - uses: actions/checkout@v4.1.7
       - uses: egonSchiele/run-agency-action@v1.0.2
         with:
-          file: agents/foo.agency
+          file: 'agents/foo.agency'
         env:
           OPENAI_API_KEY: \${{ secrets.OPENAI_API_KEY }}
           GITHUB_TOKEN: \${{ secrets.GITHUB_TOKEN }}
@@ -191,7 +191,7 @@ jobs:
       - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # v4.1.7
       - uses: egonSchiele/run-agency-action@2a3030d846ce45a7c9d5eafad345e86db4f83a38  # v1.0.2
         with:
-          file: agents/foo.agency
+          file: 'agents/foo.agency'
         env:
           OPENAI_API_KEY: \${{ secrets.OPENAI_API_KEY }}
           GITHUB_TOKEN: \${{ secrets.GITHUB_TOKEN }}
@@ -219,7 +219,7 @@ jobs:
       - uses: actions/checkout@v4.1.7
       - uses: egonSchiele/run-agency-action@v1.0.2
         with:
-          file: agents/foo.agency
+          file: 'agents/foo.agency'
         env:
           OPENAI_API_KEY: \${{ secrets.OPENAI_API_KEY }}
           GITHUB_TOKEN: \${{ secrets.GITHUB_TOKEN }}

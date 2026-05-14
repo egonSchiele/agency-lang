@@ -54,6 +54,19 @@ const llmOptions: VariableType = {
       }),
     },
     { key: "tools", value: optional(anyArray) },
+    {
+      key: "memory",
+      value: optional({
+        type: "unionType",
+        types: [
+          boolean,
+          {
+            type: "objectType",
+            properties: [{ key: "model", value: optional(string) }],
+          },
+        ],
+      }),
+    },
     // `any` already accepts undefined, so no need to wrap in optional.
     { key: "metadata", value: ANY_T },
   ],

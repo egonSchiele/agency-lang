@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { writeFileSync, unlinkSync } from "fs";
+import { writeFileSync, unlinkSync, mkdirSync, rmdirSync } from "fs";
 import path from "path";
 import os from "os";
 import { parseAgency } from "../parser.js";
@@ -212,5 +212,81 @@ describe("undefined function diagnostic — JS namespaces", () => {
       WARN,
     );
     expect(errors.filter((e) => e.message.includes("obj"))).toHaveLength(0);
+  });
+
+  it("does not double-fire on the inner method name of JSON.parse(...)", () => {
+    const errors = errorsFrom(
+      `
+      node main() {
+        let x = JSON.parse("{}")
+      }
+    `,
+      WARN,
+    );
+    // Should NOT also report 'parse' as undefined.
+    expect(errors.filter((e) => e.message.includes("'parse'"))).toHaveLength(0);
+  });
+
+  it("does not warn on Math.PI (non-call value access)", () => {
+    const errors = errorsFrom(
+      `
+      node main() {
+        let x = Math.PI
+      }
+    `,
+      WARN,
+    );
+    expect(errors.filter((e) => e.message.includes("Math"))).toHaveLength(0);
+  });
+
+  it("does not warn on process.env (non-call value access)", () => {
+    const errors = errorsFrom(
+      `
+      node main() {
+        let x = process.env
+      }
+    `,
+      WARN,
+    );
+    expect(errors.filter((e) => e.message.includes("process"))).toHaveLength(0);
+  });
+
+  it("does not warn on inherited Object prototype names", () => {
+    const errors = errorsFrom(
+      `
+      node main() {
+        toString()
+      }
+    `,
+      WARN,
+    );
+    // toString is NOT defined in Agency — should be reported as undefined.
+    expect(errors.filter((e) => e.message.includes("toString"))).toHaveLength(1);
+  });
+});
+
+describe("undefined function diagnostic — imported nodes", () => {
+  it("does not warn on calls to nodes imported via `import node { ... }`", () => {
+    // Set up a sibling .agency file the symbol table can resolve.
+    const dir = path.join(os.tmpdir(), `tc-import-${Date.now()}`);
+    mkdirSync(dir, { recursive: true });
+    const sibling = path.join(dir, "other.agency");
+    const main = path.join(dir, "main.agency");
+    writeFileSync(sibling, `node helper() { print("hi") }\n`);
+    const mainSrc = `import node { helper } from "./other.agency"\nnode main() { return helper() }\n`;
+    writeFileSync(main, mainSrc);
+    try {
+      const symbolTable = SymbolTable.build(main, WARN);
+      const parseResult = parseAgency(mainSrc, WARN);
+      if (!parseResult.success) throw new Error("Parse failed");
+      const program = parseResult.result;
+      const info = buildCompilationUnit(program, symbolTable, main, mainSrc);
+      const errors = typeCheck(program, WARN, info).errors;
+      expect(errors.filter((e) => e.message.includes("'helper'"))).toHaveLength(0);
+    } finally {
+      unlinkSync(main);
+      unlinkSync(sibling);
+      rmdirSync(dir);
+    }
   });
 });

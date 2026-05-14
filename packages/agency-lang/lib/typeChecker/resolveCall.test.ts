@@ -10,6 +10,7 @@ const emptyInput = {
   functionDefs: {},
   nodeDefs: {},
   importedFunctions: {},
+  importedNodeNames: [],
   scopeHas: () => false,
 };
 
@@ -52,6 +53,23 @@ describe("resolveCall", () => {
   it("returns unresolved for a genuinely missing name", () => {
     const result = resolveCall("doesNotExist", emptyInput);
     expect(result.kind).toBe("unresolved");
+  });
+
+  it("does not falsely resolve inherited Object prototype names", () => {
+    // Without an own-property check, `"toString" in {}` would be true and
+    // these would resolve as `def`/`builtin` even though no such function
+    // is defined.
+    expect(resolveCall("toString", emptyInput).kind).toBe("unresolved");
+    expect(resolveCall("constructor", emptyInput).kind).toBe("unresolved");
+    expect(resolveCall("hasOwnProperty", emptyInput).kind).toBe("unresolved");
+  });
+
+  it("resolves a node imported via `import node { ... }`", () => {
+    const result = resolveCall("foo", {
+      ...emptyInput,
+      importedNodeNames: ["foo"],
+    });
+    expect(result.kind).toBe("imported");
   });
 });
 

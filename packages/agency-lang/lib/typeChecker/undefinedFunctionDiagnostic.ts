@@ -1,7 +1,7 @@
 import type { ScopeInfo, TypeCheckerContext } from "./types.js";
 import type { Scope } from "./scope.js";
-import type { FunctionCall } from "../types.js";
-import type { ValueAccess } from "../types/access.js";
+import type { AgencyNode, FunctionCall } from "../types.js";
+import type { ValueAccess, AccessChainElement } from "../types/access.js";
 import { walkNodes } from "../utils/node.js";
 import {
   resolveCall,
@@ -29,12 +29,27 @@ export function checkUndefinedFunctions(
   const mode = ctx.config.typechecker?.undefinedFunctions ?? "silent";
   if (mode === "silent") return;
 
+  // Collect names from `import node { ... } from "..."` statements at the
+  // program level — `nodeDefs` only includes locally-defined nodes.
+  const importedNodeNames: string[] = [];
+  for (const node of ctx.programNodes) {
+    if (node.type === "importNodeStatement") {
+      importedNodeNames.push(...node.importedNodes);
+    }
+  }
+
   for (const info of scopes) {
     if (!info.name || info.name === "top-level") continue;
     ctx.withScope(info.scopeKey, () => {
-      for (const { node } of walkNodes(info.body)) {
+      for (const { node, ancestors } of walkNodes(info.body)) {
         if (node.type === "functionCall") {
-          checkBareCall(node, info.scope, ctx, mode);
+          // `walkNodes` descends into a `valueAccess`'s methodCall.functionCall.
+          // That method-call is already covered by checkAccessChain on its
+          // parent valueAccess; reporting it again here would double-fire and
+          // also incorrectly treat `obj.foo()` as a bare call to `foo`.
+          const parent = ancestors[ancestors.length - 1];
+          if (parent && (parent as AgencyNode).type === "valueAccess") continue;
+          checkBareCall(node, info.scope, ctx, mode, importedNodeNames);
         } else if (node.type === "valueAccess") {
           checkAccessChain(node, info.scope, ctx, mode);
         }
@@ -50,11 +65,13 @@ function checkBareCall(
   scope: Scope,
   ctx: TypeCheckerContext,
   mode: "warn" | "error",
+  importedNodeNames: readonly string[],
 ): void {
   const resolution = resolveCall(call.functionName, {
     functionDefs: ctx.functionDefs,
     nodeDefs: ctx.nodeDefs,
     importedFunctions: ctx.importedFunctions,
+    importedNodeNames,
     scopeHas: (name) => scope.has(name),
   });
   if (resolution.kind !== "unresolved") return;
@@ -77,11 +94,16 @@ function checkAccessChain(
   if (expr.base.type !== "variableName") return;
   const baseName = expr.base.value;
   if (scope.has(baseName)) return;
-  if (baseName in ctx.functionDefs) return;
-  if (baseName in ctx.importedFunctions) return;
-  if (!(baseName in JS_GLOBALS)) return;
+  if (Object.prototype.hasOwnProperty.call(ctx.functionDefs, baseName)) return;
+  if (Object.prototype.hasOwnProperty.call(ctx.importedFunctions, baseName)) return;
+  if (!Object.prototype.hasOwnProperty.call(JS_GLOBALS, baseName)) return;
 
-  const path = collectNamePath(expr, baseName);
+  // Only diagnose call sites — `Math.PI` (property lookup) is a value, not a
+  // function. The chain must end in a callable element.
+  const last = expr.chain[expr.chain.length - 1];
+  if (!last || (last.kind !== "methodCall" && last.kind !== "call")) return;
+
+  const path = collectNamePath(expr.chain, baseName);
   if (path === null) return; // Computed/optional access — bail.
 
   if (lookupJsMember(path) === null) {
@@ -98,15 +120,18 @@ function checkAccessChain(
  * chain contains anything we can't statically follow (computed lookup,
  * call-on-call, etc.) — caller bails out in that case.
  */
-function collectNamePath(expr: ValueAccess, baseName: string): string[] | null {
+function collectNamePath(
+  chain: AccessChainElement[],
+  baseName: string,
+): string[] | null {
   const path = [baseName];
-  for (const access of expr.chain) {
+  for (const access of chain) {
     if (access.kind === "property") {
       path.push(access.name);
     } else if (access.kind === "methodCall") {
       path.push(access.functionCall.functionName);
     } else if (access.kind === "call") {
-      // A call on the resolved chain is fine — leave path as-is.
+      // Terminal call on the resolved chain — leave path as-is.
       return path;
     } else {
       return null;

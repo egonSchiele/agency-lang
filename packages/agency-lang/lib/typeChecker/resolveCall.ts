@@ -223,9 +223,13 @@ export const JS_GLOBALS: Record<string, JsRegistryEntry> = {
  */
 export function lookupJsMember(path: string[]): JsRegistryEntry | null {
   if (path.length === 0) return null;
+  if (!Object.prototype.hasOwnProperty.call(JS_GLOBALS, path[0])) return null;
   let current: JsRegistryEntry | undefined = JS_GLOBALS[path[0]];
   for (let i = 1; i < path.length; i++) {
     if (!current || current.kind !== "namespace") return null;
+    if (!Object.prototype.hasOwnProperty.call(current.members, path[i])) {
+      return null;
+    }
     current = current.members[path[i]];
   }
   return current ?? null;
@@ -235,6 +239,8 @@ type ResolveCallInput = {
   functionDefs: Record<string, FunctionDefinition>;
   nodeDefs: Record<string, GraphNodeDefinition>;
   importedFunctions: Record<string, ImportedFunctionSignature>;
+  /** Names imported via `import node { ... } from "..."`. */
+  importedNodeNames: readonly string[];
   scopeHas: (name: string) => boolean;
 };
 
@@ -247,17 +253,28 @@ export type CallResolution =
   | { kind: "jsGlobal" }
   | { kind: "unresolved" };
 
+/**
+ * Own-property check — `name in obj` walks the prototype chain, so names
+ * like "toString" / "constructor" would falsely resolve against any
+ * Record. Use this for the registries below (which are plain objects).
+ */
+const has = (obj: object, name: string): boolean =>
+  Object.prototype.hasOwnProperty.call(obj, name);
+
 export function resolveCall(
   name: string,
   input: ResolveCallInput,
 ): CallResolution {
-  if (name in input.functionDefs || name in input.nodeDefs)
+  if (has(input.functionDefs, name) || has(input.nodeDefs, name))
     return { kind: "def" };
-  if (name in input.importedFunctions) return { kind: "imported" };
-  if (name in BUILTIN_FUNCTION_TYPES) return { kind: "builtin" };
+  if (has(input.importedFunctions, name)) return { kind: "imported" };
+  if (input.importedNodeNames.includes(name)) return { kind: "imported" };
+  if (has(BUILTIN_FUNCTION_TYPES, name)) return { kind: "builtin" };
   if (RESERVED_FUNCTION_NAMES.has(name)) return { kind: "reserved" };
   if (input.scopeHas(name)) return { kind: "scopeBinding" };
-  const jsEntry = JS_GLOBALS[name];
-  if (jsEntry?.kind === "callable") return { kind: "jsGlobal" };
+  if (has(JS_GLOBALS, name)) {
+    const jsEntry = JS_GLOBALS[name];
+    if (jsEntry.kind === "callable") return { kind: "jsGlobal" };
+  }
   return { kind: "unresolved" };
 }

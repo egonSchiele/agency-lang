@@ -197,7 +197,7 @@ function checkSingleFunctionCall(
     return;
   }
 
-  if (call.functionName in BUILTIN_FUNCTION_TYPES) {
+  if (Object.prototype.hasOwnProperty.call(BUILTIN_FUNCTION_TYPES, call.functionName)) {
     // Builtins don't have parameter names — named args have nowhere to bind.
     // The backend throws at codegen time (typescriptBuilder.ts); surface it
     // here with a proper diagnostic instead.

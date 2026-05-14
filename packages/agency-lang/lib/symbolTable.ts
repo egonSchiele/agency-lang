@@ -270,7 +270,11 @@ export class SymbolTable {
 
 /**
  * Classify symbols in a parsed Agency program.
- * Uses walkNodes to find symbols at all nesting levels (e.g. type aliases inside functions).
+ *
+ * Uses walkNodes to descend into every nested body so we can also reach
+ * symbols that aren't legal at the inner location and reject them with
+ * a useful diagnostic (e.g. type aliases declared inside a function /
+ * node / class body — see the `typeAlias` case below).
  */
 export function classifySymbols(program: AgencyProgram): FileSymbols {
   const symbols: FileSymbols = {};

@@ -4,17 +4,27 @@ import { cssColors } from "../colors.js";
 import { sameStyle, escapeHtml } from "../utils.js";
 import { flatten } from "./flatten.js";
 
+// SECURITY: only emit colors that match a strict allow-list. Either a
+// known palette name (mapped via cssColors) or a literal hex string of
+// the form "#rgb" / "#rrggbb". Any other value is dropped silently.
+const HEX_COLOR_RE = /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/;
+
+function safeColor(value: string | undefined): string | undefined {
+  if (!value) return undefined;
+  if (Object.prototype.hasOwnProperty.call(cssColors, value)) {
+    return cssColors[value];
+  }
+  if (HEX_COLOR_RE.test(value)) return value;
+  return undefined;
+}
+
 function cellStyle(cell: Cell): string {
   const parts: string[] = [];
-  if (cell.fg && Object.prototype.hasOwnProperty.call(cssColors, cell.fg)) {
-    parts.push(`color:${cssColors[cell.fg]}`);
-  }
-  if (cell.bg && Object.prototype.hasOwnProperty.call(cssColors, cell.bg)) {
-    parts.push(`background-color:${cssColors[cell.bg]}`);
-  }
-  if (cell.bold) {
-    parts.push("font-weight:bold");
-  }
+  const fg = safeColor(cell.fg);
+  if (fg) parts.push(`color:${fg}`);
+  const bg = safeColor(cell.bg);
+  if (bg) parts.push(`background-color:${bg}`);
+  if (cell.bold) parts.push("font-weight:bold");
   return parts.join(";");
 }
 
@@ -23,28 +33,29 @@ export function toHTML(frame: Frame): string {
   const lines: string[] = [];
 
   for (const row of grid) {
-    let line = "";
+    const parts: string[] = [];
     let i = 0;
     while (i < row.length) {
       const cell = row[i];
       const style = cellStyle(cell);
 
       // Collect run of cells with same style
-      let run = escapeHtml(cell.char);
+      const runChars: string[] = [escapeHtml(cell.char)];
       let j = i + 1;
       while (j < row.length && sameStyle(row[j], cell)) {
-        run += escapeHtml(row[j].char);
+        runChars.push(escapeHtml(row[j].char));
         j++;
       }
+      const run = runChars.join("");
 
       if (style) {
-        line += `<span style="${style}">${run}</span>`;
+        parts.push(`<span style="${style}">`, run, `</span>`);
       } else {
-        line += run;
+        parts.push(run);
       }
       i = j;
     }
-    lines.push(line);
+    lines.push(parts.join(""));
   }
 
   const body = lines.join("\n");

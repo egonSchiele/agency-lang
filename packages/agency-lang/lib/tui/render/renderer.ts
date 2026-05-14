@@ -2,7 +2,7 @@ import type { Cell, PositionedElement } from "../elements.js";
 import type { FrameStyle } from "../elements.js";
 import { Frame } from "../frame.js";
 import { parseStyledText } from "../styleParser.js";
-import { resolveEdges } from "../utils.js";
+import { innerArea } from "../utils.js";
 
 // Box-drawing characters for borders
 const BORDER = {
@@ -77,7 +77,11 @@ function renderTextContent(
   bold?: boolean,
 ): Cell[][] {
   const lines = content.split("\n");
-  const visibleLines = lines.slice(scrollOffset, scrollOffset + innerHeight);
+  // Clamp so that scrolling past the end stops at the last screenful, and
+  // negative offsets are treated as 0 (rather than slicing from the tail).
+  const maxScroll = Math.max(0, lines.length - innerHeight);
+  const effectiveOffset = Math.max(0, Math.min(scrollOffset, maxScroll));
+  const visibleLines = lines.slice(effectiveOffset, effectiveOffset + innerHeight);
   const grid: Cell[][] = [];
 
   for (const line of visibleLines) {
@@ -172,14 +176,12 @@ function renderTextInputContent(
 export function render(positioned: PositionedElement, parentScrollOffset = 0): Frame {
   const style = positioned.style ?? {};
   const hasBorder = style.border ?? false;
-  const borderSize = hasBorder ? 1 : 0;
-
-  const padding = resolveEdges(style.padding);
   const width = positioned.resolvedWidth;
   const height = positioned.resolvedHeight;
 
-  const innerWidth = Math.max(0, width - 2 * borderSize - padding.left - padding.right);
-  const innerHeight = Math.max(0, height - 2 * borderSize - padding.top - padding.bottom);
+  // Inner area as offsets from the frame's top-left corner.
+  const { x: innerOffsetX, y: innerOffsetY, width: innerWidth, height: innerHeight } =
+    innerArea(style, 0, 0, width, height);
 
   const frameStyle: FrameStyle = {
     border: hasBorder || undefined,
@@ -236,7 +238,7 @@ export function render(positioned: PositionedElement, parentScrollOffset = 0): F
     if (!content) {
       content = makeGrid(width, height, style.bg);
     }
-    blitCells(content, innerContent, borderSize + padding.left, borderSize + padding.top, innerWidth, innerHeight);
+    blitCells(content, innerContent, innerOffsetX, innerOffsetY, innerWidth, innerHeight);
   }
 
   // Recurse into children, passing scroll offset if this element is scrollable

@@ -6,8 +6,19 @@ import type { Frame } from "../frame.js";
  * Recursively blits children on top of parents.
  * Uses the frame's own x/y as the origin so sub-frames
  * returned by findByKey() render correctly.
+ *
+ * Result is memoized on the frame instance via `getFlattened()` when
+ * called with the frame's own dimensions, since rendering and the three
+ * adapters all flatten the same frame at its native size.
  */
 export function flatten(frame: Frame, width: number, height: number): Cell[][] {
+  if (width === frame.width && height === frame.height) {
+    return frame.getFlattened(() => buildGrid(frame, width, height));
+  }
+  return buildGrid(frame, width, height);
+}
+
+function buildGrid(frame: Frame, width: number, height: number): Cell[][] {
   const grid: Cell[][] = Array.from({ length: height }, () =>
     Array.from({ length: width }, () => ({ char: " " })),
   );

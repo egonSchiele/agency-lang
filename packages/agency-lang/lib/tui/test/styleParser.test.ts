@@ -59,6 +59,47 @@ describe("parseStyledText", () => {
   });
 });
 
+describe("parseStyledText: ANSI passthrough", () => {
+  it("parses a basic ANSI fg color escape", () => {
+    expect(parseStyledText("\x1b[31mred\x1b[0m")).toEqual([
+      { text: "red", fg: "red" },
+    ]);
+  });
+
+  it("parses bright fg color codes", () => {
+    expect(parseStyledText("\x1b[91mhi\x1b[0m")).toEqual([
+      { text: "hi", fg: "bright-red" },
+    ]);
+  });
+
+  it("parses 24-bit truecolor as a hex string", () => {
+    expect(parseStyledText("\x1b[38;2;86;156;214mtok\x1b[0m")).toEqual([
+      { text: "tok", fg: "#569cd6" },
+    ]);
+  });
+
+  it("treats ESC[m and ESC[0m as full reset", () => {
+    const result = parseStyledText("\x1b[1m\x1b[31mhi\x1b[mafter");
+    expect(result).toEqual([
+      { text: "hi", bold: true, fg: "red" },
+      { text: "after" },
+    ]);
+  });
+
+  it("intermixes ANSI and {tag} forms", () => {
+    const result = parseStyledText("\x1b[31m{bold}hi{/bold}\x1b[0m");
+    expect(result).toEqual([{ text: "hi", bold: true, fg: "red" }]);
+  });
+
+  it("ESC[39m pops fg only", () => {
+    const result = parseStyledText("\x1b[1m\x1b[31mhi\x1b[39mafter");
+    expect(result).toEqual([
+      { text: "hi", bold: true, fg: "red" },
+      { text: "after", bold: true },
+    ]);
+  });
+});
+
 describe("escapeStyleTags", () => {
   it("escapes curly braces", () => {
     expect(escapeStyleTags("{bold}")).toBe("\\{bold\\}");

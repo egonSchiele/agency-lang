@@ -1,22 +1,25 @@
 import { highlight, Theme } from "cli-highlight";
-import chalk from "chalk";
+import { color } from "@/utils/termcolors.js";
 
 // VS Code Dark+ color palette
-const blue = chalk.hex("#569CD6");
-const yellow = chalk.hex("#DCDCAA");
-const teal = chalk.hex("#4EC9B0");
-const lightGreen = chalk.hex("#B5CEA8");
-const red = chalk.hex("#D16969");
-const orange = chalk.hex("#CE9178");
-const lightBlue = chalk.hex("#9CDCFE");
-const green = chalk.hex("#6A9955");
-const darkGreen = chalk.hex("#608B4E");
-const gold = chalk.hex("#D7BA7D");
-const lightGray = chalk.hex("#D4D4D4");
-const magenta = chalk.hex("#C586C0");
+const blue = color.hex("#569CD6");
+const yellow = color.hex("#DCDCAA");
+const teal = color.hex("#4EC9B0");
+const lightGreen = color.hex("#B5CEA8");
+const red = color.hex("#D16969");
+const orange = color.hex("#CE9178");
+const lightBlue = color.hex("#9CDCFE");
+const green = color.hex("#6A9955");
+const darkGreen = color.hex("#608B4E");
+const gold = color.hex("#D7BA7D");
+const lightGray = color.hex("#D4D4D4");
+const magenta = color.hex("#C586C0");
 
-// VS Code Dark+ inspired theme
-const vscodeDarkTheme: Theme = {
+// VS Code Dark+ inspired theme. The Theme type expects ChalkInstance
+// values; our termcolors functions have a compatible call signature, so
+// the cast is safe at runtime — cli-highlight only ever invokes these as
+// `(text) => styledText`.
+const vscodeDarkTheme = {
   keyword: blue,
   built_in: yellow,
   type: teal,
@@ -44,8 +47,8 @@ const vscodeDarkTheme: Theme = {
   variable: lightBlue,
   bullet: gold,
   code: lightGray,
-  emphasis: chalk.italic,
-  strong: chalk.bold,
+  emphasis: color.italic,
+  strong: color.bold,
   formula: magenta,
   link: blue.underline,
   quote: darkGreen,
@@ -59,7 +62,7 @@ const vscodeDarkTheme: Theme = {
   addition: lightGreen,
   deletion: orange,
   default: lightGray,
-};
+} as unknown as Theme;
 
 export function syntaxHighlight(code: string, _language: string): string {
   try {

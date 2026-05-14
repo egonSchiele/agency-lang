@@ -1,5 +1,5 @@
 import type { Element, PositionedElement } from "./elements.js";
-import { resolveEdges, type Edges } from "./utils.js";
+import { innerArea, resolveEdges, type Edges } from "./utils.js";
 
 function resolveDimension(
   value: number | string | undefined,
@@ -11,13 +11,14 @@ function resolveDimension(
     const pct = parseFloat(value) / 100;
     return Math.floor(available * pct);
   }
-  return undefined;
+  throw new Error(
+    `Invalid dimension value: ${JSON.stringify(value)}. Expected a number or a percentage string like "50%".`,
+  );
 }
 
 function clampDimension(value: number, min?: number, max?: number): number {
-  if (min !== undefined && value < min) value = min;
-  if (max !== undefined && value > max) value = max;
-  return value;
+  const raised = Math.max(value, min ?? value);
+  return Math.min(raised, max ?? raised);
 }
 
 /**
@@ -41,10 +42,16 @@ function layoutRoot(
 ): PositionedElement {
   const style = element.style ?? {};
 
-  let width = resolveDimension(style.width, availableWidth) ?? availableWidth;
-  let height = resolveDimension(style.height, availableHeight) ?? availableHeight;
-  width = clampDimension(width, style.minWidth, style.maxWidth);
-  height = clampDimension(height, style.minHeight, style.maxHeight);
+  const width = clampDimension(
+    resolveDimension(style.width, availableWidth) ?? availableWidth,
+    style.minWidth,
+    style.maxWidth,
+  );
+  const height = clampDimension(
+    resolveDimension(style.height, availableHeight) ?? availableHeight,
+    style.minHeight,
+    style.maxHeight,
+  );
 
   const margin = resolveEdges(style.margin);
   const { children: _, ...rest } = element;
@@ -81,18 +88,16 @@ function layoutChild(
 
   const crossAxis = mainAxis === "width" ? "height" : "width";
 
-  // For stretch (default), fill available cross space.
-  // For other alignments, use child's own size if specified.
+  // Cross-axis size: use child's own size if specified, otherwise fill the
+  // available cross space. (alignItems controls offset, not size.)
   const crossProp = style[crossAxis];
-  let crossDim: number;
-  if (alignItems === "stretch") {
-    crossDim = resolveDimension(crossProp, crossAxisAvailable) ?? crossAxisAvailable;
-  } else {
-    crossDim = resolveDimension(crossProp, crossAxisAvailable) ?? crossAxisAvailable;
-  }
   const crossMin = crossAxis === "width" ? style.minWidth : style.minHeight;
   const crossMax = crossAxis === "width" ? style.maxWidth : style.maxHeight;
-  crossDim = clampDimension(crossDim, crossMin, crossMax);
+  const crossDim = clampDimension(
+    resolveDimension(crossProp, crossAxisAvailable) ?? crossAxisAvailable,
+    crossMin,
+    crossMax,
+  );
 
   // Cross-axis offset based on alignItems
   let crossOffset = 0;
@@ -138,14 +143,14 @@ function layoutChildren(
 
   if (visibleChildren.length === 0) return undefined;
 
-  const padding = resolveEdges(style.padding);
-  const borderSize = style.border ? 1 : 0;
-
   // Inner area after border and padding
-  const innerX = parent.resolvedX + borderSize + padding.left;
-  const innerY = parent.resolvedY + borderSize + padding.top;
-  const innerWidth = Math.max(0, parent.resolvedWidth - 2 * borderSize - padding.left - padding.right);
-  const innerHeight = Math.max(0, parent.resolvedHeight - 2 * borderSize - padding.top - padding.bottom);
+  const { x: innerX, y: innerY, width: innerWidth, height: innerHeight } = innerArea(
+    style,
+    parent.resolvedX,
+    parent.resolvedY,
+    parent.resolvedWidth,
+    parent.resolvedHeight,
+  );
 
   const direction = style.flexDirection ?? "column";
   const isRow = direction === "row";

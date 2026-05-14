@@ -14,11 +14,16 @@ export class TerminalOutput implements OutputTarget {
   private sigintHandler = () => { this.destroy(); process.exit(130); };
   private sigtermHandler = () => { this.destroy(); process.exit(143); };
   private sigtstpHandler = () => {
+    // Remove our handler before re-raising so the default handler can
+    // actually suspend the process; otherwise we'd recurse into ourselves.
     this.suspend();
+    process.removeListener("SIGTSTP", this.sigtstpHandler);
     process.kill(process.pid, "SIGTSTP");
   };
   private sigcontHandler = () => {
     this.resume();
+    // Re-install the SIGTSTP handler that we removed before suspending.
+    process.on("SIGTSTP", this.sigtstpHandler);
   };
 
   init(): void {
@@ -27,13 +32,11 @@ export class TerminalOutput implements OutputTarget {
     process.on("exit", this.exitHandler);
     process.on("SIGINT", this.sigintHandler);
     process.on("SIGTERM", this.sigtermHandler);
-    // For SIGTSTP, we need to remove the handler before re-raising so the
-    // default handler can actually suspend the process.
     process.on("SIGTSTP", this.sigtstpHandler);
     process.on("SIGCONT", this.sigcontHandler);
   }
 
-  write(frame: Frame): void {
+  write(frame: Frame, _label?: string): void {
     if (!this.inAltScreen) {
       this.init();
     }

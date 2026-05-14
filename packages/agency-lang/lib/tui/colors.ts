@@ -16,6 +16,13 @@ export const ansiBgColors: Record<string, string> = {
   "bright-white": "\x1b[107m",
 };
 
+/**
+ * SECURITY: `cssColors` is the only sanitization boundary between style
+ * names and the HTML output. The HTML adapter (`render/html.ts`) MUST only
+ * emit colors that appear as keys in this object, otherwise an attacker
+ * controlling a Style.fg/bg/borderColor/labelColor value could inject
+ * arbitrary CSS. Do not bypass the lookup.
+ */
 export const cssColors: Record<string, string> = {
   black: "#000", red: "#c00", green: "#0a0", yellow: "#aa0",
   blue: "#00a", magenta: "#a0a", cyan: "#0aa", white: "#ccc",

@@ -1,5 +1,6 @@
 import * as fs from "node:fs";
-import type { Frame } from "../frame.js";
+import { Frame } from "../frame.js";
+import type { Cell } from "../elements.js";
 import type { OutputTarget } from "./types.js";
 import { toHTML as frameToHTML } from "../render/html.js";
 import { escapeHtml } from "../utils.js";
@@ -9,11 +10,30 @@ type RecordedFrame = {
   label?: string;
 };
 
+function cloneContent(content: Cell[][] | undefined): Cell[][] | undefined {
+  return content?.map((row) => row.map((cell) => ({ ...cell })));
+}
+
+function cloneFrame(frame: Frame): Frame {
+  return new Frame({
+    key: frame.key,
+    x: frame.x,
+    y: frame.y,
+    width: frame.width,
+    height: frame.height,
+    style: { ...frame.style },
+    content: cloneContent(frame.content),
+    children: frame.children?.map(cloneFrame),
+  });
+}
+
 export class FrameRecorder implements OutputTarget {
   frames: RecordedFrame[] = [];
 
   write(frame: Frame, label?: string): void {
-    this.frames.push({ frame, label });
+    // Deep-clone so that downstream mutation of frames never alters
+    // already-recorded snapshots.
+    this.frames.push({ frame: cloneFrame(frame), label });
   }
 
   clear(): void {

@@ -48,3 +48,29 @@ agency schedule test
 ```
 
 Schedules a small test agent that runs every minute. Use this to verify that cron is working on your machine.
+
+## Run on GitHub Actions
+
+To run an agent on GitHub Actions instead of locally:
+
+```
+agency schedule add agents/foo.agency \
+  --backend github \
+  --every hourly \
+  --secret SLACK_WEBHOOK
+```
+
+This generates `.github/workflows/foo.yml` in your repo. Commit and push it; the agent will run on GitHub's runners on the chosen cadence.
+
+### Github-specific options
+
+- `--secret NAME` (repeatable) wires a secret into the workflow's `env:` block.
+- `--write` grants `contents: write` + `pull-requests: write` (e.g. for agents that open PRs).
+- `--no-pin` emits `@<tag>` instead of `@<sha>` action references (less secure; default is SHA pins).
+- `--force` overwrites an existing workflow file.
+
+### Notes
+
+- The agent file must live inside the git repo — it is referenced by relative path from the generated workflow.
+- Cadences faster than 5 minutes will be coarsened by GitHub's scheduler. `agency-lang` prints a warning when this happens.
+- To remove a github schedule, `git rm` the workflow file. Github schedules are not tracked by `agency schedule list` / `remove` — the workflow file in your repo is the source of truth.

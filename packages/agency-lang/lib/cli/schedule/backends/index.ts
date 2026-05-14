@@ -3,8 +3,10 @@ import type { ScheduleEntry, BackendType } from "../registry.js";
 import { LaunchdBackend } from "./launchd.js";
 import { SystemdBackend } from "./systemd.js";
 import { CrontabBackend } from "./crontab.js";
+import { GithubBackend } from "./github.js";
 
 export type { BackendType } from "../registry.js";
+export type InstallableBackendType = BackendType | "github";
 
 export type ScheduleBackend = {
   install(entry: ScheduleEntry): void;
@@ -22,7 +24,7 @@ export function detectBackend(): BackendType {
   }
 }
 
-export function getBackend(type: BackendType): ScheduleBackend {
+export function getBackend(type: InstallableBackendType): ScheduleBackend {
   switch (type) {
     case "launchd":
       return new LaunchdBackend();
@@ -30,9 +32,12 @@ export function getBackend(type: BackendType): ScheduleBackend {
       return new SystemdBackend();
     case "crontab":
       return new CrontabBackend();
+    case "github":
+      return new GithubBackend();
   }
 }
 
 export { LaunchdBackend } from "./launchd.js";
 export { SystemdBackend } from "./systemd.js";
 export { CrontabBackend } from "./crontab.js";
+export { GithubBackend } from "./github.js";

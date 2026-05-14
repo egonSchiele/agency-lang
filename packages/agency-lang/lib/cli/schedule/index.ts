@@ -3,7 +3,19 @@ import * as fs from "fs";
 import * as os from "os";
 import { Registry, type ScheduleEntry } from "./registry.js";
 import { resolveCron, formatSchedule } from "./cron.js";
-import { detectBackend, getBackend } from "./backends/index.js";
+import {
+  detectBackend,
+  getBackend,
+  type InstallableBackendType,
+} from "./backends/index.js";
+
+function cronIntervalMinutes(cron: string): number {
+  const minutesField = cron.split(/\s+/)[0] ?? "";
+  const m = minutesField.match(/^\*\/(\d+)$/);
+  if (m) return Number(m[1]);
+  // Anything else (specific minute, list, range, *) isn't a sub-5min step.
+  return Number.POSITIVE_INFINITY;
+}
 
 export async function promptScheduleOverwrite(name: string): Promise<boolean> {
   const prompts = (await import("prompts")).default;
@@ -46,11 +58,17 @@ export type AddOptions = {
   envFile?: string;
   baseDir?: string;
   force?: boolean;
+  backend?: InstallableBackendType;
+  /** github backend: extra secrets to wire into the workflow's env block. */
+  secrets?: string[];
+  /** github backend: grant `contents: write` + `pull-requests: write`. */
+  write?: boolean;
+  /** github backend: emit `@<tag>` instead of `@<sha>` for action references. */
+  noPin?: boolean;
 };
 
 export function scheduleAdd(opts: AddOptions): void {
   const baseDir = opts.baseDir ?? defaultBaseDir();
-  const registry = new Registry(baseDir);
 
   const agentFile = path.resolve(opts.file);
   if (!fs.existsSync(agentFile)) {
@@ -64,6 +82,39 @@ export function scheduleAdd(opts: AddOptions): void {
   const name = opts.name ?? path.basename(agentFile, ".agency");
   validateName(name);
 
+  if (opts.backend === "github") {
+    // GitHub Actions cron has 5-minute granularity; warn on tighter cadence.
+    if (cronIntervalMinutes(cron) < 5) {
+      console.warn(
+        `Warning: GitHub Actions cron has a 5-minute minimum granularity. ` +
+          `The cadence "${preset || cron}" will be coarsened to ~5min by GitHub's scheduler.`,
+      );
+    }
+
+    const entry: ScheduleEntry = {
+      name,
+      agentFile,
+      cron,
+      preset,
+      envFile: opts.envFile ? path.resolve(opts.envFile) : "",
+      logDir: "",
+      createdAt: new Date().toISOString(),
+      backend: "launchd", // unused; github backend is not registry-stored
+      github: {
+        secrets: opts.secrets ?? [],
+        write: !!opts.write,
+        noPin: !!opts.noPin,
+        force: !!opts.force,
+      },
+    };
+
+    getBackend("github").install(entry);
+    // Intentionally skip registry.set for github backend.
+    return;
+  }
+
+  // --- non-github (existing behavior) ---
+  const registry = new Registry(baseDir);
   if (registry.has(name) && !opts.force) {
     throw new ScheduleExistsError(name);
   }

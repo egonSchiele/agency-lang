@@ -1,4 +1,4 @@
-.PHONY: all test stdlib agents doc packages-doc
+.PHONY: all test stdlib agents doc packages-doc refresh-action-pins
 
 all:
 	pnpm run templates && pnpm run build && $(MAKE) stdlib && $(MAKE) agents && $(MAKE) doc
@@ -34,3 +34,18 @@ packages-doc:
 test-log:
 	rm -f test-output
 	pnpm run test:agency | tee test-output
+
+# Print the current SHAs for the actions used by `agency schedule add --backend github`.
+# Manually paste into lib/cli/schedule/backends/pinnedActions.ts.
+refresh-action-pins:
+	@echo "Look up these SHAs and update lib/cli/schedule/backends/pinnedActions.ts by hand:"
+	@for spec in actions/checkout@v4 egonSchiele/run-agency-action@v1; do \
+	  repo=$${spec%@*}; tag=$${spec#*@}; \
+	  ref_obj=$$(gh api repos/$$repo/git/ref/tags/$$tag --jq '.object'); \
+	  type=$$(echo "$$ref_obj" | jq -r '.type'); \
+	  sha=$$(echo "$$ref_obj" | jq -r '.sha'); \
+	  if [ "$$type" = "tag" ]; then \
+	    sha=$$(gh api repos/$$repo/git/tags/$$sha --jq '.object.sha'); \
+	  fi; \
+	  printf "  %-40s %s  # %s\n" "$$repo" "$$sha" "$$tag"; \
+	done

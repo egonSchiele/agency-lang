@@ -657,6 +657,24 @@ export function createProgram(deps: CliDependencies = {}): Command {
       "Schedule name (default: derived from filename)",
     )
     .option("--env-file <path>", "Path to .env file")
+    .option(
+      "--backend <type>",
+      "Backend: launchd, systemd, crontab, or github (default: auto-detect)",
+    )
+    .option(
+      "--secret <name>",
+      "github backend: add a GitHub Actions secret to the workflow env (repeatable)",
+      (value: string, prev: string[] = []) => [...prev, value],
+      [] as string[],
+    )
+    .option(
+      "--write",
+      "github backend: grant contents: write + pull-requests: write permissions",
+    )
+    .option(
+      "--no-pin",
+      "github backend: emit @<tag> instead of @<sha> for action references",
+    )
     .action(
       async (
         file: string,
@@ -665,10 +683,31 @@ export function createProgram(deps: CliDependencies = {}): Command {
           cron?: string;
           name?: string;
           envFile?: string;
+          backend?: string;
+          secret?: string[];
+          write?: boolean;
+          // commander exposes `--no-pin` as `pin: false` (defaults to true).
+          pin?: boolean;
         },
       ) => {
+        const addOpts = {
+          file,
+          every: opts.every,
+          cron: opts.cron,
+          name: opts.name,
+          envFile: opts.envFile,
+          backend: opts.backend as
+            | "launchd"
+            | "systemd"
+            | "crontab"
+            | "github"
+            | undefined,
+          secrets: opts.secret,
+          write: opts.write,
+          noPin: opts.pin === false,
+        };
         try {
-          scheduleAdd({ file, ...opts });
+          scheduleAdd(addOpts);
           const name = opts.name || path.basename(file, ".agency");
           console.log(
             color.green(`Schedule "${name}" added successfully.`),
@@ -678,7 +717,7 @@ export function createProgram(deps: CliDependencies = {}): Command {
             const confirmed = await promptScheduleOverwrite(err.scheduleName);
             if (confirmed) {
               try {
-                scheduleAdd({ file, ...opts, force: true });
+                scheduleAdd({ ...addOpts, force: true });
                 console.log(
                   color.green("Schedule overwritten successfully."),
                 );

@@ -24,6 +24,8 @@ export function visitTypes(
       return (
         visitTypes(t.successType, visit) || visitTypes(t.failureType, visit)
       );
+    case "schemaType":
+      return visitTypes(t.inner, visit);
     case "blockType":
       for (const p of t.params)
         if (visitTypes(p.typeAnnotation, visit)) return true;

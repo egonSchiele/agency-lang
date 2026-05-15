@@ -1,0 +1,29 @@
+// THIS FILE WAS AUTO-GENERATED
+// Source: lib/templates/prompts/memory/extraction.mustache
+// Any manual changes will be lost.
+import { apply } from "typestache";
+
+export const template = `Extract structured facts from the following conversation.{{{entityContext:string}}}
+
+Conversation:
+{{{conversationText:string}}}
+
+Return a JSON object with:
+- "entities": array of { name, type, observations: string[] }. If an entity already exists above, use the EXACT same name to merge. Only include new observations.
+- "relations": array of { from, to, type } where from/to are entity names. Only include new relations.
+- "expirations": array of { entityName, observationContent } for any existing observations that are now contradicted by new information.
+
+Only extract facts that are clearly stated or strongly implied. Do not speculate.
+`;
+
+export type TemplateType = {
+  entityContext: string;
+  conversationText: string;
+};
+
+const render = (args: TemplateType) => {
+  return apply(template, args);
+}
+
+export default render;
+    

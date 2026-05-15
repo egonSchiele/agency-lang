@@ -10,7 +10,6 @@ import { AgencyCancelledError } from "../errors.js";
 import type { AgencyCallbacks } from "../hooks.js";
 import type { InterruptResponse } from "../interrupts.js";
 import { LLMClient, SmoltalkClient } from "../llmClient.js";
-import { createMemoryLlmAdapter } from "../memory/llmAdapter.js";
 import { MemoryManager } from "../memory/manager.js";
 import { FileMemoryStore } from "../memory/store.js";
 import type {
@@ -258,10 +257,8 @@ export class RuntimeContext<T> {
       execCtx.memoryManager = new MemoryManager({
         store: this.memoryStore,
         config: this.memoryConfig,
-        llmClient: createMemoryLlmAdapter({
-          llmClient: execCtx._llmClient,
-          smoltalkDefaults: execCtx.smoltalkDefaults,
-        }),
+        llmClient: execCtx._llmClient,
+        smoltalkDefaults: execCtx.smoltalkDefaults,
         source: this.traceConfig?.program ?? "agent",
         memoryIdRef: {
           get: () => {

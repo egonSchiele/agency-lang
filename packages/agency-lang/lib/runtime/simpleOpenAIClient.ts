@@ -1,5 +1,6 @@
 import type { PromptResult, StreamChunk, TokenUsage, CostEstimate } from "smoltalk";
 import type { Result } from "smoltalk";
+import { DEFAULT_EMBEDDING_MODEL } from "../constants.js";
 import type {
   EmbedConfig,
   EmbedResult,
@@ -72,10 +73,10 @@ export class SimpleOpenAIClient implements LLMClient {
 
   async embed(
     input: string | string[],
-    config?: EmbedConfig,
+    config?: Partial<EmbedConfig>,
   ): Promise<Result<EmbedResult>> {
-    const apiKey = config?.apiKey ?? this.apiKey;
-    const model = config?.model ?? "text-embedding-3-small";
+    const apiKey = config?.openAiApiKey ?? this.apiKey;
+    const model = config?.model ?? DEFAULT_EMBEDDING_MODEL;
     const body: Record<string, unknown> = { model, input };
     if (config?.dimensions) body.dimensions = config.dimensions;
     try {

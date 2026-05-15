@@ -5,8 +5,6 @@ export { EmbeddingManager, cosineSimilarity } from "./embeddings.js";
 export type { SimilarityResult } from "./embeddings.js";
 export { MemoryManager } from "./manager.js";
 export type {
-  LlmClient,
   MemoryManagerOptions,
   MemoryIdRef,
 } from "./manager.js";
-export { createMemoryLlmAdapter } from "./llmAdapter.js";

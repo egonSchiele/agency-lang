@@ -1,0 +1,12 @@
+Given the following knowledge graph, identify which facts should be expired based on the user's request.
+
+Knowledge graph:
+{{{graphIndex:string}}}
+
+User wants to forget: {{{query:string}}}
+
+Return a JSON object with two fields:
+- "observations": array of { entityName, observationContent } to expire (substring match)
+- "relations":    array of { fromName, toName, type } to expire
+
+Return { "observations": [], "relations": [] } if nothing matches.

@@ -120,7 +120,7 @@ export class DeterministicClient implements LLMClient {
   // setLLMClient() with their own embed implementation.
   async embed(
     _input: string | string[],
-    _config?: EmbedConfig,
+    _config?: Partial<EmbedConfig>,
   ): Promise<Result<EmbedResult>> {
     return {
       success: false,

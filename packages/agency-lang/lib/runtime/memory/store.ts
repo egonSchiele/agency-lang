@@ -4,6 +4,12 @@ import type {
   EmbeddingIndex,
   MemoryStore,
 } from "./types.js";
+import {
+  MemoryGraphDataSchema,
+  EmbeddingIndexSchema,
+  ConversationSummarySchema,
+} from "./types.js";
+import type { z } from "zod";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -41,7 +47,28 @@ export class FileMemoryStore implements MemoryStore {
     }
   }
 
-  private async readJSON<T>(filePath: string): Promise<T | null> {
+  // Run a Zod schema over `data` and throw a helpful, debuggable error
+  // if the shape is wrong. We include the file path + the failing
+  // field path(s) so a corrupted file can be located and inspected.
+  private validate<T>(
+    schema: z.ZodType<T>,
+    data: unknown,
+    filePath: string,
+    direction: "load" | "save",
+  ): T {
+    const result = schema.safeParse(data);
+    if (!result.success) {
+      const issues = result.error.issues
+        .map((i) => `${i.path.join(".") || "<root>"}: ${i.message}`)
+        .join("; ");
+      throw new Error(
+        `MemoryStore ${direction} schema mismatch at ${filePath}: ${issues}`,
+      );
+    }
+    return result.data;
+  }
+
+  private async readJSON(filePath: string): Promise<unknown | null> {
     if (!fs.existsSync(filePath)) return null;
     const content = await fs.promises.readFile(filePath, "utf-8");
     return JSON.parse(content);
@@ -57,19 +84,23 @@ export class FileMemoryStore implements MemoryStore {
 
   async loadGraph(memoryId: string): Promise<MemoryGraphData> {
     const filePath = path.join(this.dir(memoryId), "graph.json");
-    const data = await this.readJSON<MemoryGraphData>(filePath);
-    return data ?? { entities: [], relations: [], nextId: 1 };
+    const raw = await this.readJSON(filePath);
+    if (raw === null) return { entities: [], relations: [], nextId: 1 };
+    return this.validate(MemoryGraphDataSchema, raw, filePath, "load");
   }
 
   async saveGraph(memoryId: string, graph: MemoryGraphData): Promise<void> {
     this.ensureDir(memoryId);
     const filePath = path.join(this.dir(memoryId), "graph.json");
+    this.validate(MemoryGraphDataSchema, graph, filePath, "save");
     await this.writeJSON(filePath, graph);
   }
 
   async loadEmbeddings(memoryId: string): Promise<EmbeddingIndex | null> {
     const filePath = path.join(this.dir(memoryId), "embeddings.json");
-    return this.readJSON<EmbeddingIndex>(filePath);
+    const raw = await this.readJSON(filePath);
+    if (raw === null) return null;
+    return this.validate(EmbeddingIndexSchema, raw, filePath, "load");
   }
 
   async saveEmbeddings(
@@ -78,12 +109,15 @@ export class FileMemoryStore implements MemoryStore {
   ): Promise<void> {
     this.ensureDir(memoryId);
     const filePath = path.join(this.dir(memoryId), "embeddings.json");
+    this.validate(EmbeddingIndexSchema, index, filePath, "save");
     await this.writeJSON(filePath, index);
   }
 
   async loadSummary(memoryId: string): Promise<ConversationSummary | null> {
     const filePath = path.join(this.dir(memoryId), "summary.json");
-    return this.readJSON<ConversationSummary>(filePath);
+    const raw = await this.readJSON(filePath);
+    if (raw === null) return null;
+    return this.validate(ConversationSummarySchema, raw, filePath, "load");
   }
 
   async saveSummary(
@@ -92,6 +126,7 @@ export class FileMemoryStore implements MemoryStore {
   ): Promise<void> {
     this.ensureDir(memoryId);
     const filePath = path.join(this.dir(memoryId), "summary.json");
+    this.validate(ConversationSummarySchema, summary, filePath, "save");
     await this.writeJSON(filePath, summary);
   }
 }

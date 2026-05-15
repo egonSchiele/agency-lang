@@ -1,3 +1,5 @@
+import compactionTemplate from "../../templates/prompts/memory/compaction.js";
+import mergeSummaryTemplate from "../../templates/prompts/memory/mergeSummary.js";
 import type { MemoryMessage } from "./types.js";
 
 export type CompactionConfig = {
@@ -50,29 +52,15 @@ export function buildCompactionPrompt(messages: MemoryMessage[]): string {
   const conversationText = messages
     .map(
       (m) =>
-        `${m.role}: ${typeof m.content === "string" ? m.content : JSON.stringify(m.content)}`
+        `${m.role}: ${typeof m.content === "string" ? m.content : JSON.stringify(m.content)}`,
     )
     .join("\n");
-
-  return `Summarize the following conversation into a concise narrative. Preserve key facts, decisions, and context that would be important for continuing the conversation later. Do not include unnecessary detail.
-
-Conversation:
-${conversationText}
-
-Write a concise summary:`;
+  return compactionTemplate({ conversationText });
 }
 
 export function buildMergeSummaryPrompt(
   existingSummary: string,
-  newSummary: string
+  newSummary: string,
 ): string {
-  return `Merge these two conversation summaries into a single cohesive summary. The existing summary covers earlier conversation, the new summary covers more recent conversation. Preserve all key facts and decisions.
-
-Existing summary:
-${existingSummary}
-
-New summary:
-${newSummary}
-
-Write the merged summary:`;
+  return mergeSummaryTemplate({ existingSummary, newSummary });
 }

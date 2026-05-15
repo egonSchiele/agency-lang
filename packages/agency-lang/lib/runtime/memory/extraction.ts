@@ -1,23 +1,57 @@
+import { z } from "zod";
+import extractionTemplate from "../../templates/prompts/memory/extraction.js";
 import type { MemoryMessage } from "./types.js";
 import { MemoryGraph } from "./graph.js";
 
-// The structured output type the LLM returns
-export type ExtractionResult = {
-  entities: Array<{
-    name: string;
-    type: string;
-    observations: string[];
-  }>;
-  relations: Array<{
-    from: string; // entity name
-    to: string; // entity name
-    type: string;
-  }>;
-  expirations: Array<{
-    entityName: string;
-    observationContent: string;
-  }>;
-};
+// Zod schema for the structured output the LLM returns. We `safeParse`
+// rather than throwing so a malformed response degrades to a no-op
+// rather than killing the LLM call.
+export const ExtractionResultSchema = z.object({
+  entities: z.array(
+    z.object({
+      name: z.string(),
+      type: z.string(),
+      observations: z.array(z.string()),
+    }),
+  ),
+  relations: z.array(
+    z.object({
+      from: z.string(), // entity name
+      to: z.string(), // entity name
+      type: z.string(),
+    }),
+  ),
+  expirations: z.array(
+    z.object({
+      entityName: z.string(),
+      observationContent: z.string(),
+    }),
+  ),
+});
+
+export type ExtractionResult = z.infer<typeof ExtractionResultSchema>;
+
+/**
+ * Validate that an LLM extraction response has the shape we expect.
+ * Returns null on JSON-parse failure or schema mismatch so the caller
+ * can safely skip rather than throw.
+ */
+export function parseExtractionResult(text: string): ExtractionResult | null {
+  let raw: unknown;
+  try {
+    raw = JSON.parse(text);
+  } catch {
+    return null;
+  }
+  const result = ExtractionResultSchema.safeParse(raw);
+  if (!result.success) {
+    console.warn(
+      `[memory] extraction parse failed: ${result.error.message}`,
+    );
+    return null;
+  }
+  return result.data;
+}
 
 export function buildExtractionPrompt(
   messages: MemoryMessage[],
@@ -36,17 +70,7 @@ export function buildExtractionPrompt(
     )
     .join("\n");
 
-  return `Extract structured facts from the following conversation.${entityContext}
-
-Conversation:
-${conversationText}
-
-Return a JSON object with:
-- "entities": array of { name, type, observations: string[] }. If an entity already exists above, use the EXACT same name to merge. Only include new observations.
-- "relations": array of { from, to, type } where from/to are entity names. Only include new relations.
-- "expirations": array of { entityName, observationContent } for any existing observations that are now contradicted by new information.
-
-Only extract facts that are clearly stated or strongly implied. Do not speculate.`;
+  return extractionTemplate({ entityContext, conversationText });
 }
 
 export type ApplyExtractionOutcome = {

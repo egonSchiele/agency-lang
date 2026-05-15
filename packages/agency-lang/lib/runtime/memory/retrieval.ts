@@ -1,3 +1,4 @@
+import retrievalTemplate from "../../templates/prompts/memory/retrieval.js";
 import type { Entity } from "./types.js";
 import { MemoryGraph } from "./graph.js";
 
@@ -65,13 +66,5 @@ export function buildRetrievalPrompt(
   query: string,
   graph: MemoryGraph
 ): string {
-  const index = graph.toCompactIndex();
-  return `Given the following knowledge graph, identify which entities are relevant to the query. Return a JSON array of entity names.
-
-Knowledge graph:
-${index}
-
-Query: ${query}
-
-Return only the JSON array of entity names, e.g. ["Mom", "Dad"]. Return [] if no entities are relevant.`;
+  return retrievalTemplate({ graphIndex: graph.toCompactIndex(), query });
 }

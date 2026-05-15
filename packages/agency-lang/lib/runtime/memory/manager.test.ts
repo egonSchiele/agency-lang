@@ -5,16 +5,39 @@ import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
 
+// Builds a minimal LLMClient mock. `text` is a vi.fn() so tests can
+// override the next return value with `mockResolvedValueOnce`. The
+// underlying value MUST match the smoltalk PromptResult shape — we
+// wrap it in `{ success: true, value: { output, ... } }` so the
+// MemoryManager's _text() helper unwraps cleanly. `embed` returns a
+// stable 3-d vector. `textStream` is a no-op generator (memory never
+// uses streaming).
 function mockLlmClient() {
+  const textFn = vi.fn();
+  // Default: empty extraction result — most tests override this anyway.
+  textFn.mockResolvedValue(wrapTextResult(
+    JSON.stringify({ entities: [], relations: [], expirations: [] })
+  ));
   return {
-    text: vi.fn().mockResolvedValue(
-      JSON.stringify({
-        entities: [],
-        relations: [],
-        expirations: [],
-      })
-    ),
-    embed: vi.fn().mockResolvedValue([0.1, 0.2, 0.3]),
+    text: textFn,
+    textStream: async function* () {},
+    embed: vi.fn().mockResolvedValue({
+      success: true,
+      value: { embeddings: [[0.1, 0.2, 0.3]], model: "mock-embed" },
+    }),
+  };
+}
+
+function wrapTextResult(output: string) {
+  return {
+    success: true,
+    value: {
+      output,
+      toolCalls: [],
+      model: "mock",
+      usage: { inputTokens: 0, outputTokens: 0, cachedInputTokens: 0, totalTokens: 0 },
+      cost: { inputCost: 0, outputCost: 0, totalCost: 0, currency: "USD" },
+    },
   };
 }
 
@@ -66,13 +89,13 @@ describe("MemoryManager", () => {
     const store = new FileMemoryStore(tmpDir);
     const client = mockLlmClient();
     client.text.mockResolvedValue(
-      JSON.stringify({
+      wrapTextResult(JSON.stringify({
         entities: [
           { name: "Mom", type: "person", observations: ["Likes pottery"] },
         ],
         relations: [],
         expirations: [],
-      })
+      }))
     );
     const manager = new MemoryManager({
       store,
@@ -96,22 +119,25 @@ describe("MemoryManager", () => {
   it("caches per memoryId — switching id keeps both in memory", async () => {
     const store = new FileMemoryStore(tmpDir);
     const client = mockLlmClient();
-    client.text.mockImplementation(async (prompt: string) => {
+    client.text.mockImplementation(async (config: any) => {
+      const prompt = config?.messages?.[0]?.content ?? "";
       if (prompt.includes("Alice")) {
-        return JSON.stringify({
+        return wrapTextResult(JSON.stringify({
           entities: [{ name: "Alice", type: "person", observations: ["a fact"] }],
           relations: [],
           expirations: [],
-        });
+        }));
       }
       if (prompt.includes("Bob")) {
-        return JSON.stringify({
+        return wrapTextResult(JSON.stringify({
           entities: [{ name: "Bob", type: "person", observations: ["b fact"] }],
           relations: [],
           expirations: [],
-        });
+        }));
       }
-      return JSON.stringify({ entities: [], relations: [], expirations: [] });
+      return wrapTextResult(
+        JSON.stringify({ entities: [], relations: [], expirations: [] })
+      );
     });
     const manager = new MemoryManager({
       store,
@@ -133,13 +159,13 @@ describe("MemoryManager", () => {
     const store = new FileMemoryStore(tmpDir);
     const client = mockLlmClient();
     client.text.mockResolvedValue(
-      JSON.stringify({
+      wrapTextResult(JSON.stringify({
         entities: [
           { name: "Mom", type: "person", observations: ["Likes pottery"] },
         ],
         relations: [],
         expirations: [],
-      })
+      }))
     );
     const manager = new MemoryManager({
       store,
@@ -162,13 +188,13 @@ describe("MemoryManager", () => {
     const client = mockLlmClient();
     // First call: extraction populates Mom + observation.
     client.text.mockResolvedValueOnce(
-      JSON.stringify({
+      wrapTextResult(JSON.stringify({
         entities: [
           { name: "Mom", type: "person", observations: ["Likes pottery"] },
         ],
         relations: [],
         expirations: [],
-      })
+      }))
     );
     const manager = new MemoryManager({
       store,
@@ -177,7 +203,7 @@ describe("MemoryManager", () => {
     });
     await manager.remember("Mom likes pottery");
     // Tier 3 LLM call returns an empty list — but tier 1 should still match.
-    client.text.mockResolvedValue("[]");
+    client.text.mockResolvedValue(wrapTextResult("[]"));
     const text = await manager.recall("mom");
     expect(text).toContain("Mom");
     expect(text).toContain("Likes pottery");
@@ -187,7 +213,7 @@ describe("MemoryManager", () => {
     const store = new FileMemoryStore(tmpDir);
     const client = mockLlmClient();
     client.text.mockResolvedValueOnce(
-      JSON.stringify({
+      wrapTextResult(JSON.stringify({
         entities: [
           {
             name: "Mom",
@@ -197,7 +223,7 @@ describe("MemoryManager", () => {
         ],
         relations: [],
         expirations: [],
-      })
+      }))
     );
     const manager = new MemoryManager({
       store,
@@ -207,12 +233,12 @@ describe("MemoryManager", () => {
     await manager.remember("Mom's favorite color is blue");
     // forget asks the LLM what to expire — return a substring that should match.
     client.text.mockResolvedValueOnce(
-      JSON.stringify({
+      wrapTextResult(JSON.stringify({
         observations: [
           { entityName: "Mom", observationContent: "favorite color" },
         ],
         relations: [],
-      })
+      }))
     );
     await manager.forget("forget mom's favorite color");
     const mom = manager.getGraph().findEntityByName("Mom")!;

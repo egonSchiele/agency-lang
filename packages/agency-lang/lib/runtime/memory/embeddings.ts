@@ -1,3 +1,4 @@
+import { DEFAULT_EMBEDDING_MODEL } from "../../constants.js";
 import type { EmbeddingEntry, EmbeddingIndex } from "./types.js";
 
 export function cosineSimilarity(a: number[], b: number[]): number {
@@ -21,7 +22,7 @@ export type SimilarityResult = {
 
 export class EmbeddingManager {
   private entries: EmbeddingEntry[] = [];
-  private model = "text-embedding-3-small";
+  private model = DEFAULT_EMBEDDING_MODEL;
 
   setModel(model: string): void {
     this.model = model;

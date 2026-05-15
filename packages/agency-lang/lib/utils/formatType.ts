@@ -44,6 +44,8 @@ export function formatTypeHint(
       if (s === "any" && f === "any") return "Result";
       return `Result<${s}, ${f}>`;
     }
+    case "schemaType":
+      return `Schema<${recurse(vt.inner)}>`;
     case "functionRefType": {
       const params = vt.params
         .map((p) => `${p.name}${p.typeHint ? `: ${recurse(p.typeHint)}` : ""}`)

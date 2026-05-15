@@ -35,12 +35,12 @@ describe("undefined function diagnostic", () => {
     const errors = errorsFrom(
       `
       node main() {
-        let x = parseJSON("{}")
+        let x = totallyMadeUpFn("{}")
       }
     `,
       WARN,
     );
-    const undef = errors.filter((e) => e.message.includes("parseJSON"));
+    const undef = errors.filter((e) => e.message.includes("totallyMadeUpFn"));
     expect(undef).toHaveLength(1);
     expect(undef[0].severity).toBe("warning");
   });
@@ -148,25 +148,39 @@ describe("undefined function diagnostic", () => {
     expect(errors.filter((e) => e.message.includes("doesNotExist"))).toHaveLength(1);
   });
 
-  it("respects undefinedFunctions: silent (default)", () => {
+  it("warns by default (no config override)", () => {
     const errors = errorsFrom(`
       node main() {
-        parseJSON("{}")
+        totallyMadeUpFn("{}")
       }
     `);
-    expect(errors.filter((e) => e.message.includes("parseJSON"))).toHaveLength(0);
+    const undef = errors.filter((e) => e.message.includes("totallyMadeUpFn"));
+    expect(undef).toHaveLength(1);
+    expect(undef[0].severity).toBe("warning");
+  });
+
+  it("respects undefinedFunctions: silent override", () => {
+    const errors = errorsFrom(
+      `
+      node main() {
+        totallyMadeUpFn("{}")
+      }
+    `,
+      { typechecker: { undefinedFunctions: "silent" } },
+    );
+    expect(errors.filter((e) => e.message.includes("totallyMadeUpFn"))).toHaveLength(0);
   });
 
   it("respects undefinedFunctions: error", () => {
     const errors = errorsFrom(
       `
       node main() {
-        parseJSON("{}")
+        totallyMadeUpFn("{}")
       }
     `,
       { typechecker: { undefinedFunctions: "error" } },
     );
-    const undef = errors.filter((e) => e.message.includes("parseJSON"));
+    const undef = errors.filter((e) => e.message.includes("totallyMadeUpFn"));
     expect(undef).toHaveLength(1);
     expect(undef[0].severity).toBe("error");
   });
@@ -285,6 +299,41 @@ describe("undefined function diagnostic — JS namespaces", () => {
     );
     // toString is NOT defined in Agency — should be reported as undefined.
     expect(errors.filter((e) => e.message.includes("toString"))).toHaveLength(1);
+  });
+});
+
+describe("undefined function diagnostic — JS imports", () => {
+  // `import { foo } from "./helpers.js"` doesn't go through the symbol
+  // table (those are JS, not Agency), but the names ARE bound at runtime.
+  // Make sure the diagnostic doesn't false-positive on them.
+  it("does not warn on calls to JS-imported functions", () => {
+    const source = [
+      'import { _now, _add } from "./helpers.js"',
+      "node main() {",
+      "  let t = _now()",
+      "  return _add(t, 1)",
+      "}",
+      "",
+    ].join("\n");
+    const errors = errorsFrom(source, WARN);
+    expect(errors.filter((e) => e.message.includes("'_now'"))).toHaveLength(0);
+    expect(errors.filter((e) => e.message.includes("'_add'"))).toHaveLength(0);
+  });
+
+  it("respects aliases on JS imports", () => {
+    const source = [
+      'import { foo as bar } from "./helpers.js"',
+      "node main() {",
+      "  return bar(1)",
+      "}",
+      "",
+    ].join("\n");
+    const errors = errorsFrom(source, WARN);
+    expect(errors.filter((e) => e.message.includes("'bar'"))).toHaveLength(0);
+    // The original name is NOT bound; only the alias.
+    expect(
+      errors.filter((e) => e.message.includes("'foo'") && e.message.includes("not defined")),
+    ).toHaveLength(0);
   });
 });
 

@@ -117,20 +117,18 @@ export function synthType(
       return synthTryExpression(expr, scope, ctx);
     case "schemaExpression":
       // `schema(Type)` is a language built-in that bridges *type space* and
-      // *value space*: the parser captures `Type` as a VariableType (not as a
-      // value expression — see schemaExpressionParser in parsers.ts), and at
-      // runtime the SchemaExpression node compiles to a zod schema constructed
-      // from that type.
+      // *value space*: the parser captures `Type` as a VariableType (not as
+      // a value expression — see schemaExpressionParser in parsers.ts), and
+      // at runtime the SchemaExpression node compiles to a zod schema
+      // constructed from that type.
       //
-      // We currently synthesize its result as "any" because there's no
-      // structured `Schema<T>` type in Agency's type system yet. Adding one
-      // would let downstream code see e.g. `Schema<MyType>` and validate
-      // .parse() / .safeParse() return types — that's future work, deliberately
-      // out of scope here.
+      // We synth it as `Schema<T>` so chained `.parse(...)` /
+      // `.parseJSON(...)` calls can track the validated type through to a
+      // `Result<T, any>` (see synthValueAccess for the method handling).
       //
       // `schema` is listed in RESERVED_FUNCTION_NAMES so users can't define
       // their own `def schema()` (which would create parse ambiguity).
-      return "any";
+      return { type: "schemaType", inner: expr.typeArg };
     default:
       return "any";
   }
@@ -551,6 +549,20 @@ export function synthValueAccess(
         break;
       }
       case "methodCall": {
+        // `schema(T).parse(x)` and `.parseJSON(s)` both return Result<T, any>
+        // at runtime (see lib/runtime/schema.ts). Track the inner type
+        // through the chain so callers can use `.value` / `catch` / pipes.
+        if (resolved.type === "schemaType") {
+          const methodName = element.functionCall.functionName;
+          if (methodName === "parse" || methodName === "parseJSON") {
+            currentType = {
+              type: "resultType",
+              successType: resolved.inner,
+              failureType: ANY_T,
+            };
+            break;
+          }
+        }
         return "any";
       }
     }

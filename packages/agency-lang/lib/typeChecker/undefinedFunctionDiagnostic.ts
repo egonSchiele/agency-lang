@@ -6,8 +6,9 @@ import { walkNodes } from "../utils/node.js";
 import {
   resolveCall,
   lookupJsMember,
-  JS_GLOBALS,
+  isJsGlobalBase,
 } from "./resolveCall.js";
+import { collectProgramShadowing } from "./shadowing.js";
 
 /**
  * Emit a diagnostic for every call site that doesn't resolve to a known
@@ -26,17 +27,14 @@ export function checkUndefinedFunctions(
   scopes: ScopeInfo[],
   ctx: TypeCheckerContext,
 ): void {
-  const mode = ctx.config.typechecker?.undefinedFunctions ?? "silent";
+  // Default is "warn" — the registries (BUILTIN_FUNCTION_TYPES,
+  // importedFunctions via SymbolTable, JS_GLOBALS) are now accurate enough
+  // that false positives are rare. Users can opt back into silence with
+  // `{ typechecker: { undefinedFunctions: "silent" } }` in agency.json.
+  const mode = ctx.config.typechecker?.undefinedFunctions ?? "warn";
   if (mode === "silent") return;
 
-  // Collect names from `import node { ... } from "..."` statements at the
-  // program level — `nodeDefs` only includes locally-defined nodes.
-  const importedNodeNames: string[] = [];
-  for (const node of ctx.programNodes) {
-    if (node.type === "importNodeStatement") {
-      importedNodeNames.push(...node.importedNodes);
-    }
-  }
+  const shadowing = collectProgramShadowing(ctx.programNodes);
 
   for (const info of scopes) {
     if (!info.name) continue;
@@ -57,9 +55,9 @@ export function checkUndefinedFunctions(
           // also incorrectly treat `obj.foo()` as a bare call to `foo`.
           const parent = ancestors[ancestors.length - 1];
           if (parent && (parent as AgencyNode).type === "valueAccess") continue;
-          checkBareCall(node, info.scope, ctx, mode, importedNodeNames);
+          checkBareCall(node, info.scope, ctx, mode, shadowing.importedNodeNames);
         } else if (node.type === "valueAccess") {
-          checkAccessChain(node, info.scope, ctx, mode);
+          checkAccessChain(node, info.scope, ctx, mode, shadowing);
         }
       }
     });
@@ -88,6 +86,7 @@ function checkBareCall(
     nodeDefs: ctx.nodeDefs,
     importedFunctions: ctx.importedFunctions,
     importedNodeNames,
+    jsImportedNames: ctx.jsImportedNames,
     scopeHas: (name) => scope.has(name),
   });
   if (resolution.kind !== "unresolved") return;
@@ -103,16 +102,25 @@ function checkAccessChain(
   scope: Scope,
   ctx: TypeCheckerContext,
   mode: "warn" | "error",
+  shadowing: { importedNodeNames: readonly string[]; classNames: object },
 ): void {
   // Only handle <variableName>.<member>... chains where the base is a JS
   // namespace global. Everything else (objects in scope, computed lookups,
   // optional chains) is the typechecker's job — not this diagnostic's.
   if (expr.base.type !== "variableName") return;
   const baseName = expr.base.value;
-  if (scope.has(baseName)) return;
-  if (Object.prototype.hasOwnProperty.call(ctx.functionDefs, baseName)) return;
-  if (Object.prototype.hasOwnProperty.call(ctx.importedFunctions, baseName)) return;
-  if (!Object.prototype.hasOwnProperty.call(JS_GLOBALS, baseName)) return;
+  if (
+    !isJsGlobalBase(baseName, {
+      scope,
+      functionDefs: ctx.functionDefs,
+      nodeDefs: ctx.nodeDefs,
+      importedFunctions: ctx.importedFunctions,
+      importedNodeNames: shadowing.importedNodeNames,
+      jsImportedNames: ctx.jsImportedNames,
+      classNames: shadowing.classNames,
+    })
+  )
+    return;
 
   // Only diagnose call sites — `Math.PI` (property lookup) is a value, not a
   // function. The chain must end in a callable element.

@@ -50,6 +50,8 @@ export type TypeCheckerContext = {
   functionDefs: Record<string, FunctionDefinition>;
   nodeDefs: Record<string, GraphNodeDefinition>;
   importedFunctions: Record<string, ImportedFunctionSignature>;
+  /** Names brought in by non-Agency JS imports — see CompilationUnit. */
+  jsImportedNames: Record<string, true>;
   interruptKindsByFunction: Record<string, InterruptKind[]>;
   errors: TypeCheckError[];
   inferredReturnTypes: Record<string, VariableType | "any">;

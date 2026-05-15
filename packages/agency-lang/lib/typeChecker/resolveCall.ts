@@ -2,6 +2,15 @@ import type { FunctionDefinition, GraphNodeDefinition } from "../types.js";
 import type { ImportedFunctionSignature } from "../compilationUnit.js";
 import type { BuiltinSignature } from "./types.js";
 import { BUILTIN_FUNCTION_TYPES } from "./builtins.js";
+import {
+  ANY_T,
+  BOOLEAN_T,
+  NUMBER_T,
+  STRING_T,
+} from "./primitives.js";
+
+const stringArray = { type: "arrayType", elementType: STRING_T } as const;
+const anyArray = { type: "arrayType", elementType: ANY_T } as const;
 
 /**
  * Names of Agency's *built-in* functions — language primitives with no
@@ -82,87 +91,114 @@ const namespace = (
   members,
 });
 
+// Common single-number-arg, returns-number signature (Math.floor / ceil / round / abs / sqrt / sign / trunc / cbrt etc.).
+const numToNum: BuiltinSignature = { params: [NUMBER_T], returnType: NUMBER_T };
+
 export const JS_GLOBALS: Record<string, JsRegistryEntry> = {
   // --- Flat callable globals ---
-  parseInt: callable(),
-  parseFloat: callable(),
-  isNaN: callable(),
-  isFinite: callable(),
-  encodeURIComponent: callable(),
-  decodeURIComponent: callable(),
-  encodeURI: callable(),
-  decodeURI: callable(),
+  // `parseInt` accepts an optional radix; we accept a 1-or-2-arg call against
+  // (string|number, number) which covers the realistic cases without false
+  // positives on numeric inputs (`parseInt(0.5)`, `parseInt(1, 2)`).
+  parseInt: callable({
+    params: [{ type: "unionType", types: [STRING_T, NUMBER_T] }, NUMBER_T],
+    minParams: 1,
+    returnType: NUMBER_T,
+  }),
+  parseFloat: callable({
+    params: [{ type: "unionType", types: [STRING_T, NUMBER_T] }],
+    returnType: NUMBER_T,
+  }),
+  isNaN: callable({ params: ["any"], returnType: BOOLEAN_T }),
+  isFinite: callable({ params: ["any"], returnType: BOOLEAN_T }),
+  encodeURIComponent: callable({ params: [STRING_T], returnType: STRING_T }),
+  decodeURIComponent: callable({ params: [STRING_T], returnType: STRING_T }),
+  encodeURI: callable({ params: [STRING_T], returnType: STRING_T }),
+  decodeURI: callable({ params: [STRING_T], returnType: STRING_T }),
   setTimeout: callable(),
   setInterval: callable(),
   clearTimeout: callable(),
   clearInterval: callable(),
   queueMicrotask: callable(),
-  structuredClone: callable(),
+  structuredClone: callable({ params: ["any"], returnType: "any" }),
   BigInt: callable(),
   Symbol: callable(),
 
   // --- Namespaces ---
   JSON: namespace({
-    parse: callable(),
-    stringify: callable(),
+    parse: callable({ params: [STRING_T], returnType: "any" }),
+    // JSON.stringify(value, replacer?, space?). Replacer can be many things —
+    // type as `any` to avoid false positives.
+    stringify: callable({
+      params: ["any", "any", { type: "unionType", types: [STRING_T, NUMBER_T] }],
+      minParams: 1,
+      returnType: STRING_T,
+    }),
   }),
   Math: namespace({
-    floor: callable(),
-    ceil: callable(),
-    round: callable(),
-    abs: callable(),
-    max: callable(),
-    min: callable(),
-    pow: callable(),
-    sqrt: callable(),
-    random: callable(),
-    log: callable(),
-    log2: callable(),
-    log10: callable(),
-    exp: callable(),
-    sin: callable(),
-    cos: callable(),
-    tan: callable(),
-    asin: callable(),
-    acos: callable(),
-    atan: callable(),
-    atan2: callable(),
-    sign: callable(),
-    trunc: callable(),
-    cbrt: callable(),
-    hypot: callable(),
+    floor: callable(numToNum),
+    ceil: callable(numToNum),
+    round: callable(numToNum),
+    abs: callable(numToNum),
+    sqrt: callable(numToNum),
+    sign: callable(numToNum),
+    trunc: callable(numToNum),
+    cbrt: callable(numToNum),
+    log: callable(numToNum),
+    log2: callable(numToNum),
+    log10: callable(numToNum),
+    exp: callable(numToNum),
+    sin: callable(numToNum),
+    cos: callable(numToNum),
+    tan: callable(numToNum),
+    asin: callable(numToNum),
+    acos: callable(numToNum),
+    atan: callable(numToNum),
+    // Variadic — keep arity loose so `Math.max(1, 2, 3)` doesn't false-positive.
+    max: callable({ params: [], restParam: NUMBER_T, returnType: NUMBER_T }),
+    min: callable({ params: [], restParam: NUMBER_T, returnType: NUMBER_T }),
+    pow: callable({ params: [NUMBER_T, NUMBER_T], returnType: NUMBER_T }),
+    atan2: callable({ params: [NUMBER_T, NUMBER_T], returnType: NUMBER_T }),
+    hypot: callable({ params: [], restParam: NUMBER_T, returnType: NUMBER_T }),
+    random: callable({ params: [], returnType: NUMBER_T }),
   }),
   Object: namespace({
-    keys: callable(),
-    values: callable(),
-    entries: callable(),
+    keys: callable({ params: ["any"], returnType: stringArray }),
+    values: callable({ params: ["any"], returnType: anyArray }),
+    entries: callable({ params: ["any"], returnType: anyArray }),
+    fromEntries: callable({ params: [anyArray], returnType: "any" }),
     assign: callable(),
-    freeze: callable(),
-    fromEntries: callable(),
-    getOwnPropertyNames: callable(),
-    getPrototypeOf: callable(),
+    freeze: callable({ params: ["any"], returnType: "any" }),
+    getOwnPropertyNames: callable({ params: ["any"], returnType: stringArray }),
+    getPrototypeOf: callable({ params: ["any"], returnType: "any" }),
     setPrototypeOf: callable(),
   }),
   Array: namespace({
-    isArray: callable(),
+    isArray: callable({ params: ["any"], returnType: BOOLEAN_T }),
     from: callable(),
     of: callable(),
   }),
   String: namespace({
-    fromCharCode: callable(),
+    fromCharCode: callable({ params: [], restParam: NUMBER_T, returnType: STRING_T }),
     raw: callable(),
   }),
   Number: namespace({
-    isInteger: callable(),
-    isFinite: callable(),
-    isNaN: callable(),
-    isSafeInteger: callable(),
-    parseFloat: callable(),
-    parseInt: callable(),
+    isInteger: callable({ params: ["any"], returnType: BOOLEAN_T }),
+    isFinite: callable({ params: ["any"], returnType: BOOLEAN_T }),
+    isNaN: callable({ params: ["any"], returnType: BOOLEAN_T }),
+    isSafeInteger: callable({ params: ["any"], returnType: BOOLEAN_T }),
+    parseFloat: callable({
+      params: [{ type: "unionType", types: [STRING_T, NUMBER_T] }],
+      returnType: NUMBER_T,
+    }),
+    parseInt: callable({
+      params: [{ type: "unionType", types: [STRING_T, NUMBER_T] }, NUMBER_T],
+      minParams: 1,
+      returnType: NUMBER_T,
+    }),
   }),
   Date: namespace({
-    now: callable(),
-    parse: callable(),
+    now: callable({ params: [], returnType: NUMBER_T }),
+    parse: callable({ params: [STRING_T], returnType: NUMBER_T }),
     UTC: callable(),
   }),
   Promise: namespace({
@@ -173,6 +209,8 @@ export const JS_GLOBALS: Record<string, JsRegistryEntry> = {
     race: callable(),
     any: callable(),
   }),
+  // console.* — variadic, intentionally untyped so `console.log(1, 2, 3)` etc.
+  // never false-positives.
   console: namespace({
     log: callable(),
     error: callable(),
@@ -242,6 +280,8 @@ type ResolveCallInput = {
   importedFunctions: Record<string, ImportedFunctionSignature>;
   /** Names imported via `import node { ... } from "..."`. */
   importedNodeNames: readonly string[];
+  /** Names imported via `import { foo } from "./helpers.js"` (non-Agency). */
+  jsImportedNames?: object;
   scopeHas: (name: string) => boolean;
 };
 
@@ -256,13 +296,12 @@ type ResolveCallInput = {
  *                   (`import { foo } from "./other.agency"` or
  *                   `import node { foo } from "./other.agency"`).
  *   builtin       — has a typed signature in `BUILTIN_FUNCTION_TYPES`.
- *                   Includes both true language primitives (`success`,
- *                   `failure`, `llm`, `approve`, `reject`, `propagate`,
- *                   `checkpoint`, `getCheckpoint`, `restore`,
- *                   `isSuccess`, `isFailure`) AND stdlib functions whose
- *                   signatures are hardcoded for typechecker convenience
- *                   (`print`, `fetch`, `read`, etc. — see the NOTE in
- *                   `builtins.ts` flagging this as tech debt).
+ *                   True language primitives only: `success`, `failure`,
+ *                   `llm`, `approve`, `reject`, `propagate`, `checkpoint`,
+ *                   `getCheckpoint`, `restore`, `isSuccess`, `isFailure`.
+ *                   Stdlib functions (`print`, `fetch`, `read`, etc.)
+ *                   resolve as `imported` instead, via the auto-injected
+ *                   `import { ... } from "std::index"` statement.
  *   reserved      — listed in `RESERVED_FUNCTION_NAMES` but NOT in
  *                   `BUILTIN_FUNCTION_TYPES`. In practice these are the
  *                   three names parsed into their own AST node type
@@ -281,6 +320,7 @@ type ResolveCallInput = {
 export type CallResolution =
   | { kind: "def" }
   | { kind: "imported" }
+  | { kind: "jsImported" }
   | { kind: "builtin" }
   | { kind: "reserved" }
   | { kind: "scopeBinding" }
@@ -299,9 +339,11 @@ const has = (obj: object, name: string): boolean =>
  * Resolution order matters:
  *
  *   1. Local `def`/`node`             — user code wins.
- *   2. Imported from another file     — cross-file `def`/`node`.
- *   3. `BUILTIN_FUNCTION_TYPES`       — language primitives + hardcoded
- *                                       stdlib signatures.
+ *   2. Imported from another file     — cross-file `def`/`node`. Stdlib
+ *                                       functions (print, fetch, read,
+ *                                       …) resolve here via the
+ *                                       auto-injected std::index import.
+ *   3. `BUILTIN_FUNCTION_TYPES`       — Agency language primitives.
  *   4. `RESERVED_FUNCTION_NAMES`      — defensive fallback for the three
  *                                       names parsed into their own AST
  *                                       node type (schema / interrupt /
@@ -310,11 +352,41 @@ const has = (obj: object, name: string): boolean =>
  *   5. Local scope binding            — lambdas, `partial`, `for` vars.
  *   6. Flat JS global callable        — parseInt, setTimeout, etc.
  *   7. Otherwise: unresolved.
- *
- * Imports take precedence over builtins so a real stdlib `def print()`
- * shadows the hardcoded BUILTIN_FUNCTION_TYPES signature when the
- * SymbolTable wires it through. See the NOTE in `builtins.ts`.
  */
+/**
+ * Inputs for {@link isJsGlobalBase}. The shape mirrors {@link ResolveCallInput}
+ * but adds class and import-node bookkeeping so user definitions of
+ * `JSON` / `Math` / etc. (via `node`, `import node`, or `class`) cleanly
+ * opt out of JS_GLOBALS validation.
+ */
+export type ShadowingInput = {
+  scope: { has(name: string): boolean };
+  functionDefs: object;
+  nodeDefs: object;
+  importedFunctions: object;
+  importedNodeNames: readonly string[];
+  jsImportedNames?: object;
+  classNames: object;
+};
+
+/**
+ * `true` only when `name` resolves to a JS global *and* nothing user-defined
+ * shadows it. Use this to gate JS-namespace member validation (e.g.
+ * `JSON.parse(...)`) and avoid checking against `JS_GLOBALS` when the user
+ * has their own `node JSON()` / `class JSON` / `let JSON = …`.
+ */
+export function isJsGlobalBase(name: string, input: ShadowingInput): boolean {
+  if (!has(JS_GLOBALS, name)) return false;
+  if (input.scope.has(name)) return false;
+  if (has(input.functionDefs, name)) return false;
+  if (has(input.nodeDefs, name)) return false;
+  if (has(input.importedFunctions, name)) return false;
+  if (input.importedNodeNames.includes(name)) return false;
+  if (input.jsImportedNames && has(input.jsImportedNames, name)) return false;
+  if (has(input.classNames, name)) return false;
+  return true;
+}
+
 export function resolveCall(
   name: string,
   input: ResolveCallInput,
@@ -323,6 +395,8 @@ export function resolveCall(
     return { kind: "def" };
   if (has(input.importedFunctions, name)) return { kind: "imported" };
   if (input.importedNodeNames.includes(name)) return { kind: "imported" };
+  if (input.jsImportedNames && has(input.jsImportedNames, name))
+    return { kind: "jsImported" };
   if (has(BUILTIN_FUNCTION_TYPES, name)) return { kind: "builtin" };
   if (RESERVED_FUNCTION_NAMES.has(name)) return { kind: "reserved" };
   if (input.scopeHas(name)) return { kind: "scopeBinding" };

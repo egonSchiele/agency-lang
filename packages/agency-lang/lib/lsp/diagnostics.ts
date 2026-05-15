@@ -14,6 +14,57 @@ import { AgencyProgram } from "../types.js";
 import { CompilationUnit } from "../compilationUnit.js";
 import { buildSemanticIndex, type SemanticIndex } from "./semantics.js";
 import type { ScopeInfo } from "../typeChecker/types.js";
+import { ImportStatement } from "../types/importStatement.js";
+import { resolveAgencyImportPath } from "../importPaths.js";
+
+// Names auto-imported from std::index by the parser template. Kept in sync
+// with lib/templates/backends/agency/template.mustache.
+const STDLIB_AUTO_IMPORTS: string[] = [
+  "print", "printJSON", "parseJSON", "input", "sleep", "round", "fetch",
+  "fetchJSON", "read", "write", "readImage", "notify", "range",
+  "mostCommon", "keys", "values", "entries", "emit",
+];
+
+/**
+ * Inject a synthetic `import { ... } from "std::index"` so the LSP sees the
+ * same auto-imports the CLI parser template prepends — see
+ * lib/templates/backends/agency/template.mustache. The synthetic is added
+ * unconditionally (alongside any user `import … from "std::index"`) so a
+ * user who imports a *subset* like `import { range } from "std::index"`
+ * still gets `print`, `read`, etc. from the auto-imports — matching CLI
+ * behavior where the template prepends a separate fixed import line.
+ *
+ * Skipped when the SymbolTable doesn't have std::index loaded — that's
+ * the test-with-empty-SymbolTable case and synthesizing here would just
+ * produce downstream "Symbol 'print' is not defined" noise.
+ */
+function ensureStdlibImport(
+  program: AgencyProgram,
+  symbolTable: SymbolTable,
+  fsPath: string,
+): AgencyProgram {
+  let stdlibPath: string;
+  try {
+    stdlibPath = resolveAgencyImportPath("std::index", fsPath);
+  } catch {
+    return program;
+  }
+  if (!symbolTable.has(stdlibPath)) return program;
+  const synthetic: ImportStatement = {
+    type: "importStatement",
+    importedNames: [
+      {
+        type: "namedImport",
+        importedNames: STDLIB_AUTO_IMPORTS,
+        safeNames: [],
+        aliases: {},
+      },
+    ],
+    modulePath: "std::index",
+    isAgencyImport: true,
+  };
+  return { ...program, nodes: [synthetic, ...program.nodes] };
+}
 
 type DiagnosticsResult = {
   diagnostics: Diagnostic[];
@@ -57,6 +108,14 @@ export function runDiagnostics(
   }
 
   let program = parseResult.result;
+
+  // The CLI parses source through a template that auto-injects an
+  // `import { ... } from "std::index"` statement. The LSP path uses
+  // `applyTemplate: false` so editor positions match the user's source —
+  // but that means stdlib calls (`print`, `read`, …) would resolve as
+  // undefined here. Synthesize the same import so they resolve through
+  // `importedFunctions` like in the CLI flow.
+  program = ensureStdlibImport(program, symbolTable, fsPath);
 
   try {
     program = resolveReExports(program, symbolTable, fsPath);

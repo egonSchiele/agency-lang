@@ -103,11 +103,18 @@ export interface AgencyConfig {
     strictTypes?: boolean;
     /**
      * What to do when a function call cannot be resolved:
+     * - "silent": ignore
+     * - "warn": emit a warning (default)
+     * - "error": emit an error
+     */
+    undefinedFunctions?: "silent" | "warn" | "error";
+    /**
+     * What to do when a variable reference cannot be resolved:
      * - "silent": ignore (default for the initial landing)
      * - "warn": emit a warning
      * - "error": emit an error
      */
-    undefinedFunctions?: "silent" | "warn" | "error";
+    undefinedVariables?: "silent" | "warn" | "error";
   };
 
   /** Enable debugger mode — auto-inserts breakpoints before every step */
@@ -223,6 +230,7 @@ export const AgencyConfigSchema = z
         strict: z.boolean(),
         strictTypes: z.boolean(),
         undefinedFunctions: z.enum(["silent", "warn", "error"]),
+        undefinedVariables: z.enum(["silent", "warn", "error"]),
       })
       .partial(),
     debugger: z.boolean(),

@@ -36,7 +36,9 @@ import {
   checkUnhandledInterruptWarnings,
 } from "./interruptAnalysis.js";
 import { checkUndefinedFunctions } from "./undefinedFunctionDiagnostic.js";
+import { checkUndefinedVariables } from "./undefinedVariableDiagnostic.js";
 import { RESERVED_FUNCTION_NAMES } from "./resolveCall.js";
+import { walkNodes } from "../utils/node.js";
 
 export type { TypeCheckError, TypeCheckResult } from "./types.js";
 
@@ -51,6 +53,7 @@ export class TypeChecker {
   private functionDefs: Record<string, FunctionDefinition> = {};
   private nodeDefs: Record<string, GraphNodeDefinition> = {};
   private importedFunctions: Record<string, ImportedFunctionSignature> = {};
+  private jsImportedNames: Record<string, true> = {};
   private interruptKindsByFunction: Record<string, InterruptKind[]> = {};
   private errors: TypeCheckError[] = [];
   private inferredReturnTypes: Record<string, VariableType | "any"> = {};
@@ -71,6 +74,7 @@ export class TypeChecker {
       resolved.graphNodes.map((n) => [n.nodeName, n]),
     );
     this.importedFunctions = { ...resolved.importedFunctions };
+    this.jsImportedNames = { ...resolved.jsImportedNames };
     this.interruptKindsByFunction = resolved.interruptKindsByFunction ?? {};
     this.sourceText = resolved.sourceText;
   }
@@ -97,6 +101,7 @@ export class TypeChecker {
       functionDefs: this.functionDefs,
       nodeDefs: this.nodeDefs,
       importedFunctions: this.importedFunctions,
+      jsImportedNames: this.jsImportedNames,
       interruptKindsByFunction: this.interruptKindsByFunction,
       errors: this.errors,
       inferredReturnTypes: this.inferredReturnTypes,
@@ -168,6 +173,24 @@ export class TypeChecker {
       }
     }
 
+    // 1d. Reserved names cannot be `let`/`const` / `static const` declared
+    // either. The variable would be unusable as a function (e.g. `schema(X)`
+    // always parses as a SchemaExpression regardless of scope), and shadowing
+    // primitives like `success`/`failure` silently changes semantics.
+    // Walk every assignment in the program — top-level and inside function /
+    // graphNode bodies — and check the variable name. Only fires on actual
+    // declarations (where `declKind` is set), not reassignments.
+    for (const { node } of walkNodes(this.program.nodes)) {
+      if (node.type !== "assignment") continue;
+      if (!node.declKind) continue;
+      if (RESERVED_FUNCTION_NAMES.has(node.variableName)) {
+        this.errors.push({
+          message: `'${node.variableName}' is a reserved built-in; cannot be redefined.`,
+          loc: node.loc,
+        });
+      }
+    }
+
     // Validated params let a function short-circuit with a failure before
     // the body runs. An explicit non-Result return type contradicts that.
     // (Unannotated returns are auto-wrapped during inference instead.)
@@ -210,6 +233,9 @@ export class TypeChecker {
 
     // 7. Check for undefined function calls (config-controlled severity).
     checkUndefinedFunctions(scopes, ctx);
+
+    // 8. Check for undefined variable references (config-controlled severity).
+    checkUndefinedVariables(scopes, ctx);
 
     return {
       errors: this.applySuppressions(this.deduplicateErrors()),

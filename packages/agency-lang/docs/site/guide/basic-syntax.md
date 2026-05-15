@@ -149,6 +149,20 @@ Mixing dimensions is a type error:
 1s + $5.00    // ERROR: cannot add time and cost
 ```
 
+### Destructuring and pattern matching
+
+Array and object destructuring work in `let` / `const` declarations and
+in `for` loops:
+
+```ts
+let [a, b, ...rest]       = items
+let { name, age }         = person
+for ({ name, age } in users) { ... }
+```
+
+The `is` operator, optional guards on `match` arms, and full pattern
+matching are documented in the [Pattern matching guide](/guide/pattern-matching).
+
 ### JavaScript features that don't exist in Agency
 - lambdas
 - async/await. Everything is awaited by default, and there are specific constructs for [concurrency](/guide/concurrency).

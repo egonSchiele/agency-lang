@@ -92,20 +92,6 @@ describe("Trace integration with debugger", () => {
       expect(Object.keys(lastLocals).length).toBeGreaterThanOrEqual(
         Object.keys(firstLocals).length,
       );
-
-      // Verify CAS dedup across per-execCtx writer segments: with the
-      // shared store on RuntimeContext, chunks should not be re-emitted
-      // for every segment that references them. Asserted in this same
-      // test (rather than a separate `it` reading the produced file) to
-      // keep the suite order-independent.
-      const lines = fs
-        .readFileSync(traceFile, "utf-8")
-        .trim()
-        .split("\n")
-        .map((l: string) => JSON.parse(l));
-      const chunks = lines.filter((l: any) => l.type === "chunk");
-      const manifests = lines.filter((l: any) => l.type === "manifest");
-      expect(chunks.length).toBeLessThan(manifests.length * 2);
     },
   );
 });

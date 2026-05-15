@@ -1,3 +1,5 @@
+import * as fs from "fs";
+import * as path from "path";
 import { MessageJSON } from "smoltalk";
 import { callHook } from "./hooks.js";
 import type { AgencyCallbacks } from "./hooks.js";
@@ -9,6 +11,7 @@ import {
 } from "./errors.js";
 import { State, StateStack } from "./state/stateStack.js";
 import { ThreadStore } from "./state/threadStore.js";
+import { resolveTraceFilePath } from "./trace/traceWriter.js";
 import { GraphState, InternalFunctionState, RunNodeResult } from "./types.js";
 import { createReturnObject } from "./utils.js";
 import { color } from "@/utils/termcolors.js";
@@ -110,6 +113,18 @@ export async function runNode({
   abortSignal?: AbortSignal;
 }): Promise<RunNodeResult<any>> {
   const runId = nanoid();
+
+  // runNode is the entry point for a fresh agent run (resumes go through
+  // respondToInterrupts instead). If trace output is enabled, truncate the
+  // target file so this run starts with a clean slate. FileSink opens in
+  // append mode, so subsequent per-execCtx writers within this same run
+  // accumulate into the same file naturally.
+  const tracePath = resolveTraceFilePath(ctx.traceConfig, runId);
+  if (tracePath) {
+    fs.mkdirSync(path.dirname(tracePath), { recursive: true });
+    fs.writeFileSync(tracePath, "");
+  }
+
   const execCtx = await ctx.createExecutionContext(runId);
   if (initializeGlobals) {
     await initializeGlobals(execCtx);

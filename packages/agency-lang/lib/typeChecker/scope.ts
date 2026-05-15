@@ -23,6 +23,20 @@ export class Scope {
     if (isConst) target.consts[name] = true;
   }
 
+  /**
+   * Declare a binding *only* in this scope, without delegating to the
+   * enclosing function scope. Use this for genuinely block-scoped
+   * bindings whose lifetime ends with the enclosing block (e.g. callback
+   * parameters introduced when synthesizing the body of a `xs.map(\(x) ->
+   * …)` lambda — `x` must not leak to the surrounding function).
+   *
+   * Behaves like `declare` for one-shot use: `lookup` will find it via
+   * the normal parent walk, and dropping the scope drops the binding.
+   */
+  declareLocal(name: string, type: ScopeType): void {
+    this.vars[name] = type;
+  }
+
   lookup(name: string): ScopeType | undefined {
     // Own-property check — `name in this.vars` walks the prototype chain
     // and would falsely match names like "toString" / "constructor".

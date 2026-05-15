@@ -302,27 +302,23 @@ type ResolveCallInput = {
  *                   Stdlib functions (`print`, `fetch`, `read`, etc.)
  *                   resolve as `imported` instead, via the auto-injected
  *                   `import { ... } from "std::index"` statement.
- *   reserved      — listed in `RESERVED_FUNCTION_NAMES` but NOT in
- *                   `BUILTIN_FUNCTION_TYPES`. In practice these are the
- *                   three names parsed into their own AST node type
- *                   (`schema` → SchemaExpression, `interrupt` →
- *                   InterruptStatement, `debugger` → DebuggerStatement),
- *                   so they don't normally reach this function as a
- *                   `functionCall`. Defensive — if the parser ever
- *                   emits one anyway, we don't want a false positive.
  *   scopeBinding  — bound in the local scope (lambda, `partial`,
  *                   `for` variable, etc.).
  *   jsGlobal      — flat callable JS global (`parseInt`, `setTimeout`).
  *                   Namespace member calls like `JSON.parse(...)` are
  *                   handled separately via `lookupJsMember`.
  *   unresolved    — none of the above. The diagnostic emits.
+ *
+ * The other RESERVED_FUNCTION_NAMES entries (`schema` → SchemaExpression,
+ * `interrupt` → InterruptStatement, `debugger` → DebuggerStatement) are
+ * parsed into their own AST node type and never reach `resolveCall` as a
+ * `functionCall`, so there's no `kind: "reserved"` here.
  */
 export type CallResolution =
   | { kind: "def" }
   | { kind: "imported" }
   | { kind: "jsImported" }
   | { kind: "builtin" }
-  | { kind: "reserved" }
   | { kind: "scopeBinding" }
   | { kind: "jsGlobal" }
   | { kind: "unresolved" };
@@ -343,12 +339,8 @@ const has = (obj: object, name: string): boolean =>
  *                                       functions (print, fetch, read,
  *                                       …) resolve here via the
  *                                       auto-injected std::index import.
- *   3. `BUILTIN_FUNCTION_TYPES`       — Agency language primitives.
- *   4. `RESERVED_FUNCTION_NAMES`      — defensive fallback for the three
- *                                       names parsed into their own AST
- *                                       node type (schema / interrupt /
- *                                       debugger). Should never fire in
- *                                       practice.
+ *   3. JS-imported name               — `import { foo } from "./helpers.js"`.
+ *   4. `BUILTIN_FUNCTION_TYPES`       — Agency language primitives.
  *   5. Local scope binding            — lambdas, `partial`, `for` vars.
  *   6. Flat JS global callable        — parseInt, setTimeout, etc.
  *   7. Otherwise: unresolved.
@@ -398,7 +390,6 @@ export function resolveCall(
   if (input.jsImportedNames && has(input.jsImportedNames, name))
     return { kind: "jsImported" };
   if (has(BUILTIN_FUNCTION_TYPES, name)) return { kind: "builtin" };
-  if (RESERVED_FUNCTION_NAMES.has(name)) return { kind: "reserved" };
   if (input.scopeHas(name)) return { kind: "scopeBinding" };
   if (has(JS_GLOBALS, name)) {
     const jsEntry = JS_GLOBALS[name];

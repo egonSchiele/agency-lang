@@ -1,7 +1,7 @@
 import type { FunctionDefinition, GraphNodeDefinition } from "../types.js";
 import type { ImportedFunctionSignature } from "../compilationUnit.js";
 import { BUILTIN_FUNCTION_TYPES } from "./builtins.js";
-import { JS_GLOBALS, RESERVED_FUNCTION_NAMES } from "./resolveCall.js";
+import { JS_GLOBALS } from "./resolveCall.js";
 
 /**
  * Inputs for variable name resolution. Mirrors `ResolveCallInput` in
@@ -37,11 +37,14 @@ type ResolveVariableInput = {
  *   class         — references a class defined in this file.
  *   builtin       — references a builtin (success, failure, llm, …) as
  *                   a function reference.
- *   reserved      — listed in `RESERVED_FUNCTION_NAMES`. Same defensive
- *                   fallback as in resolveCall.
  *   jsGlobal      — references a JS global (parseInt, JSON, Math, …)
  *                   either as a flat callable or a namespace base.
  *   unresolved    — none of the above. The diagnostic emits.
+ *
+ * The names in `RESERVED_FUNCTION_NAMES` that aren't also in
+ * `BUILTIN_FUNCTION_TYPES` (`schema`, `interrupt`, `debugger`) are parsed
+ * into their own AST node types and never appear as `variableName`, so
+ * there's no `kind: "reserved"` here.
  */
 export type VariableResolution =
   | { kind: "scopeBinding" }
@@ -50,7 +53,6 @@ export type VariableResolution =
   | { kind: "jsImported" }
   | { kind: "class" }
   | { kind: "builtin" }
-  | { kind: "reserved" }
   | { kind: "jsGlobal" }
   | { kind: "unresolved" };
 
@@ -67,10 +69,9 @@ const has = (obj: object, name: string): boolean =>
  *   4. Class definition                 — `new MyClass()` and `MyClass`
  *                                         as a value (instanceof, etc.).
  *   5. `BUILTIN_FUNCTION_TYPES`         — Agency primitive as function ref.
- *   6. `RESERVED_FUNCTION_NAMES`        — defensive fallback.
- *   7. JS global (callable or namespace) — covers both bare `parseInt` and
+ *   6. JS global (callable or namespace) — covers both bare `parseInt` and
  *                                          namespace bases like `JSON`.
- *   8. Otherwise: unresolved.
+ *   7. Otherwise: unresolved.
  */
 export function resolveVariable(
   name: string,
@@ -86,7 +87,6 @@ export function resolveVariable(
     return { kind: "jsImported" };
   if (has(input.classNames, name)) return { kind: "class" };
   if (has(BUILTIN_FUNCTION_TYPES, name)) return { kind: "builtin" };
-  if (RESERVED_FUNCTION_NAMES.has(name)) return { kind: "reserved" };
   if (has(JS_GLOBALS, name)) return { kind: "jsGlobal" };
   return { kind: "unresolved" };
 }

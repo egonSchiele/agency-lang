@@ -35,11 +35,6 @@ describe("resolveCall", () => {
     expect(result.kind).toBe("builtin");
   });
 
-  it("resolves a reserved name", () => {
-    const result = resolveCall("schema", emptyInput);
-    expect(result.kind).toBe("reserved");
-  });
-
   it("resolves a scope binding (lambda, partial, etc.)", () => {
     const result = resolveCall("myLambda", {
       ...emptyInput,

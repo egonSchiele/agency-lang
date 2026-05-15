@@ -2274,6 +2274,16 @@ export class TypeScriptBuilder {
         .done();
     }
 
+    // getContext() is a builder macro — compile-time rewrite to the
+    // `__ctx` identifier already in scope of every compiled function.
+    // Zero runtime cost; no `__call` dispatch, no await.
+    if (node.functionName === "getContext") {
+      if (node.arguments.length > 0) {
+        throw new Error("getContext() takes no arguments");
+      }
+      return ts.id("__ctx");
+    }
+
     // __-prefixed helpers and DIRECT_CALL_FUNCTIONS: emit plain direct call
     if (
       functionName.startsWith("__") ||

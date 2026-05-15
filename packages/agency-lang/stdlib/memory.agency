@@ -24,6 +24,13 @@ type ForgetResult = {
   relations: { fromName: string, toName: string, type: string }[]
 }
 
+// `getContext()` is a builtin that lowers to the in-scope `__ctx`
+// identifier at codegen time (zero runtime cost — see
+// lib/backends/typescriptBuilder.ts). We pass it inline rather than
+// binding to a const because storing the runtime context in
+// `__stack.locals` interacts badly with the runner's step counter
+// and skips the next step (tracked separately).
+
 export def setMemoryId(id: string) {
   """
   Set the memory scope for this agent run. Call this before other
@@ -35,7 +42,7 @@ export def setMemoryId(id: string) {
 
   @param id - A unique identifier for the memory scope (e.g. user ID)
   """
-  _setMemoryId(id)
+  _setMemoryId(getContext(), id)
 }
 
 export def remember(content: string) {
@@ -51,11 +58,11 @@ export def remember(content: string) {
 
   @param content - Natural language text containing facts to remember
   """
-  if (_shouldRunMemory()) {
+  if (_shouldRunMemory(getContext())) {
     thread {
-      const prompt = _buildExtractionPrompt(content)
+      const prompt = _buildExtractionPrompt(getContext(), content)
       const result: ExtractionResult = llm(prompt)
-      _applyExtractionResult(result)
+      _applyExtractionResult(getContext(), result)
     }
   }
 }
@@ -71,7 +78,7 @@ export safe def recall(query: string): string {
 
   @param query - A natural language query describing what to recall
   """
-  return _recall(query)
+  return _recall(getContext(), query)
 }
 
 export def forget(query: string) {
@@ -86,11 +93,11 @@ export def forget(query: string) {
 
   @param query - A natural language description of what to forget
   """
-  if (_shouldRunMemory()) {
+  if (_shouldRunMemory(getContext())) {
     thread {
-      const prompt = _buildForgetPrompt(query)
+      const prompt = _buildForgetPrompt(getContext(), query)
       const result: ForgetResult = llm(prompt)
-      _applyForgetResult(result)
+      _applyForgetResult(getContext(), result)
     }
   }
 }

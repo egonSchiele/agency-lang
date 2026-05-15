@@ -64,6 +64,20 @@ const llmOptions: VariableType = {
 };
 
 /**
+ * Public shape returned by `getContext()`. Mirrors the `Context` type
+ * defined in `lib/runtime/publicContext.ts`. We model `memoryManager` as
+ * optional `any` because the agency type system doesn't model class
+ * instances; users access methods through the runtime side (TS bindings),
+ * not directly via field access in agency code.
+ */
+const contextType: VariableType = {
+  type: "objectType",
+  properties: [
+    { key: "memoryManager", value: optional(ANY_T) },
+  ],
+};
+
+/**
  * Signatures for builtin / auto-imported functions that the typechecker
  * needs to know about.
  *
@@ -104,4 +118,10 @@ export const BUILTIN_FUNCTION_TYPES: Record<string, BuiltinSignature> = {
 
   // --- Checkpoint / rewind ---
   restore: { params: ["any", "any"], returnType: voidT },
+
+  // --- Runtime context (compile-time rewrite to __ctx) ---
+  // Lowered to the `__ctx` identifier in lib/backends/typescriptBuilder.ts.
+  // No TS implementation; pure codegen. Intentionally NOT in BUILTIN_FUNCTIONS
+  // (lib/config.ts) since that registry is for runtime helper bindings.
+  getContext: { params: [], returnType: contextType },
 };

@@ -117,15 +117,197 @@ After phase D, run `make` to rebuild stdlib, then full test suite.
 
 ## Phase G — Follow-up issues to file
 
-For each, write a short GitHub issue body and link from a `TODO(#issue-num)` comment in the relevant file. **Don't open the issues from the worktree** — list them here so the user can open them.
+For each, file the GitHub issue using the body below and add a
+`TODO(#<issue>)` comment at the listed call site. **Don't open the
+issues from the worktree** — these bodies are ready-to-paste.
 
-| Comment | File:Line | Issue title (suggested) | Notes |
-|---|---|---|---|
-| #4 | `embeddings.ts:3` | "perf: vectorize cosine similarity" | Mention `simsimd`, `vectorlite`, `hnswlib-node` as candidates. Current impl is pure JS, O(d) per pair. |
-| #12 | `manager.ts:190` | "memory: add benchmark harness for the recall/extraction pipeline" | Sketch: time each tier separately, varying graph size and message-history size. |
-| #13 | `manager.ts:212` | "memory: add per-step validation and structured tracing for the recall pipeline" | Partly addressed by Phase C Zod work, but the call-graph is still hard to inspect. |
-| #22 | `manager.ts:496` | "memory: refactor CacheEntry into a class with methods" | Many functions take `entry` as first arg — class methods would clean this up. Combine with Phase E dedup. |
-| #30 | `prompt.ts:163` | "memory: run compaction out-of-band so it doesn't block llm() calls" | Reviewer says "warrants a bigger discussion" — explicitly NOT for this PR. |
+---
+
+### #4 — perf: vectorize cosine similarity in the memory recall path
+
+**Anchor:** [lib/runtime/memory/embeddings.ts](file:///Users/adityabhargava/agency-lang/packages/agency-lang/.worktrees/memory-layer/packages/agency-lang/lib/runtime/memory/embeddings.ts) (`cosineSimilarity` + `findSimilar`)
+
+**Problem.** Tier-2 embedding recall scores every stored vector
+against the query vector with a hand-rolled JS loop. Per recall:
+`O(n · d)` multiplies + adds, where `n` is the number of stored
+observations and `d` is the embedding dimension (1536 for
+`text-embedding-3-small`). At ~10k observations this is ~15M FP ops
+on the JS hot path.
+
+**Goal.** Cut Tier-2 latency by 5–20× without changing the API.
+
+**Candidates.**
+- [`simsimd`](https://github.com/ashvardanian/SimSIMD) — native
+  bindings, SIMD-optimized cosine, dot, l2. Pure additive dep, no
+  index structure needed; drop-in replacement for the inner loop.
+- [`vectorlite`](https://github.com/1yefuwang1/vectorlite) — SQLite
+  extension; would only make sense if we also move embeddings out of
+  the per-memoryId JSON file into SQLite (bigger architectural
+  change).
+- [`hnswlib-node`](https://github.com/yoshoku/hnswlib-node) —
+  approximate nearest-neighbor via HNSW. Lossy but `O(log n)` per
+  query. Worth it once `n > ~50k`; needs index-rebuild lifecycle.
+
+**Acceptance.**
+- Microbenchmark (k = top-10, n = 100, 1k, 10k) showing the new
+  path beats current within `O(d)` per pair.
+- Cross-platform packaging is preserved (no breakage on macOS arm64,
+  Linux x64, Linux arm64). If a candidate breaks one of these, fall
+  back per-platform or document the constraint.
+- Public `cosineSimilarity` / `findSimilar` signatures unchanged so
+  unit tests in `embeddings.test.ts` continue to pass without edits.
+
+**Related files.** `lib/runtime/memory/embeddings.ts`,
+`lib/runtime/memory/manager.ts:embeddingRecallEntityIds`.
+
+---
+
+### #12 — memory: add a benchmark harness for the recall + extraction pipeline
+
+**Anchor:** [lib/runtime/memory/manager.ts](file:///Users/adityabhargava/agency-lang/packages/agency-lang/.worktrees/memory-layer/packages/agency-lang/lib/runtime/memory/manager.ts) (around `recall` and `remember`)
+
+**Problem.** We have unit tests but no way to detect a recall-latency
+regression or to back perf claims (#4, #19) with numbers. Today,
+"slow" is a hand-feel.
+
+**Goal.** A repeatable harness that prints per-tier latency and total
+cost as a function of graph size and message-history size.
+
+**Sketch.**
+- New file `lib/runtime/memory/__bench__/recall.bench.ts` using
+  vitest's `bench` mode (no new deps).
+- Synthetic graph generator: `makeGraph({ entities, observationsPerEntity })`.
+  Use a deterministic seed so numbers are stable.
+- Mock the LLMClient so Tier-3 returns a fixed entity name set
+  (still measures the round-trip cost of the call wrapper, just
+  not the network).
+- Mock the embedding client to return random vectors of the
+  configured dimension (so cosine has real work to do).
+- Bench matrix: `entities ∈ {10, 100, 1000, 10000}` × `recall_query
+  ∈ {short, long}`.
+- Print per-tier latency (T1, T2, T3) and total via vitest's bench
+  reporter.
+- Add a `pnpm bench:memory` script.
+
+**Acceptance.** `pnpm bench:memory` produces a table with stable
+numbers (run-to-run variance reported); CI does NOT run it (would
+slow down the pipeline) but the README section explains how to run
+it manually.
+
+---
+
+### #13 — memory: per-step validation and structured tracing for the recall pipeline
+
+**Anchor:** [lib/runtime/memory/manager.ts](file:///Users/adityabhargava/agency-lang/packages/agency-lang/.worktrees/memory-layer/packages/agency-lang/lib/runtime/memory/manager.ts) (`recall` / `tier1And2` / `llmRecallEntityIds`)
+
+**Problem.** Today a single `recall("foo")` is a black box —
+intermediate candidate counts, what each tier contributed, what got
+deduped, and what got truncated by `DEFAULT_RECALL_K` are all
+invisible to operators. Phase C tightened the I/O boundary with Zod
+schemas, but the call-graph itself still has no observability.
+
+**Goal.** Emit one statelog event per tier so operators can see
+where recall results came from and why a query missed.
+
+**Sketch.**
+- Use the existing `StatelogClient` already on `__ctx` — emit events
+  with type `memoryRecallTier` and fields:
+  - `tier`: `"structured" | "embedding" | "llm"`
+  - `query`: input
+  - `candidateCount`: pre-dedup
+  - `addedCount`: how many made it past dedup into `orderedIds`
+  - `latencyMs`
+- Final event: `memoryRecallReturn` with the final entity-id list
+  after `slice(0, DEFAULT_RECALL_K)`.
+- (Stretch) validate that every entity id we return still exists in
+  the graph (catches stale obsToEntity entries).
+
+**Acceptance.** A single `recall("foo")` produces 4 statelog events
+in `traces/`. Wire up a small unit test that runs `recall` with a
+mocked statelog and asserts the event shape.
+
+---
+
+### #22 — memory: refactor CacheEntry into a class
+
+**Anchor:** [lib/runtime/memory/manager.ts](file:///Users/adityabhargava/agency-lang/packages/agency-lang/.worktrees/memory-layer/packages/agency-lang/lib/runtime/memory/manager.ts) (the `CacheEntry` type and the methods that take `entry` as first arg)
+
+**Problem.** `CacheEntry` is a record carrying graph + embeddings +
+summary + obsToEntity index + memoryId, and ~6 `MemoryManager`
+methods take it as the first arg (`autoExtract`, `generateEmbeddings`,
+`embeddingRecallEntityIds`, `llmRecallEntityIds`,
+`indexNewObservations`, `persist`, the splits added in Phase D).
+Every mutation that touches the graph also has to manually update
+the embeddings AND the obsToEntity index AND remember to persist.
+Easy to forget one.
+
+**Goal.** Encapsulate the invariant "graph + embeddings + obsToEntity
+stay in sync" inside one type so `MemoryManager` only orchestrates.
+
+**Sketch.**
+- New `class MemoryCacheEntry` exposing:
+  - `addExtraction(result, source): { newObsIds, expiredObsIds }`
+    (encapsulates `applyExtractionResult` + embedding removal +
+    obsToEntity update)
+  - `expireObservation(obsId)`
+  - `expireRelation(relId)`
+  - `lookupEntityIdByObs(obsId): string | undefined`
+  - `getGraph()`, `getEmbeddings()`, `getSummary()`,
+    `setSummary(...)`, `persist(store)`
+- `MemoryManager` shrinks to: load → cache → call entry methods →
+  invoke LLM helpers (`buildExtractionPromptFor`, etc.).
+- Pairs naturally with Phase E #19 (the obsToEntity index, already
+  done — this just makes its maintenance the entry's responsibility
+  instead of the manager's).
+
+**Acceptance.** No production behavior change. Test count unchanged.
+The diff in `manager.ts` is a net reduction; the new class file has
+focused unit tests covering the invariant.
+
+---
+
+### #30 — memory: run compaction out-of-band so it doesn't block `llm()`
+
+**Anchor:** [lib/runtime/prompt.ts](file:///Users/adityabhargava/agency-lang/packages/agency-lang/.worktrees/memory-layer/packages/agency-lang/lib/runtime/prompt.ts) (the `compactIfNeeded` call inside `_runPrompt`)
+
+**Problem.** Compaction runs synchronously in the agent's `llm()`
+hot path. When the threshold trips, the agent waits for one (or two,
+if there's an existing summary) extra LLM call before its next
+response. For long-running threads this is a visible latency spike.
+
+**Goal.** Move compaction off the request path while preserving
+correctness across interrupt/resume.
+
+**Reviewer flagged this as needing discussion.** Open questions
+that should be resolved on the issue before any implementation:
+
+1. **Where does the in-flight promise live?** Per-`MemoryManager`
+   state, but does it survive interrupt/resume? If the agent is
+   suspended mid-compaction, do we wait, abandon, or restart on
+   resume?
+2. **Concurrent triggers.** If two `llm()` calls trip the threshold
+   in the same execCtx, only one compaction should run — needs an
+   in-flight flag with proper concurrency.
+3. **Failure semantics.** A failing compaction today logs and
+   continues. A failing async compaction needs the same forgiving
+   behavior, but errors won't be tied to a specific `llm()` call —
+   how do we surface them?
+4. **State hand-off.** Compaction mutates `entry.summary` and
+   triggers a `persist()`. If the main thread mutates the same
+   entry concurrently (e.g. another `remember()`), what's the
+   ordering rule?
+
+**Sketch (post-discussion).**
+- `MemoryManager` gets `compactIfNeededAsync(messages)` that fires
+  the work but resolves immediately, plus
+  `awaitInFlightCompaction()` for shutdown / save() paths.
+- `prompt.ts` calls the async variant — no `await` on the result.
+- A guard in `compactIfNeededAsync` short-circuits if a compaction
+  is already in flight.
+
+**Acceptance.** `tests/agency/memory/llm-injection.agency` continues
+to pass. New test asserts compaction does not block the next
+`llm()` call.
 
 ---
 
@@ -133,29 +315,69 @@ For each, write a short GitHub issue body and link from a `TODO(#issue-num)` com
 
 ### #27 — `currentContext.ts` singleton
 
-**Reviewer:** Module-level `_current` breaks concurrent users in a web-server context.
+**Reviewer:** Module-level `_current` breaks concurrent users in a
+web-server context. Two requests concurrently in `runNode` would
+trample each other's `_current` and the second `remember()` would
+read the first request's `MemoryManager`.
 
-**Reviewer's clarification:** Agency functions get `__ctx` via the
-compiled `__ctx` var, but their TypeScript equivalents
-(`stdlib/memory.ts`) don't. There's no precedent for stdlib TS code
-needing the runtime ctx. Possible directions:
-- Allow users to read `__ctx` directly in agency code and pass it in
-  (with a warning that doing so is dangerous).
-- Compile stdlib TS bindings to receive `__ctx` as a hidden second
-  argument (parallel to how agency-defined functions get it).
-- Use AsyncLocalStorage (the original recommendation), but that has
-  its own portability/observability tradeoffs.
+**Resolution direction (decided):** Add a builtin `getContext()`
+function that user agency code can call. Internally, the codegen
+lowers `getContext()` directly to the `__ctx` reference that's
+already in scope of every compiled function — no actual function
+call at runtime, just a compile-time rewrite. Then `stdlib/memory.ts`
+takes ctx as an argument, and `stdlib/memory.agency` passes it
+explicitly:
 
-**Plan:** File a discussion issue ("memory: how should stdlib TS
-functions access the runtime context?") summarizing the three
-directions. Until resolved, mark `currentContext.ts` with a
-prominent `TODO(#issue-num): RACE-PRONE — see discussion` comment.
-Phase D's other refactors (#26, #20, #11, #17) do NOT depend on this
-being resolved.
+```agency
+export def remember(content: string) {
+  const ctx = getContext()
+  if (_shouldRunMemory(ctx)) {
+    thread {
+      const prompt = _buildExtractionPrompt(ctx, content)
+      const result: ExtractionResult = llm(prompt)
+      _applyExtractionResult(ctx, result)
+    }
+  }
+}
+```
+
+**Why this approach over the alternatives:**
+- **vs. exposing `__ctx` directly as a magic identifier.** `__ctx`
+  has a double-underscore convention reserved for compiler internals.
+  Letting it leak into user code muddies the boundary AND requires
+  the typechecker to special-case it (skip declaration check, skip
+  state-stack tracking). With `getContext()`, all the magic lives
+  inside one builtin's lowering rule.
+- **vs. AsyncLocalStorage.** Cleaner — no hidden global, no
+  framework-level dependency on async hooks, and easier to reason
+  about in tests.
+- **vs. compiling TS bindings to receive ctx as a hidden arg.**
+  That works, but only fixes the stdlib case. `getContext()` is
+  user-facing too: anyone writing custom agency-callable TS code
+  can grab ctx the same way.
+
+**Open sub-decisions for the discussion issue:**
+1. **Type exposure.** `RuntimeContext` has dozens of internal fields
+   (debugger state, statelog client, abort controller, ...). Probably
+   a narrower public `Context` type with `{ memoryManager?,
+   traceWriter?, ... }` only. The builtin's return type is the public
+   shape; the lowered `__ctx` ref is structurally compatible.
+2. **Lowering site.** Is this a typechecker-resolved builtin (like
+   `nanoid`) or a TS-builder special form (like `__call`)? Builtin
+   resolution is simpler; special-form gives us full control over
+   the emitted output.
+3. **Naming.** `getContext()` vs `ctx()` vs `runtimeContext()`. I'd
+   lean `getContext()` for greppability.
+
+**Plan for this round.** File the discussion issue with the above
+content. Mark `lib/runtime/currentContext.ts` with a prominent
+`TODO(#<issue>): RACE-PRONE — see <issue url>` comment. Phase D's
+other refactors (#26, #20, #11, #17) do NOT depend on this being
+resolved.
 
 ### #30 — Compaction in parallel
 
-Already in Phase G as a follow-up; reviewer explicitly flagged it.
+Detailed write-up moved into Phase G above.
 
 ---
 

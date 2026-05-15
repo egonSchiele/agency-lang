@@ -1,5 +1,13 @@
 import { describe, it, expect } from "vitest";
-import { bindingPatternParser, matchPatternParser } from "./parsers.js";
+import {
+  assignmentParser,
+  bindingPatternParser,
+  exprParser,
+  forLoopParser,
+  matchBlockParser,
+  matchBlockParserCase,
+  matchPatternParser,
+} from "./parsers.js";
 
 describe("bindingPatternParser", () => {
   describe("variable name binders", () => {
@@ -369,6 +377,312 @@ describe("matchPatternParser", () => {
   describe("array rest enforcement (match patterns too)", () => {
     it("rejects rest in non-final position [a, ...b, c]", () => {
       expect(() => matchPatternParser("[a, ...b, c]")).toThrow(/rest.*last/i);
+    });
+  });
+});
+
+// =============================================================================
+// Integration tests for pattern syntax wired into existing parsers
+// =============================================================================
+
+describe("assignmentParser with destructuring", () => {
+  it("parses `let [a, b] = items`", () => {
+    const result = assignmentParser("let [a, b] = items");
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.result).toMatchObject({
+      type: "assignment",
+      declKind: "let",
+      variableName: "__destructured",
+      pattern: {
+        type: "arrayPattern",
+        elements: [
+          { type: "variableName", value: "a" },
+          { type: "variableName", value: "b" },
+        ],
+      },
+      value: { type: "variableName", value: "items" },
+    });
+  });
+
+  it("parses `const { name, age } = person`", () => {
+    const result = assignmentParser("const { name, age } = person");
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.result).toMatchObject({
+      type: "assignment",
+      declKind: "const",
+      variableName: "__destructured",
+      pattern: {
+        type: "objectPattern",
+        properties: [
+          { type: "objectPatternShorthand", name: "name" },
+          { type: "objectPatternShorthand", name: "age" },
+        ],
+      },
+      value: { type: "variableName", value: "person" },
+    });
+  });
+
+  it("still parses `let x = 5` as a simple assignment with no pattern", () => {
+    const result = assignmentParser("let x = 5");
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.result).toMatchObject({
+      type: "assignment",
+      declKind: "let",
+      variableName: "x",
+      value: { type: "number", value: "5" },
+    });
+    expect((result.result as any).pattern).toBeUndefined();
+  });
+
+  it("destructuring assignment carries a loc", () => {
+    const result = assignmentParser("let [a, b] = items");
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect((result.result as any).loc).toBeDefined();
+  });
+});
+
+describe("matchBlockParserCase with patterns and guards", () => {
+  it("parses an arm with an object pattern", () => {
+    const result = matchBlockParserCase('{ type: "show", v } => f(v)');
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.result).toMatchObject({
+      type: "matchBlockCase",
+      caseValue: {
+        type: "objectPattern",
+        properties: [
+          {
+            type: "objectPatternProperty",
+            key: "type",
+            value: { type: "string", segments: [{ type: "text", value: "show" }] },
+          },
+          { type: "objectPatternShorthand", name: "v" },
+        ],
+      },
+      body: {
+        type: "functionCall",
+        functionName: "f",
+      },
+    });
+  });
+
+  it("parses an arm with a guard", () => {
+    const result = matchBlockParserCase("{ s, b } if (s > 5) => f(b)");
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.result).toMatchObject({
+      type: "matchBlockCase",
+      caseValue: {
+        type: "objectPattern",
+        properties: [
+          { type: "objectPatternShorthand", name: "s" },
+          { type: "objectPatternShorthand", name: "b" },
+        ],
+      },
+      guard: {
+        type: "binOpExpression",
+        operator: ">",
+        left: { type: "variableName", value: "s" },
+        right: { type: "number", value: "5" },
+      },
+      body: {
+        type: "functionCall",
+        functionName: "f",
+      },
+    });
+  });
+
+  it("parses a default arm `_ => g()` (no guard, no pattern field)", () => {
+    const result = matchBlockParserCase("_ => g()");
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.result).toMatchObject({
+      type: "matchBlockCase",
+      caseValue: "_",
+      body: { type: "functionCall", functionName: "g" },
+    });
+    expect((result.result as any).guard).toBeUndefined();
+  });
+
+  it("parses an arm with a literal pattern (existing syntax)", () => {
+    const result = matchBlockParserCase('"a" => 1');
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.result).toMatchObject({
+      type: "matchBlockCase",
+      caseValue: { type: "string", segments: [{ type: "text", value: "a" }] },
+      body: { type: "number", value: "1" },
+    });
+  });
+});
+
+describe("matchBlockParser with `is` expression as scrutinee", () => {
+  it("parses `match(response is { status, body }) { _ => g() }`", () => {
+    const result = matchBlockParser(
+      "match(response is { status, body }) { _ => g() }",
+    );
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.result).toMatchObject({
+      type: "matchBlock",
+      expression: {
+        type: "isExpression",
+        expression: { type: "variableName", value: "response" },
+        pattern: {
+          type: "objectPattern",
+          properties: [
+            { type: "objectPatternShorthand", name: "status" },
+            { type: "objectPatternShorthand", name: "body" },
+          ],
+        },
+      },
+    });
+  });
+
+  it("still parses a plain match block (existing syntax)", () => {
+    const result = matchBlockParser('match(x) { "a" => 1; _ => 2 }');
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.result).toMatchObject({
+      type: "matchBlock",
+      expression: { type: "variableName", value: "x" },
+    });
+  });
+});
+
+describe("forLoopParser with destructuring", () => {
+  it("parses `for ([k, v] in entries) { print(k) }`", () => {
+    const result = forLoopParser("for ([k, v] in entries) { print(k) }");
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.result).toMatchObject({
+      type: "forLoop",
+      itemVar: {
+        type: "arrayPattern",
+        elements: [
+          { type: "variableName", value: "k" },
+          { type: "variableName", value: "v" },
+        ],
+      },
+      iterable: { type: "variableName", value: "entries" },
+    });
+  });
+
+  it("parses `for ({ name, age } in users) { print(name) }`", () => {
+    const result = forLoopParser(
+      "for ({ name, age } in users) { print(name) }",
+    );
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.result).toMatchObject({
+      type: "forLoop",
+      itemVar: {
+        type: "objectPattern",
+        properties: [
+          { type: "objectPatternShorthand", name: "name" },
+          { type: "objectPatternShorthand", name: "age" },
+        ],
+      },
+      iterable: { type: "variableName", value: "users" },
+    });
+  });
+
+  it("still parses a plain `for (item in items) { ... }`", () => {
+    const result = forLoopParser("for (item in items) {\n  print(item)\n}");
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.result).toMatchObject({
+      type: "forLoop",
+      itemVar: "item",
+      iterable: { type: "variableName", value: "items" },
+    });
+  });
+});
+
+describe("exprParser with `is` expression", () => {
+  it("parses `step is { type: \"showPolicy\" }` as an IsExpression", () => {
+    const result = exprParser('step is { type: "showPolicy" }');
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.result).toMatchObject({
+      type: "isExpression",
+      expression: { type: "variableName", value: "step" },
+      pattern: {
+        type: "objectPattern",
+        properties: [
+          {
+            type: "objectPatternProperty",
+            key: "type",
+            value: {
+              type: "string",
+              segments: [{ type: "text", value: "showPolicy" }],
+            },
+          },
+        ],
+      },
+    });
+  });
+
+  it("parses `x is { a } && y > 5` with IsExpression on the LHS of &&", () => {
+    const result = exprParser("x is { a } && y > 5");
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.result).toMatchObject({
+      type: "binOpExpression",
+      operator: "&&",
+      left: {
+        type: "isExpression",
+        expression: { type: "variableName", value: "x" },
+        pattern: {
+          type: "objectPattern",
+          properties: [{ type: "objectPatternShorthand", name: "a" }],
+        },
+      },
+      right: {
+        type: "binOpExpression",
+        operator: ">",
+        left: { type: "variableName", value: "y" },
+        right: { type: "number", value: "5" },
+      },
+    });
+  });
+
+  it("parses RHS of `let r = step is { type: \"showPolicy\" }` as IsExpression", () => {
+    const result = assignmentParser('let r = step is { type: "showPolicy" }');
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.result).toMatchObject({
+      type: "assignment",
+      declKind: "let",
+      variableName: "r",
+      value: {
+        type: "isExpression",
+        expression: { type: "variableName", value: "step" },
+        pattern: { type: "objectPattern" },
+      },
+    });
+  });
+
+  it("does not match `is` inside an identifier like `island`", () => {
+    const result = exprParser("island");
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.result).toMatchObject({ type: "variableName", value: "island" });
+  });
+
+  it("still parses `x == 5` (existing syntax)", () => {
+    const result = exprParser("x == 5");
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.result).toMatchObject({
+      type: "binOpExpression",
+      operator: "==",
+      left: { type: "variableName", value: "x" },
+      right: { type: "number", value: "5" },
     });
   });
 });

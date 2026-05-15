@@ -138,6 +138,7 @@ import { WithModifier } from "@/types/withModifier.js";
 import {
   ArrayPattern,
   BindingPattern,
+  IsExpression,
   MatchPattern,
   ObjectPattern,
   ObjectPatternProperty,
@@ -1813,11 +1814,35 @@ const parenParser: Parser<Expression> = (input: string) => {
   return success(exprResult.result, closeResult.rest);
 };
 
+// Wrap atom to handle `<atom> is <pattern>` as an IsExpression.
+// The check requires whitespace before `is` and a non-identifier char after,
+// so identifiers like `island` and `isFoo` are not affected.
+const atomWithIs: Parser<Expression> = (input: string) => {
+  const baseResult = atom(input);
+  if (!baseResult.success) return baseResult;
+  const isCheck = seqC(
+    spaces,
+    str("is"),
+    not(varNameChar),
+    optionalSpaces,
+    capture(lazy(() => matchPatternParser), "pattern"),
+  )(baseResult.rest);
+  if (!isCheck.success) return baseResult;
+  return success(
+    {
+      type: "isExpression",
+      expression: baseResult.result,
+      pattern: (isCheck.result as any).pattern,
+    } as IsExpression,
+    isCheck.rest,
+  );
+};
+
 // Operator table: highest precedence first.
 // Multi-char operators must come before their single-char prefixes
 // (e.g., *= before *, <= before <).
 export const exprParser: Parser<Expression> = label("an expression", buildExpressionParser<Expression>(
-  atom,
+  atomWithIs,
   [
     // Precedence 7: exponentiation
     [
@@ -2104,7 +2129,12 @@ export const inlineBlockParser: Parser<BlockArgument> = trace(
 // matchBlock.ts
 // =============================================================================
 
-export const defaultCaseParser: Parser<DefaultCase> = char("_");
+// `_` followed by a non-identifier char. Without the `not(varNameChar)` check,
+// `_foo` would partially match as `_` and leave `foo` unconsumed.
+export const defaultCaseParser: Parser<DefaultCase> = map(
+  seqC(char("_"), not(varNameChar)),
+  () => "_" as DefaultCase,
+);
 
 export const matchBlockParserCase: Parser<MatchBlockCase> = (
   input: string,
@@ -2112,7 +2142,23 @@ export const matchBlockParserCase: Parser<MatchBlockCase> = (
   const parser = seqC(
     set("type", "matchBlockCase"),
     optionalSpaces,
-    capture(or(defaultCaseParser, exprParser), "caseValue"),
+    capture(or(defaultCaseParser, lazy(() => matchPatternParser)), "caseValue"),
+    // Optional guard: ` if (<expr>)`
+    optional(
+      captureCaptures(
+        seqC(
+          spaces,
+          str("if"),
+          not(varNameChar),
+          optionalSpaces,
+          char("("),
+          optionalSpaces,
+          capture(exprParser, "guard"),
+          optionalSpaces,
+          char(")"),
+        ),
+      ),
+    ),
     optionalSpaces,
     str("=>"),
     optionalSpaces,
@@ -2369,7 +2415,49 @@ export const exportFromStatementParser: Parser<ExportFromStatement> = withLoc(
 // function.ts (the big one — assignment, body, nodes, functions, loops, etc.)
 // =============================================================================
 
+// Destructuring assignment: `let [a, b] = expr` or `const { x, y } = expr`.
+// Tried before the regular assignment parser. Sets variableName to a
+// sentinel "__destructured" and records the BindingPattern in `pattern`.
+const _destructuringAssignmentParser: Parser<Assignment> = (input: string) => {
+  const parser = seqC(
+    set("type", "assignment"),
+    optionalSpaces,
+    capture(or(str("let"), str("const")), "declKind"),
+    spaces,
+    capture(
+      or(
+        lazy(() => arrayBindingPatternParser),
+        lazy(() => objectBindingPatternParser),
+      ),
+      "pattern",
+    ),
+    optionalSpaces,
+    char("="),
+    optionalSpaces,
+    capture(or(lazy(() => messageThreadParser), exprParser), "value"),
+    optionalSemicolon,
+    optionalSpacesOrNewline,
+  );
+  const result = parser(input);
+  if (!result.success) return result;
+  const r = result.result as any;
+  return success(
+    {
+      type: "assignment",
+      declKind: r.declKind,
+      pattern: r.pattern,
+      variableName: "__destructured",
+      value: r.value,
+    } as Assignment,
+    result.rest,
+  );
+};
+
 const _assignmentParserInner: Parser<Assignment> = (input: string) => {
+  // Try destructuring assignment first (let/const + binding pattern + `=` + value).
+  const destructuringResult = _destructuringAssignmentParser(input);
+  if (destructuringResult.success) return destructuringResult;
+
   const parser = trace(
     "assignmentParser",
     seqC(
@@ -2829,7 +2917,14 @@ export const forLoopParser: Parser<ForLoop> = label("a for loop", withLoc(trace(
     optionalSpaces,
     optional(or(str("let"), str("const"))),
     optionalSpaces,
-    capture(many1WithJoin(varNameChar), "itemVar"),
+    capture(
+      or(
+        lazy(() => arrayBindingPatternParser),
+        lazy(() => objectBindingPatternParser),
+        many1WithJoin(varNameChar),
+      ),
+      "itemVar",
+    ),
     optional(
       captureCaptures(
         seqC(

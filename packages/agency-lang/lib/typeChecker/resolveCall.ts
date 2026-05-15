@@ -2,6 +2,15 @@ import type { FunctionDefinition, GraphNodeDefinition } from "../types.js";
 import type { ImportedFunctionSignature } from "../compilationUnit.js";
 import type { BuiltinSignature } from "./types.js";
 import { BUILTIN_FUNCTION_TYPES } from "./builtins.js";
+import {
+  ANY_T,
+  BOOLEAN_T,
+  NUMBER_T,
+  STRING_T,
+} from "./primitives.js";
+
+const stringArray = { type: "arrayType", elementType: STRING_T } as const;
+const anyArray = { type: "arrayType", elementType: ANY_T } as const;
 
 /**
  * Names of Agency's *built-in* functions — language primitives with no
@@ -82,87 +91,114 @@ const namespace = (
   members,
 });
 
+// Common single-number-arg, returns-number signature (Math.floor / ceil / round / abs / sqrt / sign / trunc / cbrt etc.).
+const numToNum: BuiltinSignature = { params: [NUMBER_T], returnType: NUMBER_T };
+
 export const JS_GLOBALS: Record<string, JsRegistryEntry> = {
   // --- Flat callable globals ---
-  parseInt: callable(),
-  parseFloat: callable(),
-  isNaN: callable(),
-  isFinite: callable(),
-  encodeURIComponent: callable(),
-  decodeURIComponent: callable(),
-  encodeURI: callable(),
-  decodeURI: callable(),
+  // `parseInt` accepts an optional radix; we accept a 1-or-2-arg call against
+  // (string|number, number) which covers the realistic cases without false
+  // positives on numeric inputs (`parseInt(0.5)`, `parseInt(1, 2)`).
+  parseInt: callable({
+    params: [{ type: "unionType", types: [STRING_T, NUMBER_T] }, NUMBER_T],
+    minParams: 1,
+    returnType: NUMBER_T,
+  }),
+  parseFloat: callable({
+    params: [{ type: "unionType", types: [STRING_T, NUMBER_T] }],
+    returnType: NUMBER_T,
+  }),
+  isNaN: callable({ params: ["any"], returnType: BOOLEAN_T }),
+  isFinite: callable({ params: ["any"], returnType: BOOLEAN_T }),
+  encodeURIComponent: callable({ params: [STRING_T], returnType: STRING_T }),
+  decodeURIComponent: callable({ params: [STRING_T], returnType: STRING_T }),
+  encodeURI: callable({ params: [STRING_T], returnType: STRING_T }),
+  decodeURI: callable({ params: [STRING_T], returnType: STRING_T }),
   setTimeout: callable(),
   setInterval: callable(),
   clearTimeout: callable(),
   clearInterval: callable(),
   queueMicrotask: callable(),
-  structuredClone: callable(),
+  structuredClone: callable({ params: ["any"], returnType: "any" }),
   BigInt: callable(),
   Symbol: callable(),
 
   // --- Namespaces ---
   JSON: namespace({
-    parse: callable(),
-    stringify: callable(),
+    parse: callable({ params: [STRING_T], returnType: "any" }),
+    // JSON.stringify(value, replacer?, space?). Replacer can be many things —
+    // type as `any` to avoid false positives.
+    stringify: callable({
+      params: ["any", "any", { type: "unionType", types: [STRING_T, NUMBER_T] }],
+      minParams: 1,
+      returnType: STRING_T,
+    }),
   }),
   Math: namespace({
-    floor: callable(),
-    ceil: callable(),
-    round: callable(),
-    abs: callable(),
-    max: callable(),
-    min: callable(),
-    pow: callable(),
-    sqrt: callable(),
-    random: callable(),
-    log: callable(),
-    log2: callable(),
-    log10: callable(),
-    exp: callable(),
-    sin: callable(),
-    cos: callable(),
-    tan: callable(),
-    asin: callable(),
-    acos: callable(),
-    atan: callable(),
-    atan2: callable(),
-    sign: callable(),
-    trunc: callable(),
-    cbrt: callable(),
-    hypot: callable(),
+    floor: callable(numToNum),
+    ceil: callable(numToNum),
+    round: callable(numToNum),
+    abs: callable(numToNum),
+    sqrt: callable(numToNum),
+    sign: callable(numToNum),
+    trunc: callable(numToNum),
+    cbrt: callable(numToNum),
+    log: callable(numToNum),
+    log2: callable(numToNum),
+    log10: callable(numToNum),
+    exp: callable(numToNum),
+    sin: callable(numToNum),
+    cos: callable(numToNum),
+    tan: callable(numToNum),
+    asin: callable(numToNum),
+    acos: callable(numToNum),
+    atan: callable(numToNum),
+    // Variadic — keep arity loose so `Math.max(1, 2, 3)` doesn't false-positive.
+    max: callable({ params: [], restParam: NUMBER_T, returnType: NUMBER_T }),
+    min: callable({ params: [], restParam: NUMBER_T, returnType: NUMBER_T }),
+    pow: callable({ params: [NUMBER_T, NUMBER_T], returnType: NUMBER_T }),
+    atan2: callable({ params: [NUMBER_T, NUMBER_T], returnType: NUMBER_T }),
+    hypot: callable({ params: [], restParam: NUMBER_T, returnType: NUMBER_T }),
+    random: callable({ params: [], returnType: NUMBER_T }),
   }),
   Object: namespace({
-    keys: callable(),
-    values: callable(),
-    entries: callable(),
+    keys: callable({ params: ["any"], returnType: stringArray }),
+    values: callable({ params: ["any"], returnType: anyArray }),
+    entries: callable({ params: ["any"], returnType: anyArray }),
+    fromEntries: callable({ params: [anyArray], returnType: "any" }),
     assign: callable(),
-    freeze: callable(),
-    fromEntries: callable(),
-    getOwnPropertyNames: callable(),
-    getPrototypeOf: callable(),
+    freeze: callable({ params: ["any"], returnType: "any" }),
+    getOwnPropertyNames: callable({ params: ["any"], returnType: stringArray }),
+    getPrototypeOf: callable({ params: ["any"], returnType: "any" }),
     setPrototypeOf: callable(),
   }),
   Array: namespace({
-    isArray: callable(),
+    isArray: callable({ params: ["any"], returnType: BOOLEAN_T }),
     from: callable(),
     of: callable(),
   }),
   String: namespace({
-    fromCharCode: callable(),
+    fromCharCode: callable({ params: [], restParam: NUMBER_T, returnType: STRING_T }),
     raw: callable(),
   }),
   Number: namespace({
-    isInteger: callable(),
-    isFinite: callable(),
-    isNaN: callable(),
-    isSafeInteger: callable(),
-    parseFloat: callable(),
-    parseInt: callable(),
+    isInteger: callable({ params: ["any"], returnType: BOOLEAN_T }),
+    isFinite: callable({ params: ["any"], returnType: BOOLEAN_T }),
+    isNaN: callable({ params: ["any"], returnType: BOOLEAN_T }),
+    isSafeInteger: callable({ params: ["any"], returnType: BOOLEAN_T }),
+    parseFloat: callable({
+      params: [{ type: "unionType", types: [STRING_T, NUMBER_T] }],
+      returnType: NUMBER_T,
+    }),
+    parseInt: callable({
+      params: [{ type: "unionType", types: [STRING_T, NUMBER_T] }, NUMBER_T],
+      minParams: 1,
+      returnType: NUMBER_T,
+    }),
   }),
   Date: namespace({
-    now: callable(),
-    parse: callable(),
+    now: callable({ params: [], returnType: NUMBER_T }),
+    parse: callable({ params: [STRING_T], returnType: NUMBER_T }),
     UTC: callable(),
   }),
   Promise: namespace({
@@ -173,6 +209,8 @@ export const JS_GLOBALS: Record<string, JsRegistryEntry> = {
     race: callable(),
     any: callable(),
   }),
+  // console.* — variadic, intentionally untyped so `console.log(1, 2, 3)` etc.
+  // never false-positives.
   console: namespace({
     log: callable(),
     error: callable(),

@@ -10,6 +10,12 @@ import { AgencyCancelledError } from "../errors.js";
 import type { AgencyCallbacks } from "../hooks.js";
 import type { InterruptResponse } from "../interrupts.js";
 import { LLMClient, SmoltalkClient } from "../llmClient.js";
+import { MemoryManager } from "../memory/manager.js";
+import { FileMemoryStore } from "../memory/store.js";
+import type {
+  MemoryConfig,
+  MemoryStore as MemoryStoreType,
+} from "../memory/types.js";
 import { GlobalStore } from "../state/globalStore.js";
 import { StateStack } from "../state/stateStack.js";
 import { TraceWriter } from "../trace/traceWriter.js";
@@ -125,6 +131,14 @@ export class RuntimeContext<T> {
   private statelogConfig: StatelogConfig;
   maxRestores: number;
 
+  // Memory layer (resolved decisions in
+  // docs/superpowers/plans/2026-05-12-memory-layer.md). The store is
+  // process-wide and shared across runs; each execCtx gets its own
+  // MemoryManager instance bound to its stateStack.
+  private memoryConfig?: MemoryConfig;
+  private memoryStore?: MemoryStoreType;
+  memoryManager?: MemoryManager;
+
   constructor(args: {
     statelogConfig: StatelogConfig;
     smoltalkDefaults: Partial<SmolConfig>;
@@ -132,6 +146,7 @@ export class RuntimeContext<T> {
     maxRestores?: number;
     traceConfig?: TraceConfig;
     verbose?: boolean;
+    memory?: MemoryConfig;
   }) {
     const statelogConfig = {
       ...args.statelogConfig,
@@ -177,6 +192,11 @@ export class RuntimeContext<T> {
 
     if (process.env.AGENCY_COVERAGE) {
       this.coverageCollector = getProcessCoverageCollector();
+    }
+
+    if (args.memory) {
+      this.memoryConfig = args.memory;
+      this.memoryStore = new FileMemoryStore(args.memory.dir);
     }
   }
 
@@ -224,6 +244,35 @@ export class RuntimeContext<T> {
       traceId: runId,
     });
     execCtx.coverageCollector = this.coverageCollector;
+
+    // Memory layer: per-execCtx MemoryManager backed by the shared store.
+    // The memoryIdRef reads/writes stateStack.other.memoryId so the active
+    // id survives interrupt/resume (resolved decision #1). We capture
+    // execCtx in the closure rather than reading `this`, because the ref
+    // must always see execCtx's current stateStack (which can be replaced
+    // by restoreState).
+    if (this.memoryConfig && this.memoryStore) {
+      execCtx.memoryConfig = this.memoryConfig;
+      execCtx.memoryStore = this.memoryStore;
+      execCtx.memoryManager = new MemoryManager({
+        store: this.memoryStore,
+        config: this.memoryConfig,
+        llmClient: execCtx._llmClient,
+        smoltalkDefaults: execCtx.smoltalkDefaults,
+        source: this.traceConfig?.program ?? "agent",
+        memoryIdRef: {
+          get: () => {
+            const id = execCtx.stateStack?.other?.memoryId;
+            return typeof id === "string" ? id : "default";
+          },
+          set: (id: string) => {
+            if (!execCtx.stateStack) return;
+            execCtx.stateStack.other.memoryId = id;
+          },
+        },
+      });
+    }
+
     return execCtx;
   }
 

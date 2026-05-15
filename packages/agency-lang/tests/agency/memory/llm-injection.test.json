@@ -1,0 +1,26 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "llmMocks": [
+        {
+          "return": {
+            "entities": [
+              {
+                "name": "Mom",
+                "type": "person",
+                "observations": ["Likes pottery"]
+              }
+            ],
+            "relations": [],
+            "expirations": []
+          }
+        },
+        { "return": "ok" }
+      ]
+    }
+  ]
+}

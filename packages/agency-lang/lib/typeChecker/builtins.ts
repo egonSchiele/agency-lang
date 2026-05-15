@@ -53,15 +53,32 @@ const llmOptions: VariableType = {
       }),
     },
     { key: "tools", value: optional(anyArray) },
+    // `memory: true` enables retrieval/injection on this llm() call.
+    // The object form is reserved for future config (e.g. per-call
+    // model override); for now only the boolean form is wired.
+    { key: "memory", value: optional(boolean) },
     // `any` already accepts undefined, so no need to wrap in optional.
     { key: "metadata", value: ANY_T },
   ],
 };
 
 /**
- * Signatures for true Agency language primitives — names without a `def`
- * source. The runtime implements them directly, the typechecker treats
- * them as if they had these signatures.
+ * Public shape returned by `getContext()`. Mirrors the `Context` type
+ * defined in `lib/runtime/publicContext.ts`. We model `memoryManager` as
+ * optional `any` because the agency type system doesn't model class
+ * instances; users access methods through the runtime side (TS bindings),
+ * not directly via field access in agency code.
+ */
+const contextType: VariableType = {
+  type: "objectType",
+  properties: [
+    { key: "memoryManager", value: optional(ANY_T) },
+  ],
+};
+
+/**
+ * Signatures for builtin / auto-imported functions that the typechecker
+ * needs to know about.
  *
  * Stdlib functions (`print`, `read`, `fetch`, `range`, etc.) used to live
  * here too. They are now resolved through `importedFunctions` via the
@@ -86,11 +103,16 @@ export const BUILTIN_FUNCTION_TYPES: Record<string, BuiltinSignature> = {
   restore: { params: ["any", "any"], returnType: voidT },
 
   // --- Handler outcomes (reserved names) ---
-  approve:    { params: ["any"], minParams: 0, returnType: "any" },
-  reject:     { params: ["any"], minParams: 0, returnType: "any" },
-  propagate:  { params: [],                    returnType: "any" },
+  approve: { params: ["any"], minParams: 0, returnType: "any" },
+  reject: { params: ["any"], minParams: 0, returnType: "any" },
+  propagate: { params: [], returnType: "any" },
 
   // --- Checkpointing ---
-  checkpoint:    { params: [],         returnType: number },
-  getCheckpoint: { params: [number],   returnType: "any" },
+  checkpoint: { params: [], returnType: number },
+  getCheckpoint: { params: [number], returnType: "any" },
+  // --- Runtime context (compile-time rewrite to __ctx) ---
+  // Lowered to the `__ctx` identifier in lib/backends/typescriptBuilder.ts.
+  // No TS implementation; pure codegen. Intentionally NOT in BUILTIN_FUNCTIONS
+  // (lib/config.ts) since that registry is for runtime helper bindings.
+  getContext: { params: [], returnType: contextType },
 };

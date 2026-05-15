@@ -141,6 +141,33 @@ async function _runPrompt({
     usage: completion.usage,
     cost: completion.cost,
   });
+
+  // Memory layer: auto-extraction and compaction run unconditionally
+  // whenever a MemoryManager is attached (resolved decision #6).
+  // Tool-call results have not been pushed yet, so we operate on the
+  // current message slice. Compaction is a best-effort hint — failures
+  // never break the LLM call.
+  if (ctx.memoryManager) {
+    try {
+      const original = messages.getMessages();
+      await ctx.memoryManager.onTurn(original);
+      const plan = await ctx.memoryManager.compactIfNeeded(original);
+      if (plan) {
+        // Reassemble the thread from the ORIGINAL smoltalk Message
+        // instances so tool_call metadata, ids, and other class-level
+        // fields survive untouched.
+        const head = plan.systemPrefixIndices.map((i) => original[i]);
+        const tail = plan.tailIndices.map((i) => original[i]);
+        const summary = smoltalk.systemMessage(plan.summaryMessageContent);
+        messages.setMessages([...head, summary, ...tail]);
+      }
+    } catch (err) {
+      console.warn(
+        `[memory] post-turn hook failed: ${(err as Error).message}`,
+      );
+    }
+  }
+
   const endHookResult = await callHook({
     callbacks: ctx.callbacks,
     name: "onLLMCallEnd",
@@ -223,9 +250,17 @@ export async function runPrompt(args: {
     (fn) => !removedTools.includes(fn.name),
   );
 
-  // Remove tools key from clientConfig before passing to smoltalk
-  const { tools: _extractedTools, ...restClientConfig } =
-    args.clientConfig || {};
+  // Remove tools key from clientConfig before passing to smoltalk.
+  // Also strip `memory` — it's a runtime-only directive that smoltalk
+  // doesn't understand.
+  const {
+    tools: _extractedTools,
+    memory: memoryOption,
+    ...restClientConfig
+  } = (args.clientConfig || {}) as Partial<smoltalk.SmolConfig> & {
+    tools?: any[];
+    memory?: boolean | { model?: string };
+  };
   const clientConfig = ctx.getSmoltalkConfig(restClientConfig);
 
   // Restore or initialize messages.
@@ -265,6 +300,31 @@ export async function runPrompt(args: {
   if (self.pendingToolCalls) {
     toolCalls = self.pendingToolCalls;
   } else {
+    // Memory injection (resolved decision #6): only retrieves and
+    // injects when the caller passed `memory: true` (or an object) on
+    // this llm() call. Best-effort: failures don't block the LLM call.
+    //
+    // The injected system message is transient — it's for THIS llm()
+    // call only and must not persist into the shared thread, otherwise
+    // subsequent llm() calls would see stacked stale context blobs (and
+    // recallForInjection would re-add a fresh one on top each turn).
+    // We track the exact injected content so we can strip it after the
+    // LLM call resolves, even if compaction (which can reshape indices)
+    // ran inside _runPrompt.
+    let injectedFactsContent: string | null = null;
+    if (memoryOption && ctx.memoryManager) {
+      try {
+        const facts = await ctx.memoryManager.recallForInjection(prompt);
+        if (facts) {
+          injectedFactsContent = `Relevant context from memory:\n${facts}`;
+          messages.push(smoltalk.systemMessage(injectedFactsContent));
+        }
+      } catch (err) {
+        console.warn(
+          `[memory] recall injection failed: ${(err as Error).message}`,
+        );
+      }
+    }
     messages.push(smoltalk.userMessage(prompt));
     const result = await _runPrompt({
       ctx,
@@ -277,7 +337,25 @@ export async function runPrompt(args: {
     });
     messages = result.messages;
     toolCalls = result.toolCalls;
-    // Save to frame
+
+    // Strip the transient memory injection (most recent matching system
+    // message). If compaction inside _runPrompt already removed it, this
+    // is a no-op.
+    if (injectedFactsContent !== null) {
+      const all = messages.getMessages();
+      for (let i = all.length - 1; i >= 0; i--) {
+        if (
+          all[i].role === "system" &&
+          all[i].content === injectedFactsContent
+        ) {
+          messages.setMessages([...all.slice(0, i), ...all.slice(i + 1)]);
+          break;
+        }
+      }
+    }
+
+    // Save to frame (after stripping the injection so resume sees the
+    // cleaned thread, not a duplicate-injection-on-resume).
     self.messagesJSON = messages.toJSON().messages;
     self.pendingToolCalls = toolCalls.length > 0 ? toolCalls : null;
   }

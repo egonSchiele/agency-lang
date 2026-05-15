@@ -205,6 +205,18 @@ export async function runNode({
       }
     }
   } finally {
+    // Persist any in-memory MemoryManager state. Writes are best-effort —
+    // we never fail the run because of a save error, but we do log it so
+    // disk problems are visible.
+    if (execCtx.memoryManager) {
+      try {
+        await execCtx.memoryManager.save();
+      } catch (err) {
+        console.warn(
+          `[memory] save failed: ${(err as Error).message}`,
+        );
+      }
+    }
     execCtx.cleanup();
   }
 }

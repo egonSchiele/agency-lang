@@ -1,0 +1,18 @@
+import { setMemoryId, remember, recall } from "std::memory"
+import { today } from "std::date"
+
+// Stores a fact then immediately recalls it. Must verify that the
+// recall result reflects THIS run's data — not state left by a prior
+// run under the same memoryId. Tagging the memoryId with `today()`
+// (YYYY-MM-DD — keeps the id within the validateMemoryId regex) keeps
+// each calendar day's run isolated; on top of that we assert the recall
+// result CONTAINS the entity name created by the mocked extraction so
+// stale unrelated state cannot make the test falsely pass.
+node main(): boolean {
+  const stamp: string = today()
+  setMemoryId("basic-test-" + stamp)
+  remember("Mom likes pottery")
+  const result: string = recall("mom")
+  const idx: number = result.indexOf("Mom")
+  return idx >= 0
+}

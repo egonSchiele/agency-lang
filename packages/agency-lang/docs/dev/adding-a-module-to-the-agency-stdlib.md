@@ -7,3 +7,31 @@ Adding a new module to the agency standard library follows a general pattern.
 4. Be aware that in agency, all functions are also tools that can be used by an LLM. There are a couple of pieces of functionality that agency has to make tool calls safer. One is the `safe` keyword. If a function can be called multiple times without any side effects, you can go ahead and mark it `safe`. This tells the LLM that this tool is safe to rerun if it gets an intermittent error.
 5. The other concept is interrupts. Interrupts are a way to ensure that before a tool is executed, you get confirmation from a user that it's okay to execute that tool. You can read more about interrupts here: https://agency-lang.com/guide/interrupts.html. You should throw an interrupt before any functionality that is either destructive or exposes sensitive data. Check out the calendar and OAuth standard library files to see examples of how and where interrupts are thrown. When you throw an interrupt, you specify a type, a message, and, optionally additional data. Make sure that if you do set additional data, it doesn't include any sensitive information. For example, if a user wanted to access a password, it would be a bad idea to include the password itself in the data for the interrupt.
 6. We automatically generate documentation for any code in the agency standard library. To generate the documentation, run the `make` or `make doc` commands. If you are adding a new file to the agency standard library, you will need to make sure its documentation is linked in docs-new/.vitepress/config.mts as well. All the agency stdlib modules are documented here, listed in alphabetical order.
+
+## Accessing runtime state from a TS binding
+
+If a stdlib TS helper needs to read or mutate per-run state (memory manager, statelog client, abort controller, etc.) it MUST take the `RuntimeContext` as its first argument and let the agency-side wrapper supply it via the `getContext()` builtin. Do not reach for a module-level singleton — multiple `runNode` calls can share a Node.js process and would race on it.
+
+```ts
+// lib/stdlib/foo.ts
+import type { RuntimeContext } from "../runtime/state/context.js";
+
+export async function _doThing(
+  ctx: RuntimeContext<any>,
+  arg: string,
+): Promise<void> {
+  if (!ctx?.someResource) return; // tolerate missing config
+  await ctx.someResource.handle(arg);
+}
+```
+
+```agency
+// stdlib/foo.agency
+import { _doThing } from "agency-lang/stdlib-lib/foo.js"
+
+export def doThing(arg: string) {
+  _doThing(getContext(), arg)
+}
+```
+
+`getContext()` is a builder macro: it lowers to the in-scope `__ctx` identifier at codegen time, so there is no runtime overhead and no module-level state to race on. Type the TS parameter as `RuntimeContext<any>` (not the narrower public `Context` type) so the implementation retains access to internal fields the agency type system intentionally hides.

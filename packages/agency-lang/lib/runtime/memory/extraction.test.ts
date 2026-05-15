@@ -1,0 +1,93 @@
+import { describe, it, expect } from "vitest";
+import { userMessage, assistantMessage } from "smoltalk";
+import { buildExtractionPrompt, applyExtractionResult } from "./extraction.js";
+import { MemoryGraph } from "./graph.js";
+
+describe("buildExtractionPrompt", () => {
+  it("includes conversation messages in the prompt", () => {
+    const messages = [
+      userMessage("My mom loves pottery"),
+      assistantMessage("That's great!"),
+    ];
+    const graph = new MemoryGraph();
+    const prompt = buildExtractionPrompt(messages, graph);
+    expect(prompt).toContain("My mom loves pottery");
+  });
+
+  it("includes existing entities for deduplication context", () => {
+    const graph = new MemoryGraph();
+    graph.addEntity("Mom", "person", "test");
+    const prompt = buildExtractionPrompt([], graph);
+    expect(prompt).toContain("Mom");
+    expect(prompt).toContain("person");
+  });
+});
+
+describe("applyExtractionResult", () => {
+  it("adds new entities from extraction", () => {
+    const graph = new MemoryGraph();
+    const result = {
+      entities: [
+        { name: "Mom", type: "person", observations: ["Likes pottery"] },
+      ],
+      relations: [],
+      expirations: [],
+    };
+    applyExtractionResult(graph, result, "test-agent");
+    expect(graph.getEntities()).toHaveLength(1);
+    expect(graph.getEntities()[0].observations).toHaveLength(1);
+  });
+
+  it("merges observations into existing entity by name", () => {
+    const graph = new MemoryGraph();
+    graph.addEntity("Mom", "person", "test");
+    graph.addObservation(
+      graph.findEntityByName("Mom")!.id,
+      "Birthday is March 5"
+    );
+    const result = {
+      entities: [
+        { name: "Mom", type: "person", observations: ["Likes pottery"] },
+      ],
+      relations: [],
+      expirations: [],
+    };
+    applyExtractionResult(graph, result, "test-agent");
+    expect(graph.getEntities()).toHaveLength(1);
+    expect(graph.getEntities()[0].observations).toHaveLength(2);
+  });
+
+  it("adds relations from extraction", () => {
+    const graph = new MemoryGraph();
+    graph.addEntity("User", "user", "test");
+    graph.addEntity("Mom", "person", "test");
+    const result = {
+      entities: [],
+      relations: [{ from: "User", to: "Mom", type: "mother-of" }],
+      expirations: [],
+    };
+    applyExtractionResult(graph, result, "test-agent");
+    expect(graph.getRelations()).toHaveLength(1);
+  });
+
+  it("expires old observations on contradiction", () => {
+    const graph = new MemoryGraph();
+    const mom = graph.addEntity("Mom", "person", "test");
+    const oldObs = graph.addObservation(mom.id, "Favorite color is blue");
+    const result = {
+      entities: [
+        { name: "Mom", type: "person", observations: ["Favorite color is red"] },
+      ],
+      relations: [],
+      expirations: [
+        { entityName: "Mom", observationContent: "Favorite color is blue" },
+      ],
+    };
+    const outcome = applyExtractionResult(graph, result, "test-agent");
+    const current = graph.getCurrentObservations(mom.id);
+    expect(current).toHaveLength(1);
+    expect(current[0].content).toBe("Favorite color is red");
+    expect(outcome.expiredObservationIds).toEqual([oldObs.id]);
+    expect(outcome.newObservationIds).toHaveLength(1);
+  });
+});

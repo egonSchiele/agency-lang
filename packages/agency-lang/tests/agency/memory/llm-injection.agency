@@ -1,0 +1,30 @@
+import { setMemoryId, remember } from "std::memory"
+
+// Stores a fact, then makes an llm() call with memory: true. The
+// memory layer should inject a "Relevant context from memory:" system
+// message before the user prompt. We register an onLLMCallStart
+// callback that inspects the messages handed to the LLM and asserts
+// the injected prefix is actually present — without this, the test
+// would falsely pass even if memory injection was completely removed
+// (the deterministic client returns the next mock for any prompt).
+let injected: boolean = false
+
+callback onLLMCallStart(data) {
+  for (msg in data.messages) {
+    if (msg.role == "system" && msg.content != null) {
+      const idx = msg.content.indexOf("Relevant context from memory:")
+      if (idx >= 0) {
+        injected = true
+      }
+    }
+  }
+}
+
+node main(): boolean {
+  setMemoryId("llm-injection-test")
+  remember("Mom likes pottery")
+  // Use a short query so structuredLookup's substring match matches
+  // "Mom" deterministically without needing live embeddings.
+  llm("mom", { memory: true })
+  return injected
+}

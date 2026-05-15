@@ -2274,6 +2274,16 @@ export class TypeScriptBuilder {
         .done();
     }
 
+    // getContext() is a builder macro — compile-time rewrite to the
+    // `__ctx` identifier already in scope of every compiled function.
+    // Zero runtime cost; no `__call` dispatch, no await.
+    if (node.functionName === "getContext") {
+      if (node.arguments.length > 0) {
+        throw new Error("getContext() takes no arguments");
+      }
+      return ts.id("__ctx");
+    }
+
     // __-prefixed helpers and DIRECT_CALL_FUNCTIONS: emit plain direct call
     if (
       functionName.startsWith("__") ||
@@ -3604,6 +3614,35 @@ export class TypeScriptBuilder {
       traceConfigFields.traceFile = ts.str(this.agencyConfig.traceFile);
     }
     runtimeCtxArgs.traceConfig = ts.obj(traceConfigFields);
+
+    if (this.agencyConfig.memory) {
+      const mem = this.agencyConfig.memory;
+      const memoryFields: Record<string, TsNode> = {
+        dir: ts.str(mem.dir),
+      };
+      if (mem.model) memoryFields.model = ts.str(mem.model);
+      if (mem.autoExtract?.interval !== undefined) {
+        memoryFields.autoExtract = ts.obj({
+          interval: ts.raw(String(mem.autoExtract.interval)),
+        });
+      }
+      if (mem.compaction) {
+        const compFields: Record<string, TsNode> = {};
+        if (mem.compaction.trigger) {
+          compFields.trigger = ts.str(mem.compaction.trigger);
+        }
+        if (mem.compaction.threshold !== undefined) {
+          compFields.threshold = ts.raw(String(mem.compaction.threshold));
+        }
+        memoryFields.compaction = ts.obj(compFields);
+      }
+      if (mem.embeddings?.model) {
+        memoryFields.embeddings = ts.obj({
+          model: ts.str(mem.embeddings.model),
+        });
+      }
+      runtimeCtxArgs.memory = ts.obj(memoryFields);
+    }
 
     const runtimeCtxStatements: TsNode[] = [
       ts.constDecl(

@@ -109,4 +109,20 @@ describe("JS_GLOBALS — namespace member sigs", () => {
     );
     expect(errors.filter(arityErr)).toHaveLength(0);
   });
+
+  it("does not validate when shadowed by a local node", () => {
+    // `node JSON()` shadows the JS global; JSON.parse() should not be
+    // checked against JS_GLOBALS arity.
+    const errors = errorsFrom(
+      `node JSON() { return { parse: 1 } }\nnode main() { let x = JSON.parse() }\n`,
+    );
+    expect(errors.filter(arityErr)).toHaveLength(0);
+  });
+
+  it("does not validate when shadowed by a class definition", () => {
+    const errors = errorsFrom(
+      `class JSON {\n  parse: number\n}\nnode main() {\n let j = new JSON(1)\n let x = j.parse\n print(x)\n}\n`,
+    );
+    expect(errors.filter(arityErr)).toHaveLength(0);
+  });
 });

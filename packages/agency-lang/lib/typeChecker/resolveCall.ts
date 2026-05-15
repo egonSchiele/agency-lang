@@ -350,6 +350,38 @@ const has = (obj: object, name: string): boolean =>
  *   6. Flat JS global callable        — parseInt, setTimeout, etc.
  *   7. Otherwise: unresolved.
  */
+/**
+ * Inputs for {@link isJsGlobalBase}. The shape mirrors {@link ResolveCallInput}
+ * but adds class and import-node bookkeeping so user definitions of
+ * `JSON` / `Math` / etc. (via `node`, `import node`, or `class`) cleanly
+ * opt out of JS_GLOBALS validation.
+ */
+export type ShadowingInput = {
+  scope: { has(name: string): boolean };
+  functionDefs: object;
+  nodeDefs: object;
+  importedFunctions: object;
+  importedNodeNames: readonly string[];
+  classNames: object;
+};
+
+/**
+ * `true` only when `name` resolves to a JS global *and* nothing user-defined
+ * shadows it. Use this to gate JS-namespace member validation (e.g.
+ * `JSON.parse(...)`) and avoid checking against `JS_GLOBALS` when the user
+ * has their own `node JSON()` / `class JSON` / `let JSON = …`.
+ */
+export function isJsGlobalBase(name: string, input: ShadowingInput): boolean {
+  if (!has(JS_GLOBALS, name)) return false;
+  if (input.scope.has(name)) return false;
+  if (has(input.functionDefs, name)) return false;
+  if (has(input.nodeDefs, name)) return false;
+  if (has(input.importedFunctions, name)) return false;
+  if (input.importedNodeNames.includes(name)) return false;
+  if (has(input.classNames, name)) return false;
+  return true;
+}
+
 export function resolveCall(
   name: string,
   input: ResolveCallInput,

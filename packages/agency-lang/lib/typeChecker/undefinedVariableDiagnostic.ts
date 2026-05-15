@@ -4,6 +4,7 @@ import type { AgencyNode, VariableNameLiteral } from "../types.js";
 import type { WalkAncestor } from "../utils/node.js";
 import { walkNodes } from "../utils/node.js";
 import { resolveVariable } from "./resolveVariable.js";
+import { collectProgramShadowing } from "./shadowing.js";
 
 /**
  * Emit a diagnostic for every variable reference that doesn't resolve
@@ -39,15 +40,9 @@ export function checkUndefinedVariables(
   const mode = ctx.config.typechecker?.undefinedVariables ?? "silent";
   if (mode === "silent") return;
 
-  const importedNodeNames: string[] = [];
-  const classDefs: Record<string, true> = {};
-  for (const node of ctx.programNodes) {
-    if (node.type === "importNodeStatement") {
-      importedNodeNames.push(...node.importedNodes);
-    } else if (node.type === "classDefinition") {
-      classDefs[node.className] = true;
-    }
-  }
+  const { importedNodeNames, classNames: classDefs } = collectProgramShadowing(
+    ctx.programNodes,
+  );
 
   for (const info of scopes) {
     if (!info.name) continue;

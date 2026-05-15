@@ -10,7 +10,8 @@ import type { Scope as WalkScope } from "../types.js";
 import { formatTypeHint } from "../utils/formatType.js";
 import type { ValueAccess } from "../types/access.js";
 import { BUILTIN_FUNCTION_TYPES } from "./builtins.js";
-import { JS_GLOBALS, lookupJsMember } from "./resolveCall.js";
+import { JS_GLOBALS, isJsGlobalBase, lookupJsMember } from "./resolveCall.js";
+import { collectProgramShadowing } from "./shadowing.js";
 import { isAssignable } from "./assignability.js";
 import { synthType } from "./synthesizer.js";
 import { ScopeInfo } from "./types.js";
@@ -282,13 +283,21 @@ function checkJsNamespaceMemberCall(
   expr: ValueAccess,
   scope: Scope,
   ctx: TypeCheckerContext,
+  shadowing: { importedNodeNames: readonly string[]; classNames: object },
 ): void {
   if (expr.base.type !== "variableName") return;
   const baseName = expr.base.value;
-  if (scope.has(baseName)) return;
-  if (Object.prototype.hasOwnProperty.call(ctx.functionDefs, baseName)) return;
-  if (Object.prototype.hasOwnProperty.call(ctx.importedFunctions, baseName)) return;
-  if (!Object.prototype.hasOwnProperty.call(JS_GLOBALS, baseName)) return;
+  if (
+    !isJsGlobalBase(baseName, {
+      scope,
+      functionDefs: ctx.functionDefs,
+      nodeDefs: ctx.nodeDefs,
+      importedFunctions: ctx.importedFunctions,
+      importedNodeNames: shadowing.importedNodeNames,
+      classNames: shadowing.classNames,
+    })
+  )
+    return;
   if (expr.chain.length !== 1) return;
   const access = expr.chain[0];
   if (access.kind !== "methodCall") return;
@@ -592,10 +601,11 @@ function checkExpressionsInScope(
   info: ScopeInfo,
   ctx: TypeCheckerContext,
 ): void {
+  const shadowing = collectProgramShadowing(ctx.programNodes);
   for (const { node, ancestors, scopes } of walkNodes(info.body)) {
     if (!isInScope(scopes, info)) continue;
     if (node.type === "valueAccess") {
-      checkJsNamespaceMemberCall(node, info.scope, ctx);
+      checkJsNamespaceMemberCall(node, info.scope, ctx, shadowing);
       synthType(node, info.scope, ctx);
     } else if (node.type === "returnStatement" && node.value) {
       // A return inside a block body belongs to the block, not the enclosing

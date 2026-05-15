@@ -124,6 +124,30 @@ describe("undefined variable diagnostic", () => {
     ).toHaveLength(0);
   });
 
+  it("warns on a callback argument that doesn't resolve (`xs.map(doesNotExist)`)", () => {
+    const errors = errorsFrom(
+      `node main() {\n let xs = [1, 2, 3]\n let ys = xs.map(doesNotExist)\n print(ys)\n }\n`,
+      WARN,
+    );
+    expect(
+      errors.filter(
+        (e) => e.message.includes("doesNotExist") && e.message.includes("not defined"),
+      ),
+    ).toHaveLength(1);
+  });
+
+  it("warns on a callback argument to a bare call (`map(xs, doesNotExist)`)", () => {
+    const errors = errorsFrom(
+      `node main() {\n let xs = [1, 2, 3]\n let ys = map(xs, doesNotExist)\n print(ys)\n }\n`,
+      WARN,
+    );
+    expect(
+      errors.filter(
+        (e) => e.message.includes("doesNotExist") && e.message.includes("not defined"),
+      ),
+    ).toHaveLength(1);
+  });
+
   it("does not warn on lambda/block parameters", () => {
     const errors = errorsFrom(
       `node main() {\n let xs = [1, 2, 3]\n let ys = xs.map(\\(x) -> x + 1)\n print(ys)\n }\n`,

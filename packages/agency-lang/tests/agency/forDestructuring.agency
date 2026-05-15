@@ -1,0 +1,21 @@
+node main() {
+  // Array destructuring in for loop
+  let pairs = [[1, "a"], [2, "b"], [3, "c"]]
+  let sum = 0
+  let labels = ""
+  for ([n, label] in pairs) {
+    sum = sum + n
+    labels = labels + label
+  }
+
+  // Object destructuring in for loop
+  let users = [{ name: "Alice", age: 30 }, { name: "Bob", age: 25 }]
+  let totalAge = 0
+  let names = ""
+  for ({ name, age } in users) {
+    totalAge = totalAge + age
+    names = names + name
+  }
+
+  return [sum, labels, totalAge, names]
+}

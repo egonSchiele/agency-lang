@@ -1,0 +1,14 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "[\"click\",\"scroll\",\"other\"]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    }
+  ]
+}

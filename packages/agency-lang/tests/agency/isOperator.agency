@@ -1,0 +1,18 @@
+node main() {
+  let step = { type: "showPolicy", policy: { name: "default" } }
+
+  // Boolean is
+  let isShow = step is { type: "showPolicy" }
+  let isHide = step is { type: "hide" }
+
+  // is in if-else with bindings
+  let foundName = ""
+  if (step is { type: "showPolicy", policy }) {
+    foundName = policy.name
+  }
+
+  // is composed with &&
+  let composed = step is { type: "showPolicy" } && true
+
+  return [isShow, isHide, foundName, composed]
+}

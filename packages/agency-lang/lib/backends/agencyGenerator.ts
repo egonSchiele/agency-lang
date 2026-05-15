@@ -58,6 +58,16 @@ import { Keyword } from "@/types/keyword.js";
 import { HandleBlock } from "@/types/handleBlock.js";
 import { Tag } from "@/types/tag.js";
 import { ClassDefinition, NewExpression } from "@/types/classDefinition.js";
+import {
+  ArrayPattern,
+  BindingPattern,
+  MatchPattern,
+  ObjectPattern,
+  ObjectPatternProperty,
+  ObjectPatternShorthand,
+  RestPattern,
+  WildcardPattern,
+} from "@/types/pattern.js";
 
 export class AgencyGenerator {
   protected graphNodes: GraphNodeDefinition[] = [];
@@ -285,6 +295,13 @@ export class AgencyGenerator {
         return `re/${node.pattern}/${node.flags}`;
       case "interruptStatement":
         return this.processInterruptStatement(node);
+      case "objectPattern":
+      case "arrayPattern":
+      case "restPattern":
+      case "wildcardPattern":
+        return this.formatPattern(node);
+      case "isExpression":
+        return `${this.processNode(node.expression).trim()} is ${this.formatPattern(node.pattern)}`;
       case "parallelBlock":
         return this.processParallelBlock(node);
       case "seqBlock":
@@ -462,9 +479,12 @@ export class AgencyGenerator {
         ?.map((ce) => this.processAccessChainElement(ce))
         .join("") ?? "";
     const bangSuffix = node.validated ? "!" : "";
-    const varName = node.typeHint
-      ? `${node.variableName}${chainStr}: ${variableTypeToString(node.typeHint, this.typeAliases, true)}${bangSuffix}`
-      : `${node.variableName}${chainStr}`;
+    // Destructuring pattern takes precedence over the bare variableName.
+    const lhs = node.pattern
+      ? this.formatPattern(node.pattern)
+      : node.typeHint
+        ? `${node.variableName}${chainStr}: ${variableTypeToString(node.typeHint, this.typeAliases, true)}${bangSuffix}`
+        : `${node.variableName}${chainStr}`;
     const exportPrefix = node.exported ? "export " : "";
     const staticPrefix = node.static ? "static " : "";
     const declPrefix = node.declKind ? `${node.declKind} ` : "";
@@ -474,8 +494,53 @@ export class AgencyGenerator {
         : this.processNode(node.value).trim();
     return (
       tags +
-      this.indentStr(`${exportPrefix}${staticPrefix}${declPrefix}${varName} = ${valueCode}`)
+      this.indentStr(`${exportPrefix}${staticPrefix}${declPrefix}${lhs} = ${valueCode}`)
     );
+  }
+
+  /**
+   * Format a pattern AST node back into Agency pattern syntax. Used by the
+   * formatter (it sees the un-lowered AST). Handles binding patterns and
+   * match patterns; for match patterns, literal sub-nodes are formatted via
+   * the existing literal/expression code paths.
+   */
+  protected formatPattern(pattern: BindingPattern | MatchPattern): string {
+    switch (pattern.type) {
+      case "objectPattern":
+        return this.formatObjectPattern(pattern);
+      case "arrayPattern":
+        return this.formatArrayPattern(pattern);
+      case "restPattern":
+        return `...${(pattern as RestPattern).identifier}`;
+      case "wildcardPattern":
+        return "_";
+      default:
+        // variableName / literals — defer to existing rendering
+        return this.processNode(pattern as AgencyNode).trim();
+    }
+  }
+
+  private formatObjectPattern(node: ObjectPattern): string {
+    const parts = node.properties.map((p) => {
+      if (p.type === "objectPatternShorthand") {
+        return (p as ObjectPatternShorthand).name;
+      }
+      if (p.type === "restPattern") {
+        return `...${p.identifier}`;
+      }
+      const prop = p as ObjectPatternProperty;
+      // If the value is just `variableName` matching the key, emit shorthand.
+      if (prop.value.type === "variableName" && prop.value.value === prop.key) {
+        return prop.key;
+      }
+      return `${prop.key}: ${this.formatPattern(prop.value)}`;
+    });
+    return `{ ${parts.join(", ")} }`;
+  }
+
+  private formatArrayPattern(node: ArrayPattern): string {
+    const parts = node.elements.map((el) => this.formatPattern(el));
+    return `[${parts.join(", ")}]`;
   }
 
   protected generateLiteral(literal: Literal): string {
@@ -726,9 +791,12 @@ export class AgencyGenerator {
           ? "_"
           : this.processNode(caseNode.caseValue as AgencyNode).trim();
 
+      const guardCode = caseNode.guard
+        ? ` if (${this.processNode(caseNode.guard).trim()})`
+        : "";
       const bodyCode = this.processNode(caseNode.body).trim();
 
-      result += this.indentStr(`${pattern} => ${bodyCode}\n`);
+      result += this.indentStr(`${pattern}${guardCode} => ${bodyCode}\n`);
     }
 
     this.decreaseIndent();
@@ -740,9 +808,11 @@ export class AgencyGenerator {
 
   protected processForLoop(node: ForLoop): string {
     const iterableCode = this.processNode(node.iterable).trim();
-    const vars = node.indexVar
-      ? `${node.itemVar}, ${node.indexVar}`
-      : node.itemVar;
+    const itemVarStr =
+      typeof node.itemVar === "string"
+        ? node.itemVar
+        : this.formatPattern(node.itemVar);
+    const vars = node.indexVar ? `${itemVarStr}, ${node.indexVar}` : itemVarStr;
     let result = this.indentStr(`for (${vars} in ${iterableCode}) {\n`);
 
     this.increaseIndent();

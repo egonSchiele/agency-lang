@@ -70,9 +70,10 @@ export function parse(
   contents: string,
   config: AgencyConfig,
   applyTemplate: boolean = true,
+  lower: boolean = true,
 ): AgencyProgram {
   const verbose = config.verbose ?? false;
-  const parseResult = parseAgency(contents, config, applyTemplate);
+  const parseResult = parseAgency(contents, config, applyTemplate, lower);
 
   // Check if parsing was successful
   if (!parseResult.success) {
@@ -241,7 +242,9 @@ export async function format(
   contents: string,
   config: AgencyConfig = {},
 ): Promise<string> {
-  const program = parse(replaceBlankLines(contents), config, false);
+  // Format path opts out of pattern lowering so the formatter sees the original
+  // pattern AST and can print it back as pattern syntax.
+  const program = parse(replaceBlankLines(contents), config, false, false);
   return generateAgency(program);
 }
 

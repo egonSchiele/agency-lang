@@ -140,19 +140,22 @@ describe("object destructuring", () => {
     });
   });
 
-  it("lowers object rest to a native-JS IIFE via RawCode", () => {
+  it("lowers object rest to a __objectRest call (handled by TS builder)", () => {
     const lowered = lower(`const person = { name: "B", age: 30, city: "NY" }\nconst { name, ...rest } = person`);
     // [person, __tmp, name, rest]
     expect(lowered).toHaveLength(4);
     const restBind = lowered[3] as Assignment;
     expect(restBind.variableName).toBe("rest");
-    expect(restBind.value.type).toBe("rawCode");
-    const code = (restBind.value as { type: "rawCode"; value: string }).value;
-    // IIFE that destructures and returns the rest:
-    //   (({ name: __name, ...__r }) => __r)(__tmp_1)
-    expect(code).toMatch(/__r/);
-    expect(code).toMatch(/__tmp_/);
-    expect(code).toContain("name:");
+    expect(restBind.value.type).toBe("functionCall");
+    const call = restBind.value as { type: "functionCall"; functionName: string; arguments: unknown[] };
+    expect(call.functionName).toBe("__objectRest");
+    expect(call.arguments).toHaveLength(2);
+    // First arg is the source (varRef to __tmp_X)
+    expect((call.arguments[0] as { type: string; value: string }).type).toBe("variableName");
+    // Second arg is the array of excluded keys
+    const keysArr = call.arguments[1] as { type: string; items: { segments: { value: string }[] }[] };
+    expect(keysArr.type).toBe("agencyArray");
+    expect(keysArr.items[0].segments[0].value).toBe("name");
   });
 
   it("lowers nested object/array pattern", () => {

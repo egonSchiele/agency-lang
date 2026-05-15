@@ -2217,6 +2217,35 @@ export class TypeScriptBuilder {
       return ts.callHook("onEmit", data);
     }
 
+    if (node.functionName === "__objectRest") {
+      // Compiler-internal call emitted by the pattern lowering pass for
+      // `let { a, b, ...rest } = obj`. Args are [source, ["a", "b"]].
+      // Emit a native-JS IIFE that destructures the source and returns the
+      // rest object. No runtime helper involved.
+      //
+      //   __objectRest(source, ["a", "b"])
+      //   → (({ a: __a, b: __b, ...__r }) => __r)(<resolved source>)
+      const [sourceArg, keysArg] = node.arguments;
+      const sourceJs = this.str(this.processNode(sourceArg as Expression));
+      const keys =
+        keysArg && (keysArg as AgencyArray).type === "agencyArray"
+          ? (keysArg as AgencyArray).items
+              .map((it) => {
+                if ((it as Expression).type === "string") {
+                  const segs = (it as { segments: { value: string }[] }).segments;
+                  return segs[0]?.value ?? "";
+                }
+                return "";
+              })
+              .filter((k) => k.length > 0)
+          : [];
+      const destructured = keys
+        .map((k, i) => `${k}: __k${i}`)
+        .join(", ");
+      const iife = `(({ ${destructured}, ...__r }) => __r)(${sourceJs})`;
+      return ts.raw(iife);
+    }
+
     if (node.functionName === "llm") {
       // Standalone llm() call (not assigned to variable)
       return this.processLlmCall(

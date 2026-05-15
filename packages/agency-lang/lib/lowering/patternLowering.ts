@@ -15,12 +15,14 @@ import type {
   Assignment,
   Expression,
   ForLoop,
+  FunctionCall,
   IfElse,
   MatchBlock,
   MatchBlockCase,
   WhileLoop,
 } from "../types.js";
 import type { BinOpExpression, Operator } from "../types/binop.js";
+import type { AgencyArray } from "../types/dataStructures.js";
 import type {
   BindingPattern,
   IsExpression,
@@ -31,7 +33,7 @@ import type {
 import type {
   Literal,
   NumberLiteral,
-  RawCode,
+  StringLiteral,
   VariableNameLiteral,
 } from "../types/literals.js";
 import type { ValueAccess, AccessChainElement } from "../types/access.js";
@@ -78,9 +80,93 @@ class PatternLowerer {
         return [
           { ...(node as GraphNodeDefinition), body: this.lower((node as GraphNodeDefinition).body) } as AgencyNode,
         ];
-      default:
+      case "returnStatement": {
+        const ret = node as { type: "returnStatement"; value?: Expression; loc?: SourceLocation };
+        return [
+          {
+            ...(ret as object),
+            value: ret.value !== undefined ? this.lowerExpression(ret.value) : undefined,
+          } as AgencyNode,
+        ];
+      }
+      default: {
+        // For any other node that contains expressions (functionCall, etc.),
+        // walk through it as an expression and replace any nested isExpression.
+        if (isExpr(node as unknown)) {
+          return [this.lowerExpression(node as unknown as Expression) as unknown as AgencyNode];
+        }
         return [node];
+      }
     }
+  }
+
+  /**
+   * Recursively lower an expression: any `isExpression` found in a pure-boolean
+   * context (anywhere except as the direct condition of `if`/`while` or the
+   * direct expression of `match`) is converted to its boolean condition form.
+   * Binders inside such an `isExpression` are a compile-time error.
+   */
+  private lowerExpression(expr: Expression): Expression {
+    if (expr.type === "isExpression") {
+      assertNoBindersInBoolIs(expr.pattern);
+      const inner = this.lowerExpression(expr.expression);
+      return patternToCondition(expr.pattern, inner) ?? boolLit(true, expr.loc);
+    }
+    if (expr.type === "binOpExpression") {
+      return {
+        ...expr,
+        left: this.lowerExpression(expr.left),
+        right: this.lowerExpression(expr.right),
+      };
+    }
+    if (expr.type === "functionCall") {
+      return {
+        ...expr,
+        arguments: expr.arguments.map((a) => {
+          if ("type" in a && (a.type === "splat" || a.type === "namedArgument")) {
+            return { ...a, value: this.lowerExpression(a.value) };
+          }
+          return this.lowerExpression(a as Expression);
+        }),
+      };
+    }
+    if (expr.type === "valueAccess") {
+      return {
+        ...expr,
+        chain: expr.chain.map((c) => {
+          if (c.kind === "index") return { ...c, index: this.lowerExpression(c.index) };
+          if (c.kind === "slice") {
+            return {
+              ...c,
+              start: c.start ? this.lowerExpression(c.start) : c.start,
+              end: c.end ? this.lowerExpression(c.end) : c.end,
+            };
+          }
+          return c;
+        }),
+      };
+    }
+    if (expr.type === "agencyArray") {
+      return {
+        ...expr,
+        items: expr.items.map((it) =>
+          "type" in it && it.type === "splat"
+            ? { ...it, value: this.lowerExpression(it.value) }
+            : this.lowerExpression(it as Expression),
+        ),
+      };
+    }
+    if (expr.type === "agencyObject") {
+      return {
+        ...expr,
+        entries: expr.entries.map((e) =>
+          "type" in e && e.type === "splat"
+            ? { ...e, value: this.lowerExpression(e.value) }
+            : { ...e, value: this.lowerExpression((e as { value: Expression }).value) },
+        ),
+      };
+    }
+    return expr;
   }
 
   // -------------------------------------------------------------------------
@@ -88,16 +174,15 @@ class PatternLowerer {
   // -------------------------------------------------------------------------
 
   private lowerAssignment(node: Assignment): AgencyNode[] {
+    // node.value can be Expression | MessageThread; only walk Expression cases.
+    const loweredValue = isExpr(node.value)
+      ? this.lowerExpression(node.value as Expression)
+      : node.value;
+
     if (!node.pattern) {
-      // Pure-boolean `is` context: const r = x is { type: "foo" } → const r = (x.type == "foo")
-      // Reject shorthand binders here because they have nowhere to bind.
-      const value = node.value;
-      if (isExpr(value) && value.type === "isExpression") {
-        assertNoBindersInBoolIs(value.pattern);
-        const lowered = patternToCondition(value.pattern, value.expression);
-        return [{ ...node, value: lowered ?? boolLit(true, value.loc) }];
-      }
-      return [node];
+      // Pure-boolean context: walk the value and replace any nested
+      // `isExpression` with its boolean condition. Binders are a compile error.
+      return [{ ...node, value: loweredValue }];
     }
 
     const loc = node.loc;
@@ -109,7 +194,7 @@ class PatternLowerer {
       type: "assignment",
       variableName: tempName,
       declKind: "const",
-      value: node.value,
+      value: loweredValue,
       loc,
     };
 
@@ -136,6 +221,7 @@ class PatternLowerer {
     }
     return {
       ...node,
+      condition: this.lowerExpression(node.condition),
       thenBody: this.lower(node.thenBody),
       elseBody: node.elseBody ? this.lower(node.elseBody) : undefined,
     };
@@ -152,7 +238,11 @@ class PatternLowerer {
         body: [...bindings, ...this.lower(node.body)],
       };
     }
-    return { ...node, body: this.lower(node.body) };
+    return {
+      ...node,
+      condition: this.lowerExpression(node.condition),
+      body: this.lower(node.body),
+    };
   }
 
   // -------------------------------------------------------------------------
@@ -516,7 +606,11 @@ function walkPattern(
 // ---------------------------------------------------------------------------
 
 function isExpr(v: unknown): v is Expression {
-  return typeof v === "object" && v !== null && "type" in v;
+  if (typeof v !== "object" || v === null || !("type" in v)) return false;
+  // Exclude non-Expression node types that may share the union with Expression
+  // in some fields (e.g. Assignment.value is `Expression | MessageThread`).
+  const t = (v as { type: string }).type;
+  return t !== "messageThread";
 }
 
 function varRef(name: string, loc: SourceLocation | undefined): VariableNameLiteral {
@@ -561,30 +655,40 @@ function chainAccess(
 }
 
 /**
- * Generate an inline IIFE that destructures `source` and returns the rest object.
- * Uses native JS destructuring so we don't need a runtime helper.
+ * Emit a call to the synthetic `__objectRest` function. The TS builder
+ * intercepts this name and emits an inline IIFE using native JS destructuring,
+ * so no runtime helper is needed. The function is registered as a builtin so
+ * the typechecker accepts the call.
  *
- * For `let { a, b, ...rest } = obj`, the rest binding becomes:
- *   const rest = (({ a, b, ...__r }) => __r)(__tmp_1)
- *
- * The source must already be a `varRef` (i.e. a VariableNameLiteral) since we
- * inline its name into the generated code string. This is enforced by the
- * lowering: object rest is only emitted when the source is __tmp_N.
+ * For `let { a, b, ...rest } = obj`, this emits:
+ *   __objectRest(__tmp_1, ["a", "b"])
+ * which the TS builder turns into:
+ *   (({ a: __a, b: __b, ...__r }) => __r)(<resolved source>)
  */
 function makeObjectRestCall(
   source: Expression,
   excludedKeys: string[],
   loc: SourceLocation | undefined,
-): RawCode {
-  if (source.type !== "variableName") {
-    throw new Error(
-      `internal: object rest source must be a variableName, got ${source.type}`,
-    );
-  }
-  const sourceName = source.value;
-  const excluded = excludedKeys.map((k) => `${k}: __${k}`).join(", ");
-  const code = `(({ ${excluded}, ...__r }) => __r)(${sourceName})`;
-  return { type: "rawCode", value: code, loc: loc as SourceLocation };
+): FunctionCall {
+  const keysArray: AgencyArray = {
+    type: "agencyArray",
+    items: excludedKeys.map((k) => stringLit(k, loc)),
+    loc: loc as SourceLocation,
+  };
+  return {
+    type: "functionCall",
+    functionName: "__objectRest",
+    arguments: [source, keysArray],
+    loc: loc as SourceLocation,
+  };
+}
+
+function stringLit(value: string, loc: SourceLocation | undefined): StringLiteral {
+  return {
+    type: "string",
+    segments: [{ type: "text", value }],
+    loc: loc as SourceLocation,
+  };
 }
 
 function makeAssign(

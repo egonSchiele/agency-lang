@@ -2136,13 +2136,35 @@ export const defaultCaseParser: Parser<DefaultCase> = map(
   () => "_" as DefaultCase,
 );
 
+// Match arm LHS parser. Tries in order:
+//   1. `_` (default case)
+//   2. matchPattern, but only accepts if followed by `=>` or ` if (...)` —
+//      this prevents `v` from being parsed as a pattern when the user wrote
+//      `v > 5 =>` in `match(x is pat)` guard form.
+//   3. exprParser, as a fallback for guard expressions.
+const caseLhsParser: Parser<unknown> = (input: string) => {
+  const def = defaultCaseParser(input);
+  if (def.success) return def;
+
+  const pat = lazy(() => matchPatternParser)(input);
+  if (pat.success) {
+    // Look ahead: is the next non-space token `=>` or `if`?
+    const trimmed = pat.rest.replace(/^[ \t]+/, "");
+    if (trimmed.startsWith("=>") || /^if[^A-Za-z0-9_]/.test(trimmed)) {
+      return pat;
+    }
+  }
+
+  return exprParser(input);
+};
+
 export const matchBlockParserCase: Parser<MatchBlockCase> = (
   input: string,
 ): ParserResult<MatchBlockCase> => {
   const parser = seqC(
     set("type", "matchBlockCase"),
     optionalSpaces,
-    capture(or(defaultCaseParser, lazy(() => matchPatternParser)), "caseValue"),
+    capture(caseLhsParser, "caseValue"),
     // Optional guard: ` if (<expr>)`
     optional(
       captureCaptures(

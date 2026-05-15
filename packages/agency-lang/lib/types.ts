@@ -35,7 +35,14 @@ import { ClassDefinition, ClassField, ClassMethod, NewExpression } from "./types
 import { InterruptStatement } from "./types/interruptStatement.js";
 import { SchemaExpression } from "./types/schemaExpression.js";
 import { BlockArgument } from "./types/blockArgument.js";
-import { BindingPattern, IsExpression } from "./types/pattern.js";
+import {
+  ArrayPattern,
+  BindingPattern,
+  IsExpression,
+  ObjectPattern,
+  RestPattern,
+  WildcardPattern,
+} from "./types/pattern.js";
 export * from "./types/pattern.js";
 export * from "./types/access.js";
 export * from "./types/awaitPending.js";
@@ -78,8 +85,7 @@ export type Expression =
   | SchemaExpression
   | InterruptStatement
   | BlockArgument
-  | IsExpression
-  | RawCode;
+  | IsExpression;
 
 /**
  * Scope types for variable resolution.
@@ -246,7 +252,11 @@ export type AgencyNode =
   | SchemaExpression
   | InterruptStatement
   | BlockArgument
-  | IsExpression;
+  | IsExpression
+  | ObjectPattern
+  | ArrayPattern
+  | RestPattern
+  | WildcardPattern;
 
 export type AgencyProgram = {
   type: "agencyProgram";

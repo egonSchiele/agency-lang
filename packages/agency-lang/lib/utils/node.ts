@@ -197,7 +197,7 @@ export function* getAllVariablesInBody(
         if (caseItem.type === "comment") continue;
         if (caseItem.type === "newLine") continue;
         if (caseItem.caseValue === "_") continue;
-        yield* getAllVariablesInBody([caseItem.caseValue]);
+        yield* getAllVariablesInBody([caseItem.caseValue as AgencyNode]);
       }
     } else if (node.type === "variableName") {
       yield { name: node.value, node };
@@ -386,7 +386,7 @@ export function* walkNodes(
         if (caseItem.type === "comment") continue;
         if (caseItem.type === "newLine") continue;
         if (caseItem.caseValue !== "_") {
-          yield* walkNodes([caseItem.caseValue], [...ancestors, node], scopes);
+          yield* walkNodes([caseItem.caseValue as AgencyNode], [...ancestors, node], scopes);
         }
         yield* walkNodes([caseItem.body], [...ancestors, node], scopes);
       }

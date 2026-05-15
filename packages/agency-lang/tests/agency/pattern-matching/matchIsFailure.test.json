@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "[\"big\",true]",
+      "evaluationCriteria": [{"type": "exact"}],
+      "description": "match(x is pattern) returns failure when head pattern doesn't match"
+    }
+  ]
+}

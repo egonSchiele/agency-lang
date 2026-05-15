@@ -1,0 +1,15 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "[\"Bob\",30,\"NY\",10,20,[30,40,50]]",
+      "evaluationCriteria": [{"type": "exact"}],
+      "description": "Destructuring whose source value is produced by an interrupting function survives resume",
+      "interruptHandlers": [
+        {"action": "approve"},
+        {"action": "approve"}
+      ]
+    }
+  ]
+}

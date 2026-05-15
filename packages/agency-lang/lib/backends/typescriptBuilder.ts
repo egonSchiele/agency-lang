@@ -1455,7 +1455,7 @@ export class TypeScriptBuilder {
     const id = this._subStepPath[this._subStepPath.length - 1];
 
     // Register loop variables so they bypass scope resolution
-    this.loopVars.push(node.itemVar);
+    this.loopVars.push(node.itemVar as string);
     if (node.indexVar) {
       this.loopVars.push(node.indexVar);
     }
@@ -1492,7 +1492,7 @@ export class TypeScriptBuilder {
       return ts.runnerLoop({
         id,
         items: rangeExpr,
-        itemVar: node.itemVar,
+        itemVar: node.itemVar as string,
         body: bodyNodes,
       });
     }
@@ -1502,7 +1502,7 @@ export class TypeScriptBuilder {
     return ts.runnerLoop({
       id,
       items: iterableNode,
-      itemVar: node.itemVar,
+      itemVar: node.itemVar as string,
       indexVar: node.indexVar,
       body: bodyNodes,
     });
@@ -1539,7 +1539,7 @@ export class TypeScriptBuilder {
           condition: ts.binOp(
             expression,
             "===",
-            this.processNode(caseItem.caseValue),
+            this.processNode(caseItem.caseValue as AgencyNode),
           ),
           body: [this.processNode(caseItem.body)],
         });
@@ -2215,6 +2215,10 @@ export class TypeScriptBuilder {
       );
       const data = argNodes.length > 0 ? argNodes[0] : ts.id("undefined");
       return ts.callHook("onEmit", data);
+    }
+
+    if (node.functionName === "__objectRest") {
+      return ts.raw(this.buildObjectRestIIFE(node));
     }
 
     if (node.functionName === "llm") {
@@ -3114,7 +3118,7 @@ export class TypeScriptBuilder {
           ts.postfix(ts.id(node.indexVar), "++"),
           ts.statements([
             ts.constDecl(
-              node.itemVar,
+              node.itemVar as string,
               ts.index(ts.id(iterableVar), ts.id(node.indexVar)),
             ),
             ...node.body.map((s) => this.processNode(s)),
@@ -3123,10 +3127,46 @@ export class TypeScriptBuilder {
       ]);
     }
     return ts.forOf(
-      node.itemVar,
+      node.itemVar as string,
       this.processNode(node.iterable),
       processBody(node.body),
     );
+  }
+
+  /**
+   * Compile the synthetic `__objectRest(source, ["a", "b", ...])` call emitted
+   * by the pattern lowering pass for `let { a, b, ...rest } = obj` into a
+   * native-JS IIFE. No runtime helper required.
+   *
+   *   __objectRest(source, ["a", "b"])
+   *   → (({ a: __k0, b: __k1, ...__r }) => __r)(<resolved source>)
+   *
+   * For `let { ...rest } = obj` (no excluded keys), emits
+   *   (({ ...__r }) => __r)(<resolved source>)
+   */
+  private buildObjectRestIIFE(node: FunctionCall): string {
+    const [sourceArg, keysArg] = node.arguments;
+    const sourceJs = this.str(this.processNode(sourceArg as Expression));
+
+    const keys: string[] = [];
+    if (keysArg && "type" in keysArg && keysArg.type === "agencyArray") {
+      for (const item of keysArg.items) {
+        if ("type" in item && item.type === "string") {
+          const value = item.segments[0];
+          if (value?.type === "text" && value.value.length > 0) {
+            keys.push(value.value);
+          }
+        }
+      }
+    }
+
+    const destructured = keys.map((k, i) => `${k}: __k${i}`).join(", ");
+    // Empty destructured (no excluded keys) collapses the leading comma so
+    // we never emit invalid `(({ , ...__r }) => ...)`.
+    const params = destructured.length > 0
+      ? `{ ${destructured}, ...__r }`
+      : `{ ...__r }`;
+    return `((${params}) => __r)(${sourceJs})`;
   }
 
   private processNodeInGlobalInit(node: AgencyNode): TsNode {

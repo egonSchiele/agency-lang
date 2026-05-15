@@ -1,0 +1,20 @@
+node main() {
+  let event1 = { type: "click", x: 10, y: 20 }
+  let event2 = { type: "scroll", delta: 5 }
+  let event3 = { type: "unknown" }
+
+  let r1 = describe(event1)
+  let r2 = describe(event2)
+  let r3 = describe(event3)
+
+  return [r1, r2, r3]
+}
+
+def describe(e: any): string {
+  match (e) {
+    { type: "click", x, y } => return "click"
+    { type: "scroll", delta } => return "scroll"
+    _ => return "other"
+  }
+  return "fallthrough"
+}

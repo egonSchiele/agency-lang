@@ -1,0 +1,15 @@
+node main() {
+  let x = { v: 10, label: "ten" }
+  let y = { v: 3, label: "three" }
+  let r1 = describe(x)
+  let r2 = describe(y)
+  return [r1, r2]
+}
+
+def describe(obj: any): string {
+  match (obj is { v, label }) {
+    v > 5 => return "big " + label
+    _ => return "small " + label
+  }
+  return "fallthrough"
+}

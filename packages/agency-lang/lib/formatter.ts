@@ -7,7 +7,9 @@ import { parseAgency, replaceBlankLines } from "./parser.js";
  * Returns null if parsing fails.
  */
 export function formatSource(source: string, config: AgencyConfig = {}): string | null {
-  const result = parseAgency(replaceBlankLines(source), config, false);
+  // Skip pattern lowering — the formatter needs the original pattern AST
+  // so it can print patterns back as patterns.
+  const result = parseAgency(replaceBlankLines(source), config, false, false);
   if (!result.success) return null;
   return generateAgency(result.result);
 }

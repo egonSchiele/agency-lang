@@ -1,0 +1,25 @@
+def buildPerson(): any {
+  // Build the source object via a function call that interrupts. The
+  // destructuring temp `__tmp_*` will be set, and then the next steps
+  // (extracting `name`, `age`, `others`) happen after resume — exercising
+  // the case where the destructured fields are computed AFTER an interrupt.
+  interrupt("buildIt")
+  return { name: "Bob", age: 30, city: "NY" }
+}
+
+def buildItems(): any {
+  interrupt("buildItems")
+  return [10, 20, 30, 40, 50]
+}
+
+node main() {
+  // Object destructuring whose source comes from a function that interrupts.
+  // After resume, all destructured fields (including object rest) must be
+  // populated correctly.
+  let { name, age, ...others } = buildPerson()
+
+  // Array destructuring whose source comes from a function that interrupts.
+  let [a, b, ...rest] = buildItems()
+
+  return [name, age, others.city, a, b, rest]
+}

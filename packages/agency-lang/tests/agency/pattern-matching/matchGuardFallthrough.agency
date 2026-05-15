@@ -1,0 +1,20 @@
+// Two arms with the same pattern but different guards: when the first arm's
+// pattern matches but its guard fails, control must fall through to the next
+// arm.
+def classify(x: any): string {
+  match (x) {
+    { type: "user", age } if (age >= 18) => return "adult"
+    { type: "user", age } if (age >= 13) => return "teen"
+    _ => return "child"
+  }
+  return "fallthrough"
+}
+
+node main() {
+  return [
+    classify({ type: "user", age: 25 }),
+    classify({ type: "user", age: 14 }),
+    classify({ type: "user", age: 5 }),
+    classify({ type: "other" }),
+  ]
+}

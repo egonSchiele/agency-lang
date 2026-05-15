@@ -158,11 +158,10 @@ class PatternLowerer {
     if (expr.type === "agencyObject") {
       return {
         ...expr,
-        entries: expr.entries.map((e) =>
-          "type" in e && e.type === "splat"
-            ? { ...e, value: this.lowerExpression(e.value) }
-            : { ...e, value: this.lowerExpression((e as { value: Expression }).value) },
-        ),
+        entries: expr.entries.map((e) => ({
+          ...e,
+          value: this.lowerExpression(e.value),
+        })),
       };
     }
     return expr;

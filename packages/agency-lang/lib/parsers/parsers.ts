@@ -3457,20 +3457,6 @@ export const arrayBindingPatternParser: Parser<ArrayPattern> = label(
   },
 );
 
-const _bindingPropertyWithValueParser: Parser<ObjectPatternProperty> = (
-  input: string,
-) => {
-  const parser = seqC(
-    set("type", "objectPatternProperty"),
-    capture(many1WithJoin(varNameChar), "key"),
-    optionalSpaces,
-    char(":"),
-    optionalSpaces,
-    capture(lazy(() => bindingPatternParser), "value"),
-  );
-  return parser(input);
-};
-
 const _objectPatternShorthandParser: Parser<ObjectPatternShorthand> = (
   input: string,
 ) => {
@@ -3482,14 +3468,37 @@ const _objectPatternShorthandParser: Parser<ObjectPatternShorthand> = (
   );
 };
 
+// Shared helpers for binding and match object-property parsers. The two
+// only differ by the inner value parser (bindingPatternParser vs
+// matchPatternParser); ObjectPatternProperty["value"] (= MatchPattern)
+// covers both, so we factor out the shape.
+const propertyWithValueParser = (
+  valueParser: Parser<MatchPattern>,
+): Parser<ObjectPatternProperty> => (input: string) => {
+  const parser = seqC(
+    set("type", "objectPatternProperty"),
+    capture(many1WithJoin(varNameChar), "key"),
+    optionalSpaces,
+    char(":"),
+    optionalSpaces,
+    capture(valueParser, "value"),
+  );
+  return parser(input);
+};
+
+const objectPatternPropertyParser = (
+  valueParser: Parser<MatchPattern>,
+): Parser<ObjectPatternProperty | ObjectPatternShorthand | RestPattern> =>
+  or(
+    restPatternParser,
+    // propertyWithValue MUST be tried before shorthand — the ':' disambiguates
+    propertyWithValueParser(valueParser),
+    _objectPatternShorthandParser,
+  );
+
 const _bindingObjectPropertyParser: Parser<
   ObjectPatternProperty | ObjectPatternShorthand | RestPattern
-> = or(
-  restPatternParser,
-  // propertyWithValue MUST be tried before shorthand — the ':' disambiguates
-  _bindingPropertyWithValueParser,
-  _objectPatternShorthandParser,
-);
+> = objectPatternPropertyParser(lazy(() => bindingPatternParser));
 
 export const objectBindingPatternParser: Parser<ObjectPattern> = label(
   "an object binding pattern",
@@ -3561,27 +3570,9 @@ export const arrayMatchPatternParser: Parser<ArrayPattern> = label(
   },
 );
 
-const _matchPropertyWithValueParser: Parser<ObjectPatternProperty> = (
-  input: string,
-) => {
-  const parser = seqC(
-    set("type", "objectPatternProperty"),
-    capture(many1WithJoin(varNameChar), "key"),
-    optionalSpaces,
-    char(":"),
-    optionalSpaces,
-    capture(lazy(() => matchPatternParser), "value"),
-  );
-  return parser(input);
-};
-
 const _matchObjectPropertyParser: Parser<
   ObjectPatternProperty | ObjectPatternShorthand | RestPattern
-> = or(
-  restPatternParser,
-  _matchPropertyWithValueParser,
-  _objectPatternShorthandParser,
-);
+> = objectPatternPropertyParser(lazy(() => matchPatternParser));
 
 export const objectMatchPatternParser: Parser<ObjectPattern> = label(
   "an object match pattern",

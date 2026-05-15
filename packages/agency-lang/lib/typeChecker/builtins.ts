@@ -95,7 +95,8 @@ export const BUILTIN_FUNCTION_TYPES: Record<string, BuiltinSignature> = {
   getCheckpoint: { params: [number],   returnType: "any" },
 
   // --- Compiler-internal: emitted by the pattern lowering pass for
-  // `let { a, b, ...rest } = obj`. The TS builder rewrites this call into
-  // a native-JS IIFE; there is no runtime function with this name. ---
+  // `let { a, b, ...rest } = obj`. Registered here so the typechecker
+  // doesn't flag it as undefined; the TS builder rewrites this call into
+  // a native-JS IIFE, so there is no runtime function with this name. ---
   __objectRest: { params: ["any", anyArray], returnType: "any" },
 };

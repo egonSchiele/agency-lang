@@ -1,3 +1,5 @@
+import * as fs from "fs";
+import * as path from "path";
 import { nanoid } from "nanoid";
 import { SmolConfig } from "smoltalk";
 import type { DebuggerState } from "../../debugger/debuggerState.js";
@@ -12,12 +14,24 @@ import type { InterruptResponse } from "../interrupts.js";
 import { LLMClient, SmoltalkClient } from "../llmClient.js";
 import { GlobalStore } from "../state/globalStore.js";
 import { StateStack } from "../state/stateStack.js";
+import { ContentAddressableStore } from "../trace/contentAddressableStore.js";
 import { TraceWriter } from "../trace/traceWriter.js";
 import type { TraceConfig } from "../trace/types.js";
 import type { HandlerFn } from "../types.js";
 import type { Checkpoint } from "./checkpointStore.js";
 import { CheckpointStore, RESULT_ENTRY_LABEL } from "./checkpointStore.js";
 import { PendingPromiseStore } from "./pendingPromiseStore.js";
+
+/**
+ * Ensure the trace file's parent directory exists and the file is empty.
+ * Called once at the start of a run (RuntimeContext constructor) and from
+ * `__setTraceFile` when tests reconfigure the trace file path. FileSink
+ * always appends, so this is the only place that clears stale data.
+ */
+export function truncateTraceFile(filePath: string): void {
+  fs.mkdirSync(path.dirname(filePath), { recursive: true });
+  fs.writeFileSync(filePath, "");
+}
 
 /**
  * Process-wide singleton CoverageCollector used when AGENCY_COVERAGE is set.
@@ -116,6 +130,11 @@ export class RuntimeContext<T> {
   abortController: AbortController;
 
   traceConfig: TraceConfig;
+  // Shared CAS for cross-segment dedup when writing to a single trace file.
+  // Created lazily on first execCtx and shared by all subsequent execCtx
+  // writers in this run, so chunks aren't re-emitted for every interrupt
+  // segment. Not used for traceDir mode (each segment is a separate file).
+  _sharedTraceStore: ContentAddressableStore | null = null;
   runId: string | null;
   verbose: boolean;
   getStaticVars?: () => Record<string, unknown>;
@@ -160,6 +179,13 @@ export class RuntimeContext<T> {
     this.runId = null;
     this.verbose = args.verbose ?? false;
     this.dirname = args.dirname;
+
+    // FileSink opens trace files in append mode (so multiple per-execCtx
+    // writers within one run don't truncate each other), so we truncate
+    // once here at run start to clear stale data from previous runs.
+    if (this.traceConfig.traceFile) {
+      truncateTraceFile(this.traceConfig.traceFile);
+    }
 
     const graphConfig = {
       debug: {
@@ -209,9 +235,17 @@ export class RuntimeContext<T> {
     execCtx._toolCallDepth = 0;
     execCtx._interruptResponses = {};
     execCtx.debuggerState = this.debuggerState;
+    // For single-file trace output, share the CAS across all execCtx writers
+    // in this run so dedup works across interrupt segments.
+    let sharedStore: ContentAddressableStore | undefined;
+    if (this.traceConfig.traceFile) {
+      this._sharedTraceStore ??= new ContentAddressableStore();
+      sharedStore = this._sharedTraceStore;
+    }
     execCtx.traceWriter = await TraceWriter.create({
       runId,
       traceConfig: this.traceConfig,
+      store: sharedStore,
     });
     execCtx.traceConfig = this.traceConfig;
     execCtx.runId = runId;

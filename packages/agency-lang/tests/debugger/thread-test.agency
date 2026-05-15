@@ -3,4 +3,9 @@ node main() {
     capital = llm("What is the capital of France?")
     population: { capital: string; pop: number } = llm("And what is its population?")
   }
+  // Trailing step so the debugger renders one more checkpoint after the
+  // second llm call completes — without it, the thread state with 4
+  // messages is never observable from a render call (debug steps fire
+  // before the callback executes).
+  done = true
 }

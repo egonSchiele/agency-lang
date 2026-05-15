@@ -10,10 +10,15 @@ export type TraceSink = {
 export class FileSink implements TraceSink {
   private stream: fs.WriteStream;
 
+  // Append mode: a single logical run can produce multiple TraceWriters
+  // (one per execCtx — i.e. one per respondToInterrupts call). Truncating
+  // would lose data from previous segments. Truncation of the trace file
+  // at the start of a run happens explicitly in RuntimeContext (and in
+  // the __setTraceFile helper).
   constructor(filePath: string) {
     this.createDirIfNotExists(path.dirname(filePath));
     this.stream = fs.createWriteStream(filePath, {
-      flags: "w",
+      flags: "a",
       encoding: "utf-8",
     });
   }

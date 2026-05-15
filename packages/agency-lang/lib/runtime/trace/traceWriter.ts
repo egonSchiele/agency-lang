@@ -20,8 +20,12 @@ export class TraceWriter {
   private program: string = "";
   private runId: string = "";
 
-  constructor(runId: string, program: string, sinks: TraceSink[]) {
-    this.store = new ContentAddressableStore();
+  constructor(runId: string, program: string, sinks: TraceSink[], store?: ContentAddressableStore) {
+    // The CAS may be shared across multiple TraceWriters that all write to
+    // the same file (one per execCtx within a single run). Sharing keeps
+    // dedup working across segments — without it each writer would re-emit
+    // every chunk because its CAS would start empty.
+    this.store = store ?? new ContentAddressableStore();
     this.sinks = sinks;
     this.runId = runId;
     this.program = program;
@@ -106,9 +110,11 @@ export class TraceWriter {
   static async create({
     runId,
     traceConfig,
+    store,
   }: {
     runId: string;
     traceConfig: TraceConfig;
+    store?: ContentAddressableStore;
   }): Promise<TraceWriter | null> {
     const sinks: TraceSink[] = [];
     if (traceConfig.traceFile) {
@@ -124,7 +130,7 @@ export class TraceWriter {
     if (sinks.length === 0) {
       return null;
     }
-    const writer = new TraceWriter(runId, traceConfig.program || "unknown.agency", sinks);
+    const writer = new TraceWriter(runId, traceConfig.program || "unknown.agency", sinks, store);
     await writer.writeHeader();
     return writer;
   }

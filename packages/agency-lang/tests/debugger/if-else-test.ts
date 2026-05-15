@@ -28,6 +28,7 @@ import {
   __call, __callMethod,
   functionRefReviver as __functionRefReviver,
   DeterministicClient as __DeterministicClient,
+  truncateTraceFile as __truncateTraceFile,
 } from "agency-lang/runtime";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -78,7 +79,16 @@ export const respondToInterrupts = (interrupts: Interrupt[], responses: Interrup
 export const rewindFrom = (checkpoint: Checkpoint, overrides: Record<string, unknown>, opts?: { metadata?: Record<string, any> }) => _rewindFrom({ ctx: __globalCtx, checkpoint, overrides, metadata: opts?.metadata });
 
 export const __setDebugger = (dbg: any) => { __globalCtx.debuggerState = dbg; };
-export const __setTraceWriter = (tw: any) => { __globalCtx.traceWriter = tw; };
+// Reconfigure the trace file path at runtime. Mutates the global traceConfig
+// so that per-execCtx TraceWriters created by createExecutionContext will
+// write to this path. Truncates the file so the run starts clean (FileSink
+// itself appends, so subsequent execCtx writers don't clobber each other),
+// and resets the shared CAS so dedup is recomputed for the new file.
+export const __setTraceFile = (filePath: string) => {
+  __globalCtx.traceConfig.traceFile = filePath;
+  __globalCtx._sharedTraceStore = null;
+  __truncateTraceFile(filePath);
+};
 export const __setLLMClient = (client: LLMClient) => { __globalCtx.setLLMClient(client); };
 export const __getCheckpoints = () => __globalCtx.checkpoints;
 

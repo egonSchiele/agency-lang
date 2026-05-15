@@ -36,6 +36,7 @@ import {
   checkUnhandledInterruptWarnings,
 } from "./interruptAnalysis.js";
 import { checkUndefinedFunctions } from "./undefinedFunctionDiagnostic.js";
+import { checkUndefinedVariables } from "./undefinedVariableDiagnostic.js";
 import { RESERVED_FUNCTION_NAMES } from "./resolveCall.js";
 import { walkNodes } from "../utils/node.js";
 
@@ -229,6 +230,9 @@ export class TypeChecker {
 
     // 7. Check for undefined function calls (config-controlled severity).
     checkUndefinedFunctions(scopes, ctx);
+
+    // 8. Check for undefined variable references (config-controlled severity).
+    checkUndefinedVariables(scopes, ctx);
 
     return {
       errors: this.applySuppressions(this.deduplicateErrors()),

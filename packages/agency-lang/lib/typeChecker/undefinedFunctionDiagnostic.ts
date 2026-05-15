@@ -26,7 +26,11 @@ export function checkUndefinedFunctions(
   scopes: ScopeInfo[],
   ctx: TypeCheckerContext,
 ): void {
-  const mode = ctx.config.typechecker?.undefinedFunctions ?? "silent";
+  // Default is "warn" — the registries (BUILTIN_FUNCTION_TYPES,
+  // importedFunctions via SymbolTable, JS_GLOBALS) are now accurate enough
+  // that false positives are rare. Users can opt back into silence with
+  // `{ typechecker: { undefinedFunctions: "silent" } }` in agency.json.
+  const mode = ctx.config.typechecker?.undefinedFunctions ?? "warn";
   if (mode === "silent") return;
 
   // Collect names from `import node { ... } from "..."` statements at the

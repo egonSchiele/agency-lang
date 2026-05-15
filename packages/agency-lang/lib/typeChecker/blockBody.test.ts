@@ -7,7 +7,13 @@ function check(source: string): string[] {
   const parsed = parseAgency(source);
   if (!parsed.success) throw new Error(`parse failed: ${parsed.message}`);
   const info = buildCompilationUnit(parsed.result, undefined, undefined, source);
-  return typeCheck(parsed.result, {}, info).errors.map((e) => e.message);
+  // Silence the undefined-function diagnostic — no SymbolTable means
+  // stdlib calls (print, …) would warn as unresolved.
+  return typeCheck(
+    parsed.result,
+    { typechecker: { undefinedFunctions: "silent" } },
+    info,
+  ).errors.map((e) => e.message);
 }
 
 describe("block body type-checking", () => {

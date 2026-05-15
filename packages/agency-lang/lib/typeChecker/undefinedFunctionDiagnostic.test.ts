@@ -148,12 +148,26 @@ describe("undefined function diagnostic", () => {
     expect(errors.filter((e) => e.message.includes("doesNotExist"))).toHaveLength(1);
   });
 
-  it("respects undefinedFunctions: silent (default)", () => {
+  it("warns by default (no config override)", () => {
     const errors = errorsFrom(`
       node main() {
         totallyMadeUpFn("{}")
       }
     `);
+    const undef = errors.filter((e) => e.message.includes("totallyMadeUpFn"));
+    expect(undef).toHaveLength(1);
+    expect(undef[0].severity).toBe("warning");
+  });
+
+  it("respects undefinedFunctions: silent override", () => {
+    const errors = errorsFrom(
+      `
+      node main() {
+        totallyMadeUpFn("{}")
+      }
+    `,
+      { typechecker: { undefinedFunctions: "silent" } },
+    );
     expect(errors.filter((e) => e.message.includes("totallyMadeUpFn"))).toHaveLength(0);
   });
 

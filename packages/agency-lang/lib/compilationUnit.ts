@@ -11,6 +11,7 @@ import type {
   ImportNodeStatement,
   ImportStatement,
 } from "./types/importStatement.js";
+import { getImportedNames } from "./types/importStatement.js";
 import type { SymbolTable, InterruptKind } from "./symbolTable.js";
 import { walkNodes } from "./utils/node.js";
 import { resultTypeForValidation } from "./typeChecker/validation.js";
@@ -88,6 +89,14 @@ export type CompilationUnit = {
   importStatements: ImportStatement[];
   safeFunctions: Record<string, boolean>;
   importedFunctions: Record<string, ImportedFunctionSignature>;
+  /**
+   * Local names brought in by non-Agency `import { … } from "some.js"`
+   * statements. We don't have signatures for these (they're JS), so they
+   * live in their own bag and the typechecker treats them as untyped
+   * known-callable bindings — enough to keep undefined-function /
+   * variable diagnostics quiet without pretending we know their types.
+   */
+  jsImportedNames: Record<string, true>;
   classDefinitions: Record<string, ClassDefinition>;
   /** Original source text. Used by the typechecker to locate
    * `// @tc-nocheck` / `// @tc-ignore` directives. Optional because
@@ -129,6 +138,7 @@ export function buildCompilationUnit(
     importedNodes: [],
     importStatements: [],
     importedFunctions: {},
+    jsImportedNames: {},
     classDefinitions: {},
     safeFunctions: {},
     sourceText,
@@ -162,6 +172,18 @@ export function buildCompilationUnit(
           for (const safeName of nameType.safeNames) {
             const localSafe = nameType.aliases[safeName] ?? safeName;
             unit.safeFunctions[localSafe] = true;
+          }
+        }
+        // JS imports (`import { foo } from "./helpers.js"`) don't have
+        // typed signatures the way Agency imports do — symbolTable.resolveImport
+        // skips them — but the names ARE bound at runtime, so the typechecker
+        // shouldn't flag them as undefined. Track them here so resolveCall /
+        // resolveVariable can recognize them.
+        if (!node.isAgencyImport) {
+          for (const nameType of node.importedNames) {
+            for (const local of getImportedNames(nameType)) {
+              unit.jsImportedNames[local] = true;
+            }
           }
         }
         break;

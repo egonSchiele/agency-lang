@@ -302,6 +302,41 @@ describe("undefined function diagnostic — JS namespaces", () => {
   });
 });
 
+describe("undefined function diagnostic — JS imports", () => {
+  // `import { foo } from "./helpers.js"` doesn't go through the symbol
+  // table (those are JS, not Agency), but the names ARE bound at runtime.
+  // Make sure the diagnostic doesn't false-positive on them.
+  it("does not warn on calls to JS-imported functions", () => {
+    const source = [
+      'import { _now, _add } from "./helpers.js"',
+      "node main() {",
+      "  let t = _now()",
+      "  return _add(t, 1)",
+      "}",
+      "",
+    ].join("\n");
+    const errors = errorsFrom(source, WARN);
+    expect(errors.filter((e) => e.message.includes("'_now'"))).toHaveLength(0);
+    expect(errors.filter((e) => e.message.includes("'_add'"))).toHaveLength(0);
+  });
+
+  it("respects aliases on JS imports", () => {
+    const source = [
+      'import { foo as bar } from "./helpers.js"',
+      "node main() {",
+      "  return bar(1)",
+      "}",
+      "",
+    ].join("\n");
+    const errors = errorsFrom(source, WARN);
+    expect(errors.filter((e) => e.message.includes("'bar'"))).toHaveLength(0);
+    // The original name is NOT bound; only the alias.
+    expect(
+      errors.filter((e) => e.message.includes("'foo'") && e.message.includes("not defined")),
+    ).toHaveLength(0);
+  });
+});
+
 describe("undefined function diagnostic — imported nodes", () => {
   it("does not warn on calls to nodes imported via `import node { ... }`", () => {
     // Set up a sibling .agency file the symbol table can resolve.

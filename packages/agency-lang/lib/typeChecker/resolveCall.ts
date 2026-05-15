@@ -280,6 +280,8 @@ type ResolveCallInput = {
   importedFunctions: Record<string, ImportedFunctionSignature>;
   /** Names imported via `import node { ... } from "..."`. */
   importedNodeNames: readonly string[];
+  /** Names imported via `import { foo } from "./helpers.js"` (non-Agency). */
+  jsImportedNames?: object;
   scopeHas: (name: string) => boolean;
 };
 
@@ -318,6 +320,7 @@ type ResolveCallInput = {
 export type CallResolution =
   | { kind: "def" }
   | { kind: "imported" }
+  | { kind: "jsImported" }
   | { kind: "builtin" }
   | { kind: "reserved" }
   | { kind: "scopeBinding" }
@@ -362,6 +365,7 @@ export type ShadowingInput = {
   nodeDefs: object;
   importedFunctions: object;
   importedNodeNames: readonly string[];
+  jsImportedNames?: object;
   classNames: object;
 };
 
@@ -378,6 +382,7 @@ export function isJsGlobalBase(name: string, input: ShadowingInput): boolean {
   if (has(input.nodeDefs, name)) return false;
   if (has(input.importedFunctions, name)) return false;
   if (input.importedNodeNames.includes(name)) return false;
+  if (input.jsImportedNames && has(input.jsImportedNames, name)) return false;
   if (has(input.classNames, name)) return false;
   return true;
 }
@@ -390,6 +395,8 @@ export function resolveCall(
     return { kind: "def" };
   if (has(input.importedFunctions, name)) return { kind: "imported" };
   if (input.importedNodeNames.includes(name)) return { kind: "imported" };
+  if (input.jsImportedNames && has(input.jsImportedNames, name))
+    return { kind: "jsImported" };
   if (has(BUILTIN_FUNCTION_TYPES, name)) return { kind: "builtin" };
   if (RESERVED_FUNCTION_NAMES.has(name)) return { kind: "reserved" };
   if (input.scopeHas(name)) return { kind: "scopeBinding" };

@@ -294,6 +294,7 @@ function checkJsNamespaceMemberCall(
       nodeDefs: ctx.nodeDefs,
       importedFunctions: ctx.importedFunctions,
       importedNodeNames: shadowing.importedNodeNames,
+      jsImportedNames: ctx.jsImportedNames,
       classNames: shadowing.classNames,
     })
   )

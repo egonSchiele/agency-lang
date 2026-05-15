@@ -135,6 +135,7 @@ function checkVariableRef(
     nodeDefs: ctx.nodeDefs,
     importedFunctions: ctx.importedFunctions,
     importedNodeNames,
+    jsImportedNames: ctx.jsImportedNames,
     classNames,
     scopeHas: (name) => scope.has(name),
   });

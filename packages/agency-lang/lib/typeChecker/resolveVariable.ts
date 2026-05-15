@@ -17,6 +17,8 @@ type ResolveVariableInput = {
   nodeDefs: Record<string, GraphNodeDefinition>;
   importedFunctions: Record<string, ImportedFunctionSignature>;
   importedNodeNames: readonly string[];
+  /** Names imported via `import { foo } from "./helpers.js"` (non-Agency). */
+  jsImportedNames?: Record<string, true>;
   classNames: Record<string, true>;
   scopeHas: (name: string) => boolean;
 };
@@ -45,6 +47,7 @@ export type VariableResolution =
   | { kind: "scopeBinding" }
   | { kind: "def" }
   | { kind: "imported" }
+  | { kind: "jsImported" }
   | { kind: "class" }
   | { kind: "builtin" }
   | { kind: "reserved" }
@@ -79,6 +82,8 @@ export function resolveVariable(
   }
   if (has(input.importedFunctions, name)) return { kind: "imported" };
   if (input.importedNodeNames.includes(name)) return { kind: "imported" };
+  if (input.jsImportedNames && has(input.jsImportedNames, name))
+    return { kind: "jsImported" };
   if (has(input.classNames, name)) return { kind: "class" };
   if (has(BUILTIN_FUNCTION_TYPES, name)) return { kind: "builtin" };
   if (RESERVED_FUNCTION_NAMES.has(name)) return { kind: "reserved" };

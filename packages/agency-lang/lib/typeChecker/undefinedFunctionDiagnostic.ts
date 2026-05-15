@@ -86,6 +86,7 @@ function checkBareCall(
     nodeDefs: ctx.nodeDefs,
     importedFunctions: ctx.importedFunctions,
     importedNodeNames,
+    jsImportedNames: ctx.jsImportedNames,
     scopeHas: (name) => scope.has(name),
   });
   if (resolution.kind !== "unresolved") return;
@@ -115,6 +116,7 @@ function checkAccessChain(
       nodeDefs: ctx.nodeDefs,
       importedFunctions: ctx.importedFunctions,
       importedNodeNames: shadowing.importedNodeNames,
+      jsImportedNames: ctx.jsImportedNames,
       classNames: shadowing.classNames,
     })
   )

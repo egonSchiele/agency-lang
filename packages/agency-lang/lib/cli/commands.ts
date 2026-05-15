@@ -77,7 +77,11 @@ export function parse(
 
   // Check if parsing was successful
   if (!parseResult.success) {
-    console.error("Failed to parse Agency program.", contents.slice(0, 400));
+    if (parseResult.message) {
+      console.error(`Failed to parse Agency program: ${parseResult.message}`);
+    } else {
+      console.error("Failed to parse Agency program.", contents.slice(0, 400));
+    }
     process.exit(1);
   }
 

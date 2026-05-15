@@ -1,0 +1,34 @@
+// Verify that the lowering pass recurses into block bodies. Previously the
+// lowering only recursed into function/graphNode bodies, so a destructure
+// inside a trailing-as block argument would reach the TS builder with the
+// pattern still attached, never emitting actual bindings.
+def withResult(block: () => any): any {
+  return block()
+}
+
+def mapItems(items: any[], block: (any) => any): any[] {
+  let result: any[] = []
+  for (item in items) {
+    result.push(block(item))
+  }
+  return result
+}
+
+node main() {
+  // Destructure inside a trailing-as block (no params)
+  let b = withResult() as {
+    let pair = [1, 2]
+    let [x, y] = pair
+    return [x, y]
+  }
+
+  // Destructure inside a trailing-as block (with params) — destructure the
+  // block parameter via a let.
+  let pairs = [[10, "a"], [20, "b"]]
+  let mapped = mapItems(pairs) as item {
+    let [num, label] = item
+    return label
+  }
+
+  return [b, mapped]
+}

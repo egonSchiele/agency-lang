@@ -38,8 +38,7 @@ import type {
 } from "../types/literals.js";
 import type { ValueAccess, AccessChainElement } from "../types/access.js";
 import type { SourceLocation } from "../types/base.js";
-import type { GraphNodeDefinition } from "../types/graphNode.js";
-import type { FunctionDefinition } from "../types/function.js";
+import { mapBodies } from "../utils/mapBodies.js";
 
 // ---------------------------------------------------------------------------
 // Public API
@@ -72,14 +71,6 @@ class PatternLowerer {
         return this.lowerMatchBlock(node);
       case "forLoop":
         return [this.lowerForLoop(node)];
-      case "function":
-        return [
-          { ...(node as FunctionDefinition), body: this.lower((node as FunctionDefinition).body) } as AgencyNode,
-        ];
-      case "graphNode":
-        return [
-          { ...(node as GraphNodeDefinition), body: this.lower((node as GraphNodeDefinition).body) } as AgencyNode,
-        ];
       case "returnStatement": {
         const ret = node as { type: "returnStatement"; value?: Expression; loc?: SourceLocation };
         return [
@@ -90,12 +81,16 @@ class PatternLowerer {
         ];
       }
       default: {
-        // For any other node that contains expressions (functionCall, etc.),
-        // walk through it as an expression and replace any nested isExpression.
-        if (isExpr(node as unknown)) {
-          return [this.lowerExpression(node as unknown as Expression) as unknown as AgencyNode];
+        // Recurse into every body field on body-bearing nodes (function /
+        // graphNode / handleBlock / parallelBlock / seqBlock / blockArgument /
+        // functionCall.block / …). For nodes that are also Expressions,
+        // additionally walk the expression tree so nested `isExpression` is
+        // lowered.
+        const withRecursedBodies = mapBodies(node, (b) => this.lower(b));
+        if (isExpr(withRecursedBodies as unknown)) {
+          return [this.lowerExpression(withRecursedBodies as unknown as Expression) as unknown as AgencyNode];
         }
-        return [node];
+        return [withRecursedBodies];
       }
     }
   }
@@ -120,6 +115,9 @@ class PatternLowerer {
       };
     }
     if (expr.type === "functionCall") {
+      const block = expr.block
+        ? { ...expr.block, body: this.lower(expr.block.body) }
+        : expr.block;
       return {
         ...expr,
         arguments: expr.arguments.map((a) => {
@@ -128,6 +126,7 @@ class PatternLowerer {
           }
           return this.lowerExpression(a as Expression);
         }),
+        block,
       };
     }
     if (expr.type === "valueAccess") {
@@ -302,9 +301,38 @@ class PatternLowerer {
 
     // Each arm's caseValue is now a guard expression; build if/else chain over them.
     const ifChain = this.buildIfChainFromGuardArms(node.cases, node.loc);
-    const result: AgencyNode[] = [scrutineeAssign, ...bindings];
-    if (ifChain) result.push(ifChain);
-    return result;
+    const inside: AgencyNode[] = [...bindings];
+    if (ifChain) inside.push(ifChain);
+
+    // If the head pattern includes literal value checks (e.g. `match (x is { type: "a", v })`),
+    // gate the bindings + arm chain on those checks. When the pattern doesn't
+    // match at runtime the user has indicated a precondition, so we surface
+    // the mismatch as a `failure` Result rather than silently no-oping.
+    const patCond = patternToCondition(isExpr.pattern, scrutineeRef);
+    if (patCond) {
+      const failureMsg = "match(... is pattern) head pattern did not match";
+      const failureCall: FunctionCall = {
+        type: "functionCall",
+        functionName: "failure",
+        arguments: [stringLit(failureMsg, node.loc)],
+        loc: node.loc as SourceLocation,
+      };
+      const failReturn = {
+        type: "returnStatement" as const,
+        value: failureCall as Expression,
+        loc: node.loc,
+      };
+      const guardedIf: IfElse = {
+        type: "ifElse",
+        condition: patCond,
+        thenBody: inside,
+        elseBody: [failReturn as unknown as AgencyNode],
+        loc: node.loc,
+      };
+      return [scrutineeAssign, guardedIf];
+    }
+
+    return [scrutineeAssign, ...inside];
   }
 
   /** Recurse into the body of a single match arm (without lowering the arm itself). */
@@ -385,9 +413,14 @@ class PatternLowerer {
       // Apply guard if present (for non-guardOnly arms)
       if (!guardOnly && arm.guard) {
         // Guard may reference bindings, so we need bindings in scope first.
-        // Strategy: emit `if (patCond) { let bindings; if (guard) { body } }`
-        // To keep it simple, fold the guard into the condition with `&&` when there are no bindings,
-        // else build a nested if inside the then-body.
+        // Strategy: emit `if (patCond) { let bindings; if (guard) { body } else <next-arm> }
+        //                  else <next-arm>`
+        // We fold guard into the condition with `&&` only when there are no
+        // bindings AND the next arm chain doesn't depend on those bindings —
+        // safe because there are no bindings to share. With bindings we must
+        // build a nested if and replicate the next-arm chain in BOTH the
+        // outer and inner else branches so guard failure falls through to the
+        // next arm (it would otherwise exit the match entirely).
         if (bindings.length === 0) {
           condition = makeBinOp(condition, "&&", arm.guard, loc);
         } else {
@@ -395,6 +428,7 @@ class PatternLowerer {
             type: "ifElse",
             condition: arm.guard,
             thenBody: armBody,
+            elseBody: result ? [result] : undefined,
             loc,
           };
           const thenBody: AgencyNode[] = [...bindings, innerIf];
@@ -557,19 +591,23 @@ export class PatternLoweringError extends Error {
 
 function assertNoBindersInBoolIs(pattern: MatchPattern): void {
   walkPattern(pattern, (p) => {
+    const loc = "loc" in p ? p.loc : undefined;
     if (p.type === "objectPatternShorthand") {
       throw new PatternLoweringError(
         "shorthand binder in pure-boolean `is` context has nowhere to bind; use `if (x is { ... })` to introduce variables",
+        loc,
       );
     }
     if (p.type === "restPattern") {
       throw new PatternLoweringError(
         "rest binder in pure-boolean `is` context has nowhere to bind; use `if (x is { ... })` to introduce variables",
+        loc,
       );
     }
     if (p.type === "variableName") {
       throw new PatternLoweringError(
         `bare identifier binder \`${p.value}\` in pure-boolean \`is\` context has nowhere to bind; use \`if (x is pattern)\` to introduce variables`,
+        loc,
       );
     }
   });

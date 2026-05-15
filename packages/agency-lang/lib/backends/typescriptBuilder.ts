@@ -2218,32 +2218,7 @@ export class TypeScriptBuilder {
     }
 
     if (node.functionName === "__objectRest") {
-      // Compiler-internal call emitted by the pattern lowering pass for
-      // `let { a, b, ...rest } = obj`. Args are [source, ["a", "b"]].
-      // Emit a native-JS IIFE that destructures the source and returns the
-      // rest object. No runtime helper involved.
-      //
-      //   __objectRest(source, ["a", "b"])
-      //   → (({ a: __a, b: __b, ...__r }) => __r)(<resolved source>)
-      const [sourceArg, keysArg] = node.arguments;
-      const sourceJs = this.str(this.processNode(sourceArg as Expression));
-      const keys =
-        keysArg && (keysArg as AgencyArray).type === "agencyArray"
-          ? (keysArg as AgencyArray).items
-              .map((it) => {
-                if ((it as Expression).type === "string") {
-                  const segs = (it as { segments: { value: string }[] }).segments;
-                  return segs[0]?.value ?? "";
-                }
-                return "";
-              })
-              .filter((k) => k.length > 0)
-          : [];
-      const destructured = keys
-        .map((k, i) => `${k}: __k${i}`)
-        .join(", ");
-      const iife = `(({ ${destructured}, ...__r }) => __r)(${sourceJs})`;
-      return ts.raw(iife);
+      return ts.raw(this.buildObjectRestIIFE(node));
     }
 
     if (node.functionName === "llm") {
@@ -3146,6 +3121,42 @@ export class TypeScriptBuilder {
       this.processNode(node.iterable),
       processBody(node.body),
     );
+  }
+
+  /**
+   * Compile the synthetic `__objectRest(source, ["a", "b", ...])` call emitted
+   * by the pattern lowering pass for `let { a, b, ...rest } = obj` into a
+   * native-JS IIFE. No runtime helper required.
+   *
+   *   __objectRest(source, ["a", "b"])
+   *   → (({ a: __k0, b: __k1, ...__r }) => __r)(<resolved source>)
+   *
+   * For `let { ...rest } = obj` (no excluded keys), emits
+   *   (({ ...__r }) => __r)(<resolved source>)
+   */
+  private buildObjectRestIIFE(node: FunctionCall): string {
+    const [sourceArg, keysArg] = node.arguments;
+    const sourceJs = this.str(this.processNode(sourceArg as Expression));
+
+    const keys: string[] = [];
+    if (keysArg && "type" in keysArg && keysArg.type === "agencyArray") {
+      for (const item of keysArg.items) {
+        if ("type" in item && item.type === "string") {
+          const value = item.segments[0];
+          if (value?.type === "text" && value.value.length > 0) {
+            keys.push(value.value);
+          }
+        }
+      }
+    }
+
+    const destructured = keys.map((k, i) => `${k}: __k${i}`).join(", ");
+    // Empty destructured (no excluded keys) collapses the leading comma so
+    // we never emit invalid `(({ , ...__r }) => ...)`.
+    const params = destructured.length > 0
+      ? `{ ${destructured}, ...__r }`
+      : `{ ...__r }`;
+    return `((${params}) => __r)(${sourceJs})`;
   }
 
   private processNodeInGlobalInit(node: AgencyNode): TsNode {

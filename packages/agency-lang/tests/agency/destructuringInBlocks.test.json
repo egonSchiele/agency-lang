@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "[[1,2],[\"a\",\"b\"]]",
+      "evaluationCriteria": [{"type": "exact"}],
+      "description": "Pattern lowering recurses into trailing-as block argument bodies"
+    }
+  ]
+}

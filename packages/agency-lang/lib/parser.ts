@@ -20,7 +20,7 @@ import {
 
 import { nanoid } from "nanoid";
 import { AgencyConfig } from "./config.js";
-import { lowerPatterns } from "./lowering/patternLowering.js";
+import { lowerPatterns, PatternLoweringError } from "./lowering/patternLowering.js";
 import render from "./templates/backends/agency/template.js";
 import {
   assignmentParser,
@@ -200,6 +200,22 @@ export function parseAgency(
           length: error.data.length,
           message: error.data.message,
           prettyMessage: error.data.prettyMessage,
+        },
+      };
+    } else if (error instanceof PatternLoweringError) {
+      // Compile-time error from the lowering pass (e.g. shorthand binder in
+      // pure-boolean `is` context). Surface as a normal failed parse so the
+      // CLI / LSP show it as a diagnostic instead of a stack trace.
+      return {
+        success: false,
+        message: error.message,
+        rest: input,
+        errorData: {
+          line: error.loc ? error.loc.line : 0,
+          column: error.loc ? error.loc.col : 0,
+          length: error.loc ? Math.max(1, error.loc.end - error.loc.start) : 1,
+          message: error.message,
+          prettyMessage: error.message,
         },
       };
     } else {

@@ -135,6 +135,16 @@ import { DefaultCase, MatchBlockCase } from "../types/matchBlock.js";
 import { MessageThread } from "@/types/messageThread.js";
 import { HandleBlock } from "@/types/handleBlock.js";
 import { WithModifier } from "@/types/withModifier.js";
+import {
+  ArrayPattern,
+  BindingPattern,
+  MatchPattern,
+  ObjectPattern,
+  ObjectPatternProperty,
+  ObjectPatternShorthand,
+  RestPattern,
+  WildcardPattern,
+} from "../types/pattern.js";
 
 // =============================================================================
 // utils.ts
@@ -3252,3 +3262,226 @@ const _classParserInner: Parser<ClassDefinition> = (input: string) => {
 };
 
 export const classParser: Parser<ClassDefinition> = label("a class definition", withLoc(_classParserInner));
+
+// =============================================================================
+// pattern.ts — destructuring + match patterns
+// =============================================================================
+
+export const wildcardPatternParser: Parser<WildcardPattern> = label(
+  "a wildcard pattern",
+  withLoc(seqC(set("type", "wildcardPattern"), char("_"), not(varNameChar))),
+);
+
+export const restPatternParser: Parser<RestPattern> = label(
+  "a rest pattern",
+  withLoc(
+    seqC(
+      set("type", "restPattern"),
+      str("..."),
+      capture(many1WithJoin(varNameChar), "identifier"),
+    ),
+  ),
+);
+
+// ---- helpers shared by binding and match array parsers ----
+
+function enforceRestAtEnd<T extends { type: string }>(
+  elements: readonly T[],
+): void {
+  for (let i = 0; i < elements.length - 1; i++) {
+    if (elements[i].type === "restPattern") {
+      // Throw to surface the message past surrounding `or` combinators,
+      // which would otherwise swallow it as "all parsers failed".
+      throw new Error(
+        "rest pattern must be the last element of an array pattern",
+      );
+    }
+  }
+}
+
+// ---- binding pattern parsers ----
+
+const _bindingPatternParser = (input: string): ParserResult<BindingPattern> => {
+  const parser = or(
+    lazy(() => arrayBindingPatternParser),
+    lazy(() => objectBindingPatternParser),
+    restPatternParser,
+    // wildcard MUST come before variableNameParser so `_` doesn't match as identifier
+    wildcardPatternParser,
+    variableNameParser,
+  );
+  return parser(input) as ParserResult<BindingPattern>;
+};
+export const bindingPatternParser: Parser<BindingPattern> = _bindingPatternParser;
+
+export const arrayBindingPatternParser: Parser<ArrayPattern> = label(
+  "an array binding pattern",
+  (input: string): ParserResult<ArrayPattern> => {
+    const parser = withLoc(
+      seqC(
+        set("type", "arrayPattern"),
+        char("["),
+        optionalSpacesOrNewline,
+        capture(
+          or(
+            sepBy(commaWithNewline, lazy(() => bindingPatternParser)),
+            succeed([]),
+          ),
+          "elements",
+        ),
+        optionalSpacesOrNewline,
+        char("]"),
+      ),
+    );
+    const result = parser(input);
+    if (!result.success) return result;
+    enforceRestAtEnd(result.result.elements);
+    return result;
+  },
+);
+
+const _bindingPropertyWithValueParser: Parser<ObjectPatternProperty> = (
+  input: string,
+) => {
+  const parser = seqC(
+    set("type", "objectPatternProperty"),
+    capture(many1WithJoin(varNameChar), "key"),
+    optionalSpaces,
+    char(":"),
+    optionalSpaces,
+    capture(lazy(() => bindingPatternParser), "value"),
+  );
+  return parser(input);
+};
+
+const _objectPatternShorthandParser: Parser<ObjectPatternShorthand> = (
+  input: string,
+) => {
+  const r = variableNameParser(input);
+  if (!r.success) return r;
+  return success(
+    { type: "objectPatternShorthand" as const, name: r.result.value },
+    r.rest,
+  );
+};
+
+const _bindingObjectPropertyParser: Parser<
+  ObjectPatternProperty | ObjectPatternShorthand | RestPattern
+> = or(
+  restPatternParser,
+  // propertyWithValue MUST be tried before shorthand — the ':' disambiguates
+  _bindingPropertyWithValueParser,
+  _objectPatternShorthandParser,
+);
+
+export const objectBindingPatternParser: Parser<ObjectPattern> = label(
+  "an object binding pattern",
+  withLoc(
+    seqC(
+      set("type", "objectPattern"),
+      char("{"),
+      optionalSpacesOrNewline,
+      capture(
+        or(
+          sepBy(commaWithNewline, _bindingObjectPropertyParser),
+          succeed([]),
+        ),
+        "properties",
+      ),
+      optionalSpacesOrNewline,
+      char("}"),
+    ),
+  ),
+);
+
+// ---- match pattern parsers ----
+
+const _matchPatternParser = (input: string): ParserResult<MatchPattern> => {
+  // NOTE: cannot reuse simpleLiteralParser directly because it tries
+  // numberParser before variableNameParser, and numberParser is greedy on `_`
+  // (e.g. `_foo` would parse as `{type: "number", value: ""}` with rest `foo`).
+  // We must place variableNameParser before numberParser here.
+  const parser = or(
+    lazy(() => arrayMatchPatternParser),
+    lazy(() => objectMatchPatternParser),
+    restPatternParser,
+    // wildcard MUST come before variableNameParser so `_` doesn't match as identifier
+    wildcardPatternParser,
+    nullParser,
+    booleanParser,
+    unitLiteralParser,
+    variableNameParser,
+    numberParser,
+    _stringParser,
+  );
+  return parser(input) as ParserResult<MatchPattern>;
+};
+export const matchPatternParser: Parser<MatchPattern> = _matchPatternParser;
+
+export const arrayMatchPatternParser: Parser<ArrayPattern> = label(
+  "an array match pattern",
+  (input: string): ParserResult<ArrayPattern> => {
+    const parser = withLoc(
+      seqC(
+        set("type", "arrayPattern"),
+        char("["),
+        optionalSpacesOrNewline,
+        capture(
+          or(
+            sepBy(commaWithNewline, lazy(() => matchPatternParser)),
+            succeed([]),
+          ),
+          "elements",
+        ),
+        optionalSpacesOrNewline,
+        char("]"),
+      ),
+    );
+    const result = parser(input);
+    if (!result.success) return result;
+    enforceRestAtEnd(result.result.elements);
+    return result;
+  },
+);
+
+const _matchPropertyWithValueParser: Parser<ObjectPatternProperty> = (
+  input: string,
+) => {
+  const parser = seqC(
+    set("type", "objectPatternProperty"),
+    capture(many1WithJoin(varNameChar), "key"),
+    optionalSpaces,
+    char(":"),
+    optionalSpaces,
+    capture(lazy(() => matchPatternParser), "value"),
+  );
+  return parser(input);
+};
+
+const _matchObjectPropertyParser: Parser<
+  ObjectPatternProperty | ObjectPatternShorthand | RestPattern
+> = or(
+  restPatternParser,
+  _matchPropertyWithValueParser,
+  _objectPatternShorthandParser,
+);
+
+export const objectMatchPatternParser: Parser<ObjectPattern> = label(
+  "an object match pattern",
+  withLoc(
+    seqC(
+      set("type", "objectPattern"),
+      char("{"),
+      optionalSpacesOrNewline,
+      capture(
+        or(
+          sepBy(commaWithNewline, _matchObjectPropertyParser),
+          succeed([]),
+        ),
+        "properties",
+      ),
+      optionalSpacesOrNewline,
+      char("}"),
+    ),
+  ),
+);

@@ -181,6 +181,89 @@ greet("world")`;
     }
   });
 
+  it("returns hover info for a language primitive (success)", () => {
+    const source = 'node main() {\n  let r = success(1)\n}';
+    const doc = makeDoc(source);
+    const { semanticIndex } = runDiagnostics(
+      doc,
+      "/test.agency",
+      {},
+      new SymbolTable(),
+    );
+    // Hover over "success"
+    const result = handleHover(
+      { textDocument: { uri: doc.uri }, position: { line: 1, character: 12 } },
+      doc,
+      semanticIndex,
+    );
+    expect(result).not.toBeNull();
+    const value = (result!.contents as any).value;
+    expect(value).toContain("success");
+    expect(value).toContain("Agency language primitive");
+  });
+
+  it("returns hover info for a flat JS global (parseInt)", () => {
+    const source = 'node main() {\n  let n = parseInt("42")\n}';
+    const doc = makeDoc(source);
+    const { semanticIndex } = runDiagnostics(
+      doc,
+      "/test.agency",
+      {},
+      new SymbolTable(),
+    );
+    const result = handleHover(
+      { textDocument: { uri: doc.uri }, position: { line: 1, character: 12 } },
+      doc,
+      semanticIndex,
+    );
+    expect(result).not.toBeNull();
+    const value = (result!.contents as any).value;
+    expect(value).toContain("parseInt");
+    expect(value).toContain("JavaScript global");
+  });
+
+  it("returns hover info for a JS namespace member (JSON.parse)", () => {
+    const source = 'node main() {\n  let x = JSON.parse("{}")\n}';
+    const doc = makeDoc(source);
+    const { semanticIndex } = runDiagnostics(
+      doc,
+      "/test.agency",
+      {},
+      new SymbolTable(),
+    );
+    // Hover over "parse" in JSON.parse
+    const result = handleHover(
+      { textDocument: { uri: doc.uri }, position: { line: 1, character: 17 } },
+      doc,
+      semanticIndex,
+    );
+    expect(result).not.toBeNull();
+    const value = (result!.contents as any).value;
+    expect(value).toContain("JSON.parse");
+    expect(value).toContain("JavaScript global");
+  });
+
+  it("returns hover info for a JS namespace base (JSON)", () => {
+    const source = 'node main() {\n  let x = JSON.parse("{}")\n}';
+    const doc = makeDoc(source);
+    const { semanticIndex } = runDiagnostics(
+      doc,
+      "/test.agency",
+      {},
+      new SymbolTable(),
+    );
+    // Hover over "JSON"
+    const result = handleHover(
+      { textDocument: { uri: doc.uri }, position: { line: 1, character: 11 } },
+      doc,
+      semanticIndex,
+    );
+    expect(result).not.toBeNull();
+    const value = (result!.contents as any).value;
+    expect(value).toContain("namespace JSON");
+    expect(value).toContain("JavaScript namespace");
+  });
+
   it("returns null when not on an identifier", () => {
     const doc = makeDoc("let x: number = 5");
     const { semanticIndex } = runDiagnostics(

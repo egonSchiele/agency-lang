@@ -724,7 +724,7 @@ export class AgencyGenerator {
       const pattern =
         caseNode.caseValue === "_"
           ? "_"
-          : this.processNode(caseNode.caseValue).trim();
+          : this.processNode(caseNode.caseValue as AgencyNode).trim();
 
       const bodyCode = this.processNode(caseNode.body).trim();
 

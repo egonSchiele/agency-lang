@@ -1,5 +1,6 @@
 import { AgencyNode, Expression } from "../types.js";
 import { BaseNode } from "./base.js";
+import { ArrayPattern, ObjectPattern } from "./pattern.js";
 
 /*
 eg
@@ -20,7 +21,7 @@ items - iterable
 
 export type ForLoop = BaseNode & {
   type: "forLoop";
-  itemVar: string;
+  itemVar: string | ObjectPattern | ArrayPattern;
   indexVar?: string;
   iterable: Expression;
   body: AgencyNode[];

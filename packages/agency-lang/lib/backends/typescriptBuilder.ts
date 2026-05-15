@@ -1455,7 +1455,7 @@ export class TypeScriptBuilder {
     const id = this._subStepPath[this._subStepPath.length - 1];
 
     // Register loop variables so they bypass scope resolution
-    this.loopVars.push(node.itemVar);
+    this.loopVars.push(node.itemVar as string);
     if (node.indexVar) {
       this.loopVars.push(node.indexVar);
     }
@@ -1492,7 +1492,7 @@ export class TypeScriptBuilder {
       return ts.runnerLoop({
         id,
         items: rangeExpr,
-        itemVar: node.itemVar,
+        itemVar: node.itemVar as string,
         body: bodyNodes,
       });
     }
@@ -1502,7 +1502,7 @@ export class TypeScriptBuilder {
     return ts.runnerLoop({
       id,
       items: iterableNode,
-      itemVar: node.itemVar,
+      itemVar: node.itemVar as string,
       indexVar: node.indexVar,
       body: bodyNodes,
     });
@@ -1539,7 +1539,7 @@ export class TypeScriptBuilder {
           condition: ts.binOp(
             expression,
             "===",
-            this.processNode(caseItem.caseValue),
+            this.processNode(caseItem.caseValue as AgencyNode),
           ),
           body: [this.processNode(caseItem.body)],
         });
@@ -3104,7 +3104,7 @@ export class TypeScriptBuilder {
           ts.postfix(ts.id(node.indexVar), "++"),
           ts.statements([
             ts.constDecl(
-              node.itemVar,
+              node.itemVar as string,
               ts.index(ts.id(iterableVar), ts.id(node.indexVar)),
             ),
             ...node.body.map((s) => this.processNode(s)),
@@ -3113,7 +3113,7 @@ export class TypeScriptBuilder {
       ]);
     }
     return ts.forOf(
-      node.itemVar,
+      node.itemVar as string,
       this.processNode(node.iterable),
       processBody(node.body),
     );

@@ -2110,7 +2110,7 @@ export const matchBlockParserCase: Parser<MatchBlockCase> = (
     optionalSemicolon,
     optionalSpacesOrNewline,
   );
-  return parser(input);
+  return parser(input) as ParserResult<MatchBlockCase>;
 };
 
 const semicolon = seqC(optionalSpaces, char(";"), optionalSpaces);

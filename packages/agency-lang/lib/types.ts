@@ -35,6 +35,8 @@ import { ClassDefinition, ClassField, ClassMethod, NewExpression } from "./types
 import { InterruptStatement } from "./types/interruptStatement.js";
 import { SchemaExpression } from "./types/schemaExpression.js";
 import { BlockArgument } from "./types/blockArgument.js";
+import { BindingPattern, IsExpression } from "./types/pattern.js";
+export * from "./types/pattern.js";
 export * from "./types/access.js";
 export * from "./types/awaitPending.js";
 export * from "./types/dataStructures.js";
@@ -75,7 +77,8 @@ export type Expression =
   | RegexLiteral
   | SchemaExpression
   | InterruptStatement
-  | BlockArgument;
+  | BlockArgument
+  | IsExpression;
 
 /**
  * Scope types for variable resolution.
@@ -159,6 +162,7 @@ export type StaticScope = {
 export type Assignment = BaseNode & {
   type: "assignment";
   variableName: string;
+  pattern?: BindingPattern;
   accessChain?: AccessChainElement[];
   typeHint?: VariableType;
   validated?: boolean;
@@ -240,7 +244,8 @@ export type AgencyNode =
   | RegexLiteral
   | SchemaExpression
   | InterruptStatement
-  | BlockArgument;
+  | BlockArgument
+  | IsExpression;
 
 export type AgencyProgram = {
   type: "agencyProgram";

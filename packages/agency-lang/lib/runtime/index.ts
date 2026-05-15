@@ -108,3 +108,4 @@ export {
 export type { ResultValue, ResultSuccess, ResultFailure } from "./result.js";
 export { Schema, __validateType } from "./schema.js";
 export { CoverageCollector } from "./coverageCollector.js";
+export { __objectRest, __assertDestructurable } from "./destructure.js";

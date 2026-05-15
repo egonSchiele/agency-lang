@@ -15,29 +15,23 @@ import type {
   Assignment,
   Expression,
   ForLoop,
-  FunctionCall,
   IfElse,
   MatchBlock,
   MatchBlockCase,
   WhileLoop,
 } from "../types.js";
 import type { BinOpExpression, Operator } from "../types/binop.js";
-import type { AgencyArray } from "../types/dataStructures.js";
 import type {
-  ArrayPattern,
   BindingPattern,
   IsExpression,
   MatchPattern,
-  ObjectPattern,
   ObjectPatternProperty,
   ObjectPatternShorthand,
-  RestPattern,
-  WildcardPattern,
 } from "../types/pattern.js";
 import type {
   Literal,
   NumberLiteral,
-  StringLiteral,
+  RawCode,
   VariableNameLiteral,
 } from "../types/literals.js";
 import type { ValueAccess, AccessChainElement } from "../types/access.js";
@@ -120,9 +114,8 @@ class PatternLowerer {
     };
 
     const tempRef = varRef(tempName, loc);
-    const nullCheck = makeNullCheck(tempRef, node.pattern, loc);
     const bindings = this.extractBindings(node.pattern, tempRef, userDeclKind, loc);
-    return [tempAssign, ...nullCheck, ...bindings];
+    return [tempAssign, ...bindings];
   }
 
   // -------------------------------------------------------------------------
@@ -215,12 +208,11 @@ class PatternLowerer {
       loc: node.loc,
     };
     const scrutineeRef = varRef(scrutineeName, node.loc);
-    const nullCheck = makeNullCheck(scrutineeRef, isExpr.pattern, node.loc);
     const bindings = this.extractBindings(isExpr.pattern, scrutineeRef, "const", node.loc);
 
     // Each arm's caseValue is now a guard expression; build if/else chain over them.
     const ifChain = this.buildIfChainFromGuardArms(node.cases, node.loc);
-    const result: AgencyNode[] = [scrutineeAssign, ...nullCheck, ...bindings];
+    const result: AgencyNode[] = [scrutineeAssign, ...bindings];
     if (ifChain) result.push(ifChain);
     return result;
   }
@@ -351,12 +343,11 @@ class PatternLowerer {
     }
     const tempItem = this.freshName("item");
     const tempRef = varRef(tempItem, node.loc);
-    const nullCheck = makeNullCheck(tempRef, node.itemVar, node.loc);
     const bindings = this.extractBindings(node.itemVar, tempRef, "const", node.loc);
     return {
       ...node,
       itemVar: tempItem,
-      body: [...nullCheck, ...bindings, ...this.lower(node.body)],
+      body: [...bindings, ...this.lower(node.body)],
     };
   }
 
@@ -569,31 +560,31 @@ function chainAccess(
   };
 }
 
+/**
+ * Generate an inline IIFE that destructures `source` and returns the rest object.
+ * Uses native JS destructuring so we don't need a runtime helper.
+ *
+ * For `let { a, b, ...rest } = obj`, the rest binding becomes:
+ *   const rest = (({ a, b, ...__r }) => __r)(__tmp_1)
+ *
+ * The source must already be a `varRef` (i.e. a VariableNameLiteral) since we
+ * inline its name into the generated code string. This is enforced by the
+ * lowering: object rest is only emitted when the source is __tmp_N.
+ */
 function makeObjectRestCall(
   source: Expression,
   excludedKeys: string[],
   loc: SourceLocation | undefined,
-): FunctionCall {
-  const keysArray: AgencyArray = {
-    type: "agencyArray",
-    items: excludedKeys.map((k) => stringLit(k, loc)),
-    loc: loc as SourceLocation,
-  };
-  return {
-    type: "functionCall",
-    functionName: "__objectRest",
-    arguments: [source, keysArray],
-    loc: loc as SourceLocation,
-  };
-}
-
-function makeAssertCall(source: Expression, loc: SourceLocation | undefined): FunctionCall {
-  return {
-    type: "functionCall",
-    functionName: "__assertDestructurable",
-    arguments: [source],
-    loc: loc as SourceLocation,
-  };
+): RawCode {
+  if (source.type !== "variableName") {
+    throw new Error(
+      `internal: object rest source must be a variableName, got ${source.type}`,
+    );
+  }
+  const sourceName = source.value;
+  const excluded = excludedKeys.map((k) => `${k}: __${k}`).join(", ");
+  const code = `(({ ${excluded}, ...__r }) => __r)(${sourceName})`;
+  return { type: "rawCode", value: code, loc: loc as SourceLocation };
 }
 
 function makeAssign(
@@ -626,14 +617,6 @@ function makeBinOp(
   };
 }
 
-function stringLit(value: string, loc: SourceLocation | undefined): StringLiteral {
-  return {
-    type: "string",
-    segments: [{ type: "text", value }],
-    loc: loc as SourceLocation,
-  };
-}
-
 function numberLit(value: number, loc: SourceLocation | undefined): NumberLiteral {
   return { type: "number", value: String(value), loc: loc as SourceLocation };
 }
@@ -642,17 +625,6 @@ function boolLit(value: boolean, loc: SourceLocation | undefined): Literal {
   return { type: "boolean", value, loc: loc as SourceLocation };
 }
 
-// ---------------------------------------------------------------------------
-// makeNullCheck — emit __assertDestructurable(__tmp) for object patterns
-// ---------------------------------------------------------------------------
-
-function makeNullCheck(
-  source: Expression,
-  pattern: BindingPattern | MatchPattern,
-  loc: SourceLocation | undefined,
-): AgencyNode[] {
-  // Only object patterns need an explicit null check; array index access on null
-  // throws naturally and patterns with length checks bail out cleanly.
-  if (pattern.type !== "objectPattern") return [];
-  return [makeAssertCall(source, loc) as unknown as AgencyNode];
-}
+// Note: no explicit null/undefined checks are emitted. Native JS already throws
+// `TypeError: Cannot read properties of null (reading 'foo')` on `__tmp.foo`,
+// which is sufficient for users to diagnose destructuring failures.

@@ -78,7 +78,8 @@ export type Expression =
   | SchemaExpression
   | InterruptStatement
   | BlockArgument
-  | IsExpression;
+  | IsExpression
+  | RawCode;
 
 /**
  * Scope types for variable resolution.

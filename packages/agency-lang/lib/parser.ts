@@ -20,6 +20,7 @@ import {
 
 import { nanoid } from "nanoid";
 import { AgencyConfig } from "./config.js";
+import { lowerPatterns } from "./lowering/patternLowering.js";
 import render from "./templates/backends/agency/template.js";
 import {
   assignmentParser,
@@ -167,6 +168,7 @@ export function parseAgency(
   input: string,
   config: AgencyConfig = {},
   applyTemplate: boolean = true,
+  lower: boolean = true,
 ): ParseAgencyResult {
   if (applyTemplate) {
     input = render({ body: input });
@@ -178,7 +180,14 @@ export function parseAgency(
   const offset = applyTemplate ? AGENCY_TEMPLATE_OFFSET : 0;
   setTemplateOffset(offset);
   try {
-    return _parseAgency(input, config);
+    const result = _parseAgency(input, config);
+    if (result.success && lower) {
+      // Apply pattern lowering pass: transforms destructuring/pattern syntax
+      // into existing AST constructs. The format path opts out by passing
+      // `lower: false` so it can print patterns back as patterns.
+      result.result.nodes = lowerPatterns(result.result.nodes);
+    }
+    return result;
   } catch (error) {
     if (error instanceof TarsecError) {
       return {

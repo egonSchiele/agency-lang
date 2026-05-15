@@ -13,7 +13,6 @@ import type {
   AgencyNode,
   Assignment,
   ForLoop,
-  FunctionCall,
   IfElse,
   MatchBlock,
   WhileLoop,
@@ -28,7 +27,9 @@ import type { ValueAccess } from "../types/access.js";
 /** Parse Agency source and return the body of `node main()`. Throws on parse failure. */
 function parseMainBody(source: string): AgencyNode[] {
   const wrapped = `node main() {\n${source}\n}`;
-  const result = parseAgency(wrapped, {}, false);
+  // Pass lower=false so we receive the un-lowered AST and can apply lowering
+  // explicitly under test.
+  const result = parseAgency(wrapped, {}, false, false);
   if (!result.success) {
     throw new Error(`parse failed: ${result.message ?? "unknown"}\nSource:\n${wrapped}`);
   }
@@ -47,7 +48,7 @@ function lower(source: string): AgencyNode[] {
 
 /** Lower a parsed program (full file source, returning all top-level nodes). */
 function lowerProgram(source: string): AgencyNode[] {
-  const result = parseAgency(source, {}, false);
+  const result = parseAgency(source, {}, false, false);
   if (!result.success) {
     throw new Error(`parse failed: ${result.message ?? "unknown"}`);
   }
@@ -114,17 +115,13 @@ describe("array destructuring", () => {
 // ---------------------------------------------------------------------------
 
 describe("object destructuring", () => {
-  it("lowers `let { name, age } = person` to tmp + assert + two field bindings", () => {
+  it("lowers `let { name, age } = person` to tmp + two field bindings", () => {
     const lowered = lower(`let person = { name: "Bob", age: 30 }\nlet { name, age } = person`);
-    // [person, __tmp, __assertDestructurable(__tmp), name, age]
-    expect(lowered).toHaveLength(5);
+    // [person, __tmp, name, age] — no explicit null check; native JS throws naturally.
+    expect(lowered).toHaveLength(4);
     expect((lowered[1] as Assignment).variableName).toMatch(/^__tmp_/);
 
-    const assertCall = lowered[2] as unknown as FunctionCall;
-    expect(assertCall.type).toBe("functionCall");
-    expect(assertCall.functionName).toBe("__assertDestructurable");
-
-    const nameBind = lowered[3] as Assignment;
+    const nameBind = lowered[2] as Assignment;
     expect(nameBind.variableName).toBe("name");
     expect(nameBind.value.type).toBe("valueAccess");
     expect((nameBind.value as ValueAccess).chain[0]).toMatchObject({
@@ -135,7 +132,7 @@ describe("object destructuring", () => {
 
   it("lowers renamed key `const { name: n }`", () => {
     const lowered = lower(`const person = { name: "Bob" }\nconst { name: n } = person`);
-    const nBind = lowered[3] as Assignment;
+    const nBind = lowered[2] as Assignment;
     expect(nBind.variableName).toBe("n");
     expect((nBind.value as ValueAccess).chain[0]).toMatchObject({
       kind: "property",
@@ -143,27 +140,26 @@ describe("object destructuring", () => {
     });
   });
 
-  it("lowers object rest to __objectRest call with excluded keys", () => {
+  it("lowers object rest to a native-JS IIFE via RawCode", () => {
     const lowered = lower(`const person = { name: "B", age: 30, city: "NY" }\nconst { name, ...rest } = person`);
-    // [person, __tmp, assert, name, rest]
-    expect(lowered).toHaveLength(5);
-    const restBind = lowered[4] as Assignment;
+    // [person, __tmp, name, rest]
+    expect(lowered).toHaveLength(4);
+    const restBind = lowered[3] as Assignment;
     expect(restBind.variableName).toBe("rest");
-    const call = restBind.value as FunctionCall;
-    expect(call.type).toBe("functionCall");
-    expect(call.functionName).toBe("__objectRest");
-    expect(call.arguments).toHaveLength(2);
-    const keysArr = call.arguments[1] as { type: string; items: { segments: { value: string }[] }[] };
-    expect(keysArr.type).toBe("agencyArray");
-    expect(keysArr.items).toHaveLength(1);
-    expect(keysArr.items[0].segments[0].value).toBe("name");
+    expect(restBind.value.type).toBe("rawCode");
+    const code = (restBind.value as { type: "rawCode"; value: string }).value;
+    // IIFE that destructures and returns the rest:
+    //   (({ name: __name, ...__r }) => __r)(__tmp_1)
+    expect(code).toMatch(/__r/);
+    expect(code).toMatch(/__tmp_/);
+    expect(code).toContain("name:");
   });
 
   it("lowers nested object/array pattern", () => {
     const lowered = lower(`let loc = { coords: [1, 2] }\nlet { coords: [x, y] } = loc`);
-    // [loc, __tmp, assert, x, y]
-    expect(lowered).toHaveLength(5);
-    const xBind = lowered[3] as Assignment;
+    // [loc, __tmp, x, y]
+    expect(lowered).toHaveLength(4);
+    const xBind = lowered[2] as Assignment;
     expect(xBind.variableName).toBe("x");
     const xAccess = xBind.value as ValueAccess;
     // chain should be [.coords, [0]]
@@ -378,12 +374,11 @@ describe("for loop with destructuring", () => {
     expect(lowered).toHaveLength(2);
     const forNode = lowered[1] as ForLoop;
     expect(typeof forNode.itemVar).toBe("string");
-    // body should start with: __assertDestructurable(__item); const name = __item.name; const age = __item.age
-    const assertCall = forNode.body[0] as unknown as FunctionCall;
-    expect(assertCall.type).toBe("functionCall");
-    expect(assertCall.functionName).toBe("__assertDestructurable");
-    const nameBind = forNode.body[1] as Assignment;
+    // body should start with: const name = __item.name; const age = __item.age
+    const nameBind = forNode.body[0] as Assignment;
     expect(nameBind.variableName).toBe("name");
+    const ageBind = forNode.body[1] as Assignment;
+    expect(ageBind.variableName).toBe("age");
   });
 });
 

@@ -1,0 +1,51 @@
+def pause(): string {
+  interrupt("hold")
+  return "ok"
+}
+
+node main() {
+  // Array destructuring before the interrupt
+  let items = [10, 20, 30, 40, 50]
+  let [a, b] = items
+  let [head, ...rest] = items
+
+  // Object destructuring before the interrupt
+  let person = { name: "Bob", age: 30, city: "NY" }
+  let { name, age } = person
+  let { name: n, ...others } = person
+
+  // Nested
+  let loc = { coords: [11, 22] }
+  let { coords: [x, y] } = loc
+
+  // For loop destructuring before the interrupt
+  let pairs = [[1, "a"], [2, "b"]]
+  let sum = 0
+  let labels = ""
+  for ([k, v] in pairs) {
+    sum = sum + k
+    labels = labels + v
+  }
+
+  // Pattern-match binders before the interrupt
+  let event = { type: "click", x: 10, y: 20 }
+  let clickX = 0
+  if (event is { type: "click", x: ex, y: ey }) {
+    clickX = ex
+  }
+
+  // Trigger an interrupt in the middle of the function
+  let approval = pause()
+
+  // After resume, verify all destructured bindings still exist
+  return [
+    a, b,
+    head, rest,
+    name, age,
+    n, others.age, others.city,
+    x, y,
+    sum, labels,
+    clickX,
+    approval,
+  ]
+}

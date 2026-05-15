@@ -1,21 +1,6 @@
 // Core types for the memory layer.
 import { z } from "zod";
 
-export type MemoryMessageRole =
-  | "user"
-  | "assistant"
-  | "system"
-  | "tool"
-  | "developer";
-
-// A minimal structural message shape used by the memory subsystem.
-// Compatible with smoltalk's Message classes (which expose role/content
-// via getters) but also accepts plain object literals.
-export type MemoryMessage = {
-  role: MemoryMessageRole;
-  content: string;
-};
-
 export type Observation = {
   id: string;
   content: string;

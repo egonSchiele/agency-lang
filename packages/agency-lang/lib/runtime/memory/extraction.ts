@@ -1,6 +1,6 @@
 import { z } from "zod";
+import type * as smoltalk from "smoltalk";
 import extractionTemplate from "../../templates/prompts/memory/extraction.js";
-import type { MemoryMessage } from "./types.js";
 import { MemoryGraph } from "./graph.js";
 
 // Zod schema for the structured output the LLM returns. We `safeParse`
@@ -54,7 +54,7 @@ export function parseExtractionResult(text: string): ExtractionResult | null {
 }
 
 export function buildExtractionPrompt(
-  messages: MemoryMessage[],
+  messages: smoltalk.Message[],
   graph: MemoryGraph
 ): string {
   const existingEntities = graph.getEntities();

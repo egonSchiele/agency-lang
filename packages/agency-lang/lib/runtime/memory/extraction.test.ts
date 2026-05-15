@@ -1,12 +1,13 @@
 import { describe, it, expect } from "vitest";
+import { userMessage, assistantMessage } from "smoltalk";
 import { buildExtractionPrompt, applyExtractionResult } from "./extraction.js";
 import { MemoryGraph } from "./graph.js";
 
 describe("buildExtractionPrompt", () => {
   it("includes conversation messages in the prompt", () => {
     const messages = [
-      { role: "user" as const, content: "My mom loves pottery" },
-      { role: "assistant" as const, content: "That's great!" },
+      userMessage("My mom loves pottery"),
+      assistantMessage("That's great!"),
     ];
     const graph = new MemoryGraph();
     const prompt = buildExtractionPrompt(messages, graph);

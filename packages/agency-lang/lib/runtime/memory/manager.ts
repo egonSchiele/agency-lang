@@ -5,7 +5,6 @@ import type {
   MemoryConfig,
   MemoryStore as MemoryStoreType,
   ConversationSummary,
-  MemoryMessage,
 } from "./types.js";
 import { MemoryGraph } from "./graph.js";
 import { EmbeddingManager } from "./embeddings.js";
@@ -94,12 +93,11 @@ const SUMMARY_MESSAGE_PREFIX = "Previous conversation summary:\n";
 
 /**
  * Plan describing how the caller should reshape its message thread
- * after compaction. The MemoryManager intentionally does not return
- * the new messages directly: callers like prompt.ts hold smoltalk
- * Message instances that carry tool_call metadata, and round-tripping
- * through `MemoryMessage` would drop that. The caller assembles the
- * new thread from its own message instances using these indices, then
- * inserts a single fresh system message containing the new summary.
+ * after compaction. The MemoryManager returns indices, not message
+ * instances, so the caller can rebuild the thread from its own
+ * smoltalk.Message instances and preserve identity (===). That keeps
+ * any caller-side maps keyed on message identity (e.g. trace
+ * correlations) valid across compaction.
  */
 export type CompactionPlan = {
   /** Indices in the original messages array to keep at the head, in order.
@@ -280,7 +278,7 @@ export class MemoryManager {
 
   async remember(content: string): Promise<void> {
     const entry = await this.getEntry();
-    const messages: MemoryMessage[] = [{ role: "user", content }];
+    const messages: smoltalk.Message[] = [smoltalk.userMessage(content)];
     const prompt = buildExtractionPrompt(messages, entry.graph);
     const response = await this._text(prompt, { model: this.model() });
     const result = parseExtractionResult(response);
@@ -415,7 +413,7 @@ export class MemoryManager {
     await this.persist(entry);
   }
 
-  async onTurn(messages: MemoryMessage[]): Promise<void> {
+  async onTurn(messages: smoltalk.Message[]): Promise<void> {
     const entry = await this.getEntry();
     entry.turnsSinceExtraction++;
     const interval = this.config.autoExtract?.interval ?? 5;
@@ -426,7 +424,7 @@ export class MemoryManager {
   }
 
   async compactIfNeeded(
-    messages: MemoryMessage[]
+    messages: smoltalk.Message[]
   ): Promise<CompactionPlan | null> {
     const entry = await this.getEntry();
     const compactionConfig = {
@@ -537,7 +535,7 @@ export class MemoryManager {
 
   private async autoExtract(
     entry: CacheEntry,
-    messages: MemoryMessage[]
+    messages: smoltalk.Message[]
   ): Promise<void> {
     const prompt = buildExtractionPrompt(messages, entry.graph);
     const response = await this._text(prompt, { model: this.model() });

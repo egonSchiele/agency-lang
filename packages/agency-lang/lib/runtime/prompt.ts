@@ -5,7 +5,6 @@ import { AgencyCancelledError, isAbortError } from "./errors.js";
 import { callHook } from "./hooks.js";
 import { Interrupt, hasInterrupts, isRejected } from "./interrupts.js";
 import type { PromptConfig } from "./llmClient.js";
-import type { MemoryMessage, MemoryMessageRole } from "./memory/types.js";
 import { setupFunction } from "./node.js";
 import { isFailure } from "./result.js";
 import type { SourceLocationOpts } from "./state/checkpointStore.js";
@@ -16,13 +15,6 @@ import { ThreadStore } from "./state/threadStore.js";
 import { handleStreamingResponse } from "./streaming.js";
 import { GraphState } from "./types.js";
 import { extractResponse, updateTokenStats } from "./utils.js";
-
-function toMemoryMessages(messages: smoltalk.Message[]): MemoryMessage[] {
-  return messages.map((m) => ({
-    role: m.role as MemoryMessageRole,
-    content: typeof m.content === "string" ? m.content : "",
-  }));
-}
 
 type Tool = {
   name: string;
@@ -158,14 +150,12 @@ async function _runPrompt({
   if (ctx.memoryManager) {
     try {
       const original = messages.getMessages();
-      const memMessages = toMemoryMessages(original);
-      await ctx.memoryManager.onTurn(memMessages);
-      const plan = await ctx.memoryManager.compactIfNeeded(memMessages);
+      await ctx.memoryManager.onTurn(original);
+      const plan = await ctx.memoryManager.compactIfNeeded(original);
       if (plan) {
         // Reassemble the thread from the ORIGINAL smoltalk Message
         // instances so tool_call metadata, ids, and other class-level
-        // fields survive — round-tripping via MemoryMessage would drop
-        // them (memory's view of a thread is just role + content).
+        // fields survive untouched.
         const head = plan.systemPrefixIndices.map((i) => original[i]);
         const tail = plan.tailIndices.map((i) => original[i]);
         const summary = smoltalk.systemMessage(plan.summaryMessageContent);

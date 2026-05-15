@@ -1,13 +1,13 @@
+import type * as smoltalk from "smoltalk";
 import compactionTemplate from "../../templates/prompts/memory/compaction.js";
 import mergeSummaryTemplate from "../../templates/prompts/memory/mergeSummary.js";
-import type { MemoryMessage } from "./types.js";
 
 export type CompactionConfig = {
   trigger: "token" | "messages";
   threshold: number;
 };
 
-function estimateTokens(messages: MemoryMessage[]): number {
+function estimateTokens(messages: smoltalk.Message[]): number {
   let chars = 0;
   for (const msg of messages) {
     const content =
@@ -19,7 +19,7 @@ function estimateTokens(messages: MemoryMessage[]): number {
 }
 
 export function shouldCompact(
-  messages: MemoryMessage[],
+  messages: smoltalk.Message[],
   config: CompactionConfig
 ): boolean {
   if (config.trigger === "messages") {
@@ -40,7 +40,7 @@ export function shouldCompact(
  *
  * Returns -1 if no clean boundary exists (caller should skip compacting).
  */
-export function findCompactionSplitPoint(messages: MemoryMessage[]): number {
+export function findCompactionSplitPoint(messages: smoltalk.Message[]): number {
   const midpoint = Math.floor(messages.length / 2);
   for (let i = midpoint; i < messages.length; i++) {
     if (messages[i].role === "user") return i;
@@ -48,7 +48,7 @@ export function findCompactionSplitPoint(messages: MemoryMessage[]): number {
   return -1;
 }
 
-export function buildCompactionPrompt(messages: MemoryMessage[]): string {
+export function buildCompactionPrompt(messages: smoltalk.Message[]): string {
   const conversationText = messages
     .map(
       (m) =>

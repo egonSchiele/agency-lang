@@ -1,31 +1,41 @@
 import { describe, it, expect } from "vitest";
 import {
+  userMessage,
+  assistantMessage,
+  systemMessage,
+  toolMessage,
+} from "smoltalk";
+import {
   buildCompactionPrompt,
   buildMergeSummaryPrompt,
   shouldCompact,
   findCompactionSplitPoint,
 } from "./compaction.js";
 
+// Convenience tool-message helper — every test that needs a tool reply
+// uses the same dummy id/name.
+const tm = (content: string) =>
+  toolMessage(content, { tool_call_id: "t1", name: "tool" });
+
 describe("shouldCompact", () => {
   it("returns true when message count exceeds threshold", () => {
-    const messages = Array.from({ length: 20 }, (_, i) => ({
-      role: "user" as const,
-      content: `message ${i}`,
-    }));
+    const messages = Array.from({ length: 20 }, (_, i) =>
+      userMessage(`message ${i}`),
+    );
     expect(
       shouldCompact(messages, { trigger: "messages", threshold: 10 })
     ).toBe(true);
   });
 
   it("returns false when under threshold", () => {
-    const messages = [{ role: "user" as const, content: "hi" }];
+    const messages = [userMessage("hi")];
     expect(
       shouldCompact(messages, { trigger: "messages", threshold: 10 })
     ).toBe(false);
   });
 
   it("estimates tokens for token-based trigger", () => {
-    const messages = [{ role: "user" as const, content: "a".repeat(4000) }];
+    const messages = [userMessage("a".repeat(4000))];
     expect(
       shouldCompact(messages, { trigger: "token", threshold: 500 })
     ).toBe(true);
@@ -35,8 +45,8 @@ describe("shouldCompact", () => {
 describe("buildCompactionPrompt", () => {
   it("includes messages to summarize", () => {
     const messages = [
-      { role: "user" as const, content: "I want a gift for mom" },
-      { role: "assistant" as const, content: "What does she like?" },
+      userMessage("I want a gift for mom"),
+      assistantMessage("What does she like?"),
     ];
     const prompt = buildCompactionPrompt(messages);
     expect(prompt).toContain("I want a gift for mom");
@@ -58,12 +68,12 @@ describe("buildMergeSummaryPrompt", () => {
 describe("findCompactionSplitPoint", () => {
   it("returns midpoint when midpoint is a user message", () => {
     const messages = [
-      { role: "user" as const, content: "1" },
-      { role: "assistant" as const, content: "2" },
-      { role: "user" as const, content: "3" },
-      { role: "assistant" as const, content: "4" },
-      { role: "user" as const, content: "5" },
-      { role: "assistant" as const, content: "6" },
+      userMessage("1"),
+      assistantMessage("2"),
+      userMessage("3"),
+      assistantMessage("4"),
+      userMessage("5"),
+      assistantMessage("6"),
     ];
     // midpoint = 3, messages[3] is "assistant", walk forward to messages[4] (user)
     expect(findCompactionSplitPoint(messages)).toBe(4);
@@ -71,13 +81,13 @@ describe("findCompactionSplitPoint", () => {
 
   it("walks forward past assistant tool_call/tool sequence", () => {
     const messages = [
-      { role: "user" as const, content: "1" },
-      { role: "assistant" as const, content: "2" },
-      { role: "user" as const, content: "3" },
-      { role: "assistant" as const, content: "4" },
-      { role: "tool" as const, content: "5" },
-      { role: "assistant" as const, content: "6" },
-      { role: "user" as const, content: "7" },
+      userMessage("1"),
+      assistantMessage("2"),
+      userMessage("3"),
+      assistantMessage("4"),
+      tm("5"),
+      assistantMessage("6"),
+      userMessage("7"),
     ];
     // midpoint = 3 (assistant). walk to 6 (user)
     expect(findCompactionSplitPoint(messages)).toBe(6);
@@ -85,10 +95,10 @@ describe("findCompactionSplitPoint", () => {
 
   it("returns -1 when no user boundary exists after midpoint", () => {
     const messages = [
-      { role: "user" as const, content: "1" },
-      { role: "assistant" as const, content: "2" },
-      { role: "assistant" as const, content: "3" },
-      { role: "tool" as const, content: "4" },
+      userMessage("1"),
+      assistantMessage("2"),
+      assistantMessage("3"),
+      tm("4"),
     ];
     // midpoint = 2, walk forward — no user message exists after midpoint
     expect(findCompactionSplitPoint(messages)).toBe(-1);
@@ -96,12 +106,12 @@ describe("findCompactionSplitPoint", () => {
 
   it("skips system messages at the head when computing midpoint", () => {
     const messages = [
-      { role: "system" as const, content: "system1" },
-      { role: "system" as const, content: "system2" },
-      { role: "user" as const, content: "1" },
-      { role: "assistant" as const, content: "2" },
-      { role: "user" as const, content: "3" },
-      { role: "assistant" as const, content: "4" },
+      systemMessage("system1"),
+      systemMessage("system2"),
+      userMessage("1"),
+      assistantMessage("2"),
+      userMessage("3"),
+      assistantMessage("4"),
     ];
     // 6 messages total, midpoint = 3 (assistant), walk to 4 (user)
     expect(findCompactionSplitPoint(messages)).toBe(4);

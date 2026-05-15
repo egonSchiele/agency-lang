@@ -1,5 +1,8 @@
 import { describe, it, expect } from "vitest";
 import { TextDocument } from "vscode-languageserver-textdocument";
+import * as fs from "fs";
+import * as os from "os";
+import * as path from "path";
 import { runDiagnostics } from "./diagnostics.js";
 import { SymbolTable } from "../symbolTable.js";
 
@@ -38,5 +41,44 @@ describe("runDiagnostics", () => {
     const doc = makeDoc("def greet() { let msg: string = `hello` }");
     const result = runDiagnostics(doc, "/test.agency", {}, emptySymbolTable);
     expect(result.program).not.toBeNull();
+  });
+});
+
+describe("runDiagnostics — stdlib auto-import parity with CLI", () => {
+  // The CLI parser template prepends a fixed `import { print, … } from "std::index"`
+  // line regardless of whatever the user wrote (see
+  // lib/templates/backends/agency/template.mustache). The LSP must mirror
+  // that — even when the user already imports a *subset* of names from
+  // std::index, the auto-imports must still be visible so call sites like
+  // `print(x)` don't get a false "undefined" warning.
+  it("recognizes auto-imports even when user imports a subset from std::index", () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "agency-lsp-stdlib-"));
+    try {
+      const mainFile = path.join(tmpDir, "main.agency");
+      const source = [
+        'import { range } from "std::index"',
+        "node main() {",
+        "  let xs = range(0, 3)",
+        '  print("hi")',
+        "}",
+        "",
+      ].join("\n");
+      fs.writeFileSync(mainFile, source);
+
+      const doc = makeDoc(source, `file://${mainFile}`);
+      const symbolTable = SymbolTable.build(mainFile, {});
+      const { diagnostics } = runDiagnostics(
+        doc,
+        mainFile,
+        { typechecker: { undefinedFunctions: "warn" } },
+        symbolTable,
+      );
+      const printNotDefined = diagnostics.filter(
+        (d) => d.message.includes("print") && d.message.includes("not defined"),
+      );
+      expect(printNotDefined).toHaveLength(0);
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
   });
 });

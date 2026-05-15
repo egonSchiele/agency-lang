@@ -26,24 +26,23 @@ const STDLIB_AUTO_IMPORTS: string[] = [
 ];
 
 /**
- * Inject a synthetic `import { ... } from "std::index"` if the program
- * doesn't already have one AND the SymbolTable has std::index loaded.
- * Returns the original program unchanged otherwise.
+ * Inject a synthetic `import { ... } from "std::index"` so the LSP sees the
+ * same auto-imports the CLI parser template prepends — see
+ * lib/templates/backends/agency/template.mustache. The synthetic is added
+ * unconditionally (alongside any user `import … from "std::index"`) so a
+ * user who imports a *subset* like `import { range } from "std::index"`
+ * still gets `print`, `read`, etc. from the auto-imports — matching CLI
+ * behavior where the template prepends a separate fixed import line.
  *
- * Skipping when the SymbolTable doesn't have std::index avoids generating
- * downstream "Symbol 'print' is not defined in std::index" errors when
- * tests pass an empty SymbolTable.
+ * Skipped when the SymbolTable doesn't have std::index loaded — that's
+ * the test-with-empty-SymbolTable case and synthesizing here would just
+ * produce downstream "Symbol 'print' is not defined" noise.
  */
 function ensureStdlibImport(
   program: AgencyProgram,
   symbolTable: SymbolTable,
   fsPath: string,
 ): AgencyProgram {
-  for (const node of program.nodes) {
-    if (node.type === "importStatement" && node.modulePath === "std::index") {
-      return program;
-    }
-  }
   let stdlibPath: string;
   try {
     stdlibPath = resolveAgencyImportPath("std::index", fsPath);

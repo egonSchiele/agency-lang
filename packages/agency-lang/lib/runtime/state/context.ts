@@ -236,9 +236,14 @@ export class RuntimeContext<T> {
     execCtx._interruptResponses = {};
     execCtx.debuggerState = this.debuggerState;
     // For single-file trace output, share the CAS across all execCtx writers
-    // in this run so dedup works across interrupt segments.
+    // in this run so dedup works across interrupt segments. We deliberately
+    // skip sharing when traceDir is ALSO set: the shared CAS would suppress
+    // chunks in segment-N traceDir files that were emitted in earlier
+    // segments, breaking standalone-readability of those per-segment files.
+    // The trade-off is no cross-segment dedup for traceFile in the rare
+    // both-configured case; per-segment traceDir correctness wins.
     let sharedStore: ContentAddressableStore | undefined;
-    if (this.traceConfig.traceFile) {
+    if (this.traceConfig.traceFile && !this.traceConfig.traceDir) {
       this._sharedTraceStore ??= new ContentAddressableStore();
       sharedStore = this._sharedTraceStore;
     }

@@ -7,4 +7,7 @@ export { MemoryManager } from "./manager.js";
 export type {
   MemoryManagerOptions,
   MemoryIdRef,
+  ForgetResult,
 } from "./manager.js";
+export { ExtractionResultSchema } from "./extraction.js";
+export type { ExtractionResult } from "./extraction.js";

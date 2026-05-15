@@ -1,4 +1,28 @@
-import { _setMemoryId, _remember, _recall, _forget } from "agency-lang/stdlib-lib/memory.js"
+import {
+  _setMemoryId,
+  _recall,
+  _shouldRunMemory,
+  _buildExtractionPrompt,
+  _applyExtractionResult,
+  _buildForgetPrompt,
+  _applyForgetResult,
+} from "agency-lang/stdlib-lib/memory.js"
+
+// The structured shapes the memory LLM calls return. Defining them in
+// Agency lets the runtime derive the `responseFormat` Zod schema from
+// the type annotation on `llm()`, so structured-output enforcement
+// flows through the same path as user-defined typed prompts.
+
+type ExtractionResult = {
+  entities: { name: string, type: string, observations: string[] }[]
+  relations: { from: string, to: string, type: string }[]
+  expirations: { entityName: string, observationContent: string }[]
+}
+
+type ForgetResult = {
+  observations: { entityName: string, observationContent: string }[]
+  relations: { fromName: string, toName: string, type: string }[]
+}
 
 export def setMemoryId(id: string) {
   """
@@ -20,9 +44,20 @@ export def remember(content: string) {
   knowledge graph. Uses the LLM to identify entities, observations,
   and relations.
 
+  The LLM call is wrapped in a thread block so memory's prompts run
+  on an isolated message history and don't pollute the agent's main
+  conversation. Cost and tokens still flow through the runtime's
+  per-run accounting.
+
   @param content - Natural language text containing facts to remember
   """
-  _remember(content)
+  if (_shouldRunMemory()) {
+    thread {
+      const prompt = _buildExtractionPrompt(content)
+      const result: ExtractionResult = llm(prompt)
+      _applyExtractionResult(result)
+    }
+  }
 }
 
 export safe def recall(query: string): string {
@@ -45,7 +80,17 @@ export def forget(query: string) {
   Does not erase data — affected observations are marked with a
   validTo timestamp so the audit trail is preserved.
 
+  The LLM call is wrapped in a thread block so memory's prompts run
+  on an isolated message history and don't pollute the agent's main
+  conversation.
+
   @param query - A natural language description of what to forget
   """
-  _forget(query)
+  if (_shouldRunMemory()) {
+    thread {
+      const prompt = _buildForgetPrompt(query)
+      const result: ForgetResult = llm(prompt)
+      _applyForgetResult(result)
+    }
+  }
 }

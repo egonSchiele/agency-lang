@@ -13,6 +13,7 @@ import {
   applyExtractionResult,
   parseExtractionResult,
 } from "./extraction.js";
+import type { ExtractionResult } from "./extraction.js";
 import {
   structuredLookup,
   formatRetrievalResults,
@@ -276,13 +277,27 @@ export class MemoryManager {
     return "gpt-4o-mini";
   }
 
-  async remember(content: string): Promise<void> {
+  /**
+   * Build the extraction prompt for a single user message. Stdlib
+   * agency code calls this, hands the result to `llm()` with a typed
+   * `ExtractionResult`, and then calls `applyExtractionFromLLM` —
+   * keeping the LLM call itself in the agency runPrompt pipeline so
+   * tracing, cost/token accounting, and the structured-output Zod
+   * schema all flow through the standard path.
+   */
+  async buildExtractionPromptFor(content: string): Promise<string> {
     const entry = await this.getEntry();
     const messages: smoltalk.Message[] = [smoltalk.userMessage(content)];
-    const prompt = buildExtractionPrompt(messages, entry.graph);
-    const response = await this._text(prompt, { model: this.model() });
-    const result = parseExtractionResult(response);
-    if (!result) return;
+    return buildExtractionPrompt(messages, entry.graph);
+  }
+
+  /**
+   * Apply a typed extraction result to the active graph. Used by the
+   * agency-side `remember` after it gets a structured result from
+   * `llm(...)`.
+   */
+  async applyExtractionFromLLM(result: ExtractionResult): Promise<void> {
+    const entry = await this.getEntry();
     const outcome = applyExtractionResult(entry.graph, result, this.source);
     for (const id of outcome.expiredObservationIds) {
       entry.embeddings.removeEntry(id);
@@ -290,6 +305,19 @@ export class MemoryManager {
     this.indexNewObservations(entry, outcome.newObservationIds);
     await this.generateEmbeddings(entry, outcome.newObservationIds);
     await this.persist(entry);
+  }
+
+  /**
+   * Convenience wrapper used by tests that want the whole extraction
+   * round-trip in one call. The agency runtime path goes through
+   * `buildExtractionPromptFor` + `applyExtractionFromLLM` instead.
+   */
+  async remember(content: string): Promise<void> {
+    const prompt = await this.buildExtractionPromptFor(content);
+    const response = await this._text(prompt, { model: this.model() });
+    const result = parseExtractionResult(response);
+    if (!result) return;
+    await this.applyExtractionFromLLM(result);
   }
 
   // Run the cheap tiers (structured lookup + embedding similarity) and
@@ -366,17 +394,27 @@ export class MemoryManager {
     return formatRetrievalResults(entry.graph, entities);
   }
 
-  async forget(query: string): Promise<void> {
+  /**
+   * Build the forget prompt for a query against the active graph.
+   * Same split-pattern as extraction (see `buildExtractionPromptFor`):
+   * stdlib agency code calls this, hands it to `llm()` with a typed
+   * `ForgetResult`, then calls `applyForgetFromLLM`.
+   */
+  async buildForgetPromptFor(query: string): Promise<string> {
     const entry = await this.getEntry();
-    const prompt = forgetTemplate({
+    return forgetTemplate({
       graphIndex: entry.graph.toCompactIndex(),
       query,
     });
-    const response = await this._text(prompt, { model: this.model() });
-    const parsed = parseForgetResult(response);
-    if (!parsed) return;
+  }
 
-    // forget uses substring matching, case-insensitive (resolved decision #7)
+  /**
+   * Apply a typed forget result to the active graph. Substring match,
+   * case-insensitive (resolved decision #7).
+   */
+  async applyForgetFromLLM(parsed: ForgetResult): Promise<void> {
+    const entry = await this.getEntry();
+
     for (const exp of parsed.observations) {
       const entity = entry.graph.findEntityByName(exp.entityName);
       if (!entity) continue;
@@ -411,6 +449,19 @@ export class MemoryManager {
     }
 
     await this.persist(entry);
+  }
+
+  /**
+   * Convenience wrapper used by tests that want the whole forget
+   * round-trip in one call. The agency runtime path goes through
+   * `buildForgetPromptFor` + `applyForgetFromLLM` instead.
+   */
+  async forget(query: string): Promise<void> {
+    const prompt = await this.buildForgetPromptFor(query);
+    const response = await this._text(prompt, { model: this.model() });
+    const parsed = parseForgetResult(response);
+    if (!parsed) return;
+    await this.applyForgetFromLLM(parsed);
   }
 
   async onTurn(messages: smoltalk.Message[]): Promise<void> {
@@ -669,7 +720,7 @@ const ForgetResultSchema = z.object({
   ),
 });
 
-type ForgetResult = z.infer<typeof ForgetResultSchema>;
+export type ForgetResult = z.infer<typeof ForgetResultSchema>;
 
 function parseForgetResult(text: string): ForgetResult | null {
   let raw: unknown;

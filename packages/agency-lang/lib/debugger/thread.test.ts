@@ -4,7 +4,7 @@ import * as fs from "fs";
 import * as path from "path";
 import type { DebuggerCommand } from "./types.js";
 import { compile } from "../cli/commands.js";
-import { isInterrupt } from "@/runtime/interrupts.js";
+import { hasInterrupts } from "@/runtime/interrupts.js";
 import { TestDebuggerIO, freshImport, makeDriver, fixtureDir } from "./testHelpers.js";
 
 // Queue of canned responses for the mock runPrompt
@@ -42,7 +42,7 @@ vi.mock("agency-lang/runtime", async (importOriginal) => {
 const threadTestAgency = path.join(fixtureDir, "thread-test.agency");
 const threadTestCompiled = path.join(fixtureDir, "thread-test.ts");
 
-describe.skip("Debugger threads panel", () => {
+describe("Debugger threads panel", () => {
   beforeAll(() => {
     compile({ debugger: true }, threadTestAgency, threadTestCompiled, { ts: true });
   });
@@ -61,7 +61,7 @@ describe.skip("Debugger threads panel", () => {
     const driver = makeDriver(mod, testUI);
     const callbacks = driver.getCallbacks();
     const initialResult = await mod.main({ callbacks });
-    expect(isInterrupt(initialResult?.data)).toBe(true);
+    expect(hasInterrupts(initialResult?.data)).toBe(true);
 
     await driver.run(initialResult, { interceptConsole: false });
 

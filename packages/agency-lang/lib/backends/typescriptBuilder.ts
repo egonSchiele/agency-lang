@@ -3611,6 +3611,7 @@ export class TypeScriptBuilder {
         : ts.binOp(ts.env("STATELOG_API_KEY"), "||", ts.str("")),
       projectId: ts.str(cfg.log?.projectId || ""),
       debugMode: ts.bool(cfg.log?.debugMode || false),
+      observability: ts.bool(cfg.observability || false),
     });
 
     const smoltalkDefaults = ts.obj({

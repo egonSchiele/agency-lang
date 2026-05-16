@@ -1,3 +1,4 @@
+import { StatelogClient } from "../../statelogClient.js";
 import { MessageThread, MessageThreadJSON } from "./messageThread.js";
 
 export type ThreadStoreJSON = {
@@ -12,11 +13,16 @@ export class ThreadStore {
   threads: Record<MessageThreadID, MessageThread> = {};
   counter: number = 0;
   activeStack: MessageThreadID[] = [];
+  private statelogClient?: StatelogClient;
 
   constructor() {
     this.threads = {};
     this.counter = 0;
     this.activeStack = [];
+  }
+
+  setStatelogClient(client: StatelogClient): void {
+    this.statelogClient = client;
   }
 
   static withDefaultActive(): ThreadStore {
@@ -29,6 +35,10 @@ export class ThreadStore {
   create(): MessageThreadID {
     const id = (this.counter++).toString();
     this.threads[id] = new MessageThread();
+    this.statelogClient?.threadCreated({
+      threadId: id,
+      threadType: "thread",
+    });
     return id;
   }
 
@@ -42,6 +52,11 @@ export class ThreadStore {
     const parentId = this.activeId();
     const id = (this.counter++).toString();
     this.threads[id] = this.threads[parentId!].newSubthreadChild();
+    this.statelogClient?.threadCreated({
+      threadId: id,
+      threadType: "subthread",
+      parentThreadId: parentId,
+    });
     return id;
   }
 

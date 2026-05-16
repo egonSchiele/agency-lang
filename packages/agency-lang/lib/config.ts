@@ -70,6 +70,13 @@ export interface AgencyConfig {
    */
   maxToolCallRounds?: number;
 
+  /**
+   * Enable observability. When false (default), the StatelogClient is a
+   * complete no-op — no events are emitted and no network calls are made.
+   * Set to true to activate structured event logging via the `log` config.
+   */
+  observability?: boolean;
+
   /** Statelog config */
   log?: Partial<{
     host: string;
@@ -227,6 +234,7 @@ export const AgencyConfigSchema = z
     disallowedFetchDomains: z.array(z.string()),
     tarsecTraceHost: z.string(),
     maxToolCallRounds: z.number(),
+    observability: z.boolean(),
     log: z
       .object({
         host: z.string(),

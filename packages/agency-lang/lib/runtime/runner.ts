@@ -563,6 +563,15 @@ export class Runner {
 
     if (await this.maybeDebugHook(id)) return undefined;
 
+    const forkId = `fork_${id}`;
+    const forkStartTime = performance.now();
+    this.ctx.statelogClient.forkStart({
+      forkId,
+      mode,
+      branchCount: items.length,
+    });
+    this.ctx.statelogClient.startSpan(mode === "all" ? "forkAll" : "race");
+
     this.path.push(id);
     let result: any;
     try {
@@ -590,6 +599,15 @@ export class Runner {
       this.frame.popBranches();
     } finally {
       this.path.pop();
+      this.ctx.statelogClient.endSpan(); // end forkAll/race span
+      this.ctx.statelogClient.forkEnd({
+        forkId,
+        mode,
+        timeTaken: performance.now() - forkStartTime,
+        winnerIndex: mode === "race"
+          ? this.frame.locals[this.raceWinnerKey(id)] as number | undefined
+          : undefined,
+      });
     }
 
     if (this.halted) return undefined;
@@ -660,6 +678,15 @@ export class Runner {
         moduleId: this.moduleId,
         scopeName: this.scopeName,
         stepPath: this.stepPath(id),
+      });
+      this.ctx.statelogClient.checkpointCreated({
+        checkpointId: cpId,
+        reason: "fork",
+        sourceLocation: {
+          moduleId: this.moduleId,
+          scopeName: this.scopeName,
+          stepPath: this.stepPath(id),
+        },
       });
       const cp = this.ctx.checkpoints.get(cpId);
       for (const intr of interrupts) {
@@ -754,6 +781,15 @@ export class Runner {
         scopeName: this.scopeName,
         stepPath: this.stepPath(id),
       });
+      this.ctx.statelogClient.checkpointCreated({
+        checkpointId: cpId,
+        reason: "race",
+        sourceLocation: {
+          moduleId: this.moduleId,
+          scopeName: this.scopeName,
+          stepPath: this.stepPath(id),
+        },
+      });
       const cp = this.ctx.checkpoints.get(cpId);
       for (const intr of winnerValue) {
         intr.checkpoint = cp;
@@ -818,6 +854,15 @@ export class Runner {
         moduleId: this.moduleId,
         scopeName: this.scopeName,
         stepPath: this.stepPath(id),
+      });
+      this.ctx.statelogClient.checkpointCreated({
+        checkpointId: cpId,
+        reason: "race",
+        sourceLocation: {
+          moduleId: this.moduleId,
+          scopeName: this.scopeName,
+          stepPath: this.stepPath(id),
+        },
       });
       const cp = this.ctx.checkpoints.get(cpId);
       for (const intr of value) {

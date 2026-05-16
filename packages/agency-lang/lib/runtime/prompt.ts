@@ -124,6 +124,9 @@ async function _runPrompt({
     timeTaken: endTime - startTime,
     tools,
     responseFormat,
+    usage: completion.usage,
+    cost: completion.cost,
+    stream,
   });
 
   if (toolCalls.length > 0) {
@@ -296,6 +299,7 @@ export async function runPrompt(args: {
   }
 
   // Tool calls: restore from frame or make initial LLM call
+  ctx.statelogClient.startSpan("llmCall");
   let toolCalls: smoltalk.ToolCallJSON[];
   if (self.pendingToolCalls) {
     toolCalls = self.pendingToolCalls;
@@ -441,6 +445,7 @@ export async function runPrompt(args: {
         });
 
         const toolCallStartTime = performance.now();
+        ctx.statelogClient.startSpan("toolExecution");
         let result: any;
         ctx.enterToolCall();
         try {
@@ -456,6 +461,12 @@ export async function runPrompt(args: {
           const errorMessage =
             error instanceof Error ? error.message : String(error);
           console.error(`Tool call "${handler.name}" crashed: ${errorMessage}`);
+          ctx.statelogClient.error({
+            errorType: "toolError",
+            message: errorMessage,
+            functionName: handler.name,
+            retryable: false,
+          });
           toolErrorCounts[handler.name] =
             (toolErrorCounts[handler.name] || 0) + 1;
           messages.push(
@@ -466,6 +477,7 @@ export async function runPrompt(args: {
           );
           removedTools.push(handler.name);
           stack.deleteBranch(branchKey);
+          ctx.statelogClient.endSpan(); // end toolExecution span
           continue;
         } finally {
           ctx.exitToolCall();
@@ -479,6 +491,12 @@ export async function runPrompt(args: {
               : String(result.error);
           toolErrorCounts[handler.name] =
             (toolErrorCounts[handler.name] || 0) + 1;
+          ctx.statelogClient.error({
+            errorType: "toolError",
+            message: errorMessage,
+            functionName: handler.name,
+            retryable: !!result.retryable,
+          });
 
           if (result.retryable && toolErrorCounts[handler.name] < 5) {
             messages.push(
@@ -505,6 +523,7 @@ export async function runPrompt(args: {
             removedTools.push(handler.name);
           }
           stack.deleteBranch(branchKey);
+          ctx.statelogClient.endSpan(); // end toolExecution span
           continue;
         }
 
@@ -520,11 +539,19 @@ export async function runPrompt(args: {
             }),
           );
           stack.deleteBranch(branchKey);
+          ctx.statelogClient.endSpan(); // end toolExecution span
           continue;
         }
 
         // Check for interrupts
         if (hasInterrupts(result)) {
+          for (const intr of result) {
+            ctx.statelogClient.interruptThrown({
+              interruptId: intr.interruptId,
+              interruptData: intr.interruptData,
+              functionName: handler.name,
+            });
+          }
           interrupts.push(...result);
           stack.setInterruptOnBranch(
             branchKey,
@@ -532,15 +559,7 @@ export async function runPrompt(args: {
             result[0].interruptData,
             result[0].checkpoint,
           );
-          //console.log(color.green(JSON.stringify(result, null, 2)));
-          // exit(1);
-          // Transplant the branch stack from the interrupt's checkpoint
-          // const branchCp = result[0]?.checkpoint;
-          // if (branchCp) {
-          //   stack.branches[branchKey].stack = StateStack.fromJSON(
-          //     branchCp.stack,
-          //   );
-          // }
+          ctx.statelogClient.endSpan(); // end toolExecution span
           continue;
         }
 
@@ -567,6 +586,7 @@ export async function runPrompt(args: {
           model: JSON.stringify(clientConfig.model),
           timeTaken: toolCallEndTime - toolCallStartTime,
         });
+        ctx.statelogClient.endSpan(); // end toolExecution span
 
         messages.push(
           smoltalk.toolMessage(result, {
@@ -595,6 +615,15 @@ export async function runPrompt(args: {
           intr.checkpointId = cpId;
         }
 
+        ctx.statelogClient.checkpointCreated({
+          checkpointId: cpId,
+          reason: "interrupt",
+          sourceLocation: checkpointInfo ? {
+            moduleId: checkpointInfo.moduleId ?? "",
+            scopeName: checkpointInfo.scopeName ?? "",
+            stepPath: checkpointInfo.stepPath ?? "",
+          } : undefined,
+        });
         ctx.statelogClient.debug(`Tool call interrupted execution.`, {
           messages: messages.getMessages(),
           model: clientConfig.model,
@@ -631,6 +660,7 @@ export async function runPrompt(args: {
     if (isAbortError(error)) throw error;
     throw error;
   } finally {
+    ctx.statelogClient.endSpan(); // end llmCall span
     if (shouldPop) stateStack.pop();
   }
 

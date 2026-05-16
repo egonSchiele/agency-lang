@@ -43,6 +43,7 @@ export function setupNode(args: { state: GraphState }): {
     // and the checkpoint frame doesn't have serialized threads.
     threads = ThreadStore.withDefaultActive();
   }
+  threads.setStatelogClient(ctx.statelogClient);
   stack.threads = threads;
 
   return { stack, step, self, threads };
@@ -151,6 +152,11 @@ export async function runNode({
     name: "onAgentStart",
     data: { nodeName, args: data, messages: messages || [], cancel },
   });
+
+  execCtx.statelogClient.startSpan("agentRun");
+  execCtx.statelogClient.agentStart({ entryNode: nodeName, args: data });
+  const agentStartTime = performance.now();
+
   let isResume = false;
   let threadStore = ThreadStore.withDefaultActive();
   try {
@@ -182,6 +188,12 @@ export async function runNode({
           await execCtx.pauseTraceWriter();
         } else {
           // Final result: emit footer and close
+          execCtx.statelogClient.agentEnd({
+            entryNode: nodeName,
+            result: returnObject.data,
+            timeTaken: performance.now() - agentStartTime,
+            tokenStats: returnObject.tokens,
+          });
           await callHook({
             callbacks: execCtx.callbacks,
             name: "onAgentEnd",
@@ -199,6 +211,15 @@ export async function runNode({
             );
           }
           const cp = e.checkpoint;
+          execCtx.statelogClient.checkpointRestored({
+            checkpointId: cp.id,
+            restoreCount: execCtx._restoreCount,
+            maxRestores: execCtx.maxRestores,
+            overrides: {
+              args: !!e.options?.args,
+              globals: !!e.options?.globals,
+            },
+          });
           execCtx.restoreState(cp);
           if (e.options?.args) {
             execCtx._pendingArgOverrides = e.options.args;
@@ -220,6 +241,7 @@ export async function runNode({
       }
     }
   } finally {
+    execCtx.statelogClient.endSpan(); // end agentRun span
     // Persist any in-memory MemoryManager state. Writes are best-effort —
     // we never fail the run because of a save error, but we do log it so
     // disk problems are visible.

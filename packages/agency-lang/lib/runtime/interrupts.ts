@@ -134,6 +134,8 @@ export async function interruptWithHandlers<T = any>(
 ): Promise<Interrupt<T>[] | Approved | Rejected> {
   const interruptObj = { kind, message, data, origin };
 
+  const interruptId = nanoid();
+
   let approvedValue: any = undefined;
   let hasApproval = false;
   let hasPropagation = false;
@@ -152,16 +154,43 @@ export async function interruptWithHandlers<T = any>(
       ctx.exitToolCall();
     }
     if (result === undefined) {
+      ctx.statelogClient.handlerDecision({
+        interruptId,
+        handlerIndex: i,
+        decision: "none",
+      });
       continue;
     }
     if (result.type === "reject") {
+      ctx.statelogClient.handlerDecision({
+        interruptId,
+        handlerIndex: i,
+        decision: "reject",
+        value: result.value,
+      });
+      ctx.statelogClient.interruptResolved({
+        interruptId,
+        outcome: "rejected",
+        resolvedBy: "handler",
+      });
       return { type: "reject", value: result.value };
     }
     if (result.type === "propagate") {
+      ctx.statelogClient.handlerDecision({
+        interruptId,
+        handlerIndex: i,
+        decision: "propagate",
+      });
       hasPropagation = true;
       continue;
     }
     if (result.type === "approve") {
+      ctx.statelogClient.handlerDecision({
+        interruptId,
+        handlerIndex: i,
+        decision: "approve",
+        value: result.value,
+      });
       hasApproval = true;
       approvedValue = result.value;
       continue;
@@ -177,18 +206,44 @@ export async function interruptWithHandlers<T = any>(
       { propagated: hasPropagation },
     );
     if (parentDecision.type === "approve") {
+      ctx.statelogClient.interruptResolved({
+        interruptId,
+        outcome: "approved",
+        resolvedBy: "ipc",
+      });
       return { type: "approve", value: parentDecision.value ?? approvedValue };
     }
+    ctx.statelogClient.interruptResolved({
+      interruptId,
+      outcome: "rejected",
+      resolvedBy: "ipc",
+    });
     return { type: "reject", value: parentDecision.value };
   }
 
   // Normal mode (non-IPC)
   if (hasPropagation) {
+    ctx.statelogClient.interruptResolved({
+      interruptId,
+      outcome: "propagated",
+      resolvedBy: "handler",
+    });
     return [interrupt({ kind, message, data, origin, runId: ctx.getRunId() })];
   }
   if (hasApproval) {
+    ctx.statelogClient.interruptResolved({
+      interruptId,
+      outcome: "approved",
+      resolvedBy: "handler",
+    });
     return { type: "approve", value: approvedValue };
   }
+  // No handler responded — propagate to user
+  ctx.statelogClient.interruptResolved({
+    interruptId,
+    outcome: "propagated",
+    resolvedBy: "user",
+  });
   return [interrupt({ kind, message, data, origin, runId: ctx.getRunId() })];
 }
 

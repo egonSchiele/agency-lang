@@ -122,6 +122,7 @@ export class SimpleMachine<T> {
         });
       }
       this.debug(`Executing node: ${color.green(currentId)}`, data);
+      this.statelogClient?.startSpan("nodeExecution");
       this.statelogClient?.enterNode({ nodeId: currentId, data });
       const startTime = performance.now();
       const result = await this.runAndValidate(nodeFunc, currentId, data);
@@ -138,6 +139,7 @@ export class SimpleMachine<T> {
         data,
         timeTaken: endTime - startTime,
       });
+      this.statelogClient?.endSpan();
       this.debug(`Completed node: ${color.green(currentId)}`, data);
 
       if (this.config.hooks?.afterNode) {

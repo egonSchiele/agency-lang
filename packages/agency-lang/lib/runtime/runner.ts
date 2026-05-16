@@ -1,3 +1,4 @@
+import { nanoid } from "nanoid";
 import { debugStep } from "./debugger.js";
 import { hasInterrupts } from "./interrupts.js";
 import { __pipeBind } from "./result.js";
@@ -563,7 +564,7 @@ export class Runner {
 
     if (await this.maybeDebugHook(id)) return undefined;
 
-    const forkId = `fork_${id}`;
+    const forkId = nanoid(12);
     const forkStartTime = performance.now();
     this.ctx.statelogClient.forkStart({
       forkId,
@@ -648,7 +649,10 @@ export class Runner {
           ? AbortSignal.any([parentSignal, existing.abortController.signal])
           : existing.abortController.signal;
       }
-      return blockFn(item, i, existing.stack);
+      this.ctx.statelogClient.enterFork();
+      return blockFn(item, i, existing.stack).finally(() => {
+        this.ctx.statelogClient.exitFork();
+      });
     });
 
     const settled = await Promise.allSettled(promises);
@@ -729,10 +733,17 @@ export class Runner {
             ? AbortSignal.any([parentSignal, existing.abortController.signal])
             : existing.abortController.signal;
         }
-        return blockFn(item, i, existing.stack).then((value) => ({
-          index: i,
-          value,
-        }));
+        this.ctx.statelogClient.enterFork();
+        return blockFn(item, i, existing.stack).then(
+          (value) => {
+            this.ctx.statelogClient.exitFork();
+            return { index: i, value };
+          },
+          (err) => {
+            this.ctx.statelogClient.exitFork();
+            throw err;
+          },
+        );
       },
     );
 

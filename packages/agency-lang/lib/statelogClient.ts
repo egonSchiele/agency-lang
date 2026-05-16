@@ -67,6 +67,8 @@ export class StatelogClient {
   private projectId: string;
   private enabled: boolean = true;
   private spanStack: SpanContext[] = [];
+  private forkDepth: number = 0;
+  private metadata?: RunMetadata;
 
   constructor(config: StatelogConfig) {
     const { host, apiKey, projectId, traceId, debugMode } = config;
@@ -75,6 +77,8 @@ export class StatelogClient {
     this.projectId = projectId;
     this.debugMode = debugMode || false;
     this.traceId = traceId || nanoid();
+
+    this.metadata = config.metadata;
 
     // Observability must be explicitly enabled. When false (the default),
     // the entire client is a no-op — no events emitted, no network calls.
@@ -99,10 +103,24 @@ export class StatelogClient {
     }
   }
 
+  // === Fork depth tracking ===
+  // Inside fork/race branches, multiple concurrent branches share this
+  // client. Span push/pop would interleave and corrupt the stack, so we
+  // skip span management entirely when forkDepth > 0. Events still fire
+  // (just without span attribution).
+
+  enterFork(): void {
+    this.forkDepth++;
+  }
+
+  exitFork(): void {
+    if (this.forkDepth > 0) this.forkDepth--;
+  }
+
   // === Span management ===
 
   startSpan(type: SpanType): string {
-    if (!this.enabled) return "";
+    if (!this.enabled || this.forkDepth > 0) return "";
     const spanId = nanoid(12);
     const parentSpanId = this.spanStack.length > 0
       ? this.spanStack[this.spanStack.length - 1].spanId
@@ -117,7 +135,7 @@ export class StatelogClient {
   }
 
   endSpan(): SpanContext | undefined {
-    if (!this.enabled) return undefined;
+    if (!this.enabled || this.forkDepth > 0) return undefined;
     return this.spanStack.pop();
   }
 
@@ -361,6 +379,9 @@ export class StatelogClient {
       entryNode,
       args,
     });
+    if (this.metadata) {
+      await this.runMetadata({ ...this.metadata, entryNode });
+    }
   }
 
   async agentEnd({

@@ -299,8 +299,9 @@ export async function runPrompt(args: {
   }
 
   // Tool calls: restore from frame or make initial LLM call
-  ctx.statelogClient.startSpan("llmCall");
   let toolCalls: smoltalk.ToolCallJSON[];
+  ctx.statelogClient.startSpan("llmCall");
+  try { // try/finally for llmCall span — covers initial _runPrompt and tool loop
   if (self.pendingToolCalls) {
     toolCalls = self.pendingToolCalls;
   } else {
@@ -656,8 +657,10 @@ export async function runPrompt(args: {
     if (isAbortError(error)) throw error;
     throw error;
   } finally {
-    ctx.statelogClient.endSpan(); // end llmCall span
     if (shouldPop) stateStack.pop();
+  }
+  } finally { // end llmCall span (covers initial _runPrompt + tool loop)
+    ctx.statelogClient.endSpan();
   }
 
   const responseMessage = messages.getMessages().at(-1);

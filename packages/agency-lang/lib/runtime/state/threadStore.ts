@@ -21,6 +21,9 @@ export class ThreadStore {
     this.activeStack = [];
   }
 
+  // Set after construction. The initial default thread created by
+  // withDefaultActive() is intentionally not logged — it's an implicit
+  // implementation detail, not a user-initiated thread/subthread block.
   setStatelogClient(client: StatelogClient): void {
     this.statelogClient = client;
   }

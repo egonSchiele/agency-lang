@@ -4,65 +4,8 @@ import { TypeScriptBuilder } from "./typescriptBuilder.js";
 import { TypescriptPreprocessor } from "@/preprocessors/typescriptPreprocessor.js";
 import { buildCompilationUnit } from "@/compilationUnit.js";
 import { printTs } from "../ir/prettyPrint.js";
-import fs from "fs";
+import { discoverFixturePairs } from "../../tests/fixtureDiscovery.js";
 import path from "path";
-
-interface FixturePair {
-  name: string;
-  agencyPath: string;
-  mtsPath: string;
-  agencyContent: string;
-  expectedTS: string;
-}
-
-function discoverFixtures(fixtureDir: string): FixturePair[] {
-  const fixtures: FixturePair[] = [];
-
-  function scanDirectory(dir: string, relativePath: string = "") {
-    const entries = fs.readdirSync(dir, { withFileTypes: true });
-
-    for (const entry of entries) {
-      const fullPath = path.join(dir, entry.name);
-      const relPath = relativePath
-        ? `${relativePath}/${entry.name}`
-        : entry.name;
-
-      if (entry.isDirectory()) {
-        scanDirectory(fullPath, relPath);
-      } else if (entry.isFile() && entry.name.endsWith(".agency")) {
-        const baseName = entry.name.replace(".agency", "");
-        const mtsPath = path.join(dir, `${baseName}.mjs`);
-
-        if (fs.existsSync(mtsPath)) {
-          const nameWithoutExt = relativePath
-            ? `${relativePath}/${baseName}`
-            : baseName;
-
-          try {
-            fixtures.push({
-              name: nameWithoutExt,
-              agencyPath: fullPath,
-              mtsPath: mtsPath,
-              agencyContent: fs.readFileSync(fullPath, "utf-8"),
-              expectedTS: fs.readFileSync(mtsPath, "utf-8"),
-            });
-          } catch (error) {
-            console.error(
-              `Cannot read fixture ${fullPath}: ${
-                error instanceof Error ? error.message : String(error)
-              }`,
-            );
-          }
-        } else {
-          console.warn(`Warning: No corresponding .mjs file for ${fullPath}`);
-        }
-      }
-    }
-  }
-
-  scanDirectory(fixtureDir);
-  return fixtures.sort((a, b) => a.name.localeCompare(b.name));
-}
 
 function normalizeWhitespace(code: string): string {
   return (
@@ -96,7 +39,7 @@ const FIXTURES_DIR = path.resolve(
 );
 
 describe("TypeScript Builder Integration Tests", () => {
-  const fixtures = discoverFixtures(FIXTURES_DIR);
+  const fixtures = discoverFixturePairs(FIXTURES_DIR, ".mjs");
 
   if (fixtures.length === 0) {
     it("should find test fixtures (add .agency + .mjs pairs to tests/typescriptBuilder/)", () => {
@@ -109,19 +52,19 @@ describe("TypeScript Builder Integration Tests", () => {
 
   describe.each(fixtures)(
     "Fixture: $name",
-    ({ name, agencyPath, agencyContent, expectedTS }) => {
+    ({ name, filePath, agencyContent, companionContent }) => {
       it("should generate correct TypeScript output", () => {
         let generatedTS: string;
         try {
           generatedTS = generateWithBuilder(agencyContent, name + ".agency");
         } catch (error) {
           throw new Error(
-            `Failed to generate TypeScript for fixture: ${name}\nFile: ${agencyPath}\nError: ${error instanceof Error ? error.message : String(error)}`,
+            `Failed to generate TypeScript for fixture: ${name}\nFile: ${filePath}\nError: ${error instanceof Error ? error.message : String(error)}`,
           );
         }
 
         expect(normalizeWhitespace(generatedTS)).toBe(
-          normalizeWhitespace(expectedTS),
+          normalizeWhitespace(companionContent),
         );
       });
     },

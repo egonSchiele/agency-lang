@@ -3,39 +3,9 @@ import { parseAgency } from "../parser.js";
 import { buildCompilationUnit } from "../compilationUnit.js";
 import { SymbolTable } from "../symbolTable.js";
 import { typeCheck, formatErrors } from "./index.js";
+import { discoverAgencyFiles } from "../../tests/fixtureDiscovery.js";
 import fs from "fs";
 import path from "path";
-
-/**
- * Discovers all .agency files recursively in a directory.
- */
-function discoverAgencyFiles(fixtureDir: string): { name: string; filePath: string }[] {
-  const files: { name: string; filePath: string }[] = [];
-
-  function scanDirectory(dir: string, relativePath: string = "") {
-    const entries = fs.readdirSync(dir, { withFileTypes: true });
-
-    for (const entry of entries) {
-      const fullPath = path.join(dir, entry.name);
-      const relPath = relativePath
-        ? `${relativePath}/${entry.name}`
-        : entry.name;
-
-      if (entry.isDirectory()) {
-        scanDirectory(fullPath, relPath);
-      } else if (entry.isFile() && entry.name.endsWith(".agency")) {
-        const baseName = entry.name.replace(".agency", "");
-        const nameWithoutExt = relativePath
-          ? `${relativePath}/${baseName}`
-          : baseName;
-        files.push({ name: nameWithoutExt, filePath: fullPath });
-      }
-    }
-  }
-
-  scanDirectory(fixtureDir);
-  return files.sort((a, b) => a.name.localeCompare(b.name));
-}
 
 const FIXTURES_DIR = path.resolve(__dirname, "../../tests/typescriptGenerator");
 const STDLIB_DIR = path.resolve(__dirname, "../../stdlib");

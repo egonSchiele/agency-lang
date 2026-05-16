@@ -5,39 +5,17 @@ import type {
 } from "../runtime/memory/index.js";
 
 /**
- * std::memory implementations.
- *
- * These are "context-injected builtins": the agency-side wrappers in
- * `stdlib/memory.agency` call them by their `__internal_*` names with
- * the user-visible argument list, and the TypeScript builder rewrites
- * each call to prepend the runtime context (`__ctx`) as the first
- * positional argument. See `lib/codegenBuiltins/contextInjected.ts`
- * for the registry that drives the rewrite.
- *
- * The previous design exposed the runtime context to user code via a
- * `getContext()` builder macro. That was bad for two reasons:
- *   - users could store the returned context in a global and recreate
- *     the original race-prone singleton across runs;
- *   - binding `getContext()` to a `const` triggered a runner-step
- *     skip bug because the assignment looked like an async point
- *     without actually being one.
- * Context-injection avoids both: user code never touches `__ctx`,
- * and the call site is emitted as a plain async call so the runner
- * sees it as a normal step.
+ * std::memory TS implementations for the context-injected builtins
+ * registered in `lib/codegenBuiltins/contextInjected.ts`. Each
+ * function takes the per-run `RuntimeContext` as its first argument;
+ * the agency-side wrappers in `stdlib/memory.agency` call them
+ * without it, and the TypeScript builder prepends `__ctx` at every
+ * call site.
  *
  * If memory isn't configured in `agency.json`, every function is a
- * no-op: `__internal_setMemoryId` and `__internal_forget` resolve to
- * `undefined`, `__internal_recall` to `""`, and the prompt-build
- * helpers return `""` so the agency-side guard short-circuits.
- *
- * `__internal_remember` / `__internal_forget` are kept as a
- * convenience for direct callers (e.g. legacy embedders that don't
- * route through the agency-side flow). The agency-side path
- * (`stdlib/memory.agency`) splits the work into prompt-build +
- * result-apply so the LLM call itself flows through agency
- * `runPrompt` for tracing, cost/token accounting, and
- * structured-output enforcement via the `responseFormat` schema
- * derived from the agency type system.
+ * no-op: side-effecting helpers resolve to `undefined`,
+ * `__internal_recall` to `""`, and the prompt-build helpers return
+ * `""` so the agency-side guard short-circuits.
  */
 
 export async function __internal_setMemoryId(

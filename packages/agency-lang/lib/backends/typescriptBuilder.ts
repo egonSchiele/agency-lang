@@ -3733,16 +3733,14 @@ export class TypeScriptBuilder {
    * Emit the import statement that brings every context-injected
    * builtin into scope in the generated TS. The set is fixed by
    * `CONTEXT_INJECTED_BUILTINS` at codegen time, so we always import
-   * the full list (option 1 in the plan): one import block per file,
-   * tree-shaking removes anything unused. When a future registry
-   * entry comes from a different source module, group by `from`
-   * here and emit one import per source.
+   * the full list — esbuild tree-shakes anything the call site
+   * didn't use. When a future registry entry comes from a different
+   * source module, group by `from` here and emit one import per
+   * source.
    */
   private generateContextInjectedImports(): string {
-    const names = Object.keys(CONTEXT_INJECTED_BUILTINS);
-    if (names.length === 0) return "";
-    const sorted = [...names].sort();
-    return `import {\n  ${sorted.join(",\n  ")},\n} from "agency-lang/stdlib-lib/memory.js";`;
+    const names = [...Object.keys(CONTEXT_INJECTED_BUILTINS)].sort();
+    return `import {\n  ${names.join(",\n  ")},\n} from "agency-lang/stdlib-lib/memory.js";`;
   }
 
   private preprocess(): TsNode[] {

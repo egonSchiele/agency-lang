@@ -14,19 +14,11 @@ type ForgetResult = {
   relations: { fromName: string, toName: string, type: string }[]
 }
 
-// `__internal_*` names are context-injected builtins: agency-callable
-// identifiers whose call sites are rewritten by the TypeScript builder
-// to prepend the runtime context (`__ctx`) as the first positional
-// argument. They are always in scope — no `import` is needed at the
-// agency-source level — and are forbidden from appearing as values
-// (no `let f = __internal_recall`, etc).
-//
-// See lib/codegenBuiltins/contextInjected.ts for the registry that
-// drives the rewrite, and lib/stdlib/memory.ts for the implementations.
-//
-// This replaces the earlier `getContext()` macro: rather than handing
-// the runtime context to user code via a builtin call, we pass it in
-// at codegen time so user code never holds a reference to it.
+// `__internal_*` names are context-injected builtins: always in
+// scope (no `import` needed), forbidden as values, and rewritten by
+// the TypeScript builder to receive the runtime context as the
+// first positional argument. See lib/codegenBuiltins/contextInjected.ts
+// for the registry and lib/stdlib/memory.ts for the implementations.
 
 export def setMemoryId(id: string) {
   """

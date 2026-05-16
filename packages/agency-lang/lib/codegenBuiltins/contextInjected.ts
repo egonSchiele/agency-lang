@@ -14,16 +14,7 @@ import {
  *   agency:    __internal_recall(query)
  *   generated: await __internal_recall(__ctx, query)
  *
- * Why this exists: stdlib functions that need access to the runtime
- * context (e.g. for memory) used to obtain it via a `getContext()`
- * macro that exposed the context to user code. Exposing the context
- * is bad — users could store it in a global and recreate the original
- * race-prone singleton. With context-injected builtins, the context
- * is invisible to user code and gets threaded through the call site
- * by codegen, so the same code that was racey as a module singleton
- * is now correctly per-execution.
- *
- * One entry here is consumed by:
+ * Used as the single source of truth for two consumers:
  *   - the typechecker (via `BUILTIN_FUNCTION_TYPES`) for arg/return
  *     type validation against the user-visible signature;
  *   - the TypeScript builder for the codegen rewrite that prepends

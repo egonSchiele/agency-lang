@@ -21,11 +21,9 @@ import { CONTEXT_INJECTED_BUILTINS } from "./contextInjected.js";
  * and the codegen will emit broken calls. The fix is usually either
  * to add the missing export or to align the arity.
  *
- * `restParam` is excluded from the arity check because variadic TS
- * functions advertise `length` as the count of named params before the
- * rest — we just assert that the named-param count is at least
- * `minParams ?? params.length` and at most `1 + params.length` once
- * the leading ctx slot is counted.
+ * Variadic / default-param entries are not handled yet because no
+ * current registry entry uses them. Add the case when the first one
+ * lands.
  */
 describe("CONTEXT_INJECTED_BUILTINS drift safeguard", () => {
   const allImpls: Record<string, unknown> = { ...memoryImpls };
@@ -49,15 +47,7 @@ describe("CONTEXT_INJECTED_BUILTINS drift safeguard", () => {
         if (typeof fn !== "function") {
           throw new Error(`No impl found for ${name}`);
         }
-        if (def.restParam !== undefined) {
-          // Variadic: js Function.length reports the count of
-          // declared params before the rest. The registry's fixed
-          // params plus the leading ctx slot is the lower bound.
-          expect(fn.length).toBeGreaterThanOrEqual(1 + (def.minParams ?? def.params.length));
-          expect(fn.length).toBeLessThanOrEqual(1 + def.params.length);
-        } else {
-          expect(fn.length).toBe(1 + def.params.length);
-        }
+        expect(fn.length).toBe(1 + def.params.length);
       });
     });
   }

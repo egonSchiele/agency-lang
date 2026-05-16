@@ -92,20 +92,30 @@ export interface AgencyConfig {
   }>;
 
   /**
-   * If true, untyped variables are errors.
-   * If false (default), untyped variables are implicitly `any`.
+   * Type checker configuration. Controls which checks run and their severity.
    */
-  strictTypes?: boolean;
-
-  /**
-   * If true, run type checking during compilation and print warnings.
-   */
-  typeCheck?: boolean;
-
-  /**
-   * If true, type errors are fatal during compilation (implies typeCheck: true).
-   */
-  typeCheckStrict?: boolean;
+  typechecker?: {
+    /** If true, run type checking during compilation and print warnings. Default: false. */
+    enabled?: boolean;
+    /** If true, type errors are fatal during compilation (implies enabled: true). Default: false. */
+    strict?: boolean;
+    /** If true, untyped variables are errors. Default: false. */
+    strictTypes?: boolean;
+    /**
+     * What to do when a function call cannot be resolved:
+     * - "silent": ignore
+     * - "warn": emit a warning (default)
+     * - "error": emit an error
+     */
+    undefinedFunctions?: "silent" | "warn" | "error";
+    /**
+     * What to do when a variable reference cannot be resolved:
+     * - "silent": ignore (default for the initial landing)
+     * - "warn": emit a warning
+     * - "error": emit an error
+     */
+    undefinedVariables?: "silent" | "warn" | "error";
+  };
 
   /** Enable debugger mode — auto-inserts breakpoints before every step */
   debugger?: boolean;
@@ -240,9 +250,15 @@ export const AgencyConfigSchema = z
           .partial(),
       })
       .partial(),
-    strictTypes: z.boolean(),
-    typeCheck: z.boolean(),
-    typeCheckStrict: z.boolean(),
+    typechecker: z
+      .object({
+        enabled: z.boolean(),
+        strict: z.boolean(),
+        strictTypes: z.boolean(),
+        undefinedFunctions: z.enum(["silent", "warn", "error"]),
+        undefinedVariables: z.enum(["silent", "warn", "error"]),
+      })
+      .partial(),
     debugger: z.boolean(),
     instrument: z.boolean(),
     checkpoints: z.object({ maxRestores: z.number() }).partial(),

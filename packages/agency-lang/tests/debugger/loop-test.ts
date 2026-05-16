@@ -1,5 +1,5 @@
 // @ts-nocheck
-import { print, printJSON, input, sleep, round, fetch, fetchJSON, read, write, readImage, notify, range, mostCommon, keys, values, entries, emit } from "agency-lang/stdlib/index.js";
+import { print, printJSON, parseJSON, input, sleep, round, fetch, fetchJSON, read, write, readImage, notify, range, mostCommon, keys, values, entries, emit } from "agency-lang/stdlib/index.js";
 import { fileURLToPath } from "url";
 import __process from "process";
 import { readFileSync, writeFileSync } from "fs";
@@ -89,7 +89,16 @@ export const respondToInterrupts = (interrupts: Interrupt[], responses: Interrup
 export const rewindFrom = (checkpoint: Checkpoint, overrides: Record<string, unknown>, opts?: { metadata?: Record<string, any> }) => _rewindFrom({ ctx: __globalCtx, checkpoint, overrides, metadata: opts?.metadata });
 
 export const __setDebugger = (dbg: any) => { __globalCtx.debuggerState = dbg; };
-export const __setTraceWriter = (tw: any) => { __globalCtx.traceWriter = tw; };
+// Reconfigure the trace file path at runtime. Mutates the module-level
+// traceConfig; the next call to runNode (mod.main / mod.someNode) will
+// truncate the file and per-execCtx writers will append to it for the
+// duration of that run. NOTE: traceFile is process-wide and cannot be
+// used safely with concurrent runs of the same agent — for production
+// concurrency, use traceDir instead (each run gets its own
+// {traceDir}/{runId}.agencytrace).
+export const __setTraceFile = (filePath: string) => {
+  __globalCtx.traceConfig.traceFile = filePath;
+};
 export const __setLLMClient = (client: LLMClient) => { __globalCtx.setLLMClient(client); };
 export const __getCheckpoints = () => __globalCtx.checkpoints;
 
@@ -132,6 +141,7 @@ function registerTools(tools: any[]) {
 
 __registerTool(print);
 __registerTool(printJSON);
+__registerTool(parseJSON);
 __registerTool(input);
 __registerTool(sleep);
 __registerTool(round);

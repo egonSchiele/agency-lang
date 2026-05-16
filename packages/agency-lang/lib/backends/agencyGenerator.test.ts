@@ -488,3 +488,32 @@ describe("AgencyGenerator - schema(Type) expressions", () => {
   });
 });
 
+describe("AgencyGenerator - string interpolation with nested calls", () => {
+  function formatAgency(input: string): string {
+    const parseResult = parseAgency(input, {}, false);
+    expect(parseResult.success).toBe(true);
+    if (!parseResult.success) return "";
+    const generator = new AgencyGenerator();
+    return generator.generate(parseResult.result).output.trim();
+  }
+
+  it("preserves inline block arguments inside a string interpolation", () => {
+    // The interpolation expression is a function call whose second argument
+    // is an inline block (`\k -> ...`). Previously the generator routed
+    // through expressionToString, which knows nothing about block args,
+    // so the block silently disappeared from the output.
+    const input = `node main() {\n  let s = "x: " + map(arr, \\k -> k).join(",")\n}`;
+    const output = formatAgency(input);
+    expect(output).toContain("\\k -> k");
+    expect(output).toContain('.join(",")');
+  });
+
+  it("preserves quoted string arguments inside a string interpolation", () => {
+    // expressionToString rendered string literals without their quotes,
+    // so `.join("")` collapsed to `.join()`.
+    const input = `node main() {\n  let s = "x: " + arr.join("")\n}`;
+    const output = formatAgency(input);
+    expect(output).toContain('.join("")');
+  });
+});
+

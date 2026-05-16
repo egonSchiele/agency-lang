@@ -52,6 +52,28 @@ This lets you prevent specific built-in functions from being generated in the ou
 - `fetchJSON` / `fetchJson` - JSON fetch
 - `sleep` - Async sleep
 
+### Type Checker
+
+- **`typechecker`** (object): Type checker configuration
+
+  - **`enabled`** (boolean): Run type checking during compilation. Default: `false`
+  - **`strict`** (boolean): Type errors are fatal (implies `enabled: true`). Default: `false`
+  - **`strictTypes`** (boolean): Untyped variables are errors. Default: `false`
+  - **`undefinedFunctions`** (`"silent" | "warn" | "error"`): What to do when a called
+    function (or `Namespace.method(...)` chain on a JS global) cannot be resolved.
+    Default: `"silent"`. Recommend setting to `"warn"` once your codebase is clean.
+
+**Example:**
+```json
+{
+  "typechecker": {
+    "enabled": true,
+    "strictTypes": true,
+    "undefinedFunctions": "warn"
+  }
+}
+```
+
 ### Fetch Domain Restrictions
 
 - **`allowedFetchDomains`** (string[]): Safelist of domains allowed for fetch operations

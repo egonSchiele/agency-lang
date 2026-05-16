@@ -2,47 +2,15 @@
 // These tests exercise real side effects (filesystem, shell, network) in controlled
 // environments, so they should not run on developer machines by default.
 
-import { execSync } from "node:child_process";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { run, runAllowFail } from "./testRunner.mjs";
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const rootDir = join(__dirname, "..", "..", "..");
+const rootDir = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
 
 if (!process.env.CI && process.env.AGENCY_SANDBOX_TESTS !== "1") {
   console.log("Skipping stdlib sandbox tests (set CI=true or AGENCY_SANDBOX_TESTS=1 to run)");
   process.exit(0);
-}
-
-function run(label, command) {
-  console.log(`\n=== ${label} ===`);
-  try {
-    execSync(command, {
-      cwd: rootDir,
-      encoding: "utf-8",
-      stdio: "inherit",
-      timeout: 300_000,
-    });
-    console.log(`${label}: PASSED`);
-  } catch {
-    console.error(`${label}: FAILED`);
-    process.exit(1);
-  }
-}
-
-function runAllowFail(label, command) {
-  console.log(`\n=== ${label} (allow fail) ===`);
-  try {
-    execSync(command, {
-      cwd: rootDir,
-      encoding: "utf-8",
-      stdio: "inherit",
-      timeout: 300_000,
-    });
-    console.log(`${label}: PASSED`);
-  } catch {
-    console.error(`${label}: FAILED (allowed)`);
-  }
 }
 
 // Agency tests (.agency + .test.json) — run each file individually so one failure
@@ -52,14 +20,16 @@ const agencyTests = [
 ];
 
 for (const name of agencyTests) {
-  run(`Stdlib sandbox: ${name}`,
+  run(rootDir, `Stdlib sandbox: ${name}`,
     `node ./dist/scripts/agency.js test tests/integration/stdlib-sandbox/${name}.agency`);
 }
 
-// Wikipedia hits a live API — allow it to fail without blocking CI
-runAllowFail("Stdlib sandbox: wikipedia",
+// Live APIs — allow to fail without blocking CI
+runAllowFail(rootDir, "Stdlib sandbox: wikipedia",
   "node ./dist/scripts/agency.js test tests/integration/stdlib-sandbox/wikipedia.agency");
+runAllowFail(rootDir, "Stdlib sandbox: weather",
+  "node ./dist/scripts/agency.js test tests/integration/stdlib-sandbox/weather.agency");
 
 // Agency-JS tests (test.js + fixture.json)
-run("Stdlib sandbox (agency-js tests)",
+run(rootDir, "Stdlib sandbox (agency-js tests)",
   "node ./dist/scripts/agency.js test js tests/integration/stdlib-sandbox-js/");

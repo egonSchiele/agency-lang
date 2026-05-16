@@ -20,7 +20,7 @@ function mockLlmClient() {
   ));
   return {
     text: textFn,
-    textStream: async function* () {},
+    textStream: async function* () { },
     embed: vi.fn().mockResolvedValue({
       success: true,
       value: { embeddings: [[0.1, 0.2, 0.3]], model: "mock-embed" },

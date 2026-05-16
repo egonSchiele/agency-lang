@@ -46,6 +46,11 @@ export function widenType(vt: VariableType | "any"): VariableType | "any" {
         successType: widenType(vt.successType) as VariableType,
         failureType: widenType(vt.failureType) as VariableType,
       };
+    case "schemaType":
+      return {
+        type: "schemaType",
+        inner: widenType(vt.inner) as VariableType,
+      };
     default:
       return vt;
   }
@@ -233,6 +238,16 @@ export function isAssignable(
       isAssignable(resolvedSource.successType, resolvedTarget.successType, typeAliases) &&
       isAssignable(resolvedSource.failureType, resolvedTarget.failureType, typeAliases)
     );
+  }
+
+  // Schema<T>: covariant in the validated type. There's no parser surface
+  // for `Schema<T>` annotations yet — this rule lets a synthed schema flow
+  // through `let` bindings whose RHS is `schema(T)` without false positives.
+  if (
+    resolvedSource.type === "schemaType" &&
+    resolvedTarget.type === "schemaType"
+  ) {
+    return isAssignable(resolvedSource.inner, resolvedTarget.inner, typeAliases);
   }
 
   if (

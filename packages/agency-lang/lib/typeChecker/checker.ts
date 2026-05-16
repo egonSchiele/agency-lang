@@ -8,11 +8,14 @@ import { walkNodes, isInsideBlock, type WalkAncestor } from "../utils/node.js";
 import { scopeKey as getScopeKey } from "../compilationUnit.js";
 import type { Scope as WalkScope } from "../types.js";
 import { formatTypeHint } from "../utils/formatType.js";
+import type { ValueAccess } from "../types/access.js";
 import { BUILTIN_FUNCTION_TYPES } from "./builtins.js";
+import { JS_GLOBALS, isJsGlobalBase, lookupJsMember } from "./resolveCall.js";
+import { collectProgramShadowing } from "./shadowing.js";
 import { isAssignable } from "./assignability.js";
 import { synthType } from "./synthesizer.js";
 import { ScopeInfo } from "./types.js";
-import type { TypeCheckerContext } from "./types.js";
+import type { BuiltinSignature, TypeCheckerContext } from "./types.js";
 import {
   checkType,
   isAnyType,
@@ -197,43 +200,116 @@ function checkSingleFunctionCall(
     return;
   }
 
-  if (call.functionName in BUILTIN_FUNCTION_TYPES) {
-    // Builtins don't have parameter names — named args have nowhere to bind.
-    // The backend throws at codegen time (typescriptBuilder.ts); surface it
-    // here with a proper diagnostic instead.
-    if (call.arguments.some((a) => a.type === "namedArgument")) {
-      ctx.errors.push({
-        message: `Named arguments can only be used with Agency-defined functions, not '${call.functionName}'.`,
-        loc: call.loc,
-      });
-      return;
-    }
-    if (call.block) {
-      // None of the entries in BUILTIN_FUNCTION_TYPES take a block. (fork /
-      // race do, but they're special-cased in the backend and never reach
-      // this branch — they fall through with no params lookup at all.)
-      ctx.errors.push({
-        message: `'${call.functionName}' does not accept a block argument.`,
-        loc: call.block.loc ?? call.loc,
-      });
-      return;
-    }
-    const sig = BUILTIN_FUNCTION_TYPES[call.functionName];
-    const minArgs = sig.minParams ?? sig.params.length;
-    const hasRest = sig.restParam !== undefined;
-    const maxArgs = hasRest ? Infinity : sig.params.length;
-    if (!checkArity(call, minArgs, maxArgs, hasSplatArg, ctx)) return;
-    const slots: ParamSlot[] = sig.params.map((type) => ({
-      type,
-      validated: false,
-    }));
-    if (hasRest) {
-      while (slots.length < call.arguments.length) {
-        slots.push({ type: sig.restParam!, validated: false });
-      }
-    }
-    checkArgsAgainstParams(call, slots, scope, ctx);
+  if (Object.prototype.hasOwnProperty.call(BUILTIN_FUNCTION_TYPES, call.functionName)) {
+    checkCallAgainstBuiltinSig(
+      call,
+      BUILTIN_FUNCTION_TYPES[call.functionName],
+      scope,
+      ctx,
+      hasSplatArg,
+    );
+    return;
   }
+
+  // Flat callable JS globals (parseInt, parseFloat, isNaN, …) with a
+  // populated `sig`. Namespace member calls like `JSON.parse(...)` are
+  // valueAccess nodes and are checked in checkExpressionsInScope. JS
+  // globals without a `sig` keep the existence-only behavior — no arity
+  // or type validation, mirroring the diagnostic's Phase 1 behavior.
+  if (Object.prototype.hasOwnProperty.call(JS_GLOBALS, call.functionName)) {
+    const entry = JS_GLOBALS[call.functionName];
+    if (entry.kind === "callable" && entry.sig) {
+      checkCallAgainstBuiltinSig(call, entry.sig, scope, ctx, hasSplatArg);
+    }
+  }
+}
+
+/**
+ * Common arity + per-arg type validation for a call against a
+ * `BuiltinSignature`. Used for both `BUILTIN_FUNCTION_TYPES` entries (true
+ * Agency primitives) and `JS_GLOBALS` entries that have a populated `sig`.
+ *
+ * Builtins have no parameter names, so named args and block args are
+ * rejected here — the backend can't bind either.
+ */
+function checkCallAgainstBuiltinSig(
+  call: FunctionCall,
+  sig: BuiltinSignature,
+  scope: Scope,
+  ctx: TypeCheckerContext,
+  hasSplatArg: boolean,
+): void {
+  if (call.arguments.some((a) => a.type === "namedArgument")) {
+    ctx.errors.push({
+      message: `Named arguments can only be used with Agency-defined functions, not '${call.functionName}'.`,
+      loc: call.loc,
+    });
+    return;
+  }
+  if (call.block) {
+    ctx.errors.push({
+      message: `'${call.functionName}' does not accept a block argument.`,
+      loc: call.block.loc ?? call.loc,
+    });
+    return;
+  }
+  const minArgs = sig.minParams ?? sig.params.length;
+  const hasRest = sig.restParam !== undefined;
+  const maxArgs = hasRest ? Infinity : sig.params.length;
+  if (!checkArity(call, minArgs, maxArgs, hasSplatArg, ctx)) return;
+  const slots: ParamSlot[] = sig.params.map((type) => ({
+    type,
+    validated: false,
+  }));
+  if (hasRest) {
+    while (slots.length < call.arguments.length) {
+      slots.push({ type: sig.restParam!, validated: false });
+    }
+  }
+  checkArgsAgainstParams(call, slots, scope, ctx);
+}
+
+/**
+ * Validate a `<JsNamespace>.<member>(args)` call against `JS_GLOBALS`'s
+ * sig (when populated). Only the simple shape — base = bare variableName
+ * matching a JS namespace, single methodCall in the chain — is checked;
+ * deeper or computed chains are left to the runtime.
+ *
+ * Skips cases where the base is shadowed by a local binding (so `let JSON
+ * = ...` cleanly opts out). Entries without `sig` (e.g. `console.log`)
+ * are skipped — they're variadic / loosely typed by design.
+ */
+function checkJsNamespaceMemberCall(
+  expr: ValueAccess,
+  scope: Scope,
+  ctx: TypeCheckerContext,
+  shadowing: { importedNodeNames: readonly string[]; classNames: object },
+): void {
+  if (expr.base.type !== "variableName") return;
+  const baseName = expr.base.value;
+  if (
+    !isJsGlobalBase(baseName, {
+      scope,
+      functionDefs: ctx.functionDefs,
+      nodeDefs: ctx.nodeDefs,
+      importedFunctions: ctx.importedFunctions,
+      importedNodeNames: shadowing.importedNodeNames,
+      jsImportedNames: ctx.jsImportedNames,
+      classNames: shadowing.classNames,
+    })
+  )
+    return;
+  if (expr.chain.length !== 1) return;
+  const access = expr.chain[0];
+  if (access.kind !== "methodCall") return;
+  const member = access.functionCall;
+  const entry = lookupJsMember([baseName, member.functionName]);
+  if (!entry || entry.kind !== "callable" || !entry.sig) return;
+  const hasSplatArg = member.arguments.some((a) => a.type === "splat");
+  // Reuse the BUILTIN-style check. It uses `member.functionName` in error
+  // messages, so the user sees `'parse' …` for `JSON.parse(...)`. Acceptable
+  // — disambiguation is in the source location, not the function name.
+  checkCallAgainstBuiltinSig(member, entry.sig, scope, ctx, hasSplatArg);
 }
 
 /**
@@ -526,9 +602,11 @@ function checkExpressionsInScope(
   info: ScopeInfo,
   ctx: TypeCheckerContext,
 ): void {
+  const shadowing = collectProgramShadowing(ctx.programNodes);
   for (const { node, ancestors, scopes } of walkNodes(info.body)) {
     if (!isInScope(scopes, info)) continue;
     if (node.type === "valueAccess") {
+      checkJsNamespaceMemberCall(node, info.scope, ctx, shadowing);
       synthType(node, info.scope, ctx);
     } else if (node.type === "returnStatement" && node.value) {
       // A return inside a block body belongs to the block, not the enclosing

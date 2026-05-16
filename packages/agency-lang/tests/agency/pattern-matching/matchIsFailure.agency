@@ -1,0 +1,18 @@
+// `match (x is { type: "a", v })` with a literal in the head pattern. When the
+// scrutinee doesn't match (x.type !== "a"), the function should return a
+// `failure` Result rather than silently no-oping.
+def lookup(x: any): string {
+  match (x is { type: "a", v }) {
+    v > 5 => return "big"
+    _ => return "small"
+  }
+  return "unreachable"
+}
+
+node main() {
+  // Matching case
+  let okResult = lookup({ type: "a", v: 10 })
+  // Non-matching case (type: "b") should fail
+  let failed = lookup({ type: "b", v: 10 })
+  return [okResult, isFailure(failed)]
+}

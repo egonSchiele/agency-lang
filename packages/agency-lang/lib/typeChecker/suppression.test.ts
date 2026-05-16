@@ -97,7 +97,9 @@ describe("typeCheck honors suppressions end-to-end", () => {
     if (!parseResult.success) throw new Error(`Parse failed: ${parseResult.message}`);
     const program = parseResult.result;
     const info = buildCompilationUnit(program, undefined, undefined, source);
-    return typeCheck(program, {}, info);
+    // Silence the undefined-function diagnostic — these tests don't supply a
+    // SymbolTable, so stdlib calls (print, …) would warn as unresolved.
+    return typeCheck(program, { typechecker: { undefinedFunctions: "silent" } }, info);
   }
 
   it("@tc-ignore suppresses the next-line error", () => {

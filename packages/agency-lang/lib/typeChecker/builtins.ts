@@ -10,7 +10,6 @@ import {
 } from "./primitives.js";
 import { CONTEXT_INJECTED_BUILTINS } from "../codegenBuiltins/contextInjected.js";
 
-const stringArray = { type: "arrayType", elementType: string } as const;
 const anyArray = { type: "arrayType", elementType: ANY_T } as const;
 
 const optional = (t: VariableType): VariableType => ({
@@ -65,37 +64,35 @@ const llmOptions: VariableType = {
 };
 
 /**
+ * Public shape returned by `getContext()`. Mirrors the `Context` type
+ * defined in `lib/runtime/publicContext.ts`. We model `memoryManager` as
+ * optional `any` because the agency type system doesn't model class
+ * instances; users access methods through the runtime side (TS bindings),
+ * not directly via field access in agency code.
+ */
+const contextType: VariableType = {
+  type: "objectType",
+  properties: [
+    { key: "memoryManager", value: optional(ANY_T) },
+  ],
+};
+
+/**
  * Signatures for builtin / auto-imported functions that the typechecker
  * needs to know about.
  *
- * NOTE: many entries here (print, fetch, read, etc.) are also defined as
- * real functions in stdlib/index.agency. Ideally the typechecker would
- * resolve them through the SymbolTable instead of hardcoding signatures.
- * Until that lands, hardcoding here keeps arg-count and return-type
- * checking working for callers.
+ * Stdlib functions (`print`, `read`, `fetch`, `range`, etc.) used to live
+ * here too. They are now resolved through `importedFunctions` via the
+ * auto-injected `import { ... } from "std::index"` statement, using the
+ * real signatures from `stdlib/index.agency`. This means a user `def
+ * print()` correctly shadows the stdlib version with no special-casing.
+ *
+ * `llm` stays here — the runtime implements it as a primitive, not a
+ * stdlib wrapper, and its argument is structurally typed.
  */
 export const BUILTIN_FUNCTION_TYPES: Record<string, BuiltinSignature> = {
-  // --- IO / debugging ---
-  print: { params: [], restParam: "any", returnType: voidT },
-  printJSON: { params: [], restParam: "any", returnType: voidT },
-  input: { params: [string], returnType: string },
-  read: { params: [string], returnType: string },
-  readImage: { params: [string], returnType: string },
-  write: { params: [string, string], returnType: voidT },
-  fetch: { params: [string], returnType: string },
-  fetchJSON: { params: [string], returnType: "any" },
-  notify: { params: [string, string], returnType: boolean },
-  sleep: { params: [number], returnType: voidT },
-  round: { params: [number, number], returnType: number },
+  // --- LLM primitive ---
   llm: { params: ["any", llmOptions], minParams: 1, returnType: string },
-  emit: { params: [], restParam: "any", returnType: voidT },
-
-  // --- Object / array helpers (auto-imported from stdlib/index.agency) ---
-  range: { params: [number, number], minParams: 1, returnType: { type: "arrayType", elementType: number } },
-  keys: { params: ["any"], returnType: stringArray },
-  values: { params: ["any"], returnType: anyArray },
-  entries: { params: ["any"], returnType: anyArray },
-  mostCommon: { params: [anyArray], returnType: "any" },
 
   // --- Result type (lib/runtime/result.ts) ---
   success: { params: ["any"], returnType: "any" },
@@ -105,6 +102,15 @@ export const BUILTIN_FUNCTION_TYPES: Record<string, BuiltinSignature> = {
 
   // --- Checkpoint / rewind ---
   restore: { params: ["any", "any"], returnType: voidT },
+
+  // --- Handler outcomes (reserved names) ---
+  approve: { params: ["any"], minParams: 0, returnType: "any" },
+  reject: { params: ["any"], minParams: 0, returnType: "any" },
+  propagate: { params: [], returnType: "any" },
+
+  // --- Checkpointing ---
+  checkpoint: { params: [], returnType: number },
+  getCheckpoint: { params: [number], returnType: "any" },
 
   // --- Context-injected builtins (codegen rewrites the call to inject __ctx) ---
   // The registry lives in lib/codegenBuiltins/contextInjected.ts and is the

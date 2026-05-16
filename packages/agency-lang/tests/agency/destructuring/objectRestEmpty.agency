@@ -1,0 +1,6 @@
+node main() {
+  let person = { name: "Bob", age: 30, city: "NY" }
+  // Object rest with no excluded keys — must not generate `(({ , ...__r }) => ...)`.
+  let { ...all } = person
+  return [all.name, all.age, all.city]
+}

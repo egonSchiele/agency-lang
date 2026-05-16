@@ -1,0 +1,6 @@
+// getContext() is a builtin macro that lowers to the in-scope `__ctx`
+// identifier at codegen time. It always returns a non-null runtime
+// context inside any node or function body.
+node main(): boolean {
+  return getContext() != null
+}

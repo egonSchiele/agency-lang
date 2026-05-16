@@ -102,7 +102,16 @@ export const respondToInterrupts = (interrupts: Interrupt[], responses: Interrup
 export const rewindFrom = (checkpoint: Checkpoint, overrides: Record<string, unknown>, opts?: { metadata?: Record<string, any> }) => _rewindFrom({ ctx: __globalCtx, checkpoint, overrides, metadata: opts?.metadata });
 
 export const __setDebugger = (dbg: any) => { __globalCtx.debuggerState = dbg; };
-export const __setTraceWriter = (tw: any) => { __globalCtx.traceWriter = tw; };
+// Reconfigure the trace file path at runtime. Mutates the module-level
+// traceConfig; the next call to runNode (mod.main / mod.someNode) will
+// truncate the file and per-execCtx writers will append to it for the
+// duration of that run. NOTE: traceFile is process-wide and cannot be
+// used safely with concurrent runs of the same agent — for production
+// concurrency, use traceDir instead (each run gets its own
+// {traceDir}/{runId}.agencytrace).
+export const __setTraceFile = (filePath: string) => {
+  __globalCtx.traceConfig.traceFile = filePath;
+};
 export const __setLLMClient = (client: LLMClient) => { __globalCtx.setLLMClient(client); };
 export const __getCheckpoints = () => __globalCtx.checkpoints;
 

@@ -11,6 +11,17 @@ import { resultTypeForValidation } from "./validation.js";
 import { TypeCheckerContext } from "./types.js";
 import { Scope } from "./scope.js";
 import { ANY_T, BOOLEAN_T, NUMBER_T, REGEX_T, STRING_T } from "./primitives.js";
+import {
+  lookupArrayCallbackMethod,
+  lookupPrimitiveMember,
+  resolvePropertyType,
+  resolveSig,
+  type ArrayCallbackKind,
+} from "./primitiveMembers.js";
+import type { BuiltinSignature } from "./types.js";
+import { walkNodes } from "../utils/node.js";
+import type { BlockArgument } from "../types/blockArgument.js";
+import { UNDEFINED_T, VOID_T } from "./primitives.js";
 
 /** Names treated as Result constructors (synth parameterizes ResultType from arg). */
 const RESULT_CONSTRUCTORS = new Set<string>(["success", "failure"]);
@@ -130,6 +141,20 @@ export function synthType(
       return synthValueAccess(expr, scope, ctx);
     case "tryExpression":
       return synthTryExpression(expr, scope, ctx);
+    case "schemaExpression":
+      // `schema(Type)` is a language built-in that bridges *type space* and
+      // *value space*: the parser captures `Type` as a VariableType (not as
+      // a value expression — see schemaExpressionParser in parsers.ts), and
+      // at runtime the SchemaExpression node compiles to a zod schema
+      // constructed from that type.
+      //
+      // We synth it as `Schema<T>` so chained `.parse(...)` /
+      // `.parseJSON(...)` calls can track the validated type through to a
+      // `Result<T, any>` (see synthValueAccess for the method handling).
+      //
+      // `schema` is listed in RESERVED_FUNCTION_NAMES so users can't define
+      // their own `def schema()` (which would create parse ambiguity).
+      return { type: "schemaType", inner: expr.typeArg };
     default:
       return "any";
   }
@@ -531,11 +556,16 @@ export function synthValueAccess(
             });
             return "any";
           }
-        } else if (resolved.type === "arrayType" && element.name === "length") {
-          currentType = NUMBER_T;
         } else {
+          // Built-in member on a primitive (string.length, array.length, …)?
+          const member = lookupPrimitiveMember(resolved, element.name);
+          if (member && member.kind === "property") {
+            currentType = resolvePropertyType(member.type, resolved);
+            break;
+          }
           ctx.errors.push({
             message: `Property '${element.name}' does not exist on type '${formatTypeHint(resolved)}'.`,
+            loc: expr.loc,
           });
           return "any";
         }
@@ -550,10 +580,260 @@ export function synthValueAccess(
         break;
       }
       case "methodCall": {
+        // `schema(T).parse(x)` and `.parseJSON(s)` both return Result<T, any>
+        // at runtime (see lib/runtime/schema.ts). Track the inner type
+        // through the chain so callers can use `.value` / `catch` / pipes.
+        if (resolved.type === "schemaType") {
+          const methodName = element.functionCall.functionName;
+          if (methodName === "parse" || methodName === "parseJSON") {
+            currentType = {
+              type: "resultType",
+              successType: resolved.inner,
+              failureType: ANY_T,
+            };
+            break;
+          }
+        }
+        // Array callback methods: `xs.map(\(x) -> ...)`, `xs.filter(fn)`, …
+        // Handled separately from the simple BuiltinSignature path because
+        // their result types depend on a callback's return type, which we
+        // synth from the block body or function-ref argument.
+        if (resolved.type === "arrayType") {
+          const cbKind = lookupArrayCallbackMethod(
+            element.functionCall.functionName,
+          );
+          if (cbKind !== null) {
+            currentType = synthArrayCallbackMethod(
+              resolved,
+              cbKind,
+              element.functionCall,
+              scope,
+              ctx,
+            );
+            break;
+          }
+        }
+        // Built-in method on a primitive receiver? (`s.toUpperCase()`,
+        // `xs.slice(1, 3)`, …) — see primitiveMembers.ts.
+        const member = lookupPrimitiveMember(
+          resolved,
+          element.functionCall.functionName,
+        );
+        if (member && member.kind === "method") {
+          const sig = resolveSig(member.sig, resolved);
+          validatePrimitiveMethodCall(expr, element.functionCall, sig, scope, ctx);
+          currentType = sig.returnType === "any" ? ANY_T : sig.returnType;
+          break;
+        }
         return "any";
       }
     }
   }
 
   return currentType;
+}
+
+/**
+ * Validate a built-in primitive method call (`s.toUpperCase()`,
+ * `xs.indexOf(x)`, …) against a {@link BuiltinSignature}: rejects named
+ * args / blocks (primitives have no parameter names), enforces arity, and
+ * checks each positional arg against its slot. Splat args bypass arity.
+ *
+ * Mirrors the shape of `checkCallAgainstBuiltinSig` in checker.ts but
+ * lives here to avoid a circular import — synth runs eagerly inside
+ * checkExpressionsInScope, and adding errors here keeps validation local
+ * to the place that already knows the receiver type.
+ */
+function validatePrimitiveMethodCall(
+  expr: ValueAccess,
+  call: { functionName: string; arguments: AgencyNode[] | (Expression | SplatExpression | NamedArgument)[] },
+  sig: BuiltinSignature,
+  scope: Scope,
+  ctx: TypeCheckerContext,
+): void {
+  const args = call.arguments as (Expression | SplatExpression | NamedArgument)[];
+  if (args.some((a) => "type" in a && a.type === "namedArgument")) {
+    ctx.errors.push({
+      message: `Named arguments are not supported on built-in method '.${call.functionName}()'.`,
+      loc: expr.loc,
+    });
+    return;
+  }
+  const hasSplat = args.some((a) => "type" in a && a.type === "splat");
+  if (!hasSplat) {
+    const minArgs = sig.minParams ?? sig.params.length;
+    const hasRest = sig.restParam !== undefined;
+    const maxArgs = hasRest ? Infinity : sig.params.length;
+    if (args.length < minArgs || args.length > maxArgs) {
+      const expected =
+        minArgs === maxArgs
+          ? `${minArgs}`
+          : maxArgs === Infinity
+            ? `at least ${minArgs}`
+            : `${minArgs}–${maxArgs}`;
+      ctx.errors.push({
+        message: `Method '.${call.functionName}()' expects ${expected} argument(s), got ${args.length}.`,
+        loc: expr.loc,
+      });
+      return;
+    }
+  }
+  const typeAliases = ctx.getTypeAliases();
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
+    if ("type" in arg && arg.type === "splat") continue; // skip splat element check for primitives
+    const slotType =
+      i < sig.params.length ? sig.params[i] : (sig.restParam as VariableType | "any" | undefined);
+    if (slotType === undefined || slotType === "any") continue;
+    const argType = synthType(arg as AgencyNode, scope, ctx);
+    if (argType === "any") continue;
+    if (!isAssignable(argType, slotType, typeAliases)) {
+      ctx.errors.push({
+        message: `Argument type '${formatTypeHint(argType)}' is not assignable to parameter type '${formatTypeHint(slotType)}' in call to '.${call.functionName}()'.`,
+        expectedType: formatTypeHint(slotType),
+        actualType: formatTypeHint(argType),
+        loc: expr.loc,
+      });
+    }
+  }
+}
+
+/**
+ * Compute the result type of a known callback-taking array method
+ * (`map` / `filter` / `forEach` / …) on an `Array<T>` receiver. Best-effort:
+ *
+ *   - For block callbacks (`xs.map(\(x) -> body)`), bind the block's params
+ *     to the element type in a child scope, then walk the body's
+ *     `returnStatement`s and synth-union their values.
+ *   - For function-ref args (`xs.map(myFn)`), use the synth'd argument's
+ *     `functionRefType.returnType`.
+ *   - On anything we can't recognize, the callback return is "any" and
+ *     methods that depend on it (`map`/`reduce`/`flatMap`) propagate that.
+ *
+ * Callback signature validation (arity, body return type vs. expected
+ * slot) is intentionally deferred — Phase 3.
+ */
+function synthArrayCallbackMethod(
+  receiver: VariableType & { type: "arrayType" },
+  cbKind: ArrayCallbackKind,
+  call: { functionName: string; arguments: AgencyNode[] | unknown[]; block?: BlockArgument },
+  scope: Scope,
+  ctx: TypeCheckerContext,
+): VariableType | "any" {
+  const elementT = receiver.elementType;
+  if (cbKind === "sameArray") return receiver;
+  if (cbKind === "void") return VOID_T;
+  if (cbKind === "boolean") return BOOLEAN_T;
+  if (cbKind === "elementOrUndef") {
+    return { type: "unionType", types: [elementT, UNDEFINED_T] };
+  }
+
+  // The remaining kinds (`arrayU`, `flatten`, `reduce`) all need the
+  // callback's return type. Synth it from whichever shape was provided.
+  const cbReturn = synthCallbackReturnType(call, elementT, scope, ctx);
+
+  if (cbKind === "arrayU") {
+    if (cbReturn === "any") return ANY_T;
+    return { type: "arrayType", elementType: cbReturn };
+  }
+  if (cbKind === "flatten") {
+    if (cbReturn === "any") return ANY_T;
+    // `flatMap`'s callback returns `Array<U>`; we unwrap one level.
+    if (cbReturn.type === "arrayType") return cbReturn;
+    // Callback returned a non-array — flatMap silently treats it as a
+    // single-element wrap at runtime; type as `Array<U>`.
+    return { type: "arrayType", elementType: cbReturn };
+  }
+  if (cbKind === "reduce") {
+    // Prefer the explicit accumulator initializer (2nd arg) if available;
+    // otherwise fall back to the callback's return type. Both signatures
+    // are common — `xs.reduce(\(acc, x) -> acc + x, 0)` and the rarer
+    // `xs.reduce(\(acc, x) -> acc + x)`.
+    const args = (call.arguments as AgencyNode[]) ?? [];
+    const init = args[1];
+    if (init) {
+      const initType = synthType(init, scope, ctx);
+      return initType;
+    }
+    return cbReturn;
+  }
+  return "any";
+}
+
+/**
+ * Pull the callback's return type out of a method call. The callback may be:
+ *
+ *   - A trailing/inline block (`\(x) -> body` or `as { … }`): we walk all
+ *     `returnStatement`s in the body, synth each value's type, and union
+ *     the distinct results.
+ *   - The first positional argument as a function reference (`xs.map(myFn)`):
+ *     synth it; if the result is a `functionRefType`, take its `returnType`.
+ *
+ * Returns "any" when neither shape applies.
+ */
+function synthCallbackReturnType(
+  call: { arguments: AgencyNode[] | unknown[]; block?: BlockArgument },
+  elementT: VariableType,
+  scope: Scope,
+  ctx: TypeCheckerContext,
+): VariableType | "any" {
+  if (call.block) {
+    return synthBlockReturnType(call.block, elementT, scope, ctx);
+  }
+  const args = (call.arguments as AgencyNode[]) ?? [];
+  if (args.length === 0) return "any";
+  const cbType = synthType(args[0], scope, ctx);
+  if (cbType === "any") return "any";
+  if (cbType.type === "functionRefType") return cbType.returnType ?? "any";
+  if (cbType.type === "blockType") return cbType.returnType;
+  return "any";
+}
+
+/**
+ * Synth a block callback's return type. The block introduces its
+ * parameters into a child scope (`declareLocal`) bound to the element
+ * type, so that body references like `x.foo` resolve through `T`'s
+ * member shape rather than degrading to `any`.
+ *
+ * Walks every `returnStatement.value` descendant in the block body,
+ * synths each, dedupes by structural identity, and unions the distinct
+ * results. An empty block (no `return`) yields "any".
+ */
+function synthBlockReturnType(
+  block: BlockArgument,
+  elementT: VariableType,
+  scope: Scope,
+  ctx: TypeCheckerContext,
+): VariableType | "any" {
+  const child = scope.child();
+  // First param is the element; second (if present) is the index for
+  // most array iteration methods. We don't try to special-case `reduce`
+  // (param 0 = acc) — the resulting param types are best-effort and the
+  // body can still infer through binOps and literals.
+  block.params.forEach((p, i) => {
+    if (i === 0) child.declareLocal(p.name, elementT);
+    else if (i === 1) child.declareLocal(p.name, NUMBER_T);
+    else child.declareLocal(p.name, "any");
+  });
+
+  const returnTypes: (VariableType | "any")[] = [];
+  for (const { node } of walkNodes(block.body)) {
+    if (node.type === "returnStatement" && node.value) {
+      returnTypes.push(synthType(node.value, child, ctx));
+    }
+  }
+  if (returnTypes.length === 0) return "any";
+  const concrete = returnTypes.filter((t): t is VariableType => t !== "any");
+  if (concrete.length === 0) return "any";
+  if (concrete.length === 1) return concrete[0];
+  // Dedupe structurally identical types.
+  const seen = new Map<string, VariableType>();
+  for (const t of concrete) {
+    const key = JSON.stringify(t);
+    if (!seen.has(key)) seen.set(key, t);
+  }
+  const unique = Array.from(seen.values());
+  return unique.length === 1
+    ? unique[0]
+    : { type: "unionType", types: unique };
 }

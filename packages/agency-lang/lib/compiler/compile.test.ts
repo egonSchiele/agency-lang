@@ -26,7 +26,7 @@ describe("compileSource", () => {
 def foo(x: number): string { return x }
 node main() { return foo(42) }
 `;
-    const result = compileSource(source, { typeCheck: true });
+    const result = compileSource(source, { typechecker: { enabled: true } });
     expect(result.success).toBe(false);
   });
 

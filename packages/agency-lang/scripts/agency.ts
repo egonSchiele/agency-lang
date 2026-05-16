@@ -521,7 +521,9 @@ export function createProgram(deps: CliDependencies = {}): Command {
           console.log("No type errors found.");
         }
       };
-      if (opts.strict) config.strictTypes = true;
+      if (opts.strict) {
+        config.typechecker = { ...config.typechecker, strictTypes: true };
+      }
       if (inputs.length === 0) {
         const contents = await readStdin();
         runTypeCheck(contents);

@@ -20,6 +20,7 @@ import {
 
 import { nanoid } from "nanoid";
 import { AgencyConfig } from "./config.js";
+import { lowerPatterns, PatternLoweringError } from "./lowering/patternLowering.js";
 import render from "./templates/backends/agency/template.js";
 import {
   assignmentParser,
@@ -167,6 +168,7 @@ export function parseAgency(
   input: string,
   config: AgencyConfig = {},
   applyTemplate: boolean = true,
+  lower: boolean = true,
 ): ParseAgencyResult {
   if (applyTemplate) {
     input = render({ body: input });
@@ -178,7 +180,14 @@ export function parseAgency(
   const offset = applyTemplate ? AGENCY_TEMPLATE_OFFSET : 0;
   setTemplateOffset(offset);
   try {
-    return _parseAgency(input, config);
+    const result = _parseAgency(input, config);
+    if (result.success && lower) {
+      // Apply pattern lowering pass: transforms destructuring/pattern syntax
+      // into existing AST constructs. The format path opts out by passing
+      // `lower: false` so it can print patterns back as patterns.
+      result.result.nodes = lowerPatterns(result.result.nodes);
+    }
+    return result;
   } catch (error) {
     if (error instanceof TarsecError) {
       return {
@@ -191,6 +200,22 @@ export function parseAgency(
           length: error.data.length,
           message: error.data.message,
           prettyMessage: error.data.prettyMessage,
+        },
+      };
+    } else if (error instanceof PatternLoweringError) {
+      // Compile-time error from the lowering pass (e.g. shorthand binder in
+      // pure-boolean `is` context). Surface as a normal failed parse so the
+      // CLI / LSP show it as a diagnostic instead of a stack trace.
+      return {
+        success: false,
+        message: error.message,
+        rest: input,
+        errorData: {
+          line: error.loc ? error.loc.line : 0,
+          column: error.loc ? error.loc.col : 0,
+          length: error.loc ? Math.max(1, error.loc.end - error.loc.start) : 1,
+          message: error.message,
+          prettyMessage: error.message,
         },
       };
     } else {

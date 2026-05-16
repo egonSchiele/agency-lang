@@ -1,0 +1,20 @@
+// Regression test: `string + functionCall(...)` and chained access on the
+// right of `+` must parse and execute correctly. Previously stringParser
+// only allowed plain variable names on the right of `+`, so `"hi" + foo()`
+// failed to parse and `"hi" + foo.bar` produced garbage AST.
+
+def greet(): string {
+  return "world"
+}
+
+def thing(): string {
+  return "WIDGET"
+}
+
+node main() {
+  // Function call on the right of +
+  const a = "hello, " + greet()
+  // Method-style chain on the right of +
+  const b = "x=" + thing().toLowerCase()
+  return a + " | " + b
+}

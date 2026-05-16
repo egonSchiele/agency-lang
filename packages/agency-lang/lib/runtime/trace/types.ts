@@ -67,7 +67,22 @@ export type TraceCallback = (event: {
 
 export type TraceConfig = {
   program?: string;
+  /**
+   * Directory for trace output. When set, each run writes to
+   * `${traceDir}/${runId}.agencytrace`. Different runs (different
+   * runIds) get different files automatically — safe with concurrent
+   * runs of the same agent. Recommended for production.
+   */
   traceDir?: string;
+  /**
+   * Fixed trace file path. All runs of this module write to this same
+   * file. Useful for tests and single-run inspection. NOT safe with
+   * concurrent runs of the same agent — they will interleave into one
+   * file and runNode will truncate at each new run start. Prefer
+   * `traceDir` for production agents that may run concurrently.
+   *
+   * If both `traceFile` and `traceDir` are set, `traceFile` wins.
+   */
   traceFile?: string;
   traceCallback?: TraceCallback;
 };

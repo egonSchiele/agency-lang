@@ -5,6 +5,7 @@ import { StateStack } from "./state/stateStack.js";
 import type { GraphState } from "./types.js";
 import { createReturnObject, deepClone } from "./utils.js";
 import { color } from "@/utils/termcolors.js";
+import { nanoid } from "nanoid";
 
 export function applyOverrides(
   checkpoint: Checkpoint,
@@ -27,7 +28,13 @@ export async function rewindFrom(args: {
 
   applyOverrides(checkpoint, overrides);
 
-  const execCtx = await ctx.createExecutionContext(ctx.getRunId());
+  // A rewind is conceptually a new execution: it builds a fresh execCtx
+  // and replays from the checkpoint. The module-level `__globalCtx` that
+  // callers pass in never has runId set (only per-run execCtx do), so we
+  // mint one for trace correlation. Replays therefore appear as distinct
+  // runs in trace files, which matches the actual execution semantics.
+  const runId = (ctx as any).runId ?? nanoid();
+  const execCtx = await ctx.createExecutionContext(runId);
   execCtx.restoreState(checkpoint);
   execCtx._skipNextCheckpoint = true;
 

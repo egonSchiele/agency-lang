@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "[\"Bob\",30,\"NY\"]",
+      "evaluationCriteria": [{"type": "exact"}],
+      "description": "Object rest with no excluded keys clones the object"
+    }
+  ]
+}

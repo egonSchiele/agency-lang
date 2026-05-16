@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "[\"adult\",\"teen\",\"child\",\"child\"]",
+      "evaluationCriteria": [{"type": "exact"}],
+      "description": "Match arm guard failure falls through to the next arm"
+    }
+  ]
+}

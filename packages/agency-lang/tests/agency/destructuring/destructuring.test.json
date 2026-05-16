@@ -1,0 +1,14 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "[10,20,10,30,10,[20,30,40,50],\"Bob\",30,\"Bob\",30,\"Bob\",30,\"NY\",11,22]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    }
+  ]
+}

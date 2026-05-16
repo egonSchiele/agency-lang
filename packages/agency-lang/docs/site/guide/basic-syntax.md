@@ -153,6 +153,20 @@ Mixing dimensions is a type error:
 
 Identifiers beginning with two underscores (`__name`) are reserved for the compiler and runtime. The codegen uses this prefix for plumbing identifiers like `__ctx`, `__stack`, and `__call`, and the `__internal_` prefix for context-injected stdlib builtins. Do not define functions, variables, or globals whose names start with `__` — your code may compile today but collide with a future internal addition.
 
+### Destructuring and pattern matching
+
+Array and object destructuring work in `let` / `const` declarations and
+in `for` loops:
+
+```ts
+let [a, b, ...rest]       = items
+let { name, age }         = person
+for ({ name, age } in users) { ... }
+```
+
+The `is` operator, optional guards on `match` arms, and full pattern
+matching are documented in the [Pattern matching guide](/guide/pattern-matching).
+
 ### JavaScript features that don't exist in Agency
 - lambdas
 - async/await. Everything is awaited by default, and there are specific constructs for [concurrency](/guide/concurrency).

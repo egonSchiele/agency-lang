@@ -13,12 +13,25 @@ export type VariableType =
   | TypeAliasVariable
   | BlockType
   | ResultType
+  | SchemaType
   | FunctionRefType;
 
 export type ResultType = {
   type: "resultType";
   successType: VariableType;
   failureType: VariableType;
+};
+
+/**
+ * `Schema<T>` — synthesized type of a `schema(T)` expression. The runtime
+ * `Schema` class wraps a zod schema and exposes `.parse(...)` /
+ * `.parseJSON(...)`, both returning `Result<T, any>`. Carrying `inner`
+ * lets the typechecker track the validated type through the call chain
+ * (e.g. `schema(MyType).parse(x)` → `Result<MyType, any>`).
+ */
+export type SchemaType = {
+  type: "schemaType";
+  inner: VariableType;
 };
 
 export type BlockType = {

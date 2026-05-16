@@ -6,10 +6,24 @@ import { CallbackSink, FileSink, type TraceSink } from "./sinks.js";
 import type { TraceConfig, TraceLine, TraceManifest } from "./types.js";
 import { CHECKPOINT_SCHEMA } from "./types.js";
 
-function generateTraceFilePath(dir: string): string {
-  const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-  const id = Math.random().toString(16).slice(2, 6);
-  return path.join(dir, `${timestamp}_${id}.agencytrace`);
+/**
+ * Decide which file (if any) a trace writer should target for a given run.
+ *
+ * - `traceFile` set: use it verbatim. This is a fixed, process-wide path —
+ *   useful for tests and single-run inspection, but NOT safe with concurrent
+ *   runs of the same agent (they'd interleave into one file). Documented.
+ * - `traceFile` unset, `traceDir` set: derive `${traceDir}/${runId}.agencytrace`.
+ *   Each run gets its own file, naturally supporting concurrent runs without
+ *   any shared state.
+ * - Neither set: returns null (no file output; callback-only or disabled).
+ */
+export function resolveTraceFilePath(
+  traceConfig: TraceConfig,
+  runId: string,
+): string | null {
+  if (traceConfig.traceFile) return traceConfig.traceFile;
+  if (traceConfig.traceDir) return path.join(traceConfig.traceDir, `${runId}.agencytrace`);
+  return null;
 }
 
 export class TraceWriter {
@@ -21,6 +35,13 @@ export class TraceWriter {
   private runId: string = "";
 
   constructor(runId: string, program: string, sinks: TraceSink[]) {
+    // Per-writer CAS. Cross-segment dedup is intentionally not done — it
+    // would require shared state on the parent ctx (broken for concurrent
+    // runs) or in globals (extra serialization overhead). The trade-off is
+    // that some chunks may be duplicated across segments in the file; the
+    // reader handles duplicates idempotently via loadChunks, so correctness
+    // is unaffected. Files are slightly larger but readable and concurrency
+    // -safe.
     this.store = new ContentAddressableStore();
     this.sinks = sinks;
     this.runId = runId;
@@ -111,11 +132,8 @@ export class TraceWriter {
     traceConfig: TraceConfig;
   }): Promise<TraceWriter | null> {
     const sinks: TraceSink[] = [];
-    if (traceConfig.traceFile) {
-      sinks.push(new FileSink(traceConfig.traceFile));
-    }
-    if (traceConfig.traceDir) {
-      const filePath = generateTraceFilePath(traceConfig.traceDir);
+    const filePath = resolveTraceFilePath(traceConfig, runId);
+    if (filePath) {
       sinks.push(new FileSink(filePath));
     }
     if (traceConfig.traceCallback) {

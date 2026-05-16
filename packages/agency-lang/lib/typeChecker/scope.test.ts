@@ -47,4 +47,22 @@ describe("Scope", () => {
     expect(child.key).toBe("block:if");
   });
 
+  it("isConst reflects whether a binding was declared as const", () => {
+    const scope = new Scope("function:foo");
+    scope.declare("c", numberType, true);
+    scope.declare("v", numberType, false);
+    scope.declare("d", numberType);
+    expect(scope.isConst("c")).toBe(true);
+    expect(scope.isConst("v")).toBe(false);
+    expect(scope.isConst("d")).toBe(false);
+    expect(scope.isConst("missing")).toBe(false);
+  });
+
+  it("isConst inherits from parent scopes", () => {
+    const parent = new Scope("function:foo");
+    parent.declare("c", numberType, true);
+    const child = parent.child();
+    expect(child.isConst("c")).toBe(true);
+  });
+
 });

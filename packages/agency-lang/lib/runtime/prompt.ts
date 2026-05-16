@@ -609,7 +609,7 @@ export async function runPrompt(args: {
           scopeName: checkpointInfo?.scopeName ?? "",
           stepPath: checkpointInfo?.stepPath ?? "",
         });
-        const cp = ctx.checkpoints.get(cpId);
+        const cp = ctx.checkpoints.get(cpId)!;
         for (const intr of interrupts) {
           intr.checkpoint = cp;
           intr.checkpointId = cpId;
@@ -618,11 +618,7 @@ export async function runPrompt(args: {
         ctx.statelogClient.checkpointCreated({
           checkpointId: cpId,
           reason: "interrupt",
-          sourceLocation: checkpointInfo ? {
-            moduleId: checkpointInfo.moduleId ?? "",
-            scopeName: checkpointInfo.scopeName ?? "",
-            stepPath: checkpointInfo.stepPath ?? "",
-          } : undefined,
+          sourceLocation: { moduleId: cp.moduleId, scopeName: cp.scopeName, stepPath: cp.stepPath },
         });
         ctx.statelogClient.debug(`Tool call interrupted execution.`, {
           messages: messages.getMessages(),

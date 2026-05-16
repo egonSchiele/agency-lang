@@ -679,16 +679,12 @@ export class Runner {
         scopeName: this.scopeName,
         stepPath: this.stepPath(id),
       });
+      const cp = this.ctx.checkpoints.get(cpId)!;
       this.ctx.statelogClient.checkpointCreated({
         checkpointId: cpId,
         reason: "fork",
-        sourceLocation: {
-          moduleId: this.moduleId,
-          scopeName: this.scopeName,
-          stepPath: this.stepPath(id),
-        },
+        sourceLocation: { moduleId: cp.moduleId, scopeName: cp.scopeName, stepPath: cp.stepPath },
       });
-      const cp = this.ctx.checkpoints.get(cpId);
       for (const intr of interrupts) {
         intr.checkpoint = cp;
         intr.checkpointId = cpId;
@@ -781,16 +777,12 @@ export class Runner {
         scopeName: this.scopeName,
         stepPath: this.stepPath(id),
       });
+      const cp = this.ctx.checkpoints.get(cpId)!;
       this.ctx.statelogClient.checkpointCreated({
         checkpointId: cpId,
         reason: "race",
-        sourceLocation: {
-          moduleId: this.moduleId,
-          scopeName: this.scopeName,
-          stepPath: this.stepPath(id),
-        },
+        sourceLocation: { moduleId: cp.moduleId, scopeName: cp.scopeName, stepPath: cp.stepPath },
       });
-      const cp = this.ctx.checkpoints.get(cpId);
       for (const intr of winnerValue) {
         intr.checkpoint = cp;
         intr.checkpointId = cpId;
@@ -855,16 +847,12 @@ export class Runner {
         scopeName: this.scopeName,
         stepPath: this.stepPath(id),
       });
+      const cp = this.ctx.checkpoints.get(cpId)!;
       this.ctx.statelogClient.checkpointCreated({
         checkpointId: cpId,
         reason: "race",
-        sourceLocation: {
-          moduleId: this.moduleId,
-          scopeName: this.scopeName,
-          stepPath: this.stepPath(id),
-        },
+        sourceLocation: { moduleId: cp.moduleId, scopeName: cp.scopeName, stepPath: cp.stepPath },
       });
-      const cp = this.ctx.checkpoints.get(cpId);
       for (const intr of value) {
         intr.checkpoint = cp;
         intr.checkpointId = cpId;

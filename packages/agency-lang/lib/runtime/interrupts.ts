@@ -72,13 +72,14 @@ export function interrupt<T = any>(opts: {
   data: T;
   origin: string;
   runId: string;
+  interruptId?: string;
 }): Interrupt<T> {
   return {
     type: "interrupt",
     kind: opts.kind,
     message: opts.message,
     origin: opts.origin,
-    interruptId: nanoid(),
+    interruptId: opts.interruptId || nanoid(),
     data: opts.data,
     runId: opts.runId,
   };
@@ -228,7 +229,7 @@ export async function interruptWithHandlers<T = any>(
       outcome: "propagated",
       resolvedBy: "handler",
     });
-    return [interrupt({ kind, message, data, origin, runId: ctx.getRunId() })];
+    return [interrupt({ kind, message, data, origin, runId: ctx.getRunId(), interruptId })];
   }
   if (hasApproval) {
     ctx.statelogClient.interruptResolved({
@@ -244,7 +245,7 @@ export async function interruptWithHandlers<T = any>(
     outcome: "propagated",
     resolvedBy: "user",
   });
-  return [interrupt({ kind, message, data, origin, runId: ctx.getRunId() })];
+  return [interrupt({ kind, message, data, origin, runId: ctx.getRunId(), interruptId })];
 }
 
 export async function respondToInterrupts(args: {

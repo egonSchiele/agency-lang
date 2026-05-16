@@ -125,21 +125,24 @@ export class SimpleMachine<T> {
       this.statelogClient?.startSpan("nodeExecution");
       this.statelogClient?.enterNode({ nodeId: currentId, data });
       const startTime = performance.now();
-      const result = await this.runAndValidate(nodeFunc, currentId, data);
-      const endTime = performance.now();
       let nextNode;
-      if (result instanceof GoToNode) {
-        nextNode = result.to;
-        data = result.data;
-      } else {
-        data = result;
+      try {
+        const result = await this.runAndValidate(nodeFunc, currentId, data);
+        const endTime = performance.now();
+        if (result instanceof GoToNode) {
+          nextNode = result.to;
+          data = result.data;
+        } else {
+          data = result;
+        }
+        this.statelogClient?.exitNode({
+          nodeId: currentId,
+          data,
+          timeTaken: endTime - startTime,
+        });
+      } finally {
+        this.statelogClient?.endSpan();
       }
-      this.statelogClient?.exitNode({
-        nodeId: currentId,
-        data,
-        timeTaken: endTime - startTime,
-      });
-      this.statelogClient?.endSpan();
       this.debug(`Completed node: ${color.green(currentId)}`, data);
 
       if (this.config.hooks?.afterNode) {

@@ -592,7 +592,7 @@ export class StatelogClient {
 
   // === Post (wire format) ===
 
-  async post(body: Record<string, any>): Promise<void> {
+  private async post(body: Record<string, any>): Promise<void> {
     if (!this.host) {
       return;
     }

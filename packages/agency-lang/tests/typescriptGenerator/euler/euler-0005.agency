@@ -1,0 +1,25 @@
+// Project Euler Problem 5: Smallest Multiple
+// Find the smallest positive number evenly divisible by all numbers from 1 to 20.
+
+def gcd(a: number, b: number): number {
+  let x = a
+  let y = b
+  while (y != 0) {
+    let temp = y
+    y = x % y
+    x = temp
+  }
+  return x
+}
+
+def lcm(a: number, b: number): number {
+  return (a / gcd(a, b)) * b
+}
+
+node main() {
+  let result = 1
+  for (i in range(2, 21)) {
+    result = lcm(result, i)
+  }
+  return result
+}

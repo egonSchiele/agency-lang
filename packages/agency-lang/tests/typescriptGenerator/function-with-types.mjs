@@ -198,6 +198,9 @@ __stack.locals.result = await runPrompt({
         ctx: __ctx,
         prompt: `add ${__stack.args.x} and ${__stack.args.y}`,
         messages: __threads.getOrCreateActive(),
+        responseFormat: z.object({
+          response: z.number()
+        }),
         clientConfig: {},
         maxToolCallRounds: 10,
         stateStack: __stateStack,

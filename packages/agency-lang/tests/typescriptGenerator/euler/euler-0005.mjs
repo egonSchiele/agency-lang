@@ -55,7 +55,7 @@ const __globalCtx = new RuntimeContext({
   },
   dirname: __dirname,
   traceConfig: {
-    program: "getContext.agency"
+    program: "euler-0005.agency"
   }
 });
 const graph = __globalCtx.graph;
@@ -127,19 +127,266 @@ function registerTools(tools: any[]) {
 }
 
 async function __initializeGlobals(__ctx) {
-  __ctx.globals.markInitialized("getContext.agency")
+  __ctx.globals.markInitialized("euler-0005.agency")
 }
 __toolRegistry["readSkill"] = __AgencyFunction.create({
   name: "readSkill",
-  module: "getContext.agency",
+  module: "euler-0005.agency",
   fn: readSkill,
   params: __readSkillToolParams.map(p => ({ name: p, hasDefault: false, defaultValue: undefined, variadic: false })),
   toolDefinition: __readSkillTool,
 }, __toolRegistry);
 __functionRefReviver.registry = __toolRegistry;
-//  getContext() is a builder macro: the typescriptBuilder rewrites it
-//  to the in-scope `__ctx` identifier. Confirm the lowering produces a
-//  bare identifier (no __call dispatch, no await).
+//  Project Euler Problem 5: Smallest Multiple
+//  Find the smallest positive number evenly divisible by all numbers from 1 to 20.
+async function __gcd_impl(a: number, b: number, __state: InternalFunctionState | undefined = undefined) {
+  const __setupData = setupFunction({
+    state: __state
+  });
+  // __state will be undefined if this function is being called as a tool by an llm
+  const __stateStack = __setupData.stateStack;
+const __stack = __setupData.stack;
+const __step = __setupData.step;
+const __self = __setupData.self;
+const __threads = __setupData.threads;
+const __ctx = __state?.ctx || __globalCtx;
+const statelogClient = __ctx.statelogClient;
+const __graph = __ctx.graph;
+let __forked;
+let __functionCompleted = false;
+  if (!__ctx.globals.isInitialized("euler-0005.agency")) {
+    await __initializeGlobals(__ctx)
+  }
+  let __funcStartTime: number = performance.now();
+  await callHook({
+    callbacks: __ctx.callbacks,
+    name: "onFunctionStart",
+    data: {
+      functionName: "gcd",
+      args: {
+        a: a,
+        b: b
+      },
+      isBuiltin: false,
+      moduleId: "euler-0005.agency"
+    }
+  })
+  __stack.args["a"] = a;
+  __stack.args["b"] = b;
+  __self.__retryable = __self.__retryable ?? true;
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "euler-0005.agency", scopeName: "gcd" });
+  let __resultCheckpointId = -1;
+if (__ctx.stateStack.currentNodeId()) {
+  __resultCheckpointId = __ctx.checkpoints.createPinned(__stateStack, __ctx, { moduleId: "euler-0005.agency", scopeName: "gcd", stepPath: "", label: "result-entry" });
+}
+if (__ctx._pendingArgOverrides) {
+  const __overrides = __ctx._pendingArgOverrides;
+  __ctx._pendingArgOverrides = undefined;
+  if ("a" in __overrides) {
+    a = __overrides["a"];
+    __stack.args["a"] = a;
+  }
+  if ("b" in __overrides) {
+    b = __overrides["b"];
+    __stack.args["b"] = b;
+  }
+
+}
+
+  try {
+    await runner.step(0, async (runner) => {
+__stack.locals.x = __stack.args.a;
+    });
+    await runner.step(1, async (runner) => {
+__stack.locals.y = __stack.args.b;
+    });
+    await runner.whileLoop(2, () => __stack.locals.y !== 0, async (runner) => {
+await runner.step(0, async (runner) => {
+__stack.locals.temp = __stack.locals.y;
+      });
+await runner.step(1, async (runner) => {
+__stack.locals.y = __stack.locals.x % __stack.locals.y;
+      });
+await runner.step(2, async (runner) => {
+__stack.locals.x = __stack.locals.temp;
+      });
+    });
+    await runner.step(3, async (runner) => {
+__functionCompleted = true;
+runner.halt(__stack.locals.x)
+return;
+    });
+    if (runner.halted) { if (isFailure(runner.haltResult)) { runner.haltResult.retryable = runner.haltResult.retryable && __self.__retryable; } return runner.haltResult; }
+  } catch (__error) {
+    if (__error instanceof RestoreSignal) {
+  throw __error;
+}
+return failure(
+  __error instanceof Error ? __error.message : String(__error),
+  {
+    checkpoint: __ctx.getResultCheckpoint(),
+    retryable: __self.__retryable,
+    functionName: "gcd",
+    args: __stack.args,
+  }
+);
+
+  } finally {
+    __stateStack.pop()
+    if (__functionCompleted) {
+      await callHook({
+        callbacks: __ctx.callbacks,
+        name: "onFunctionEnd",
+        data: {
+          functionName: "gcd",
+          timeTaken: performance.now() - __funcStartTime
+        }
+      })
+    }
+  }
+}
+const gcd = __AgencyFunction.create({
+  name: "gcd",
+  module: "euler-0005.agency",
+  fn: __gcd_impl,
+  params: [{
+    name: "a",
+    hasDefault: false,
+    defaultValue: undefined,
+    variadic: false
+  }, {
+    name: "b",
+    hasDefault: false,
+    defaultValue: undefined,
+    variadic: false
+  }],
+  toolDefinition: {
+    name: "gcd",
+    description: `No description provided.`,
+    schema: z.object({"a": z.number(), "b": z.number(), })
+  },
+  safe: false,
+  exported: false
+}, __toolRegistry);
+async function __lcm_impl(a: number, b: number, __state: InternalFunctionState | undefined = undefined) {
+  const __setupData = setupFunction({
+    state: __state
+  });
+  // __state will be undefined if this function is being called as a tool by an llm
+  const __stateStack = __setupData.stateStack;
+const __stack = __setupData.stack;
+const __step = __setupData.step;
+const __self = __setupData.self;
+const __threads = __setupData.threads;
+const __ctx = __state?.ctx || __globalCtx;
+const statelogClient = __ctx.statelogClient;
+const __graph = __ctx.graph;
+let __forked;
+let __functionCompleted = false;
+  if (!__ctx.globals.isInitialized("euler-0005.agency")) {
+    await __initializeGlobals(__ctx)
+  }
+  let __funcStartTime: number = performance.now();
+  await callHook({
+    callbacks: __ctx.callbacks,
+    name: "onFunctionStart",
+    data: {
+      functionName: "lcm",
+      args: {
+        a: a,
+        b: b
+      },
+      isBuiltin: false,
+      moduleId: "euler-0005.agency"
+    }
+  })
+  __stack.args["a"] = a;
+  __stack.args["b"] = b;
+  __self.__retryable = __self.__retryable ?? true;
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "euler-0005.agency", scopeName: "lcm" });
+  let __resultCheckpointId = -1;
+if (__ctx.stateStack.currentNodeId()) {
+  __resultCheckpointId = __ctx.checkpoints.createPinned(__stateStack, __ctx, { moduleId: "euler-0005.agency", scopeName: "lcm", stepPath: "", label: "result-entry" });
+}
+if (__ctx._pendingArgOverrides) {
+  const __overrides = __ctx._pendingArgOverrides;
+  __ctx._pendingArgOverrides = undefined;
+  if ("a" in __overrides) {
+    a = __overrides["a"];
+    __stack.args["a"] = a;
+  }
+  if ("b" in __overrides) {
+    b = __overrides["b"];
+    __stack.args["b"] = b;
+  }
+
+}
+
+  try {
+    await runner.step(0, async (runner) => {
+__functionCompleted = true;
+runner.halt(__stack.args.a / await __call(gcd, {
+        type: "positional",
+        args: [__stack.args.a, __stack.args.b]
+      }, {
+        ctx: __ctx,
+        threads: __threads,
+        stateStack: __stateStack
+      }) * __stack.args.b)
+return;
+    });
+    if (runner.halted) { if (isFailure(runner.haltResult)) { runner.haltResult.retryable = runner.haltResult.retryable && __self.__retryable; } return runner.haltResult; }
+  } catch (__error) {
+    if (__error instanceof RestoreSignal) {
+  throw __error;
+}
+return failure(
+  __error instanceof Error ? __error.message : String(__error),
+  {
+    checkpoint: __ctx.getResultCheckpoint(),
+    retryable: __self.__retryable,
+    functionName: "lcm",
+    args: __stack.args,
+  }
+);
+
+  } finally {
+    __stateStack.pop()
+    if (__functionCompleted) {
+      await callHook({
+        callbacks: __ctx.callbacks,
+        name: "onFunctionEnd",
+        data: {
+          functionName: "lcm",
+          timeTaken: performance.now() - __funcStartTime
+        }
+      })
+    }
+  }
+}
+const lcm = __AgencyFunction.create({
+  name: "lcm",
+  module: "euler-0005.agency",
+  fn: __lcm_impl,
+  params: [{
+    name: "a",
+    hasDefault: false,
+    defaultValue: undefined,
+    variadic: false
+  }, {
+    name: "b",
+    hasDefault: false,
+    defaultValue: undefined,
+    variadic: false
+  }],
+  toolDefinition: {
+    name: "lcm",
+    description: `No description provided.`,
+    schema: z.object({"a": z.number(), "b": z.number(), })
+  },
+  safe: false,
+  exported: false
+}, __toolRegistry);
 graph.node("main", async (__state: GraphState) => {
   const __setupData = setupNode({
     state: __state
@@ -161,23 +408,35 @@ let __functionCompleted = false;
       nodeName: "main"
     }
   })
-  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "getContext.agency", scopeName: "main" });
+  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "euler-0005.agency", scopeName: "main" });
   try {
     await runner.step(0, async (runner) => {
-__stack.locals.ctx = __ctx;
-if (hasInterrupts(__stack.locals.ctx)) {
-        await __ctx.pendingPromises.awaitAll()
-        runner.halt({
-          ...__state,
-          data: __stack.locals.ctx
-        })
-        return;
-      }
+__stack.locals.result = 1;
     });
-    await runner.step(1, async (runner) => {
+    await runner.loop(1, Array.from({length: 21 - 2}, (_, __i) => __i + 2), async (i, _, runner) => {
+await runner.step(0, async (runner) => {
+__stack.locals.result = await __call(lcm, {
+          type: "positional",
+          args: [__stack.locals.result, i]
+        }, {
+          ctx: __ctx,
+          threads: __threads,
+          stateStack: __stateStack
+        });
+if (hasInterrupts(__stack.locals.result)) {
+          await __ctx.pendingPromises.awaitAll()
+          runner.halt({
+            ...__state,
+            data: __stack.locals.result
+          })
+          return;
+        }
+      });
+    });
+    await runner.step(2, async (runner) => {
 runner.halt({
         messages: __threads,
-        data: __stack.locals.ctx
+        data: __stack.locals.result
       })
 return;
     });
@@ -230,4 +489,4 @@ if (__process.argv[1] === fileURLToPath(import.meta.url)) {
   }
 }
 export default graph
-export const __sourceMap = {"getContext.agency:main":{"0":{"line":4,"col":2},"1":{"line":5,"col":2}}};
+export const __sourceMap = {"euler-0005.agency:gcd":{"0":{"line":4,"col":2},"1":{"line":5,"col":2},"2":{"line":6,"col":2},"3":{"line":11,"col":2},"2.0":{"line":7,"col":4},"2.1":{"line":8,"col":4},"2.2":{"line":9,"col":4}},"euler-0005.agency:lcm":{"0":{"line":15,"col":2}},"euler-0005.agency:main":{"0":{"line":19,"col":2},"1":{"line":20,"col":2},"2":{"line":23,"col":2},"1.0":{"line":21,"col":4}}};

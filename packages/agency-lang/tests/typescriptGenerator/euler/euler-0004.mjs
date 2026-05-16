@@ -55,7 +55,7 @@ const __globalCtx = new RuntimeContext({
   },
   dirname: __dirname,
   traceConfig: {
-    program: "getContext.agency"
+    program: "euler-0004.agency"
   }
 });
 const graph = __globalCtx.graph;
@@ -127,19 +127,150 @@ function registerTools(tools: any[]) {
 }
 
 async function __initializeGlobals(__ctx) {
-  __ctx.globals.markInitialized("getContext.agency")
+  __ctx.globals.markInitialized("euler-0004.agency")
 }
 __toolRegistry["readSkill"] = __AgencyFunction.create({
   name: "readSkill",
-  module: "getContext.agency",
+  module: "euler-0004.agency",
   fn: readSkill,
   params: __readSkillToolParams.map(p => ({ name: p, hasDefault: false, defaultValue: undefined, variadic: false })),
   toolDefinition: __readSkillTool,
 }, __toolRegistry);
 __functionRefReviver.registry = __toolRegistry;
-//  getContext() is a builder macro: the typescriptBuilder rewrites it
-//  to the in-scope `__ctx` identifier. Confirm the lowering produces a
-//  bare identifier (no __call dispatch, no await).
+//  Project Euler Problem 4: Largest Palindrome Product
+//  Find the largest palindrome made from the product of two 3-digit numbers.
+async function __isPalindrome_impl(n: number, __state: InternalFunctionState | undefined = undefined) {
+  const __setupData = setupFunction({
+    state: __state
+  });
+  // __state will be undefined if this function is being called as a tool by an llm
+  const __stateStack = __setupData.stateStack;
+const __stack = __setupData.stack;
+const __step = __setupData.step;
+const __self = __setupData.self;
+const __threads = __setupData.threads;
+const __ctx = __state?.ctx || __globalCtx;
+const statelogClient = __ctx.statelogClient;
+const __graph = __ctx.graph;
+let __forked;
+let __functionCompleted = false;
+  if (!__ctx.globals.isInitialized("euler-0004.agency")) {
+    await __initializeGlobals(__ctx)
+  }
+  let __funcStartTime: number = performance.now();
+  await callHook({
+    callbacks: __ctx.callbacks,
+    name: "onFunctionStart",
+    data: {
+      functionName: "isPalindrome",
+      args: {
+        n: n
+      },
+      isBuiltin: false,
+      moduleId: "euler-0004.agency"
+    }
+  })
+  __stack.args["n"] = n;
+  __self.__retryable = __self.__retryable ?? true;
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "euler-0004.agency", scopeName: "isPalindrome" });
+  let __resultCheckpointId = -1;
+if (__ctx.stateStack.currentNodeId()) {
+  __resultCheckpointId = __ctx.checkpoints.createPinned(__stateStack, __ctx, { moduleId: "euler-0004.agency", scopeName: "isPalindrome", stepPath: "", label: "result-entry" });
+}
+if (__ctx._pendingArgOverrides) {
+  const __overrides = __ctx._pendingArgOverrides;
+  __ctx._pendingArgOverrides = undefined;
+  if ("n" in __overrides) {
+    n = __overrides["n"];
+    __stack.args["n"] = n;
+  }
+
+}
+
+  try {
+    await runner.step(0, async (runner) => {
+__stack.locals.s = `${__stack.args.n}`;
+    });
+    await runner.step(1, async (runner) => {
+__stack.locals.left = 0;
+    });
+    await runner.step(2, async (runner) => {
+__stack.locals.right = __stack.locals.s.length - 1;
+    });
+    await runner.whileLoop(3, () => __stack.locals.left < __stack.locals.right, async (runner) => {
+await runner.ifElse(0, [
+
+  {
+    condition: async () => __stack.locals.s[__stack.locals.left] !== __stack.locals.s[__stack.locals.right],
+    body: async (runner) => {
+await runner.step(0, async (runner) => {
+__functionCompleted = true;
+runner.halt(false)
+return;
+            });
+    },
+  },
+
+]);
+await runner.step(1, async (runner) => {
+__stack.locals.left = __stack.locals.left + 1;
+      });
+await runner.step(2, async (runner) => {
+__stack.locals.right = __stack.locals.right - 1;
+      });
+    });
+    await runner.step(4, async (runner) => {
+__functionCompleted = true;
+runner.halt(true)
+return;
+    });
+    if (runner.halted) { if (isFailure(runner.haltResult)) { runner.haltResult.retryable = runner.haltResult.retryable && __self.__retryable; } return runner.haltResult; }
+  } catch (__error) {
+    if (__error instanceof RestoreSignal) {
+  throw __error;
+}
+return failure(
+  __error instanceof Error ? __error.message : String(__error),
+  {
+    checkpoint: __ctx.getResultCheckpoint(),
+    retryable: __self.__retryable,
+    functionName: "isPalindrome",
+    args: __stack.args,
+  }
+);
+
+  } finally {
+    __stateStack.pop()
+    if (__functionCompleted) {
+      await callHook({
+        callbacks: __ctx.callbacks,
+        name: "onFunctionEnd",
+        data: {
+          functionName: "isPalindrome",
+          timeTaken: performance.now() - __funcStartTime
+        }
+      })
+    }
+  }
+}
+const isPalindrome = __AgencyFunction.create({
+  name: "isPalindrome",
+  module: "euler-0004.agency",
+  fn: __isPalindrome_impl,
+  params: [{
+    name: "n",
+    hasDefault: false,
+    defaultValue: undefined,
+    variadic: false
+  }],
+  toolDefinition: {
+    name: "isPalindrome",
+    description: `No description provided.`,
+    schema: z.object({"n": z.number(), })
+  },
+  safe: false,
+  exported: false
+}, __toolRegistry);
 graph.node("main", async (__state: GraphState) => {
   const __setupData = setupNode({
     state: __state
@@ -161,23 +292,53 @@ let __functionCompleted = false;
       nodeName: "main"
     }
   })
-  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "getContext.agency", scopeName: "main" });
+  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "euler-0004.agency", scopeName: "main" });
   try {
     await runner.step(0, async (runner) => {
-__stack.locals.ctx = __ctx;
-if (hasInterrupts(__stack.locals.ctx)) {
-        await __ctx.pendingPromises.awaitAll()
-        runner.halt({
-          ...__state,
-          data: __stack.locals.ctx
-        })
-        return;
-      }
+__stack.locals.largest = 0;
     });
     await runner.step(1, async (runner) => {
+__stack.locals.i = 999;
+    });
+    await runner.whileLoop(2, () => __stack.locals.i >= 100, async (runner) => {
+await runner.step(0, async (runner) => {
+__stack.locals.j = __stack.locals.i;
+      });
+await runner.whileLoop(1, () => __stack.locals.j >= 100, async (runner) => {
+await runner.step(0, async (runner) => {
+__stack.locals.product = __stack.locals.i * __stack.locals.j;
+        });
+await runner.ifElse(1, [
+
+  {
+    condition: async () => __stack.locals.product > __stack.locals.largest && await __call(isPalindrome, {
+              type: "positional",
+              args: [__stack.locals.product]
+            }, {
+              ctx: __ctx,
+              threads: __threads,
+              stateStack: __stateStack
+            }),
+    body: async (runner) => {
+await runner.step(0, async (runner) => {
+__stack.locals.largest = __stack.locals.product;
+              });
+    },
+  },
+
+]);
+await runner.step(2, async (runner) => {
+__stack.locals.j = __stack.locals.j - 1;
+        });
+      });
+await runner.step(2, async (runner) => {
+__stack.locals.i = __stack.locals.i - 1;
+      });
+    });
+    await runner.step(3, async (runner) => {
 runner.halt({
         messages: __threads,
-        data: __stack.locals.ctx
+        data: __stack.locals.largest
       })
 return;
     });
@@ -230,4 +391,4 @@ if (__process.argv[1] === fileURLToPath(import.meta.url)) {
   }
 }
 export default graph
-export const __sourceMap = {"getContext.agency:main":{"0":{"line":4,"col":2},"1":{"line":5,"col":2}}};
+export const __sourceMap = {"euler-0004.agency:isPalindrome":{"0":{"line":4,"col":2},"1":{"line":5,"col":2},"2":{"line":6,"col":2},"3":{"line":7,"col":2},"4":{"line":14,"col":2},"3.0.0":{"line":9,"col":6},"3.0":{"line":8,"col":4},"3.1":{"line":11,"col":4},"3.2":{"line":12,"col":4}},"euler-0004.agency:main":{"0":{"line":18,"col":2},"1":{"line":19,"col":2},"2":{"line":20,"col":2},"3":{"line":31,"col":2},"2.0":{"line":21,"col":4},"2.1.0":{"line":23,"col":6},"2.1.1.0":{"line":25,"col":8},"2.1.1":{"line":24,"col":6},"2.1.2":{"line":27,"col":6},"2.1":{"line":22,"col":4},"2.2":{"line":29,"col":4}}};

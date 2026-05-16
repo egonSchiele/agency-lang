@@ -1,0 +1,17 @@
+// Project Euler Problem 2: Even Fibonacci Numbers
+// Find the sum of the even-valued Fibonacci terms not exceeding four million.
+
+node main() {
+  let a = 1
+  let b = 2
+  let sum = 0
+  while (a <= 4000000) {
+    if (a % 2 == 0) {
+      sum = sum + a
+    }
+    let c = a + b
+    a = b
+    b = c
+  }
+  return sum
+}

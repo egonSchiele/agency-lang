@@ -360,7 +360,7 @@ AGENCY_USE_TEST_LLM_PROVIDER=1 pnpm run test:agency-js
 
 ### On every push and PR
 
-**Unit tests** (`pnpm test:run`) — vitest tests for parsers, generators, runtime, and other TypeScript internals. Run on both Node 22 and Node 23.
+**Unit tests** (`pnpm test:run`) — vitest tests for parsers, generators, runtime, typechecker, and other TypeScript internals. Run on both Node 22 and Node 23.
 
 **Structural lint** (`pnpm run lint:structure`) — eslint with Agency-specific rules (max function length, no dynamic imports, no Map/Set, etc.). Run on PRs only.
 

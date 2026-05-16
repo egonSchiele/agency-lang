@@ -1,71 +1,8 @@
 import { describe, it, expect } from "vitest";
 import { parseAgency } from "../parser.js";
 import { TypescriptPreprocessor } from "./typescriptPreprocessor.js";
-import fs from "fs";
+import { discoverFixturePairs } from "../../tests/fixtureDiscovery.js";
 import path from "path";
-
-/**
- * Interface representing a test fixture pair (.agency and .json files)
- */
-interface FixturePair {
-  name: string; // e.g., "simple", "subdir/nested"
-  agencyPath: string; // absolute path to .agency file
-  jsonPath: string; // absolute path to .json file
-  agencyContent: string; // pre-read Agency source
-  expectedJSON: string; // pre-read expected JSON
-}
-
-/**
- * Recursively discovers all .agency/.json fixture pairs in a directory
- */
-function discoverFixtures(fixtureDir: string): FixturePair[] {
-  const fixtures: FixturePair[] = [];
-
-  function scanDirectory(dir: string, relativePath: string = "") {
-    const entries = fs.readdirSync(dir, { withFileTypes: true });
-
-    for (const entry of entries) {
-      const fullPath = path.join(dir, entry.name);
-      const relPath = relativePath
-        ? `${relativePath}/${entry.name}`
-        : entry.name;
-
-      if (entry.isDirectory()) {
-        scanDirectory(fullPath, relPath);
-      } else if (entry.isFile() && entry.name.endsWith(".agency")) {
-        const baseName = entry.name.replace(".agency", "");
-        const jsonPath = path.join(dir, `${baseName}.json`);
-
-        if (fs.existsSync(jsonPath)) {
-          const nameWithoutExt = relativePath
-            ? `${relativePath}/${baseName}`
-            : baseName;
-
-          try {
-            fixtures.push({
-              name: nameWithoutExt,
-              agencyPath: fullPath,
-              jsonPath: jsonPath,
-              agencyContent: fs.readFileSync(fullPath, "utf-8"),
-              expectedJSON: fs.readFileSync(jsonPath, "utf-8"),
-            });
-          } catch (error) {
-            console.error(
-              `Cannot read fixture ${fullPath}: ${
-                error instanceof Error ? error.message : String(error)
-              }`
-            );
-          }
-        } else {
-          console.warn(`Warning: No corresponding .json file for ${fullPath}`);
-        }
-      }
-    }
-  }
-
-  scanDirectory(fixtureDir);
-  return fixtures.sort((a, b) => a.name.localeCompare(b.name));
-}
 
 const FIXTURES_DIR = path.resolve(
   __dirname,
@@ -73,7 +10,7 @@ const FIXTURES_DIR = path.resolve(
 );
 
 describe("TypeScript Preprocessor Integration Tests", () => {
-  const fixtures = discoverFixtures(FIXTURES_DIR);
+  const fixtures = discoverFixturePairs(FIXTURES_DIR, ".json");
 
   // Guard against no fixtures found
   if (fixtures.length === 0) {
@@ -84,7 +21,7 @@ describe("TypeScript Preprocessor Integration Tests", () => {
 
   describe.each(fixtures)(
     "Fixture: $name",
-    ({ name, agencyPath, jsonPath, agencyContent, expectedJSON }) => {
+    ({ name, filePath, agencyContent, companionContent }) => {
       it("should produce correct preprocessed AST", () => {
         // 1. Parse Agency
         const parseResult = parseAgency(agencyContent, {}, false);
@@ -93,7 +30,7 @@ describe("TypeScript Preprocessor Integration Tests", () => {
         if (!parseResult.success) {
           const errorMessage = [
             `Failed to parse Agency fixture: ${name}`,
-            `File: ${agencyPath}`,
+            `File: ${filePath}`,
             `Error: ${parseResult.message}`,
             ``,
             `Agency Content:`,
@@ -110,7 +47,7 @@ describe("TypeScript Preprocessor Integration Tests", () => {
         } catch (error) {
           const errorMessage = [
             `Failed to preprocess fixture: ${name}`,
-            `File: ${agencyPath}`,
+            `File: ${filePath}`,
             `Error: ${error instanceof Error ? error.message : String(error)}`,
             ``,
             `Parsed AST:`,
@@ -122,7 +59,7 @@ describe("TypeScript Preprocessor Integration Tests", () => {
         // 4. Serialize and compare
         const generatedJSON = JSON.stringify(preprocessedAST, null, 2);
         const normalizedExpected = JSON.stringify(
-          JSON.parse(expectedJSON),
+          JSON.parse(companionContent),
           null,
           2
         );

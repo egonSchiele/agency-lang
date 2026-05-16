@@ -2,7 +2,7 @@ def add(x: number, y: number): number {
   """
   Adds two numbers together
   """
-  const result = llm("add ${x} and ${y}")
+  const result: number = llm("add ${x} and ${y}")
   return result
 }
 

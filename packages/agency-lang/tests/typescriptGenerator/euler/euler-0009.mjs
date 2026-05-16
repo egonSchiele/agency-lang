@@ -55,7 +55,7 @@ const __globalCtx = new RuntimeContext({
   },
   dirname: __dirname,
   traceConfig: {
-    program: "getContext.agency"
+    program: "euler-0009.agency"
   }
 });
 const graph = __globalCtx.graph;
@@ -127,19 +127,18 @@ function registerTools(tools: any[]) {
 }
 
 async function __initializeGlobals(__ctx) {
-  __ctx.globals.markInitialized("getContext.agency")
+  __ctx.globals.markInitialized("euler-0009.agency")
 }
 __toolRegistry["readSkill"] = __AgencyFunction.create({
   name: "readSkill",
-  module: "getContext.agency",
+  module: "euler-0009.agency",
   fn: readSkill,
   params: __readSkillToolParams.map(p => ({ name: p, hasDefault: false, defaultValue: undefined, variadic: false })),
   toolDefinition: __readSkillTool,
 }, __toolRegistry);
 __functionRefReviver.registry = __toolRegistry;
-//  getContext() is a builder macro: the typescriptBuilder rewrites it
-//  to the in-scope `__ctx` identifier. Confirm the lowering produces a
-//  bare identifier (no __call dispatch, no await).
+//  Project Euler Problem 9: Special Pythagorean Triplet
+//  Find the product abc where a + b + c = 1000 and a^2 + b^2 = c^2.
 graph.node("main", async (__state: GraphState) => {
   const __setupData = setupNode({
     state: __state
@@ -161,23 +160,47 @@ let __functionCompleted = false;
       nodeName: "main"
     }
   })
-  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "getContext.agency", scopeName: "main" });
+  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "euler-0009.agency", scopeName: "main" });
   try {
     await runner.step(0, async (runner) => {
-__stack.locals.ctx = __ctx;
-if (hasInterrupts(__stack.locals.ctx)) {
-        await __ctx.pendingPromises.awaitAll()
-        runner.halt({
-          ...__state,
-          data: __stack.locals.ctx
-        })
-        return;
-      }
+__stack.locals.a = 1;
     });
-    await runner.step(1, async (runner) => {
+    await runner.whileLoop(1, () => __stack.locals.a < 1000, async (runner) => {
+await runner.step(0, async (runner) => {
+__stack.locals.b = __stack.locals.a + 1;
+      });
+await runner.whileLoop(1, () => __stack.locals.b < 1000 - __stack.locals.a, async (runner) => {
+await runner.step(0, async (runner) => {
+__stack.locals.c = 1000 - __stack.locals.a - __stack.locals.b;
+        });
+await runner.ifElse(1, [
+
+  {
+    condition: async () => __stack.locals.a * __stack.locals.a + __stack.locals.b * __stack.locals.b === __stack.locals.c * __stack.locals.c,
+    body: async (runner) => {
+await runner.step(0, async (runner) => {
+runner.halt({
+                  messages: __threads,
+                  data: __stack.locals.a * __stack.locals.b * __stack.locals.c
+                })
+return;
+              });
+    },
+  },
+
+]);
+await runner.step(2, async (runner) => {
+__stack.locals.b = __stack.locals.b + 1;
+        });
+      });
+await runner.step(2, async (runner) => {
+__stack.locals.a = __stack.locals.a + 1;
+      });
+    });
+    await runner.step(2, async (runner) => {
 runner.halt({
         messages: __threads,
-        data: __stack.locals.ctx
+        data: 0
       })
 return;
     });
@@ -230,4 +253,4 @@ if (__process.argv[1] === fileURLToPath(import.meta.url)) {
   }
 }
 export default graph
-export const __sourceMap = {"getContext.agency:main":{"0":{"line":4,"col":2},"1":{"line":5,"col":2}}};
+export const __sourceMap = {"euler-0009.agency:main":{"0":{"line":4,"col":2},"1":{"line":5,"col":2},"2":{"line":16,"col":2},"1.0":{"line":6,"col":4},"1.1.0":{"line":8,"col":6},"1.1.1.0":{"line":10,"col":8},"1.1.1":{"line":9,"col":6},"1.1.2":{"line":12,"col":6},"1.1":{"line":7,"col":4},"1.2":{"line":14,"col":4}}};

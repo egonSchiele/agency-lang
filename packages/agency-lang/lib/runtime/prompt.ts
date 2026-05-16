@@ -454,11 +454,13 @@ export async function runPrompt(args: {
         try { // try/finally for toolExecution span
         ctx.enterToolCall();
         try {
+          const toolThreads = new ThreadStore();
+          toolThreads.setStatelogClient(ctx.statelogClient);
           result = await handler.invoke(
             { type: "named", positionalArgs: [], namedArgs },
             {
               ctx,
-              threads: new ThreadStore(),
+              threads: toolThreads,
               stateStack: branchStack,
             },
           );

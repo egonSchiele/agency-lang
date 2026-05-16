@@ -638,10 +638,14 @@ export class Runner {
     stateStack: StateStack,
     forkId: string,
   ): Promise<any> {
+    const branchStartTimes: number[] = [];
+    const branchEndTimes: number[] = [];
     const promises = items.map((item, i) => {
       const branchKey = this.forkBranchKey(id, i);
       const existing = this.frame.getOrCreateBranch(branchKey);
       if (existing.result !== undefined) {
+        branchStartTimes[i] = 0;
+        branchEndTimes[i] = 0;
         return Promise.resolve(existing.result.result);
       }
       // Each fork branch gets its own AbortController. For fork-all this is
@@ -656,9 +660,10 @@ export class Runner {
           ? AbortSignal.any([parentSignal, existing.abortController.signal])
           : existing.abortController.signal;
       }
-      const branchStart = performance.now();
+      branchStartTimes[i] = performance.now();
       this.ctx.statelogClient.enterFork();
       return blockFn(item, i, existing.stack).finally(() => {
+        branchEndTimes[i] = performance.now();
         this.ctx.statelogClient.exitFork();
       });
     });
@@ -669,12 +674,13 @@ export class Runner {
     for (let i = 0; i < settled.length; i++) {
       const s = settled[i];
       const branchKey = this.forkBranchKey(id, i);
+      const branchTime = (branchEndTimes[i] || 0) - (branchStartTimes[i] || 0);
       if (s.status === "rejected") {
         this.ctx.statelogClient.forkBranchEnd({
           forkId,
           branchIndex: i,
           outcome: "failure",
-          timeTaken: 0,
+          timeTaken: branchTime,
         });
         throw s.reason;
       }
@@ -683,7 +689,7 @@ export class Runner {
           forkId,
           branchIndex: i,
           outcome: "interrupted",
-          timeTaken: 0,
+          timeTaken: branchTime,
         });
         interrupts.push(...s.value);
         this.frame.setInterruptOnBranch(
@@ -697,7 +703,7 @@ export class Runner {
           forkId,
           branchIndex: i,
           outcome: "success",
-          timeTaken: 0,
+          timeTaken: branchTime,
         });
         this.frame.setResultOnBranch(branchKey, s.value);
       }
@@ -742,6 +748,7 @@ export class Runner {
   ): Promise<any> {
     // Build the per-branch promises, each tagged with its index so we know
     // who won the race.
+    const raceStart = performance.now();
     const taggedPromises: Promise<{ index: number; value: any }>[] = items.map(
       (item, i) => {
         const branchKey = this.forkBranchKey(id, i);
@@ -777,6 +784,7 @@ export class Runner {
     // Promise.race resolves with whichever finishes first.
     const { index: winnerIndex, value: winnerValue } =
       await Promise.race(taggedPromises);
+    const winnerTime = performance.now() - raceStart;
 
     // Abort the losing branches so any in-flight work (LLM calls, tool calls)
     // can stop. Note: synchronous code that has already reached an
@@ -791,14 +799,14 @@ export class Runner {
         forkId,
         branchIndex: i,
         outcome: "aborted",
-        timeTaken: 0,
+        timeTaken: winnerTime, // losers ran at least this long before being aborted
       });
     }
     this.ctx.statelogClient.forkBranchEnd({
       forkId,
       branchIndex: winnerIndex,
       outcome: hasInterrupts(winnerValue) ? "interrupted" : "success",
-      timeTaken: 0,
+      timeTaken: winnerTime,
     });
 
     // Record the winner so a resume on the same race step replays only this

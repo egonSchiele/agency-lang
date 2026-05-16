@@ -3621,15 +3621,14 @@ export class TypeScriptBuilder {
       if (cfg.log.metadata.environment) {
         metaFields.environment = ts.str(cfg.log.metadata.environment);
       }
+      if (cfg.log.metadata.userId) {
+        metaFields.userId = ts.str(cfg.log.metadata.userId);
+      }
       if (cfg.log.metadata.agentVersion) {
         metaFields.agentVersion = ts.str(cfg.log.metadata.agentVersion);
       }
       if (cfg.log.metadata.custom) {
-        const customFields: Record<string, TsNode> = {};
-        for (const [k, v] of Object.entries(cfg.log.metadata.custom)) {
-          customFields[k] = ts.str(v);
-        }
-        metaFields.custom = ts.obj(customFields);
+        metaFields.custom = ts.raw(JSON.stringify(cfg.log.metadata.custom));
       }
       statelogFields.metadata = ts.obj(metaFields);
     }

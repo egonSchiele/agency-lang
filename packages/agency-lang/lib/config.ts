@@ -86,6 +86,7 @@ export interface AgencyConfig {
     metadata: {
       tags?: string[];
       environment?: string;
+      userId?: string;
       agentVersion?: string;
       custom?: Record<string, string>;
     };
@@ -251,6 +252,7 @@ export const AgencyConfigSchema = z
           .object({
             tags: z.array(z.string()),
             environment: z.string(),
+            userId: z.string(),
             agentVersion: z.string(),
             custom: z.record(z.string(), z.string()),
           })

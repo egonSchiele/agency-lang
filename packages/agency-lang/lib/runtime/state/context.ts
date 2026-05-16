@@ -243,9 +243,6 @@ export class RuntimeContext<T> {
       ...this.statelogConfig,
       traceId: runId,
     });
-    // Share the per-run statelogClient with the graph so node-level events
-    // (enterNode/exitNode/spans) use the same trace ID and span stack.
-    execCtx.graph.setStatelogClient(execCtx.statelogClient);
     execCtx.coverageCollector = this.coverageCollector;
 
     // Memory layer: per-execCtx MemoryManager backed by the shared store.

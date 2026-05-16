@@ -170,7 +170,7 @@ export async function runNode({
             ctx: execCtx,
             isResume,
           },
-          { onNodeEnter: (id) => execCtx.stateStack.nodesTraversed.push(id) },
+          { onNodeEnter: (id) => execCtx.stateStack.nodesTraversed.push(id), statelogClient: execCtx.statelogClient },
         );
         await execCtx.pendingPromises.awaitAll();
         const returnObject = createReturnObject({

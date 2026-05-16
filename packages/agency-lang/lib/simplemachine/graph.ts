@@ -46,9 +46,6 @@ export class SimpleMachine<T> {
     }
   }
 
-  setStatelogClient(client: StatelogClient): void {
-    this.statelogClient = client;
-  }
 
   node(id: string, func: (data: T) => Promise<T | GoToNode<T>>): void {
     this.nodes[id] = func;
@@ -89,14 +86,15 @@ export class SimpleMachine<T> {
     //this.statelogClient?.debug(message, data || {});
   }
 
-  async run(startId: string, input: T, options?: { onNodeEnter?: (id: string) => void }): Promise<T> {
+  async run(startId: string, input: T, options?: { onNodeEnter?: (id: string) => void; statelogClient?: StatelogClient }): Promise<T> {
+    const client = options?.statelogClient ?? this.statelogClient;
     const jsonEdges: Record<string, JSONEdge> = {};
     for (const from in this.edges) {
       jsonEdges[from] = edgeToJSON(
         this.edges[from as keyof typeof this.edges]!,
       );
     }
-    this.statelogClient?.graph({
+    client?.graph({
       nodes: Object.keys(this.nodes),
       edges: jsonEdges,
       startNode: startId,
@@ -119,7 +117,7 @@ export class SimpleMachine<T> {
         const startTime = performance.now();
         data = await this.config.hooks!.beforeNode!(currentId, data);
         const endTime = performance.now();
-        this.statelogClient?.beforeHook({
+        client?.beforeHook({
           nodeId: currentId,
           startData,
           endData: data,
@@ -127,8 +125,8 @@ export class SimpleMachine<T> {
         });
       }
       this.debug(`Executing node: ${color.green(currentId)}`, data);
-      this.statelogClient?.startSpan("nodeExecution");
-      this.statelogClient?.enterNode({ nodeId: currentId, data });
+      client?.startSpan("nodeExecution");
+      client?.enterNode({ nodeId: currentId, data });
       const startTime = performance.now();
       let nextNode;
       try {
@@ -140,13 +138,13 @@ export class SimpleMachine<T> {
         } else {
           data = result;
         }
-        this.statelogClient?.exitNode({
+        client?.exitNode({
           nodeId: currentId,
           data,
           timeTaken: endTime - startTime,
         });
       } finally {
-        this.statelogClient?.endSpan();
+        client?.endSpan();
       }
       this.debug(`Completed node: ${color.green(currentId)}`, data);
 
@@ -156,7 +154,7 @@ export class SimpleMachine<T> {
         const startTime = performance.now();
         data = await this.config.hooks!.afterNode!(currentId, data);
         const endTime = performance.now();
-        this.statelogClient?.afterHook({
+        client?.afterHook({
           nodeId: currentId,
           startData,
           endData: data,
@@ -175,7 +173,7 @@ export class SimpleMachine<T> {
             `${currentId} tried to go to ${nextNode}, but did not specify a conditional edge to it. Use graph.conditionalEdge("${currentId}", ["${nextNode}"]) to define the edge.`,
           );
         }
-        this.statelogClient?.followEdge({
+        client?.followEdge({
           fromNodeId: currentId,
           toNodeId: nextNode as string,
           isConditionalEdge: false,
@@ -189,7 +187,7 @@ export class SimpleMachine<T> {
         continue;
       }
       if (isRegularEdge(edge)) {
-        this.statelogClient?.followEdge({
+        client?.followEdge({
           fromNodeId: currentId,
           toNodeId: edge.to,
           isConditionalEdge: false,
@@ -200,7 +198,7 @@ export class SimpleMachine<T> {
       } else {
         if (edge.condition) {
           const nextId = await edge.condition(data);
-          this.statelogClient?.followEdge({
+          client?.followEdge({
             fromNodeId: currentId,
             toNodeId: nextId,
             isConditionalEdge: true,

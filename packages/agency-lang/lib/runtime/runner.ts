@@ -781,10 +781,22 @@ export class Runner {
       },
     );
 
-    // Promise.race resolves with whichever finishes first.
-    const { index: winnerIndex, value: winnerValue } =
-      await Promise.race(taggedPromises);
-    const winnerTime = performance.now() - raceStart;
+    // Promise.race resolves/rejects with whichever settles first.
+    let winnerIndex: number;
+    let winnerValue: any;
+    let winnerTime: number;
+    try {
+      const winner = await Promise.race(taggedPromises);
+      winnerIndex = winner.index;
+      winnerValue = winner.value;
+      winnerTime = performance.now() - raceStart;
+    } catch (err) {
+      // A branch rejected first — emit failure and rethrow.
+      // We don't know which branch index it was (Promise.race doesn't tell us),
+      // so we can't emit a precise forkBranchEnd. Rethrow to let the outer
+      // finally handle forkEnd/exitFork cleanup.
+      throw err;
+    }
 
     // Abort the losing branches so any in-flight work (LLM calls, tool calls)
     // can stop. Note: synchronous code that has already reached an

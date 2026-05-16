@@ -223,6 +223,11 @@ export async function interruptWithHandlers<T = any>(
   }
 
   // Normal mode (non-IPC)
+  // Note: checkpointCreated for these interrupts is emitted by the generated
+  // interrupt template code, not here. This is a known gap — non-tool
+  // interrupts will have interruptThrown but no matching checkpointCreated
+  // from the runtime. A future improvement could add checkpoint events to
+  // the generated templates.
   if (hasPropagation) {
     const intr = interrupt({ kind, message, data, origin, runId: ctx.getRunId(), interruptId });
     ctx.statelogClient.interruptThrown({
@@ -319,7 +324,7 @@ export async function respondToInterrupts(args: {
             ctx: execCtx,
             isResume: true,
           },
-          { onNodeEnter: (id) => execCtx.stateStack.nodesTraversed.push(id) },
+          { onNodeEnter: (id) => execCtx.stateStack.nodesTraversed.push(id), statelogClient: execCtx.statelogClient },
         );
         await execCtx.pendingPromises.awaitAll();
         const returnObject = createReturnObject({

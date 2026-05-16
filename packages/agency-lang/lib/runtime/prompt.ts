@@ -548,14 +548,9 @@ export async function runPrompt(args: {
         }
 
         // Check for interrupts
+        // Note: interruptThrown is already emitted by interruptWithHandlers
+        // when the interrupt propagates, so we don't emit it again here.
         if (hasInterrupts(result)) {
-          for (const intr of result) {
-            ctx.statelogClient.interruptThrown({
-              interruptId: intr.interruptId,
-              interruptData: intr.interruptData,
-              functionName: handler.name,
-            });
-          }
           interrupts.push(...result);
           stack.setInterruptOnBranch(
             branchKey,

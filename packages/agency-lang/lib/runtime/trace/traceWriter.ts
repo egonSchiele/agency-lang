@@ -1,5 +1,6 @@
 import fs from "fs";
 import path from "path";
+import readline from "readline";
 import { VERSION } from "../../version.js";
 import type { Checkpoint } from "../state/checkpointStore.js";
 import { ContentAddressableStore } from "./contentAddressableStore.js";
@@ -41,19 +42,25 @@ export function resolveTraceFilePath(
  * already gated to once per run elsewhere (`static-state` via
  * `globals.markInitialized`; `manifest`/`footer` are per-checkpoint /
  * per-close events that shouldn't be deduped).
+ *
+ * Uses streaming line I/O (`createReadStream` + `readline`) so peak memory
+ * stays at roughly one line, not the full file content. Each parsed chunk
+ * line becomes GC-eligible after we extract its `hash` — the chunk's `data`
+ * payload (potentially large) is never retained.
  */
-export function scanExistingTraceFile(filePath: string): {
+export async function scanExistingTraceFile(filePath: string): Promise<{
   hasHeader: boolean;
   chunkHashes: Set<string>;
-} {
+}> {
   const empty = { hasHeader: false, chunkHashes: new Set<string>() };
   if (!fs.existsSync(filePath)) return empty;
-  const content = fs.readFileSync(filePath, "utf-8");
-  if (content.trim() === "") return empty;
+
+  const stream = fs.createReadStream(filePath, { encoding: "utf-8" });
+  const rl = readline.createInterface({ input: stream, crlfDelay: Infinity });
 
   let hasHeader = false;
   const chunkHashes = new Set<string>();
-  for (const line of content.split("\n")) {
+  for await (const line of rl) {
     if (line.trim() === "") continue;
     let parsed: TraceLine;
     try {
@@ -208,7 +215,7 @@ export class TraceWriter {
     // start of every fresh run, so this only ever sees state from earlier
     // execCtxs within the same run (e.g. across `respondToInterrupts`).
     const scan = filePath
-      ? scanExistingTraceFile(filePath)
+      ? await scanExistingTraceFile(filePath)
       : { hasHeader: false, chunkHashes: new Set<string>() };
 
     const writer = new TraceWriter(

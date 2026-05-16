@@ -232,15 +232,17 @@ describe("scanExistingTraceFile", () => {
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 
-  it("returns empty result for a non-existent file", () => {
-    const result = scanExistingTraceFile(path.join(tmpDir, "missing.agencytrace"));
+  it("returns empty result for a non-existent file", async () => {
+    const result = await scanExistingTraceFile(
+      path.join(tmpDir, "missing.agencytrace"),
+    );
     expect(result.hasHeader).toBe(false);
     expect(result.chunkHashes.size).toBe(0);
   });
 
-  it("returns empty result for an empty file", () => {
+  it("returns empty result for an empty file", async () => {
     fs.writeFileSync(tracePath, "");
-    const result = scanExistingTraceFile(tracePath);
+    const result = await scanExistingTraceFile(tracePath);
     expect(result.hasHeader).toBe(false);
     expect(result.chunkHashes.size).toBe(0);
   });
@@ -252,7 +254,7 @@ describe("scanExistingTraceFile", () => {
     await writer.writeCheckpoint(makeCheckpoint());
     await writer.pause();
 
-    const result = scanExistingTraceFile(tracePath);
+    const result = await scanExistingTraceFile(tracePath);
     expect(result.hasHeader).toBe(true);
     expect(result.chunkHashes.size).toBeGreaterThan(0);
 
@@ -278,7 +280,7 @@ describe("scanExistingTraceFile", () => {
       JSON.stringify({ type: "chunk", hash: "abcd", data: { x: 1 } }) + "\n",
     );
 
-    const result = scanExistingTraceFile(tracePath);
+    const result = await scanExistingTraceFile(tracePath);
     expect(result.hasHeader).toBe(true);
     expect(result.chunkHashes.has("abcd")).toBe(true);
   });

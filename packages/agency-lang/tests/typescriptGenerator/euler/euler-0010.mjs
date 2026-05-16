@@ -55,7 +55,7 @@ const __globalCtx = new RuntimeContext({
   },
   dirname: __dirname,
   traceConfig: {
-    program: "getContext.agency"
+    program: "euler-0010.agency"
   }
 });
 const graph = __globalCtx.graph;
@@ -127,19 +127,183 @@ function registerTools(tools: any[]) {
 }
 
 async function __initializeGlobals(__ctx) {
-  __ctx.globals.markInitialized("getContext.agency")
+  __ctx.globals.markInitialized("euler-0010.agency")
 }
 __toolRegistry["readSkill"] = __AgencyFunction.create({
   name: "readSkill",
-  module: "getContext.agency",
+  module: "euler-0010.agency",
   fn: readSkill,
   params: __readSkillToolParams.map(p => ({ name: p, hasDefault: false, defaultValue: undefined, variadic: false })),
   toolDefinition: __readSkillTool,
 }, __toolRegistry);
 __functionRefReviver.registry = __toolRegistry;
-//  getContext() is a builder macro: the typescriptBuilder rewrites it
-//  to the in-scope `__ctx` identifier. Confirm the lowering produces a
-//  bare identifier (no __call dispatch, no await).
+//  Project Euler Problem 10: Summation of Primes
+//  Find the sum of all the primes below two million.
+async function __isPrime_impl(n: number, __state: InternalFunctionState | undefined = undefined) {
+  const __setupData = setupFunction({
+    state: __state
+  });
+  // __state will be undefined if this function is being called as a tool by an llm
+  const __stateStack = __setupData.stateStack;
+const __stack = __setupData.stack;
+const __step = __setupData.step;
+const __self = __setupData.self;
+const __threads = __setupData.threads;
+const __ctx = __state?.ctx || __globalCtx;
+const statelogClient = __ctx.statelogClient;
+const __graph = __ctx.graph;
+let __forked;
+let __functionCompleted = false;
+  if (!__ctx.globals.isInitialized("euler-0010.agency")) {
+    await __initializeGlobals(__ctx)
+  }
+  let __funcStartTime: number = performance.now();
+  await callHook({
+    callbacks: __ctx.callbacks,
+    name: "onFunctionStart",
+    data: {
+      functionName: "isPrime",
+      args: {
+        n: n
+      },
+      isBuiltin: false,
+      moduleId: "euler-0010.agency"
+    }
+  })
+  __stack.args["n"] = n;
+  __self.__retryable = __self.__retryable ?? true;
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "euler-0010.agency", scopeName: "isPrime" });
+  let __resultCheckpointId = -1;
+if (__ctx.stateStack.currentNodeId()) {
+  __resultCheckpointId = __ctx.checkpoints.createPinned(__stateStack, __ctx, { moduleId: "euler-0010.agency", scopeName: "isPrime", stepPath: "", label: "result-entry" });
+}
+if (__ctx._pendingArgOverrides) {
+  const __overrides = __ctx._pendingArgOverrides;
+  __ctx._pendingArgOverrides = undefined;
+  if ("n" in __overrides) {
+    n = __overrides["n"];
+    __stack.args["n"] = n;
+  }
+
+}
+
+  try {
+    await runner.ifElse(0, [
+
+  {
+    condition: async () => __stack.args.n < 2,
+    body: async (runner) => {
+await runner.step(0, async (runner) => {
+__functionCompleted = true;
+runner.halt(false)
+return;
+          });
+    },
+  },
+
+]);
+    await runner.ifElse(1, [
+
+  {
+    condition: async () => __stack.args.n < 4,
+    body: async (runner) => {
+await runner.step(0, async (runner) => {
+__functionCompleted = true;
+runner.halt(true)
+return;
+          });
+    },
+  },
+
+]);
+    await runner.ifElse(2, [
+
+  {
+    condition: async () => __stack.args.n % 2 === 0 || __stack.args.n % 3 === 0,
+    body: async (runner) => {
+await runner.step(0, async (runner) => {
+__functionCompleted = true;
+runner.halt(false)
+return;
+          });
+    },
+  },
+
+]);
+    await runner.step(3, async (runner) => {
+__stack.locals.i = 5;
+    });
+    await runner.whileLoop(4, () => __stack.locals.i * __stack.locals.i <= __stack.args.n, async (runner) => {
+await runner.ifElse(0, [
+
+  {
+    condition: async () => __stack.args.n % __stack.locals.i === 0 || __stack.args.n % (__stack.locals.i + 2) === 0,
+    body: async (runner) => {
+await runner.step(0, async (runner) => {
+__functionCompleted = true;
+runner.halt(false)
+return;
+            });
+    },
+  },
+
+]);
+await runner.step(1, async (runner) => {
+__stack.locals.i = __stack.locals.i + 6;
+      });
+    });
+    await runner.step(5, async (runner) => {
+__functionCompleted = true;
+runner.halt(true)
+return;
+    });
+    if (runner.halted) { if (isFailure(runner.haltResult)) { runner.haltResult.retryable = runner.haltResult.retryable && __self.__retryable; } return runner.haltResult; }
+  } catch (__error) {
+    if (__error instanceof RestoreSignal) {
+  throw __error;
+}
+return failure(
+  __error instanceof Error ? __error.message : String(__error),
+  {
+    checkpoint: __ctx.getResultCheckpoint(),
+    retryable: __self.__retryable,
+    functionName: "isPrime",
+    args: __stack.args,
+  }
+);
+
+  } finally {
+    __stateStack.pop()
+    if (__functionCompleted) {
+      await callHook({
+        callbacks: __ctx.callbacks,
+        name: "onFunctionEnd",
+        data: {
+          functionName: "isPrime",
+          timeTaken: performance.now() - __funcStartTime
+        }
+      })
+    }
+  }
+}
+const isPrime = __AgencyFunction.create({
+  name: "isPrime",
+  module: "euler-0010.agency",
+  fn: __isPrime_impl,
+  params: [{
+    name: "n",
+    hasDefault: false,
+    defaultValue: undefined,
+    variadic: false
+  }],
+  toolDefinition: {
+    name: "isPrime",
+    description: `No description provided.`,
+    schema: z.object({"n": z.number(), })
+  },
+  safe: false,
+  exported: false
+}, __toolRegistry);
 graph.node("main", async (__state: GraphState) => {
   const __setupData = setupNode({
     state: __state
@@ -161,23 +325,42 @@ let __functionCompleted = false;
       nodeName: "main"
     }
   })
-  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "getContext.agency", scopeName: "main" });
+  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "euler-0010.agency", scopeName: "main" });
   try {
     await runner.step(0, async (runner) => {
-__stack.locals.ctx = __ctx;
-if (hasInterrupts(__stack.locals.ctx)) {
-        await __ctx.pendingPromises.awaitAll()
-        runner.halt({
-          ...__state,
-          data: __stack.locals.ctx
-        })
-        return;
-      }
+__stack.locals.sum = 2;
     });
     await runner.step(1, async (runner) => {
+__stack.locals.n = 3;
+    });
+    await runner.whileLoop(2, () => __stack.locals.n < 2000000, async (runner) => {
+await runner.ifElse(0, [
+
+  {
+    condition: async () => await __call(isPrime, {
+            type: "positional",
+            args: [__stack.locals.n]
+          }, {
+            ctx: __ctx,
+            threads: __threads,
+            stateStack: __stateStack
+          }),
+    body: async (runner) => {
+await runner.step(0, async (runner) => {
+__stack.locals.sum = __stack.locals.sum + __stack.locals.n;
+            });
+    },
+  },
+
+]);
+await runner.step(1, async (runner) => {
+__stack.locals.n = __stack.locals.n + 2;
+      });
+    });
+    await runner.step(3, async (runner) => {
 runner.halt({
         messages: __threads,
-        data: __stack.locals.ctx
+        data: __stack.locals.sum
       })
 return;
     });
@@ -230,4 +413,4 @@ if (__process.argv[1] === fileURLToPath(import.meta.url)) {
   }
 }
 export default graph
-export const __sourceMap = {"getContext.agency:main":{"0":{"line":4,"col":2},"1":{"line":5,"col":2}}};
+export const __sourceMap = {"euler-0010.agency:isPrime":{"0":{"line":4,"col":2},"1":{"line":5,"col":2},"2":{"line":6,"col":2},"3":{"line":7,"col":2},"4":{"line":8,"col":2},"5":{"line":12,"col":2},"0.0":{"line":4,"col":15},"1.0":{"line":5,"col":15},"2.0":{"line":6,"col":34},"4.0.0":{"line":9,"col":42},"4.0":{"line":9,"col":4},"4.1":{"line":10,"col":4}},"euler-0010.agency:main":{"0":{"line":16,"col":2},"1":{"line":17,"col":2},"2":{"line":18,"col":2},"3":{"line":24,"col":2},"2.0.0":{"line":20,"col":6},"2.0":{"line":19,"col":4},"2.1":{"line":22,"col":4}}};

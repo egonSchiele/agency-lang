@@ -55,7 +55,7 @@ const __globalCtx = new RuntimeContext({
   },
   dirname: __dirname,
   traceConfig: {
-    program: "getContext.agency"
+    program: "euler-0003.agency"
   }
 });
 const graph = __globalCtx.graph;
@@ -127,19 +127,18 @@ function registerTools(tools: any[]) {
 }
 
 async function __initializeGlobals(__ctx) {
-  __ctx.globals.markInitialized("getContext.agency")
+  __ctx.globals.markInitialized("euler-0003.agency")
 }
 __toolRegistry["readSkill"] = __AgencyFunction.create({
   name: "readSkill",
-  module: "getContext.agency",
+  module: "euler-0003.agency",
   fn: readSkill,
   params: __readSkillToolParams.map(p => ({ name: p, hasDefault: false, defaultValue: undefined, variadic: false })),
   toolDefinition: __readSkillTool,
 }, __toolRegistry);
 __functionRefReviver.registry = __toolRegistry;
-//  getContext() is a builder macro: the typescriptBuilder rewrites it
-//  to the in-scope `__ctx` identifier. Confirm the lowering produces a
-//  bare identifier (no __call dispatch, no await).
+//  Project Euler Problem 3: Largest Prime Factor
+//  Find the largest prime factor of 600851475143.
 graph.node("main", async (__state: GraphState) => {
   const __setupData = setupNode({
     state: __state
@@ -161,23 +160,28 @@ let __functionCompleted = false;
       nodeName: "main"
     }
   })
-  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "getContext.agency", scopeName: "main" });
+  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "euler-0003.agency", scopeName: "main" });
   try {
     await runner.step(0, async (runner) => {
-__stack.locals.ctx = __ctx;
-if (hasInterrupts(__stack.locals.ctx)) {
-        await __ctx.pendingPromises.awaitAll()
-        runner.halt({
-          ...__state,
-          data: __stack.locals.ctx
-        })
-        return;
-      }
+__stack.locals.n = 600851475143;
     });
     await runner.step(1, async (runner) => {
+__stack.locals.d = 2;
+    });
+    await runner.whileLoop(2, () => __stack.locals.d * __stack.locals.d <= __stack.locals.n, async (runner) => {
+await runner.whileLoop(0, () => __stack.locals.n % __stack.locals.d === 0, async (runner) => {
+await runner.step(0, async (runner) => {
+__stack.locals.n = __stack.locals.n / __stack.locals.d;
+        });
+      });
+await runner.step(1, async (runner) => {
+__stack.locals.d = __stack.locals.d + 1;
+      });
+    });
+    await runner.step(3, async (runner) => {
 runner.halt({
         messages: __threads,
-        data: __stack.locals.ctx
+        data: __stack.locals.n
       })
 return;
     });
@@ -230,4 +234,4 @@ if (__process.argv[1] === fileURLToPath(import.meta.url)) {
   }
 }
 export default graph
-export const __sourceMap = {"getContext.agency:main":{"0":{"line":4,"col":2},"1":{"line":5,"col":2}}};
+export const __sourceMap = {"euler-0003.agency:main":{"0":{"line":4,"col":2},"1":{"line":5,"col":2},"2":{"line":6,"col":2},"3":{"line":12,"col":2},"2.0.0":{"line":8,"col":6},"2.0":{"line":7,"col":4},"2.1":{"line":10,"col":4}}};

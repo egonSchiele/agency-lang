@@ -1,0 +1,14 @@
+// Project Euler Problem 3: Largest Prime Factor
+// Find the largest prime factor of 600851475143.
+
+node main() {
+  let n = 600851475143
+  let d = 2
+  while (d * d <= n) {
+    while (n % d == 0) {
+      n = n / d
+    }
+    d = d + 1
+  }
+  return n
+}

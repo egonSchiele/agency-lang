@@ -1,0 +1,26 @@
+// Project Euler Problem 7: 10001st Prime
+// Find the 10001st prime number.
+
+def isPrime(n: number): boolean {
+  if (n < 2) { return false }
+  if (n < 4) { return true }
+  if (n % 2 == 0 || n % 3 == 0) { return false }
+  let i = 5
+  while (i * i <= n) {
+    if (n % i == 0 || n % (i + 2) == 0) { return false }
+    i = i + 6
+  }
+  return true
+}
+
+node main() {
+  let count = 0
+  let num = 1
+  while (count < 10001) {
+    num = num + 1
+    if (isPrime(num)) {
+      count = count + 1
+    }
+  }
+  return num
+}

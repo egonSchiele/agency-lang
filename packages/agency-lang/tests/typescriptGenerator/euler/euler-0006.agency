@@ -1,0 +1,14 @@
+// Project Euler Problem 6: Sum Square Difference
+// Find the difference between the sum of the squares and the square of the sum
+// of the first one hundred natural numbers.
+
+node main() {
+  let sumOfSquares = 0
+  let sum = 0
+  for (i in range(1, 101)) {
+    sumOfSquares = sumOfSquares + i * i
+    sum = sum + i
+  }
+  let squareOfSum = sum * sum
+  return squareOfSum - sumOfSquares
+}

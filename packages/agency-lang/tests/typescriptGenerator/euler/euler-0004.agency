@@ -1,0 +1,33 @@
+// Project Euler Problem 4: Largest Palindrome Product
+// Find the largest palindrome made from the product of two 3-digit numbers.
+
+def isPalindrome(n: number): boolean {
+  const s = `${n}`
+  let left = 0
+  let right = s.length - 1
+  while (left < right) {
+    if (s[left] != s[right]) {
+      return false
+    }
+    left = left + 1
+    right = right - 1
+  }
+  return true
+}
+
+node main() {
+  let largest = 0
+  let i = 999
+  while (i >= 100) {
+    let j = i
+    while (j >= 100) {
+      let product = i * j
+      if (product > largest && isPalindrome(product)) {
+        largest = product
+      }
+      j = j - 1
+    }
+    i = i - 1
+  }
+  return largest
+}

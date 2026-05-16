@@ -1,7 +1,0 @@
-// getContext() is a builder macro: the typescriptBuilder rewrites it
-// to the in-scope `__ctx` identifier. Confirm the lowering produces a
-// bare identifier (no __call dispatch, no await).
-node main() {
-  const ctx = getContext()
-  return ctx
-}

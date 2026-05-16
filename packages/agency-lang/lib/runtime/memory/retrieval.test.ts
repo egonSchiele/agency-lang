@@ -2,12 +2,11 @@ import { describe, it, expect } from "vitest";
 import {
   structuredLookup,
   formatRetrievalResults,
-  buildRetrievalPrompt,
 } from "./retrieval.js";
 import { MemoryGraph } from "./graph.js";
 
 describe("structuredLookup", () => {
-  it("finds entities by name substring", () => {
+  it("finds entities by name substring (keyword query)", () => {
     const graph = new MemoryGraph();
     const mom = graph.addEntity("Mom", "person", "test");
     graph.addObservation(mom.id, "Likes pottery");
@@ -15,6 +14,41 @@ describe("structuredLookup", () => {
     const results = structuredLookup(graph, "mom");
     expect(results).toHaveLength(1);
     expect(results[0].name).toBe("Mom");
+  });
+
+  it("finds entities when the query mentions the name (descriptive query)", () => {
+    // Regression for the user-reported recall failure: a long
+    // natural-language query that contains an entity name should
+    // hit Tier 1, not require an LLM rerank.
+    const graph = new MemoryGraph();
+    const maggie = graph.addEntity("Maggie", "Person", "test");
+    graph.addObservation(maggie.id, "loves to weave");
+    const results = structuredLookup(graph, "Tell me something about Maggie");
+    expect(results).toHaveLength(1);
+    expect(results[0].name).toBe("Maggie");
+  });
+
+  it("respects word boundaries (Bob does not match Bobby)", () => {
+    const graph = new MemoryGraph();
+    graph.addEntity("Bob", "person", "test");
+    const results = structuredLookup(graph, "Bobby went home");
+    expect(results).toHaveLength(0);
+  });
+
+  it("skips entity names shorter than the minimum length", () => {
+    // Short names like "AI" would otherwise match arbitrary
+    // queries that happen to contain those two letters as a token.
+    const graph = new MemoryGraph();
+    graph.addEntity("AI", "topic", "test");
+    const results = structuredLookup(graph, "the AI is here");
+    expect(results).toHaveLength(0);
+  });
+
+  it("skips entity names that are stop words", () => {
+    const graph = new MemoryGraph();
+    graph.addEntity("the", "filler", "test");
+    const results = structuredLookup(graph, "this is the answer");
+    expect(results).toHaveLength(0);
   });
 
   it("finds entities by type", () => {
@@ -26,7 +60,7 @@ describe("structuredLookup", () => {
     expect(results[0].name).toBe("Mom");
   });
 
-  it("finds entities by observation content", () => {
+  it("finds entities by observation content (keyword)", () => {
     const graph = new MemoryGraph();
     const mom = graph.addEntity("Mom", "person", "test");
     graph.addObservation(mom.id, "Likes pottery");
@@ -37,11 +71,27 @@ describe("structuredLookup", () => {
     expect(results[0].name).toBe("Mom");
   });
 
+  it("finds entities by observation content (descriptive query)", () => {
+    const graph = new MemoryGraph();
+    const mom = graph.addEntity("Mom", "person", "test");
+    graph.addObservation(mom.id, "Likes pottery");
+    const results = structuredLookup(graph, "Who likes pottery the most?");
+    expect(results).toHaveLength(1);
+    expect(results[0].name).toBe("Mom");
+  });
+
   it("returns empty for no matches", () => {
     const graph = new MemoryGraph();
     graph.addEntity("Mom", "person", "test");
     const results = structuredLookup(graph, "xyz123");
     expect(results).toHaveLength(0);
+  });
+
+  it("returns empty for empty queries", () => {
+    const graph = new MemoryGraph();
+    graph.addEntity("Mom", "person", "test");
+    expect(structuredLookup(graph, "")).toHaveLength(0);
+    expect(structuredLookup(graph, "   ")).toHaveLength(0);
   });
 
   it("filters by source when specified", () => {
@@ -81,16 +131,5 @@ describe("formatRetrievalResults", () => {
     const graph = new MemoryGraph();
     const text = formatRetrievalResults(graph, []);
     expect(text).toBe("");
-  });
-});
-
-describe("buildRetrievalPrompt", () => {
-  it("includes the query and graph index", () => {
-    const graph = new MemoryGraph();
-    const mom = graph.addEntity("Mom", "person", "test");
-    graph.addObservation(mom.id, "Likes pottery");
-    const prompt = buildRetrievalPrompt("what does mom like?", graph);
-    expect(prompt).toContain("what does mom like?");
-    expect(prompt).toContain("Mom");
   });
 });

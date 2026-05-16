@@ -183,10 +183,10 @@ describe("MemoryManager", () => {
     expect(fresh.getGraph().getEntities()).toHaveLength(1);
   });
 
-  it("recall returns union of tiers (structured + embeddings) up to K", async () => {
+  it("recall pipes cheap-tier candidates through the LLM filter and returns matches", async () => {
     const store = new FileMemoryStore(tmpDir);
     const client = mockLlmClient();
-    // First call: extraction populates Mom + observation.
+    // First text call: extraction populates Mom + observation.
     client.text.mockResolvedValueOnce(
       wrapTextResult(JSON.stringify({
         entities: [
@@ -202,11 +202,69 @@ describe("MemoryManager", () => {
       llmClient: client,
     });
     await manager.remember("Mom likes pottery");
-    // Tier 3 LLM call returns an empty list — but tier 1 should still match.
-    client.text.mockResolvedValue(wrapTextResult("[]"));
+    const mom = manager.getGraph().findEntityByName("Mom")!;
+    // Tier 3 (filter) returns Mom's id from the candidate set Tier 1
+    // surfaced. We assert end-to-end that the formatted recall text
+    // includes the entity and its observation.
+    client.text.mockResolvedValue(wrapTextResult(JSON.stringify([mom.id])));
     const text = await manager.recall("mom");
     expect(text).toContain("Mom");
     expect(text).toContain("Likes pottery");
+  });
+
+  it("recall drops Tier-3 hallucinated ids that were never offered", async () => {
+    const store = new FileMemoryStore(tmpDir);
+    const client = mockLlmClient();
+    client.text.mockResolvedValueOnce(
+      wrapTextResult(JSON.stringify({
+        entities: [
+          { name: "Mom", type: "person", observations: ["Likes pottery"] },
+        ],
+        relations: [],
+        expirations: [],
+      }))
+    );
+    const manager = new MemoryManager({
+      store,
+      config: { dir: tmpDir },
+      llmClient: client,
+    });
+    await manager.remember("Mom likes pottery");
+    // LLM hallucinates an id outside the candidate set. With the
+    // hallucination guard this collapses to an empty filter result,
+    // and recall should return "" rather than a corrupted entity ref.
+    client.text.mockResolvedValue(
+      wrapTextResult(JSON.stringify(["entity-totally-fake"])),
+    );
+    const text = await manager.recall("mom");
+    expect(text).toBe("");
+  });
+
+  it("recall feeds embed text contextualized as '{name} ({type}): {content}'", async () => {
+    const store = new FileMemoryStore(tmpDir);
+    const client = mockLlmClient();
+    client.text.mockResolvedValueOnce(
+      wrapTextResult(JSON.stringify({
+        entities: [
+          { name: "Maggie", type: "person", observations: ["loves to weave"] },
+        ],
+        relations: [],
+        expirations: [],
+      }))
+    );
+    const manager = new MemoryManager({
+      store,
+      config: { dir: tmpDir },
+      llmClient: client,
+    });
+    await manager.remember("Maggie loves to weave");
+    // The embed call we care about is the one made during the
+    // remember above (when Tier 2 vectors are written). Inspect the
+    // first arg passed to embed.
+    const embedCalls = (client.embed as any).mock.calls;
+    expect(embedCalls.length).toBeGreaterThan(0);
+    const firstEmbedInput = embedCalls[0][0];
+    expect(firstEmbedInput).toBe("Maggie (person): loves to weave");
   });
 
   it("forget uses substring matching (soft-delete via validTo)", async () => {

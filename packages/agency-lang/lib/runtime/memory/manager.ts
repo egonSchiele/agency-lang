@@ -1,23 +1,23 @@
 import { z } from "zod";
 import * as smoltalk from "smoltalk";
 import type { SmolConfig } from "smoltalk";
-import type {
-  MemoryConfig,
-  MemoryStore as MemoryStoreType,
-  ConversationSummary,
+import {
+  EMBEDDING_FORMAT_VERSION,
+  type MemoryConfig,
+  type MemoryStore as MemoryStoreType,
+  type ConversationSummary,
 } from "./types.js";
 import { MemoryGraph } from "./graph.js";
 import { EmbeddingManager } from "./embeddings.js";
+import { MemoryCacheEntry } from "./cacheEntry.js";
 import {
   buildExtractionPrompt,
-  applyExtractionResult,
   parseExtractionResult,
 } from "./extraction.js";
 import type { ExtractionResult } from "./extraction.js";
 import {
   structuredLookup,
   formatRetrievalResults,
-  buildRetrievalPrompt,
 } from "./retrieval.js";
 import {
   shouldCompact,
@@ -27,6 +27,7 @@ import {
 } from "./compaction.js";
 import { MEMORY_COMPACTION_DEFAULT_THRESHOLD } from "../../constants.js";
 import forgetTemplate from "../../templates/prompts/memory/forget.js";
+import retrievalTemplate from "../../templates/prompts/memory/retrieval.js";
 import type { LLMClient } from "../llmClient.js";
 
 /**
@@ -73,24 +74,21 @@ export type MemoryManagerOptions = {
   memoryIdRef?: MemoryIdRef;
 };
 
-type CacheEntry = {
-  // Captured at load time so persists go to the same id even if a
-  // concurrent setMemoryId() runs while an LLM/embed call is in flight.
-  memoryId: string;
-  graph: MemoryGraph;
-  embeddings: EmbeddingManager;
-  summary: ConversationSummary | null;
-  turnsSinceExtraction: number;
-  // observationId -> entityId reverse index. Maintained alongside
-  // graph mutations (add/expire) so Tier-2 embedding recall can map
-  // similarity hits back to entities in O(1) instead of scanning all
-  // entities * observations every recall.
-  obsToEntity: Record<string, string>;
-};
-
 const DEFAULT_RECALL_K = 10;
 const DEFAULT_EMBEDDING_THRESHOLD = 0.3;
 const SUMMARY_MESSAGE_PREFIX = "Previous conversation summary:\n";
+
+/**
+ * When Tier 1 + Tier 2 produce no candidates, fall back to "all
+ * entities" only if the graph is small enough that sending the entire
+ * candidate list to the LLM is reasonable. Above this size the
+ * prompt becomes too large to justify the spend, so we accept "no
+ * recall" rather than blast the model with everything we know.
+ *
+ * Picked by intuition (entry index lines are short — ~80 chars each).
+ * Promote to a `MemoryConfig` knob the day a real workload demands it.
+ */
+const FALLBACK_GRAPH_SIZE_LIMIT = 50;
 
 /**
  * Plan describing how the caller should reshape its message thread
@@ -131,7 +129,7 @@ export class MemoryManager {
   // per execution context, so per-instance caching is the correct
   // boundary — concurrent flows in different contexts each get their
   // own snapshot and their own write surface.
-  private cache: Record<string, CacheEntry> = Object.create(null);
+  private cache: Record<string, MemoryCacheEntry> = Object.create(null);
 
   constructor(options: MemoryManagerOptions) {
     this.store = options.store;
@@ -207,14 +205,14 @@ export class MemoryManager {
         `MemoryManager not initialized for memoryId "${this.getMemoryId()}". Call init() first.`
       );
     }
-    return entry.graph;
+    return entry.getGraph();
   }
 
   async init(): Promise<void> {
     await this.getEntry();
   }
 
-  private async getEntry(): Promise<CacheEntry> {
+  private async getEntry(): Promise<MemoryCacheEntry> {
     const id = this.getMemoryId();
     const existing = this.cache[id];
     if (existing) return existing;
@@ -225,8 +223,18 @@ export class MemoryManager {
     const configuredModel = this.config.embeddings?.model;
     const embeddingIndex = await this.store.loadEmbeddings(id);
     let embeddings: EmbeddingManager;
+    // Reject indexes built before we contextualized embedding inputs
+    // (formatVersion missing or < current). They contain vectors
+    // computed from bare observation content and aren't comparable to
+    // query vectors built under the new scheme — leaving them in
+    // would produce semantically wrong similarity scores. The next
+    // write rebuilds with the current contextualized format.
+    const indexFormatOk =
+      embeddingIndex !== null &&
+      (embeddingIndex.formatVersion ?? 1) >= EMBEDDING_FORMAT_VERSION;
     if (
       embeddingIndex &&
+      indexFormatOk &&
       (!configuredModel || embeddingIndex.model === configuredModel)
     ) {
       // `!configuredModel` means the user hasn't pinned an embedding
@@ -237,9 +245,10 @@ export class MemoryManager {
       // risk of repeated rebuilds.
       embeddings = EmbeddingManager.fromIndex(embeddingIndex);
     } else {
-      // Model mismatch (or no prior index): discard stale entries —
-      // comparing query vectors from one model to stored vectors from
-      // another (or different dimensions) yields garbage similarities.
+      // Model mismatch, format-version bump, or no prior index:
+      // discard stale entries. Comparing query vectors built under one
+      // (model, source-text) pair to stored vectors built under
+      // another yields garbage similarities.
       embeddings = new EmbeddingManager();
     }
     if (configuredModel) {
@@ -247,20 +256,7 @@ export class MemoryManager {
     }
 
     const summary = await this.store.loadSummary(id);
-    const obsToEntity: Record<string, string> = Object.create(null);
-    for (const e of graph.getEntities()) {
-      for (const o of e.observations) {
-        obsToEntity[o.id] = e.id;
-      }
-    }
-    const entry: CacheEntry = {
-      memoryId: id,
-      graph,
-      embeddings,
-      summary,
-      turnsSinceExtraction: 0,
-      obsToEntity,
-    };
+    const entry = new MemoryCacheEntry(id, graph, embeddings, summary);
     this.cache[id] = entry;
     return entry;
   }
@@ -288,7 +284,7 @@ export class MemoryManager {
   async buildExtractionPromptFor(content: string): Promise<string> {
     const entry = await this.getEntry();
     const messages: smoltalk.Message[] = [smoltalk.userMessage(content)];
-    return buildExtractionPrompt(messages, entry.graph);
+    return buildExtractionPrompt(messages, entry.getGraph());
   }
 
   /**
@@ -298,13 +294,9 @@ export class MemoryManager {
    */
   async applyExtractionFromLLM(result: ExtractionResult): Promise<void> {
     const entry = await this.getEntry();
-    const outcome = applyExtractionResult(entry.graph, result, this.source);
-    for (const id of outcome.expiredObservationIds) {
-      entry.embeddings.removeEntry(id);
-    }
-    this.indexNewObservations(entry, outcome.newObservationIds);
+    const outcome = entry.applyExtraction(result, this.source);
     await this.generateEmbeddings(entry, outcome.newObservationIds);
-    await this.persist(entry);
+    await entry.persist(this.store);
   }
 
   /**
@@ -325,12 +317,12 @@ export class MemoryManager {
   // `recall` (which then layers Tier 3 LLM recall on top) and
   // `recallForInjection` (which intentionally stops here for latency).
   private async tier1And2(
-    entry: CacheEntry,
+    entry: MemoryCacheEntry,
     query: string
   ): Promise<string[]> {
     const orderedIds: string[] = [];
 
-    const tier1 = structuredLookup(entry.graph, query);
+    const tier1 = structuredLookup(entry.getGraph(), query);
     for (const e of tier1) {
       if (!orderedIds.includes(e.id)) orderedIds.push(e.id);
     }
@@ -345,53 +337,71 @@ export class MemoryManager {
 
   async recall(query: string, options?: { model?: string }): Promise<string> {
     const entry = await this.getEntry();
+    const graph = entry.getGraph();
+    if (graph.getEntities().length === 0) return "";
 
-    // Order: structured matches first, then embedding matches, then LLM.
-    const orderedIds = await this.tier1And2(entry, query);
+    // Stage A: cheap tiers gather candidate ids.
+    let candidateIds = await this.tier1And2(entry, query);
 
-    // If tiers 1+2 already filled the top-K window, skip the LLM call —
-    // any tier 3 results would be sliced off below anyway, and the LLM
-    // round-trip dominates the recall latency budget.
-    if (orderedIds.length < DEFAULT_RECALL_K) {
-      // Tier 3 is best-effort like Tier 2: a provider error here must not
-      // throw away results we already have from tiers 1 and 2.
-      const model = options?.model ?? this.model();
-      try {
-        const tier3EntityIds = await this.llmRecallEntityIds(
-          entry,
-          query,
-          model,
-        );
-        for (const id of tier3EntityIds) {
-          if (!orderedIds.includes(id)) orderedIds.push(id);
-        }
-      } catch (err) {
-        // Tier 1 + 2 results still get returned below; surface the
-        // failure so it shows up in logs / traces rather than vanishing.
-        console.warn(
-          `[memory] tier 3 (LLM recall) failed for query=${JSON.stringify(query)}: ${(err as Error).message}`,
-        );
-      }
+    // Stage B (fallback): if cheap tiers found nothing AND the graph
+    // is small enough to fit in the prompt without blowing tokens,
+    // hand the entire graph to Tier 3 as candidates. Above the limit
+    // we accept "no recall" — Tiers 1+2 should have surfaced something
+    // for a graph that big, and the LLM doesn't help if every entity
+    // is a candidate at scale.
+    if (candidateIds.length === 0) {
+      const all = graph.getEntities();
+      if (all.length > FALLBACK_GRAPH_SIZE_LIMIT) return "";
+      candidateIds = all.map((e) => e.id);
     }
 
-    const topK = orderedIds.slice(0, DEFAULT_RECALL_K);
+    // Stage C: LLM relevance filter over the candidate set. The LLM
+    // can only return ids from the set we offered (hallucinations are
+    // dropped). Best-effort: a provider error falls back to the
+    // cheap-tier order so we still return something usable.
+    const model = options?.model ?? this.model();
+    let relevantIds: string[];
+    try {
+      relevantIds = await this.llmFilterCandidates(
+        entry,
+        query,
+        candidateIds,
+        model,
+      );
+      // An empty filter result on a fallback (whole-graph) call most
+      // likely means the LLM correctly judged nothing relevant —
+      // honour that. On a non-fallback call (cheap tiers had hits),
+      // also honour it: the tiers gave us *candidates*, the LLM is
+      // the precision filter. Returning the cheap-tier order anyway
+      // would defeat the filter's purpose.
+    } catch (err) {
+      console.warn(
+        `[memory] tier 3 (LLM filter) failed for query=${JSON.stringify(query)}: ${(err as Error).message}`,
+      );
+      // Fail open: keep whatever the cheap tiers found rather than
+      // returning nothing on a transient provider error.
+      relevantIds = candidateIds;
+    }
+
+    const topK = relevantIds.slice(0, DEFAULT_RECALL_K);
     const entities = topK
-      .map((id) => entry.graph.getEntity(id))
+      .map((id) => graph.getEntity(id))
       .filter((e): e is NonNullable<typeof e> => e !== null);
-    return formatRetrievalResults(entry.graph, entities);
+    return formatRetrievalResults(graph, entities);
   }
 
   async recallForInjection(query: string): Promise<string> {
     const entry = await this.getEntry();
+    const graph = entry.getGraph();
 
     // Tiers 1+2 only for low latency (resolved decision #4).
     const orderedIds = await this.tier1And2(entry, query);
 
     const topK = orderedIds.slice(0, DEFAULT_RECALL_K);
     const entities = topK
-      .map((id) => entry.graph.getEntity(id))
+      .map((id) => graph.getEntity(id))
       .filter((e): e is NonNullable<typeof e> => e !== null);
-    return formatRetrievalResults(entry.graph, entities);
+    return formatRetrievalResults(graph, entities);
   }
 
   /**
@@ -403,7 +413,7 @@ export class MemoryManager {
   async buildForgetPromptFor(query: string): Promise<string> {
     const entry = await this.getEntry();
     return forgetTemplate({
-      graphIndex: entry.graph.toCompactIndex(),
+      graphIndex: entry.getGraph().toCompactIndex(),
       query,
     });
   }
@@ -414,9 +424,10 @@ export class MemoryManager {
    */
   async applyForgetFromLLM(parsed: ForgetResult): Promise<void> {
     const entry = await this.getEntry();
+    const graph = entry.getGraph();
 
     for (const exp of parsed.observations) {
-      const entity = entry.graph.findEntityByName(exp.entityName);
+      const entity = graph.findEntityByName(exp.entityName);
       if (!entity) continue;
       const obs = entity.observations.find(
         (o) =>
@@ -426,17 +437,18 @@ export class MemoryManager {
             .includes(exp.observationContent.toLowerCase()),
       );
       if (obs) {
-        entry.graph.expireObservation(obs.id);
-        entry.embeddings.removeEntry(obs.id);
+        // Goes through the entry so the embedding entry for this
+        // observation is dropped in lockstep with the graph mutation.
+        entry.expireObservation(obs.id);
       }
     }
 
     for (const exp of parsed.relations) {
-      const fromEntity = entry.graph.findEntityByName(exp.fromName);
-      const toEntity = entry.graph.findEntityByName(exp.toName);
+      const fromEntity = graph.findEntityByName(exp.fromName);
+      const toEntity = graph.findEntityByName(exp.toName);
       if (!fromEntity || !toEntity) continue;
       const lowerType = exp.type.toLowerCase();
-      const rel = entry.graph
+      const rel = graph
         .getRelations()
         .find(
           (r) =>
@@ -445,10 +457,10 @@ export class MemoryManager {
             r.to === toEntity.id &&
             r.type.toLowerCase().includes(lowerType),
         );
-      if (rel) entry.graph.expireRelation(rel.id);
+      if (rel) entry.expireRelation(rel.id);
     }
 
-    await this.persist(entry);
+    await entry.persist(this.store);
   }
 
   /**
@@ -473,6 +485,7 @@ export class MemoryManager {
       entry.turnsSinceExtraction = 0;
     }
   }
+
 
   async compactIfNeeded(
     messages: smoltalk.Message[]
@@ -536,24 +549,25 @@ export class MemoryManager {
       model: this.model(),
     });
 
-    if (entry.summary) {
+    const prevSummary = entry.getSummary();
+    if (prevSummary) {
       const mergePrompt = buildMergeSummaryPrompt(
-        entry.summary.summary,
-        newSummary
+        prevSummary.summary,
+        newSummary,
       );
       newSummary = await this._text(mergePrompt, {
         model: this.model(),
       });
     }
 
-    entry.summary = {
+    entry.setSummary({
       summary: newSummary,
       lastCompactedAt: new Date().toISOString(),
       messagesSummarized:
-        (entry.summary?.messagesSummarized ?? 0) + toCompact.length,
-    };
+        (prevSummary?.messagesSummarized ?? 0) + toCompact.length,
+    });
 
-    await this.persist(entry);
+    await entry.persist(this.store);
 
     return {
       systemPrefixIndices,
@@ -565,80 +579,73 @@ export class MemoryManager {
   /** Persist all cached memoryIds to disk. */
   async save(): Promise<void> {
     for (const entry of Object.values(this.cache)) {
-      await this.persist(entry);
+      await entry.persist(this.store);
     }
   }
 
   // ---- internals ----
 
-  private async persist(entry: CacheEntry): Promise<void> {
-    // Always persist using the id captured when the entry was loaded,
-    // never `this.getMemoryId()` — a concurrent setMemoryId() during an
-    // in-flight LLM/embed call would otherwise route this user's data
-    // to a different memory namespace.
-    const id = entry.memoryId;
-    await this.store.saveGraph(id, entry.graph.toJSON());
-    await this.store.saveEmbeddings(id, entry.embeddings.toIndex());
-    if (entry.summary) {
-      await this.store.saveSummary(id, entry.summary);
-    }
-  }
-
   private async autoExtract(
-    entry: CacheEntry,
+    entry: MemoryCacheEntry,
     messages: smoltalk.Message[]
   ): Promise<void> {
-    const prompt = buildExtractionPrompt(messages, entry.graph);
+    const prompt = buildExtractionPrompt(messages, entry.getGraph());
     const response = await this._text(prompt, { model: this.model() });
     const result = parseExtractionResult(response);
     if (!result) return;
-    const outcome = applyExtractionResult(entry.graph, result, this.source);
-    for (const id of outcome.expiredObservationIds) {
-      entry.embeddings.removeEntry(id);
-    }
-    this.indexNewObservations(entry, outcome.newObservationIds);
+    const outcome = entry.applyExtraction(result, this.source);
     await this.generateEmbeddings(entry, outcome.newObservationIds);
-    await this.persist(entry);
-  }
-
-  // Update the cached `obsToEntity` reverse index for newly-added
-  // observations. Called after every `applyExtractionResult` so the
-  // index stays in sync with the graph without us having to rebuild
-  // from scratch on each recall.
-  private indexNewObservations(
-    entry: CacheEntry,
-    observationIds: string[]
-  ): void {
-    if (observationIds.length === 0) return;
-    const wanted: Record<string, true> = Object.create(null);
-    for (const id of observationIds) wanted[id] = true;
-    for (const e of entry.graph.getEntities()) {
-      for (const o of e.observations) {
-        if (wanted[o.id]) entry.obsToEntity[o.id] = e.id;
-      }
-    }
+    await entry.persist(this.store);
   }
 
   private async generateEmbeddings(
-    entry: CacheEntry,
+    entry: MemoryCacheEntry,
     observationIds: string[]
   ): Promise<void> {
     for (const obsId of observationIds) {
-      const obsContent = findObservationContent(entry.graph, obsId);
-      if (!obsContent) continue;
+      const embedText = buildEmbedText(entry, obsId);
+      if (!embedText) continue;
       try {
-        const vector = await this._embed(obsContent, {
+        const vector = await this._embed(embedText, {
           model: this.config.embeddings?.model,
         });
-        entry.embeddings.addEntry(obsId, vector);
+        entry.setEmbedding(obsId, vector);
       } catch {
         // Embedding failed — Tier 2 silently no-ops (resolved decision #8).
       }
     }
   }
 
+  /**
+   * Build the per-line "id: name (type) — facts" candidate index
+   * fed to the Tier-3 filter prompt. Including the entity's current
+   * observations lets the LLM judge relevance without us having to
+   * dump the full graph; using stable ids (not names) makes the
+   * response unambiguous and lets us reject hallucinated ids.
+   */
+  private buildCandidateIndex(
+    graph: MemoryGraph,
+    candidateIds: string[],
+  ): string {
+    const lines: string[] = [];
+    for (const id of candidateIds) {
+      const e = graph.getEntity(id);
+      if (!e) continue;
+      const facts = graph
+        .getCurrentObservations(e.id)
+        .map((o) => o.content)
+        .join("; ");
+      lines.push(
+        facts
+          ? `${e.id}: ${e.name} (${e.type}) — ${facts}`
+          : `${e.id}: ${e.name} (${e.type})`,
+      );
+    }
+    return lines.join("\n");
+  }
+
   private async embeddingRecallEntityIds(
-    entry: CacheEntry,
+    entry: MemoryCacheEntry,
     query: string
   ): Promise<string[]> {
     let queryVector: number[];
@@ -649,7 +656,7 @@ export class MemoryManager {
     } catch {
       return [];
     }
-    const similar = entry.embeddings.findSimilar(
+    const similar = entry.getEmbeddings().findSimilar(
       queryVector,
       DEFAULT_RECALL_K,
       DEFAULT_EMBEDDING_THRESHOLD
@@ -659,7 +666,7 @@ export class MemoryManager {
     // O(k) lookup via the maintained reverse index instead of O(E*O*k).
     const entityIds: string[] = [];
     for (const result of similar) {
-      const entityId = entry.obsToEntity[result.id];
+      const entityId = entry.lookupEntityIdByObs(result.id);
       if (entityId && !entityIds.includes(entityId)) {
         entityIds.push(entityId);
       }
@@ -667,27 +674,45 @@ export class MemoryManager {
     return entityIds;
   }
 
-  private async llmRecallEntityIds(
-    entry: CacheEntry,
+  /**
+   * Tier 3: ask the LLM to pick the relevant entities from a fixed
+   * candidate list (the union of Tier 1 + Tier 2 hits, or the whole
+   * graph on the small-graph fallback). Returns ids in the order the
+   * LLM emitted, filtered to the offered set so a hallucinated id is
+   * silently dropped instead of crashing the recall.
+   */
+  private async llmFilterCandidates(
+    entry: MemoryCacheEntry,
     query: string,
-    model: string
+    candidateIds: string[],
+    model: string,
   ): Promise<string[]> {
-    if (entry.graph.getEntities().length === 0) return [];
-    const retrievalPrompt = buildRetrievalPrompt(query, entry.graph);
-    const response = await this._text(retrievalPrompt, { model });
-    const entityNames = parseStringArray(response);
-    if (!entityNames) return [];
-    const ids: string[] = [];
-    for (const name of entityNames) {
-      const e = entry.graph.findEntityByName(name);
-      if (e && !ids.includes(e.id)) ids.push(e.id);
+    if (candidateIds.length === 0) return [];
+    const candidates = this.buildCandidateIndex(entry.getGraph(), candidateIds);
+    const prompt = retrievalTemplate({ candidates, query });
+    const response = await this._text(prompt, { model });
+    const ids = parseStringArray(response);
+    if (!ids) return [];
+    // Hallucination guard: only keep ids we actually offered. Set
+    // lookup is O(1) per check; we also de-dupe in case the LLM
+    // returned the same id twice.
+    const offered = new Set(candidateIds);
+    const seen: Record<string, true> = Object.create(null);
+    const out: string[] = [];
+    for (const id of ids) {
+      if (offered.has(id) && !seen[id]) {
+        seen[id] = true;
+        out.push(id);
+      }
     }
-    return ids;
+    return out;
   }
 }
 
-// Schema for the JSON returned by the Tier-3 (LLM) recall pass — just
-// a list of entity names. Used by `parseStringArray` below.
+// Schema for the JSON returned by the Tier-3 (LLM) filter pass — a
+// list of entity ids picked from the candidate set. The manager
+// additionally filters the result to ids that were actually offered
+// so a hallucinated id is silently dropped.
 const StringArraySchema = z.array(z.string());
 
 function parseStringArray(text: string): string[] | null {
@@ -739,13 +764,27 @@ function parseForgetResult(text: string): ForgetResult | null {
   return result.data;
 }
 
-function findObservationContent(
-  graph: MemoryGraph,
-  obsId: string
-): string | null {
-  for (const entity of graph.getEntities()) {
-    const obs = entity.observations.find((o) => o.id === obsId);
-    if (obs) return obs.content;
-  }
-  return null;
+/**
+ * Source text fed to the embedder for an observation. Synthesizes
+ * "{entityName} ({entityType}): {content}" so a query that anchors
+ * on the subject ("what does Maggie do?") still has cosine signal
+ * against an observation as bare as "weaves baskets". The on-disk
+ * Observation shape is unchanged — the structured graph remains the
+ * source of truth; this contextualized string is purely the
+ * embedding input.
+ *
+ * If the format here changes, bump `EMBEDDING_FORMAT_VERSION` in
+ * types.ts so existing on-disk indexes are discarded on next load.
+ *
+ * Uses the cached `obsToEntity` reverse index for an O(1) entity
+ * lookup instead of scanning every entity * observation.
+ */
+function buildEmbedText(entry: MemoryCacheEntry, obsId: string): string | null {
+  const entityId = entry.lookupEntityIdByObs(obsId);
+  if (!entityId) return null;
+  const entity = entry.getGraph().getEntity(entityId);
+  if (!entity) return null;
+  const obs = entity.observations.find((o) => o.id === obsId);
+  if (!obs) return null;
+  return `${entity.name} (${entity.type}): ${obs.content}`;
 }

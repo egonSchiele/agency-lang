@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { cosineSimilarity, EmbeddingManager } from "./embeddings.js";
+import { EMBEDDING_FORMAT_VERSION } from "./types.js";
 
 describe("cosineSimilarity", () => {
   it("returns 1 for identical vectors", () => {
@@ -59,5 +60,15 @@ describe("EmbeddingManager", () => {
 
     const restored = EmbeddingManager.fromIndex(index);
     expect(restored.findSimilar([1, 2, 3], 1)[0].id).toBe("obs-1");
+  });
+
+  it("stamps the current format version when serializing", () => {
+    // The version travels with the index so old on-disk indexes can
+    // be detected and discarded by the load-side guard in
+    // MemoryManager.getEntry. Bumped whenever the embedding-input
+    // text shape changes.
+    const manager = new EmbeddingManager();
+    const index = manager.toIndex();
+    expect(index.formatVersion).toBe(EMBEDDING_FORMAT_VERSION);
   });
 });

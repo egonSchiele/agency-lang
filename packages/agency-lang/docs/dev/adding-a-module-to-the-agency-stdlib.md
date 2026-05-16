@@ -10,13 +10,15 @@ Adding a new module to the agency standard library follows a general pattern.
 
 ## Accessing runtime state from a TS binding
 
-If a stdlib TS helper needs to read or mutate per-run state (memory manager, statelog client, abort controller, etc.) it MUST take the `RuntimeContext` as its first argument and let the agency-side wrapper supply it via the `getContext()` builtin. Do not reach for a module-level singleton — multiple `runNode` calls can share a Node.js process and would race on it.
+If a stdlib TS helper needs to read or mutate per-run state (memory manager, statelog client, abort controller, etc.) it MUST take the `RuntimeContext` as its first argument. Do not reach for a module-level singleton — multiple `runNode` calls can share a Node.js process and would race on it.
+
+The runtime context is threaded into the call site by codegen via the **context-injected builtins** mechanism. Add an entry to the registry in `lib/codegenBuiltins/contextInjected.ts`, export the TS implementation under the same `__internal_*` name, and the agency-side wrapper can call it as if `__ctx` weren't a parameter:
 
 ```ts
 // lib/stdlib/foo.ts
 import type { RuntimeContext } from "../runtime/state/context.js";
 
-export async function _doThing(
+export async function __internal_doThing(
   ctx: RuntimeContext<any>,
   arg: string,
 ): Promise<void> {
@@ -25,13 +27,22 @@ export async function _doThing(
 }
 ```
 
-```agency
-// stdlib/foo.agency
-import { _doThing } from "agency-lang/stdlib-lib/foo.js"
+```ts
+// lib/codegenBuiltins/contextInjected.ts (add to the registry)
+__internal_doThing: {
+  name: "__internal_doThing",
+  params: [string],
+  returnType: voidT,
+},
+```
 
+```agency
+// stdlib/foo.agency — no `import` needed; __internal_* are builtins
 export def doThing(arg: string) {
-  _doThing(getContext(), arg)
+  __internal_doThing(arg)
 }
 ```
 
-`getContext()` is a builder macro: it lowers to the in-scope `__ctx` identifier at codegen time, so there is no runtime overhead and no module-level state to race on. Type the TS parameter as `RuntimeContext<any>` (not the narrower public `Context` type) so the implementation retains access to internal fields the agency type system intentionally hides.
+The TypeScript builder rewrites every call to `__internal_doThing(arg)` as `await __internal_doThing(__ctx, arg)`, so user code never holds a reference to the runtime context. Type the TS parameter as `RuntimeContext<any>` so the implementation retains access to internal fields the agency type system intentionally hides.
+
+Names beginning with `__internal_` are reserved for this mechanism. The typechecker rejects any reference to a `__internal_*` identifier outside the callee position of a function call (e.g. `let f = __internal_doThing` is an error), and any `__internal_*` name not in the registry is reported as an unknown internal builtin.

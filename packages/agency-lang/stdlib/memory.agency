@@ -1,13 +1,3 @@
-import {
-  _setMemoryId,
-  _recall,
-  _shouldRunMemory,
-  _buildExtractionPrompt,
-  _applyExtractionResult,
-  _buildForgetPrompt,
-  _applyForgetResult,
-} from "agency-lang/stdlib-lib/memory.js"
-
 // The structured shapes the memory LLM calls return. Defining them in
 // Agency lets the runtime derive the `responseFormat` Zod schema from
 // the type annotation on `llm()`, so structured-output enforcement
@@ -24,12 +14,19 @@ type ForgetResult = {
   relations: { fromName: string, toName: string, type: string }[]
 }
 
-// `getContext()` is a builtin that lowers to the in-scope `__ctx`
-// identifier at codegen time (zero runtime cost — see
-// lib/backends/typescriptBuilder.ts). We pass it inline rather than
-// binding to a const because storing the runtime context in
-// `__stack.locals` interacts badly with the runner's step counter
-// and skips the next step (tracked separately).
+// `__internal_*` names are context-injected builtins: agency-callable
+// identifiers whose call sites are rewritten by the TypeScript builder
+// to prepend the runtime context (`__ctx`) as the first positional
+// argument. They are always in scope — no `import` is needed at the
+// agency-source level — and are forbidden from appearing as values
+// (no `let f = __internal_recall`, etc).
+//
+// See lib/codegenBuiltins/contextInjected.ts for the registry that
+// drives the rewrite, and lib/stdlib/memory.ts for the implementations.
+//
+// This replaces the earlier `getContext()` macro: rather than handing
+// the runtime context to user code via a builtin call, we pass it in
+// at codegen time so user code never holds a reference to it.
 
 export def setMemoryId(id: string) {
   """
@@ -42,7 +39,7 @@ export def setMemoryId(id: string) {
 
   @param id - A unique identifier for the memory scope (e.g. user ID)
   """
-  _setMemoryId(getContext(), id)
+  __internal_setMemoryId(id)
 }
 
 export def remember(content: string) {
@@ -58,11 +55,11 @@ export def remember(content: string) {
 
   @param content - Natural language text containing facts to remember
   """
-  if (_shouldRunMemory(getContext())) {
+  if (__internal_shouldRunMemory()) {
     thread {
-      const prompt = _buildExtractionPrompt(getContext(), content)
+      const prompt = __internal_buildExtractionPrompt(content)
       const result: ExtractionResult = llm(prompt)
-      _applyExtractionResult(getContext(), result)
+      __internal_applyExtractionResult(result)
     }
   }
 }
@@ -78,7 +75,7 @@ export safe def recall(query: string): string {
 
   @param query - A natural language query describing what to recall
   """
-  return _recall(getContext(), query)
+  return __internal_recall(query)
 }
 
 export def forget(query: string) {
@@ -93,11 +90,11 @@ export def forget(query: string) {
 
   @param query - A natural language description of what to forget
   """
-  if (_shouldRunMemory(getContext())) {
+  if (__internal_shouldRunMemory()) {
     thread {
-      const prompt = _buildForgetPrompt(getContext(), query)
+      const prompt = __internal_buildForgetPrompt(query)
       const result: ForgetResult = llm(prompt)
-      _applyForgetResult(getContext(), result)
+      __internal_applyForgetResult(result)
     }
   }
 }

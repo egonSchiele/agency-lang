@@ -144,3 +144,34 @@ jobs:
           exit 0
         fi
         pnpm -F @agency-lang/github test:agency
+
+  integration-credentials:
+    # Only run on push to main or daily cron — never on PRs (secrets not available to forks).
+    if: >
+      (github.event_name == 'push' && github.ref == 'refs/heads/main')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: ci-credentials
+    permissions:
+      contents: read
+    env:
+      RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+      TWILIO_ACCOUNT_SID: ${{ secrets.TWILIO_ACCOUNT_SID }}
+      TWILIO_AUTH_TOKEN: ${{ secrets.TWILIO_AUTH_TOKEN }}
+      TWILIO_FROM_NUMBER: ${{ secrets.TWILIO_FROM_NUMBER }}
+      BROWSER_USE_API_KEY: ${{ secrets.BROWSER_USE_API_KEY }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
+        with:
+          version: 9
+          run_install: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install
+      - run: make
+      - name: Credential stdlib tests
+        working-directory: packages/agency-lang
+        run: node tests/integration/stdlib-sandbox/credential/run.mjs

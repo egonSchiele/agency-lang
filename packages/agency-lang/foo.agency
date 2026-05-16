@@ -1,5 +1,5 @@
 node main() {
-  const interruptKinds = ["showPolicy", "writePolicy", "askQuestion"]
-  let contextMessage = "This agent can produce the following interrupts:\n" + map(interruptKinds, \kind -> `- ${kind}\n`).join("")
+  const name = "Adit"
+  const greeting = llm("What is a good greeting for ${name}?")
+  print(greeting)
 }
-

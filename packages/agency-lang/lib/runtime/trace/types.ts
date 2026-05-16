@@ -78,8 +78,15 @@ export type TraceConfig = {
    * Fixed trace file path. All runs of this module write to this same
    * file. Useful for tests and single-run inspection. NOT safe with
    * concurrent runs of the same agent — they will interleave into one
-   * file and runNode will truncate at each new run start. Prefer
+   * file and `runNode` will truncate at each new run start. Prefer
    * `traceDir` for production agents that may run concurrently.
+   *
+   * Within a single run, multiple per-execCtx writers (one per
+   * `respondToInterrupts`) cooperate via the file itself: each new
+   * writer scans the on-disk trace at construction (see
+   * `scanExistingTraceFile` in `traceWriter.ts`) to skip writing a
+   * duplicate header and to seed its CAS so chunks already on disk are
+   * not re-emitted.
    *
    * If both `traceFile` and `traceDir` are set, `traceFile` wins.
    */

@@ -157,8 +157,6 @@ function collectTags(nodes: AgencyNode[]): AgencyNode[] {
 export class TypescriptPreprocessor {
   public program: AgencyProgram;
   protected config: AgencyConfig;
-  protected functionNameToAsync: Record<string, boolean> = {};
-  protected functionNameToUsesInterrupt: Record<string, boolean> = {};
   protected functionDefinitions: Record<string, FunctionDefinition> = {};
   protected importedFunctions: Record<string, ImportedFunctionSignature> = {};
   protected graphNodeDefinitions: Record<string, AgencyNode> = {};
@@ -314,36 +312,6 @@ export class TypescriptPreprocessor {
     }
     this.propagateBlockTypes();
     this.collectSkills();
-    /*
-    Skipping these for now. The issue is that these functions could be modifying global state.
-    Here's an example:
-
-    ```agency
-    globalVar = 0
-      
-    def increment() {
-      globalVar = globalVar + 1
-    }
-      
-    def getGlobal() {
-      return globalVar
-    }
-      
-    node main() {
-      increment()
-      increment()
-      val = getGlobal()
-      print(val)
-    }
-    ```
-      
-    In the current code to mark functions async,
-    all three of these function calls run concurrently...
-    so `val` could be 0, 1, or 2, depending on how many of the increment() calls run!
-    */
-    // this.markFunctionsAsync();
-    // this.markFunctionCallsAsync();
-    this.removeUnusedLlmCalls();
     this.addAwaitPendingCalls();
     this.filterExcludedNodeTypes();
     this.filterExcludedBuiltinFunctions();
@@ -370,70 +338,6 @@ export class TypescriptPreprocessor {
         }
       }
     }
-  }
-
-  protected removeUnusedLlmCalls(): void {
-    for (const node of this.program.nodes) {
-      if (node.type === "function" || node.type === "graphNode") {
-        node.body = this._removeUnusedLlmCalls(node.body);
-      }
-    }
-  }
-
-  // TODO: Update _removeUnusedLlmCalls to work with llm() as FunctionCall.
-  // Currently disabled because we can't introspect the config object to check
-  // for sync tools. Need to update this to check for tools in the llm() config arg.
-  protected _removeUnusedLlmCalls(body: AgencyNode[]): AgencyNode[] {
-    return body;
-    /* Original implementation (used PromptLiteral nodes, needs rewrite for FunctionCall):
-    const newBody: AgencyNode[] = [];
-    for (const node of body) {
-      if (node.type === "prompt") {
-        const hasSyncTools = node.tools
-          ? node.tools.toolNames.some(
-              (t) => this.functionNameToAsync[t] === false,
-            )
-          : false;
-        if (!hasSyncTools) {
-          newBody.push({
-            type: "comment",
-            content: `Removed unused LLM call: "${this.promptLiteralToString(node)}"`,
-          });
-          continue;
-        }
-      }
-
-      if (node.type === "assignment" && node.value.type === "prompt") {
-        const hasSyncTools = node.value.tools
-          ? node.value.tools.toolNames.some(
-              (t) => this.functionNameToAsync[t] === false,
-            )
-          : false;
-        if (hasSyncTools) {
-          newBody.push(node);
-        } else {
-          const isUsed = this.isVarUsedInBody(node.variableName, node, body);
-          if (isUsed) {
-            newBody.push(node);
-          } else {
-            newBody.push({
-              type: "comment",
-              content: `Removed unused LLM call, was assigned to variable '${node.variableName}' but variable was never used.`,
-            });
-            continue;
-          }
-        }
-      } else if (
-        node.type === "returnStatement" &&
-        node.value?.type === "prompt"
-      ) {
-        newBody.push(node);
-      } else {
-        newBody.push(node);
-      }
-    }
-    return newBody;
-    */
   }
 
   protected isVarUsedInBody(
@@ -515,16 +419,6 @@ export class TypescriptPreprocessor {
     */
   }
 
-  protected markFunctionsAsync(): void {
-    if (this.program === null) {
-      throw new Error("Program is not set in generator.");
-    }
-    const sortedFunctions = this.topologicalSortFunctions();
-    for (const node of sortedFunctions) {
-      this._markFunctionAsAsync(node);
-    }
-  }
-
   protected findChildren(body: AgencyNode[], type: string): AgencyNode[] {
     const children: AgencyNode[] = [];
     for (const { node } of walkNodesArray(body)) {
@@ -537,109 +431,6 @@ export class TypescriptPreprocessor {
 
   protected isBuiltinFunction(functionName: string): boolean {
     return BUILTIN_FUNCTIONS[functionName] !== undefined;
-  }
-
-  protected markFunctionCallsAsync(): void {
-    if (this.program === null) {
-      throw new Error("Program is not set in generator.");
-    }
-    for (const { node, ancestors } of walkNodesArray(this.program.nodes)) {
-      const closestMessageThread = [...ancestors]
-        .reverse()
-        .find((a) => a.type === "messageThread") as MessageThread | undefined;
-      const isInMessageThread = !!closestMessageThread;
-      const isInReturnStatement = ancestors.some(
-        (a) => a.type === "returnStatement",
-      );
-
-      if (node.type === "functionCall") {
-        if (node.functionName === "llm") {
-          // llm() calls: sync by default when they have a config arg (2nd argument),
-          // unless explicitly marked async by the user.
-          // llm() calls without config follow the same rules as before.
-          if (node.async !== undefined) {
-            continue; // already marked as async or sync by user
-          }
-
-          const hasConfig = node.arguments.length > 1;
-          if (hasConfig) {
-            // LLM calls with config are always sync unless explicitly async
-            node.async = false;
-            continue;
-          }
-
-          // prompts in message threads are sync to preserve message order
-          if (isInMessageThread) {
-            node.async = false;
-            continue;
-          }
-
-          // if in return, this is the last line of execution,
-          // so we need to wait for it to finish
-          if (isInReturnStatement) {
-            node.async = false;
-            continue;
-          }
-
-          // Default: async (no tools to worry about in the no-config case)
-          node.async = true;
-        } else {
-          // Non-llm function calls: run sync unless specifically marked async
-          node.async = node.async ?? false;
-        }
-        continue;
-      }
-    }
-  }
-
-  protected _markFunctionAsAsync(node: FunctionDefinition): void {
-    if (this.functionNameToAsync[node.functionName] !== undefined) {
-      return; // already processed
-    }
-    let isAsync = true;
-    if (this.containsInterrupt(node)) {
-      isAsync = false;
-    }
-    this.functionNameToAsync[node.functionName] = isAsync;
-    node.async = isAsync;
-  }
-
-  protected containsInterrupt(node: FunctionDefinition): boolean {
-    if (this.functionNameToUsesInterrupt[node.functionName] !== undefined) {
-      return this.functionNameToUsesInterrupt[node.functionName];
-    }
-
-    // Default to true (has interrupt) before recursing. This breaks infinite
-    // loops from mutual recursion: if A calls B and B calls A, when we recurse
-    // into B and it tries to check A again, it will hit this cached value and
-    // return true instead of recursing forever. We err on the side of caution
-    // (true = has interrupt = not async) since marking a function as sync when
-    // it should be async is safer than the reverse.
-    this.functionNameToUsesInterrupt[node.functionName] = true;
-
-    for (const { node: subnode, ancestors } of walkNodesArray(node.body)) {
-      if (subnode.type === "functionCall") {
-        if (subnode.functionName === "interrupt") {
-          return true;
-        }
-        // Skip method calls on objects (e.g. planner.updateActions()) —
-        // these are nested inside a valueAccess node and should not be
-        // resolved against top-level function definitions.
-        const isPartOfValueAccess = ancestors.some(
-          (a) => a.type === "valueAccess",
-        );
-        if (isPartOfValueAccess) {
-          continue;
-        }
-        const func = this.functionDefinitions[subnode.functionName];
-        if (func && this.containsInterrupt(func)) {
-          return true;
-        }
-      }
-    }
-
-    this.functionNameToUsesInterrupt[node.functionName] = false;
-    return false;
   }
 
   private prettifyName(call: FunctionCall): string {

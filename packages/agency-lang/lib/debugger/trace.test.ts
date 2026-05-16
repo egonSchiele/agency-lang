@@ -92,6 +92,28 @@ describe("Trace integration with debugger", () => {
       expect(Object.keys(lastLocals).length).toBeGreaterThanOrEqual(
         Object.keys(firstLocals).length,
       );
+
+      // Cross-segment trace optimizations:
+      //   1. Exactly one `header` line spans the whole file (each new
+      //      per-execCtx writer skips writing a header after detecting one
+      //      already on disk via `scanExistingTraceFile`).
+      //   2. Cross-segment chunk dedup happens — chunks observed on disk by
+      //      a new writer seed its CAS so they aren't re-emitted. With many
+      //      step-driven interrupts and shared globals/frames between
+      //      segments, total chunks should be far less than 2× manifests
+      //      (a loose-but-meaningful upper bound).
+      const lines = fs
+        .readFileSync(traceFile, "utf-8")
+        .trim()
+        .split("\n")
+        .map((l) => JSON.parse(l));
+      const headers = lines.filter((l: any) => l.type === "header");
+      expect(headers).toHaveLength(1);
+
+      const chunks = lines.filter((l: any) => l.type === "chunk");
+      const manifests = lines.filter((l: any) => l.type === "manifest");
+      expect(manifests.length).toBeGreaterThan(0);
+      expect(chunks.length).toBeLessThan(manifests.length * 2);
     },
   );
 });

@@ -48,6 +48,19 @@ export class ContentAddressableStore {
     }
   }
 
+  /**
+   * Seed the set of hashes that should be treated as already-emitted, without
+   * loading their chunk data. Used by `TraceWriter` when it scans an existing
+   * trace file at construction time so that subsequent `process()` calls don't
+   * re-emit chunks that prior writers in the same run already wrote. Unlike
+   * `loadChunks`, this does NOT populate `chunkData` (the writer never needs to
+   * reconstruct values, only check whether to emit them), keeping memory low
+   * for long traces.
+   */
+  seedSeenHashes(hashes: Set<string>): void {
+    for (const h of hashes) this.seenHashes.add(h);
+  }
+
   private walk(data: any, schema: CASSchema, chunks: Chunk[]): any {
     if (data === null || data === undefined) return data;
     const result = Array.isArray(data) ? [...data] : { ...data };

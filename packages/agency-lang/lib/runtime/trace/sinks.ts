@@ -16,7 +16,12 @@ export class FileSink implements TraceSink {
   // at the start of a fresh run is handled by `runNode` via
   // `resolveTraceFilePath` + `fs.writeFileSync(path, "")`. Resume paths
   // (respondToInterrupts) never truncate, so per-execCtx writers within
-  // one run accumulate into the same file naturally.
+  // one run accumulate into the same file naturally. Cross-segment
+  // header/chunk dedup is implemented in `TraceWriter.create` via
+  // `scanExistingTraceFile`, which reads the on-disk state and seeds the
+  // new writer's CAS + header flag — no shared in-memory state on the
+  // parent ctx, so concurrent runs (each writing to a distinct
+  // `${runId}.agencytrace` file in `traceDir` mode) never collide.
   constructor(filePath: string) {
     this.createDirIfNotExists(path.dirname(filePath));
     this.stream = fs.createWriteStream(filePath, {

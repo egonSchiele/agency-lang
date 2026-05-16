@@ -353,3 +353,57 @@ agency test js tests/agency-js/my-test
 # Multi-step JS tests (deterministic — reads tests/agency-js/<dir>/llmMocks.json)
 AGENCY_USE_TEST_LLM_PROVIDER=1 pnpm run test:agency-js
 ```
+
+---
+
+## What Runs Where
+
+### On every push and PR
+
+**Unit tests** (`pnpm test:run`) — vitest tests for parsers, generators, runtime, and other TypeScript internals. Run on both Node 22 and Node 23.
+
+**Structural lint** (`pnpm run lint:structure`) — eslint with Agency-specific rules (max function length, no dynamic imports, no Map/Set, etc.). Run on PRs only.
+
+**Docs build** (`pnpm run docs`) — builds the vitepress documentation site to catch broken links or markup. Node 22 only.
+
+**Integration tests** — run in a fresh temp directory outside the monorepo, installed from an `npm pack` tarball. Node 22 only.
+
+- **Smoke test** (`tests/integration/smoke/test.mjs`) — installs Agency from tarball, compiles an `.agency` file, imports and runs it from TypeScript.
+- **esbuild test** (`tests/integration/bundlers/test-esbuild.mjs`) — bundles a compiled Agency project with esbuild.
+- **Vite test** (`tests/integration/bundlers/test-vite.mjs`) — builds a compiled Agency project with Vite (SSR mode).
+- **CLI tests** (`tests/integration/cli/test.mjs`) — tests `agency run`, stdlib imports, interrupts/handlers, and the `agency test` runner.
+
+**Stdlib sandbox tests** (`tests/integration/stdlib-sandbox/run.mjs`) — exercise real side effects (filesystem, shell, network) in controlled environments. Guarded by `CI=true` so they don't run locally. Node 22 only. Includes:
+
+- `fs.agency` — mkdir, edit, copy, move, remove in a `/tmp` sandbox
+- `shell.agency` — exec, bash, ls, stat, exists, which
+- `pure.agency` — math, array, path, system, agent
+- `date.agency` — now, today, tomorrow, addDays, addHours, startOfDay, endOfDay
+- `policy.agency` — validatePolicy
+- `ui.agency` — log, status, separator, emptyLine
+- `strategy.agency` — retry, firstValid
+- `wikipedia.agency` — search, summary (live API, allowed to fail)
+- `weather.agency` — weather lookup, unit conversion (live API, allowed to fail)
+- `http` (agency-js format) — webfetch against a local mock server
+
+**Agency execution tests** (`pnpm run test:agency`) — compile and run `.agency` files, compare output to `.test.json` fixtures. Use the deterministic LLM client in CI (`AGENCY_USE_TEST_LLM_PROVIDER=1`). Run on both Node 22 and 23.
+
+**Agency-JS tests** (`pnpm run test:agency-js`) — multi-step JavaScript tests that import compiled agents. Same deterministic LLM mode in CI. Run on both Node 22 and 23.
+
+**Coverage report** — on Node 22, the agency and agency-js test runs collect step coverage data. A report is generated and posted as a PR comment showing stdlib coverage percentages.
+
+### On push to main only
+
+**Credential-based stdlib tests** (`tests/integration/stdlib-sandbox/credential/run.mjs`) — tests that require API keys, gated by the `ci-credentials` GitHub Environment. Never run on PRs (secrets not available to forks).
+
+- `email.agency` — sends via Resend sandbox (no real email delivered)
+- `sms.agency` — sends via Twilio test credentials (no real SMS sent)
+- `browser.agency` — visits example.com via Browser Use API
+
+**GitHub stdlib smoke test** — runs the `@agency-lang/github` package's agency tests with a real GitHub token.
+
+### Local only (not in CI)
+
+**Agency tests with real LLM** — run `pnpm run test:agency` without `AGENCY_USE_TEST_LLM_PROVIDER` to use the real OpenAI client. Requires `OPENAI_API_KEY`.
+
+**Stdlib sandbox tests** — can be run locally by setting `AGENCY_SANDBOX_TESTS=1`, but this is discouraged since they touch the real filesystem and network.

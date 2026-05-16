@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Weather: current weather lookup + unit conversion (live API, may be flaky)",
+      "input": "",
+      "expectedOutput": "\"weather ok\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

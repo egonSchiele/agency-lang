@@ -56,9 +56,11 @@ for (const name of agencyTests) {
     `node ./dist/scripts/agency.js test tests/integration/stdlib-sandbox/${name}.agency`);
 }
 
-// Wikipedia hits a live API — allow it to fail without blocking CI
+// Live APIs — allow to fail without blocking CI
 runAllowFail("Stdlib sandbox: wikipedia",
   "node ./dist/scripts/agency.js test tests/integration/stdlib-sandbox/wikipedia.agency");
+runAllowFail("Stdlib sandbox: weather",
+  "node ./dist/scripts/agency.js test tests/integration/stdlib-sandbox/weather.agency");
 
 // Agency-JS tests (test.js + fixture.json)
 run("Stdlib sandbox (agency-js tests)",

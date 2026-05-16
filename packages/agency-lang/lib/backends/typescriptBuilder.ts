@@ -3604,7 +3604,7 @@ export class TypeScriptBuilder {
   private generateImports(): string {
     const cfg = this.agencyConfig;
 
-    const statelogConfig = ts.obj({
+    const statelogFields: Record<string, TsNode> = {
       host: ts.str(cfg.log?.host || ""),
       apiKey: cfg.log?.apiKey
         ? ts.str(cfg.log.apiKey)
@@ -3612,7 +3612,28 @@ export class TypeScriptBuilder {
       projectId: ts.str(cfg.log?.projectId || ""),
       debugMode: ts.bool(cfg.log?.debugMode || false),
       observability: ts.bool(cfg.observability || false),
-    });
+    };
+    if (cfg.log?.metadata) {
+      const metaFields: Record<string, TsNode> = {};
+      if (cfg.log.metadata.tags) {
+        metaFields.tags = ts.raw(JSON.stringify(cfg.log.metadata.tags));
+      }
+      if (cfg.log.metadata.environment) {
+        metaFields.environment = ts.str(cfg.log.metadata.environment);
+      }
+      if (cfg.log.metadata.agentVersion) {
+        metaFields.agentVersion = ts.str(cfg.log.metadata.agentVersion);
+      }
+      if (cfg.log.metadata.custom) {
+        const customFields: Record<string, TsNode> = {};
+        for (const [k, v] of Object.entries(cfg.log.metadata.custom)) {
+          customFields[k] = ts.str(v);
+        }
+        metaFields.custom = ts.obj(customFields);
+      }
+      statelogFields.metadata = ts.obj(metaFields);
+    }
+    const statelogConfig = ts.obj(statelogFields);
 
     const smoltalkDefaults = ts.obj({
       openAiApiKey: cfg.client?.openAiApiKey

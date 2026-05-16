@@ -83,6 +83,12 @@ export interface AgencyConfig {
     projectId: string;
     debugMode: boolean;
     apiKey: string;
+    metadata: {
+      tags?: string[];
+      environment?: string;
+      agentVersion?: string;
+      custom?: Record<string, string>;
+    };
   }>;
 
   /** Smoltalk client config */
@@ -241,6 +247,14 @@ export const AgencyConfigSchema = z
         projectId: z.string(),
         debugMode: z.boolean(),
         apiKey: z.string(),
+        metadata: z
+          .object({
+            tags: z.array(z.string()),
+            environment: z.string(),
+            agentVersion: z.string(),
+            custom: z.record(z.string(), z.string()),
+          })
+          .partial(),
       })
       .partial(),
     client: z

@@ -46,6 +46,10 @@ export class SimpleMachine<T> {
     }
   }
 
+  setStatelogClient(client: StatelogClient): void {
+    this.statelogClient = client;
+  }
+
   node(id: string, func: (data: T) => Promise<T | GoToNode<T>>): void {
     this.nodes[id] = func;
   }

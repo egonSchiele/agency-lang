@@ -46,6 +46,8 @@ async function _runPrompt({
     throw new AgencyCancelledError();
   }
 
+  ctx.statelogClient.startSpan("llmCall");
+  try { // try/finally for llmCall span
   const stream = !!(clientConfig as any)?.stream;
   const startTime = performance.now();
 
@@ -188,6 +190,9 @@ async function _runPrompt({
   }
 
   return { messages, toolCalls };
+  } finally {
+    ctx.statelogClient.endSpan(); // end llmCall span
+  }
 }
 
 export async function runPrompt(args: {
@@ -300,8 +305,6 @@ export async function runPrompt(args: {
 
   // Tool calls: restore from frame or make initial LLM call
   let toolCalls: smoltalk.ToolCallJSON[];
-  ctx.statelogClient.startSpan("llmCall");
-  try { // try/finally for llmCall span — covers initial _runPrompt and tool loop
   if (self.pendingToolCalls) {
     toolCalls = self.pendingToolCalls;
   } else {
@@ -448,6 +451,7 @@ export async function runPrompt(args: {
         const toolCallStartTime = performance.now();
         ctx.statelogClient.startSpan("toolExecution");
         let result: any;
+        try { // try/finally for toolExecution span
         ctx.enterToolCall();
         try {
           result = await handler.invoke(
@@ -478,7 +482,6 @@ export async function runPrompt(args: {
           );
           removedTools.push(handler.name);
           stack.deleteBranch(branchKey);
-          ctx.statelogClient.endSpan(); // end toolExecution span
           continue;
         } finally {
           ctx.exitToolCall();
@@ -524,7 +527,6 @@ export async function runPrompt(args: {
             removedTools.push(handler.name);
           }
           stack.deleteBranch(branchKey);
-          ctx.statelogClient.endSpan(); // end toolExecution span
           continue;
         }
 
@@ -540,7 +542,6 @@ export async function runPrompt(args: {
             }),
           );
           stack.deleteBranch(branchKey);
-          ctx.statelogClient.endSpan(); // end toolExecution span
           continue;
         }
 
@@ -560,7 +561,6 @@ export async function runPrompt(args: {
             result[0].interruptData,
             result[0].checkpoint,
           );
-          ctx.statelogClient.endSpan(); // end toolExecution span
           continue;
         }
 
@@ -587,7 +587,10 @@ export async function runPrompt(args: {
           model: JSON.stringify(clientConfig.model),
           timeTaken: toolCallEndTime - toolCallStartTime,
         });
-        ctx.statelogClient.endSpan(); // end toolExecution span
+
+        } finally { // end toolExecution span
+          ctx.statelogClient.endSpan();
+        }
 
         messages.push(
           smoltalk.toolMessage(result, {
@@ -658,9 +661,6 @@ export async function runPrompt(args: {
     throw error;
   } finally {
     if (shouldPop) stateStack.pop();
-  }
-  } finally { // end llmCall span (covers initial _runPrompt + tool loop)
-    ctx.statelogClient.endSpan();
   }
 
   const responseMessage = messages.getMessages().at(-1);

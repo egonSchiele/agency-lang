@@ -566,12 +566,12 @@ export class Runner {
 
     const forkId = nanoid(12);
     const forkStartTime = performance.now();
+    this.ctx.statelogClient.startSpan(mode === "all" ? "forkAll" : "race");
     this.ctx.statelogClient.forkStart({
       forkId,
       mode,
       branchCount: items.length,
     });
-    this.ctx.statelogClient.startSpan(mode === "all" ? "forkAll" : "race");
 
     this.path.push(id);
     let result: any;
@@ -589,10 +589,10 @@ export class Runner {
         );
         if (hasInterrupts(result)) return result;
       } else if (mode === "all") {
-        result = await this.runForkAll(id, items, blockFn, stateStack);
+        result = await this.runForkAll(id, items, blockFn, stateStack, forkId);
         if (hasInterrupts(result)) return result;
       } else {
-        result = await this.runRace(id, items, blockFn, stateStack);
+        result = await this.runRace(id, items, blockFn, stateStack, forkId);
         if (hasInterrupts(result)) return result;
       }
 
@@ -600,7 +600,12 @@ export class Runner {
       this.frame.popBranches();
     } finally {
       this.path.pop();
-      this.ctx.statelogClient.endSpan(); // end forkAll/race span
+      // Ensure all branch forkDepth increments are cleared before ending
+      // the fork span. Losers in a race may still be running when the
+      // winner resolves, leaving forkDepth elevated.
+      for (let i = 0; i < items.length; i++) {
+        this.ctx.statelogClient.exitFork();
+      }
       this.ctx.statelogClient.forkEnd({
         forkId,
         mode,
@@ -609,6 +614,7 @@ export class Runner {
           ? this.frame.locals[this.raceWinnerKey(id)] as number | undefined
           : undefined,
       });
+      this.ctx.statelogClient.endSpan(); // end forkAll/race span
     }
 
     if (this.halted) return undefined;
@@ -630,6 +636,7 @@ export class Runner {
       branchStack: StateStack,
     ) => Promise<any>,
     stateStack: StateStack,
+    forkId: string,
   ): Promise<any> {
     const promises = items.map((item, i) => {
       const branchKey = this.forkBranchKey(id, i);
@@ -649,6 +656,7 @@ export class Runner {
           ? AbortSignal.any([parentSignal, existing.abortController.signal])
           : existing.abortController.signal;
       }
+      const branchStart = performance.now();
       this.ctx.statelogClient.enterFork();
       return blockFn(item, i, existing.stack).finally(() => {
         this.ctx.statelogClient.exitFork();
@@ -662,9 +670,21 @@ export class Runner {
       const s = settled[i];
       const branchKey = this.forkBranchKey(id, i);
       if (s.status === "rejected") {
+        this.ctx.statelogClient.forkBranchEnd({
+          forkId,
+          branchIndex: i,
+          outcome: "failure",
+          timeTaken: 0,
+        });
         throw s.reason;
       }
       if (hasInterrupts(s.value)) {
+        this.ctx.statelogClient.forkBranchEnd({
+          forkId,
+          branchIndex: i,
+          outcome: "interrupted",
+          timeTaken: 0,
+        });
         interrupts.push(...s.value);
         this.frame.setInterruptOnBranch(
           branchKey,
@@ -673,6 +693,12 @@ export class Runner {
           s.value[0].checkpoint,
         );
       } else {
+        this.ctx.statelogClient.forkBranchEnd({
+          forkId,
+          branchIndex: i,
+          outcome: "success",
+          timeTaken: 0,
+        });
         this.frame.setResultOnBranch(branchKey, s.value);
       }
     }
@@ -712,6 +738,7 @@ export class Runner {
       branchStack: StateStack,
     ) => Promise<any>,
     stateStack: StateStack,
+    forkId: string,
   ): Promise<any> {
     // Build the per-branch promises, each tagged with its index so we know
     // who won the race.
@@ -760,7 +787,19 @@ export class Runner {
       const branchKey = this.forkBranchKey(id, i);
       const branch = this.frame.getBranch(branchKey);
       branch?.abortController?.abort();
+      this.ctx.statelogClient.forkBranchEnd({
+        forkId,
+        branchIndex: i,
+        outcome: "aborted",
+        timeTaken: 0,
+      });
     }
+    this.ctx.statelogClient.forkBranchEnd({
+      forkId,
+      branchIndex: winnerIndex,
+      outcome: hasInterrupts(winnerValue) ? "interrupted" : "success",
+      timeTaken: 0,
+    });
 
     // Record the winner so a resume on the same race step replays only this
     // branch (not the abandoned losers).

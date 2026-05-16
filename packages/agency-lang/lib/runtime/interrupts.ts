@@ -224,12 +224,12 @@ export async function interruptWithHandlers<T = any>(
 
   // Normal mode (non-IPC)
   if (hasPropagation) {
-    ctx.statelogClient.interruptResolved({
-      interruptId,
-      outcome: "propagated",
-      resolvedBy: "handler",
+    const intr = interrupt({ kind, message, data, origin, runId: ctx.getRunId(), interruptId });
+    ctx.statelogClient.interruptThrown({
+      interruptId: intr.interruptId,
+      interruptData: data,
     });
-    return [interrupt({ kind, message, data, origin, runId: ctx.getRunId(), interruptId })];
+    return [intr];
   }
   if (hasApproval) {
     ctx.statelogClient.interruptResolved({
@@ -240,12 +240,12 @@ export async function interruptWithHandlers<T = any>(
     return { type: "approve", value: approvedValue };
   }
   // No handler responded — propagate to user
-  ctx.statelogClient.interruptResolved({
-    interruptId,
-    outcome: "propagated",
-    resolvedBy: "user",
+  const intr = interrupt({ kind, message, data, origin, runId: ctx.getRunId(), interruptId });
+  ctx.statelogClient.interruptThrown({
+    interruptId: intr.interruptId,
+    interruptData: data,
   });
-  return [interrupt({ kind, message, data, origin, runId: ctx.getRunId(), interruptId })];
+  return [intr];
 }
 
 export async function respondToInterrupts(args: {
@@ -290,6 +290,10 @@ export async function respondToInterrupts(args: {
   }
 
   const execCtx = await ctx.createExecutionContext(interrupt.runId);
+  execCtx.statelogClient.checkpointRestored({
+    checkpointId: checkpoint.id,
+    restoreCount: 1,
+  });
   execCtx.restoreState(checkpoint);
 
   execCtx.setInterruptResponses(responseMap);
@@ -303,6 +307,7 @@ export async function respondToInterrupts(args: {
     execCtx.debuggerState = metadata.debugger;
   }
 
+  execCtx.statelogClient.startSpan("agentRun");
   let nodeName = checkpoint.nodeId;
   try {
     while (true) {
@@ -331,6 +336,10 @@ export async function respondToInterrupts(args: {
       } catch (e) {
         if (e instanceof RestoreSignal) {
           const cp = e.checkpoint;
+          execCtx.statelogClient.checkpointRestored({
+            checkpointId: cp.id,
+            restoreCount: execCtx._restoreCount,
+          });
           execCtx.restoreState(cp);
           nodeName = cp.nodeId;
           execCtx.stateStack.nodesTraversed = [cp.nodeId];
@@ -340,6 +349,7 @@ export async function respondToInterrupts(args: {
       }
     }
   } finally {
+    execCtx.statelogClient.endSpan(); // end agentRun span
     execCtx.cleanup();
   }
 }

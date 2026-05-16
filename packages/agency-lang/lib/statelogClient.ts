@@ -94,7 +94,7 @@ export class StatelogClient {
       );
     }
 
-    if (!this.apiKey) {
+    if (!this.apiKey && this.host.toLowerCase() !== "stdout") {
       this.enabled = false;
       if (this.debugMode)
         console.warn(
@@ -613,7 +613,7 @@ export class StatelogClient {
 
   // === Post (wire format) ===
 
-  private async post(body: Record<string, any>): Promise<void> {
+  async post(body: Record<string, any>): Promise<void> {
     if (!this.host) {
       return;
     }
@@ -664,6 +664,7 @@ export function getStatelogClient(config: {
   traceId?: string;
   projectId: string;
   debugMode?: boolean;
+  observability?: boolean;
 }): StatelogClient {
   const statelogConfig = {
     host: config.host,
@@ -671,6 +672,7 @@ export function getStatelogClient(config: {
     apiKey: process.env.STATELOG_API_KEY || "",
     projectId: config.projectId,
     debugMode: config.debugMode || false,
+    observability: config.observability,
   };
   const client = new StatelogClient(statelogConfig);
   return client;

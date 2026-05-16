@@ -351,6 +351,7 @@ type StatelogConfig = {
   apiKey: string;
   projectId: string;
   debugMode: boolean;
+  observability?: boolean;
   // NEW:
   metadata?: {
     tags?: string[];
@@ -366,6 +367,7 @@ The `agency.json` config section becomes:
 
 ```json
 {
+  "observability": true,
   "log": {
     "host": "https://agency-lang.com",
     "projectId": "my-project",
@@ -588,7 +590,7 @@ And a new interrupt event:
 ### Integration tests
 
 - Create a small Agency program that exercises: LLM call, tool call, interrupt, handler, checkpoint, restore, fork, thread.
-- Run it with `host: "stdout"` and capture the JSON output.
+- Run it with `observability: true` and `host: "stdout"` and capture the JSON output. Note: stdout mode is exempt from the API key requirement.
 - Assert the event stream contains all expected event types in the correct order, with correct span nesting (parent IDs match), correct token/cost data, and correct interrupt lifecycle events.
 
 ### Fixture tests

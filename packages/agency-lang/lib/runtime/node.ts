@@ -240,6 +240,17 @@ export async function runNode({
         throw e;
       }
     }
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    execCtx.statelogClient.error({
+      errorType: "runtimeError",
+      message: errorMessage,
+    });
+    execCtx.statelogClient.agentEnd({
+      entryNode: nodeName,
+      timeTaken: performance.now() - agentStartTime,
+    });
+    throw error;
   } finally {
     execCtx.statelogClient.endSpan(); // end agentRun span
     // Persist any in-memory MemoryManager state. Writes are best-effort —

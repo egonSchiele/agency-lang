@@ -42,6 +42,7 @@ export class SimpleMachine<T> {
         traceId: config.statelog.traceId,
         debugMode: config.statelog.debugMode ?? false,
         observability: config.statelog.observability,
+        logFile: config.statelog.logFile,
       });
     }
   }

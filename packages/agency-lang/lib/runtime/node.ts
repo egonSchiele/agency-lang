@@ -35,15 +35,17 @@ export function setupNode(args: { state: GraphState }): {
   let threads: ThreadStore;
   if (stack.threads) {
     threads = ThreadStore.fromJSON(stack.threads);
+    threads.setStatelogClient(ctx.statelogClient);
   } else if (state.messages instanceof ThreadStore) {
     threads = state.messages;
+    threads.setStatelogClient(ctx.statelogClient);
   } else {
     // Fallback: create a new ThreadStore with a default active thread.
     // This can happen on debugger/rewind resume paths where messages is not passed
     // and the checkpoint frame doesn't have serialized threads.
-    threads = ThreadStore.withDefaultActive();
+    // Pass the client so the default thread is logged.
+    threads = ThreadStore.withDefaultActive(ctx.statelogClient);
   }
-  threads.setStatelogClient(ctx.statelogClient);
   stack.threads = threads;
 
   return { stack, step, self, threads };
@@ -158,7 +160,7 @@ export async function runNode({
   const agentStartTime = performance.now();
 
   let isResume = false;
-  let threadStore = ThreadStore.withDefaultActive();
+  let threadStore = ThreadStore.withDefaultActive(execCtx.statelogClient);
   try {
     while (true) {
       try {
@@ -234,7 +236,7 @@ export async function runNode({
           isResume = true;
           execCtx.stateStack.nodesTraversed = [cp.nodeId];
           // Reset ThreadStore for the restored execution
-          threadStore = ThreadStore.withDefaultActive();
+          threadStore = ThreadStore.withDefaultActive(execCtx.statelogClient);
           continue;
         }
         throw e;
@@ -246,9 +248,16 @@ export async function runNode({
       errorType: "runtimeError",
       message: errorMessage,
     });
+    // Pull whatever token usage accumulated before the crash so cost
+    // dashboards still attribute partial spend to failed runs.
+    const partialReturn = createReturnObject({
+      result: { data: undefined as any },
+      globals: execCtx.globals,
+    });
     execCtx.statelogClient.agentEnd({
       entryNode: nodeName,
       timeTaken: performance.now() - agentStartTime,
+      tokenStats: partialReturn.tokens,
     });
     throw error;
   } finally {

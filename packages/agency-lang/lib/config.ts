@@ -83,6 +83,12 @@ export interface AgencyConfig {
     projectId: string;
     debugMode: boolean;
     apiKey: string;
+    /**
+     * Local file sink. When set, each statelog event is appended as a
+     * single JSON object per line. Intended for local development and
+     * tests. Can be combined with `host` — both sinks receive events.
+     */
+    logFile: string;
     metadata: {
       tags?: string[];
       environment?: string;
@@ -248,6 +254,7 @@ export const AgencyConfigSchema = z
         projectId: z.string(),
         debugMode: z.boolean(),
         apiKey: z.string(),
+        logFile: z.string(),
         metadata: z
           .object({
             tags: z.array(z.string()),

@@ -1,3 +1,5 @@
+import * as fs from "fs";
+import * as path from "path";
 import { nanoid } from "nanoid";
 import { ModelName } from "smoltalk";
 import { JSONEdge } from "./types.js";
@@ -10,9 +12,7 @@ export type SpanType =
   | "llmCall"
   | "toolExecution"
   | "forkAll"
-  | "forkBranch"
   | "race"
-  | "raceBranch"
   | "handlerChain";
 
 export type SpanContext = {
@@ -40,6 +40,10 @@ export type StatelogConfig = {
   debugMode: boolean;
   metadata?: RunMetadata;
   observability?: boolean;
+  // Append every event as a JSON line to this file path. Intended for
+  // local development and tests. Mutually compatible with host/stdout —
+  // events are written to all configured sinks.
+  logFile?: string;
 };
 
 // === Token / cost types ===
@@ -65,6 +69,7 @@ export class StatelogClient {
   private traceId: string;
   private apiKey: string;
   private projectId: string;
+  private logFile?: string;
   private enabled: boolean = true;
   private spanStack: SpanContext[] = [];
   private forkDepth: number = 0;
@@ -77,11 +82,13 @@ export class StatelogClient {
     this.projectId = projectId;
     this.debugMode = debugMode || false;
     this.traceId = traceId || nanoid();
+    this.logFile = config.logFile;
 
     this.metadata = config.metadata;
 
     // Observability must be explicitly enabled. When false (the default),
-    // the entire client is a no-op — no events emitted, no network calls.
+    // the entire client is a no-op — no events emitted, no network calls,
+    // no file writes.
     if (!config.observability) {
       this.enabled = false;
       return;
@@ -94,12 +101,29 @@ export class StatelogClient {
       );
     }
 
-    if (!this.apiKey && this.host.toLowerCase() !== "stdout") {
+    // A remote host needs an apiKey. The "stdout" and file-only sinks
+    // bypass this requirement because they're local-only.
+    const hostLower = this.host.toLowerCase();
+    const hasLocalSink = hostLower === "stdout" || !!this.logFile;
+    if (!this.apiKey && hostLower !== "stdout" && this.host && !hasLocalSink) {
       this.enabled = false;
       if (this.debugMode)
         console.warn(
           "API key is required for StatelogClient to send logs to a remote server. Logs will not be sent.",
         );
+      return;
+    }
+
+    // If a logFile is configured, ensure the parent directory exists.
+    // We don't truncate here — each run uses its own runId as traceId,
+    // so multiple runs writing to the same file are still distinguishable.
+    if (this.logFile) {
+      try {
+        fs.mkdirSync(path.dirname(this.logFile), { recursive: true });
+      } catch (err) {
+        if (this.debugMode)
+          console.warn(`StatelogClient: failed to ensure logFile dir: ${err}`);
+      }
     }
   }
 
@@ -119,8 +143,8 @@ export class StatelogClient {
 
   // === Span management ===
 
-  startSpan(type: SpanType): string {
-    if (!this.enabled || this.forkDepth > 0) return "";
+  startSpan(type: SpanType): string | undefined {
+    if (!this.enabled || this.forkDepth > 0) return undefined;
     const spanId = nanoid(12);
     const parentSpanId = this.spanStack.length > 0
       ? this.spanStack[this.spanStack.length - 1].spanId
@@ -412,20 +436,14 @@ export class StatelogClient {
   async interruptThrown({
     interruptId,
     interruptData,
-    functionName,
-    sourceLocation,
   }: {
     interruptId: string;
     interruptData: any;
-    functionName?: string;
-    sourceLocation?: { moduleId: string; line?: number };
   }): Promise<void> {
     await this.post({
       type: "interruptThrown",
       interruptId,
       interruptData,
-      functionName,
-      sourceLocation,
     });
   }
 
@@ -477,7 +495,7 @@ export class StatelogClient {
     sourceLocation,
   }: {
     checkpointId: number;
-    reason: "interrupt" | "explicit" | "failure" | "fork" | "race" | "trace";
+    reason: "interrupt" | "explicit" | "failure" | "fork" | "race";
     sourceLocation?: { moduleId: string; scopeName: string; stepPath: string };
   }): Promise<void> {
     await this.post({
@@ -614,11 +632,12 @@ export class StatelogClient {
   // === Post (wire format) ===
 
   async post(body: Record<string, any>): Promise<void> {
-    if (!this.host) {
+    if (!this.enabled) {
       return;
     }
 
-    if (!this.enabled) {
+    // We need either a host (remote / stdout) or a logFile to do anything.
+    if (!this.host && !this.logFile) {
       return;
     }
 
@@ -630,6 +649,19 @@ export class StatelogClient {
       parent_span_id: span?.parentSpanId ?? null,
       data: { ...body, timestamp: new Date().toISOString() },
     });
+
+    // File sink: append one JSON object per line. Done synchronously
+    // so tests can read the file immediately after an awaited event.
+    if (this.logFile) {
+      try {
+        fs.appendFileSync(this.logFile, postBody + "\n");
+      } catch (err) {
+        if (this.debugMode)
+          console.error("StatelogClient: failed to append to logFile:", err);
+      }
+    }
+
+    if (!this.host) return;
 
     if (this.host.toLowerCase() === "stdout") {
       console.log(postBody);
@@ -665,6 +697,7 @@ export function getStatelogClient(config: {
   projectId: string;
   debugMode?: boolean;
   observability?: boolean;
+  logFile?: string;
 }): StatelogClient {
   const statelogConfig = {
     host: config.host,
@@ -673,6 +706,7 @@ export function getStatelogClient(config: {
     projectId: config.projectId,
     debugMode: config.debugMode || false,
     observability: config.observability,
+    logFile: config.logFile,
   };
   const client = new StatelogClient(statelogConfig);
   return client;

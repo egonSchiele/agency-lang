@@ -21,15 +21,19 @@ export class ThreadStore {
     this.activeStack = [];
   }
 
-  // Set after construction. The initial default thread created by
-  // withDefaultActive() is intentionally not logged — it's an implicit
-  // implementation detail, not a user-initiated thread/subthread block.
+  // Set after construction. Most callers should pass the client to
+  // `withDefaultActive(client)` instead so the initial default thread
+  // is logged consistently with subsequent thread/subthread blocks.
   setStatelogClient(client: StatelogClient): void {
     this.statelogClient = client;
   }
 
-  static withDefaultActive(): ThreadStore {
+  // Create a store with a default active thread. If `client` is passed,
+  // the default thread is logged as a normal threadCreated event so the
+  // implicit root thread appears in the trace alongside user-created ones.
+  static withDefaultActive(client?: StatelogClient): ThreadStore {
     const store = new ThreadStore();
+    if (client) store.setStatelogClient(client);
     store.getOrCreateActive();
     return store;
   }

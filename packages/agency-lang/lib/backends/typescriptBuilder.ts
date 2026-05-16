@@ -3613,6 +3613,9 @@ export class TypeScriptBuilder {
       debugMode: ts.bool(cfg.log?.debugMode || false),
       observability: ts.bool(cfg.observability || false),
     };
+    if (cfg.log?.logFile) {
+      statelogFields.logFile = ts.str(cfg.log.logFile);
+    }
     if (cfg.log?.metadata) {
       const metaFields: Record<string, TsNode> = {};
       if (cfg.log.metadata.tags) {

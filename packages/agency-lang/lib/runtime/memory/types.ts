@@ -44,7 +44,21 @@ export type EmbeddingEntry = {
   vector: number[];
 };
 
+/**
+ * `formatVersion` distinguishes embeddings built from different source
+ * texts. Bumped to 2 when we started feeding the embedder a
+ * contextualized "{name} ({type}): {content}" string per observation
+ * instead of the bare observation content. Legacy files (no version)
+ * are treated as v1 and discarded on load — the next write rebuilds
+ * them in the current format.
+ *
+ * If the source-text shape changes again, bump this constant and
+ * update the load-side guard in `MemoryManager.getEntry`.
+ */
+export const EMBEDDING_FORMAT_VERSION = 2;
+
 export type EmbeddingIndex = {
+  formatVersion?: number; // undefined treated as 1 (legacy bare-content)
   model: string;
   entries: EmbeddingEntry[];
 };
@@ -119,6 +133,7 @@ export const MemoryGraphDataSchema = z.object({
 });
 
 export const EmbeddingIndexSchema = z.object({
+  formatVersion: z.number().optional(),
   model: z.string(),
   entries: z.array(
     z.object({

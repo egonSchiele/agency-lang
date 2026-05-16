@@ -44,8 +44,6 @@ const STDLIB_DIR = path.resolve(__dirname, "../../stdlib");
 const SKIP_TYPECHECK = new Set([
   "bangParams",         // intentionally passes wrong type to test bang (!) validation
   "functionRef",        // typechecker doesn't yet support function-ref assignability to function types
-  "euler/euler-0004",   // uses string.length which typechecker doesn't recognize yet
-  "euler/euler-0008",   // uses string.length which typechecker doesn't recognize yet
   "blockParams",        // calls append() which doesn't exist (should use .push())
   "ifElse",             // calls undefined isReady(), uses undeclared variables
   "setLLMClient",       // setLLMClient() is runtime-injected, not visible to typechecker

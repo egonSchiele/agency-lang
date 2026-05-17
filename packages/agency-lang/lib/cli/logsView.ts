@@ -23,15 +23,19 @@ export async function logsView(
     process.exit(1);
   }
   const jsonl = fs.readFileSync(file, "utf8");
+  // Always pass `file` as `followPath` so the user can toggle follow
+  // mode at runtime with `f`. `initialFollow` only controls whether
+  // the watcher is started immediately at boot.
   await runWith(jsonl, {
     stdinIsPipe: false,
-    followPath: cliOpts.follow ? file : undefined,
+    followPath: file,
+    initialFollow: cliOpts.follow ?? false,
   });
 }
 
 async function runWith(
   jsonl: string,
-  opts: { stdinIsPipe: boolean; followPath?: string },
+  opts: { stdinIsPipe: boolean; followPath?: string; initialFollow?: boolean },
 ): Promise<void> {
   // When stdin was used to feed the JSONL data we cannot also use it
   // for interactive keystrokes — it's been drained and isn't a TTY.
@@ -45,7 +49,14 @@ async function runWith(
     cols: process.stdout.columns ?? 80,
   };
   try {
-    await runViewer({ jsonl, input, output, viewport, followPath: opts.followPath });
+    await runViewer({
+      jsonl,
+      input,
+      output,
+      viewport,
+      followPath: opts.followPath,
+      initialFollow: opts.initialFollow ?? false,
+    });
   } finally {
     input.destroy();
     if (output.destroy) output.destroy();

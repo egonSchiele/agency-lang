@@ -42,17 +42,19 @@ When you compile from a global install, agency will print a one-line note steeri
 
 ## `agency pack` — portable single-file scripts
 
-`agency pack` produces a self-contained `.js` file that runs anywhere Node is installed, with no need for `agency-lang` (or any other package) to be installed at runtime:
+`agency pack` produces a self-contained `.mjs` file that runs anywhere Node is installed, with no need for `agency-lang` (or any other package) to be installed at runtime:
 
 ```bash
-agency pack hello.agency -o hello.js
-# Packed hello.agency -> hello.js
+agency pack hello.agency -o hello.mjs
+# Packed hello.agency -> hello.mjs
 
-./hello.js
-# (or `node hello.js`)
+./hello.mjs
+# (or `node hello.mjs`)
 ```
 
 The output is an ESM module bundled with esbuild. Only Node built-ins are kept external; the agency runtime, smoltalk, zod, and any user `.agency` imports are inlined. Files are produced executable (mode `0o755`) with a `#!/usr/bin/env node` shebang.
+
+The default extension is `.mjs` so the output is unambiguously ESM regardless of any surrounding `package.json`'s `"type"`. You can pass `-o foo.js` instead, but inside a project where `package.json` has `"type": "commonjs"` (or no `"type"` at all in newer Node) you may see `MODULE_TYPELESS_PACKAGE_JSON` warnings.
 
 This is useful when you want to:
 - hand an agent to someone who doesn't have Node packages installed
@@ -63,7 +65,7 @@ This is useful when you want to:
 
 | flag | default | meaning |
 |---|---|---|
-| `-o, --output <file>` | `agent.js` | output file path |
+| `-o, --output <file>` | `agent.mjs` | output file path |
 | `--target <target>` | `node` | output target; currently only `node` is supported. `sea` (Node single-executable application) is a planned future target |
 
 ### Limitations

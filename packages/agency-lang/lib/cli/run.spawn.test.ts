@@ -41,17 +41,27 @@ describe("compiledOutputNodeArgs", () => {
 });
 
 describe("compileWarning", () => {
-  it("returns a warning string when install is global", () => {
-    const out = compileWarning("global", "/tmp/foo.js");
+  const cannotResolve = () => false;
+  const canResolve = () => true;
+
+  it("returns a warning when install is global AND output dir cannot resolve agency-lang", () => {
+    const out = compileWarning("global", "/tmp/foo.js", cannotResolve);
     expect(out).not.toBeNull();
     expect(out!).toMatch(/agency-lang.*global/);
     expect(out!).toMatch(/agency run/);
     expect(out!).toMatch(/agency pack/);
+    expect(out!).toMatch(/may fail/);
   });
+
+  it("returns null when install is global BUT agency-lang resolves locally from the output dir", () => {
+    expect(compileWarning("global", "/tmp/foo.js", canResolve)).toBeNull();
+  });
+
   it("returns null when install is local", () => {
-    expect(compileWarning("local", "/tmp/foo.js")).toBeNull();
+    expect(compileWarning("local", "/tmp/foo.js", cannotResolve)).toBeNull();
   });
+
   it("returns null when install is workspace", () => {
-    expect(compileWarning("workspace", "/tmp/foo.js")).toBeNull();
+    expect(compileWarning("workspace", "/tmp/foo.js", cannotResolve)).toBeNull();
   });
 });

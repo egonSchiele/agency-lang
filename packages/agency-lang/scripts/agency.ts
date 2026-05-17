@@ -135,18 +135,23 @@ export function createProgram(deps: CliDependencies = {}): Command {
             process.exit(0);
           });
         } else {
-          let lastOutput: string | null = null;
           for (const input of inputs) {
-            const out = compile(config, input, undefined, { ts: opts.ts });
-            if (out) lastOutput = out;
+            compile(config, input, undefined, { ts: opts.ts });
           }
-          // If installed globally, the user will hit ERR_MODULE_NOT_FOUND if
-          // they try to `node` the output directly. Steer them to `agency run`
-          // or `agency pack` instead.
-          if (lastOutput) {
+          // If installed globally, the user will hit ERR_MODULE_NOT_FOUND
+          // if they try to `node` the output directly. Steer them toward
+          // `agency run` or `agency pack`. Gated on:
+          //   - JS output only — `--ts` produces a .ts the user isn't
+          //     going to run directly with node anyway.
+          //   - The output directory doesn't already have a resolvable
+          //     `agency-lang` (the warning helper does that check).
+          // Uses the first input's directory as the resolution context;
+          // directory inputs use the directory itself.
+          if (!opts.ts && inputs.length > 0) {
+            const ctx = path.resolve(inputs[0]);
             const warning = compileWarning(
               classifyInstall(installDirFromUrl(import.meta.url)),
-              lastOutput,
+              ctx,
             );
             if (warning) console.error(warning);
           }
@@ -178,10 +183,13 @@ export function createProgram(deps: CliDependencies = {}): Command {
   program
     .command("pack")
     .description(
-      "Bundle a .agency program into a single portable .js (no agency install needed at runtime)",
+      "Bundle a .agency program into a single portable .mjs (no agency install needed at runtime)",
     )
     .argument("<input>", "Path to .agency input file")
-    .option("-o, --output <file>", "Output file path", "agent.js")
+    // Default to .mjs so the output is unambiguously ESM regardless of
+    // any surrounding package.json `"type"`. Users may pass `-o foo.js`
+    // explicitly if they prefer that extension.
+    .option("-o, --output <file>", "Output file path", "agent.mjs")
     .option("--target <target>", "Output target (currently only 'node')", "node")
     .action(
       async (input: string, opts: { output: string; target: string }) => {

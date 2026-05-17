@@ -64,6 +64,12 @@ export type TokenCost = {
 
 // === Client ===
 
+// Shared empty stack returned by `snapshotStack()` when the client is
+// disabled. Reusing one frozen array avoids per-fork allocations in the
+// default no-op mode. The runner only ever reads from this snapshot
+// (passes it back into `runInBranchContext`), never mutates it.
+const EMPTY_STACK: ReadonlyArray<SpanContext> = Object.freeze([]) as ReadonlyArray<SpanContext>;
+
 export class StatelogClient {
   private host: string;
   private debugMode: boolean;
@@ -158,7 +164,12 @@ export class StatelogClient {
   // Returns a shallow snapshot of the active span stack — used by the
   // runner to seed each branch's stack with the parent's spans so
   // events inside the branch nest under the fork/race span.
+  //
+  // Short-circuits to a shared empty array when observability is off
+  // so the runner can call this unconditionally without paying for an
+  // allocation on every fork/race in the no-op default mode.
   snapshotStack(): SpanContext[] {
+    if (!this.enabled) return EMPTY_STACK as SpanContext[];
     return [...this.currentStack()];
   }
 
@@ -170,10 +181,16 @@ export class StatelogClient {
   // Spans pushed inside `fn` are popped against this private stack only,
   // never the parent. Defensively copies `parentStack` so the caller's
   // array is never mutated.
+  //
+  // When observability is disabled the ALS plumbing is skipped entirely
+  // — we just invoke `fn()` directly. The runner can therefore always
+  // wrap branches in this call without paying ALS overhead in no-op
+  // mode.
   runInBranchContext<T>(
     parentStack: SpanContext[],
     fn: () => Promise<T>,
   ): Promise<T> {
+    if (!this.enabled) return fn();
     return this.spanStorage.run([...parentStack], fn);
   }
 

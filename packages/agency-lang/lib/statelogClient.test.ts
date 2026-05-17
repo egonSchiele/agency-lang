@@ -81,6 +81,29 @@ describe("StatelogClient", () => {
       expect(client.currentSpan).toBeUndefined();
     });
 
+    it("snapshotStack and runInBranchContext short-circuit when disabled", async () => {
+      // The runner calls `snapshotStack()` and wraps every branch in
+      // `runInBranchContext()` unconditionally. When the client is a
+      // no-op, neither call should allocate a fresh stack copy or set
+      // up an AsyncLocalStorage context. We verify behavior — same
+      // empty array reference, no ALS plumbing — to keep the no-op
+      // mode genuinely free of per-fork overhead.
+      const client = fileClient(newLogFile("disabled-fork"), { observability: false });
+      const snap1 = client.snapshotStack();
+      const snap2 = client.snapshotStack();
+      expect(snap1).toHaveLength(0);
+      // Same shared empty stack returned every call — no per-fork allocation.
+      expect(snap1).toBe(snap2);
+
+      // runInBranchContext just calls fn() directly when disabled, so
+      // we observe no ALS context inside it.
+      const inside = await client.runInBranchContext(snap1, async () => {
+        // currentSpan stays undefined (no rootStack pushes, no ALS store).
+        return client.currentSpan;
+      });
+      expect(inside).toBeUndefined();
+    });
+
     it("activates the file sink when observability is true", async () => {
       const file = newLogFile("enabled");
       const client = fileClient(file);

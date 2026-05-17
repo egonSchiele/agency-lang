@@ -1,8 +1,10 @@
 import * as fs from "fs";
 import * as path from "path";
+import { createRequire } from "module";
 import { fileURLToPath } from "url";
-import { build } from "esbuild";
+import { build, type Plugin } from "esbuild";
 import { AgencyConfig } from "@/config.js";
+import { SymbolTable } from "@/symbolTable.js";
 import { compile } from "./commands.js";
 
 // Locate this package's install root by walking up from this module's
@@ -27,6 +29,40 @@ function agencyLangInstallRoot(): string {
     }
     dir = parent;
   }
+}
+
+// esbuild plugin that resolves `agency-lang` and `agency-lang/<sub>`
+// imports against the agency-lang package's own `package.json`. This is
+// the only mechanism we use to teach esbuild where agency-lang lives —
+// we intentionally do NOT use `nodePaths`, because that would also let
+// esbuild silently bundle any globally-installed sibling package the
+// user happens to (mis-)import, making the output non-reproducible.
+//
+// Transitive dependencies of agency-lang (zod, smoltalk, etc.) are
+// resolved by esbuild's normal walk from the resolved agency-lang
+// files' on-disk locations.
+function agencyLangResolverPlugin(installRoot: string): Plugin {
+  const req = createRequire(path.join(installRoot, "package.json"));
+  return {
+    name: "agency-lang-resolver",
+    setup(build) {
+      build.onResolve({ filter: /^agency-lang(\/.*)?$/ }, (args) => {
+        try {
+          return { path: req.resolve(args.path) };
+        } catch (err) {
+          return {
+            errors: [
+              {
+                text: `agency pack: could not resolve "${args.path}" from agency-lang at ${installRoot}: ${
+                  err instanceof Error ? err.message : String(err)
+                }`,
+              },
+            ],
+          };
+        }
+      });
+    },
+  };
 }
 
 export type PackTarget = "node";
@@ -85,21 +121,60 @@ const NODE_BUILTINS = [
   "node:*",
 ];
 
+// Walk the symbol table from the entry and collect every .agency file
+// reachable. These are the locations where `compile()` will produce
+// transitive .js sidecars next to the user's source.
+function reachableAgencyFiles(entry: string, config: AgencyConfig): string[] {
+  try {
+    const st = SymbolTable.build(entry, config);
+    return st.filePaths().filter((p) => p.endsWith(".agency"));
+  } catch {
+    // If symbol-table building fails, the subsequent compile will fail
+    // with a more useful message; just skip the cleanup snapshot.
+    return [];
+  }
+}
+
 export async function pack(opts: PackOptions): Promise<void> {
-  // 1. Compile the .agency file to .js using the existing pipeline.
-  //    We write to a sibling temp file so relative paths inside the user's
-  //    source dir continue to resolve the same way they would for `compile`.
-  const tmpJs = opts.inputFile.replace(/\.agency$/, ".__pack__.js");
-  const compiled = compile(opts.config, opts.inputFile, tmpJs);
-  if (!compiled) {
-    throw new Error(`compile failed for ${opts.inputFile}`);
+  // 1. Reject inputs whose extension isn't `.agency`. Otherwise the
+  //    tmp-file derivation below could end up writing over the input
+  //    and then deleting it in `finally`.
+  if (!opts.inputFile.endsWith(".agency")) {
+    throw new Error(
+      `agency pack: input file must end in .agency (got ${opts.inputFile})`,
+    );
+  }
+  if (!fs.existsSync(opts.inputFile)) {
+    throw new Error(`agency pack: input file not found: ${opts.inputFile}`);
   }
 
+  // 2. Snapshot which sibling .js files exist BEFORE compile runs. We
+  //    use this to clean up only the files compile creates — a
+  //    user-authored .js that already existed must never be deleted.
+  const reachable = reachableAgencyFiles(opts.inputFile, opts.config);
+  const siblingJsPaths = reachable.map((p) => p.replace(/\.agency$/, ".js"));
+  const preExistingJs = new Set(
+    siblingJsPaths.filter((p) => fs.existsSync(p)),
+  );
+
+  // 3. Compile the entry next to its source under a `.__pack__.js`
+  //    suffix so we never collide with a user-authored `<name>.js`.
+  //    Recursive .agency imports get compiled next to their sources
+  //    (the normal `compile` behavior) — those are tracked above and
+  //    cleaned up in `finally` below so the bundled artifact is the
+  //    only file the user sees afterwards.
+  const entryOutput = opts.inputFile.replace(/\.agency$/, ".__pack__.js");
   try {
-    // 2. Bundle with esbuild — inline agency-lang, smoltalk, zod, and any
-    //    transitive .js imports into one ESM file. The user's working
-    //    directory may have no node_modules, so explicitly tell esbuild to
-    //    resolve bare specifiers from agency-lang's install location.
+    const compiled = compile(opts.config, opts.inputFile, entryOutput);
+    if (!compiled) {
+      throw new Error(`agency pack: compile failed for ${opts.inputFile}`);
+    }
+
+    // 4. Bundle with esbuild. Only Node built-ins stay external; the
+    //    agency-lang package and its transitive deps inline. The
+    //    resolver plugin handles `agency-lang*` specifiers using
+    //    agency-lang's own require resolution — no nodePaths, so we
+    //    cannot accidentally pull in globally-installed user packages.
     const installRoot = agencyLangInstallRoot();
     const result = await build({
       entryPoints: [compiled],
@@ -110,14 +185,11 @@ export async function pack(opts: PackOptions): Promise<void> {
       write: false,
       outfile: opts.outputFile,
       external: NODE_BUILTINS,
-      nodePaths: [
-        path.dirname(installRoot), // the directory containing agency-lang/
-        path.join(installRoot, "node_modules"), // its own deps
-      ],
+      plugins: [agencyLangResolverPlugin(installRoot)],
       // Some transitive CJS deps call `require("child_process")` etc.
-      // esbuild's bundler can't statically rewrite those for ESM output,
-      // so it emits a runtime shim that throws "Dynamic require ...".
-      // Replace that with a real createRequire so they work.
+      // esbuild can't statically rewrite those for ESM output, so it
+      // emits a runtime shim that throws "Dynamic require ...".
+      // Install a real createRequire so they work.
       banner: {
         js: [
           "// Built by `agency pack`",
@@ -130,16 +202,48 @@ export async function pack(opts: PackOptions): Promise<void> {
 
     if (result.outputFiles.length !== 1) {
       throw new Error(
-        `expected exactly one output file from esbuild, got ${result.outputFiles.length}`,
+        `agency pack: expected exactly one output file from esbuild, got ${result.outputFiles.length}`,
       );
     }
 
+    // 5. Write the bundle. mode on writeFileSync only takes effect when
+    //    the file is created — if the user re-packs over an existing
+    //    file, Node preserves the old permissions. chmod explicitly so
+    //    the output is always executable.
     const outDir = path.dirname(path.resolve(opts.outputFile));
     fs.mkdirSync(outDir, { recursive: true });
     fs.writeFileSync(opts.outputFile, SHEBANG + result.outputFiles[0].text, {
       mode: 0o755,
     });
+    fs.chmodSync(opts.outputFile, 0o755);
   } finally {
-    if (fs.existsSync(tmpJs)) fs.unlinkSync(tmpJs);
+    // 6. Tidy up: the entry `.__pack__.js`, plus any sibling .js files
+    //    compile() created next to the user's source files. We never
+    //    touch a sibling .js that already existed before we ran.
+    if (fs.existsSync(entryOutput)) {
+      try {
+        fs.unlinkSync(entryOutput);
+      } catch {
+        /* best-effort */
+      }
+    }
+    const absOutput = path.resolve(opts.outputFile);
+    for (const p of siblingJsPaths) {
+      // Never delete:
+      //  - a sibling that pre-existed (it's the user's file)
+      //  - the pack output itself (it might coincidentally share a name)
+      if (
+        preExistingJs.has(p) ||
+        path.resolve(p) === absOutput ||
+        !fs.existsSync(p)
+      ) {
+        continue;
+      }
+      try {
+        fs.unlinkSync(p);
+      } catch {
+        /* best-effort */
+      }
+    }
   }
 }

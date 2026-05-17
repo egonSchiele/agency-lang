@@ -72,7 +72,7 @@
   "types": "./dist/lib/index.d.ts",
   "keywords": [],
   "author": "Aditya Bhargava",
-  "license": "ISC",
+  "license": "MIT",
   "bugs": {
     "url": "https://github.com/egonSchiele/agency-lang/issues"
   },

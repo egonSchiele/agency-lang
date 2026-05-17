@@ -32,4 +32,4 @@ Now read [the docs](https://agency-lang.com) to learn more about the language an
 Weather data in the standard library (`std::weather`) is provided by [Open-Meteo](https://open-meteo.com/). Data is licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). The free API is for non-commercial use only; commercial use requires a [paid subscription](https://open-meteo.com/en/pricing).
 
 ## License
-[FSL](https://fsl.software).
+MIT. See [LICENSE](./LICENSE).

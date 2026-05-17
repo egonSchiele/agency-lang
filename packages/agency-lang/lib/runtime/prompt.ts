@@ -46,8 +46,10 @@ async function _runPrompt({
     throw new AgencyCancelledError();
   }
 
-  ctx.statelogClient.startSpan("llmCall");
-  try { // try/finally for llmCall span
+  // Note: the llmCall span is opened in the outer `runPrompt`, not here,
+  // so that any tool executions triggered by this LLM response nest under
+  // the same llmCall span (matching the design spec hierarchy
+  // agentRun > nodeExecution > llmCall > toolExecution).
   const stream = !!(clientConfig as any)?.stream;
   const startTime = performance.now();
 
@@ -128,6 +130,7 @@ async function _runPrompt({
     responseFormat,
     usage: completion.usage,
     cost: completion.cost,
+    finishReason: (completion as any).finishReason ?? (completion as any).finish_reason,
     stream,
   });
 
@@ -190,9 +193,6 @@ async function _runPrompt({
   }
 
   return { messages, toolCalls };
-  } finally {
-    ctx.statelogClient.endSpan(); // end llmCall span
-  }
 }
 
 export async function runPrompt(args: {
@@ -303,10 +303,27 @@ export async function runPrompt(args: {
     messages = new MessageThread();
   }
 
+  // Manage llmCall spans across the prompt round-trip loop. Each
+  // llmCall span covers one `_runPrompt` call PLUS the tool executions
+  // triggered by its returned tool_calls, so toolExecution spans nest
+  // under their parent llmCall — matching the
+  // agentRun > nodeExecution > llmCall > toolExecution hierarchy.
+  let currentLlmSpanId: string | undefined;
+  const closeLlmSpan = () => {
+    if (currentLlmSpanId) {
+      ctx.statelogClient.endSpan(currentLlmSpanId);
+      currentLlmSpanId = undefined;
+    }
+  };
+
   // Tool calls: restore from frame or make initial LLM call
   let toolCalls: smoltalk.ToolCallJSON[];
   if (self.pendingToolCalls) {
     toolCalls = self.pendingToolCalls;
+    // Resumed run: the original llmCall span ended at the interrupt.
+    // Open a fresh span so subsequent tool executions still have a
+    // parent llmCall to nest under.
+    currentLlmSpanId = ctx.statelogClient.startSpan("llmCall");
   } else {
     // Memory injection (resolved decision #6): only retrieves and
     // injects when the caller passed `memory: true` (or an object) on
@@ -334,15 +351,22 @@ export async function runPrompt(args: {
       }
     }
     messages.push(smoltalk.userMessage(prompt));
-    const result = await _runPrompt({
-      ctx,
-      messages,
-      tools: tools || [],
-      prompt,
-      responseFormat,
-      clientConfig,
-      stateStack,
-    });
+    currentLlmSpanId = ctx.statelogClient.startSpan("llmCall");
+    let result;
+    try {
+      result = await _runPrompt({
+        ctx,
+        messages,
+        tools: tools || [],
+        prompt,
+        responseFormat,
+        clientConfig,
+        stateStack,
+      });
+    } catch (e) {
+      closeLlmSpan();
+      throw e;
+    }
     messages = result.messages;
     toolCalls = result.toolCalls;
 
@@ -449,7 +473,7 @@ export async function runPrompt(args: {
         });
 
         const toolCallStartTime = performance.now();
-        ctx.statelogClient.startSpan("toolExecution");
+        const toolSpanId = ctx.statelogClient.startSpan("toolExecution");
         let result: any;
         try { // try/finally for toolExecution span
         ctx.enterToolCall();
@@ -586,7 +610,7 @@ export async function runPrompt(args: {
         });
 
         } finally { // end toolExecution span
-          ctx.statelogClient.endSpan();
+          ctx.statelogClient.endSpan(toolSpanId);
         }
 
         messages.push(
@@ -637,6 +661,11 @@ export async function runPrompt(args: {
         (fn) => !removedTools.includes(fn.name),
       );
 
+      // Close the prior llmCall span (its tool executions are done) and
+      // open a fresh one for this next round so per-call latency stays
+      // accurate.
+      closeLlmSpan();
+      currentLlmSpanId = ctx.statelogClient.startSpan("llmCall");
       const nextResult = await _runPrompt({
         ctx,
         messages,
@@ -657,6 +686,11 @@ export async function runPrompt(args: {
     if (isAbortError(error)) throw error;
     throw error;
   } finally {
+    // Close any open llmCall span. This covers normal completion,
+    // thrown errors, and early returns when tool calls interrupted
+    // (the resumed run opens a fresh llmCall span). The helper is a
+    // no-op if no span is currently open.
+    closeLlmSpan();
     if (shouldPop) stateStack.pop();
   }
 

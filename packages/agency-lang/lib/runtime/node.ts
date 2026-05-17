@@ -155,7 +155,7 @@ export async function runNode({
     data: { nodeName, args: data, messages: messages || [], cancel },
   });
 
-  execCtx.statelogClient.startSpan("agentRun");
+  const agentRunSpanId = execCtx.statelogClient.startSpan("agentRun");
   execCtx.statelogClient.agentStart({ entryNode: nodeName, args: data });
   const agentStartTime = performance.now();
 
@@ -261,7 +261,7 @@ export async function runNode({
     });
     throw error;
   } finally {
-    execCtx.statelogClient.endSpan(); // end agentRun span
+    execCtx.statelogClient.endSpan(agentRunSpanId); // end agentRun span
     // Persist any in-memory MemoryManager state. Writes are best-effort —
     // we never fail the run because of a save error, but we do log it so
     // disk problems are visible.

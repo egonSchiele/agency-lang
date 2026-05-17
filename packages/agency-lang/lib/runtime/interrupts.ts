@@ -143,7 +143,7 @@ async function runHandlerChain(
   let approvedValue: any = undefined;
   let hasApproval = false;
   let hasPropagation = false;
-  ctx.statelogClient.startSpan("handlerChain");
+  const chainSpanId = ctx.statelogClient.startSpan("handlerChain");
   try {
     for (let i = (ctx.handlers ?? []).length - 1; i >= 0; i--) {
       if (ctx.isCancelled(stack)) throw new AgencyCancelledError();
@@ -180,7 +180,7 @@ async function runHandlerChain(
       );
     }
   } finally {
-    ctx.statelogClient.endSpan(); // end handlerChain span
+    ctx.statelogClient.endSpan(chainSpanId); // end handlerChain span
   }
   if (hasPropagation) return { kind: "propagated" };
   if (hasApproval) return { kind: "approved", value: approvedValue };
@@ -359,13 +359,27 @@ export async function respondToInterrupts(args: {
     checkpointId: checkpoint.id,
     restoreCount: execCtx._restoreCount,
   });
+  // Each user response resolves a previously-thrown interrupt. Emit the
+  // lifecycle event so dashboards can pair every interruptThrown with a
+  // terminal interruptResolved.
+  for (let i = 0; i < interrupts.length; i++) {
+    const intr = interrupts[i];
+    const resp = responses[i];
+    const outcome =
+      resp.type === "approve" ? "approved" : ("rejected" as const);
+    execCtx.statelogClient.interruptResolved({
+      interruptId: intr.interruptId,
+      outcome,
+      resolvedBy: "user",
+    });
+  }
   execCtx.restoreState(checkpoint);
   execCtx.setInterruptResponses(responseMap);
   execCtx.installRegisteredCallbacks(ctx);
   if (metadata.callbacks) Object.assign(execCtx.callbacks, metadata.callbacks);
   if (metadata.debugger) execCtx.debuggerState = metadata.debugger;
 
-  execCtx.statelogClient.startSpan("agentRun");
+  const agentRunSpanId = execCtx.statelogClient.startSpan("agentRun");
   execCtx.statelogClient.agentStart({ entryNode: checkpoint.nodeId, args: {} });
   const agentStartTime = performance.now();
   try {
@@ -379,7 +393,7 @@ export async function respondToInterrupts(args: {
     });
     throw error;
   } finally {
-    execCtx.statelogClient.endSpan(); // end agentRun span
+    execCtx.statelogClient.endSpan(agentRunSpanId); // end agentRun span
     execCtx.cleanup();
   }
 }

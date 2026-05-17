@@ -126,7 +126,7 @@ export class SimpleMachine<T> {
         });
       }
       this.debug(`Executing node: ${color.green(currentId)}`, data);
-      client?.startSpan("nodeExecution");
+      const nodeSpanId = client?.startSpan("nodeExecution");
       client?.enterNode({ nodeId: currentId, data });
       const startTime = performance.now();
       let nextNode;
@@ -145,7 +145,7 @@ export class SimpleMachine<T> {
           timeTaken: endTime - startTime,
         });
       } finally {
-        client?.endSpan();
+        client?.endSpan(nodeSpanId);
       }
       this.debug(`Completed node: ${color.green(currentId)}`, data);
 

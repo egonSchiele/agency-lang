@@ -566,7 +566,9 @@ export class Runner {
 
     const forkId = nanoid(12);
     const forkStartTime = performance.now();
-    this.ctx.statelogClient.startSpan(mode === "all" ? "forkAll" : "race");
+    const forkSpanId = this.ctx.statelogClient.startSpan(
+      mode === "all" ? "forkAll" : "race",
+    );
     this.ctx.statelogClient.forkStart({
       forkId,
       mode,
@@ -580,6 +582,10 @@ export class Runner {
     // before emitting forkEnd, so reading via raceWinnerKey() there would
     // produce the wrong key. Read it now and close over the value.
     let winnerIndex: number | undefined = undefined;
+    // Read the race winner from this.frame.locals using a key derived from
+    // the current path. Safe to call only inside the try block.
+    const readWinner = () =>
+      this.frame.locals[this.raceWinnerKey(id)] as number | undefined;
     try {
       // Race resume: if a winner was already chosen on a previous run,
       // resume only that branch — skip the race entirely.
@@ -592,16 +598,22 @@ export class Runner {
           stateStack,
           this.frame.locals[raceWinnerKey] as number,
         );
-        if (hasInterrupts(result)) return result;
+        if (hasInterrupts(result)) {
+          winnerIndex = readWinner();
+          return result;
+        }
       } else if (mode === "all") {
         result = await this.runForkAll(id, items, blockFn, stateStack, forkId);
         if (hasInterrupts(result)) return result;
       } else {
         result = await this.runRace(id, items, blockFn, stateStack, forkId);
-        if (hasInterrupts(result)) return result;
+        if (hasInterrupts(result)) {
+          winnerIndex = readWinner();
+          return result;
+        }
       }
       if (mode === "race") {
-        winnerIndex = this.frame.locals[raceWinnerKey] as number | undefined;
+        winnerIndex = readWinner();
       }
 
       // Clean up branch state after successful completion
@@ -620,7 +632,7 @@ export class Runner {
         timeTaken: performance.now() - forkStartTime,
         winnerIndex,
       });
-      this.ctx.statelogClient.endSpan(); // end forkAll/race span
+      this.ctx.statelogClient.endSpan(forkSpanId); // end forkAll/race span
     }
 
     if (this.halted) return undefined;

@@ -206,27 +206,27 @@ describe("StatelogClient", () => {
   describe("span management", () => {
     it("startSpan / endSpan maintains a LIFO stack", () => {
       const client = fileClient(newLogFile("span-lifo"));
-      client.startSpan("agentRun");
-      client.startSpan("nodeExecution");
-      client.startSpan("llmCall");
+      const agentId = client.startSpan("agentRun")!;
+      const nodeId = client.startSpan("nodeExecution")!;
+      const llmId = client.startSpan("llmCall")!;
       expect(client.currentSpan?.spanType).toBe("llmCall");
-      const popped = client.endSpan();
+      const popped = client.endSpan(llmId);
       expect(popped?.spanType).toBe("llmCall");
       expect(client.currentSpan?.spanType).toBe("nodeExecution");
-      client.endSpan();
+      client.endSpan(nodeId);
       expect(client.currentSpan?.spanType).toBe("agentRun");
-      client.endSpan();
+      client.endSpan(agentId);
       expect(client.currentSpan).toBeUndefined();
     });
 
     it("attaches span_id and parent_span_id to emitted events", async () => {
       const file = newLogFile("span-payload");
       const client = fileClient(file);
-      const outer = client.startSpan("agentRun");
-      const inner = client.startSpan("nodeExecution");
+      const outer = client.startSpan("agentRun")!;
+      const inner = client.startSpan("nodeExecution")!;
       await client.enterNode({ nodeId: "n1", data: {} });
-      client.endSpan();
-      client.endSpan();
+      client.endSpan(inner);
+      client.endSpan(outer);
       const events = readEvents(file);
       expect(events).toHaveLength(1);
       expect(events[0].span_id).toBe(inner);
@@ -236,9 +236,9 @@ describe("StatelogClient", () => {
     it("root-level events have null parent_span_id", async () => {
       const file = newLogFile("root-span");
       const client = fileClient(file);
-      client.startSpan("agentRun");
+      const id = client.startSpan("agentRun")!;
       await client.debug("hi", {});
-      client.endSpan();
+      client.endSpan(id);
       const events = readEvents(file);
       expect(events[0].parent_span_id).toBeNull();
       expect(events[0].span_id).toBeTruthy();
@@ -267,11 +267,11 @@ describe("StatelogClient", () => {
     it("events emitted inside a fork have no span attribution", async () => {
       const file = newLogFile("fork-payload");
       const client = fileClient(file);
-      client.startSpan("agentRun");
+      const agentId = client.startSpan("agentRun")!;
       client.enterFork();
       await client.debug("inside-fork", {});
       client.exitFork();
-      client.endSpan();
+      client.endSpan(agentId);
       const events = readEvents(file);
       // The event was emitted while inside a fork, so it inherits the
       // outer span (agentRun) — startSpan was gated, not currentSpan.

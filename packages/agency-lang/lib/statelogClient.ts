@@ -71,6 +71,10 @@ export class StatelogClient {
   private projectId: string;
   private logFile?: string;
   private enabled: boolean = true;
+  // Whether the remote http sink is usable. A configured host with no
+  // apiKey disables ONLY the remote send; local sinks (logFile, stdout)
+  // still receive events.
+  private remoteEnabled: boolean = false;
   private spanStack: SpanContext[] = [];
   private forkDepth: number = 0;
   private metadata?: RunMetadata;
@@ -101,17 +105,20 @@ export class StatelogClient {
       );
     }
 
-    // A remote host needs an apiKey. The "stdout" and file-only sinks
-    // bypass this requirement because they're local-only.
+    // Decide whether the remote sink is usable. The remote sink (any
+    // host that isn't "stdout") requires an apiKey. If the host is set
+    // but the key is missing, we keep the client enabled (so local
+    // sinks still work) but skip the http POST inside `post()`.
     const hostLower = this.host.toLowerCase();
-    const hasLocalSink = hostLower === "stdout" || !!this.logFile;
-    if (!this.apiKey && hostLower !== "stdout" && this.host && !hasLocalSink) {
-      this.enabled = false;
-      if (this.debugMode)
+    const isRemoteHost = !!this.host && hostLower !== "stdout";
+    if (isRemoteHost) {
+      if (this.apiKey) {
+        this.remoteEnabled = true;
+      } else if (this.debugMode) {
         console.warn(
-          "API key is required for StatelogClient to send logs to a remote server. Logs will not be sent.",
+          "StatelogClient: remote host configured without apiKey — remote sink disabled. Local sinks (stdout/logFile) will still receive events.",
         );
-      return;
+      }
     }
 
     // If a logFile is configured, ensure the parent directory exists.
@@ -158,9 +165,36 @@ export class StatelogClient {
     return spanId;
   }
 
-  endSpan(): SpanContext | undefined {
-    if (!this.enabled || this.forkDepth > 0) return undefined;
-    return this.spanStack.pop();
+  // Pop the span identified by `spanId`. The id MUST be the one returned
+  // by the matching `startSpan` call:
+  //
+  //   const id = client.startSpan("agentRun");
+  //   try { ... } finally { client.endSpan(id); }
+  //
+  // - If `spanId` is undefined (its `startSpan` was gated, e.g. inside a
+  //   fork branch), this is a no-op.
+  // - If the span is at the top of the stack, it pops it directly.
+  // - Otherwise we drop everything above the matched span as well — this
+  //   defends against an inner span that forgot to call `endSpan`.
+  // - If the span isn't found at all, this is a no-op.
+  //
+  // We deliberately do NOT gate on `forkDepth` here: the only callers
+  // are paired with a `startSpan` that returned a real id, and they must
+  // be allowed to pop even when concurrent branches are still running.
+  // Branches themselves call `endSpan(undefined)` because their
+  // `startSpan` was gated, so they cannot accidentally pop the parent's
+  // spans.
+  endSpan(spanId?: string): SpanContext | undefined {
+    if (!this.enabled || !spanId) return undefined;
+    const top = this.spanStack[this.spanStack.length - 1];
+    if (top && top.spanId === spanId) {
+      return this.spanStack.pop();
+    }
+    const idx = this.spanStack.findIndex((s) => s.spanId === spanId);
+    if (idx < 0) return undefined;
+    const popped = this.spanStack[idx];
+    this.spanStack.length = idx;
+    return popped;
   }
 
   get currentSpan(): SpanContext | undefined {
@@ -667,6 +701,11 @@ export class StatelogClient {
       console.log(postBody);
       return;
     }
+
+    // Remote sink is only attempted when an apiKey was provided. Without
+    // it we silently skip the http POST so a configured logFile/stdout
+    // sink keeps working without firing unauthenticated requests.
+    if (!this.remoteEnabled) return;
 
     try {
       const fullUrl = new URL("/api/logs", this.host);

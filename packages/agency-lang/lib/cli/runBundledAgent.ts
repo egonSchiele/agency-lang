@@ -1,5 +1,5 @@
 import { AgencyConfig } from "@/config.js";
-import { compile } from "./commands.js";
+import { compile, compiledOutputEnv } from "./commands.js";
 import { spawn } from "child_process";
 import * as path from "path";
 
@@ -23,9 +23,10 @@ export function runBundledAgent(
   }
 
   console.log("---");
-  const nodeProcess = spawn("node", [runFile, ...args], {
+  const nodeProcess = spawn(process.execPath, [runFile, ...args], {
     stdio: "inherit",
     shell: false,
+    env: compiledOutputEnv(process.env),
   });
 
   nodeProcess.on("error", (error) => {

@@ -23,7 +23,44 @@ import {
   type ImportStrategy,
 } from "../importStrategy.js";
 import { parseAgency, replaceBlankLines } from "../parser.js";
+import {
+  classifyInstall,
+  installDirFromUrl,
+  type InstallKind,
+  nodeModulesParent,
+} from "./installLocation.js";
 import { findRecursively, getImports } from "./util.js";
+
+// Build an env for the compiled-output child process that lets a globally
+// installed agency CLI's compiled code resolve `agency-lang`, `zod`, etc.
+// without an `npm install` in the user's working directory.
+export function compiledOutputEnv(
+  base: NodeJS.ProcessEnv,
+): NodeJS.ProcessEnv {
+  const cliRoot = nodeModulesParent(installDirFromUrl(import.meta.url));
+  const sep = process.platform === "win32" ? ";" : ":";
+  const existing = base.NODE_PATH;
+  return {
+    ...base,
+    NODE_PATH: existing ? `${existing}${sep}${cliRoot}` : cliRoot,
+  };
+}
+
+export function compileWarning(
+  kind: InstallKind,
+  outputFile: string,
+): string | null {
+  if (kind !== "global") return null;
+  return [
+    "",
+    `Note: agency-lang is installed globally. Running \`node ${outputFile}\``,
+    "directly will fail with ERR_MODULE_NOT_FOUND because Node does not",
+    "resolve global packages for bare imports.",
+    "  - Use  agency run <file>    to execute an agency file",
+    "  - Use  agency pack <file>   to produce a portable single-file script",
+    "",
+  ].join("\n");
+}
 
 // Load configuration from agency.json
 export function loadConfig(
@@ -293,11 +330,15 @@ export function run(
   console.log(`Running ${output}...`);
   console.log("---");
 
-  const env = resumeFile
-    ? { ...process.env, AGENCY_RESUME_FILE: resumeFile }
-    : process.env;
+  const env = compiledOutputEnv(
+    resumeFile
+      ? { ...process.env, AGENCY_RESUME_FILE: resumeFile }
+      : process.env,
+  );
 
-  const nodeProcess = spawn("node", [output], {
+  // Use process.execPath so the child runs under the same Node as the CLI,
+  // avoiding version mismatches when the user has multiple Nodes installed.
+  const nodeProcess = spawn(process.execPath, [output], {
     stdio: "inherit",
     shell: false,
     env,

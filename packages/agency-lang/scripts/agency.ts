@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import {
   compile,
+  compileWarning,
   format,
   formatFile,
   loadConfig,
@@ -9,6 +10,10 @@ import {
   readStdin,
   run,
 } from "@/cli/commands.js";
+import {
+  classifyInstall,
+  installDirFromUrl,
+} from "@/cli/installLocation.js";
 import { evaluate } from "@/cli/evaluate.js";
 import { fixtures, test, testTs, SlowTest } from "@/cli/test.js";
 import { generateReport, cleanCoverage } from "@/cli/coverage.js";
@@ -129,8 +134,20 @@ export function createProgram(deps: CliDependencies = {}): Command {
             process.exit(0);
           });
         } else {
+          let lastOutput: string | null = null;
           for (const input of inputs) {
-            compile(config, input, undefined, { ts: opts.ts });
+            const out = compile(config, input, undefined, { ts: opts.ts });
+            if (out) lastOutput = out;
+          }
+          // If installed globally, the user will hit ERR_MODULE_NOT_FOUND if
+          // they try to `node` the output directly. Steer them to `agency run`
+          // or `agency pack` instead.
+          if (lastOutput) {
+            const warning = compileWarning(
+              classifyInstall(installDirFromUrl(import.meta.url)),
+              lastOutput,
+            );
+            if (warning) console.error(warning);
           }
         }
       },

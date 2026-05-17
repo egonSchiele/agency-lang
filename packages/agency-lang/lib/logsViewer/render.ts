@@ -41,6 +41,12 @@ function renderRow(
   const glyph = chooseGlyph(row.node, isExpanded);
   const marker = isCursor ? "> " : "  ";
   const line = `${marker}${indent}${glyph} ${row.node.summary}`;
+  // NOTE: v1 assumes ASCII-width summaries. `line.length` counts
+  // UTF-16 code units, not terminal cells, so wide glyphs (CJK,
+  // emoji) or combining marks will misalign / over-run the column
+  // budget. Acceptable for v1 because summaries are built from a
+  // fixed vocabulary plus short user payload fragments; revisit
+  // with a string-width measurement if real users hit it.
   return line.length > cols ? line.slice(0, cols - 1) + "…" : line;
 }
 

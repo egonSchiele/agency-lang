@@ -48,6 +48,25 @@ export function text(content: string): Element {
   return { type: "text", content };
 }
 
+// Single-line text row. Sets `height: 1` so the element doesn't
+// stretch via the default `flex: 1` when placed inside a column,
+// which is the source of the "every row triple-spaces itself"
+// surprise. Caller-provided style is merged on top so `line("hi",
+// { height: 2 })` still works.
+export function line(content: string, style?: Style): Element {
+  return { type: "text", content, style: { height: 1, ...style } };
+}
+
+// Convenience: a column of `line()`s. `justifyContent: "flex-start"`
+// stops the layout engine from distributing leftover space between
+// the children if their combined height is less than the viewport.
+export function lines(strings: string[], style?: Style): Element {
+  return column(
+    { justifyContent: "flex-start", ...style },
+    ...strings.map((s) => line(s)),
+  );
+}
+
 export function list(style: StyleProps, items: string[], selectedIndex?: number): Element {
   const { style: resolvedStyle, key } = splitStyleAndKey(style);
   return { type: "list", style: resolvedStyle, key, items, selectedIndex };

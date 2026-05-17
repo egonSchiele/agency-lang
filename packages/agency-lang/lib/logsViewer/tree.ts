@@ -6,14 +6,40 @@ export function buildForest(events: EventEnvelope[]): TreeNode[] {
   const traces: Record<string, TreeNode> = {};
   // span_id → span node (lookup across all traces; span_ids are globally unique per nanoid)
   const spans: Record<string, TreeNode> = {};
+  // span_id → its desired parent_span_id (as observed on first sight).
+  // Tracked separately so pass 1b can re-resolve parents once every
+  // span exists, without polluting the public TreeNode shape.
+  const desiredParent: Record<string, string | null> = {};
 
-  // Pass 1: create traces and spans, linking each span to its parent
+  // Pass 1a: create traces and spans, linking each span to its parent
   // (or trace root) in arrival order. This puts child spans into their
   // parent's `children` array BEFORE any leaf events get appended in
   // pass 2, so a span's child spans are always listed before its leaves.
   for (const evt of events) {
     ensureTrace(traces, evt.trace_id);
-    if (evt.span_id) ensureSpan(spans, traces, evt);
+    if (evt.span_id) {
+      ensureSpan(spans, traces, evt);
+      if (!(evt.span_id in desiredParent)) {
+        desiredParent[evt.span_id] = evt.parent_span_id ?? null;
+      }
+    }
+  }
+
+  // Pass 1b: re-resolve any span that was attached to the trace root
+  // because its parent_span_id had not been seen yet. After pass 1a
+  // every span that will ever exist does exist, so we can move the
+  // child under its true parent if it shows up now. This makes the
+  // tree shape order-independent.
+  for (const span of Object.values(spans)) {
+    const desiredParentId = desiredParent[span.id];
+    if (!desiredParentId) continue;
+    const trueParent = spans[desiredParentId];
+    if (!trueParent || span.parentId === trueParent.id) continue;
+    // Detach from current parent and re-attach to the true parent.
+    const traceRoot = traces[span.traceId];
+    traceRoot.children = traceRoot.children.filter((c) => c.id !== span.id);
+    span.parentId = trueParent.id;
+    trueParent.children.push(span);
   }
 
   // Pass 2: attach each event as a leaf under its span (or under the

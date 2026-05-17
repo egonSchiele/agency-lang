@@ -124,6 +124,30 @@ describe("buildForest", () => {
     expect(events[1].event!.data.message).toBe("second");
   });
 
+  it("re-parents a child span when its parent appears later in the stream", () => {
+    // Child span s2 is observed BEFORE its parent s1 has emitted any
+    // event. The tree should still nest s2 under s1, not under the
+    // trace root, once both spans exist.
+    const forest = buildForest([
+      evt({
+        span_id: "s2",
+        parent_span_id: "s1",
+        data: { type: "debug", timestamp: "", message: "early child" },
+      }),
+      evt({
+        span_id: "s1",
+        parent_span_id: null,
+        data: { type: "agentStart", timestamp: "" },
+      }),
+    ]);
+    const trace = forest[0];
+    expect(trace.children).toHaveLength(1);
+    const s1 = trace.children[0];
+    expect(s1.id).toBe("s1");
+    expect(s1.children[0].id).toBe("s2");
+    expect(s1.children[0].parentId).toBe("s1");
+  });
+
   it("orphaned parent_span_id attaches to the trace root", () => {
     const forest = buildForest([
       evt({

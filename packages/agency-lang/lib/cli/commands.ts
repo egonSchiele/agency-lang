@@ -9,7 +9,9 @@ import { formatErrors, typeCheck } from "@/typeChecker/index.js";
 import { spawn } from "child_process";
 import { transformSync } from "esbuild";
 import * as fs from "fs";
+import { createRequire } from "module";
 import * as path from "path";
+import { fileURLToPath } from "url";
 
 import {
   getStdlibDir,
@@ -276,6 +278,73 @@ export async function formatFile(
   }
 }
 
+/**
+ * Does `import "agency-lang"` resolve from `fromDir`? Uses CommonJS
+ * resolution via `createRequire`, which walks `node_modules` upward exactly
+ * like Node's ESM resolver does for bare specifiers — so a `true` result
+ * means the compiled JS's `import "agency-lang"` will also succeed.
+ */
+function isAgencyLangResolvableFrom(fromDir: string): boolean {
+  try {
+    // The path passed to createRequire only matters for its directory;
+    // the file itself doesn't need to exist.
+    const req = createRequire(path.join(fromDir, "__agency_probe__.js"));
+    req.resolve("agency-lang");
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Locate the directories that should be added to NODE_PATH so a process
+ * spawned outside this package can still import `agency-lang` and its
+ * transitive deps. Walks up from this file's location to find the
+ * `agency-lang` package root, then returns:
+ *   1. The `node_modules` directory containing it (lets `agency-lang`
+ *      itself resolve, plus any sibling packages installed at the same
+ *      level — e.g. globally-installed `zod`).
+ *   2. The package's own `node_modules` (lets nested transitive deps
+ *      resolve when npm chose not to hoist them — common for global
+ *      installs).
+ * Returns an empty array if the package root can't be located (e.g.
+ * running from a non-standard layout); the caller should fall through
+ * without setting NODE_PATH in that case.
+ */
+function findGlobalAgencyLangSearchPaths(): string[] {
+  let dir: string;
+  try {
+    dir = path.dirname(fileURLToPath(import.meta.url));
+  } catch {
+    return [];
+  }
+  while (true) {
+    const pkgJsonPath = path.join(dir, "package.json");
+    if (fs.existsSync(pkgJsonPath)) {
+      try {
+        const pkg = JSON.parse(fs.readFileSync(pkgJsonPath, "utf-8"));
+        if (pkg.name === "agency-lang") {
+          const paths: string[] = [];
+          const parent = path.dirname(dir);
+          if (path.basename(parent) === "node_modules") {
+            paths.push(parent);
+          }
+          const ownNodeModules = path.join(dir, "node_modules");
+          if (fs.existsSync(ownNodeModules)) {
+            paths.push(ownNodeModules);
+          }
+          return paths;
+        }
+      } catch {
+        // Malformed package.json — keep walking up.
+      }
+    }
+    const next = path.dirname(dir);
+    if (next === dir) return [];
+    dir = next;
+  }
+}
+
 export function run(
   config: AgencyConfig,
   inputFile: string,
@@ -293,9 +362,32 @@ export function run(
   console.log(`Running ${output}...`);
   console.log("---");
 
-  const env = resumeFile
-    ? { ...process.env, AGENCY_RESUME_FILE: resumeFile }
-    : process.env;
+  const env: NodeJS.ProcessEnv = { ...process.env };
+  if (resumeFile) {
+    env.AGENCY_RESUME_FILE = resumeFile;
+  }
+
+  // If `agency-lang` isn't resolvable from the directory that will run the
+  // compiled output, we're almost certainly being invoked from a global
+  // install (the `agency` CLI is on $PATH but Node's module resolver does
+  // not consult npm's global prefix). Point NODE_PATH at the globally
+  // installed copy so `import "agency-lang"` (and its transitive deps)
+  // resolve, and warn the user that this is a fallback.
+  const outputDir = path.dirname(path.resolve(output));
+  if (!isAgencyLangResolvableFrom(outputDir)) {
+    const fallbackPaths = findGlobalAgencyLangSearchPaths();
+    if (fallbackPaths.length > 0) {
+      const existing = env.NODE_PATH ? env.NODE_PATH.split(path.delimiter) : [];
+      env.NODE_PATH = [...fallbackPaths, ...existing].join(path.delimiter);
+      console.warn(
+        `\nWarning: 'agency-lang' is not installed locally in ${outputDir}.\n` +
+          `Falling back to the globally installed copy at:\n` +
+          fallbackPaths.map((p) => `  ${p}`).join("\n") +
+          `\nFor a more reliable setup, install it in your project:\n` +
+          `  npm install agency-lang zod\n`,
+      );
+    }
+  }
 
   const nodeProcess = spawn("node", [output], {
     stdio: "inherit",

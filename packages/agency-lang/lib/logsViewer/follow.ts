@@ -14,41 +14,49 @@ export type Follower = {
 };
 
 // Watch `path` for size growth and push the appended bytes into
-// `onAppend`. We use `fs.watchFile` rather than `fs.watch` because
-// watchFile works uniformly across platforms and gives us prev/curr
-// stat objects, which is exactly what we need to compute the delta
-// range. The first callback (when the file already exists) doesn't
-// emit anything — only growth from the starting offset onward.
+// `onAppend`. We poll `stat().size` directly on a setInterval rather
+// than using `fs.watchFile`, because watchFile is documented to
+// fire only on observable stat changes — on filesystems with
+// second-resolution mtime (common on Linux CI runners) an append
+// that lands in the same second as the previous stat can be missed
+// entirely. A plain size poll is dumber and more reliable.
+//
+// The first poll (matching the starting offset) doesn't emit
+// anything; only growth from the starting offset onward is reported.
 export function follow(opts: FollowOpts): Follower {
   const interval = opts.intervalMs ?? 250;
   let offset = safeSize(opts.path);
   let stopped = false;
 
-  const listener = (curr: fs.Stats, prev: fs.Stats): void => {
+  const tick = (): void => {
     if (stopped) return;
-    if (curr.size <= offset) {
-      // File shrank (rotation/truncation): rewind to start and
-      // emit everything from there next tick.
-      if (curr.size < prev.size) offset = 0;
+    const size = safeSize(opts.path);
+    if (size === offset) return;
+    if (size < offset) {
+      // File shrank (rotation / truncation): rewind to start and
+      // emit everything from there on the next tick.
+      offset = 0;
       return;
     }
     const fd = fs.openSync(opts.path, "r");
     try {
-      const length = curr.size - offset;
+      const length = size - offset;
       const buf = Buffer.alloc(length);
       fs.readSync(fd, buf, 0, length, offset);
-      offset = curr.size;
+      offset = size;
       opts.onAppend(buf.toString("utf-8"));
     } finally {
       fs.closeSync(fd);
     }
   };
 
-  fs.watchFile(opts.path, { interval }, listener);
+  const timer = setInterval(tick, interval);
+  // Don't keep the event loop alive solely for the poller.
+  if (typeof timer.unref === "function") timer.unref();
   return {
     stop(): void {
       stopped = true;
-      fs.unwatchFile(opts.path, listener);
+      clearInterval(timer);
     },
   };
 }

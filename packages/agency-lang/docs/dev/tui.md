@@ -20,7 +20,7 @@ single line of text" — the common case in lists, logs, command bars
 — you want fixed-height rows instead. Use `line()`:
 
 ```ts
-import { line, lines, column } from "lib/tui";
+import { line, lines, column } from "@/tui/index.js";
 
 column(
   line("> j moves down"),
@@ -42,7 +42,7 @@ lines(["Loading…", "Press q to cancel."]);
 Two pure functions, no element/state coupling:
 
 ```ts
-import { clampScroll, followCursor } from "lib/tui";
+import { clampScroll, followCursor } from "@/tui/index.js";
 
 const clamped = clampScroll(scrollTop, totalRows, viewportRows);
 const scrollTop = cursorIdx >= 0
@@ -97,7 +97,7 @@ for the `letter()` helper pattern.
 The 16 named ANSI colors are exported as a typed union:
 
 ```ts
-import type { ColorName } from "lib/tui";
+import type { ColorName } from "@/tui/index.js";
 
 const fg: ColorName = "bright-cyan"; // autocompletes; typos caught at build time
 ```
@@ -113,7 +113,7 @@ adapter). A unit test enforces that `COLOR_NAMES`, `ansiColors`,
 construction time for the most concise tests:
 
 ```ts
-import { ScriptedInput, FrameRecorder } from "lib/tui";
+import { ScriptedInput, FrameRecorder } from "@/tui/index.js";
 
 const input = new ScriptedInput(["j", "j", { key: "c", ctrl: true }]);
 const output = new FrameRecorder();

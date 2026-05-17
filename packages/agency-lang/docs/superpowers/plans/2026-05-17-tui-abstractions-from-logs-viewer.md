@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Land the abstractions in `lib/tui` that I found myself reinventing while building [packages/agency-lang/lib/logsViewer/run.ts](file:///Users/adityabhargava/agency-lang/packages/agency-lang/lib/logsViewer/run.ts) (merged in `a49249b6`). The viewer hand-rolled key normalization, single-line row wrappers, scroll bookkeeping, the render/input loop, line clipping, color names, and test harness boilerplate. Every future TUI app would do the same. This plan pushes each pain point down into the library and adopts it from the viewer (and, where they obviously apply, from the debugger and any existing in-tree consumers).
+**Goal:** Land the abstractions in `lib/tui` that I found myself reinventing while building [packages/agency-lang/lib/logsViewer/run.ts](../../../lib/logsViewer/run.ts) (merged in `a49249b6`). The viewer hand-rolled key normalization, single-line row wrappers, scroll bookkeeping, the render/input loop, line clipping, color names, and test harness boilerplate. Every future TUI app would do the same. This plan pushes each pain point down into the library and adopts it from the viewer (and, where they obviously apply, from the debugger and any existing in-tree consumers).
 
 **Tech Stack:** TypeScript, existing `lib/tui` module, Vitest. No new dependencies.
 
@@ -14,10 +14,10 @@
 
 While shipping `agency logs view` I hit eight separate places where the right primitive was missing from `lib/tui`:
 
-1. **Key normalization** — each app rebuilds the `{key, ctrl, shift}` → string switch ([run.ts mapKey](file:///Users/adityabhargava/agency-lang/packages/agency-lang/lib/logsViewer/run.ts#L107-L127)).
+1. **Key normalization** — each app rebuilds the `{key, ctrl, shift}` → string switch ([run.ts mapKey](../../../lib/logsViewer/run.ts#L107-L127)).
 2. **Single-line rows** — `text()` defaults to `flex: 1`, so a `column(...lines)` triple-spaces itself and shifts the parent when children grow. I worked around it with an inline `row()` that hard-codes `height: 1`.
-3. **Scrollable list with cursor tracking** — `scrollTop` clamping + cursor-visibility were hand-rolled in [run.ts](file:///Users/adityabhargava/agency-lang/packages/agency-lang/lib/logsViewer/run.ts#L100-L122). The Copilot reviewer caught one regression here (blank screen after collapse) that an abstraction would have prevented.
-4. **Render/input loop** — `draw → nextKey → handleKey → draw → quit` is the same in every TUI app; the viewer's [runViewer](file:///Users/adityabhargava/agency-lang/packages/agency-lang/lib/logsViewer/run.ts#L23-L84) is mostly this loop.
+3. **Scrollable list with cursor tracking** — `scrollTop` clamping + cursor-visibility were hand-rolled in [run.ts](../../../lib/logsViewer/run.ts#L100-L122). The Copilot reviewer caught one regression here (blank screen after collapse) that an abstraction would have prevented.
+4. **Render/input loop** — `draw → nextKey → handleKey → draw → quit` is the same in every TUI app; the viewer's [runViewer](../../../lib/logsViewer/run.ts#L23-L84) is mostly this loop.
 5. **Text element self-clipping** — I pre-clip every line with `slice(0, cols-1) + "…"`. The renderer already knows each element's resolved width; clipping should live there. Same place to one day fix the UTF-16-vs-display-cell width issue.
 6. **Color name discoverability** — `colors.ts` has 16 named colors; nothing surfaces that set to autocomplete.
 7. **ScriptedInput ergonomic constructor** — every test writes a local `feed(input, ["j", "l", "q"])` helper because `ScriptedInput` only exposes `feedKey(KeyEvent)`.
@@ -33,32 +33,32 @@ These are independent — they can be implemented in parallel by separate worker
 
 | File | Responsibility |
 |---|---|
-| [packages/agency-lang/lib/tui/input/format.ts](file:///Users/adityabhargava/agency-lang/packages/agency-lang/lib/tui/input/format.ts) | `formatKey(event): string` and `keyMatches(event, name): boolean` |
-| [packages/agency-lang/lib/tui/input/format.test.ts](file:///Users/adityabhargava/agency-lang/packages/agency-lang/lib/tui/input/format.test.ts) | Tests for `formatKey` / `keyMatches` |
-| [packages/agency-lang/lib/tui/test/runLoop.test.ts](file:///Users/adityabhargava/agency-lang/packages/agency-lang/lib/tui/test/runLoop.test.ts) | Integration test for `Screen.runLoop` |
-| [packages/agency-lang/lib/tui/scroll.ts](file:///Users/adityabhargava/agency-lang/packages/agency-lang/lib/tui/scroll.ts) | `clampScroll()` + `followCursor()` reusable helpers |
-| [packages/agency-lang/lib/tui/scroll.test.ts](file:///Users/adityabhargava/agency-lang/packages/agency-lang/lib/tui/scroll.test.ts) | Tests for the scroll helpers |
+| [packages/agency-lang/lib/tui/input/format.ts](../../../lib/tui/input/format.ts) | `formatKey(event): string` and `keyMatches(event, name): boolean` |
+| [packages/agency-lang/lib/tui/input/format.test.ts](../../../lib/tui/input/format.test.ts) | Tests for `formatKey` / `keyMatches` |
+| [packages/agency-lang/lib/tui/test/runLoop.test.ts](../../../lib/tui/test/runLoop.test.ts) | Integration test for `Screen.runLoop` |
+| [packages/agency-lang/lib/tui/scroll.ts](../../../lib/tui/scroll.ts) | `clampScroll()` + `followCursor()` reusable helpers |
+| [packages/agency-lang/lib/tui/scroll.test.ts](../../../lib/tui/scroll.test.ts) | Tests for the scroll helpers |
 
 ### Modified files
 
 | File | Change |
 |---|---|
-| [packages/agency-lang/lib/tui/builders.ts](file:///Users/adityabhargava/agency-lang/packages/agency-lang/lib/tui/builders.ts) | Add `line(content, style?)` and `lines(strings[], style?)` builders |
-| [packages/agency-lang/lib/tui/builders.test.ts](file:///Users/adityabhargava/agency-lang/packages/agency-lang/lib/tui/builders.test.ts) | New tests for the line builders (file may not exist yet — create if so) |
-| [packages/agency-lang/lib/tui/render/renderer.ts](file:///Users/adityabhargava/agency-lang/packages/agency-lang/lib/tui/render/renderer.ts) | Clip rendered `text` content to its resolved width inside the renderer |
-| [packages/agency-lang/lib/tui/test/renderer.test.ts](file:///Users/adityabhargava/agency-lang/packages/agency-lang/lib/tui/test/renderer.test.ts) | Test that overlong text is auto-clipped with `…` |
-| [packages/agency-lang/lib/tui/colors.ts](file:///Users/adityabhargava/agency-lang/packages/agency-lang/lib/tui/colors.ts) | Export a `ColorName` union derived from `ansiColors` |
-| [packages/agency-lang/lib/tui/elements.ts](file:///Users/adityabhargava/agency-lang/packages/agency-lang/lib/tui/elements.ts) | Narrow `Style.fg` / `bg` / `borderColor` / `labelColor` to `ColorName \| string` (string kept for hex) |
-| [packages/agency-lang/lib/tui/screen.ts](file:///Users/adityabhargava/agency-lang/packages/agency-lang/lib/tui/screen.ts) | Add `Screen.runLoop({ render, handleKey })` |
-| [packages/agency-lang/lib/tui/input/scripted.ts](file:///Users/adityabhargava/agency-lang/packages/agency-lang/lib/tui/input/scripted.ts) | Accept `(KeyEvent \| string)[]` in the constructor; document semantics |
-| [packages/agency-lang/lib/tui/test/scripted.test.ts](file:///Users/adityabhargava/agency-lang/packages/agency-lang/lib/tui/test/scripted.test.ts) | Tests for the new constructor |
-| [packages/agency-lang/lib/tui/output/recorder.ts](file:///Users/adityabhargava/agency-lang/packages/agency-lang/lib/tui/output/recorder.ts) | Add `textAt(i)` and `lastText()` convenience getters |
-| [packages/agency-lang/lib/tui/test/recorder.test.ts](file:///Users/adityabhargava/agency-lang/packages/agency-lang/lib/tui/test/recorder.test.ts) | Tests for the new getters |
-| [packages/agency-lang/lib/tui/index.ts](file:///Users/adityabhargava/agency-lang/packages/agency-lang/lib/tui/index.ts) | Export everything new |
-| [packages/agency-lang/lib/logsViewer/run.ts](file:///Users/adityabhargava/agency-lang/packages/agency-lang/lib/logsViewer/run.ts) | Adopt the new primitives (delete local `mapKey`, `row`, `clampScrollTop`, `ensureCursorVisible`) |
-| [packages/agency-lang/lib/logsViewer/render.ts](file:///Users/adityabhargava/agency-lang/packages/agency-lang/lib/logsViewer/render.ts) | Delete the manual `…` slice now that the renderer clips |
-| [packages/agency-lang/lib/logsViewer/run.test.ts](file:///Users/adityabhargava/agency-lang/packages/agency-lang/lib/logsViewer/run.test.ts) | Switch `new ScriptedInput()` + `feed(...)` to the array constructor |
-| [packages/agency-lang/lib/logsViewer/render.test.ts](file:///Users/adityabhargava/agency-lang/packages/agency-lang/lib/logsViewer/render.test.ts) | Drop tests that asserted the manual `…` slice if any |
+| [packages/agency-lang/lib/tui/builders.ts](../../../lib/tui/builders.ts) | Add `line(content, style?)` and `lines(strings[], style?)` builders |
+| [packages/agency-lang/lib/tui/builders.test.ts](../../../lib/tui/builders.test.ts) | New tests for the line builders (file may not exist yet — create if so) |
+| [packages/agency-lang/lib/tui/render/renderer.ts](../../../lib/tui/render/renderer.ts) | Clip rendered `text` content to its resolved width inside the renderer |
+| [packages/agency-lang/lib/tui/test/renderer.test.ts](../../../lib/tui/test/renderer.test.ts) | Test that overlong text is auto-clipped with `…` |
+| [packages/agency-lang/lib/tui/colors.ts](../../../lib/tui/colors.ts) | Export a `ColorName` union derived from `ansiColors` |
+| [packages/agency-lang/lib/tui/elements.ts](../../../lib/tui/elements.ts) | Narrow `Style.fg` / `bg` / `borderColor` / `labelColor` to `ColorName \| string` (string kept for hex) |
+| [packages/agency-lang/lib/tui/screen.ts](../../../lib/tui/screen.ts) | Add `Screen.runLoop({ render, handleKey })` |
+| [packages/agency-lang/lib/tui/input/scripted.ts](../../../lib/tui/input/scripted.ts) | Accept `(KeyEvent \| string)[]` in the constructor; document semantics |
+| [packages/agency-lang/lib/tui/test/scripted.test.ts](../../../lib/tui/test/scripted.test.ts) | Tests for the new constructor |
+| [packages/agency-lang/lib/tui/output/recorder.ts](../../../lib/tui/output/recorder.ts) | Add `textAt(i)` and `lastText()` convenience getters |
+| [packages/agency-lang/lib/tui/test/recorder.test.ts](../../../lib/tui/test/recorder.test.ts) | Tests for the new getters |
+| [packages/agency-lang/lib/tui/index.ts](../../../lib/tui/index.ts) | Export everything new |
+| [packages/agency-lang/lib/logsViewer/run.ts](../../../lib/logsViewer/run.ts) | Adopt the new primitives (delete local `mapKey`, `row`, `clampScrollTop`, `ensureCursorVisible`) |
+| [packages/agency-lang/lib/logsViewer/render.ts](../../../lib/logsViewer/render.ts) | Delete the manual `…` slice now that the renderer clips |
+| [packages/agency-lang/lib/logsViewer/run.test.ts](../../../lib/logsViewer/run.test.ts) | Switch `new ScriptedInput()` + `feed(...)` to the array constructor |
+| [packages/agency-lang/lib/logsViewer/render.test.ts](../../../lib/logsViewer/render.test.ts) | Drop tests that asserted the manual `…` slice if any |
 
 ---
 
@@ -66,7 +66,7 @@ These are independent — they can be implemented in parallel by separate worker
 
 ### Task 1 — `formatKey(event)` and `keyMatches(event, name)`
 
-**Files:** create [lib/tui/input/format.ts](file:///Users/adityabhargava/agency-lang/packages/agency-lang/lib/tui/input/format.ts) + co-located test; re-export from [lib/tui/index.ts](file:///Users/adityabhargava/agency-lang/packages/agency-lang/lib/tui/index.ts).
+**Files:** create [lib/tui/input/format.ts](../../../lib/tui/input/format.ts) + co-located test; re-export from [lib/tui/index.ts](../../../lib/tui/index.ts).
 
 The API:
 
@@ -141,14 +141,14 @@ export function keyMatches(event: KeyEvent, name: string): boolean {
 ```
 
 - [ ] **Step 4: Pass tests**
-- [ ] **Step 5: Re-export from [lib/tui/index.ts](file:///Users/adityabhargava/agency-lang/packages/agency-lang/lib/tui/index.ts)**: `export { formatKey, keyMatches } from "./input/format.js";`
+- [ ] **Step 5: Re-export from [lib/tui/index.ts](../../../lib/tui/index.ts)**: `export { formatKey, keyMatches } from "./input/format.js";`
 - [ ] **Step 6: Commit** `tui: formatKey / keyMatches utilities`
 
 ---
 
 ### Task 2 — `line(content, style?)` and `lines(strings[], style?)` builders
 
-**Files:** modify [lib/tui/builders.ts](file:///Users/adityabhargava/agency-lang/packages/agency-lang/lib/tui/builders.ts); test in `builders.test.ts` (create if absent).
+**Files:** modify [lib/tui/builders.ts](../../../lib/tui/builders.ts); test in `builders.test.ts` (create if absent).
 
 Rationale: `text()` defaults to `flex: 1`, which is wrong for the common case of "a single line of text inside a column". Don't change `text()` (would be breaking); add a new builder that explicitly fixes `height: 1`. `lines()` is a convenience that wraps a `string[]` into a `column` of fixed-height rows.
 
@@ -197,7 +197,7 @@ describe("lines()", () => {
 ```
 
 - [ ] **Step 2: Run, confirm fail**
-- [ ] **Step 3: Implement in [builders.ts](file:///Users/adityabhargava/agency-lang/packages/agency-lang/lib/tui/builders.ts)**
+- [ ] **Step 3: Implement in [builders.ts](../../../lib/tui/builders.ts)**
 
 ```ts
 export function line(content: string, style?: Style): Element {
@@ -222,7 +222,7 @@ export function lines(strings: string[], style?: Style): Element {
 
 ### Task 3 — `clampScroll()` and `followCursor()` helpers
 
-**Files:** create [lib/tui/scroll.ts](file:///Users/adityabhargava/agency-lang/packages/agency-lang/lib/tui/scroll.ts) + test.
+**Files:** create [lib/tui/scroll.ts](../../../lib/tui/scroll.ts) + test.
 
 Pure functions, no element/state coupling. Both are used together in the viewer's `draw()`.
 
@@ -298,14 +298,14 @@ export function followCursor(
 ```
 
 - [ ] **Step 4: Pass tests**
-- [ ] **Step 5: Re-export from [lib/tui/index.ts](file:///Users/adityabhargava/agency-lang/packages/agency-lang/lib/tui/index.ts)**: `export * from "./scroll.js";`
+- [ ] **Step 5: Re-export from [lib/tui/index.ts](../../../lib/tui/index.ts)**: `export * from "./scroll.js";`
 - [ ] **Step 6: Commit** `tui: clampScroll / followCursor helpers`
 
 ---
 
 ### Task 4 — `Screen.runLoop({ render, handleKey })`
 
-**Files:** modify [lib/tui/screen.ts](file:///Users/adityabhargava/agency-lang/packages/agency-lang/lib/tui/screen.ts); create [lib/tui/test/runLoop.test.ts](file:///Users/adityabhargava/agency-lang/packages/agency-lang/lib/tui/test/runLoop.test.ts).
+**Files:** modify [lib/tui/screen.ts](../../../lib/tui/screen.ts); create [lib/tui/test/runLoop.test.ts](../../../lib/tui/test/runLoop.test.ts).
 
 The loop:
 
@@ -383,7 +383,7 @@ async runLoop<S>(opts: {
 
 ### Task 5 — Renderer auto-clips overlong `text` to its box width
 
-**Files:** modify [lib/tui/render/renderer.ts](file:///Users/adityabhargava/agency-lang/packages/agency-lang/lib/tui/render/renderer.ts); test in [lib/tui/test/renderer.test.ts](file:///Users/adityabhargava/agency-lang/packages/agency-lang/lib/tui/test/renderer.test.ts).
+**Files:** modify [lib/tui/render/renderer.ts](../../../lib/tui/render/renderer.ts); test in [lib/tui/test/renderer.test.ts](../../../lib/tui/test/renderer.test.ts).
 
 Today `text` content longer than its resolved width overflows or is silently truncated by the cell grid depending on the path. Make the truncation explicit and consistent: clip to `(resolvedWidth - 1)` and append `…` whenever clipped.
 
@@ -419,7 +419,7 @@ describe("renderer auto-clips long text", () => {
 
 ### Task 6 — Typed `ColorName` union exported from `lib/tui`
 
-**Files:** modify [lib/tui/colors.ts](file:///Users/adityabhargava/agency-lang/packages/agency-lang/lib/tui/colors.ts) and [lib/tui/elements.ts](file:///Users/adityabhargava/agency-lang/packages/agency-lang/lib/tui/elements.ts); index re-export.
+**Files:** modify [lib/tui/colors.ts](../../../lib/tui/colors.ts) and [lib/tui/elements.ts](../../../lib/tui/elements.ts); index re-export.
 
 Goal: get autocomplete for `fg: "..."` and compile-time validation for the 16 supported color names without breaking the hex-string escape hatch the HTML adapter already supports.
 
@@ -450,7 +450,7 @@ it("ColorName covers exactly the named ANSI palette", () => {
 
 In `elements.ts`, change `fg?: string` (and `bg`, `borderColor`, `labelColor`) to `fg?: ColorName | (string & {})`. The `& {}` trick keeps hex strings (e.g. `"#abc"`) compiling without losing the autocomplete on the named branch. Add a comment explaining.
 
-- [ ] **Step 3: Re-export from [lib/tui/index.ts](file:///Users/adityabhargava/agency-lang/packages/agency-lang/lib/tui/index.ts)**: `export type { ColorName } from "./colors.js"; export { COLOR_NAMES } from "./colors.js";`
+- [ ] **Step 3: Re-export from [lib/tui/index.ts](../../../lib/tui/index.ts)**: `export type { ColorName } from "./colors.js"; export { COLOR_NAMES } from "./colors.js";`
 - [ ] **Step 4: Build the project** (`pnpm run build`); fix any callers in `lib/logsViewer/render.ts`, `lib/debugger/`, etc. that were passing color names that don't exist in the palette. The build will surface them all.
 - [ ] **Step 5: Commit** `tui: typed ColorName union and narrowed Style color fields`
 
@@ -458,7 +458,7 @@ In `elements.ts`, change `fg?: string` (and `bg`, `borderColor`, `labelColor`) t
 
 ### Task 7 — `ScriptedInput` constructor accepts `(KeyEvent | string)[]`
 
-**Files:** modify [lib/tui/input/scripted.ts](file:///Users/adityabhargava/agency-lang/packages/agency-lang/lib/tui/input/scripted.ts); test in [lib/tui/test/scripted.test.ts](file:///Users/adityabhargava/agency-lang/packages/agency-lang/lib/tui/test/scripted.test.ts).
+**Files:** modify [lib/tui/input/scripted.ts](../../../lib/tui/input/scripted.ts); test in [lib/tui/test/scripted.test.ts](../../../lib/tui/test/scripted.test.ts).
 
 Sugar: pass keys directly when constructing; mixed string/KeyEvent items welcome.
 
@@ -492,7 +492,7 @@ constructor(initial?: ReadonlyArray<KeyEvent | string>) {
 
 ### Task 8 — `FrameRecorder.lastText()` / `textAt(i)`
 
-**Files:** modify [lib/tui/output/recorder.ts](file:///Users/adityabhargava/agency-lang/packages/agency-lang/lib/tui/output/recorder.ts); test in [lib/tui/test/recorder.test.ts](file:///Users/adityabhargava/agency-lang/packages/agency-lang/lib/tui/test/recorder.test.ts).
+**Files:** modify [lib/tui/output/recorder.ts](../../../lib/tui/output/recorder.ts); test in [lib/tui/test/recorder.test.ts](../../../lib/tui/test/recorder.test.ts).
 
 - [ ] **Step 1: Write failing test**
 
@@ -531,17 +531,17 @@ This is the load-bearing task: prove each new abstraction works for its motivati
 
 - [ ] **Step 1: Replace `mapKey()` + key strings with `keyMatches()`**
 
-In [lib/logsViewer/input.ts](file:///Users/adityabhargava/agency-lang/packages/agency-lang/lib/logsViewer/input.ts), accept a `KeyEvent` directly (drop the `Key` string union) and use `keyMatches(event, "j")` / etc. inside the switch. Delete `mapKey` from [run.ts](file:///Users/adityabhargava/agency-lang/packages/agency-lang/lib/logsViewer/run.ts) and pass the raw `KeyEvent` straight into `handleKey`.
+In [lib/logsViewer/input.ts](../../../lib/logsViewer/input.ts), accept a `KeyEvent` directly (drop the `Key` string union) and use `keyMatches(event, "j")` / etc. inside the switch. Delete `mapKey` from [run.ts](../../../lib/logsViewer/run.ts) and pass the raw `KeyEvent` straight into `handleKey`.
 
-Adjust [input.test.ts](file:///Users/adityabhargava/agency-lang/packages/agency-lang/lib/logsViewer/input.test.ts) to pass `{ key: "j" }` shapes (or string-named keys via a small wrapper) — they were already using single-char strings that match `formatKey`.
+Adjust [input.test.ts](../../../lib/logsViewer/input.test.ts) to pass `{ key: "j" }` shapes (or string-named keys via a small wrapper) — they were already using single-char strings that match `formatKey`.
 
 - [ ] **Step 2: Replace inline `row()` with `line()`**
 
-In [run.ts](file:///Users/adityabhargava/agency-lang/packages/agency-lang/lib/logsViewer/run.ts) delete the local `row()` helper and call `line(content, { fg })` from `lib/tui`. The empty-state branch becomes `screen.render(lines(["No events found."]))`.
+In [run.ts](../../../lib/logsViewer/run.ts) delete the local `row()` helper and call `line(content, { fg })` from `lib/tui`. The empty-state branch becomes `screen.render(lines(["No events found."]))`.
 
 - [ ] **Step 3: Replace `clampScrollTop()` + `ensureCursorVisible()` with `clampScroll()` + `followCursor()`**
 
-In [run.ts](file:///Users/adityabhargava/agency-lang/packages/agency-lang/lib/logsViewer/run.ts) the new `draw()` becomes (sketch):
+In [run.ts](../../../lib/logsViewer/run.ts) the new `draw()` becomes (sketch):
 
 ```ts
 const rows = flattenVisibleRows(state);
@@ -552,7 +552,7 @@ state = { ...state, scrollTop: followCursor(clamped, cursorIdx, opts.viewport.ro
 
 Delete the two local helpers.
 
-- [ ] **Step 4: Replace the manual `…` slice in [render.ts](file:///Users/adityabhargava/agency-lang/packages/agency-lang/lib/logsViewer/render.ts)**
+- [ ] **Step 4: Replace the manual `…` slice in [render.ts](../../../lib/logsViewer/render.ts)**
 
 `renderRow` no longer needs the `line.length > cols` branch — the renderer handles it. Delete the slice + the ASCII-width comment block (the comment migrates to the renderer in Task 5).
 
@@ -569,7 +569,7 @@ return await screen.runLoop({
 
 - [ ] **Step 6: Replace `feed(input, [...])` test helpers with the array constructor**
 
-In [run.test.ts](file:///Users/adityabhargava/agency-lang/packages/agency-lang/lib/logsViewer/run.test.ts) delete the `feed()` function and rewrite to `new ScriptedInput(["j", "l", "q"])`.
+In [run.test.ts](../../../lib/logsViewer/run.test.ts) delete the `feed()` function and rewrite to `new ScriptedInput(["j", "l", "q"])`.
 
 - [ ] **Step 7: Replace `out.frames[i].frame.toPlainText()` with `out.textAt(i)` / `out.lastText()`** throughout the viewer's tests.
 
@@ -591,7 +591,7 @@ All previously-passing counts must hold; the viewer should still behave identica
 
 ### Task 10 — Update documentation
 
-- [ ] Add a section to [docs/site/guide/observability.md](file:///Users/adityabhargava/agency-lang/packages/agency-lang/docs/site/guide/observability.md) only if anything user-facing changed (it shouldn't; this is internal refactor).
+- [ ] Add a section to [docs/site/guide/observability.md](../../../docs/site/guide/observability.md) only if anything user-facing changed (it shouldn't; this is internal refactor).
 - [ ] Add a short developer-facing reference: `docs/dev/tui.md` (create if missing) covering: `line` / `lines`, `clampScroll` / `followCursor`, `Screen.runLoop`, `formatKey` / `keyMatches`, `ColorName`. Two paragraphs each, with the existing logs viewer cited as the canonical example.
 - [ ] **Commit** `docs: developer reference for the new TUI primitives`
 
@@ -613,7 +613,7 @@ Before opening the PR, verify all of:
 
 ## Anti-pattern review
 
-Per [docs/dev/anti-patterns.md](file:///Users/adityabhargava/agency-lang/packages/agency-lang/docs/dev/anti-patterns.md), this plan deliberately avoids:
+Per [docs/dev/anti-patterns.md](../../../docs/dev/anti-patterns.md), this plan deliberately avoids:
 
 - **Dynamic imports** — every new export is statically resolved through `lib/tui/index.ts`.
 - **Maps / Sets** — `clampScroll` and `followCursor` operate on plain `number`s; `COLOR_NAMES` is a tuple, not a `Set`.

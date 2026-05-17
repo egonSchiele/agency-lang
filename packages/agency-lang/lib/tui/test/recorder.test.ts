@@ -39,4 +39,17 @@ describe("FrameRecorder", () => {
     expect(recorder.textAt(0).trim()).toBe("first");
     expect(recorder.lastText().trim()).toBe("second");
   });
+
+  it("textAt() throws a clear error when the index is out of range", () => {
+    const recorder = new FrameRecorder();
+    expect(() => recorder.textAt(0)).toThrow(/index out of range/);
+    recorder.write(render(layout(line("only"), 10, 1)));
+    expect(() => recorder.textAt(-1)).toThrow(/index out of range/);
+    expect(() => recorder.textAt(5)).toThrow(/index out of range/);
+  });
+
+  it("lastText() throws a clear error when no frames have been recorded", () => {
+    const recorder = new FrameRecorder();
+    expect(() => recorder.lastText()).toThrow(/no frames recorded/);
+  });
 });

@@ -103,8 +103,10 @@ function renderTextContent(
       }
     }
     // If we ran out of room, mark the truncation explicitly with an
-    // ellipsis in the final cell. NOTE: widths here are counted in
-    // UTF-16 code units, matching the layout engine; grapheme-aware
+    // ellipsis in the final cell. NOTE: widths here are counted by
+    // Unicode code points (`for..of` over the string), not grapheme
+    // clusters or terminal display cells; combining marks and wide
+    // characters (CJK, emoji) can still misalign. Grapheme-aware
     // clipping is out of scope.
     if (clipped && row.length > 0) {
       const last = row[row.length - 1];

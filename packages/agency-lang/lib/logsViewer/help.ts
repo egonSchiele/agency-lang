@@ -14,6 +14,8 @@ export const HELP_GROUPS: BindingGroup[] = [
       { keys: "k / Up / Ctrl+P", action: "previous row" },
       { keys: "g", action: "first row" },
       { keys: "G", action: "last row" },
+      { keys: "Ctrl+F / Ctrl+B / PageDown / PageUp", action: "page down / up" },
+      { keys: "Ctrl+D / Ctrl+U", action: "half page down / up" },
       { keys: "Tab / Shift+Tab", action: "next / previous trace" },
     ],
   },

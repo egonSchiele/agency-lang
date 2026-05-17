@@ -14,6 +14,8 @@ import {
   VisibleRow,
 } from "./render.js";
 import { handleKeyEx } from "./input.js";
+import { formatKey } from "../tui/input/format.js";
+import type { KeyEvent } from "../tui/input/types.js";
 import { ViewerState, TreeNode } from "./types.js";
 import { findMatches, expandAncestorsOf } from "./search.js";
 import { detectClipboard } from "./clipboard.js";
@@ -99,6 +101,16 @@ export async function runViewer(opts: RunViewerOpts): Promise<void> {
       ) {
         state = { ...state, quit: true };
         break;
+      }
+      // Vim-style page scroll — handled here because page size is
+      // viewport-dependent and the pure reducer doesn't know the
+      // viewport. We move the cursor by N rows; applyScroll then
+      // pages the viewport along with it.
+      const paged = paginate(state, event, opts.viewport);
+      if (paged) {
+        state = applyScroll(paged, opts.viewport);
+        screen.render(renderState(state, parsed.errors, opts.viewport, thresholds));
+        continue;
       }
       const { state: next, command } = handleKeyEx(state, event);
       state = applyScroll(next, opts.viewport);
@@ -212,6 +224,30 @@ function onFollowAppend(
     cursorId: stillThere ? prev.cursorId : roots[0].id,
   };
   return applyScroll(next, viewport);
+}
+
+// Vim-style page scroll. Returns the updated state if `event` is a
+// page-scroll key; otherwise undefined so the caller falls through
+// to the normal reducer.
+function paginate(
+  state: ViewerState,
+  event: KeyEvent,
+  viewport: { rows: number; cols: number },
+): ViewerState | undefined {
+  const fmt = formatKey(event);
+  const pageRows = Math.max(1, treePaneRows(viewport, state) - 1);
+  const halfPage = Math.max(1, Math.floor(pageRows / 2));
+  let delta = 0;
+  if (fmt === "Ctrl+F" || fmt === "PageDown") delta = +pageRows;
+  else if (fmt === "Ctrl+B" || fmt === "PageUp") delta = -pageRows;
+  else if (fmt === "Ctrl+D") delta = +halfPage;
+  else if (fmt === "Ctrl+U") delta = -halfPage;
+  else return undefined;
+  const rows = flattenVisibleRows(state);
+  if (rows.length === 0) return state;
+  const curIdx = Math.max(0, rows.findIndex((r) => r.node.id === state.cursorId));
+  const nextIdx = Math.min(rows.length - 1, Math.max(0, curIdx + delta));
+  return { ...state, cursorId: rows[nextIdx].node.id };
 }
 
 // Clamp and cursor-follow scrollTop based on the current visible

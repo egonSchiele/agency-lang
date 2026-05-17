@@ -58,6 +58,8 @@ agency logs view --follow path/to/run.jsonl
 | `h`, `Left` | Collapse the focused node (or jump to its parent) |
 | `g` | Jump to the top |
 | `G` | Jump to the bottom |
+| `Ctrl+F`, `PageDown` / `Ctrl+B`, `PageUp` | Page down / up |
+| `Ctrl+D` / `Ctrl+U` | Half-page down / up |
 | `Tab`, `Shift+Tab` | Jump cursor to the next / previous trace |
 | `e` / `E` | Expand all / collapse all |
 | `/`, then text + Enter | Search rows for a substring |

@@ -118,6 +118,18 @@ describe("StatelogClient", () => {
   });
 
   describe("sinks", () => {
+    it("emits format_version: 1 on every event envelope", async () => {
+      const file = newLogFile("format-version");
+      const client = fileClient(file);
+      await client.debug("hi", {});
+      await client.agentStart({ entryNode: "main" });
+      const events = readEvents(file);
+      expect(events.length).toBeGreaterThan(0);
+      for (const evt of events) {
+        expect(evt.format_version).toBe(1);
+      }
+    });
+
     it("file sink writes one JSONL line per event", async () => {
       const file = newLogFile("jsonl");
       const client = fileClient(file);

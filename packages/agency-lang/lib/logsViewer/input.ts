@@ -3,6 +3,59 @@ import { flattenVisibleRows, VisibleRow } from "./render.js";
 import type { KeyEvent } from "../tui/input/types.js";
 import { formatKey } from "../tui/input/format.js";
 
+// Signals from the input layer back to the run loop. `requestSearch`
+// asks the loop to open the line-prompt for `/`. `requestCopy` asks
+// it to shell out to the clipboard. Pure reducers can't do either on
+// their own.
+export type ViewerCommand =
+  | { kind: "search" }
+  | { kind: "copy" }
+  | { kind: "toggleFollow" };
+
+export type HandleKeyResult = {
+  state: ViewerState;
+  command?: ViewerCommand;
+};
+
+export function handleKeyEx(
+  state: ViewerState,
+  event: KeyEvent,
+): HandleKeyResult {
+  // Help overlay swallows the next keystroke — any key closes it.
+  if (state.helpOpen) {
+    return { state: { ...state, helpOpen: false } };
+  }
+  // Any keystroke clears a transient status message.
+  const cleared = state.messageBar ? { ...state, messageBar: undefined } : state;
+  const fmt = formatKey(event);
+  // Enter on a leaf opens the JSON pane and grabs focus, instead of
+  // the no-op the default reducer would do (leaves can't expand).
+  if (fmt === "Enter" || fmt === "l" || fmt === "Right") {
+    const cursor = findCursorNode(cleared);
+    if (cursor && cursor.nodeKind === "event") {
+      return {
+        state: { ...cleared, jsonPaneOpen: true, pane: "json" },
+      };
+    }
+  }
+  const next = handleKey(cleared, event);
+  // Promote special keys into commands the run loop has to action.
+  if (fmt === "/") return { state: next, command: { kind: "search" } };
+  if (fmt === "y") return { state: next, command: { kind: "copy" } };
+  if (fmt === "f") return { state: next, command: { kind: "toggleFollow" } };
+  return { state: next };
+}
+
+function findCursorNode(state: ViewerState): TreeNode | undefined {
+  const stack: TreeNode[] = [...state.roots];
+  while (stack.length > 0) {
+    const n = stack.pop()!;
+    if (n.id === state.cursorId) return n;
+    for (const c of n.children) stack.push(c);
+  }
+  return undefined;
+}
+
 export function handleKey(state: ViewerState, event: KeyEvent): ViewerState {
   const rows = flattenVisibleRows(state);
   if (rows.length === 0) return state;
@@ -38,12 +91,36 @@ export function handleKey(state: ViewerState, event: KeyEvent): ViewerState {
       return cycleTrace(state, +1);
     case "Shift+Tab":
       return cycleTrace(state, -1);
+    case "n":
+      return jumpMatch(state, +1);
+    case "N":
+      return jumpMatch(state, -1);
+    case "p":
+      return { ...state, jsonPaneOpen: !state.jsonPaneOpen };
+    case "Escape":
+      return clearSearch(state);
+    case "?":
+      return { ...state, helpOpen: true };
     case "q":
     case "Ctrl+C":
       return { ...state, quit: true };
     default:
       return state;
   }
+}
+
+// Jump cursor to next/previous match. Wraps. No-op if no active query.
+function jumpMatch(state: ViewerState, direction: 1 | -1): ViewerState {
+  const matches = state.matches ?? [];
+  if (matches.length === 0) return state;
+  const cur = state.matchIdx ?? -1;
+  const next = (cur + direction + matches.length) % matches.length;
+  return { ...state, matchIdx: next, cursorId: matches[next] };
+}
+
+function clearSearch(state: ViewerState): ViewerState {
+  if (!state.query && !state.matches?.length) return state;
+  return { ...state, query: undefined, matches: undefined, matchIdx: undefined };
 }
 
 // Expand every span and trace in the forest. Leaves stay leaves.

@@ -54,4 +54,33 @@ export type ViewerState = {
   scrollTop: number;
   // Set by the input layer; consumed by the run loop.
   quit: boolean;
+  // ---- v2 additions ----
+  // Active substring query for `/`, `n`, `N`. Empty when search is off.
+  query?: string;
+  // Node ids that currently match `query`, in flatten order.
+  matches?: string[];
+  // Index into `matches` for the current "n/N" position.
+  matchIdx?: number;
+  // Bottom JSON payload pane: visible? Owned by run.ts.
+  jsonPaneOpen?: boolean;
+  // Which pane has keyboard focus.
+  pane?: "tree" | "json";
+  // Inner JSON-pane state — built lazily for the currently-focused
+  // tree node when the pane is open. Run loop owns rebuilds.
+  jsonPane?: JsonPaneStateRef;
+  // Help-screen overlay shown?
+  helpOpen?: boolean;
+  // Follow mode (`--follow` / `f`) — viewer re-reads the file when it grows.
+  followOn?: boolean;
+  // One-line status message (`copied 312 bytes`, etc.); auto-clears
+  // on the next keystroke. Owned by the input layer.
+  messageBar?: string;
+};
+
+// Re-export so consumers don't need a second import.
+import type { JsonPaneState } from "./jsonView/input.js";
+export type JsonPaneStateRef = JsonPaneState & {
+  // Tree-node id this pane content was built from. Lets the run loop
+  // detect when the focused tree node changed and rebuild.
+  builtFor: string;
 };

@@ -76,12 +76,18 @@ describe("buildJsonTree", () => {
   });
 
   it("formats numbers like JSON would (no exponential)", () => {
-    expect(buildJsonTree(0.000234).raw).toBe("0.000234");
+    const node = buildJsonTree(0.000234);
+    if (node.kind !== "primitive") throw new Error("not primitive");
+    expect(node.raw).toBe("0.000234");
   });
 
   it("treats NaN/Infinity as null per JSON convention", () => {
-    expect(buildJsonTree(NaN).raw).toBe("null");
-    expect(buildJsonTree(Infinity).raw).toBe("null");
+    const nan = buildJsonTree(NaN);
+    if (nan.kind !== "primitive") throw new Error("not primitive");
+    expect(nan.raw).toBe("null");
+    const inf = buildJsonTree(Infinity);
+    if (inf.kind !== "primitive") throw new Error("not primitive");
+    expect(inf.raw).toBe("null");
   });
 });
 

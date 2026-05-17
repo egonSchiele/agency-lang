@@ -192,8 +192,9 @@ export function createProgram(deps: CliDependencies = {}): Command {
     .command("view")
     .description("Open an interactive TUI viewer for a statelog JSONL file")
     .argument("<file>", "Path to a .statelog.jsonl file, or '-' for stdin")
-    .action(async (file: string) => {
-      await logsView(file);
+    .option("--follow", "Tail the file — re-read and re-render as new events are appended")
+    .action(async (file: string, options: { follow?: boolean }) => {
+      await logsView(file, { follow: options.follow });
     });
 
   program

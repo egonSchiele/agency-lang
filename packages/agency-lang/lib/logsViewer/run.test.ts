@@ -90,6 +90,58 @@ describe("runViewer", () => {
     expect(last).toMatch(/\[abc\]/);
   });
 
+  it("Enter on a leaf opens the JSON pane with the payload", async () => {
+    const out = new FrameRecorder();
+    await runViewer({
+      jsonl: sample,
+      // Navigate: l (expand trace) l (expand agentRun span) j (move
+      // to first child leaf, agentStart) Enter (open pane) q (quit).
+      input: new ScriptedInput(["l", "l", "j", "Enter", "q"]),
+      output: out,
+      viewport: { rows: 20, cols: 80 },
+    });
+    const last = out.lastText();
+    // The pane should show the agentStart event payload (the
+    // EventEnvelope shape includes trace_id and "data" at the top
+    // level). Header `▼ {` indicates the pane is open and expanded.
+    expect(last).toMatch(/"data":/);
+    expect(last).toMatch(/agentStart/);
+  });
+
+  it("/ then a query jumps the cursor to the first match", async () => {
+    const out = new FrameRecorder();
+    const scripted = new ScriptedInput(["l", "j", "/"]);
+    // Pre-load the search prompt response and the final 'q'.
+    scripted.feedLine("agentEnd");
+    scripted.feedKey({ key: "q" });
+    await runViewer({
+      jsonl: sample,
+      input: scripted,
+      output: out,
+      viewport: { rows: 10, cols: 80 },
+    });
+    const last = out.lastText();
+    // Status bar should show the match indicator.
+    expect(last).toMatch(/match 1\/1/);
+    // And mention the query string.
+    expect(last).toMatch(/agentEnd/);
+  });
+
+  it("? opens the help overlay; any key closes it", async () => {
+    const out = new FrameRecorder();
+    await runViewer({
+      jsonl: sample,
+      input: new ScriptedInput(["?", "j", "q"]),
+      output: out,
+      viewport: { rows: 20, cols: 80 },
+    });
+    // At least one frame should show the help heading.
+    const anyHelp = out.frames.some((_, i) => out.textAt(i).includes("Keybindings"));
+    expect(anyHelp).toBe(true);
+    // And the final frame (after `j`) should not.
+    expect(out.lastText()).not.toMatch(/Keybindings/);
+  });
+
   it("shows parse errors as a footer line", async () => {
     const out = new FrameRecorder();
     const bad = sample + "this is not json\n";

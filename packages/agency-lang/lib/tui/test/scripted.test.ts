@@ -24,4 +24,11 @@ describe("ScriptedInput", () => {
     const line = await input.nextLine("prompt>");
     expect(line).toBe("hello world");
   });
+
+  it("constructor accepts a list of strings or KeyEvents", async () => {
+    const input = new ScriptedInput(["j", "k", { key: "c", ctrl: true }]);
+    expect(await input.nextKey()).toEqual({ key: "j" });
+    expect(await input.nextKey()).toEqual({ key: "k" });
+    expect(await input.nextKey()).toEqual({ key: "c", ctrl: true });
+  });
 });

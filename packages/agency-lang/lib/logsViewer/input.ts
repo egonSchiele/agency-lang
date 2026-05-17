@@ -1,29 +1,16 @@
 import { ViewerState } from "./types.js";
 import { flattenVisibleRows, VisibleRow } from "./render.js";
+import type { KeyEvent } from "../tui/input/types.js";
+import { formatKey } from "../tui/input/format.js";
 
-export type Key =
-  | "j"
-  | "k"
-  | "h"
-  | "l"
-  | "g"
-  | "G"
-  | "q"
-  | "Enter"
-  | "Up"
-  | "Down"
-  | "Left"
-  | "Right"
-  | "Ctrl+N"
-  | "Ctrl+P"
-  | "Ctrl+C"
-  | string;
-
-export function handleKey(state: ViewerState, key: Key): ViewerState {
+export function handleKey(state: ViewerState, event: KeyEvent): ViewerState {
   const rows = flattenVisibleRows(state);
   if (rows.length === 0) return state;
   const idx = rows.findIndex((r) => r.node.id === state.cursorId);
-  switch (key) {
+  // `formatKey` returns canonical strings like "j", "G", "Up",
+  // "Ctrl+C". It is case-preserving for single letters, so 'g' and
+  // 'G' stay distinct here.
+  switch (formatKey(event)) {
     case "j":
     case "Down":
     case "Ctrl+N":

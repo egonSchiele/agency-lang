@@ -40,6 +40,22 @@ export class FrameRecorder implements OutputTarget {
     this.frames = [];
   }
 
+  textAt(i: number): string {
+    if (i < 0 || i >= this.frames.length) {
+      throw new Error(
+        `FrameRecorder.textAt(${i}): index out of range (have ${this.frames.length} frames)`,
+      );
+    }
+    return this.frames[i].frame.toPlainText();
+  }
+
+  lastText(): string {
+    if (this.frames.length === 0) {
+      throw new Error("FrameRecorder.lastText(): no frames recorded");
+    }
+    return this.textAt(this.frames.length - 1);
+  }
+
   toHTML(): string {
     const frameHtmls = this.frames.map((entry, i) => {
       const label = entry.label ?? `Frame ${i + 1}`;

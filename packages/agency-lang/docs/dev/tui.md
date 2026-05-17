@@ -56,6 +56,30 @@ top row (when above the viewport) or the bottom row (when below).
 They are pure, so they belong in the render function rather than in
 event handlers.
 
+## Scrollable cursor lists: `scrollList()`
+
+When you want the whole pattern — clamp + cursor-follow + slice +
+render each row — wrap it once with `scrollList()`:
+
+```ts
+import { scrollList, line } from "@/tui/index.js";
+
+const { element, scrollTop } = scrollList({
+  items: visibleRows,
+  cursorIdx,
+  scrollTop: state.scrollTop,
+  viewportRows: viewport.rows,
+  renderItem: (row, isCursor) =>
+    line(`${isCursor ? "> " : "  "}${row.label}`),
+});
+```
+
+`scrollList` returns the rendered `Element` plus the
+clamped/cursor-followed `scrollTop` that the caller should persist
+back into state. Item styling, cursor markup, and key handling are
+all up to the caller; `scrollList` only owns the scroll bookkeeping
+and the visible-window slicing.
+
 ## Render loop: `Screen.runLoop()`
 
 The `draw → nextKey → handleKey → draw → quit` loop is the same in

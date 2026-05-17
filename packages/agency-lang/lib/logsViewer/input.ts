@@ -1,42 +1,41 @@
 import { ViewerState } from "./types.js";
 import { flattenVisibleRows, VisibleRow } from "./render.js";
 import type { KeyEvent } from "../tui/input/types.js";
-import { keyMatches } from "../tui/input/format.js";
-
-// `keyMatches` is intentionally case-insensitive so callers can use
-// "up" or "Up" interchangeably. Vim-style letter shortcuts ('g' vs
-// 'G') need case-sensitive matching though, so for the single-letter
-// keys we compare event.key directly.
-function letter(event: KeyEvent, ch: string): boolean {
-  return !event.ctrl && !event.shift && event.key === ch;
-}
+import { formatKey } from "../tui/input/format.js";
 
 export function handleKey(state: ViewerState, event: KeyEvent): ViewerState {
   const rows = flattenVisibleRows(state);
   if (rows.length === 0) return state;
   const idx = rows.findIndex((r) => r.node.id === state.cursorId);
-  if (letter(event, "j") || keyMatches(event, "Down") || keyMatches(event, "Ctrl+N")) {
-    return moveCursor(state, rows, Math.min(idx + 1, rows.length - 1));
+  // `formatKey` returns canonical strings like "j", "G", "Up",
+  // "Ctrl+C". It is case-preserving for single letters, so 'g' and
+  // 'G' stay distinct here.
+  switch (formatKey(event)) {
+    case "j":
+    case "Down":
+    case "Ctrl+N":
+      return moveCursor(state, rows, Math.min(idx + 1, rows.length - 1));
+    case "k":
+    case "Up":
+    case "Ctrl+P":
+      return moveCursor(state, rows, Math.max(idx - 1, 0));
+    case "g":
+      return { ...state, cursorId: rows[0].node.id, scrollTop: 0 };
+    case "G":
+      return moveCursor(state, rows, rows.length - 1);
+    case "l":
+    case "Right":
+    case "Enter":
+      return expand(state, rows, idx);
+    case "h":
+    case "Left":
+      return collapseOrParent(state, rows, idx);
+    case "q":
+    case "Ctrl+C":
+      return { ...state, quit: true };
+    default:
+      return state;
   }
-  if (letter(event, "k") || keyMatches(event, "Up") || keyMatches(event, "Ctrl+P")) {
-    return moveCursor(state, rows, Math.max(idx - 1, 0));
-  }
-  if (letter(event, "g")) {
-    return { ...state, cursorId: rows[0].node.id, scrollTop: 0 };
-  }
-  if (event.key === "G" && !event.ctrl) {
-    return moveCursor(state, rows, rows.length - 1);
-  }
-  if (letter(event, "l") || keyMatches(event, "Right") || keyMatches(event, "Enter")) {
-    return expand(state, rows, idx);
-  }
-  if (letter(event, "h") || keyMatches(event, "Left")) {
-    return collapseOrParent(state, rows, idx);
-  }
-  if (letter(event, "q") || keyMatches(event, "Ctrl+C")) {
-    return { ...state, quit: true };
-  }
-  return state;
 }
 
 function moveCursor(

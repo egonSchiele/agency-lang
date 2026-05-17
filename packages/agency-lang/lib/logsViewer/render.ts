@@ -22,7 +22,7 @@ export function renderViewerLines(
   const rows = flattenVisibleRows(state);
   const slice = rows.slice(state.scrollTop, state.scrollTop + viewport.rows);
   return slice.map((row) =>
-    renderRow(
+    renderRowText(
       row,
       state.cursorId === row.node.id,
       state.expanded.has(row.node.id),
@@ -30,7 +30,7 @@ export function renderViewerLines(
   );
 }
 
-function renderRow(
+export function renderRowText(
   row: VisibleRow,
   isCursor: boolean,
   isExpanded: boolean,

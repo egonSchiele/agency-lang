@@ -85,6 +85,71 @@ describe("buildForest", () => {
     expect(s1.cost).toBeCloseTo(0.0052, 5);
   });
 
+  it("prefers promptCompletion.timeTaken for llmCall span duration", () => {
+    // Both events fire at nearly the same moment (the timestamps
+    // are *emission* times), but the LLM call actually took 3.5s
+    // as recorded in promptCompletion.timeTaken. Without the fix the
+    // viewer would show 1ms.
+    const forest = buildForest([
+      evt({
+        span_id: "s1",
+        parent_span_id: null,
+        data: {
+          type: "promptCompletion",
+          timestamp: "2026-05-16T00:00:03.500Z",
+          timeTaken: 3500,
+        },
+      }),
+      evt({
+        span_id: "s1",
+        parent_span_id: null,
+        data: {
+          type: "debug",
+          timestamp: "2026-05-16T00:00:03.501Z",
+          message: "ack",
+        },
+      }),
+    ]);
+    const s1 = forest[0].children[0];
+    expect(s1.label).toBe("llmCall");
+    expect(s1.duration).toBe(3500);
+  });
+
+  it("sums timeTaken across multiple toolCall leaves for toolExecution spans", () => {
+    const forest = buildForest([
+      evt({
+        span_id: "s1",
+        parent_span_id: null,
+        data: { type: "toolCall", timestamp: "", timeTaken: 120 },
+      }),
+      evt({
+        span_id: "s1",
+        parent_span_id: null,
+        data: { type: "toolCall", timestamp: "", timeTaken: 80 },
+      }),
+    ]);
+    const s1 = forest[0].children[0];
+    expect(s1.label).toBe("toolExecution");
+    expect(s1.duration).toBe(200);
+  });
+
+  it("falls back to timestamp range when no characteristic event has timeTaken", () => {
+    const forest = buildForest([
+      evt({
+        span_id: "s1",
+        parent_span_id: null,
+        data: { type: "debug", timestamp: "2026-05-16T00:00:00.000Z" },
+      }),
+      evt({
+        span_id: "s1",
+        parent_span_id: null,
+        data: { type: "debug", timestamp: "2026-05-16T00:00:02.000Z" },
+      }),
+    ]);
+    const s1 = forest[0].children[0];
+    expect(s1.duration).toBeCloseTo(2000, 0);
+  });
+
   it("computes duration from first to last event timestamp", () => {
     const forest = buildForest([
       evt({

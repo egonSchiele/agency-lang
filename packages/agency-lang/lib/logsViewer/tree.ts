@@ -207,12 +207,44 @@ function aggregateMetrics(node: TreeNode): void {
   if (timestamps.length >= 1) {
     node.firstTs = Math.min(...timestamps);
   }
-  if (timestamps.length >= 2) {
+
+  // Prefer the authoritative `timeTaken` field on the span's
+  // characteristic leaf events. Event timestamps record *emission*
+  // time, so a span with a single completion event (like an llmCall
+  // with one promptCompletion) would otherwise compute a duration
+  // of 0/1ms even when the LLM call took seconds.
+  const measured = measuredDuration(node, leaves);
+  if (measured !== undefined) {
+    node.duration = measured;
+  } else if (timestamps.length >= 2) {
     node.duration = Math.max(...timestamps) - Math.min(...timestamps);
   }
 
   if (node.nodeKind === "span") {
     node.summary = summarizeSpan(node);
+  }
+}
+
+function measuredDuration(node: TreeNode, leaves: TreeNode[]): number | undefined {
+  if (node.nodeKind !== "span") return undefined;
+  const matchingLeaves = leaves.filter(
+    (l) => l.event!.data.type === durationEventType(node.label),
+  );
+  const times = matchingLeaves
+    .map((l) => l.event!.data.timeTaken)
+    .filter((t): t is number => typeof t === "number");
+  if (times.length === 0) return undefined;
+  return times.reduce((a, b) => a + b, 0);
+}
+
+function durationEventType(spanLabel: string): string | undefined {
+  switch (spanLabel) {
+    case "llmCall": return "promptCompletion";
+    case "toolExecution": return "toolCall";
+    case "agentRun": return "agentEnd";
+    case "forkAll":
+    case "race": return "forkEnd";
+    default: return undefined;
   }
 }
 

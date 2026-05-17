@@ -1,3 +1,5 @@
+import type { ColorName } from "./colors.js";
+
 export type Element = {
   type: "box" | "text" | "list" | "textInput";
   style?: Style;
@@ -8,6 +10,14 @@ export type Element = {
   value?: string;
   key?: string;
 };
+
+/**
+ * Color fields accept either a `ColorName` from the named palette or
+ * an arbitrary string (used for hex values like `"#abc"` in the HTML
+ * adapter). The `string & {}` intersection preserves autocomplete on
+ * the named branch while keeping the string escape hatch.
+ */
+export type Color = ColorName | (string & {});
 
 export type Style = {
   // Layout
@@ -30,13 +40,13 @@ export type Style = {
 
   // Box decoration
   border?: boolean;        // draw a single-line box border (reduces inner area by 1 on each side)
-  borderColor?: string;    // named color (e.g. "cyan", "bright-red")
+  borderColor?: Color;     // named color (e.g. "cyan", "bright-red") or hex string
   label?: string;          // text rendered into the top border
-  labelColor?: string;     // named color for the label
+  labelColor?: Color;      // named color for the label, or hex string
 
   // Content styling
-  fg?: string;             // foreground color name
-  bg?: string;             // background color name
+  fg?: Color;              // foreground color
+  bg?: Color;              // background color
   bold?: boolean;
 
   // Scrolling

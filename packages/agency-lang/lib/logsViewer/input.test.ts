@@ -114,4 +114,72 @@ describe("handleKey", () => {
     const next = handleKey(initial("trace-t"), k("down"));
     expect(next.cursorId).toBe("a");
   });
+
+  it("e expands every span and trace in the forest", () => {
+    // child 'a' has a grandchild so expanding everything reveals it.
+    const state = initial("trace-t");
+    const a = state.roots[0].children[0];
+    a.children = [
+      {
+        id: "a-child",
+        traceId: "t",
+        parentId: "a",
+        children: [],
+        nodeKind: "event",
+        label: "debug",
+        summary: "debug",
+      },
+    ];
+    const next = handleKey(state, k("e"));
+    expect(next.expanded.has("trace-t")).toBe(true);
+    expect(next.expanded.has("a")).toBe(true);
+    expect(next.expanded.has("b")).toBe(true);
+  });
+
+  it("E collapses everything, auto-expanding the lone trace", () => {
+    const state = initial("a");
+    state.expanded = new Set(["trace-t", "a", "b"]);
+    const next = handleKey(state, k("E"));
+    expect(next.expanded.has("a")).toBe(false);
+    expect(next.expanded.has("b")).toBe(false);
+    expect(next.expanded.has("trace-t")).toBe(true); // lone trace stays expanded
+  });
+
+  it("Tab cycles to the next trace root", () => {
+    const state: ViewerState = {
+      roots: [
+        { ...child("t1"), id: "t1", nodeKind: "trace", traceId: "t1", parentId: null, summary: "t1" },
+        { ...child("t2"), id: "t2", nodeKind: "trace", traceId: "t2", parentId: null, summary: "t2" },
+        { ...child("t3"), id: "t3", nodeKind: "trace", traceId: "t3", parentId: null, summary: "t3" },
+      ],
+      expanded: new Set(),
+      cursorId: "t1",
+      scrollTop: 0,
+      quit: false,
+    };
+    const next = handleKey(state, k("tab"));
+    expect(next.cursorId).toBe("t2");
+    const wrapped = handleKey({ ...state, cursorId: "t3" }, k("tab"));
+    expect(wrapped.cursorId).toBe("t1");
+  });
+
+  it("Shift+Tab cycles to the previous trace root", () => {
+    const state: ViewerState = {
+      roots: [
+        { ...child("t1"), id: "t1", nodeKind: "trace", traceId: "t1", parentId: null, summary: "t1" },
+        { ...child("t2"), id: "t2", nodeKind: "trace", traceId: "t2", parentId: null, summary: "t2" },
+      ],
+      expanded: new Set(),
+      cursorId: "t1",
+      scrollTop: 0,
+      quit: false,
+    };
+    const next = handleKey(state, k("tab", { shift: true }));
+    expect(next.cursorId).toBe("t2"); // wraps backwards
+  });
+
+  it("Tab is a no-op when there is only one trace", () => {
+    const state = initial();
+    expect(handleKey(state, k("tab"))).toBe(state);
+  });
 });

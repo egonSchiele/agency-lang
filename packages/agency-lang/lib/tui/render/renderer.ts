@@ -87,9 +87,13 @@ function renderTextContent(
   for (const line of visibleLines) {
     const spans = parseStyledText(line);
     const row: Cell[] = [];
-    for (const span of spans) {
+    let clipped = false;
+    outer: for (const span of spans) {
       for (const ch of span.text) {
-        if (row.length >= innerWidth) break;
+        if (row.length >= innerWidth) {
+          clipped = true;
+          break outer;
+        }
         row.push({
           char: ch,
           fg: span.fg ?? fg,
@@ -97,6 +101,14 @@ function renderTextContent(
           bold: span.bold ?? bold,
         });
       }
+    }
+    // If we ran out of room, mark the truncation explicitly with an
+    // ellipsis in the final cell. NOTE: widths here are counted in
+    // UTF-16 code units, matching the layout engine; grapheme-aware
+    // clipping is out of scope.
+    if (clipped && row.length > 0) {
+      const last = row[row.length - 1];
+      row[row.length - 1] = { ...last, char: "…" };
     }
     // Pad to inner width
     while (row.length < innerWidth) {

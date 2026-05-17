@@ -97,4 +97,16 @@ describe("render", () => {
     expect(frame.children![0].key).toBe("top");
     expect(frame.children![1].key).toBe("bottom");
   });
+
+  it("auto-clips overlong text with an ellipsis", () => {
+    const frame = renderElement(box({ width: 5, height: 1 }, text("abcdefghij")), 80, 24);
+    const child = frame.children![0];
+    expect(contentText(child)).toBe("abcd…");
+  });
+
+  it("leaves text untouched when it fits", () => {
+    const frame = renderElement(box({ width: 10, height: 1 }, text("abc")), 80, 24);
+    const child = frame.children![0];
+    expect(contentText(child)).toBe("abc       ");
+  });
 });

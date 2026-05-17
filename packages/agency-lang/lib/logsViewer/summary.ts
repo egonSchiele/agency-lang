@@ -53,16 +53,23 @@ export function summarizeTrace(node: TreeNode): string {
   return `${head}${middle}  [${shortTraceId}]`;
 }
 
-// Local time, second-precision, no timezone suffix. Format chosen for
-// at-a-glance readability over machine parsing — the full ISO timestamp
-// lives in the raw envelope if anyone needs it.
+// Local time, friendly format: "May 16, 11:15pm". Chosen for
+// at-a-glance readability over machine parsing — the full ISO
+// timestamp lives in the raw envelope if anyone needs it.
+const MONTHS = [
+  "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+];
+
 function fmtTime(ms: number): string {
   const d = new Date(ms);
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return (
-    `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ` +
-    `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
-  );
+  const month = MONTHS[d.getMonth()];
+  const day = d.getDate();
+  const hours24 = d.getHours();
+  const minutes = String(d.getMinutes()).padStart(2, "0");
+  const period = hours24 >= 12 ? "pm" : "am";
+  const hours12 = hours24 % 12 === 0 ? 12 : hours24 % 12;
+  return `${month} ${day}, ${hours12}:${minutes}${period}`;
 }
 
 function formatMetrics(node: TreeNode): string {

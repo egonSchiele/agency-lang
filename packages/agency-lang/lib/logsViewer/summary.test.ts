@@ -102,9 +102,9 @@ describe("summarizeTrace", () => {
       firstTs: Date.parse("2026-05-16T17:42:31Z"),
     };
     const s = summarizeTrace(node);
-    // Should match a local timestamp like 2026-05-16 HH:MM:SS — we
-    // don't pin the HH because the test runs in any timezone.
-    expect(s).toMatch(/2026-05-16 \d{2}:\d{2}:\d{2}/);
+    // Friendly format: "May 16, h:mmam|pm". The hour depends on the
+    // test machine's timezone, so we don't pin it.
+    expect(s).toMatch(/May 16, \d{1,2}:\d{2}(am|pm)/);
     expect(s).toMatch(/4\.2s/);
     expect(s).toMatch(/2300\s*tok/);
     expect(s).toMatch(/\$0\.010/);

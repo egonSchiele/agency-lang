@@ -245,39 +245,114 @@ describe("StatelogClient", () => {
     });
   });
 
-  describe("forkDepth gating", () => {
-    it("startSpan returns undefined inside a fork", () => {
-      const client = fileClient(newLogFile("fork-gate"));
-      client.enterFork();
-      expect(client.startSpan("nodeExecution")).toBeUndefined();
-      expect(client.currentSpan).toBeUndefined();
-      client.exitFork();
-      expect(client.startSpan("nodeExecution")).toBeTruthy();
+  describe("branch span isolation (AsyncLocalStorage)", () => {
+    it("snapshotStack copies the active stack and decouples it from later pushes", () => {
+      const client = fileClient(newLogFile("snapshot"));
+      const a = client.startSpan("agentRun")!;
+      const snap = client.snapshotStack();
+      const b = client.startSpan("nodeExecution")!;
+      // Snapshot was taken before `b` was pushed, so it must NOT contain b.
+      expect(snap.map((s) => s.spanId)).toEqual([a]);
+      // And mutating the live stack must not retroactively alter the snapshot.
+      expect(snap.length).toBe(1);
+      client.endSpan(b);
+      client.endSpan(a);
     });
 
-    it("exitFork is clamped at zero", () => {
-      const client = fileClient(newLogFile("fork-clamp"));
-      client.exitFork();
-      client.exitFork();
-      client.exitFork();
-      // Should still be able to start a span (forkDepth must be 0).
-      expect(client.startSpan("agentRun")).toBeTruthy();
+    it("spans pushed inside runInBranchContext are invisible outside it", async () => {
+      const client = fileClient(newLogFile("branch-iso"));
+      const outer = client.startSpan("agentRun")!;
+      const parent = client.snapshotStack();
+      let innerIdInsideBranch: string | undefined;
+      let currentInsideBranch: string | undefined;
+      await client.runInBranchContext(parent, async () => {
+        innerIdInsideBranch = client.startSpan("nodeExecution");
+        currentInsideBranch = client.currentSpan?.spanId;
+        // Inside the branch, currentSpan is the branch-local push.
+        expect(currentInsideBranch).toBe(innerIdInsideBranch);
+      });
+      // Back outside the branch, the outer stack must be unaffected.
+      expect(client.currentSpan?.spanId).toBe(outer);
+      client.endSpan(outer);
     });
 
-    it("events emitted inside a fork have no span attribution", async () => {
-      const file = newLogFile("fork-payload");
+    it("concurrent branches each see their own stack — no interleaving", async () => {
+      const client = fileClient(newLogFile("branch-concurrent"));
+      const outer = client.startSpan("agentRun")!;
+      const parent = client.snapshotStack();
+
+      // Two branches run concurrently. Each pushes a different span and
+      // yields control multiple times via `await`. If the two branches
+      // shared a stack, they would observe each other's pushes.
+      const branch0 = client.runInBranchContext(parent, async () => {
+        const id = client.startSpan("nodeExecution")!;
+        await new Promise((r) => setImmediate(r));
+        const top0 = client.currentSpan?.spanId;
+        await new Promise((r) => setImmediate(r));
+        const top1 = client.currentSpan?.spanId;
+        client.endSpan(id);
+        return { id, top0, top1, parentSpan: id && client.currentSpan?.spanId };
+      });
+      const branch1 = client.runInBranchContext(parent, async () => {
+        const id = client.startSpan("llmCall")!;
+        await new Promise((r) => setImmediate(r));
+        const top0 = client.currentSpan?.spanId;
+        await new Promise((r) => setImmediate(r));
+        const top1 = client.currentSpan?.spanId;
+        client.endSpan(id);
+        return { id, top0, top1 };
+      });
+
+      const [b0, b1] = await Promise.all([branch0, branch1]);
+      // Each branch's "currentSpan" across awaits is its own push, never
+      // the sibling's push.
+      expect(b0.top0).toBe(b0.id);
+      expect(b0.top1).toBe(b0.id);
+      expect(b1.top0).toBe(b1.id);
+      expect(b1.top1).toBe(b1.id);
+      expect(b0.id).not.toBe(b1.id);
+
+      // The outer stack still has only the agentRun span.
+      expect(client.currentSpan?.spanId).toBe(outer);
+      client.endSpan(outer);
+    });
+
+    it("events emitted inside a branch attribute to the branch's span", async () => {
+      const file = newLogFile("branch-attribution");
       const client = fileClient(file);
-      const agentId = client.startSpan("agentRun")!;
-      client.enterFork();
-      await client.debug("inside-fork", {});
-      client.exitFork();
-      client.endSpan(agentId);
+      const outer = client.startSpan("agentRun")!;
+      const parent = client.snapshotStack();
+      await client.runInBranchContext(parent, async () => {
+        const inner = client.startSpan("nodeExecution")!;
+        await client.debug("inside-branch", {});
+        client.endSpan(inner);
+      });
+      client.endSpan(outer);
       const events = readEvents(file);
-      // The event was emitted while inside a fork, so it inherits the
-      // outer span (agentRun) — startSpan was gated, not currentSpan.
-      // The important invariant is that no inner span pushed during the
-      // fork is visible.
+      expect(events).toHaveLength(1);
+      // The debug event must be attributed to the branch's nodeExecution
+      // span (not to the outer agentRun span).
+      expect(events[0].parent_span_id).toBe(outer);
+      // And its span_id must be the branch-local span — which means the
+      // branch saw a fresh push.
       expect(events[0].span_id).toBeTruthy();
+      expect(events[0].span_id).not.toBe(outer);
+    });
+
+    it("a branch ending a span it never opened is a no-op on the parent stack", async () => {
+      const client = fileClient(newLogFile("branch-no-parent-pop"));
+      const outer = client.startSpan("agentRun")!;
+      const parent = client.snapshotStack();
+      await client.runInBranchContext(parent, async () => {
+        // Try to pop the parent's outer span from inside the branch. The
+        // branch's snapshot includes `outer`, but ending it pops only the
+        // branch's *local* copy — it must not pop the real outer stack.
+        client.endSpan(outer);
+      });
+      // The parent's outer span is still active.
+      expect(client.currentSpan?.spanId).toBe(outer);
+      client.endSpan(outer);
+      expect(client.currentSpan).toBeUndefined();
     });
   });
 

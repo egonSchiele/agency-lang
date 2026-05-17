@@ -1,6 +1,9 @@
 import { describe, it, expect } from "vitest";
 import { handleKey } from "./input.js";
 import { ViewerState, TreeNode } from "./types.js";
+import type { KeyEvent } from "../tui/input/types.js";
+
+const k = (key: string, mods: Partial<KeyEvent> = {}): KeyEvent => ({ key, ...mods });
 
 const child = (id: string): TreeNode => ({
   id,
@@ -32,17 +35,17 @@ const initial = (cursorId = "trace-t"): ViewerState => ({
 
 describe("handleKey", () => {
   it("j moves cursor down", () => {
-    const next = handleKey(initial("trace-t"), "j");
+    const next = handleKey(initial("trace-t"), k("j"));
     expect(next.cursorId).toBe("a");
   });
 
   it("k moves cursor up", () => {
-    const next = handleKey(initial("a"), "k");
+    const next = handleKey(initial("a"), k("k"));
     expect(next.cursorId).toBe("trace-t");
   });
 
   it("q sets quit", () => {
-    const next = handleKey(initial(), "q");
+    const next = handleKey(initial(), k("q"));
     expect(next.quit).toBe(true);
   });
 
@@ -54,39 +57,37 @@ describe("handleKey", () => {
       children: [child("a-child")],
     };
     state.expanded.delete("a");
-    const next = handleKey(state, "l");
+    const next = handleKey(state, k("l"));
     expect(next.expanded.has("a")).toBe(true);
   });
 
   it("h collapses an expanded node", () => {
     const state = initial("trace-t");
     expect(state.expanded.has("trace-t")).toBe(true);
-    const next = handleKey(state, "h");
+    const next = handleKey(state, k("h"));
     expect(next.expanded.has("trace-t")).toBe(false);
   });
 
   it("h on a collapsed node moves cursor to parent", () => {
     const state = initial("a");
     expect(state.expanded.has("a")).toBe(false);
-    const next = handleKey(state, "h");
+    const next = handleKey(state, k("h"));
     expect(next.cursorId).toBe("trace-t");
   });
 
   it("g jumps to the first visible row", () => {
-    const next = handleKey(initial("a"), "g");
+    const next = handleKey(initial("a"), k("g"));
     expect(next.cursorId).toBe("trace-t");
     expect(next.scrollTop).toBe(0);
   });
 
   it("G jumps to the last visible row", () => {
-    const next = handleKey(initial("trace-t"), "G");
+    const next = handleKey(initial("trace-t"), k("G"));
     expect(next.cursorId).toBe("b");
   });
 
   it("l on an already-expanded node descends to its first child", () => {
-    // trace-t is expanded by default; pressing l on it should move
-    // cursor to 'a' (its first child).
-    const next = handleKey(initial("trace-t"), "l");
+    const next = handleKey(initial("trace-t"), k("l"));
     expect(next.cursorId).toBe("a");
     expect(next.expanded.has("trace-t")).toBe(true);
   });
@@ -99,8 +100,18 @@ describe("handleKey", () => {
       scrollTop: 0,
       quit: false,
     };
-    expect(handleKey(empty, "j")).toBe(empty);
-    expect(handleKey(empty, "g")).toBe(empty);
-    expect(handleKey(empty, "G")).toBe(empty);
+    expect(handleKey(empty, k("j"))).toBe(empty);
+    expect(handleKey(empty, k("g"))).toBe(empty);
+    expect(handleKey(empty, k("G"))).toBe(empty);
+  });
+
+  it("Ctrl+C also quits", () => {
+    const next = handleKey(initial(), k("c", { ctrl: true }));
+    expect(next.quit).toBe(true);
+  });
+
+  it("arrow keys move cursor", () => {
+    const next = handleKey(initial("trace-t"), k("down"));
+    expect(next.cursorId).toBe("a");
   });
 });

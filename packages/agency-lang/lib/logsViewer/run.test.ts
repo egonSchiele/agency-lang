@@ -32,38 +32,28 @@ const sampleEvents = [
 
 const sample = sampleEvents.map((e) => JSON.stringify(e)).join("\n") + "\n";
 
-function feed(input: ScriptedInput, keys: string[]): void {
-  for (const k of keys) input.feedKey({ key: k });
-}
-
 describe("runViewer", () => {
   it("renders, navigates with j, expands with l, quits with q", async () => {
-    const input = new ScriptedInput();
-    feed(input, ["j", "l", "q"]);
     const out = new FrameRecorder();
     await runViewer({
       jsonl: sample,
-      input,
+      input: new ScriptedInput(["j", "l", "q"]),
       output: out,
       viewport: { rows: 10, cols: 80 },
     });
     expect(out.frames.length).toBeGreaterThan(0);
-    const lastFrame = out.frames[out.frames.length - 1].frame.toPlainText();
-    expect(lastFrame).toMatch(/agentRun/);
+    expect(out.lastText()).toMatch(/agentRun/);
   });
 
   it("shows a helpful message when the file is empty", async () => {
-    const input = new ScriptedInput();
-    feed(input, ["q"]);
     const out = new FrameRecorder();
     await runViewer({
       jsonl: "",
-      input,
+      input: new ScriptedInput(["q"]),
       output: out,
       viewport: { rows: 5, cols: 40 },
     });
-    const first = out.frames[0].frame.toPlainText();
-    expect(first.toLowerCase()).toMatch(/no events/);
+    expect(out.textAt(0).toLowerCase()).toMatch(/no events/);
   });
 
   it("clamps scrollTop after collapsing reduces the visible row count", async () => {
@@ -79,22 +69,21 @@ describe("runViewer", () => {
       data: { type: "debug", timestamp: "", message: `m${i}` },
     }));
     const jsonl = many.map((e) => JSON.stringify(e)).join("\n") + "\n";
-    const input = new ScriptedInput();
     // l: expand span. j × 20: scroll far down. h: collapse it. q.
-    feed(input, [
+    const keys = [
       "l",
       ...Array.from({ length: 20 }, () => "j"),
       "h",
       "q",
-    ]);
+    ];
     const out = new FrameRecorder();
     await runViewer({
       jsonl,
-      input,
+      input: new ScriptedInput(keys),
       output: out,
       viewport: { rows: 5, cols: 80 },
     });
-    const last = out.frames[out.frames.length - 1].frame.toPlainText();
+    const last = out.lastText();
     // After collapsing, the trace + s1 should still be visible — the
     // frame must not be empty.
     expect(last.length).toBeGreaterThan(0);
@@ -102,17 +91,14 @@ describe("runViewer", () => {
   });
 
   it("shows parse errors as a footer line", async () => {
-    const input = new ScriptedInput();
-    feed(input, ["q"]);
     const out = new FrameRecorder();
     const bad = sample + "this is not json\n";
     await runViewer({
       jsonl: bad,
-      input,
+      input: new ScriptedInput(["q"]),
       output: out,
       viewport: { rows: 10, cols: 80 },
     });
-    const frame = out.frames[0].frame.toPlainText();
-    expect(frame).toMatch(/1 parse error/);
+    expect(out.textAt(0)).toMatch(/1 parse error/);
   });
 });

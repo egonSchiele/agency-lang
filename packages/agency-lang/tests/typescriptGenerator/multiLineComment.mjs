@@ -39,7 +39,8 @@ const __globalCtx = new RuntimeContext({
     host: "https://statelog.adit.io",
     apiKey: __process.env["STATELOG_API_KEY"] || "",
     projectId: "",
-    debugMode: false
+    debugMode: false,
+    observability: false
   },
   smoltalkDefaults: {
     openAiApiKey: __process.env["OPENAI_API_KEY"] || "",

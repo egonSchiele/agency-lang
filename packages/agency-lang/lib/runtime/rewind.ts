@@ -61,6 +61,7 @@ export async function rewindFrom(args: {
           },
           {
             onNodeEnter: (id) => execCtx.stateStack.nodesTraversed.push(id),
+            statelogClient: execCtx.statelogClient,
           },
         );
         await execCtx.pendingPromises.awaitAll();

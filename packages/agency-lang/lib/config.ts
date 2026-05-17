@@ -70,12 +70,32 @@ export interface AgencyConfig {
    */
   maxToolCallRounds?: number;
 
+  /**
+   * Enable observability. When false (default), the StatelogClient is a
+   * complete no-op — no events are emitted and no network calls are made.
+   * Set to true to activate structured event logging via the `log` config.
+   */
+  observability?: boolean;
+
   /** Statelog config */
   log?: Partial<{
     host: string;
     projectId: string;
     debugMode: boolean;
     apiKey: string;
+    /**
+     * Local file sink. When set, each statelog event is appended as a
+     * single JSON object per line. Intended for local development and
+     * tests. Can be combined with `host` — both sinks receive events.
+     */
+    logFile: string;
+    metadata: {
+      tags?: string[];
+      environment?: string;
+      userId?: string;
+      agentVersion?: string;
+      custom?: Record<string, string>;
+    };
   }>;
 
   /** Smoltalk client config */
@@ -227,12 +247,23 @@ export const AgencyConfigSchema = z
     disallowedFetchDomains: z.array(z.string()),
     tarsecTraceHost: z.string(),
     maxToolCallRounds: z.number(),
+    observability: z.boolean(),
     log: z
       .object({
         host: z.string(),
         projectId: z.string(),
         debugMode: z.boolean(),
         apiKey: z.string(),
+        logFile: z.string(),
+        metadata: z
+          .object({
+            tags: z.array(z.string()),
+            environment: z.string(),
+            userId: z.string(),
+            agentVersion: z.string(),
+            custom: z.record(z.string(), z.string()),
+          })
+          .partial(),
       })
       .partial(),
     client: z

@@ -19,6 +19,8 @@ export type SimpleMachineConfig<T> = {
     projectId: string;
     traceId?: string;
     debugMode?: boolean;
+    observability?: boolean;
+    logFile?: string;
   };
 };
 

@@ -35,13 +35,16 @@ export function setupNode(args: { state: GraphState }): {
   let threads: ThreadStore;
   if (stack.threads) {
     threads = ThreadStore.fromJSON(stack.threads);
+    threads.setStatelogClient(ctx.statelogClient);
   } else if (state.messages instanceof ThreadStore) {
     threads = state.messages;
+    threads.setStatelogClient(ctx.statelogClient);
   } else {
     // Fallback: create a new ThreadStore with a default active thread.
     // This can happen on debugger/rewind resume paths where messages is not passed
     // and the checkpoint frame doesn't have serialized threads.
-    threads = ThreadStore.withDefaultActive();
+    // Pass the client so the default thread is logged.
+    threads = ThreadStore.withDefaultActive(ctx.statelogClient);
   }
   stack.threads = threads;
 
@@ -151,8 +154,13 @@ export async function runNode({
     name: "onAgentStart",
     data: { nodeName, args: data, messages: messages || [], cancel },
   });
+
+  const agentRunSpanId = execCtx.statelogClient.startSpan("agentRun");
+  execCtx.statelogClient.agentStart({ entryNode: nodeName, args: data });
+  const agentStartTime = performance.now();
+
   let isResume = false;
-  let threadStore = ThreadStore.withDefaultActive();
+  let threadStore = ThreadStore.withDefaultActive(execCtx.statelogClient);
   try {
     while (true) {
       try {
@@ -164,7 +172,7 @@ export async function runNode({
             ctx: execCtx,
             isResume,
           },
-          { onNodeEnter: (id) => execCtx.stateStack.nodesTraversed.push(id) },
+          { onNodeEnter: (id) => execCtx.stateStack.nodesTraversed.push(id), statelogClient: execCtx.statelogClient },
         );
         await execCtx.pendingPromises.awaitAll();
         const returnObject = createReturnObject({
@@ -182,6 +190,12 @@ export async function runNode({
           await execCtx.pauseTraceWriter();
         } else {
           // Final result: emit footer and close
+          execCtx.statelogClient.agentEnd({
+            entryNode: nodeName,
+            result: returnObject.data,
+            timeTaken: performance.now() - agentStartTime,
+            tokenStats: returnObject.tokens,
+          });
           await callHook({
             callbacks: execCtx.callbacks,
             name: "onAgentEnd",
@@ -199,6 +213,15 @@ export async function runNode({
             );
           }
           const cp = e.checkpoint;
+          execCtx.statelogClient.checkpointRestored({
+            checkpointId: cp.id,
+            restoreCount: execCtx._restoreCount,
+            maxRestores: execCtx.maxRestores,
+            overrides: {
+              args: !!e.options?.args,
+              globals: !!e.options?.globals,
+            },
+          });
           execCtx.restoreState(cp);
           if (e.options?.args) {
             execCtx._pendingArgOverrides = e.options.args;
@@ -213,13 +236,32 @@ export async function runNode({
           isResume = true;
           execCtx.stateStack.nodesTraversed = [cp.nodeId];
           // Reset ThreadStore for the restored execution
-          threadStore = ThreadStore.withDefaultActive();
+          threadStore = ThreadStore.withDefaultActive(execCtx.statelogClient);
           continue;
         }
         throw e;
       }
     }
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    execCtx.statelogClient.error({
+      errorType: "runtimeError",
+      message: errorMessage,
+    });
+    // Pull whatever token usage accumulated before the crash so cost
+    // dashboards still attribute partial spend to failed runs.
+    const partialReturn = createReturnObject({
+      result: { data: undefined as any },
+      globals: execCtx.globals,
+    });
+    execCtx.statelogClient.agentEnd({
+      entryNode: nodeName,
+      timeTaken: performance.now() - agentStartTime,
+      tokenStats: partialReturn.tokens,
+    });
+    throw error;
   } finally {
+    execCtx.statelogClient.endSpan(agentRunSpanId); // end agentRun span
     // Persist any in-memory MemoryManager state. Writes are best-effort —
     // we never fail the run because of a save error, but we do log it so
     // disk problems are visible.

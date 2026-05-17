@@ -1,3 +1,4 @@
+import { StatelogClient } from "../../statelogClient.js";
 import { MessageThread, MessageThreadJSON } from "./messageThread.js";
 
 export type ThreadStoreJSON = {
@@ -12,6 +13,7 @@ export class ThreadStore {
   threads: Record<MessageThreadID, MessageThread> = {};
   counter: number = 0;
   activeStack: MessageThreadID[] = [];
+  private statelogClient?: StatelogClient;
 
   constructor() {
     this.threads = {};
@@ -19,8 +21,19 @@ export class ThreadStore {
     this.activeStack = [];
   }
 
-  static withDefaultActive(): ThreadStore {
+  // Set after construction. Most callers should pass the client to
+  // `withDefaultActive(client)` instead so the initial default thread
+  // is logged consistently with subsequent thread/subthread blocks.
+  setStatelogClient(client: StatelogClient): void {
+    this.statelogClient = client;
+  }
+
+  // Create a store with a default active thread. If `client` is passed,
+  // the default thread is logged as a normal threadCreated event so the
+  // implicit root thread appears in the trace alongside user-created ones.
+  static withDefaultActive(client?: StatelogClient): ThreadStore {
     const store = new ThreadStore();
+    if (client) store.setStatelogClient(client);
     store.getOrCreateActive();
     return store;
   }
@@ -29,6 +42,10 @@ export class ThreadStore {
   create(): MessageThreadID {
     const id = (this.counter++).toString();
     this.threads[id] = new MessageThread();
+    this.statelogClient?.threadCreated({
+      threadId: id,
+      threadType: "thread",
+    });
     return id;
   }
 
@@ -42,6 +59,11 @@ export class ThreadStore {
     const parentId = this.activeId();
     const id = (this.counter++).toString();
     this.threads[id] = this.threads[parentId!].newSubthreadChild();
+    this.statelogClient?.threadCreated({
+      threadId: id,
+      threadType: "subthread",
+      parentThreadId: parentId,
+    });
     return id;
   }
 

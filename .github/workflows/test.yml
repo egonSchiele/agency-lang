@@ -69,6 +69,10 @@ jobs:
         node tests/integration/bundlers/test-vite.mjs ./agency-lang-*.tgz
         node tests/integration/cli/test.mjs ./agency-lang-*.tgz
         rm -f agency-lang-*.tgz
+    - name: StateLog integration tests
+      if: matrix.node-version == '22.x'
+      working-directory: packages/agency-lang
+      run: node tests/integration/statelog/test.mjs
     - name: Stdlib sandbox tests
       if: matrix.node-version == '22.x'
       working-directory: packages/agency-lang

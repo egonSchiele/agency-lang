@@ -72,13 +72,14 @@ export function interrupt<T = any>(opts: {
   data: T;
   origin: string;
   runId: string;
+  interruptId?: string;
 }): Interrupt<T> {
   return {
     type: "interrupt",
     kind: opts.kind,
     message: opts.message,
     origin: opts.origin,
-    interruptId: nanoid(),
+    interruptId: opts.interruptId || nanoid(),
     data: opts.data,
     runId: opts.runId,
   };
@@ -124,6 +125,68 @@ export function isApproved(obj: any): obj is Approved {
   return obj && obj.type === "approve";
 }
 
+type HandlerChainOutcome =
+  | { kind: "rejected"; value: any }
+  | { kind: "approved"; value: any }
+  | { kind: "propagated" }
+  | { kind: "noResponse" };
+
+/** Run all registered handlers for an interrupt (top of the stack first).
+ * Emits handlerDecision/interruptResolved events along the way and returns
+ * a summary outcome the caller uses to decide whether to propagate. */
+async function runHandlerChain(
+  ctx: RuntimeContext<any>,
+  stack: StateStack | undefined,
+  interruptId: string,
+  interruptObj: { kind: string; message: string; data: any; origin: string },
+): Promise<HandlerChainOutcome> {
+  let approvedValue: any = undefined;
+  let hasApproval = false;
+  let hasPropagation = false;
+  const chainSpanId = ctx.statelogClient.startSpan("handlerChain");
+  try {
+    for (let i = (ctx.handlers ?? []).length - 1; i >= 0; i--) {
+      if (ctx.isCancelled(stack)) throw new AgencyCancelledError();
+      // Treat handler execution as atomic for the debugger — same as LLM tool calls.
+      ctx.enterToolCall();
+      let result: any;
+      try {
+        result = await ctx.handlers[i](interruptObj);
+      } finally {
+        ctx.exitToolCall();
+      }
+      if (result === undefined) {
+        ctx.statelogClient.handlerDecision({ interruptId, handlerIndex: i, decision: "none" });
+        continue;
+      }
+      if (result.type === "reject") {
+        ctx.statelogClient.handlerDecision({ interruptId, handlerIndex: i, decision: "reject", value: result.value });
+        ctx.statelogClient.interruptResolved({ interruptId, outcome: "rejected", resolvedBy: "handler" });
+        return { kind: "rejected", value: result.value };
+      }
+      if (result.type === "propagate") {
+        ctx.statelogClient.handlerDecision({ interruptId, handlerIndex: i, decision: "propagate" });
+        hasPropagation = true;
+        continue;
+      }
+      if (result.type === "approve") {
+        ctx.statelogClient.handlerDecision({ interruptId, handlerIndex: i, decision: "approve", value: result.value });
+        hasApproval = true;
+        approvedValue = result.value;
+        continue;
+      }
+      throw new Error(
+        `Handler returned invalid result type: ${JSON.stringify(result)}. Expected "approve", "reject", "propagate", or undefined.`,
+      );
+    }
+  } finally {
+    ctx.statelogClient.endSpan(chainSpanId); // end handlerChain span
+  }
+  if (hasPropagation) return { kind: "propagated" };
+  if (hasApproval) return { kind: "approved", value: approvedValue };
+  return { kind: "noResponse" };
+}
+
 export async function interruptWithHandlers<T = any>(
   kind: string,
   message: string,
@@ -133,43 +196,15 @@ export async function interruptWithHandlers<T = any>(
   stack?: StateStack,
 ): Promise<Interrupt<T>[] | Approved | Rejected> {
   const interruptObj = { kind, message, data, origin };
+  const interruptId = nanoid();
+  const outcome = await runHandlerChain(ctx, stack, interruptId, interruptObj);
 
-  let approvedValue: any = undefined;
-  let hasApproval = false;
-  let hasPropagation = false;
-  for (let i = (ctx.handlers ?? []).length - 1; i >= 0; i--) {
-    if (ctx.isCancelled(stack)) {
-      throw new AgencyCancelledError();
-    }
-    // Enter tool call context so that the debugger treats handler execution
-    // as atomic — debug hooks won't fire inside the handler body, just like
-    // they don't fire inside LLM tool calls.
-    ctx.enterToolCall();
-    let result: any;
-    try {
-      result = await ctx.handlers[i](interruptObj);
-    } finally {
-      ctx.exitToolCall();
-    }
-    if (result === undefined) {
-      continue;
-    }
-    if (result.type === "reject") {
-      return { type: "reject", value: result.value };
-    }
-    if (result.type === "propagate") {
-      hasPropagation = true;
-      continue;
-    }
-    if (result.type === "approve") {
-      hasApproval = true;
-      approvedValue = result.value;
-      continue;
-    }
-    throw new Error(
-      `Handler returned invalid result type: ${JSON.stringify(result)}. Expected "approve", "reject", "propagate", or undefined.`,
-    );
+  if (outcome.kind === "rejected") {
+    return { type: "reject", value: outcome.value };
   }
+  const hasPropagation = outcome.kind === "propagated";
+  const hasApproval = outcome.kind === "approved";
+  const approvedValue = hasApproval ? outcome.value : undefined;
   // IPC mode: always consult parent (unless local handler rejected — that already returned above)
   if (isIpcMode()) {
     const parentDecision = await sendInterruptToParent(
@@ -177,19 +212,120 @@ export async function interruptWithHandlers<T = any>(
       { propagated: hasPropagation },
     );
     if (parentDecision.type === "approve") {
+      ctx.statelogClient.interruptResolved({
+        interruptId,
+        outcome: "approved",
+        resolvedBy: "ipc",
+      });
       return { type: "approve", value: parentDecision.value ?? approvedValue };
     }
+    ctx.statelogClient.interruptResolved({
+      interruptId,
+      outcome: "rejected",
+      resolvedBy: "ipc",
+    });
     return { type: "reject", value: parentDecision.value };
   }
 
   // Normal mode (non-IPC)
+  // Note: checkpointCreated for these interrupts is emitted by the generated
+  // interrupt template code, not here. This is a known gap — non-tool
+  // interrupts will have interruptThrown but no matching checkpointCreated
+  // from the runtime. A future improvement could add checkpoint events to
+  // the generated templates.
   if (hasPropagation) {
-    return [interrupt({ kind, message, data, origin, runId: ctx.getRunId() })];
+    const intr = interrupt({ kind, message, data, origin, runId: ctx.getRunId(), interruptId });
+    ctx.statelogClient.interruptThrown({
+      interruptId: intr.interruptId,
+      interruptData: data,
+    });
+    return [intr];
   }
   if (hasApproval) {
+    ctx.statelogClient.interruptResolved({
+      interruptId,
+      outcome: "approved",
+      resolvedBy: "handler",
+    });
     return { type: "approve", value: approvedValue };
   }
-  return [interrupt({ kind, message, data, origin, runId: ctx.getRunId() })];
+  // No handler responded — propagate to user
+  const intr = interrupt({ kind, message, data, origin, runId: ctx.getRunId(), interruptId });
+  ctx.statelogClient.interruptThrown({
+    interruptId: intr.interruptId,
+    interruptData: data,
+  });
+  return [intr];
+}
+
+/** Build the ID-keyed response map for `respondToInterrupts`. Extracted
+ * to keep the main function under the structural lint limit. */
+function buildResponseMap(
+  interrupts: Interrupt[],
+  responses: InterruptResponse[],
+): Record<string, { response: InterruptResponse }> {
+  if (responses.length !== interrupts.length) {
+    throw new Error(
+      `respondToInterrupts: expected ${interrupts.length} responses but got ${responses.length}`,
+    );
+  }
+  const responseMap: Record<string, { response: InterruptResponse }> = {};
+  for (let i = 0; i < interrupts.length; i++) {
+    responseMap[interrupts[i].interruptId] = {
+      response: deepClone(responses[i]),
+    };
+  }
+  return responseMap;
+}
+
+/** Inner resume loop: runs the graph and reacts to RestoreSignal until the
+ * agent either returns or yields another batch of interrupts. */
+async function runResumeLoop(
+  execCtx: RuntimeContext<GraphState>,
+  startNodeName: string,
+  agentStartTime: number,
+): Promise<any> {
+  let nodeName = startNodeName;
+  while (true) {
+    try {
+      const result = await execCtx.graph.run(
+        nodeName,
+        { data: {}, ctx: execCtx, isResume: true },
+        {
+          onNodeEnter: (id) => execCtx.stateStack.nodesTraversed.push(id),
+          statelogClient: execCtx.statelogClient,
+        },
+      );
+      await execCtx.pendingPromises.awaitAll();
+      const returnObject = createReturnObject({ result, globals: execCtx.globals });
+      if (hasInterrupts(returnObject.data)) {
+        await execCtx.pauseTraceWriter();
+      } else {
+        execCtx.statelogClient.agentEnd({
+          entryNode: nodeName,
+          result: returnObject.data,
+          timeTaken: performance.now() - agentStartTime,
+          tokenStats: returnObject.tokens,
+        });
+        await execCtx.closeTraceWriter();
+      }
+      return returnObject;
+    } catch (e) {
+      if (e instanceof RestoreSignal) {
+        const cp = e.checkpoint;
+        execCtx._restoreCount++;
+        execCtx.statelogClient.checkpointRestored({
+          checkpointId: cp.id,
+          restoreCount: execCtx._restoreCount,
+        });
+        execCtx.restoreState(cp);
+        nodeName = cp.nodeId;
+        execCtx.stateStack.nodesTraversed = [cp.nodeId];
+        continue;
+      }
+      throw e;
+    }
+  }
 }
 
 export async function respondToInterrupts(args: {
@@ -200,20 +336,7 @@ export async function respondToInterrupts(args: {
   metadata?: Record<string, any>;
 }): Promise<any> {
   const { ctx, interrupts, responses, metadata = {} } = args;
-
-  if (responses.length !== interrupts.length) {
-    throw new Error(
-      `respondToInterrupts: expected ${interrupts.length} responses but got ${responses.length}`,
-    );
-  }
-
-  // Build ID-keyed response map
-  const responseMap: Record<string, { response: InterruptResponse }> = {};
-  for (let i = 0; i < interrupts.length; i++) {
-    responseMap[interrupts[i].interruptId] = {
-      response: deepClone(responses[i]),
-    };
-  }
+  const responseMap = buildResponseMap(interrupts, responses);
 
   // All interrupts share the same checkpoint — grab from first
   const interrupt = deepClone(interrupts[0]);
@@ -227,63 +350,50 @@ export async function respondToInterrupts(args: {
       "No checkpoint found for interrupt. The interrupt may have been created with an older format.",
     );
   }
-
-
-  if (args.overrides) {
-    applyOverrides(checkpoint, args.overrides);
-  }
+  if (args.overrides) applyOverrides(checkpoint, args.overrides);
 
   const execCtx = await ctx.createExecutionContext(interrupt.runId);
+  // This is the first restore on this execCtx — record it as such.
+  execCtx._restoreCount++;
+  execCtx.statelogClient.checkpointRestored({
+    checkpointId: checkpoint.id,
+    restoreCount: execCtx._restoreCount,
+  });
+  // Each user response resolves a previously-thrown interrupt. Emit the
+  // lifecycle event so dashboards can pair every interruptThrown with a
+  // terminal interruptResolved.
+  for (let i = 0; i < interrupts.length; i++) {
+    const intr = interrupts[i];
+    const resp = responses[i];
+    const outcome =
+      resp.type === "approve" ? "approved" : ("rejected" as const);
+    execCtx.statelogClient.interruptResolved({
+      interruptId: intr.interruptId,
+      outcome,
+      resolvedBy: "user",
+    });
+  }
   execCtx.restoreState(checkpoint);
-
   execCtx.setInterruptResponses(responseMap);
-
   execCtx.installRegisteredCallbacks(ctx);
-  if (metadata.callbacks) {
-    Object.assign(execCtx.callbacks, metadata.callbacks);
-  }
+  if (metadata.callbacks) Object.assign(execCtx.callbacks, metadata.callbacks);
+  if (metadata.debugger) execCtx.debuggerState = metadata.debugger;
 
-  if (metadata.debugger) {
-    execCtx.debuggerState = metadata.debugger;
-  }
-
-  let nodeName = checkpoint.nodeId;
+  const agentRunSpanId = execCtx.statelogClient.startSpan("agentRun");
+  execCtx.statelogClient.agentStart({ entryNode: checkpoint.nodeId, args: {} });
+  const agentStartTime = performance.now();
   try {
-    while (true) {
-      try {
-        const result = await execCtx.graph.run(
-          nodeName,
-          {
-            data: {},
-            ctx: execCtx,
-            isResume: true,
-          },
-          { onNodeEnter: (id) => execCtx.stateStack.nodesTraversed.push(id) },
-        );
-        await execCtx.pendingPromises.awaitAll();
-        const returnObject = createReturnObject({
-          result,
-          globals: execCtx.globals,
-        });
-
-        if (hasInterrupts(returnObject.data)) {
-          await execCtx.pauseTraceWriter();
-        } else {
-          await execCtx.closeTraceWriter();
-        }
-        return returnObject;
-      } catch (e) {
-        if (e instanceof RestoreSignal) {
-          const cp = e.checkpoint;
-          execCtx.restoreState(cp);
-          nodeName = cp.nodeId;
-          execCtx.stateStack.nodesTraversed = [cp.nodeId];
-          continue;
-        }
-        throw e;
-      }
-    }
+    return await runResumeLoop(execCtx, checkpoint.nodeId, agentStartTime);
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    execCtx.statelogClient.error({ errorType: "runtimeError", message: errorMessage });
+    execCtx.statelogClient.agentEnd({
+      entryNode: checkpoint.nodeId,
+      timeTaken: performance.now() - agentStartTime,
+    });
+    throw error;
   } finally {
+    execCtx.statelogClient.endSpan(agentRunSpanId); // end agentRun span
     execCtx.cleanup();
   }
 }

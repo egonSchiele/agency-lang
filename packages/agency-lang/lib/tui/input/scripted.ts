@@ -6,6 +6,18 @@ export class ScriptedInput implements InputSource {
   private lineQueue: string[] = [];
   private lineWaiters: ((line: string) => void)[] = [];
 
+  /**
+   * Optionally pre-load the input with a sequence of keys. Strings are
+   * converted to `{ key }` events; `KeyEvent` objects are used as-is.
+   */
+  constructor(initial?: ReadonlyArray<KeyEvent | string>) {
+    if (initial) {
+      for (const item of initial) {
+        this.feedKey(typeof item === "string" ? { key: item } : item);
+      }
+    }
+  }
+
   feedKey(key: KeyEvent): void {
     const waiter = this.keyWaiters.shift();
     if (waiter) {

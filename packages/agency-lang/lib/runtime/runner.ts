@@ -1,4 +1,5 @@
 import { nanoid } from "nanoid";
+import type { SpanContext } from "../statelogClient.js";
 import { debugStep } from "./debugger.js";
 import { hasInterrupts } from "./interrupts.js";
 import { __pipeBind } from "./result.js";
@@ -771,7 +772,7 @@ export class Runner {
     ) => Promise<any>,
     stateStack: StateStack,
     branchStartTimes: number[],
-    parentSpanStack: import("../statelogClient.js").SpanContext[],
+    parentSpanStack: SpanContext[],
   ): Promise<{ index: number; value: any }> {
     const branchKey = this.forkBranchKey(id, i);
     const existing = this.frame.getOrCreateBranch(branchKey);

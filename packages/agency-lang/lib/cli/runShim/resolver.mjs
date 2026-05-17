@@ -40,8 +40,18 @@ export async function resolve(specifier, context, nextResolve) {
           ...context,
           parentURL: fakeParentURL,
         });
-      } catch {
-        /* fall through */
+      } catch (innerErr) {
+        // Set AGENCY_DEBUG_RESOLVER=1 to surface fallback failures.
+        // Normally we stay silent so the user only sees the original
+        // ERR_MODULE_NOT_FOUND from Node.
+        if (process.env.AGENCY_DEBUG_RESOLVER) {
+          const msg = innerErr && innerErr.message
+            ? innerErr.message
+            : String(innerErr);
+          process.stderr.write(
+            `[agency resolver] fallback failed for ${specifier}: ${msg}\n`,
+          );
+        }
       }
     }
     throw err;

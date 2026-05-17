@@ -68,6 +68,21 @@ This is useful when you want to:
 | `-o, --output <file>` | `agent.mjs` | output file path |
 | `--target <target>` | `node` | output target; currently only `node` is supported. `sea` (Node single-executable application) is a planned future target |
 
+### Config
+
+You can override the defaults from `agency.json`:
+
+```jsonc
+{
+  "pack": {
+    "format": "esm",        // or "cjs"
+    "target": "node20",     // esbuild target string, e.g. "node22"
+    "external": []          // extra bare specifiers to leave external
+  },
+  "verbose": true            // emit bundling progress and esbuild diagnostics during `agency pack`
+}
+```
+
 ### Limitations
 
 - Programs that read `.agency` stdlib files at runtime (e.g. anything dynamic) will hit `Could not find package root`. Most user programs do not — the stdlib is consumed at compile time. If you need it inlined for runtime use, file an issue.

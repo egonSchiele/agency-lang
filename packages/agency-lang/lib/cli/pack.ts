@@ -1,9 +1,10 @@
 import * as fs from "fs";
 import * as path from "path";
-import { createRequire } from "module";
+import { builtinModules, createRequire } from "module";
 import { fileURLToPath } from "url";
 import { build, type Plugin } from "esbuild";
 import { AgencyConfig } from "@/config.js";
+import { findPackageRoot } from "@/importPaths.js";
 import { SymbolTable } from "@/symbolTable.js";
 import { compile } from "./commands.js";
 
@@ -12,23 +13,10 @@ import { compile } from "./commands.js";
 // Works for both the built `dist/lib/cli/pack.js` and the dev-tree
 // `lib/cli/pack.ts` paths.
 function agencyLangInstallRoot(): string {
-  let dir = path.dirname(fileURLToPath(import.meta.url));
-  while (true) {
-    const pkgJson = path.join(dir, "package.json");
-    if (fs.existsSync(pkgJson)) {
-      try {
-        const parsed = JSON.parse(fs.readFileSync(pkgJson, "utf-8"));
-        if (parsed.name === "agency-lang") return dir;
-      } catch {
-        /* keep walking */
-      }
-    }
-    const parent = path.dirname(dir);
-    if (parent === dir) {
-      throw new Error("Could not locate agency-lang package root");
-    }
-    dir = parent;
-  }
+  return findPackageRoot(
+    path.dirname(fileURLToPath(import.meta.url)),
+    "agency-lang",
+  );
 }
 
 // esbuild plugin that resolves `agency-lang` and `agency-lang/<sub>`
@@ -66,6 +54,7 @@ function agencyLangResolverPlugin(installRoot: string): Plugin {
 }
 
 export type PackTarget = "node";
+export type PackFormat = "esm" | "cjs";
 
 export type PackOptions = {
   config: AgencyConfig;
@@ -79,47 +68,13 @@ const SHEBANG = "#!/usr/bin/env node\n";
 // Only Node built-ins are kept external; everything else (agency-lang,
 // smoltalk, zod, user .agency imports, etc.) is bundled into the output
 // so the result runs anywhere Node is available without an install.
-const NODE_BUILTINS = [
-  "assert",
-  "async_hooks",
-  "buffer",
-  "child_process",
-  "cluster",
-  "console",
-  "constants",
-  "crypto",
-  "dgram",
-  "dns",
-  "events",
-  "fs",
-  "http",
-  "http2",
-  "https",
-  "inspector",
-  "module",
-  "net",
-  "os",
-  "path",
-  "perf_hooks",
-  "process",
-  "punycode",
-  "querystring",
-  "readline",
-  "repl",
-  "stream",
-  "string_decoder",
-  "timers",
-  "tls",
-  "trace_events",
-  "tty",
-  "url",
-  "util",
-  "v8",
-  "vm",
-  "worker_threads",
-  "zlib",
-  "node:*",
-];
+// Derived from `module.builtinModules` so it always tracks the running
+// Node version with no hand-maintained list to keep in sync.
+const NODE_BUILTINS = [...builtinModules, "node:*"];
+
+// Defaults used when `config.pack` does not override them.
+const DEFAULT_FORMAT: PackFormat = "esm";
+const DEFAULT_NODE_TARGET = "node20";
 
 // Walk the symbol table from the entry and collect every .agency file
 // reachable. These are the locations where `compile()` will produce
@@ -176,74 +131,117 @@ export async function pack(opts: PackOptions): Promise<void> {
     //    agency-lang's own require resolution — no nodePaths, so we
     //    cannot accidentally pull in globally-installed user packages.
     const installRoot = agencyLangInstallRoot();
+    const packCfg = opts.config.pack ?? {};
+    const format: PackFormat = packCfg.format ?? DEFAULT_FORMAT;
+    const targetVersion = packCfg.target ?? DEFAULT_NODE_TARGET;
+    const externals = [...NODE_BUILTINS, ...(packCfg.external ?? [])];
+    const verbose = !!opts.config.verbose;
+    if (verbose) {
+      console.error(
+        `agency pack: bundling ${opts.inputFile} (format=${format}, target=${targetVersion}, installRoot=${installRoot})`,
+      );
+    }
+    // Some transitive CJS deps call `require("child_process")` etc.
+    // esbuild can't statically rewrite those for ESM output, so it
+    // emits a runtime shim that throws "Dynamic require ...".
+    // Install a real createRequire so they work. CJS output does not
+    // need the shim because `require` is already available there.
+    const banner =
+      format === "esm"
+        ? {
+            js: [
+              "// Built by `agency pack`",
+              'import { createRequire as __pack_createRequire } from "node:module";',
+              "const require = __pack_createRequire(import.meta.url);",
+            ].join("\n"),
+          }
+        : { js: "// Built by `agency pack`" };
     const result = await build({
       entryPoints: [compiled],
       bundle: true,
       platform: "node",
-      format: "esm",
-      target: "node20",
+      format,
+      target: targetVersion,
       write: false,
       outfile: opts.outputFile,
-      external: NODE_BUILTINS,
+      external: externals,
       plugins: [agencyLangResolverPlugin(installRoot)],
-      // Some transitive CJS deps call `require("child_process")` etc.
-      // esbuild can't statically rewrite those for ESM output, so it
-      // emits a runtime shim that throws "Dynamic require ...".
-      // Install a real createRequire so they work.
-      banner: {
-        js: [
-          "// Built by `agency pack`",
-          'import { createRequire as __pack_createRequire } from "node:module";',
-          "const require = __pack_createRequire(import.meta.url);",
-        ].join("\n"),
-      },
-      logLevel: "silent",
+      banner,
+      logLevel: verbose ? "info" : "silent",
     });
 
     if (result.outputFiles.length !== 1) {
+      const paths = result.outputFiles.map((f) => f.path).join(", ");
       throw new Error(
-        `agency pack: expected exactly one output file from esbuild, got ${result.outputFiles.length}`,
+        `agency pack: expected exactly one output file from esbuild, got ${result.outputFiles.length}: [${paths}]`,
       );
     }
 
-    // 5. Write the bundle. mode on writeFileSync only takes effect when
-    //    the file is created — if the user re-packs over an existing
-    //    file, Node preserves the old permissions. chmod explicitly so
-    //    the output is always executable.
+    // 5. Write the bundle and force executable permissions. The `mode`
+    //    option on writeFileSync is honored only when Node creates the
+    //    file; if we're overwriting an existing non-executable file
+    //    Node keeps the old permissions, so we chmod explicitly
+    //    afterward to guarantee the output is always runnable as
+    //    `./bundle.mjs`.
     const outDir = path.dirname(path.resolve(opts.outputFile));
     fs.mkdirSync(outDir, { recursive: true });
     fs.writeFileSync(opts.outputFile, SHEBANG + result.outputFiles[0].text, {
       mode: 0o755,
     });
     fs.chmodSync(opts.outputFile, 0o755);
+    if (verbose) {
+      const size = fs.statSync(opts.outputFile).size;
+      console.error(
+        `agency pack: wrote ${opts.outputFile} (${size} bytes, mode 0755)`,
+      );
+    }
   } finally {
     // 6. Tidy up: the entry `.__pack__.js`, plus any sibling .js files
     //    compile() created next to the user's source files. We never
     //    touch a sibling .js that already existed before we ran.
-    if (fs.existsSync(entryOutput)) {
-      try {
-        fs.unlinkSync(entryOutput);
-      } catch {
-        /* best-effort */
-      }
-    }
+    tryRemove(entryOutput);
     const absOutput = path.resolve(opts.outputFile);
     for (const p of siblingJsPaths) {
       // Never delete:
       //  - a sibling that pre-existed (it's the user's file)
       //  - the pack output itself (it might coincidentally share a name)
-      if (
-        preExistingJs.has(p) ||
-        path.resolve(p) === absOutput ||
-        !fs.existsSync(p)
-      ) {
+      if (preExistingJs.has(p) || path.resolve(p) === absOutput) {
         continue;
       }
-      try {
-        fs.unlinkSync(p);
-      } catch {
-        /* best-effort */
-      }
+      tryRemove(p);
     }
+  }
+}
+
+// Best-effort cleanup of a generated file. Refuses to follow into a
+// directory (a `.js` directory next to a `.agency` source would be the
+// user's, not ours), and surfaces real failures (permission denied,
+// busy file, etc.) as warnings rather than silently swallowing them.
+function tryRemove(p: string): void {
+  let stat: fs.Stats;
+  try {
+    stat = fs.statSync(p);
+  } catch (err: unknown) {
+    // ENOENT is fine — nothing to clean up.
+    if ((err as NodeJS.ErrnoException)?.code === "ENOENT") return;
+    console.error(
+      `agency pack: warning: could not stat ${p} for cleanup: ${
+        err instanceof Error ? err.message : String(err)
+      }`,
+    );
+    return;
+  }
+  if (stat.isDirectory()) {
+    // Don't recurse into directories — that's almost certainly user data.
+    return;
+  }
+  try {
+    fs.unlinkSync(p);
+  } catch (err) {
+    console.error(
+      `agency pack: warning: could not remove ${p}: ${
+        err instanceof Error ? err.message : String(err)
+      }`,
+    );
   }
 }

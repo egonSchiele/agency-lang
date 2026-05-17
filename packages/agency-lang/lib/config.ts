@@ -206,6 +206,28 @@ export interface AgencyConfig {
     };
   };
 
+  /**
+   * Configuration for `agency pack`.
+   */
+  pack?: {
+    /**
+     * Output module format. Default: "esm". CJS output is useful when
+     * embedding the bundle in a project whose package.json sets
+     * `"type": "commonjs"` and the surrounding tooling expects CommonJS.
+     */
+    format?: "esm" | "cjs";
+    /**
+     * esbuild `target` string (e.g. "node20", "node22"). Default: "node20".
+     */
+    target?: string;
+    /**
+     * Additional bare specifiers to keep external (in addition to Node
+     * built-ins). Use sparingly — anything listed here must already be
+     * installed wherever the bundle runs.
+     */
+    external?: string[];
+  };
+
   coverage?: {
     /** Output directory for collected coverage data (default: ".coverage") */
     outDir?: string;
@@ -305,6 +327,13 @@ export const AgencyConfigSchema = z
         threshold: z.number().min(0).max(100),
         perFileThreshold: z.number().min(0).max(100),
         exclude: z.array(z.string()),
+      })
+      .partial(),
+    pack: z
+      .object({
+        format: z.enum(["esm", "cjs"]),
+        target: z.string(),
+        external: z.array(z.string()),
       })
       .partial(),
     memory: z.object({

@@ -1,6 +1,12 @@
 import { EventEnvelope, TreeNode } from "./types.js";
 import { summarize, summarizeSpan, summarizeTrace } from "./summary.js";
 
+// Event types the viewer skips entirely. `graph` is a one-shot
+// schema dump (nodes + edges + start node) emitted at the top of
+// each agent run; useful in the JSONL for tooling but not in the
+// interactive tree.
+const HIDDEN_EVENT_TYPES = new Set<string>(["graph"]);
+
 export function buildForest(events: EventEnvelope[]): TreeNode[] {
   // traceId → trace root
   const traces: Record<string, TreeNode> = {};
@@ -43,9 +49,12 @@ export function buildForest(events: EventEnvelope[]): TreeNode[] {
   }
 
   // Pass 2: attach each event as a leaf under its span (or under the
-  // trace root if it has no span_id), preserving arrival order.
+  // trace root if it has no span_id), preserving arrival order. Some
+  // event types are noise (e.g. the `graph` schema dump) and are
+  // hidden from the viewer entirely.
   let leafCounter = 0;
   for (const evt of events) {
+    if (HIDDEN_EVENT_TYPES.has(evt.data.type)) continue;
     const traceRoot = traces[evt.trace_id];
     const parent = evt.span_id ? spans[evt.span_id] : traceRoot;
     const leaf: TreeNode = {

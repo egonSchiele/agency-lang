@@ -1,4 +1,6 @@
+import fs from "fs";
 import path from "path";
+import readline from "readline";
 import { VERSION } from "../../version.js";
 import type { Checkpoint } from "../state/checkpointStore.js";
 import { ContentAddressableStore } from "./contentAddressableStore.js";
@@ -26,6 +28,56 @@ export function resolveTraceFilePath(
   return null;
 }
 
+/**
+ * Scan an existing trace file to learn what a prior writer in the same run
+ * already emitted, so that a freshly-constructed `TraceWriter` can avoid
+ * writing a duplicate header or re-emitting chunks that are already on disk.
+ *
+ * Best-effort: malformed lines (e.g. a partial JSON line from a crashed prior
+ * writer) are skipped, not propagated. Returns `{ hasHeader: false,
+ * chunkHashes: new Set() }` for empty or non-existent files. Only `header` and
+ * `chunk` line types affect the result; other types (`source`, `static-state`,
+ * `manifest`, `footer`) are ignored — they don't need cross-writer dedup
+ * because either they're never emitted at runtime (`source`) or they're
+ * already gated to once per run elsewhere (`static-state` via
+ * `globals.markInitialized`; `manifest`/`footer` are per-checkpoint /
+ * per-close events that shouldn't be deduped).
+ *
+ * Uses streaming line I/O (`createReadStream` + `readline`) so peak memory
+ * stays at roughly one line, not the full file content. Each parsed chunk
+ * line becomes GC-eligible after we extract its `hash` — the chunk's `data`
+ * payload (potentially large) is never retained.
+ */
+export async function scanExistingTraceFile(filePath: string): Promise<{
+  hasHeader: boolean;
+  chunkHashes: Set<string>;
+}> {
+  const empty = { hasHeader: false, chunkHashes: new Set<string>() };
+  if (!fs.existsSync(filePath)) return empty;
+
+  const stream = fs.createReadStream(filePath, { encoding: "utf-8" });
+  const rl = readline.createInterface({ input: stream, crlfDelay: Infinity });
+
+  let hasHeader = false;
+  const chunkHashes = new Set<string>();
+  for await (const line of rl) {
+    if (line.trim() === "") continue;
+    let parsed: TraceLine;
+    try {
+      parsed = JSON.parse(line) as TraceLine;
+    } catch {
+      // Partial / corrupt line from a crashed writer — skip and keep going.
+      continue;
+    }
+    if (parsed.type === "header") {
+      hasHeader = true;
+    } else if (parsed.type === "chunk" && typeof parsed.hash === "string") {
+      chunkHashes.add(parsed.hash);
+    }
+  }
+  return { hasHeader, chunkHashes };
+}
+
 export class TraceWriter {
   private store: ContentAddressableStore;
   private sinks: TraceSink[];
@@ -33,22 +85,36 @@ export class TraceWriter {
   private chunkCount = 0;
   private program: string = "";
   private runId: string = "";
+  private headerWritten = false;
 
-  constructor(runId: string, program: string, sinks: TraceSink[]) {
-    // Per-writer CAS. Cross-segment dedup is intentionally not done — it
-    // would require shared state on the parent ctx (broken for concurrent
-    // runs) or in globals (extra serialization overhead). The trade-off is
-    // that some chunks may be duplicated across segments in the file; the
-    // reader handles duplicates idempotently via loadChunks, so correctness
-    // is unaffected. Files are slightly larger but readable and concurrency
-    // -safe.
+  constructor(
+    runId: string,
+    program: string,
+    sinks: TraceSink[],
+    options: { seenHashes?: Set<string>; headerWritten?: boolean } = {},
+  ) {
+    // Per-writer CAS, but seeded with hashes already on disk from prior
+    // writers in the same run. This gives cross-segment dedup without
+    // putting any shared state on the parent ctx — each new writer
+    // independently scans the file (see `scanExistingTraceFile` /
+    // `TraceWriter.create`) and seeds itself.
     this.store = new ContentAddressableStore();
+    if (options.seenHashes && options.seenHashes.size > 0) {
+      this.store.seedSeenHashes(options.seenHashes);
+    }
     this.sinks = sinks;
     this.runId = runId;
     this.program = program;
+    this.headerWritten = options.headerWritten ?? false;
   }
 
   async writeHeader(): Promise<void> {
+    // Idempotent: at most one `header` line per writer. Combined with the
+    // file-scan in `create()`, the file ends up with exactly one header
+    // (the first writer's), which is what `TraceReader` requires
+    // (`lines[0].type === "header"`).
+    if (this.headerWritten) return;
+    this.headerWritten = true;
     await this.writeLine({
       type: "header",
       version: 1,
@@ -142,7 +208,22 @@ export class TraceWriter {
     if (sinks.length === 0) {
       return null;
     }
-    const writer = new TraceWriter(runId, traceConfig.program || "unknown.agency", sinks);
+
+    // Scan the existing trace file (if any) so this writer can seed its CAS
+    // with hashes already on disk from prior writers in the same run, and
+    // skip writing a duplicate header. `runNode` truncates the file at the
+    // start of every fresh run, so this only ever sees state from earlier
+    // execCtxs within the same run (e.g. across `respondToInterrupts`).
+    const scan = filePath
+      ? await scanExistingTraceFile(filePath)
+      : { hasHeader: false, chunkHashes: new Set<string>() };
+
+    const writer = new TraceWriter(
+      runId,
+      traceConfig.program || "unknown.agency",
+      sinks,
+      { seenHashes: scan.chunkHashes, headerWritten: scan.hasHeader },
+    );
     await writer.writeHeader();
     return writer;
   }

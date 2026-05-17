@@ -98,6 +98,34 @@ describe("ContentAddressableStore", () => {
     expect(c2).toHaveLength(0);
   });
 
+  it("seedSeenHashes prevents re-emission of seeded hashes without populating chunkData", () => {
+    // First, learn what hashes a value produces by running it through one store.
+    const probe = new ContentAddressableStore();
+    const schema = { items: true } as const;
+    const { record: probedRecord, chunks: probedChunks } = probe.process(
+      { items: { a: { x: 1 }, b: { x: 2 } } },
+      schema,
+    );
+    const hashA = probedRecord.items.a as string;
+    const hashB = probedRecord.items.b as string;
+    expect(probedChunks).toHaveLength(2);
+
+    // Now seed a fresh store with those hashes and confirm process() emits nothing.
+    const fresh = new ContentAddressableStore();
+    fresh.seedSeenHashes(new Set([hashA, hashB]));
+    const { record, chunks } = fresh.process(
+      { items: { a: { x: 1 }, b: { x: 2 } } },
+      schema,
+    );
+    expect(record.items.a).toBe(hashA);
+    expect(record.items.b).toBe(hashB);
+    expect(chunks).toHaveLength(0);
+
+    // A new value (hash not seeded) is still emitted.
+    const { chunks: c2 } = fresh.process({ items: { c: { x: 3 } } }, schema);
+    expect(c2).toHaveLength(1);
+  });
+
   it("reconstruct reverses process", () => {
     const store = new ContentAddressableStore();
     const schema = { outer: { inner: true } } as const;

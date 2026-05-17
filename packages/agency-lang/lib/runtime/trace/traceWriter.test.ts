@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { TraceWriter } from "./traceWriter.js";
+import { TraceWriter, scanExistingTraceFile } from "./traceWriter.js";
 import { FileSink, CallbackSink } from "./sinks.js";
 import type { TraceLine } from "./types.js";
 import { Checkpoint } from "../state/checkpointStore.js";
@@ -202,5 +202,187 @@ describe("TraceWriter", () => {
     const staticLine = lines.find((l: any) => l.type === "static-state");
     expect(staticLine).toBeDefined();
     expect(staticLine.values).toEqual({ prompt: "hello", count: 42 });
+  });
+
+  it("writeHeader is idempotent within a single writer", async () => {
+    const writer = new TraceWriter(RUN_ID, "test.agency", [
+      new FileSink(tracePath),
+    ]);
+    await writer.writeHeader();
+    await writer.writeHeader();
+    await writer.writeCheckpoint(makeCheckpoint()); // also calls writeHeader internally
+    await writer.close(); // and so does close (and pause-from-close)
+
+    const lines = readTrace(tracePath);
+    const headers = lines.filter((l: any) => l.type === "header");
+    expect(headers).toHaveLength(1);
+  });
+});
+
+describe("scanExistingTraceFile", () => {
+  let tmpDir: string;
+  let tracePath: string;
+
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "trace-scan-test-"));
+    tracePath = path.join(tmpDir, "test.agencytrace");
+  });
+
+  afterEach(() => {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it("returns empty result for a non-existent file", async () => {
+    const result = await scanExistingTraceFile(
+      path.join(tmpDir, "missing.agencytrace"),
+    );
+    expect(result.hasHeader).toBe(false);
+    expect(result.chunkHashes.size).toBe(0);
+  });
+
+  it("returns empty result for an empty file", async () => {
+    fs.writeFileSync(tracePath, "");
+    const result = await scanExistingTraceFile(tracePath);
+    expect(result.hasHeader).toBe(false);
+    expect(result.chunkHashes.size).toBe(0);
+  });
+
+  it("detects an existing header and collects chunk hashes", async () => {
+    const writer = new TraceWriter(RUN_ID, "test.agency", [
+      new FileSink(tracePath),
+    ]);
+    await writer.writeCheckpoint(makeCheckpoint());
+    await writer.pause();
+
+    const result = await scanExistingTraceFile(tracePath);
+    expect(result.hasHeader).toBe(true);
+    expect(result.chunkHashes.size).toBeGreaterThan(0);
+
+    // Sanity-check: every chunk hash in the file appears in the scan.
+    const lines = readTrace(tracePath);
+    const fileHashes = lines
+      .filter((l: any) => l.type === "chunk")
+      .map((l: any) => l.hash);
+    for (const h of fileHashes) expect(result.chunkHashes.has(h)).toBe(true);
+  });
+
+  it("skips malformed lines without bailing on later valid ones", async () => {
+    // Build: a header, a chunk, a malformed line, another chunk.
+    const writer = new TraceWriter(RUN_ID, "test.agency", [
+      new FileSink(tracePath),
+    ]);
+    await writer.writeCheckpoint(makeCheckpoint());
+    await writer.pause();
+
+    fs.appendFileSync(tracePath, "this is not json\n");
+    fs.appendFileSync(
+      tracePath,
+      JSON.stringify({ type: "chunk", hash: "abcd", data: { x: 1 } }) + "\n",
+    );
+
+    const result = await scanExistingTraceFile(tracePath);
+    expect(result.hasHeader).toBe(true);
+    expect(result.chunkHashes.has("abcd")).toBe(true);
+  });
+});
+
+describe("TraceWriter.create cross-segment dedup", () => {
+  let tmpDir: string;
+  let tracePath: string;
+
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "trace-create-test-"));
+    tracePath = path.join(tmpDir, "test.agencytrace");
+  });
+
+  afterEach(() => {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it("first writer on an empty file emits a header and chunks normally", async () => {
+    const w = await TraceWriter.create({
+      runId: RUN_ID,
+      traceConfig: { traceFile: tracePath, program: "test.agency" },
+    });
+    expect(w).not.toBeNull();
+    await w!.writeCheckpoint(makeCheckpoint());
+    await w!.pause();
+
+    const lines = readTrace(tracePath);
+    expect(lines.filter((l: any) => l.type === "header")).toHaveLength(1);
+    expect(lines.filter((l: any) => l.type === "chunk").length).toBeGreaterThan(0);
+  });
+
+  it("second writer on a file that already has a header does not emit a duplicate header", async () => {
+    const w1 = await TraceWriter.create({
+      runId: RUN_ID,
+      traceConfig: { traceFile: tracePath, program: "test.agency" },
+    });
+    await w1!.writeCheckpoint(makeCheckpoint());
+    await w1!.pause();
+
+    const w2 = await TraceWriter.create({
+      runId: RUN_ID,
+      traceConfig: { traceFile: tracePath, program: "test.agency" },
+    });
+    await w2!.writeCheckpoint(makeCheckpoint({ id: 1, stepPath: "1" }));
+    await w2!.close();
+
+    const lines = readTrace(tracePath);
+    expect(lines.filter((l: any) => l.type === "header")).toHaveLength(1);
+  });
+
+  it("second writer dedups chunks already on disk", async () => {
+    const w1 = await TraceWriter.create({
+      runId: RUN_ID,
+      traceConfig: { traceFile: tracePath, program: "test.agency" },
+    });
+    await w1!.writeCheckpoint(makeCheckpoint());
+    await w1!.pause();
+
+    const linesAfterFirst = readTrace(tracePath);
+    const chunksAfterFirst = linesAfterFirst.filter(
+      (l: any) => l.type === "chunk",
+    ).length;
+    expect(chunksAfterFirst).toBeGreaterThan(0);
+
+    // Second writer writes IDENTICAL checkpoint contents — every chunk hash
+    // should already be in the on-disk set, so no new chunks emitted.
+    const w2 = await TraceWriter.create({
+      runId: RUN_ID,
+      traceConfig: { traceFile: tracePath, program: "test.agency" },
+    });
+    await w2!.writeCheckpoint(makeCheckpoint());
+    await w2!.pause();
+
+    const linesAfterSecond = readTrace(tracePath);
+    const chunksAfterSecond = linesAfterSecond.filter(
+      (l: any) => l.type === "chunk",
+    ).length;
+    expect(chunksAfterSecond).toBe(chunksAfterFirst);
+    // Manifest count went up though.
+    const manifestsAfterSecond = linesAfterSecond.filter(
+      (l: any) => l.type === "manifest",
+    ).length;
+    expect(manifestsAfterSecond).toBe(2);
+  });
+
+  it("falls back gracefully on a malformed file", async () => {
+    fs.writeFileSync(tracePath, "garbage that is not json\n");
+
+    const w = await TraceWriter.create({
+      runId: RUN_ID,
+      traceConfig: { traceFile: tracePath, program: "test.agency" },
+    });
+    await w!.writeCheckpoint(makeCheckpoint());
+    await w!.close();
+
+    // The pre-existing garbage line stays where it was; the new writer
+    // appended a header + content after. Parsing the file as JSONL would
+    // throw on the garbage line, so just check the new lines exist.
+    const raw = fs.readFileSync(tracePath, "utf-8");
+    expect(raw).toContain('"type":"header"');
+    expect(raw).toContain('"type":"manifest"');
+    expect(raw).toContain('"type":"footer"');
   });
 });

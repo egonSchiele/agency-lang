@@ -42,6 +42,7 @@ export async function runViewer(opts: RunViewerOpts): Promise<void> {
   };
 
   const draw = () => {
+    state = clampScrollTop(state, opts.viewport);
     state = ensureCursorVisible(state, opts.viewport);
     const lines = renderViewerLines(state, opts.viewport);
     if (parsed.errors.length > 0) {
@@ -61,6 +62,16 @@ export async function runViewer(opts: RunViewerOpts): Promise<void> {
     state = handleKey(state, key);
     draw();
   }
+}
+
+function clampScrollTop(
+  state: ViewerState,
+  viewport: { rows: number; cols: number },
+): ViewerState {
+  const rows = flattenVisibleRows(state);
+  const maxTop = Math.max(0, rows.length - viewport.rows);
+  if (state.scrollTop <= maxTop && state.scrollTop >= 0) return state;
+  return { ...state, scrollTop: Math.max(0, Math.min(state.scrollTop, maxTop)) };
 }
 
 function ensureCursorVisible(

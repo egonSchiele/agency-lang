@@ -1,5 +1,6 @@
 import * as fs from "fs";
 import * as path from "path";
+import { AsyncLocalStorage } from "node:async_hooks";
 import { nanoid } from "nanoid";
 import { ModelName } from "smoltalk";
 import { JSONEdge } from "./types.js";
@@ -63,6 +64,12 @@ export type TokenCost = {
 
 // === Client ===
 
+// Shared empty stack returned by `snapshotStack()` when the client is
+// disabled. Reusing one frozen array avoids per-fork allocations in the
+// default no-op mode. The runner only ever reads from this snapshot
+// (passes it back into `runInBranchContext`), never mutates it.
+const EMPTY_STACK: ReadonlyArray<SpanContext> = Object.freeze([]) as ReadonlyArray<SpanContext>;
+
 export class StatelogClient {
   private host: string;
   private debugMode: boolean;
@@ -75,8 +82,15 @@ export class StatelogClient {
   // apiKey disables ONLY the remote send; local sinks (logFile, stdout)
   // still receive events.
   private remoteEnabled: boolean = false;
-  private spanStack: SpanContext[] = [];
-  private forkDepth: number = 0;
+  // The "root" span stack — used by the outer agent run thread. Code
+  // running inside `runInBranchContext` sees a branch-local stack
+  // delivered via AsyncLocalStorage instead.
+  private rootStack: SpanContext[] = [];
+  // Per-branch span stacks live in this AsyncLocalStorage. Each concurrent
+  // fork/race branch gets its own stack so its `startSpan`/`endSpan`
+  // calls never bleed into the parent or siblings — even though they all
+  // share this single StatelogClient instance.
+  private spanStorage = new AsyncLocalStorage<SpanContext[]>();
   private metadata?: RunMetadata;
 
   constructor(config: StatelogConfig) {
@@ -134,29 +148,58 @@ export class StatelogClient {
     }
   }
 
-  // === Fork depth tracking ===
-  // Inside fork/race branches, multiple concurrent branches share this
-  // client. Span push/pop would interleave and corrupt the stack, so we
-  // skip span management entirely when forkDepth > 0. Events still fire
-  // (just without span attribution).
-
-  enterFork(): void {
-    this.forkDepth++;
-  }
-
-  exitFork(): void {
-    if (this.forkDepth > 0) this.forkDepth--;
-  }
-
   // === Span management ===
+  //
+  // Spans are tracked per-async-context. Outside fork/race branches the
+  // active stack is `rootStack`. Inside `runInBranchContext` it is the
+  // per-branch stack delivered by `spanStorage`. This means concurrent
+  // branches each get a private stack — their `startSpan`/`endSpan`
+  // calls cannot interleave or pop each other's spans, and events
+  // emitted inside a branch are attributed to that branch's current
+  // span (which inherits the parent fork span at branch entry).
+  private currentStack(): SpanContext[] {
+    return this.spanStorage.getStore() ?? this.rootStack;
+  }
+
+  // Returns a shallow snapshot of the active span stack — used by the
+  // runner to seed each branch's stack with the parent's spans so
+  // events inside the branch nest under the fork/race span.
+  //
+  // Short-circuits to a shared empty array when observability is off
+  // so the runner can call this unconditionally without paying for an
+  // allocation on every fork/race in the no-op default mode.
+  snapshotStack(): SpanContext[] {
+    if (!this.enabled) return EMPTY_STACK as SpanContext[];
+    return [...this.currentStack()];
+  }
+
+  // Run `fn` with a fresh, branch-local span stack seeded from
+  // `parentStack`. Each call to this method creates an independent ALS
+  // context; sibling calls (e.g. concurrent fork branches) see
+  // independent stacks even though they share this StatelogClient.
+  //
+  // Spans pushed inside `fn` are popped against this private stack only,
+  // never the parent. Defensively copies `parentStack` so the caller's
+  // array is never mutated.
+  //
+  // When observability is disabled the ALS plumbing is skipped entirely
+  // — we just invoke `fn()` directly. The runner can therefore always
+  // wrap branches in this call without paying ALS overhead in no-op
+  // mode.
+  runInBranchContext<T>(
+    parentStack: SpanContext[],
+    fn: () => Promise<T>,
+  ): Promise<T> {
+    if (!this.enabled) return fn();
+    return this.spanStorage.run([...parentStack], fn);
+  }
 
   startSpan(type: SpanType): string | undefined {
-    if (!this.enabled || this.forkDepth > 0) return undefined;
+    if (!this.enabled) return undefined;
+    const stack = this.currentStack();
     const spanId = nanoid(12);
-    const parentSpanId = this.spanStack.length > 0
-      ? this.spanStack[this.spanStack.length - 1].spanId
-      : null;
-    this.spanStack.push({
+    const parentSpanId = stack.length > 0 ? stack[stack.length - 1].spanId : null;
+    stack.push({
       spanId,
       parentSpanId,
       spanType: type,
@@ -165,42 +208,36 @@ export class StatelogClient {
     return spanId;
   }
 
-  // Pop the span identified by `spanId`. The id MUST be the one returned
-  // by the matching `startSpan` call:
+  // Pop the span identified by `spanId` from the active stack. The id
+  // MUST be the one returned by the matching `startSpan` call:
   //
   //   const id = client.startSpan("agentRun");
   //   try { ... } finally { client.endSpan(id); }
   //
-  // - If `spanId` is undefined (its `startSpan` was gated, e.g. inside a
-  //   fork branch), this is a no-op.
-  // - If the span is at the top of the stack, it pops it directly.
-  // - Otherwise we drop everything above the matched span as well — this
+  // - If `spanId` is undefined, this is a no-op.
+  // - If the span is at the top of the active stack, it pops it directly.
+  // - Otherwise we drop everything above the matched span — this
   //   defends against an inner span that forgot to call `endSpan`.
-  // - If the span isn't found at all, this is a no-op.
-  //
-  // We deliberately do NOT gate on `forkDepth` here: the only callers
-  // are paired with a `startSpan` that returned a real id, and they must
-  // be allowed to pop even when concurrent branches are still running.
-  // Branches themselves call `endSpan(undefined)` because their
-  // `startSpan` was gated, so they cannot accidentally pop the parent's
-  // spans.
+  // - If the span isn't found in the active stack, this is a no-op.
+  //   That can legitimately happen when a branch tries to end a span
+  //   that lives on the parent's stack, or vice versa.
   endSpan(spanId?: string): SpanContext | undefined {
     if (!this.enabled || !spanId) return undefined;
-    const top = this.spanStack[this.spanStack.length - 1];
+    const stack = this.currentStack();
+    const top = stack[stack.length - 1];
     if (top && top.spanId === spanId) {
-      return this.spanStack.pop();
+      return stack.pop();
     }
-    const idx = this.spanStack.findIndex((s) => s.spanId === spanId);
+    const idx = stack.findIndex((s) => s.spanId === spanId);
     if (idx < 0) return undefined;
-    const popped = this.spanStack[idx];
-    this.spanStack.length = idx;
+    const popped = stack[idx];
+    stack.length = idx;
     return popped;
   }
 
   get currentSpan(): SpanContext | undefined {
-    return this.spanStack.length > 0
-      ? this.spanStack[this.spanStack.length - 1]
-      : undefined;
+    const stack = this.currentStack();
+    return stack.length > 0 ? stack[stack.length - 1] : undefined;
   }
 
   toJSON() {

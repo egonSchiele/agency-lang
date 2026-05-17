@@ -1,4 +1,5 @@
 import { nanoid } from "nanoid";
+import type { SpanContext } from "../statelogClient.js";
 import { debugStep } from "./debugger.js";
 import { hasInterrupts } from "./interrupts.js";
 import { __pipeBind } from "./result.js";
@@ -620,12 +621,11 @@ export class Runner {
       this.frame.popBranches();
     } finally {
       this.path.pop();
-      // Each branch is responsible for balancing its own
-      // enterFork/exitFork call via .finally/.then-or-catch handlers.
-      // We deliberately do NOT decrement here: in a race, losing branches
-      // may still be running, and decrementing prematurely would corrupt
-      // a parent fork's depth tracking and let nested code start logging
-      // spans into the shared stack while branches are still in flight.
+      // Each branch ran inside its own AsyncLocalStorage span context, so
+      // its pushes/pops are isolated from the parent. We can safely emit
+      // forkEnd and pop the fork span here even while loser race branches
+      // are still draining in the background — their stacks live in
+      // independent ALS contexts and cannot touch the parent's stack.
       this.ctx.statelogClient.forkEnd({
         forkId,
         mode,
@@ -658,6 +658,10 @@ export class Runner {
   ): Promise<any> {
     const branchStartTimes: number[] = [];
     const branchEndTimes: number[] = [];
+    // Snapshot the current span stack ONCE, before branches are scheduled.
+    // Each branch runs inside its own ALS context seeded from this snapshot,
+    // so spans pushed in one branch never leak to siblings or the parent.
+    const parentStack = this.ctx.statelogClient.snapshotStack();
     const promises = items.map((item, i) => {
       const branchKey = this.forkBranchKey(id, i);
       const existing = this.frame.getOrCreateBranch(branchKey);
@@ -679,11 +683,11 @@ export class Runner {
           : existing.abortController.signal;
       }
       branchStartTimes[i] = performance.now();
-      this.ctx.statelogClient.enterFork();
-      return blockFn(item, i, existing.stack).finally(() => {
-        branchEndTimes[i] = performance.now();
-        this.ctx.statelogClient.exitFork();
-      });
+      return this.ctx.statelogClient
+        .runInBranchContext(parentStack, () => blockFn(item, i, existing.stack))
+        .finally(() => {
+          branchEndTimes[i] = performance.now();
+        });
     });
 
     const settled = await Promise.allSettled(promises);
@@ -768,6 +772,7 @@ export class Runner {
     ) => Promise<any>,
     stateStack: StateStack,
     branchStartTimes: number[],
+    parentSpanStack: SpanContext[],
   ): Promise<{ index: number; value: any }> {
     const branchKey = this.forkBranchKey(id, i);
     const existing = this.frame.getOrCreateBranch(branchKey);
@@ -786,68 +791,30 @@ export class Runner {
         : existing.abortController.signal;
     }
     branchStartTimes[i] = performance.now();
-    this.ctx.statelogClient.enterFork();
-    return blockFn(item, i, existing.stack).then(
-      (value) => {
-        this.ctx.statelogClient.exitFork();
-        return { index: i, value };
-      },
-      (err) => {
-        this.ctx.statelogClient.exitFork();
+    return this.ctx.statelogClient
+      .runInBranchContext(parentSpanStack, () => blockFn(item, i, existing.stack))
+      .then(
+        (value) => ({ index: i, value }),
         // Tag the rejection so the racer can identify which branch died.
-        return Promise.reject({ index: i, err });
-      },
-    );
+        (err) => Promise.reject({ index: i, err }),
+      );
   }
 
-  private async runRace(
+  /** After a race winner is chosen, abort the loser branches and emit
+   * a `forkBranchEnd` event for every branch (winner + losers). The
+   * abort is best-effort: synchronous code that has already reached an
+   * `interrupt()` call before we get here will still resolve its orphan
+   * promise — runRace's caller discards those resolutions. */
+  private abortLoserBranchesAndEmitEnds(
     id: number,
-    items: any[],
-    blockFn: (
-      item: any,
-      index: number,
-      branchStack: StateStack,
-    ) => Promise<any>,
-    stateStack: StateStack,
+    itemCount: number,
+    winnerIndex: number,
+    winnerValue: any,
+    winnerTime: number,
+    branchStartTimes: number[],
     forkId: string,
-  ): Promise<any> {
-    const branchStartTimes: number[] = new Array(items.length).fill(0);
-    const taggedPromises = items.map((item, i) =>
-      this.buildRaceBranchPromise(id, i, item, blockFn, stateStack, branchStartTimes),
-    );
-
-    // Promise.race resolves/rejects with whichever settles first.
-    let winnerIndex: number;
-    let winnerValue: any;
-    let winnerTime: number;
-    try {
-      const winner = await Promise.race(taggedPromises);
-      winnerIndex = winner.index;
-      winnerValue = winner.value;
-      winnerTime = performance.now() - branchStartTimes[winnerIndex];
-    } catch (tagged) {
-      // A branch rejected first — we know which one thanks to tagging.
-      const { index: failedIndex, err } = tagged as { index: number; err: any };
-      this.ctx.statelogClient.forkBranchEnd({
-        forkId,
-        branchIndex: failedIndex,
-        outcome: "failure",
-        timeTaken: performance.now() - branchStartTimes[failedIndex],
-      });
-      // Abort the still-running branches. Their per-branch exitFork in the
-      // .then/.catch handlers will balance the enterFork depth.
-      for (let i = 0; i < items.length; i++) {
-        if (i === failedIndex) continue;
-        this.frame.getBranch(this.forkBranchKey(id, i))?.abortController?.abort();
-      }
-      throw err;
-    }
-
-    // Abort the losing branches so any in-flight work (LLM calls, tool calls)
-    // can stop. Note: synchronous code that has already reached an
-    // interrupt() call before we get here will still resolve its orphan
-    // promise — we discard those resolutions below.
-    for (let i = 0; i < items.length; i++) {
+  ): void {
+    for (let i = 0; i < itemCount; i++) {
       if (i === winnerIndex) continue;
       const branchKey = this.forkBranchKey(id, i);
       const branch = this.frame.getBranch(branchKey);
@@ -868,6 +835,74 @@ export class Runner {
       outcome: hasInterrupts(winnerValue) ? "interrupted" : "success",
       timeTaken: winnerTime,
     });
+  }
+
+  private async runRace(
+    id: number,
+    items: any[],
+    blockFn: (
+      item: any,
+      index: number,
+      branchStack: StateStack,
+    ) => Promise<any>,
+    stateStack: StateStack,
+    forkId: string,
+  ): Promise<any> {
+    const branchStartTimes: number[] = new Array(items.length).fill(0);
+    // Snapshot the current span stack ONCE — each race branch will run
+    // inside its own ALS context seeded from this snapshot, so concurrent
+    // branches cannot interleave span pushes/pops on the parent stack.
+    const parentSpanStack = this.ctx.statelogClient.snapshotStack();
+    const taggedPromises = items.map((item, i) =>
+      this.buildRaceBranchPromise(
+        id,
+        i,
+        item,
+        blockFn,
+        stateStack,
+        branchStartTimes,
+        parentSpanStack,
+      ),
+    );
+
+    // Promise.race resolves/rejects with whichever settles first.
+    let winnerIndex: number;
+    let winnerValue: any;
+    let winnerTime: number;
+    try {
+      const winner = await Promise.race(taggedPromises);
+      winnerIndex = winner.index;
+      winnerValue = winner.value;
+      winnerTime = performance.now() - branchStartTimes[winnerIndex];
+    } catch (tagged) {
+      // A branch rejected first — we know which one thanks to tagging.
+      const { index: failedIndex, err } = tagged as { index: number; err: any };
+      this.ctx.statelogClient.forkBranchEnd({
+        forkId,
+        branchIndex: failedIndex,
+        outcome: "failure",
+        timeTaken: performance.now() - branchStartTimes[failedIndex],
+      });
+      // Abort the still-running branches. Each branch already runs in
+      // its own ALS-scoped span context, so no parent span bookkeeping
+      // needs balancing here — losers' span stacks simply go away with
+      // their async contexts.
+      for (let i = 0; i < items.length; i++) {
+        if (i === failedIndex) continue;
+        this.frame.getBranch(this.forkBranchKey(id, i))?.abortController?.abort();
+      }
+      throw err;
+    }
+
+    this.abortLoserBranchesAndEmitEnds(
+      id,
+      items.length,
+      winnerIndex,
+      winnerValue,
+      winnerTime,
+      branchStartTimes,
+      forkId,
+    );
 
     // Record the winner so a resume on the same race step replays only this
     // branch (not the abandoned losers).
@@ -951,7 +986,14 @@ export class Runner {
       existing.abortController = new AbortController();
       existing.stack.abortSignal = existing.abortController.signal;
     }
-    const value = await blockFn(items[winnerIndex], winnerIndex, existing.stack);
+    // Run the resumed winner inside its own branch-local span context
+    // so its spans nest under the (resumed) race span rather than
+    // mutating the outer stack directly.
+    const parentSpanStack = this.ctx.statelogClient.snapshotStack();
+    const value = await this.ctx.statelogClient.runInBranchContext(
+      parentSpanStack,
+      () => blockFn(items[winnerIndex], winnerIndex, existing.stack),
+    );
 
     if (hasInterrupts(value)) {
       this.frame.setInterruptOnBranch(

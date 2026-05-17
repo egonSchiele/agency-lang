@@ -71,7 +71,39 @@ export function buildForest(events: EventEnvelope[]): TreeNode[] {
     trace.summary = summarizeTrace(trace);
   }
 
+  // Pass 4: sort each node's children in chronological order. Spans
+  // sort by their aggregated firstTs (computed in pass 3); leaves by
+  // their own timestamp. Children with missing/invalid timestamps
+  // keep their original arrival position via a stable sort.
+  for (const trace of Object.values(traces)) {
+    sortChildrenByTime(trace);
+  }
+
   return Object.values(traces);
+}
+
+function sortChildrenByTime(node: TreeNode): void {
+  // Decorate with the original index so we can fall back to arrival
+  // order whenever timestamps tie or are missing (stable sort).
+  const decorated = node.children.map((child, idx) => ({
+    child,
+    ts: nodeSortTs(child),
+    idx,
+  }));
+  decorated.sort((a, b) => {
+    if (a.ts !== b.ts) return a.ts - b.ts;
+    return a.idx - b.idx;
+  });
+  node.children = decorated.map((d) => d.child);
+  for (const child of node.children) sortChildrenByTime(child);
+}
+
+function nodeSortTs(node: TreeNode): number {
+  if (node.event) {
+    const t = Date.parse(node.event.data.timestamp);
+    return Number.isFinite(t) ? t : Number.POSITIVE_INFINITY;
+  }
+  return node.firstTs ?? Number.POSITIVE_INFINITY;
 }
 
 function ensureTrace(

@@ -124,6 +124,58 @@ describe("buildForest", () => {
     expect(events[1].event!.data.message).toBe("second");
   });
 
+  it("sorts children chronologically by timestamp (events and spans interleaved)", () => {
+    // Under agentRun span s1, the chronology is:
+    //   t=0   agentStart leaf
+    //   t=1s  nodeExecution span s2 (introduced by enterNode)
+    //   t=3s  agentEnd leaf
+    // The previous implementation always listed s2 before its leaf
+    // siblings; chronological order should put agentStart, then s2,
+    // then agentEnd.
+    const forest = buildForest([
+      evt({
+        span_id: "s1",
+        parent_span_id: null,
+        data: {
+          type: "agentStart",
+          timestamp: "2026-05-16T00:00:00.000Z",
+        },
+      }),
+      evt({
+        span_id: "s2",
+        parent_span_id: "s1",
+        data: {
+          type: "enterNode",
+          timestamp: "2026-05-16T00:00:01.000Z",
+          nodeId: "main",
+        },
+      }),
+      evt({
+        span_id: "s2",
+        parent_span_id: "s1",
+        data: {
+          type: "exitNode",
+          timestamp: "2026-05-16T00:00:02.000Z",
+        },
+      }),
+      evt({
+        span_id: "s1",
+        parent_span_id: null,
+        data: {
+          type: "agentEnd",
+          timestamp: "2026-05-16T00:00:03.000Z",
+        },
+      }),
+    ]);
+    const s1 = forest[0].children[0];
+    const kinds = s1.children.map((c) => `${c.nodeKind}:${c.label}`);
+    expect(kinds).toEqual([
+      "event:agentStart",
+      "span:nodeExecution",
+      "event:agentEnd",
+    ]);
+  });
+
   it("re-parents a child span when its parent appears later in the stream", () => {
     // Child span s2 is observed BEFORE its parent s1 has emitted any
     // event. The tree should still nest s2 under s1, not under the

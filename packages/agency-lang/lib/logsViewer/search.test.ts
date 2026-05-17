@@ -89,6 +89,77 @@ describe("expandAncestorsOf", () => {
   });
 });
 
+describe("findMatches — synthetic rows", () => {
+  // A promptCompletion leaf whose conversation rows include the word
+  // "Alice". `findMatches` must reach the synthetic convoLine and
+  // `expandAncestorsOf` must auto-expand the leaf so `n`/`N` lands
+  // on it.
+  function pcLeaf(): TreeNode {
+    return {
+      id: "evt-0",
+      traceId: "T",
+      parentId: "T",
+      children: [],
+      nodeKind: "event",
+      label: "promptCompletion",
+      summary: "promptCompletion",
+      event: {
+        format_version: 1,
+        trace_id: "T",
+        project_id: "p",
+        span_id: null,
+        parent_span_id: null,
+        data: {
+          type: "promptCompletion",
+          timestamp: "2026-01-01T00:00:00Z",
+          messages: [{ role: "user", content: "Hello Alice" }],
+        },
+      },
+    };
+  }
+
+  it("matches text inside synthetic conversation rows", () => {
+    const leaf = pcLeaf();
+    const t = trace("T", [leaf]);
+    leaf.parentId = "T";
+    // "Alice" appears in the conversation row and again inside the
+    // raw-data JSON payload, so we expect both synthetic ids.
+    expect(findMatches([t], "Alice")).toContain("evt-0:convo:0");
+  });
+
+  it("expands the parent leaf when a convo row matches", () => {
+    const leaf = pcLeaf();
+    const t = trace("T", [leaf]);
+    leaf.parentId = "T";
+    const state: ViewerState = {
+      roots: [t],
+      expanded: new Set(),
+      cursorId: "T",
+      scrollTop: 0,
+      quit: false,
+    };
+    const next = expandAncestorsOf(state, ["evt-0:convo:0"]);
+    expect(next.expanded.has("evt-0")).toBe(true);
+    expect(next.expanded.has("T")).toBe(true);
+  });
+
+  it("expands both leaf and raw-data toggle for raw-JSON matches", () => {
+    const leaf = pcLeaf();
+    const t = trace("T", [leaf]);
+    leaf.parentId = "T";
+    const state: ViewerState = {
+      roots: [t],
+      expanded: new Set(),
+      cursorId: "T",
+      scrollTop: 0,
+      quit: false,
+    };
+    const next = expandAncestorsOf(state, ["evt-0:raw:json:5"]);
+    expect(next.expanded.has("evt-0")).toBe(true);
+    expect(next.expanded.has("evt-0:raw")).toBe(true);
+  });
+});
+
 describe("highlightMatches", () => {
   it("returns one segment when the query is empty", () => {
     expect(highlightMatches("foo bar", "")).toEqual([{ text: "foo bar" }]);

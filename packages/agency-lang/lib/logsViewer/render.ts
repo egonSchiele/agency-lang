@@ -38,12 +38,24 @@ export function flattenVisibleRows(state: ViewerState): VisibleRow[] {
 // promptCompletion events get a readable conversation view plus a
 // "raw data" toggle for the JSON; other events fall back to raw JSON
 // lines directly.
-function eventExpansionChildren(leaf: TreeNode): TreeNode[] {
+//
+// Exported so search.ts can walk these the same way the renderer does
+// — otherwise `/foo` would match a highlighted row but `n`/`N` would
+// claim there are no matches (the rows aren't in the persistent
+// forest).
+export function eventExpansionChildren(leaf: TreeNode): TreeNode[] {
   if (!leaf.event) return [];
   if (leaf.event.data.type === "promptCompletion") {
     return promptCompletionChildren(leaf);
   }
   return jsonLineChildren(leaf, leaf.event);
+}
+
+// Synthetic children of a "raw data" toggle row. Exported for the
+// same reason as eventExpansionChildren above.
+export function rawDataChildren(toggle: TreeNode): TreeNode[] {
+  if (!toggle.event) return [];
+  return jsonLineChildren(toggle, toggle.event);
 }
 
 function promptCompletionChildren(leaf: TreeNode): TreeNode[] {

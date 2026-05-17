@@ -1,20 +1,42 @@
 import { describe, it, expect } from "vitest";
-import { compileWarning, compiledOutputEnv } from "./commands.js";
-import { installDirFromUrl, nodeModulesParent } from "./installLocation.js";
+import * as fs from "fs";
+import { fileURLToPath } from "url";
+import {
+  compileWarning,
+  compiledOutputNodeArgs,
+  compiledOutputRegisterUrl,
+} from "./commands.js";
 
-describe("compiledOutputEnv", () => {
-  it("injects NODE_PATH pointing at the CLI's resolution root", () => {
-    const env = compiledOutputEnv({ existing: "x" } as NodeJS.ProcessEnv);
-    const expected = nodeModulesParent(installDirFromUrl(import.meta.url));
-    expect(env.NODE_PATH ?? "").toContain(expected);
-    expect(env.existing).toBe("x");
+describe("compiledOutputRegisterUrl", () => {
+  it("returns a file:// URL pointing at the shipped register.mjs", () => {
+    const url = compiledOutputRegisterUrl();
+    expect(url.startsWith("file://")).toBe(true);
+    // Under vitest the URL points at lib/cli/runShim (source); in the built
+    // tree it would point at dist/lib/cli/runShim. Either is correct.
+    expect(url.endsWith("/lib/cli/runShim/register.mjs")).toBe(true);
   });
-  it("appends to existing NODE_PATH rather than overwriting", () => {
-    const env = compiledOutputEnv({
-      NODE_PATH: "/some/path",
-    } as NodeJS.ProcessEnv);
-    expect(env.NODE_PATH?.startsWith("/some/path")).toBe(true);
-    expect(env.NODE_PATH?.length).toBeGreaterThan("/some/path".length);
+  it("points at a file that exists on disk", () => {
+    const url = compiledOutputRegisterUrl();
+    const filePath = fileURLToPath(url);
+    expect(fs.existsSync(filePath)).toBe(true);
+  });
+  it("points at a register.mjs sitting next to resolver.mjs", () => {
+    // The register shim is useless without the resolver next to it.
+    const registerUrl = compiledOutputRegisterUrl();
+    const resolverPath = fileURLToPath(registerUrl).replace(
+      /register\.mjs$/,
+      "resolver.mjs",
+    );
+    expect(fs.existsSync(resolverPath)).toBe(true);
+  });
+});
+
+describe("compiledOutputNodeArgs", () => {
+  it("includes a --import flag pointing at the register shim", () => {
+    const args = compiledOutputNodeArgs();
+    expect(args.length).toBe(1);
+    expect(args[0].startsWith("--import=file://")).toBe(true);
+    expect(args[0].endsWith("/lib/cli/runShim/register.mjs")).toBe(true);
   });
 });
 

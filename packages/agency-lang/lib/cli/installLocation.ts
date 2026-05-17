@@ -37,13 +37,3 @@ export function installDirFromUrl(metaUrl: string): string {
   const file = fileURLToPath(metaUrl);
   return path.resolve(path.dirname(file), "..", "..");
 }
-
-export function nodeModulesParent(installDir: string): string {
-  const parts = installDir.split(path.sep);
-  const idx = parts.lastIndexOf("node_modules");
-  if (idx !== -1) {
-    return parts.slice(0, idx + 1).join(path.sep);
-  }
-  // workspace dev: the package's own node_modules holds its transitive deps
-  return path.join(installDir, "node_modules");
-}

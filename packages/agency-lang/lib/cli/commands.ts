@@ -23,27 +23,34 @@ import {
   type ImportStrategy,
 } from "../importStrategy.js";
 import { parseAgency, replaceBlankLines } from "../parser.js";
+import { fileURLToPath, pathToFileURL } from "url";
 import {
   classifyInstall,
   installDirFromUrl,
   type InstallKind,
-  nodeModulesParent,
 } from "./installLocation.js";
 import { findRecursively, getImports } from "./util.js";
 
-// Build an env for the compiled-output child process that lets a globally
-// installed agency CLI's compiled code resolve `agency-lang`, `zod`, etc.
-// without an `npm install` in the user's working directory.
-export function compiledOutputEnv(
-  base: NodeJS.ProcessEnv,
-): NodeJS.ProcessEnv {
-  const cliRoot = nodeModulesParent(installDirFromUrl(import.meta.url));
-  const sep = process.platform === "win32" ? ";" : ":";
-  const existing = base.NODE_PATH;
-  return {
-    ...base,
-    NODE_PATH: existing ? `${existing}${sep}${cliRoot}` : cliRoot,
-  };
+// Returns the file:// URL of the ESM loader-register shim shipped with the
+// agency-lang package. Passing this to `node --import=<url>` causes Node to
+// fall back to agency-lang's own node_modules when resolving bare specifiers,
+// which lets `agency run` work even when agency-lang is installed globally.
+//
+// The shim lives at dist/lib/cli/runShim/register.mjs, right next to this
+// file's compiled output (dist/lib/cli/commands.js), so we resolve it
+// relative to this module's URL.
+export function compiledOutputRegisterUrl(): string {
+  const thisDir = path.dirname(fileURLToPath(import.meta.url));
+  return pathToFileURL(
+    path.join(thisDir, "runShim", "register.mjs"),
+  ).href;
+}
+
+// Build the argv prefix to use when spawning `node` on a compiled .agency
+// output file. Always includes the resolver register so transitive bare
+// imports (zod, smoltalk, etc.) resolve regardless of cwd or install kind.
+export function compiledOutputNodeArgs(): string[] {
+  return [`--import=${compiledOutputRegisterUrl()}`];
 }
 
 export function compileWarning(
@@ -330,19 +337,22 @@ export function run(
   console.log(`Running ${output}...`);
   console.log("---");
 
-  const env = compiledOutputEnv(
-    resumeFile
-      ? { ...process.env, AGENCY_RESUME_FILE: resumeFile }
-      : process.env,
-  );
+  const env = resumeFile
+    ? { ...process.env, AGENCY_RESUME_FILE: resumeFile }
+    : process.env;
 
   // Use process.execPath so the child runs under the same Node as the CLI,
-  // avoiding version mismatches when the user has multiple Nodes installed.
-  const nodeProcess = spawn(process.execPath, [output], {
-    stdio: "inherit",
-    shell: false,
-    env,
-  });
+  // and pass our resolver shim so the compiled output's `import "agency-lang"`
+  // succeeds even when the CLI is installed globally.
+  const nodeProcess = spawn(
+    process.execPath,
+    [...compiledOutputNodeArgs(), output],
+    {
+      stdio: "inherit",
+      shell: false,
+      env,
+    },
+  );
 
   nodeProcess.on("error", (error) => {
     console.error(`Failed to run ${output}:`, error);

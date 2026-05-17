@@ -1,9 +1,5 @@
 import { describe, it, expect } from "vitest";
-import {
-  classifyInstall,
-  installDirFromUrl,
-  nodeModulesParent,
-} from "./installLocation.js";
+import { classifyInstall, installDirFromUrl } from "./installLocation.js";
 
 describe("classifyInstall", () => {
   it("flags npm global paths on unix", () => {
@@ -50,18 +46,5 @@ describe("installDirFromUrl", () => {
   it("walks up two dirs from dist/scripts/agency.js", () => {
     const url = "file:///opt/x/agency-lang/dist/scripts/agency.js";
     expect(installDirFromUrl(url)).toBe("/opt/x/agency-lang");
-  });
-});
-
-describe("nodeModulesParent", () => {
-  it("returns the parent of agency-lang when inside node_modules", () => {
-    expect(nodeModulesParent("/usr/lib/node_modules/agency-lang")).toBe(
-      "/usr/lib/node_modules",
-    );
-  });
-  it("falls back to the install dir's own node_modules for workspace dev", () => {
-    expect(nodeModulesParent("/repo/packages/agency-lang")).toBe(
-      "/repo/packages/agency-lang/node_modules",
-    );
   });
 });

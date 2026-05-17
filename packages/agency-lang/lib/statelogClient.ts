@@ -5,6 +5,10 @@ import { nanoid } from "nanoid";
 import { ModelName } from "smoltalk";
 import { JSONEdge } from "./types.js";
 
+// Bump this when the wire format changes in a way the viewer needs
+// to notice. The viewer rejects files with a higher version.
+export const STATELOG_FORMAT_VERSION = 1;
+
 // === Span model ===
 
 export type SpanType =
@@ -714,6 +718,7 @@ export class StatelogClient {
 
     const span = this.currentSpan;
     const postBody = JSON.stringify({
+      format_version: STATELOG_FORMAT_VERSION,
       trace_id: this.traceId,
       project_id: this.projectId,
       span_id: span?.spanId ?? null,

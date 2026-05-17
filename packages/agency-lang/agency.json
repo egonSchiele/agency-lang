@@ -1,15 +1,19 @@
 {
   "verbose": false,
+  "observability": true,
   "log": {
     "projectId": "agency-lang",
-    "debugMode": false
+    "debugMode": false,
+    "logFile": "statelog.log"
   },
   "client": {
     "logLevel": "warn",
     "defaultModel": "gpt-4o-mini"
   },
   "traceDir": "traces",
-  "typechecker": { "enabled": true },
+  "typechecker": {
+    "enabled": true
+  },
   "doc": {
     "outDir": "docs/site/stdlib",
     "baseUrl": "https://github.com/egonSchiele/agency-lang/tree/main/stdlib"

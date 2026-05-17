@@ -82,4 +82,25 @@ describe("handleKey", () => {
     const next = handleKey(initial("trace-t"), "G");
     expect(next.cursorId).toBe("b");
   });
+
+  it("l on an already-expanded node descends to its first child", () => {
+    // trace-t is expanded by default; pressing l on it should move
+    // cursor to 'a' (its first child).
+    const next = handleKey(initial("trace-t"), "l");
+    expect(next.cursorId).toBe("a");
+    expect(next.expanded.has("trace-t")).toBe(true);
+  });
+
+  it("returns state unchanged on any key when there are no visible rows", () => {
+    const empty: ViewerState = {
+      roots: [],
+      expanded: new Set(),
+      cursorId: "",
+      scrollTop: 0,
+      quit: false,
+    };
+    expect(handleKey(empty, "j")).toBe(empty);
+    expect(handleKey(empty, "g")).toBe(empty);
+    expect(handleKey(empty, "G")).toBe(empty);
+  });
 });

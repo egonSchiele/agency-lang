@@ -21,6 +21,7 @@ export type Key =
 
 export function handleKey(state: ViewerState, key: Key): ViewerState {
   const rows = flattenVisibleRows(state);
+  if (rows.length === 0) return state;
   const idx = rows.findIndex((r) => r.node.id === state.cursorId);
   switch (key) {
     case "j":
@@ -67,6 +68,10 @@ function expand(
   if (idx < 0) return state;
   const node = rows[idx].node;
   if (node.children.length === 0) return state;
+  // If the node is already expanded, descend into its first child.
+  if (state.expanded.has(node.id)) {
+    return { ...state, cursorId: node.children[0].id };
+  }
   const next = new Set(state.expanded);
   next.add(node.id);
   return { ...state, expanded: next };

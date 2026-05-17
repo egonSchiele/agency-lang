@@ -5,7 +5,7 @@ Agency is a language for building agents that compiles to TypeScript.
 ## Installation
 
 ```bash
-npm install agency-lang zod
+npm install agency-lang
 ```
 
 ## Quick Start

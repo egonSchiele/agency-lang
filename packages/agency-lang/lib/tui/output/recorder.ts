@@ -40,6 +40,14 @@ export class FrameRecorder implements OutputTarget {
     this.frames = [];
   }
 
+  textAt(i: number): string {
+    return this.frames[i].frame.toPlainText();
+  }
+
+  lastText(): string {
+    return this.textAt(this.frames.length - 1);
+  }
+
   toHTML(): string {
     const frameHtmls = this.frames.map((entry, i) => {
       const label = entry.label ?? `Frame ${i + 1}`;

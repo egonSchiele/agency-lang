@@ -1,6 +1,9 @@
 import { describe, it, expect } from "vitest";
 import { FrameRecorder } from "../output/recorder.js";
 import { Frame } from "../frame.js";
+import { layout } from "../layout.js";
+import { render } from "../render/renderer.js";
+import { line } from "../builders.js";
 
 describe("FrameRecorder", () => {
   it("records frames with labels", () => {
@@ -27,5 +30,13 @@ describe("FrameRecorder", () => {
     expect(html).toContain("step 1");
     expect(html).toContain("step 2");
     expect(html).toContain("<pre");
+  });
+
+  it("textAt() and lastText() expose recorded frames as plain text", () => {
+    const recorder = new FrameRecorder();
+    recorder.write(render(layout(line("first"), 10, 1)));
+    recorder.write(render(layout(line("second"), 10, 1)));
+    expect(recorder.textAt(0).trim()).toBe("first");
+    expect(recorder.lastText().trim()).toBe("second");
   });
 });

@@ -14,6 +14,7 @@ import {
   classifyInstall,
   installDirFromUrl,
 } from "@/cli/installLocation.js";
+import { pack } from "@/cli/pack.js";
 import { evaluate } from "@/cli/evaluate.js";
 import { fixtures, test, testTs, SlowTest } from "@/cli/test.js";
 import { generateReport, cleanCoverage } from "@/cli/coverage.js";
@@ -173,6 +174,33 @@ export function createProgram(deps: CliDependencies = {}): Command {
   ).action((input: string, options: RunOptions) => {
     runWithOptions(input, options);
   });
+
+  program
+    .command("pack")
+    .description(
+      "Bundle a .agency program into a single portable .js (no agency install needed at runtime)",
+    )
+    .argument("<input>", "Path to .agency input file")
+    .option("-o, --output <file>", "Output file path", "agent.js")
+    .option("--target <target>", "Output target (currently only 'node')", "node")
+    .action(
+      async (input: string, opts: { output: string; target: string }) => {
+        if (opts.target !== "node") {
+          console.error(
+            `Unsupported pack target: ${opts.target} (supported: node)`,
+          );
+          process.exit(1);
+        }
+        const config = getConfig();
+        await pack({
+          config,
+          inputFile: input,
+          outputFile: opts.output,
+          target: "node",
+        });
+        console.log(`Packed ${input} -> ${opts.output}`);
+      },
+    );
 
   const traceCmd = program
     .command("trace")

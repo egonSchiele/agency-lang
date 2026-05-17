@@ -28,11 +28,12 @@
     {
       "nodeName": "nodeImport",
       "input": "",
+      "retry": 3,
       "expectedOutput": "\"Hello, Alice! Hope you're having a great day!\"",
       "evaluationCriteria": [
         {
           "type": "llmJudge",
-          "judgePrompt": "Should be a string greeting a person named Alice",
+          "judgePrompt": "Should be a string greeting a person named Alice, maybe additionally hoping she is having a great day... either way, as long as the string greets alice, give a perfect score.",
           "desiredAccuracy": 80
         }
       ]

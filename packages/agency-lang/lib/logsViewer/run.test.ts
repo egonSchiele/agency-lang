@@ -98,7 +98,7 @@ describe("runViewer", () => {
     // After collapsing, the trace + s1 should still be visible — the
     // frame must not be empty.
     expect(last.length).toBeGreaterThan(0);
-    expect(last).toMatch(/trace abc/);
+    expect(last).toMatch(/\[abc\]/);
   });
 
   it("shows parse errors as a footer line", async () => {

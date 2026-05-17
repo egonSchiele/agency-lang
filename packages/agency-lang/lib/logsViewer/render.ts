@@ -54,3 +54,43 @@ function chooseGlyph(node: TreeNode, isExpanded: boolean): string {
   if (node.nodeKind === "event" || node.children.length === 0) return "●";
   return isExpanded ? "▼" : "▶";
 }
+
+// Per-row foreground color, keyed by span type for spans and event
+// type for leaves. Returns undefined to mean "use the default
+// terminal fg" — used for trace headers (which we'd rather see in
+// the default color so the bold/inverse cursor style stays readable).
+export function colorFor(node: TreeNode): string | undefined {
+  if (node.nodeKind === "trace") return undefined;
+  if (node.nodeKind === "span") {
+    switch (node.label) {
+      case "agentRun":
+        return "bright-cyan";
+      case "nodeExecution":
+        return "bright-green";
+      case "llmCall":
+        return "bright-magenta";
+      case "toolExecution":
+        return "yellow";
+      case "forkAll":
+      case "race":
+        return "magenta";
+      case "handlerChain":
+        return "bright-yellow";
+      default:
+        return undefined;
+    }
+  }
+  // Leaf events: highlight the noisy ones, leave the rest default.
+  switch (node.label) {
+    case "error":
+      return "bright-red";
+    case "interruptThrown":
+    case "interruptResolved":
+      return "yellow";
+    case "agentStart":
+    case "agentEnd":
+      return "cyan";
+    default:
+      return undefined;
+  }
+}

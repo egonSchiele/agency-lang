@@ -1,10 +1,15 @@
 import { Screen } from "../tui/screen.js";
-import { column, text } from "../tui/builders.js";
+import { column } from "../tui/builders.js";
+import type { Element } from "../tui/elements.js";
 import type { InputSource, KeyEvent } from "../tui/input/types.js";
 import type { OutputTarget } from "../tui/output/types.js";
 import { parseStatelogJsonl } from "./parse.js";
 import { buildForest } from "./tree.js";
-import { renderViewerLines, flattenVisibleRows } from "./render.js";
+import {
+  renderViewerLines,
+  flattenVisibleRows,
+  colorFor,
+} from "./render.js";
 import { handleKey } from "./input.js";
 import { ViewerState } from "./types.js";
 
@@ -27,7 +32,12 @@ export async function runViewer(opts: RunViewerOpts): Promise<void> {
   });
 
   if (roots.length === 0) {
-    screen.render(column({}, text("No events found.")));
+    screen.render(
+      column(
+        { justifyContent: "flex-start" },
+        row("No events found."),
+      ),
+    );
     await opts.input.nextKey();
     return;
   }
@@ -44,15 +54,26 @@ export async function runViewer(opts: RunViewerOpts): Promise<void> {
   const draw = () => {
     state = clampScrollTop(state, opts.viewport);
     state = ensureCursorVisible(state, opts.viewport);
+    const visible = flattenVisibleRows(state).slice(
+      state.scrollTop,
+      state.scrollTop + opts.viewport.rows,
+    );
     const lines = renderViewerLines(state, opts.viewport);
+    const elements: Element[] = visible.map((vrow, i) =>
+      row(lines[i], colorFor(vrow.node)),
+    );
     if (parsed.errors.length > 0) {
-      lines.push("");
-      lines.push(
-        `${parsed.errors.length} parse error(s) — first: line ${parsed.errors[0].line}`,
+      elements.push(row(""));
+      elements.push(
+        row(
+          `${parsed.errors.length} parse error(s) — first: line ${parsed.errors[0].line}`,
+          "bright-red",
+        ),
       );
     }
-    const elements = lines.map((line) => text(line));
-    screen.render(column({}, ...elements));
+    screen.render(
+      column({ justifyContent: "flex-start" }, ...elements),
+    );
   };
 
   draw();
@@ -62,6 +83,17 @@ export async function runViewer(opts: RunViewerOpts): Promise<void> {
     state = handleKey(state, key);
     draw();
   }
+}
+
+// One single-line row. height: 1 stops the default flex: 1 from
+// stretching each line to fill the viewport (which is what made the
+// viewer look triple-spaced in v1).
+function row(content: string, fg?: string): Element {
+  return {
+    type: "text",
+    content,
+    style: fg ? { height: 1, fg } : { height: 1 },
+  };
 }
 
 function clampScrollTop(

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { renderViewerLines, flattenVisibleRows } from "./render.js";
+import { renderViewerLines, flattenVisibleRows, colorFor } from "./render.js";
 import { TreeNode, ViewerState } from "./types.js";
 
 function span(id: string, label: string, children: TreeNode[] = []): TreeNode {
@@ -130,5 +130,30 @@ describe("renderViewerLines", () => {
     };
     const lines = renderViewerLines(state, { rows: 3, cols: 80 });
     expect(lines).toHaveLength(3);
+  });
+});
+
+describe("colorFor", () => {
+  it("returns a span-type color for known span labels", () => {
+    expect(colorFor(span("a", "agentRun"))).toBe("bright-cyan");
+    expect(colorFor(span("b", "nodeExecution"))).toBe("bright-green");
+    expect(colorFor(span("c", "llmCall"))).toBe("bright-magenta");
+    expect(colorFor(span("d", "toolExecution"))).toBe("yellow");
+  });
+
+  it("returns undefined for trace headers (use terminal default)", () => {
+    expect(colorFor(trace([]))).toBeUndefined();
+  });
+
+  it("highlights error leaves in bright-red", () => {
+    const leaf: TreeNode = {
+      id: "evt-0", traceId: "t", parentId: null, children: [],
+      nodeKind: "event", label: "error", summary: "",
+    };
+    expect(colorFor(leaf)).toBe("bright-red");
+  });
+
+  it("returns undefined for unrecognized labels", () => {
+    expect(colorFor(span("x", "weird"))).toBeUndefined();
   });
 });

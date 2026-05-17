@@ -35,6 +35,9 @@ export type TreeNode = {
   duration?: number;
   tokens?: number;
   cost?: number;
+  // Earliest event timestamp (ms since epoch) under this node, used
+  // by the trace-header summary to show when the run started.
+  firstTs?: number;
   // The raw event for leaf nodes. Spans don't carry one (multiple
   // events share a span).
   event?: EventEnvelope;

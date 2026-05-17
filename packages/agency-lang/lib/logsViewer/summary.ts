@@ -48,8 +48,21 @@ export function summarizeSpan(node: TreeNode): string {
 export function summarizeTrace(node: TreeNode): string {
   const shortTraceId = node.traceId.slice(0, 6);
   const metrics = formatMetrics(node);
-  const tail = metrics ? ` (${metrics})` : "";
-  return `trace ${shortTraceId}${tail}`;
+  const head = node.firstTs !== undefined ? fmtTime(node.firstTs) : "trace";
+  const middle = metrics ? `  (${metrics})` : "";
+  return `${head}${middle}  [${shortTraceId}]`;
+}
+
+// Local time, second-precision, no timezone suffix. Format chosen for
+// at-a-glance readability over machine parsing — the full ISO timestamp
+// lives in the raw envelope if anyone needs it.
+function fmtTime(ms: number): string {
+  const d = new Date(ms);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return (
+    `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ` +
+    `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
+  );
 }
 
 function formatMetrics(node: TreeNode): string {

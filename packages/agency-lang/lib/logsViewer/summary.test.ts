@@ -87,7 +87,7 @@ describe("summarizeSpan", () => {
 });
 
 describe("summarizeTrace", () => {
-  it("trace summary trims id and shows aggregate metrics", () => {
+  it("leads with local timestamp when firstTs is set, ends with short id", () => {
     const node: TreeNode = {
       id: "trace-abc123def456",
       traceId: "abc123def456",
@@ -99,11 +99,28 @@ describe("summarizeTrace", () => {
       duration: 4200,
       tokens: 2300,
       cost: 0.01,
+      firstTs: Date.parse("2026-05-16T17:42:31Z"),
     };
     const s = summarizeTrace(node);
-    expect(s).toMatch(/trace abc123/);
+    // Should match a local timestamp like 2026-05-16 HH:MM:SS — we
+    // don't pin the HH because the test runs in any timezone.
+    expect(s).toMatch(/2026-05-16 \d{2}:\d{2}:\d{2}/);
     expect(s).toMatch(/4\.2s/);
     expect(s).toMatch(/2300\s*tok/);
     expect(s).toMatch(/\$0\.010/);
+    expect(s).toMatch(/\[abc123\]$/);
+  });
+
+  it("falls back to literal 'trace' header when firstTs is missing", () => {
+    const node: TreeNode = {
+      id: "trace-abc123",
+      traceId: "abc123",
+      parentId: null,
+      children: [],
+      nodeKind: "trace",
+      label: "abc123",
+      summary: "",
+    };
+    expect(summarizeTrace(node)).toBe("trace  [abc123]");
   });
 });

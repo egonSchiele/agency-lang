@@ -172,6 +172,9 @@ function aggregateMetrics(node: TreeNode): void {
 
   if (tokens > 0) node.tokens = tokens;
   if (cost > 0) node.cost = cost;
+  if (timestamps.length >= 1) {
+    node.firstTs = Math.min(...timestamps);
+  }
   if (timestamps.length >= 2) {
     node.duration = Math.max(...timestamps) - Math.min(...timestamps);
   }

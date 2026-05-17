@@ -14,6 +14,7 @@ import { fixtures, test, testTs, SlowTest } from "@/cli/test.js";
 import { generateReport, cleanCoverage } from "@/cli/coverage.js";
 import { createBundle, extractBundle } from "@/cli/bundle.js";
 import { traceLog } from "@/cli/events.js";
+import { logsView } from "@/cli/logsView.js";
 import { AgencyConfig } from "@/config.js";
 import * as path from "path";
 import { _parseAgency } from "@/parser.js";
@@ -181,6 +182,18 @@ export function createProgram(deps: CliDependencies = {}): Command {
     .option("-o, --output <file>", "Output JSON file path (default: stdout)")
     .action((file: string, options: { output?: string }) => {
       traceLog(file, options.output);
+    });
+
+  const logsCmd = program
+    .command("logs")
+    .description("Inspect StateLog output");
+
+  logsCmd
+    .command("view")
+    .description("Open an interactive TUI viewer for a statelog JSONL file")
+    .argument("<file>", "Path to a .statelog.jsonl file, or '-' for stdin")
+    .action(async (file: string) => {
+      await logsView(file);
     });
 
   program

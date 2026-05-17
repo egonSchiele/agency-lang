@@ -12,6 +12,7 @@ export { toANSI } from "./render/ansi.js";
 export * from "./input/types.js";
 export { ScriptedInput } from "./input/scripted.js";
 export { TerminalInput } from "./input/terminal.js";
+export { formatKey, keyMatches } from "./input/format.js";
 export * from "./output/types.js";
 export { TerminalOutput } from "./output/terminal.js";
 export { FrameRecorder } from "./output/recorder.js";

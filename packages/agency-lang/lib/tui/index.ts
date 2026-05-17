@@ -17,3 +17,4 @@ export * from "./output/types.js";
 export { TerminalOutput } from "./output/terminal.js";
 export { FrameRecorder } from "./output/recorder.js";
 export { Screen } from "./screen.js";
+export * from "./scroll.js";

@@ -37,6 +37,23 @@ export class Screen {
     return { width: this.width, height: this.height };
   }
 
+  async runLoop<S>(opts: {
+    initialState: S;
+    render: (state: S) => Element;
+    handleKey: (state: S, event: KeyEvent) => S;
+    isDone: (state: S) => boolean;
+    label?: string;
+  }): Promise<S> {
+    let state = opts.initialState;
+    this.render(opts.render(state), opts.label);
+    while (!opts.isDone(state)) {
+      const event = await this.nextKey();
+      state = opts.handleKey(state, event);
+      this.render(opts.render(state), opts.label);
+    }
+    return state;
+  }
+
   destroy(): void {
     this.input.destroy();
     if (this.output.destroy) this.output.destroy();

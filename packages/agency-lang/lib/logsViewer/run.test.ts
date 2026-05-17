@@ -90,22 +90,31 @@ describe("runViewer", () => {
     expect(last).toMatch(/\[abc\]/);
   });
 
-  it("Enter on a leaf opens the JSON pane with the payload", async () => {
+  it("Enter on a leaf inlines its JSON payload below the leaf", async () => {
     const out = new FrameRecorder();
     await runViewer({
       jsonl: sample,
       // Navigate: l (expand trace) l (expand agentRun span) j (move
-      // to first child leaf, agentStart) Enter (open pane) q (quit).
+      // to first child leaf, agentStart) Enter (inline its JSON) q.
       input: new ScriptedInput(["l", "l", "j", "Enter", "q"]),
       output: out,
       viewport: { rows: 20, cols: 80 },
     });
     const last = out.lastText();
-    // The pane should show the agentStart event payload (the
-    // EventEnvelope shape includes trace_id and "data" at the top
-    // level). Header `▼ {` indicates the pane is open and expanded.
+    // The inlined JSON includes the full EventEnvelope shape: keys
+    // like `"data":` and the event type literal `agentStart`.
     expect(last).toMatch(/"data":/);
     expect(last).toMatch(/agentStart/);
+    // h collapses the inline JSON back. Smoke check: re-run with an
+    // extra `h` and ensure `"data":` is gone from the final frame.
+    const out2 = new FrameRecorder();
+    await runViewer({
+      jsonl: sample,
+      input: new ScriptedInput(["l", "l", "j", "Enter", "h", "q"]),
+      output: out2,
+      viewport: { rows: 20, cols: 80 },
+    });
+    expect(out2.lastText()).not.toMatch(/"data":/);
   });
 
   it("/ then a query jumps the cursor to the first match", async () => {

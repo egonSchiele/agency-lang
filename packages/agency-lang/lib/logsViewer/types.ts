@@ -24,7 +24,10 @@ export type TreeNode = {
   traceId: string;
   parentId: string | null;
   children: TreeNode[];
-  nodeKind: "trace" | "span" | "event";
+  // "jsonLine" is a synthetic, on-the-fly row generated when a leaf
+  // event is expanded — it carries one rendered line of the leaf's
+  // JSON payload. Not part of the persistent forest.
+  nodeKind: "trace" | "span" | "event" | "jsonLine";
   // For "trace": the trace_id; for "span": the span type (agentRun,
   // llmCall, ...); for "event": the data.type.
   label: string;
@@ -61,13 +64,6 @@ export type ViewerState = {
   matches?: string[];
   // Index into `matches` for the current "n/N" position.
   matchIdx?: number;
-  // Bottom JSON payload pane: visible? Owned by run.ts.
-  jsonPaneOpen?: boolean;
-  // Which pane has keyboard focus.
-  pane?: "tree" | "json";
-  // Inner JSON-pane state — built lazily for the currently-focused
-  // tree node when the pane is open. Run loop owns rebuilds.
-  jsonPane?: JsonPaneStateRef;
   // Help-screen overlay shown?
   helpOpen?: boolean;
   // Follow mode (`--follow` / `f`) — viewer re-reads the file when it grows.
@@ -75,12 +71,4 @@ export type ViewerState = {
   // One-line status message (`copied 312 bytes`, etc.); auto-clears
   // on the next keystroke. Owned by the input layer.
   messageBar?: string;
-};
-
-// Re-export so consumers don't need a second import.
-import type { JsonPaneState } from "./jsonView/input.js";
-export type JsonPaneStateRef = JsonPaneState & {
-  // Tree-node id this pane content was built from. Lets the run loop
-  // detect when the focused tree node changed and rebuild.
-  builtFor: string;
 };

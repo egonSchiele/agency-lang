@@ -20,10 +20,9 @@ export const HELP_GROUPS: BindingGroup[] = [
   {
     heading: "Expand",
     bindings: [
-      { keys: "l / Right / Enter", action: "expand or open payload pane" },
+      { keys: "l / Right / Enter", action: "expand — leaves inline their JSON payload" },
       { keys: "h / Left", action: "collapse or go to parent" },
       { keys: "e / E", action: "expand-all / collapse-all" },
-      { keys: "p", action: "toggle payload pane" },
     ],
   },
   {

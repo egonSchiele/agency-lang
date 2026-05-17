@@ -6,7 +6,10 @@ import { JsonNode, LONG_STRING_THRESHOLD } from "./types.js";
 // renderer as the key into the "open" set, so it must stay stable
 // across rebuilds.
 export function buildJsonTree(value: unknown, path = "$"): JsonNode {
-  if (value === null) {
+  // `undefined` is not valid JSON but turns up routinely in real
+  // payloads (optional fields, dropped keys, etc.). Treat it as null
+  // so the renderer doesn't crash on `Object.entries(undefined)`.
+  if (value === null || value === undefined) {
     return { kind: "primitive", path, valueType: "null", raw: "null" };
   }
   if (typeof value === "string") {

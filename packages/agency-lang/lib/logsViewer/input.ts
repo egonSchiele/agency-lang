@@ -28,32 +28,12 @@ export function handleKeyEx(
   // Any keystroke clears a transient status message.
   const cleared = state.messageBar ? { ...state, messageBar: undefined } : state;
   const fmt = formatKey(event);
-  // Enter on a leaf opens the JSON pane and grabs focus, instead of
-  // the no-op the default reducer would do (leaves can't expand).
-  if (fmt === "Enter" || fmt === "l" || fmt === "Right") {
-    const cursor = findCursorNode(cleared);
-    if (cursor && cursor.nodeKind === "event") {
-      return {
-        state: { ...cleared, jsonPaneOpen: true, pane: "json" },
-      };
-    }
-  }
   const next = handleKey(cleared, event);
   // Promote special keys into commands the run loop has to action.
   if (fmt === "/") return { state: next, command: { kind: "search" } };
   if (fmt === "y") return { state: next, command: { kind: "copy" } };
   if (fmt === "f") return { state: next, command: { kind: "toggleFollow" } };
   return { state: next };
-}
-
-function findCursorNode(state: ViewerState): TreeNode | undefined {
-  const stack: TreeNode[] = [...state.roots];
-  while (stack.length > 0) {
-    const n = stack.pop()!;
-    if (n.id === state.cursorId) return n;
-    for (const c of n.children) stack.push(c);
-  }
-  return undefined;
 }
 
 export function handleKey(state: ViewerState, event: KeyEvent): ViewerState {
@@ -95,8 +75,6 @@ export function handleKey(state: ViewerState, event: KeyEvent): ViewerState {
       return jumpMatch(state, +1);
     case "N":
       return jumpMatch(state, -1);
-    case "p":
-      return { ...state, jsonPaneOpen: !state.jsonPaneOpen };
     case "Escape":
       return clearSearch(state);
     case "?":
@@ -192,10 +170,19 @@ function expand(
 ): ViewerState {
   if (idx < 0) return state;
   const node = rows[idx].node;
-  if (node.children.length === 0) return state;
-  // If the node is already expanded, descend into its first child.
+  // jsonLine rows aren't expandable and have no children to descend
+  // into; leave them alone.
+  if (node.nodeKind === "jsonLine") return state;
+  const isLeafWithPayload = node.nodeKind === "event" && !!node.event;
+  if (node.children.length === 0 && !isLeafWithPayload) return state;
+  // If the node is already expanded, descend into its first child
+  // (only for true tree nodes — leaves' "children" are synthetic
+  // jsonLine rows that aren't worth landing the cursor on first).
   if (state.expanded.has(node.id)) {
-    return { ...state, cursorId: node.children[0].id };
+    if (node.children.length > 0) {
+      return { ...state, cursorId: node.children[0].id };
+    }
+    return state;
   }
   const next = new Set(state.expanded);
   next.add(node.id);

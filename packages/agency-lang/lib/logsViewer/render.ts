@@ -10,11 +10,37 @@ export function flattenVisibleRows(state: ViewerState): VisibleRow[] {
   const walk = (node: TreeNode, depth: number): void => {
     out.push({ node, depth });
     if (state.expanded.has(node.id)) {
-      for (const c of node.children) walk(c, depth + 1);
+      // Leaf event nodes can be "expanded" to inline their JSON
+      // payload as synthetic jsonLine rows. Real children only ever
+      // exist for non-leaf nodes.
+      if (node.nodeKind === "event" && node.event) {
+        for (const child of jsonLineChildren(node)) walk(child, depth + 1);
+      } else {
+        for (const c of node.children) walk(c, depth + 1);
+      }
     }
   };
   for (const r of state.roots) walk(r, 0);
   return out;
+}
+
+// Pretty-print the leaf event payload and turn it into one synthetic
+// TreeNode per line, so the visible-rows pipeline can fold them into
+// the same scroll/cursor model used for real tree rows. Heavy work is
+// kept here so callers don't have to know the format.
+function jsonLineChildren(leaf: TreeNode): TreeNode[] {
+  if (!leaf.event) return [];
+  const text = JSON.stringify(leaf.event, null, 2);
+  const lines = text.split("\n");
+  return lines.map((line, i) => ({
+    id: `${leaf.id}:json:${i}`,
+    traceId: leaf.traceId,
+    parentId: leaf.id,
+    children: [],
+    nodeKind: "jsonLine" as const,
+    label: "",
+    summary: line,
+  }));
 }
 
 export function renderViewerLines(
@@ -39,8 +65,16 @@ export function renderRowText(
   opts: { query?: string; thresholds?: ViewerThresholds } = {},
 ): string {
   const indent = "  ".repeat(row.depth);
-  const glyph = chooseGlyph(row.node, isExpanded);
   const marker = isCursor ? "> " : "  ";
+  if (row.node.nodeKind === "jsonLine") {
+    // No glyph; the raw JSON line is the summary text. Highlight
+    // matches per the active search.
+    const text = opts.query
+      ? highlightInline(row.node.summary, opts.query)
+      : row.node.summary;
+    return `${marker}${indent}${text}`;
+  }
+  const glyph = chooseGlyph(row.node, isExpanded);
   // Spans and traces get the magnitude-colored summary so durations
   // and costs render in red/gray per the configured thresholds; raw
   // event leaves use the plain pre-computed summary (no metrics).
@@ -109,7 +143,13 @@ function splitOnTags(text: string): Part[] {
 }
 
 function chooseGlyph(node: TreeNode, isExpanded: boolean): string {
-  if (node.nodeKind === "event" || node.children.length === 0) return "●";
+  if (node.nodeKind === "jsonLine") return "";
+  if (node.nodeKind === "event") {
+    // Event leaves with a payload are expandable (inline JSON).
+    if (node.event) return isExpanded ? "▼" : "▶";
+    return "●";
+  }
+  if (node.children.length === 0) return "●";
   return isExpanded ? "▼" : "▶";
 }
 
@@ -118,6 +158,7 @@ function chooseGlyph(node: TreeNode, isExpanded: boolean): string {
 // terminal fg" — used for trace headers (which we'd rather see in
 // the default color so the bold/inverse cursor style stays readable).
 export function colorFor(node: TreeNode): string | undefined {
+  if (node.nodeKind === "jsonLine") return "gray";
   if (node.nodeKind === "trace") return undefined;
   if (node.nodeKind === "span") {
     switch (node.label) {

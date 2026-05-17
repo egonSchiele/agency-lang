@@ -75,6 +75,17 @@ describe("buildJsonTree", () => {
     expect(node.entries[0].child.path).toBe("$.a");
   });
 
+  it("treats undefined values as null instead of crashing", () => {
+    // Real payloads sometimes carry `undefined` for missing fields;
+    // we must not blow up on `Object.entries(undefined)` deeper in.
+    const node = buildJsonTree({ a: undefined, b: { c: undefined } });
+    if (node.kind !== "object") throw new Error("expected object");
+    const a = node.entries[0].child;
+    if (a.kind !== "primitive") throw new Error("expected primitive");
+    expect(a.valueType).toBe("null");
+    expect(a.raw).toBe("null");
+  });
+
   it("formats numbers like JSON would (no exponential)", () => {
     const node = buildJsonTree(0.000234);
     if (node.kind !== "primitive") throw new Error("not primitive");

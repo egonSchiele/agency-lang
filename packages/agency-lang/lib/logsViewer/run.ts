@@ -14,10 +14,7 @@ import {
   VisibleRow,
 } from "./render.js";
 import { handleKeyEx } from "./input.js";
-import { handlePaneKey, flattenJsonRows } from "./jsonView/input.js";
-import { buildJsonTree } from "./jsonView/build.js";
-import { defaultOpenSet, renderJson } from "./jsonView/render.js";
-import { ViewerState, TreeNode, JsonPaneStateRef } from "./types.js";
+import { ViewerState, TreeNode } from "./types.js";
 import { findMatches, expandAncestorsOf } from "./search.js";
 import { detectClipboard } from "./clipboard.js";
 import { follow, Follower } from "./follow.js";
@@ -61,7 +58,6 @@ export async function runViewer(opts: RunViewerOpts): Promise<void> {
       cursorId: roots[0].id,
       scrollTop: 0,
       quit: false,
-      pane: "tree",
     },
     opts.viewport,
   );
@@ -96,7 +92,7 @@ export async function runViewer(opts: RunViewerOpts): Promise<void> {
   try {
     while (!state.quit) {
       const event = await screen.nextKey();
-      // Global quit, regardless of which pane has focus.
+      // Global quit, regardless of any overlay.
       if (
         event.key === "q" ||
         (event.ctrl && (event.key === "c" || event.key === "C"))
@@ -104,100 +100,22 @@ export async function runViewer(opts: RunViewerOpts): Promise<void> {
         state = { ...state, quit: true };
         break;
       }
-      // JSON pane has focus: route keys there.
-      if (state.pane === "json" && state.jsonPane) {
-        const builtFor = state.jsonPane.builtFor;
-        const nextJson = handlePaneKey(state.jsonPane, event);
-        if (nextJson.releaseFocus) {
-          state = {
-            ...state,
-            pane: "tree",
-            jsonPane: { ...nextJson, releaseFocus: false, builtFor },
-          };
-        } else {
-          state = { ...state, jsonPane: { ...nextJson, builtFor } };
-        }
-      } else {
-        const { state: next, command } = handleKeyEx(state, event);
-        state = applyScroll(next, opts.viewport);
-        if (command?.kind === "search") {
-          const query = await screen.nextLine("Search: ");
-          state = applySearch(state, query, opts.viewport);
-        } else if (command?.kind === "copy") {
-          state = runCopy(state);
-        } else if (command?.kind === "toggleFollow") {
-          state = runToggleFollow(state, opts.followPath, startFollow, stopFollow);
-        }
+      const { state: next, command } = handleKeyEx(state, event);
+      state = applyScroll(next, opts.viewport);
+      if (command?.kind === "search") {
+        const query = await screen.nextLine("Search: ");
+        state = applySearch(state, query, opts.viewport);
+      } else if (command?.kind === "copy") {
+        state = runCopy(state);
+      } else if (command?.kind === "toggleFollow") {
+        state = runToggleFollow(state, opts.followPath, startFollow, stopFollow);
       }
-      // Maintain the JSON pane: rebuild content when the focused
-      // tree leaf changes, drop it when the pane is closed.
-      state = syncJsonPane(state);
       state = applyScroll(state, opts.viewport);
       screen.render(renderState(state, parsed.errors, opts.viewport, thresholds));
     }
   } finally {
     stopFollow();
   }
-}
-
-// Build / rebuild / clear the inner JSON pane based on the current
-// focused tree node. Cheap to call on every key — the JSON tree is
-// only re-built when the focused-node id actually changed.
-function syncJsonPane(state: ViewerState): ViewerState {
-  if (!state.jsonPaneOpen) {
-    return state.jsonPane ? { ...state, jsonPane: undefined } : state;
-  }
-  if (state.jsonPane?.builtFor === state.cursorId) return state;
-  const node = findNode(state.roots, state.cursorId);
-  if (!node) return state;
-  const payload = jsonPayloadFor(node);
-  const root = buildJsonTree(payload);
-  const open = defaultOpenSet(root);
-  const pane: JsonPaneStateRef = {
-    root,
-    open,
-    cursorPath: root.path,
-    scrollTop: 0,
-    releaseFocus: false,
-    builtFor: state.cursorId,
-  };
-  return { ...state, jsonPane: pane };
-}
-
-// JSON payload for a tree node. Leaves serialize their EventEnvelope;
-// spans and traces synthesize a small summary object because spans
-// don't have one canonical payload (multiple events share a span).
-function jsonPayloadFor(node: TreeNode): unknown {
-  if (node.nodeKind === "event" && node.event) return node.event;
-  if (node.nodeKind === "span") {
-    return {
-      spanType: node.label,
-      spanId: node.id,
-      parentId: node.parentId,
-      metrics: {
-        duration: node.duration,
-        tokens: node.tokens,
-        cost: node.cost,
-      },
-      eventCount: countEvents(node),
-    };
-  }
-  // trace
-  return {
-    traceId: node.traceId,
-    metrics: {
-      duration: node.duration,
-      tokens: node.tokens,
-      cost: node.cost,
-    },
-    eventCount: countEvents(node),
-  };
-}
-
-function countEvents(node: TreeNode): number {
-  let n = node.nodeKind === "event" ? 1 : 0;
-  for (const c of node.children) n += countEvents(c);
-  return n;
 }
 
 function findNode(roots: TreeNode[], id: string): TreeNode | undefined {
@@ -262,7 +180,11 @@ function runCopy(state: ViewerState): ViewerState {
   if (!node) return state;
   const cb = detectClipboard();
   if (!cb) return { ...state, messageBar: "clipboard unavailable" };
-  const payload = jsonPayloadFor(node);
+  const payload = node.event ?? {
+    label: node.label,
+    traceId: node.traceId,
+    metrics: { duration: node.duration, tokens: node.tokens, cost: node.cost },
+  };
   const text = JSON.stringify(payload, null, 2);
   try {
     cb.write(text);
@@ -309,30 +231,23 @@ function applyScroll(
   return scrollTop === state.scrollTop ? state : { ...state, scrollTop };
 }
 
-// Rows available to the tree pane after subtracting (a) the JSON
-// pane allotment when open, (b) the bottom status line when present.
+// Rows available to the tree after subtracting the bottom status
+// line (when present).
 function treePaneRows(
   viewport: { rows: number; cols: number },
   state: ViewerState,
 ): number {
   const reserved = hasStatusBar(state) ? 1 : 0;
-  const usable = Math.max(1, viewport.rows - reserved);
-  if (!state.jsonPaneOpen) return usable;
-  // Tree gets ~60%, pane ~40%, min 1 row each.
-  return Math.max(1, Math.floor(usable * 0.6));
-}
-
-function jsonPaneRows(
-  viewport: { rows: number; cols: number },
-  state: ViewerState,
-): number {
-  const reserved = hasStatusBar(state) ? 1 : 0;
-  const usable = Math.max(1, viewport.rows - reserved);
-  return Math.max(1, usable - treePaneRows(viewport, state));
+  return Math.max(1, viewport.rows - reserved);
 }
 
 function hasStatusBar(state: ViewerState): boolean {
-  return !!(state.messageBar || (state.matches && state.matches.length > 0) || state.followOn || state.query);
+  return !!(
+    state.messageBar ||
+    (state.matches && state.matches.length > 0) ||
+    state.followOn ||
+    state.query
+  );
 }
 
 function renderState(
@@ -353,7 +268,7 @@ function renderState(
     scrollTop: state.scrollTop,
     viewportRows: treeHeight,
     renderItem: (vrow, isCursor) => {
-      const fg = state.pane === "json" ? "gray" : colorFor(vrow.node);
+      const fg = colorFor(vrow.node);
       return line(
         renderRowText(vrow, isCursor, state.expanded.has(vrow.node.id), {
           query: state.query,
@@ -365,10 +280,6 @@ function renderState(
   });
 
   const parts: Element[] = [tree];
-
-  if (state.jsonPaneOpen && state.jsonPane) {
-    parts.push(renderJsonPane(state, jsonPaneRows(viewport, state)));
-  }
 
   if (hasStatusBar(state)) {
     parts.push(renderStatusBar(state));
@@ -382,43 +293,6 @@ function renderState(
   }
 
   return column({ justifyContent: "flex-start" }, ...parts);
-}
-
-function renderJsonPane(state: ViewerState, height: number): Element {
-  const pane = state.jsonPane!;
-  const allLines = renderJson(pane.root, {
-    open: pane.open,
-    cursorPath: pane.cursorPath,
-  });
-  // The JSON pane needs its own scroll. Compute cursor index for
-  // followCursor; we treat the owner-path of the line as the cursor.
-  const rowPaths = flattenJsonRows(pane);
-  const cursorIdx = rowPaths.indexOf(pane.cursorPath);
-  const clamped = clampScroll(pane.scrollTop, allLines.length, height);
-  const scrollTop =
-    cursorIdx >= 0 ? followCursor(clamped, cursorIdx, height) : clamped;
-  const slice = allLines.slice(scrollTop, scrollTop + height);
-  const baseFg = state.pane === "json" ? undefined : "gray";
-  return column(
-    { justifyContent: "flex-start", height },
-    ...slice.map((l) => line(segmentsToStyled(l.segments), baseFg ? { fg: baseFg } : undefined)),
-  );
-}
-
-// Convert per-segment `{text, fg?, bg?}` into a single inline-tagged
-// string the TUI's parseStyledText understands. We don't bother
-// closing intermediate tags — each segment is fully wrapped.
-function segmentsToStyled(
-  segments: ReadonlyArray<{ text: string; fg?: string; bg?: string }>,
-): string {
-  return segments
-    .map((s) => {
-      let out = s.text;
-      if (s.bg) out = `{${s.bg}-bg}${out}{/${s.bg}-bg}`;
-      if (s.fg) out = `{${s.fg}-fg}${out}{/${s.fg}-fg}`;
-      return out;
-    })
-    .join("");
 }
 
 function renderStatusBar(state: ViewerState): Element {

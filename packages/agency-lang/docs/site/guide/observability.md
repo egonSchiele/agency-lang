@@ -54,14 +54,12 @@ agency logs view --follow path/to/run.jsonl
 |---|---|
 | `j`, `Down`, `Ctrl+N` | Move cursor down |
 | `k`, `Up`, `Ctrl+P` | Move cursor up |
-| `l`, `Right` | Expand the focused node (or jump into its children) |
-| `Enter` | Expand; on a leaf, open the JSON payload pane and focus it |
+| `l`, `Right`, `Enter` | Expand the focused node — on a span/trace, reveal children; on a leaf, inline the JSON payload |
 | `h`, `Left` | Collapse the focused node (or jump to its parent) |
 | `g` | Jump to the top |
 | `G` | Jump to the bottom |
 | `Tab`, `Shift+Tab` | Jump cursor to the next / previous trace |
 | `e` / `E` | Expand all / collapse all |
-| `p` | Toggle the JSON payload pane |
 | `/`, then text + Enter | Search rows for a substring |
 | `n` / `N` | Jump to next / previous match |
 | `Esc` | Clear active search |
@@ -73,14 +71,12 @@ agency logs view --follow path/to/run.jsonl
 A single-trace file opens with the trace expanded; multi-trace files
 open with everything collapsed.
 
-### JSON payload pane
+### Inline JSON payload
 
-Press `Enter` on a leaf to open a bottom split-pane that renders the
-event's full payload as a collapsible JSON tree (objects/arrays show
-as `▶ { 3 keys }` collapsed and expand on `l` or `Enter`). Long
-strings (with newlines or > 80 chars) collapse to a preview. The pane
-follows the focused leaf in the tree; `Esc` releases focus back to
-the tree; `p` toggles the pane.
+Press `Enter` (or `l`) on a leaf to inline its full JSON payload
+below it as gray, indented lines. Press `h` (or `Left`) to collapse
+it back. Leaves with payloads show a `▶` / `▼` glyph instead of `●`
+so the affordance is visible.
 
 ### Search
 

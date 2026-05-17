@@ -50,6 +50,16 @@ describe("parseStatelogJsonl", () => {
     expect(result.errors[0].kind).toBe("unsupported_version");
   });
 
+  it.each([
+    ["string", JSON.stringify({ format_version: "1.0", trace_id: "t", data: { type: "x", timestamp: "" } })],
+    ["boolean", JSON.stringify({ format_version: true, trace_id: "t", data: { type: "x", timestamp: "" } })],
+    ["object", JSON.stringify({ format_version: {}, trace_id: "t", data: { type: "x", timestamp: "" } })],
+  ])("rejects non-numeric format_version (%s)", (_kind, input) => {
+    const result = parseStatelogJsonl(input);
+    expect(result.events).toHaveLength(0);
+    expect(result.errors[0].kind).toBe("unsupported_version");
+  });
+
   it("tolerates missing format_version (legacy files)", () => {
     const legacy = JSON.stringify({
       trace_id: "t",

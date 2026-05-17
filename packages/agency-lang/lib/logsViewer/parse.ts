@@ -31,8 +31,20 @@ export function parseStatelogJsonl(text: string): ParseResult {
       });
       continue;
     }
-    const version = obj.format_version ?? 1;
-    if (typeof version === "number" && version > SUPPORTED_VERSION) {
+    const rawVersion = obj.format_version;
+    // Missing format_version is treated as a legacy v1 file.
+    // Anything present-but-non-numeric is rejected so the
+    // EventEnvelope.format_version: number invariant holds.
+    if (rawVersion !== undefined && typeof rawVersion !== "number") {
+      errors.push({
+        line: i + 1,
+        kind: "unsupported_version",
+        detail: `format_version must be a number, got ${typeof rawVersion}`,
+      });
+      continue;
+    }
+    const version: number = rawVersion ?? 1;
+    if (version > SUPPORTED_VERSION) {
       errors.push({
         line: i + 1,
         kind: "unsupported_version",

@@ -8,28 +8,62 @@ const __dirname = path.dirname(__filename);
 
 /**
  * Walk up from startDir until we find a directory containing package.json.
+ *
+ * If `packageName` is supplied, we only accept a package.json whose `name`
+ * field equals that string — useful for callers that need to find a
+ * specific package root (e.g. `agency-lang`) even when intermediate
+ * directories above the starting point contain unrelated package.jsons
+ * (workspaces, nested tooling configs, etc.).
  */
-export function findPackageRoot(startDir: string): string {
+export function findPackageRoot(
+  startDir: string,
+  packageName?: string,
+): string {
   let dir = startDir;
-  while (!fs.existsSync(path.join(dir, "package.json"))) {
+  while (true) {
+    const pkgJsonPath = path.join(dir, "package.json");
+    if (fs.existsSync(pkgJsonPath)) {
+      if (packageName === undefined) {
+        return dir;
+      }
+      try {
+        const parsed = JSON.parse(fs.readFileSync(pkgJsonPath, "utf-8"));
+        if (parsed.name === packageName) {
+          return dir;
+        }
+      } catch {
+        /* unparseable package.json — keep walking */
+      }
+    }
     const parent = path.dirname(dir);
     if (parent === dir) {
-      throw new Error("Could not find package root (no package.json found)");
+      throw new Error(
+        packageName
+          ? `Could not find package root for '${packageName}' (no matching package.json found above ${startDir})`
+          : "Could not find package root (no package.json found)",
+      );
     }
     dir = parent;
   }
-  return dir;
 }
 
-const PACKAGE_ROOT = findPackageRoot(__dirname);
-const STDLIB_DIR = path.join(PACKAGE_ROOT, "stdlib");
-const TEST_DIR = path.join(PACKAGE_ROOT, "tests");
+// Lazily resolve the package root so that bundled / packed outputs (which
+// may live in a directory tree without any package.json above them) don't
+// crash on module load. The failure is only surfaced when something actually
+// asks for the stdlib or tests directory.
+let _packageRoot: string | null = null;
+function getPackageRoot(): string {
+  if (_packageRoot === null) {
+    _packageRoot = findPackageRoot(__dirname);
+  }
+  return _packageRoot;
+}
 
 /**
  * Returns the absolute path to the stdlib directory.
  */
 export function getStdlibDir(): string {
-  return STDLIB_DIR;
+  return path.join(getPackageRoot(), "stdlib");
 }
 
 /**
@@ -37,9 +71,10 @@ export function getStdlibDir(): string {
  */
 export function getStdlibFiles(): string[] {
   try {
-    return fs.readdirSync(STDLIB_DIR)
+    const dir = getStdlibDir();
+    return fs.readdirSync(dir)
       .filter((f) => f.endsWith(".agency"))
-      .map((f) => path.join(STDLIB_DIR, f));
+      .map((f) => path.join(dir, f));
   } catch {
     return [];
   }
@@ -49,7 +84,7 @@ export function getStdlibFiles(): string[] {
  * Returns the absolute path to the tests directory.
  */
 export function getTestDir(): string {
-  return TEST_DIR;
+  return path.join(getPackageRoot(), "tests");
 }
 
 /**
@@ -282,7 +317,10 @@ export function resolveAgencyImportPath(
   fromFile: string,
 ): string {
   if (isStdlibImport(importPath)) {
-    return path.join(STDLIB_DIR, normalizeStdlibPath(importPath) + ".agency");
+    return path.join(
+      getStdlibDir(),
+      normalizeStdlibPath(importPath) + ".agency",
+    );
   }
   if (isPkgImport(importPath)) {
     return resolvePkgAgencyPath(importPath, fromFile);

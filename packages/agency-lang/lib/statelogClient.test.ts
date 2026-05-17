@@ -208,6 +208,62 @@ describe("StatelogClient", () => {
       expect(fetchSpy).not.toHaveBeenCalled();
     });
 
+    it("aborts the remote fetch after requestTimeoutMs", async () => {
+      // Mock fetch as a hang-forever-unless-aborted.
+      const fetchSpy = vi
+        .spyOn(globalThis, "fetch")
+        .mockImplementation(
+          (_url, init) =>
+            new Promise<Response>((_resolve, reject) => {
+              const signal = (init as RequestInit | undefined)?.signal;
+              signal?.addEventListener("abort", () => {
+                const err = new Error("aborted");
+                (err as Error & { name?: string }).name = "AbortError";
+                reject(err);
+              });
+            }),
+        );
+      const client = new StatelogClient({
+        host: "https://example.invalid",
+        apiKey: "secret",
+        projectId: "p",
+        traceId: "t",
+        debugMode: false,
+        observability: true,
+        requestTimeoutMs: 30,
+      });
+      const start = Date.now();
+      await client.debug("hi", {});
+      const elapsed = Date.now() - start;
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+      // Should resolve in roughly requestTimeoutMs, not hang forever.
+      expect(elapsed).toBeLessThan(500);
+      const init = fetchSpy.mock.calls[0][1] as RequestInit | undefined;
+      expect(init?.signal).toBeDefined();
+    });
+
+    it("agentEnd does not await the remote fetch (fire-and-forget)", async () => {
+      // fetch never resolves; if agentEnd awaited it, this test would
+      // hang. With noWait the call returns immediately.
+      const fetchSpy = vi
+        .spyOn(globalThis, "fetch")
+        .mockImplementation(() => new Promise<Response>(() => {}));
+      const client = new StatelogClient({
+        host: "https://example.invalid",
+        apiKey: "secret",
+        projectId: "p",
+        traceId: "t",
+        debugMode: false,
+        observability: true,
+        requestTimeoutMs: 60_000,
+      });
+      const start = Date.now();
+      await client.agentEnd({ entryNode: "main", timeTaken: 1 });
+      const elapsed = Date.now() - start;
+      expect(elapsed).toBeLessThan(100);
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+    });
+
     it("stdout sink does not require an apiKey", async () => {
       const spy = vi.spyOn(console, "log").mockImplementation(() => {});
       const client = new StatelogClient({

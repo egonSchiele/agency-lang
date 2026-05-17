@@ -9,6 +9,7 @@ import { formatErrors, typeCheck } from "@/typeChecker/index.js";
 import { spawn } from "child_process";
 import { transformSync } from "esbuild";
 import * as fs from "fs";
+import { createRequire } from "module";
 import * as path from "path";
 
 import {
@@ -23,7 +24,75 @@ import {
   type ImportStrategy,
 } from "../importStrategy.js";
 import { parseAgency, replaceBlankLines } from "../parser.js";
+import { fileURLToPath, pathToFileURL } from "url";
+import {
+  classifyInstall,
+  installDirFromUrl,
+  type InstallKind,
+} from "./installLocation.js";
 import { findRecursively, getImports } from "./util.js";
+
+// Returns the file:// URL of the ESM loader-register shim shipped with the
+// agency-lang package. Passing this to `node --import=<url>` causes Node to
+// fall back to agency-lang's own node_modules when resolving bare specifiers,
+// which lets `agency run` work even when agency-lang is installed globally.
+//
+// The shim lives at dist/lib/cli/runShim/register.mjs, right next to this
+// file's compiled output (dist/lib/cli/commands.js), so we resolve it
+// relative to this module's URL.
+export function compiledOutputRegisterUrl(): string {
+  const thisDir = path.dirname(fileURLToPath(import.meta.url));
+  return pathToFileURL(
+    path.join(thisDir, "runShim", "register.mjs"),
+  ).href;
+}
+
+// Build the argv prefix to use when spawning `node` on a compiled .agency
+// output file. Always includes the resolver register so transitive bare
+// imports (zod, smoltalk, etc.) resolve regardless of cwd or install kind.
+export function compiledOutputNodeArgs(): string[] {
+  return [`--import=${compiledOutputRegisterUrl()}`];
+}
+
+// Returns true if `agency-lang` resolves from a file inside the given
+// directory using Node's standard CommonJS resolver. If true, the user
+// can run `node compiled.js` from that location and it will succeed —
+// no need to print the global-install warning.
+export function agencyLangResolvesFrom(dir: string): boolean {
+  try {
+    // createRequire needs a file path inside the directory; the file
+    // doesn't have to exist.
+    const req = createRequire(path.join(path.resolve(dir), "x.js"));
+    req.resolve("agency-lang");
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function compileWarning(
+  kind: InstallKind,
+  outputContext: string,
+  // Injected so tests can simulate a clean directory regardless of the
+  // host's module-resolution state (vitest, for instance, patches Node
+  // module resolution to find workspace packages from any cwd).
+  resolvesFrom: (dir: string) => boolean = agencyLangResolvesFrom,
+): string | null {
+  if (kind !== "global") return null;
+  const dir = fs.existsSync(outputContext) && fs.statSync(outputContext).isDirectory()
+    ? outputContext
+    : path.dirname(path.resolve(outputContext));
+  if (resolvesFrom(dir)) return null;
+  return [
+    "",
+    "Note: agency-lang is installed globally. Running `node <output>.js`",
+    "directly may fail with ERR_MODULE_NOT_FOUND because Node does not",
+    "resolve global packages for bare imports.",
+    "  - Use  agency run <file>    to execute an agency file",
+    "  - Use  agency pack <file>   to produce a portable single-file script",
+    "",
+  ].join("\n");
+}
 
 // Load configuration from agency.json
 export function loadConfig(
@@ -297,11 +366,18 @@ export function run(
     ? { ...process.env, AGENCY_RESUME_FILE: resumeFile }
     : process.env;
 
-  const nodeProcess = spawn("node", [output], {
-    stdio: "inherit",
-    shell: false,
-    env,
-  });
+  // Use process.execPath so the child runs under the same Node as the CLI,
+  // and pass our resolver shim so the compiled output's `import "agency-lang"`
+  // succeeds even when the CLI is installed globally.
+  const nodeProcess = spawn(
+    process.execPath,
+    [...compiledOutputNodeArgs(), output],
+    {
+      stdio: "inherit",
+      shell: false,
+      env,
+    },
+  );
 
   nodeProcess.on("error", (error) => {
     console.error(`Failed to run ${output}:`, error);

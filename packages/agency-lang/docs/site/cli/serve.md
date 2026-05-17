@@ -41,3 +41,7 @@ This starts a JSON HTTP REST server that exposes:
 - `--api-key <key>` — API key for authentication. **Not recommended** — visible in process listings. Prefer `--api-key-env`.
 - `--api-key-env <name>` — name of the environment variable to read the API key from. Defaults to `API_KEY`. Without `--standalone`, the key is read from the env var at serve time. With `--standalone`, the generated bundle reads it at runtime.
 - `--standalone` — generate a standalone `server.js` file.
+
+### See also
+
+- You can easily pack up your agent as a standalone cli script with [pack](./pack).

@@ -1,6 +1,6 @@
 # Observability
 
-If you were like agency to emit structured logs, set `observability: true` in your `agency.json`. Agency will now emit logs for different events such as entering a node, making an LLM call, making a tool call, throwing an interrupt, etc.
+If you would like agency to emit structured logs, set `observability: true` in your `agency.json`. Agency will now emit logs for different events such as entering a node, making an LLM call, making a tool call, throwing an interrupt, etc.
 
 ## Enabling observability
 

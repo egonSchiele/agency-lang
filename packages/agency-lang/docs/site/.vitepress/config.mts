@@ -29,6 +29,7 @@ export default defineConfig({
             },
             { text: "TypeScript Interoperability", link: "/guide/ts-interop" },
             { text: "Odds and Ends", link: "/guide/odds-and-ends" },
+            { text: "Troubleshooting", link: "/guide/troubleshooting" },
           ],
         },
         {
@@ -49,6 +50,7 @@ export default defineConfig({
             { text: "Blocks", link: "/guide/blocks" },
             { text: "Execution Model", link: "/guide/execution-model" },
             { text: "Testing", link: "/guide/testing" },
+            { text: "Observability", link: "/guide/observability" },
           ],
         },
         {
@@ -145,6 +147,7 @@ export default defineConfig({
             { text: "format", link: "/cli/format" },
             { text: "lsp / mcp", link: "/cli/editor-integration" },
             { text: "optimize", link: "/cli/optimize" },
+            { text: "pack", link: "/cli/pack" },
             { text: "preprocess / ast", link: "/cli/preprocess-and-ast" },
             { text: "policy", link: "/cli/policy" },
             { text: "review", link: "/cli/review" },

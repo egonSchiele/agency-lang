@@ -49,7 +49,15 @@ export type StatelogConfig = {
   // local development and tests. Mutually compatible with host/stdout —
   // events are written to all configured sinks.
   logFile?: string;
+  /**
+   * Per-request timeout (milliseconds) applied to the remote http POST.
+   * Prevents a slow/unreachable statelog host from wedging the agent's
+   * end-of-run cleanup. Default: 1500ms.
+   */
+  requestTimeoutMs?: number;
 };
+
+const DEFAULT_REQUEST_TIMEOUT_MS = 1500;
 
 // === Token / cost types ===
 
@@ -96,6 +104,7 @@ export class StatelogClient {
   // share this single StatelogClient instance.
   private spanStorage = new AsyncLocalStorage<SpanContext[]>();
   private metadata?: RunMetadata;
+  private requestTimeoutMs: number;
 
   constructor(config: StatelogConfig) {
     const { host, apiKey, projectId, traceId, debugMode } = config;
@@ -105,6 +114,8 @@ export class StatelogClient {
     this.debugMode = debugMode || false;
     this.traceId = traceId || nanoid();
     this.logFile = config.logFile;
+    this.requestTimeoutMs =
+      config.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS;
 
     this.metadata = config.metadata;
 
@@ -497,13 +508,20 @@ export class StatelogClient {
       cost: TokenCost;
     };
   }): Promise<void> {
-    await this.post({
-      type: "agentEnd",
-      entryNode,
-      result,
-      timeTaken,
-      tokenStats,
-    });
+    // Fire-and-forget the remote send: this is the very last event of
+    // a run, and waiting for the http round trip here directly delays
+    // process exit. The synchronous file/stdout sinks still run inline
+    // inside `post()`, so local observability is unaffected.
+    await this.post(
+      {
+        type: "agentEnd",
+        entryNode,
+        result,
+        timeTaken,
+        tokenStats,
+      },
+      { noWait: true },
+    );
   }
 
   // --- Interrupt lifecycle ---
@@ -706,7 +724,20 @@ export class StatelogClient {
 
   // === Post (wire format) ===
 
-  async post(body: Record<string, any>): Promise<void> {
+  async post(
+    body: Record<string, any>,
+    options?: {
+      /**
+       * When true, fire the remote http POST without awaiting its
+       * result. The synchronous file/stdout sinks still run inline so
+       * the event ordering they care about is preserved; only the
+       * network round-trip is detached. Used for end-of-run events
+       * (e.g. `agentEnd`) where nothing useful can be done with the
+       * response and waiting would just delay process exit.
+       */
+      noWait?: boolean;
+    },
+  ): Promise<void> {
     if (!this.enabled) {
       return;
     }
@@ -753,16 +784,29 @@ export class StatelogClient {
       const fullUrl = new URL("/api/logs", this.host);
       const url = fullUrl.toString();
 
-      await fetch(url, {
+      // Bound each remote send by `requestTimeoutMs` so a slow or
+      // unreachable statelog host cannot wedge process exit. The
+      // request still completes asynchronously; on timeout it just
+      // aborts with no retry.
+      const request = fetch(url, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${this.apiKey}`,
         },
         body: postBody,
+        signal: AbortSignal.timeout(this.requestTimeoutMs),
       }).catch((err) => {
         if (this.debugMode) console.error("Failed to send statelog:", err);
       });
+
+      if (options?.noWait) {
+        // Detach the in-flight request from the caller's await chain.
+        // The `.catch` above guarantees no UnhandledPromiseRejection if
+        // it later fails or aborts.
+        return;
+      }
+      await request;
     } catch (err) {
       if (this.debugMode)
         console.error("Error sending log in statelog client:", err, {

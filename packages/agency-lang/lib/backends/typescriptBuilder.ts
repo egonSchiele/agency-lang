@@ -3616,6 +3616,11 @@ export class TypeScriptBuilder {
     if (cfg.log?.logFile) {
       statelogFields.logFile = ts.str(cfg.log.logFile);
     }
+    if (cfg.log?.requestTimeoutMs !== undefined) {
+      statelogFields.requestTimeoutMs = ts.raw(
+        String(cfg.log.requestTimeoutMs),
+      );
+    }
     if (cfg.log?.metadata) {
       const metaFields: Record<string, TsNode> = {};
       if (cfg.log.metadata.tags) {

@@ -1,7 +1,18 @@
-.PHONY: all test stdlib agents doc packages-doc refresh-action-pins
+.PHONY: all test stdlib agents doc packages-doc refresh-action-pins build
 
 all:
 	pnpm run templates && pnpm run build && $(MAKE) stdlib && $(MAKE) agents && $(MAKE) doc
+
+# Build the dist/ tree. Invoked by `pnpm run build`. Kept here (rather
+# than as a chain in package.json) so the steps remain readable and easy
+# to extend without inflating the package.json scripts section.
+build:
+	rm -rf dist/
+	tsc
+	tsc-alias
+	cp -r lib/agents dist/lib
+	mkdir -p dist/lib/cli/runShim
+	cp lib/cli/runShim/*.mjs dist/lib/cli/runShim/
 
 stdlib:
 	pnpm run agency compile stdlib/

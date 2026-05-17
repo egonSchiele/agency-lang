@@ -1,5 +1,11 @@
-node main() {
-  const interruptKinds = ["showPolicy", "writePolicy", "askQuestion"]
-  let contextMessage = "This agent can produce the following interrupts:\n" + map(interruptKinds, \kind -> `- ${kind}\n`).join("")
+def greet(name: string): string {
+  return "Hello, ${name}!"
 }
 
+node main() {
+  const name = "Alice"
+  const greeting = llm("Greet ${name} using the greet tool", {
+    tools: [greet]
+  })
+  print(greeting)
+}

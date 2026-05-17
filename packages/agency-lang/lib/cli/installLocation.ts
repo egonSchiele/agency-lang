@@ -14,6 +14,11 @@ const GLOBAL_MARKERS = [
   "/.volta/tools/", // volta-managed tool installs
   "/.fnm/node-versions/", // fnm-managed Node with global packages
   "/.nvm/versions/node/", // nvm-managed Node with global packages
+  "/_npx/", // npx / npm exec ephemeral installs; the spawned `node
+  // <user-file>` runs in the user's cwd which has no
+  // path to this _npx tree, so this is effectively a
+  // global-install scenario for the purposes of the
+  // resolver-shim warning.
 ];
 
 function toPosix(p: string): string {

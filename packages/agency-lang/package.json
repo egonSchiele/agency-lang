@@ -8,7 +8,7 @@
     "test:run": "vitest run",
     "test:agency": "time node ./dist/scripts/agency.js test tests/agency -p 12",
     "test:agency-js": "time node ./dist/scripts/agency.js test js tests/agency-js -p 12",
-    "build": "rm -rf dist/ && tsc && tsc-alias && cp -r lib/agents dist/lib && cp -r lib/cli/runShim dist/lib/cli/runShim",
+    "build": "rm -rf dist/ && tsc && tsc-alias && cp -r lib/agents dist/lib && mkdir -p dist/lib/cli/runShim && cp lib/cli/runShim/*.mjs dist/lib/cli/runShim/",
     "start": "node dist/index.js",
     "templates": "typestache ./lib/templates",
     "typecheck": "tsc --noEmit",

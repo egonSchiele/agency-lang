@@ -40,6 +40,14 @@ describe("classifyInstall", () => {
       ),
     ).toBe("workspace");
   });
+  it("flags npx / npm exec ephemeral installs as global", () => {
+    // npx puts a fresh install under <npm-cache>/_npx/<hash>/node_modules
+    expect(
+      classifyInstall(
+        "/Users/x/.npm/_npx/abc123/node_modules/agency-lang/dist/scripts",
+      ),
+    ).toBe("global");
+  });
 });
 
 describe("installDirFromUrl", () => {

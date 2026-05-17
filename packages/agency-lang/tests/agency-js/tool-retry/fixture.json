@@ -68,14 +68,6 @@
     ],
     "succeeded": true
   },
-  "safeForLoopRetry": {
-    "toolCallCount": 2,
-    "toolCalls": [
-      "safeForLoopTool",
-      "safeForLoopTool"
-    ],
-    "succeeded": true
-  },
   "safeWhileLoopRetry": {
     "toolCallCount": 2,
     "toolCalls": [

@@ -1,4 +1,4 @@
-import { ViewerState } from "./types.js";
+import { ViewerState, TreeNode } from "./types.js";
 import { flattenVisibleRows, VisibleRow } from "./render.js";
 import type { KeyEvent } from "../tui/input/types.js";
 import { formatKey } from "../tui/input/format.js";
@@ -30,12 +30,73 @@ export function handleKey(state: ViewerState, event: KeyEvent): ViewerState {
     case "h":
     case "Left":
       return collapseOrParent(state, rows, idx);
+    case "e":
+      return expandAll(state);
+    case "E":
+      return collapseAll(state);
+    case "Tab":
+      return cycleTrace(state, +1);
+    case "Shift+Tab":
+      return cycleTrace(state, -1);
     case "q":
     case "Ctrl+C":
       return { ...state, quit: true };
     default:
       return state;
   }
+}
+
+// Expand every span and trace in the forest. Leaves stay leaves.
+function expandAll(state: ViewerState): ViewerState {
+  const next = new Set(state.expanded);
+  const walk = (node: TreeNode): void => {
+    if (node.nodeKind !== "event") next.add(node.id);
+    for (const c of node.children) walk(c);
+  };
+  for (const r of state.roots) walk(r);
+  return { ...state, expanded: next };
+}
+
+// Collapse everything. Per the v1 default-expand-only-trace rule,
+// auto-expand the lone trace when there is exactly one — keeps the
+// "press E to see the top-level view" behavior intuitive.
+function collapseAll(state: ViewerState): ViewerState {
+  const onlyTrace = state.roots.length === 1 ? state.roots[0].id : undefined;
+  const expanded = new Set<string>();
+  if (onlyTrace !== undefined) expanded.add(onlyTrace);
+  // Keep the cursor on something visible; if its node is now hidden,
+  // move it to the trace root containing it (or the first trace).
+  const cursorTraceRoot = traceRootOf(state.roots, state.cursorId);
+  const cursorId = expanded.has(state.cursorId)
+    ? state.cursorId
+    : cursorTraceRoot ?? state.roots[0]?.id ?? state.cursorId;
+  return { ...state, expanded, cursorId, scrollTop: 0 };
+}
+
+// Move the cursor to the previous/next trace root, wrapping at the
+// edges. No-op when there's only one trace.
+function cycleTrace(state: ViewerState, direction: 1 | -1): ViewerState {
+  const traceIds = state.roots.map((r) => r.id);
+  if (traceIds.length <= 1) return state;
+  const cur = traceRootOf(state.roots, state.cursorId);
+  const startIdx = cur ? traceIds.indexOf(cur) : -1;
+  const nextIdx = (startIdx + direction + traceIds.length) % traceIds.length;
+  return { ...state, cursorId: traceIds[nextIdx] };
+}
+
+function traceRootOf(roots: TreeNode[], id: string): string | undefined {
+  for (const r of roots) {
+    if (containsId(r, id)) return r.id;
+  }
+  return undefined;
+}
+
+function containsId(node: TreeNode, id: string): boolean {
+  if (node.id === id) return true;
+  for (const c of node.children) {
+    if (containsId(c, id)) return true;
+  }
+  return false;
 }
 
 function moveCursor(

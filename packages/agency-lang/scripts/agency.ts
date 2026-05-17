@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import {
   compile,
+  compileWarning,
   format,
   formatFile,
   loadConfig,
@@ -9,6 +10,11 @@ import {
   readStdin,
   run,
 } from "@/cli/commands.js";
+import {
+  classifyInstall,
+  installDirFromUrl,
+} from "@/cli/installLocation.js";
+import { pack } from "@/cli/pack.js";
 import { evaluate } from "@/cli/evaluate.js";
 import { fixtures, test, testTs, SlowTest } from "@/cli/test.js";
 import { generateReport, cleanCoverage } from "@/cli/coverage.js";
@@ -132,6 +138,23 @@ export function createProgram(deps: CliDependencies = {}): Command {
           for (const input of inputs) {
             compile(config, input, undefined, { ts: opts.ts });
           }
+          // If installed globally, the user will hit ERR_MODULE_NOT_FOUND
+          // if they try to `node` the output directly. Steer them toward
+          // `agency run` or `agency pack`. Gated on:
+          //   - JS output only — `--ts` produces a .ts the user isn't
+          //     going to run directly with node anyway.
+          //   - The output directory doesn't already have a resolvable
+          //     `agency-lang` (the warning helper does that check).
+          // Uses the first input's directory as the resolution context;
+          // directory inputs use the directory itself.
+          if (!opts.ts && inputs.length > 0) {
+            const ctx = path.resolve(inputs[0]);
+            const warning = compileWarning(
+              classifyInstall(installDirFromUrl(import.meta.url)),
+              ctx,
+            );
+            if (warning) console.error(warning);
+          }
         }
       },
     );
@@ -156,6 +179,36 @@ export function createProgram(deps: CliDependencies = {}): Command {
   ).action((input: string, options: RunOptions) => {
     runWithOptions(input, options);
   });
+
+  program
+    .command("pack")
+    .description(
+      "Bundle a .agency program into a single portable .mjs (no agency install needed at runtime)",
+    )
+    .argument("<input>", "Path to .agency input file")
+    // Default to .mjs so the output is unambiguously ESM regardless of
+    // any surrounding package.json `"type"`. Users may pass `-o foo.js`
+    // explicitly if they prefer that extension.
+    .option("-o, --output <file>", "Output file path", "agent.mjs")
+    .option("--target <target>", "Output target (currently only 'node')", "node")
+    .action(
+      async (input: string, opts: { output: string; target: string }) => {
+        if (opts.target !== "node") {
+          console.error(
+            `Unsupported pack target: ${opts.target} (supported: node)`,
+          );
+          process.exit(1);
+        }
+        const config = getConfig();
+        await pack({
+          config,
+          inputFile: input,
+          outputFile: opts.output,
+          target: "node",
+        });
+        console.log(`Packed ${input} -> ${opts.output}`);
+      },
+    );
 
   const traceCmd = program
     .command("trace")

@@ -21,15 +21,23 @@ export function findPackageRoot(startDir: string): string {
   return dir;
 }
 
-const PACKAGE_ROOT = findPackageRoot(__dirname);
-const STDLIB_DIR = path.join(PACKAGE_ROOT, "stdlib");
-const TEST_DIR = path.join(PACKAGE_ROOT, "tests");
+// Lazily resolve the package root so that bundled / packed outputs (which
+// may live in a directory tree without any package.json above them) don't
+// crash on module load. The failure is only surfaced when something actually
+// asks for the stdlib or tests directory.
+let _packageRoot: string | null = null;
+function getPackageRoot(): string {
+  if (_packageRoot === null) {
+    _packageRoot = findPackageRoot(__dirname);
+  }
+  return _packageRoot;
+}
 
 /**
  * Returns the absolute path to the stdlib directory.
  */
 export function getStdlibDir(): string {
-  return STDLIB_DIR;
+  return path.join(getPackageRoot(), "stdlib");
 }
 
 /**
@@ -37,9 +45,10 @@ export function getStdlibDir(): string {
  */
 export function getStdlibFiles(): string[] {
   try {
-    return fs.readdirSync(STDLIB_DIR)
+    const dir = getStdlibDir();
+    return fs.readdirSync(dir)
       .filter((f) => f.endsWith(".agency"))
-      .map((f) => path.join(STDLIB_DIR, f));
+      .map((f) => path.join(dir, f));
   } catch {
     return [];
   }
@@ -49,7 +58,7 @@ export function getStdlibFiles(): string[] {
  * Returns the absolute path to the tests directory.
  */
 export function getTestDir(): string {
-  return TEST_DIR;
+  return path.join(getPackageRoot(), "tests");
 }
 
 /**
@@ -282,7 +291,10 @@ export function resolveAgencyImportPath(
   fromFile: string,
 ): string {
   if (isStdlibImport(importPath)) {
-    return path.join(STDLIB_DIR, normalizeStdlibPath(importPath) + ".agency");
+    return path.join(
+      getStdlibDir(),
+      normalizeStdlibPath(importPath) + ".agency",
+    );
   }
   if (isPkgImport(importPath)) {
     return resolvePkgAgencyPath(importPath, fromFile);

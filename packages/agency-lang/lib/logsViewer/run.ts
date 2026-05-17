@@ -29,8 +29,13 @@ export type RunViewerOpts = {
   output: OutputTarget;
   viewport: { rows: number; cols: number };
   // Optional path to enable --follow mode (re-read as the file grows).
-  // Undefined disables follow even if the user presses `f`.
+  // Undefined disables follow even if the user presses `f` (e.g. when
+  // reading from stdin).
   followPath?: string;
+  // If true, start the file watcher immediately at boot — equivalent
+  // to launching the viewer and then pressing `f`. Ignored when
+  // followPath is undefined.
+  initialFollow?: boolean;
   thresholds?: ViewerThresholds;
 };
 
@@ -89,6 +94,14 @@ export async function runViewer(opts: RunViewerOpts): Promise<void> {
     followerState.f.stop();
     followerState = undefined;
   };
+
+  // Auto-start follow if --follow was passed. We do this after
+  // building state so the [FOLLOW] indicator appears in the first
+  // render below.
+  if (opts.initialFollow && opts.followPath) {
+    startFollow();
+    state = { ...state, followOn: true };
+  }
 
   screen.render(renderState(state, parsed.errors, opts.viewport, thresholds));
   try {
@@ -177,7 +190,9 @@ function runToggleFollow(
   stop: () => void,
 ): ViewerState {
   if (!followPath) {
-    return { ...state, messageBar: "follow disabled (stdin or no file)" };
+    // We only end up here when the viewer was launched without a
+    // file path (stdin pipe). There is no on-disk file to tail.
+    return { ...state, messageBar: "follow unavailable when reading from stdin" };
   }
   if (state.followOn) {
     stop();

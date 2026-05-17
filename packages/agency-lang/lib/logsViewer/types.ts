@@ -24,7 +24,13 @@ export type TreeNode = {
   traceId: string;
   parentId: string | null;
   children: TreeNode[];
-  nodeKind: "trace" | "span" | "event";
+  // Synthetic, on-the-fly rows generated when a leaf event is
+  // expanded — none are part of the persistent forest:
+  //   - "jsonLine"      : one rendered line of the leaf's JSON payload
+  //   - "convoLine"     : one rendered conversation message (promptCompletion only)
+  //   - "rawDataToggle" : expandable "raw data" header that, when opened,
+  //                       reveals the underlying JSON payload as jsonLine rows
+  nodeKind: "trace" | "span" | "event" | "jsonLine" | "convoLine" | "rawDataToggle";
   // For "trace": the trace_id; for "span": the span type (agentRun,
   // llmCall, ...); for "event": the data.type.
   label: string;
@@ -54,4 +60,18 @@ export type ViewerState = {
   scrollTop: number;
   // Set by the input layer; consumed by the run loop.
   quit: boolean;
+  // ---- v2 additions ----
+  // Active substring query for `/`, `n`, `N`. Empty when search is off.
+  query?: string;
+  // Node ids that currently match `query`, in flatten order.
+  matches?: string[];
+  // Index into `matches` for the current "n/N" position.
+  matchIdx?: number;
+  // Help-screen overlay shown?
+  helpOpen?: boolean;
+  // Follow mode (`--follow` / `f`) — viewer re-reads the file when it grows.
+  followOn?: boolean;
+  // One-line status message (`copied 312 bytes`, etc.); auto-clears
+  // on the next keystroke. Owned by the input layer.
+  messageBar?: string;
 };

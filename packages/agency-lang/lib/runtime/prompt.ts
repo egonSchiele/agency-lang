@@ -88,7 +88,6 @@ async function _runPrompt({
     _completion = ctx.llmClient.text(promptConfig);
   }
 
-  const endTime = performance.now();
   let completion: PromptResult;
   let toolCalls: ToolCallJSON[] = [];
 
@@ -118,6 +117,12 @@ async function _runPrompt({
     completion = response.value;
     toolCalls = completion.toolCalls || [];
   }
+
+  // Capture endTime AFTER the response has been fully received. The
+  // request Promise is created above but only awaited inside the
+  // stream/non-stream branches; sampling earlier would only measure
+  // request setup, not the actual round-trip time.
+  const endTime = performance.now();
 
   const modelName = completion.model || clientConfig.model || "unknown model";
 

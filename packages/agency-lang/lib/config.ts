@@ -206,6 +206,18 @@ export interface AgencyConfig {
     };
   };
 
+  /**
+   * Visual thresholds used by `agency logs view`. Durations at or
+   * above `slowMs` (default 5000) render bright-red; durations below
+   * `fastMs` (default 100) render gray. Costs at or above
+   * `expensiveUsd` (default 0.01) render bright-red.
+   */
+  viewer?: {
+    slowMs?: number;
+    fastMs?: number;
+    expensiveUsd?: number;
+  };
+
   coverage?: {
     /** Output directory for collected coverage data (default: ".coverage") */
     outDir?: string;
@@ -299,6 +311,13 @@ export const AgencyConfigSchema = z
     distDir: z.string(),
     test: z.object({ parallel: z.number() }).partial(),
     doc: z.object({ outDir: z.string(), baseUrl: z.string() }).partial(),
+    viewer: z
+      .object({
+        slowMs: z.number(),
+        fastMs: z.number(),
+        expensiveUsd: z.number(),
+      })
+      .partial(),
     coverage: z
       .object({
         outDir: z.string(),

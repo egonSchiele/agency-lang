@@ -4,11 +4,17 @@ import { runViewer } from "@/logsViewer/run.js";
 import { TerminalInput } from "@/tui/input/terminal.js";
 import { TerminalOutput } from "@/tui/output/terminal.js";
 
-export async function logsView(file: string): Promise<void> {
+export async function logsView(
+  file: string,
+  cliOpts: { follow?: boolean } = {},
+): Promise<void> {
   if (file === "-") {
     const chunks: Buffer[] = [];
     for await (const chunk of process.stdin) chunks.push(chunk as Buffer);
     const jsonl = Buffer.concat(chunks).toString("utf8");
+    if (cliOpts.follow) {
+      console.error("--follow ignored when reading from stdin");
+    }
     await runWith(jsonl, { stdinIsPipe: true });
     return;
   }
@@ -17,12 +23,15 @@ export async function logsView(file: string): Promise<void> {
     process.exit(1);
   }
   const jsonl = fs.readFileSync(file, "utf8");
-  await runWith(jsonl, { stdinIsPipe: false });
+  await runWith(jsonl, {
+    stdinIsPipe: false,
+    followPath: cliOpts.follow ? file : undefined,
+  });
 }
 
 async function runWith(
   jsonl: string,
-  opts: { stdinIsPipe: boolean },
+  opts: { stdinIsPipe: boolean; followPath?: string },
 ): Promise<void> {
   // When stdin was used to feed the JSONL data we cannot also use it
   // for interactive keystrokes — it's been drained and isn't a TTY.
@@ -36,7 +45,7 @@ async function runWith(
     cols: process.stdout.columns ?? 80,
   };
   try {
-    await runViewer({ jsonl, input, output, viewport });
+    await runViewer({ jsonl, input, output, viewport, followPath: opts.followPath });
   } finally {
     input.destroy();
     if (output.destroy) output.destroy();

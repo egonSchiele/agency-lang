@@ -133,6 +133,61 @@ describe("renderViewerLines", () => {
   });
 });
 
+describe("promptCompletion expansion", () => {
+  // A promptCompletion leaf should expand into one row per message
+  // followed by a single "raw data" toggle row. Expanding the toggle
+  // should then reveal the JSON dump.
+  function pcLeaf(): TreeNode {
+    return {
+      id: "evt-0",
+      traceId: "t",
+      parentId: "trace-t",
+      children: [],
+      nodeKind: "event",
+      label: "promptCompletion",
+      summary: "promptCompletion",
+      event: {
+        format_version: 1,
+        trace_id: "t",
+        project_id: "p",
+        span_id: null,
+        parent_span_id: null,
+        data: {
+          type: "promptCompletion",
+          timestamp: "2026-01-01T00:00:00Z",
+          messages: [
+            { role: "user", content: "hi" },
+            { role: "assistant", content: "hello" },
+          ],
+        },
+      },
+    };
+  }
+
+  it("expands into conversation lines + raw data toggle", () => {
+    const t = trace([pcLeaf()]);
+    const rows = flattenVisibleRows(baseState([t], ["trace-t", "evt-0"]));
+    // trace, leaf, [user], [assistant], raw-data toggle
+    expect(rows).toHaveLength(5);
+    expect(rows[2].node.nodeKind).toBe("convoLine");
+    expect(rows[2].node.summary).toBe(`[user] "hi"`);
+    expect(rows[3].node.nodeKind).toBe("convoLine");
+    expect(rows[4].node.nodeKind).toBe("rawDataToggle");
+    expect(rows[4].node.id).toBe("evt-0:raw");
+  });
+
+  it("expands the raw-data toggle into JSON lines", () => {
+    const t = trace([pcLeaf()]);
+    const rows = flattenVisibleRows(
+      baseState([t], ["trace-t", "evt-0", "evt-0:raw"]),
+    );
+    // Should now include JSON lines after the toggle.
+    const jsonRows = rows.filter((r) => r.node.nodeKind === "jsonLine");
+    expect(jsonRows.length).toBeGreaterThan(0);
+    expect(jsonRows[0].node.summary.trim()).toBe("{");
+  });
+});
+
 describe("colorFor", () => {
   it("returns a span-type color for known span labels", () => {
     expect(colorFor(span("a", "agentRun"))).toBe("bright-cyan");

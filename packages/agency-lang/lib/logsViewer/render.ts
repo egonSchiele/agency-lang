@@ -1,4 +1,7 @@
 import { TreeNode, ViewerState } from "./types.js";
+import { summarizeSpanStyled, summarizeTraceStyled } from "./summary.js";
+import { DEFAULT_THRESHOLDS, ViewerThresholds } from "./thresholds.js";
+import { formatConversation } from "./conversation.js";
 
 export type Viewport = { rows: number; cols: number };
 export type VisibleRow = { node: TreeNode; depth: number };
@@ -7,12 +10,99 @@ export function flattenVisibleRows(state: ViewerState): VisibleRow[] {
   const out: VisibleRow[] = [];
   const walk = (node: TreeNode, depth: number): void => {
     out.push({ node, depth });
-    if (state.expanded.has(node.id)) {
-      for (const c of node.children) walk(c, depth + 1);
+    if (!state.expanded.has(node.id)) return;
+    // Leaf event nodes can be "expanded" to inline a synthetic
+    // payload view (conversation lines for promptCompletion, raw
+    // JSON otherwise). Real children only ever exist for non-leaf
+    // tree nodes.
+    if (node.nodeKind === "event" && node.event) {
+      for (const child of eventExpansionChildren(node)) walk(child, depth + 1);
+      return;
     }
+    // A "raw data" toggle row, when expanded, reveals the JSON
+    // payload of the parent event leaf. We carry the original event
+    // on the toggle node so we can recompute lines here.
+    if (node.nodeKind === "rawDataToggle" && node.event) {
+      for (const child of jsonLineChildren(node, node.event)) {
+        walk(child, depth + 1);
+      }
+      return;
+    }
+    for (const c of node.children) walk(c, depth + 1);
   };
   for (const r of state.roots) walk(r, 0);
   return out;
+}
+
+// Return the synthetic children shown when a leaf event is expanded.
+// promptCompletion events get a readable conversation view plus a
+// "raw data" toggle for the JSON; other events fall back to raw JSON
+// lines directly.
+//
+// Exported so search.ts can walk these the same way the renderer does
+// — otherwise `/foo` would match a highlighted row but `n`/`N` would
+// claim there are no matches (the rows aren't in the persistent
+// forest).
+export function eventExpansionChildren(leaf: TreeNode): TreeNode[] {
+  if (!leaf.event) return [];
+  if (leaf.event.data.type === "promptCompletion") {
+    return promptCompletionChildren(leaf);
+  }
+  return jsonLineChildren(leaf, leaf.event);
+}
+
+// Synthetic children of a "raw data" toggle row. Exported for the
+// same reason as eventExpansionChildren above.
+export function rawDataChildren(toggle: TreeNode): TreeNode[] {
+  if (!toggle.event) return [];
+  return jsonLineChildren(toggle, toggle.event);
+}
+
+function promptCompletionChildren(leaf: TreeNode): TreeNode[] {
+  const messages = Array.isArray(leaf.event!.data.messages)
+    ? leaf.event!.data.messages
+    : [];
+  const convoLines = formatConversation(messages);
+  const convoNodes: TreeNode[] = convoLines.map((line, i) => ({
+    id: `${leaf.id}:convo:${i}`,
+    traceId: leaf.traceId,
+    parentId: leaf.id,
+    children: [],
+    nodeKind: "convoLine" as const,
+    label: "",
+    summary: line,
+  }));
+  const toggle: TreeNode = {
+    id: `${leaf.id}:raw`,
+    traceId: leaf.traceId,
+    parentId: leaf.id,
+    children: [],
+    nodeKind: "rawDataToggle" as const,
+    label: "raw data",
+    summary: "raw data",
+    event: leaf.event,
+  };
+  return [...convoNodes, toggle];
+}
+
+// Pretty-print the leaf event payload and turn it into one synthetic
+// TreeNode per line, so the visible-rows pipeline can fold them into
+// the same scroll/cursor model used for real tree rows.
+function jsonLineChildren(
+  parent: TreeNode,
+  envelope: NonNullable<TreeNode["event"]>,
+): TreeNode[] {
+  const text = JSON.stringify(envelope, null, 2);
+  const lines = text.split("\n");
+  return lines.map((line, i) => ({
+    id: `${parent.id}:json:${i}`,
+    traceId: parent.traceId,
+    parentId: parent.id,
+    children: [],
+    nodeKind: "jsonLine" as const,
+    label: "",
+    summary: line,
+  }));
 }
 
 export function renderViewerLines(
@@ -34,17 +124,95 @@ export function renderRowText(
   row: VisibleRow,
   isCursor: boolean,
   isExpanded: boolean,
+  opts: { query?: string; thresholds?: ViewerThresholds } = {},
 ): string {
   const indent = "  ".repeat(row.depth);
-  const glyph = chooseGlyph(row.node, isExpanded);
   const marker = isCursor ? "> " : "  ";
+  if (row.node.nodeKind === "jsonLine" || row.node.nodeKind === "convoLine") {
+    // No glyph; the raw text line *is* the summary. Highlight
+    // matches per the active search.
+    const text = opts.query
+      ? highlightInline(row.node.summary, opts.query)
+      : row.node.summary;
+    return `${marker}${indent}${text}`;
+  }
+  const glyph = chooseGlyph(row.node, isExpanded);
+  // Spans and traces get the magnitude-colored summary so durations
+  // and costs render in red/gray per the configured thresholds; raw
+  // event leaves use the plain pre-computed summary (no metrics).
+  const t = opts.thresholds ?? DEFAULT_THRESHOLDS;
+  const styledSummary =
+    row.node.nodeKind === "span"
+      ? summarizeSpanStyled(row.node, t)
+      : row.node.nodeKind === "trace"
+        ? summarizeTraceStyled(row.node, t)
+        : row.node.summary;
+  const withHighlight = opts.query
+    ? highlightInline(styledSummary, opts.query)
+    : styledSummary;
   // Over-long lines are clipped centrally by the TUI renderer; no
   // need to slice here.
-  return `${marker}${indent}${glyph} ${row.node.summary}`;
+  return `${marker}${indent}${glyph} ${withHighlight}`;
+}
+
+// Wrap every case-insensitive occurrence of `query` in the source
+// string with `{yellow-bg}...{/yellow-bg}` style tags, taking care
+// not to break existing tags that the styled summary may already
+// have inserted (e.g. `{bright-red-fg}5.2s{/bright-red-fg}`). We
+// only highlight substrings that fall fully outside a tag body.
+export function highlightInline(text: string, query: string): string {
+  if (!query) return text;
+  const needle = query.toLowerCase();
+  // Walk through the source one segment at a time, splitting at any
+  // `{...}` tag boundary. Highlight inside text segments only.
+  const parts = splitOnTags(text);
+  const out: string[] = [];
+  for (const part of parts) {
+    if (part.kind === "tag") {
+      out.push(part.text);
+      continue;
+    }
+    let i = 0;
+    const lower = part.text.toLowerCase();
+    while (i < part.text.length) {
+      const hit = lower.indexOf(needle, i);
+      if (hit < 0) {
+        out.push(part.text.slice(i));
+        break;
+      }
+      if (hit > i) out.push(part.text.slice(i, hit));
+      out.push(`{yellow-bg}${part.text.slice(hit, hit + query.length)}{/yellow-bg}`);
+      i = hit + query.length;
+    }
+  }
+  return out.join("");
+}
+
+type Part = { kind: "text" | "tag"; text: string };
+
+function splitOnTags(text: string): Part[] {
+  const re = /\{[^}]+\}/g;
+  const out: Part[] = [];
+  let last = 0;
+  for (const m of text.matchAll(re)) {
+    const start = m.index ?? 0;
+    if (start > last) out.push({ kind: "text", text: text.slice(last, start) });
+    out.push({ kind: "tag", text: m[0] });
+    last = start + m[0].length;
+  }
+  if (last < text.length) out.push({ kind: "text", text: text.slice(last) });
+  return out;
 }
 
 function chooseGlyph(node: TreeNode, isExpanded: boolean): string {
-  if (node.nodeKind === "event" || node.children.length === 0) return "●";
+  if (node.nodeKind === "jsonLine" || node.nodeKind === "convoLine") return "";
+  if (node.nodeKind === "rawDataToggle") return isExpanded ? "▼" : "▶";
+  if (node.nodeKind === "event") {
+    // Event leaves with a payload are expandable (inline JSON).
+    if (node.event) return isExpanded ? "▼" : "▶";
+    return "●";
+  }
+  if (node.children.length === 0) return "●";
   return isExpanded ? "▼" : "▶";
 }
 
@@ -53,6 +221,9 @@ function chooseGlyph(node: TreeNode, isExpanded: boolean): string {
 // terminal fg" — used for trace headers (which we'd rather see in
 // the default color so the bold/inverse cursor style stays readable).
 export function colorFor(node: TreeNode): string | undefined {
+  if (node.nodeKind === "jsonLine") return "gray";
+  if (node.nodeKind === "rawDataToggle") return "gray";
+  if (node.nodeKind === "convoLine") return undefined;
   if (node.nodeKind === "trace") return undefined;
   if (node.nodeKind === "span") {
     switch (node.label) {

@@ -13,6 +13,18 @@ const evt = (over: Partial<EventEnvelope>): EventEnvelope => ({
 });
 
 describe("buildForest", () => {
+  it("hides graph schema events from the tree", () => {
+    const forest = buildForest([
+      evt({ data: { type: "agentStart", timestamp: "" } }),
+      evt({ data: { type: "graph", timestamp: "", nodes: ["main"], edges: {}, startNode: "main" } }),
+      evt({ data: { type: "enterNode", timestamp: "", nodeId: "main" } }),
+    ]);
+    const labels = forest[0].children.map((c) => c.label);
+    expect(labels).not.toContain("graph");
+    expect(labels).toContain("agentStart");
+    expect(labels).toContain("enterNode");
+  });
+
   it("returns one root per trace_id", () => {
     const forest = buildForest([
       evt({ trace_id: "a" }),

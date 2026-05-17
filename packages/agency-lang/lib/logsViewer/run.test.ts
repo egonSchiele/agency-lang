@@ -90,6 +90,69 @@ describe("runViewer", () => {
     expect(last).toMatch(/\[abc\]/);
   });
 
+  it("Enter on a leaf inlines its JSON payload below the leaf", async () => {
+    const out = new FrameRecorder();
+    await runViewer({
+      jsonl: sample,
+      // Navigate: l (expand trace) l (expand agentRun span) j (move
+      // to first child leaf, agentStart) Enter (inline its JSON) q.
+      input: new ScriptedInput(["l", "l", "j", "Enter", "q"]),
+      output: out,
+      viewport: { rows: 20, cols: 80 },
+    });
+    const last = out.lastText();
+    // The inlined JSON includes the full EventEnvelope shape: keys
+    // like `"data":` and the event type literal `agentStart`.
+    expect(last).toMatch(/"data":/);
+    expect(last).toMatch(/agentStart/);
+    // h collapses the inline JSON back. Smoke check: re-run with an
+    // extra `h` and ensure `"data":` is gone from the final frame.
+    const out2 = new FrameRecorder();
+    await runViewer({
+      jsonl: sample,
+      input: new ScriptedInput(["l", "l", "j", "Enter", "h", "q"]),
+      output: out2,
+      viewport: { rows: 20, cols: 80 },
+    });
+    expect(out2.lastText()).not.toMatch(/"data":/);
+  });
+
+  it("/ then a query jumps the cursor to the first match", async () => {
+    const out = new FrameRecorder();
+    const scripted = new ScriptedInput(["l", "j", "/"]);
+    // Pre-load the search prompt response and the final 'q'.
+    scripted.feedLine("agentEnd");
+    scripted.feedKey({ key: "q" });
+    await runViewer({
+      jsonl: sample,
+      input: scripted,
+      output: out,
+      viewport: { rows: 10, cols: 80 },
+    });
+    const last = out.lastText();
+    // Status bar should show the match indicator. The query also
+    // matches occurrences inside the leaf's expanded JSON payload,
+    // so total matches is >1 — we only assert the cursor landed on
+    // the first one and the query text is shown.
+    expect(last).toMatch(/match 1\/\d+/);
+    expect(last).toMatch(/agentEnd/);
+  });
+
+  it("? opens the help overlay; any key closes it", async () => {
+    const out = new FrameRecorder();
+    await runViewer({
+      jsonl: sample,
+      input: new ScriptedInput(["?", "j", "q"]),
+      output: out,
+      viewport: { rows: 20, cols: 80 },
+    });
+    // At least one frame should show the help heading.
+    const anyHelp = out.frames.some((_, i) => out.textAt(i).includes("Keybindings"));
+    expect(anyHelp).toBe(true);
+    // And the final frame (after `j`) should not.
+    expect(out.lastText()).not.toMatch(/Keybindings/);
+  });
+
   it("shows parse errors as a footer line", async () => {
     const out = new FrameRecorder();
     const bad = sample + "this is not json\n";

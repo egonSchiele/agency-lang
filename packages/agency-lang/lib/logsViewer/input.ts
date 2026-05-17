@@ -170,11 +170,16 @@ function expand(
 ): ViewerState {
   if (idx < 0) return state;
   const node = rows[idx].node;
-  // jsonLine rows aren't expandable and have no children to descend
-  // into; leave them alone.
-  if (node.nodeKind === "jsonLine") return state;
+  // Synthetic text rows aren't expandable and have no children to
+  // descend into; leave them alone.
+  if (node.nodeKind === "jsonLine" || node.nodeKind === "convoLine") {
+    return state;
+  }
   const isLeafWithPayload = node.nodeKind === "event" && !!node.event;
-  if (node.children.length === 0 && !isLeafWithPayload) return state;
+  const isRawToggle = node.nodeKind === "rawDataToggle";
+  if (node.children.length === 0 && !isLeafWithPayload && !isRawToggle) {
+    return state;
+  }
   // If the node is already expanded, descend into its first child
   // (only for true tree nodes — leaves' "children" are synthetic
   // jsonLine rows that aren't worth landing the cursor on first).

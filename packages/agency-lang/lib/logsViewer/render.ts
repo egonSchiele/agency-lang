@@ -1,6 +1,7 @@
 import { TreeNode, ViewerState } from "./types.js";
 import { summarizeSpanStyled, summarizeTraceStyled } from "./summary.js";
 import { DEFAULT_THRESHOLDS, ViewerThresholds } from "./thresholds.js";
+import { formatConversation } from "./conversation.js";
 
 export type Viewport = { rows: number; cols: number };
 export type VisibleRow = { node: TreeNode; depth: number };
@@ -9,33 +10,82 @@ export function flattenVisibleRows(state: ViewerState): VisibleRow[] {
   const out: VisibleRow[] = [];
   const walk = (node: TreeNode, depth: number): void => {
     out.push({ node, depth });
-    if (state.expanded.has(node.id)) {
-      // Leaf event nodes can be "expanded" to inline their JSON
-      // payload as synthetic jsonLine rows. Real children only ever
-      // exist for non-leaf nodes.
-      if (node.nodeKind === "event" && node.event) {
-        for (const child of jsonLineChildren(node)) walk(child, depth + 1);
-      } else {
-        for (const c of node.children) walk(c, depth + 1);
-      }
+    if (!state.expanded.has(node.id)) return;
+    // Leaf event nodes can be "expanded" to inline a synthetic
+    // payload view (conversation lines for promptCompletion, raw
+    // JSON otherwise). Real children only ever exist for non-leaf
+    // tree nodes.
+    if (node.nodeKind === "event" && node.event) {
+      for (const child of eventExpansionChildren(node)) walk(child, depth + 1);
+      return;
     }
+    // A "raw data" toggle row, when expanded, reveals the JSON
+    // payload of the parent event leaf. We carry the original event
+    // on the toggle node so we can recompute lines here.
+    if (node.nodeKind === "rawDataToggle" && node.event) {
+      for (const child of jsonLineChildren(node, node.event)) {
+        walk(child, depth + 1);
+      }
+      return;
+    }
+    for (const c of node.children) walk(c, depth + 1);
   };
   for (const r of state.roots) walk(r, 0);
   return out;
 }
 
-// Pretty-print the leaf event payload and turn it into one synthetic
-// TreeNode per line, so the visible-rows pipeline can fold them into
-// the same scroll/cursor model used for real tree rows. Heavy work is
-// kept here so callers don't have to know the format.
-function jsonLineChildren(leaf: TreeNode): TreeNode[] {
+// Return the synthetic children shown when a leaf event is expanded.
+// promptCompletion events get a readable conversation view plus a
+// "raw data" toggle for the JSON; other events fall back to raw JSON
+// lines directly.
+function eventExpansionChildren(leaf: TreeNode): TreeNode[] {
   if (!leaf.event) return [];
-  const text = JSON.stringify(leaf.event, null, 2);
-  const lines = text.split("\n");
-  return lines.map((line, i) => ({
-    id: `${leaf.id}:json:${i}`,
+  if (leaf.event.data.type === "promptCompletion") {
+    return promptCompletionChildren(leaf);
+  }
+  return jsonLineChildren(leaf, leaf.event);
+}
+
+function promptCompletionChildren(leaf: TreeNode): TreeNode[] {
+  const messages = Array.isArray(leaf.event!.data.messages)
+    ? leaf.event!.data.messages
+    : [];
+  const convoLines = formatConversation(messages);
+  const convoNodes: TreeNode[] = convoLines.map((line, i) => ({
+    id: `${leaf.id}:convo:${i}`,
     traceId: leaf.traceId,
     parentId: leaf.id,
+    children: [],
+    nodeKind: "convoLine" as const,
+    label: "",
+    summary: line,
+  }));
+  const toggle: TreeNode = {
+    id: `${leaf.id}:raw`,
+    traceId: leaf.traceId,
+    parentId: leaf.id,
+    children: [],
+    nodeKind: "rawDataToggle" as const,
+    label: "raw data",
+    summary: "raw data",
+    event: leaf.event,
+  };
+  return [...convoNodes, toggle];
+}
+
+// Pretty-print the leaf event payload and turn it into one synthetic
+// TreeNode per line, so the visible-rows pipeline can fold them into
+// the same scroll/cursor model used for real tree rows.
+function jsonLineChildren(
+  parent: TreeNode,
+  envelope: NonNullable<TreeNode["event"]>,
+): TreeNode[] {
+  const text = JSON.stringify(envelope, null, 2);
+  const lines = text.split("\n");
+  return lines.map((line, i) => ({
+    id: `${parent.id}:json:${i}`,
+    traceId: parent.traceId,
+    parentId: parent.id,
     children: [],
     nodeKind: "jsonLine" as const,
     label: "",
@@ -66,8 +116,8 @@ export function renderRowText(
 ): string {
   const indent = "  ".repeat(row.depth);
   const marker = isCursor ? "> " : "  ";
-  if (row.node.nodeKind === "jsonLine") {
-    // No glyph; the raw JSON line is the summary text. Highlight
+  if (row.node.nodeKind === "jsonLine" || row.node.nodeKind === "convoLine") {
+    // No glyph; the raw text line *is* the summary. Highlight
     // matches per the active search.
     const text = opts.query
       ? highlightInline(row.node.summary, opts.query)
@@ -143,7 +193,8 @@ function splitOnTags(text: string): Part[] {
 }
 
 function chooseGlyph(node: TreeNode, isExpanded: boolean): string {
-  if (node.nodeKind === "jsonLine") return "";
+  if (node.nodeKind === "jsonLine" || node.nodeKind === "convoLine") return "";
+  if (node.nodeKind === "rawDataToggle") return isExpanded ? "▼" : "▶";
   if (node.nodeKind === "event") {
     // Event leaves with a payload are expandable (inline JSON).
     if (node.event) return isExpanded ? "▼" : "▶";
@@ -159,6 +210,8 @@ function chooseGlyph(node: TreeNode, isExpanded: boolean): string {
 // the default color so the bold/inverse cursor style stays readable).
 export function colorFor(node: TreeNode): string | undefined {
   if (node.nodeKind === "jsonLine") return "gray";
+  if (node.nodeKind === "rawDataToggle") return "gray";
+  if (node.nodeKind === "convoLine") return undefined;
   if (node.nodeKind === "trace") return undefined;
   if (node.nodeKind === "span") {
     switch (node.label) {

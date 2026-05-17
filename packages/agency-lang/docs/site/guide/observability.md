@@ -80,6 +80,23 @@ below it as gray, indented lines. Press `h` (or `Left`) to collapse
 it back. Leaves with payloads show a `▶` / `▼` glyph instead of `●`
 so the affordance is visible.
 
+### Conversation view for `promptCompletion`
+
+Expanding a `promptCompletion` leaf shows a compact conversation
+summary — one line per message — instead of the raw JSON. For
+example:
+
+```text
+[user] "Greet Alice using the greet tool"
+[assistant] tool call: greet({"name":"Alice"})
+[tool: greet] "Hello, Alice!"
+[assistant] "Hello, Alice!"
+▶ raw data
+```
+
+Expand the `▶ raw data` row to reveal the full JSON envelope when
+you need it.
+
 ### Search
 
 Press `/`, type a substring, then `Enter`. Matches are highlighted

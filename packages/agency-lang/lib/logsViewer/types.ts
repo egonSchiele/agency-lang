@@ -24,10 +24,13 @@ export type TreeNode = {
   traceId: string;
   parentId: string | null;
   children: TreeNode[];
-  // "jsonLine" is a synthetic, on-the-fly row generated when a leaf
-  // event is expanded — it carries one rendered line of the leaf's
-  // JSON payload. Not part of the persistent forest.
-  nodeKind: "trace" | "span" | "event" | "jsonLine";
+  // Synthetic, on-the-fly rows generated when a leaf event is
+  // expanded — none are part of the persistent forest:
+  //   - "jsonLine"      : one rendered line of the leaf's JSON payload
+  //   - "convoLine"     : one rendered conversation message (promptCompletion only)
+  //   - "rawDataToggle" : expandable "raw data" header that, when opened,
+  //                       reveals the underlying JSON payload as jsonLine rows
+  nodeKind: "trace" | "span" | "event" | "jsonLine" | "convoLine" | "rawDataToggle";
   // For "trace": the trace_id; for "span": the span type (agentRun,
   // llmCall, ...); for "event": the data.type.
   label: string;

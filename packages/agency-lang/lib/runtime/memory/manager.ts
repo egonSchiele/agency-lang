@@ -308,6 +308,12 @@ export class MemoryManager {
           model: result.value.model ?? options?.model,
           dimensions: vector.length,
           timeTaken,
+          // Pass through provider-reported token/cost when available.
+          // Some embed providers (e.g. Ollama) don't report these, in
+          // which case they stay undefined and the viewer just omits
+          // them — same fallthrough as `promptCompletion`.
+          usage: result.value.tokenUsage,
+          cost: result.value.costEstimate,
           phase,
         });
       } catch (err) {
@@ -1162,10 +1168,25 @@ function parseForgetResult(
  * Slice `text` to at most `max` characters, appending an ellipsis
  * marker when truncated. Used for log/event previews so long inputs
  * (e.g. embedded text, recall queries) don't dominate a line.
+ *
+ * Also escapes newlines, tabs, embedded quotes, backslashes, and other
+ * control characters so the result is reliably single-line and safe to
+ * splat inside a `"..."` log template. Without this, a user-provided
+ * query containing a newline (`remember("a\nb")`) would emit a multi-line
+ * log entry that breaks line-oriented `grep`/`awk`/log-shipper pipelines.
  */
 function truncatePreview(text: string, max: number): string {
-  if (text.length <= max) return text;
-  return `${text.slice(0, max)}…`;
+  const sliced = text.length > max ? `${text.slice(0, max)}…` : text;
+  return sliced
+    .replace(/\\/g, "\\\\")
+    .replace(/"/g, '\\"')
+    .replace(/\n/g, "\\n")
+    .replace(/\r/g, "\\r")
+    .replace(/\t/g, "\\t")
+    .replace(
+      /[\x00-\x1f\x7f]/g,
+      (c) => `\\x${c.charCodeAt(0).toString(16).padStart(2, "0")}`,
+    );
 }
 
 /**

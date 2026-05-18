@@ -1,0 +1,4 @@
+/** Visible docs file. */
+node visible(): string {
+  return "visible"
+}

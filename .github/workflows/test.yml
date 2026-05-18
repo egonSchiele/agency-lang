@@ -69,6 +69,15 @@ jobs:
         node tests/integration/bundlers/test-vite.mjs ./agency-lang-*.tgz
         node tests/integration/cli/test.mjs ./agency-lang-*.tgz
         rm -f agency-lang-*.tgz
+    - name: Main-only CLI command integration tests
+      if: matrix.node-version == '22.x' && github.event_name == 'push' && github.ref == 'refs/heads/main'
+      env:
+        TMPDIR: ${{ runner.temp }}
+      run: |
+        cd packages/agency-lang
+        npm pack
+        node tests/integration/cli-main/test.mjs ./agency-lang-*.tgz
+        rm -f agency-lang-*.tgz
     - name: StateLog integration tests
       if: matrix.node-version == '22.x'
       working-directory: packages/agency-lang

@@ -16,21 +16,21 @@ export function findMatches(roots: TreeNode[], query: string): string[] {
   if (query.length === 0) return [];
   const needle = query.toLowerCase();
   const out: string[] = [];
-  const walk = (node: TreeNode): void => {
+  const pushIfMatches = (node: TreeNode): void => {
     if (node.summary.toLowerCase().includes(needle)) {
       out.push(node.id);
     }
+  };
+  const walk = (node: TreeNode): void => {
+    pushIfMatches(node);
     if (node.nodeKind === "event" && node.event) {
       for (const synth of eventExpansionChildren(node)) {
-        if (synth.summary.toLowerCase().includes(needle)) {
-          out.push(synth.id);
+        pushIfMatches(synth);
+        if (synth.nodeKind !== "rawDataToggle") {
+          continue;
         }
-        if (synth.nodeKind === "rawDataToggle") {
-          for (const json of rawDataChildren(synth)) {
-            if (json.summary.toLowerCase().includes(needle)) {
-              out.push(json.id);
-            }
-          }
+        for (const json of rawDataChildren(synth)) {
+          pushIfMatches(json);
         }
       }
     }

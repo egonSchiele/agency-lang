@@ -1,0 +1,11 @@
+{
+  "sourceFile": "coverage-partial.agency",
+  "tests": [
+    {
+      "nodeName": "covered",
+      "input": "",
+      "expectedOutput": "\"covered\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

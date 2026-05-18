@@ -402,6 +402,34 @@ AGENCY_USE_TEST_LLM_PROVIDER=1 pnpm run test:agency-js
 
 **GitHub stdlib smoke test** — runs the `@agency-lang/github` package's agency tests with a real GitHub token.
 
+**Main-only CLI command integration tests** — installs `agency-lang` from the same `npm pack` tarball used by the PR integration suite in a fresh temp project and exercises finite, non-interactive CLI commands that are broader than the PR smoke suite. Runs only on `push` to `main`, Node 22.
+
+Covered commands:
+- `compile`
+- `run`
+- `pack`
+- `trace`
+- `fmt`
+- `parse`
+- `coverage`
+- `tc`
+- `bundle`
+- `unbundle`
+- `doc`
+- `schedule add --backend github`
+
+The suite also covers selected flags and failure paths:
+- `compile --ts`
+- `pack --target browser` failure
+- `fmt` stdout mode and `fmt -i` idempotence
+- `parse` stdin mode
+- `coverage` full coverage, partial coverage, threshold failure, and clean
+- `tc` stdin mode, normal type error, and `--strict`
+- `doc` directory mode with `--ignore`
+- `schedule --cron`, `schedule --write`, existing workflow failure, and invalid backend failure
+
+The `pack` assertions move packed files to directories without `node_modules` before running them with Node. The `schedule` assertions check generated GitHub Actions YAML only and never install local cron/systemd/launchd entries.
+
 **Agency and agency-js tests** - makes real llm calls
 
 ### Local only (not in CI)

@@ -1,0 +1,4 @@
+node covered(): string {
+  const label = "covered"
+  return label
+}

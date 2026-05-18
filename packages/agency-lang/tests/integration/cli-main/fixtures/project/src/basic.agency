@@ -1,0 +1,5 @@
+node main() {
+  const greeting = "basic-ok"
+  print(greeting)
+  return greeting
+}

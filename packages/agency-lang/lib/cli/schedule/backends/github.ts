@@ -103,6 +103,9 @@ export class GithubBackend implements ScheduleBackend {
       agentFile: yamlQuote(entry.agentFile),
       checkoutRef: actionRef("actions/checkout", opts.noPin),
       runAgentActionRef: actionRef("egonSchiele/run-agency-action", opts.noPin),
+      actionPinComment: opts.noPin
+        ? "Action versions are not SHA-pinned because --no-pin was used. Remove --no-pin to pin action SHAs."
+        : "Action SHAs are pinned. Re-run `agency schedule add --force` after upgrading agency-lang to refresh.",
       permissionsBlock: renderPermissionsBlock(opts.write),
       concurrencyGroup: renderConcurrencyGroup(),
       envBlock: renderEnvBlock(opts.secrets),

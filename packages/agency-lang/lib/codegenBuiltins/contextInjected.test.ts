@@ -7,10 +7,9 @@ import { CONTEXT_INJECTED_BUILTINS } from "./contextInjected.js";
  *
  * For every entry in `CONTEXT_INJECTED_BUILTINS`, this asserts that:
  *
- *   1. A TS implementation with the same name is exported from one of
- *      the registered stdlib modules (today only `lib/stdlib/memory.ts`,
- *      so we import that one directly; when a future entry comes from
- *      a different module, add the module here).
+ *   1. A TS implementation with the same name is exported from the
+ *      module specified by the entry's `from` field. Add new source
+ *      modules to `implsByFrom` below as they're introduced.
  *
  *   2. The TS implementation's arity is `1 + params.length` — i.e. it
  *      takes a leading `RuntimeContext` argument followed by exactly
@@ -26,7 +25,12 @@ import { CONTEXT_INJECTED_BUILTINS } from "./contextInjected.js";
  * lands.
  */
 describe("CONTEXT_INJECTED_BUILTINS drift safeguard", () => {
-  const allImpls: Record<string, unknown> = { ...memoryImpls };
+  // Map each registry-side `from` specifier to the runtime module
+  // that exports the impls. When a new context-injected source
+  // module is added, append it here.
+  const implsByFrom: Record<string, Record<string, unknown>> = {
+    "agency-lang/stdlib-lib/memory.js": { ...memoryImpls },
+  };
 
   for (const [name, def] of Object.entries(CONTEXT_INJECTED_BUILTINS)) {
     describe(name, () => {
@@ -38,14 +42,21 @@ describe("CONTEXT_INJECTED_BUILTINS drift safeguard", () => {
         expect(def.name).toBe(name);
       });
 
+      it("registry knows the impl's source module", () => {
+        expect(implsByFrom[def.from]).toBeDefined();
+      });
+
       it("has a TS implementation exported under the same name", () => {
-        expect(allImpls[name]).toBeTypeOf("function");
+        const mod = implsByFrom[def.from];
+        expect(mod?.[name]).toBeTypeOf("function");
       });
 
       it("TS implementation arity is 1 + registry params.length", () => {
-        const fn = allImpls[name] as ((...args: unknown[]) => unknown) | undefined;
+        const fn = implsByFrom[def.from]?.[name] as
+          | ((...args: unknown[]) => unknown)
+          | undefined;
         if (typeof fn !== "function") {
-          throw new Error(`No impl found for ${name}`);
+          throw new Error(`No impl found for ${name} in ${def.from}`);
         }
         expect(fn.length).toBe(1 + def.params.length);
       });

@@ -64,20 +64,6 @@ const llmOptions: VariableType = {
 };
 
 /**
- * Public shape returned by `getContext()`. Mirrors the `Context` type
- * defined in `lib/runtime/publicContext.ts`. We model `memoryManager` as
- * optional `any` because the agency type system doesn't model class
- * instances; users access methods through the runtime side (TS bindings),
- * not directly via field access in agency code.
- */
-const contextType: VariableType = {
-  type: "objectType",
-  properties: [
-    { key: "memoryManager", value: optional(ANY_T) },
-  ],
-};
-
-/**
  * Signatures for builtin / auto-imported functions that the typechecker
  * needs to know about.
  *

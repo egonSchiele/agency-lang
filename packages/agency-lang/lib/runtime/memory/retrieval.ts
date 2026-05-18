@@ -30,15 +30,15 @@ function escapeRegex(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-// Word-boundary substring test. Treats `needle` as a token sequence
-// (so "Bob" finds "Bob" in "tell me about Bob" but not in "Bobby").
-// Both sides are assumed already lowercased by the caller.
-function containsToken(haystack: string, needle: string): boolean {
-  if (!needle) return false;
-  const re = new RegExp(`\\b${escapeRegex(needle)}\\b`);
-  return re.test(haystack);
+function tokenRegex(s: string): RegExp {
+  return new RegExp(`\\b${escapeRegex(s)}\\b`);
 }
 
+// Note on plural / inflection handling: type labels are stored
+// verbatim as the LLM emitted them, so a query for "person" won't
+// match an entity typed "persons" and vice versa. Adding a tiny
+// inflection step (e.g. trailing-`s` strip) would cover ~80% of the
+// gap; tracked as future work to keep this PR scoped.
 export function structuredLookup(
   graph: MemoryGraph,
   query: string,
@@ -47,6 +47,10 @@ export function structuredLookup(
   const lower = query.toLowerCase().trim();
   if (!lower) return [];
   const entities = graph.getEntities();
+
+  // Loop-invariant: the query regex is the same for every entity and
+  // every observation. Build it once before the filter.
+  const queryRe = tokenRegex(lower);
 
   const matches = entities.filter((entity) => {
     if (options?.source && entity.source !== options.source) return false;
@@ -62,10 +66,10 @@ export function structuredLookup(
     // matching everything in sight.
     const nameLower = entity.name.toLowerCase();
     if (isMeaningfulName(nameLower)) {
-      if (
-        containsToken(lower, nameLower) ||
-        containsToken(nameLower, lower)
-      ) {
+      // The name regex is per-entity (not loop-invariant), but is
+      // still built once per entity rather than once per observation.
+      const nameRe = tokenRegex(nameLower);
+      if (queryRe.test(nameLower) || nameRe.test(lower)) {
         return true;
       }
     }
@@ -83,7 +87,11 @@ export function structuredLookup(
     if (
       currentObs.some((o) => {
         const c = o.content.toLowerCase();
-        return containsToken(c, lower) || containsToken(lower, c);
+        // The content regex is per-observation and unavoidable —
+        // each observation is a different needle when checking
+        // "does query mention this observation". The query side uses
+        // the loop-invariant `queryRe`.
+        return queryRe.test(c) || tokenRegex(c).test(lower);
       })
     ) {
       return true;

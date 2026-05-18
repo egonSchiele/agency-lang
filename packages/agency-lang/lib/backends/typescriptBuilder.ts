@@ -2288,7 +2288,9 @@ export class TypeScriptBuilder {
     // branch below — but the registry lookup has to happen FIRST so
     // we know to inject ctx. See lib/codegenBuiltins/contextInjected.ts.
     if (isContextInjectedBuiltin(node.functionName)) {
-      return this.emitContextInjectedCall(node, functionName, shouldAwait);
+      return this.emitDirectFunctionCall(node, functionName, shouldAwait, [
+        ts.id("__ctx"),
+      ]);
     }
 
     // __-prefixed helpers and DIRECT_CALL_FUNCTIONS: emit plain direct call
@@ -2329,36 +2331,20 @@ export class TypeScriptBuilder {
     return shouldAwait ? ts.await(callExpr) : callExpr;
   }
 
+  /**
+   * Emit a plain direct function call: `f(arg1, arg2, blockArg?)`.
+   * Context-injected builtins reuse this with `prependArgs =
+   * [__ctx]`; the registry lookup at the call site is what marks the
+   * intent, no separate method needed.
+   */
   private emitDirectFunctionCall(
     node: FunctionCall,
     functionName: string,
     shouldAwait: boolean,
-  ): TsNode {
-    const argNodes = node.arguments.map((a) => this.processCallArg(a));
-
-    if (node.block) {
-      argNodes.push(this.processBlockArgument(node));
-    }
-
-    const call = $.id(functionName).call(argNodes).done();
-    return shouldAwait ? ts.await(call) : call;
-  }
-
-  /**
-   * Emit a context-injected builtin call: `f(__ctx, ...args)`. The
-   * shape is identical to `emitDirectFunctionCall` except for the
-   * `__ctx` prepended onto the resolved positional arg list. Done as
-   * its own method (rather than a parameter on `emitDirectFunctionCall`)
-   * so the codegen call site for these builtins is greppable and the
-   * intent is explicit.
-   */
-  private emitContextInjectedCall(
-    node: FunctionCall,
-    functionName: string,
-    shouldAwait: boolean,
+    prependArgs: TsNode[] = [],
   ): TsNode {
     const argNodes: TsNode[] = [
-      ts.id("__ctx"),
+      ...prependArgs,
       ...node.arguments.map((a) => this.processCallArg(a)),
     ];
 
@@ -3730,17 +3716,26 @@ export class TypeScriptBuilder {
   }
 
   /**
-   * Emit the import statement that brings every context-injected
+   * Emit the import statements that bring every context-injected
    * builtin into scope in the generated TS. The set is fixed by
    * `CONTEXT_INJECTED_BUILTINS` at codegen time, so we always import
    * the full list — esbuild tree-shakes anything the call site
-   * didn't use. When a future registry entry comes from a different
-   * source module, group by `from` here and emit one import per
-   * source.
+   * didn't use. Imports are grouped by each entry's `from` field, so
+   * adding a builtin sourced from a different module is a registry
+   * change only.
    */
   private generateContextInjectedImports(): string {
-    const names = [...Object.keys(CONTEXT_INJECTED_BUILTINS)].sort();
-    return `import {\n  ${names.join(",\n  ")},\n} from "agency-lang/stdlib-lib/memory.js";`;
+    const byFrom: Record<string, string[]> = {};
+    for (const entry of Object.values(CONTEXT_INJECTED_BUILTINS)) {
+      (byFrom[entry.from] ??= []).push(entry.name);
+    }
+    return Object.keys(byFrom)
+      .sort()
+      .map((from) => {
+        const names = byFrom[from].sort();
+        return `import {\n  ${names.join(",\n  ")},\n} from ${JSON.stringify(from)};`;
+      })
+      .join("\n");
   }
 
   private preprocess(): TsNode[] {

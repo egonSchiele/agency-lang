@@ -48,12 +48,20 @@ export type EmbeddingEntry = {
  * `formatVersion` distinguishes embeddings built from different source
  * texts. Bumped to 2 when we started feeding the embedder a
  * contextualized "{name} ({type}): {content}" string per observation
- * instead of the bare observation content. Legacy files (no version)
- * are treated as v1 and discarded on load — the next write rebuilds
- * them in the current format.
+ * instead of the bare observation content.
  *
- * If the source-text shape changes again, bump this constant and
- * update the load-side guard in `MemoryManager.getEntry`.
+ * Load-side behaviour (`MemoryManager.getEntry`): if the on-disk
+ * index's `formatVersion` is missing (treated as v1) or older than
+ * this constant, we discard the index in memory, log a warning so the
+ * discard is visible, and start with an empty `EmbeddingManager`. The
+ * graph and summary are NOT touched — only embeddings get rebuilt.
+ * The next mutation (any `applyExtractionFromLLM` call) embeds the
+ * affected observations in the current format and persists. Until
+ * then, Tier 2 (embedding similarity) silently produces zero hits
+ * and recall falls back to Tier 1 + Tier 3.
+ *
+ * If the source-text shape changes again, bump this constant; the
+ * load guard handles the rest.
  */
 export const EMBEDDING_FORMAT_VERSION = 2;
 

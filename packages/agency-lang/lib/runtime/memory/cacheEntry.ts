@@ -1,14 +1,14 @@
 import { MemoryGraph } from "./graph.js";
 import { EmbeddingManager } from "./embeddings.js";
 import { applyExtractionResult } from "./extraction.js";
-import type { ExtractionResult } from "./extraction.js";
+import type { ExtractionResult, NewObservation } from "./extraction.js";
 import type {
   ConversationSummary,
   MemoryStore as MemoryStoreType,
 } from "./types.js";
 
 export type ExtractionOutcome = {
-  newObservationIds: string[];
+  newObservations: NewObservation[];
   expiredObservationIds: string[];
 };
 
@@ -118,15 +118,15 @@ export class MemoryCacheEntry {
    * The caller still has to compute embedding vectors for the new
    * observations — that requires an embed-API call which is the
    * manager's responsibility, not the entry's. The returned
-   * `newObservationIds` is exactly the set of ids the manager needs
-   * to feed to `setEmbedding` after embedding them.
+   * `newObservations` is exactly the set the manager needs to feed
+   * to `setEmbedding` after embedding each one.
    */
   applyExtraction(result: ExtractionResult, source: string): ExtractionOutcome {
     const outcome = applyExtractionResult(this.graph, result, source);
     for (const id of outcome.expiredObservationIds) {
       this.embeddings.removeEntry(id);
     }
-    this.indexNewObservations(outcome.newObservationIds);
+    this.indexNewObservations(outcome.newObservations);
     return outcome;
   }
 
@@ -173,19 +173,14 @@ export class MemoryCacheEntry {
   }
 
   /**
-   * Update the cached `obsToEntity` reverse index for a set of
-   * newly-added observation ids. Linear in (entities × their
-   * observations) but only over the freshly-added set, so it stays
-   * cheap at recall time.
+   * Register the obs→entity reverse-index pair for each newly-added
+   * observation. O(N) over the new set — the entity id is captured
+   * at add-time in `applyExtractionResult`, so no graph walk is
+   * needed.
    */
-  private indexNewObservations(observationIds: string[]): void {
-    if (observationIds.length === 0) return;
-    const wanted: Record<string, true> = Object.create(null);
-    for (const id of observationIds) wanted[id] = true;
-    for (const e of this.graph.getEntities()) {
-      for (const o of e.observations) {
-        if (wanted[o.id]) this.obsToEntity[o.id] = e.id;
-      }
+  private indexNewObservations(observations: NewObservation[]): void {
+    for (const { id, entityId } of observations) {
+      this.obsToEntity[id] = entityId;
     }
   }
 }

@@ -88,6 +88,7 @@ describe("applyExtractionResult", () => {
     expect(current).toHaveLength(1);
     expect(current[0].content).toBe("Favorite color is red");
     expect(outcome.expiredObservationIds).toEqual([oldObs.id]);
-    expect(outcome.newObservationIds).toHaveLength(1);
+    expect(outcome.newObservations).toHaveLength(1);
+    expect(outcome.newObservations[0].entityId).toBe(mom.id);
   });
 });

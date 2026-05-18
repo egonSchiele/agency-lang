@@ -7,7 +7,6 @@ export type {
 } from "./types.js";
 export type { Interrupt, InterruptResponse } from "./interrupts.js";
 export { RuntimeContext } from "./state/context.js";
-export type { Context } from "./publicContext.js";
 export { StateStack, State } from "./state/stateStack.js";
 export { GlobalStore } from "./state/globalStore.js";
 export { MessageThread } from "./state/messageThread.js";

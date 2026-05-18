@@ -67,10 +67,12 @@ describe("MemoryCacheEntry", () => {
       },
       "test",
     );
-    expect(outcome.newObservationIds).toHaveLength(1);
+    expect(outcome.newObservations).toHaveLength(1);
     expect(outcome.expiredObservationIds).toHaveLength(0);
-    const newObsId = outcome.newObservationIds[0];
+    const newObsId = outcome.newObservations[0].id;
     const mom = graph.findEntityByName("Mom")!;
+    // Outcome carries the entity id at add-time (no graph walk needed).
+    expect(outcome.newObservations[0].entityId).toBe(mom.id);
     // Reverse index now includes the freshly-added observation.
     expect(entry.lookupEntityIdByObs(newObsId)).toBe(mom.id);
   });

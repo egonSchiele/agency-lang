@@ -14,7 +14,7 @@ import {
   buildExtractionPrompt,
   parseExtractionResult,
 } from "./extraction.js";
-import type { ExtractionResult } from "./extraction.js";
+import type { ExtractionResult, NewObservation } from "./extraction.js";
 import {
   structuredLookup,
   formatRetrievalResults,
@@ -149,12 +149,15 @@ export class MemoryManager {
    */
   private async _text(
     prompt: string,
-    options?: { model?: string },
+    options?: { model?: string; responseFormat?: z.ZodType },
   ): Promise<string> {
     const result = await this.llmClient.text({
       ...this.smoltalkDefaults,
       messages: [smoltalk.userMessage(prompt)],
       model: options?.model ?? this.smoltalkDefaults.model,
+      ...(options?.responseFormat
+        ? { responseFormat: options.responseFormat }
+        : {}),
     } as any);
     if (!result.success) {
       throw new Error(`memory llm text call failed: ${result.error}`);
@@ -249,6 +252,15 @@ export class MemoryManager {
       // discard stale entries. Comparing query vectors built under one
       // (model, source-text) pair to stored vectors built under
       // another yields garbage similarities.
+      if (embeddingIndex) {
+        // Only warn when we found an index but rejected it — a fresh
+        // memoryId with no on-disk index isn't a discard, it's a
+        // first-time load.
+        const onDiskVersion = embeddingIndex.formatVersion ?? 1;
+        console.warn(
+          `[memory] discarding embeddings for memoryId="${id}" (on-disk format v${onDiskVersion}, model="${embeddingIndex.model}"; current format v${EMBEDDING_FORMAT_VERSION}${configuredModel ? `, configured model="${configuredModel}"` : ""}); will rebuild on next write`,
+        );
+      }
       embeddings = new EmbeddingManager();
     }
     if (configuredModel) {
@@ -295,7 +307,7 @@ export class MemoryManager {
   async applyExtractionFromLLM(result: ExtractionResult): Promise<void> {
     const entry = await this.getEntry();
     const outcome = entry.applyExtraction(result, this.source);
-    await this.generateEmbeddings(entry, outcome.newObservationIds);
+    await this.generateEmbeddings(entry, outcome.newObservations);
     await entry.persist(this.store);
   }
 
@@ -383,11 +395,7 @@ export class MemoryManager {
       relevantIds = candidateIds;
     }
 
-    const topK = relevantIds.slice(0, DEFAULT_RECALL_K);
-    const entities = topK
-      .map((id) => graph.getEntity(id))
-      .filter((e): e is NonNullable<typeof e> => e !== null);
-    return formatRetrievalResults(graph, entities);
+    return this.formatTopK(graph, relevantIds);
   }
 
   async recallForInjection(query: string): Promise<string> {
@@ -397,8 +405,18 @@ export class MemoryManager {
     // Tiers 1+2 only for low latency (resolved decision #4).
     const orderedIds = await this.tier1And2(entry, query);
 
-    const topK = orderedIds.slice(0, DEFAULT_RECALL_K);
-    const entities = topK
+    return this.formatTopK(graph, orderedIds);
+  }
+
+  /**
+   * Slice the recall result down to `DEFAULT_RECALL_K`, resolve each
+   * id to its entity (dropping ids that no longer exist), and render
+   * the final user-visible string. Shared tail for `recall` (Tier
+   * 1+2+3) and `recallForInjection` (Tier 1+2 only).
+   */
+  private formatTopK(graph: MemoryGraph, ids: string[]): string {
+    const entities = ids
+      .slice(0, DEFAULT_RECALL_K)
       .map((id) => graph.getEntity(id))
       .filter((e): e is NonNullable<typeof e> => e !== null);
     return formatRetrievalResults(graph, entities);
@@ -594,22 +612,32 @@ export class MemoryManager {
     const result = parseExtractionResult(response);
     if (!result) return;
     const outcome = entry.applyExtraction(result, this.source);
-    await this.generateEmbeddings(entry, outcome.newObservationIds);
+    await this.generateEmbeddings(entry, outcome.newObservations);
     await entry.persist(this.store);
   }
 
   private async generateEmbeddings(
     entry: MemoryCacheEntry,
-    observationIds: string[]
+    observations: NewObservation[]
   ): Promise<void> {
-    for (const obsId of observationIds) {
-      const embedText = buildEmbedText(entry, obsId);
-      if (!embedText) continue;
+    for (const { id } of observations) {
+      const embedText = buildEmbedText(entry, id);
+      if (!embedText) {
+        // Should never happen: the observation was just added by
+        // applyExtraction, so the entity + obs row both exist and
+        // the reverse index was just updated. If we hit this, the
+        // graph mutated between apply and embed in a way we don't
+        // expect — make it visible instead of silently skipping.
+        console.warn(
+          `[memory] generateEmbeddings: no embed text for obs=${id} in memoryId="${entry.memoryId}"; skipping`,
+        );
+        continue;
+      }
       try {
         const vector = await this._embed(embedText, {
           model: this.config.embeddings?.model,
         });
-        entry.setEmbedding(obsId, vector);
+        entry.setEmbedding(id, vector);
       } catch {
         // Embedding failed — Tier 2 silently no-ops (resolved decision #8).
       }
@@ -690,22 +718,31 @@ export class MemoryManager {
     if (candidateIds.length === 0) return [];
     const candidates = this.buildCandidateIndex(entry.getGraph(), candidateIds);
     const prompt = retrievalTemplate({ candidates, query });
-    const response = await this._text(prompt, { model });
+    // Pass the Zod schema so the provider enforces a JSON array of
+    // strings at the output layer. Without this, a model that "thinks
+    // out loud" or wraps the array in prose makes `parseStringArray`
+    // return null and the filter silently produces no hits.
+    const response = await this._text(prompt, {
+      model,
+      responseFormat: StringArraySchema,
+    });
     const ids = parseStringArray(response);
-    if (!ids) return [];
-    // Hallucination guard: only keep ids we actually offered. Set
-    // lookup is O(1) per check; we also de-dupe in case the LLM
-    // returned the same id twice.
-    const offered = new Set(candidateIds);
-    const seen: Record<string, true> = Object.create(null);
-    const out: string[] = [];
-    for (const id of ids) {
-      if (offered.has(id) && !seen[id]) {
-        seen[id] = true;
-        out.push(id);
-      }
+    if (!ids) {
+      // Reaching here means the provider returned something that
+      // didn't parse as a JSON string array even though we asked for
+      // one via `responseFormat`. That's a real signal (bad provider
+      // response, schema not honoured, etc.) and worth surfacing.
+      console.warn(
+        `[memory] tier 3 (LLM filter) returned malformed response for query=${JSON.stringify(query)}: ${response.slice(0, 200)}`,
+      );
+      return [];
     }
-    return out;
+    // Hallucination guard: only keep ids we actually offered, and
+    // de-dupe in case the LLM returned the same id twice. `new
+    // Set(filtered)` preserves first-seen order, which preserves the
+    // LLM's ranking.
+    const offered = new Set(candidateIds);
+    return [...new Set(ids.filter((id) => offered.has(id)))];
   }
 }
 

@@ -3,7 +3,7 @@ import { AgencyFunction, UNSET } from "./agencyFunction.js";
 
 function makeFunction(
   params: { name: string; hasDefault?: boolean; defaultValue?: unknown; variadic?: boolean }[],
-  fn?: Function,
+  fn?: (...args: any[]) => any,
 ) {
   return new AgencyFunction({
     name: "testFn",
@@ -162,7 +162,7 @@ describe("AgencyFunction", () => {
       const fn = AgencyFunction.create({
         name: "add",
         module: "math.agency",
-        fn: async () => {},
+        fn: async () => { },
         params: [],
         toolDefinition: null,
       }, registry);
@@ -319,7 +319,7 @@ describe("partial()", () => {
     const fn = AgencyFunction.create({
       name: "readFile",
       module: "test",
-      fn: () => {},
+      fn: () => { },
       params: [
         { name: "dir", hasDefault: false, defaultValue: undefined, variadic: false },
         { name: "filename", hasDefault: false, defaultValue: undefined, variadic: false },
@@ -340,7 +340,7 @@ describe("describe()", () => {
     const fn = AgencyFunction.create({
       name: "readFile",
       module: "test",
-      fn: () => {},
+      fn: () => { },
       params: [
         { name: "filename", hasDefault: false, defaultValue: undefined, variadic: false },
       ],
@@ -359,7 +359,7 @@ describe("describe()", () => {
     const fn = AgencyFunction.create({
       name: "readFile",
       module: "test",
-      fn: () => {},
+      fn: () => { },
       params: [],
       toolDefinition: null,
     }, {});
@@ -372,7 +372,7 @@ describe("describe()", () => {
     const fn = AgencyFunction.create({
       name: "foo",
       module: "test",
-      fn: () => {},
+      fn: () => { },
       params: [],
       toolDefinition: { name: "foo", description: "old", schema: {} },
     }, {});
@@ -384,7 +384,7 @@ describe("describe()", () => {
     const fn = AgencyFunction.create({
       name: "foo",
       module: "test",
-      fn: () => {},
+      fn: () => { },
       params: [],
       toolDefinition: { name: "foo", description: "old", schema: {} },
     }, {});

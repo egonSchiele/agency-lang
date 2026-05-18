@@ -237,7 +237,7 @@ export class SimpleMachine<T> {
     }
     if (this.config.validation?.func) {
       const maxRetries = this.config.validation.maxRetries ?? 0;
-      let isValid = await this.config.validation.func(data);
+      const isValid = await this.config.validation.func(data);
       while (!isValid) {
         if (retries >= maxRetries) {
           throw new SimpleMachineError(

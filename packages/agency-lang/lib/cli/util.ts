@@ -45,7 +45,7 @@ export async function promptForTarget(): Promise<{
   nodeName: string;
 }> {
   let filename: string = "";
-  let nodeName: string = "";
+  const nodeName: string = "";
   // Find all .agency files in the current directory
   const agencyFiles = fs
     .readdirSync(process.cwd())

@@ -1,0 +1,5 @@
+node main() {
+  const name = "Ada"
+  print("hello ${name}")
+  return name
+}

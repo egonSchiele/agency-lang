@@ -293,6 +293,7 @@ export class DebuggerDriver {
     return { data: interrupt };
   }
 
+  // eslint-disable-next-line max-lines-per-function -- large command dispatcher; refactor tracked separately
   private async handleCommand(
     command: DebuggerCommand,
     interrupt: Interrupt,

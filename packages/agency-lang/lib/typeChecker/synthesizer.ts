@@ -529,6 +529,7 @@ export function synthValueAccess(
               const prop = resolvedMember.properties.find(
                 (p) => p.key === element.name,
               );
+              // eslint-disable-next-line max-depth -- collecting union member property types
               if (prop) propTypes.push(prop.value);
             }
           }

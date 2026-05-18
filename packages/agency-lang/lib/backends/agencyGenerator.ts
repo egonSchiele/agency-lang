@@ -488,7 +488,7 @@ export class AgencyGenerator {
     const exportPrefix = node.exported ? "export " : "";
     const staticPrefix = node.static ? "static " : "";
     const declPrefix = node.declKind ? `${node.declKind} ` : "";
-    let valueCode =
+    const valueCode =
       node.value.type === "binOpExpression"
         ? this.processBinOpExpression(node.value, true).trim()
         : this.processNode(node.value).trim();
@@ -609,7 +609,7 @@ export class AgencyGenerator {
     const prefixes: string[] = [];
     if (node.exported) prefixes.push("export");
     if (node.safe) prefixes.push("safe");
-    node.callback ? prefixes.push("callback") : prefixes.push("def");
+    prefixes.push(node.callback ? "callback" : "def");
 
     const prefix = `${prefixes.join(" ")} ${functionName}`;
     const renderedParams = this.renderParams(parameters);
@@ -736,7 +736,7 @@ export class AgencyGenerator {
     if (entries.length === 0) {
       return `{}`;
     }
-    let entriesStr = "\n" + entries.join(",\n") + "\n";
+    const entriesStr = "\n" + entries.join(",\n") + "\n";
 
     return `{${entriesStr}` + this.indentStr("}");
   }

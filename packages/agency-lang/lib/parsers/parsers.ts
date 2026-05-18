@@ -1,3 +1,4 @@
+/* eslint-disable max-lines -- intentionally combined into one file to eliminate circular dependencies */
 // =============================================================================
 // Combined parser file — all parsers from lib/parsers/ merged into one file
 // to eliminate circular dependencies. Uses lazy() for forward references.
@@ -1786,6 +1787,7 @@ function makeBinOp(op: string): (left: Expression, right: Expression) => Express
 // `.method()`, `(...)`, etc.). If any chain element matches, wrap the
 // result in a ValueAccess so things like `(a + b).toString()`,
 // `(arr)[0]`, and `(new Foo()).method()` work as expected.
+// eslint-disable-next-line prefer-const -- reassigned at the bottom of this file to break a circular dependency
 let _exprParser: Parser<Expression>;
 const parenParser: Parser<Expression> = (input: string) => {
   const openResult = char("(")(input);

@@ -75,6 +75,7 @@ async function loadAndDiscover(
   compileResult: CompileResult,
 ): Promise<{ exports: ExportedItem[]; moduleExports: Record<string, unknown> }> {
   const moduleUrl = pathToFileURL(path.resolve(compileResult.outputPath)).href;
+  // eslint-disable-next-line no-restricted-syntax -- compiled module URL is only known at runtime
   const mod = await import(moduleUrl);
   const moduleExports = mod as Record<string, unknown>;
 

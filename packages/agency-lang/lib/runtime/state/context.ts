@@ -346,7 +346,7 @@ export class RuntimeContext<T> {
         if (AgencyFunction.isAgencyFunction(fn)) {
           return fn.invoke({ type: "positional", args: [data] }, { ctx: this });
         }
-        return (fn as Function)(data, { ctx: this });
+        return (fn as (...args: any[]) => any)(data, { ctx: this });
       };
     }
   }

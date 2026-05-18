@@ -47,6 +47,7 @@ function printParams(params: TsParam[]): string {
   return params.map(printParam).join(", ");
 }
 
+// eslint-disable-next-line max-lines-per-function -- large switch over TsNode kinds; intentionally kept in one function
 export function printTs(node: TsNode, indent = 0): string {
   switch (node.kind) {
     case "raw":

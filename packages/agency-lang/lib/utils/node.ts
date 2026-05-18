@@ -279,6 +279,7 @@ export function getNodesOfType<T extends AgencyNode["type"]>(
 
 export let walkNodeDebug = false;
 export const setWalkNodeDebug = (value: boolean) => (walkNodeDebug = value);
+// eslint-disable-next-line max-lines-per-function -- generator walks every AST node kind; refactor tracked separately
 export function* walkNodes(
   nodes: AgencyNode[],
   ancestors: WalkAncestor[] = [],

@@ -134,6 +134,7 @@ export class UIState {
       }
       // Dynamically import the compiled module
       const absOutput = path.resolve(jsFile);
+      // eslint-disable-next-line no-restricted-syntax -- compiled module path is only known at runtime
       const mod = await import(absOutput);
       if (!mod) {
         this.log(`Could not import module ${absOutput} for checkpoint`);

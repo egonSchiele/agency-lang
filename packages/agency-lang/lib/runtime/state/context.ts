@@ -1,6 +1,7 @@
 import { nanoid } from "nanoid";
 import { SmolConfig } from "smoltalk";
 import type { DebuggerState } from "../../debugger/debuggerState.js";
+import type { LogLevel } from "../../logger.js";
 import { SimpleMachine } from "../../simplemachine/index.js";
 import { StatelogClient, StatelogConfig } from "../../statelogClient.js";
 import { AgencyFunction } from "../agencyFunction.js";
@@ -124,6 +125,16 @@ export class RuntimeContext<T> {
   traceConfig: TraceConfig;
   runId: string | null;
   verbose: boolean;
+  /**
+   * Log threshold used by ad-hoc subsystem loggers (memory, etc.).
+   * Plumbed in from `AgencyConfig.logLevel` so users can crank it up to
+   * `"debug"` when investigating issues without recompiling. The logger
+   * itself is stateless — consumers call `createLogger(execCtx.logLevel)`
+   * on demand rather than carrying a long-lived Logger instance, which
+   * lets each subsystem add its own prefix without coordinating an
+   * instance pool.
+   */
+  logLevel: LogLevel;
   getStaticVars?: () => Record<string, unknown>;
   coverageCollector: CoverageCollector | null = null;
 
@@ -147,6 +158,10 @@ export class RuntimeContext<T> {
     traceConfig?: TraceConfig;
     verbose?: boolean;
     memory?: MemoryConfig;
+    /** Threshold for ad-hoc subsystem loggers. Optional so existing
+     *  test/runtime constructors keep working; defaults to "info" to
+     *  match the established no-debug-by-default behavior. */
+    logLevel?: LogLevel;
   }) {
     const statelogConfig = {
       ...args.statelogConfig,
@@ -174,6 +189,7 @@ export class RuntimeContext<T> {
     this.traceConfig = args.traceConfig || {};
     this.runId = null;
     this.verbose = args.verbose ?? false;
+    this.logLevel = args.logLevel ?? "info";
     this.dirname = args.dirname;
 
     const graphConfig = {
@@ -196,7 +212,10 @@ export class RuntimeContext<T> {
 
     if (args.memory) {
       this.memoryConfig = args.memory;
-      this.memoryStore = new FileMemoryStore(args.memory.dir);
+      // Pass logLevel so the file store can chatter at debug about
+      // every read/write — handy for spotting "why isn't anything
+      // persisting?" without a debugger.
+      this.memoryStore = new FileMemoryStore(args.memory.dir, this.logLevel);
     }
   }
 
@@ -236,6 +255,7 @@ export class RuntimeContext<T> {
     execCtx.traceConfig = this.traceConfig;
     execCtx.runId = runId;
     execCtx.verbose = this.verbose;
+    execCtx.logLevel = this.logLevel;
     execCtx.pendingPromises = new PendingPromiseStore();
     execCtx.classRegistry = this.classRegistry;
     execCtx.abortController = new AbortController();
@@ -260,6 +280,13 @@ export class RuntimeContext<T> {
         llmClient: execCtx._llmClient,
         smoltalkDefaults: execCtx.smoltalkDefaults,
         source: this.traceConfig?.program ?? "agent",
+        // Reuse the per-execCtx StatelogClient so memory's own LLM/embed
+        // spans nest under the same trace as the agent's calls.
+        statelogClient: execCtx.statelogClient,
+        // Threshold for memory's internal logger; promoting this to
+        // "debug" in agency.json surfaces every tier/extract/compact
+        // step on stderr.
+        logLevel: execCtx.logLevel,
         memoryIdRef: {
           get: () => {
             const id = execCtx.stateStack?.other?.memoryId;

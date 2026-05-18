@@ -494,6 +494,61 @@ describe("StatelogClient", () => {
       expect(evt.data.stream).toBe(false);
     });
 
+    /**
+     * Drives the new embed event end-to-end through the file sink.
+     * Asserts the shape we promised in the docstring: preview is the
+     * caller-supplied slice (we don't re-truncate on the client side),
+     * dimensions / inputCount / phase travel through, and vectors are
+     * never serialized — only their length.
+     */
+    it("embedCompletion includes preview, dimensions, phase", async () => {
+      const file = newLogFile("embed");
+      const client = fileClient(file);
+      await client.embedCompletion({
+        inputPreview: "Mom likes pottery",
+        inputCount: 1,
+        model: "text-embedding-3-small",
+        dimensions: 1536,
+        timeTaken: 42,
+        usage: { inputTokens: 4 },
+        phase: "new-observation",
+      });
+      const [evt] = readEvents(file);
+      expect(evt.data.type).toBe("embedCompletion");
+      expect(evt.data.inputPreview).toBe("Mom likes pottery");
+      expect(evt.data.inputCount).toBe(1);
+      expect(evt.data.model).toBe("text-embedding-3-small");
+      expect(evt.data.dimensions).toBe(1536);
+      expect(evt.data.timeTaken).toBe(42);
+      expect(evt.data.phase).toBe("new-observation");
+      // The on-the-wire payload must not carry the actual vector.
+      // (We don't pass `vector` at the API; this guards the field
+      // doesn't accidentally appear via some shared envelope.)
+      expect(evt.data).not.toHaveProperty("vector");
+      expect(evt.data).not.toHaveProperty("embeddings");
+    });
+
+    /**
+     * Lock-in that the new memory SpanTypes are accepted by `startSpan`
+     * (they're a closed union and a typo here would not be a runtime
+     * error, only a type error — this asserts the runtime behaviour
+     * for completeness).
+     */
+    it("startSpan accepts the new memory and embedding span types", async () => {
+      const file = newLogFile("memspans");
+      const client = fileClient(file);
+      const ids: (string | undefined)[] = [];
+      ids.push(client.startSpan("memoryRemember"));
+      ids.push(client.startSpan("memoryRecall"));
+      ids.push(client.startSpan("memoryForget"));
+      ids.push(client.startSpan("memoryCompaction"));
+      ids.push(client.startSpan("embedding"));
+      // All five returned a non-empty id (i.e. were not rejected).
+      for (const id of ids) expect(typeof id).toBe("string");
+      // Close in reverse order to match the stack discipline.
+      for (let i = ids.length - 1; i >= 0; i--) client.endSpan(ids[i]);
+    });
+
     it("interruptThrown emits only interruptId + interruptData", async () => {
       const file = newLogFile("intr-thrown");
       const client = fileClient(file);

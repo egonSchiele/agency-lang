@@ -1,3 +1,43 @@
+## May 18 2026 — v0.2
+
+### Language
+- Destructuring and pattern matching (`match` blocks, destructuring in `let`/`const`/`for`)
+- Undefined function diagnostics — typechecker warns on undefined functions
+- Methods on primitives (e.g. `.length` on strings)
+- Const reassignment checks in typechecker
+- `parseJSON` built-in function
+- Fix string interpolation parser for concatenating function calls and strings
+
+### New: Memory Layer
+- Built-in memory layer: temporal knowledge graph, hybrid retrieval, conversation compaction
+- Configured via `agency.json`, accessible via `std::memory` (`remember`, `recall`, `forget`, `setMemoryId`)
+
+### CLI
+- `pack` command — creates standalone JS files with all dependencies inlined
+- Fix global install of agency (`agency run` now tells node where to find agency-lang)
+- `logs view` command — TUI for viewing statelog files with search, follow, clipboard, formatted LLM chat history
+- Troubleshooting section added to guide
+- Integration tests for the CLI (run on push to main)
+
+### Observability / Statelog
+- Lots of new statelog events, plus spans for more structured tracing
+- Per-branch span stacks via AsyncLocalStorage (concurrent fork/race branches get proper span attribution)
+- Statelog logging throughout the runtime and memory layer
+- Timeouts for statelog calls (1.5s), `agentEnd` made fire-and-forget
+- Performance improvements for traces
+
+### TUI
+- TUI abstractions extracted: line, scrollList, runLoop, key management
+
+### Debugger
+- Fix ctrl-z handling, fix rewindFrom
+
+### Other
+- Upgrade smoltalk to 0.3.0 (embed() and image() functions)
+- Move to MIT license
+- Typechecker now runs on all typescriptGenerator tests and stdlib code
+- Dead preprocessor code removed
+
 ## May 13 2026 — v0.1.3
 
 ### Language
@@ -16,7 +56,7 @@
 - Remove `chalk` dependency (folded into termcolors)
 - Various TUI fixes
 
-### New: Stdlib
+### New: whisper-local package
 - Add `@agency-lang/whisper-local` package (vendors whisper.cpp v1.7.6, pins SHA-256 hashes for all whisper models)
 
 ### Scheduling

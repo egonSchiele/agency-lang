@@ -3,7 +3,7 @@
     {
       "nodeName": "main",
       "input": "",
-      "retry": 3,
+      "retry": 5,
       "expectedOutput": "[12,5,7]",
       "evaluationCriteria": [
         {

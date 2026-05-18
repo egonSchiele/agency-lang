@@ -25,6 +25,7 @@
       "nodeName": "bar",
       "description": "Test the math function with 2 + 2",
       "input": "",
+      "retry": 3,
       "expectedOutput": "\"2 + 2 equals 4.\"",
       "evaluationCriteria": [
         {
@@ -38,6 +39,7 @@
       "nodeName": "foo",
       "description": "Test the greet function with name Adit and reject the interrupt",
       "input": "",
+      "retry": 3,
       "expectedOutput": "null",
       "evaluationCriteria": [
         {

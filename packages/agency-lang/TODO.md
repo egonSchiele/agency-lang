@@ -157,3 +157,6 @@ node main() {
   printJSON(story)
 }
 ```
+---
+
+tests/integration/stdlib-sandbox/credential/browser.test.json skipped, need to get a browseruse subscription to continue running this test.

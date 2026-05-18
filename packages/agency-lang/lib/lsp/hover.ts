@@ -30,7 +30,7 @@ function getDottedBase(
   if (start === 0 || lineText[start - 1] !== ".") return null;
 
   // Walk left across the base identifier.
-  let baseEnd = start - 1;
+  const baseEnd = start - 1;
   let baseStart = baseEnd;
   while (baseStart > 0 && /[a-zA-Z0-9_]/.test(lineText[baseStart - 1])) {
     baseStart--;

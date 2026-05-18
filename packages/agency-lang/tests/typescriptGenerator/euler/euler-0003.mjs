@@ -66,6 +66,7 @@ const __globalCtx = new RuntimeContext({
     }
   },
   dirname: __dirname,
+  logLevel: "info",
   traceConfig: {
     program: "euler-0003.agency"
   }

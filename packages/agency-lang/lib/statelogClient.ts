@@ -18,7 +18,19 @@ export type SpanType =
   | "toolExecution"
   | "forkAll"
   | "race"
-  | "handlerChain";
+  | "handlerChain"
+  // Embedding-vector requests. Distinct from `llmCall` so cost
+  // roll-ups in the viewer don't conflate chat-completion cost with
+  // embedding cost, and so embeddings are filterable on their own.
+  | "embedding"
+  // Memory-subsystem umbrella spans. Each one wraps a single
+  // user-facing memory operation; the inner `llmCall`/`embedding`
+  // spans nest underneath via AsyncLocalStorage so a viewer can
+  // collapse the whole operation into one row.
+  | "memoryRemember"
+  | "memoryRecall"
+  | "memoryForget"
+  | "memoryCompaction";
 
 export type SpanContext = {
   spanId: string;
@@ -422,6 +434,147 @@ export class StatelogClient {
       cost,
       finishReason,
       stream,
+    });
+  }
+
+  /**
+   * Emit an `embedCompletion` event. Mirrors `promptCompletion` so the
+   * viewer can render the two with a shared formatter, but keeps the
+   * embedding-specific bits (dimensions, phase tag) separate.
+   *
+   * `inputPreview` is intentionally a short slice of the source text —
+   * the full text is kept off the wire so a transcript-with-PII never
+   * ends up in a remote sink by accident. Vectors are NEVER logged
+   * (only their length, via `dimensions`).
+   */
+  async embedCompletion({
+    inputPreview,
+    inputCount,
+    model,
+    dimensions,
+    timeTaken,
+    usage,
+    cost,
+    phase,
+  }: {
+    /** First ~200 chars of the embedded text, for human-readable tracing. */
+    inputPreview: string;
+    /** Number of input strings in the batch. Currently always 1 from
+     *  memory; left as a count so future batching changes don't
+     *  require a schema bump. */
+    inputCount: number;
+    /** Embedding model name (e.g. "text-embedding-3-small"). */
+    model?: string;
+    /** Vector length. Useful for catching index-vs-query model
+     *  mismatches at trace time without comparing the full vectors. */
+    dimensions?: number;
+    /** Wall-clock latency in ms (caller measures via `performance.now`). */
+    timeTaken?: number;
+    /** Optional provider-reported usage. Not all embed providers
+     *  return these; absent values stay undefined. */
+    usage?: TokenUsage;
+    cost?: TokenCost;
+    /** Free-form tag identifying the caller — e.g. "recall-query",
+     *  "new-observation". Lets a viewer filter "embed for recall"
+     *  vs "embed for storage" without parsing the parent span tree. */
+    phase?: string;
+  }): Promise<void> {
+    await this.post({
+      type: "embedCompletion",
+      inputPreview,
+      inputCount,
+      model,
+      dimensions,
+      timeTaken,
+      usage,
+      cost,
+      phase,
+    });
+  }
+
+  /**
+   * Memory umbrella-span marker events.
+   *
+   * Why these exist: the logs viewer infers span types from EVENT
+   * types (see `lib/logsViewer/tree.ts#inferSpanLabel`). A span that
+   * never has an event posted with its own `span_id` is invisible to
+   * the viewer — its children get re-parented to the trace root.
+   *
+   * Calling `startSpan("memoryRemember")` only sets up the AsyncLocal-
+   * Storage stack; on its own it produces no event. These methods
+   * post a tiny marker event right after `startSpan` so the span
+   * materializes in the tree with the right label, and the inner
+   * `llmCall` / `embedding` spans nest under it. The payload is also
+   * useful in its own right (content/query preview, memoryId).
+   */
+  async memoryRemember({
+    contentPreview,
+    memoryId,
+  }: {
+    /** First ~N chars of the content being remembered. */
+    contentPreview: string;
+    /** Active memory scope (from `setMemoryId`, defaults to "default"). */
+    memoryId: string;
+  }): Promise<void> {
+    await this.post({
+      type: "memoryRemember",
+      contentPreview,
+      memoryId,
+    });
+  }
+
+  async memoryRecall({
+    queryPreview,
+    memoryId,
+    phase,
+  }: {
+    /** First ~N chars of the recall query. */
+    queryPreview: string;
+    memoryId: string;
+    /** "recall" for the user-facing tier-3 call, "recallForInjection"
+     *  for the auto-injection variant. Lets the viewer distinguish
+     *  the two without inspecting the parent span tree. */
+    phase: "recall" | "recallForInjection";
+  }): Promise<void> {
+    await this.post({
+      type: "memoryRecall",
+      queryPreview,
+      memoryId,
+      phase,
+    });
+  }
+
+  async memoryForget({
+    queryPreview,
+    memoryId,
+  }: {
+    queryPreview: string;
+    memoryId: string;
+  }): Promise<void> {
+    await this.post({
+      type: "memoryForget",
+      queryPreview,
+      memoryId,
+    });
+  }
+
+  async memoryCompaction({
+    memoryId,
+    messageCount,
+    threshold,
+  }: {
+    memoryId: string;
+    /** Number of messages in the thread that triggered compaction. */
+    messageCount: number;
+    /** Threshold the count was checked against (so a viewer can show
+     *  how close to the trigger this run was). */
+    threshold: number;
+  }): Promise<void> {
+    await this.post({
+      type: "memoryCompaction",
+      memoryId,
+      messageCount,
+      threshold,
     });
   }
 

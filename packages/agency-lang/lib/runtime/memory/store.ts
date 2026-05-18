@@ -12,6 +12,7 @@ import {
 import type { z } from "zod";
 import fs from "node:fs";
 import path from "node:path";
+import { createLogger, type Logger, type LogLevel } from "../../logger.js";
 
 // memoryIds become directory names, so anything that could escape the
 // configured baseDir (path separators, leading dots, control chars) must
@@ -33,7 +34,14 @@ function validateMemoryId(memoryId: string): void {
 }
 
 export class FileMemoryStore implements MemoryStore {
-  constructor(private baseDir: string) {}
+  /** Built once in the constructor from `logLevel`. Each line emitted
+   *  is `[memory]`-prefixed so it groups with the manager's output
+   *  when grepping. */
+  private logger: Logger;
+
+  constructor(private baseDir: string, logLevel?: LogLevel) {
+    this.logger = createLogger(logLevel ?? "info");
+  }
 
   private dir(memoryId: string): string {
     validateMemoryId(memoryId);
@@ -44,6 +52,7 @@ export class FileMemoryStore implements MemoryStore {
     const dir = this.dir(memoryId);
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true });
+      this.logger.debug(`[memory] FileMemoryStore: mkdir ${dir}`);
     }
   }
 
@@ -69,16 +78,22 @@ export class FileMemoryStore implements MemoryStore {
   }
 
   private async readJSON(filePath: string): Promise<unknown | null> {
-    if (!fs.existsSync(filePath)) return null;
+    if (!fs.existsSync(filePath)) {
+      this.logger.debug(`[memory] FileMemoryStore: read miss ${filePath}`);
+      return null;
+    }
     const content = await fs.promises.readFile(filePath, "utf-8");
+    this.logger.debug(
+      `[memory] FileMemoryStore: read ${filePath} (${content.length} bytes)`,
+    );
     return JSON.parse(content);
   }
 
   private async writeJSON(filePath: string, data: unknown): Promise<void> {
-    await fs.promises.writeFile(
-      filePath,
-      JSON.stringify(data, null, 2),
-      "utf-8"
+    const serialized = JSON.stringify(data, null, 2);
+    await fs.promises.writeFile(filePath, serialized, "utf-8");
+    this.logger.debug(
+      `[memory] FileMemoryStore: wrote ${filePath} (${serialized.length} bytes)`,
     );
   }
 

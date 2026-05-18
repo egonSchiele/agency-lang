@@ -66,6 +66,7 @@ const __globalCtx = new RuntimeContext({
     }
   },
   dirname: __dirname,
+  logLevel: "info",
   traceConfig: {
     program: "interrupt-2-deep-in-function.agency"
   }

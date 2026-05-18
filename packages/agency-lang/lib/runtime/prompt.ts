@@ -1,5 +1,6 @@
 import * as smoltalk from "smoltalk";
 import { PromptResult, Result, StreamChunk, ToolCallJSON } from "smoltalk";
+import { createLogger } from "../logger.js";
 import { AgencyFunction } from "./agencyFunction.js";
 import { AgencyCancelledError, isAbortError } from "./errors.js";
 import { callHook } from "./hooks.js";
@@ -175,7 +176,11 @@ async function _runPrompt({
         messages.setMessages([...head, summary, ...tail]);
       }
     } catch (err) {
-      console.warn(
+      // The memory hook is best-effort: a failure here must never
+      // break the LLM call. Logged at `warn` so users see the failure
+      // by default; the manager already emitted finer-grained debug
+      // lines and a statelog `error` event if applicable.
+      createLogger(ctx.logLevel).warn(
         `[memory] post-turn hook failed: ${(err as Error).message}`,
       );
     }
@@ -350,7 +355,8 @@ export async function runPrompt(args: {
           messages.push(smoltalk.systemMessage(injectedFactsContent));
         }
       } catch (err) {
-        console.warn(
+        // Best-effort, same reasoning as the post-turn hook.
+        createLogger(ctx.logLevel).warn(
           `[memory] recall injection failed: ${(err as Error).message}`,
         );
       }

@@ -66,6 +66,7 @@ const __globalCtx = new RuntimeContext({
     }
   },
   dirname: __dirname,
+  logLevel: "info",
   traceConfig: {
     program: "bangReturnType.agency"
   }

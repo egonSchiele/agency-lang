@@ -227,6 +227,11 @@ export class TypeScriptBuilder {
   private configDefaults(): Partial<AgencyConfig> {
     return {
       maxToolCallRounds: 10,
+      // Top-level threshold for runtime subsystem loggers (memory,
+      // etc.). Distinct from `client.logLevel` which is the
+      // smoltalk-internal one. "info" matches the existing
+      // no-debug-by-default behavior — users opt in via agency.json.
+      logLevel: "info",
       log: {
         host: "https://statelog.adit.io",
       },
@@ -3681,6 +3686,13 @@ export class TypeScriptBuilder {
     };
     if (this.agencyConfig.verbose) {
       runtimeCtxArgs.verbose = ts.raw("true");
+    }
+    // Always render the top-level logLevel; `configDefaults()` guarantees
+    // a value, so this never emits a runtime default-fallback path. The
+    // RuntimeContext uses this to construct ad-hoc loggers in subsystems
+    // (e.g. memory) on demand.
+    if (this.agencyConfig.logLevel) {
+      runtimeCtxArgs.logLevel = ts.str(this.agencyConfig.logLevel);
     }
     if (this.agencyConfig.checkpoints?.maxRestores !== undefined) {
       runtimeCtxArgs.maxRestores = ts.raw(

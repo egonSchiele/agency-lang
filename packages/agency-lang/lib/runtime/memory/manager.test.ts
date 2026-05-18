@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { MemoryManager } from "./manager.js";
 import { FileMemoryStore } from "./store.js";
+import { StatelogClient } from "../../statelogClient.js";
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
@@ -304,5 +305,203 @@ describe("MemoryManager", () => {
     expect(current).toHaveLength(0);
     // Original observation still present, just expired
     expect(mom.observations[0].validTo).toBeTruthy();
+  });
+
+  /**
+   * These tests drive the manager with a real `StatelogClient`
+   * pointed at a temp file sink and assert the resulting event
+   * stream. The shape of the stream is the contract the trace
+   * viewer relies on, so regressions here would silently break
+   * the tarsec viewer.
+   *
+   * We build the events file with `observability: true` and a
+   * stable `traceId` so the run-id continuity check at the end is
+   * deterministic.
+   */
+  describe("statelog observability", () => {
+    function makeStatelogClient(file: string): StatelogClient {
+      return new StatelogClient({
+        host: "",
+        apiKey: "",
+        projectId: "test",
+        traceId: "test-trace-id",
+        debugMode: false,
+        observability: true,
+        logFile: file,
+      });
+    }
+
+    function readEvents(file: string): any[] {
+      if (!fs.existsSync(file)) return [];
+      const raw = fs.readFileSync(file, "utf-8").trim();
+      if (!raw) return [];
+      return raw.split("\n").map((line) => JSON.parse(line));
+    }
+
+    /**
+     * Tap startSpan to record the sequence of span types opened during
+     * the test. startSpan/endSpan don't emit events themselves —
+     * they just maintain a stack that nested events attach to via
+     * `span_id` / `parent_span_id`. To assert that the umbrella spans
+     * exist we spy on the call directly.
+     */
+    function spyOnSpans(statelogClient: StatelogClient): string[] {
+      const opened: string[] = [];
+      const realStart = statelogClient.startSpan.bind(statelogClient);
+      vi.spyOn(statelogClient, "startSpan").mockImplementation((type) => {
+        opened.push(type);
+        return realStart(type);
+      });
+      return opened;
+    }
+
+    it("remember opens a memoryRemember span and emits prompt/embed events", async () => {
+      const eventsFile = path.join(tmpDir, "events.jsonl");
+      const statelogClient = makeStatelogClient(eventsFile);
+      const openedSpans = spyOnSpans(statelogClient);
+      const client = mockLlmClient();
+      client.text.mockResolvedValue(
+        wrapTextResult(JSON.stringify({
+          entities: [{ name: "Mom", type: "person", observations: ["likes pottery"] }],
+          relations: [],
+          expirations: [],
+        }))
+      );
+      const manager = new MemoryManager({
+        store: new FileMemoryStore(tmpDir),
+        config: { dir: tmpDir },
+        llmClient: client,
+        statelogClient,
+      });
+
+      await manager.remember("Mom likes pottery");
+
+      // The umbrella + inner spans were all opened in the right
+      // shape — memoryRemember wraps an llmCall (extraction) and an
+      // embedding span (per new observation).
+      expect(openedSpans).toContain("memoryRemember");
+      expect(openedSpans).toContain("llmCall");
+      expect(openedSpans).toContain("embedding");
+
+      const events = readEvents(eventsFile);
+      const types = events.map((e) => e.data.type);
+      expect(types).toContain("promptCompletion");
+      expect(types).toContain("embedCompletion");
+    });
+
+    it("recall opens memoryRecall and parents inner spans correctly", async () => {
+      const eventsFile = path.join(tmpDir, "events.jsonl");
+      const statelogClient = makeStatelogClient(eventsFile);
+      const client = mockLlmClient();
+      // Seed an entity via remember.
+      client.text.mockResolvedValueOnce(
+        wrapTextResult(JSON.stringify({
+          entities: [{ name: "Mom", type: "person", observations: ["likes pottery"] }],
+          relations: [],
+          expirations: [],
+        }))
+      );
+      const manager = new MemoryManager({
+        store: new FileMemoryStore(tmpDir),
+        config: { dir: tmpDir },
+        llmClient: client,
+        statelogClient,
+      });
+      await manager.remember("Mom likes pottery");
+
+      // Tier-3 LLM returns the seeded entity id.
+      const mom = manager.getGraph().findEntityByName("Mom")!;
+      client.text.mockResolvedValueOnce(wrapTextResult(JSON.stringify([mom.id])));
+
+      // Spy on spans + reset the events file so we only see recall.
+      const openedSpans = spyOnSpans(statelogClient);
+      fs.writeFileSync(eventsFile, "");
+      await manager.recall("mom");
+
+      expect(openedSpans).toContain("memoryRecall");
+      // Tier 2 fires an embedding span; tier 3 fires an llmCall.
+      expect(openedSpans).toContain("embedding");
+      expect(openedSpans).toContain("llmCall");
+
+      // Every event emitted inside recall has a parent_span_id —
+      // they all live under the memoryRecall umbrella (or under one
+      // of its child spans, which themselves chain back to recall).
+      // The root-level case is when parent_span_id is null.
+      const events = readEvents(eventsFile);
+      const childishEvents = events.filter(
+        (e) =>
+          e.data.type === "promptCompletion" ||
+          e.data.type === "embedCompletion",
+      );
+      expect(childishEvents.length).toBeGreaterThan(0);
+      for (const evt of childishEvents) {
+        expect(evt.parent_span_id).not.toBeNull();
+      }
+    });
+
+    it("forget opens a memoryForget span", async () => {
+      const eventsFile = path.join(tmpDir, "events.jsonl");
+      const statelogClient = makeStatelogClient(eventsFile);
+      const client = mockLlmClient();
+      client.text.mockResolvedValueOnce(
+        wrapTextResult(JSON.stringify({
+          entities: [{ name: "Mom", type: "person", observations: ["likes pottery"] }],
+          relations: [],
+          expirations: [],
+        }))
+      );
+      const manager = new MemoryManager({
+        store: new FileMemoryStore(tmpDir),
+        config: { dir: tmpDir },
+        llmClient: client,
+        statelogClient,
+      });
+      await manager.remember("Mom likes pottery");
+      client.text.mockResolvedValueOnce(
+        wrapTextResult(JSON.stringify({
+          observations: [{ entityName: "Mom", observationContent: "pottery" }],
+          relations: [],
+        }))
+      );
+      const openedSpans = spyOnSpans(statelogClient);
+      fs.writeFileSync(eventsFile, "");
+      await manager.forget("forget mom pottery");
+      expect(openedSpans).toContain("memoryForget");
+    });
+
+    /**
+     * Locks the run-id continuity invariant in §5 of the plan:
+     * every memory-emitted event must carry the same `trace_id` as
+     * the StatelogClient instance, which (in production) is set to
+     * the run id by `RuntimeContext.createExecutionContext`. If
+     * something accidentally bypasses the shared client and emits
+     * via a new one, the trace splits and the viewer can't stitch.
+     */
+    it("all memory events inherit the StatelogClient's trace_id", async () => {
+      const eventsFile = path.join(tmpDir, "events.jsonl");
+      const statelogClient = makeStatelogClient(eventsFile);
+      const client = mockLlmClient();
+      client.text.mockResolvedValue(
+        wrapTextResult(JSON.stringify({
+          entities: [{ name: "Mom", type: "person", observations: ["likes pottery"] }],
+          relations: [],
+          expirations: [],
+        }))
+      );
+      const manager = new MemoryManager({
+        store: new FileMemoryStore(tmpDir),
+        config: { dir: tmpDir },
+        llmClient: client,
+        statelogClient,
+      });
+      await manager.remember("Mom likes pottery");
+      const events = readEvents(eventsFile);
+      expect(events.length).toBeGreaterThan(0);
+      for (const evt of events) {
+        // Every line shares the configured trace_id — no shadow
+        // StatelogClient created somewhere in the manager.
+        expect(evt.trace_id).toBe("test-trace-id");
+      }
+    });
   });
 });

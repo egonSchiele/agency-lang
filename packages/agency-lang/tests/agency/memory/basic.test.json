@@ -4,7 +4,12 @@
       "nodeName": "main",
       "input": "",
       "expectedOutput": "true",
-      "evaluationCriteria": [{ "type": "exact" }],
+      "retry": 3,
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
       "llmMocks": [
         {
           "return": {
@@ -12,14 +17,20 @@
               {
                 "name": "Mom",
                 "type": "person",
-                "observations": ["Likes pottery"]
+                "observations": [
+                  "Likes pottery"
+                ]
               }
             ],
             "relations": [],
             "expirations": []
           }
         },
-        { "return": ["Mom"] }
+        {
+          "return": [
+            "Mom"
+          ]
+        }
       ]
     }
   ]

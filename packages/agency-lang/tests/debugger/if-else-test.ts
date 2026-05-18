@@ -68,6 +68,7 @@ const __globalCtx = new RuntimeContext({
     }
   },
   dirname: __dirname,
+  logLevel: "info",
   traceConfig: {
     program: "tests/debugger/if-else-test.agency"
   }

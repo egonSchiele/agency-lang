@@ -172,6 +172,11 @@ function inferSpanLabel(evt: EventEnvelope): string {
       return "nodeExecution";
     case "promptCompletion":
       return "llmCall";
+    case "embedCompletion":
+      // Embedding spans share the chat-completion shape but get their
+      // own label so the viewer can color/filter them separately and
+      // cost roll-ups don't conflate the two.
+      return "embedding";
     case "toolCall":
       return "toolExecution";
     case "forkStart":
@@ -180,6 +185,10 @@ function inferSpanLabel(evt: EventEnvelope): string {
     case "handlerDecision":
       return "handlerChain";
     default:
+      // The memory umbrella events (`memoryRemember`, `memoryRecall`,
+      // `memoryForget`, `memoryCompaction`) intentionally hit this
+      // branch — their event type already matches the SpanType, so the
+      // default returns the right label without a per-case mapping.
       return evt.data.type;
   }
 }

@@ -41,7 +41,8 @@ export default defineConfig({
               text: "Structured Interrupts",
               link: "/guide/structured-interrupts",
             },
-            { text: "PFAs", link: "/guide/partial-application" },
+            { text: "Partial Function Application", link: "/guide/partial-application" },
+            { text: "Pattern Matching", link: "/guide/pattern-matching" },
             {
               text: "Message History and Threads",
               link: "/guide/message-history-and-threads",

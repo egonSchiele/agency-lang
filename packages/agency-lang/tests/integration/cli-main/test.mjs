@@ -11,7 +11,7 @@ import {
   unlinkSync,
   writeFileSync,
 } from "node:fs";
-import { execSync } from "node:child_process";
+import { spawnSync } from "node:child_process";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
@@ -22,14 +22,16 @@ import {
   getTarballPath,
   initProject,
   installTarball,
-  writeFile,
 } from "../helpers.mjs";
 
 const tarball = resolve(getTarballPath());
 const dir = createTempProject("cli-main");
 const fixtureDir = resolve(dirname(fileURLToPath(import.meta.url)), "fixtures");
+const expectedDir = join(fixtureDir, "expected");
 const logsDir = join(dir, "__logs");
 mkdirSync(logsDir, { recursive: true });
+
+// Shared helpers
 
 function stripAnsi(text) {
   return text.replace(/\x1b\[[0-9;]*m/g, "");
@@ -71,32 +73,64 @@ function assertSameFileContent(actualPath, expectedPath) {
   );
 }
 
-function runLogged(label, command, opts = {}) {
+function commandToString(file, args) {
+  return [file, ...args].join(" ");
+}
+
+function runLogged(label, file, args = [], opts = {}) {
   const logPath = join(logsDir, `${label}.txt`);
-  try {
-    const output = execSync(command, {
-      cwd: opts.cwd || dir,
-      encoding: "utf8",
-      timeout: opts.timeout || 120_000,
-      input: opts.input,
-      stdio: ["pipe", "pipe", "pipe"],
-      env: opts.env ? { ...process.env, ...opts.env } : process.env,
-    });
-    writeFileSync(logPath, output);
-    if (opts.expectFail) {
-      throw new Error(`Expected command to fail but it succeeded: ${command}`);
-    }
-    return output;
-  } catch (err) {
-    const output = `${err.stdout || ""}${err.stderr || ""}`;
-    writeFileSync(logPath, output);
-    if (opts.expectFail) return output;
+  const command = commandToString(file, args);
+  const result = spawnSync(file, args, {
+    cwd: opts.cwd || dir,
+    encoding: "utf8",
+    timeout: opts.timeout || 120_000,
+    input: opts.input,
+    stdio: ["pipe", "pipe", "pipe"],
+    env: opts.env ? { ...process.env, ...opts.env } : process.env,
+  });
+  const stdout = result.stdout || "";
+  const stderr = result.stderr || "";
+  const output = `${stdout}${stderr}`;
+  writeFileSync(logPath, output);
+
+  if (result.error) {
     const error = new Error(`Command failed: ${command}\nLog: ${logPath}\n${output}`);
-    error.stdout = err.stdout;
-    error.stderr = err.stderr;
+    error.cause = result.error;
     throw error;
   }
+  if (opts.expectFail) {
+    assert(result.status !== 0, `Expected command to fail but it succeeded: ${command}`);
+    return output;
+  }
+  if (result.status !== 0) {
+    throw new Error(`Command failed: ${command}\nLog: ${logPath}\n${output}`);
+  }
+  return stdout;
 }
+
+function runAgency(label, args, opts = {}) {
+  return runLogged(label, "npx", ["--no-install", "agency", ...args], opts);
+}
+
+function runNode(label, args, opts = {}) {
+  return runLogged(label, "node", args, opts);
+}
+
+// Fixture setup
+
+function copyProjectFixtures() {
+  cpSync(join(fixtureDir, "project", "src"), join(dir, "src"), {
+    recursive: true,
+  });
+  cpSync(join(fixtureDir, "project", "docs-src"), join(dir, "docs-src"), {
+    recursive: true,
+  });
+  cpSync(join(fixtureDir, "project", "agents"), join(dir, "agents"), {
+    recursive: true,
+  });
+}
+
+// trace helpers
 
 function readJsonLines(path) {
   return readText(path)
@@ -191,6 +225,8 @@ function assertTraceFile(tracePath, expectedProgram) {
   }
 }
 
+// parse helpers
+
 function assertParseOutput(output, nodeName) {
   const parsed = JSON.parse(output);
   const nodes = parsed.nodes || [];
@@ -199,6 +235,8 @@ function assertParseOutput(output, nodeName) {
     `Expected parsed AST to contain node ${nodeName}`,
   );
 }
+
+// coverage helpers
 
 function extractCoverageStats(output) {
   const clean = stripAnsi(output);
@@ -238,179 +276,43 @@ function assertPartialCoverage(output) {
 try {
   initProject(dir);
   installTarball(dir, tarball);
+  copyProjectFixtures();
 
-  writeFile(dir, "src/basic.agency", `node main() {
-  const greeting = "basic-ok"
-  print(greeting)
-  return greeting
-}
-`);
-
-  writeFile(dir, "src/pack-target.agency", `node main() {
-  const message = "pack-ok"
-  print(message)
-  return message
-}
-`);
-
-  writeFile(dir, "src/pack-helper.agency", `export def helper(value: string): string {
-  return value + "-local"
-}
-`);
-
-  writeFile(dir, "src/pack-imports.agency", `import { add } from "std::math"
-import { helper } from "./pack-helper.agency"
-
-node main() {
-  const sum = add(2, 3)
-  const message = helper("pack-imports")
-  print(message + "-" + sum)
-  return message + "-" + sum
-}
-`);
-
-  writeFile(dir, "src/trace-target.agency", `node main() {
-  const name = "Trace"
-  const greeting = "hello " + name
-  print(greeting)
-  return greeting
-}
-`);
-
-  writeFile(dir, "src/messy.agency", `node main(){const name="Ada";print("hello "+name);return name}
-`);
-
-  writeFile(dir, "src/type-ok.agency", `node main(): string {
-  return "type-ok"
-}
-`);
-
-  writeFile(dir, "src/type-error.agency", `node bad(): number {
-  return "oops"
-}
-`);
-
-  writeFile(dir, "src/type-strict.agency", `node main() {
-  const inferred = "strict-error"
-  return inferred
-}
-`);
-
-  writeFile(dir, "src/coverage-target.agency", `node covered(): string {
-  const label = "covered"
-  return label
-}
-`);
-
-  writeFile(dir, "src/coverage-target.test.json", JSON.stringify({
-    sourceFile: "coverage-target.agency",
-    tests: [
-      {
-        nodeName: "covered",
-        input: "",
-        expectedOutput: "\"covered\"",
-        evaluationCriteria: [{ type: "exact" }],
-      },
-    ],
-  }, null, 2));
-
-  writeFile(dir, "src/coverage-partial.agency", `node covered(): string {
-  const label = "covered"
-  return label
-}
-
-node uncovered(): string {
-  const label = "uncovered"
-  return label
-}
-`);
-
-  writeFile(dir, "src/coverage-partial.test.json", JSON.stringify({
-    sourceFile: "coverage-partial.agency",
-    tests: [
-      {
-        nodeName: "covered",
-        input: "",
-        expectedOutput: "\"covered\"",
-        evaluationCriteria: [{ type: "exact" }],
-      },
-    ],
-  }, null, 2));
-
-  writeFile(dir, "src/doc-target.agency", `/** @module
-  Helpers used by CLI integration tests.
-*/
-
-/** A person to greet. */
-type Person = {
-  name: string
-}
-
-/** Build a greeting. */
-def greet(person: Person): string {
-  return "Hello, " + person.name + "!"
-}
-
-/** Return a greeting for Ada. */
-node main(): string {
-  const person: Person = { name: "Ada" }
-  return greet(person)
-}
-`);
-
-  writeFile(dir, "docs-src/main.agency", `/** Visible docs file. */
-node visible(): string {
-  return "visible"
-}
-`);
-
-  writeFile(dir, "docs-src/ignored/skip.agency", `/** Ignored docs file. */
-node ignored(): string {
-  return "ignored"
-}
-`);
-
-  writeFile(dir, "agents/nightly.agency", `node main() {
-  return "scheduled"
-}
-`);
+  // version
 
   console.log("--- version ---");
-  const versionOutput = runLogged("00-version", "npx --no-install agency --version");
+  const versionOutput = runAgency("00-version", ["--version"]);
   assert(
     /^\d+\.\d+\.\d+\s*$/.test(versionOutput),
     `Expected semver version output, got: ${versionOutput}`,
   );
 
+  // compile
+
   console.log("--- compile ---");
-  runLogged("01-compile", "npx --no-install agency compile src/basic.agency");
+  runAgency("01-compile", ["compile", "src/basic.agency"]);
   assertFile(join(dir, "src/basic.js"), "compile should write src/basic.js");
-  writeFile(dir, "src/run-compiled.mjs", `import { main } from "./basic.js";
-const result = await main();
-const value = result?.data ?? result;
-if (value !== "basic-ok") {
-  console.error("Unexpected compiled result", result);
-  process.exit(1);
-}
-console.log("compiled-ok");
-`);
   assertIncludes(
-    runLogged("02-compiled-output", "node src/run-compiled.mjs"),
+    runNode("02-compiled-output", ["src/run-compiled.mjs"]),
     "compiled-ok",
   );
 
-  runLogged("02b-compile-ts", "npx --no-install agency compile src/basic.agency --ts");
+  runAgency("02b-compile-ts", ["compile", "src/basic.agency", "--ts"]);
   assertFile(join(dir, "src/basic.ts"), "compile --ts should write src/basic.ts");
   assertIncludes(readText(join(dir, "src/basic.ts")), "// @ts-nocheck");
 
+  // run
+
   console.log("--- run ---");
   assertIncludes(
-    runLogged("03-run", "npx --no-install agency run src/basic.agency"),
+    runAgency("03-run", ["run", "src/basic.agency"]),
     "basic-ok",
   );
 
+  // pack
+
   console.log("--- pack ---");
-  runLogged("04-pack", "npx --no-install agency pack src/pack-target.agency -o packed.mjs");
+  runAgency("04-pack", ["pack", "src/pack-target.agency", "-o", "packed.mjs"]);
   assertFile(join(dir, "packed.mjs"), "pack should write packed.mjs");
   assert(statSync(join(dir, "packed.mjs")).size > 0, "packed.mjs should be non-empty");
 
@@ -420,16 +322,16 @@ console.log("compiled-ok");
     unlinkSync(join(dir, "packed.mjs"));
     assert(!existsSync(join(standaloneDir, "node_modules")), "standalone directory must not contain node_modules");
     assertIncludes(
-      runLogged("05-pack-standalone", "node packed.mjs", { cwd: standaloneDir }),
+      runNode("05-pack-standalone", ["packed.mjs"], { cwd: standaloneDir }),
       "pack-ok",
     );
   } finally {
     cleanup(standaloneDir);
   }
 
-  runLogged(
+  runAgency(
     "05b-pack-imports",
-    "npx --no-install agency pack src/pack-imports.agency -o packed-imports.mjs",
+    ["pack", "src/pack-imports.agency", "-o", "packed-imports.mjs"],
   );
   const importsStandaloneDir = createTempProject("cli-main-pack-imports");
   try {
@@ -440,7 +342,7 @@ console.log("compiled-ok");
       "pack imports standalone directory must not contain node_modules",
     );
     assertIncludes(
-      runLogged("05c-pack-imports-standalone", "node packed-imports.mjs", {
+      runNode("05c-pack-imports-standalone", ["packed-imports.mjs"], {
         cwd: importsStandaloneDir,
       }),
       "pack-imports-local-5",
@@ -449,57 +351,62 @@ console.log("compiled-ok");
     cleanup(importsStandaloneDir);
   }
 
-  const invalidPackTarget = runLogged(
+  const invalidPackTarget = runAgency(
     "05d-pack-invalid-target",
-    "npx --no-install agency pack src/pack-target.agency --target browser",
+    ["pack", "src/pack-target.agency", "--target", "browser"],
     { expectFail: true },
   );
   assertIncludes(invalidPackTarget, "Unsupported pack target: browser");
 
+  // trace
+
   console.log("--- trace ---");
-  runLogged("06-trace", "npx --no-install agency trace src/trace-target.agency -o trace-target.trace");
+  runAgency("06-trace", ["trace", "src/trace-target.agency", "-o", "trace-target.trace"]);
   const tracePath = join(dir, "trace-target.trace");
   assertFile(tracePath, "trace should write trace-target.trace");
   assertTraceFile(tracePath, "src/trace-target.agency");
 
-  runLogged("07-trace-log", "npx --no-install agency trace log trace-target.trace -o trace-events.json");
+  runAgency("07-trace-log", ["trace", "log", "trace-target.trace", "-o", "trace-events.json"]);
   assertFile(join(dir, "trace-events.json"), "trace log should write trace-events.json");
   const traceEvents = JSON.parse(readText(join(dir, "trace-events.json")));
   assert(Array.isArray(traceEvents), "trace log output should be an array");
   assert(traceEvents.length > 0, "trace log should contain events");
 
-  console.log("--- fmt ---");
-  runLogged("08-fmt-in-place", "npx --no-install agency fmt src/messy.agency -i");
-  assertExactFile(join(dir, "src/messy.agency"), join(fixtureDir, "fmt.expected.agency"));
+  // fmt
 
-  const formattedOnce = readText(join(dir, "src/messy.agency"));
-  runLogged("09-fmt-idempotent", "npx --no-install agency fmt src/messy.agency -i");
-  const formattedTwice = readText(join(dir, "src/messy.agency"));
+  console.log("--- fmt ---");
+  runAgency("08-fmt-in-place", ["fmt", "src/fmt-input.agency", "-i"]);
+  assertExactFile(join(dir, "src/fmt-input.agency"), join(expectedDir, "fmt.expected.agency"));
+
+  const formattedOnce = readText(join(dir, "src/fmt-input.agency"));
+  runAgency("09-fmt-idempotent", ["fmt", "src/fmt-input.agency", "-i"]);
+  const formattedTwice = readText(join(dir, "src/fmt-input.agency"));
   assert(formattedOnce === formattedTwice, "fmt should be idempotent");
 
-  writeFile(dir, "src/messy-stdout.agency", `node main(){const name="Ada";print("hello "+name);return name}
-`);
-  const stdoutFormatted = runLogged(
+  cpSync(join(fixtureDir, "project", "src", "fmt-input.agency"), join(dir, "src/fmt-stdout.agency"));
+  const stdoutFormatted = runAgency(
     "09b-fmt-stdout",
-    "npx --no-install agency fmt src/messy-stdout.agency",
+    ["fmt", "src/fmt-stdout.agency"],
   );
   assert(
     normalizeOptionalFinalNewline(stdoutFormatted) ===
-      normalizeOptionalFinalNewline(readText(join(fixtureDir, "fmt.expected.agency"))),
+      normalizeOptionalFinalNewline(readText(join(expectedDir, "fmt.expected.agency"))),
     "fmt stdout should match the fixture",
   );
   assertIncludes(
-    readText(join(dir, "src/messy-stdout.agency")),
-    `node main(){const name="Ada";print("hello "+name);return name}`,
+    readText(join(dir, "src/fmt-stdout.agency")),
+    `type Person={name:string,meta:{active:boolean}}`,
   );
+
+  // parse
 
   console.log("--- parse ---");
   assertParseOutput(
-    runLogged("10-parse", "npx --no-install agency parse src/basic.agency"),
+    runAgency("10-parse", ["parse", "src/basic.agency"]),
     "main",
   );
   assertParseOutput(
-    runLogged("10b-parse-stdin", "npx --no-install agency parse", {
+    runAgency("10b-parse-stdin", ["parse"], {
       input: `node stdinMain() {
   return "stdin"
 }
@@ -508,49 +415,53 @@ console.log("compiled-ok");
     "stdinMain",
   );
 
+  // coverage
+
   console.log("--- coverage ---");
-  runLogged("11-coverage-generate", "npx --no-install agency test src/coverage-target.agency --coverage");
-  const coverageOutput = runLogged(
+  runAgency("11-coverage-generate", ["test", "src/coverage-target.agency", "--coverage"]);
+  const coverageOutput = runAgency(
     "12-coverage-report",
-    "npx --no-install agency coverage report src/coverage-target.agency --detail --threshold 100",
+    ["coverage", "report", "src/coverage-target.agency", "--detail", "--threshold", "100"],
   );
   assertFullCoverage(coverageOutput);
   assertFile(join(dir, ".coverage"), "coverage run should create .coverage");
-  runLogged("13-coverage-clean", "npx --no-install agency coverage clean");
+  runAgency("13-coverage-clean", ["coverage", "clean"]);
   assert(!existsSync(join(dir, ".coverage")), "coverage clean should remove .coverage");
 
-  runLogged(
+  runAgency(
     "13b-coverage-partial-generate",
-    "npx --no-install agency test src/coverage-partial.agency --coverage",
+    ["test", "src/coverage-partial.agency", "--coverage"],
   );
-  const partialCoverageOutput = runLogged(
+  const partialCoverageOutput = runAgency(
     "13c-coverage-partial-report",
-    "npx --no-install agency coverage report src/coverage-partial.agency --detail",
+    ["coverage", "report", "src/coverage-partial.agency", "--detail"],
   );
   assertPartialCoverage(partialCoverageOutput);
-  const thresholdFailure = stripAnsi(runLogged(
+  const thresholdFailure = stripAnsi(runAgency(
     "13d-coverage-threshold-failure",
-    "npx --no-install agency coverage report src/coverage-partial.agency --threshold 100",
+    ["coverage", "report", "src/coverage-partial.agency", "--threshold", "100"],
     { expectFail: true },
   ));
   assertIncludes(thresholdFailure, "below threshold 100%");
-  runLogged("13e-coverage-clean-partial", "npx --no-install agency coverage clean");
+  runAgency("13e-coverage-clean-partial", ["coverage", "clean"]);
   assert(!existsSync(join(dir, ".coverage")), "coverage clean should remove partial coverage data");
+
+  // tc
 
   console.log("--- tc ---");
   assertIncludes(
-    runLogged("14-tc-ok", "npx --no-install agency tc src/type-ok.agency"),
+    runAgency("14-tc-ok", ["tc", "src/type-ok.agency"]),
     "No type errors found.",
   );
-  const tcError = stripAnsi(runLogged(
+  const tcError = stripAnsi(runAgency(
     "15-tc-error",
-    "npx --no-install agency tc src/type-error.agency",
+    ["tc", "src/type-error.agency"],
     { expectFail: true },
   ));
   assertIncludes(tcError, "Type '\"oops\"' is not assignable to type 'number'");
   assertIncludes(tcError, "return in 'bad'");
   assertIncludes(
-    runLogged("15b-tc-stdin", "npx --no-install agency tc", {
+    runAgency("15b-tc-stdin", ["tc"], {
       input: `node stdinTypecheck(): string {
   return "stdin-ok"
 }
@@ -558,18 +469,20 @@ console.log("compiled-ok");
     }),
     "No type errors found.",
   );
-  const strictError = stripAnsi(runLogged(
+  const strictError = stripAnsi(runAgency(
     "15c-tc-strict",
-    "npx --no-install agency tc src/type-strict.agency --strict",
+    ["tc", "src/type-strict.agency", "--strict"],
     { expectFail: true },
   ));
   assertIncludes(strictError, "no type annotation");
   assertIncludes(strictError, "strict mode");
 
+  // bundle and unbundle
+
   console.log("--- bundle/unbundle ---");
-  runLogged(
+  runAgency(
     "16-bundle",
-    "npx --no-install agency bundle src/trace-target.agency trace-target.trace -o trace-target.bundle",
+    ["bundle", "src/trace-target.agency", "trace-target.trace", "-o", "trace-target.bundle"],
   );
   const bundlePath = join(dir, "trace-target.bundle");
   assertFile(bundlePath, "bundle should write trace-target.bundle");
@@ -583,60 +496,64 @@ console.log("compiled-ok");
     "bundle should include source line",
   );
 
-  runLogged("17-unbundle", "npx --no-install agency unbundle trace-target.bundle -o unpacked");
+  runAgency("17-unbundle", ["unbundle", "trace-target.bundle", "-o", "unpacked"]);
   assertSameFileContent(join(dir, "unpacked/trace-target.agency"), join(dir, "src/trace-target.agency"));
   assertFile(join(dir, "unpacked/trace-target.trace"), "unbundle should write trace-target.trace");
   assertTraceFile(join(dir, "unpacked/trace-target.trace"), "trace-target.agency");
 
-  console.log("--- doc ---");
-  runLogged("18-doc", "npx --no-install agency doc src/doc-target.agency -o generated-docs");
-  assertExactFile(join(dir, "generated-docs/doc-target.md"), join(fixtureDir, "doc-target.expected.md"));
+  // doc
 
-  runLogged("18b-doc-directory-ignore", "npx --no-install agency doc docs-src -o generated-docs-dir --ignore ignored");
+  console.log("--- doc ---");
+  runAgency("18-doc", ["doc", "src/doc-target.agency", "-o", "generated-docs"]);
+  assertExactFile(join(dir, "generated-docs/doc-target.md"), join(expectedDir, "doc-target.expected.md"));
+
+  runAgency("18b-doc-directory-ignore", ["doc", "docs-src", "-o", "generated-docs-dir", "--ignore", "ignored"]);
   assertFile(join(dir, "generated-docs-dir/main.md"), "doc directory mode should generate main.md");
   assert(!existsSync(join(dir, "generated-docs-dir/ignored/skip.md")), "doc --ignore should skip ignored directories");
 
+  // schedule
+
   console.log("--- schedule ---");
   const scheduleEnv = { HOME: join(dir, "__home") };
-  runLogged(
+  runAgency(
     "19-schedule-add-github",
-    "npx --no-install agency schedule add agents/nightly.agency --backend github --every hourly --name nightly --no-pin --secret EXTRA_TOKEN",
+    ["schedule", "add", "agents/nightly.agency", "--backend", "github", "--every", "hourly", "--name", "nightly", "--no-pin", "--secret", "EXTRA_TOKEN"],
     { env: scheduleEnv },
   );
-  assertExactFile(join(dir, "nightly.yml"), join(fixtureDir, "nightly.expected.yml"));
-  const listOutput = runLogged("20-schedule-list", "npx --no-install agency schedule list", { env: scheduleEnv });
+  assertExactFile(join(dir, "nightly.yml"), join(expectedDir, "nightly.expected.yml"));
+  const listOutput = runAgency("20-schedule-list", ["schedule", "list"], { env: scheduleEnv });
   assertIncludes(listOutput, "No scheduled agents");
-  const removeOutput = stripAnsi(runLogged(
+  const removeOutput = stripAnsi(runAgency(
     "21-schedule-remove-missing",
-    "npx --no-install agency schedule remove nightly",
+    ["schedule", "remove", "nightly"],
     { env: scheduleEnv, expectFail: true },
   ));
   assertIncludes(removeOutput, "No schedule named \"nightly\"");
 
-  runLogged(
+  runAgency(
     "22-schedule-cron-github",
-    "npx --no-install agency schedule add agents/nightly.agency --backend github --cron \"*/5 * * * *\" --name nightly-cron --no-pin",
+    ["schedule", "add", "agents/nightly.agency", "--backend", "github", "--cron", "*/5 * * * *", "--name", "nightly-cron", "--no-pin"],
     { env: scheduleEnv },
   );
-  assertExactFile(join(dir, "nightly-cron.yml"), join(fixtureDir, "nightly-cron.expected.yml"));
+  assertExactFile(join(dir, "nightly-cron.yml"), join(expectedDir, "nightly-cron.expected.yml"));
 
-  runLogged(
+  runAgency(
     "23-schedule-write-github",
-    "npx --no-install agency schedule add agents/nightly.agency --backend github --every hourly --name nightly-write --no-pin --write",
+    ["schedule", "add", "agents/nightly.agency", "--backend", "github", "--every", "hourly", "--name", "nightly-write", "--no-pin", "--write"],
     { env: scheduleEnv },
   );
-  assertExactFile(join(dir, "nightly-write.yml"), join(fixtureDir, "nightly-write.expected.yml"));
+  assertExactFile(join(dir, "nightly-write.yml"), join(expectedDir, "nightly-write.expected.yml"));
 
-  const existingSchedule = stripAnsi(runLogged(
+  const existingSchedule = stripAnsi(runAgency(
     "24-schedule-existing-failure",
-    "npx --no-install agency schedule add agents/nightly.agency --backend github --every hourly --name nightly --no-pin",
+    ["schedule", "add", "agents/nightly.agency", "--backend", "github", "--every", "hourly", "--name", "nightly", "--no-pin"],
     { env: scheduleEnv, expectFail: true },
   ));
   assertIncludes(existingSchedule, "File already exists");
 
-  const invalidBackend = stripAnsi(runLogged(
+  const invalidBackend = stripAnsi(runAgency(
     "25-schedule-invalid-backend",
-    "npx --no-install agency schedule add agents/nightly.agency --backend local --every hourly --name bad",
+    ["schedule", "add", "agents/nightly.agency", "--backend", "local", "--every", "hourly", "--name", "bad"],
     { env: scheduleEnv, expectFail: true },
   ));
   assertIncludes(invalidBackend, "Unknown --backend value");

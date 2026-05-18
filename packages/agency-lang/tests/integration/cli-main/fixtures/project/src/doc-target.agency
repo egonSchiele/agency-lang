@@ -1,0 +1,19 @@
+/** @module
+  Helpers used by CLI integration tests.
+*/
+
+/** A person to greet. */
+type Person = {
+  name: string
+}
+
+/** Build a greeting. */
+def greet(person: Person): string {
+  return "Hello, " + person.name + "!"
+}
+
+/** Return a greeting for Ada. */
+node main(): string {
+  const person: Person = { name: "Ada" }
+  return greet(person)
+}

@@ -1,0 +1,9 @@
+import { add } from "std::math"
+import { helper } from "./pack-helper.agency"
+
+node main() {
+  const sum = add(2, 3)
+  const message = helper("pack-imports")
+  print(message + "-" + sum)
+  return message + "-" + sum
+}

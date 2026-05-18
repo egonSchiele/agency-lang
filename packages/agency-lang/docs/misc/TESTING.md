@@ -402,7 +402,7 @@ AGENCY_USE_TEST_LLM_PROVIDER=1 pnpm run test:agency-js
 
 **GitHub stdlib smoke test** — runs the `@agency-lang/github` package's agency tests with a real GitHub token.
 
-**Main-only CLI command integration tests** — installs `agency-lang` from an `npm pack` tarball in a fresh temp project and exercises finite, non-interactive CLI commands that are broader than the PR smoke suite. Runs only on `push` to `main`, Node 22.
+**Main-only CLI command integration tests** — installs `agency-lang` from the same `npm pack` tarball used by the PR integration suite in a fresh temp project and exercises finite, non-interactive CLI commands that are broader than the PR smoke suite. Runs only on `push` to `main`, Node 22.
 
 Covered commands:
 - `compile`

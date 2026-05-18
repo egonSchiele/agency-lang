@@ -1,0 +1,3 @@
+node main(): string {
+  return "type-ok"
+}

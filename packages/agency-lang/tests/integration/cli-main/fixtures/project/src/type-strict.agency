@@ -1,0 +1,4 @@
+node main() {
+  const inferred = "strict-error"
+  return inferred
+}

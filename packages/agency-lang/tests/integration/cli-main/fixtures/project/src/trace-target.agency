@@ -1,0 +1,6 @@
+node main() {
+  const name = "Trace"
+  const greeting = "hello " + name
+  print(greeting)
+  return greeting
+}

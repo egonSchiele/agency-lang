@@ -30,6 +30,10 @@ import { DebuggerStatement } from "@/types/debuggerStatement.js";
 import { SchemaExpression } from "@/types/schemaExpression.js";
 import { expressionToString } from "@/utils/node.js";
 import { toCompiledImportPath } from "../importPaths.js";
+import {
+  CONTEXT_INJECTED_BUILTINS,
+  isContextInjectedBuiltin,
+} from "../codegenBuiltins/contextInjected.js";
 import * as renderDebugger from "../templates/backends/typescriptGenerator/debugger.js";
 import * as renderImports from "../templates/backends/typescriptGenerator/imports.js";
 import * as renderInterruptAssignment from "../templates/backends/typescriptGenerator/interruptAssignment.js";
@@ -2278,14 +2282,15 @@ export class TypeScriptBuilder {
         .done();
     }
 
-    // getContext() is a builder macro — compile-time rewrite to the
-    // `__ctx` identifier already in scope of every compiled function.
-    // Zero runtime cost; no `__call` dispatch, no await.
-    if (node.functionName === "getContext") {
-      if (node.arguments.length > 0) {
-        throw new Error("getContext() takes no arguments");
-      }
-      return ts.id("__ctx");
+    // Context-injected builtins: codegen rewrites the call to prepend
+    // `__ctx` as the first positional argument. The actual emit is a
+    // plain direct call (`f(__ctx, ...args)`), like the __-prefixed
+    // branch below — but the registry lookup has to happen FIRST so
+    // we know to inject ctx. See lib/codegenBuiltins/contextInjected.ts.
+    if (isContextInjectedBuiltin(node.functionName)) {
+      return this.emitDirectFunctionCall(node, functionName, shouldAwait, [
+        ts.id("__ctx"),
+      ]);
     }
 
     // __-prefixed helpers and DIRECT_CALL_FUNCTIONS: emit plain direct call
@@ -2326,12 +2331,22 @@ export class TypeScriptBuilder {
     return shouldAwait ? ts.await(callExpr) : callExpr;
   }
 
+  /**
+   * Emit a plain direct function call: `f(arg1, arg2, blockArg?)`.
+   * Context-injected builtins reuse this with `prependArgs =
+   * [__ctx]`; the registry lookup at the call site is what marks the
+   * intent, no separate method needed.
+   */
   private emitDirectFunctionCall(
     node: FunctionCall,
     functionName: string,
     shouldAwait: boolean,
+    prependArgs: TsNode[] = [],
   ): TsNode {
-    const argNodes = node.arguments.map((a) => this.processCallArg(a));
+    const argNodes: TsNode[] = [
+      ...prependArgs,
+      ...node.arguments.map((a) => this.processCallArg(a)),
+    ];
 
     if (node.block) {
       argNodes.push(this.processBlockArgument(node));
@@ -3725,7 +3740,31 @@ export class TypeScriptBuilder {
 
     return renderImports.default({
       runtimeContextCode: printTs(runtimeCtx),
+      contextInjectedImports: this.generateContextInjectedImports(),
     });
+  }
+
+  /**
+   * Emit the import statements that bring every context-injected
+   * builtin into scope in the generated TS. The set is fixed by
+   * `CONTEXT_INJECTED_BUILTINS` at codegen time, so we always import
+   * the full list — esbuild tree-shakes anything the call site
+   * didn't use. Imports are grouped by each entry's `from` field, so
+   * adding a builtin sourced from a different module is a registry
+   * change only.
+   */
+  private generateContextInjectedImports(): string {
+    const byFrom: Record<string, string[]> = {};
+    for (const entry of Object.values(CONTEXT_INJECTED_BUILTINS)) {
+      (byFrom[entry.from] ??= []).push(entry.name);
+    }
+    return Object.keys(byFrom)
+      .sort()
+      .map((from) => {
+        const names = byFrom[from].sort();
+        return `import {\n  ${names.join(",\n  ")},\n} from ${JSON.stringify(from)};`;
+      })
+      .join("\n");
   }
 
   private preprocess(): TsNode[] {

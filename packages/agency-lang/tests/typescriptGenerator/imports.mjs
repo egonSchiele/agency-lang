@@ -42,6 +42,17 @@ import {
   functionRefReviver as __functionRefReviver,
   DeterministicClient as __DeterministicClient,
 } from "agency-lang/runtime";
+import {
+  __internal_applyExtractionResult,
+  __internal_applyForgetResult,
+  __internal_buildExtractionPrompt,
+  __internal_buildForgetPrompt,
+  __internal_forget,
+  __internal_recall,
+  __internal_remember,
+  __internal_setMemoryId,
+  __internal_shouldRunMemory,
+} from "agency-lang/stdlib-lib/memory.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);

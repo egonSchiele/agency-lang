@@ -12,7 +12,7 @@ type ExtractionResult = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/memory.agency#L16))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/memory.agency#L6))
 
 ### ForgetResult
 
@@ -23,7 +23,7 @@ type ForgetResult = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/memory.agency#L22))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/memory.agency#L12))
 
 ## Functions
 
@@ -48,7 +48,7 @@ Set the memory scope for this agent run. Call this before other
 |---|---|---|
 | id | `string` |  |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/memory.agency#L34))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/memory.agency#L23))
 
 ### remember
 
@@ -73,7 +73,7 @@ Extract and store structured facts from the given text into the
 |---|---|---|
 | content | `string` |  |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/memory.agency#L48))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/memory.agency#L37))
 
 ### recall
 
@@ -98,7 +98,7 @@ Retrieve relevant facts from the knowledge graph as a formatted
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/memory.agency#L70))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/memory.agency#L59))
 
 ### forget
 
@@ -122,4 +122,4 @@ Soft-delete facts matching the query from the knowledge graph.
 |---|---|---|
 | query | `string` |  |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/memory.agency#L84))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/memory.agency#L73))

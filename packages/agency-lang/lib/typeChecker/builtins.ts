@@ -8,6 +8,7 @@ import {
   UNDEFINED_T as undef,
   VOID_T as voidT,
 } from "./primitives.js";
+import { CONTEXT_INJECTED_BUILTINS } from "../codegenBuiltins/contextInjected.js";
 
 const anyArray = { type: "arrayType", elementType: ANY_T } as const;
 
@@ -63,20 +64,6 @@ const llmOptions: VariableType = {
 };
 
 /**
- * Public shape returned by `getContext()`. Mirrors the `Context` type
- * defined in `lib/runtime/publicContext.ts`. We model `memoryManager` as
- * optional `any` because the agency type system doesn't model class
- * instances; users access methods through the runtime side (TS bindings),
- * not directly via field access in agency code.
- */
-const contextType: VariableType = {
-  type: "objectType",
-  properties: [
-    { key: "memoryManager", value: optional(ANY_T) },
-  ],
-};
-
-/**
  * Signatures for builtin / auto-imported functions that the typechecker
  * needs to know about.
  *
@@ -110,15 +97,21 @@ export const BUILTIN_FUNCTION_TYPES: Record<string, BuiltinSignature> = {
   // --- Checkpointing ---
   checkpoint: { params: [], returnType: number },
   getCheckpoint: { params: [number], returnType: "any" },
-  // --- Runtime context (compile-time rewrite to __ctx) ---
-  // Lowered to the `__ctx` identifier in lib/backends/typescriptBuilder.ts.
-  // No TS implementation; pure codegen. Intentionally NOT in BUILTIN_FUNCTIONS
-  // (lib/config.ts) since that registry is for runtime helper bindings.
-  getContext: { params: [], returnType: contextType },
 
-  // --- Compiler-internal: emitted by the pattern lowering pass for
-  // `let { a, b, ...rest } = obj`. Registered here so the typechecker
-  // doesn't flag it as undefined; the TS builder rewrites this call into
-  // a native-JS IIFE, so there is no runtime function with this name. ---
-  __objectRest: { params: ["any", anyArray], returnType: "any" },
+  // --- Context-injected builtins (codegen rewrites the call to inject __ctx) ---
+  // The registry lives in lib/codegenBuiltins/contextInjected.ts and is the
+  // single source of truth for both the typechecker (here) and the
+  // TypeScript builder. Adding a new context-injected builtin = one entry
+  // in CONTEXT_INJECTED_BUILTINS plus a TS impl with arity 1 + params.length.
+  ...Object.fromEntries(
+    Object.entries(CONTEXT_INJECTED_BUILTINS).map(([name, def]) => [
+      name,
+      {
+        params: def.params,
+        minParams: def.minParams,
+        restParam: def.restParam,
+        returnType: def.returnType,
+      } satisfies BuiltinSignature,
+    ]),
+  ),
 };

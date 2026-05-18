@@ -44,7 +44,29 @@ export type EmbeddingEntry = {
   vector: number[];
 };
 
+/**
+ * `formatVersion` distinguishes embeddings built from different source
+ * texts. Bumped to 2 when we started feeding the embedder a
+ * contextualized "{name} ({type}): {content}" string per observation
+ * instead of the bare observation content.
+ *
+ * Load-side behaviour (`MemoryManager.getEntry`): if the on-disk
+ * index's `formatVersion` is missing (treated as v1) or older than
+ * this constant, we discard the index in memory, log a warning so the
+ * discard is visible, and start with an empty `EmbeddingManager`. The
+ * graph and summary are NOT touched — only embeddings get rebuilt.
+ * The next mutation (any `applyExtractionFromLLM` call) embeds the
+ * affected observations in the current format and persists. Until
+ * then, Tier 2 (embedding similarity) silently produces zero hits
+ * and recall falls back to Tier 1 + Tier 3.
+ *
+ * If the source-text shape changes again, bump this constant; the
+ * load guard handles the rest.
+ */
+export const EMBEDDING_FORMAT_VERSION = 2;
+
 export type EmbeddingIndex = {
+  formatVersion?: number; // undefined treated as 1 (legacy bare-content)
   model: string;
   entries: EmbeddingEntry[];
 };
@@ -119,6 +141,7 @@ export const MemoryGraphDataSchema = z.object({
 });
 
 export const EmbeddingIndexSchema = z.object({
+  formatVersion: z.number().optional(),
   model: z.string(),
   entries: z.array(
     z.object({

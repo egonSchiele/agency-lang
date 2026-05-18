@@ -381,6 +381,63 @@ Detailed write-up moved into Phase G above.
 
 ---
 
+### Other follow-ups
+
+# "Transient" injected memory is fed into extraction and compaction before being stripped.
+
+Memory injection is pushed into the live thread at prompt.ts (line 329), but _runPrompt() runs onTurn() and compactIfNeeded() over that thread at prompt.ts (line 160) before the cleanup at prompt.ts (line 354). That means auto-extraction can re-store injected facts, and compaction can permanently summarize the injected "Relevant context from memory" system message. This defeats the "transient" guarantee and can create a memory feedback loop.
+
+---
+
+# Extraction parsing only validates top-level arrays, then trusts nested LLM output.
+
+manager.ts (line 528) casts any { entities: [], relations: [], expirations: [] } shape to ExtractionResult; extraction.ts (line 82) then assumes each entity has string name, string type, and iterable observations. A malformed but plausible LLM response like { "entities": [{}], "relations": [], "expirations": [] } can throw inside remember() and crash the agent. The comment promises structural validation, so nested validation should be added. Would it make sense to validate using zod schemas first?
+
+
+---
+
+# currentContext singleton and concurrent runs (Copilot #7)
+The round 2 commit acknowledges this as a v1 constraint in the comment. The comment on currentContext.ts is clear. Acceptable for v1 given
+the documented single-writer constraint, but this should be a follow-up issue since fork/race within a single run could trigger it.
+---
+
+# Auto-extraction operates on the full message history (Copilot #26)
+
+onTurn(messages) receives the entire thread and passes it to autoExtract, which builds an extraction prompt from ALL messages. On a
+100-message thread with extraction interval 5, every 5th turn sends the full 100 messages to extraction. This:
+- Re-extracts facts already captured in previous extractions
+- Grows the extraction prompt without bound
+- Burns tokens proportional to total conversation length
+
+The fix is straightforward: track an index/count of "messages already extracted" and only pass the slice since last extraction.
+
+---
+
+# Embed batching (Copilot #13)
+
+generateEmbeddings makes one API call per observation. For an extraction that produces 5 entities with 3 observations each = 15 sequential
+network calls. smoltalk.embed supports string[] input. This is a real performance issue — a large remember() call could take 15x longer
+than necessary.
+
+---
+
+# MemoryIdRef and branch stacks (Copilot #30)
+
+The memoryIdRef closure captures execCtx.stateStack directly. In fork/race scenarios where branches get their own StateStack copies,
+setMemoryId() in a branch modifies the root stack. What are the consequences of this?
+
+---
+
+figure out a different solution so setMemoryId doesn't cause concurrency issues
+
+---
+
+eventually make these configurable:
+const DEFAULT_RECALL_K = 10;
+const DEFAULT_EMBEDDING_THRESHOLD = 0.3;
+
+---
+
 ## Verification checklist
 
 Run at the end of each phase:

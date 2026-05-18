@@ -1,5 +1,9 @@
 import { DEFAULT_EMBEDDING_MODEL } from "../../constants.js";
-import type { EmbeddingEntry, EmbeddingIndex } from "./types.js";
+import {
+  EMBEDDING_FORMAT_VERSION,
+  type EmbeddingEntry,
+  type EmbeddingIndex,
+} from "./types.js";
 
 export function cosineSimilarity(a: number[], b: number[]): number {
   let dot = 0;
@@ -61,7 +65,11 @@ export class EmbeddingManager {
   }
 
   toIndex(): EmbeddingIndex {
-    return { model: this.model, entries: this.entries };
+    return {
+      formatVersion: EMBEDDING_FORMAT_VERSION,
+      model: this.model,
+      entries: this.entries,
+    };
   }
 
   static fromIndex(index: EmbeddingIndex): EmbeddingManager {

@@ -73,8 +73,20 @@ export function buildExtractionPrompt(
   return extractionTemplate({ entityContext, conversationText });
 }
 
+/**
+ * One newly-added observation. `entityId` is captured at add-time
+ * (the entity is in scope where `addObservation` is called) so
+ * downstream consumers — the obs→entity reverse index in
+ * `MemoryCacheEntry` — can register the pair in O(1) instead of
+ * scanning the whole graph to find which entity owns each obs id.
+ */
+export type NewObservation = {
+  id: string;
+  entityId: string;
+};
+
 export type ApplyExtractionOutcome = {
-  newObservationIds: string[];
+  newObservations: NewObservation[];
   expiredObservationIds: string[];
 };
 
@@ -83,7 +95,7 @@ export function applyExtractionResult(
   result: ExtractionResult,
   source: string
 ): ApplyExtractionOutcome {
-  const newObservationIds: string[] = [];
+  const newObservations: NewObservation[] = [];
   const expiredObservationIds: string[] = [];
 
   // Apply expirations first. Per resolved decision #7, extraction
@@ -110,7 +122,7 @@ export function applyExtractionResult(
     }
     for (const obsContent of extracted.observations) {
       const obs = graph.addObservation(entity.id, obsContent);
-      newObservationIds.push(obs.id);
+      newObservations.push({ id: obs.id, entityId: entity.id });
     }
   }
 
@@ -123,5 +135,5 @@ export function applyExtractionResult(
     }
   }
 
-  return { newObservationIds, expiredObservationIds };
+  return { newObservations, expiredObservationIds };
 }

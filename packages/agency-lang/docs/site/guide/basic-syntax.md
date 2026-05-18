@@ -149,6 +149,10 @@ Mixing dimensions is a type error:
 1s + $5.00    // ERROR: cannot add time and cost
 ```
 
+### Reserved names
+
+Identifiers beginning with two underscores (`__name`) are reserved for the compiler and runtime. The codegen uses this prefix for plumbing identifiers like `__ctx`, `__stack`, and `__call`, and the `__internal_` prefix for context-injected stdlib builtins. Do not define functions, variables, or globals whose names start with `__` — your code may compile today but collide with a future internal addition.
+
 ### Destructuring and pattern matching
 
 Array and object destructuring work in `let` / `const` declarations and

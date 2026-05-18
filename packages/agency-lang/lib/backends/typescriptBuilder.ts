@@ -11,7 +11,6 @@ import {
   NamedArgument,
   PromptSegment,
   FunctionScope,
-  Scope,
   ScopeType,
   SplatExpression,
   TypeAlias,
@@ -104,8 +103,9 @@ import type {
   TsTemplatePart,
 } from "../ir/tsIR.js";
 import type { CompilationUnit } from "../compilationUnit.js";
-import { scopeKey } from "../compilationUnit.js";
 import { SourceMapBuilder } from "./sourceMap.js";
+import { ScopeManager } from "./typescriptBuilder/scopeManager.js";
+import { StepPathTracker } from "./typescriptBuilder/stepPathTracker.js";
 
 const DEFAULT_PROMPT_NAME = "__promptVar";
 
@@ -152,8 +152,9 @@ export class TypeScriptBuilder {
   // Function tracking
   private functionsUsed: Set<string> = new Set();
 
-  // Scope management
-  private currentScope: Scope[] = [{ type: "global" }];
+  // Scope management & step-path bookkeeping (extracted to helpers)
+  private scopes: ScopeManager;
+  private steps: StepPathTracker = new StepPathTracker();
 
   // Config
   private agencyConfig: AgencyConfig = {};
@@ -167,17 +168,6 @@ export class TypeScriptBuilder {
   private loopVars: string[] = [];
   private insideHandlerBody: boolean = false;
   private insideGlobalInit: boolean = false;
-  private _isInSafeFunction: boolean = false;
-  private _blockCounter: number = 0;
-  /** Nesting depth of fork/race block bodies currently being generated.
-   * Used to detect when a fork is nested inside another fork's block, so
-   * the inner block can carry forward the outer block's args (otherwise
-   * the inner __bstack only contains the inner iteration variable). */
-  private _forkBlockDepth: number = 0;
-
-  /** Stack of loop subKeys for generating break/continue cleanup code.
-   * Pushed when entering a stepped loop, popped when leaving. */
-  private _loopContextStack: string[] = [];
 
   /*
   We break up every function and node body into steps,
@@ -191,11 +181,6 @@ export class TypeScriptBuilder {
   */
   private _asyncBranchCheckNeeded: boolean = false;
 
-  /** Tracks the current substep nesting path. Empty when at the top level
-   * of a stepped body. Non-empty when inside a block (if/else, etc.) that
-   * has been broken into substeps. Used to generate unique variable names
-   * like __substep_3.1 for nested blocks. */
-  private _subStepPath: number[] = [];
   private _sourceMapBuilder: SourceMapBuilder = new SourceMapBuilder();
 
 
@@ -221,6 +206,7 @@ export class TypeScriptBuilder {
   ) {
     this.agencyConfig = mergeDeep(this.configDefaults(), config || {});
     this.compilationUnit = info;
+    this.scopes = new ScopeManager(info);
     this.moduleId = moduleId;
     this.outputFile = outputFile;
   }
@@ -252,19 +238,7 @@ export class TypeScriptBuilder {
     return printTs(node);
   }
 
-  // ------- Scope management -------
-
-  private startScope(scope: Scope): void {
-    this.currentScope.push(scope);
-  }
-
-  private endScope(): void {
-    this.currentScope.pop();
-  }
-
-  private getCurrentScope(): Scope {
-    return this.currentScope[this.currentScope.length - 1];
-  }
+  // ------- Assignment lowering -------
 
   /**
    * Assign a value to a scoped variable. For global scope, emits a
@@ -314,32 +288,13 @@ export class TypeScriptBuilder {
 
   // ------- Lookup helpers -------
 
-  private currentScopeKey(): string {
-    return scopeKey(this.getCurrentScope());
-  }
-
-  /** Returns the name of the current scope (function, node, or block name, or empty string for global). */
-  private currentScopeName(): string {
-    const scope = this.getCurrentScope();
-    if (scope.type === "function") return scope.functionName;
-    if (scope.type === "node") return scope.nodeName;
-    if (scope.type === "block") return scope.blockName;
-    return "";
-  }
-
   /** Returns the template opts for checkpoint creation (moduleId, scopeName, stepPath as JSON-quoted strings). */
   private checkpointOpts(): Record<keyof SourceLocationOpts, string> {
-    const path = [...this._subStepPath];
-    //path[path.length - 1] = path[path.length - 1] + 1;
     return {
       moduleId: JSON.stringify(this.moduleId),
-      scopeName: JSON.stringify(this.currentScopeName()),
-      stepPath: JSON.stringify(path.join(".")),
+      scopeName: JSON.stringify(this.scopes.currentName()),
+      stepPath: JSON.stringify(this.steps.joined()),
     };
-  }
-
-  private getVisibleTypeAliases(): Record<string, VariableType> {
-    return this.compilationUnit.typeAliases.visibleIn(this.currentScopeKey());
   }
 
   private forkBranchSetup(branchKey: string): TsNode[] {
@@ -461,52 +416,6 @@ export class TypeScriptBuilder {
       }
     }
     return false;
-  }
-
-  private getScopeReturnType(): VariableType | undefined {
-    const currentScope = this.getCurrentScope();
-    switch (currentScope.type) {
-      case "global":
-        return undefined;
-      case "function": {
-        const funcDef =
-          this.compilationUnit.functionDefinitions[currentScope.functionName];
-        if (funcDef && funcDef.returnType) {
-          return funcDef.returnType;
-        }
-        return undefined;
-      }
-      case "node": {
-        const graphNode = this.compilationUnit.graphNodes.find(
-          (n) => n.nodeName === currentScope.nodeName,
-        );
-        if (graphNode && graphNode.returnType) {
-          return graphNode.returnType;
-        }
-        return undefined;
-      }
-      default:
-        throw new Error(`Unknown scope type: ${(currentScope as any).type}`);
-    }
-  }
-
-  private getScopeReturnTypeValidated(): boolean {
-    const currentScope = this.getCurrentScope();
-    switch (currentScope.type) {
-      case "function": {
-        const funcDef =
-          this.compilationUnit.functionDefinitions[currentScope.functionName];
-        return !!funcDef?.returnTypeValidated;
-      }
-      case "node": {
-        const graphNode = this.compilationUnit.graphNodes.find(
-          (n) => n.nodeName === currentScope.nodeName,
-        );
-        return !!graphNode?.returnTypeValidated;
-      }
-      default:
-        return false;
-    }
   }
 
   private agencyFileToDefaultImportName(agencyFile: string): string {
@@ -947,7 +856,7 @@ export class TypeScriptBuilder {
   private processKeyword(node: Keyword): TsNode {
     // Inside a handler body or not inside a stepped loop: emit bare keyword
     const loopSubKey =
-      this._loopContextStack[this._loopContextStack.length - 1];
+      this.steps.currentLoopKey();
     if (this.insideHandlerBody || loopSubKey === undefined) {
       return node.value === "break" ? ts.break() : ts.continue();
     }
@@ -1016,7 +925,7 @@ export class TypeScriptBuilder {
 
   private processTypeAlias(node: TypeAlias): TsNode {
     const exportPrefix = node.exported ? "export " : "";
-    const zodSchema = mapTypeToValidationSchema(node.aliasedType, this.getVisibleTypeAliases());
+    const zodSchema = mapTypeToValidationSchema(node.aliasedType, this.scopes.visibleTypeAliases());
     return ts.statements([
       ts.raw(`${exportPrefix}const ${node.aliasName} = ${zodSchema};`),
       ts.raw(`${exportPrefix}type ${node.aliasName} = z.infer<typeof ${node.aliasName}>;`),
@@ -1272,7 +1181,7 @@ export class TypeScriptBuilder {
     }
     const callNode = this.processNode(node.call as AgencyNode);
     const args: TsNode[] = [ts.arrowFn([], callNode, { async: true })];
-    const scope = this.getCurrentScope();
+    const scope = this.scopes.current();
     if (scope.type === "function") {
       args.push(
         ts.obj({
@@ -1293,7 +1202,7 @@ export class TypeScriptBuilder {
   }
 
   private processSchemaExpression(node: SchemaExpression): TsNode {
-    const zodSchema = mapTypeToValidationSchema(node.typeArg, this.getVisibleTypeAliases());
+    const zodSchema = mapTypeToValidationSchema(node.typeArg, this.scopes.visibleTypeAliases());
     return ts.new(ts.id("Schema"), [ts.raw(zodSchema)]);
   }
 
@@ -1353,15 +1262,15 @@ export class TypeScriptBuilder {
 
   private buildMethodCode(method: ClassMethod, className: string): string {
     const methodScopeName = `${className}.${method.name}`;
-    this.startScope({ type: "function", functionName: methodScopeName });
+    this.scopes.push({ type: "function", functionName: methodScopeName });
     this._sourceMapBuilder.enterScope(this.moduleId, methodScopeName);
-    const prevSafe = this._isInSafeFunction;
-    this._isInSafeFunction = !!method.safe;
+    const prevSafe = this.scopes.inSafeFunction;
+    this.scopes.inSafeFunction = !!method.safe;
     // Hoist body-local type aliases to the method's outer scope.
     const hoistedAliases = this.hoistBodyTypeAliases(method.body);
     const bodyCode = this.processBodyAsParts(method.body);
-    this._isInSafeFunction = prevSafe;
-    this.endScope();
+    this.scopes.inSafeFunction = prevSafe;
+    this.scopes.pop();
 
     // Reuse the same function body logic as processFunctionDefinition
     const setupStmts = this.buildFunctionBody({
@@ -1414,7 +1323,7 @@ export class TypeScriptBuilder {
   }
 
   private processIfElseWithSteps(node: IfElse): TsNode {
-    const id = this._subStepPath[this._subStepPath.length - 1];
+    const id = this.steps.currentId();
 
     // Flatten the else-if chain.
     // Each branch gets a unique range of substep IDs so source map
@@ -1462,7 +1371,7 @@ export class TypeScriptBuilder {
   }
 
   private processForLoopWithSteps(node: ForLoop): TsNode {
-    const id = this._subStepPath[this._subStepPath.length - 1];
+    const id = this.steps.currentId();
 
     // Register loop variables so they bypass scope resolution
     this.loopVars.push(node.itemVar as string);
@@ -1470,11 +1379,11 @@ export class TypeScriptBuilder {
       this.loopVars.push(node.indexVar);
     }
 
-    const subKey = this._subStepPath.join(".");
+    const subKey = this.steps.joined();
 
-    this._loopContextStack.push(subKey);
+    this.steps.pushLoop(subKey);
     const bodyNodes = this.processBodyAsParts(node.body);
-    this._loopContextStack.pop();
+    this.steps.popLoop();
 
     // Unregister loop variables
     this.loopVars = this.loopVars.filter(
@@ -1519,19 +1428,19 @@ export class TypeScriptBuilder {
   }
 
   private processWhileLoopWithSteps(node: WhileLoop): TsNode {
-    const id = this._subStepPath[this._subStepPath.length - 1];
-    const subKey = this._subStepPath.join(".");
+    const id = this.steps.currentId();
+    const subKey = this.steps.joined();
     const condition = this.processNode(node.condition);
 
-    this._loopContextStack.push(subKey);
+    this.steps.pushLoop(subKey);
     const bodyNodes = this.processBodyAsParts(node.body);
-    this._loopContextStack.pop();
+    this.steps.popLoop();
 
     return ts.runnerWhileLoop({ id, condition, body: bodyNodes });
   }
 
   private processMatchBlockWithSteps(node: MatchBlock): TsNode {
-    const id = this._subStepPath[this._subStepPath.length - 1];
+    const id = this.steps.currentId();
     const expression = this.processNode(node.expression);
 
     const filteredCases = node.cases.filter(
@@ -1639,13 +1548,13 @@ export class TypeScriptBuilder {
         : "any",
     }));
 
-    const blockName = `__block_${this._blockCounter++}`;
-    const parentScopeName = this.currentScopeName();
-    this.startScope({ type: "block", blockName });
+    const blockName = this.steps.nextBlockName();
+    const parentScopeName = this.scopes.currentName();
+    this.scopes.push({ type: "block", blockName });
     this._sourceMapBuilder.enterScope(this.moduleId, blockName);
     const bodyParts = this.processBodyAsParts(block.body);
     this._sourceMapBuilder.enterScope(this.moduleId, parentScopeName);
-    this.endScope();
+    this.scopes.pop();
 
     const bodyStr = bodyParts.map((n) => printTs(n, 1)).join("\n");
 
@@ -1683,13 +1592,13 @@ export class TypeScriptBuilder {
       typeAnnotation: p.typeHint ? formatTypeHintTs(p.typeHint) : "any",
     }));
 
-    const blockName = `__block_${this._blockCounter++}`;
-    const parentScopeName = this.currentScopeName();
-    this.startScope({ type: "block", blockName });
+    const blockName = this.steps.nextBlockName();
+    const parentScopeName = this.scopes.currentName();
+    this.scopes.push({ type: "block", blockName });
     this._sourceMapBuilder.enterScope(this.moduleId, blockName);
     const bodyParts = this.processBodyAsParts(block.body);
     this._sourceMapBuilder.enterScope(this.moduleId, parentScopeName);
-    this.endScope();
+    this.scopes.pop();
 
     const bodyStr = bodyParts.map((n) => printTs(n, 1)).join("\n");
 
@@ -1740,7 +1649,7 @@ export class TypeScriptBuilder {
         type: "primitiveType" as const,
         value: "string",
       };
-      let tsType = mapTypeToValidationSchema(typeHint, this.getVisibleTypeAliases());
+      let tsType = mapTypeToValidationSchema(typeHint, this.scopes.visibleTypeAliases());
       if (param.defaultValue) {
         const defaultStr = expressionToString(param.defaultValue);
         tsType += `.nullable().describe(${JSON.stringify("Default: " + defaultStr)})`;
@@ -1924,7 +1833,7 @@ export class TypeScriptBuilder {
     const validationGuards: TsNode[] = [];
     for (const param of parameters) {
       if (param.validated && param.typeHint) {
-        const zodSchema = mapTypeToValidationSchema(param.typeHint, this.getVisibleTypeAliases());
+        const zodSchema = mapTypeToValidationSchema(param.typeHint, this.scopes.visibleTypeAliases());
         const stackArg = $(ts.stack("args")).index(ts.str(param.name)).done();
         const vrName = `__vr_${param.name}`;
         const vrId = ts.id(vrName);
@@ -1980,18 +1889,18 @@ export class TypeScriptBuilder {
   }
 
   private processFunctionDefinition(node: FunctionDefinition): TsNode {
-    this.startScope({ type: "function", functionName: node.functionName });
+    this.scopes.push({ type: "function", functionName: node.functionName });
     this._sourceMapBuilder.enterScope(this.moduleId, node.functionName);
     const { functionName, parameters } = node;
 
-    const prevSafe = this._isInSafeFunction;
-    this._isInSafeFunction = !!node.safe;
+    const prevSafe = this.scopes.inSafeFunction;
+    this.scopes.inSafeFunction = !!node.safe;
     // Hoist body-local type aliases to the function's outer scope so
     // every runner.step closure can reference the generated zod schemas.
     const hoistedAliases = this.hoistBodyTypeAliases(node.body);
     const bodyCode = this.processBodyAsParts(node.body);
-    this._isInSafeFunction = prevSafe;
-    this.endScope();
+    this.scopes.inSafeFunction = prevSafe;
+    this.scopes.pop();
 
     // Build function params: typed args + __state
     const fnParams: TsParam[] = parameters.map((p) => {
@@ -2086,8 +1995,8 @@ export class TypeScriptBuilder {
     return ts.raw(
       renderInterruptReturn.default({
         ...this.interruptTemplateArgs(kind, messageExpr, dataExpr, origin),
-        nodeContext: this.getCurrentScope().type === "node",
-        interruptIdKey: `__interruptId_${this._subStepPath.join("_")}`,
+        nodeContext: this.scopes.current().type === "node",
+        interruptIdKey: `__interruptId_${this.steps.joined("_")}`,
         ...opts,
       }),
     );
@@ -2120,7 +2029,7 @@ export class TypeScriptBuilder {
     }
 
     const callNode = this.processFunctionCall(node);
-    const scope = this.getCurrentScope();
+    const scope = this.scopes.current();
 
     if (
       this.shouldHandleInterrupts(node.functionName) &&
@@ -2131,7 +2040,7 @@ export class TypeScriptBuilder {
         // Fork the stack for per-thread isolation
         if (this.shouldHandleInterrupts(node.functionName)) {
           this._asyncBranchCheckNeeded = true;
-          const branchKey = this._subStepPath.join(".");
+          const branchKey = this.steps.joined();
           let statements = ts.statements(this.forkBranchSetup(branchKey));
           const callWithStack = this.generateFunctionCallExpression(
             node,
@@ -2195,10 +2104,10 @@ export class TypeScriptBuilder {
 
     if (
       node.functionName === "failure" &&
-      this.getCurrentScope().type === "function"
+      this.scopes.current().type === "function"
     ) {
       // Inside functions, inject checkpoint, function name, and args
-      const scope = this.getCurrentScope() as FunctionScope;
+      const scope = this.scopes.current() as FunctionScope;
       const argNodes: TsNode[] = node.arguments.map((arg) =>
         this.processCallArg(arg),
       );
@@ -2235,16 +2144,16 @@ export class TypeScriptBuilder {
       // Standalone llm() call (not assigned to variable)
       return this.processLlmCall(
         DEFAULT_PROMPT_NAME,
-        this.getScopeReturnType(),
+        this.scopes.returnType(),
         node,
         "local",
       );
     }
 
     if (this.isGraphNode(node.functionName)) {
-      if (this.getCurrentScope().type === "function") {
+      if (this.scopes.current().type === "function") {
         throw new Error(
-          `Cannot call graph node '${node.functionName}' from inside function '${(this.getCurrentScope() as any).functionName}'. Node transitions can only be made from within graph nodes.`,
+          `Cannot call graph node '${node.functionName}' from inside function '${(this.scopes.current() as any).functionName}'. Node transitions can only be made from within graph nodes.`,
         );
       }
       this.currentAdjacentNodes.push(node.functionName);
@@ -2321,8 +2230,8 @@ export class TypeScriptBuilder {
 
     const locationOpts = node.functionName === "checkpoint" ? {
       moduleId: ts.str(this.moduleId),
-      scopeName: ts.str(this.currentScopeName()),
-      stepPath: ts.str(this._subStepPath.join(".")),
+      scopeName: ts.str(this.scopes.currentName()),
+      stepPath: ts.str(this.steps.joined()),
     } : undefined;
     const configObj = this.buildStateConfig({
       stateStack: options?.stateStack,
@@ -2416,27 +2325,27 @@ export class TypeScriptBuilder {
     const mode = node.functionName === "fork" ? "all" : "race";
     const block = node.block!;
     const paramName = block.params[0]?.name ?? "_";
-    const id = this._subStepPath[this._subStepPath.length - 1];
+    const id = this.steps.currentId();
 
     const itemsNode =
       node.arguments.length > 0
         ? this.processCallArg(node.arguments[0])
         : ts.arr([]);
 
-    const blockName = `__block_${this._blockCounter++}`;
-    const parentScopeName = this.currentScopeName();
+    const blockName = this.steps.nextBlockName();
+    const parentScopeName = this.scopes.currentName();
     // Track that we're now generating code inside a fork-block body so
     // any nested fork can carry parent block args forward. Capture the
     // depth value the inner fork will see, then increment for the body
     // walk and restore after.
-    const isNestedInForkBlock = this._forkBlockDepth > 0;
-    this._forkBlockDepth++;
-    this.startScope({ type: "block", blockName });
+    const isNestedInForkBlock = this.steps.isNestedInForkBlock();
+    this.steps.enterForkBlock();
+    this.scopes.push({ type: "block", blockName });
     this._sourceMapBuilder.enterScope(this.moduleId, blockName);
     const bodyParts = this.processBodyAsParts(block.body);
     this._sourceMapBuilder.enterScope(this.moduleId, parentScopeName);
-    this.endScope();
-    this._forkBlockDepth--;
+    this.scopes.pop();
+    this.steps.exitForkBlock();
 
     const bodyStr = bodyParts.map((n) => printTs(n, 1)).join("\n");
 
@@ -2508,7 +2417,7 @@ export class TypeScriptBuilder {
   }
 
   private processGraphNode(node: GraphNodeDefinition): TsNode {
-    this.startScope({ type: "node", nodeName: node.nodeName });
+    this.scopes.push({ type: "node", nodeName: node.nodeName });
     this._sourceMapBuilder.enterScope(this.moduleId, node.nodeName);
     const { nodeName, body, parameters } = node;
     this.adjacentNodes[nodeName] = [];
@@ -2531,7 +2440,7 @@ export class TypeScriptBuilder {
 
     this.adjacentNodes[nodeName] = [...this.currentAdjacentNodes];
     this.isInsideGraphNode = false;
-    this.endScope();
+    this.scopes.pop();
     // Build the arrow function body
     const stmts: TsNode[] = [
       ts.constDecl(
@@ -2631,10 +2540,10 @@ export class TypeScriptBuilder {
 
   /** If the enclosing function/node has returnTypeValidated, wrap value in __validateType */
   private maybeWrapReturnValidation(valueNode: TsNode): TsNode {
-    if (!this.getScopeReturnTypeValidated()) return valueNode;
-    const returnType = this.getScopeReturnType();
+    if (!this.scopes.returnTypeValidated()) return valueNode;
+    const returnType = this.scopes.returnType();
     if (!returnType) return valueNode;
-    const zodSchema = mapTypeToValidationSchema(returnType, this.getVisibleTypeAliases());
+    const zodSchema = mapTypeToValidationSchema(returnType, this.scopes.visibleTypeAliases());
     return ts.validateType(valueNode, ts.raw(zodSchema));
   }
 
@@ -2658,7 +2567,7 @@ export class TypeScriptBuilder {
     // Bare return (no value)
     if (!node.value) {
       if (this.insideHandlerBody) return ts.return();
-      if (this.getCurrentScope().type === "block") return ts.runnerHalt(ts.id("undefined"));
+      if (this.scopes.current().type === "block") return ts.runnerHalt(ts.id("undefined"));
       if (this.isInsideGraphNode) return ts.nodeResult(ts.id("undefined"));
       return ts.functionReturn(ts.id("undefined"));
     }
@@ -2669,7 +2578,7 @@ export class TypeScriptBuilder {
     }
 
     // Block bodies: halt the block's runner with the raw value
-    if (this.getCurrentScope().type === "block") {
+    if (this.scopes.current().type === "block") {
       if (this.isInterruptExpression(node.value)) {
         return this.processInterruptStatement(node.value as InterruptStatement);
       }
@@ -2687,7 +2596,7 @@ export class TypeScriptBuilder {
       ) {
         const llmNode = this.processLlmCall(
           DEFAULT_PROMPT_NAME,
-          this.getScopeReturnType(),
+          this.scopes.returnType(),
           node.value,
           "local",
         );
@@ -2714,7 +2623,7 @@ export class TypeScriptBuilder {
     ) {
       const llmNode = this.processLlmCall(
         DEFAULT_PROMPT_NAME,
-        this.getScopeReturnType(),
+        this.scopes.returnType(),
         node.value,
         "local",
       );
@@ -2733,7 +2642,7 @@ export class TypeScriptBuilder {
     if (node.validated && node.typeHint) {
       const zodSchema = mapTypeToValidationSchema(
         node.typeHint,
-        this.getVisibleTypeAliases(),
+        this.scopes.visibleTypeAliases(),
       );
       const varRef = ts.scopedVar(node.variableName, node.scope!, this.moduleId);
       const validateStmt = ts.assign(varRef, ts.validateType(varRef, ts.raw(zodSchema)));
@@ -2775,8 +2684,8 @@ export class TypeScriptBuilder {
           assignApprove: makeAssign("true"),
           handlerApprove: makeAssign("__handlerResult.value"),
           ...this.interruptTemplateArgs(kind, messageExpr, dataExpr, origin),
-          nodeContext: this.getCurrentScope().type === "node",
-          interruptIdKey: `__interruptId_${this._subStepPath.join("_")}`,
+          nodeContext: this.scopes.current().type === "node",
+          interruptIdKey: `__interruptId_${this.steps.joined("_")}`,
           ...opts,
         }),
       );
@@ -2799,7 +2708,7 @@ export class TypeScriptBuilder {
         // Fork the stack for per-thread isolation
         if (this.shouldHandleInterrupts(value.functionName)) {
           this._asyncBranchCheckNeeded = true;
-          const branchKey = this._subStepPath.join(".");
+          const branchKey = this.steps.joined();
           stmts.unshift(...this.forkBranchSetup(branchKey));
           stmts[stmts.length - 1] = this.scopedAssign(
             node.scope!,
@@ -2821,7 +2730,7 @@ export class TypeScriptBuilder {
             ),
           ),
         );
-      } else if (this.getCurrentScope().type !== "global") {
+      } else if (this.scopes.current().type !== "global") {
         if (this.insideHandlerBody) {
           stmts.push(
             ts.if(
@@ -2834,7 +2743,7 @@ export class TypeScriptBuilder {
           // In function context, halt with the interrupt array directly so
           // the caller's hasInterrupts check can detect it.
           const haltValue =
-            this.getCurrentScope().type === "node"
+            this.scopes.current().type === "node"
               ? ts.obj([ts.setSpread(ts.runtime.state), ts.set("data", varRef)])
               : varRef;
           stmts.push(
@@ -2919,7 +2828,7 @@ export class TypeScriptBuilder {
 
     const zodSchema = mapTypeToValidationSchema(
       _variableType,
-      this.getVisibleTypeAliases(),
+      this.scopes.visibleTypeAliases(),
     );
 
     // Extract prompt from first argument, using processNode to get scoped variable references
@@ -3004,7 +2913,7 @@ export class TypeScriptBuilder {
         );
       } else {
         stmts.push(ts.comment("halt if this is an interrupt"));
-        const isNodeContext = this.getCurrentScope().type === "node";
+        const isNodeContext = this.scopes.current().type === "node";
         const haltValue = isNodeContext
           ? ts.obj({ messages: ts.runtime.threads, data: varRef })
           : varRef;
@@ -3031,7 +2940,7 @@ export class TypeScriptBuilder {
     }
 
     return ts.runnerDebugger({
-      id: this._subStepPath[this._subStepPath.length - 1],
+      id: this.steps.currentId(),
       label: node.label || "",
     });
   }
@@ -3040,7 +2949,7 @@ export class TypeScriptBuilder {
     node: MessageThread,
     assignTo?: Assignment,
   ): TsNode {
-    const id = this._subStepPath[this._subStepPath.length - 1];
+    const id = this.steps.currentId();
     const method =
       node.threadType === "subthread"
         ? ("createSubthread" as const)
@@ -3225,8 +3134,8 @@ export class TypeScriptBuilder {
   }
 
   private processHandleBlockWithSteps(node: HandleBlock): TsNode {
-    const id = this._subStepPath[this._subStepPath.length - 1];
-    const subKey = this._subStepPath.join(".");
+    const id = this.steps.currentId();
+    const subKey = this.steps.joined();
     const handlerName = `__handler_${subKey}`;
 
     // Build handler arrow function
@@ -3257,7 +3166,7 @@ export class TypeScriptBuilder {
   }
 
   private processWithModifier(node: WithModifier): TsNode {
-    const id = this._subStepPath[this._subStepPath.length - 1];
+    const id = this.steps.currentId();
     const handler = this.buildHandlerArrow(node.handlerName);
     const bodyNodes = this.processBodyAsParts([node.statement]);
     return ts.runnerHandle({ id, handler, body: bodyNodes });
@@ -3366,7 +3275,7 @@ export class TypeScriptBuilder {
 
     // If the assignment has ! (validated), wrap the final result in __validateType
     if (stmt.validated && stmt.typeHint) {
-      const zodSchema = mapTypeToValidationSchema(stmt.typeHint, this.getVisibleTypeAliases());
+      const zodSchema = mapTypeToValidationSchema(stmt.typeHint, this.scopes.visibleTypeAliases());
       nodes.push(
         ts.runnerStep({
           id: baseId + stages.length,
@@ -3579,10 +3488,10 @@ export class TypeScriptBuilder {
           baseId,
         );
         for (let i = 0; i < pipeNodes.length; i++) {
-          this._subStepPath.push(baseId + i);
+          this.steps.push(baseId + i);
           result.push(pipeNodes[i]);
-          this._sourceMapBuilder.record([...this._subStepPath], stmt.loc);
-          this._subStepPath.pop();
+          this._sourceMapBuilder.record(this.steps.snapshot(), stmt.loc);
+          this.steps.pop();
         }
         continue;
       }
@@ -3592,8 +3501,8 @@ export class TypeScriptBuilder {
       }
 
       const stepIndex = nextId();
-      this._subStepPath.push(stepIndex);
-      if (!this._isInSafeFunction && this.containsImpureCall(stmt)) {
+      this.steps.push(stepIndex);
+      if (!this.scopes.inSafeFunction && this.containsImpureCall(stmt)) {
         if (!currentPart) currentPart = [];
         currentPart.push(ts.assign(ts.self("__retryable"), ts.bool(false)));
       }
@@ -3605,11 +3514,11 @@ export class TypeScriptBuilder {
         currentPart.push(processed);
       }
       if (this._asyncBranchCheckNeeded) {
-        branchKeys[nextId()] = this._subStepPath.join(".");
+        branchKeys[nextId()] = this.steps.joined();
         this._asyncBranchCheckNeeded = false;
       }
-      this._sourceMapBuilder.record([...this._subStepPath], stmt.loc);
-      this._subStepPath.pop();
+      this._sourceMapBuilder.record(this.steps.snapshot(), stmt.loc);
+      this.steps.pop();
     }
 
     flushPart();

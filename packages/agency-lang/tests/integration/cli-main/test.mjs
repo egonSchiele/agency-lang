@@ -49,27 +49,23 @@ function assertFile(path, message) {
   assert(existsSync(path), message || `Expected file to exist: ${path}`);
 }
 
-function assertExactFile(actualPath, expectedPath) {
-  const actual = readText(actualPath);
-  const expected = readText(expectedPath);
-  assert(
-    actual === expected,
-    `Expected ${actualPath} to match ${expectedPath}\n--- actual ---\n${actual}\n--- expected ---\n${expected}`,
-  );
-}
-
 function normalizeOptionalFinalNewline(text) {
   return normalizeNewline(text).replace(/\n*$/, "\n");
 }
 
-function assertSameFileContent(actualPath, expectedPath) {
-  const actual = normalizeOptionalFinalNewline(readFileSync(actualPath, "utf8"));
-  const expected = normalizeOptionalFinalNewline(
-    readFileSync(expectedPath, "utf8"),
-  );
+// Compares two files for equality. By default the comparison is strict
+// (line-for-line, preserving trailing newlines). Pass
+// `{ normalizeTrailingNewline: true }` to collapse trailing newline
+// differences before comparing.
+function assertFileEquals(actualPath, expectedPath, opts = {}) {
+  const normalize = opts.normalizeTrailingNewline
+    ? normalizeOptionalFinalNewline
+    : normalizeNewline;
+  const actual = normalize(readFileSync(actualPath, "utf8"));
+  const expected = normalize(readFileSync(expectedPath, "utf8"));
   assert(
     actual === expected,
-    `Expected ${actualPath} to have the same content as ${expectedPath}\n--- actual ---\n${actual}\n--- expected ---\n${expected}`,
+    `Expected ${actualPath} to match ${expectedPath}\n--- actual ---\n${actual}\n--- expected ---\n${expected}`,
   );
 }
 
@@ -94,7 +90,9 @@ function runLogged(label, file, args = [], opts = {}) {
   writeFileSync(logPath, output);
 
   if (result.error) {
-    const error = new Error(`Command failed: ${command}\nLog: ${logPath}\n${output}`);
+    const error = new Error(
+      `Command failed: ${command}\nLog: ${logPath}\nspawn error: ${result.error.message}\n${output}`,
+    );
     error.cause = result.error;
     throw error;
   }
@@ -281,7 +279,7 @@ try {
   // version
 
   console.log("--- version ---");
-  const versionOutput = runAgency("00-version", ["--version"]);
+  const versionOutput = runAgency("01-version", ["--version"]);
   assert(
     /^\d+\.\d+\.\d+\s*$/.test(versionOutput),
     `Expected semver version output, got: ${versionOutput}`,
@@ -290,14 +288,14 @@ try {
   // compile
 
   console.log("--- compile ---");
-  runAgency("01-compile", ["compile", "src/basic.agency"]);
+  runAgency("02-compile", ["compile", "src/basic.agency"]);
   assertFile(join(dir, "src/basic.js"), "compile should write src/basic.js");
   assertIncludes(
-    runNode("02-compiled-output", ["src/run-compiled.mjs"]),
+    runNode("03-compiled-output", ["src/run-compiled.mjs"]),
     "compiled-ok",
   );
 
-  runAgency("02b-compile-ts", ["compile", "src/basic.agency", "--ts"]);
+  runAgency("04-compile-ts", ["compile", "src/basic.agency", "--ts"]);
   assertFile(join(dir, "src/basic.ts"), "compile --ts should write src/basic.ts");
   assertIncludes(readText(join(dir, "src/basic.ts")), "// @ts-nocheck");
 
@@ -305,14 +303,14 @@ try {
 
   console.log("--- run ---");
   assertIncludes(
-    runAgency("03-run", ["run", "src/basic.agency"]),
+    runAgency("05-run", ["run", "src/basic.agency"]),
     "basic-ok",
   );
 
   // pack
 
   console.log("--- pack ---");
-  runAgency("04-pack", ["pack", "src/pack-target.agency", "-o", "packed.mjs"]);
+  runAgency("06-pack", ["pack", "src/pack-target.agency", "-o", "packed.mjs"]);
   assertFile(join(dir, "packed.mjs"), "pack should write packed.mjs");
   assert(statSync(join(dir, "packed.mjs")).size > 0, "packed.mjs should be non-empty");
 
@@ -322,7 +320,7 @@ try {
     unlinkSync(join(dir, "packed.mjs"));
     assert(!existsSync(join(standaloneDir, "node_modules")), "standalone directory must not contain node_modules");
     assertIncludes(
-      runNode("05-pack-standalone", ["packed.mjs"], { cwd: standaloneDir }),
+      runNode("07-pack-standalone", ["packed.mjs"], { cwd: standaloneDir }),
       "pack-ok",
     );
   } finally {
@@ -330,7 +328,7 @@ try {
   }
 
   runAgency(
-    "05b-pack-imports",
+    "08-pack-imports",
     ["pack", "src/pack-imports.agency", "-o", "packed-imports.mjs"],
   );
   const importsStandaloneDir = createTempProject("cli-main-pack-imports");
@@ -342,7 +340,7 @@ try {
       "pack imports standalone directory must not contain node_modules",
     );
     assertIncludes(
-      runNode("05c-pack-imports-standalone", ["packed-imports.mjs"], {
+      runNode("09-pack-imports-standalone", ["packed-imports.mjs"], {
         cwd: importsStandaloneDir,
       }),
       "pack-imports-local-5",
@@ -352,7 +350,7 @@ try {
   }
 
   const invalidPackTarget = runAgency(
-    "05d-pack-invalid-target",
+    "10-pack-invalid-target",
     ["pack", "src/pack-target.agency", "--target", "browser"],
     { expectFail: true },
   );
@@ -361,12 +359,12 @@ try {
   // trace
 
   console.log("--- trace ---");
-  runAgency("06-trace", ["trace", "src/trace-target.agency", "-o", "trace-target.trace"]);
+  runAgency("11-trace", ["trace", "src/trace-target.agency", "-o", "trace-target.trace"]);
   const tracePath = join(dir, "trace-target.trace");
   assertFile(tracePath, "trace should write trace-target.trace");
   assertTraceFile(tracePath, "src/trace-target.agency");
 
-  runAgency("07-trace-log", ["trace", "log", "trace-target.trace", "-o", "trace-events.json"]);
+  runAgency("12-trace-log", ["trace", "log", "trace-target.trace", "-o", "trace-events.json"]);
   assertFile(join(dir, "trace-events.json"), "trace log should write trace-events.json");
   const traceEvents = JSON.parse(readText(join(dir, "trace-events.json")));
   assert(Array.isArray(traceEvents), "trace log output should be an array");
@@ -375,17 +373,17 @@ try {
   // fmt
 
   console.log("--- fmt ---");
-  runAgency("08-fmt-in-place", ["fmt", "src/fmt-input.agency", "-i"]);
-  assertExactFile(join(dir, "src/fmt-input.agency"), join(expectedDir, "fmt.expected.agency"));
+  runAgency("13-fmt-in-place", ["fmt", "src/fmt-input.agency", "-i"]);
+  assertFileEquals(join(dir, "src/fmt-input.agency"), join(expectedDir, "fmt.expected.agency"));
 
   const formattedOnce = readText(join(dir, "src/fmt-input.agency"));
-  runAgency("09-fmt-idempotent", ["fmt", "src/fmt-input.agency", "-i"]);
+  runAgency("14-fmt-idempotent", ["fmt", "src/fmt-input.agency", "-i"]);
   const formattedTwice = readText(join(dir, "src/fmt-input.agency"));
   assert(formattedOnce === formattedTwice, "fmt should be idempotent");
 
   cpSync(join(fixtureDir, "project", "src", "fmt-input.agency"), join(dir, "src/fmt-stdout.agency"));
   const stdoutFormatted = runAgency(
-    "09b-fmt-stdout",
+    "15-fmt-stdout",
     ["fmt", "src/fmt-stdout.agency"],
   );
   assert(
@@ -393,20 +391,21 @@ try {
       normalizeOptionalFinalNewline(readText(join(expectedDir, "fmt.expected.agency"))),
     "fmt stdout should match the fixture",
   );
-  assertIncludes(
-    readText(join(dir, "src/fmt-stdout.agency")),
-    `type Person={name:string,meta:{active:boolean}}`,
+  // fmt without -i must not modify the source file.
+  assertFileEquals(
+    join(dir, "src/fmt-stdout.agency"),
+    join(fixtureDir, "project", "src", "fmt-input.agency"),
   );
 
   // parse
 
   console.log("--- parse ---");
   assertParseOutput(
-    runAgency("10-parse", ["parse", "src/basic.agency"]),
+    runAgency("16-parse", ["parse", "src/basic.agency"]),
     "main",
   );
   assertParseOutput(
-    runAgency("10b-parse-stdin", ["parse"], {
+    runAgency("17-parse-stdin", ["parse"], {
       input: `node stdinMain() {
   return "stdin"
 }
@@ -418,50 +417,50 @@ try {
   // coverage
 
   console.log("--- coverage ---");
-  runAgency("11-coverage-generate", ["test", "src/coverage-target.agency", "--coverage"]);
+  runAgency("18-coverage-generate", ["test", "src/coverage-target.agency", "--coverage"]);
   const coverageOutput = runAgency(
-    "12-coverage-report",
+    "19-coverage-report",
     ["coverage", "report", "src/coverage-target.agency", "--detail", "--threshold", "100"],
   );
   assertFullCoverage(coverageOutput);
   assertFile(join(dir, ".coverage"), "coverage run should create .coverage");
-  runAgency("13-coverage-clean", ["coverage", "clean"]);
+  runAgency("20-coverage-clean", ["coverage", "clean"]);
   assert(!existsSync(join(dir, ".coverage")), "coverage clean should remove .coverage");
 
   runAgency(
-    "13b-coverage-partial-generate",
+    "21-coverage-partial-generate",
     ["test", "src/coverage-partial.agency", "--coverage"],
   );
   const partialCoverageOutput = runAgency(
-    "13c-coverage-partial-report",
+    "22-coverage-partial-report",
     ["coverage", "report", "src/coverage-partial.agency", "--detail"],
   );
   assertPartialCoverage(partialCoverageOutput);
   const thresholdFailure = stripAnsi(runAgency(
-    "13d-coverage-threshold-failure",
+    "23-coverage-threshold-failure",
     ["coverage", "report", "src/coverage-partial.agency", "--threshold", "100"],
     { expectFail: true },
   ));
   assertIncludes(thresholdFailure, "below threshold 100%");
-  runAgency("13e-coverage-clean-partial", ["coverage", "clean"]);
+  runAgency("24-coverage-clean-partial", ["coverage", "clean"]);
   assert(!existsSync(join(dir, ".coverage")), "coverage clean should remove partial coverage data");
 
   // tc
 
   console.log("--- tc ---");
   assertIncludes(
-    runAgency("14-tc-ok", ["tc", "src/type-ok.agency"]),
+    runAgency("25-tc-ok", ["tc", "src/type-ok.agency"]),
     "No type errors found.",
   );
   const tcError = stripAnsi(runAgency(
-    "15-tc-error",
+    "26-tc-error",
     ["tc", "src/type-error.agency"],
     { expectFail: true },
   ));
   assertIncludes(tcError, "Type '\"oops\"' is not assignable to type 'number'");
   assertIncludes(tcError, "return in 'bad'");
   assertIncludes(
-    runAgency("15b-tc-stdin", ["tc"], {
+    runAgency("27-tc-stdin", ["tc"], {
       input: `node stdinTypecheck(): string {
   return "stdin-ok"
 }
@@ -470,7 +469,7 @@ try {
     "No type errors found.",
   );
   const strictError = stripAnsi(runAgency(
-    "15c-tc-strict",
+    "28-tc-strict",
     ["tc", "src/type-strict.agency", "--strict"],
     { expectFail: true },
   ));
@@ -481,7 +480,7 @@ try {
 
   console.log("--- bundle/unbundle ---");
   runAgency(
-    "16-bundle",
+    "29-bundle",
     ["bundle", "src/trace-target.agency", "trace-target.trace", "-o", "trace-target.bundle"],
   );
   const bundlePath = join(dir, "trace-target.bundle");
@@ -496,18 +495,22 @@ try {
     "bundle should include source line",
   );
 
-  runAgency("17-unbundle", ["unbundle", "trace-target.bundle", "-o", "unpacked"]);
-  assertSameFileContent(join(dir, "unpacked/trace-target.agency"), join(dir, "src/trace-target.agency"));
+  runAgency("30-unbundle", ["unbundle", "trace-target.bundle", "-o", "unpacked"]);
+  assertFileEquals(
+    join(dir, "unpacked/trace-target.agency"),
+    join(dir, "src/trace-target.agency"),
+    { normalizeTrailingNewline: true },
+  );
   assertFile(join(dir, "unpacked/trace-target.trace"), "unbundle should write trace-target.trace");
   assertTraceFile(join(dir, "unpacked/trace-target.trace"), "trace-target.agency");
 
   // doc
 
   console.log("--- doc ---");
-  runAgency("18-doc", ["doc", "src/doc-target.agency", "-o", "generated-docs"]);
-  assertExactFile(join(dir, "generated-docs/doc-target.md"), join(expectedDir, "doc-target.expected.md"));
+  runAgency("31-doc", ["doc", "src/doc-target.agency", "-o", "generated-docs"]);
+  assertFileEquals(join(dir, "generated-docs/doc-target.md"), join(expectedDir, "doc-target.expected.md"));
 
-  runAgency("18b-doc-directory-ignore", ["doc", "docs-src", "-o", "generated-docs-dir", "--ignore", "ignored"]);
+  runAgency("32-doc-directory-ignore", ["doc", "docs-src", "-o", "generated-docs-dir", "--ignore", "ignored"]);
   assertFile(join(dir, "generated-docs-dir/main.md"), "doc directory mode should generate main.md");
   assert(!existsSync(join(dir, "generated-docs-dir/ignored/skip.md")), "doc --ignore should skip ignored directories");
 
@@ -516,43 +519,46 @@ try {
   console.log("--- schedule ---");
   const scheduleEnv = { HOME: join(dir, "__home") };
   runAgency(
-    "19-schedule-add-github",
+    "33-schedule-add-github",
     ["schedule", "add", "agents/nightly.agency", "--backend", "github", "--every", "hourly", "--name", "nightly", "--no-pin", "--secret", "EXTRA_TOKEN"],
     { env: scheduleEnv },
   );
-  assertExactFile(join(dir, "nightly.yml"), join(expectedDir, "nightly.expected.yml"));
-  const listOutput = runAgency("20-schedule-list", ["schedule", "list"], { env: scheduleEnv });
+  assertFileEquals(join(dir, "nightly.yml"), join(expectedDir, "nightly.expected.yml"));
+  // The github backend writes a workflow YAML file and does not persist any
+  // state under $HOME, so `schedule list` should report no scheduled agents
+  // even though the previous `schedule add` succeeded.
+  const listOutput = runAgency("34-schedule-list", ["schedule", "list"], { env: scheduleEnv });
   assertIncludes(listOutput, "No scheduled agents");
   const removeOutput = stripAnsi(runAgency(
-    "21-schedule-remove-missing",
+    "35-schedule-remove-missing",
     ["schedule", "remove", "nightly"],
     { env: scheduleEnv, expectFail: true },
   ));
   assertIncludes(removeOutput, "No schedule named \"nightly\"");
 
   runAgency(
-    "22-schedule-cron-github",
+    "36-schedule-cron-github",
     ["schedule", "add", "agents/nightly.agency", "--backend", "github", "--cron", "*/5 * * * *", "--name", "nightly-cron", "--no-pin"],
     { env: scheduleEnv },
   );
-  assertExactFile(join(dir, "nightly-cron.yml"), join(expectedDir, "nightly-cron.expected.yml"));
+  assertFileEquals(join(dir, "nightly-cron.yml"), join(expectedDir, "nightly-cron.expected.yml"));
 
   runAgency(
-    "23-schedule-write-github",
+    "37-schedule-write-github",
     ["schedule", "add", "agents/nightly.agency", "--backend", "github", "--every", "hourly", "--name", "nightly-write", "--no-pin", "--write"],
     { env: scheduleEnv },
   );
-  assertExactFile(join(dir, "nightly-write.yml"), join(expectedDir, "nightly-write.expected.yml"));
+  assertFileEquals(join(dir, "nightly-write.yml"), join(expectedDir, "nightly-write.expected.yml"));
 
   const existingSchedule = stripAnsi(runAgency(
-    "24-schedule-existing-failure",
+    "38-schedule-existing-failure",
     ["schedule", "add", "agents/nightly.agency", "--backend", "github", "--every", "hourly", "--name", "nightly", "--no-pin"],
     { env: scheduleEnv, expectFail: true },
   ));
   assertIncludes(existingSchedule, "File already exists");
 
   const invalidBackend = stripAnsi(runAgency(
-    "25-schedule-invalid-backend",
+    "39-schedule-invalid-backend",
     ["schedule", "add", "agents/nightly.agency", "--backend", "local", "--every", "hourly", "--name", "bad"],
     { env: scheduleEnv, expectFail: true },
   ));

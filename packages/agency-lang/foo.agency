@@ -1,15 +1,7 @@
-import { remember, recall } from "std::memory"
 def greet(name: string): string {
-  return "Hello, ${name}!"
-}
-
-node main() {
-  const name = "Alice"
-  const greeting = llm("Greet ${name} using the greet tool", {
-    tools: [greet]
-  })
-  print(greeting)
-  remember("Maggie loves weaving")
-  const memory = recall("Maggie loves weaving")
-  print(memory)
+  const contents = read(
+    dir: "/Users/adityabhargava/agency-lang/packages/agency-lang",
+    filename: "README.md",
+  )
+  print(contents)
 }

@@ -124,7 +124,7 @@ describe("findMatches — synthetic rows", () => {
     leaf.parentId = "T";
     // "Alice" appears in the conversation row and again inside the
     // raw-data JSON payload, so we expect both synthetic ids.
-    expect(findMatches([t], "Alice")).toContain("evt-0:convo:0");
+    expect(findMatches([t], "Alice")).toContain("evt-0:convo:0:0");
   });
 
   it("expands the parent leaf when a convo row matches", () => {

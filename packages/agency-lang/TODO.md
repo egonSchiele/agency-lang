@@ -160,3 +160,11 @@ node main() {
 ---
 
 tests/integration/stdlib-sandbox/credential/browser.test.json skipped, need to get a browseruse subscription to continue running this test.
+
+---
+
+docstrings don't allow string interpolation yet
+
+---
+
+pattern matching for result types

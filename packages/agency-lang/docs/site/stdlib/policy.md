@@ -1,5 +1,26 @@
 # policy
 
+## Types
+
+### PolicyRule
+
+```ts
+export type PolicyRule = {
+  match?: object;
+  action: "approve" | "reject" | "propagate"
+}
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/policy.agency#L7))
+
+### Policy
+
+```ts
+export type Policy = object
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/policy.agency#L13))
+
 ## Functions
 
 ### checkPolicy
@@ -17,7 +38,7 @@ Evaluate a policy against an interrupt. Returns approve(), reject(), or propagat
 | policy | `Record<string, any>` |  |
 | interrupt | `Record<string, any>` |  |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/policy.agency#L3))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/policy.agency#L15))
 
 ### validatePolicy
 
@@ -33,12 +54,12 @@ Validate that a policy object is well-formed. Returns { success: true } if valid
 |---|---|---|
 | policy | `Record<string, any>` |  |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/policy.agency#L10))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/policy.agency#L22))
 
 ### writePolicyFile
 
 ```ts
-writePolicyFile(path: string, policy: Record<string, any>)
+writePolicyFile(path: string, policy: Policy)
 ```
 
 Validate and write a policy to a JSON file. Throws if the policy is invalid.
@@ -48,6 +69,6 @@ Validate and write a policy to a JSON file. Throws if the policy is invalid.
 | Name | Type | Default |
 |---|---|---|
 | path | `string` |  |
-| policy | `Record<string, any>` |  |
+| policy | [Policy](#policy) |  |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/policy.agency#L17))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/policy.agency#L29))

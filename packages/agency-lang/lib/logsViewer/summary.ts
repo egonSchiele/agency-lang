@@ -99,7 +99,7 @@ function fmtCost(c?: number): string {
 }
 
 function shortId(id?: string): string {
-  return (id ?? "").slice(0, 6);
+  return (String(id) ?? "").slice(0, 6);
 }
 
 function stripQuotes(s?: string): string {

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { renderViewerLines, flattenVisibleRows, colorFor } from "./render.js";
+import { renderViewerLines, flattenVisibleRows, colorFor, wrapLine } from "./render.js";
 import { TreeNode, ViewerState } from "./types.js";
 
 function span(id: string, label: string, children: TreeNode[] = []): TreeNode {
@@ -185,6 +185,73 @@ describe("promptCompletion expansion", () => {
     const jsonRows = rows.filter((r) => r.node.nodeKind === "jsonLine");
     expect(jsonRows.length).toBeGreaterThan(0);
     expect(jsonRows[0].node.summary.trim()).toBe("{");
+  });
+
+  // Long messages used to be silently clipped with a `…` by the TUI
+  // renderer. With viewportCols set on state, a long convoLine is
+  // split into multiple synthetic convoLine rows so the full text is
+  // visible (wrapped) instead of truncated.
+  it("wraps long convoLines into multiple rows when viewportCols is set", () => {
+    const longText = "a".repeat(120);
+    const leaf: TreeNode = {
+      id: "evt-0",
+      traceId: "t",
+      parentId: "trace-t",
+      children: [],
+      nodeKind: "event",
+      label: "promptCompletion",
+      summary: "promptCompletion",
+      event: {
+        format_version: 1,
+        trace_id: "t",
+        project_id: "p",
+        span_id: null,
+        parent_span_id: null,
+        data: {
+          type: "promptCompletion",
+          timestamp: "2026-01-01T00:00:00Z",
+          messages: [{ role: "user", content: longText }],
+        },
+      },
+    };
+    const t = trace([leaf]);
+    const state: ViewerState = {
+      ...baseState([t], ["trace-t", "evt-0"]),
+      viewportCols: 40,
+    };
+    const rows = flattenVisibleRows(state);
+    const convoRows = rows.filter((r) => r.node.nodeKind === "convoLine");
+    expect(convoRows.length).toBeGreaterThan(1);
+    // No row's rendered text exceeds the available width.
+    for (const r of convoRows) {
+      expect(r.node.summary.length).toBeLessThanOrEqual(40 - r.depth * 2 - 2);
+    }
+    // Concatenating wrapped chunks reconstructs the original line.
+    const joined = convoRows.map((r) => r.node.summary).join("");
+    expect(joined).toContain(longText);
+  });
+});
+
+describe("wrapLine", () => {
+  it("returns the input unchanged when it fits", () => {
+    expect(wrapLine("hello", 10)).toEqual(["hello"]);
+  });
+
+  it("breaks at the last space at or before width", () => {
+    expect(wrapLine("one two three four", 10)).toEqual(["one two", "three four"]);
+  });
+
+  it("hard-breaks mid-word when no space is in range", () => {
+    expect(wrapLine("supercalifragilistic", 6)).toEqual([
+      "superc",
+      "alifra",
+      "gilist",
+      "ic",
+    ]);
+  });
+
+  it("returns a single-element list for width <= 0", () => {
+    expect(wrapLine("abc", 0)).toEqual(["abc"]);
   });
 });
 

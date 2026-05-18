@@ -1,11 +1,16 @@
 import picomatch from "picomatch";
+import { z } from "zod";
 
-export type PolicyRule = {
-  match?: Record<string, string>;
-  action: "approve" | "reject" | "propagate";
-};
+export const PolicyRuleSchema = z.object({
+  match: z.record(z.string(), z.string()).optional(),
+  action: z.enum(["approve", "reject", "propagate"]),
+});
 
-export type Policy = Record<string, PolicyRule[]>;
+export type PolicyRule = z.infer<typeof PolicyRuleSchema>;
+
+export const PolicySchema = z.record(z.string(), z.array(PolicyRuleSchema));
+
+export type Policy = z.infer<typeof PolicySchema>;
 
 type PolicyResult =
   | { type: "approve" }
@@ -56,18 +61,9 @@ function matchesRule(
 }
 
 export function validatePolicy(policy: any): { success: boolean; error?: string } {
-  if (typeof policy !== "object" || policy === null) {
-    return { success: false, error: "Policy must be an object" };
-  }
-  for (const [kind, rules] of Object.entries(policy)) {
-    if (!Array.isArray(rules)) {
-      return { success: false, error: `Rules for "${kind}" must be an array` };
-    }
-    for (const rule of rules as any[]) {
-      if (!rule.action || !["approve", "reject", "propagate"].includes(rule.action)) {
-        return { success: false, error: `Invalid action in rules for "${kind}": ${rule.action}` };
-      }
-    }
+  const result = PolicySchema.safeParse(policy);
+  if (!result.success) {
+    return { success: false, error: result.error.message };
   }
   return { success: true };
 }

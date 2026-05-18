@@ -12,7 +12,14 @@ import { eventExpansionChildren, rawDataChildren } from "./render.js";
 // would visibly highlight a match in a conversation/JSON row but
 // `n`/`N` would jump to "no matches" because those rows aren't in
 // state.roots.
-export function findMatches(roots: TreeNode[], query: string): string[] {
+export function findMatches(
+  roots: TreeNode[],
+  query: string,
+  // Total terminal columns; passed through to eventExpansionChildren
+  // so search sees the same wrapped convoLine ids the renderer does.
+  // Optional for tests / non-TTY contexts.
+  cols?: number,
+): string[] {
   if (query.length === 0) return [];
   const needle = query.toLowerCase();
   const out: string[] = [];
@@ -21,10 +28,10 @@ export function findMatches(roots: TreeNode[], query: string): string[] {
       out.push(node.id);
     }
   };
-  const walk = (node: TreeNode): void => {
+  const walk = (node: TreeNode, depth: number): void => {
     pushIfMatches(node);
     if (node.nodeKind === "event" && node.event) {
-      for (const synth of eventExpansionChildren(node)) {
+      for (const synth of eventExpansionChildren(node, depth + 1, cols)) {
         pushIfMatches(synth);
         if (synth.nodeKind !== "rawDataToggle") {
           continue;
@@ -34,9 +41,9 @@ export function findMatches(roots: TreeNode[], query: string): string[] {
         }
       }
     }
-    for (const child of node.children) walk(child);
+    for (const child of node.children) walk(child, depth + 1);
   };
-  for (const r of roots) walk(r);
+  for (const r of roots) walk(r, 0);
   return out;
 }
 

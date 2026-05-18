@@ -65,6 +65,10 @@ export async function runViewer(opts: RunViewerOpts): Promise<void> {
       cursorId: roots[0].id,
       scrollTop: 0,
       quit: false,
+      // Propagate the terminal width into state so render, input,
+      // and search all wrap promptCompletion convoLines to the same
+      // boundary.
+      viewportCols: opts.viewport.cols,
     },
     opts.viewport,
   );
@@ -162,7 +166,7 @@ function applySearch(
   if (trimmed.length === 0) {
     return { ...state, query: undefined, matches: undefined, matchIdx: undefined };
   }
-  const matches = findMatches(state.roots, trimmed);
+  const matches = findMatches(state.roots, trimmed, state.viewportCols);
   if (matches.length === 0) {
     return {
       ...state,

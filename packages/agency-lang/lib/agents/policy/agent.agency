@@ -2,12 +2,104 @@ import { map } from "std::array"
 import { writePolicyFile } from "std::policy"
 import { args } from "std::system"
 
-systemPrompt = read("./prompts/system.md")
+// crap these comments dont stay in place! So can't ignore a type error
+// in an import
+// @tc-ignore
 
-type NextStep =
-  | { type: "showPolicy"; policy: object }
-  | { type: "writePolicy"; policy: object }
-  | { type: "askQuestion"; question: string }
+callback onToolCallStart(data) {
+  print("Calling ${data.toolName}...")
+}
+
+callback onToolCallEnd(data) {
+  print("Finished calling ${data.toolName}.")
+}
+
+systemPrompt = read(
+  dir: "/Users/adityabhargava/agency-lang/packages/agency-lang/lib/agents/agency-agent/prompts/",
+  filename: "system.md",
+) with approve
+
+// doesn't hoist, so we can't have types depending on
+// other types defined later in the file
+type Question = {
+  type: "askQuestion";
+  question: string
+}
+
+type Done = {
+  type: "done"
+}
+
+type Action = Question | Done
+
+type PolicyAction = "approve" | "reject" | "propagate"
+
+let currentPolicy = {}
+
+def addToPolicy(
+  interruptKind: string,
+  matchArgName: string,
+  matchArgValue: string,
+  action: PolicyAction!,
+) {
+  """
+  Add a rule to the current policy for the given interrupt kind, matching on the specified argument and value, with the specified action.
+  Use only "approve", "reject", or "propagate" as the action. DO NOT use "allow" or "deny".
+  Returns the current policy after adding the rule.
+  """
+  // this should be allowed
+  /*   const match = {
+    [matchArgName]: matchArgValue
+  }
+ */
+  const match: any = {}
+  match[matchArgName] = matchArgValue
+  if (!currentPolicy[interruptKind]) {
+    currentPolicy[interruptKind] = []
+  }
+  currentPolicy[interruptKind].push({
+    match: match,
+    action: action
+  })
+  return currentPolicy
+}
+
+def getPolicy() {
+  """
+  Get the current policy object.
+  """
+  return currentPolicy
+}
+
+def deleteFromPolicy(interruptKind: string, index: number): boolean {
+  """
+  Delete the rule at the specified index for the given interrupt kind from the current policy.
+  Returns true if the rule was successfully deleted, or false if the index was out of bounds.
+  """
+  if (currentPolicy[interruptKind] && index < currentPolicy[interruptKind].length) {
+    currentPolicy[interruptKind].splice(index, 1)
+    return true
+  }
+  return false
+}
+
+def savePolicy(path: string) {
+  """
+  Validate and save the current policy to a JSON file.
+
+  @param path - The file path where the policy should be saved.
+  """
+  return writePolicyFile(path, currentPolicy)
+}
+
+const tools = [
+  addToPolicy,
+  getPolicy,
+  deleteFromPolicy,
+  savePolicy.partial(
+  path: "/Users/adityabhargava/agency-lang/packages/agency-lang/testPolicy.json",
+),
+]
 
 def get(array: any[], index: number) {
   if (index < array.length) {
@@ -20,9 +112,8 @@ node main() {
   const cliArgs = args()
   if (cliArgs.length < 2) {
     print("Usage: agency policy gen <file>")
-    return end()
+    return
   }
-  print(cliArgs)
 
   const interruptKinds = cliArgs[0] |> parseJSON
   const outputPath = cliArgs[1]
@@ -30,56 +121,59 @@ node main() {
 
   if (isFailure(interruptKinds)) {
     print("Failed to parse interrupt kinds: ${interruptKinds.error}")
-    return null
+    return
   }
 
-  let contextMessage = "This agent can produce the following interrupts:\n" + map(interruptKinds, kind -> `- ${kind}\n`).join("")
+  let contextMessage = "This agent can produce the following interrupts:\n${map(interruptKinds.value, \kind -> "- ${kind}\n").join("")}"
 
-  if (existingPolicy != null) {
+  if (isSuccess(existingPolicy)) {
+    currentPolicy = existingPolicy.value
     contextMessage = contextMessage + """
-                                    Current policy:\n```json\n${printJSON(existingPolicy)}\n```\n\nWhat would you like to change?
-                                    """
+    Current policy:
+    ```json
+    ${existingPolicy.value}
+    ```
+
+    What would you like to change?
+    """
   } else {
     contextMessage = contextMessage + "\nWhat actions would you like to allow?"
   }
 
   print(contextMessage)
 
-  let done = false
-  let policy = {}
-  let conversationHistory = contextMessage
-  while (!done) {
+  let userInput = input("> ")
+  // didn't catch `policy` var is undefined??
+  // doesn't typecheck in string segments??
+  const prompt = """
+  Current policy: ${currentPolicy}
+
+  Decide the next step. If the user is describing what they want, build or update the policy and use showPolicy. If the user approves the shown policy, use writePolicy. If you need clarification, use askQuestion.
+  """
+  // fix tc
+  // @tc-ignore
+  system(systemPrompt)
+
+  let action: Action = llm(
+    """
+  Assistant:
+  ${contextMessage}
+  User:
+  ${userInput}
+
+  ${prompt}
+
+  """,
+    {
+    tools: tools
+  },
+  )
+  while (action.type != "done") {
+    print(action.question)
     let userInput = input("> ")
-    conversationHistory = conversationHistory + "\nUser: ${userInput}"
-
-    thread {
-      system(systemPrompt)
-      let step: NextStep = llm(
-        """
-                                                      ${conversationHistory}\n\nCurrent policy: ${printJSON(policy)}\n\nDecide the next step. If the user is describing what they want, build or update the policy and use showPolicy. If the user approves the shown policy, use writePolicy. If you need clarification, use askQuestion.
-                                                      """,
-      )
-    }
-
-    if (step.type == "showPolicy") {
-      policy = step.policy
-      let policyStr = printJSON(policy)
-      print("\nProposed policy:\n```json\n${policyStr}\n```\n")
-      print("Does this look right? (say 'yes' to save, or describe changes)")
-      conversationHistory = conversationHistory + "\nAssistant: Here is the proposed policy:\n${policyStr}\nDoes this look right?"
-    } else if (step.type == "writePolicy") {
-      policy = step.policy
-      writePolicyFile(outputPath, policy)
-      print("\nPolicy written to ${outputPath}")
-      done = true
-    } else if (step.type == "askQuestion") {
-      print(step.question)
-      conversationHistory = conversationHistory + "\nAssistant: ${step.question}"
-    }
+    action: Action = llm(userInput, {
+      tools: tools
+    })
   }
-  return end()
-}
-
-node end() {
-
+  print("Done.")
 }

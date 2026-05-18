@@ -488,10 +488,12 @@ export class AgencyGenerator {
     const exportPrefix = node.exported ? "export " : "";
     const staticPrefix = node.static ? "static " : "";
     const declPrefix = node.declKind ? `${node.declKind} ` : "";
-    const valueCode =
-      node.value.type === "binOpExpression"
-        ? this.processBinOpExpression(node.value, true).trim()
-        : this.processNode(node.value).trim();
+    let valueCode = "";
+    if (node.value.type === "binOpExpression") {
+      valueCode = this.processBinOpExpression(node.value, true).trim();
+    } else {
+      valueCode = this.processNode(node.value).trim();
+    }
     return (
       tags +
       this.indentStr(`${exportPrefix}${staticPrefix}${declPrefix}${lhs} = ${valueCode}`)
@@ -591,7 +593,7 @@ export class AgencyGenerator {
     result += '"""';
     return result
       .split("\n")
-      .map((line) => this.indentStr(line))
+      .map((line) => this.indentStr(line.trim()))
       .join("\n");
   }
 

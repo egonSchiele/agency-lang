@@ -8,6 +8,7 @@ export type VisibleRow = { node: TreeNode; depth: number };
 
 export function flattenVisibleRows(state: ViewerState): VisibleRow[] {
   const out: VisibleRow[] = [];
+  const cols = state.viewportCols;
   const walk = (node: TreeNode, depth: number): void => {
     out.push({ node, depth });
     if (!state.expanded.has(node.id)) return;
@@ -16,7 +17,9 @@ export function flattenVisibleRows(state: ViewerState): VisibleRow[] {
     // JSON otherwise). Real children only ever exist for non-leaf
     // tree nodes.
     if (node.nodeKind === "event" && node.event) {
-      for (const child of eventExpansionChildren(node)) walk(child, depth + 1);
+      for (const child of eventExpansionChildren(node, depth + 1, cols)) {
+        walk(child, depth + 1);
+      }
       return;
     }
     // A "raw data" toggle row, when expanded, reveals the JSON
@@ -43,10 +46,19 @@ export function flattenVisibleRows(state: ViewerState): VisibleRow[] {
 // — otherwise `/foo` would match a highlighted row but `n`/`N` would
 // claim there are no matches (the rows aren't in the persistent
 // forest).
-export function eventExpansionChildren(leaf: TreeNode): TreeNode[] {
+export function eventExpansionChildren(
+  leaf: TreeNode,
+  // Depth at which the synthetic children will be rendered (= parent
+  // event depth + 1). Used to compute available width when wrapping
+  // long conversation lines.
+  childDepth = 0,
+  // Total terminal columns available; undefined disables wrapping
+  // (tests, non-TTY contexts).
+  cols?: number,
+): TreeNode[] {
   if (!leaf.event) return [];
   if (leaf.event.data.type === "promptCompletion") {
-    return promptCompletionChildren(leaf);
+    return promptCompletionChildren(leaf, childDepth, cols);
   }
   return jsonLineChildren(leaf, leaf.event);
 }
@@ -58,20 +70,36 @@ export function rawDataChildren(toggle: TreeNode): TreeNode[] {
   return jsonLineChildren(toggle, toggle.event);
 }
 
-function promptCompletionChildren(leaf: TreeNode): TreeNode[] {
+function promptCompletionChildren(
+  leaf: TreeNode,
+  childDepth = 0,
+  cols?: number,
+): TreeNode[] {
   const messages = Array.isArray(leaf.event!.data.messages)
     ? leaf.event!.data.messages
     : [];
   const convoLines = formatConversation(messages);
-  const convoNodes: TreeNode[] = convoLines.map((line, i) => ({
-    id: `${leaf.id}:convo:${i}`,
-    traceId: leaf.traceId,
-    parentId: leaf.id,
-    children: [],
-    nodeKind: "convoLine" as const,
-    label: "",
-    summary: line,
-  }));
+  // renderRowText prefixes each row with `marker` (2 chars) + indent
+  // (`depth * 2` chars) before the convoLine summary. Subtract both
+  // so wrapped chunks fit without triggering the TUI clipper.
+  const available = cols !== undefined
+    ? Math.max(20, cols - childDepth * 2 - 2)
+    : undefined;
+  const convoNodes: TreeNode[] = [];
+  convoLines.forEach((line, i) => {
+    const chunks = available !== undefined ? wrapLine(line, available) : [line];
+    chunks.forEach((chunk, j) => {
+      convoNodes.push({
+        id: `${leaf.id}:convo:${i}:${j}`,
+        traceId: leaf.traceId,
+        parentId: leaf.id,
+        children: [],
+        nodeKind: "convoLine" as const,
+        label: "",
+        summary: chunk,
+      });
+    });
+  });
   const toggle: TreeNode = {
     id: `${leaf.id}:raw`,
     traceId: leaf.traceId,
@@ -83,6 +111,27 @@ function promptCompletionChildren(leaf: TreeNode): TreeNode[] {
     event: leaf.event,
   };
   return [...convoNodes, toggle];
+}
+
+// Word-aware hard wrap. Splits `text` into chunks of at most `width`
+// code points, preferring to break at the last space at or before
+// the limit. Words longer than `width` are split mid-word. Empty
+// strings return [""] so a blank convoLine still occupies a row.
+export function wrapLine(text: string, width: number): string[] {
+  if (width <= 0 || text.length <= width) return [text];
+  const out: string[] = [];
+  let rest = text;
+  while (rest.length > width) {
+    let cut = rest.lastIndexOf(" ", width);
+    // No space found in the window — hard-break mid-word.
+    if (cut <= 0) cut = width;
+    out.push(rest.slice(0, cut));
+    // Drop the space we broke on (if any) so the next line doesn't
+    // start with leading whitespace.
+    rest = rest.slice(cut).replace(/^ +/, "");
+  }
+  if (rest.length > 0) out.push(rest);
+  return out;
 }
 
 // Pretty-print the leaf event payload and turn it into one synthetic

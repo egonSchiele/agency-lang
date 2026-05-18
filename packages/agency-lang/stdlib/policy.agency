@@ -1,4 +1,16 @@
-import { _checkPolicy, _validatePolicy, _writePolicyFile } from "agency-lang/stdlib-lib/policy.js"
+import {
+  _checkPolicy,
+  _validatePolicy,
+  _writePolicyFile,
+ } from "agency-lang/stdlib-lib/policy.js"
+
+export type PolicyRule = {
+  match?: object;
+  action: "approve" | "reject" | "propagate"
+}
+
+// Record<string, PolicyRule[]>
+export type Policy = object
 
 export def checkPolicy(policy: object, interrupt: object) {
   """
@@ -14,7 +26,7 @@ export def validatePolicy(policy: object) {
   return _validatePolicy(policy)
 }
 
-export def writePolicyFile(path: string, policy: object) {
+export def writePolicyFile(path: string, policy: Policy) {
   """
   Validate and write a policy to a JSON file. Throws if the policy is invalid.
   """

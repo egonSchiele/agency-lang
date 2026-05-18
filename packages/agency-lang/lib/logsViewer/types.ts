@@ -74,4 +74,10 @@ export type ViewerState = {
   // One-line status message (`copied 312 bytes`, etc.); auto-clears
   // on the next keystroke. Owned by the input layer.
   messageBar?: string;
+  // Width (in terminal columns) available to the viewer. Used to
+  // wrap long convoLine summaries onto multiple visible rows so
+  // promptCompletion messages aren't truncated with `…`. Kept on
+  // state so the renderer, input layer, and search all agree on
+  // the same row set.
+  viewportCols?: number;
 };

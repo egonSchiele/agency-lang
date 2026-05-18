@@ -139,9 +139,9 @@ export async function evaluate(
   resultsFilePath?: string,
 ) {
   // A. Resolve target
-  let { filename, nodeName } = target
-    ? parseTarget(target)
-    : await promptForTarget();
+  const resolved = target ? parseTarget(target) : await promptForTarget();
+  const { filename } = resolved;
+  let { nodeName } = resolved;
 
   const contents = readFile(filename);
   const parsed = parseAgency(contents);

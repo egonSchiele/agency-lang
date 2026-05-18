@@ -29,6 +29,7 @@ import { getCodeActions } from "./codeAction.js";
 import { getWorkspaceSymbols } from "./workspaceSymbol.js";
 import type { DocumentState } from "./documentState.js";
 
+// eslint-disable-next-line max-lines-per-function -- LSP server wiring; refactor tracked separately
 export function startServer(): void {
   const connection = createConnection(
     new StreamMessageReader(process.stdin),

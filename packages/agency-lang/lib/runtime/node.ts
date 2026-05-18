@@ -24,7 +24,7 @@ export function setupNode(args: { state: GraphState }): {
   self: Record<string, any>;
   threads: ThreadStore;
 } {
-  let { state } = args;
+  const { state } = args;
   const ctx = state.ctx;
 
   const stack = ctx.stateStack.getNewState();
@@ -84,6 +84,7 @@ export function setupFunction(args: { state?: InternalFunctionState }): {
   return { stateStack, stack, step, self, threads };
 }
 
+// eslint-disable-next-line max-lines-per-function -- core node-execution loop; refactor tracked separately
 export async function runNode({
   ctx,
   nodeName,
@@ -183,6 +184,7 @@ export async function runNode({
         if (hasInterrupts(returnObject.data)) {
           // Interrupt(s): attach runId and pause (no footer)
           if (execCtx.runId) {
+            // eslint-disable-next-line max-depth -- attaching runId to each interrupt
             for (const intr of returnObject.data) {
               intr.runId = execCtx.runId;
             }
@@ -227,6 +229,7 @@ export async function runNode({
             execCtx._pendingArgOverrides = e.options.args;
           }
           if (e.options?.globals) {
+            // eslint-disable-next-line max-depth -- applying restored globals overrides
             for (const [varName, value] of Object.entries(e.options.globals)) {
               execCtx.globals.set(cp.moduleId, varName, value);
             }

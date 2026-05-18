@@ -82,6 +82,7 @@ let importCounter = 0;
 // checkpoint stores (debugger vs context) remain comparable.
 export async function freshImport(compiledFile: string): Promise<any> {
   resetGlobalCheckpointCounter();
+  // eslint-disable-next-line no-restricted-syntax -- cache-busting dynamic import is required for fresh module state per test
   return await import(compiledFile + `?t=${importCounter++}`);
 }
 

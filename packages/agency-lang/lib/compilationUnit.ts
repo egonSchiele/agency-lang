@@ -230,6 +230,7 @@ export function buildCompilationUnit(
             originFile: r.file,
           };
           for (const p of r.symbol.parameters) {
+            // eslint-disable-next-line max-depth -- collecting alias seeds from imported function params
             if (p.typeHint) aliasSeeds.push({ type: p.typeHint, preferFile: r.file });
           }
           if (returnType) aliasSeeds.push({ type: returnType, preferFile: r.file });

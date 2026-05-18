@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { __call, __callMethod } from "./call.js";
 import { AgencyFunction } from "./agencyFunction.js";
 
-function makeAgencyFn(fn: Function, name = "testFn") {
+function makeAgencyFn(fn: (...args: any[]) => any, name = "testFn") {
   return new AgencyFunction({
     name,
     module: "test.agency",

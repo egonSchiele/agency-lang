@@ -205,6 +205,7 @@ async function _runPrompt({
   return { messages, toolCalls };
 }
 
+// eslint-disable-next-line max-lines-per-function -- core prompt execution loop; refactor tracked separately
 export async function runPrompt(args: {
   ctx: RuntimeContext<GraphState>;
   prompt: string;

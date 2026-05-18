@@ -26,7 +26,7 @@ export type ToolDefinition = {
 export type AgencyFunctionOpts = {
   name: string;
   module: string;
-  fn: Function;
+  fn: (...args: any[]) => any;
   params: FuncParam[];
   toolDefinition: ToolDefinition | null;
   exported?: boolean;
@@ -40,7 +40,7 @@ export class AgencyFunction {
   readonly module: string;
   readonly params: FuncParam[];
   readonly toolDefinition: ToolDefinition | null;
-  private readonly _fn: Function;
+  private readonly _fn: (...args: any[]) => any;
   private readonly _unboundParams: FuncParam[];
   private readonly _nonVariadicUnbound: FuncParam[];
   private readonly _hasVariadic: boolean;

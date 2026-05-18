@@ -217,6 +217,7 @@ export function parseStyledText(input: string): StyledSpan[] {
       if (entry) {
         if (isClosing) {
           for (let i = stack.length - 1; i >= 0; i--) {
+            // eslint-disable-next-line max-depth -- searching tag stack from top
             if (matchesEntry(stack[i], entry)) {
               stack.splice(i, 1);
               break;

@@ -15,6 +15,7 @@ import { createDebugInterrupt } from "@/runtime/interrupts.js";
 import * as fs from "fs";
 import * as path from "path";
 
+// eslint-disable-next-line max-lines-per-function -- legacy CLI entrypoint slated for incremental refactor
 export async function debug(
   config: AgencyConfig,
   _inputFile: string,
@@ -142,6 +143,7 @@ export async function debug(
     process.env.AGENCY_DEBUGGER = "1";
 
     // Dynamically import the compiled module
+    // eslint-disable-next-line no-restricted-syntax -- compiled output path is only known at runtime
     const mod = await import(absOutput);
 
     // Get the source map from the module

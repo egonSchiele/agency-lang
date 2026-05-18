@@ -219,10 +219,11 @@ function exitIfSignal(e: unknown): void {
   }
 }
 
+// eslint-disable-next-line max-lines-per-function -- legacy CLI entrypoint slated for incremental refactor
 export async function fixtures(config: AgencyConfig, target?: string) {
-  let { filename, nodeName } = target
-    ? parseTarget(target)
-    : await promptForTarget();
+  const resolved = target ? parseTarget(target) : await promptForTarget();
+  const { filename } = resolved;
+  let { nodeName } = resolved;
 
   const contents = readFile(filename);
   const parsed = parseAgency(contents);
@@ -252,7 +253,7 @@ export async function fixtures(config: AgencyConfig, target?: string) {
 
   // Find the selected node and prompt for args
   const selectedNode = nodes.find((n) => n.nodeName === nodeName)!;
-  let { hasArgs, argsString } = await promptForArgs(selectedNode);
+  const { hasArgs, argsString } = await promptForArgs(selectedNode);
 
   console.log("Running program from entrypoint", nodeName);
   let json = executeNode({

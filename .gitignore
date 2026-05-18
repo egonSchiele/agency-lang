@@ -20,6 +20,7 @@ stdlib/array.ts
 stdlib/object.ts
 stdlib/strategy.ts
 **/traces/*
+**/statelog.log
 tests/agency-js/**/traces/*
 **/test-output/
 **/test-frames/

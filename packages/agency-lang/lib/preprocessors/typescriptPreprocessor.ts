@@ -1235,6 +1235,7 @@ export class TypescriptPreprocessor {
    * After this pass, every VariableNameLiteral, InterpolationSegment, and Assignment
    * will have a `scope` property indicating whether the variable is global, local, or args.
    */
+  // eslint-disable-next-line max-lines-per-function -- multi-pass scope resolution; refactor tracked separately
   protected resolveVariableScopes(): void {
     const globalVars = new Set<string>();
     const staticVars = new Set<string>();
@@ -1361,6 +1362,7 @@ export class TypescriptPreprocessor {
                   blockVarNode.scope = "block";
                 } else {
                   const resolved = lookupScope(nodeName, blockVarNode.variableName);
+                  // eslint-disable-next-line max-depth -- block-scope variable resolution
                   if (resolved) blockVarNode.scope = resolved;
                   // else: leave unscoped — Phase 2 will resolve once locals are registered
                 }

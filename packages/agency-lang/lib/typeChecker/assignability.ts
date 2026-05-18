@@ -73,6 +73,7 @@ function isOptionalType(
   return false;
 }
 
+// eslint-disable-next-line max-lines-per-function -- large switch over type kinds; refactor tracked separately
 export function isAssignable(
   source: VariableType | "any",
   target: VariableType | "any",

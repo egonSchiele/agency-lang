@@ -17,6 +17,7 @@ function cronIntervalMinutes(cron: string): number {
 }
 
 export async function promptScheduleOverwrite(name: string): Promise<boolean> {
+  // eslint-disable-next-line no-restricted-syntax -- lazy load to avoid pulling in `prompts` for non-interactive flows
   const prompts = (await import("prompts")).default;
   const { overwrite } = await prompts({
     type: "confirm",

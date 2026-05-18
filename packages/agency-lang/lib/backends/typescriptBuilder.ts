@@ -1,3 +1,4 @@
+/* eslint-disable max-lines -- legacy file slated for incremental refactor */
 import {
   AgencyComment,
   AgencyNode,
@@ -3748,7 +3749,7 @@ export class TypeScriptBuilder {
       ts.constDecl("graph", $(ts.runtime.globalCtx).prop("graph").done()),
     ];
 
-    let runtimeCtx: TsNode = ts.statements(runtimeCtxStatements);
+    const runtimeCtx: TsNode = ts.statements(runtimeCtxStatements);
 
     return renderImports.default({
       runtimeContextCode: printTs(runtimeCtx),

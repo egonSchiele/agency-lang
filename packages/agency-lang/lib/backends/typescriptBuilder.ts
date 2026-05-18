@@ -54,7 +54,7 @@ import {
   PRECEDENCE,
 } from "@/types/binop.js";
 import { MessageThread } from "@/types/messageThread.js";
-import { walkNodes, walkNodesArray } from "@/utils/node.js";
+import { walkNodes } from "@/utils/node.js";
 import { AccessChainElement, ValueAccess } from "../types/access.js";
 import {
   AgencyArray,
@@ -75,7 +75,6 @@ import { IfElse } from "../types/ifElse.js";
 import {
   ImportNodeStatement,
   ImportStatement,
-  getImportedNames,
 } from "../types/importStatement.js";
 import { MatchBlock, MatchBlockCase } from "../types/matchBlock.js";
 import { ReturnStatement } from "../types/returnStatement.js";
@@ -106,6 +105,7 @@ import type { CompilationUnit } from "../compilationUnit.js";
 import { SourceMapBuilder } from "./sourceMap.js";
 import { ScopeManager } from "./typescriptBuilder/scopeManager.js";
 import { StepPathTracker } from "./typescriptBuilder/stepPathTracker.js";
+import { NameClassifier } from "./typescriptBuilder/nameClassifier.js";
 
 const DEFAULT_PROMPT_NAME = "__promptVar";
 
@@ -152,9 +152,11 @@ export class TypeScriptBuilder {
   // Function tracking
   private functionsUsed: Set<string> = new Set();
 
-  // Scope management & step-path bookkeeping (extracted to helpers)
+  // Scope management, step-path bookkeeping, and name classification
+  // (extracted to helpers).
   private scopes: ScopeManager;
   private steps: StepPathTracker = new StepPathTracker();
+  private names: NameClassifier;
 
   // Config
   private agencyConfig: AgencyConfig = {};
@@ -207,6 +209,7 @@ export class TypeScriptBuilder {
     this.agencyConfig = mergeDeep(this.configDefaults(), config || {});
     this.compilationUnit = info;
     this.scopes = new ScopeManager(info);
+    this.names = new NameClassifier(info);
     this.moduleId = moduleId;
     this.outputFile = outputFile;
   }
@@ -324,26 +327,6 @@ export class TypeScriptBuilder {
   }
 
 
-  // Plain JS functions that bypass __call dispatch and are called directly.
-  // These are NOT AgencyFunction instances.
-  private static DIRECT_CALL_FUNCTIONS = new Set([
-    "approve", "reject", "propagate",
-    "success", "failure",
-    "isInterrupt", "hasInterrupts", "isDebugger", "isRejected", "isApproved",
-    "isSuccess", "isFailure", "setLLMClient", "registerTools"
-  ]);
-
-  /**
-   * Returns true if a function call should have interrupt-checking boilerplate.
-   * Everything gets interrupt handling UNLESS it's a known non-Agency function.
-   */
-  private shouldHandleInterrupts(functionName: string): boolean {
-    if (functionName.startsWith("__")) return false;
-    if (TypeScriptBuilder.DIRECT_CALL_FUNCTIONS.has(functionName)) return false;
-    if (this.isGraphNode(functionName)) return false;
-    return true;
-  }
-
   /** Generate a TsNode for `hasInterrupts(x)` */
   private interruptCheck(expr: TsNode): TsNode {
     return ts.call(ts.id("hasInterrupts"), [expr]);
@@ -352,70 +335,6 @@ export class TypeScriptBuilder {
   /** Generate a raw string for `hasInterrupts(x)` */
   private interruptCheckRaw(exprStr: string): TsNode {
     return ts.raw(`hasInterrupts(${exprStr})`);
-  }
-
-  private _plainTsImportNames: Set<string> | null = null;
-
-  private _agencyImportNames: Set<string> | null = null;
-
-  private _buildImportNameSets(): void {
-    this._plainTsImportNames = new Set<string>();
-    this._agencyImportNames = new Set<string>();
-    for (const stmt of this.compilationUnit.importStatements) {
-      const targetSet = stmt.isAgencyImport
-        ? this._agencyImportNames
-        : this._plainTsImportNames;
-      for (const nameType of stmt.importedNames) {
-        for (const name of getImportedNames(nameType)) {
-          targetSet.add(name);
-        }
-      }
-    }
-  }
-
-  private isGraphNode(functionName: string): boolean {
-    return (
-      this.compilationUnit.graphNodes
-        .map((n) => n.nodeName)
-        .includes(functionName) ||
-      this.compilationUnit.importedNodes
-        .map((n) => n.importedNodes)
-        .flat()
-        .includes(functionName)
-    );
-  }
-
-  private static TOP_LEVEL_DECLARATION_TYPES = new Set([
-    "graphNode", "function", "typeAlias", "classDefinition",
-    "importStatement", "importNodeStatement",
-    "comment", "multiLineComment", "newLine",
-  ]);
-
-  private isTopLevelDeclaration(node: AgencyNode): boolean {
-    if (TypeScriptBuilder.TOP_LEVEL_DECLARATION_TYPES.has(node.type)) return true;
-    if (node.type === "assignment" && (node as any).scope === "static") return true;
-    return false;
-  }
-
-  private isImpureImportedFunction(functionName: string): boolean {
-    if (!this._plainTsImportNames) {
-      this._buildImportNameSets();
-    }
-    return (
-      (this._plainTsImportNames!.has(functionName) || this._agencyImportNames!.has(functionName)) &&
-      !this.compilationUnit.safeFunctions[functionName]
-    );
-  }
-
-  private containsImpureCall(node: AgencyNode): boolean {
-    for (const { node: subNode } of walkNodesArray([node])) {
-      if (subNode.type === "functionCall") {
-        const name = subNode.functionName;
-        if (this.isImpureImportedFunction(name)) return true;
-        if (BUILTIN_FUNCTIONS[name]) return true;
-      }
-    }
-    return false;
   }
 
   private agencyFileToDefaultImportName(agencyFile: string): string {
@@ -505,7 +424,7 @@ export class TypeScriptBuilder {
         node.statement.scope === "static"
       ) {
         // Already handled above in staticDeclarations — skip
-      } else if (this.isTopLevelDeclaration(node)) {
+      } else if (this.names.isTopLevelDeclaration(node)) {
         const result = this.processNode(node);
         this.generatedStatements.push(result);
       } else {
@@ -1204,19 +1123,6 @@ export class TypeScriptBuilder {
   private processSchemaExpression(node: SchemaExpression): TsNode {
     const zodSchema = mapTypeToValidationSchema(node.typeArg, this.scopes.visibleTypeAliases());
     return ts.new(ts.id("Schema"), [ts.raw(zodSchema)]);
-  }
-
-  /**
-   * Check if a method name matches any method defined on any known Agency class.
-   * Used to decide whether to inject __state into method calls.
-   */
-  private isKnownClassMethod(methodName: string): boolean {
-    for (const classDef of Object.values(this.compilationUnit.classDefinitions)) {
-      if (classDef.methods.some((m) => m.name === methodName)) {
-        return true;
-      }
-    }
-    return false;
   }
 
   /**
@@ -2032,13 +1938,13 @@ export class TypeScriptBuilder {
     const scope = this.scopes.current();
 
     if (
-      this.shouldHandleInterrupts(node.functionName) &&
+      this.names.shouldHandleInterrupts(node.functionName) &&
       scope.type !== "global"
     ) {
       // Async unassigned calls: register with pending promise store, no interrupt check
       if (node.async) {
         // Fork the stack for per-thread isolation
-        if (this.shouldHandleInterrupts(node.functionName)) {
+        if (this.names.shouldHandleInterrupts(node.functionName)) {
           this._asyncBranchCheckNeeded = true;
           const branchKey = this.steps.joined();
           let statements = ts.statements(this.forkBranchSetup(branchKey));
@@ -2150,7 +2056,7 @@ export class TypeScriptBuilder {
       );
     }
 
-    if (this.isGraphNode(node.functionName)) {
+    if (this.names.isGraphNode(node.functionName)) {
       if (this.scopes.current().type === "function") {
         throw new Error(
           `Cannot call graph node '${node.functionName}' from inside function '${(this.scopes.current() as any).functionName}'. Node transitions can only be made from within graph nodes.`,
@@ -2211,7 +2117,7 @@ export class TypeScriptBuilder {
     // __-prefixed helpers and DIRECT_CALL_FUNCTIONS: emit plain direct call
     if (
       functionName.startsWith("__") ||
-      TypeScriptBuilder.DIRECT_CALL_FUNCTIONS.has(functionName)
+      this.names.isDirectCallFunction(functionName)
     ) {
       return this.emitDirectFunctionCall(node, functionName, shouldAwait);
     }
@@ -2425,7 +2331,7 @@ export class TypeScriptBuilder {
     this.isInsideGraphNode = true;
 
     for (const stmt of body) {
-      if (stmt.type === "functionCall" && this.isGraphNode(stmt.functionName)) {
+      if (stmt.type === "functionCall" && this.names.isGraphNode(stmt.functionName)) {
         throw new Error(
           `Call to graph node '${stmt.functionName}' inside graph node '${nodeName}' must use goto or return, eg: goto ${stmt.functionName}(...)`,
         );
@@ -2553,7 +2459,7 @@ export class TypeScriptBuilder {
         `goto can only be used inside a node body`,
       );
     }
-    if (!this.isGraphNode(node.nodeCall.functionName)) {
+    if (!this.names.isGraphNode(node.nodeCall.functionName)) {
       throw new Error(
         `goto target '${node.nodeCall.functionName}' is not a node`,
       );
@@ -2608,7 +2514,7 @@ export class TypeScriptBuilder {
       const valueNode = this.processNode(node.value);
       if (
         node.value.type === "functionCall" &&
-        this.isGraphNode(node.value.functionName)
+        this.names.isGraphNode(node.value.functionName)
       ) {
         return valueNode;
       }
@@ -2706,7 +2612,7 @@ export class TypeScriptBuilder {
 
       if (value.async) {
         // Fork the stack for per-thread isolation
-        if (this.shouldHandleInterrupts(value.functionName)) {
+        if (this.names.shouldHandleInterrupts(value.functionName)) {
           this._asyncBranchCheckNeeded = true;
           const branchKey = this.steps.joined();
           stmts.unshift(...this.forkBranchSetup(branchKey));
@@ -3109,7 +3015,7 @@ export class TypeScriptBuilder {
   }
 
   private buildHandlerArrow(handlerName: string): TsNode {
-    if (TypeScriptBuilder.DIRECT_CALL_FUNCTIONS.has(handlerName)) {
+    if (this.names.isDirectCallFunction(handlerName)) {
       // Built-in handler (approve/reject/propagate): call with no args
       return ts.arrowFn(
         [{ name: "__data", typeAnnotation: "any" }],
@@ -3502,7 +3408,7 @@ export class TypeScriptBuilder {
 
       const stepIndex = nextId();
       this.steps.push(stepIndex);
-      if (!this.scopes.inSafeFunction && this.containsImpureCall(stmt)) {
+      if (!this.scopes.inSafeFunction && this.names.containsImpureCall(stmt)) {
         if (!currentPart) currentPart = [];
         currentPart.push(ts.assign(ts.self("__retryable"), ts.bool(false)));
       }

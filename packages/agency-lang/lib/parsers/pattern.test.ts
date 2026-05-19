@@ -737,16 +737,20 @@ describe("result pattern", () => {
   });
 
   it("rejects empty parens `success()` as a parse error", () => {
-    expect(() => matchPatternParser("success()")).toThrow(/empty parens/i);
+    expect(() => matchPatternParser("success()")).toThrow(
+      /expected an identifier in result pattern binding/i,
+    );
   });
 
   it("rejects empty parens `failure()` as a parse error", () => {
-    expect(() => matchPatternParser("failure()")).toThrow(/empty parens/i);
+    expect(() => matchPatternParser("failure()")).toThrow(
+      /expected an identifier in result pattern binding/i,
+    );
   });
 
   it("rejects `success(123)` (non-identifier binding) as a parse error", () => {
     expect(() => matchPatternParser("success(123)")).toThrow(
-      /expected identifier in result pattern binding/i,
+      /expected an identifier in result pattern binding/i,
     );
   });
 

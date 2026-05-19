@@ -3538,69 +3538,48 @@ type ResultPatternBase = {
 
 export const resultPatternParser: Parser<ResultPattern> = withLoc(
   (input: string): ParserResult<ResultPatternBase> => {
-    // Try "success" or "failure" keyword
+    // Try "success" or "failure" keyword + identifier boundary so `successful`
+    // does NOT match. A soft failure here lets the outer `or` fall through to
+    // `variableNameParser`.
     const kwResult = or(str("success"), str("failure"))(input);
     if (!kwResult.success) return kwResult;
     const kind = kwResult.result as "success" | "failure";
-
-    // Boundary check — keyword must not be followed by an identifier char,
-    // so `successful` does NOT match.
     const boundary = not(varNameChar)(kwResult.rest);
     if (!boundary.success) {
       return fail("not a result pattern keyword boundary")(input);
     }
 
-    const rest = kwResult.rest;
-    if (rest.length > 0 && rest[0] === "(") {
-      // We've matched `success(` or `failure(` — this is COMMITTED to the
-      // result-pattern form. Bad contents must throw (not return a failed
-      // parse) to bypass the surrounding `or` combinator in
-      // `_matchPatternParser`; otherwise the outer parser would fall through
-      // to `variableNameParser`, which would happily parse `success` as a
-      // bare identifier and leave `(...)` in the remainder.
-      const emptyCheck = seqC(
-        char("("),
-        optionalSpacesOrNewline,
-        char(")"),
-      )(rest);
-      if (emptyCheck.success) {
-        throw new Error(
-          "empty parens not allowed in result pattern; use `success` (bare) or `success(name)` (with binding)",
-        );
-      }
-
-      // Try `(identifier)` binding. Tolerate line breaks inside the parens
-      // for consistency with array/object pattern parsers.
-      const bindingResult = seqC(
-        char("("),
-        optionalSpacesOrNewline,
-        capture(variableNameParser, "binding"),
-        optionalSpacesOrNewline,
-        char(")"),
-      )(rest);
-
-      if (bindingResult.success) {
-        const node: ResultPatternBase = {
-          type: "resultPattern",
-          kind,
-          binding: (bindingResult.result.binding as { value: string }).value,
-        };
-        return success(node, bindingResult.rest);
-      }
-
-      // `(` present but no valid binding — committed, so throw.
-      throw new Error(
-        `expected identifier in result pattern binding after \`${kind}(\``,
+    // Bare form: no `(` after the keyword.
+    if (kwResult.rest[0] !== "(") {
+      return success(
+        { type: "resultPattern", kind, binding: null },
+        kwResult.rest,
       );
     }
 
-    // Bare form (no parens)
-    const bareNode: ResultPatternBase = {
-      type: "resultPattern",
-      kind,
-      binding: null,
-    };
-    return success(bareNode, rest);
+    // Committed to the result-pattern form: once we see `success(` or
+    // `failure(`, the next token MUST be an identifier followed by `)`.
+    // `parseError` runs the wrapped sequence and throws on failure, which
+    // bypasses the surrounding `or` in `_matchPatternParser` — without this,
+    // `success()` would silently fall through to `variableNameParser`
+    // (parsing `success` as a bare identifier and leaving `()` as remainder).
+    const bindingResult = parseError(
+      `expected an identifier in result pattern binding (e.g. \`${kind}(name)\`); empty parens and non-identifier expressions are not allowed`,
+      char("("),
+      optionalSpacesOrNewline,
+      capture(variableNameParser, "binding"),
+      optionalSpacesOrNewline,
+      char(")"),
+    )(kwResult.rest);
+    if (!bindingResult.success) return bindingResult;
+    return success(
+      {
+        type: "resultPattern",
+        kind,
+        binding: (bindingResult.result.binding as { value: string }).value,
+      },
+      bindingResult.rest,
+    );
   },
 );
 

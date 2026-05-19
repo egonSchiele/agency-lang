@@ -106,6 +106,7 @@ import { SourceMapBuilder } from "./sourceMap.js";
 import { ScopeManager } from "./typescriptBuilder/scopeManager.js";
 import { StepPathTracker } from "./typescriptBuilder/stepPathTracker.js";
 import { NameClassifier } from "./typescriptBuilder/nameClassifier.js";
+import { resolveNamedArgs } from "./typescriptBuilder/namedArgsResolver.js";
 
 const DEFAULT_PROMPT_NAME = "__promptVar";
 
@@ -537,110 +538,6 @@ export class TypeScriptBuilder {
   }
 
   // ------- Node dispatch -------
-
-  /**
-   * Resolve named arguments: reorder them to match the parameter list,
-   * inserting null for skipped optional params. Returns unwrapped args
-   * (no NamedArgument wrappers) in the correct positional order.
-   *
-   * Rules (Python-style):
-   * - Positional args must come before named args
-   * - Named args can be in any order
-   * - Named args can skip optional params (those with defaults)
-   * - Named args are only supported for Agency-defined functions
-   */
-  private resolveNamedArgs(
-    node: FunctionCall,
-    paramList: FunctionParameter[] | undefined,
-    isAgencyFunction: boolean,
-  ): (Expression | SplatExpression)[] {
-    const args = node.arguments;
-    const hasNamedArgs = args.some((a) => a.type === "namedArgument");
-
-    if (!hasNamedArgs) {
-      return args as (Expression | SplatExpression)[];
-    }
-
-    // Named args require a known Agency function
-    if (!isAgencyFunction || !paramList || paramList.length === 0) {
-      throw new Error(
-        `Named arguments can only be used with Agency-defined functions, not '${node.functionName}'`,
-      );
-    }
-
-    // Find where named args start
-    const namedStartIdx = args.findIndex((a) => a.type === "namedArgument");
-
-    // Validate no positional after named
-    for (let i = namedStartIdx + 1; i < args.length; i++) {
-      if (args[i].type !== "namedArgument") {
-        throw new Error(
-          `Positional argument cannot follow a named argument in call to '${node.functionName}'`,
-        );
-      }
-    }
-
-    // Collect named args, checking for duplicates and unknown names
-    const nonVariadicParams = paramList.filter(
-      (p) => !p.variadic && p.typeHint?.type !== "blockType",
-    );
-    const namedArgMap = new Map<string, Expression>();
-    for (let i = namedStartIdx; i < args.length; i++) {
-      const arg = args[i] as NamedArgument;
-      if (namedArgMap.has(arg.name)) {
-        throw new Error(
-          `Duplicate named argument '${arg.name}' in call to '${node.functionName}'`,
-        );
-      }
-      const paramIdx = nonVariadicParams.findIndex((p) => p.name === arg.name);
-      if (paramIdx === -1) {
-        throw new Error(
-          `Unknown named argument '${arg.name}' in call to '${node.functionName}'`,
-        );
-      }
-      if (paramIdx < namedStartIdx) {
-        throw new Error(
-          `Named argument '${arg.name}' conflicts with positional argument at position ${paramIdx + 1} in call to '${node.functionName}'`,
-        );
-      }
-      namedArgMap.set(arg.name, arg.value);
-    }
-
-    // Build result: positional args first, then fill from named args in parameter order
-    const result: (Expression | SplatExpression)[] = [];
-
-    // Positional args stay in their positions (unwrapped)
-    for (let i = 0; i < namedStartIdx; i++) {
-      const a = args[i];
-      result.push(a.type === "namedArgument" ? a.value : a);
-    }
-
-    // Fill remaining parameter slots from named args
-    for (let i = namedStartIdx; i < nonVariadicParams.length; i++) {
-      const param = nonVariadicParams[i];
-      if (namedArgMap.has(param.name)) {
-        result.push(namedArgMap.get(param.name)!);
-        namedArgMap.delete(param.name);
-      } else if (param.defaultValue) {
-        // Check if any later param has a named arg — if so, insert null placeholder
-        const hasLaterNamedArg = nonVariadicParams
-          .slice(i + 1)
-          .some((p) => namedArgMap.has(p.name));
-        if (hasLaterNamedArg) {
-          result.push({ type: "null" } as Expression);
-        } else {
-          // Trailing skipped params — stop here, adjustCallArgs will pad
-          break;
-        }
-      } else {
-        throw new Error(
-          `Missing required argument '${param.name}' in call to '${node.functionName}'`,
-        );
-      }
-    }
-
-    return result;
-  }
 
   /** Process a function call argument, unwrapping NamedArgument and SplatExpression. */
   private processCallArg(
@@ -2286,7 +2183,7 @@ export class TypeScriptBuilder {
     const targetNode = this.compilationUnit.graphNodes.find(
       (n) => n.nodeName === functionName,
     );
-    const resolvedArgs = this.resolveNamedArgs(node, targetNode?.parameters, true);
+    const resolvedArgs = resolveNamedArgs(node, targetNode?.parameters, true);
     const argNodes = this.processResolvedArgs(resolvedArgs);
 
     let dataNode: TsNode;

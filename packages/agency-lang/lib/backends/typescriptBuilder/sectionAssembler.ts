@@ -64,33 +64,25 @@ export function partitionProgram(
   const globalInitStatements: TsNode[] = [];
   const topLevelStatements: TsNode[] = [];
 
-  // First pass: collect static variable info from `static` assignments
-  // (with or without `with handler`). We do this in a dedicated pass
-  // so static `let` declarations and init statements are gathered
-  // even though they are not emitted from the main walk.
   for (const node of program.nodes) {
     const staticAssign = unwrapStaticAssignment(node);
-    if (!staticAssign) continue;
-    const { stmt, handlerName } = staticAssign;
+    if (staticAssign) {
+      const { stmt, handlerName } = staticAssign;
+      staticVarNames.add(stmt.variableName);
+      if (stmt.exported) exportedStaticVarNames.add(stmt.variableName);
 
-    staticVarNames.add(stmt.variableName);
-    if (stmt.exported) exportedStaticVarNames.add(stmt.variableName);
-
-    const valueNode = deps.processNodeInGlobalInit(stmt.value);
-    const frozenAssign = ts.assign(
-      ts.id(stmt.variableName),
-      ts.call(ts.id("__deepFreeze"), [valueNode]),
-    );
-    staticInitStatements.push(
-      handlerName
-        ? ts.withHandler(deps.buildHandlerArrow(handlerName), frozenAssign)
-        : frozenAssign,
-    );
-  }
-
-  // Second pass: route every other node.
-  for (const node of program.nodes) {
-    if (unwrapStaticAssignment(node)) continue; // handled above
+      const valueNode = deps.processNodeInGlobalInit(stmt.value);
+      const frozenAssign = ts.assign(
+        ts.id(stmt.variableName),
+        ts.call(ts.id("__deepFreeze"), [valueNode]),
+      );
+      staticInitStatements.push(
+        handlerName
+          ? ts.withHandler(deps.buildHandlerArrow(handlerName), frozenAssign)
+          : frozenAssign,
+      );
+      continue;
+    }
 
     const globalAssign = unwrapGlobalAssignment(node);
     if (globalAssign) {

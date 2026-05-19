@@ -181,6 +181,34 @@ function isValidRecordKey(t: VariableType): boolean {
   return false;
 }
 
+/** True if `t` is the built-in `Record<K, V>` generic (after resolution). */
+function isRecord(
+  t: VariableType,
+): t is VariableType & { type: "genericType"; name: "Record" } {
+  return t.type === "genericType" && t.name === "Record";
+}
+
+/**
+ * If the key type is a literal or a union of literals, return the
+ * concrete key strings (number keys are stringified). Returns `null`
+ * for open key types like `string` / `number` where no specific keys
+ * are required.
+ */
+function collectLiteralKeys(keyType: VariableType): string[] | null {
+  if (keyType.type === "stringLiteralType") return [keyType.value];
+  if (keyType.type === "numberLiteralType") return [keyType.value];
+  if (keyType.type === "unionType") {
+    const keys: string[] = [];
+    for (const m of keyType.types) {
+      const inner = collectLiteralKeys(m);
+      if (inner === null) return null;
+      keys.push(...inner);
+    }
+    return keys;
+  }
+  return null;
+}
+
 export function widenType(vt: VariableType | "any"): VariableType | "any" {
   if (vt === "any") return "any";
   switch (vt.type) {
@@ -423,6 +451,47 @@ export function isAssignable(
     resolvedTarget.type === "schemaType"
   ) {
     return isAssignable(resolvedSource.inner, resolvedTarget.inner, typeAliases);
+  }
+
+  // Record<K, V> -> Record<K, V>: covariant in both K and V.
+  // Deliberately unsound for mutable records (writes through the wider type
+  // could break the narrower one) — we accept this for ergonomics, so users
+  // can pass Record<string, "approve"> where Record<string, string> is expected.
+  if (isRecord(resolvedSource) && isRecord(resolvedTarget)) {
+    return (
+      isAssignable(
+        resolvedSource.typeArgs[0],
+        resolvedTarget.typeArgs[0],
+        typeAliases,
+      ) &&
+      isAssignable(
+        resolvedSource.typeArgs[1],
+        resolvedTarget.typeArgs[1],
+        typeAliases,
+      )
+    );
+  }
+
+  // objectType -> Record<K, V>: structural. Every source property value
+  // must be assignable to V. If K is a literal-key union, all listed keys
+  // must be present.
+  if (resolvedSource.type === "objectType" && isRecord(resolvedTarget)) {
+    const [keyType, valueType] = resolvedTarget.typeArgs;
+    if (resolvedSource.properties.length === 0) return true;
+    const requiredKeys = collectLiteralKeys(keyType);
+    if (requiredKeys) {
+      const sourceKeys = new Set(resolvedSource.properties.map((p) => p.key));
+      for (const k of requiredKeys) if (!sourceKeys.has(k)) return false;
+    }
+    return resolvedSource.properties.every((p) =>
+      isAssignable(p.value, valueType, typeAliases),
+    );
+  }
+
+  // Record<K, V> -> objectType: only safe when target is the empty object,
+  // since arbitrary record contents can't guarantee specific properties.
+  if (isRecord(resolvedSource) && resolvedTarget.type === "objectType") {
+    return resolvedTarget.properties.length === 0;
   }
 
   if (

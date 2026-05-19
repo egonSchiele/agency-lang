@@ -799,6 +799,15 @@ describe("result pattern", () => {
     expect(result.rest).toBe("");
   });
 
+  it("does NOT match an identifier with a longer name (`failures`)", () => {
+    // Symmetric boundary check for `failure`.
+    const result = matchPatternParser("failures");
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.result.type).toBe("variableName");
+    expect(result.rest).toBe("");
+  });
+
   it("parses success(v) nested inside an array match pattern", () => {
     const result = matchPatternParser("[success(v), _]");
     expect(result.success).toBe(true);

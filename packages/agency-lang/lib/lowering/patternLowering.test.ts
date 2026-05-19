@@ -446,31 +446,47 @@ describe("recursion into bodies", () => {
 
 describe("result patterns", () => {
   describe("is operator — boolean context (no binding)", () => {
-    it("lowers `let x = r is success` to isSuccess call", () => {
+    it("lowers `let x = r is success` to isSuccess(r) call (with the right source)", () => {
       const lowered = lower(`let r = success(1)\nlet x = r is success`);
       // [r assignment, x assignment with isSuccess call]
       expect(lowered).toHaveLength(2);
       const xAssign = lowered[1] as Assignment;
       expect(xAssign.variableName).toBe("x");
       expect(xAssign.value.type).toBe("functionCall");
-      expect((xAssign.value as { functionName: string }).functionName).toBe(
-        "isSuccess",
-      );
+      const call = xAssign.value as {
+        functionName: string;
+        arguments: { type: string; value?: string }[];
+      };
+      expect(call.functionName).toBe("isSuccess");
+      // The source `r` must be passed as the single argument — guards against
+      // a bug where the check is built against a wrong / constant expression.
+      expect(call.arguments).toHaveLength(1);
+      expect(call.arguments[0]).toMatchObject({
+        type: "variableName",
+        value: "r",
+      });
     });
 
-    it("lowers `let x = r is failure` to isFailure call", () => {
+    it("lowers `let x = r is failure` to isFailure(r) call (with the right source)", () => {
       const lowered = lower(`let r = failure("err")\nlet x = r is failure`);
       expect(lowered).toHaveLength(2);
       const xAssign = lowered[1] as Assignment;
       expect(xAssign.value.type).toBe("functionCall");
-      expect((xAssign.value as { functionName: string }).functionName).toBe(
-        "isFailure",
-      );
+      const call = xAssign.value as {
+        functionName: string;
+        arguments: { type: string; value?: string }[];
+      };
+      expect(call.functionName).toBe("isFailure");
+      expect(call.arguments).toHaveLength(1);
+      expect(call.arguments[0]).toMatchObject({
+        type: "variableName",
+        value: "r",
+      });
     });
   });
 
   describe("is operator — binding context (if)", () => {
-    it("lowers `if (r is success(v))` to isSuccess guard + const binding", () => {
+    it("lowers `if (r is success(v))` to isSuccess(r) guard + `const v = r.value` binding", () => {
       const lowered = lower(
         `let r = success(1)\nif (r is success(v)) {\n  print(v)\n}`,
       );
@@ -478,28 +494,48 @@ describe("result patterns", () => {
       const ifNode = lowered[1] as IfElse;
       expect(ifNode.type).toBe("ifElse");
       expect(ifNode.condition.type).toBe("functionCall");
-      expect(
-        (ifNode.condition as { functionName: string }).functionName,
-      ).toBe("isSuccess");
+      const cond = ifNode.condition as {
+        functionName: string;
+        arguments: { type: string; value?: string }[];
+      };
+      expect(cond.functionName).toBe("isSuccess");
+      expect(cond.arguments[0]).toMatchObject({
+        type: "variableName",
+        value: "r",
+      });
+      // Binding must read `.value` from r (the .success field) — guards
+      // against accidentally swapping .value with .error.
       const vBind = ifNode.thenBody[0] as Assignment;
       expect(vBind.variableName).toBe("v");
       expect(vBind.declKind).toBe("const");
       expect(vBind.value.type).toBe("valueAccess");
+      const va = vBind.value as ValueAccess;
+      expect(va.base).toMatchObject({ type: "variableName", value: "r" });
+      expect(va.chain).toEqual([{ kind: "property", name: "value" }]);
     });
 
-    it("lowers `if (r is failure(e))` to isFailure guard + const binding", () => {
+    it("lowers `if (r is failure(e))` to isFailure(r) guard + `const e = r.error` binding", () => {
       const lowered = lower(
         `let r = failure("oops")\nif (r is failure(e)) {\n  print(e)\n}`,
       );
       expect(lowered).toHaveLength(2);
       const ifNode = lowered[1] as IfElse;
       expect(ifNode.condition.type).toBe("functionCall");
-      expect(
-        (ifNode.condition as { functionName: string }).functionName,
-      ).toBe("isFailure");
+      const cond = ifNode.condition as {
+        functionName: string;
+        arguments: { type: string; value?: string }[];
+      };
+      expect(cond.functionName).toBe("isFailure");
+      expect(cond.arguments[0]).toMatchObject({
+        type: "variableName",
+        value: "r",
+      });
       const eBind = ifNode.thenBody[0] as Assignment;
       expect(eBind.variableName).toBe("e");
       expect(eBind.declKind).toBe("const");
+      const va = eBind.value as ValueAccess;
+      expect(va.base).toMatchObject({ type: "variableName", value: "r" });
+      expect(va.chain).toEqual([{ kind: "property", name: "error" }]);
     });
   });
 
@@ -557,7 +593,7 @@ describe("result patterns", () => {
   });
 
   describe("match arms", () => {
-    it("lowers match with success/failure arms to if/else-if chain", () => {
+    it("lowers match with success/failure arms to if/else-if chain with correct bindings on BOTH arms", () => {
       const lowered = lower(
         `let r = success(42)\nmatch (r) {\n  success(v) => print(v)\n  failure(e) => print(e)\n}`,
       );
@@ -565,20 +601,53 @@ describe("result patterns", () => {
       expect(lowered).toHaveLength(3);
       const scrutinee = lowered[1] as Assignment;
       expect(scrutinee.variableName).toMatch(/^__scrutinee_/);
+      const scrutineeName = scrutinee.variableName;
+
       const ifNode = lowered[2] as IfElse;
       expect(ifNode.type).toBe("ifElse");
+
+      // success arm: isSuccess(scrutinee) + const v = scrutinee.value
       expect(ifNode.condition.type).toBe("functionCall");
-      expect(
-        (ifNode.condition as { functionName: string }).functionName,
-      ).toBe("isSuccess");
+      const successCond = ifNode.condition as {
+        functionName: string;
+        arguments: { type: string; value?: string }[];
+      };
+      expect(successCond.functionName).toBe("isSuccess");
+      expect(successCond.arguments[0]).toMatchObject({
+        type: "variableName",
+        value: scrutineeName,
+      });
       const vBind = ifNode.thenBody[0] as Assignment;
       expect(vBind.variableName).toBe("v");
+      const vAccess = vBind.value as ValueAccess;
+      expect(vAccess.base).toMatchObject({
+        type: "variableName",
+        value: scrutineeName,
+      });
+      expect(vAccess.chain).toEqual([{ kind: "property", name: "value" }]);
+
+      // failure arm: isFailure(scrutinee) + const e = scrutinee.error
       expect(ifNode.elseBody).toBeDefined();
       const elseIf = ifNode.elseBody![0] as IfElse;
       expect(elseIf.condition.type).toBe("functionCall");
-      expect(
-        (elseIf.condition as { functionName: string }).functionName,
-      ).toBe("isFailure");
+      const failureCond = elseIf.condition as {
+        functionName: string;
+        arguments: { type: string; value?: string }[];
+      };
+      expect(failureCond.functionName).toBe("isFailure");
+      expect(failureCond.arguments[0]).toMatchObject({
+        type: "variableName",
+        value: scrutineeName,
+      });
+      const eBind = elseIf.thenBody[0] as Assignment;
+      expect(eBind.variableName).toBe("e");
+      expect(eBind.declKind).toBe("const");
+      const eAccess = eBind.value as ValueAccess;
+      expect(eAccess.base).toMatchObject({
+        type: "variableName",
+        value: scrutineeName,
+      });
+      expect(eAccess.chain).toEqual([{ kind: "property", name: "error" }]);
     });
   });
 });

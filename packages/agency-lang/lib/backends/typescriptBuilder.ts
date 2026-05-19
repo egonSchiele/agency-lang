@@ -108,6 +108,10 @@ import { NameClassifier } from "./typescriptBuilder/nameClassifier.js";
 import { PipeChainEmitter } from "./typescriptBuilder/pipeChainEmitter.js";
 import { ClassEmitter } from "./typescriptBuilder/classEmitter.js";
 import { AssignmentEmitter } from "./typescriptBuilder/assignmentEmitter.js";
+import {
+  assembleSections,
+  partitionProgram,
+} from "./typescriptBuilder/sectionAssembler.js";
 import { resolveNamedArgs } from "./typescriptBuilder/namedArgsResolver.js";
 
 const DEFAULT_PROMPT_NAME = "__promptVar";
@@ -345,179 +349,32 @@ export class TypeScriptBuilder {
     // Generate tool registry (empty — AgencyFunction.create() populates it)
     this.generatedStatements.push(this.generateToolRegistry());
 
-    // Collect static variable names and their init statements.
-    // Static vars are declared as `let` at module level and initialized inside
-    // a separate `__initializeStatic(__ctx)` function (called once from __initializeGlobals).
-    // This gives them access to __ctx for handlers and function dispatch.
-    const staticVarNames = new Set<string>();
-    const exportedStaticVarNames = new Set<string>();
-    const staticInitStatements: TsNode[] = [];
-    for (const node of program.nodes) {
-      if (node.type === "assignment" && node.scope === "static") {
-        staticVarNames.add(node.variableName);
-        if (node.exported) exportedStaticVarNames.add(node.variableName);
-        const valueNode = this.processNodeInGlobalInit(node.value);
-        staticInitStatements.push(
-          ts.assign(ts.id(node.variableName), ts.call(ts.id("__deepFreeze"), [valueNode]))
-        );
-      } else if (
-        node.type === "withModifier" &&
-        node.statement.type === "assignment" &&
-        node.statement.scope === "static"
-      ) {
-        const stmt = node.statement;
-        staticVarNames.add(stmt.variableName);
-        if (stmt.exported) exportedStaticVarNames.add(stmt.variableName);
-        const valueNode = this.processNodeInGlobalInit(stmt.value);
-        const handler = this.buildHandlerArrow(node.handlerName);
-        staticInitStatements.push(
-          ts.withHandler(handler, ts.assign(ts.id(stmt.variableName), ts.call(ts.id("__deepFreeze"), [valueNode])))
-        );
-      }
-    }
+    // Sort program nodes into static-init / global-init / top-level buckets.
+    const partition = partitionProgram(program, {
+      processNode: (n) => this.processNode(n),
+      processNodeInGlobalInit: (n) => this.processNodeInGlobalInit(n),
+      buildHandlerArrow: (h) => this.buildHandlerArrow(h),
+      isTopLevelDeclaration: (n) => this.names.isTopLevelDeclaration(n),
+      moduleId: this.moduleId,
+    });
+    this.generatedStatements.push(...partition.topLevelStatements);
 
-    // Pass 7: Process all nodes and generate code
-    // Separate global-scope assignments into __initializeGlobals function.
-    const globalInitStatements: TsNode[] = [];
-    for (const node of program.nodes) {
-      if (node.type === "assignment" && node.scope === "global") {
-        const valueNode = this.processNodeInGlobalInit(node.value);
-        globalInitStatements.push(
-          ts.globalSet(this.moduleId, node.variableName, valueNode),
-        );
-      } else if (
-        node.type === "withModifier" &&
-        node.statement.type === "assignment" &&
-        node.statement.scope === "global"
-      ) {
-        const stmt = node.statement;
-        const valueNode = this.processNodeInGlobalInit(stmt.value);
-        const setNode = ts.globalSet(
-          this.moduleId,
-          stmt.variableName,
-          valueNode,
-        );
-        const handler = this.buildHandlerArrow(node.handlerName);
-
-        globalInitStatements.push(ts.withHandler(handler, setNode));
-      } else if (node.type === "assignment" && node.scope === "static") {
-        // Already handled above in staticDeclarations — skip
-      } else if (
-        node.type === "withModifier" &&
-        node.statement.type === "assignment" &&
-        node.statement.scope === "static"
-      ) {
-        // Already handled above in staticDeclarations — skip
-      } else if (this.names.isTopLevelDeclaration(node)) {
-        const result = this.processNode(node);
-        this.generatedStatements.push(result);
-      } else {
-        // Top-level statements (function calls, etc.) go into __initializeGlobals
-        // so they can access the execution context and global variables.
-        const result = this.processNodeInGlobalInit(node);
-        globalInitStatements.push(result);
-      }
-    }
-
-    // Assemble output
-    const sections: TsNode[] = [];
-
-    sections.push(...this.preprocess());
-
-    if (this.importStatements.length > 0) {
-      sections.push(ts.statements(this.importStatements));
-    }
-
-    const importsResult = this.generateImports();
-    if (importsResult.trim() !== "") {
-      sections.push(ts.raw(importsResult));
-    }
-
-    const builtinsResult = this.generateBuiltins();
-    if (builtinsResult.trim() !== "") {
-      sections.push(ts.raw(builtinsResult));
-    }
-
-    // Register imported AgencyFunction instances (after __toolRegistry is declared)
-    if (this.toolRegistrations.length > 0) {
-      sections.push(ts.statements(this.toolRegistrations));
-    }
-
-    for (const alias of this.generatedTypeAliases) {
-      sections.push(alias);
-    }
-
-    // Emit static variable `let` declarations at module level + __initializeStatic function
-    if (staticVarNames.size > 0) {
-      const staticLetDecls = [...staticVarNames].map(name =>
-        exportedStaticVarNames.has(name) ? ts.export(ts.letDecl(name)) : ts.letDecl(name)
-      );
-      sections.push(ts.statements([
-        ts.raw("let __staticInitPromise = null"),
-        ...staticLetDecls,
-      ]));
-
-      // Use a Promise-based guard: concurrent callers await the same init promise.
-      sections.push(
-        ts.functionDecl(
-          "__initializeStatic",
-          [{ name: "__ctx" }],
-          ts.statements([
-            ts.raw("if (__staticInitPromise) return __staticInitPromise"),
-            ts.raw(`__staticInitPromise = (async () => {`),
-            ...staticInitStatements,
-            ts.raw(`})()`),
-            ts.raw("return __staticInitPromise"),
-          ]),
-          { async: true },
-        ),
-      );
-
-      const staticVarObj = ts.obj([...staticVarNames].map(n => ts.set(n, ts.id(n))));
-      sections.push(ts.statements([
-        ts.functionDecl("__getStaticVars", [], ts.return(staticVarObj)),
-        ts.raw("__globalCtx.getStaticVars = __getStaticVars;"),
-      ]));
-    }
-
-    // Generate __initializeGlobals function for per-execution global variable initialization
-    sections.push(
-      ts.functionDecl(
-        "__initializeGlobals",
-        [{ name: "__ctx" }],
-        ts.statements([
-          // Mark this module as initialized BEFORE running init statements.
-          // This prevents infinite recursion when a global init expression
-          // calls a function defined in the same module (which would trigger
-          // __initializeGlobals again via the isInitialized check).
-          ts.call(
-            $(ts.runtime.ctx).prop("globals").prop("markInitialized").done(),
-            [ts.str(this.moduleId)],
-          ),
-          ...(staticVarNames.size > 0 ? [
-            ts.raw("await __initializeStatic(__ctx)"),
-            ts.raw("await __ctx.writeStaticStateToTrace(__globalCtx.getStaticVars())"),
-          ] : []),
-          ...globalInitStatements,
-        ]),
-        { async: true },
-      ),
-    );
-
-    sections.push(ts.statements(this.generatedStatements));
-
-    const postprocessNodes = this.postprocess();
-    if (postprocessNodes.length > 0) {
-      sections.push(ts.statements(postprocessNodes));
-    }
-
-    sections.push(
-      ts.raw(
-        `export const __sourceMap = ${JSON.stringify(this._sourceMapBuilder.build())};`,
-      ),
-    );
-
-    return ts.statements(sections);
+    return assembleSections({
+      moduleId: this.moduleId,
+      preprocess: this.preprocess(),
+      importStatements: this.importStatements,
+      generatedImports: this.generateImports(),
+      generatedBuiltins: this.generateBuiltins(),
+      toolRegistrations: this.toolRegistrations,
+      typeAliases: this.generatedTypeAliases,
+      staticVarNames: partition.staticVarNames,
+      exportedStaticVarNames: partition.exportedStaticVarNames,
+      staticInitStatements: partition.staticInitStatements,
+      globalInitStatements: partition.globalInitStatements,
+      generatedStatements: this.generatedStatements,
+      postprocess: this.postprocess(),
+      sourceMapJson: JSON.stringify(this._sourceMapBuilder.build()),
+    });
   }
 
   // ------- Node dispatch -------

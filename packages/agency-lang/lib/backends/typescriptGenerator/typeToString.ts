@@ -58,6 +58,11 @@ export function variableTypeToString(
     if (s === "any" && f === "any") return "Result";
     if (f === "string") return `Result<${s}>`;
     return `Result<${s}, ${f}>`;
+  } else if (variableType.type === "genericType") {
+    const args = variableType.typeArgs
+      .map((a) => variableTypeToString(a, typeAliases, forFormatting))
+      .join(", ");
+    return `${variableType.name}<${args}>`;
   }
   return "unknown";
 }

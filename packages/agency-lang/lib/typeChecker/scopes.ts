@@ -144,14 +144,21 @@ export function declareVariable(
   }
 
   if (existingType) {
-    const valueType = synthType(node.value, scope, ctx);
-    reportNotAssignable(
-      ctx,
-      node.variableName,
-      valueType,
-      existingType,
-      node.loc,
-    );
+    // Property/index writes (e.g. `obj.field = x`, `votes["k"] = v`) target
+    // the chain's result type, not the variable type itself. Synthesizing the
+    // exact LHS type would require walking the accessChain; for now, skip the
+    // top-level assignability check when an accessChain is present. The
+    // synthesizer still typechecks the chain via valueAccess.
+    if (!node.accessChain) {
+      const valueType = synthType(node.value, scope, ctx);
+      reportNotAssignable(
+        ctx,
+        node.variableName,
+        valueType,
+        existingType,
+        node.loc,
+      );
+    }
     return;
   }
 

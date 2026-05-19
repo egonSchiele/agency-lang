@@ -107,3 +107,51 @@ describe("mapTypeToValidationSchema", () => {
     expect(result).toBe(`z.object({ "pattern": z.instanceof(RegExp) })`);
   });
 });
+
+describe("mapTypeToZodSchema: Record<K, V>", () => {
+  it("emits z.record for Record<string, number>", () => {
+    const result = mapTypeToZodSchema(
+      {
+        type: "genericType",
+        name: "Record",
+        typeArgs: [
+          { type: "primitiveType", value: "string" },
+          { type: "primitiveType", value: "number" },
+        ],
+      },
+      {},
+    );
+    expect(result).toBe("z.record(z.string(), z.number())");
+  });
+
+  it("emits z.record nested inside z.array", () => {
+    const result = mapTypeToZodSchema(
+      {
+        type: "arrayType",
+        elementType: {
+          type: "genericType",
+          name: "Record",
+          typeArgs: [
+            { type: "primitiveType", value: "string" },
+            { type: "primitiveType", value: "string" },
+          ],
+        },
+      },
+      {},
+    );
+    expect(result).toBe("z.array(z.record(z.string(), z.string()))");
+  });
+
+  it("throws on unresolved generic types other than Record", () => {
+    expect(() =>
+      mapTypeToZodSchema(
+        {
+          type: "genericType",
+          name: "Container",
+          typeArgs: [{ type: "primitiveType", value: "string" }],
+        },
+        {},
+      ),
+    ).toThrow(/Unresolved generic type at codegen: Container/);
+  });
+});

@@ -71,6 +71,17 @@ function mapTypeToSchema(
     return resultHandler(variableType, typeAliases);
   } else if (variableType.type === "typeAliasVariable") {
     return variableType.aliasName;
+  } else if (variableType.type === "genericType") {
+    if (variableType.name === "Record") {
+      const keySchema = recurse(variableType.typeArgs[0]);
+      const valueSchema = recurse(variableType.typeArgs[1]);
+      return `z.record(${keySchema}, ${valueSchema})`;
+    }
+    // Array/Schema should have been normalized by resolveType before reaching
+    // codegen; user-defined generics likewise. A leftover here is a bug.
+    throw new Error(
+      `Unresolved generic type at codegen: ${variableType.name}`,
+    );
   }
 
   return "z.string()";

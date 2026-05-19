@@ -324,6 +324,22 @@ describe("Runner", () => {
       // After completion, the iteration counter should reflect 2 iterations
       expect(frame.locals.__iteration_0).toBe(2);
     });
+
+    it("iterates the keys of a plain object (Record)", async () => {
+      const frame = makeFrame();
+      const runner = new Runner(makeMockCtx(), frame);
+      const collected: string[] = [];
+
+      await runner.loop(
+        0,
+        { alice: "approve", bob: "reject" },
+        async (key) => {
+          collected.push(key);
+        },
+      );
+
+      expect(collected.sort()).toEqual(["alice", "bob"]);
+    });
   });
 
   describe("whileLoop()", () => {

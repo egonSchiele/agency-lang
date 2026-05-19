@@ -1,0 +1,11 @@
+// Test Record<K, V> codegen, property/index access, and for-in iteration
+
+node main() {
+  let votes: Record<string, string> = { alice: "approve", bob: "reject" }
+  votes["carol"] = "approve"
+  let v = votes["alice"]
+  print(v)
+  for (k in votes) {
+    print(k)
+  }
+}

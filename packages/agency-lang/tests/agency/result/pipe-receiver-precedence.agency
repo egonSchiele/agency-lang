@@ -36,17 +36,14 @@ node main() {
   // Chained receivers across multiple pipe stages.
   let r2 = success(10) |> makeContainer(2).inner.multiply |> makeContainer(4).inner.multiply
 
-  // Receiver with optional chaining. Pre-fix this dropped the
-  // `optional` flag, emitting `c.inner.multiply` instead of
-  // `c?.inner.multiply`. The non-null case below would still
-  // function correctly even without the fix; the assertion here is
-  // that the optional flag survives codegen and the pipe still runs.
-  let c = makeContainer(7)
-  let r3 = success(2) |> c?.inner.multiply
+  // Optional-chain receiver lowering is covered by the codegen
+  // assertion in lib/backends/typescriptBuilder/pipeReceiverCodegen.test.ts
+  // — the runtime values for a non-null receiver are identical
+  // whether `?.` is preserved or dropped, so a runtime fixture cannot
+  // distinguish the two.
 
   return {
     r1: r1.value,
     r2: r2.value,
-    r3: r3.value,
   }
 }

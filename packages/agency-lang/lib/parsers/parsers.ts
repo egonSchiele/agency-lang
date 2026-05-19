@@ -3530,8 +3530,14 @@ export const objectBindingPatternParser: Parser<ObjectPattern> = label(
 // and `failure` in pattern position are intercepted before they'd parse as
 // bare variable names. In expression position, `success(42)` etc. remain
 // valid function calls because expression parsers do not use this parser.
+type ResultPatternBase = {
+  type: "resultPattern";
+  kind: "success" | "failure";
+  binding: string | null;
+};
+
 export const resultPatternParser: Parser<ResultPattern> = withLoc(
-  (input: string) => {
+  (input: string): ParserResult<ResultPatternBase> => {
     // Try "success" or "failure" keyword
     const kwResult = or(str("success"), str("failure"))(input);
     if (!kwResult.success) return kwResult;
@@ -3574,14 +3580,12 @@ export const resultPatternParser: Parser<ResultPattern> = withLoc(
       )(rest);
 
       if (bindingResult.success) {
-        return success(
-          {
-            type: "resultPattern" as const,
-            kind,
-            binding: (bindingResult.result.binding as { value: string }).value,
-          },
-          bindingResult.rest,
-        );
+        const node: ResultPatternBase = {
+          type: "resultPattern",
+          kind,
+          binding: (bindingResult.result.binding as { value: string }).value,
+        };
+        return success(node, bindingResult.rest);
       }
 
       // `(` present but no valid binding — committed, so throw.
@@ -3591,14 +3595,12 @@ export const resultPatternParser: Parser<ResultPattern> = withLoc(
     }
 
     // Bare form (no parens)
-    return success(
-      {
-        type: "resultPattern" as const,
-        kind,
-        binding: null,
-      },
-      rest,
-    );
+    const bareNode: ResultPatternBase = {
+      type: "resultPattern",
+      kind,
+      binding: null,
+    };
+    return success(bareNode, rest);
   },
 );
 

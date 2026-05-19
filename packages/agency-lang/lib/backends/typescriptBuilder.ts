@@ -106,6 +106,7 @@ import { SourceMapBuilder } from "./sourceMap.js";
 import { ScopeManager } from "./typescriptBuilder/scopeManager.js";
 import { StepPathTracker } from "./typescriptBuilder/stepPathTracker.js";
 import { NameClassifier } from "./typescriptBuilder/nameClassifier.js";
+import { PipeChainEmitter } from "./typescriptBuilder/pipeChainEmitter.js";
 import { resolveNamedArgs } from "./typescriptBuilder/namedArgsResolver.js";
 
 const DEFAULT_PROMPT_NAME = "__promptVar";
@@ -158,6 +159,7 @@ export class TypeScriptBuilder {
   private scopes: ScopeManager;
   private steps: StepPathTracker = new StepPathTracker();
   private names: NameClassifier;
+  private pipes: PipeChainEmitter;
 
   // Config
   private agencyConfig: AgencyConfig = {};
@@ -211,6 +213,16 @@ export class TypeScriptBuilder {
     this.compilationUnit = info;
     this.scopes = new ScopeManager(info);
     this.names = new NameClassifier(info);
+    this.pipes = new PipeChainEmitter({
+      processNode: (n) => this.processNode(n),
+      buildAssignmentLhs: (scope, varName, accessChain) =>
+        this.buildAssignmentLhs(scope, varName, accessChain),
+      buildStateConfig: () => this.buildStateConfig(),
+      generateFunctionCallExpression: (call, ctx) =>
+        this.generateFunctionCallExpression(call, ctx),
+      str: (n) => this.str(n),
+      scopes: this.scopes,
+    });
     this.moduleId = moduleId;
     this.outputFile = outputFile;
   }
@@ -986,7 +998,7 @@ export class TypeScriptBuilder {
 
   private processPipeExpression(node: BinOpExpression): TsNode {
     const left = this.processNode(node.left);
-    return this.buildPipeBind(left, node.right);
+    return this.pipes.bind(left, node.right);
   }
 
   private processTryExpression(node: TryExpression): TsNode {
@@ -2997,255 +3009,6 @@ export class TypeScriptBuilder {
     return expanded;
   }
 
-  // ── Pipe chain splitting ──
-
-  private _pipeCounter = 0;
-
-  /**
-   * Walk a left-recursive |> tree and return [initial, stage1, stage2, ...].
-   * Returns null if the expression is not a pipe assignment.
-   */
-  private getPipeChainStages(node: AgencyNode): Expression[] | null {
-    if (node.type !== "assignment") return null;
-    const expr = node.value;
-    if (expr.type !== "binOpExpression" || expr.operator !== "|>") return null;
-
-    const stages: Expression[] = [];
-    let current: Expression = expr;
-    while (
-      current.type === "binOpExpression" &&
-      (current as BinOpExpression).operator === "|>"
-    ) {
-      stages.push((current as BinOpExpression).right);
-      current = (current as BinOpExpression).left;
-    }
-    stages.push(current);
-    return stages.reverse();
-  }
-
-  /** Build: await __pipeBind(leftIR, async (__pipeArg) => stage(__pipeArg)) */
-  private buildPipeBind(leftIR: TsNode, stage: Expression): TsNode {
-    return ts.await(
-      ts.call(ts.raw("__pipeBind"), [leftIR, this.buildPipeLambda(stage)]),
-    );
-  }
-
-  /**
-   * Expand a pipe chain assignment into multiple IR parts, one per stage.
-   * Each part becomes its own runner step so interrupts don't replay earlier stages.
-   */
-  private expandPipeChain(
-    stmt: Assignment,
-    stages: Expression[],
-    baseId: number,
-  ): TsNode[] {
-    const tempName = `__pipe_${this._pipeCounter++}`;
-    const tempVar = ts.scopedVar(tempName, "local");
-    const targetVar = this.buildAssignmentLhs(
-      stmt.scope!,
-      stmt.variableName,
-      stmt.accessChain,
-    );
-    const nodes: TsNode[] = [];
-
-    nodes.push(
-      ts.runnerStep({
-        id: baseId,
-        body: [ts.assign(tempVar, this.processNode(stages[0]))],
-      }),
-    );
-
-    for (let i = 1; i < stages.length - 1; i++) {
-      nodes.push(
-        ts.runnerPipe({
-          id: baseId + i,
-          target: tempVar,
-          input: tempVar,
-          fn: this.buildPipeLambda(stages[i]),
-        }),
-      );
-    }
-
-    const lastIdx = stages.length - 1;
-    nodes.push(
-      ts.runnerPipe({
-        id: baseId + lastIdx,
-        target: targetVar,
-        input: tempVar,
-        fn: this.buildPipeLambda(stages[lastIdx]),
-      }),
-    );
-
-    // If the assignment has ! (validated), wrap the final result in __validateType
-    if (stmt.validated && stmt.typeHint) {
-      const zodSchema = mapTypeToValidationSchema(stmt.typeHint, this.scopes.visibleTypeAliases());
-      nodes.push(
-        ts.runnerStep({
-          id: baseId + stages.length,
-          body: [ts.assign(targetVar, ts.validateType(targetVar, ts.raw(zodSchema)))],
-        }),
-      );
-    }
-
-    return nodes;
-  }
-
-  private buildPipeLambda(stage: Expression): TsNode {
-    const pipeArg = ts.raw("__pipeArg");
-
-    if (stage.type === "valueAccess") {
-      const lastElement = stage.chain[stage.chain.length - 1];
-
-      // Method call with args (e.g. multiply.partial(a: 3)):
-      // call the method first to produce a function, then invoke with piped value
-      if (lastElement?.kind === "methodCall" && lastElement.functionCall.arguments.length > 0) {
-        const fnExpr = this.processNode(stage);
-        const descriptor = ts.obj({ type: ts.str("positional"), args: ts.arr([pipeArg]) });
-        const callExpr = ts.call(ts.id("__call"), [fnExpr, descriptor, this.buildStateConfig()]);
-        return ts.arrowFn([{ name: "__pipeArg" }], ts.await(callExpr), { async: true });
-      }
-
-      // No placeholder: bare method/property reference — use __callMethod to preserve `this`
-      const receiver = this.processValueAccessPartial(stage);
-      const lastEl = stage.chain[stage.chain.length - 1];
-      const propName = lastEl.kind === "property" ? lastEl.name
-        : lastEl.kind === "methodCall" ? lastEl.functionCall.functionName
-          : null;
-      if (propName) {
-        const descriptor = ts.obj({ type: ts.str("positional"), args: ts.arr([pipeArg]) });
-        const callExpr = ts.call(
-          ts.id("__callMethod"),
-          [receiver, ts.str(propName), descriptor, this.buildStateConfig()],
-        );
-        return ts.arrowFn([{ name: "__pipeArg" }], ts.await(callExpr), { async: true });
-      }
-      // Fallback for non-property access (e.g. index): use __call
-      const callee = this.processNode(stage);
-      const descriptor = ts.obj({ type: ts.str("positional"), args: ts.arr([pipeArg]) });
-      const callExpr = ts.call(ts.id("__call"), [callee, descriptor, this.buildStateConfig()]);
-      return ts.arrowFn([{ name: "__pipeArg" }], ts.await(callExpr), { async: true });
-    }
-
-    if (stage.type === "variableName" || stage.type === "functionCall") {
-      return ts.arrowFn([{ name: "__pipeArg" }], this.buildPipeStageBody(stage), { async: true });
-    }
-
-    if (stage.type === "binOpExpression" && stage.operator === "catch") {
-      const innerBody = this.buildPipeStageBody(stage.left);
-      const fallback = this.processNode(stage.right as AgencyNode);
-      const wrapped = ts.await(
-        ts.call(ts.id("__catchResult"), [
-          innerBody,
-          ts.arrowFn([], ts.statements([ts.return(fallback)]), { async: true }),
-        ]),
-      );
-      return ts.arrowFn([{ name: "__pipeArg" }], wrapped, { async: true });
-    }
-
-    throw new Error(`Invalid pipe stage type: ${stage.type}`);
-  }
-
-  /**
-   * Build the body expression for a pipe stage (without the outer arrow function wrapper).
-   * Returns `await __call(...)` — the caller wraps this in an arrow function.
-   */
-  private buildPipeStageBody(stage: Expression): TsNode {
-    const pipeArg = ts.raw("__pipeArg");
-
-    if (stage.type === "variableName") {
-      const callee = this.processNode(stage);
-      const descriptor = ts.obj({ type: ts.str("positional"), args: ts.arr([pipeArg]) });
-      return ts.await(ts.call(ts.id("__call"), [callee, descriptor, this.buildStateConfig()]));
-    }
-
-    if (stage.type === "functionCall") {
-      throw new Error(
-        `Function call '${stage.functionName}(...)' cannot appear as a pipe stage. Use .partial() to bind arguments, e.g. ${stage.functionName}.partial(...)`,
-      );
-    }
-
-    if (stage.type === "valueAccess") {
-      // Delegate to buildPipeLambda which already handles valueAccess fully,
-      // then extract the body from the resulting arrow function.
-      // Simpler: just process the valueAccess as a callee and invoke with piped arg.
-      const lastElement = stage.chain[stage.chain.length - 1];
-      if (lastElement?.kind === "methodCall" && lastElement.functionCall.arguments.length > 0) {
-        // e.g. map.partial(func: \x -> x * 2) — call the method, then invoke result with piped value
-        const fnExpr = this.processNode(stage);
-        const descriptor = ts.obj({ type: ts.str("positional"), args: ts.arr([pipeArg]) });
-        return ts.await(ts.call(ts.id("__call"), [fnExpr, descriptor, this.buildStateConfig()]));
-      }
-      // Bare method/property reference — use __callMethod
-      const receiver = this.processValueAccessPartial(stage);
-      const lastEl = stage.chain[stage.chain.length - 1];
-      const propName = lastEl.kind === "property" ? lastEl.name
-        : lastEl.kind === "methodCall" ? lastEl.functionCall.functionName
-          : null;
-      if (propName) {
-        const descriptor = ts.obj({ type: ts.str("positional"), args: ts.arr([pipeArg]) });
-        return ts.await(ts.call(
-          ts.id("__callMethod"),
-          [receiver, ts.str(propName), descriptor, this.buildStateConfig()],
-        ));
-      }
-      const callee = this.processNode(stage);
-      const descriptor = ts.obj({ type: ts.str("positional"), args: ts.arr([pipeArg]) });
-      return ts.await(ts.call(ts.id("__call"), [callee, descriptor, this.buildStateConfig()]));
-    }
-
-    throw new Error(`Unsupported pipe stage type in catch: ${stage.type}`);
-  }
-
-  /**
-   * Process a valueAccess up to but not including the last chain element.
-   * Used by pipe to get the receiver for a method call.
-   */
-  private processValueAccessPartial(node: ValueAccess): TsNode {
-    let result = this.processNode(node.base);
-    for (let i = 0; i < node.chain.length - 1; i++) {
-      const element = node.chain[i];
-      switch (element.kind) {
-        case "property":
-          result = ts.prop(result, element.name);
-          break;
-        case "index":
-          result = ts.index(result, this.processNode(element.index));
-          break;
-        case "slice": {
-          const args: TsNode[] = [];
-          if (element.start) {
-            args.push(this.processNode(element.start));
-            if (element.end) args.push(this.processNode(element.end));
-          } else if (element.end) {
-            args.push(ts.raw("0"));
-            args.push(this.processNode(element.end));
-          }
-          result = $(result).prop("slice").call(args).done();
-          break;
-        }
-        case "methodCall": {
-          const callNode = this.generateFunctionCallExpression(
-            element.functionCall,
-            "valueAccess",
-          );
-          if (
-            callNode.kind === "call" &&
-            callNode.callee.kind === "identifier"
-          ) {
-            result = $(result)
-              .prop(callNode.callee.name)
-              .call(callNode.arguments)
-              .done();
-          } else {
-            result = ts.raw(`${this.str(result)}.${this.str(callNode)}`);
-          }
-          break;
-        }
-      }
-    }
-    return result;
-  }
-
 
   // ── Body processing ──
 
@@ -3281,11 +3044,11 @@ export class TypeScriptBuilder {
 
     for (const stmt of body) {
       // Pipe chains produce pre-formed runner nodes
-      const pipeStages = this.getPipeChainStages(stmt);
+      const pipeStages = this.pipes.tryGetChainStages(stmt);
       if (pipeStages) {
         flushPart();
         const baseId = nextId();
-        const pipeNodes = this.expandPipeChain(
+        const pipeNodes = this.pipes.expand(
           stmt as Assignment,
           pipeStages,
           baseId,

@@ -4,6 +4,7 @@ import {
   arrayTypeParser,
   angleBracketsArrayTypeParser,
   blockTypeParser,
+  genericTypeParser,
   stringLiteralTypeParser,
   numberLiteralTypeParser,
   booleanLiteralTypeParser,
@@ -2768,3 +2769,96 @@ describe("parenthesized type", () => {
   });
 });
 
+
+describe("genericTypeParser", () => {
+  it("parses a single-arg generic", () => {
+    const result = genericTypeParser("Container<string>");
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.result).toEqual({
+        type: "genericType",
+        name: "Container",
+        typeArgs: [{ type: "primitiveType", value: "string" }],
+      });
+    }
+  });
+
+  it("parses a two-arg generic (Record<K, V>)", () => {
+    const result = genericTypeParser("Record<string, number>");
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.result).toEqual({
+        type: "genericType",
+        name: "Record",
+        typeArgs: [
+          { type: "primitiveType", value: "string" },
+          { type: "primitiveType", value: "number" },
+        ],
+      });
+    }
+  });
+
+  it("parses nested generics (Record<string, Record<string, number>>)", () => {
+    const result = genericTypeParser("Record<string, Record<string, number>>");
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.result.name).toBe("Record");
+      expect(result.result.typeArgs[1]).toEqual({
+        type: "genericType",
+        name: "Record",
+        typeArgs: [
+          { type: "primitiveType", value: "string" },
+          { type: "primitiveType", value: "number" },
+        ],
+      });
+    }
+  });
+
+  it("allows whitespace inside angle brackets", () => {
+    const result = genericTypeParser("Container< string >");
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.result.name).toBe("Container");
+    }
+  });
+});
+
+describe("genericType integration with variableTypeParser", () => {
+  it("parses a generic in a union: Container<string> | null", () => {
+    const result = variableTypeParser("Container<string> | null");
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.result.type).toBe("unionType");
+      if (result.result.type === "unionType") {
+        expect(result.result.types[0]).toEqual({
+          type: "genericType",
+          name: "Container",
+          typeArgs: [{ type: "primitiveType", value: "string" }],
+        });
+      }
+    }
+  });
+
+  it("parses an array of generics: Container<string>[]", () => {
+    const result = variableTypeParser("Container<string>[]");
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.result).toEqual({
+        type: "arrayType",
+        elementType: {
+          type: "genericType",
+          name: "Container",
+          typeArgs: [{ type: "primitiveType", value: "string" }],
+        },
+      });
+    }
+  });
+
+  it("Result<T> still wins over genericType", () => {
+    const result = variableTypeParser("Result<string, number>");
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.result.type).toBe("resultType");
+    }
+  });
+});

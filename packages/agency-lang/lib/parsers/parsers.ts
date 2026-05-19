@@ -91,11 +91,13 @@ import {
   NumberLiteralType,
   ObjectProperty,
   ObjectType,
+  GenericType,
   PrimitiveType,
   ResultType,
   StringLiteralType,
   TypeAlias,
   TypeAliasVariable,
+  TypeParam,
   UnionType,
   Tag,
 } from "../types.js";
@@ -722,6 +724,9 @@ export const arrayTypeParser: Parser<ArrayType> = (input: string) => {
         or(
           parenthesizedTypeParser,
           objectTypeParser,
+          lazy(() => resultTypeParser),
+          lazy(() => angleBracketsArrayTypeParser),
+          lazy(() => genericTypeParser),
           primitiveTypeParser,
           typeAliasVariableParser,
         ),
@@ -931,6 +936,7 @@ export const unionItemParser: Parser<VariableType> = trace(
     angleBracketsArrayTypeParser,
     arrayTypeParser,
     lazy(() => resultTypeParser),
+    lazy(() => genericTypeParser),
     stringLiteralTypeParser,
     numberLiteralTypeParser,
     booleanLiteralTypeParser,
@@ -1086,6 +1092,36 @@ export const resultTypeParser: Parser<ResultType> = trace(
   ),
 );
 
+/**
+ * Generic type usage: `Name<TypeArg1, TypeArg2, ...>`. Produces a
+ * `genericType` AST node. The parser is policy-free — it does not
+ * special-case any name. The type checker's `resolveType` normalizes
+ * built-ins (`Array`, `Schema`, `Record`) and resolves user-defined
+ * generic aliases by substituting type parameters into the alias body.
+ *
+ * Ordering: must come AFTER `resultTypeParser` (which keeps its own AST
+ * node for `Result<T, E>`) and BEFORE `typeAliasVariableParser` (which
+ * greedily matches any identifier).
+ */
+export const genericTypeParser: Parser<GenericType> = trace(
+  "genericTypeParser",
+  seqC(
+    set("type", "genericType"),
+    capture(many1WithJoin(varNameChar), "name"),
+    char("<"),
+    optionalSpaces,
+    capture(
+      sepBy1(
+        seqR(optionalSpaces, char(","), optionalSpaces),
+        lazy(() => variableTypeParser),
+      ),
+      "typeArgs",
+    ),
+    optionalSpaces,
+    char(">"),
+  ),
+);
+
 export const variableTypeParser: Parser<VariableType> = trace(
   "variableTypeParser",
   or(
@@ -1095,6 +1131,7 @@ export const variableTypeParser: Parser<VariableType> = trace(
     objectTypeParser,
     angleBracketsArrayTypeParser,
     resultTypeParser,
+    genericTypeParser,
     stringLiteralTypeParser,
     numberLiteralTypeParser,
     booleanLiteralTypeParser,

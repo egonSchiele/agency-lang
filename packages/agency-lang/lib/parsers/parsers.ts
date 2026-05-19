@@ -1141,6 +1141,28 @@ export const variableTypeParser: Parser<VariableType> = trace(
   ),
 );
 
+/**
+ * Type parameter on a generic alias declaration. Examples:
+ *   T            → { name: "T" }
+ *   V = any      → { name: "V", default: { type: "primitiveType", value: "any" } }
+ */
+export const typeParamParser: Parser<TypeParam> = trace(
+  "typeParamParser",
+  seqC(
+    capture(many1WithJoin(varNameChar), "name"),
+    optional(
+      captureCaptures(
+        seqC(
+          optionalSpaces,
+          char("="),
+          optionalSpaces,
+          capture(lazy(() => variableTypeParser), "default"),
+        ),
+      ),
+    ),
+  ),
+);
+
 const baseTypeAliasParser: Parser<TypeAlias> = withLoc(trace(
   "typeAliasParser",
   seqC(
@@ -1151,6 +1173,25 @@ const baseTypeAliasParser: Parser<TypeAlias> = withLoc(trace(
       parseError(
         "expected a statement of the form `type Foo = X' where X can be a union, array, object, type alias, or primitive type`",
         capture(many1WithJoin(varNameChar), "aliasName"),
+        // Optional `<T, U = Default, ...>`. When absent, no `typeParams`
+        // capture is set, so non-generic aliases keep their existing shape.
+        optional(
+          captureCaptures(
+            seqC(
+              char("<"),
+              optionalSpaces,
+              capture(
+                sepBy1(
+                  seqR(optionalSpaces, char(","), optionalSpaces),
+                  typeParamParser,
+                ),
+                "typeParams",
+              ),
+              optionalSpaces,
+              char(">"),
+            ),
+          ),
+        ),
         optionalSpaces,
         str("="),
         optionalSpaces,

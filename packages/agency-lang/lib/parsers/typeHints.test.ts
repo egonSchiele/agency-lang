@@ -2862,3 +2862,55 @@ describe("genericType integration with variableTypeParser", () => {
     }
   });
 });
+
+describe("typeAliasParser with type parameters", () => {
+  it("parses a single type parameter: type Container<T> = { value: T }", () => {
+    const result = typeAliasParser("type Container<T> = { value: T }");
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.result.aliasName).toBe("Container");
+      expect(result.result.typeParams).toEqual([{ name: "T" }]);
+      expect(result.result.aliasedType.type).toBe("objectType");
+    }
+  });
+
+  it("parses multiple type parameters: type Pair<A, B> = ...", () => {
+    const result = typeAliasParser("type Pair<A, B> = { first: A, second: B }");
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.result.aliasName).toBe("Pair");
+      expect(result.result.typeParams).toEqual([{ name: "A" }, { name: "B" }]);
+    }
+  });
+
+  it("parses type parameter with default: type StringMap<V = any> = Record<string, V>", () => {
+    const result = typeAliasParser("type StringMap<V = any> = Record<string, V>");
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.result.aliasName).toBe("StringMap");
+      expect(result.result.typeParams).toEqual([
+        { name: "V", default: { type: "primitiveType", value: "any" } },
+      ]);
+    }
+  });
+
+  it("non-generic alias has no typeParams field: type Plain = string", () => {
+    const result = typeAliasParser("type Plain = string");
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.result.aliasName).toBe("Plain");
+      expect(result.result.typeParams).toBeUndefined();
+    }
+  });
+
+  it("mixed required + defaulted params: type Foo<A, B = string>", () => {
+    const result = typeAliasParser("type Foo<A, B = string> = { a: A, b: B }");
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.result.typeParams).toEqual([
+        { name: "A" },
+        { name: "B", default: { type: "primitiveType", value: "string" } },
+      ]);
+    }
+  });
+});

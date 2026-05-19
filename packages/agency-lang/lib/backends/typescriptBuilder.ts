@@ -1250,9 +1250,10 @@ export class TypeScriptBuilder {
     const schemaArg = Object.keys(properties).length > 0 ? `{${schema}}` : "{}";
     return ts.obj({
       name: ts.str(functionName),
-      description: ts.raw(
-        `\`${node.docString?.value || "No description provided."}\``,
-      ),
+      description:
+        node.docString && node.docString.segments.length > 0
+          ? this.generateStringLiteralNode(node.docString.segments)
+          : ts.str("No description provided."),
       schema: $.z()
         .prop("object")
         .call([ts.raw(schemaArg)])
@@ -2957,6 +2958,25 @@ export class TypeScriptBuilder {
         ts.new(ts.id("RuntimeContext"), [ts.obj(runtimeCtxArgs)]),
       ),
       ts.constDecl("graph", $(ts.runtime.globalCtx).prop("graph").done()),
+      // Alias __ctx to __globalCtx at module top-level. Generated code
+      // emits `__ctx.globals.get(...)` for scope=global variable reads,
+      // and inside function/node bodies a local `const __ctx2 = ...`
+      // shadows this alias. Without this top-level alias, expressions
+      // that are evaluated at module load time (such as doc string
+      // interpolations in tool descriptions) would fail with a
+      // ReferenceError because `__ctx` is otherwise only defined inside
+      // function bodies.
+      ts.constDecl("__ctx", ts.id("__globalCtx")),
+      // Eagerly trigger module global initialization so that top-level
+      // expressions (notably doc string interpolations in tool
+      // descriptions) can read module globals. `__initializeGlobals` is
+      // hoisted, so calling it here — before its source declaration —
+      // is safe. The function is `async` but for pure-literal global
+      // initializers the side effects (globals.set) run synchronously
+      // before the awaited boundary. We fire-and-forget the returned
+      // Promise; any later attempt to re-initialize is short-circuited
+      // by the `markInitialized` flag set in the very first statement.
+      ts.raw(`__initializeGlobals(__globalCtx);`),
     ];
 
     const runtimeCtx: TsNode = ts.statements(runtimeCtxStatements);

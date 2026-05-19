@@ -72,6 +72,8 @@ const __globalCtx = new RuntimeContext({
   }
 });
 const graph = __globalCtx.graph;
+const __ctx = __globalCtx;
+__initializeGlobals(__globalCtx);
 
 // Path-dependent builtin wrappers
 export function readSkill({filepath}: {filepath: string}): string {
@@ -266,7 +268,7 @@ const append = __AgencyFunction.create({
   }],
   toolDefinition: {
     name: "append",
-    description: `No description provided.`,
+    description: "No description provided.",
     schema: z.object({"sleepTime": z.number(), "value": z.any(), })
   },
   safe: false,

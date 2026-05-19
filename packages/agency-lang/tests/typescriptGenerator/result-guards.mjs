@@ -72,6 +72,8 @@ const __globalCtx = new RuntimeContext({
   }
 });
 const graph = __globalCtx.graph;
+const __ctx = __globalCtx;
+__initializeGlobals(__globalCtx);
 
 // Path-dependent builtin wrappers
 export function readSkill({filepath}: {filepath: string}): string {
@@ -259,7 +261,7 @@ const checkValue = __AgencyFunction.create({
   }],
   toolDefinition: {
     name: "checkValue",
-    description: `No description provided.`,
+    description: "No description provided.",
     schema: z.object({"r": z.union([z.object({ __type: z.literal("resultType"), success: z.literal(true), value: z.any() }), z.object({ __type: z.literal("resultType"), success: z.literal(false), error: z.any() })]), })
   },
   safe: false,

@@ -18,6 +18,7 @@ import {
   markdownTable,
   section,
 } from "@/utils/markdown.js";
+import { docStringText } from "@/utils/docStringText.js";
 import * as fs from "fs";
 import * as path from "path";
 
@@ -307,7 +308,7 @@ function generateFunctionSection(
     return section(
       heading(3, fn.functionName),
       codeFence(sig),
-      fn.docString ? fn.docString.value : null,
+      fn.docString ? docStringText(fn.docString) : null,
       fn.docComment ? formatDocComment(fn.docComment) : null,
       generateParamTable(fn.parameters, ctx),
       fn.returnType
@@ -335,7 +336,7 @@ function generateNodeSection(
     return section(
       heading(3, node.nodeName),
       codeFence(sig),
-      node.docString ? node.docString.value : null,
+      node.docString ? docStringText(node.docString) : null,
       node.docComment ? formatDocComment(node.docComment) : null,
       generateParamTable(node.parameters, ctx),
       node.returnType

@@ -9,6 +9,7 @@ import {
 import { BaseNode } from "./base.js";
 import { BlockArgument } from "./blockArgument.js";
 import { AgencyArray, AgencyObject, NamedArgument, SplatExpression } from "./dataStructures.js";
+import { MultiLineStringLiteral } from "./literals.js";
 import { Tag } from "./tag.js";
 
 export type FunctionParameter = {
@@ -46,7 +47,7 @@ export type FunctionDefinition = BaseNode & {
   body: AgencyNode[];
   returnType?: VariableType | null;
   returnTypeValidated?: boolean;
-  docString?: DocString;
+  docString?: MultiLineStringLiteral;
   docComment?: AgencyMultiLineComment;
   async?: boolean;
   safe?: boolean;
@@ -65,7 +66,4 @@ export type FunctionCall = BaseNode & {
   tags?: Tag[];
 };
 
-export type DocString = {
-  type: "docString";
-  value: string;
-};
+

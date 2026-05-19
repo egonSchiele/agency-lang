@@ -1,8 +1,8 @@
 import { AgencyMultiLineComment, AgencyNode, FunctionCall, VariableType } from "../types.js";
 import { ValueAccess } from "./access.js";
 import { BaseNode } from "./base.js";
-import { DocString, FunctionParameter } from "./function.js";
-import { Literal } from "./literals.js";
+import { FunctionParameter } from "./function.js";
+import { Literal, MultiLineStringLiteral } from "./literals.js";
 import { Tag } from "./tag.js";
 
 export type GraphNodeDefinition = BaseNode & {
@@ -15,7 +15,7 @@ export type GraphNodeDefinition = BaseNode & {
   exported?: boolean;
   tags?: Tag[];
   docComment?: AgencyMultiLineComment;
-  docString?: DocString;
+  docString?: MultiLineStringLiteral;
 };
 
 export type NodeCall = {

@@ -61,7 +61,6 @@ import {
   AgencyNode,
   Assignment,
   BooleanLiteral,
-  DocString,
   Expression,
   FunctionCall,
   FunctionDefinition,
@@ -330,7 +329,7 @@ export const multiLineStringTextSegmentParser: Parser<TextSegment> = map(
   }),
 );
 
-export const interpolationSegmentParser: Parser<InterpolationSegment> = (
+export const interpolationSegmentParser: Parser<InterpolationSegment> = withLoc((
   input: string,
 ) => {
   const parser = seqC(
@@ -352,7 +351,7 @@ export const interpolationSegmentParser: Parser<InterpolationSegment> = (
     },
     result.rest,
   );
-};
+});
 
 const objectParser = (input: string): ParserResult<Record<string, any>> => {
   const kvParser = trace(
@@ -2724,22 +2723,38 @@ export const modifiedAssignmentParser: Parser<Assignment> = withLoc((input: stri
   return success(out, result.rest);
 });
 
-const trim = (s: string) => s.trim();
-export const docStringParser: Parser<DocString> = (input: string) => {
-  const parser = trace(
-    "docStringParser",
-    seqC(
-      set("type", "docString"),
-      str('"""'),
-      capture(map(many1Till(str('"""')), trim), "value"),
-      str('"""'),
-    ),
-  );
-  const result = parser(input);
-  if (result.success) {
-    result.result.value = stripSentinels(result.result.value);
+export const docStringParser: Parser<MultiLineStringLiteral> = (input: string) => {
+  const result = multiLineStringParser(input);
+  if (!result.success) return result;
+
+  // Build a fresh segments array — do not mutate the array or segment
+  // objects owned by `result.result`.
+  const orig = result.result.segments;
+  const trimmed: PromptSegment[] = orig.map((s) => ({ ...s }));
+
+  // Trim leading whitespace of first text segment and trailing whitespace
+  // of last text segment (preserves historic doc-string behavior, e.g.
+  // """\n  Some doc\n  """ → "Some doc"; inner whitespace is preserved).
+  if (trimmed.length > 0 && trimmed[0].type === "text") {
+    trimmed[0] = { type: "text", value: trimmed[0].value.replace(/^\s+/, "") };
   }
-  return result;
+  const lastIdx = trimmed.length - 1;
+  if (lastIdx >= 0 && trimmed[lastIdx].type === "text") {
+    trimmed[lastIdx] = {
+      type: "text",
+      value: trimmed[lastIdx].value.replace(/\s+$/, ""),
+    };
+  }
+
+  // Drop empty text segments created by trimming.
+  const segments = trimmed.filter(
+    (s) => s.type !== "text" || s.value !== "",
+  );
+
+  return success(
+    { type: "multiLineString" as const, segments, loc: result.result.loc },
+    result.rest,
+  );
 };
 
 export const bodyParser = (input: string): ParserResult<AgencyNode[]> => {

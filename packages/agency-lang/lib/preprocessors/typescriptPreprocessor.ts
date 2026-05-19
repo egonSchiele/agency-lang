@@ -1474,6 +1474,38 @@ export class TypescriptPreprocessor {
         }
       }
     }
+
+    // Resolve scope on expressions inside function/node doc string
+    // interpolations. These execute at module load time when the tool
+    // definition is constructed, so they only see top-level (global /
+    // static / imported) names, never function parameters or locals.
+    for (const node of this.program.nodes) {
+      if (node.type !== "function" && node.type !== "graphNode") continue;
+      if (!node.docString) continue;
+      for (const seg of node.docString.segments) {
+        if (seg.type !== "interpolation") continue;
+        for (const { node: inner } of walkNodesArray([seg.expression])) {
+          if (inner.type === "variableName" && !inner.scope) {
+            if (isClassKeyword(inner.value)) continue;
+            const resolved = lookupScope("", inner.value);
+            if (resolved) {
+              inner.scope = resolved;
+            } else if (this.functionDefinitions[inner.value]) {
+              inner.scope = "functionRef";
+            } else {
+              inner.scope = "imported";
+            }
+          } else if (inner.type === "functionCall" && !inner.scope) {
+            const name = inner.functionName;
+            if (this.functionDefinitions[name]) {
+              inner.scope = "functionRef";
+            } else {
+              inner.scope = lookupScope("", name) ?? "imported";
+            }
+          }
+        }
+      }
+    }
   }
 
 }

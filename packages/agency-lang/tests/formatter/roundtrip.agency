@@ -147,3 +147,11 @@ export def bash(
   },
   )
 }
+
+const ver = "1.0"
+
+def versioned() {
+  """
+  Tool version ${ver}.
+  """
+}

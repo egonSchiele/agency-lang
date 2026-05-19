@@ -43,8 +43,7 @@ import * as renderForkBlockSetup from "../templates/backends/typescriptGenerator
 import * as renderBuiltinToolRegistration from "../templates/backends/typescriptGenerator/builtinToolRegistration.js";
 import * as renderResultCheckpointSetup from "../templates/backends/typescriptGenerator/resultCheckpointSetup.js";
 import * as renderFunctionCatchFailure from "../templates/backends/typescriptGenerator/functionCatchFailure.js";
-import * as renderClassMethod from "../templates/backends/typescriptGenerator/classMethod.js";
-import * as renderClassDefinition from "../templates/backends/typescriptGenerator/classDefinition.js";
+
 
 import { AgencyConfig } from "@/config.js";
 import {
@@ -80,7 +79,7 @@ import { MatchBlock, MatchBlockCase } from "../types/matchBlock.js";
 import { ReturnStatement } from "../types/returnStatement.js";
 import { GotoStatement } from "../types/gotoStatement.js";
 import { WhileLoop } from "../types/whileLoop.js";
-import { ClassDefinition, ClassField, ClassMethod, NewExpression, isClassKeyword } from "../types/classDefinition.js";
+import { NewExpression, isClassKeyword } from "../types/classDefinition.js";
 import { InterruptStatement } from "../types/interruptStatement.js";
 import { moduleIdToOrigin } from "../runtime/origin.js";
 import { escape, mergeDeep } from "../utils.js";
@@ -107,6 +106,7 @@ import { ScopeManager } from "./typescriptBuilder/scopeManager.js";
 import { StepPathTracker } from "./typescriptBuilder/stepPathTracker.js";
 import { NameClassifier } from "./typescriptBuilder/nameClassifier.js";
 import { PipeChainEmitter } from "./typescriptBuilder/pipeChainEmitter.js";
+import { ClassEmitter } from "./typescriptBuilder/classEmitter.js";
 import { resolveNamedArgs } from "./typescriptBuilder/namedArgsResolver.js";
 
 const DEFAULT_PROMPT_NAME = "__promptVar";
@@ -160,6 +160,7 @@ export class TypeScriptBuilder {
   private steps: StepPathTracker = new StepPathTracker();
   private names: NameClassifier;
   private pipes: PipeChainEmitter;
+  private classes: ClassEmitter;
 
   // Config
   private agencyConfig: AgencyConfig = {};
@@ -222,6 +223,16 @@ export class TypeScriptBuilder {
         this.generateFunctionCallExpression(call, ctx),
       str: (n) => this.str(n),
       scopes: this.scopes,
+    });
+    this.classes = new ClassEmitter({
+      scopes: this.scopes,
+      classDefinitions: info.classDefinitions,
+      moduleId,
+      enterScope: (scopeName) =>
+        this._sourceMapBuilder.enterScope(this.moduleId, scopeName),
+      hoistBodyTypeAliases: (body) => this.hoistBodyTypeAliases(body),
+      processBodyAsParts: (body) => this.processBodyAsParts(body),
+      buildFunctionBody: (opts) => this.buildFunctionBody(opts),
     });
     this.moduleId = moduleId;
     this.outputFile = outputFile;
@@ -665,7 +676,7 @@ export class TypeScriptBuilder {
       case "tryExpression":
         return this.processTryExpression(node);
       case "classDefinition":
-        return this.processClassDefinition(node);
+        return this.classes.emit(node);
       case "newExpression":
         return this.processNewExpression(node);
       case "schemaExpression":
@@ -1054,88 +1065,6 @@ export class TypeScriptBuilder {
     });
   }
 
-  /**
-   * Collect all fields for a class, walking the inheritance chain.
-   * Returns parent fields first, then own fields.
-   */
-  private collectAllClassFields(node: ClassDefinition): ClassField[] {
-    const allFields: ClassField[] = [];
-    if (node.parentClass) {
-      const parent = this.compilationUnit.classDefinitions[node.parentClass];
-      if (parent) {
-        allFields.push(...this.collectAllClassFields(parent));
-      }
-    }
-    allFields.push(...node.fields);
-    return allFields;
-  }
-
-  private formatParam(p: { name: string; typeHint?: VariableType }): string {
-    return p.typeHint ? `${p.name}: ${formatTypeHintTs(p.typeHint)}` : p.name;
-  }
-
-
-  private buildMethodCode(method: ClassMethod, className: string): string {
-    const methodScopeName = `${className}.${method.name}`;
-    this.scopes.push({ type: "function", functionName: methodScopeName });
-    this._sourceMapBuilder.enterScope(this.moduleId, methodScopeName);
-    const prevSafe = this.scopes.inSafeFunction;
-    this.scopes.inSafeFunction = !!method.safe;
-    // Hoist body-local type aliases to the method's outer scope.
-    const hoistedAliases = this.hoistBodyTypeAliases(method.body);
-    const bodyCode = this.processBodyAsParts(method.body);
-    this.scopes.inSafeFunction = prevSafe;
-    this.scopes.pop();
-
-    // Reuse the same function body logic as processFunctionDefinition
-    const setupStmts = this.buildFunctionBody({
-      functionName: methodScopeName,
-      parameters: method.parameters,
-      bodyCode,
-      hoistedAliases,
-    });
-
-    // Build as an async method with __state as last param
-    const params = method.parameters.map((p) => this.formatParam(p)).join(", ");
-    const fnParams: TsParam[] = method.parameters.map((p) => {
-      const baseType = p.typeHint ? formatTypeHintTs(p.typeHint) : "any";
-      return { name: p.name, typeAnnotation: baseType };
-    });
-    fnParams.push({
-      name: "__state",
-      typeAnnotation: "any",
-      defaultValue: ts.id("undefined"),
-    });
-
-    // Use printTs on the IR body, then wrap as a method
-    const bodyStr = printTs(ts.statements(setupStmts), 2);
-    const paramStr = fnParams
-      .map((p) => p.defaultValue
-        ? `${p.name}: ${p.typeAnnotation} = ${printTs(p.defaultValue, 0)}`
-        : `${p.name}: ${p.typeAnnotation}`)
-      .join(", ");
-    return `  async ${method.name}(${paramStr}) {\n${bodyStr}\n  }`;
-  }
-
-  private processClassDefinition(node: ClassDefinition): TsNode {
-    const { className, fields, methods, parentClass } = node;
-    const allFields = this.collectAllClassFields(node);
-    const classKey = `${this.moduleId}::${className}`;
-
-    return ts.raw(renderClassDefinition.default({
-      className,
-      parentClassName: parentClass || "",
-      hasParent: !!parentClass,
-      classKey,
-      fields: fields.map((f) => ({ name: f.name, typeStr: formatTypeHintTs(f.typeHint) })),
-      allFields: allFields.map((f) => ({ name: f.name })),
-      constructorParamsStr: allFields.map((f) => `${f.name}: ${formatTypeHintTs(f.typeHint)}`).join(", "),
-      superArgsStr: parentClass
-        ? this.collectAllClassFields(this.compilationUnit.classDefinitions[parentClass]).map((f) => f.name).join(", ")
-        : "",
-      methods: methods.map((m) => this.buildMethodCode(m, className)),
-    }));
-  }
 
   private processIfElseWithSteps(node: IfElse): TsNode {
     const id = this.steps.currentId();

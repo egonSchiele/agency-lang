@@ -1,16 +1,112 @@
 import { TypeAliasEntry, VariableType } from "../types.js";
 import { BOOLEAN_T, NUMBER_T, STRING_T } from "./primitives.js";
 
+/**
+ * Public resolveType: normalizes a VariableType by resolving type-alias
+ * references and built-in generic forms.
+ *
+ *   `Array<T>`  → `arrayType { elementType: T }`
+ *   `Schema<T>` → `schemaType { inner: T }`
+ *   `Record<K, V>` → unchanged `genericType` (survives to codegen) after
+ *                    validating the key type
+ *   `typeAliasVariable("X")` → body of alias X (recursively)
+ *
+ * Recursion guarding for self-referential generic aliases (added in
+ * Task 9) lives in the private `resolveTypeWithGuard` helper. The public
+ * signature stays small.
+ */
 export function resolveType(
   vt: VariableType,
   typeAliases: Record<string, TypeAliasEntry>,
 ): VariableType {
+  return resolveTypeWithGuard(vt, typeAliases, new Set());
+}
+
+function resolveTypeWithGuard(
+  vt: VariableType,
+  typeAliases: Record<string, TypeAliasEntry>,
+  inProgress: Set<string>,
+): VariableType {
   if (vt.type === "typeAliasVariable") {
     const entry = typeAliases[vt.aliasName];
-    if (entry) return resolveType(entry.body, typeAliases);
+    if (entry) return resolveTypeWithGuard(entry.body, typeAliases, inProgress);
     return vt;
   }
+
+  if (vt.type === "genericType") {
+    if (vt.name === "Array") {
+      if (vt.typeArgs.length !== 1) {
+        throw new TypeError(
+          `Array expects 1 type argument, got ${vt.typeArgs.length}`,
+        );
+      }
+      return {
+        type: "arrayType",
+        elementType: resolveTypeWithGuard(
+          vt.typeArgs[0],
+          typeAliases,
+          inProgress,
+        ),
+      };
+    }
+    if (vt.name === "Schema") {
+      if (vt.typeArgs.length !== 1) {
+        throw new TypeError(
+          `Schema expects 1 type argument, got ${vt.typeArgs.length}`,
+        );
+      }
+      return {
+        type: "schemaType",
+        inner: resolveTypeWithGuard(vt.typeArgs[0], typeAliases, inProgress),
+      };
+    }
+    if (vt.name === "Record") {
+      if (vt.typeArgs.length !== 2) {
+        throw new TypeError(
+          `Record expects 2 type arguments, got ${vt.typeArgs.length}`,
+        );
+      }
+      validateRecordKeyType(vt.typeArgs[0], typeAliases);
+      // Keep the genericType wrapper so codegen can lower to z.record / Record<K,V>;
+      // resolve inside so nested aliases/built-ins are normalized.
+      return {
+        ...vt,
+        typeArgs: vt.typeArgs.map((a) =>
+          resolveTypeWithGuard(a, typeAliases, inProgress),
+        ),
+      };
+    }
+    // User-defined generics handled in Task 9.
+  }
+
   return vt;
+}
+
+/**
+ * Record keys must be a string-like or number-like primitive (or literal,
+ * or a union of these). Booleans, objects, arrays etc. are not valid
+ * because zod's `z.record` and TypeScript's `Record<K, V>` only support
+ * key types that map to property keys.
+ */
+function validateRecordKeyType(
+  keyType: VariableType,
+  typeAliases: Record<string, TypeAliasEntry>,
+): void {
+  const resolved = resolveType(keyType, typeAliases);
+  if (!isValidRecordKey(resolved)) {
+    throw new TypeError(
+      `Record key type must be string, number, a string literal, a number literal, or a union of those`,
+    );
+  }
+}
+
+function isValidRecordKey(t: VariableType): boolean {
+  if (t.type === "primitiveType")
+    return t.value === "string" || t.value === "number";
+  if (t.type === "stringLiteralType" || t.type === "numberLiteralType")
+    return true;
+  if (t.type === "unionType") return t.types.every(isValidRecordKey);
+  return false;
 }
 
 export function widenType(vt: VariableType | "any"): VariableType | "any" {

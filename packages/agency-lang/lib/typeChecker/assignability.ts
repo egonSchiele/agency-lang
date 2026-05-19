@@ -51,6 +51,12 @@ export function widenType(vt: VariableType | "any"): VariableType | "any" {
         type: "schemaType",
         inner: widenType(vt.inner) as VariableType,
       };
+    case "genericType":
+      return {
+        type: "genericType",
+        name: vt.name,
+        typeArgs: vt.typeArgs.map((a) => widenType(a) as VariableType),
+      };
     default:
       return vt;
   }

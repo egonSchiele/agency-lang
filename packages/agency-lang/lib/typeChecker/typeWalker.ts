@@ -35,6 +35,9 @@ export function visitTypes(
         if (p.typeHint && visitTypes(p.typeHint, visit)) return true;
       }
       return t.returnType ? visitTypes(t.returnType, visit) : false;
+    case "genericType":
+      for (const a of t.typeArgs) if (visitTypes(a, visit)) return true;
+      return false;
     default:
       return false;
   }

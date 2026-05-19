@@ -107,6 +107,7 @@ import { StepPathTracker } from "./typescriptBuilder/stepPathTracker.js";
 import { NameClassifier } from "./typescriptBuilder/nameClassifier.js";
 import { PipeChainEmitter } from "./typescriptBuilder/pipeChainEmitter.js";
 import { ClassEmitter } from "./typescriptBuilder/classEmitter.js";
+import { AssignmentEmitter } from "./typescriptBuilder/assignmentEmitter.js";
 import { resolveNamedArgs } from "./typescriptBuilder/namedArgsResolver.js";
 
 const DEFAULT_PROMPT_NAME = "__promptVar";
@@ -161,6 +162,7 @@ export class TypeScriptBuilder {
   private names: NameClassifier;
   private pipes: PipeChainEmitter;
   private classes: ClassEmitter;
+  private assigns: AssignmentEmitter;
 
   // Config
   private agencyConfig: AgencyConfig = {};
@@ -217,12 +219,18 @@ export class TypeScriptBuilder {
     this.pipes = new PipeChainEmitter({
       processNode: (n) => this.processNode(n),
       buildAssignmentLhs: (scope, varName, accessChain) =>
-        this.buildAssignmentLhs(scope, varName, accessChain),
+        this.assigns.lhs(scope, varName, accessChain),
       buildStateConfig: () => this.buildStateConfig(),
       generateFunctionCallExpression: (call, ctx) =>
         this.generateFunctionCallExpression(call, ctx),
       str: (n) => this.str(n),
       scopes: this.scopes,
+    });
+    this.assigns = new AssignmentEmitter({
+      moduleId,
+      processNode: (n) => this.processNode(n),
+      buildCallDescriptor: (call) => this.buildCallDescriptor(call),
+      buildStateConfig: () => this.buildStateConfig(),
     });
     this.classes = new ClassEmitter({
       scopes: this.scopes,
@@ -263,54 +271,6 @@ export class TypeScriptBuilder {
   /** Convert a TsNode to string (for use in template-based methods) */
   private str(node: TsNode): string {
     return printTs(node);
-  }
-
-  // ------- Assignment lowering -------
-
-  /**
-   * Assign a value to a scoped variable. For global scope, emits a
-   * `__ctx.globals.set(moduleId, name, value)` call. For all other scopes,
-   * emits a normal `lhs = rhs` assignment.
-   */
-  private scopedAssign(
-    scope: ScopeType,
-    varName: string,
-    value: TsNode,
-    accessChain?: AccessChainElement[],
-  ): TsNode {
-    if (accessChain && accessChain.length > 0 && accessChain[accessChain.length - 1].kind === "slice") {
-      return this.buildSliceAssignment(scope, varName, value, accessChain);
-    }
-    if (scope === "global" && (!accessChain || accessChain.length === 0)) {
-      return ts.globalSet(this.moduleId, varName, value);
-    }
-    const lhs = this.buildAssignmentLhs(scope, varName, accessChain);
-    return ts.assign(lhs, value);
-  }
-
-  /**
-   * arr[1:3] = [10, 20] → arr.splice(start, end - start, ...value)
-   * arr[2:] = [10]      → arr.splice(start, arr.length - start, ...value)
-   */
-  private buildSliceAssignment(
-    scope: ScopeType,
-    varName: string,
-    value: TsNode,
-    accessChain: AccessChainElement[],
-  ): TsNode {
-    const sliceEl = accessChain[accessChain.length - 1] as Extract<AccessChainElement, { kind: "slice" }>;
-    const baseChain = accessChain.length > 1 ? accessChain.slice(0, -1) : undefined;
-    const base = this.buildAssignmentLhs(scope, varName, baseChain);
-    const baseStr = this.str(base);
-
-    const startNode = sliceEl.start ? this.processNode(sliceEl.start) : ts.raw("0");
-    const startStr = this.str(startNode);
-
-    const deleteCountStr = sliceEl.end
-      ? `${this.str(this.processNode(sliceEl.end))} - ${startStr}`
-      : `${baseStr}.length - ${startStr}`;
-
-    return ts.raw(`${baseStr}.splice(${startStr}, ${deleteCountStr}, ...${this.str(value)})`);
   }
 
   // ------- Lookup helpers -------
@@ -2403,7 +2363,7 @@ export class TypeScriptBuilder {
 
     // `this.field = value` and `super.field = value` — emit as direct property assignment
     if (isClassKeyword(variableName)) {
-      const lhs = this.buildAccessChain(ts.id(variableName), node.accessChain);
+      const lhs = this.assigns.accessChain(ts.id(variableName), node.accessChain);
       return ts.assign(lhs, this.processNode(value));
     }
 
@@ -2414,7 +2374,7 @@ export class TypeScriptBuilder {
       const origin = moduleIdToOrigin(this.moduleId);
       const makeAssign = (val: string) =>
         this.str(
-          this.scopedAssign(
+          this.assigns.scopedAssign(
             node.scope!,
             variableName,
             ts.raw(val),
@@ -2434,13 +2394,13 @@ export class TypeScriptBuilder {
         }),
       );
     } else if (value.type === "functionCall") {
-      const varRef = this.buildAssignmentLhs(
+      const varRef = this.assigns.lhs(
         node.scope!,
         variableName,
         node.accessChain,
       );
       const stmts: TsNode[] = [
-        this.scopedAssign(
+        this.assigns.scopedAssign(
           node.scope!,
           variableName,
           this.processNode(value),
@@ -2454,7 +2414,7 @@ export class TypeScriptBuilder {
           this._asyncBranchCheckNeeded = true;
           const branchKey = this.steps.joined();
           stmts.unshift(...this.forkBranchSetup(branchKey));
-          stmts[stmts.length - 1] = this.scopedAssign(
+          stmts[stmts.length - 1] = this.assigns.scopedAssign(
             node.scope!,
             variableName,
             this.generateFunctionCallExpression(value, "topLevelStatement", {
@@ -2506,52 +2466,13 @@ export class TypeScriptBuilder {
     } else if (value.type === "messageThread") {
       return this.processMessageThread(value, node);
     } else {
-      return this.scopedAssign(
+      return this.assigns.scopedAssign(
         node.scope!,
         variableName,
         this.processNode(value),
         node.accessChain,
       );
     }
-  }
-
-  private buildAccessChain(base: TsNode, chain?: AccessChainElement[]): TsNode {
-    if (!chain || chain.length === 0) return base;
-    let result = base;
-    for (const el of chain) {
-      switch (el.kind) {
-        case "property":
-          result = ts.prop(result, el.name);
-          break;
-        case "index":
-          result = ts.index(result, this.processNode(el.index));
-          break;
-        case "methodCall": {
-          const fnCall = el.functionCall;
-          const descriptor = this.buildCallDescriptor(fnCall);
-          const configObj = this.buildStateConfig();
-
-          const callExpr = ts.call(
-            ts.id("__callMethod"),
-            [result, ts.str(fnCall.functionName), descriptor, configObj],
-          );
-          result = ts.await(callExpr);
-          break;
-        }
-      }
-    }
-    return result;
-  }
-
-  private buildAssignmentLhs(
-    scope: ScopeType,
-    variableName: string,
-    chain?: AccessChainElement[],
-  ): TsNode {
-    return this.buildAccessChain(
-      ts.scopedVar(variableName, scope, this.moduleId),
-      chain,
-    );
   }
 
   /**
@@ -2707,7 +2628,7 @@ export class TypeScriptBuilder {
     // INSIDE the callback (before popActive runs in the finally block).
     if (assignTo) {
       bodyNodes.push(
-        this.scopedAssign(
+        this.assigns.scopedAssign(
           assignTo.scope!,
           assignTo.variableName,
           $(ts.threads.active()).prop("cloneMessages").call().done(),

@@ -686,3 +686,158 @@ describe("exprParser with `is` expression", () => {
     });
   });
 });
+
+describe("result pattern", () => {
+  it("parses bare `success` as a result pattern", () => {
+    const result = matchPatternParser("success");
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.result).toMatchObject({
+      type: "resultPattern",
+      kind: "success",
+      binding: null,
+    });
+    expect(result.rest).toBe("");
+  });
+
+  it("parses bare `failure` as a result pattern", () => {
+    const result = matchPatternParser("failure");
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.result).toMatchObject({
+      type: "resultPattern",
+      kind: "failure",
+      binding: null,
+    });
+    expect(result.rest).toBe("");
+  });
+
+  it("parses `success(v)` with binding", () => {
+    const result = matchPatternParser("success(v)");
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.result).toMatchObject({
+      type: "resultPattern",
+      kind: "success",
+      binding: "v",
+    });
+    expect(result.rest).toBe("");
+  });
+
+  it("parses `failure(err)` with binding", () => {
+    const result = matchPatternParser("failure(err)");
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.result).toMatchObject({
+      type: "resultPattern",
+      kind: "failure",
+      binding: "err",
+    });
+    expect(result.rest).toBe("");
+  });
+
+  it("rejects empty parens `success()` as a parse error", () => {
+    expect(() => matchPatternParser("success()")).toThrow(
+      /expected an identifier in result pattern binding/i,
+    );
+  });
+
+  it("rejects empty parens `failure()` as a parse error", () => {
+    expect(() => matchPatternParser("failure()")).toThrow(
+      /expected an identifier in result pattern binding/i,
+    );
+  });
+
+  it("rejects `success(123)` (non-identifier binding) as a parse error", () => {
+    expect(() => matchPatternParser("success(123)")).toThrow(
+      /expected an identifier in result pattern binding/i,
+    );
+  });
+
+  it("parses `success(value)` in is-expression context", () => {
+    const result = exprParser("result is success(value)");
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.result).toMatchObject({
+      type: "isExpression",
+      pattern: {
+        type: "resultPattern",
+        kind: "success",
+        binding: "value",
+      },
+    });
+  });
+
+  it("parses `result is success` (bare) in is-expression context", () => {
+    const result = exprParser("result is success");
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.result).toMatchObject({
+      type: "isExpression",
+      pattern: {
+        type: "resultPattern",
+        kind: "success",
+        binding: null,
+      },
+    });
+  });
+
+  it("parses success(v) as a match arm LHS", () => {
+    const result = matchBlockParserCase("  success(v) => return v");
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.result.caseValue).toMatchObject({
+      type: "resultPattern",
+      kind: "success",
+      binding: "v",
+    });
+  });
+
+  it("does NOT match an identifier with a longer name (`successful`)", () => {
+    // Boundary check: `successful` must parse as a variable name pattern,
+    // not as a `success` result pattern with trailing `ful` left in `rest`.
+    const result = matchPatternParser("successful");
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.result.type).toBe("variableName");
+    expect(result.rest).toBe("");
+  });
+
+  it("does NOT match an identifier with a longer name (`failures`)", () => {
+    // Symmetric boundary check for `failure`.
+    const result = matchPatternParser("failures");
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.result.type).toBe("variableName");
+    expect(result.rest).toBe("");
+  });
+
+  it("parses success(v) nested inside an array match pattern", () => {
+    const result = matchPatternParser("[success(v), _]");
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.result).toMatchObject({
+      type: "arrayPattern",
+      elements: [
+        { type: "resultPattern", kind: "success", binding: "v" },
+        { type: "wildcardPattern" },
+      ],
+    });
+  });
+
+  it("parses failure(e) nested inside an object match pattern", () => {
+    const result = matchPatternParser("{ r: failure(e) }");
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.result).toMatchObject({
+      type: "objectPattern",
+      properties: [
+        {
+          type: "objectPatternProperty",
+          key: "r",
+          value: { type: "resultPattern", kind: "failure", binding: "e" },
+        },
+      ],
+    });
+  });
+});

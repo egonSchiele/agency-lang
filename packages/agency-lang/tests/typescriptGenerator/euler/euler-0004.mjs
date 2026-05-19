@@ -210,7 +210,7 @@ __stack.locals.left = 0;
     await runner.step(2, async (runner) => {
 __stack.locals.right = __stack.locals.s.length - 1;
     });
-    await runner.whileLoop(3, () => __stack.locals.left < __stack.locals.right, async (runner) => {
+    await runner.whileLoop(3, async () => __stack.locals.left < __stack.locals.right, async (runner) => {
 await runner.ifElse(0, [
 
   {
@@ -313,11 +313,11 @@ __stack.locals.largest = 0;
     await runner.step(1, async (runner) => {
 __stack.locals.i = 999;
     });
-    await runner.whileLoop(2, () => __stack.locals.i >= 100, async (runner) => {
+    await runner.whileLoop(2, async () => __stack.locals.i >= 100, async (runner) => {
 await runner.step(0, async (runner) => {
 __stack.locals.j = __stack.locals.i;
       });
-await runner.whileLoop(1, () => __stack.locals.j >= 100, async (runner) => {
+await runner.whileLoop(1, async () => __stack.locals.j >= 100, async (runner) => {
 await runner.step(0, async (runner) => {
 __stack.locals.product = __stack.locals.i * __stack.locals.j;
         });

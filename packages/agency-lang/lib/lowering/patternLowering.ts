@@ -29,6 +29,7 @@ import type {
   MatchPattern,
   ObjectPatternProperty,
   ObjectPatternShorthand,
+  ResultPattern,
 } from "../types/pattern.js";
 import type {
   Literal,
@@ -256,7 +257,10 @@ class PatternLowerer {
     const hasPatternArms = node.cases.some(
       (c) =>
         c.type === "matchBlockCase" &&
-        ((c.caseValue !== "_" && (c.caseValue.type === "objectPattern" || c.caseValue.type === "arrayPattern")) ||
+        ((c.caseValue !== "_" &&
+          (c.caseValue.type === "objectPattern" ||
+            c.caseValue.type === "arrayPattern" ||
+            c.caseValue.type === "resultPattern")) ||
           c.guard !== undefined),
     );
 
@@ -518,6 +522,18 @@ class PatternLowerer {
       case "wildcardPattern":
       case "restPattern":
         return [];
+      case "resultPattern": {
+        if (pattern.binding === null) return [];
+        const field = pattern.kind === "success" ? "value" : "error";
+        return [
+          makeAssign(
+            pattern.binding,
+            fieldAccess(source, field, loc),
+            declKind,
+            loc,
+          ),
+        ];
+      }
       default:
         // Literal — produces no binding
         return [];
@@ -569,12 +585,28 @@ function collectChecks(pattern: MatchPattern, source: Expression, checks: Expres
     case "restPattern":
       // Always true (binders match anything)
       break;
+    case "resultPattern":
+      checks.push(resultCheckCall(pattern.kind, source, pattern.loc));
+      break;
     default: {
       // Literal — equality check
       checks.push(makeBinOp(source, "==", pattern as Expression, pattern.loc));
       break;
     }
   }
+}
+
+function resultCheckCall(
+  kind: "success" | "failure",
+  source: Expression,
+  loc: SourceLocation | undefined,
+): FunctionCall {
+  return {
+    type: "functionCall",
+    functionName: kind === "success" ? "isSuccess" : "isFailure",
+    arguments: [source],
+    loc: loc as SourceLocation,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -606,6 +638,15 @@ function assertNoBindersInBoolIs(pattern: MatchPattern): void {
     if (p.type === "variableName") {
       throw new PatternLoweringError(
         `bare identifier binder \`${p.value}\` in pure-boolean \`is\` context has nowhere to bind; use \`if (x is pattern)\` to introduce variables`,
+        loc,
+      );
+    }
+    if (
+      p.type === "resultPattern" &&
+      (p as ResultPattern).binding !== null
+    ) {
+      throw new PatternLoweringError(
+        `result pattern binder in pure-boolean \`is\` context has nowhere to bind; use \`if (x is ${(p as ResultPattern).kind}(...))\` to introduce variables`,
         loc,
       );
     }

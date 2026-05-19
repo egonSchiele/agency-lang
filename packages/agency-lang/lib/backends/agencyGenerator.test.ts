@@ -517,3 +517,89 @@ describe("AgencyGenerator - string interpolation with nested calls", () => {
   });
 });
 
+describe("AgencyGenerator - Result Patterns", () => {
+  // Format with lowering DISABLED so raw `resultPattern` nodes reach the
+  // formatter (the formatter operates on the un-lowered AST).
+  function formatAgency(input: string): string {
+    const parseResult = parseAgency(input, {}, false, false);
+    expect(parseResult.success).toBe(true);
+    if (!parseResult.success) return "";
+    const generator = new AgencyGenerator();
+    return generator.generate(parseResult.result).output.trim();
+  }
+
+  // Round-trip parses → formats → parses and compares the resulting AST
+  // (modulo `loc`). This is the strongest possible check: it catches both
+  // missing output and *extra* output, which `toContain` would miss.
+  function expectRoundTripStable(input: string): void {
+    const formatted = formatAgency(input);
+    const reparsed = parseAgency(formatted, {}, false, false);
+    expect(reparsed.success).toBe(true);
+    if (!reparsed.success) return;
+    const firstParse = parseAgency(input, {}, false, false);
+    expect(firstParse.success).toBe(true);
+    if (!firstParse.success) return;
+    // Strip `loc` fields recursively so we compare structure only.
+    const stripLoc = (node: unknown): unknown => {
+      if (Array.isArray(node)) return node.map(stripLoc);
+      if (node && typeof node === "object") {
+        const out: Record<string, unknown> = {};
+        for (const [k, v] of Object.entries(node)) {
+          if (k === "loc") continue;
+          out[k] = stripLoc(v);
+        }
+        return out;
+      }
+      return node;
+    };
+    expect(stripLoc(reparsed.result.nodes)).toEqual(
+      stripLoc(firstParse.result.nodes),
+    );
+  }
+
+  it("formats `r is success` (bare boolean form) — round trip", () => {
+    const input = `node main() {\n  let r = success(1)\n  let x = r is success\n}`;
+    const output = formatAgency(input);
+    expect(output).toContain("r is success");
+    expect(output).not.toContain("isSuccess");
+    expectRoundTripStable(input);
+  });
+
+  it("formats `r is failure` (bare boolean form) — round trip", () => {
+    const input = `node main() {\n  let r = failure("e")\n  let x = r is failure\n}`;
+    const output = formatAgency(input);
+    expect(output).toContain("r is failure");
+    expect(output).not.toContain("isFailure");
+    expectRoundTripStable(input);
+  });
+
+  it("formats `r is success(v)` with binding — round trip", () => {
+    const input = `node main() {\n  let r = success(1)\n  if (r is success(v)) {\n    print(v)\n  }\n}`;
+    const output = formatAgency(input);
+    expect(output).toContain("r is success(v)");
+    expectRoundTripStable(input);
+  });
+
+  it("formats `r is failure(e)` with binding — round trip", () => {
+    const input = `node main() {\n  let r = failure("e")\n  if (r is failure(e)) {\n    print(e)\n  }\n}`;
+    const output = formatAgency(input);
+    expect(output).toContain("r is failure(e)");
+    expectRoundTripStable(input);
+  });
+
+  it("formats result patterns as match arm LHS — round trip", () => {
+    const input = `node main() {\n  let r = success(1)\n  match (r) {\n    success(v) => print(v)\n    failure(e) => print(e)\n  }\n}`;
+    const output = formatAgency(input);
+    expect(output).toContain("success(v)");
+    expect(output).toContain("failure(e)");
+    expectRoundTripStable(input);
+  });
+
+  it("formats result patterns nested inside an array match pattern — round trip", () => {
+    const input = `node main() {\n  let arr = [success(1), failure("e")]\n  match (arr) {\n    [success(v), _] => print(v)\n    _ => print("none")\n  }\n}`;
+    const output = formatAgency(input);
+    expect(output).toContain("[success(v), _]");
+    expectRoundTripStable(input);
+  });
+});
+

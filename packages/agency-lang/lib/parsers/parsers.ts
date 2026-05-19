@@ -145,6 +145,7 @@ import {
   ObjectPatternProperty,
   ObjectPatternShorthand,
   RestPattern,
+  ResultPattern,
   WildcardPattern,
 } from "../types/pattern.js";
 
@@ -3524,6 +3525,64 @@ export const objectBindingPatternParser: Parser<ObjectPattern> = label(
 
 // ---- match pattern parsers ----
 
+// Result patterns: `success`, `success(v)`, `failure`, `failure(e)`. Must be
+// placed in `_matchPatternParser` BEFORE `variableNameParser`, so `success`
+// and `failure` in pattern position are intercepted before they'd parse as
+// bare variable names. In expression position, `success(42)` etc. remain
+// valid function calls because expression parsers do not use this parser.
+type ResultPatternBase = {
+  type: "resultPattern";
+  kind: "success" | "failure";
+  binding: string | null;
+};
+
+export const resultPatternParser: Parser<ResultPattern> = withLoc(
+  (input: string): ParserResult<ResultPatternBase> => {
+    // Try "success" or "failure" keyword + identifier boundary so `successful`
+    // does NOT match. A soft failure here lets the outer `or` fall through to
+    // `variableNameParser`.
+    const kwResult = or(str("success"), str("failure"))(input);
+    if (!kwResult.success) return kwResult;
+    const kind = kwResult.result as "success" | "failure";
+    const boundary = not(varNameChar)(kwResult.rest);
+    if (!boundary.success) {
+      return fail("not a result pattern keyword boundary")(input);
+    }
+
+    // Bare form: no `(` after the keyword.
+    if (kwResult.rest[0] !== "(") {
+      return success(
+        { type: "resultPattern", kind, binding: null },
+        kwResult.rest,
+      );
+    }
+
+    // Committed to the result-pattern form: once we see `success(` or
+    // `failure(`, the next token MUST be an identifier followed by `)`.
+    // `parseError` runs the wrapped sequence and throws on failure, which
+    // bypasses the surrounding `or` in `_matchPatternParser` — without this,
+    // `success()` would silently fall through to `variableNameParser`
+    // (parsing `success` as a bare identifier and leaving `()` as remainder).
+    const bindingResult = parseError(
+      `expected an identifier in result pattern binding (e.g. \`${kind}(name)\`); empty parens and non-identifier expressions are not allowed`,
+      char("("),
+      optionalSpacesOrNewline,
+      capture(variableNameParser, "binding"),
+      optionalSpacesOrNewline,
+      char(")"),
+    )(kwResult.rest);
+    if (!bindingResult.success) return bindingResult;
+    return success(
+      {
+        type: "resultPattern",
+        kind,
+        binding: (bindingResult.result.binding as { value: string }).value,
+      },
+      bindingResult.rest,
+    );
+  },
+);
+
 const _matchPatternParser = (input: string): ParserResult<MatchPattern> => {
   // NOTE: cannot reuse simpleLiteralParser directly because it tries
   // numberParser before variableNameParser, and numberParser is greedy on `_`
@@ -3538,6 +3597,9 @@ const _matchPatternParser = (input: string): ParserResult<MatchPattern> => {
     nullParser,
     booleanParser,
     unitLiteralParser,
+    // resultPatternParser MUST come before variableNameParser so `success` /
+    // `failure` are intercepted before they'd parse as bare identifiers.
+    resultPatternParser,
     variableNameParser,
     numberParser,
     _stringParser,

@@ -181,8 +181,8 @@ __stack.locals.n = 600851475143;
     await runner.step(1, async (runner) => {
 __stack.locals.d = 2;
     });
-    await runner.whileLoop(2, () => __stack.locals.d * __stack.locals.d <= __stack.locals.n, async (runner) => {
-await runner.whileLoop(0, () => __stack.locals.n % __stack.locals.d === 0, async (runner) => {
+    await runner.whileLoop(2, async () => __stack.locals.d * __stack.locals.d <= __stack.locals.n, async (runner) => {
+await runner.whileLoop(0, async () => __stack.locals.n % __stack.locals.d === 0, async (runner) => {
 await runner.step(0, async (runner) => {
 __stack.locals.n = __stack.locals.n / __stack.locals.d;
         });

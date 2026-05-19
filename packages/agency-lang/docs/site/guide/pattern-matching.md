@@ -106,6 +106,65 @@ The scrutinee is evaluated exactly once, the binders (`user`, `role`)
 are extracted exactly once, and each arm's left-hand side is treated as
 a boolean guard expression.
 
+## Result patterns
+
+The `success` and `failure` keywords work as patterns for ergonomic
+Result type unwrapping.
+
+### Boolean test
+
+```agency
+let worked = result is success
+let failed = result is failure
+```
+
+### Binding in `if`/`while`
+
+```agency
+if (result is success(value)) {
+    print(value)   // value is the unwrapped success value
+}
+
+if (result is failure(err)) {
+    print(err)     // err is the error string
+}
+```
+
+### In match blocks
+
+```agency
+match (result) {
+    success(v) => print("Got: ${v}")
+    failure(e) => print("Error: ${e}")
+}
+```
+
+### Combined with `match(expr is pattern)` form
+
+```agency
+match (result is success(v)) {
+    v > 0  => print("positive")
+    _      => print("zero or negative")
+}
+```
+
+### Nested inside other patterns
+
+Result patterns may appear as nested elements inside array or object
+match patterns:
+
+```agency
+match (pair) {
+    [success(v), _] => print("first ok: ${v}")
+    [failure(e), _] => print("first err: ${e}")
+    _               => print("other")
+}
+```
+
+Note: `failure(e)` binds only the error string. For checkpoint,
+functionName, or args, use the traditional `if (isFailure(result))`
+form and access fields on the result variable directly.
+
 ## For loop destructuring
 
 The iteration variable can be an array or object pattern:

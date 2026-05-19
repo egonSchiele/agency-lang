@@ -246,7 +246,7 @@ return;
     await runner.step(3, async (runner) => {
 __stack.locals.i = 5;
     });
-    await runner.whileLoop(4, () => __stack.locals.i * __stack.locals.i <= __stack.args.n, async (runner) => {
+    await runner.whileLoop(4, async () => __stack.locals.i * __stack.locals.i <= __stack.args.n, async (runner) => {
 await runner.ifElse(0, [
 
   {
@@ -346,7 +346,7 @@ __stack.locals.sum = 2;
     await runner.step(1, async (runner) => {
 __stack.locals.n = 3;
     });
-    await runner.whileLoop(2, () => __stack.locals.n < 2000000, async (runner) => {
+    await runner.whileLoop(2, async () => __stack.locals.n < 2000000, async (runner) => {
 await runner.ifElse(0, [
 
   {

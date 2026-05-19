@@ -5,7 +5,9 @@ import type { Expression } from "../types.js";
 export type ObjectPatternProperty = {
   type: "objectPatternProperty";
   key: string;
-  value: BindingPattern | Literal;
+  // ResultPattern is only valid in match-position use; the parser does not
+  // produce it in binding-position contexts.
+  value: BindingPattern | Literal | ResultPattern;
 };
 
 export type ObjectPatternShorthand = {
@@ -20,7 +22,9 @@ export type ObjectPattern = BaseNode & {
 
 export type ArrayPattern = BaseNode & {
   type: "arrayPattern";
-  elements: (BindingPattern | Literal | WildcardPattern | RestPattern)[];
+  // ResultPattern is only valid in match-position use; the parser does not
+  // produce it in binding-position contexts.
+  elements: (BindingPattern | Literal | WildcardPattern | RestPattern | ResultPattern)[];
 };
 
 export type RestPattern = BaseNode & {
@@ -38,6 +42,12 @@ export type IsExpression = BaseNode & {
   pattern: MatchPattern;
 };
 
+export type ResultPattern = BaseNode & {
+  type: "resultPattern";
+  kind: "success" | "failure";
+  binding: string | null; // null = bare form (no parens), string = binding identifier
+};
+
 // A binding pattern: only variable bindings, no value-matching.
 // Used in let/const LHS and for-loop item position.
 export type BindingPattern =
@@ -51,7 +61,8 @@ export type BindingPattern =
 // Used in match arm LHS and after `is`.
 export type MatchPattern =
   | BindingPattern
-  | Literal;
+  | Literal
+  | ResultPattern;
 
 // Convenience union when context doesn't matter
 export type Pattern = MatchPattern;

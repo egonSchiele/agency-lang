@@ -41,6 +41,7 @@ import {
   IsExpression,
   ObjectPattern,
   RestPattern,
+  ResultPattern,
   WildcardPattern,
 } from "./types/pattern.js";
 export * from "./types/pattern.js";
@@ -256,7 +257,8 @@ export type AgencyNode =
   | ObjectPattern
   | ArrayPattern
   | RestPattern
-  | WildcardPattern;
+  | WildcardPattern
+  | ResultPattern;
 
 export type AgencyProgram = {
   type: "agencyProgram";

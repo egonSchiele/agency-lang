@@ -1,0 +1,14 @@
+def describe(arr: any): string {
+  match (arr) {
+    [success(v), _] => return "head ok: ${v}"
+    [failure(e), _] => return "head err: ${e}"
+    _ => return "other"
+  }
+  return "unreachable"
+}
+
+node main() {
+  let a1 = [success(1), failure("e")]
+  let a2 = [failure("oops"), success(2)]
+  return [describe(a1), describe(a2)]
+}

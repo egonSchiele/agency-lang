@@ -66,6 +66,7 @@ import {
   ObjectPatternProperty,
   ObjectPatternShorthand,
   RestPattern,
+  ResultPattern,
   WildcardPattern,
 } from "@/types/pattern.js";
 
@@ -299,6 +300,7 @@ export class AgencyGenerator {
       case "arrayPattern":
       case "restPattern":
       case "wildcardPattern":
+      case "resultPattern":
         return this.formatPattern(node);
       case "isExpression":
         return `${this.processNode(node.expression).trim()} is ${this.formatPattern(node.pattern)}`;
@@ -516,6 +518,10 @@ export class AgencyGenerator {
         return `...${(pattern as RestPattern).identifier}`;
       case "wildcardPattern":
         return "_";
+      case "resultPattern": {
+        const rp = pattern as ResultPattern;
+        return rp.binding === null ? rp.kind : `${rp.kind}(${rp.binding})`;
+      }
       default:
         // variableName / literals — defer to existing rendering
         return this.processNode(pattern as AgencyNode).trim();

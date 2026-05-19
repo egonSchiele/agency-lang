@@ -6,9 +6,8 @@ import type {
 } from "../../types.js";
 import type { BinOpExpression } from "../../types/binop.js";
 import type { AccessChainElement, ValueAccess } from "../../types/access.js";
-import type { FunctionCall } from "../../types/function.js";
 import type { TsNode } from "../../ir/tsIR.js";
-import { $, ts } from "../../ir/builders.js";
+import { ts } from "../../ir/builders.js";
 import { mapTypeToValidationSchema } from "../typescriptGenerator/typeToZodSchema.js";
 import type { ScopeManager } from "./scopeManager.js";
 
@@ -21,17 +20,17 @@ import type { ScopeManager } from "./scopeManager.js";
  */
 export type PipeChainEmitterDeps = {
   processNode: (node: AgencyNode) => TsNode;
+  /**
+   * The builder's full ValueAccess lowering. Used to build pipe-stage
+   * receivers correctly — see the doc comment on `processValueAccessPartial`.
+   */
+  processValueAccess: (node: ValueAccess) => TsNode;
   buildAssignmentLhs: (
     scope: ScopeType,
     varName: string,
     accessChain?: AccessChainElement[],
   ) => TsNode;
   buildStateConfig: () => TsNode;
-  generateFunctionCallExpression: (
-    call: FunctionCall,
-    context: "topLevelStatement" | "functionArg" | "valueAccess",
-  ) => TsNode;
-  str: (node: TsNode) => string;
   scopes: ScopeManager;
 };
 
@@ -262,52 +261,26 @@ export class PipeChainEmitter {
   }
 
   /**
-   * Process a valueAccess up to but not including the last chain element.
-   * Used by pipe lowering to get the receiver for a method call.
+   * Process a ValueAccess up to but not including the last chain element.
+   * Used by pipe lowering to get the receiver for a method call —
+   * the LAST chain element is the pipe stage's method name, which the
+   * caller hands to `__callMethod(receiver, name, …)` directly.
+   *
+   * Delegates to the builder's full `processValueAccess` (via deps) on
+   * a synthetic node with `chain.slice(0, -1)`. This keeps every
+   * subtlety of receiver lowering in one place — awaiting + paren-
+   * wrapping a `functionCall` base, paren-wrapping a non-trivial base,
+   * propagating the `optional` flag through chain elements, handling
+   * the `call` chain-element kind, etc. Previously this method
+   * duplicated the chain-walk and silently dropped all of those
+   * behaviours; see the "pipe receiver precedence" issue for the
+   * shapes that were broken (`getObj().foo.bar |> stage`, `obj?.foo
+   * |> stage`, `factories.makeOne().bar |> stage`, etc.).
    */
   private processValueAccessPartial(node: ValueAccess): TsNode {
-    let result = this.deps.processNode(node.base);
-    for (let i = 0; i < node.chain.length - 1; i++) {
-      const element = node.chain[i];
-      switch (element.kind) {
-        case "property":
-          result = ts.prop(result, element.name);
-          break;
-        case "index":
-          result = ts.index(result, this.deps.processNode(element.index));
-          break;
-        case "slice": {
-          const args: TsNode[] = [];
-          if (element.start) {
-            args.push(this.deps.processNode(element.start));
-            if (element.end) args.push(this.deps.processNode(element.end));
-          } else if (element.end) {
-            args.push(ts.raw("0"));
-            args.push(this.deps.processNode(element.end));
-          }
-          result = $(result).prop("slice").call(args).done();
-          break;
-        }
-        case "methodCall": {
-          const callNode = this.deps.generateFunctionCallExpression(
-            element.functionCall,
-            "valueAccess",
-          );
-          if (
-            callNode.kind === "call" &&
-            callNode.callee.kind === "identifier"
-          ) {
-            result = $(result)
-              .prop(callNode.callee.name)
-              .call(callNode.arguments)
-              .done();
-          } else {
-            result = ts.raw(`${this.deps.str(result)}.${this.deps.str(callNode)}`);
-          }
-          break;
-        }
-      }
-    }
-    return result;
+    return this.deps.processValueAccess({
+      ...node,
+      chain: node.chain.slice(0, -1),
+    });
   }
 }

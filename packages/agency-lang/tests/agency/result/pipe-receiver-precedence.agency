@@ -1,0 +1,49 @@
+/*
+  Regression for the pipe receiver precedence bug
+  (see issue-pipe-receiver-precedence.md).
+
+  When a pipe stage's receiver has shape `expr.chain.method` and the
+  base `expr` lowers to an `await` (e.g. a function call), the receiver
+  computation must paren-wrap the awaited base before applying the
+  intermediate chain elements. Otherwise the `.chain` access binds to
+  the unresolved Promise and we end up calling `.method` on undefined.
+*/
+
+class Multiplier {
+  factor: number
+
+  multiply(x: number): Result {
+    return success(x * this.factor)
+  }
+}
+
+class Container {
+  inner: Multiplier
+}
+
+def makeContainer(f: number): Container {
+  return new Container(new Multiplier(f))
+}
+
+node main() {
+  // Receiver shape: functionCall base + intermediate property + final method ref.
+  // Pre-fix lowering: __callMethod(await makeContainer(3).inner, "multiply", …)
+  // which parses as __callMethod((await (makeContainer(3).inner)), …) and
+  // crashes because .inner is read off the Promise.
+  // Post-fix lowering: __callMethod((await makeContainer(3)).inner, "multiply", …)
+  let r1 = success(5) |> makeContainer(3).inner.multiply
+
+  // Chained receivers across multiple pipe stages.
+  let r2 = success(10) |> makeContainer(2).inner.multiply |> makeContainer(4).inner.multiply
+
+  // Optional-chain receiver lowering is covered by the codegen
+  // assertion in lib/backends/typescriptBuilder/pipeReceiverCodegen.test.ts
+  // — the runtime values for a non-null receiver are identical
+  // whether `?.` is preserved or dropped, so a runtime fixture cannot
+  // distinguish the two.
+
+  return {
+    r1: r1.value,
+    r2: r2.value,
+  }
+}

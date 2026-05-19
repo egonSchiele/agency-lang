@@ -222,12 +222,10 @@ export class TypeScriptBuilder {
     this.names = new NameClassifier(info);
     this.pipes = new PipeChainEmitter({
       processNode: (n) => this.processNode(n),
+      processValueAccess: (n) => this.processValueAccess(n),
       buildAssignmentLhs: (scope, varName, accessChain) =>
         this.assigns.lhs(scope, varName, accessChain),
       buildStateConfig: () => this.buildStateConfig(),
-      generateFunctionCallExpression: (call, ctx) =>
-        this.generateFunctionCallExpression(call, ctx),
-      str: (n) => this.str(n),
       scopes: this.scopes,
     });
     this.assigns = new AssignmentEmitter({

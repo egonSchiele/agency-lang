@@ -2,9 +2,15 @@ import { describe, it, expect } from "vitest";
 import { mapTypes, visitTypes } from "./typeWalker.js";
 import type { VariableType } from "../types.js";
 
-const numberType: VariableType = { type: "number" };
-const stringType: VariableType = { type: "string" };
-const booleanType: VariableType = { type: "boolean" };
+const numberType: VariableType = { type: "primitiveType", value: "number" };
+const stringType: VariableType = { type: "primitiveType", value: "string" };
+const booleanType: VariableType = {
+  type: "primitiveType",
+  value: "boolean",
+};
+
+const isNumber = (t: VariableType): boolean =>
+  t.type === "primitiveType" && t.value === "number";
 
 describe("mapTypes", () => {
   it("returns a primitive unchanged when fn is identity", () => {
@@ -13,16 +19,14 @@ describe("mapTypes", () => {
   });
 
   it("transforms a primitive via fn", () => {
-    const result = mapTypes(numberType, (t) =>
-      t.type === "number" ? stringType : t,
-    );
+    const result = mapTypes(numberType, (t) => (isNumber(t) ? stringType : t));
     expect(result).toEqual(stringType);
   });
 
   it("recurses into arrayType element", () => {
     const arr: VariableType = { type: "arrayType", elementType: numberType };
     const result = mapTypes(arr, (t) =>
-      t.type === "number" ? stringType : t,
+      isNumber(t) ? stringType : t,
     );
     expect(result).toEqual({ type: "arrayType", elementType: stringType });
   });
@@ -33,7 +37,7 @@ describe("mapTypes", () => {
       types: [numberType, booleanType],
     };
     const result = mapTypes(u, (t) =>
-      t.type === "number" ? stringType : t,
+      isNumber(t) ? stringType : t,
     );
     expect(result).toEqual({
       type: "unionType",
@@ -50,7 +54,7 @@ describe("mapTypes", () => {
       ],
     };
     const result = mapTypes(obj, (t) =>
-      t.type === "number" ? stringType : t,
+      isNumber(t) ? stringType : t,
     );
     expect(result).toEqual({
       type: "objectType",
@@ -68,7 +72,7 @@ describe("mapTypes", () => {
       failureType: booleanType,
     };
     const result = mapTypes(r, (t) =>
-      t.type === "number" ? stringType : t,
+      isNumber(t) ? stringType : t,
     );
     expect(result).toEqual({
       type: "resultType",
@@ -80,7 +84,7 @@ describe("mapTypes", () => {
   it("recurses into schemaType inner", () => {
     const s: VariableType = { type: "schemaType", inner: numberType };
     const result = mapTypes(s, (t) =>
-      t.type === "number" ? stringType : t,
+      isNumber(t) ? stringType : t,
     );
     expect(result).toEqual({ type: "schemaType", inner: stringType });
   });
@@ -92,7 +96,7 @@ describe("mapTypes", () => {
       returnType: booleanType,
     };
     const result = mapTypes(b, (t) =>
-      t.type === "number" ? stringType : t,
+      isNumber(t) ? stringType : t,
     );
     expect(result).toEqual({
       type: "blockType",
@@ -108,7 +112,7 @@ describe("mapTypes", () => {
       typeArgs: [numberType, booleanType],
     };
     const result = mapTypes(g, (t) =>
-      t.type === "number" ? stringType : t,
+      isNumber(t) ? stringType : t,
     );
     expect(result).toEqual({
       type: "genericType",
@@ -124,13 +128,13 @@ describe("mapTypes", () => {
       seen.push(t);
       return t;
     });
-    expect(seen.map((t) => t.type)).toEqual(["number", "arrayType"]);
+    expect(seen.map((t) => t.type)).toEqual(["primitiveType", "arrayType"]);
   });
 
   it("does not mutate the input", () => {
     const arr: VariableType = { type: "arrayType", elementType: numberType };
     const snapshot = JSON.parse(JSON.stringify(arr));
-    mapTypes(arr, (t) => (t.type === "number" ? stringType : t));
+    mapTypes(arr, (t) => (isNumber(t) ? stringType : t));
     expect(arr).toEqual(snapshot);
   });
 
@@ -166,6 +170,6 @@ describe("visitTypes (sanity check that walker still works)", () => {
     visitTypes(arr, (t) => {
       seen.push(t.type);
     });
-    expect(seen).toEqual(["arrayType", "number"]);
+    expect(seen).toEqual(["arrayType", "primitiveType"]);
   });
 });

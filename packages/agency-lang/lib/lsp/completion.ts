@@ -66,8 +66,8 @@ export function getCompletions(info: CompilationUnit, context?: CompletionContex
 
   const globalAliases = info.typeAliases.get(GLOBAL_SCOPE_KEY);
   if (globalAliases) {
-    for (const [name, vt] of Object.entries(globalAliases)) {
-      add(name, CompletionItemKind.TypeParameter, `= ${formatTypeHint(vt)}`);
+    for (const [name, entry] of Object.entries(globalAliases)) {
+      add(name, CompletionItemKind.TypeParameter, `= ${formatTypeHint(entry.body)}`);
     }
   }
 

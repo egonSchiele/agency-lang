@@ -15,6 +15,7 @@ import {
   AgencyProgram,
   FunctionDefinition,
   GraphNodeDefinition,
+  TypeAliasEntry,
   VariableType,
 } from "../types.js";
 import type { SourceLocation } from "../types/base.js";
@@ -79,7 +80,7 @@ export class TypeChecker {
     this.sourceText = resolved.sourceText;
   }
 
-  private get typeAliases(): Record<string, VariableType> {
+  private get typeAliases(): Record<string, TypeAliasEntry> {
     return this.scopedTypeAliases.visibleIn(this.currentScopeKey);
   }
 
@@ -121,9 +122,9 @@ export class TypeChecker {
     // 1. Validate type alias references
     for (const [sk, scopeAliases] of this.scopedTypeAliases.scopes()) {
       this.withScope(sk, () => {
-        for (const [name, aliasedType] of Object.entries(scopeAliases)) {
+        for (const [name, entry] of Object.entries(scopeAliases)) {
           validateTypeReferences(
-            aliasedType,
+            entry.body,
             name,
             this.typeAliases,
             this.errors,

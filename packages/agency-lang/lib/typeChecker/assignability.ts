@@ -1,13 +1,13 @@
-import { VariableType } from "../types.js";
+import { TypeAliasEntry, VariableType } from "../types.js";
 import { BOOLEAN_T, NUMBER_T, STRING_T } from "./primitives.js";
 
 export function resolveType(
   vt: VariableType,
-  typeAliases: Record<string, VariableType>,
+  typeAliases: Record<string, TypeAliasEntry>,
 ): VariableType {
   if (vt.type === "typeAliasVariable") {
-    const resolved = typeAliases[vt.aliasName];
-    if (resolved) return resolveType(resolved, typeAliases);
+    const entry = typeAliases[vt.aliasName];
+    if (entry) return resolveType(entry.body, typeAliases);
     return vt;
   }
   return vt;
@@ -63,7 +63,7 @@ export function widenType(vt: VariableType | "any"): VariableType | "any" {
  */
 function isOptionalType(
   vt: VariableType,
-  typeAliases: Record<string, VariableType>,
+  typeAliases: Record<string, TypeAliasEntry>,
 ): boolean {
   const resolved = resolveType(vt, typeAliases);
   if (resolved.type === "primitiveType")
@@ -77,7 +77,7 @@ function isOptionalType(
 export function isAssignable(
   source: VariableType | "any",
   target: VariableType | "any",
-  typeAliases: Record<string, VariableType>,
+  typeAliases: Record<string, TypeAliasEntry>,
 ): boolean {
   if (source === "any" || target === "any") return true;
 

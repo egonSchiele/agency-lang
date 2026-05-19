@@ -34,7 +34,7 @@ describe("buildCompilationUnit", () => {
     };
     const info = buildCompilationUnit(program);
     expect(info.typeAliases.get(GLOBAL_SCOPE_KEY)).toEqual({
-      Name: { type: "primitiveType", value: "string" },
+      Name: { body: { type: "primitiveType", value: "string" } },
     });
   });
 
@@ -58,7 +58,7 @@ describe("buildCompilationUnit", () => {
     };
     const info = buildCompilationUnit(program);
     expect(info.typeAliases.get("node:start")).toEqual({
-      LocalType: { type: "primitiveType", value: "number" },
+      LocalType: { body: { type: "primitiveType", value: "number" } },
     });
     expect(info.typeAliases.get(GLOBAL_SCOPE_KEY)?.["LocalType"]).toBeUndefined();
   });
@@ -89,7 +89,7 @@ describe("buildCompilationUnit", () => {
     const info = buildCompilationUnit(program);
     const visible = info.typeAliases.visibleIn("function:fn");
     // Function-scoped T overrides global T
-    expect(visible["T"]).toEqual({ type: "primitiveType", value: "number" });
+    expect(visible["T"]).toEqual({ body: { type: "primitiveType", value: "number" } });
   });
 
   it("collects graph nodes", () => {

@@ -1,4 +1,4 @@
-import { VariableType } from "../types.js";
+import { TypeAliasEntry, VariableType } from "../types.js";
 import { SourceLocation } from "../types/base.js";
 import { TypeCheckError } from "./types.js";
 import { visitTypes } from "./typeWalker.js";
@@ -6,7 +6,7 @@ import { visitTypes } from "./typeWalker.js";
 export function validateTypeReferences(
   vt: VariableType,
   context: string,
-  typeAliases: Record<string, VariableType>,
+  typeAliases: Record<string, TypeAliasEntry>,
   errors: TypeCheckError[],
   loc?: SourceLocation,
 ): void {

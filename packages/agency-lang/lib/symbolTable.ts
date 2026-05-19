@@ -6,6 +6,7 @@ import type {
   AgencyNode,
   AgencyProgram,
   FunctionParameter,
+  TypeParam,
   VariableType,
 } from "./types.js";
 import type { SourceLocation } from "./types/base.js";
@@ -65,6 +66,8 @@ export type TypeSymbol = {
   loc?: SourceLocation;
   exported: boolean;
   aliasedType: VariableType;
+  /** Type parameters for generic aliases (e.g., `T` in `type Container<T> = ...`). */
+  typeParams?: TypeParam[];
   reExportedFrom?: ReExportedFrom;
 };
 
@@ -314,6 +317,7 @@ export function classifySymbols(program: AgencyProgram): FileSymbols {
           loc: node.loc,
           exported: !!node.exported,
           aliasedType: node.aliasedType,
+          ...(node.typeParams ? { typeParams: node.typeParams } : {}),
         };
         break;
       case "classDefinition":

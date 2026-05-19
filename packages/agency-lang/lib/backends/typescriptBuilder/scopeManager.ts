@@ -63,7 +63,15 @@ export class ScopeManager {
   // ---- Compilation-unit-backed queries ----
 
   visibleTypeAliases(): Record<string, VariableType> {
-    return this.compilationUnit.typeAliases.visibleIn(this.currentKey());
+    const entries = this.compilationUnit.typeAliases.visibleIn(this.currentKey());
+    // Renderers (typeToString, typeToZodSchema) only need the alias body,
+    // not its type parameters. Flatten TypeAliasEntry → VariableType here
+    // so those modules keep their existing signature.
+    const out: Record<string, VariableType> = {};
+    for (const [name, entry] of Object.entries(entries)) {
+      out[name] = entry.body;
+    }
+    return out;
   }
 
   /**

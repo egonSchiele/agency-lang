@@ -7,6 +7,11 @@
 - Const reassignment checks in typechecker
 - `parseJSON` built-in function
 - Fix string interpolation parser for concatenating function calls and strings
+- **Generics**: built-in `Record<K, V>` type with `z.record` codegen and TS `Record<K, V>` output; covariant for ergonomics (documented variance gotcha in [docs/site/guide/types.md](file:///Users/adityabhargava/agency-lang/packages/agency-lang/docs/site/guide/types.md))
+- **Generics**: user-defined generic type aliases (`type Container<T> = ...`) with defaults (`type StringMap<V = any> = ...`) and recursion (`type Tree<T> = { value: T, children: Tree<T>[] }`)
+- **Generics**: `Array<T>` and `Schema<T>` are now usable in source as built-in generics (equivalent to `T[]` and the type of `schema(T)`)
+- For-loops can iterate the keys of a `Record<K, V>` value (`for (k in record)`)
+- The `object` primitive still works but `Record<string, any>` is preferred for new code
 
 ### New: Memory Layer
 - Built-in memory layer: temporal knowledge graph, hybrid retrieval, conversation compaction

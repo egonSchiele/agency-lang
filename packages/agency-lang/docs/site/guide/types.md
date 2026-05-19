@@ -1,6 +1,6 @@
 # Types
 
-Agency's type system is similar to TypeScript's, without all the advanced features like generics.
+Agency's type system is similar to TypeScript's. It includes user-defined generic type aliases and the built-in `Record<K, V>` / `Array<T>` / `Schema<T>` generics, but not all of TypeScript's more advanced features (conditional types, mapped types, etc.).
 
 Agency types are cool because Agency generates Zod Schemas from the types automatically. This means you can use types to specify the structured output format for LLM calls.
 
@@ -18,7 +18,7 @@ Primitive types:
 - `boolean`
 - `null`
 - `undefined` (treated as null)
-- `object` (equivalent to `Record<string, any>`)
+- `object` (equivalent to `Record<string, any>` — prefer `Record<string, any>` directly in new code)
 - `regex` (matches a `RegExp` literal — note that LLMs can't return regex values through structured output, so `regex` cannot appear in an `llm()` return type)
 
 Union types. Example:
@@ -56,6 +56,78 @@ type User = {
   age: number # The age of the user
 }
 ```
+
+## Records
+
+`Record<K, V>` describes an object whose keys all share one type and whose values all share another. Use it when the set of keys isn't fixed up front — typical examples are caches, lookup tables, or "string → enum" maps.
+
+```ts
+let votes: Record<string, "approve" | "reject"> = {}
+votes["alice"] = "approve"
+let v = votes["alice"]   // type: "approve" | "reject"
+for (k in votes) {
+  print("{k}: {votes[k]}")
+}
+```
+
+`Record<K, V>` is a built-in generic with two type arguments: the key type and the value type. The key type must be `string`, `number`, a string/number literal, or a union of those.
+
+You can also use a literal-key union for `K` to require a closed set of keys:
+
+```ts
+let status: Record<"active" | "inactive", number> = {
+  active: 5,
+  inactive: 2
+}
+```
+
+### Variance gotcha
+
+Agency treats `Record<K, V>` as **covariant** in both type parameters. Covariance means narrow values can flow into wider Records — e.g. `Record<string, "approve">` is assignable to `Record<string, string>`. This is the intuitive ergonomic choice, but it's technically unsound for mutable Records:
+
+```ts
+let narrow: Record<string, "approve"> = { alice: "approve" }
+let wide: Record<string, string> = narrow
+wide["bob"] = "anything"        // mutates narrow too — now narrow has a non-"approve" value
+```
+
+We accept the unsoundness for ergonomics. If you need strict invariance, keep the wider Record type at the source of the value.
+
+## Generic type aliases
+
+Type aliases can take type parameters:
+
+```ts
+type Container<T> = { value: T }
+type Pair<A, B> = { first: A, second: B }
+
+let c: Container<number> = { value: 42 }
+let p: Pair<string, number> = { first: "age", second: 30 }
+```
+
+A type parameter can have a default. When all parameters have defaults, the alias can be used bare:
+
+```ts
+type StringMap<V = any> = Record<string, V>
+
+let untyped: StringMap = {}                       // V defaults to any
+let typed:   StringMap<number> = { count: 1 }     // V explicit
+```
+
+Default parameters must come **after** all required ones, mirroring TypeScript:
+
+```ts
+type Pair<A, B = string> = { first: A, second: B }  // ok
+type Pair<A = string, B> = { first: A, second: B }  // error
+```
+
+Recursive generic aliases work — the self-reference keeps the same type arguments:
+
+```ts
+type Tree<T> = { value: T, children: Tree<T>[] }
+```
+
+`Array<T>` and `Schema<T>` are also built-in generics, equivalent to `T[]` and the type of `schema(T)` respectively. They are interchangeable with their shorthand forms.
 
 ## Optional properties
 

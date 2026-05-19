@@ -19,15 +19,19 @@ This loses type-safety, sourcemap potential, and pretty-printing control. Two fa
 
 **Direction:** Audit `ts.raw(...)` call sites; promote each to a structured builder. Add new builders where they would replace a recurring raw-string pattern.
 
-### 2. Method-call chains require `$(...).prop().call().done()`
+### 2. Method-call chains require `$(...).prop().call().done()` ✅ (partially)
 
 The fluent helper works, but readers always have to mentally translate `$(receiver).prop("foo").call(args).done()` into `receiver.foo(args)`. For very common shapes (`obj.method(args)`, `obj.prop`), a one-shot `ts.methodCall(obj, "foo", args)` reads better and is shorter.
 
 **Direction:** Consider `ts.methodCall(receiver, name, args, opts?)` and `ts.awaitedCall(receiver, name, args)` for the chain emitters that always await.
 
-### 3. Multiple ways to spell "an await of a call"
+**Done:** `ts.methodCall(receiver, name, args, { optional? })`, `ts.awaitCall(callee, args)`, and `ts.awaitMethodCall(receiver, name, args, opts?)` exist as of the high-frequency-builders PR. Most call sites in `lib/ir/builders.ts`, `lib/backends/typescriptBuilder.ts` and `lib/backends/typescriptBuilder/sectionAssembler.ts` migrated. Remaining `$(...).prop(...).call(...).done()` chains are intentional (e.g. mixed-purpose chains in pipe emitters).
+
+### 3. Multiple ways to spell "an await of a call" ✅ (canonical form established)
 
 We have `ts.await(ts.call(...))`, `$(...).done()` (with `.await()` modifier?), and inline `ts.raw("await ...")` in some places. Picking one canonical form would help.
+
+**Done:** Canonical form is now `ts.awaitCall(callee, args)` and `ts.awaitMethodCall(receiver, name, args)`. All `ts.raw("await ...")` patterns in `typescriptBuilder.ts` and `sectionAssembler.ts` migrated.
 
 ### 4. Object literals with mixed regular and spread entries are verbose
 
@@ -57,15 +61,17 @@ When reading code that consumes `TsNode`, it is hard to remember the full set of
 
 Picking the right one requires knowing what each compiles to. Worth documenting alongside each builder which compiled form they produce, and possibly consolidating.
 
-### 8. Module-init plumbing is mostly `ts.raw` strings
+### 8. Module-init plumbing is mostly `ts.raw` strings ✅
 
 While extracting `assembleSections`, almost everything in the static-init / `__initializeGlobals` plumbing fell out as `ts.raw("await __initializeStatic(__ctx)")`, `ts.raw("let __staticInitPromise = null")`, etc. The IR has builders for assignments, function declarations, and calls, but for these helpers we still drop to strings because of:
 
 - `await` as a leading keyword on a bare call: no `ts.await(call)` ergonomics that print as a statement.
 - Hand-built `(async () => { ... })()` IIFE: no `ts.iife({ async: true, body })` builder.
-- `let foo = null` initializer: `ts.letDecl(name)` exists but no `ts.letDecl(name, value)` form.
+- `let foo = null` initializer: ~~no `ts.letDecl(name, value)` form~~ — turned out `ts.letDecl(name, initializer?, typeAnnotation?)` already exists; the static-init plumbing just wasn't using it.
 
 **Direction:** Add at least `ts.iife({ body, async })`, `ts.letDecl(name, value?)`, and double-check `ts.await` produces statement-form output.
+
+**Done:** `ts.iife({ async?, params?, body })` added. The pretty-printer now wraps arrow/function-expression callees in parens automatically, so the IIFE shape `(async () => { ... })()` is purely IR-driven. `ts.awaitCall`/`ts.awaitMethodCall` cover statement-form awaits. The static-init plumbing in `sectionAssembler.ts` is now fully structured (no `ts.raw` in that path).
 
 ### 9. Discriminator on assignment LHS in raw IR is asymmetric
 

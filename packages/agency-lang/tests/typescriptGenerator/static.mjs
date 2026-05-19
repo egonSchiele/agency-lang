@@ -139,14 +139,16 @@ function registerTools(tools: any[]) {
   }
 }
 
-let __staticInitPromise = null
+let __staticInitPromise = null;
 let foo;
 async function __initializeStatic(__ctx) {
-  if (__staticInitPromise) return __staticInitPromise
+  if (__staticInitPromise) {
+    return __staticInitPromise;
+  }
   __staticInitPromise = (async () => {
-  foo = __deepFreeze(1);
-  })()
-  return __staticInitPromise
+    foo = __deepFreeze(1);
+  })();
+  return __staticInitPromise;
 }
 function __getStaticVars() {
   return {

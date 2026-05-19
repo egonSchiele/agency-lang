@@ -222,6 +222,52 @@ export const ts = {
     return { kind: "await", expr };
   },
 
+  /**
+   * `receiver.name(args)` or `receiver?.name(args)`.
+   * Replaces the verbose `$(receiver).prop(name).call(args).done()` chain
+   * for the common "method call on a receiver" shape.
+   */
+  methodCall(
+    receiver: TsNode,
+    name: string,
+    args: TsNode[] = [],
+    opts?: { optional?: boolean },
+  ): TsCall {
+    return ts.call(ts.prop(receiver, name, opts), args);
+  },
+
+  /** `await callee(args)` */
+  awaitCall(callee: TsNode, args: TsNode[] = []): TsAwait {
+    return ts.await(ts.call(callee, args));
+  },
+
+  /** `await receiver.name(args)` or `await receiver?.name(args)` */
+  awaitMethodCall(
+    receiver: TsNode,
+    name: string,
+    args: TsNode[] = [],
+    opts?: { optional?: boolean },
+  ): TsAwait {
+    return ts.await(ts.methodCall(receiver, name, args, opts));
+  },
+
+  /**
+   * Immediately-invoked (arrow) function expression: `(async () => { body })()`.
+   * `body` can be a `TsStatements` body or any single `TsNode`.
+   * The printer adds the wrapping parens around the arrow callee automatically.
+   */
+  iife(opts: {
+    async?: boolean;
+    params?: TsParam[];
+    body: TsNode | TsNode[];
+  }): TsCall {
+    const body = Array.isArray(opts.body) ? ts.statements(opts.body) : opts.body;
+    return ts.call(
+      ts.arrowFn(opts.params ?? [], body, { async: opts.async }),
+      [],
+    );
+  },
+
   return(expr?: TsNode): TsReturn {
     return { kind: "return", expr };
   },
@@ -434,7 +480,7 @@ export const ts = {
   /** Call runner.halt(value) and return from the current callback */
   runnerHalt(value: TsNode): TsStatements {
     return ts.statements([
-      $(ts.id("runner")).prop("halt").call([value]).done(),
+      ts.methodCall(ts.id("runner"), "halt", [value]),
       ts.return(),
     ]);
   },
@@ -450,16 +496,13 @@ export const ts = {
 
   callHook(hookName: string, data: Record<string, TsNode> | TsNode): TsNode {
     const dataNode = "kind" in data ? data as TsNode : ts.obj(data as Record<string, TsNode>);
-    return $(ts.id("callHook"))
-      .call([
-        ts.obj({
-          callbacks: $(ts.runtime.ctx).prop("callbacks").done(),
-          name: ts.str(hookName),
-          data: dataNode,
-        }),
-      ])
-      .await()
-      .done();
+    return ts.awaitCall(ts.id("callHook"), [
+      ts.obj({
+        callbacks: ts.prop(ts.runtime.ctx, "callbacks"),
+        name: ts.str(hookName),
+        data: dataNode,
+      }),
+    ]);
   },
 
   setupEnv({
@@ -501,21 +544,21 @@ export const ts = {
   time(varName: string): TsNode {
     return ts.letDecl(
       varName,
-      $(ts.id("performance")).prop("now").call().done(),
+      ts.methodCall(ts.id("performance"), "now"),
       "number",
     );
   },
 
   stack(varName: string): TsNode {
-    return $(ts.runtime.stack).prop(varName).done();
+    return ts.prop(ts.runtime.stack, varName);
   },
 
   ctx(varName: string): TsNode {
-    return $(ts.runtime.ctx).prop(varName).done();
+    return ts.prop(ts.runtime.ctx, varName);
   },
 
   self(varName: string): TsNode {
-    return $(ts.runtime.self).prop(varName).done();
+    return ts.prop(ts.runtime.self, varName);
   },
 
   throw(code: string): TsNode {
@@ -579,46 +622,41 @@ export const ts = {
   },
 
   smoltalkSystemMessage(args: TsNode[]): TsNode {
-    return $.id("smoltalk").prop("systemMessage").call(args).done();
+    return ts.methodCall(ts.id("smoltalk"), "systemMessage", args);
   },
 
   smoltalkUserMessage(args: TsNode[]): TsNode {
-    return $.id("smoltalk").prop("userMessage").call(args).done();
+    return ts.methodCall(ts.id("smoltalk"), "userMessage", args);
   },
   smoltalkAssistantMessage(args: TsNode[]): TsNode {
-    return $.id("smoltalk").prop("assistantMessage").call(args).done();
+    return ts.methodCall(ts.id("smoltalk"), "assistantMessage", args);
   },
 
   goToNode(nodeName: string, args: TsNode): TsNode {
-    return $.id("goToNode")
-      .call([ts.str(nodeName), args])
-      .done();
+    return ts.call(ts.id("goToNode"), [ts.str(nodeName), args]);
   },
 
   nodeReturn({ messages, data }: { messages: TsNode; data: TsNode }): TsStatements {
     return ts.statements([
-      $(ts.id("runner"))
-        .prop("halt")
-        .call([ts.obj({ messages, data })])
-        .done(),
+      ts.methodCall(ts.id("runner"), "halt", [ts.obj({ messages, data })]),
       ts.raw("return"),
     ]);
   },
 
   jsonStringify(value: TsNode): TsNode {
-    return $.id("JSON").prop("stringify").call([value]).done();
+    return ts.methodCall(ts.id("JSON"), "stringify", [value]);
   },
 
   consoleLog(...args: TsNode[]): TsNode {
-    return $.id("console").prop("log").call(args).done();
+    return ts.methodCall(ts.id("console"), "log", args);
   },
 
   consoleWarn(...args: TsNode[]): TsNode {
-    return $.id("console").prop("warn").call(args).done();
+    return ts.methodCall(ts.id("console"), "warn", args);
   },
 
   consoleError(...args: TsNode[]): TsNode {
-    return $.id("console").prop("error").call(args).done();
+    return ts.methodCall(ts.id("console"), "error", args);
   },
 
   /* 
@@ -633,18 +671,19 @@ export const ts = {
 
   /** GlobalStore operations */
   globalGet(moduleId: string, varName: string): TsCall {
-    return ts.call($(ts.runtime.ctx).prop("globals").prop("get").done(), [
-      ts.str(moduleId),
-      ts.str(varName),
-    ]);
+    return ts.methodCall(
+      ts.prop(ts.runtime.ctx, "globals"),
+      "get",
+      [ts.str(moduleId), ts.str(varName)],
+    );
   },
 
   globalSet(moduleId: string, varName: string, value: TsNode): TsCall {
-    return ts.call($(ts.runtime.ctx).prop("globals").prop("set").done(), [
-      ts.str(moduleId),
-      ts.str(varName),
-      value,
-    ]);
+    return ts.methodCall(
+      ts.prop(ts.runtime.ctx, "globals"),
+      "set",
+      [ts.str(moduleId), ts.str(varName), value],
+    );
   },
 
   ternary(condition: TsNode, trueExpr: TsNode, falseExpr: TsNode): TsTernary {

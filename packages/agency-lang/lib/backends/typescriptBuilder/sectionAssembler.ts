@@ -1,6 +1,6 @@
 import type { AgencyNode, AgencyProgram } from "../../types.js";
 import type { TsNode } from "../../ir/tsIR.js";
-import { $, ts } from "../../ir/builders.js";
+import { ts } from "../../ir/builders.js";
 
 /**
  * Two helpers for the orchestration phase of `TypeScriptBuilder.build()`:
@@ -252,7 +252,7 @@ function buildStaticVarSetup(opts: AssembleSectionsOpts): TsNode[] {
   );
 
   out.push(ts.statements([
-    ts.raw("let __staticInitPromise = null"),
+    ts.letDecl("__staticInitPromise", ts.raw("null")),
     ...staticLetDecls,
   ]));
 
@@ -262,11 +262,15 @@ function buildStaticVarSetup(opts: AssembleSectionsOpts): TsNode[] {
       "__initializeStatic",
       [{ name: "__ctx" }],
       ts.statements([
-        ts.raw("if (__staticInitPromise) return __staticInitPromise"),
-        ts.raw(`__staticInitPromise = (async () => {`),
-        ...opts.staticInitStatements,
-        ts.raw(`})()`),
-        ts.raw("return __staticInitPromise"),
+        ts.if(
+          ts.id("__staticInitPromise"),
+          ts.return(ts.id("__staticInitPromise")),
+        ),
+        ts.assign(
+          ts.id("__staticInitPromise"),
+          ts.iife({ async: true, body: opts.staticInitStatements }),
+        ),
+        ts.return(ts.id("__staticInitPromise")),
       ]),
       { async: true },
     ),
@@ -277,7 +281,10 @@ function buildStaticVarSetup(opts: AssembleSectionsOpts): TsNode[] {
   );
   out.push(ts.statements([
     ts.functionDecl("__getStaticVars", [], ts.return(staticVarObj)),
-    ts.raw("__globalCtx.getStaticVars = __getStaticVars;"),
+    ts.assign(
+      ts.prop(ts.runtime.globalCtx, "getStaticVars"),
+      ts.id("__getStaticVars"),
+    ),
   ]));
 
   return out;
@@ -298,16 +305,19 @@ function buildInitializeGlobalsFn(opts: AssembleSectionsOpts): TsNode {
     // This prevents infinite recursion when a global init expression
     // calls a function defined in the same module (which would trigger
     // __initializeGlobals again via the isInitialized check).
-    ts.call(
-      $(ts.runtime.ctx).prop("globals").prop("markInitialized").done(),
+    ts.methodCall(
+      ts.prop(ts.runtime.ctx, "globals"),
+      "markInitialized",
       [ts.str(opts.moduleId)],
     ),
   ];
 
   if (opts.staticVarNames.size > 0) {
     body.push(
-      ts.raw("await __initializeStatic(__ctx)"),
-      ts.raw("await __ctx.writeStaticStateToTrace(__globalCtx.getStaticVars())"),
+      ts.awaitCall(ts.id("__initializeStatic"), [ts.runtime.ctx]),
+      ts.awaitMethodCall(ts.runtime.ctx, "writeStaticStateToTrace", [
+        ts.methodCall(ts.runtime.globalCtx, "getStaticVars"),
+      ]),
     );
   }
 

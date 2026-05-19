@@ -1,0 +1,21 @@
+def makeOk(): Success<number> {
+  return success(42)
+}
+
+def makeBad(): Failure<string> {
+  return failure("boom")
+}
+
+node main() {
+  const ok: Success<number> = makeOk()
+  const bad: Failure = makeBad()
+  const anyOk: Success = success("ignored")
+  if (isFailure(bad)) {
+    if (isSuccess(ok)) {
+      if (isSuccess(anyOk)) {
+        return ok.value
+      }
+    }
+  }
+  return -1
+}

@@ -43,7 +43,7 @@ import { walkNodes } from "../utils/node.js";
 export type { TypeCheckError, TypeCheckResult } from "./types.js";
 
 /** Type-alias names that resolve to built-in types. */
-const RESERVED_TYPE_NAMES = new Set<string>(["Result"]);
+const RESERVED_TYPE_NAMES = new Set<string>(["Result", "Success", "Failure"]);
 
 export class TypeChecker {
   private program: AgencyProgram;

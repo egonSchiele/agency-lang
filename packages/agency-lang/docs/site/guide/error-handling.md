@@ -36,6 +36,27 @@ const result = divide(10, 0)
 You can also use result patterns for more concise unwrapping — see
 [Pattern Matching](pattern-matching.md#result-patterns).
 
+### `Success` and `Failure` type aliases
+
+`Result` has two built-in companion aliases that read more naturally when
+you want to signal which branch a value belongs to:
+
+```ts
+def makeOk(): Success<number> { return success(42) }
+def makeBad(): Failure<string> { return failure("boom") }
+
+const ok: Success<number> = success(1)   // Result<number, any>
+const bad: Failure = failure("oops")     // Result<any, any>
+```
+
+- `Success<T>` is sugar for `Result<T, any>`
+- `Failure<E>` is sugar for `Result<any, E>`
+- Bare `Success` and `Failure` are both sugar for `Result<any, any>`
+
+These are purely type-level aliases — the runtime representation is still
+a `Result`, so `isSuccess`, `isFailure`, `match`, `catch`, etc. all work
+the same way on them.
+
 Let's see some reasons you might want to use a Result type instead.
 
 ## Default value

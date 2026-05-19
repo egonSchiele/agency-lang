@@ -2481,6 +2481,75 @@ describe("resultTypeParser", () => {
       });
     }
   });
+
+  it("parses bare Success as Result<any, any>", () => {
+    const result = resultTypeParser("Success");
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.result).toEqual({
+        type: "resultType",
+        successType: { type: "primitiveType", value: "any" },
+        failureType: { type: "primitiveType", value: "any" },
+      });
+    }
+  });
+
+  it("parses Success<T> as Result<T, any>", () => {
+    const result = resultTypeParser("Success<number>");
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.result).toEqual({
+        type: "resultType",
+        successType: { type: "primitiveType", value: "number" },
+        failureType: { type: "primitiveType", value: "any" },
+      });
+    }
+  });
+
+  it("parses bare Failure as Result<any, any>", () => {
+    const result = resultTypeParser("Failure");
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.result).toEqual({
+        type: "resultType",
+        successType: { type: "primitiveType", value: "any" },
+        failureType: { type: "primitiveType", value: "any" },
+      });
+    }
+  });
+
+  it("parses Failure<E> as Result<any, E>", () => {
+    const result = resultTypeParser("Failure<string>");
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.result).toEqual({
+        type: "resultType",
+        successType: { type: "primitiveType", value: "any" },
+        failureType: { type: "primitiveType", value: "string" },
+      });
+    }
+  });
+
+  it("does not match SuccessFoo as bare Success", () => {
+    const result = resultTypeParser("SuccessFoo");
+    expect(result.success).toBe(false);
+  });
+
+  it("does not match FailureFoo as bare Failure", () => {
+    const result = resultTypeParser("FailureFoo");
+    expect(result.success).toBe(false);
+  });
+
+  it("parses SuccessFoo as a type alias via variableTypeParser", () => {
+    const result = variableTypeParser("SuccessFoo");
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.result).toEqual({
+        type: "typeAliasVariable",
+        aliasName: "SuccessFoo",
+      });
+    }
+  });
 });
 
 describe("variableTypeParser", () => {

@@ -1045,6 +1045,44 @@ export const resultTypeParser: Parser<ResultType> = trace(
       set("successType", { type: "primitiveType", value: "any" }),
       set("failureType", { type: "primitiveType", value: "any" }),
     ),
+    // Success<T> — sugar for Result<T, any>
+    seqC(
+      set("type", "resultType"),
+      str("Success"),
+      char("<"),
+      captureCaptures(seqC(
+        capture(lazy(() => variableTypeParser), "successType"),
+        char(">"),
+      )),
+      set("failureType", { type: "primitiveType", value: "any" }),
+    ),
+    // Bare Success (sugar for Result<any, any>)
+    seqC(
+      set("type", "resultType"),
+      str("Success"),
+      not(varNameChar),
+      set("successType", { type: "primitiveType", value: "any" }),
+      set("failureType", { type: "primitiveType", value: "any" }),
+    ),
+    // Failure<E> — sugar for Result<any, E>
+    seqC(
+      set("type", "resultType"),
+      str("Failure"),
+      char("<"),
+      captureCaptures(seqC(
+        capture(lazy(() => variableTypeParser), "failureType"),
+        char(">"),
+      )),
+      set("successType", { type: "primitiveType", value: "any" }),
+    ),
+    // Bare Failure (sugar for Result<any, any>)
+    seqC(
+      set("type", "resultType"),
+      str("Failure"),
+      not(varNameChar),
+      set("successType", { type: "primitiveType", value: "any" }),
+      set("failureType", { type: "primitiveType", value: "any" }),
+    ),
   ),
 );
 

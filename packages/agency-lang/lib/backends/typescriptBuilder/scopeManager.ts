@@ -75,6 +75,15 @@ export class ScopeManager {
   }
 
   /**
+   * Full TypeAliasEntry-form alias registry for callers (resolveTypeDeep)
+   * that need type-parameter metadata to substitute user-defined generic
+   * aliases.
+   */
+  visibleTypeAliasesFull() {
+    return this.compilationUnit.typeAliases.visibleIn(this.currentKey());
+  }
+
+  /**
    * Declared return type of the currently-executing function or graph node,
    * or `undefined` for global scope or a function with no annotation.
    */

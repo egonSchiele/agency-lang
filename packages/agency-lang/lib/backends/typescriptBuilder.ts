@@ -91,6 +91,7 @@ import {
   DEFAULT_SCHEMA,
   mapTypeToValidationSchema,
 } from "./typescriptGenerator/typeToZodSchema.js";
+import { resolveTypeDeep } from "../typeChecker/assignability.js";
 
 import { $, ts } from "../ir/builders.js";
 import { printTs } from "../ir/prettyPrint.js";
@@ -584,11 +585,22 @@ export class TypeScriptBuilder {
     // resolveType in the typechecker, so no top-level emission is needed.
     if (node.typeParams && node.typeParams.length > 0) return ts.empty();
     const exportPrefix = node.exported ? "export " : "";
-    const zodSchema = mapTypeToValidationSchema(node.aliasedType, this.scopes.visibleTypeAliases());
+    const zodSchema = this.zodSchemaFor(node.aliasedType);
     return ts.statements([
       ts.raw(`${exportPrefix}const ${node.aliasName} = ${zodSchema};`),
       ts.raw(`${exportPrefix}type ${node.aliasName} = z.infer<typeof ${node.aliasName}>;`),
     ]);
+  }
+
+  /**
+   * Build a zod validation schema string for a VariableType taken from user
+   * source. Deep-resolves user-defined generic aliases first so that uses
+   * like `Container<number>` become a concrete object/array/etc. before the
+   * (alias-unaware) zod mapper runs.
+   */
+  private zodSchemaFor(t: VariableType): string {
+    const resolved = resolveTypeDeep(t, this.scopes.visibleTypeAliasesFull());
+    return mapTypeToValidationSchema(resolved, this.scopes.visibleTypeAliases());
   }
 
   // ------- Proper IR node methods -------
@@ -861,7 +873,7 @@ export class TypeScriptBuilder {
   }
 
   private processSchemaExpression(node: SchemaExpression): TsNode {
-    const zodSchema = mapTypeToValidationSchema(node.typeArg, this.scopes.visibleTypeAliases());
+    const zodSchema = this.zodSchemaFor(node.typeArg);
     return ts.new(ts.id("Schema"), [ts.raw(zodSchema)]);
   }
 
@@ -1213,7 +1225,7 @@ export class TypeScriptBuilder {
         type: "primitiveType" as const,
         value: "string",
       };
-      let tsType = mapTypeToValidationSchema(typeHint, this.scopes.visibleTypeAliases());
+      let tsType = this.zodSchemaFor(typeHint);
       if (param.defaultValue) {
         const defaultStr = expressionToString(param.defaultValue);
         tsType += `.nullable().describe(${JSON.stringify("Default: " + defaultStr)})`;
@@ -1397,7 +1409,7 @@ export class TypeScriptBuilder {
     const validationGuards: TsNode[] = [];
     for (const param of parameters) {
       if (param.validated && param.typeHint) {
-        const zodSchema = mapTypeToValidationSchema(param.typeHint, this.scopes.visibleTypeAliases());
+        const zodSchema = this.zodSchemaFor(param.typeHint);
         const stackArg = $(ts.stack("args")).index(ts.str(param.name)).done();
         const vrName = `__vr_${param.name}`;
         const vrId = ts.id(vrName);
@@ -2107,7 +2119,7 @@ export class TypeScriptBuilder {
     if (!this.scopes.returnTypeValidated()) return valueNode;
     const returnType = this.scopes.returnType();
     if (!returnType) return valueNode;
-    const zodSchema = mapTypeToValidationSchema(returnType, this.scopes.visibleTypeAliases());
+    const zodSchema = this.zodSchemaFor(returnType);
     return ts.validateType(valueNode, ts.raw(zodSchema));
   }
 
@@ -2204,10 +2216,7 @@ export class TypeScriptBuilder {
     const result = this._processAssignmentInner(node);
     // If the type annotation has !, wrap the assigned value in __validateType
     if (node.validated && node.typeHint) {
-      const zodSchema = mapTypeToValidationSchema(
-        node.typeHint,
-        this.scopes.visibleTypeAliases(),
-      );
+      const zodSchema = this.zodSchemaFor(node.typeHint);
       const varRef = ts.scopedVar(node.variableName, node.scope!, this.moduleId);
       const validateStmt = ts.assign(varRef, ts.validateType(varRef, ts.raw(zodSchema)));
       if (result.kind === "statements") {
@@ -2351,10 +2360,7 @@ export class TypeScriptBuilder {
       value: "string",
     };
 
-    const zodSchema = mapTypeToValidationSchema(
-      _variableType,
-      this.scopes.visibleTypeAliases(),
-    );
+    const zodSchema = this.zodSchemaFor(_variableType);
 
     // Extract prompt from first argument, using processNode to get scoped variable references
     const promptArg = node.arguments[0];

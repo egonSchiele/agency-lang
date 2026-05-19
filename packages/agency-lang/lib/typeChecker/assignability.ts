@@ -1,6 +1,7 @@
 import { TypeAliasEntry, TypeParam, VariableType } from "../types.js";
 import { BOOLEAN_T, NUMBER_T, STRING_T } from "./primitives.js";
 import { substituteTypeParams } from "./substitute.js";
+import { mapTypes } from "./typeWalker.js";
 
 /**
  * Public resolveType: normalizes a VariableType by resolving type-alias
@@ -170,6 +171,44 @@ function validateRecordKeyType(
       `Record key type must be string, number, a string literal, a number literal, or a union of those`,
     );
   }
+}
+
+/**
+ * Recursively resolve generic types and type aliases throughout a type tree.
+ *
+ * `resolveType` only normalizes a single node — when a user-defined generic
+ * alias like `Container<T>` is substituted, the resulting body may contain
+ * further generic forms (e.g. `Wrapper<number>`) that the substituting call
+ * hasn't seen. Codegen needs every generic resolved away (other than the
+ * survivable `Record<K, V>` form), so this function applies `resolveType`
+ * iteratively until a pass produces no change.
+ *
+ * Used by the TypeScript builder before calling `mapTypeToValidationSchema`
+ * / `mapTypeToZodSchema`, neither of which knows how to substitute user-
+ * defined generic aliases.
+ */
+export function resolveTypeDeep(
+  t: VariableType,
+  typeAliases: Record<string, TypeAliasEntry>,
+): VariableType {
+  let current = t;
+  // Iterate until a pass produces no change. Generic-alias depth is bounded
+  // in practice; the cap exists only to prevent runaway loops on a bug.
+  for (let i = 0; i < 32; i++) {
+    const next = mapTypes(current, (n) => {
+      // Only expand `genericType` nodes here. We deliberately leave
+      // `typeAliasVariable` references intact so codegen can emit them by
+      // name (e.g. `Coords` → references the already-declared zod schema).
+      if (n.type !== "genericType") return n;
+      // Resolve built-in `Array`/`Schema` (codegen wants the lowered form)
+      // and any user-defined generic alias instantiation. `Record<K, V>`
+      // stays as a `genericType` after resolveType normalizes its args.
+      return resolveType(n, typeAliases);
+    });
+    if (JSON.stringify(next) === JSON.stringify(current)) return next;
+    current = next;
+  }
+  return current;
 }
 
 function isValidRecordKey(t: VariableType): boolean {

@@ -517,3 +517,54 @@ describe("AgencyGenerator - string interpolation with nested calls", () => {
   });
 });
 
+describe("AgencyGenerator - Result Patterns", () => {
+  // Format with lowering DISABLED so raw `resultPattern` nodes reach the
+  // formatter (the formatter operates on the un-lowered AST).
+  function formatAgency(input: string): string {
+    const parseResult = parseAgency(input, {}, false, false);
+    expect(parseResult.success).toBe(true);
+    if (!parseResult.success) return "";
+    const generator = new AgencyGenerator();
+    return generator.generate(parseResult.result).output.trim();
+  }
+
+  it("formats `r is success` (bare boolean form)", () => {
+    const input = `node main() {\n  let r = success(1)\n  let x = r is success\n}`;
+    const output = formatAgency(input);
+    expect(output).toContain("r is success");
+    expect(output).not.toContain("isSuccess");
+  });
+
+  it("formats `r is failure` (bare boolean form)", () => {
+    const input = `node main() {\n  let r = failure("e")\n  let x = r is failure\n}`;
+    const output = formatAgency(input);
+    expect(output).toContain("r is failure");
+    expect(output).not.toContain("isFailure");
+  });
+
+  it("formats `r is success(v)` with binding", () => {
+    const input = `node main() {\n  let r = success(1)\n  if (r is success(v)) {\n    print(v)\n  }\n}`;
+    const output = formatAgency(input);
+    expect(output).toContain("r is success(v)");
+  });
+
+  it("formats `r is failure(e)` with binding", () => {
+    const input = `node main() {\n  let r = failure("e")\n  if (r is failure(e)) {\n    print(e)\n  }\n}`;
+    const output = formatAgency(input);
+    expect(output).toContain("r is failure(e)");
+  });
+
+  it("formats result patterns as match arm LHS", () => {
+    const input = `node main() {\n  let r = success(1)\n  match (r) {\n    success(v) => print(v)\n    failure(e) => print(e)\n  }\n}`;
+    const output = formatAgency(input);
+    expect(output).toContain("success(v)");
+    expect(output).toContain("failure(e)");
+  });
+
+  it("formats result patterns nested inside an array match pattern", () => {
+    const input = `node main() {\n  let arr = [success(1), failure("e")]\n  match (arr) {\n    [success(v), _] => print(v)\n    _ => print("none")\n  }\n}`;
+    const output = formatAgency(input);
+    expect(output).toContain("[success(v), _]");
+  });
+});
+

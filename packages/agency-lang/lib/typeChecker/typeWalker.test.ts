@@ -138,6 +138,48 @@ describe("mapTypes", () => {
     expect(arr).toEqual(snapshot);
   });
 
+  it("recurses into functionRefType params and returnType", () => {
+    const fn: VariableType = {
+      type: "functionRefType",
+      name: "f",
+      params: [
+        { type: "functionParameter", name: "x", typeHint: numberType },
+        { type: "functionParameter", name: "y", typeHint: booleanType },
+      ],
+      returnType: numberType,
+    };
+    const result = mapTypes(fn, (t) =>
+      isNumber(t) ? stringType : t,
+    );
+    expect(result).toEqual({
+      type: "functionRefType",
+      name: "f",
+      params: [
+        { type: "functionParameter", name: "x", typeHint: stringType },
+        { type: "functionParameter", name: "y", typeHint: booleanType },
+      ],
+      returnType: stringType,
+    });
+  });
+
+  it("leaves functionRefType params without typeHint untouched", () => {
+    const fn: VariableType = {
+      type: "functionRefType",
+      name: "f",
+      params: [{ type: "functionParameter", name: "x" }],
+      returnType: numberType,
+    };
+    const result = mapTypes(fn, (t) =>
+      isNumber(t) ? stringType : t,
+    );
+    expect(result).toEqual({
+      type: "functionRefType",
+      name: "f",
+      params: [{ type: "functionParameter", name: "x" }],
+      returnType: stringType,
+    });
+  });
+
   it("substitutes a typeAliasVariable (the substitute pattern)", () => {
     const tParam: VariableType = { type: "typeAliasVariable", aliasName: "T" };
     const tree: VariableType = {
@@ -171,5 +213,41 @@ describe("visitTypes (sanity check that walker still works)", () => {
       seen.push(t.type);
     });
     expect(seen).toEqual(["arrayType", "primitiveType"]);
+  });
+
+  it("visits functionRefType param types and returnType", () => {
+    const fn: VariableType = {
+      type: "functionRefType",
+      name: "f",
+      params: [
+        { type: "functionParameter", name: "x", typeHint: numberType },
+        { type: "functionParameter", name: "y" }, // untyped — should be skipped
+        { type: "functionParameter", name: "z", typeHint: stringType },
+      ],
+      returnType: booleanType,
+    };
+    const seen: VariableType[] = [];
+    visitTypes(fn, (t) => {
+      seen.push(t);
+    });
+    // root, then param[0].typeHint, then param[2].typeHint, then returnType
+    expect(seen).toEqual([fn, numberType, stringType, booleanType]);
+  });
+
+  it("short-circuits when visitor returns true inside functionRefType", () => {
+    const fn: VariableType = {
+      type: "functionRefType",
+      name: "f",
+      params: [{ type: "functionParameter", name: "x", typeHint: numberType }],
+      returnType: stringType,
+    };
+    let count = 0;
+    const halted = visitTypes(fn, (t) => {
+      count++;
+      return t.type === "primitiveType" && t.value === "number";
+    });
+    expect(halted).toBe(true);
+    // root + numberType only; should not visit returnType
+    expect(count).toBe(2);
   });
 });

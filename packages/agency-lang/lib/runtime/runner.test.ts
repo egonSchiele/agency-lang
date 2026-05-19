@@ -340,6 +340,59 @@ describe("Runner", () => {
 
       expect(collected.sort()).toEqual(["alice", "bob"]);
     });
+
+    it("does nothing when iterating an empty Record", async () => {
+      const frame = makeFrame();
+      const runner = new Runner(makeMockCtx(), frame);
+      const collected: string[] = [];
+
+      await runner.loop(0, {}, async (key) => {
+        collected.push(key);
+      });
+
+      expect(collected).toEqual([]);
+      // The iteration counter is initialized to 0 and the step counter
+      // still advances past this loop.
+      expect(frame.locals.__iteration_0).toBe(0);
+      expect(frame.step).toBe(1);
+    });
+
+    it("halts mid-iteration over a Record and preserves state", async () => {
+      const frame = makeFrame();
+      const runner = new Runner(makeMockCtx(), frame);
+      const collected: string[] = [];
+
+      await runner.loop(
+        0,
+        { a: 1, b: 2, c: 3 },
+        async (key, _i, runner) => {
+          collected.push(key);
+          if (key === "b") {
+            runner.halt("stopped");
+          }
+        },
+      );
+
+      expect(runner.halted).toBe(true);
+      // Object.keys order is insertion order for string keys -> a, b, c
+      expect(collected).toEqual(["a", "b"]);
+      // Completed iteration 0 ("a") only. The halt happens inside iteration
+      // 1, so the counter still points at iteration 1 for resumption.
+      expect(frame.locals.__iteration_0).toBe(1);
+    });
+
+    it("does nothing when given null/undefined as the iterable", async () => {
+      const frame = makeFrame();
+      const runner = new Runner(makeMockCtx(), frame);
+      const collected: string[] = [];
+
+      await runner.loop(0, null as any, async (item) => {
+        collected.push(item);
+      });
+
+      expect(collected).toEqual([]);
+      expect(frame.step).toBe(1);
+    });
   });
 
   describe("whileLoop()", () => {

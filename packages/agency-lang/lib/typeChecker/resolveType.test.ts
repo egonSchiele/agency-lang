@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { resolveType } from "./assignability.js";
+import { resolveType, resolveTypeDeep } from "./assignability.js";
 import type { TypeAliasEntry, VariableType } from "../types.js";
 
 const stringType: VariableType = { type: "primitiveType", value: "string" };
@@ -434,5 +434,173 @@ describe("resolveType: user-defined generic aliases", () => {
         {},
       ),
     ).toThrow(/Unknown generic type Ghost/);
+  });
+});
+
+describe("resolveTypeDeep: nested generic resolution", () => {
+  it("resolves a generic alias nested inside another generic alias arg", () => {
+    // type Container<T> = { value: T }
+    const aliases: Record<string, TypeAliasEntry> = {
+      Container: {
+        body: {
+          type: "objectType",
+          properties: [
+            {
+              key: "value",
+              value: { type: "typeAliasVariable", aliasName: "T" },
+            },
+          ],
+        },
+        typeParams: [{ name: "T" }],
+      },
+    };
+    // Container<Container<number>>
+    const input: VariableType = {
+      type: "genericType",
+      name: "Container",
+      typeArgs: [
+        {
+          type: "genericType",
+          name: "Container",
+          typeArgs: [numberType],
+        },
+      ],
+    };
+    const result = resolveTypeDeep(input, aliases);
+    expect(result).toEqual({
+      type: "objectType",
+      properties: [
+        {
+          key: "value",
+          value: {
+            type: "objectType",
+            properties: [{ key: "value", value: numberType }],
+          },
+        },
+      ],
+    });
+  });
+
+  it("resolves a generic alias inside Array<...>", () => {
+    const aliases: Record<string, TypeAliasEntry> = {
+      Container: {
+        body: {
+          type: "objectType",
+          properties: [
+            {
+              key: "value",
+              value: { type: "typeAliasVariable", aliasName: "T" },
+            },
+          ],
+        },
+        typeParams: [{ name: "T" }],
+      },
+    };
+    // Array<Container<string>>
+    const input: VariableType = {
+      type: "genericType",
+      name: "Array",
+      typeArgs: [
+        {
+          type: "genericType",
+          name: "Container",
+          typeArgs: [stringType],
+        },
+      ],
+    };
+    const result = resolveTypeDeep(input, aliases);
+    expect(result).toEqual({
+      type: "arrayType",
+      elementType: {
+        type: "objectType",
+        properties: [{ key: "value", value: stringType }],
+      },
+    });
+  });
+
+  it("keeps Record<K, V> as a genericType while resolving its value arg", () => {
+    const aliases: Record<string, TypeAliasEntry> = {
+      Container: {
+        body: {
+          type: "objectType",
+          properties: [
+            {
+              key: "value",
+              value: { type: "typeAliasVariable", aliasName: "T" },
+            },
+          ],
+        },
+        typeParams: [{ name: "T" }],
+      },
+    };
+    // Record<string, Container<number>>
+    const input: VariableType = {
+      type: "genericType",
+      name: "Record",
+      typeArgs: [
+        stringType,
+        {
+          type: "genericType",
+          name: "Container",
+          typeArgs: [numberType],
+        },
+      ],
+    };
+    const result = resolveTypeDeep(input, aliases);
+    expect(result).toEqual({
+      type: "genericType",
+      name: "Record",
+      typeArgs: [
+        stringType,
+        {
+          type: "objectType",
+          properties: [{ key: "value", value: numberType }],
+        },
+      ],
+    });
+  });
+
+  it("leaves bare typeAliasVariable references intact (so codegen can emit by name)", () => {
+    const aliases: Record<string, TypeAliasEntry> = {
+      Coords: {
+        body: {
+          type: "objectType",
+          properties: [
+            { key: "x", value: numberType },
+            { key: "y", value: numberType },
+          ],
+        },
+      },
+    };
+    const input: VariableType = {
+      type: "typeAliasVariable",
+      aliasName: "Coords",
+    };
+    const result = resolveTypeDeep(input, aliases);
+    // unchanged — codegen emits the alias by name
+    expect(result).toEqual(input);
+  });
+
+  it("preserves typeAliasVariable references even inside an object tree", () => {
+    const aliases: Record<string, TypeAliasEntry> = {
+      Coords: {
+        body: {
+          type: "objectType",
+          properties: [{ key: "x", value: numberType }],
+        },
+      },
+    };
+    const input: VariableType = {
+      type: "objectType",
+      properties: [
+        { key: "a", value: { type: "typeAliasVariable", aliasName: "Coords" } },
+      ],
+    };
+    const result = resolveTypeDeep(input, aliases);
+    expect(result).toEqual(input);
+  });
+
+  it("returns primitives unchanged", () => {
+    expect(resolveTypeDeep(numberType, {})).toEqual(numberType);
   });
 });

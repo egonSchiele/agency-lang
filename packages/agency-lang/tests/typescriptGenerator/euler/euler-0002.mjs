@@ -184,7 +184,7 @@ __stack.locals.b = 2;
     await runner.step(2, async (runner) => {
 __stack.locals.sum = 0;
     });
-    await runner.whileLoop(3, () => __stack.locals.a <= 4000000, async (runner) => {
+    await runner.whileLoop(3, async () => __stack.locals.a <= 4000000, async (runner) => {
 await runner.ifElse(0, [
 
   {

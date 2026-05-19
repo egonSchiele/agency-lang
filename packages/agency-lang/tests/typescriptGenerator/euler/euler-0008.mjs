@@ -412,14 +412,14 @@ __stack.locals.maxProduct = 0;
     await runner.step(2, async (runner) => {
 __stack.locals.i = 0;
     });
-    await runner.whileLoop(3, () => __stack.locals.i <= __stack.locals.digits.length - 13, async (runner) => {
+    await runner.whileLoop(3, async () => __stack.locals.i <= __stack.locals.digits.length - 13, async (runner) => {
 await runner.step(0, async (runner) => {
 __stack.locals.product = 1;
       });
 await runner.step(1, async (runner) => {
 __stack.locals.j = 0;
       });
-await runner.whileLoop(2, () => __stack.locals.j < 13, async (runner) => {
+await runner.whileLoop(2, async () => __stack.locals.j < 13, async (runner) => {
 await runner.step(0, async (runner) => {
 __stack.locals.product = __stack.locals.product * await __call(toDigit, {
             type: "positional",

@@ -178,11 +178,11 @@ let __functionCompleted = false;
     await runner.step(0, async (runner) => {
 __stack.locals.a = 1;
     });
-    await runner.whileLoop(1, () => __stack.locals.a < 1000, async (runner) => {
+    await runner.whileLoop(1, async () => __stack.locals.a < 1000, async (runner) => {
 await runner.step(0, async (runner) => {
 __stack.locals.b = __stack.locals.a + 1;
       });
-await runner.whileLoop(1, () => __stack.locals.b < 1000 - __stack.locals.a, async (runner) => {
+await runner.whileLoop(1, async () => __stack.locals.b < 1000 - __stack.locals.a, async (runner) => {
 await runner.step(0, async (runner) => {
 __stack.locals.c = 1000 - __stack.locals.a - __stack.locals.b;
         });

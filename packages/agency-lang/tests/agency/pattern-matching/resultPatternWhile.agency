@@ -1,0 +1,18 @@
+// Verifies that `while (r is success(v))` re-binds `v` on each iteration
+// and terminates when the pattern stops matching.
+node main() {
+  let r = success(0)
+  let total = 0
+  let count = 0
+  while (r is success(v)) {
+    total = total + v
+    count = count + 1
+    if (v < 3) {
+      r = success(v + 1)
+    } else {
+      r = failure("done")
+    }
+  }
+  // Iterations: v = 0, 1, 2, 3 → total = 6, count = 4
+  return [total, count]
+}

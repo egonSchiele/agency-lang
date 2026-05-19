@@ -331,7 +331,13 @@ export function printTs(node: TsNode, indent = 0): string {
     case "runnerWhileLoop": {
       const cond = printTs(node.condition, indent + 1);
       const body = node.body.map((n) => printTs(n, indent + 1)).join("\n");
-      return `await runner.whileLoop(${node.id}, () => ${cond}, async (runner) => {\n${body}\n${ind(indent)}});`;
+      // The condition arrow MUST be `async` because the TS builder always
+      // emits `await` around function calls; a non-async wrapper would
+      // produce `() => await fn(...)`, which is a syntax error. The runtime
+      // `whileLoop` accepts `() => boolean | Promise<boolean>` and awaits
+      // the result, so a sync condition like `x < 3` still works (a sync
+      // value inside an async arrow is wrapped as Promise<boolean>).
+      return `await runner.whileLoop(${node.id}, async () => ${cond}, async (runner) => {\n${body}\n${ind(indent)}});`;
     }
 
     case "runnerBranchStep": {

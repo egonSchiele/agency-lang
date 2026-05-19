@@ -444,7 +444,10 @@ export class Runner {
 
   async whileLoop(
     id: number,
-    condition: () => boolean,
+    // The condition may be sync (`x < 3`) or async (`isSuccess(r)` — the TS
+    // builder always emits `await` around function calls, so any condition
+    // containing one becomes a Promise<boolean>).
+    condition: () => boolean | Promise<boolean>,
     callback: (runner: Runner) => Promise<void>,
   ): Promise<void> {
     if (this.shouldSkip()) return;
@@ -462,7 +465,7 @@ export class Runner {
     this.frame.locals[iterKey] = this.frame.locals[iterKey] ?? 0;
     let currentIter = 0;
 
-    while (condition()) {
+    while (await condition()) {
       if (this.halted) return;
 
       if (currentIter < this.frame.locals[iterKey]) {

@@ -213,7 +213,7 @@ __stack.locals.x = __stack.args.a;
     await runner.step(1, async (runner) => {
 __stack.locals.y = __stack.args.b;
     });
-    await runner.whileLoop(2, () => __stack.locals.y !== 0, async (runner) => {
+    await runner.whileLoop(2, async () => __stack.locals.y !== 0, async (runner) => {
 await runner.step(0, async (runner) => {
 __stack.locals.temp = __stack.locals.y;
       });

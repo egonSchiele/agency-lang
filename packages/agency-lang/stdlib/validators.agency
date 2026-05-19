@@ -1,0 +1,54 @@
+import { _isEmail, _isUrl, _isUuid, _isInt, _isPositive, _isNegative } from "agency-lang/stdlib-lib/validators.js"
+
+/** @module
+  Validator functions intended for use with `@validate(...)` annotations.
+
+  Each validator takes a single value and returns a `Result` — `success(value)`
+  if the value is valid (optionally transformed), or `failure(reason)` if not.
+
+  ## Usage
+
+  ```ts
+  import { isEmail } from "std::validators"
+
+  @validate(isEmail)
+  type Email = string
+
+  def main() {
+    const e: Email! = "foo@example.com"   // validated
+  }
+  ```
+
+  Validators are only run for types annotated with `!` (the bang operator).
+  See the [validation annotations guide](../guide/annotations.md) for details.
+*/
+
+/** Returns success if `value` is a syntactically valid email address. */
+export def isEmail(value: string): Result {
+  return _isEmail(value)
+}
+
+/** Returns success if `value` is an http:// or https:// URL. */
+export def isUrl(value: string): Result {
+  return _isUrl(value)
+}
+
+/** Returns success if `value` is a canonical UUID string (8-4-4-4-12 hex). */
+export def isUuid(value: string): Result {
+  return _isUuid(value)
+}
+
+/** Returns success if `value` is an integer (no fractional component). */
+export def isInt(value: number): Result {
+  return _isInt(value)
+}
+
+/** Returns success if `value > 0`. */
+export def isPositive(value: number): Result {
+  return _isPositive(value)
+}
+
+/** Returns success if `value < 0`. */
+export def isNegative(value: number): Result {
+  return _isNegative(value)
+}

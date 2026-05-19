@@ -5,6 +5,7 @@ import type {
   FunctionParameter,
   GraphNodeDefinition,
   Scope,
+  Tag,
   TypeAliasEntry,
   TypeParam,
   VariableType,
@@ -15,6 +16,7 @@ import type {
 } from "./types/importStatement.js";
 import { getImportedNames } from "./types/importStatement.js";
 import type { SymbolTable, InterruptKind } from "./symbolTable.js";
+import { collectTypeAliasTags } from "./symbolTable.js";
 import { walkNodes } from "./utils/node.js";
 import { resultTypeForValidation } from "./typeChecker/validation.js";
 import { visitTypes } from "./typeChecker/typeWalker.js";
@@ -43,9 +45,12 @@ export class ScopedTypeAliases {
     name: string,
     body: VariableType,
     typeParams?: TypeParam[],
+    tags?: Tag[],
   ): void {
     if (!this.byScope[scopeKey]) this.byScope[scopeKey] = {};
-    const entry: TypeAliasEntry = typeParams ? { body, typeParams } : { body };
+    const entry: TypeAliasEntry = { body };
+    if (typeParams) entry.typeParams = typeParams;
+    if (tags && tags.length > 0) entry.tags = tags;
     this.byScope[scopeKey][name] = entry;
   }
 
@@ -198,15 +203,24 @@ export function buildCompilationUnit(
     }
   }
 
+  // Tags on local typeAlias nodes are only attached after the preprocessor
+  // runs (which happens AFTER buildCompilationUnit). Pre-collect them here
+  // so cross-module annotation propagation works in the first pass.
+  const localAliasTags = collectTypeAliasTags(program);
+
   // Deep walk: collect every type alias keyed by its enclosing scope.
   for (const { node, scopes } of walkNodes(program.nodes)) {
     const key = scopeKey(scopes[scopes.length - 1]);
     if (node.type === "typeAlias") {
+      const tags = node.tags && node.tags.length > 0
+        ? node.tags
+        : localAliasTags[node.aliasName];
       unit.typeAliases.add(
         key,
         node.aliasName,
         node.aliasedType,
         node.typeParams,
+        tags,
       );
     }
   }
@@ -257,6 +271,7 @@ export function buildCompilationUnit(
             r.localName,
             r.symbol.aliasedType,
             r.symbol.typeParams,
+            r.symbol.tags,
           );
           // Imported type's body may reference other aliases from its
           // module — pull those transitively too.
@@ -335,6 +350,7 @@ function pullTransitiveAliases(
       name,
       found.aliasedType,
       found.typeParams,
+      found.tags,
     );
     // Nested aliases referenced by this type should resolve in the file
     // the type was actually found in (not the original preferFile) — the
@@ -356,13 +372,14 @@ function resolveTypeFromFile(
   symbolTable: SymbolTable,
   name: string,
   preferFile: string | undefined,
-): { aliasedType: VariableType; typeParams?: TypeParam[]; file: string } | undefined {
+): { aliasedType: VariableType; typeParams?: TypeParam[]; tags?: Tag[]; file: string } | undefined {
   if (preferFile) {
     const fileSym = symbolTable.getFile(preferFile)?.[name];
     if (fileSym?.kind === "type") {
       return {
         aliasedType: fileSym.aliasedType,
         typeParams: fileSym.typeParams,
+        tags: fileSym.tags,
         file: preferFile,
       };
     }
@@ -373,6 +390,7 @@ function resolveTypeFromFile(
       return {
         aliasedType: sym.aliasedType,
         typeParams: sym.typeParams,
+        tags: sym.tags,
         file,
       };
     }

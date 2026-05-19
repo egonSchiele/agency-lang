@@ -1,0 +1,12 @@
+import { isEmail } from "std::validators"
+
+@validate(isEmail)
+type Email = string
+
+node main() {
+  const bad: Email! = "not-an-email"
+  if (isSuccess(bad)) {
+    return "unexpectedly ok"
+  }
+  return "failed-as-expected"
+}

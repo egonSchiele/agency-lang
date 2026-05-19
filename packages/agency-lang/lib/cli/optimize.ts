@@ -4,6 +4,7 @@ import { resetCompilationCache } from "./commands.js";
 import { parseAgency } from "@/parser.js";
 import { exprParser } from "@/parsers/parsers.js";
 import { Tag, AgencyProgram, AgencyNode, PromptSegment, FunctionParameter, GraphNodeDefinition } from "@/types.js";
+import { tagArgToLegacyString } from "@/types/tag.js";
 import { TypescriptPreprocessor } from "@/preprocessors/typescriptPreprocessor.js";
 import { buildCompilationUnit } from "@/compilationUnit.js";
 import { AgencyGenerator } from "@/backends/agencyGenerator.js";
@@ -140,7 +141,8 @@ export async function optimize(
     );
   }
 
-  const goal = goalTag.arguments[0];
+  const goalArg = goalTag.arguments[0];
+  const goal = goalArg ? (tagArgToLegacyString(goalArg) ?? "") : "";
   console.log(`Goal: ${goal}`);
   console.log(`Running up to ${options.iterations} iterations...\n`);
 
@@ -274,7 +276,11 @@ function collectOptimizeTargets(
 
       const target: OptimizeTarget = { node, llmCall, tag: optimizeTag };
       target.promptValue = getPromptValue(target);
-      target.configKeys = optimizeTag.arguments.length === 0 ? ["prompt"] : optimizeTag.arguments;
+      target.configKeys = optimizeTag.arguments.length === 0
+        ? ["prompt"]
+        : optimizeTag.arguments
+          .map((a) => tagArgToLegacyString(a))
+          .filter((s): s is string => s !== null);
       targets.push(target);
     }
   }

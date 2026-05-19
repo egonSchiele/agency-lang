@@ -1,8 +1,27 @@
 import { color } from "@/utils/termcolors.js";
-import { VariableType } from "../../types.js";
+import { Tag, VariableType } from "../../types.js";
 import { escape } from "../../utils.js";
+import { tagArgToTs } from "./tagArgToTs.js";
+import { mergeTagSets } from "@/typeChecker/mergeTags.js";
 
 export const DEFAULT_SCHEMA = "z.string()";
+
+/**
+ * Append a `.meta({...})` call to a Zod schema string when the type
+ * carries a `@jsonSchema(...)` tag.
+ *
+ * `.meta()` MUST be the last call in the Zod chain (Zod's API requires
+ * it for the metadata to be picked up by `toJSONSchema`). Every callsite
+ * that finishes a Zod expression for a type should route through here.
+ */
+export function appendMeta(schemaExpr: string, tags: Tag[] | undefined): string {
+  if (!tags || tags.length === 0) return schemaExpr;
+  const jsonSchema = tags.find((t) => t.name === "jsonSchema");
+  if (!jsonSchema) return schemaExpr;
+  const arg = jsonSchema.arguments[0];
+  if (!arg) return schemaExpr;
+  return `${schemaExpr}.meta(${tagArgToTs(arg)})`;
+}
 
 /**
  * Internal recursive schema mapper. The `resultHandler` parameter controls
@@ -15,7 +34,21 @@ function mapTypeToSchema(
   typeAliases: Record<string, VariableType>,
   resultHandler: (vt: VariableType, ta: Record<string, VariableType>) => string,
 ): string {
-  const recurse = (vt: VariableType) => mapTypeToSchema(vt, typeAliases, resultHandler);
+  const recurse = (vt: VariableType) =>
+    appendMeta(mapTypeToSchemaInner(vt, typeAliases, resultHandler), vt.tags);
+  return appendMeta(
+    mapTypeToSchemaInner(variableType, typeAliases, resultHandler),
+    variableType.tags,
+  );
+}
+
+function mapTypeToSchemaInner(
+  variableType: VariableType,
+  typeAliases: Record<string, VariableType>,
+  resultHandler: (vt: VariableType, ta: Record<string, VariableType>) => string,
+): string {
+  const recurse = (vt: VariableType) =>
+    appendMeta(mapTypeToSchemaInner(vt, typeAliases, resultHandler), vt.tags);
 
   if (!variableType) {
     throw new Error(
@@ -59,7 +92,16 @@ function mapTypeToSchema(
   } else if (variableType.type === "objectType") {
     const props = variableType.properties
       .map((prop) => {
-        let str = `"${prop.key.replace(/"/g, '\\"')}": ${recurse(prop.value)}`;
+        // Merge alias-level tags (already attached to prop.value during
+        // resolveType) with property-level tags. @jsonSchema keys from
+        // the property override alias keys; @validate validators concat.
+        const mergedTags = mergeTagSets(prop.value.tags, prop.tags);
+        const inner = mapTypeToSchemaInner(
+          prop.value,
+          typeAliases,
+          resultHandler,
+        );
+        let str = `"${prop.key.replace(/"/g, '\\"')}": ${appendMeta(inner, mergedTags)}`;
         if (prop.description) {
           str += `.describe("${escape(prop.description)}")`;
         }

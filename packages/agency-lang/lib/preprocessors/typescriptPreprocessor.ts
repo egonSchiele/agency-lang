@@ -121,7 +121,8 @@ function attachTags(nodes: AgencyNode[]): AgencyNode[] {
 
     if (pendingTags.length > 0) {
       if (node.type === "graphNode" || node.type === "function" ||
-        node.type === "assignment" || node.type === "functionCall") {
+        node.type === "assignment" || node.type === "functionCall" ||
+        node.type === "typeAlias") {
         node.tags = [...(node.tags || []), ...pendingTags];
         pendingTags = [];
       } else {

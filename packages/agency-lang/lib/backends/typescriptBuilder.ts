@@ -91,6 +91,10 @@ import {
   DEFAULT_SCHEMA,
   mapTypeToValidationSchema,
 } from "./typescriptGenerator/typeToZodSchema.js";
+import {
+  buildValidationDescriptorTs,
+  hasAnyValidateTag,
+} from "./typescriptGenerator/validationDescriptor.js";
 import { resolveTypeDeep } from "../typeChecker/assignability.js";
 
 import { $, ts } from "../ir/builders.js";
@@ -595,11 +599,41 @@ export class TypeScriptBuilder {
       return ts.raw(`export const ${node.aliasName} = undefined;`);
     }
     const exportPrefix = node.exported ? "export " : "";
-    const zodSchema = this.zodSchemaFor(node.aliasedType);
-    return ts.statements([
+    // Thread alias-level @validate / @jsonSchema tags onto the body type so
+    // appendMeta (in typeToZodSchema) attaches the `.meta(...)` chain to the
+    // top-level alias schema. Without this, alias-level annotations would
+    // never reach the codegen since only use-site `VariableType.tags` are
+    // consulted; alias-level tags live on the `TypeAlias` node itself.
+    const aliasedWithTags: VariableType = node.tags
+      ? { ...node.aliasedType, tags: [...(node.aliasedType.tags ?? []), ...node.tags] }
+      : node.aliasedType;
+    const zodSchema = this.zodSchemaFor(aliasedWithTags);
+    const stmts: TsNode[] = [
       ts.raw(`${exportPrefix}const ${node.aliasName} = ${zodSchema};`),
       ts.raw(`${exportPrefix}type ${node.aliasName} = z.infer<typeof ${node.aliasName}>;`),
-    ]);
+    ];
+    // If the alias body carries any `@validate(...)` annotation, attach a
+    // descriptor to the schema const so use-site `Foo!` validations can
+    // pick it up without re-importing the validator identifiers themselves
+    // (those are in scope here, not in the consumer module).
+    const aliasesFull = this.scopes.visibleTypeAliasesFull();
+    if (hasAnyValidateTag(aliasedWithTags, aliasesFull)) {
+      const resolved = resolveTypeDeep(aliasedWithTags, aliasesFull);
+      const descriptor = buildValidationDescriptorTs(
+        resolved,
+        this.scopes.visibleTypeAliases(),
+        aliasesFull,
+      );
+      // `(Foo as any).__agency_descriptor = ...` — keeps the runtime metadata
+      // co-located with the schema and avoids exporting/importing a second
+      // symbol. Cast to `any` because Zod's typings don't know about us.
+      stmts.push(
+        ts.raw(
+          `(${node.aliasName} as any).__agency_descriptor = ${descriptor};`,
+        ),
+      );
+    }
+    return ts.statements(stmts);
   }
 
   /**
@@ -611,6 +645,25 @@ export class TypeScriptBuilder {
   private zodSchemaFor(t: VariableType): string {
     const resolved = resolveTypeDeep(t, this.scopes.visibleTypeAliasesFull());
     return mapTypeToValidationSchema(resolved, this.scopes.visibleTypeAliases());
+  }
+
+  /**
+   * Build the validation expression for a `!` site. If the resolved type
+   * carries no `@validate(...)` tag anywhere, return the existing
+   * `__validateType(value, schema)` call (zero behavior change). Otherwise
+   * return `await __validateChainRecursive(value, <descriptor>, __ctx)`,
+   * which runs Zod parse + the validator chain at each level.
+   */
+  private validateExpr(t: VariableType, value: TsNode): TsNode {
+    const aliasesFull = this.scopes.visibleTypeAliasesFull();
+    const resolved = resolveTypeDeep(t, aliasesFull);
+    const aliases = this.scopes.visibleTypeAliases();
+    if (!hasAnyValidateTag(resolved, aliasesFull)) {
+      const zodSchema = mapTypeToValidationSchema(resolved, aliases);
+      return ts.validateType(value, ts.raw(zodSchema));
+    }
+    const descriptor = buildValidationDescriptorTs(resolved, aliases, aliasesFull);
+    return ts.validateChainRecursive(value, ts.raw(descriptor));
   }
 
   // ------- Proper IR node methods -------
@@ -1419,12 +1472,11 @@ export class TypeScriptBuilder {
     const validationGuards: TsNode[] = [];
     for (const param of parameters) {
       if (param.validated && param.typeHint) {
-        const zodSchema = this.zodSchemaFor(param.typeHint);
         const stackArg = $(ts.stack("args")).index(ts.str(param.name)).done();
         const vrName = `__vr_${param.name}`;
         const vrId = ts.id(vrName);
         validationGuards.push(
-          ts.constDecl(vrName, ts.validateType(stackArg, ts.raw(zodSchema))),
+          ts.constDecl(vrName, this.validateExpr(param.typeHint, stackArg)),
           ts.if(
             ts.not(ts.prop(vrId, "success")),
             ts.return(vrId),
@@ -2132,8 +2184,7 @@ export class TypeScriptBuilder {
     if (!this.scopes.returnTypeValidated()) return valueNode;
     const returnType = this.scopes.returnType();
     if (!returnType) return valueNode;
-    const zodSchema = this.zodSchemaFor(returnType);
-    return ts.validateType(valueNode, ts.raw(zodSchema));
+    return this.validateExpr(returnType, valueNode);
   }
 
   private processGotoStatement(node: GotoStatement): TsNode {
@@ -2228,10 +2279,13 @@ export class TypeScriptBuilder {
   private processAssignment(node: Assignment): TsNode {
     const result = this._processAssignmentInner(node);
     // If the type annotation has !, wrap the assigned value in __validateType
+    // (or __validateChainRecursive if the type carries @validate tags).
     if (node.validated && node.typeHint) {
-      const zodSchema = this.zodSchemaFor(node.typeHint);
       const varRef = ts.scopedVar(node.variableName, node.scope!, this.moduleId);
-      const validateStmt = ts.assign(varRef, ts.validateType(varRef, ts.raw(zodSchema)));
+      const validateStmt = ts.assign(
+        varRef,
+        this.validateExpr(node.typeHint, varRef),
+      );
       if (result.kind === "statements") {
         return ts.statementsPush(result, validateStmt);
       }

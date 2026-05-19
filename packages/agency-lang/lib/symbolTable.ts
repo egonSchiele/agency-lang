@@ -6,6 +6,7 @@ import type {
   AgencyNode,
   AgencyProgram,
   FunctionParameter,
+  Tag,
   TypeParam,
   VariableType,
 } from "./types.js";
@@ -68,6 +69,9 @@ export type TypeSymbol = {
   aliasedType: VariableType;
   /** Type parameters for generic aliases (e.g., `T` in `type Container<T> = ...`). */
   typeParams?: TypeParam[];
+  /** `@validate(...)` / `@jsonSchema(...)` annotations declared above the alias.
+   * Carried through imports/re-exports so annotation metadata flows across modules. */
+  tags?: Tag[];
   reExportedFrom?: ReExportedFrom;
 };
 
@@ -272,11 +276,46 @@ export class SymbolTable {
 }
 
 /**
+ * Walk the top-level program node list to find `@tag(...)` nodes
+ * sitting directly above type aliases, returning a map from alias name
+ * to its pending tag list. This mirrors what the TypescriptPreprocessor's
+ * `attachTags` does later in the pipeline, but happens early so symbol
+ * table consumers (other modules that import this alias) see annotations
+ * attached to the TypeSymbol.
+ *
+ * Pre-pass only, no mutation: keeps SymbolTable.build idempotent and
+ * decoupled from the preprocessor.
+ */
+export function collectTypeAliasTags(program: AgencyProgram): Record<string, Tag[]> {
+  const byName: Record<string, Tag[]> = {};
+  function walk(nodes: AgencyNode[]): void {
+    let pending: Tag[] = [];
+    for (const node of nodes) {
+      if (node.type === "tag") {
+        pending.push(node);
+        continue;
+      }
+      if (node.type === "typeAlias" && pending.length > 0) {
+        byName[node.aliasName] = [...(byName[node.aliasName] ?? []), ...pending];
+      }
+      pending = [];
+      // Recurse into nested bodies that may contain typeAlias + tag siblings.
+      if ((node as any).body && Array.isArray((node as any).body)) {
+        walk((node as any).body);
+      }
+    }
+  }
+  walk(program.nodes);
+  return byName;
+}
+
+/**
  * Classify symbols in a parsed Agency program.
  * Uses walkNodes to find symbols at all nesting levels (e.g. type aliases inside functions).
  */
 export function classifySymbols(program: AgencyProgram): FileSymbols {
   const symbols: FileSymbols = {};
+  const typeAliasTags = collectTypeAliasTags(program);
 
   for (const { node } of walkNodes(program.nodes)) {
     switch (node.type) {
@@ -318,6 +357,9 @@ export function classifySymbols(program: AgencyProgram): FileSymbols {
           exported: !!node.exported,
           aliasedType: node.aliasedType,
           ...(node.typeParams ? { typeParams: node.typeParams } : {}),
+          ...(typeAliasTags[node.aliasName]?.length
+            ? { tags: typeAliasTags[node.aliasName] }
+            : {}),
         };
         break;
       case "classDefinition":

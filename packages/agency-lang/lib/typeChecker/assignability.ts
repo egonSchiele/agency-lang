@@ -1,7 +1,8 @@
-import { TypeAliasEntry, TypeParam, VariableType } from "../types.js";
+import { Tag, TypeAliasEntry, TypeParam, VariableType } from "../types.js";
 import { ANY_T, BOOLEAN_T, NUMBER_T, STRING_T } from "./primitives.js";
 import { substituteTypeParams } from "./substitute.js";
 import { mapTypes } from "./typeWalker.js";
+import { mergeTagSets } from "./mergeTags.js";
 
 /**
  * Public resolveType: normalizes a VariableType by resolving type-alias
@@ -74,9 +75,11 @@ function resolveTypeWithGuard(
         entry.typeParams.map((p) => p.name),
         args,
       );
-      return resolveTypeWithGuard(substituted, typeAliases, next);
+      const resolved = resolveTypeWithGuard(substituted, typeAliases, next);
+      return attachAliasTags(resolved, entry.tags);
     }
-    return resolveTypeWithGuard(entry.body, typeAliases, next);
+    const resolved = resolveTypeWithGuard(entry.body, typeAliases, next);
+    return attachAliasTags(resolved, entry.tags);
   }
 
   if (vt.type === "genericType") {
@@ -147,10 +150,25 @@ function resolveTypeWithGuard(
       entry.typeParams.map((p) => p.name),
       args,
     );
-    return resolveTypeWithGuard(substituted, typeAliases, next);
+    const resolved = resolveTypeWithGuard(substituted, typeAliases, next);
+    return attachAliasTags(resolved, entry.tags);
   }
 
   return vt;
+}
+
+/**
+ * Return a shallow copy of `vt` with the alias's tags concatenated onto
+ * any tags the resolved type already has. We never mutate `vt`.
+ *
+ * The merge rule between alias and use-site tags is documented in
+ * `mergeTagSets` (lib/typeChecker/mergeTags.ts) and applied by callers
+ * that have both available. resolveType only ever has the alias side.
+ */
+function attachAliasTags(vt: VariableType, aliasTags: Tag[] | undefined): VariableType {
+  if (!aliasTags || aliasTags.length === 0) return vt;
+  const merged = mergeTagSets(aliasTags, vt.tags);
+  return { ...vt, tags: merged } as VariableType;
 }
 
 /**

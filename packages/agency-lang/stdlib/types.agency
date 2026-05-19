@@ -1,0 +1,35 @@
+import { isEmail, isUrl, isUuid } from "std::validators"
+import { emailFormat, urlFormat, uuidFormat } from "std::schemas"
+
+/** @module
+  Pre-baked type aliases that combine `@validate(...)` and `@jsonSchema(...)`
+  for the most common string-shaped opaque types. Use them in place of plain
+  `string` whenever the value must conform to one of these formats:
+
+  ```ts
+  import { Email } from "std::types"
+
+  def main() {
+    const e: Email! = "user@example.com"   // validated at runtime
+  }
+  ```
+
+  Aliases here only carry annotations — they are still plain `string` from
+  TypeScript's perspective. Validation runs on `!` sites; structured-output
+  LLM calls get the JSON Schema `format` hint via `.meta(...)`.
+*/
+
+/** A syntactically valid email address. */
+@validate(isEmail)
+@jsonSchema({ ...emailFormat })
+export type Email = string
+
+/** An http:// or https:// URL. */
+@validate(isUrl)
+@jsonSchema({ ...urlFormat })
+export type Url = string
+
+/** A canonical 8-4-4-4-12 hex UUID. */
+@validate(isUuid)
+@jsonSchema({ ...uuidFormat })
+export type Uuid = string

@@ -17,10 +17,12 @@ node main(msg: string): string {
     if (!result.success) return;
     const tagNode = result.result.nodes.find((n: any) => n.type === "tag");
     expect(tagNode).toBeDefined();
-    expect(tagNode).toMatchObject({
-      type: "tag",
-      name: "goal",
-      arguments: ["Classify messages"],
+    const tag = tagNode as any;
+    expect(tag.name).toBe("goal");
+    expect(tag.arguments).toHaveLength(1);
+    expect(tag.arguments[0]).toMatchObject({
+      type: "string",
+      segments: [{ type: "text", value: "Classify messages" }],
     });
   });
 
@@ -61,10 +63,11 @@ node main(msg: string): string {
 
     const graphNode = processed.nodes.find((n: any) => n.type === "graphNode") as any;
     expect(graphNode.tags).toHaveLength(1);
-    expect(graphNode.tags[0]).toMatchObject({
-      type: "tag",
-      name: "goal",
-      arguments: ["Classify messages"],
+    expect(graphNode.tags[0].name).toBe("goal");
+    expect(graphNode.tags[0].arguments).toHaveLength(1);
+    expect(graphNode.tags[0].arguments[0]).toMatchObject({
+      type: "string",
+      segments: [{ type: "text", value: "Classify messages" }],
     });
   });
 

@@ -464,21 +464,29 @@ export class AgencyGenerator {
     this.typeAliases[node.aliasName] = node.aliasedType;
     const aliasedTypeStr = this.aliasedTypeToString(node.aliasedType);
     const exportPrefix = node.exported ? "export " : "";
-    const typeParamsStr = node.typeParams?.length
-      ? `<${node.typeParams
-          .map((p) =>
-            p.default
-              ? `${p.name} = ${variableTypeToString(p.default, this.typeAliases, true)}`
-              : p.name,
-          )
-          .join(", ")}>`
-      : "";
+    const typeParamsStr = this.formatTypeParams(node.typeParams);
     return (
       this.formatDocComment(node) +
       this.indentStr(
         `${exportPrefix}type ${node.aliasName}${typeParamsStr} = ${aliasedTypeStr}`,
       )
     );
+  }
+
+  /**
+   * Format the `<T, U = string, ...>` chunk of a generic alias declaration.
+   * Returns an empty string when there are no type params.
+   */
+  private formatTypeParams(
+    params: TypeAlias["typeParams"],
+  ): string {
+    if (!params || params.length === 0) return "";
+    const parts = params.map((p) => {
+      if (!p.default) return p.name;
+      const def = variableTypeToString(p.default, this.typeAliases, true);
+      return `${p.name} = ${def}`;
+    });
+    return `<${parts.join(", ")}>`;
   }
 
   // Assignment and literals

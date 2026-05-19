@@ -142,6 +142,61 @@ describe("mapTypeToZodSchema: Record<K, V>", () => {
     expect(result).toBe("z.array(z.record(z.string(), z.string()))");
   });
 
+  it("emits nested z.record for Record<string, Record<string, number>>", () => {
+    const result = mapTypeToZodSchema(
+      {
+        type: "genericType",
+        name: "Record",
+        typeArgs: [
+          { type: "primitiveType", value: "string" },
+          {
+            type: "genericType",
+            name: "Record",
+            typeArgs: [
+              { type: "primitiveType", value: "string" },
+              { type: "primitiveType", value: "number" },
+            ],
+          },
+        ],
+      },
+      {},
+    );
+    expect(result).toBe(
+      "z.record(z.string(), z.record(z.string(), z.number()))",
+    );
+  });
+
+  it("emits doubly-nested z.record for Record<string, Record<string, Record<string, boolean>>>", () => {
+    const result = mapTypeToZodSchema(
+      {
+        type: "genericType",
+        name: "Record",
+        typeArgs: [
+          { type: "primitiveType", value: "string" },
+          {
+            type: "genericType",
+            name: "Record",
+            typeArgs: [
+              { type: "primitiveType", value: "string" },
+              {
+                type: "genericType",
+                name: "Record",
+                typeArgs: [
+                  { type: "primitiveType", value: "string" },
+                  { type: "primitiveType", value: "boolean" },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+      {},
+    );
+    expect(result).toBe(
+      "z.record(z.string(), z.record(z.string(), z.record(z.string(), z.boolean())))",
+    );
+  });
+
   it("throws on unresolved generic types other than Record", () => {
     expect(() =>
       mapTypeToZodSchema(

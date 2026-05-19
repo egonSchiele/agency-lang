@@ -6,7 +6,7 @@ import type {
 import { formatTypeHint } from "../utils/formatType.js";
 import { BUILTIN_FUNCTION_TYPES } from "./builtins.js";
 import { isContextInjectedBuiltin } from "../codegenBuiltins/contextInjected.js";
-import { isAssignable, resolveType } from "./assignability.js";
+import { isAssignable, safeResolveType } from "./assignability.js";
 import { resultTypeForValidation } from "./validation.js";
 import { TypeCheckerContext } from "./types.js";
 import { Scope } from "./scope.js";
@@ -505,7 +505,7 @@ export function synthValueAccess(
     }
 
     if (currentType === "any") return "any";
-    const resolved = resolveType(currentType, typeAliases);
+    const resolved = safeResolveType(currentType, typeAliases);
     if (resolved.type === "primitiveType" && resolved.value === "any")
       return "any";
 
@@ -524,7 +524,7 @@ export function synthValueAccess(
         if (resolved.type === "unionType") {
           const propTypes: VariableType[] = [];
           for (const member of resolved.types) {
-            const resolvedMember = resolveType(member, typeAliases);
+            const resolvedMember = safeResolveType(member, typeAliases);
             if (resolvedMember.type === "objectType") {
               const prop = resolvedMember.properties.find(
                 (p) => p.key === element.name,

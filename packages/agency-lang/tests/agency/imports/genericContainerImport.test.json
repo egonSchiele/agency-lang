@@ -1,0 +1,15 @@
+{
+  "tests": [
+    {
+      "nodeName": "useContainer",
+      "input": "",
+      "expectedOutput": "42",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "description": "imports a generic type alias (Container<T>) from another module and uses it with a type argument"
+    }
+  ]
+}

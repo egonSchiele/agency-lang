@@ -227,6 +227,7 @@ export class TypeScriptBuilder {
       buildAssignmentLhs: (scope, varName, accessChain) =>
         this.assigns.lhs(scope, varName, accessChain),
       buildStateConfig: () => this.buildStateConfig(),
+      zodSchemaFor: (t) => this.zodSchemaFor(t),
       scopes: this.scopes,
     });
     this.assigns = new AssignmentEmitter({
@@ -582,8 +583,17 @@ export class TypeScriptBuilder {
     // Generic aliases (type Container<T> = ...) can't be turned into a single
     // zod schema because the body references type parameters that have no
     // runtime value. Usages like `Container<number>` are normalized away by
-    // resolveType in the typechecker, so no top-level emission is needed.
-    if (node.typeParams && node.typeParams.length > 0) return ts.empty();
+    // resolveTypeDeep before the zod mapper sees them.
+    //
+    // For exported aliases we still emit a runtime *stub* (`undefined`) so
+    // that another module's `import { Container } from "./a.agency"` resolves
+    // at runtime. Concrete uses on the importer side have already been
+    // resolved away at codegen, so the imported symbol is never actually
+    // consulted as a schema value.
+    if (node.typeParams && node.typeParams.length > 0) {
+      if (!node.exported) return ts.empty();
+      return ts.raw(`export const ${node.aliasName} = undefined;`);
+    }
     const exportPrefix = node.exported ? "export " : "";
     const zodSchema = this.zodSchemaFor(node.aliasedType);
     return ts.statements([

@@ -6,7 +6,7 @@
 
 ```ts
 export type PolicyRule = {
-  match?: object;
+  match?: Record<string, any>;
   action: "approve" | "reject" | "propagate"
 }
 ```

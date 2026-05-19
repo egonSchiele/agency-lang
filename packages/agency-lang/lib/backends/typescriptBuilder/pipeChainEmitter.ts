@@ -3,12 +3,12 @@ import type {
   Assignment,
   Expression,
   ScopeType,
+  VariableType,
 } from "../../types.js";
 import type { BinOpExpression } from "../../types/binop.js";
 import type { AccessChainElement, ValueAccess } from "../../types/access.js";
 import type { TsNode } from "../../ir/tsIR.js";
 import { ts } from "../../ir/builders.js";
-import { mapTypeToValidationSchema } from "../typescriptGenerator/typeToZodSchema.js";
 import type { ScopeManager } from "./scopeManager.js";
 
 /**
@@ -31,6 +31,12 @@ export type PipeChainEmitterDeps = {
     accessChain?: AccessChainElement[],
   ) => TsNode;
   buildStateConfig: () => TsNode;
+  /**
+   * Build a zod validation schema string for a VariableType taken from
+   * user source. Must deep-resolve generic aliases before lowering, just
+   * like the rest of the TS builder does. See `TypeScriptBuilder.zodSchemaFor`.
+   */
+  zodSchemaFor: (t: VariableType) => string;
   scopes: ScopeManager;
 };
 
@@ -139,10 +145,7 @@ export class PipeChainEmitter {
     );
 
     if (stmt.validated && stmt.typeHint) {
-      const zodSchema = mapTypeToValidationSchema(
-        stmt.typeHint,
-        this.deps.scopes.visibleTypeAliases(),
-      );
+      const zodSchema = this.deps.zodSchemaFor(stmt.typeHint);
       nodes.push(
         ts.runnerStep({
           id: baseId + stages.length,

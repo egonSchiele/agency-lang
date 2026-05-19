@@ -15,7 +15,7 @@ export def compile(source: string): Result {
 export def run(
   compiled: CompiledProgram,
   node: string,
-  args: object = {},
+  args: Record<string, any> = {},
   wallClock: number = 60s,
   memory: number = 512mb,
   ipcPayload: number = 100mb,
@@ -48,7 +48,7 @@ export def runFile(
   dir: string,
   filename: string,
   node: string,
-  args: object = {},
+  args: Record<string, any> = {},
   wallClock: number = 60s,
   memory: number = 512mb,
   ipcPayload: number = 100mb,

@@ -1,6 +1,6 @@
 import { _webfetch } from "agency-lang/stdlib-lib/http.js"
 
-export def webfetch(baseUrl: string, path: string = "", headers: object = {}, allowedDomains: string[] = []): Result {
+export def webfetch(baseUrl: string, path: string = "", headers: Record<string, any> = {}, allowedDomains: string[] = []): Result {
   """
   Fetch a URL and return the body as readable markdown when the response is HTML, or as plain text otherwise. Useful for extracting page content for an LLM. Provide baseUrl and optionally path (they are joined). Set headers for custom request headers. Set allowedDomains to restrict which domains can be fetched. Fails on network errors, domain violations, or if the response body exceeds 10 MB.
 

@@ -1,4 +1,4 @@
-import type { Scope, VariableType } from "../../types.js";
+import type { Scope, TypeAliasEntry, VariableType } from "../../types.js";
 import type { CompilationUnit } from "../../compilationUnit.js";
 import { scopeKey } from "../../compilationUnit.js";
 
@@ -79,7 +79,7 @@ export class ScopeManager {
    * that need type-parameter metadata to substitute user-defined generic
    * aliases.
    */
-  visibleTypeAliasesFull() {
+  visibleTypeAliasesFull(): Record<string, TypeAliasEntry> {
     return this.compilationUnit.typeAliases.visibleIn(this.currentKey());
   }
 

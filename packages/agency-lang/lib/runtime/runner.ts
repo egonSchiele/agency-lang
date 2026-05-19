@@ -404,11 +404,17 @@ export class Runner {
     this.frame.locals[iterKey] = this.frame.locals[iterKey] ?? 0;
 
     // Records (plain objects) iterate by key. Arrays iterate by element.
-    const iterable: any[] = Array.isArray(items)
-      ? items
-      : items != null && typeof items === "object"
-        ? Object.keys(items)
-        : [];
+    // Anything else (null, undefined, primitives) is treated as an empty
+    // iterable, matching how a JS `for...of` over a non-iterable would
+    // simply do nothing rather than crash mid-flow.
+    let iterable: any[];
+    if (Array.isArray(items)) {
+      iterable = items;
+    } else if (items != null && typeof items === "object") {
+      iterable = Object.keys(items);
+    } else {
+      iterable = [];
+    }
 
     for (let i = 0; i < iterable.length; i++) {
       if (this.halted) return;

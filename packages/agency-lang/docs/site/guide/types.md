@@ -18,7 +18,6 @@ Primitive types:
 - `boolean`
 - `null`
 - `undefined` (treated as null)
-- `object` (equivalent to `Record<string, any>` — prefer `Record<string, any>` directly in new code)
 - `regex` (matches a `RegExp` literal — note that LLMs can't return regex values through structured output, so `regex` cannot appear in an `llm()` return type)
 
 Union types. Example:
@@ -80,6 +79,19 @@ let status: Record<"active" | "inactive", number> = {
   inactive: 2
 }
 ```
+
+Or pull the union out into a named alias and use it as the key type:
+
+```ts
+type Status = "active" | "inactive"
+
+let counts: Record<Status, number> = {
+  active: 5,
+  inactive: 2
+}
+```
+
+Open-ended unions like `string | number` are also legal as keys, because each member is a primitive that maps to a property key.
 
 ### Variance gotcha
 

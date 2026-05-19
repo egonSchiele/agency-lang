@@ -58,7 +58,7 @@ export safe def round(num: number, precision: number): number {
   return _round(num, precision)
 }
 
-export def fetch(baseUrl: string, path: string = "", headers: object = {}, allowedDomains: string[] = []): Result {
+export def fetch(baseUrl: string, path: string = "", headers: Record<string, any> = {}, allowedDomains: string[] = []): Result {
   """
   A tool for fetching a URL and returning the response as text. Provide baseUrl and optionally path (they are joined). Set headers for custom request headers. Set allowedDomains to restrict which domains can be fetched.
 
@@ -74,7 +74,7 @@ export def fetch(baseUrl: string, path: string = "", headers: object = {}, allow
   return try _fetch(baseUrl, path, headers, allowedDomains)
 }
 
-export def fetchJSON(baseUrl: string, path: string = "", headers: object = {}, allowedDomains: string[] = []): Result {
+export def fetchJSON(baseUrl: string, path: string = "", headers: Record<string, any> = {}, allowedDomains: string[] = []): Result {
   """
   A tool for fetching a URL and returning the response as parsed JSON. Provide baseUrl and optionally path (they are joined). Set headers for custom request headers. Set allowedDomains to restrict which domains can be fetched.
 

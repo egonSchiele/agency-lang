@@ -1,5 +1,5 @@
 import { TypeAliasEntry, TypeParam, VariableType } from "../types.js";
-import { BOOLEAN_T, NUMBER_T, STRING_T } from "./primitives.js";
+import { ANY_T, BOOLEAN_T, NUMBER_T, STRING_T } from "./primitives.js";
 import { substituteTypeParams } from "./substitute.js";
 import { mapTypes } from "./typeWalker.js";
 
@@ -22,6 +22,31 @@ export function resolveType(
   typeAliases: Record<string, TypeAliasEntry>,
 ): VariableType {
   return resolveTypeWithGuard(vt, typeAliases, new Set());
+}
+
+/**
+ * Non-throwing wrapper around `resolveType` for use inside the main
+ * typecheck pipeline (synthesizer, isAssignable, etc.). If the input
+ * contains an invalid generic form (unknown name, wrong arity, bad
+ * Record key, missing required type args, …) we don't want to crash the
+ * entire typecheck run — the user-facing diagnostic is reported by
+ * `validateTypeReferences` as part of the regular validation pass, and
+ * callers here just need a usable VariableType to continue with.
+ *
+ * Falling back to `any` matches how unresolved/unknown types are handled
+ * everywhere else in the checker — it short-circuits further constraints
+ * without producing spurious assignability errors.
+ */
+export function safeResolveType(
+  vt: VariableType,
+  typeAliases: Record<string, TypeAliasEntry>,
+): VariableType {
+  try {
+    return resolveType(vt, typeAliases);
+  } catch (e) {
+    if (e instanceof TypeError) return ANY_T;
+    throw e;
+  }
 }
 
 function resolveTypeWithGuard(
@@ -174,6 +199,13 @@ function validateRecordKeyType(
 }
 
 /**
+ * Upper bound on how many full-tree passes `resolveTypeDeep` will run before
+ * giving up. Real generic-alias depth is tiny in practice (each pass strips
+ * one level); this is purely a runaway-loop guard, not a real depth limit.
+ */
+const MAX_GENERIC_RESOLUTION_PASSES = 32;
+
+/**
  * Recursively resolve generic types and type aliases throughout a type tree.
  *
  * `resolveType` only normalizes a single node — when a user-defined generic
@@ -193,22 +225,46 @@ export function resolveTypeDeep(
 ): VariableType {
   let current = t;
   // Iterate until a pass produces no change. Generic-alias depth is bounded
-  // in practice; the cap exists only to prevent runaway loops on a bug.
-  for (let i = 0; i < 32; i++) {
-    const next = mapTypes(current, (n) => {
-      // Only expand `genericType` nodes here. We deliberately leave
-      // `typeAliasVariable` references intact so codegen can emit them by
-      // name (e.g. `Coords` → references the already-declared zod schema).
-      if (n.type !== "genericType") return n;
-      // Resolve built-in `Array`/`Schema` (codegen wants the lowered form)
-      // and any user-defined generic alias instantiation. `Record<K, V>`
-      // stays as a `genericType` after resolveType normalizes its args.
-      return resolveType(n, typeAliases);
-    });
+  // in practice; MAX_GENERIC_RESOLUTION_PASSES exists only to prevent
+  // runaway loops on a bug.
+  for (let i = 0; i < MAX_GENERIC_RESOLUTION_PASSES; i++) {
+    const next = mapTypes(current, (n) => deepResolveNode(n, typeAliases));
     if (JSON.stringify(next) === JSON.stringify(current)) return next;
     current = next;
   }
   return current;
+}
+
+/**
+ * Per-node rewrite used by resolveTypeDeep. Expands:
+ *
+ * - `genericType` nodes: built-in Array/Schema get lowered; Record stays a
+ *   genericType (with args normalized); user-defined generic aliases get
+ *   substituted with their type args.
+ * - bare `typeAliasVariable` references *to a generic alias* (e.g. a
+ *   `StringMap` written without `<...>` that relies on parameter defaults)
+ *   get inlined too, so codegen never sees an unresolved generic alias.
+ *
+ * Plain non-generic `typeAliasVariable` references are deliberately left
+ * intact so codegen can emit them by name (e.g. `Coords` referencing the
+ * already-declared zod schema constant).
+ */
+function deepResolveNode(
+  n: VariableType,
+  typeAliases: Record<string, TypeAliasEntry>,
+): VariableType {
+  if (n.type === "genericType") return resolveType(n, typeAliases);
+  if (n.type === "typeAliasVariable") {
+    const entry = typeAliases[n.aliasName];
+    // Inline only generic aliases that can resolve themselves via defaults.
+    // Non-generic aliases stay as-is; defaultless generic aliases would
+    // throw inside resolveType — let that surface as a typecheck error
+    // through the normal pipeline rather than swallowing it here.
+    if (entry?.typeParams && entry.typeParams.every((p) => p.default)) {
+      return resolveType(n, typeAliases);
+    }
+  }
+  return n;
 }
 
 function isValidRecordKey(t: VariableType): boolean {
@@ -306,7 +362,7 @@ function isOptionalType(
   vt: VariableType,
   typeAliases: Record<string, TypeAliasEntry>,
 ): boolean {
-  const resolved = resolveType(vt, typeAliases);
+  const resolved = safeResolveType(vt, typeAliases);
   if (resolved.type === "primitiveType")
     return resolved.value === "undefined" || resolved.value === "any";
   if (resolved.type === "unionType")
@@ -322,8 +378,8 @@ export function isAssignable(
 ): boolean {
   if (source === "any" || target === "any") return true;
 
-  const resolvedSource = resolveType(source, typeAliases);
-  const resolvedTarget = resolveType(target, typeAliases);
+  const resolvedSource = safeResolveType(source, typeAliases);
+  const resolvedTarget = safeResolveType(target, typeAliases);
 
   // primitiveType("any") behaves the same as the "any" sentinel
   if (

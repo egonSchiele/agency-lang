@@ -1,7 +1,7 @@
 import { AgencyNode, FunctionParameter, VariableType } from "../types.js";
 import type { BlockType } from "../types/typeHints.js";
 import { formatTypeHint } from "../utils/formatType.js";
-import { isAssignable, resolveType } from "./assignability.js";
+import { isAssignable, safeResolveType } from "./assignability.js";
 import { synthType } from "./synthesizer.js";
 import { TypeCheckerContext } from "./types.js";
 import { Scope } from "./scope.js";
@@ -114,7 +114,7 @@ export function checkExcessObjectProperties(
   context: string,
   ctx: TypeCheckerContext,
 ): void {
-  const resolved = resolveType(expectedType, ctx.getTypeAliases());
+  const resolved = safeResolveType(expectedType, ctx.getTypeAliases());
   if (resolved.type !== "objectType") return;
   const known = new Set(resolved.properties.map((p) => p.key));
   for (const entry of literal.entries) {

@@ -145,6 +145,7 @@ import {
   ObjectPatternProperty,
   ObjectPatternShorthand,
   RestPattern,
+  ResultPattern,
   WildcardPattern,
 } from "../types/pattern.js";
 
@@ -3524,6 +3525,83 @@ export const objectBindingPatternParser: Parser<ObjectPattern> = label(
 
 // ---- match pattern parsers ----
 
+// Result patterns: `success`, `success(v)`, `failure`, `failure(e)`. Must be
+// placed in `_matchPatternParser` BEFORE `variableNameParser`, so `success`
+// and `failure` in pattern position are intercepted before they'd parse as
+// bare variable names. In expression position, `success(42)` etc. remain
+// valid function calls because expression parsers do not use this parser.
+export const resultPatternParser: Parser<ResultPattern> = withLoc(
+  (input: string) => {
+    // Try "success" or "failure" keyword
+    const kwResult = or(str("success"), str("failure"))(input);
+    if (!kwResult.success) return kwResult;
+    const kind = kwResult.result as "success" | "failure";
+
+    // Boundary check — keyword must not be followed by an identifier char,
+    // so `successful` does NOT match.
+    const boundary = not(varNameChar)(kwResult.rest);
+    if (!boundary.success) {
+      return fail("not a result pattern keyword boundary")(input);
+    }
+
+    const rest = kwResult.rest;
+    if (rest.length > 0 && rest[0] === "(") {
+      // We've matched `success(` or `failure(` — this is COMMITTED to the
+      // result-pattern form. Bad contents must throw (not return a failed
+      // parse) to bypass the surrounding `or` combinator in
+      // `_matchPatternParser`; otherwise the outer parser would fall through
+      // to `variableNameParser`, which would happily parse `success` as a
+      // bare identifier and leave `(...)` in the remainder.
+      const emptyCheck = seqC(
+        char("("),
+        optionalSpacesOrNewline,
+        char(")"),
+      )(rest);
+      if (emptyCheck.success) {
+        throw new Error(
+          "empty parens not allowed in result pattern; use `success` (bare) or `success(name)` (with binding)",
+        );
+      }
+
+      // Try `(identifier)` binding. Tolerate line breaks inside the parens
+      // for consistency with array/object pattern parsers.
+      const bindingResult = seqC(
+        char("("),
+        optionalSpacesOrNewline,
+        capture(variableNameParser, "binding"),
+        optionalSpacesOrNewline,
+        char(")"),
+      )(rest);
+
+      if (bindingResult.success) {
+        return success(
+          {
+            type: "resultPattern" as const,
+            kind,
+            binding: (bindingResult.result.binding as { value: string }).value,
+          },
+          bindingResult.rest,
+        );
+      }
+
+      // `(` present but no valid binding — committed, so throw.
+      throw new Error(
+        `expected identifier in result pattern binding after \`${kind}(\``,
+      );
+    }
+
+    // Bare form (no parens)
+    return success(
+      {
+        type: "resultPattern" as const,
+        kind,
+        binding: null,
+      },
+      rest,
+    );
+  },
+);
+
 const _matchPatternParser = (input: string): ParserResult<MatchPattern> => {
   // NOTE: cannot reuse simpleLiteralParser directly because it tries
   // numberParser before variableNameParser, and numberParser is greedy on `_`
@@ -3538,6 +3616,9 @@ const _matchPatternParser = (input: string): ParserResult<MatchPattern> => {
     nullParser,
     booleanParser,
     unitLiteralParser,
+    // resultPatternParser MUST come before variableNameParser so `success` /
+    // `failure` are intercepted before they'd parse as bare identifiers.
+    resultPatternParser,
     variableNameParser,
     numberParser,
     _stringParser,

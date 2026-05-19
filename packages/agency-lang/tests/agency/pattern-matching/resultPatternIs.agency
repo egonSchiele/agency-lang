@@ -1,0 +1,23 @@
+def tryParse(input: string): Result {
+  if (input == "ok") {
+    return success(42)
+  }
+  return failure("bad input")
+}
+
+node main() {
+  let r1 = tryParse("ok")
+  let r2 = tryParse("bad")
+
+  let v1 = -1
+  if (r1 is success(val)) {
+    v1 = val
+  }
+
+  let e1 = ""
+  if (r2 is failure(err)) {
+    e1 = err
+  }
+
+  return [v1, e1]
+}

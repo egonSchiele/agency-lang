@@ -1,0 +1,21 @@
+def tryParse(input: string): Result {
+  if (input == "ok") {
+    return success(42)
+  }
+  return failure("bad input")
+}
+
+def classify(input: string): any {
+  let r = tryParse(input)
+  match (r is success(v)) {
+    v > 10 => return "big"
+    _ => return "small"
+  }
+  return "unreachable"
+}
+
+node main() {
+  let r1 = classify("ok")
+  let r2 = classify("bad")
+  return [r1, isFailure(r2)]
+}

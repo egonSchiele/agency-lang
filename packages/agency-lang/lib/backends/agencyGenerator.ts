@@ -464,10 +464,19 @@ export class AgencyGenerator {
     this.typeAliases[node.aliasName] = node.aliasedType;
     const aliasedTypeStr = this.aliasedTypeToString(node.aliasedType);
     const exportPrefix = node.exported ? "export " : "";
+    const typeParamsStr = node.typeParams?.length
+      ? `<${node.typeParams
+          .map((p) =>
+            p.default
+              ? `${p.name} = ${variableTypeToString(p.default, this.typeAliases, true)}`
+              : p.name,
+          )
+          .join(", ")}>`
+      : "";
     return (
       this.formatDocComment(node) +
       this.indentStr(
-        `${exportPrefix}type ${node.aliasName} = ${aliasedTypeStr}`,
+        `${exportPrefix}type ${node.aliasName}${typeParamsStr} = ${aliasedTypeStr}`,
       )
     );
   }

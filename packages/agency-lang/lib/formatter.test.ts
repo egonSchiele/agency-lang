@@ -144,6 +144,15 @@ describe("formatSource", () => {
     expect(formatted).toBe(input.trimEnd() + "\n");
   });
 
+  it("round-trips a generics fixture (type params + Record) unchanged", () => {
+    const fixturePath = path.join(__dirname, "../tests/formatter/generics.agency");
+    const input = fs.readFileSync(fixturePath, "utf-8");
+    const formatted = formatSource(input);
+    expect(formatted).toBe(input.trimEnd() + "\n");
+    // Idempotent: a second pass over the formatted output is identical.
+    expect(formatSource(formatted!)).toBe(formatted);
+  });
+
   describe("export-from re-export round-trip", () => {
     it.each([
       'export { foo } from "./tools.agency"',

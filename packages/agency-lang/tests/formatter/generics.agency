@@ -1,0 +1,19 @@
+type Container<T> = {
+  value: T
+}
+
+type StringMap<V = any> = Record<string, V>
+
+type Pair<A, B> = {
+  first: A;
+  second: B
+}
+
+node main() {
+  let c: Container<number> = {
+    value: 42
+  }
+  let r: Record<string, "yes" | "no"> = {}
+  print(c.value)
+  print(r)
+}

@@ -104,6 +104,18 @@ describe("resolveNamedArgs", () => {
     ).toThrow(/Positional argument cannot follow a named argument/);
   });
 
+  it("throws on splat after named (covered by checker but locked in here too)", () => {
+    const splat = (value: Expression): SplatExpression =>
+      ({ type: "splat", value } as unknown as SplatExpression);
+    expect(() =>
+      resolveNamedArgs(
+        call([named("a", num(1)), splat(num(0))]),
+        [param("a"), param("b")],
+        true,
+      ),
+    ).toThrow(/Positional argument cannot follow a named argument/);
+  });
+
   it("throws on duplicate named arg", () => {
     expect(() =>
       resolveNamedArgs(

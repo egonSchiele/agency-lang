@@ -371,10 +371,22 @@ function checkNamedArgStructure(
     ok = false;
   };
 
-  // Pass 1: positional args (other than splats) can't follow named args.
+  // Pass 1: only named args can follow the first named arg. Splats can't
+  // appear after a named arg either — the runtime can't tell statically
+  // how many positional slots a splat will fill, so mixing it with named
+  // args would create an ambiguous overlap between the splat's elements
+  // and the named values. (The TypeScript builder's resolveNamedArgs and
+  // the runtime's resolveNamed both reject this combination.) Splats are
+  // fine *before* the first named arg.
   for (let i = namedStartIdx + 1; i < call.arguments.length; i++) {
     const a = call.arguments[i];
-    if (a.type !== "namedArgument" && a.type !== "splat") {
+    if (a.type === "splat") {
+      pushErr(
+        `Splat argument cannot follow a named argument in call to '${call.functionName}'.`,
+      );
+      break;
+    }
+    if (a.type !== "namedArgument") {
       pushErr(
         `Positional argument cannot follow a named argument in call to '${call.functionName}'.`,
       );

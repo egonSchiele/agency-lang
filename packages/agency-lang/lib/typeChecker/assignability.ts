@@ -1,16 +1,307 @@
-import { VariableType } from "../types.js";
-import { BOOLEAN_T, NUMBER_T, STRING_T } from "./primitives.js";
+import { TypeAliasEntry, TypeParam, VariableType } from "../types.js";
+import { ANY_T, BOOLEAN_T, NUMBER_T, STRING_T } from "./primitives.js";
+import { substituteTypeParams } from "./substitute.js";
+import { mapTypes } from "./typeWalker.js";
 
+/**
+ * Public resolveType: normalizes a VariableType by resolving type-alias
+ * references and built-in generic forms.
+ *
+ *   `Array<T>`  → `arrayType { elementType: T }`
+ *   `Schema<T>` → `schemaType { inner: T }`
+ *   `Record<K, V>` → unchanged `genericType` (survives to codegen) after
+ *                    validating the key type
+ *   `typeAliasVariable("X")` → body of alias X (recursively)
+ *
+ * Recursion guarding for self-referential generic aliases (added in
+ * Task 9) lives in the private `resolveTypeWithGuard` helper. The public
+ * signature stays small.
+ */
 export function resolveType(
   vt: VariableType,
-  typeAliases: Record<string, VariableType>,
+  typeAliases: Record<string, TypeAliasEntry>,
+): VariableType {
+  return resolveTypeWithGuard(vt, typeAliases, new Set());
+}
+
+/**
+ * Non-throwing wrapper around `resolveType` for use inside the main
+ * typecheck pipeline (synthesizer, isAssignable, etc.). If the input
+ * contains an invalid generic form (unknown name, wrong arity, bad
+ * Record key, missing required type args, …) we don't want to crash the
+ * entire typecheck run — the user-facing diagnostic is reported by
+ * `validateTypeReferences` as part of the regular validation pass, and
+ * callers here just need a usable VariableType to continue with.
+ *
+ * Falling back to `any` matches how unresolved/unknown types are handled
+ * everywhere else in the checker — it short-circuits further constraints
+ * without producing spurious assignability errors.
+ */
+export function safeResolveType(
+  vt: VariableType,
+  typeAliases: Record<string, TypeAliasEntry>,
+): VariableType {
+  try {
+    return resolveType(vt, typeAliases);
+  } catch (e) {
+    if (e instanceof TypeError) return ANY_T;
+    throw e;
+  }
+}
+
+function resolveTypeWithGuard(
+  vt: VariableType,
+  typeAliases: Record<string, TypeAliasEntry>,
+  inProgress: Set<string>,
 ): VariableType {
   if (vt.type === "typeAliasVariable") {
-    const resolved = typeAliases[vt.aliasName];
-    if (resolved) return resolveType(resolved, typeAliases);
-    return vt;
+    const entry = typeAliases[vt.aliasName];
+    if (!entry) return vt;
+
+    // Bare use of a generic alias is only allowed if every parameter has a default.
+    if (entry.typeParams && entry.typeParams.some((p) => !p.default)) {
+      throw new TypeError(`${vt.aliasName} requires type arguments`);
+    }
+
+    // Self-reference inside the same alias body — stop recursing.
+    if (inProgress.has(vt.aliasName)) return vt;
+    const next = new Set(inProgress).add(vt.aliasName);
+
+    if (entry.typeParams) {
+      const args = entry.typeParams.map((p) => p.default!);
+      const substituted = substituteTypeParams(
+        entry.body,
+        entry.typeParams.map((p) => p.name),
+        args,
+      );
+      return resolveTypeWithGuard(substituted, typeAliases, next);
+    }
+    return resolveTypeWithGuard(entry.body, typeAliases, next);
   }
+
+  if (vt.type === "genericType") {
+    if (vt.name === "Array") {
+      if (vt.typeArgs.length !== 1) {
+        throw new TypeError(
+          `Array expects 1 type argument, got ${vt.typeArgs.length}`,
+        );
+      }
+      return {
+        type: "arrayType",
+        elementType: resolveTypeWithGuard(
+          vt.typeArgs[0],
+          typeAliases,
+          inProgress,
+        ),
+      };
+    }
+    if (vt.name === "Schema") {
+      if (vt.typeArgs.length !== 1) {
+        throw new TypeError(
+          `Schema expects 1 type argument, got ${vt.typeArgs.length}`,
+        );
+      }
+      return {
+        type: "schemaType",
+        inner: resolveTypeWithGuard(vt.typeArgs[0], typeAliases, inProgress),
+      };
+    }
+    if (vt.name === "Record") {
+      if (vt.typeArgs.length !== 2) {
+        throw new TypeError(
+          `Record expects 2 type arguments, got ${vt.typeArgs.length}`,
+        );
+      }
+      validateRecordKeyType(vt.typeArgs[0], typeAliases);
+      // Keep the genericType wrapper so codegen can lower to z.record / Record<K,V>;
+      // resolve inside so nested aliases/built-ins are normalized.
+      return {
+        ...vt,
+        typeArgs: vt.typeArgs.map((a) =>
+          resolveTypeWithGuard(a, typeAliases, inProgress),
+        ),
+      };
+    }
+    // User-defined generic alias.
+    const entry = typeAliases[vt.name];
+    if (!entry) throw new TypeError(`Unknown generic type ${vt.name}`);
+    if (!entry.typeParams) {
+      throw new TypeError(`${vt.name} is not a generic type`);
+    }
+
+    // Self-reference within the alias body: preserve the genericType wrapper
+    // with substituted args; don't try to re-expand or we'd recurse forever.
+    if (inProgress.has(vt.name)) {
+      return {
+        ...vt,
+        typeArgs: vt.typeArgs.map((a) =>
+          resolveTypeWithGuard(a, typeAliases, inProgress),
+        ),
+      };
+    }
+
+    const args = fillDefaults(vt.typeArgs, entry.typeParams, vt.name);
+    const next = new Set(inProgress).add(vt.name);
+    const substituted = substituteTypeParams(
+      entry.body,
+      entry.typeParams.map((p) => p.name),
+      args,
+    );
+    return resolveTypeWithGuard(substituted, typeAliases, next);
+  }
+
   return vt;
+}
+
+/**
+ * Fill in defaults for omitted type arguments on a user-defined generic.
+ * Errors if too many args are supplied or a required (defaultless) param is missing.
+ */
+function fillDefaults(
+  args: VariableType[],
+  params: TypeParam[],
+  name: string,
+): VariableType[] {
+  if (args.length > params.length) {
+    throw new TypeError(
+      `${name} expects at most ${params.length} type arguments, got ${args.length}`,
+    );
+  }
+  const result = [...args];
+  for (let i = args.length; i < params.length; i++) {
+    const p = params[i];
+    if (!p.default) {
+      throw new TypeError(
+        `${name} requires at least ${i + 1} type arguments`,
+      );
+    }
+    result.push(p.default);
+  }
+  return result;
+}
+
+/**
+ * Record keys must be a string-like or number-like primitive (or literal,
+ * or a union of these). Booleans, objects, arrays etc. are not valid
+ * because zod's `z.record` and TypeScript's `Record<K, V>` only support
+ * key types that map to property keys.
+ */
+function validateRecordKeyType(
+  keyType: VariableType,
+  typeAliases: Record<string, TypeAliasEntry>,
+): void {
+  const resolved = resolveType(keyType, typeAliases);
+  if (!isValidRecordKey(resolved)) {
+    throw new TypeError(
+      `Record key type must be string, number, a string literal, a number literal, or a union of those`,
+    );
+  }
+}
+
+/**
+ * Upper bound on how many full-tree passes `resolveTypeDeep` will run before
+ * giving up. Real generic-alias depth is tiny in practice (each pass strips
+ * one level); this is purely a runaway-loop guard, not a real depth limit.
+ */
+const MAX_GENERIC_RESOLUTION_PASSES = 32;
+
+/**
+ * Recursively resolve generic types and type aliases throughout a type tree.
+ *
+ * `resolveType` only normalizes a single node — when a user-defined generic
+ * alias like `Container<T>` is substituted, the resulting body may contain
+ * further generic forms (e.g. `Wrapper<number>`) that the substituting call
+ * hasn't seen. Codegen needs every generic resolved away (other than the
+ * survivable `Record<K, V>` form), so this function applies `resolveType`
+ * iteratively until a pass produces no change.
+ *
+ * Used by the TypeScript builder before calling `mapTypeToValidationSchema`
+ * / `mapTypeToZodSchema`, neither of which knows how to substitute user-
+ * defined generic aliases.
+ */
+export function resolveTypeDeep(
+  t: VariableType,
+  typeAliases: Record<string, TypeAliasEntry>,
+): VariableType {
+  let current = t;
+  // Iterate until a pass produces no change. Generic-alias depth is bounded
+  // in practice; MAX_GENERIC_RESOLUTION_PASSES exists only to prevent
+  // runaway loops on a bug.
+  for (let i = 0; i < MAX_GENERIC_RESOLUTION_PASSES; i++) {
+    const next = mapTypes(current, (n) => deepResolveNode(n, typeAliases));
+    if (JSON.stringify(next) === JSON.stringify(current)) return next;
+    current = next;
+  }
+  return current;
+}
+
+/**
+ * Per-node rewrite used by resolveTypeDeep. Expands:
+ *
+ * - `genericType` nodes: built-in Array/Schema get lowered; Record stays a
+ *   genericType (with args normalized); user-defined generic aliases get
+ *   substituted with their type args.
+ * - bare `typeAliasVariable` references *to a generic alias* (e.g. a
+ *   `StringMap` written without `<...>` that relies on parameter defaults)
+ *   get inlined too, so codegen never sees an unresolved generic alias.
+ *
+ * Plain non-generic `typeAliasVariable` references are deliberately left
+ * intact so codegen can emit them by name (e.g. `Coords` referencing the
+ * already-declared zod schema constant).
+ */
+function deepResolveNode(
+  n: VariableType,
+  typeAliases: Record<string, TypeAliasEntry>,
+): VariableType {
+  if (n.type === "genericType") return resolveType(n, typeAliases);
+  if (n.type === "typeAliasVariable") {
+    const entry = typeAliases[n.aliasName];
+    // Inline only generic aliases that can resolve themselves via defaults.
+    // Non-generic aliases stay as-is; defaultless generic aliases would
+    // throw inside resolveType — let that surface as a typecheck error
+    // through the normal pipeline rather than swallowing it here.
+    if (entry?.typeParams && entry.typeParams.every((p) => p.default)) {
+      return resolveType(n, typeAliases);
+    }
+  }
+  return n;
+}
+
+function isValidRecordKey(t: VariableType): boolean {
+  if (t.type === "primitiveType")
+    return t.value === "string" || t.value === "number";
+  if (t.type === "stringLiteralType" || t.type === "numberLiteralType")
+    return true;
+  if (t.type === "unionType") return t.types.every(isValidRecordKey);
+  return false;
+}
+
+/** True if `t` is the built-in `Record<K, V>` generic (after resolution). */
+function isRecord(
+  t: VariableType,
+): t is VariableType & { type: "genericType"; name: "Record" } {
+  return t.type === "genericType" && t.name === "Record";
+}
+
+/**
+ * If the key type is a literal or a union of literals, return the
+ * concrete key strings (number keys are stringified). Returns `null`
+ * for open key types like `string` / `number` where no specific keys
+ * are required.
+ */
+function collectLiteralKeys(keyType: VariableType): string[] | null {
+  if (keyType.type === "stringLiteralType") return [keyType.value];
+  if (keyType.type === "numberLiteralType") return [keyType.value];
+  if (keyType.type === "unionType") {
+    const keys: string[] = [];
+    for (const m of keyType.types) {
+      const inner = collectLiteralKeys(m);
+      if (inner === null) return null;
+      keys.push(...inner);
+    }
+    return keys;
+  }
+  return null;
 }
 
 export function widenType(vt: VariableType | "any"): VariableType | "any" {
@@ -51,6 +342,12 @@ export function widenType(vt: VariableType | "any"): VariableType | "any" {
         type: "schemaType",
         inner: widenType(vt.inner) as VariableType,
       };
+    case "genericType":
+      return {
+        type: "genericType",
+        name: vt.name,
+        typeArgs: vt.typeArgs.map((a) => widenType(a) as VariableType),
+      };
     default:
       return vt;
   }
@@ -63,9 +360,9 @@ export function widenType(vt: VariableType | "any"): VariableType | "any" {
  */
 function isOptionalType(
   vt: VariableType,
-  typeAliases: Record<string, VariableType>,
+  typeAliases: Record<string, TypeAliasEntry>,
 ): boolean {
-  const resolved = resolveType(vt, typeAliases);
+  const resolved = safeResolveType(vt, typeAliases);
   if (resolved.type === "primitiveType")
     return resolved.value === "undefined" || resolved.value === "any";
   if (resolved.type === "unionType")
@@ -77,12 +374,12 @@ function isOptionalType(
 export function isAssignable(
   source: VariableType | "any",
   target: VariableType | "any",
-  typeAliases: Record<string, VariableType>,
+  typeAliases: Record<string, TypeAliasEntry>,
 ): boolean {
   if (source === "any" || target === "any") return true;
 
-  const resolvedSource = resolveType(source, typeAliases);
-  const resolvedTarget = resolveType(target, typeAliases);
+  const resolvedSource = safeResolveType(source, typeAliases);
+  const resolvedTarget = safeResolveType(target, typeAliases);
 
   // primitiveType("any") behaves the same as the "any" sentinel
   if (
@@ -249,6 +546,47 @@ export function isAssignable(
     resolvedTarget.type === "schemaType"
   ) {
     return isAssignable(resolvedSource.inner, resolvedTarget.inner, typeAliases);
+  }
+
+  // Record<K, V> -> Record<K, V>: covariant in both K and V.
+  // Deliberately unsound for mutable records (writes through the wider type
+  // could break the narrower one) — we accept this for ergonomics, so users
+  // can pass Record<string, "approve"> where Record<string, string> is expected.
+  if (isRecord(resolvedSource) && isRecord(resolvedTarget)) {
+    return (
+      isAssignable(
+        resolvedSource.typeArgs[0],
+        resolvedTarget.typeArgs[0],
+        typeAliases,
+      ) &&
+      isAssignable(
+        resolvedSource.typeArgs[1],
+        resolvedTarget.typeArgs[1],
+        typeAliases,
+      )
+    );
+  }
+
+  // objectType -> Record<K, V>: structural. Every source property value
+  // must be assignable to V. If K is a literal-key union, all listed keys
+  // must be present.
+  if (resolvedSource.type === "objectType" && isRecord(resolvedTarget)) {
+    const [keyType, valueType] = resolvedTarget.typeArgs;
+    if (resolvedSource.properties.length === 0) return true;
+    const requiredKeys = collectLiteralKeys(keyType);
+    if (requiredKeys) {
+      const sourceKeys = new Set(resolvedSource.properties.map((p) => p.key));
+      for (const k of requiredKeys) if (!sourceKeys.has(k)) return false;
+    }
+    return resolvedSource.properties.every((p) =>
+      isAssignable(p.value, valueType, typeAliases),
+    );
+  }
+
+  // Record<K, V> -> objectType: only safe when target is the empty object,
+  // since arbitrary record contents can't guarantee specific properties.
+  if (isRecord(resolvedSource) && resolvedTarget.type === "objectType") {
+    return resolvedTarget.properties.length === 0;
   }
 
   if (

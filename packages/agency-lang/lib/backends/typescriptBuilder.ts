@@ -91,6 +91,7 @@ import {
   DEFAULT_SCHEMA,
   mapTypeToValidationSchema,
 } from "./typescriptGenerator/typeToZodSchema.js";
+import { resolveTypeDeep } from "../typeChecker/assignability.js";
 
 import { $, ts } from "../ir/builders.js";
 import { printTs } from "../ir/prettyPrint.js";
@@ -226,6 +227,7 @@ export class TypeScriptBuilder {
       buildAssignmentLhs: (scope, varName, accessChain) =>
         this.assigns.lhs(scope, varName, accessChain),
       buildStateConfig: () => this.buildStateConfig(),
+      zodSchemaFor: (t) => this.zodSchemaFor(t),
       scopes: this.scopes,
     });
     this.assigns = new AssignmentEmitter({
@@ -578,12 +580,37 @@ export class TypeScriptBuilder {
   }
 
   private processTypeAlias(node: TypeAlias): TsNode {
+    // Generic aliases (type Container<T> = ...) can't be turned into a single
+    // zod schema because the body references type parameters that have no
+    // runtime value. Usages like `Container<number>` are normalized away by
+    // resolveTypeDeep before the zod mapper sees them.
+    //
+    // For exported aliases we still emit a runtime *stub* (`undefined`) so
+    // that another module's `import { Container } from "./a.agency"` resolves
+    // at runtime. Concrete uses on the importer side have already been
+    // resolved away at codegen, so the imported symbol is never actually
+    // consulted as a schema value.
+    if (node.typeParams && node.typeParams.length > 0) {
+      if (!node.exported) return ts.empty();
+      return ts.raw(`export const ${node.aliasName} = undefined;`);
+    }
     const exportPrefix = node.exported ? "export " : "";
-    const zodSchema = mapTypeToValidationSchema(node.aliasedType, this.scopes.visibleTypeAliases());
+    const zodSchema = this.zodSchemaFor(node.aliasedType);
     return ts.statements([
       ts.raw(`${exportPrefix}const ${node.aliasName} = ${zodSchema};`),
       ts.raw(`${exportPrefix}type ${node.aliasName} = z.infer<typeof ${node.aliasName}>;`),
     ]);
+  }
+
+  /**
+   * Build a zod validation schema string for a VariableType taken from user
+   * source. Deep-resolves user-defined generic aliases first so that uses
+   * like `Container<number>` become a concrete object/array/etc. before the
+   * (alias-unaware) zod mapper runs.
+   */
+  private zodSchemaFor(t: VariableType): string {
+    const resolved = resolveTypeDeep(t, this.scopes.visibleTypeAliasesFull());
+    return mapTypeToValidationSchema(resolved, this.scopes.visibleTypeAliases());
   }
 
   // ------- Proper IR node methods -------
@@ -856,7 +883,7 @@ export class TypeScriptBuilder {
   }
 
   private processSchemaExpression(node: SchemaExpression): TsNode {
-    const zodSchema = mapTypeToValidationSchema(node.typeArg, this.scopes.visibleTypeAliases());
+    const zodSchema = this.zodSchemaFor(node.typeArg);
     return ts.new(ts.id("Schema"), [ts.raw(zodSchema)]);
   }
 
@@ -1208,7 +1235,7 @@ export class TypeScriptBuilder {
         type: "primitiveType" as const,
         value: "string",
       };
-      let tsType = mapTypeToValidationSchema(typeHint, this.scopes.visibleTypeAliases());
+      let tsType = this.zodSchemaFor(typeHint);
       if (param.defaultValue) {
         const defaultStr = expressionToString(param.defaultValue);
         tsType += `.nullable().describe(${JSON.stringify("Default: " + defaultStr)})`;
@@ -1392,7 +1419,7 @@ export class TypeScriptBuilder {
     const validationGuards: TsNode[] = [];
     for (const param of parameters) {
       if (param.validated && param.typeHint) {
-        const zodSchema = mapTypeToValidationSchema(param.typeHint, this.scopes.visibleTypeAliases());
+        const zodSchema = this.zodSchemaFor(param.typeHint);
         const stackArg = $(ts.stack("args")).index(ts.str(param.name)).done();
         const vrName = `__vr_${param.name}`;
         const vrId = ts.id(vrName);
@@ -2102,7 +2129,7 @@ export class TypeScriptBuilder {
     if (!this.scopes.returnTypeValidated()) return valueNode;
     const returnType = this.scopes.returnType();
     if (!returnType) return valueNode;
-    const zodSchema = mapTypeToValidationSchema(returnType, this.scopes.visibleTypeAliases());
+    const zodSchema = this.zodSchemaFor(returnType);
     return ts.validateType(valueNode, ts.raw(zodSchema));
   }
 
@@ -2199,10 +2226,7 @@ export class TypeScriptBuilder {
     const result = this._processAssignmentInner(node);
     // If the type annotation has !, wrap the assigned value in __validateType
     if (node.validated && node.typeHint) {
-      const zodSchema = mapTypeToValidationSchema(
-        node.typeHint,
-        this.scopes.visibleTypeAliases(),
-      );
+      const zodSchema = this.zodSchemaFor(node.typeHint);
       const varRef = ts.scopedVar(node.variableName, node.scope!, this.moduleId);
       const validateStmt = ts.assign(varRef, ts.validateType(varRef, ts.raw(zodSchema)));
       if (result.kind === "statements") {
@@ -2346,10 +2370,7 @@ export class TypeScriptBuilder {
       value: "string",
     };
 
-    const zodSchema = mapTypeToValidationSchema(
-      _variableType,
-      this.scopes.visibleTypeAliases(),
-    );
+    const zodSchema = this.zodSchemaFor(_variableType);
 
     // Extract prompt from first argument, using processNode to get scoped variable references
     const promptArg = node.arguments[0];

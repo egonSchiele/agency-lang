@@ -10,7 +10,9 @@ import type { SourceLocation } from "../types/base.js";
 import { GLOBAL_SCOPE_KEY, scopeKey } from "../compilationUnit.js";
 import { getImportedNames } from "../types/importStatement.js";
 import { isAssignable, widenType } from "./assignability.js";
-import { synthType } from "./synthesizer.js";
+import { synthType, synthValueAccess } from "./synthesizer.js";
+import type { AccessChainElement, ValueAccess } from "../types/access.js";
+import type { VariableNameLiteral } from "../types/literals.js";
 import { resultTypeForValidation } from "./validation.js";
 import { validateTypeReferences } from "./validate.js";
 import { ScopeInfo, TypeCheckerContext } from "./types.js";
@@ -144,6 +146,28 @@ export function declareVariable(
   }
 
   if (existingType) {
+    if (node.accessChain) {
+      // Property / index writes (e.g. `obj.field = x`, `votes["k"] = v`)
+      // target the *member* type the chain resolves to, not the whole
+      // variable type. Synthesize the LHS by walking the chain through
+      // the read-side synthesizer, then compare the RHS against that.
+      const lhsType = synthAccessChainTargetType(
+        node.variableName,
+        node.accessChain,
+        node.loc,
+        scope,
+        ctx,
+      );
+      const rhsType = synthType(node.value, scope, ctx);
+      reportNotAssignable(
+        ctx,
+        node.variableName,
+        rhsType,
+        lhsType,
+        node.loc,
+      );
+      return;
+    }
     const valueType = synthType(node.value, scope, ctx);
     reportNotAssignable(
       ctx,
@@ -164,6 +188,38 @@ export function declareVariable(
   }
   const inferred = synthType(node.value, scope, ctx);
   scope.declare(node.variableName, widenType(inferred), isConst);
+}
+
+/**
+ * Synthesize the read-side type of `variableName + accessChain` and return
+ * it as the assignment target. Used for property/index writes
+ * (`obj.field = …`, `votes["k"] = …`) where the LHS type is the member the
+ * chain resolves to, not the whole variable type.
+ *
+ * Builds a synthetic `ValueAccess` and reuses `synthValueAccess`, which
+ * already encodes all the rules we'd otherwise duplicate (object property
+ * lookup, record value type, union narrowing, etc.). Any diagnostics raised
+ * by the synthesizer here are part of the regular typecheck output.
+ */
+function synthAccessChainTargetType(
+  variableName: string,
+  accessChain: AccessChainElement[],
+  loc: SourceLocation | undefined,
+  scope: Scope,
+  ctx: TypeCheckerContext,
+): VariableType | "any" {
+  const base: VariableNameLiteral = {
+    type: "variableName",
+    value: variableName,
+    loc,
+  };
+  const synthetic: ValueAccess = {
+    type: "valueAccess",
+    base,
+    chain: accessChain,
+    loc,
+  };
+  return synthValueAccess(synthetic, scope, ctx);
 }
 
 function reportNotAssignable(
@@ -328,10 +384,16 @@ export function walkScopeBody(
           scope.declare(node.itemVar as string, "any");
         } else if (iterableType.type === "arrayType") {
           scope.declare(node.itemVar as string, iterableType.elementType);
+        } else if (
+          iterableType.type === "genericType" &&
+          iterableType.name === "Record"
+        ) {
+          // for (k in record): iteration variable is the key type.
+          scope.declare(node.itemVar as string, iterableType.typeArgs[0]);
         } else {
           scope.declare(node.itemVar as string, "any");
           ctx.errors.push({
-            message: `For-loop iterable must be an array, got '${formatTypeHint(iterableType)}'.`,
+            message: `For-loop iterable must be an array or Record, got '${formatTypeHint(iterableType)}'.`,
             actualType: formatTypeHint(iterableType),
             loc: node.iterable.loc,
           });

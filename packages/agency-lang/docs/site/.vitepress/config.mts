@@ -79,6 +79,10 @@ export default defineConfig({
               text: "Agency's Standard Library",
               link: "/appendix/agency-stdlib",
             },
+            {
+              text: "Advanced Types",
+              link: "/appendix/advanced-types",
+            },
           ],
         },
       ],

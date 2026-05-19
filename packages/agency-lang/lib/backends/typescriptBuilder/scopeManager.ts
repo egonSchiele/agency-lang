@@ -1,4 +1,4 @@
-import type { Scope, VariableType } from "../../types.js";
+import type { Scope, TypeAliasEntry, VariableType } from "../../types.js";
 import type { CompilationUnit } from "../../compilationUnit.js";
 import { scopeKey } from "../../compilationUnit.js";
 
@@ -63,6 +63,23 @@ export class ScopeManager {
   // ---- Compilation-unit-backed queries ----
 
   visibleTypeAliases(): Record<string, VariableType> {
+    const entries = this.compilationUnit.typeAliases.visibleIn(this.currentKey());
+    // Renderers (typeToString, typeToZodSchema) only need the alias body,
+    // not its type parameters. Flatten TypeAliasEntry → VariableType here
+    // so those modules keep their existing signature.
+    const out: Record<string, VariableType> = {};
+    for (const [name, entry] of Object.entries(entries)) {
+      out[name] = entry.body;
+    }
+    return out;
+  }
+
+  /**
+   * Full TypeAliasEntry-form alias registry for callers (resolveTypeDeep)
+   * that need type-parameter metadata to substitute user-defined generic
+   * aliases.
+   */
+  visibleTypeAliasesFull(): Record<string, TypeAliasEntry> {
     return this.compilationUnit.typeAliases.visibleIn(this.currentKey());
   }
 

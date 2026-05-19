@@ -386,7 +386,7 @@ export class Runner {
 
   async loop(
     id: number,
-    items: any[],
+    items: any[] | Record<string, any>,
     callback: (item: any, index: number, runner: Runner) => Promise<void>,
   ): Promise<void> {
     if (this.shouldSkip()) return;
@@ -403,7 +403,20 @@ export class Runner {
 
     this.frame.locals[iterKey] = this.frame.locals[iterKey] ?? 0;
 
-    for (let i = 0; i < items.length; i++) {
+    // Records (plain objects) iterate by key. Arrays iterate by element.
+    // Anything else (null, undefined, primitives) is treated as an empty
+    // iterable, matching how a JS `for...of` over a non-iterable would
+    // simply do nothing rather than crash mid-flow.
+    let iterable: any[];
+    if (Array.isArray(items)) {
+      iterable = items;
+    } else if (items != null && typeof items === "object") {
+      iterable = Object.keys(items);
+    } else {
+      iterable = [];
+    }
+
+    for (let i = 0; i < iterable.length; i++) {
       if (this.halted) return;
 
       // Skip to resume iteration
@@ -413,7 +426,7 @@ export class Runner {
       this._continue = false;
       this.path.push(id);
       try {
-        await callback(items[i], i, this);
+        await callback(iterable[i], i, this);
       } finally {
         this.path.pop();
       }

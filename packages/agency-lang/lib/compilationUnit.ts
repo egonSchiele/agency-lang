@@ -5,6 +5,8 @@ import type {
   FunctionParameter,
   GraphNodeDefinition,
   Scope,
+  TypeAliasEntry,
+  TypeParam,
   VariableType,
 } from "./types.js";
 import type {
@@ -25,9 +27,9 @@ export const GLOBAL_SCOPE_KEY = "global";
  * (scope-local overrides global).
  */
 export class ScopedTypeAliases {
-  private readonly byScope: Record<string, Record<string, VariableType>>;
+  private readonly byScope: Record<string, Record<string, TypeAliasEntry>>;
 
-  constructor(initial?: Record<string, Record<string, VariableType>>) {
+  constructor(initial?: Record<string, Record<string, TypeAliasEntry>>) {
     this.byScope = { [GLOBAL_SCOPE_KEY]: {} };
     if (initial) {
       for (const [k, v] of Object.entries(initial)) {
@@ -36,22 +38,28 @@ export class ScopedTypeAliases {
     }
   }
 
-  add(scopeKey: string, name: string, type: VariableType): void {
+  add(
+    scopeKey: string,
+    name: string,
+    body: VariableType,
+    typeParams?: TypeParam[],
+  ): void {
     if (!this.byScope[scopeKey]) this.byScope[scopeKey] = {};
-    this.byScope[scopeKey][name] = type;
+    const entry: TypeAliasEntry = typeParams ? { body, typeParams } : { body };
+    this.byScope[scopeKey][name] = entry;
   }
 
-  get(scopeKey: string): Record<string, VariableType> | undefined {
+  get(scopeKey: string): Record<string, TypeAliasEntry> | undefined {
     return this.byScope[scopeKey];
   }
 
   /** Flat map of every alias visible in `scopeKey`; scope-local wins. */
-  visibleIn(scopeKey: string): Record<string, VariableType> {
+  visibleIn(scopeKey: string): Record<string, TypeAliasEntry> {
     return { ...this.byScope[GLOBAL_SCOPE_KEY], ...this.byScope[scopeKey] };
   }
 
   /** Iterate over every (scopeKey, aliases-in-that-scope) pair. */
-  scopes(): [string, Record<string, VariableType>][] {
+  scopes(): [string, Record<string, TypeAliasEntry>][] {
     return Object.entries(this.byScope);
   }
 
@@ -194,7 +202,12 @@ export function buildCompilationUnit(
   for (const { node, scopes } of walkNodes(program.nodes)) {
     const key = scopeKey(scopes[scopes.length - 1]);
     if (node.type === "typeAlias") {
-      unit.typeAliases.add(key, node.aliasName, node.aliasedType);
+      unit.typeAliases.add(
+        key,
+        node.aliasName,
+        node.aliasedType,
+        node.typeParams,
+      );
     }
   }
 
@@ -243,6 +256,7 @@ export function buildCompilationUnit(
             GLOBAL_SCOPE_KEY,
             r.localName,
             r.symbol.aliasedType,
+            r.symbol.typeParams,
           );
           // Imported type's body may reference other aliases from its
           // module — pull those transitively too.
@@ -316,7 +330,12 @@ function pullTransitiveAliases(
     if (globalAliases[name] !== undefined) continue; // already known
     const found = resolveTypeFromFile(symbolTable, name, preferFile);
     if (!found) continue;
-    unit.typeAliases.add(GLOBAL_SCOPE_KEY, name, found.aliasedType);
+    unit.typeAliases.add(
+      GLOBAL_SCOPE_KEY,
+      name,
+      found.aliasedType,
+      found.typeParams,
+    );
     // Nested aliases referenced by this type should resolve in the file
     // the type was actually found in (not the original preferFile) — the
     // body's references are scoped to that module.
@@ -337,17 +356,25 @@ function resolveTypeFromFile(
   symbolTable: SymbolTable,
   name: string,
   preferFile: string | undefined,
-): { aliasedType: VariableType; file: string } | undefined {
+): { aliasedType: VariableType; typeParams?: TypeParam[]; file: string } | undefined {
   if (preferFile) {
     const fileSym = symbolTable.getFile(preferFile)?.[name];
     if (fileSym?.kind === "type") {
-      return { aliasedType: fileSym.aliasedType, file: preferFile };
+      return {
+        aliasedType: fileSym.aliasedType,
+        typeParams: fileSym.typeParams,
+        file: preferFile,
+      };
     }
   }
   for (const file of symbolTable.filePaths()) {
     const sym = symbolTable.getFile(file)?.[name];
     if (sym?.kind === "type") {
-      return { aliasedType: sym.aliasedType, file };
+      return {
+        aliasedType: sym.aliasedType,
+        typeParams: sym.typeParams,
+        file,
+      };
     }
   }
   return undefined;

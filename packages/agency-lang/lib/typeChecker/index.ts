@@ -15,6 +15,7 @@ import {
   AgencyProgram,
   FunctionDefinition,
   GraphNodeDefinition,
+  TypeAliasEntry,
   VariableType,
 } from "../types.js";
 import type { SourceLocation } from "../types/base.js";
@@ -79,7 +80,7 @@ export class TypeChecker {
     this.sourceText = resolved.sourceText;
   }
 
-  private get typeAliases(): Record<string, VariableType> {
+  private get typeAliases(): Record<string, TypeAliasEntry> {
     return this.scopedTypeAliases.visibleIn(this.currentScopeKey);
   }
 
@@ -121,11 +122,35 @@ export class TypeChecker {
     // 1. Validate type alias references
     for (const [sk, scopeAliases] of this.scopedTypeAliases.scopes()) {
       this.withScope(sk, () => {
-        for (const [name, aliasedType] of Object.entries(scopeAliases)) {
+        for (const [name, entry] of Object.entries(scopeAliases)) {
+          // Type parameters declared on a generic alias are in scope inside
+          // its own body. Add them to the visible alias set as opaque entries
+          // so references like `T` don't get flagged as undefined.
+          const localAliases: Record<string, TypeAliasEntry> = {
+            ...this.typeAliases,
+          };
+          if (entry.typeParams) {
+            for (const p of entry.typeParams) {
+              localAliases[p.name] = {
+                body: { type: "typeAliasVariable", aliasName: p.name },
+              };
+            }
+            // Defaults must come after all required parameters.
+            let seenDefault = false;
+            for (const p of entry.typeParams) {
+              if (p.default) {
+                seenDefault = true;
+              } else if (seenDefault) {
+                this.errors.push({
+                  message: `Type parameter '${p.name}' (no default) must come before parameters that have defaults in '${name}'.`,
+                });
+              }
+            }
+          }
           validateTypeReferences(
-            aliasedType,
+            entry.body,
             name,
-            this.typeAliases,
+            localAliases,
             this.errors,
           );
         }

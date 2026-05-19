@@ -4,6 +4,7 @@ import {
   arrayTypeParser,
   angleBracketsArrayTypeParser,
   blockTypeParser,
+  genericTypeParser,
   stringLiteralTypeParser,
   numberLiteralTypeParser,
   booleanLiteralTypeParser,
@@ -2768,3 +2769,148 @@ describe("parenthesized type", () => {
   });
 });
 
+
+describe("genericTypeParser", () => {
+  it("parses a single-arg generic", () => {
+    const result = genericTypeParser("Container<string>");
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.result).toEqual({
+        type: "genericType",
+        name: "Container",
+        typeArgs: [{ type: "primitiveType", value: "string" }],
+      });
+    }
+  });
+
+  it("parses a two-arg generic (Record<K, V>)", () => {
+    const result = genericTypeParser("Record<string, number>");
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.result).toEqual({
+        type: "genericType",
+        name: "Record",
+        typeArgs: [
+          { type: "primitiveType", value: "string" },
+          { type: "primitiveType", value: "number" },
+        ],
+      });
+    }
+  });
+
+  it("parses nested generics (Record<string, Record<string, number>>)", () => {
+    const result = genericTypeParser("Record<string, Record<string, number>>");
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.result.name).toBe("Record");
+      expect(result.result.typeArgs[1]).toEqual({
+        type: "genericType",
+        name: "Record",
+        typeArgs: [
+          { type: "primitiveType", value: "string" },
+          { type: "primitiveType", value: "number" },
+        ],
+      });
+    }
+  });
+
+  it("allows whitespace inside angle brackets", () => {
+    const result = genericTypeParser("Container< string >");
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.result.name).toBe("Container");
+    }
+  });
+});
+
+describe("genericType integration with variableTypeParser", () => {
+  it("parses a generic in a union: Container<string> | null", () => {
+    const result = variableTypeParser("Container<string> | null");
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.result.type).toBe("unionType");
+      if (result.result.type === "unionType") {
+        expect(result.result.types[0]).toEqual({
+          type: "genericType",
+          name: "Container",
+          typeArgs: [{ type: "primitiveType", value: "string" }],
+        });
+      }
+    }
+  });
+
+  it("parses an array of generics: Container<string>[]", () => {
+    const result = variableTypeParser("Container<string>[]");
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.result).toEqual({
+        type: "arrayType",
+        elementType: {
+          type: "genericType",
+          name: "Container",
+          typeArgs: [{ type: "primitiveType", value: "string" }],
+        },
+      });
+    }
+  });
+
+  it("Result<T> still wins over genericType", () => {
+    const result = variableTypeParser("Result<string, number>");
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.result.type).toBe("resultType");
+    }
+  });
+});
+
+describe("typeAliasParser with type parameters", () => {
+  it("parses a single type parameter: type Container<T> = { value: T }", () => {
+    const result = typeAliasParser("type Container<T> = { value: T }");
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.result.aliasName).toBe("Container");
+      expect(result.result.typeParams).toEqual([{ name: "T" }]);
+      expect(result.result.aliasedType.type).toBe("objectType");
+    }
+  });
+
+  it("parses multiple type parameters: type Pair<A, B> = ...", () => {
+    const result = typeAliasParser("type Pair<A, B> = { first: A, second: B }");
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.result.aliasName).toBe("Pair");
+      expect(result.result.typeParams).toEqual([{ name: "A" }, { name: "B" }]);
+    }
+  });
+
+  it("parses type parameter with default: type StringMap<V = any> = Record<string, V>", () => {
+    const result = typeAliasParser("type StringMap<V = any> = Record<string, V>");
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.result.aliasName).toBe("StringMap");
+      expect(result.result.typeParams).toEqual([
+        { name: "V", default: { type: "primitiveType", value: "any" } },
+      ]);
+    }
+  });
+
+  it("non-generic alias has no typeParams field: type Plain = string", () => {
+    const result = typeAliasParser("type Plain = string");
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.result.aliasName).toBe("Plain");
+      expect(result.result.typeParams).toBeUndefined();
+    }
+  });
+
+  it("mixed required + defaulted params: type Foo<A, B = string>", () => {
+    const result = typeAliasParser("type Foo<A, B = string> = { a: A, b: B }");
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.result.typeParams).toEqual([
+        { name: "A" },
+        { name: "B", default: { type: "primitiveType", value: "string" } },
+      ]);
+    }
+  });
+});

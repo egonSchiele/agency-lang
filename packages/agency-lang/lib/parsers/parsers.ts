@@ -91,11 +91,13 @@ import {
   NumberLiteralType,
   ObjectProperty,
   ObjectType,
+  GenericType,
   PrimitiveType,
   ResultType,
   StringLiteralType,
   TypeAlias,
   TypeAliasVariable,
+  TypeParam,
   UnionType,
   Tag,
 } from "../types.js";
@@ -722,6 +724,9 @@ export const arrayTypeParser: Parser<ArrayType> = (input: string) => {
         or(
           parenthesizedTypeParser,
           objectTypeParser,
+          lazy(() => resultTypeParser),
+          lazy(() => angleBracketsArrayTypeParser),
+          lazy(() => genericTypeParser),
           primitiveTypeParser,
           typeAliasVariableParser,
         ),
@@ -931,6 +936,7 @@ export const unionItemParser: Parser<VariableType> = trace(
     angleBracketsArrayTypeParser,
     arrayTypeParser,
     lazy(() => resultTypeParser),
+    lazy(() => genericTypeParser),
     stringLiteralTypeParser,
     numberLiteralTypeParser,
     booleanLiteralTypeParser,
@@ -1086,6 +1092,36 @@ export const resultTypeParser: Parser<ResultType> = trace(
   ),
 );
 
+/**
+ * Generic type usage: `Name<TypeArg1, TypeArg2, ...>`. Produces a
+ * `genericType` AST node. The parser is policy-free — it does not
+ * special-case any name. The type checker's `resolveType` normalizes
+ * built-ins (`Array`, `Schema`, `Record`) and resolves user-defined
+ * generic aliases by substituting type parameters into the alias body.
+ *
+ * Ordering: must come AFTER `resultTypeParser` (which keeps its own AST
+ * node for `Result<T, E>`) and BEFORE `typeAliasVariableParser` (which
+ * greedily matches any identifier).
+ */
+export const genericTypeParser: Parser<GenericType> = trace(
+  "genericTypeParser",
+  seqC(
+    set("type", "genericType"),
+    capture(many1WithJoin(varNameChar), "name"),
+    char("<"),
+    optionalSpaces,
+    capture(
+      sepBy1(
+        seqR(optionalSpaces, char(","), optionalSpaces),
+        lazy(() => variableTypeParser),
+      ),
+      "typeArgs",
+    ),
+    optionalSpaces,
+    char(">"),
+  ),
+);
+
 export const variableTypeParser: Parser<VariableType> = trace(
   "variableTypeParser",
   or(
@@ -1095,12 +1131,35 @@ export const variableTypeParser: Parser<VariableType> = trace(
     objectTypeParser,
     angleBracketsArrayTypeParser,
     resultTypeParser,
+    genericTypeParser,
     stringLiteralTypeParser,
     numberLiteralTypeParser,
     booleanLiteralTypeParser,
     primitiveTypeParser,
     typeAliasVariableParser,
     parenthesizedTypeParser,
+  ),
+);
+
+/**
+ * Type parameter on a generic alias declaration. Examples:
+ *   T            → { name: "T" }
+ *   V = any      → { name: "V", default: { type: "primitiveType", value: "any" } }
+ */
+export const typeParamParser: Parser<TypeParam> = trace(
+  "typeParamParser",
+  seqC(
+    capture(many1WithJoin(varNameChar), "name"),
+    optional(
+      captureCaptures(
+        seqC(
+          optionalSpaces,
+          char("="),
+          optionalSpaces,
+          capture(lazy(() => variableTypeParser), "default"),
+        ),
+      ),
+    ),
   ),
 );
 
@@ -1114,6 +1173,25 @@ const baseTypeAliasParser: Parser<TypeAlias> = withLoc(trace(
       parseError(
         "expected a statement of the form `type Foo = X' where X can be a union, array, object, type alias, or primitive type`",
         capture(many1WithJoin(varNameChar), "aliasName"),
+        // Optional `<T, U = Default, ...>`. When absent, no `typeParams`
+        // capture is set, so non-generic aliases keep their existing shape.
+        optional(
+          captureCaptures(
+            seqC(
+              char("<"),
+              optionalSpaces,
+              capture(
+                sepBy1(
+                  seqR(optionalSpaces, char(","), optionalSpaces),
+                  typeParamParser,
+                ),
+                "typeParams",
+              ),
+              optionalSpaces,
+              char(">"),
+            ),
+          ),
+        ),
         optionalSpaces,
         str("="),
         optionalSpaces,

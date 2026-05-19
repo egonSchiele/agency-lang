@@ -1,0 +1,6 @@
+import { Container } from "./genericContainer.agency"
+
+node useContainer() {
+  let raw: Container<number> = { value: 42 }
+  return raw.value
+}

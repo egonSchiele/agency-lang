@@ -53,6 +53,8 @@ export function formatTypeHint(
       const ret = vt.returnType ? `: ${recurse(vt.returnType)}` : "";
       return `function ${vt.name}(${params})${ret}`;
     }
+    case "genericType":
+      return `${vt.name}<${vt.typeArgs.map(recurse).join(", ")}>`;
     default:
       throw new Error(`Unknown variable type: ${(vt as any).type}`);
   }

@@ -1,0 +1,11 @@
+type Container<T> = { value: T }
+
+def process(c: Container<number>!) {
+  print(c.value)
+  return c
+}
+
+node main() {
+  let c = process({ value: 42 })
+  print(c.value)
+}

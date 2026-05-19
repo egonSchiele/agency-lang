@@ -4,6 +4,7 @@ import {
   AgencyNode,
   FunctionDefinition,
   GraphNodeDefinition,
+  TypeAliasEntry,
   VariableType,
 } from "../types.js";
 import { SourceLocation } from "../types/base.js";
@@ -57,7 +58,7 @@ export type TypeCheckerContext = {
   inferredReturnTypes: Record<string, VariableType | "any">;
   inferringReturnType: Set<string>;
   config: AgencyConfig;
-  getTypeAliases(): Record<string, VariableType>;
+  getTypeAliases(): Record<string, TypeAliasEntry>;
   withScope<T>(key: string, fn: () => T): T;
   inferReturnTypeFor(
     name: string,

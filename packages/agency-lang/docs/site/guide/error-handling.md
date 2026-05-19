@@ -33,6 +33,9 @@ const result = divide(10, 0)
   }
 ```
 
+You can also use result patterns for more concise unwrapping — see
+[Pattern Matching](pattern-matching.md#result-patterns).
+
 Let's see some reasons you might want to use a Result type instead.
 
 ## Default value

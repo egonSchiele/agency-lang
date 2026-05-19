@@ -57,6 +57,20 @@ When reading code that consumes `TsNode`, it is hard to remember the full set of
 
 Picking the right one requires knowing what each compiles to. Worth documenting alongside each builder which compiled form they produce, and possibly consolidating.
 
+### 8. Module-init plumbing is mostly `ts.raw` strings
+
+While extracting `assembleSections`, almost everything in the static-init / `__initializeGlobals` plumbing fell out as `ts.raw("await __initializeStatic(__ctx)")`, `ts.raw("let __staticInitPromise = null")`, etc. The IR has builders for assignments, function declarations, and calls, but for these helpers we still drop to strings because of:
+
+- `await` as a leading keyword on a bare call: no `ts.await(call)` ergonomics that print as a statement.
+- Hand-built `(async () => { ... })()` IIFE: no `ts.iife({ async: true, body })` builder.
+- `let foo = null` initializer: `ts.letDecl(name)` exists but no `ts.letDecl(name, value)` form.
+
+**Direction:** Add at least `ts.iife({ body, async })`, `ts.letDecl(name, value?)`, and double-check `ts.await` produces statement-form output.
+
+### 9. Discriminator on assignment LHS in raw IR is asymmetric
+
+The IR has both `ts.assign(lhs, rhs)` and `ts.globalSet(moduleId, name, value)`. For a reader, it is not obvious that the latter exists; we accidentally hand-wrote `ts.raw("__ctx.globals.set(...)")` in a couple of places before standardizing on `ts.globalSet`. A short doc-comment on `ts.assign` pointing readers at the global variant would help.
+
 ---
 
 (Append more as we go.)

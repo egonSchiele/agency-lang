@@ -426,4 +426,58 @@ describe("prettyPrint", () => {
     expect(printTs(ts.scopedVar("greet", "functionRef"))).toBe("greet");
   });
 
+  // ── high-frequency builders ───────────────────────────────────────────────
+
+  it("ts.methodCall produces receiver.name(args)", () => {
+    expect(printTs(ts.methodCall(ts.id("runner"), "halt", [ts.num(1)]))).toBe(
+      "runner.halt(1)",
+    );
+  });
+
+  it("ts.methodCall with no args", () => {
+    expect(printTs(ts.methodCall(ts.id("performance"), "now"))).toBe(
+      "performance.now()",
+    );
+  });
+
+  it("ts.methodCall with optional chaining", () => {
+    expect(
+      printTs(ts.methodCall(ts.id("x"), "foo", [], { optional: true })),
+    ).toBe("x?.foo()");
+  });
+
+  it("ts.awaitCall wraps a call in await", () => {
+    expect(printTs(ts.awaitCall(ts.id("init"), [ts.id("ctx")]))).toBe(
+      "await init(ctx)",
+    );
+  });
+
+  it("ts.awaitMethodCall produces await receiver.name(args)", () => {
+    expect(
+      printTs(ts.awaitMethodCall(ts.id("ctx"), "drain", [ts.num(0)])),
+    ).toBe("await ctx.drain(0)");
+  });
+
+  it("ts.iife wraps arrow callee in parens (async)", () => {
+    const node = ts.iife({ async: true, body: [ts.return(ts.num(1))] });
+    expect(printTs(node)).toBe(
+      "(async () => {\n  return 1;\n})()",
+    );
+  });
+
+  it("ts.iife wraps arrow callee in parens (sync, expression body)", () => {
+    const node = ts.iife({ body: ts.num(42) });
+    expect(printTs(node)).toBe("(() => 42)()");
+  });
+
+  it("ts.call with arrow-fn callee parenthesises the callee", () => {
+    // Regression-style: the printer must add parens around arrow callees
+    // so `(async () => {...})()` parses as an IIFE.
+    const node = ts.call(
+      ts.arrowFn([], ts.statements([ts.return(ts.num(7))]), { async: true }),
+    );
+    expect(printTs(node).startsWith("(async () =>")).toBe(true);
+    expect(printTs(node).endsWith(")()")).toBe(true);
+  });
+
 });

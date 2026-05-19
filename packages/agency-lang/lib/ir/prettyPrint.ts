@@ -106,7 +106,14 @@ export function printTs(node: TsNode, indent = 0): string {
     }
 
     case "call": {
-      const callee = printTs(node.callee, indent);
+      // Arrow / function-expression callees must be wrapped in parens so
+      // they parse as IIFEs, e.g. `(async () => { ... })()` rather than
+      // `async () => { ... }()` which is a parse error in statement
+      // position and binds wrong in expression position.
+      const needsCalleeParens =
+        node.callee.kind === "arrowFn" || node.callee.kind === "functionDecl";
+      const calleeStr = printTs(node.callee, indent);
+      const callee = needsCalleeParens ? `(${calleeStr})` : calleeStr;
       const args = node.arguments.map((a) => printTs(a, indent)).join(", ");
       return `${callee}(${args})`;
     }

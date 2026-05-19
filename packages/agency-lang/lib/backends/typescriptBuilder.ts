@@ -521,7 +521,7 @@ export class TypeScriptBuilder {
     // and return from the callback. The runner handles iteration cleanup.
     const method = node.value === "break" ? "breakLoop" : "continueLoop";
     return ts.statements([
-      $(ts.id("runner")).prop(method).call().done(),
+      ts.methodCall(ts.id("runner"), method),
       ts.raw("return"),
     ]);
   }
@@ -1669,8 +1669,11 @@ export class TypeScriptBuilder {
         ts.if(
           this.interruptCheck(ts.id(tempVar)),
           ts.statements([
-            ts.raw("await __ctx.pendingPromises.awaitAll()"),
-            $(ts.id("runner")).prop("halt").call([haltValue]).done(),
+            ts.awaitMethodCall(
+              ts.prop(ts.runtime.ctx, "pendingPromises"),
+              "awaitAll",
+            ),
+            ts.methodCall(ts.id("runner"), "halt", [haltValue]),
             ts.return(),
           ]),
         ),
@@ -1984,7 +1987,7 @@ export class TypeScriptBuilder {
           ),
         )
         .done();
-      dataNode = $.id("Object").prop("fromEntries").call([entries]).done();
+      dataNode = ts.methodCall(ts.id("Object"), "fromEntries", [entries]);
     } else {
       dataNode = ts.obj({});
     }
@@ -2333,8 +2336,11 @@ export class TypeScriptBuilder {
             ts.if(
               this.interruptCheck(varRef),
               ts.statements([
-                ts.raw("await __ctx.pendingPromises.awaitAll()"),
-                $(ts.id("runner")).prop("halt").call([haltValue]).done(),
+                ts.awaitMethodCall(
+                  ts.prop(ts.runtime.ctx, "pendingPromises"),
+                  "awaitAll",
+                ),
+                ts.methodCall(ts.id("runner"), "halt", [haltValue]),
                 ts.return(),
               ]),
             ),
@@ -2462,8 +2468,11 @@ export class TypeScriptBuilder {
           ts.if(
             this.interruptCheck(varRef),
             ts.statements([
-              ts.raw("await __ctx.pendingPromises.awaitAll()"),
-              $(ts.id("runner")).prop("halt").call([haltValue]).done(),
+              ts.awaitMethodCall(
+                ts.prop(ts.runtime.ctx, "pendingPromises"),
+                "awaitAll",
+              ),
+              ts.methodCall(ts.id("runner"), "halt", [haltValue]),
               ts.return(),
             ]),
           ),
@@ -2507,7 +2516,7 @@ export class TypeScriptBuilder {
         this.assigns.scopedAssign(
           assignTo.scope!,
           assignTo.variableName,
-          $(ts.threads.active()).prop("cloneMessages").call().done(),
+          ts.methodCall(ts.threads.active(), "cloneMessages"),
           assignTo.accessChain,
         ),
       );

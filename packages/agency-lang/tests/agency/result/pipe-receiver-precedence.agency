@@ -1,0 +1,52 @@
+/*
+  Regression for the pipe receiver precedence bug
+  (see issue-pipe-receiver-precedence.md).
+
+  When a pipe stage's receiver has shape `expr.chain.method` and the
+  base `expr` lowers to an `await` (e.g. a function call), the receiver
+  computation must paren-wrap the awaited base before applying the
+  intermediate chain elements. Otherwise the `.chain` access binds to
+  the unresolved Promise and we end up calling `.method` on undefined.
+*/
+
+class Multiplier {
+  factor: number
+
+  multiply(x: number): Result {
+    return success(x * this.factor)
+  }
+}
+
+class Container {
+  inner: Multiplier
+}
+
+def makeContainer(f: number): Container {
+  return new Container(new Multiplier(f))
+}
+
+node main() {
+  // Receiver shape: functionCall base + intermediate property + final method ref.
+  // Pre-fix lowering: __callMethod(await makeContainer(3).inner, "multiply", …)
+  // which parses as __callMethod((await (makeContainer(3).inner)), …) and
+  // crashes because .inner is read off the Promise.
+  // Post-fix lowering: __callMethod((await makeContainer(3)).inner, "multiply", …)
+  let r1 = success(5) |> makeContainer(3).inner.multiply
+
+  // Chained receivers across multiple pipe stages.
+  let r2 = success(10) |> makeContainer(2).inner.multiply |> makeContainer(4).inner.multiply
+
+  // Receiver with optional chaining. Pre-fix this dropped the
+  // `optional` flag, emitting `c.inner.multiply` instead of
+  // `c?.inner.multiply`. The non-null case below would still
+  // function correctly even without the fix; the assertion here is
+  // that the optional flag survives codegen and the pipe still runs.
+  let c = makeContainer(7)
+  let r3 = success(2) |> c?.inner.multiply
+
+  return {
+    r1: r1.value,
+    r2: r2.value,
+    r3: r3.value,
+  }
+}

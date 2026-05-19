@@ -1,5 +1,6 @@
-import { TypeAliasEntry, VariableType } from "../types.js";
+import { TypeAliasEntry, TypeParam, VariableType } from "../types.js";
 import { BOOLEAN_T, NUMBER_T, STRING_T } from "./primitives.js";
+import { substituteTypeParams } from "./substitute.js";
 
 /**
  * Public resolveType: normalizes a VariableType by resolving type-alias
@@ -29,8 +30,27 @@ function resolveTypeWithGuard(
 ): VariableType {
   if (vt.type === "typeAliasVariable") {
     const entry = typeAliases[vt.aliasName];
-    if (entry) return resolveTypeWithGuard(entry.body, typeAliases, inProgress);
-    return vt;
+    if (!entry) return vt;
+
+    // Bare use of a generic alias is only allowed if every parameter has a default.
+    if (entry.typeParams && entry.typeParams.some((p) => !p.default)) {
+      throw new TypeError(`${vt.aliasName} requires type arguments`);
+    }
+
+    // Self-reference inside the same alias body — stop recursing.
+    if (inProgress.has(vt.aliasName)) return vt;
+    const next = new Set(inProgress).add(vt.aliasName);
+
+    if (entry.typeParams) {
+      const args = entry.typeParams.map((p) => p.default!);
+      const substituted = substituteTypeParams(
+        entry.body,
+        entry.typeParams.map((p) => p.name),
+        args,
+      );
+      return resolveTypeWithGuard(substituted, typeAliases, next);
+    }
+    return resolveTypeWithGuard(entry.body, typeAliases, next);
   }
 
   if (vt.type === "genericType") {
@@ -76,10 +96,62 @@ function resolveTypeWithGuard(
         ),
       };
     }
-    // User-defined generics handled in Task 9.
+    // User-defined generic alias.
+    const entry = typeAliases[vt.name];
+    if (!entry) throw new TypeError(`Unknown generic type ${vt.name}`);
+    if (!entry.typeParams) {
+      throw new TypeError(`${vt.name} is not a generic type`);
+    }
+
+    // Self-reference within the alias body: preserve the genericType wrapper
+    // with substituted args; don't try to re-expand or we'd recurse forever.
+    if (inProgress.has(vt.name)) {
+      return {
+        ...vt,
+        typeArgs: vt.typeArgs.map((a) =>
+          resolveTypeWithGuard(a, typeAliases, inProgress),
+        ),
+      };
+    }
+
+    const args = fillDefaults(vt.typeArgs, entry.typeParams, vt.name);
+    const next = new Set(inProgress).add(vt.name);
+    const substituted = substituteTypeParams(
+      entry.body,
+      entry.typeParams.map((p) => p.name),
+      args,
+    );
+    return resolveTypeWithGuard(substituted, typeAliases, next);
   }
 
   return vt;
+}
+
+/**
+ * Fill in defaults for omitted type arguments on a user-defined generic.
+ * Errors if too many args are supplied or a required (defaultless) param is missing.
+ */
+function fillDefaults(
+  args: VariableType[],
+  params: TypeParam[],
+  name: string,
+): VariableType[] {
+  if (args.length > params.length) {
+    throw new TypeError(
+      `${name} expects at most ${params.length} type arguments, got ${args.length}`,
+    );
+  }
+  const result = [...args];
+  for (let i = args.length; i < params.length; i++) {
+    const p = params[i];
+    if (!p.default) {
+      throw new TypeError(
+        `${name} requires at least ${i + 1} type arguments`,
+      );
+    }
+    result.push(p.default);
+  }
+  return result;
 }
 
 /**

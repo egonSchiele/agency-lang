@@ -230,14 +230,209 @@ describe("resolveType: passthrough for unrelated variants", () => {
     expect(resolveType(stringType, {})).toEqual(stringType);
     expect(resolveType(anyType, {})).toEqual(anyType);
   });
+});
 
-  it("returns user-defined genericType unchanged (handled in Task 9)", () => {
-    const userGeneric: VariableType = {
-      type: "genericType",
-      name: "Container",
-      typeArgs: [stringType],
+describe("resolveType: user-defined generic aliases", () => {
+  it("substitutes T in a simple Container<T>", () => {
+    const aliases: Record<string, TypeAliasEntry> = {
+      Container: {
+        body: {
+          type: "objectType",
+          properties: [
+            {
+              key: "value",
+              value: { type: "typeAliasVariable", aliasName: "T" },
+            },
+          ],
+        },
+        typeParams: [{ name: "T" }],
+      },
     };
-    const result = resolveType(userGeneric, {});
-    expect(result).toEqual(userGeneric);
+    const result = resolveType(
+      { type: "genericType", name: "Container", typeArgs: [numberType] },
+      aliases,
+    );
+    expect(result).toEqual({
+      type: "objectType",
+      properties: [{ key: "value", value: numberType }],
+    });
+  });
+
+  it("uses default type argument when alias is referenced bare", () => {
+    const aliases: Record<string, TypeAliasEntry> = {
+      StringMap: {
+        body: {
+          type: "genericType",
+          name: "Record",
+          typeArgs: [
+            stringType,
+            { type: "typeAliasVariable", aliasName: "V" },
+          ],
+        },
+        typeParams: [{ name: "V", default: anyType }],
+      },
+    };
+    const result = resolveType(
+      { type: "typeAliasVariable", aliasName: "StringMap" },
+      aliases,
+    );
+    expect(result).toEqual({
+      type: "genericType",
+      name: "Record",
+      typeArgs: [stringType, anyType],
+    });
+  });
+
+  it("fills in default type args when only some are supplied", () => {
+    const aliases: Record<string, TypeAliasEntry> = {
+      Pair: {
+        body: {
+          type: "objectType",
+          properties: [
+            {
+              key: "first",
+              value: { type: "typeAliasVariable", aliasName: "A" },
+            },
+            {
+              key: "second",
+              value: { type: "typeAliasVariable", aliasName: "B" },
+            },
+          ],
+        },
+        typeParams: [{ name: "A" }, { name: "B", default: stringType }],
+      },
+    };
+    const result = resolveType(
+      { type: "genericType", name: "Pair", typeArgs: [numberType] },
+      aliases,
+    );
+    expect(result).toEqual({
+      type: "objectType",
+      properties: [
+        { key: "first", value: numberType },
+        { key: "second", value: stringType },
+      ],
+    });
+  });
+
+  it("does not infinite-loop on a recursive generic alias", () => {
+    // type Tree<T> = { value: T, children: Tree<T>[] }
+    const aliases: Record<string, TypeAliasEntry> = {
+      Tree: {
+        body: {
+          type: "objectType",
+          properties: [
+            {
+              key: "value",
+              value: { type: "typeAliasVariable", aliasName: "T" },
+            },
+            {
+              key: "children",
+              value: {
+                type: "arrayType",
+                elementType: {
+                  type: "genericType",
+                  name: "Tree",
+                  typeArgs: [{ type: "typeAliasVariable", aliasName: "T" }],
+                },
+              },
+            },
+          ],
+        },
+        typeParams: [{ name: "T" }],
+      },
+    };
+    const result = resolveType(
+      { type: "genericType", name: "Tree", typeArgs: [stringType] },
+      aliases,
+    );
+    // The self-reference is preserved as a genericType with substituted args
+    expect(result).toEqual({
+      type: "objectType",
+      properties: [
+        { key: "value", value: stringType },
+        {
+          key: "children",
+          value: {
+            type: "arrayType",
+            elementType: {
+              type: "genericType",
+              name: "Tree",
+              typeArgs: [stringType],
+            },
+          },
+        },
+      ],
+    });
+  });
+
+  it("throws when too many type args are supplied", () => {
+    const aliases: Record<string, TypeAliasEntry> = {
+      Box: {
+        body: { type: "typeAliasVariable", aliasName: "T" },
+        typeParams: [{ name: "T" }],
+      },
+    };
+    expect(() =>
+      resolveType(
+        {
+          type: "genericType",
+          name: "Box",
+          typeArgs: [stringType, numberType],
+        },
+        aliases,
+      ),
+    ).toThrow(/expects at most 1/);
+  });
+
+  it("throws when a required type arg is missing", () => {
+    const aliases: Record<string, TypeAliasEntry> = {
+      Pair: {
+        body: { type: "typeAliasVariable", aliasName: "A" },
+        typeParams: [{ name: "A" }, { name: "B" }],
+      },
+    };
+    expect(() =>
+      resolveType(
+        { type: "genericType", name: "Pair", typeArgs: [stringType] },
+        aliases,
+      ),
+    ).toThrow(/requires at least 2/);
+  });
+
+  it("throws when a bare alias has params without defaults", () => {
+    const aliases: Record<string, TypeAliasEntry> = {
+      Container: {
+        body: { type: "typeAliasVariable", aliasName: "T" },
+        typeParams: [{ name: "T" }],
+      },
+    };
+    expect(() =>
+      resolveType(
+        { type: "typeAliasVariable", aliasName: "Container" },
+        aliases,
+      ),
+    ).toThrow(/Container requires type arguments/);
+  });
+
+  it("throws when applying type args to a non-generic alias", () => {
+    const aliases: Record<string, TypeAliasEntry> = {
+      Plain: { body: stringType },
+    };
+    expect(() =>
+      resolveType(
+        { type: "genericType", name: "Plain", typeArgs: [stringType] },
+        aliases,
+      ),
+    ).toThrow(/Plain is not a generic type/);
+  });
+
+  it("throws when referencing an unknown generic type", () => {
+    expect(() =>
+      resolveType(
+        { type: "genericType", name: "Ghost", typeArgs: [stringType] },
+        {},
+      ),
+    ).toThrow(/Unknown generic type Ghost/);
   });
 });

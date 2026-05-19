@@ -58,7 +58,12 @@ describe("pipe receiver codegen", () => {
     `);
     // Receiver chain is `.inner.m`; we slice off `.m`. The remaining
     // `.inner` access must bind to `(await makeC())`, not the
-    // unresolved Promise. We check for `(await … )).inner`.
-    expect(out).toMatch(/\)\.inner,\s*"m"/);
+    // unresolved Promise. With the fix we emit
+    // `(await await __call(makeC, ...)).inner` — the extra wrapping
+    // paren is what makes `.inner` apply to the awaited value
+    // instead of to the call expression. Pre-fix codegen produced
+    // `await __call(makeC, ...).inner` (single closing paren),
+    // which would bind `.inner` to the unresolved Promise.
+    expect(out).toMatch(/\)\)\.inner/);
   });
 });

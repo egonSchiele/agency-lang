@@ -439,3 +439,146 @@ describe("recursion into bodies", () => {
     expect(tmpInBody).toBeDefined();
   });
 });
+
+// ---------------------------------------------------------------------------
+// Result patterns
+// ---------------------------------------------------------------------------
+
+describe("result patterns", () => {
+  describe("is operator — boolean context (no binding)", () => {
+    it("lowers `let x = r is success` to isSuccess call", () => {
+      const lowered = lower(`let r = success(1)\nlet x = r is success`);
+      // [r assignment, x assignment with isSuccess call]
+      expect(lowered).toHaveLength(2);
+      const xAssign = lowered[1] as Assignment;
+      expect(xAssign.variableName).toBe("x");
+      expect(xAssign.value.type).toBe("functionCall");
+      expect((xAssign.value as { functionName: string }).functionName).toBe(
+        "isSuccess",
+      );
+    });
+
+    it("lowers `let x = r is failure` to isFailure call", () => {
+      const lowered = lower(`let r = failure("err")\nlet x = r is failure`);
+      expect(lowered).toHaveLength(2);
+      const xAssign = lowered[1] as Assignment;
+      expect(xAssign.value.type).toBe("functionCall");
+      expect((xAssign.value as { functionName: string }).functionName).toBe(
+        "isFailure",
+      );
+    });
+  });
+
+  describe("is operator — binding context (if)", () => {
+    it("lowers `if (r is success(v))` to isSuccess guard + const binding", () => {
+      const lowered = lower(
+        `let r = success(1)\nif (r is success(v)) {\n  print(v)\n}`,
+      );
+      expect(lowered).toHaveLength(2);
+      const ifNode = lowered[1] as IfElse;
+      expect(ifNode.type).toBe("ifElse");
+      expect(ifNode.condition.type).toBe("functionCall");
+      expect(
+        (ifNode.condition as { functionName: string }).functionName,
+      ).toBe("isSuccess");
+      const vBind = ifNode.thenBody[0] as Assignment;
+      expect(vBind.variableName).toBe("v");
+      expect(vBind.declKind).toBe("const");
+      expect(vBind.value.type).toBe("valueAccess");
+    });
+
+    it("lowers `if (r is failure(e))` to isFailure guard + const binding", () => {
+      const lowered = lower(
+        `let r = failure("oops")\nif (r is failure(e)) {\n  print(e)\n}`,
+      );
+      expect(lowered).toHaveLength(2);
+      const ifNode = lowered[1] as IfElse;
+      expect(ifNode.condition.type).toBe("functionCall");
+      expect(
+        (ifNode.condition as { functionName: string }).functionName,
+      ).toBe("isFailure");
+      const eBind = ifNode.thenBody[0] as Assignment;
+      expect(eBind.variableName).toBe("e");
+      expect(eBind.declKind).toBe("const");
+    });
+  });
+
+  describe("is operator — binding context (while)", () => {
+    it("lowers `while (r is success(v))` to isSuccess guard + binding prepended to body", () => {
+      const lowered = lower(
+        `let r = success(1)\nwhile (r is success(v)) {\n  print(v)\n}`,
+      );
+      expect(lowered).toHaveLength(2);
+      const whileNode = lowered[1] as WhileLoop;
+      expect(whileNode.type).toBe("whileLoop");
+      expect(whileNode.condition.type).toBe("functionCall");
+      expect(
+        (whileNode.condition as { functionName: string }).functionName,
+      ).toBe("isSuccess");
+      const vBind = whileNode.body[0] as Assignment;
+      expect(vBind.variableName).toBe("v");
+      expect(vBind.declKind).toBe("const");
+      expect(vBind.value.type).toBe("valueAccess");
+    });
+  });
+
+  describe("nested result patterns inside other patterns", () => {
+    it("lowers `[success(v), _]` arm to length+isSuccess checks and arr[0].value binding", () => {
+      const lowered = lower(
+        `let arr = [success(1), failure("e")]\nmatch (arr) {\n  [success(v), _] => print(v)\n  _ => print("none")\n}`,
+      );
+      // [arr assignment, scrutinee assignment, ifElse]
+      expect(lowered).toHaveLength(3);
+      const ifNode = lowered[2] as IfElse;
+      // The condition is `length >= 2 && isSuccess(__scrutinee_n[0])`
+      // (combined via && — top-level is a binOp).
+      expect(ifNode.condition.type).toBe("binOpExpression");
+      // The first binding in the then-body is the nested result-pattern
+      // binding for `v`.
+      const vBind = ifNode.thenBody[0] as Assignment;
+      expect(vBind.variableName).toBe("v");
+      expect(vBind.declKind).toBe("const");
+      expect(vBind.value.type).toBe("valueAccess");
+    });
+  });
+
+  describe("is operator — binding in pure-boolean context is an error", () => {
+    it("rejects `let x = r is success(v)`", () => {
+      expect(() =>
+        lower(`let r = success(1)\nlet x = r is success(v)`),
+      ).toThrow(PatternLoweringError);
+    });
+
+    it("rejects `let x = r is failure(e)`", () => {
+      expect(() =>
+        lower(`let r = failure("e")\nlet x = r is failure(e)`),
+      ).toThrow(PatternLoweringError);
+    });
+  });
+
+  describe("match arms", () => {
+    it("lowers match with success/failure arms to if/else-if chain", () => {
+      const lowered = lower(
+        `let r = success(42)\nmatch (r) {\n  success(v) => print(v)\n  failure(e) => print(e)\n}`,
+      );
+      // [r assignment, scrutinee assignment, if/else-if chain]
+      expect(lowered).toHaveLength(3);
+      const scrutinee = lowered[1] as Assignment;
+      expect(scrutinee.variableName).toMatch(/^__scrutinee_/);
+      const ifNode = lowered[2] as IfElse;
+      expect(ifNode.type).toBe("ifElse");
+      expect(ifNode.condition.type).toBe("functionCall");
+      expect(
+        (ifNode.condition as { functionName: string }).functionName,
+      ).toBe("isSuccess");
+      const vBind = ifNode.thenBody[0] as Assignment;
+      expect(vBind.variableName).toBe("v");
+      expect(ifNode.elseBody).toBeDefined();
+      const elseIf = ifNode.elseBody![0] as IfElse;
+      expect(elseIf.condition.type).toBe("functionCall");
+      expect(
+        (elseIf.condition as { functionName: string }).functionName,
+      ).toBe("isFailure");
+    });
+  });
+});

@@ -328,10 +328,16 @@ export function walkScopeBody(
           scope.declare(node.itemVar as string, "any");
         } else if (iterableType.type === "arrayType") {
           scope.declare(node.itemVar as string, iterableType.elementType);
+        } else if (
+          iterableType.type === "genericType" &&
+          iterableType.name === "Record"
+        ) {
+          // for (k in record): iteration variable is the key type.
+          scope.declare(node.itemVar as string, iterableType.typeArgs[0]);
         } else {
           scope.declare(node.itemVar as string, "any");
           ctx.errors.push({
-            message: `For-loop iterable must be an array, got '${formatTypeHint(iterableType)}'.`,
+            message: `For-loop iterable must be an array or Record, got '${formatTypeHint(iterableType)}'.`,
             actualType: formatTypeHint(iterableType),
             loc: node.iterable.loc,
           });

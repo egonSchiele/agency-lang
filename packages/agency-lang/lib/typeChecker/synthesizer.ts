@@ -557,6 +557,9 @@ export function synthValueAccess(
             });
             return "any";
           }
+        } else if (resolved.type === "genericType" && resolved.name === "Record") {
+          // Record<K, V>: property access yields V (key existence is dynamic).
+          currentType = resolved.typeArgs[1];
         } else {
           // Built-in member on a primitive (string.length, array.length, …)?
           const member = lookupPrimitiveMember(resolved, element.name);
@@ -575,6 +578,9 @@ export function synthValueAccess(
       case "index": {
         if (resolved.type === "arrayType") {
           currentType = resolved.elementType;
+        } else if (resolved.type === "genericType" && resolved.name === "Record") {
+          // Record<K, V>: index access yields V.
+          currentType = resolved.typeArgs[1];
         } else {
           return "any";
         }

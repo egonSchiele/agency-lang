@@ -1,6 +1,11 @@
-import type { AgencyNode, Assignment, Expression } from "../../types.js";
-import { BinOpExpression } from "../../../lib/types/binop.js";
-import type { ValueAccess } from "../../types/access.js";
+import type {
+  AgencyNode,
+  Assignment,
+  Expression,
+  ScopeType,
+} from "../../types.js";
+import type { BinOpExpression } from "../../types/binop.js";
+import type { AccessChainElement, ValueAccess } from "../../types/access.js";
 import type { FunctionCall } from "../../types/function.js";
 import type { TsNode } from "../../ir/tsIR.js";
 import { $, ts } from "../../ir/builders.js";
@@ -17,9 +22,9 @@ import type { ScopeManager } from "./scopeManager.js";
 export type PipeChainEmitterDeps = {
   processNode: (node: AgencyNode) => TsNode;
   buildAssignmentLhs: (
-    scope: import("../../types.js").ScopeType,
+    scope: ScopeType,
     varName: string,
-    accessChain?: import("../../types/access.js").AccessChainElement[],
+    accessChain?: AccessChainElement[],
   ) => TsNode;
   buildStateConfig: () => TsNode;
   generateFunctionCallExpression: (

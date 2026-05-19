@@ -11,6 +11,7 @@ import { findContainingScope } from "./scopeResolution.js";
 import { offsetOfLine } from "./util.js";
 import { getStdlibFiles } from "../importPaths.js";
 import { docStringText } from "../utils/docStringText.js";
+import { AgencyGenerator } from "../backends/agencyGenerator.js";
 
 function formatParams(params: FunctionParameter[]): string {
   return params
@@ -54,9 +55,14 @@ export function getCompletions(info: CompilationUnit, context?: CompletionContex
     }
   }
 
+  // Hoist the AgencyGenerator out of the loop: docStringText only
+  // allocates one if interpolated expression printing is needed, but
+  // share a single instance across all function defs anyway to avoid
+  // repeated construction.
+  const docGen = new AgencyGenerator();
   for (const [name, def] of Object.entries(info.functionDefinitions)) {
     const detail = formatDetail(def.parameters, def.returnType);
-    const doc = def.docString ? docStringText(def.docString) : undefined;
+    const doc = def.docString ? docStringText(def.docString, docGen) : undefined;
     add(name, CompletionItemKind.Function, detail, doc);
   }
 

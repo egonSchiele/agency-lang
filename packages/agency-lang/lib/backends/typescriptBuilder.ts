@@ -1262,6 +1262,29 @@ export class TypeScriptBuilder {
   }
 
   /**
+   * Returns true if any function or graph node in the compilation unit
+   * has a doc string with at least one interpolation segment.
+   */
+  private hasDocStringInterpolation(): boolean {
+    const fns = Object.values(this.compilationUnit.functionDefinitions);
+    for (const fn of fns) {
+      if (
+        fn.docString?.segments.some((s) => s.type === "interpolation")
+      ) {
+        return true;
+      }
+    }
+    for (const node of this.compilationUnit.graphNodes) {
+      if (
+        node.docString?.segments.some((s) => s.type === "interpolation")
+      ) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /**
    * Generate __toolRegistry as an empty object. AgencyFunction.create() calls
    * register local functions into it. Imported and builtin tools are registered
    * here directly. The reviver is bound at the end.
@@ -2958,26 +2981,27 @@ export class TypeScriptBuilder {
         ts.new(ts.id("RuntimeContext"), [ts.obj(runtimeCtxArgs)]),
       ),
       ts.constDecl("graph", $(ts.runtime.globalCtx).prop("graph").done()),
-      // Alias __ctx to __globalCtx at module top-level. Generated code
-      // emits `__ctx.globals.get(...)` for scope=global variable reads,
-      // and inside function/node bodies a local `const __ctx2 = ...`
-      // shadows this alias. Without this top-level alias, expressions
-      // that are evaluated at module load time (such as doc string
-      // interpolations in tool descriptions) would fail with a
-      // ReferenceError because `__ctx` is otherwise only defined inside
-      // function bodies.
-      ts.constDecl("__ctx", ts.id("__globalCtx")),
-      // Eagerly trigger module global initialization so that top-level
-      // expressions (notably doc string interpolations in tool
-      // descriptions) can read module globals. `__initializeGlobals` is
-      // hoisted, so calling it here — before its source declaration —
-      // is safe. The function is `async` but for pure-literal global
-      // initializers the side effects (globals.set) run synchronously
-      // before the awaited boundary. We fire-and-forget the returned
-      // Promise; any later attempt to re-initialize is short-circuited
-      // by the `markInitialized` flag set in the very first statement.
-      ts.raw(`__initializeGlobals(__globalCtx);`),
     ];
+
+    // If any function has a doc string with interpolation, the tool
+    // description is evaluated at module load time and may need to
+    // reference module globals via `__ctx.globals.get(...)`. Alias
+    // `__ctx` to `__globalCtx` at module top level (function bodies
+    // shadow this with their own `__ctx2` binding), and trigger global
+    // initialization eagerly so any interpolated reads resolve. This is
+    // gated to modules that actually use the feature, so other modules
+    // see no preamble change.
+    //
+    // Caveat: `__initializeGlobals` is async; for modules with
+    // `static` declarations or async global initializers, top-level
+    // interpolation may still see uninitialized values. Synchronous
+    // literal globals are populated before the function returns.
+    if (this.hasDocStringInterpolation()) {
+      runtimeCtxStatements.push(
+        ts.constDecl("__ctx", ts.id("__globalCtx")),
+        ts.raw(`__initializeGlobals(__globalCtx);`),
+      );
+    }
 
     const runtimeCtx: TsNode = ts.statements(runtimeCtxStatements);
 

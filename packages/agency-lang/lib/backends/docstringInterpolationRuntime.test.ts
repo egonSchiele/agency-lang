@@ -1,25 +1,39 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { execSync } from "child_process";
 import path from "path";
 import fs from "fs";
+import { pathToFileURL } from "url";
 
 // Verifies that doc string interpolation referencing a module global is
 // correctly resolved at runtime — the compiled JS module loads without
 // errors and the resulting tool description contains the interpolated
 // global value (not `undefined` or a ReferenceError trace).
+//
+// The compiled module imports from the workspace's `agency-lang` stdlib
+// via a package import, so we must compile next to the source `.agency`
+// file (where node_modules is reachable). All `.js` files in the repo
+// are gitignored, but we still clean up the artifact to keep the
+// working tree tidy.
 describe("doc string interpolation — runtime resolution", () => {
   const repoRoot = path.resolve(__dirname, "../..");
   const agencyFile = path.join(
     repoRoot,
     "tests/agency/docstring-interpolation.agency",
   );
+  const jsFile = agencyFile.replace(/\.agency$/, ".js");
 
-  it("compiles to a module whose generated tool description references __ctx.globals.get", () => {
+  beforeAll(() => {
     execSync(`node ./dist/scripts/agency.js compile ${agencyFile}`, {
       cwd: repoRoot,
       stdio: "pipe",
     });
-    const jsFile = agencyFile.replace(/\.agency$/, ".js");
+  });
+
+  afterAll(() => {
+    fs.rmSync(jsFile, { force: true });
+  });
+
+  it("compiles to a module whose generated tool description references __ctx.globals.get", () => {
     const compiled = fs.readFileSync(jsFile, "utf-8");
 
     // Description in the tool definition uses the template literal with
@@ -37,12 +51,9 @@ describe("doc string interpolation — runtime resolution", () => {
   it("evaluates the tool description to the interpolated global value at runtime", async () => {
     // Importing the compiled module triggers eager init of globals. The
     // tool description is a template literal evaluated at module load
-    // time using the now-initialized `__ctx.globals`.
-    const jsFile = agencyFile.replace(/\.agency$/, ".js");
-    const mod = await import(jsFile);
-    // The compiled module exports a default graph. The tool registry is
-    // populated as a side effect of module load. Read versionedGreet's
-    // description from the toolRegistry.
+    // time using the now-initialized `__ctx.globals`. We pass through
+    // pathToFileURL so this works on Windows as well.
+    const mod = await import(pathToFileURL(jsFile).href);
     const toolRegistry = mod.__toolRegistry;
     expect(toolRegistry).toBeDefined();
     const tool = toolRegistry["versionedGreet"];

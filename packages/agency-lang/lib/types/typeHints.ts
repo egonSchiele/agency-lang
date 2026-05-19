@@ -14,7 +14,39 @@ export type VariableType =
   | BlockType
   | ResultType
   | SchemaType
-  | FunctionRefType;
+  | FunctionRefType
+  | GenericType;
+
+/**
+ * A concrete generic-type usage: Record<string, number>, Container<string>, etc.
+ * Built-in generic names (Array, Schema, Record) are normalized by
+ * `resolveType` in the type checker; user-defined names are looked up in
+ * the type alias registry and substituted.
+ */
+export type GenericType = {
+  type: "genericType";
+  name: string;
+  typeArgs: VariableType[];
+};
+
+/**
+ * A type parameter declaration on a generic type alias.
+ * Example: in `type Container<T> = { value: T }`, the `T` is a TypeParam.
+ * Defaults allow bare use of the alias: `type StringMap<V = any> = Record<string, V>`.
+ */
+export type TypeParam = {
+  name: string;
+  default?: VariableType;
+};
+
+/**
+ * Entry in the type alias registry. For non-generic aliases `typeParams`
+ * is absent; for generic aliases it carries the declared parameters.
+ */
+export type TypeAliasEntry = {
+  body: VariableType;
+  typeParams?: TypeParam[];
+};
 
 export type ResultType = {
   type: "resultType";
@@ -85,6 +117,7 @@ export type TypeAlias = BaseNode & {
   type: "typeAlias";
   aliasName: string;
   aliasedType: VariableType;
+  typeParams?: TypeParam[];
   exported?: boolean;
   docComment?: AgencyMultiLineComment;
 };

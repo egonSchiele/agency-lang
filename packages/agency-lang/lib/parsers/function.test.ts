@@ -33,14 +33,16 @@ describe("docStringParser", () => {
       },
     },
 
-    // Docstrings with whitespace
+    // Docstrings with whitespace — parser preserves source verbatim;
+    // trimming is applied downstream by `trimDocStringSegments` only
+    // where it's needed (LLM emission, human display).
     {
       input: '"""  Leading and trailing spaces  """',
       expected: {
         success: true,
         result: {
           type: "multiLineString",
-          segments: [{ type: "text", value: "Leading and trailing spaces" }],
+          segments: [{ type: "text", value: "  Leading and trailing spaces  " }],
         },
       },
     },
@@ -50,7 +52,7 @@ describe("docStringParser", () => {
         success: true,
         result: {
           type: "multiLineString",
-          segments: [{ type: "text", value: "Multiline\ndocstring" }],
+          segments: [{ type: "text", value: "\nMultiline\ndocstring\n" }],
         },
       },
     },
@@ -64,12 +66,15 @@ describe("docStringParser", () => {
         result: { type: "multiLineString", segments: [] },
       },
     },
-    // Docstring with only whitespace — trims to empty.
+    // Docstring with only whitespace — preserved as a text segment.
     {
       input: '"""   """',
       expected: {
         success: true,
-        result: { type: "multiLineString", segments: [] },
+        result: {
+          type: "multiLineString",
+          segments: [{ type: "text", value: "   " }],
+        },
       },
     },
 
@@ -169,8 +174,8 @@ describe("docStringParser", () => {
         },
       },
     },
-    // Interpolation at the start — leading whitespace trimmed (empty text
-    // segment filtered), interpolation preserved.
+    // Interpolation at the start — leading whitespace preserved as a
+    // text segment (parser no longer trims; trimming happens downstream).
     {
       input: '"""\n  ${name} is great\n  """',
       expected: {
@@ -178,16 +183,17 @@ describe("docStringParser", () => {
         result: {
           type: "multiLineString",
           segments: [
+            { type: "text", value: "\n  " },
             {
               type: "interpolation",
               expression: { type: "variableName", value: "name" },
             },
-            { type: "text", value: " is great" },
+            { type: "text", value: " is great\n  " },
           ],
         },
       },
     },
-    // Interpolation at the end — trailing whitespace trimmed.
+    // Interpolation at the end — trailing whitespace preserved.
     {
       input: '"""Version ${ver}\n  """',
       expected: {
@@ -200,12 +206,13 @@ describe("docStringParser", () => {
               type: "interpolation",
               expression: { type: "variableName", value: "ver" },
             },
+            { type: "text", value: "\n  " },
           ],
         },
       },
     },
-    // Interpolations separated by inner whitespace — only the outer
-    // whitespace is trimmed; the inner text segment is preserved.
+    // Interpolations separated by inner whitespace — all whitespace
+    // segments preserved verbatim (no trimming at parser level).
     {
       input: '"""  ${a}  ${b}  """',
       expected: {
@@ -213,6 +220,7 @@ describe("docStringParser", () => {
         result: {
           type: "multiLineString",
           segments: [
+            { type: "text", value: "  " },
             {
               type: "interpolation",
               expression: { type: "variableName", value: "a" },
@@ -222,6 +230,7 @@ describe("docStringParser", () => {
               type: "interpolation",
               expression: { type: "variableName", value: "b" },
             },
+            { type: "text", value: "  " },
           ],
         },
       },
@@ -551,7 +560,7 @@ describe("functionParser", () => {
           returnType: null,
           docString: {
             type: "multiLineString",
-            segments: [{ type: "text", value: "This is a multi-line\n  docstring" }],
+            segments: [{ type: "text", value: "\n  This is a multi-line\n  docstring\n  " }],
           },
           body: [
             {

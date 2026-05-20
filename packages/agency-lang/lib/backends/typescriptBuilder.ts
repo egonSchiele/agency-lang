@@ -29,6 +29,7 @@ import { BlockArgument } from "@/types/blockArgument.js";
 import { DebuggerStatement } from "@/types/debuggerStatement.js";
 import { SchemaExpression } from "@/types/schemaExpression.js";
 import { expressionToString } from "@/utils/node.js";
+import { trimDocStringSegments } from "@/utils/docStringText.js";
 import { toCompiledImportPath } from "../importPaths.js";
 import {
   CONTEXT_INJECTED_BUILTINS,
@@ -1248,11 +1249,17 @@ export class TypeScriptBuilder {
     }
 
     const schemaArg = Object.keys(properties).length > 0 ? `{${schema}}` : "{}";
+    // Trim leading/trailing indentation from doc-string segments before
+    // emission so the LLM sees clean text, while keeping the AST
+    // untouched for faithful formatter round-trips.
+    const trimmedDocSegments = node.docString
+      ? trimDocStringSegments(node.docString.segments)
+      : [];
     return ts.obj({
       name: ts.str(functionName),
       description:
-        node.docString && node.docString.segments.length > 0
-          ? this.generateStringLiteralNode(node.docString.segments)
+        trimmedDocSegments.length > 0
+          ? this.generateStringLiteralNode(trimmedDocSegments)
           : ts.str("No description provided."),
       schema: $.z()
         .prop("object")

@@ -2723,39 +2723,13 @@ export const modifiedAssignmentParser: Parser<Assignment> = withLoc((input: stri
   return success(out, result.rest);
 });
 
-export const docStringParser: Parser<MultiLineStringLiteral> = (input: string) => {
-  const result = multiLineStringParser(input);
-  if (!result.success) return result;
-
-  // Build a fresh segments array — do not mutate the array or segment
-  // objects owned by `result.result`.
-  const orig = result.result.segments;
-  const trimmed: PromptSegment[] = orig.map((s) => ({ ...s }));
-
-  // Trim leading whitespace of first text segment and trailing whitespace
-  // of last text segment (preserves historic doc-string behavior, e.g.
-  // """\n  Some doc\n  """ → "Some doc"; inner whitespace is preserved).
-  if (trimmed.length > 0 && trimmed[0].type === "text") {
-    trimmed[0] = { type: "text", value: trimmed[0].value.replace(/^\s+/, "") };
-  }
-  const lastIdx = trimmed.length - 1;
-  if (lastIdx >= 0 && trimmed[lastIdx].type === "text") {
-    trimmed[lastIdx] = {
-      type: "text",
-      value: trimmed[lastIdx].value.replace(/\s+$/, ""),
-    };
-  }
-
-  // Drop empty text segments created by trimming.
-  const segments = trimmed.filter(
-    (s) => s.type !== "text" || s.value !== "",
-  );
-
-  return success(
-    { type: "multiLineString" as const, segments, loc: result.result.loc },
-    result.rest,
-  );
-};
+// Doc strings are parsed identically to multi-line strings. Trimming of
+// the leading/trailing indentation is applied at the points that
+// actually need normalized text — the LLM tool-description emitter
+// (`typescriptBuilder.buildToolDefinition`) and the human-display
+// helper (`utils/docStringText`) — so the parser preserves the source
+// faithfully for the formatter to round-trip.
+export const docStringParser = multiLineStringParser;
 
 export const bodyParser = (input: string): ParserResult<AgencyNode[]> => {
   const bodyNodeParser = or(

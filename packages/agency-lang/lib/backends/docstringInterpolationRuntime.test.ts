@@ -1,19 +1,21 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
-import { execSync } from "child_process";
 import path from "path";
 import fs from "fs";
 import { pathToFileURL } from "url";
+import { compile } from "../cli/commands.js";
 
 // Verifies that doc string interpolation referencing a module global is
 // correctly resolved at runtime — the compiled JS module loads without
 // errors and the resulting tool description contains the interpolated
 // global value (not `undefined` or a ReferenceError trace).
 //
-// The compiled module imports from the workspace's `agency-lang` stdlib
-// via a package import, so we must compile next to the source `.agency`
-// file (where node_modules is reachable). All `.js` files in the repo
-// are gitignored, but we still clean up the artifact to keep the
-// working tree tidy.
+// We invoke the in-process `compile()` from `lib/cli/commands.ts`
+// rather than shelling out to `./dist/scripts/agency.js`, so the test
+// always exercises the current source rather than a stale build.
+// The compiled `.js` is written next to the `.agency` fixture because
+// the generated module imports from `agency-lang/...` and so must sit
+// inside the workspace's `node_modules` reach. All `.js` files in the
+// repo are gitignored, but we still clean up the artifact in afterAll.
 describe("doc string interpolation — runtime resolution", () => {
   const repoRoot = path.resolve(__dirname, "../..");
   const agencyFile = path.join(
@@ -23,10 +25,7 @@ describe("doc string interpolation — runtime resolution", () => {
   const jsFile = agencyFile.replace(/\.agency$/, ".js");
 
   beforeAll(() => {
-    execSync(`node ./dist/scripts/agency.js compile ${agencyFile}`, {
-      cwd: repoRoot,
-      stdio: "pipe",
-    });
+    compile({}, agencyFile);
   });
 
   afterAll(() => {

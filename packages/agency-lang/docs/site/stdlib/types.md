@@ -29,24 +29,24 @@ export type Email = string
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/types.agency#L25))
 
-### Url
+### URL
 
 An http:// or https:// URL.
 
 ```ts
 /** An http:// or https:// URL. */
-export type Url = string
+export type URL = string
 ```
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/types.agency#L30))
 
-### Uuid
+### UUID
 
 A canonical 8-4-4-4-12 hex UUID.
 
 ```ts
 /** A canonical 8-4-4-4-12 hex UUID. */
-export type Uuid = string
+export type UUID = string
 ```
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/types.agency#L35))

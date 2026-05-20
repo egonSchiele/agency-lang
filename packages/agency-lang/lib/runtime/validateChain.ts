@@ -141,9 +141,12 @@ async function walk(
   maxDepth: number,
 ): Promise<ResultValue> {
   if (depth > maxDepth) {
-    return failure(
-      `validation recursion depth exceeded (limit ${maxDepth})`,
-    );
+    return failure({
+      reason: "validation recursion depth exceeded",
+      limit: maxDepth,
+      kind: descriptor.kind,
+      valuePreview: previewValue(value),
+    });
   }
   if (isFailure(value)) return value as ResultValue;
 
@@ -206,4 +209,28 @@ async function walk(
       return walk(parsed, branch.descriptor, ctx, depth + 1, maxDepth);
     }
   }
+}
+
+/**
+ * Return a short, cycle-safe, JSON-friendly preview of a value for use
+ * inside error payloads. We don't want huge or self-referential structures
+ * to blow up the failure message.
+ */
+function previewValue(value: unknown, maxLen = 200): unknown {
+  const seen = new WeakSet<object>();
+  const replacer = (_k: string, v: unknown): unknown => {
+    if (typeof v === "object" && v !== null) {
+      if (seen.has(v)) return "[cycle]";
+      seen.add(v);
+    }
+    return v;
+  };
+  let str: string;
+  try {
+    str = JSON.stringify(value, replacer);
+  } catch {
+    return String(value).slice(0, maxLen);
+  }
+  if (str === undefined) return String(value).slice(0, maxLen);
+  return str.length > maxLen ? `${str.slice(0, maxLen)}…` : str;
 }

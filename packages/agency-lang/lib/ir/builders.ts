@@ -405,7 +405,7 @@ export const ts = {
    * `await __validateChainRecursive(value, <descriptor>, __ctx)` — used at
    * `!` sites whose resolved type carries at least one `@validate(...)` tag
    * anywhere in the tree. The descriptor is a TS expression built via
-   * `buildValidationDescriptorTs(...)` and passed in raw.
+   * `buildValidationDescriptor(...)`.
    */
   validateChainRecursive(value: TsNode, descriptor: TsNode): TsAwait {
     return ts.awaitCall(ts.id("__validateChainRecursive"), [

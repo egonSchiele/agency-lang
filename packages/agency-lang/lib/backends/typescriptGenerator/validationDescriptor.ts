@@ -1,13 +1,15 @@
 import type { Tag, VariableType, TypeAliasEntry } from "../../types.js";
+import type { TsNode, TsObjectEntry } from "@/ir/tsIR.js";
+import { ts } from "@/ir/builders.js";
 import { mapTypeToValidationSchema } from "./typeToZodSchema.js";
 import { tagArgToTs } from "./tagArgToTs.js";
 import { mergeTagSets } from "@/typeChecker/mergeTags.js";
 
 /**
- * Render a TS source expression that evaluates to a runtime
- * `TypeValidationDescriptor`. Mirrors `mapTypeToValidationSchema`'s
- * structural recursion but threads validator lists collected from
- * `@validate(...)` tags at each level.
+ * Build a TS IR node that evaluates to a runtime `TypeValidationDescriptor`.
+ *
+ * Mirrors `mapTypeToValidationSchema`'s structural recursion but threads
+ * validator lists collected from `@validate(...)` tags at each level.
  *
  * Use this only when the type carries at least one `@validate` tag
  * somewhere — callers should check via `hasAnyValidateTag` first.
@@ -19,11 +21,11 @@ import { mergeTagSets } from "@/typeChecker/mergeTags.js";
  * tags reachable only through a non-generic alias reference would be
  * silently dropped.
  */
-export function buildValidationDescriptorTs(
+export function buildValidationDescriptor(
   variableType: VariableType,
   typeAliases: Record<string, VariableType>,
   typeAliasesFull?: Record<string, TypeAliasEntry>,
-): string {
+): TsNode {
   return descriptor(variableType, typeAliases, typeAliasesFull ?? {});
 }
 
@@ -94,13 +96,19 @@ function hasAliasValidate(
   return hasAnyValidateTag(entry.body, typeAliasesFull);
 }
 
-function collectValidators(tags: Tag[] | undefined): string[] {
+/**
+ * Each validator referenced inside `@validate(...)` is itself an Agency
+ * expression. We don't have a TS IR builder for arbitrary Agency
+ * expressions, so we delegate to `tagArgToTs` (which returns a TS
+ * source string) and wrap with `ts.raw(...)`.
+ */
+function validatorNodes(tags: Tag[] | undefined): TsNode[] {
   if (!tags) return [];
-  const out: string[] = [];
+  const out: TsNode[] = [];
   for (const t of tags) {
     if (t.name !== "validate") continue;
     for (const arg of t.arguments) {
-      out.push(tagArgToTs(arg));
+      out.push(ts.raw(tagArgToTs(arg)));
     }
   }
   return out;
@@ -115,12 +123,24 @@ function isNullableType(t: VariableType): boolean {
   );
 }
 
+/**
+ * Build the (string-built) Zod schema for `t` as a `ts.raw` node.
+ * `mapTypeToValidationSchema` predates the TS IR; rather than rewriting
+ * it, we keep it returning strings and wrap here.
+ */
+function schemaNode(
+  t: VariableType,
+  typeAliases: Record<string, VariableType>,
+): TsNode {
+  return ts.raw(mapTypeToValidationSchema(t, typeAliases));
+}
+
 function descriptor(
   variableType: VariableType,
   typeAliases: Record<string, VariableType>,
   typeAliasesFull: Record<string, TypeAliasEntry>,
   seen: Set<string> = new Set(),
-): string {
+): TsNode {
   // For an alias reference whose alias body has any `@validate(...)` tag,
   // reference the alias's runtime descriptor (attached as
   // `(Alias as any).__agency_descriptor` by `processTypeAlias`) rather than
@@ -130,24 +150,40 @@ function descriptor(
   // alias's via a runtime helper.
   if (variableType.type === "typeAliasVariable") {
     const entry = typeAliasesFull[variableType.aliasName];
-    const useSiteValidators = collectValidators(variableType.tags);
+    const useSiteValidators = validatorNodes(variableType.tags);
     if (entry && hasAliasValidate(entry, typeAliasesFull)) {
-      const ref = `(${variableType.aliasName} as any).__agency_descriptor`;
-      if (useSiteValidators.length === 0) return ref;
-      // Append use-site validators to the alias's chain.
-      return `{ ...${ref}, validators: [...(${ref}?.validators ?? []), ${useSiteValidators.join(", ")}] }`;
+      // `(Alias as any).__agency_descriptor`
+      const aliasRef = ts.prop(
+        ts.raw(`(${variableType.aliasName} as any)`),
+        "__agency_descriptor",
+      );
+      if (useSiteValidators.length === 0) return aliasRef;
+      // `{ ...aliasRef, validators: [...(aliasRef?.validators ?? []), ...] }`
+      const existingValidators = ts.binOp(
+        ts.prop(aliasRef, "validators", { optional: true }),
+        "??",
+        ts.arr([]),
+        { parenLeft: true },
+      );
+      return ts.obj([
+        ts.setSpread(aliasRef),
+        ts.set(
+          '"validators"',
+          ts.arr([ts.spread(existingValidators), ...useSiteValidators]),
+        ),
+      ]);
     }
     // No alias-level validators — emit a leaf using only the alias schema and
     // any use-site validators.
-    const schema = mapTypeToValidationSchema(variableType, typeAliases);
-    return `{ kind: "leaf", schema: ${schema}, validators: [${useSiteValidators.join(
-      ", ",
-    )}] }`;
+    return objEntries([
+      ["kind", ts.str("leaf")],
+      ["schema", schemaNode(variableType, typeAliases)],
+      ["validators", ts.arr(useSiteValidators)],
+    ]);
   }
 
-  const schema = mapTypeToValidationSchema(variableType, typeAliases);
-  const validators = collectValidators(variableType.tags);
-  const validatorsLit = `[${validators.join(", ")}]`;
+  const schema = schemaNode(variableType, typeAliases);
+  const validatorsArr = ts.arr(validatorNodes(variableType.tags));
 
   if (variableType.type === "arrayType") {
     const el = descriptor(
@@ -156,17 +192,32 @@ function descriptor(
       typeAliasesFull,
       seen,
     );
-    return `{ kind: "array", schema: ${schema}, validators: ${validatorsLit}, element: ${el} }`;
+    return objEntries([
+      ["kind", ts.str("array")],
+      ["schema", schema],
+      ["validators", validatorsArr],
+      ["element", el],
+    ]);
   }
 
   if (variableType.type === "objectType") {
-    const propEntries = variableType.properties.map((p) => {
+    const propEntries: TsObjectEntry[] = variableType.properties.map((p) => {
       const merged = mergeTagSets(p.value.tags, p.tags);
       const childType: VariableType = { ...p.value, tags: merged };
-      const childDesc = descriptor(childType, typeAliases, typeAliasesFull, seen);
-      return `${JSON.stringify(p.key)}: ${childDesc}`;
+      const childDesc = descriptor(
+        childType,
+        typeAliases,
+        typeAliasesFull,
+        seen,
+      );
+      return ts.set(JSON.stringify(p.key), childDesc);
     });
-    return `{ kind: "object", schema: ${schema}, validators: ${validatorsLit}, properties: { ${propEntries.join(", ")} } }`;
+    return objEntries([
+      ["kind", ts.str("object")],
+      ["schema", schema],
+      ["validators", validatorsArr],
+      ["properties", ts.obj(propEntries)],
+    ]);
   }
 
   if (isNullableType(variableType)) {
@@ -186,19 +237,39 @@ function descriptor(
         typeAliasesFull,
         seen,
       );
-      return `{ kind: "nullable", schema: ${schema}, validators: ${validatorsLit}, inner: ${inner} }`;
+      return objEntries([
+        ["kind", ts.str("nullable")],
+        ["schema", schema],
+        ["validators", validatorsArr],
+        ["inner", inner],
+      ]);
     }
     // multi-member nullable union: fall through to general union handling
   }
 
   if (variableType.type === "unionType") {
     const branches = variableType.types.map((m) => {
-      const branchSchema = mapTypeToValidationSchema(m, typeAliases);
+      const branchSchema = schemaNode(m, typeAliases);
       const branchDesc = descriptor(m, typeAliases, typeAliasesFull, seen);
-      const test = `(v) => (${branchSchema}).safeParse(v).success`;
-      return `{ test: ${test}, descriptor: ${branchDesc} }`;
+      // `(v) => (<branchSchema>).safeParse(v).success`
+      const test = ts.arrowFn(
+        [{ name: "v" }],
+        ts.prop(
+          ts.methodCall(branchSchema, "safeParse", [ts.id("v")]),
+          "success",
+        ),
+      );
+      return ts.obj([
+        ts.set("test", test),
+        ts.set("descriptor", branchDesc),
+      ]);
     });
-    return `{ kind: "union", schema: ${schema}, validators: ${validatorsLit}, branches: [${branches.join(", ")}] }`;
+    return objEntries([
+      ["kind", ts.str("union")],
+      ["schema", schema],
+      ["validators", validatorsArr],
+      ["branches", ts.arr(branches)],
+    ]);
   }
 
   if (variableType.type === "resultType") {
@@ -209,8 +280,26 @@ function descriptor(
       typeAliasesFull,
       seen,
     );
-    return `{ kind: "nullable", schema: ${schema}, validators: ${validatorsLit}, inner: ${inner} }`;
+    return objEntries([
+      ["kind", ts.str("nullable")],
+      ["schema", schema],
+      ["validators", validatorsArr],
+      ["inner", inner],
+    ]);
   }
 
-  return `{ kind: "leaf", schema: ${schema}, validators: ${validatorsLit} }`;
+  return objEntries([
+    ["kind", ts.str("leaf")],
+    ["schema", schema],
+    ["validators", validatorsArr],
+  ]);
+}
+
+/**
+ * Tiny helper: `objEntries([["a", x], ["b", y]])` builds `{ "a": x, "b": y }`.
+ * We always quote the keys so the printer renders predictable output for
+ * snapshots and matches the previous string-built form.
+ */
+function objEntries(entries: Array<[string, TsNode]>): TsNode {
+  return ts.obj(entries.map(([k, v]) => ts.set(JSON.stringify(k), v)));
 }

@@ -65,6 +65,11 @@ describe("mergeTagSets", () => {
     expect(byKey.description.segments[0].value).toBe("prop desc");
   });
 
+  it("throws on a malformed @jsonSchema whose argument is not an object literal", () => {
+    const aliasTags = [tag("jsonSchema", [stringLit("not an object")])];
+    expect(() => mergeTagSets(aliasTags, undefined)).toThrow(/object-literal argument/);
+  });
+
   it("preserves other tag names verbatim", () => {
     const aliasTags = [tag("goal", [stringLit("alias goal")])];
     const useSiteTags = [tag("goal", [stringLit("use goal")])];

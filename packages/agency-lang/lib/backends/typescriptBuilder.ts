@@ -92,7 +92,7 @@ import {
   mapTypeToValidationSchema,
 } from "./typescriptGenerator/typeToZodSchema.js";
 import {
-  buildValidationDescriptorTs,
+  buildValidationDescriptor,
   hasAnyValidateTag,
 } from "./typescriptGenerator/validationDescriptor.js";
 import { resolveTypeDeep } from "../typeChecker/assignability.js";
@@ -619,7 +619,7 @@ export class TypeScriptBuilder {
     const aliasesFull = this.scopes.visibleTypeAliasesFull();
     if (hasAnyValidateTag(aliasedWithTags, aliasesFull)) {
       const resolved = resolveTypeDeep(aliasedWithTags, aliasesFull);
-      const descriptor = buildValidationDescriptorTs(
+      const descriptor = buildValidationDescriptor(
         resolved,
         this.scopes.visibleTypeAliases(),
         aliasesFull,
@@ -628,8 +628,12 @@ export class TypeScriptBuilder {
       // co-located with the schema and avoids exporting/importing a second
       // symbol. Cast to `any` because Zod's typings don't know about us.
       stmts.push(
-        ts.raw(
-          `(${node.aliasName} as any).__agency_descriptor = ${descriptor};`,
+        ts.assign(
+          ts.prop(
+            ts.raw(`(${node.aliasName} as any)`),
+            "__agency_descriptor",
+          ),
+          descriptor,
         ),
       );
     }
@@ -662,8 +666,8 @@ export class TypeScriptBuilder {
       const zodSchema = mapTypeToValidationSchema(resolved, aliases);
       return ts.validateType(value, ts.raw(zodSchema));
     }
-    const descriptor = buildValidationDescriptorTs(resolved, aliases, aliasesFull);
-    return ts.validateChainRecursive(value, ts.raw(descriptor));
+    const descriptor = buildValidationDescriptor(resolved, aliases, aliasesFull);
+    return ts.validateChainRecursive(value, descriptor);
   }
 
   // ------- Proper IR node methods -------

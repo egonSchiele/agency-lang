@@ -154,6 +154,10 @@ describe("__validateChainRecursive", () => {
 
     const r = await __validateChainRecursive(v, desc, ctx, { maxDepth: 3 });
     expect(isFailure(r)).toBe(true);
-    expect((r as { error: string }).error).toMatch(/recursion depth/);
+    const err = (r as { error: { reason: string; limit: number; kind: string; valuePreview: unknown } }).error;
+    expect(err.reason).toMatch(/recursion depth/);
+    expect(err.limit).toBe(3);
+    expect(err.kind).toBe("array");
+    expect(typeof err.valuePreview === "string").toBe(true);
   });
 });

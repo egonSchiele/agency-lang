@@ -27,9 +27,9 @@ export type Email = string
 /** An http:// or https:// URL. */
 @validate(isUrl)
 @jsonSchema({ ...urlFormat })
-export type Url = string
+export type URL = string
 
 /** A canonical 8-4-4-4-12 hex UUID. */
 @validate(isUuid)
 @jsonSchema({ ...uuidFormat })
-export type Uuid = string
+export type UUID = string

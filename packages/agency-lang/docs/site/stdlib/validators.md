@@ -29,7 +29,10 @@ Validator functions intended for use with `@validate(...)` annotations.
 isEmail(value: string): Result
 ```
 
-Returns success if `value` is a syntactically valid email address.
+Returns success if value is a syntactically valid email address,
+  failure otherwise.
+
+  @param value - The string to check.
 
 **Parameters:**
 
@@ -39,7 +42,7 @@ Returns success if `value` is a syntactically valid email address.
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/validators.agency#L27))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/validators.agency#L26))
 
 ### isUrl
 
@@ -47,7 +50,10 @@ Returns success if `value` is a syntactically valid email address.
 isUrl(value: string): Result
 ```
 
-Returns success if `value` is an http:// or https:// URL.
+Returns success if value is an http:// or https:// URL,
+  failure otherwise.
+
+  @param value - The string to check.
 
 **Parameters:**
 
@@ -57,7 +63,7 @@ Returns success if `value` is an http:// or https:// URL.
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/validators.agency#L32))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/validators.agency#L36))
 
 ### isUuid
 
@@ -65,7 +71,10 @@ Returns success if `value` is an http:// or https:// URL.
 isUuid(value: string): Result
 ```
 
-Returns success if `value` is a canonical UUID string (8-4-4-4-12 hex).
+Returns success if value is a canonical UUID string
+  (8-4-4-4-12 hex), failure otherwise.
+
+  @param value - The string to check.
 
 **Parameters:**
 
@@ -75,7 +84,7 @@ Returns success if `value` is a canonical UUID string (8-4-4-4-12 hex).
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/validators.agency#L37))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/validators.agency#L46))
 
 ### isInt
 
@@ -83,7 +92,10 @@ Returns success if `value` is a canonical UUID string (8-4-4-4-12 hex).
 isInt(value: number): Result
 ```
 
-Returns success if `value` is an integer (no fractional component).
+Returns success if value is an integer (no fractional component),
+  failure otherwise.
+
+  @param value - The number to check.
 
 **Parameters:**
 
@@ -93,7 +105,7 @@ Returns success if `value` is an integer (no fractional component).
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/validators.agency#L42))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/validators.agency#L56))
 
 ### isPositive
 
@@ -101,7 +113,9 @@ Returns success if `value` is an integer (no fractional component).
 isPositive(value: number): Result
 ```
 
-Returns success if `value > 0`.
+Returns success if value > 0, failure otherwise.
+
+  @param value - The number to check.
 
 **Parameters:**
 
@@ -111,7 +125,7 @@ Returns success if `value > 0`.
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/validators.agency#L47))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/validators.agency#L66))
 
 ### isNegative
 
@@ -119,7 +133,9 @@ Returns success if `value > 0`.
 isNegative(value: number): Result
 ```
 
-Returns success if `value < 0`.
+Returns success if value < 0, failure otherwise.
+
+  @param value - The number to check.
 
 **Parameters:**
 
@@ -129,4 +145,4 @@ Returns success if `value < 0`.
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/validators.agency#L52))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/validators.agency#L75))

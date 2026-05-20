@@ -10,7 +10,12 @@ import type { Tag, Expression, AgencyObject, AgencyObjectKV, SplatExpression } f
  *   use-site keys overriding alias keys, producing a single combined
  *   `@jsonSchema` tag. Spreads are preserved verbatim (their evaluation
  *   happens at module load time).
- * - Any other tag name: concatenated.
+ *
+ * Tag names other than `validate` / `jsonSchema` are deliberately not
+ * merged here — they have no alias-vs-use-site semantics defined and may
+ * belong to a different feature entirely (e.g. `@goal` / `@optimize`).
+ * They flow through `resolveType` untouched on whichever side they
+ * appeared, but never combined across the two sides.
  *
  * `aliasTags` come first in the chain, `useSiteTags` apply on top.
  */
@@ -24,43 +29,40 @@ export function mergeTagSets(
 
   const combined: Tag[] = [];
 
-  // Collect tag groups by name in the order they're first seen.
-  const seenNames = new Set<string>();
-  for (const t of [...alias, ...useSite]) {
-    if (!seenNames.has(t.name)) seenNames.add(t.name);
+  const aliasValidate = alias.filter((t) => t.name === "validate");
+  const useSiteValidate = useSite.filter((t) => t.name === "validate");
+  if (aliasValidate.length + useSiteValidate.length > 0) {
+    const allArgs: Expression[] = [];
+    for (const t of [...aliasValidate, ...useSiteValidate]) {
+      allArgs.push(...t.arguments);
+    }
+    combined.push({
+      type: "tag",
+      name: "validate",
+      arguments: allArgs,
+      loc: (aliasValidate[0] ?? useSiteValidate[0]).loc,
+    });
   }
 
-  for (const name of seenNames) {
-    const aliasOfName = alias.filter((t) => t.name === name);
-    const useSiteOfName = useSite.filter((t) => t.name === name);
-    const all = [...aliasOfName, ...useSiteOfName];
+  const aliasJson = alias.filter((t) => t.name === "jsonSchema");
+  const useSiteJson = useSite.filter((t) => t.name === "jsonSchema");
+  if (aliasJson.length + useSiteJson.length > 0) {
+    const merged = mergeJsonSchemaArgs([...aliasJson, ...useSiteJson]);
+    combined.push({
+      type: "tag",
+      name: "jsonSchema",
+      arguments: merged,
+      loc: (aliasJson[0] ?? useSiteJson[0]).loc,
+    });
+  }
 
-    if (name === "validate") {
-      // Concat all argument lists into one @validate tag.
-      const allArgs: Expression[] = [];
-      for (const t of all) allArgs.push(...t.arguments);
-      combined.push({
-        type: "tag",
-        name: "validate",
-        arguments: allArgs,
-        loc: all[0].loc,
-      });
-    } else if (name === "jsonSchema") {
-      // Merge all argument objects left-to-right. Each argument is
-      // expected to be a single object literal (per spec — multiple
-      // @jsonSchema on the same target is an error, but the merge
-      // across alias-then-use-site is allowed).
-      const merged = mergeJsonSchemaArgs(all);
-      combined.push({
-        type: "tag",
-        name: "jsonSchema",
-        arguments: merged,
-        loc: all[0].loc,
-      });
-    } else {
-      // Other tags: concat verbatim.
-      for (const t of all) combined.push(t);
-    }
+  // Pass through any other tags from each side verbatim. We never combine
+  // across the two sides because we don't know what their semantics are.
+  for (const t of alias) {
+    if (t.name !== "validate" && t.name !== "jsonSchema") combined.push(t);
+  }
+  for (const t of useSite) {
+    if (t.name !== "validate" && t.name !== "jsonSchema") combined.push(t);
   }
 
   return combined;
@@ -77,8 +79,11 @@ function mergeJsonSchemaArgs(tags: Tag[]): Expression[] {
   for (const t of tags) {
     const arg = t.arguments[0];
     if (!arg || arg.type !== "agencyObject") {
-      // Not a well-formed @jsonSchema(...) — leave the tag's args alone.
-      return arg ? [arg] : [];
+      const loc = (arg ?? t).loc;
+      const where = loc ? ` (line ${loc.line}, col ${loc.col})` : "";
+      throw new Error(
+        `@jsonSchema(...) requires a single object-literal argument${where}; got ${arg ? arg.type : "no argument"}.`,
+      );
     }
     for (const e of (arg as AgencyObject).entries) {
       entries.push(e);

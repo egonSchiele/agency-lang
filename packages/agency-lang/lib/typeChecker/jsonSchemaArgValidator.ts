@@ -44,6 +44,7 @@ export function validateJsonSchemaArg(
 ): JsonSchemaArgValidationResult {
   switch (expr.type) {
     case "string":
+      return validateStringLiteral(expr as any);
     case "number":
     case "boolean":
     case "null":
@@ -65,6 +66,23 @@ export function validateJsonSchemaArg(
         loc: (expr as any).loc,
       };
   }
+}
+
+function validateStringLiteral(
+  str: { segments?: Array<{ type: string }>; loc?: { line: number; col: number } },
+): JsonSchemaArgValidationResult {
+  const segments = str.segments ?? [];
+  for (const seg of segments) {
+    if (seg.type !== "text") {
+      return {
+        ok: false,
+        reason:
+          "@jsonSchema(...) string arguments must be plain literals (no interpolation)",
+        loc: str.loc,
+      };
+    }
+  }
+  return { ok: true };
 }
 
 function validateObjectLiteral(

@@ -100,4 +100,22 @@ describe("validateJsonSchemaArg", () => {
     const arr = { type: "agencyArray", items: [] } as any;
     expect(validateJsonSchemaArg(arr, scope()).ok).toBe(false);
   });
+
+  it("rejects string literals that contain interpolation segments", () => {
+    const interpolated: Expression = {
+      type: "string",
+      segments: [
+        { type: "text", value: "hello " },
+        {
+          type: "interpolation",
+          expression: { type: "variableName", value: "name" } as any,
+        },
+      ],
+    } as any;
+    const r = validateJsonSchemaArg(interpolated, scope());
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(r.reason).toMatch(/plain literals|interpolation/i);
+    }
+  });
 });

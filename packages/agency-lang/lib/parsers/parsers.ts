@@ -1379,7 +1379,7 @@ const restrictedTagArgParser: Parser<Expression> = label(
     nullParser,
     booleanParser,
     numberParser,
-    lazy(() => stringParser),
+    simpleStringParser,
     variableNameParser,
   ),
 );

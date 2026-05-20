@@ -24,12 +24,14 @@ import { emailFormat, urlFormat, uuidFormat } from "std::schemas"
 @jsonSchema({ ...emailFormat })
 export type Email = string
 
-/** An http:// or https:// URL. */
+/** An http:// or https:// URL. (Named `URLString` so it does not shadow
+    JavaScript's global `URL` constructor.) */
 @validate(isUrl)
 @jsonSchema({ ...urlFormat })
-export type URL = string
+export type URLString = string
 
-/** A canonical 8-4-4-4-12 hex UUID. */
+/** A canonical 8-4-4-4-12 hex UUID string. (Named `UUIDString` for symmetry
+    with `URLString`.) */
 @validate(isUuid)
 @jsonSchema({ ...uuidFormat })
-export type UUID = string
+export type UUIDString = string

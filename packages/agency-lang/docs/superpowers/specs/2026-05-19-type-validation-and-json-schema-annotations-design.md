@@ -120,22 +120,25 @@ type Email = string
 
 @validate(isUrl)
 @jsonSchema({ ...urlFormat })
-type URL = string
+type URLString = string
 
 @validate(isUuid)
 @jsonSchema({ ...uuidFormat })
-type UUID = string
+type UUIDString = string
 ```
+
+(`URLString` / `UUIDString` are named with the `String` suffix so they do
+not shadow JavaScript's global `URL` constructor.)
 
 Users can then write:
 
 ```
-import { Email, URL, UUID } from "std::types"
+import { Email, URLString, UUIDString } from "std::types"
 
 type User = {
   email: Email
-  homepage: URL
-  id: UUID
+  homepage: URLString
+  id: UUIDString
 }
 ```
 
@@ -237,7 +240,7 @@ The `@jsonSchema` annotations also flow into nested positions. In the example ab
 
 #### Unions
 
-For `type Contact = Email | URL`, the Zod schema validates structure first and determines which branch the value matches. Only the validators on the matching branch then run. If the value matched `Email`, `isEmail` runs; if it matched `URL`, `isUrl` runs. If no branch matches at the Zod level, validation fails before any validator is invoked.
+For `type Contact = Email | URLString`, the Zod schema validates structure first and determines which branch the value matches. Only the validators on the matching branch then run. If the value matched `Email`, `isEmail` runs; if it matched `URLString`, `isUrl` runs. If no branch matches at the Zod level, validation fails before any validator is invoked.
 
 #### Nullable / Optional
 
@@ -506,7 +509,7 @@ Agency functions compile to async TypeScript functions with runtime infrastructu
 
 ### Motivation
 
-The annotation system encourages creating reusable validated types. The v1 stdlib ships pre-baked aliases for the common no-parameter cases (`Email`, `URL`, `UUID` — see the "Pre-baked Validated Types" section above).
+The annotation system encourages creating reusable validated types. The v1 stdlib ships pre-baked aliases for the common no-parameter cases (`Email`, `URLString`, `UUIDString` — see the "Pre-baked Validated Types" section above).
 
 However, some validated types need **parameters**. A "number in range" type needs to know the range, and shipping a fixed `Age = NumberInRange(0, 150)` is no good for the user who wants `NumberInRange(1, 100)`. With the current design users must repeat the annotations every time:
 
@@ -571,13 +574,13 @@ In the generated TypeScript, each distinct instantiation produces its own Zod sc
 
 ### Standard Library Types
 
-With value parameters, `std::types` (which already exports the no-parameter aliases `Email`, `URL`, `UUID` shipped in v1) can grow a set of reusable parameterized types:
+With value parameters, `std::types` (which already exports the no-parameter aliases `Email`, `URLString`, `UUIDString` shipped in v1) can grow a set of reusable parameterized types:
 
 ```
 // v1 — ships now in std::types
 type Email = string
-type URL = string
-type UUID = string
+type URLString = string
+type UUIDString = string
 
 // Future — added once value parameters land
 type NumberInRange(low: number, high: number) = number

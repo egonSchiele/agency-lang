@@ -23,22 +23,26 @@ export function tagArgToTs(expr: Expression): string {
     case "multiLineString": {
       const lit = expr as Literal & {
         segments: Array<{ type: "text" | "interpolation"; value?: string; expression?: Expression }>;
+        loc?: { line: number; col: number };
       };
-      // For tag args we expect plain text segments (the parser doesn't
-      // currently support interpolation here, but handle defensively).
-      const parts: string[] = [];
+      // Tag-arg strings must be plain literals: the parser uses
+      // `simpleStringParser`, which never produces interpolation segments.
+      // If we ever see one here, that's a bug — fail loudly rather than
+      // emit broken TypeScript.
       let raw = "";
       for (const seg of lit.segments) {
         if (seg.type === "text") {
           raw += seg.value ?? "";
-        } else if (seg.expression) {
-          parts.push(JSON.stringify(raw));
-          parts.push(`(${tagArgToTs(seg.expression)})`);
-          raw = "";
+        } else {
+          const loc = lit.loc
+            ? ` at line ${lit.loc.line}, col ${lit.loc.col}`
+            : "";
+          throw new Error(
+            `Tag arguments must be plain string literals (no interpolation)${loc}`,
+          );
         }
       }
-      parts.push(JSON.stringify(raw));
-      return parts.length === 1 ? parts[0] : `(${parts.join(" + ")})`;
+      return JSON.stringify(raw);
     }
     case "number":
       return (expr as Literal & { value: string }).value;
@@ -64,9 +68,11 @@ export function tagArgToTs(expr: Expression): string {
       return `${fc.functionName}(${args})`;
     }
     default:
-      // Restricted subset means we should not see anything else; emit a
-      // clearly-broken value so the failure is obvious.
-      return `/* unsupported tag arg: ${expr.type} */ undefined`;
+      // Restricted subset means we should not see anything else; fail loudly
+      // so the bug is obvious instead of emitting broken TS.
+      throw new Error(
+        `tagArgToTs: unsupported tag argument expression type "${(expr as Expression).type}"`,
+      );
   }
 }
 

@@ -19,7 +19,8 @@ Validator functions intended for use with `@validate(...)` annotations.
   ```
 
   Validators are only run for types annotated with `!` (the bang operator).
-  See the [validation annotations guide](../guide/annotations.md) for details.
+  See the [schemas guide](../guide/schemas.md) for details on `!`
+  validation and how `@validate(...)` integrates with it.
 
 ## Functions
 
@@ -42,7 +43,7 @@ Returns success if value is a syntactically valid email address,
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/validators.agency#L26))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/validators.agency#L27))
 
 ### isUrl
 
@@ -63,7 +64,7 @@ Returns success if value is an http:// or https:// URL,
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/validators.agency#L36))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/validators.agency#L37))
 
 ### isUuid
 
@@ -84,7 +85,7 @@ Returns success if value is a canonical UUID string
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/validators.agency#L46))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/validators.agency#L47))
 
 ### isInt
 
@@ -105,7 +106,7 @@ Returns success if value is an integer (no fractional component),
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/validators.agency#L56))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/validators.agency#L57))
 
 ### isPositive
 
@@ -125,7 +126,7 @@ Returns success if value > 0, failure otherwise.
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/validators.agency#L66))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/validators.agency#L67))
 
 ### isNegative
 
@@ -145,4 +146,4 @@ Returns success if value < 0, failure otherwise.
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/validators.agency#L75))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/validators.agency#L76))

@@ -130,4 +130,43 @@ describe("tagParser", () => {
     if (!result.success) return;
     expect(result.result.loc).toBeDefined();
   });
+
+  // The restricted tag-arg parser uses `simpleStringParser`, which does
+  // not support interpolation segments or `+`-concatenation. These tests
+  // assert that contract: malformed string-shaped args don't sneak
+  // through as a valid single string argument.
+  it("does not accept interpolated string arguments", () => {
+    const result = tagParser('@validate("hello {name}")');
+    if (result.success) {
+      // If parsing succeeds, the interpolation must NOT have been parsed
+      // as part of the tag argument. The argument should either be the
+      // plain text (no interpolation segment) or the tag should have
+      // zero arguments with the rest unconsumed.
+      for (const arg of result.result.arguments) {
+        if (arg.type === "string") {
+          for (const seg of (arg as any).segments) {
+            expect(seg.type).toBe("text");
+          }
+        }
+      }
+    }
+  });
+
+  it("does not accept `+`-concatenated string arguments", () => {
+    // `"hi" + foo` must not parse as a single string arg in a tag.
+    // Either the parser fails outright or the arg list contains only
+    // the first literal and leaves `+ foo` unconsumed inside the parens
+    // (which then makes the whole tag fail or fall back to zero-args).
+    const result = tagParser('@goal("hi" + foo)');
+    if (result.success) {
+      const arg = result.result.arguments[0];
+      if (arg && arg.type === "string") {
+        // It must be the plain "hi" (one text segment) — never the
+        // concatenated expression.
+        expect((arg as any).segments).toEqual([
+          { type: "text", value: "hi" },
+        ]);
+      }
+    }
+  });
 });

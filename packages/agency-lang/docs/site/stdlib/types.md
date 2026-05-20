@@ -43,17 +43,19 @@ export type Email = string
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/types.agency#L25))
 
-### URL
+### URLString
 
-An http:// or https:// URL.
+An http:// or https:// URL. (Named `URLString` so it does not shadow
+    JavaScript's global `URL` constructor.)
 
 ```ts
-/** An http:// or https:// URL. */
+/** An http:// or https:// URL. (Named `URLString` so it does not shadow
+    JavaScript's global `URL` constructor.) */
 @validate(isUrl)
 @jsonSchema({
   ...urlFormat
 })
-export type URL = string
+export type URLString = string
 ```
 
 **Validators:** `isUrl`
@@ -66,19 +68,21 @@ export type URL = string
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/types.agency#L30))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/types.agency#L31))
 
-### UUID
+### UUIDString
 
-A canonical 8-4-4-4-12 hex UUID.
+A canonical 8-4-4-4-12 hex UUID string. (Named `UUIDString` for symmetry
+    with `URLString`.)
 
 ```ts
-/** A canonical 8-4-4-4-12 hex UUID. */
+/** A canonical 8-4-4-4-12 hex UUID string. (Named `UUIDString` for symmetry
+    with `URLString`.) */
 @validate(isUuid)
 @jsonSchema({
   ...uuidFormat
 })
-export type UUID = string
+export type UUIDString = string
 ```
 
 **Validators:** `isUuid`
@@ -91,4 +95,4 @@ export type UUID = string
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/types.agency#L35))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/types.agency#L37))

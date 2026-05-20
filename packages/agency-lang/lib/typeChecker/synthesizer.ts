@@ -600,6 +600,12 @@ export function synthValueAccess(
             };
             break;
           }
+          if (methodName === "toJSONSchema") {
+            // `toJSONSchema()` returns an arbitrary JSON Schema object —
+            // we don't track its exact shape statically.
+            currentType = ANY_T;
+            break;
+          }
         }
         // Array callback methods: `xs.map(\(x) -> ...)`, `xs.filter(fn)`, …
         // Handled separately from the simple BuiltinSignature path because

@@ -65,6 +65,16 @@ describe("mergeTagSets", () => {
     expect(byKey.description.segments[0].value).toBe("prop desc");
   });
 
+  it("throws when the same side has multiple @jsonSchema tags", () => {
+    const aliasTags = [
+      tag("jsonSchema", [obj({ format: stringLit("email") })]),
+      tag("jsonSchema", [obj({ description: stringLit("dup") })]),
+    ];
+    expect(() => mergeTagSets(aliasTags, undefined)).toThrow(
+      /Multiple @jsonSchema/,
+    );
+  });
+
   it("throws on a malformed @jsonSchema whose argument is not an object literal", () => {
     const aliasTags = [tag("jsonSchema", [stringLit("not an object")])];
     expect(() => mergeTagSets(aliasTags, undefined)).toThrow(/object-literal argument/);

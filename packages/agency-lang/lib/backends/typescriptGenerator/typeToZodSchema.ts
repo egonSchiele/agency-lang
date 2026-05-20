@@ -16,9 +16,19 @@ export const DEFAULT_SCHEMA = "z.string()";
  */
 export function appendMeta(schemaExpr: string, tags: Tag[] | undefined): string {
   if (!tags || tags.length === 0) return schemaExpr;
-  const jsonSchema = tags.find((t) => t.name === "jsonSchema");
-  if (!jsonSchema) return schemaExpr;
-  const arg = jsonSchema.arguments[0];
+  const jsonSchemas = tags.filter((t) => t.name === "jsonSchema");
+  if (jsonSchemas.length === 0) return schemaExpr;
+  if (jsonSchemas.length > 1) {
+    const locs = jsonSchemas
+      .map((t) =>
+        t.loc ? `line ${t.loc.line}, col ${t.loc.col}` : "<unknown>",
+      )
+      .join(" and ");
+    throw new Error(
+      `Multiple @jsonSchema(...) annotations on the same target are not allowed (found at ${locs}). Combine them into a single object literal.`,
+    );
+  }
+  const arg = jsonSchemas[0].arguments[0];
   if (!arg) return schemaExpr;
   return `${schemaExpr}.meta(${tagArgToTs(arg)})`;
 }
@@ -101,10 +111,14 @@ function mapTypeToSchemaInner(
           typeAliases,
           resultHandler,
         );
-        let str = `"${prop.key.replace(/"/g, '\\"')}": ${appendMeta(inner, mergedTags)}`;
+        // .describe(...) must come BEFORE .meta(...) — Zod requires
+        // .meta() to be the final call in the chain or the metadata is
+        // dropped from toJSONSchema(...).
+        let inner2 = inner;
         if (prop.description) {
-          str += `.describe("${escape(prop.description)}")`;
+          inner2 += `.describe("${escape(prop.description)}")`;
         }
+        const str = `"${prop.key.replace(/"/g, '\\"')}": ${appendMeta(inner2, mergedTags)}`;
         return str;
       })
       .join(", ");

@@ -52,7 +52,7 @@
 | `lib/typeChecker/jsonSchemaArgValidator.test.ts` | Unit tests for the restriction |
 | `stdlib/validators.agency` + `stdlib/validators.js` | `isEmail`, `isUrl`, `isUuid`, `isInt`, `isPositive`, `isNegative`, `min`, `max`, `minLength`, `maxLength`, `matches` |
 | `stdlib/schemas.agency` + `stdlib/schemas.js` | `emailFormat`, `urlFormat`, `uuidFormat`, `dateTimeFormat`, `dateFormat`, `ipv4Format`, `ipv6Format` |
-| `stdlib/types.agency` + `stdlib/types.js` | Pre-baked `Email`, `Url`, `Uuid` aliases |
+| `stdlib/types.agency` + `stdlib/types.js` | Pre-baked `Email`, `URL`, `UUID` aliases |
 | `docs/site/guide/annotations.md` | User-facing docs for `@validate` / `@jsonSchema` and the stdlib modules |
 
 **Files modified:**
@@ -1133,11 +1133,11 @@ export type Email = string
 
 @validate(isUrl)
 @jsonSchema({ ...urlFormat })
-export type Url = string
+export type URL = string
 
 @validate(isUuid)
 @jsonSchema({ ...uuidFormat })
-export type Uuid = string
+export type UUID = string
 ```
 
 The `.js` companion may be empty (pure type re-exports).
@@ -1173,7 +1173,7 @@ pnpm run agency test tests/agency/stdlib/types.agency 2>&1 | tee /tmp/task14-tes
 
 ```bash
 git add stdlib/types.agency stdlib/types.js tests/agency/stdlib/types.agency
-git commit -m "feat(stdlib): add std::types with pre-baked Email/Url/Uuid"
+git commit -m "feat(stdlib): add std::types with pre-baked Email/URL/UUID"
 ```
 
 ---

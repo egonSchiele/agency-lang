@@ -1,0 +1,43 @@
+// Verifies that when an object type has its own @validate AND one of
+// its property types has its own @validate, both fire — property
+// validation runs on the property value, then the object-level
+// validation runs on the whole object.
+
+def isEven(value: number): Result {
+  if (value % 2 == 0) {
+    return success(value)
+  }
+  return failure("not even")
+}
+
+// Object-level validator: fail if `name` is the empty string.
+def hasName(value: {name: string, age: number}): Result {
+  if (value.name == "") {
+    return failure("name must not be empty")
+  }
+  return success(value)
+}
+
+@validate(isEven)
+type Even = number
+
+@validate(hasName)
+type Person = {
+  name: string,
+  age: Even
+}
+
+node main() {
+  const good: Person! = { name: "Alice", age: 30 }
+  const oddAge: Person! = { name: "Bob", age: 7 }
+  const noName: Person! = { name: "", age: 30 }
+
+  if (isSuccess(good)) {
+    if (isFailure(oddAge)) {
+      if (isFailure(noName)) {
+        return good.value.name
+      }
+    }
+  }
+  return "failed"
+}

@@ -20,7 +20,8 @@ import { _isEmail, _isUrl, _isUuid, _isInt, _isPositive, _isNegative } from "age
   ```
 
   Validators are only run for types annotated with `!` (the bang operator).
-  See the [validation annotations guide](../guide/annotations.md) for details.
+  See the [schemas guide](../guide/schemas.md) for details on `!`
+  validation and how `@validate(...)` integrates with it.
 */
 
 export def isEmail(value: string): Result {

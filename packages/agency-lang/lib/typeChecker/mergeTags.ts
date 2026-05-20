@@ -46,6 +46,8 @@ export function mergeTagSets(
 
   const aliasJson = alias.filter((t) => t.name === "jsonSchema");
   const useSiteJson = useSite.filter((t) => t.name === "jsonSchema");
+  enforceSingleJsonSchema(aliasJson, "alias");
+  enforceSingleJsonSchema(useSiteJson, "use site");
   if (aliasJson.length + useSiteJson.length > 0) {
     const merged = mergeJsonSchemaArgs([...aliasJson, ...useSiteJson]);
     combined.push({
@@ -66,6 +68,25 @@ export function mergeTagSets(
   }
 
   return combined;
+}
+
+/**
+ * Reject having more than one `@jsonSchema(...)` annotation on the same
+ * side (alias-level or use-site). Multiple annotations on a single
+ * target are ambiguous — callers should combine them into a single
+ * object literal instead. Throws a location-aware error listing every
+ * offending occurrence.
+ */
+function enforceSingleJsonSchema(tags: Tag[], side: string): void {
+  if (tags.length <= 1) return;
+  const locs = tags
+    .map((t) =>
+      t.loc ? `line ${t.loc.line}, col ${t.loc.col}` : "<unknown>",
+    )
+    .join(" and ");
+  throw new Error(
+    `Multiple @jsonSchema(...) annotations on the same target (${side}) are not allowed (found at ${locs}). Combine them into a single object literal.`,
+  );
 }
 
 function mergeJsonSchemaArgs(tags: Tag[]): Expression[] {

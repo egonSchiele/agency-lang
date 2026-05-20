@@ -11,10 +11,11 @@ features that landed together:
   that structured-output LLM calls and downstream Zod consumers see it.
   Internally this becomes a Zod `.meta(...)` call.
 
-The user-facing guide lives at
-[`docs/site/guide/annotations.md`](../site/guide/annotations.md); this
-doc focuses on how the implementation is wired up so future engineers
-can change it safely.
+The user-facing material currently lives in
+[`docs/site/guide/schemas.md`](../site/guide/schemas.md) (the existing
+`!`-validation guide); a dedicated annotations guide is a planned
+follow-up. This doc focuses on how the implementation is wired up so
+future engineers can change it safely.
 
 ---
 

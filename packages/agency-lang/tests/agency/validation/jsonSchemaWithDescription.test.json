@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "\"email|primary contact address\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "Property `#` description AND alias-level @jsonSchema both surface in toJSONSchema — guards .meta(...) being the last Zod chain call"
+    }
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "\"email|user email\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "@jsonSchema(...) metadata at a type-alias level surfaces in toJSONSchema() output"
+    }
+  ]
+}

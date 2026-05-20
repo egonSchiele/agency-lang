@@ -1,0 +1,18 @@
+// Regression test: when an object property has both a `#` description
+// AND a @jsonSchema(...) annotation, BOTH must appear in the generated
+// JSON Schema. This guards the invariant that `.meta(...)` is the
+// final Zod chain call (otherwise the metadata is dropped by
+// toJSONSchema).
+
+@jsonSchema({ format: "email" })
+type Email = string
+
+type User = {
+  contact: Email # primary contact address
+}
+
+node main() {
+  const s = schema(User)
+  const js = s.toJSONSchema()
+  return js.properties.contact.format + "|" + js.properties.contact.description
+}

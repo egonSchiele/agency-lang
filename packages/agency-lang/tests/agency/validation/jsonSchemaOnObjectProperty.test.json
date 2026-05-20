@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "\"email\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "@jsonSchema on a property's type alias surfaces under properties.<key> in the generated JSON Schema"
+    }
+  ]
+}

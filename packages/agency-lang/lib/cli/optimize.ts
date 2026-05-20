@@ -141,14 +141,20 @@ export async function optimize(
   }
 
   const goalArg = goalTag.arguments[0];
-  let goal = "";
   if (
-    goalArg?.type === "string" &&
-    goalArg.segments.length === 1 &&
-    goalArg.segments[0].type === "text"
+    !goalArg ||
+    goalArg.type !== "string" ||
+    goalArg.segments.length !== 1 ||
+    goalArg.segments[0].type !== "text"
   ) {
-    goal = goalArg.segments[0].value;
+    const where = goalArg?.loc
+      ? ` (line ${goalArg.loc.line}, col ${goalArg.loc.col})`
+      : "";
+    throw new Error(
+      `@goal(...) requires a single plain string-literal argument${where}; got ${goalArg ? goalArg.type : "no argument"}.`,
+    );
   }
+  const goal: string = goalArg.segments[0].value;
   console.log(`Goal: ${goal}`);
   console.log(`Running up to ${options.iterations} iterations...\n`);
 
@@ -282,11 +288,19 @@ function collectOptimizeTargets(
 
       const target: OptimizeTarget = { node, llmCall, tag: optimizeTag };
       target.promptValue = getPromptValue(target);
-      target.configKeys = optimizeTag.arguments.length === 0
-        ? ["prompt"]
-        : optimizeTag.arguments
-          .map((a) => (a.type === "variableName" ? a.value : null))
-          .filter((s): s is string => s !== null);
+      if (optimizeTag.arguments.length === 0) {
+        target.configKeys = ["prompt"];
+      } else {
+        target.configKeys = optimizeTag.arguments.map((a) => {
+          if (a.type !== "variableName") {
+            const where = a.loc ? ` (line ${a.loc.line}, col ${a.loc.col})` : "";
+            throw new Error(
+              `@optimize(...) arguments must be plain config-key identifiers${where}; got ${a.type}.`,
+            );
+          }
+          return a.value;
+        });
+      }
       targets.push(target);
     }
   }

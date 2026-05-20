@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
-import { mapTypeToZodSchema, mapTypeToValidationSchema } from "./typeToZodSchema.js";
+import { mapTypeToZodSchema, mapTypeToValidationSchema, appendMeta } from "./typeToZodSchema.js";
 import { VariableType } from "../../types.js";
+import type { Tag } from "../../types/tag.js";
 
 describe("mapTypeToZodSchema", () => {
   it("should return the alias name directly for typeAliasVariable", () => {
@@ -208,5 +209,41 @@ describe("mapTypeToZodSchema: Record<K, V>", () => {
         {},
       ),
     ).toThrow(/Unresolved generic type at codegen: Container/);
+  });
+});
+
+describe("appendMeta", () => {
+  const obj = (entries: Record<string, unknown>) => ({
+    type: "agencyObject" as const,
+    entries: Object.entries(entries).map(([key, value]) => ({
+      key,
+      value: value as any,
+    })),
+  });
+  const stringLit = (s: string) => ({
+    type: "string" as const,
+    segments: [{ type: "text" as const, value: s }],
+  });
+  const tag = (name: string, args: any[]): Tag =>
+    ({ type: "tag", name, arguments: args }) as Tag;
+
+  it("returns the schema unchanged when no @jsonSchema tag is present", () => {
+    expect(appendMeta("z.string()", undefined)).toBe("z.string()");
+    expect(appendMeta("z.string()", [])).toBe("z.string()");
+    expect(appendMeta("z.string()", [tag("validate", [])])).toBe("z.string()");
+  });
+
+  it("appends .meta(...) when a single @jsonSchema tag is present", () => {
+    const tags = [tag("jsonSchema", [obj({ format: stringLit("email") })])];
+    expect(appendMeta("z.string()", tags)).toContain(".meta(");
+    expect(appendMeta("z.string()", tags)).toMatch(/format:\s*"email"/);
+  });
+
+  it("throws when more than one @jsonSchema is attached to the same target", () => {
+    const tags = [
+      tag("jsonSchema", [obj({ format: stringLit("email") })]),
+      tag("jsonSchema", [obj({ description: stringLit("dup") })]),
+    ];
+    expect(() => appendMeta("z.string()", tags)).toThrow(/Multiple @jsonSchema/);
   });
 });

@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "\"email\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "@jsonSchema on an array's element type surfaces under items.<keys> in the generated JSON Schema"
+    }
+  ]
+}

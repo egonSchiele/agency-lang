@@ -22,6 +22,17 @@ export class Schema {
     }
     return this.parse(parsed);
   }
+
+  /**
+   * Convert this schema to a JSON Schema document. Picks up any
+   * `@jsonSchema(...)` metadata attached via `.meta(...)` and merges it
+   * into the output. Use this from agency code to verify that
+   * `@jsonSchema(...)` annotations actually propagate to the wire
+   * format LLMs and JSON-schema consumers see.
+   */
+  toJSONSchema(): unknown {
+    return z.toJSONSchema(this.zodSchema);
+  }
 }
 
 export function __validateType(value: unknown, schema: z.ZodType): ResultValue {

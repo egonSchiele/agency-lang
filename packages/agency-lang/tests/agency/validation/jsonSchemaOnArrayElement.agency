@@ -1,0 +1,13 @@
+// @jsonSchema on an array element type should appear under
+// items.<element-keys> in the generated JSON Schema.
+
+@jsonSchema({ format: "email" })
+type Email = string
+
+type Emails = Email[]
+
+node main() {
+  const s = schema(Emails)
+  const js = s.toJSONSchema()
+  return js.items.format
+}

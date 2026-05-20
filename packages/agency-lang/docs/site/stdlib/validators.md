@@ -19,8 +19,50 @@ Validator functions intended for use with `@validate(...)` annotations.
   ```
 
   Validators are only run for types annotated with `!` (the bang operator).
-  See the [schemas guide](../guide/schemas.md) for details on `!`
-  validation and how `@validate(...)` integrates with it.
+  See the [annotations guide](../guide/annotations.md) for details on
+  `@validate(...)` and how it integrates with `!` validation.
+
+## Constants
+
+### min
+
+```ts
+export static const min = _min
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/validators.agency#L100))
+
+### max
+
+```ts
+export static const max = _max
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/validators.agency#L101))
+
+### minLength
+
+```ts
+export static const minLength = _minLength
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/validators.agency#L102))
+
+### maxLength
+
+```ts
+export static const maxLength = _maxLength
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/validators.agency#L103))
+
+### matches
+
+```ts
+export static const matches = _matches
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/validators.agency#L104))
 
 ## Functions
 

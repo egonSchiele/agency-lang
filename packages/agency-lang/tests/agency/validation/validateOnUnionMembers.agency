@@ -1,0 +1,32 @@
+// Verifies that when a union type has members carrying @validate,
+// the validators of the matched branch run. The Zod structural step
+// picks a branch first (Email when value is a string; Age when value
+// is a number); only the matching branch's validators then run.
+
+import { isEmail, isPositive } from "std::validators"
+
+@validate(isEmail)
+type Email = string
+
+@validate(isPositive)
+type Age = number
+
+type EmailOrAge = Email | Age
+
+node main() {
+  const e: EmailOrAge! = "user@example.com"
+  const a: EmailOrAge! = 42
+  const badEmail: EmailOrAge! = "not-an-email"
+  const badAge: EmailOrAge! = -3
+
+  if (isSuccess(e)) {
+    if (isSuccess(a)) {
+      if (isFailure(badEmail)) {
+        if (isFailure(badAge)) {
+          return "ok"
+        }
+      }
+    }
+  }
+  return "failed"
+}

@@ -1,4 +1,4 @@
-import { _isEmail, _isUrl, _isUuid, _isInt, _isPositive, _isNegative } from "agency-lang/stdlib-lib/validators.js"
+import { _isEmail, _isUrl, _isUuid, _isInt, _isPositive, _isNegative, _min, _max, _minLength, _maxLength, _matches } from "agency-lang/stdlib-lib/validators.js"
 
 /** @module
   Validator functions intended for use with `@validate(...)` annotations.
@@ -20,8 +20,8 @@ import { _isEmail, _isUrl, _isUuid, _isInt, _isPositive, _isNegative } from "age
   ```
 
   Validators are only run for types annotated with `!` (the bang operator).
-  See the [schemas guide](../guide/schemas.md) for details on `!`
-  validation and how `@validate(...)` integrates with it.
+  See the [annotations guide](../guide/annotations.md) for details on
+  `@validate(...)` and how it integrates with `!` validation.
 */
 
 export def isEmail(value: string): Result {
@@ -81,3 +81,24 @@ export def isNegative(value: number): Result {
   """
   return _isNegative(value)
 }
+
+// ---------------------------------------------------------------------------
+// Parameterized validator factories
+//
+// These return a fresh validator closure each time they are called. They
+// are intended to be used directly inside a `@validate(...)` tag, e.g.
+// `@validate(min(0), max(150))`. The factory call happens once at module
+// load (when the descriptor is constructed), so the captured parameters
+// are baked into the resulting validator.
+//
+// Note: these are re-exports of the raw JS factories rather than agency
+// `def` wrappers. They must remain plain callable JS functions because
+// tags compile to direct calls at module-load time (e.g. `min(0)` runs
+// once when the descriptor is built). Wrapping them in AgencyFunction
+// would break this — see the comment in `lib/stdlib/validators.ts`.
+//
+export static const min = _min
+export static const max = _max
+export static const minLength = _minLength
+export static const maxLength = _maxLength
+export static const matches = _matches

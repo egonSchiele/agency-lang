@@ -1,0 +1,17 @@
+// Verifies that @jsonSchema on the success type of `Result<T>` flows
+// through to the success branch of the Result's JSON Schema. The
+// validation-time Zod schema for `Result<T>` is a union of two object
+// shapes; the success branch contains the inner success-type schema
+// (including its `.meta(...)`), so the `format` keyword is reachable
+// inside `anyOf[0].properties.value`.
+
+@jsonSchema({ format: "email" })
+type Email = string
+
+type LookupResult = Result<Email>
+
+node main() {
+  const s = schema(LookupResult)
+  const js = s.toJSONSchema()
+  return js.anyOf[0].properties.value.format
+}

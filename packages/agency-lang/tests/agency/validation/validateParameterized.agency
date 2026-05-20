@@ -1,0 +1,47 @@
+// Verifies that parameterized validator factories work end-to-end inside
+// @validate(...) tags. Each factory (min, max, minLength, maxLength,
+// matches) is instantiated once when the descriptor is built; the
+// captured parameter is then applied on every validation.
+
+import { min, max, minLength, maxLength, matches } from "std::validators"
+
+@validate(min(0), max(150))
+type Age = number
+
+@validate(minLength(3), maxLength(8))
+type Username = string
+
+@validate(matches("^[A-Z][a-z]+$"))
+type Capitalized = string
+
+node main() {
+  const goodAge: Age! = 30
+  const tooSmall: Age! = -1
+  const tooBig: Age! = 200
+
+  const goodName: Username! = "alice"
+  const tooShortName: Username! = "ab"
+  const tooLongName: Username! = "alexander"
+
+  const goodCap: Capitalized! = "Hello"
+  const badCap: Capitalized! = "hello"
+
+  if (isSuccess(goodAge)) {
+    if (isFailure(tooSmall)) {
+      if (isFailure(tooBig)) {
+        if (isSuccess(goodName)) {
+          if (isFailure(tooShortName)) {
+            if (isFailure(tooLongName)) {
+              if (isSuccess(goodCap)) {
+                if (isFailure(badCap)) {
+                  return goodCap.value
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  return "failed"
+}

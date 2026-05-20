@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "\"Hello\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "Parameterized validators (min/max/minLength/maxLength/matches) work end-to-end in @validate(...) tags"
+    }
+  ]
+}

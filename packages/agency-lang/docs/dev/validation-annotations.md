@@ -11,11 +11,12 @@ features that landed together:
   that structured-output LLM calls and downstream Zod consumers see it.
   Internally this becomes a Zod `.meta(...)` call.
 
-The user-facing material currently lives in
-[`docs/site/guide/schemas.md`](../site/guide/schemas.md) (the existing
-`!`-validation guide); a dedicated annotations guide is a planned
-follow-up. This doc focuses on how the implementation is wired up so
-future engineers can change it safely.
+The user-facing material lives in
+[`docs/site/guide/annotations.md`](../site/guide/annotations.md); the
+broader `!`-validation model is in
+[`docs/site/guide/schemas.md`](../site/guide/schemas.md). This doc
+focuses on how the implementation is wired up so future engineers can
+change it safely.
 
 ---
 
@@ -282,6 +283,70 @@ type Trimmed = string
 
 The bound variable receives the transformed value. See
 [`tests/agency/validation/validateTransform.agency`](../../tests/agency/validation/validateTransform.agency).
+
+### Parameterized validators (`@validate(min(0))`) and `__factory`
+
+`std::validators` ships factory validators (`min`, `max`, `minLength`,
+`maxLength`, `matches`) that take a parameter and return a validator
+closure. The user writes:
+
+```agency
+@validate(min(0), max(150))
+type Age = number
+```
+
+The tag-arg parser already accepts function calls (the restricted
+expression subset includes `functionCall`), so this parses without
+language changes. But the generated descriptor literal runs at
+module-load time, and the stdlib factories are stored in `static const`
+re-exports whose bindings are not bound until `__initializeStatic` runs
+later. A naive `validators: [min(0), max(150)]` would call `min` while
+it is still `undefined`.
+
+[`validatorNodes` in
+`validationDescriptor.ts`](../../lib/backends/typescriptGenerator/validationDescriptor.ts)
+detects `functionCall` tag args and wraps them in
+`__factory(() => …)`. The
+[`__factory` runtime helper](../../lib/runtime/validateChain.ts) returns
+a closure that defers the factory call until the first validation:
+
+```ts
+export function __factory(getter) {
+  let cached = null;
+  return (value) => {
+    if (cached === null) cached = getter();
+    return cached(value);
+  };
+}
+```
+
+So the descriptor looks like
+`validators: [__factory(() => min(0)), __factory(() => max(150))]`, and
+by the time validation actually fires (after `__initializeGlobals` ran
+and `min` / `max` are bound) the factory call succeeds. The instantiated
+closure is cached, so each `@validate(min(0))` site instantiates the
+factory exactly once.
+
+Two more pieces make this work:
+
+- [`stdlib/validators.agency`](../../stdlib/validators.agency) exports
+  the parameterized factories as `static const` aliases of the raw JS
+  factories (e.g. `export static const min = _min`).
+- [`partitionProgram` in
+  `sectionAssembler.ts`](../../lib/backends/typescriptBuilder/sectionAssembler.ts)
+  detects when a `static const` value is an identifier that was imported
+  from a non-agency (i.e. plain JS) module and hoists the assignment to
+  a direct top-level `const x = y;` instead of going through the lazy
+  `__initializeStatic` ceremony. Without this hoist, downstream modules
+  would see the binding as `undefined` for the same reason `__factory`
+  exists. The hoist is keyed off `isAgencyImport` on the import
+  statement, so aliases of agency-module-imported names stay on the
+  lazy path (their source is itself lazily initialized).
+
+If you add new parameterized validators, expose them with this same
+`static const` re-export pattern. If you add a new validator-author
+sugar that puts a function call inside a tag, verify the `__factory`
+wrap still triggers (it keys off `arg.type === "functionCall"`).
 
 ---
 

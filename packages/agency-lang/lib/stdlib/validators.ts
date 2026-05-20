@@ -41,3 +41,53 @@ export function _isNegative(value: number): ResultValue {
     ? success(value)
     : failure(`expected negative number, got ${value}`);
 }
+
+// ---------------------------------------------------------------------------
+// Parameterized validators
+//
+// Each `_X(...)` is a factory: it captures its parameters and returns a
+// fresh `(value) => ResultValue` validator closure. This means a tag like
+// `@validate(maxLength(80))` instantiates the validator once at module
+// load — the factory does NOT re-run on every validation call.
+//
+// All five validators here are usable with `@validate(...)` because their
+// returned closure matches the plain-JS validator contract `(value) => Result`.
+// ---------------------------------------------------------------------------
+
+export function _min(n: number): (value: number) => ResultValue {
+  return (value: number): ResultValue =>
+    value >= n
+      ? success(value)
+      : failure(`expected value >= ${n}, got ${value}`);
+}
+
+export function _max(n: number): (value: number) => ResultValue {
+  return (value: number): ResultValue =>
+    value <= n
+      ? success(value)
+      : failure(`expected value <= ${n}, got ${value}`);
+}
+
+export function _minLength(n: number): (value: string) => ResultValue {
+  return (value: string): ResultValue =>
+    value.length >= n
+      ? success(value)
+      : failure(`expected length >= ${n}, got ${value.length}`);
+}
+
+export function _maxLength(n: number): (value: string) => ResultValue {
+  return (value: string): ResultValue =>
+    value.length <= n
+      ? success(value)
+      : failure(`expected length <= ${n}, got ${value.length}`);
+}
+
+export function _matches(
+  pattern: string | RegExp,
+): (value: string) => ResultValue {
+  const re = pattern instanceof RegExp ? pattern : new RegExp(pattern);
+  return (value: string): ResultValue =>
+    re.test(value)
+      ? success(value)
+      : failure(`value does not match pattern ${re.source}`);
+}

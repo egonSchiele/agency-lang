@@ -64,10 +64,37 @@ export function partitionProgram(
   const globalInitStatements: TsNode[] = [];
   const topLevelStatements: TsNode[] = [];
 
+  // Pre-scan imports: names imported from JS modules (anything that is
+  // NOT an agency import — no `.agency` suffix, no `std::`, no `pkg::`)
+  // are eagerly initialized at JS-module-load time. That means a static
+  // const that just aliases one of these names (e.g.
+  // `export static const min = _min`) can be hoisted to a direct
+  // top-level `const` instead of going through the async __initializeStatic
+  // ceremony, which is important so that downstream modules see the
+  // binding as defined at THEIR load time (e.g. inside an `__agency_descriptor`
+  // literal). Aliases of agency-module-imported names stay on the lazy
+  // path because those sources themselves init lazily.
+  const jsImportedNames = collectJsImportedNames(program);
+
   for (const node of program.nodes) {
     const staticAssign = unwrapStaticAssignment(node);
     if (staticAssign) {
       const { stmt, handlerName } = staticAssign;
+
+      // Hoist trivial JS-import aliases out of __initializeStatic so they
+      // are bound at module-load time (see comment above).
+      if (
+        !handlerName &&
+        stmt.value &&
+        (stmt.value as { type?: string }).type === "variableName" &&
+        jsImportedNames.has((stmt.value as { value: string }).value)
+      ) {
+        const valueNode = deps.processNodeInGlobalInit(stmt.value);
+        const decl = ts.constDecl(stmt.variableName, valueNode);
+        topLevelStatements.push(stmt.exported ? ts.export(decl) : decl);
+        continue;
+      }
+
       staticVarNames.add(stmt.variableName);
       if (stmt.exported) exportedStaticVarNames.add(stmt.variableName);
 
@@ -113,6 +140,36 @@ export function partitionProgram(
     globalInitStatements,
     topLevelStatements,
   };
+}
+
+/**
+ * Collect the local names of every plain `import { … }` statement that
+ * pulls from a non-agency module (i.e. a plain JS / TS file, not an
+ * `.agency`, `std::`, or `pkg::` source). These bindings exist as soon
+ * as the JS module is evaluated, so a `static const x = importedName`
+ * alias can be hoisted to a direct top-level `const` declaration
+ * instead of going through the lazy `__initializeStatic` ceremony.
+ */
+function collectJsImportedNames(program: AgencyProgram): Set<string> {
+  const out = new Set<string>();
+  for (const node of program.nodes) {
+    if (node.type !== "importStatement") continue;
+    const stmt = node as Extract<AgencyNode, { type: "importStatement" }>;
+    if (stmt.isAgencyImport) continue;
+    for (const entry of stmt.importedNames) {
+      if (entry.type === "namedImport") {
+        for (const name of entry.importedNames) {
+          out.add(entry.aliases[name] ?? name);
+        }
+      } else if (
+        entry.type === "namespaceImport" ||
+        entry.type === "defaultImport"
+      ) {
+        out.add(entry.importedNames);
+      }
+    }
+  }
+  return out;
 }
 
 /** If `node` is a `static x = ...` (optionally wrapped in `with handler`), return its parts. */

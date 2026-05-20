@@ -4,6 +4,7 @@ import { ts } from "@/ir/builders.js";
 import { mapTypeToValidationSchema } from "./typeToZodSchema.js";
 import { tagArgToTs } from "./tagArgToTs.js";
 import { mergeTagSets } from "@/typeChecker/mergeTags.js";
+import { applyValueArgs } from "@/typeChecker/valueParamSubstitution.js";
 
 /**
  * Build a TS IR node that evaluates to a runtime `TypeValidationDescriptor`.
@@ -67,12 +68,19 @@ export function hasAnyValidateTag(
       if (!aliasesFull) return false;
       const entry = aliasesFull[t.aliasName];
       if (!entry) return false;
-      if (tagsHaveValidate(entry.tags)) return true;
+      // For value-parameterized references, the alias's raw tags may
+      // reference value-param identifiers; substitute first so the
+      // post-substitution tag set is what we check for `@validate`.
+      const effectiveEntry =
+        entry.valueParams && t.valueArgs
+          ? applyValueArgs(entry, t.valueArgs, t.aliasName)
+          : entry;
+      if (tagsHaveValidate(effectiveEntry.tags)) return true;
       // Guard against recursive alias self-reference.
       if (seen.has(t.aliasName)) return false;
       const nextSeen = new Set(seen);
       nextSeen.add(t.aliasName);
-      return hasAnyValidateTag(entry.body, aliasesFull, nextSeen);
+      return hasAnyValidateTag(effectiveEntry.body, aliasesFull, nextSeen);
     }
     default:
       return false;
@@ -158,6 +166,23 @@ function descriptor(
   if (variableType.type === "typeAliasVariable") {
     const entry = typeAliasesFull[variableType.aliasName];
     const useSiteValidators = validatorNodes(variableType.tags);
+    // Value-parameterized alias instantiation: there is NO
+    // `__agency_descriptor` side-channel (those only exist for bare
+    // aliases). Inline the descriptor for the substituted body with
+    // substituted tags threaded through.
+    if (entry?.valueParams && variableType.valueArgs) {
+      const substituted = applyValueArgs(
+        entry,
+        variableType.valueArgs,
+        variableType.aliasName,
+      );
+      const merged = mergeTagSets(substituted.tags, variableType.tags);
+      const bodyWithTags: VariableType = {
+        ...substituted.body,
+        tags: mergeTagSets(substituted.body.tags, merged),
+      };
+      return descriptor(bodyWithTags, typeAliases, typeAliasesFull, seen);
+    }
     if (entry && hasAliasValidate(entry, typeAliasesFull)) {
       // `(Alias as any).__agency_descriptor`
       const aliasRef = ts.prop(

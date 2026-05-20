@@ -1,0 +1,18 @@
+// Verifies that a type alias combining type parameters `<T>` with value
+// parameters `(n: number)` performs both substitutions. The use-site
+// `BoundedList<string>(3)` resolves T -> string and substitutes the
+// literal 3 into the @jsonSchema tag.
+
+@jsonSchema({ maxItems: n })
+type BoundedList<T>(n: number) = T[]
+
+node main() {
+  const s = schema(BoundedList<string>(3))
+  const js = s.toJSONSchema()
+  const okList: BoundedList<string>(3)! = ["a", "b", "c"]
+
+  if (isSuccess(okList)) {
+    return js.maxItems + "|" + js.type + "|" + okList.value[0]
+  }
+  return "failed"
+}

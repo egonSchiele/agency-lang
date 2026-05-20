@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "\"ok\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "Value-parameterized alias with two parameters substitutes both bounds independently"
+    }
+  ]
+}

@@ -154,6 +154,101 @@ export function isPalindrome(value) {
 ```
 
 
+## Value-Parameterized Aliases
+
+When you find yourself repeating the same `@validate(...)` / `@jsonSchema(...)`
+shape with just one or two numbers (or strings) changing, you can lift those
+numbers out as **value parameters** on the alias itself:
+
+```ts
+import { min, max } from "std::validators"
+
+@validate(min.partial(n: low), max.partial(n: high))
+@jsonSchema({ minimum: low, maximum: high })
+type NumberInRange(low: number, high: number) = number
+```
+
+At every use site you supply concrete arguments and the alias's tags are
+substituted at compile time as if you had written them out by hand:
+
+```ts
+type User = {
+  age: NumberInRange(0, 150)
+  score: NumberInRange(1, 100)
+}
+```
+
+The `age` property gets `@validate(min.partial(n: 0), max.partial(n: 150))`
+plus `@jsonSchema({ minimum: 0, maximum: 150 })`; the `score` property gets
+the equivalent with `1` / `100`. The two instantiations are nominally
+distinct but are mutually assignment-compatible (both bottom out at
+`number`); validation runs only at `!` sites.
+
+### Syntax
+
+- **Value parameters use `(...)`**, distinct from type parameters'
+  `<...>`. Value params must come *after* type params:
+
+  ```ts
+  type BoundedList<T>(n: number) = T[]
+  // use site
+  const xs: BoundedList<string>(3) = ["a", "b", "c"]
+  ```
+- Defaults are allowed and follow the same restriction set:
+
+  ```ts
+  type Age(low: number = 0) = number
+  const x: Age()! = 5   // uses default 0
+  ```
+
+### What can appear as a use-site argument
+
+Arguments are evaluated at compile time, not at runtime — they have to be
+*statically known*:
+
+- String / number / boolean / `null` literals
+- Identifiers that resolve to a top-level `static const` (including
+  const-bound imports)
+- Other value-param identifiers in scope (so a wrapper alias can forward
+  its own value params)
+- Object literals built from any of the above (with `...` spread)
+
+**Not allowed:** bare function calls, ternaries, binary operators (other
+than spread), member access, template strings, array literals, or
+identifiers that resolve to a `let` binding, function parameter, or
+local declaration.
+
+### Bare function calls in tag arguments
+
+The same restriction applies inside `@validate(...)` and `@jsonSchema(...)`
+arguments themselves:
+
+```ts
+// ❌ Rejected — bare function call in a tag argument
+@validate(min(0))
+type Age = number
+
+// ✅ Use a partial-application chain instead
+@validate(min.partial(n: 0))
+type Age = number
+```
+
+The partial-application (PFA) form is what makes value-parameter
+substitution well-defined: a value-param identifier (`low`) can flow into
+the named-argument slot of a method call, which we can manipulate as an
+expression tree at compile time.
+
+### Pre-baked stdlib types
+
+`std::types` already exports the most common parameterized shapes:
+
+- `NumberInRange(low, high)`
+- `StringWithLength(min, max)`
+- `MatchesPattern(pat)`
+- `BoundedArray<T>(min, max)`
+
+See the [`std::types` reference](../stdlib/types.md) for the full list.
+
 ## References
 - [minimum](https://json-schema.org/draft/2020-12/draft-bhutton-json-schema-validation-00#rfc.section.6.2.4)
 - [JSON Schema object](https://json-schema.org/understanding-json-schema/reference/object)

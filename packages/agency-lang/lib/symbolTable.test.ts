@@ -75,6 +75,37 @@ def myFunc() {
     expect(symbols.Inner).toMatchObject({ kind: "type", name: "Inner" });
     expect(symbols.myFunc).toMatchObject({ kind: "function", name: "myFunc" });
   });
+
+  it("carries valueParams onto a value-parameterized TypeAlias entry", () => {
+    const symbols = parseAndClassify(`
+type Age(min: number) = number
+`);
+    const age = symbols.Age as any;
+    expect(age.kind).toBe("type");
+    expect(age.valueParams).toHaveLength(1);
+    expect(age.valueParams[0]).toMatchObject({
+      name: "min",
+      type: { type: "primitiveType", value: "number" },
+    });
+  });
+
+  it("carries multi-param valueParams onto a NumberInRange entry", () => {
+    const symbols = parseAndClassify(`
+type NumberInRange(low: number, high: number) = number
+`);
+    const r = symbols.NumberInRange as any;
+    expect(r.kind).toBe("type");
+    expect(r.valueParams).toHaveLength(2);
+    expect(r.valueParams[0].name).toBe("low");
+    expect(r.valueParams[1].name).toBe("high");
+  });
+
+  it("non-parameterized alias has no valueParams field", () => {
+    const symbols = parseAndClassify(`type Plain = string`);
+    const p = symbols.Plain as any;
+    expect(p.kind).toBe("type");
+    expect(p.valueParams).toBeUndefined();
+  });
 });
 
 describe("SymbolTable direct interrupt collection", () => {
@@ -393,6 +424,31 @@ describe("SymbolTable: re-export reachability and merging", () => {
       // Source's foo is on the first line (line 0)
       const sourceFoo = st.getFile(path.resolve(paths.source))!["foo"];
       expect(foo.loc).not.toEqual(sourceFoo.loc);
+    } finally {
+      cleanup();
+    }
+  });
+
+  it("propagates valueParams across re-exports of a value-parameterized alias", () => {
+    const { paths, cleanup } = withTempFiles({
+      source: `export type Age(min: number) = number`,
+      reexporter: `export { Age } from "@source@"`,
+    });
+    try {
+      const st = SymbolTable.build(paths.reexporter);
+      const reSyms = st.getFile(path.resolve(paths.reexporter))!;
+      const age = reSyms["Age"] as any;
+      expect(age.kind).toBe("type");
+      expect(age.exported).toBe(true);
+      expect(age.valueParams).toHaveLength(1);
+      expect(age.valueParams[0]).toMatchObject({
+        name: "min",
+        type: { type: "primitiveType", value: "number" },
+      });
+      expect(age.reExportedFrom).toEqual({
+        sourceFile: path.resolve(paths.source),
+        originalName: "Age",
+      });
     } finally {
       cleanup();
     }

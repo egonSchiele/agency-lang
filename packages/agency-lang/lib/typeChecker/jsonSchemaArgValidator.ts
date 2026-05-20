@@ -36,6 +36,15 @@ export type JsonSchemaArgScope = {
   importedNames: Set<string>;
   /** Names of top-level `def` functions. */
   topLevelFunctionNames: Set<string>;
+  /**
+   * Names of value parameters in scope for the current alias's tag
+   * arguments. When validating an alias's RAW tags (pre-substitution)
+   * the alias's own `valueParams` names go here so identifier
+   * references resolve cleanly. When validating tags AFTER
+   * `applyValueArgs` has run, this should be empty — any leftover
+   * value-param identifier is a bug, not a valid reference.
+   */
+  valueParamNames?: Set<string>;
 };
 
 export function validateJsonSchemaArg(
@@ -56,6 +65,9 @@ export function validateJsonSchemaArg(
     case "functionCall":
       return validateFunctionCall(expr, scope);
 
+    case "valueAccess":
+      return validateValueAccess(expr as any, scope);
+
     case "variableName":
       return validateIdentifier(expr, scope);
 
@@ -66,6 +78,56 @@ export function validateJsonSchemaArg(
         loc: (expr as any).loc,
       };
   }
+}
+
+/**
+ * Alias for `validateJsonSchemaArg` — the same restriction set applies
+ * to `@validate(...)` and `@jsonSchema(...)` tag arguments. Use this
+ * name in new call sites; the legacy export stays for compatibility.
+ */
+export const validateTagArg = validateJsonSchemaArg;
+
+/**
+ * Validate a PFA expression: a `valueAccess` whose chain contains at
+ * least one method-call element. A bare `valueAccess` with only
+ * property accesses (e.g. `foo.bar`) is rejected — member access is
+ * not in the restricted subset.
+ */
+function validateValueAccess(
+  va: { base: any; chain: any[]; loc?: { line: number; col: number } },
+  scope: JsonSchemaArgScope,
+): JsonSchemaArgValidationResult {
+  const hasMethodCall = (va.chain ?? []).some(
+    (el) => el && el.kind === "methodCall",
+  );
+  if (!hasMethodCall) {
+    return {
+      ok: false,
+      reason:
+        "tag arguments must be a literal, identifier, object literal, or PFA expression (e.g. min.partial(n: 0))",
+      loc: va.loc,
+    };
+  }
+  // Validate the base (must itself be allowed: typically an identifier
+  // referring to a top-level function or const).
+  const baseRes = validateJsonSchemaArg(va.base as Expression, scope);
+  if (!baseRes.ok) return baseRes;
+  // Validate each method-call argument as a restricted expression.
+  for (const el of va.chain) {
+    if (el?.kind !== "methodCall") continue;
+    const args = el.functionCall?.arguments ?? [];
+    for (const arg of args) {
+      const inner =
+        arg && arg.type === "namedArgument"
+          ? (arg as any).value
+          : arg && arg.type === "splat"
+            ? (arg as any).value
+            : arg;
+      const r = validateJsonSchemaArg(inner as Expression, scope);
+      if (!r.ok) return r;
+    }
+  }
+  return { ok: true };
 }
 
 function validateStringLiteral(
@@ -136,7 +198,12 @@ function validateIdentifier(
   scope: JsonSchemaArgScope,
 ): JsonSchemaArgValidationResult {
   const name: string = id.value;
-  if (scope.topLevelConstNames.has(name) || scope.importedNames.has(name)) {
+  if (
+    scope.topLevelConstNames.has(name) ||
+    scope.importedNames.has(name) ||
+    scope.topLevelFunctionNames.has(name) ||
+    (scope.valueParamNames && scope.valueParamNames.has(name))
+  ) {
     return { ok: true };
   }
   return {

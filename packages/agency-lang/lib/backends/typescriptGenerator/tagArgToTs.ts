@@ -18,8 +18,18 @@ import type {
  * string / number / boolean / null literals, identifiers, function calls,
  * object literals (including spread). Anything else is a bug and produces
  * a clearly-broken output.
+ *
+ * `valueParamNames` (optional): when supplied, an identifier whose name
+ * matches any entry throws — this catches accidental skips of the
+ * value-parameter substitution pass. A value-param identifier must
+ * never reach codegen; if it does, something upstream is broken and
+ * we want it to fail loudly rather than emit a bogus reference to an
+ * out-of-scope name.
  */
-export function tagArgToTs(expr: Expression): string {
+export function tagArgToTs(
+  expr: Expression,
+  valueParamNames?: ReadonlyArray<string>,
+): string {
   switch (expr.type) {
     case "string":
     case "multiLineString": {
@@ -52,19 +62,26 @@ export function tagArgToTs(expr: Expression): string {
       return String((expr as Literal & { value: boolean }).value);
     case "null":
       return "null";
-    case "variableName":
-      return (expr as Literal & { value: string }).value;
+    case "variableName": {
+      const name = (expr as Literal & { value: string }).value;
+      if (valueParamNames && valueParamNames.indexOf(name) !== -1) {
+        throw new Error(
+          `value param '${name}' left unsubstituted — substitution pass not invoked?`,
+        );
+      }
+      return name;
+    }
     case "agencyObject":
-      return objectLiteralToTs(expr as AgencyObject);
+      return objectLiteralToTs(expr as AgencyObject, valueParamNames);
     case "functionCall": {
       const fc = expr as FunctionCall;
-      return `${fc.functionName}(${functionCallArgsToTs(fc)})`;
+      return `${fc.functionName}(${functionCallArgsToTs(fc, valueParamNames)})`;
     }
     case "valueAccess": {
       const va = expr as ValueAccess;
-      let out = tagArgToTs(va.base as Expression);
+      let out = tagArgToTs(va.base as Expression, valueParamNames);
       for (const el of va.chain) {
-        out += renderChainElement(el);
+        out += renderChainElement(el, valueParamNames);
       }
       return out;
     }
@@ -77,14 +94,17 @@ export function tagArgToTs(expr: Expression): string {
   }
 }
 
-function functionCallArgsToTs(fc: FunctionCall): string {
+function functionCallArgsToTs(
+  fc: FunctionCall,
+  valueParamNames?: ReadonlyArray<string>,
+): string {
   return (fc.arguments ?? [])
     .map((a) =>
       a.type === "namedArgument"
-        ? `${(a as any).name}: ${tagArgToTs((a as any).value)}`
+        ? `${(a as any).name}: ${tagArgToTs((a as any).value, valueParamNames)}`
         : a.type === "splat"
-          ? `...${tagArgToTs((a as any).value)}`
-          : tagArgToTs(a as Expression),
+          ? `...${tagArgToTs((a as any).value, valueParamNames)}`
+          : tagArgToTs(a as Expression, valueParamNames),
     )
     .join(", ");
 }
@@ -98,7 +118,10 @@ function functionCallArgsToTs(fc: FunctionCall): string {
  * collect them into an object literal because `AgencyFunction.partial`
  * takes a single `Record<string, unknown>` of bindings at runtime.
  */
-function renderChainElement(el: AccessChainElement): string {
+function renderChainElement(
+  el: AccessChainElement,
+  valueParamNames?: ReadonlyArray<string>,
+): string {
   if (el.kind === "property") {
     return el.optional ? `?.${el.name}` : `.${el.name}`;
   }
@@ -111,10 +134,10 @@ function renderChainElement(el: AccessChainElement): string {
       ? `{ ${args
           .map(
             (a) =>
-              `${(a as any).name}: ${tagArgToTs((a as any).value)}`,
+              `${(a as any).name}: ${tagArgToTs((a as any).value, valueParamNames)}`,
           )
           .join(", ")} }`
-      : functionCallArgsToTs(fc);
+      : functionCallArgsToTs(fc, valueParamNames);
     const dot = el.optional ? "?." : ".";
     return `${dot}${fc.functionName}(${argStr})`;
   }
@@ -123,7 +146,10 @@ function renderChainElement(el: AccessChainElement): string {
   );
 }
 
-function objectLiteralToTs(obj: AgencyObject): string {
+function objectLiteralToTs(
+  obj: AgencyObject,
+  valueParamNames?: ReadonlyArray<string>,
+): string {
   const entries = obj.entries.map((entry) => {
     if ("key" in entry) {
       const kv = entry as AgencyObjectKV;
@@ -131,10 +157,10 @@ function objectLiteralToTs(obj: AgencyObject): string {
       const key = /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(kv.key)
         ? kv.key
         : JSON.stringify(kv.key);
-      return `${key}: ${tagArgToTs(kv.value)}`;
+      return `${key}: ${tagArgToTs(kv.value, valueParamNames)}`;
     }
     const sp = entry as SplatExpression;
-    return `...${tagArgToTs(sp.value)}`;
+    return `...${tagArgToTs(sp.value, valueParamNames)}`;
   });
   return `{ ${entries.join(", ")} }`;
 }

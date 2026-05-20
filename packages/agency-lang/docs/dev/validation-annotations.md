@@ -394,3 +394,101 @@ since `.meta()`'s semantics only matter at runtime.
    threads `success.value` into the next validator. Tests in
    `tests/agency/validation/` cover the boundary cases (array element,
    nested object, nullable, transform).
+
+---
+
+## Value parameters and substitution
+
+Value-parameterized type aliases — `type NumberInRange(low: number, high: number) = number`
+— let users lift a tag's numeric (or string) literals out to the alias
+declaration and re-supply them at every use site. Substitution is purely
+compile-time; the runtime walker, descriptor format, and `__validateChain`
+helpers are unchanged.
+
+### The substitution pass
+
+`lib/typeChecker/valueParamSubstitution.ts` is the single source of
+truth. It exports:
+
+- `substituteValueArgsInExpression(expr, bindings)` — walks the
+  restricted tag-arg expression subtree (literals, identifiers, object
+  literals + spreads, `valueAccess` chains incl. PFA method-call args)
+  and replaces any `variableName` whose `value` matches a key in
+  `bindings` with a structural clone of the bound `Expression`. Nodes
+  outside the restricted subset pass through unchanged. The input tree
+  is never mutated.
+- `substituteValueArgsInTag(tag, bindings)` — convenience wrapper that
+  maps the substitution over `tag.arguments`.
+- `substituteValueArgsInType(vt, bindings)` — walks a `VariableType`
+  tree and rewrites any inner `typeAliasVariable` / `genericType` whose
+  own `valueArgs` reference a name in `bindings`. Required so wrapping
+  aliases (`type EvenInRange(low, high) = NumberInRange(low, high)`)
+  can forward their value parameters to inner instantiations.
+- `applyValueArgs(entry, valueArgs, aliasName)` — the canonical entry
+  point: validates arity (filling missing tail args from
+  `valueParams[i].default`, throwing on missing-required or
+  too-many-args), builds the bindings map, then returns a fresh
+  `TypeAliasEntry` whose `tags` and `body` are both substituted. Best-
+  effort literal type-check on each argument; non-literal args are
+  accepted and deferred.
+
+### Where it fires
+
+In `lib/typeChecker/assignability.ts`, `resolveType` calls
+`applyValueArgs` whenever it resolves a `typeAliasVariable` or
+`genericType` whose entry has `valueParams`. Type-param substitution
+happens first (existing path); value-arg substitution runs on the
+result. The substituted entry's tags then flow through the existing
+`attachAliasTags` + `mergeTagSets` chain unchanged.
+
+### The shared `staticTagArgParser`
+
+A single combinator backs every place that needs the restricted
+expression subset:
+
+1. Tag arguments inside `@validate(...)` and `@jsonSchema(...)`.
+2. Default-value expressions for value params (`= 0`).
+3. Use-site value-arg expressions (`Age(18)`).
+
+Centralizing the rule keeps "static consts and value-param identifiers
+are OK; bare function calls are not" defined exactly once. PFA
+(`min.partial(n: low)`) stays allowed because it's a method call on an
+identifier, not a bare function call.
+
+### Codegen divergence
+
+Value-parameterized aliases are deliberately *not* emitted as top-level
+Zod schemas:
+
+- **No top-level `const AliasName = z....` emission.**
+  `typescriptBuilder.ts` skips the const for aliases with
+  `valueParams`. There's no single schema for `NumberInRange` without
+  arguments.
+- **No `(AliasName as any).__agency_descriptor` side-channel.** The
+  descriptor would have to encode the specific value args; instead,
+  the descriptor is constructed *inline at the use site* with the
+  substituted tags.
+- **Use-site inlining.** `typeToZodSchema.ts` and
+  `validationDescriptor.ts` both check for `variableType.valueArgs` on
+  a `typeAliasVariable` / `genericType` reference, call
+  `applyValueArgs`, and recursively map the substituted entry. The
+  substituted tags drive `appendMeta` and `validatorNodes`.
+
+### `tagArgToTs` safety net
+
+After substitution, the TypeScript printer should never see a
+value-param identifier. If it does (i.e. someone added a code path that
+skipped `applyValueArgs`), `tagArgToTs` throws
+`value param 'X' left unsubstituted` so the bug surfaces immediately.
+
+### Files of record (value-parameterized additions)
+
+| File | Role |
+|------|------|
+| `lib/typeChecker/valueParamSubstitution.ts` | The substitution pass + `applyValueArgs` |
+| `lib/typeChecker/valueParamSubstitution.test.ts` | Unit tests for every branch |
+| `lib/typeChecker/assignability.ts` | Calls `applyValueArgs` during `resolveType` |
+| `lib/backends/typescriptGenerator/typeToZodSchema.ts` | Inlines substituted schemas at use sites |
+| `lib/backends/typescriptGenerator/validationDescriptor.ts` | Inlines substituted descriptors at use sites |
+| `lib/backends/typescriptBuilder.ts` | Skips top-level emission for value-parameterized aliases |
+| `stdlib/types.agency` | Pre-baked `NumberInRange`, `StringWithLength`, `MatchesPattern`, `BoundedArray<T>` |

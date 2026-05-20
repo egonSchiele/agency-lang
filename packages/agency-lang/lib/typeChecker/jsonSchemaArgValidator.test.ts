@@ -10,6 +10,7 @@ function scope(opts: Partial<JsonSchemaArgScope> = {}): JsonSchemaArgScope {
     topLevelConstNames: opts.topLevelConstNames ?? new Set(),
     importedNames: opts.importedNames ?? new Set(),
     topLevelFunctionNames: opts.topLevelFunctionNames ?? new Set(),
+    valueParamNames: opts.valueParamNames,
   };
 }
 
@@ -99,6 +100,52 @@ describe("validateJsonSchemaArg", () => {
     expect(validateJsonSchemaArg(binop, scope()).ok).toBe(false);
     const arr = { type: "agencyArray", items: [] } as any;
     expect(validateJsonSchemaArg(arr, scope()).ok).toBe(false);
+  });
+
+  it("accepts value-param identifiers when in scope", () => {
+    const r = validateJsonSchemaArg(
+      ident("low"),
+      scope({ valueParamNames: new Set(["low", "high"]) }),
+    );
+    expect(r.ok).toBe(true);
+  });
+
+  it("rejects unbound value-param identifier when scope omits it", () => {
+    const r = validateJsonSchemaArg(ident("low"), scope());
+    expect(r.ok).toBe(false);
+  });
+
+  it("accepts PFA expression: foo.partial(n: 0)", () => {
+    const pfa: Expression = {
+      type: "valueAccess",
+      base: ident("min"),
+      chain: [
+        {
+          kind: "methodCall",
+          functionCall: {
+            type: "functionCall",
+            functionName: "partial",
+            arguments: [{ type: "namedArgument", name: "n", value: nm("0") }],
+          },
+        },
+      ],
+    } as any;
+    const r = validateJsonSchemaArg(
+      pfa,
+      scope({ topLevelFunctionNames: new Set(["min"]) }),
+    );
+    expect(r.ok).toBe(true);
+  });
+
+  it("rejects bare valueAccess with only property accesses", () => {
+    const expr: Expression = {
+      type: "valueAccess",
+      base: ident("foo"),
+      chain: [{ kind: "property", name: "bar" }],
+    } as any;
+    const r = validateJsonSchemaArg(expr, scope());
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.reason).toMatch(/PFA expression/);
   });
 
   it("rejects string literals that contain interpolation segments", () => {

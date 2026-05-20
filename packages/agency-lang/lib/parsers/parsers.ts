@@ -99,6 +99,7 @@ import {
   TypeParam,
   UnionType,
   Tag,
+  ValueParam,
 } from "../types.js";
 import { GraphNodeDefinition } from "../types/graphNode.js";
 import { ForLoop } from "../types/forLoop.js";
@@ -689,10 +690,33 @@ export const primitiveTypeParser: Parser<PrimitiveType> = trace(
 
 export const typeAliasVariableParser: Parser<TypeAliasVariable> = trace(
   "typeAliasVariableParser",
-  seqC(
-    set("type", "typeAliasVariable"),
-    capture(many1WithJoin(varNameChar), "aliasName"),
-  ),
+  (input: string): ParserResult<TypeAliasVariable> => {
+    const parser = seqC(
+      set("type", "typeAliasVariable"),
+      capture(many1WithJoin(varNameChar), "aliasName"),
+      // Optional `(arg1, arg2, ...)` value-arg suffix for
+      // value-parameterized aliases. Each arg is a statically-
+      // restricted expression (literal, identifier, PFA, object literal).
+      optional(
+        captureCaptures(
+          seqC(
+            char("("),
+            optionalSpaces,
+            capture(
+              sepBy(
+                seqR(optionalSpaces, char(","), optionalSpaces),
+                lazy(() => staticTagArgParser),
+              ),
+              "valueArgs",
+            ),
+            optionalSpaces,
+            char(")"),
+          ),
+        ),
+      ),
+    );
+    return parser(input);
+  },
 );
 
 /**
@@ -1163,6 +1187,25 @@ export const genericTypeParser: Parser<GenericType> = trace(
     ),
     optionalSpaces,
     char(">"),
+    // Optional value-arg suffix: combined `<T>(n)` form for
+    // value-parameterized generic aliases (e.g. `BoundedList<string>(3)`).
+    optional(
+      captureCaptures(
+        seqC(
+          char("("),
+          optionalSpaces,
+          capture(
+            sepBy(
+              seqR(optionalSpaces, char(","), optionalSpaces),
+              lazy(() => staticTagArgParser),
+            ),
+            "valueArgs",
+          ),
+          optionalSpaces,
+          char(")"),
+        ),
+      ),
+    ),
   ),
 );
 
@@ -1207,6 +1250,35 @@ export const typeParamParser: Parser<TypeParam> = trace(
   ),
 );
 
+/**
+ * Value parameter on a value-parameterized alias declaration. Examples:
+ *   min: number              → { name: "min", type: { type: "primitiveType", value: "number" } }
+ *   min: number = 0          → { ..., default: { type: "number", value: "0" } }
+ *
+ * The default expression is restricted to the same statically-known
+ * subset as tag arguments (see `staticTagArgParser`).
+ */
+export const valueParamParser: Parser<ValueParam> = trace(
+  "valueParamParser",
+  seqC(
+    capture(many1WithJoin(varNameChar), "name"),
+    optionalSpaces,
+    char(":"),
+    optionalSpaces,
+    capture(lazy(() => variableTypeParser), "type"),
+    optional(
+      captureCaptures(
+        seqC(
+          optionalSpaces,
+          char("="),
+          optionalSpaces,
+          capture(lazy(() => staticTagArgParser), "default"),
+        ),
+      ),
+    ),
+  ),
+);
+
 const baseTypeAliasParser: Parser<TypeAlias> = withLoc(trace(
   "typeAliasParser",
   seqC(
@@ -1233,6 +1305,26 @@ const baseTypeAliasParser: Parser<TypeAlias> = withLoc(trace(
               ),
               optionalSpaces,
               char(">"),
+            ),
+          ),
+        ),
+        // Optional `(name: T, name: T = default, ...)`. Must come AFTER the
+        // optional `<...>` block: reversed ordering `(...)<...>` is rejected
+        // because nothing here consumes a `<` before the `=`.
+        optional(
+          captureCaptures(
+            seqC(
+              char("("),
+              optionalSpaces,
+              capture(
+                sepBy1(
+                  seqR(optionalSpaces, char(","), optionalSpaces),
+                  valueParamParser,
+                ),
+                "valueParams",
+              ),
+              optionalSpaces,
+              char(")"),
             ),
           ),
         ),
@@ -1360,31 +1452,50 @@ export const skillParser = (input: string) => {
 // tag.ts
 // =============================================================================
 
-// A single tag argument: restricted subset of expressions per spec
-// (docs/superpowers/specs/2026-05-19-type-validation-and-json-schema-annotations-design.md).
+// A single statically-restricted argument expression. Shared by:
+//   1. `@validate(...)` / `@jsonSchema(...)` tag arguments
+//   2. value-parameter default expressions (`= 0`)
+//   3. value-arg expressions at use sites (`Age(18)`)
 //
 // Allowed: string / number / boolean / null literals, identifiers,
-// function calls, object literals (including spread). NOT allowed:
-// ternaries, binary ops, pipes, member access, template strings,
-// array literals.
+// object literals (including spread), and PFA expressions
+// (e.g. `min.partial(n: 0)`). NOT allowed: bare function calls
+// (no chain), ternaries, binary ops, pipes, member access on a
+// function-call base, template strings, array literals.
 //
 // All forward references go through lazy(...) because these parsers
 // are defined later in the file.
-const restrictedTagArgParser: Parser<Expression> = label(
-  "a tag argument (literal, identifier, function call, PFA, or object literal)",
+const _identOrPfaParser: Parser<Expression> = (input: string) => {
+  const result = lazy(() => _valueAccessParser)(input);
+  if (!result.success) return result;
+  // Reject bare function calls (no chain). PFA expressions (function
+  // call followed by a `.partial(...)` style method-call chain) are
+  // `valueAccess` nodes and so survive this filter. Bare identifiers
+  // (`variableName`) are also fine.
+  if (result.result.type === "functionCall") {
+    return failure(
+      "bare function call not allowed; use a literal, identifier, PFA expression (e.g. `min.partial(n: 0)`), or object literal",
+      input,
+    );
+  }
+  return result;
+};
+
+export const staticTagArgParser: Parser<Expression> = label(
+  "a static argument (literal, identifier, PFA expression, or object literal)",
   or(
     lazy(() => agencyObjectParser),
     nullParser,
     booleanParser,
     numberParser,
     simpleStringParser,
-    // `_valueAccessParser` subsumes plain function calls and bare
-    // identifiers (when there is no chain), and also accepts PFA
-    // expressions like `min.partial(n: 0)` so users can configure
-    // parameterized validators inline in `@validate(...)`.
-    lazy(() => _valueAccessParser),
+    _identOrPfaParser,
   ),
 );
+
+// Backwards-compatible alias for the previous name. The current
+// behaviour is the tightened one: bare function calls are rejected.
+const restrictedTagArgParser: Parser<Expression> = staticTagArgParser;
 
 // Parenthesized argument list: (arg1, arg2)
 const tagArgsList = map(

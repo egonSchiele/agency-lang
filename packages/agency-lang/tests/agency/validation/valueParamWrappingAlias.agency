@@ -1,0 +1,31 @@
+// Verifies that a value-parameterized alias can forward its own value
+// parameters into another value-parameterized alias in its body. The
+// outer alias's value-param identifiers (`low`, `high`) are substituted
+// at the inner reference site, which itself is substituted at the
+// outer use site.
+
+import { min, max } from "std::validators"
+
+@validate(min.partial(n: low), max.partial(n: high))
+@jsonSchema({ minimum: low, maximum: high })
+type NumberInRange(low: number, high: number) = number
+
+type EvenInRange(low: number, high: number) = NumberInRange(low, high)
+
+node main() {
+  const s = schema(EvenInRange(0, 100))
+  const js = s.toJSONSchema()
+
+  const okMid: EvenInRange(0, 100)! = 50
+  const tooLow: EvenInRange(0, 100)! = -1
+  const tooHigh: EvenInRange(0, 100)! = 101
+
+  if (isSuccess(okMid)) {
+    if (isFailure(tooLow)) {
+      if (isFailure(tooHigh)) {
+        return js.minimum + "|" + js.maximum
+      }
+    }
+  }
+  return "failed"
+}

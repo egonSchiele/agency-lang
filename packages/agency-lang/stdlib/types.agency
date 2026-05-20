@@ -1,4 +1,4 @@
-import { isEmail, isUrl, isUuid } from "std::validators"
+import { isEmail, isUrl, isUuid, min, max, minLength, maxLength, matches } from "std::validators"
 import { emailFormat, urlFormat, uuidFormat } from "std::schemas"
 
 /** @module
@@ -35,3 +35,24 @@ export type URLString = string
 @validate(isUuid)
 @jsonSchema({ ...uuidFormat })
 export type UUIDString = string
+
+/** A number that must lie within the inclusive range `[low, high]`.
+    Use as `NumberInRange(0, 100)` etc. — both bounds substitute into the
+    `@validate(...)` and `@jsonSchema(...)` tags at the use site. */
+@validate(min.partial(n: low), max.partial(n: high))
+@jsonSchema({ minimum: low, maximum: high })
+export type NumberInRange(low: number, high: number) = number
+
+/** A string whose length is in the inclusive range `[min, max]`. */
+@validate(minLength.partial(n: min), maxLength.partial(n: max))
+@jsonSchema({ minLength: min, maxLength: max })
+export type StringWithLength(min: number, max: number) = string
+
+/** A string that matches the given regular expression `pat`. */
+@validate(matches.partial(pattern: pat))
+@jsonSchema({ pattern: pat })
+export type MatchesPattern(pat: string) = string
+
+/** An array whose length is in the inclusive range `[min, max]`. */
+@jsonSchema({ minItems: min, maxItems: max })
+export type BoundedArray<T>(min: number, max: number) = T[]

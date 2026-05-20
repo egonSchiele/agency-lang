@@ -1,0 +1,23 @@
+// Verifies that omitting a value argument falls back to the declared default.
+// `type Age(min: number = 0)` allows both `Age(18)` (explicit) and `Age()`
+// (uses the default of 0).
+
+import { min } from "std::validators"
+
+@validate(min.partial(n: low))
+type Age(low: number = 0) = number
+
+node main() {
+  const adult: Age(18)! = 25
+  const childButOk: Age()! = 5
+  const negative: Age()! = -1
+
+  if (isSuccess(adult)) {
+    if (isSuccess(childButOk)) {
+      if (isFailure(negative)) {
+        return "ok"
+      }
+    }
+  }
+  return "failed"
+}

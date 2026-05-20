@@ -1,0 +1,33 @@
+// Verifies that a value-parameterized alias with multiple value parameters
+// substitutes each one into its corresponding @validate PFA. Both the lower
+// and upper bound must fire independently.
+
+import { min, max } from "std::validators"
+
+@validate(min.partial(n: low), max.partial(n: high))
+type NumberInRange(low: number, high: number) = number
+
+node main() {
+  const okMid: NumberInRange(0, 150)! = 50
+  const tooLow: NumberInRange(0, 150)! = -1
+  const tooHigh: NumberInRange(0, 150)! = 200
+
+  const okTight: NumberInRange(1, 100)! = 100
+  const tightTooLow: NumberInRange(1, 100)! = 0
+  const tightTooHigh: NumberInRange(1, 100)! = 101
+
+  if (isSuccess(okMid)) {
+    if (isFailure(tooLow)) {
+      if (isFailure(tooHigh)) {
+        if (isSuccess(okTight)) {
+          if (isFailure(tightTooLow)) {
+            if (isFailure(tightTooHigh)) {
+              return "ok"
+            }
+          }
+        }
+      }
+    }
+  }
+  return "failed"
+}

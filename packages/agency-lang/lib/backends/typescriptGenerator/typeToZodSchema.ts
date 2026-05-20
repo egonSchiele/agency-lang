@@ -3,6 +3,7 @@ import { Tag, TypeAliasEntry, VariableType } from "../../types.js";
 import { escape } from "../../utils.js";
 import { tagArgToTs } from "./tagArgToTs.js";
 import { mergeJsonSchemaArgs, mergeTagSets } from "@/typeChecker/mergeTags.js";
+import { applyValueArgs } from "@/typeChecker/valueParamSubstitution.js";
 
 export const DEFAULT_SCHEMA = "z.string()";
 
@@ -147,6 +148,30 @@ function mapTypeToSchemaInner(
   } else if (variableType.type === "resultType") {
     return resultHandler(variableType, typeAliases);
   } else if (variableType.type === "typeAliasVariable") {
+    // Value-parameterized alias reference (e.g. `Age(18)`): there is
+    // no single top-level schema const for the alias, so we inline the
+    // substituted body's Zod schema at this use-site. The substituted
+    // tags drive `appendMeta`.
+    if (variableType.valueArgs && typeAliasesFull) {
+      const aliasEntry = typeAliasesFull[variableType.aliasName];
+      if (aliasEntry?.valueParams) {
+        const substituted = applyValueArgs(
+          aliasEntry,
+          variableType.valueArgs,
+          variableType.aliasName,
+        );
+        const bodyWithAliasTags: VariableType = {
+          ...substituted.body,
+          tags: mergeTagSets(substituted.tags, substituted.body.tags),
+        };
+        return mapTypeToSchema(
+          bodyWithAliasTags,
+          typeAliases,
+          resultHandler,
+          typeAliasesFull,
+        );
+      }
+    }
     return variableType.aliasName;
   } else if (variableType.type === "genericType") {
     if (variableType.name === "Record") {

@@ -8,6 +8,7 @@ import type {
   FunctionParameter,
   Tag,
   TypeParam,
+  ValueParam,
   VariableType,
 } from "./types.js";
 import type { SourceLocation } from "./types/base.js";
@@ -69,6 +70,10 @@ export type TypeSymbol = {
   aliasedType: VariableType;
   /** Type parameters for generic aliases (e.g., `T` in `type Container<T> = ...`). */
   typeParams?: TypeParam[];
+  /** Value parameters for value-parameterized aliases (e.g. `low` and `high`
+   * in `type NumberInRange(low: number, high: number) = number`).
+   * Carried through imports/re-exports alongside `typeParams`. */
+  valueParams?: ValueParam[];
   /** `@validate(...)` / `@jsonSchema(...)` annotations declared above the alias.
    * Carried through imports/re-exports so annotation metadata flows across modules. */
   tags?: Tag[];
@@ -357,6 +362,7 @@ export function classifySymbols(program: AgencyProgram): FileSymbols {
           exported: !!node.exported,
           aliasedType: node.aliasedType,
           ...(node.typeParams ? { typeParams: node.typeParams } : {}),
+          ...(node.valueParams ? { valueParams: node.valueParams } : {}),
           ...(typeAliasTags[node.aliasName]?.length
             ? { tags: typeAliasTags[node.aliasName] }
             : {}),

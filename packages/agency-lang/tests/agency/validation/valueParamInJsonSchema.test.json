@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "\"0|100\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "Value-parameter substitution flows through @jsonSchema so toJSONSchema() output carries the literal bounds"
+    }
+  ]
+}

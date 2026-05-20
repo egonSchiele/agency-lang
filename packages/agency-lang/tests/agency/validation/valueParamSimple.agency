@@ -1,0 +1,27 @@
+// Verifies the simplest value-parameterized type alias:
+// `type Age(min: number) = number` whose @validate(...) tag substitutes the
+// value parameter into a PFA. Use-sites Age(0) and Age(18) should both pass
+// when values meet the bound, and fail when they don't.
+
+import { min } from "std::validators"
+
+@validate(min.partial(n: low))
+type Age(low: number) = number
+
+node main() {
+  const goodAdult: Age(18)! = 20
+  const tooYoung: Age(18)! = 10
+  const anyPositive: Age(0)! = 5
+  const negative: Age(0)! = -1
+
+  if (isSuccess(goodAdult)) {
+    if (isFailure(tooYoung)) {
+      if (isSuccess(anyPositive)) {
+        if (isFailure(negative)) {
+          return "ok"
+        }
+      }
+    }
+  }
+  return "failed"
+}

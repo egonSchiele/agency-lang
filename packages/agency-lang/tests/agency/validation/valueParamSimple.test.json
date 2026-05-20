@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "\"ok\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "Single value-parameterized alias substitutes a literal into the @validate PFA at the use site"
+    }
+  ]
+}

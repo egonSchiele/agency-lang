@@ -5,6 +5,8 @@ import type {
   FunctionCall,
   Literal,
   SplatExpression,
+  ValueAccess,
+  AccessChainElement,
 } from "../../types.js";
 
 /**
@@ -56,16 +58,15 @@ export function tagArgToTs(expr: Expression): string {
       return objectLiteralToTs(expr as AgencyObject);
     case "functionCall": {
       const fc = expr as FunctionCall;
-      const args = (fc.arguments ?? [])
-        .map((a) =>
-          a.type === "namedArgument"
-            ? `${(a as any).name}: ${tagArgToTs((a as any).value)}`
-            : a.type === "splat"
-              ? `...${tagArgToTs((a as any).value)}`
-              : tagArgToTs(a as Expression),
-        )
-        .join(", ");
-      return `${fc.functionName}(${args})`;
+      return `${fc.functionName}(${functionCallArgsToTs(fc)})`;
+    }
+    case "valueAccess": {
+      const va = expr as ValueAccess;
+      let out = tagArgToTs(va.base as Expression);
+      for (const el of va.chain) {
+        out += renderChainElement(el);
+      }
+      return out;
     }
     default:
       // Restricted subset means we should not see anything else; fail loudly
@@ -74,6 +75,52 @@ export function tagArgToTs(expr: Expression): string {
         `tagArgToTs: unsupported tag argument expression type "${(expr as Expression).type}"`,
       );
   }
+}
+
+function functionCallArgsToTs(fc: FunctionCall): string {
+  return (fc.arguments ?? [])
+    .map((a) =>
+      a.type === "namedArgument"
+        ? `${(a as any).name}: ${tagArgToTs((a as any).value)}`
+        : a.type === "splat"
+          ? `...${tagArgToTs((a as any).value)}`
+          : tagArgToTs(a as Expression),
+    )
+    .join(", ");
+}
+
+/**
+ * Render an access-chain element as TS source. Tag-arg expressions only
+ * need a small subset: property accesses (rare) and method calls — the
+ * latter primarily for PFA validators like `min.partial(n: 0)`.
+ *
+ * When the method call's arguments are all named (the PFA shape), we
+ * collect them into an object literal because `AgencyFunction.partial`
+ * takes a single `Record<string, unknown>` of bindings at runtime.
+ */
+function renderChainElement(el: AccessChainElement): string {
+  if (el.kind === "property") {
+    return el.optional ? `?.${el.name}` : `.${el.name}`;
+  }
+  if (el.kind === "methodCall") {
+    const fc = el.functionCall;
+    const args = fc.arguments ?? [];
+    const allNamed =
+      args.length > 0 && args.every((a) => a.type === "namedArgument");
+    const argStr = allNamed
+      ? `{ ${args
+          .map(
+            (a) =>
+              `${(a as any).name}: ${tagArgToTs((a as any).value)}`,
+          )
+          .join(", ")} }`
+      : functionCallArgsToTs(fc);
+    const dot = el.optional ? "?." : ".";
+    return `${dot}${fc.functionName}(${argStr})`;
+  }
+  throw new Error(
+    `tagArgToTs: unsupported access chain element "${(el as any).kind}"`,
+  );
 }
 
 function objectLiteralToTs(obj: AgencyObject): string {

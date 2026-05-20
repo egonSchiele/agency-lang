@@ -41,3 +41,51 @@ export function _isNegative(value: number): ResultValue {
     ? success(value)
     : failure(`expected negative number, got ${value}`);
 }
+
+// ---------------------------------------------------------------------------
+// Parameterized validators
+//
+// These are plain two-argument validators. The first argument is the
+// configuration parameter (e.g. the minimum value), the second is the
+// value being validated. Users bind the configuration parameter via
+// Agency's partial-application (PFA) syntax when using them inside a
+// `@validate(...)` tag:
+//
+//   @validate(min.partial(n: 0))
+//   type NonNegative = number
+//
+// `.partial(n: 0)` produces a single-argument `AgencyFunction` that the
+// validation chain invokes with the value to check. See
+// `docs/site/guide/type-validation.md` for usage details.
+// ---------------------------------------------------------------------------
+
+export function _min(n: number, value: number): ResultValue {
+  return value >= n
+    ? success(value)
+    : failure(`expected value >= ${n}, got ${value}`);
+}
+
+export function _max(n: number, value: number): ResultValue {
+  return value <= n
+    ? success(value)
+    : failure(`expected value <= ${n}, got ${value}`);
+}
+
+export function _minLength(n: number, value: string): ResultValue {
+  return value.length >= n
+    ? success(value)
+    : failure(`expected length >= ${n}, got ${value.length}`);
+}
+
+export function _maxLength(n: number, value: string): ResultValue {
+  return value.length <= n
+    ? success(value)
+    : failure(`expected length <= ${n}, got ${value.length}`);
+}
+
+export function _matches(pattern: string, value: string): ResultValue {
+  const re = new RegExp(pattern);
+  return re.test(value)
+    ? success(value)
+    : failure(`value does not match pattern ${re.source}`);
+}

@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "2",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "Descriptor walker recurses through nested object/array/object/array/object/array down to a validated leaf primitive"
+    }
+  ]
+}

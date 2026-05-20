@@ -1,0 +1,30 @@
+// Verifies that a @validate-tagged alias used as a type argument to a
+// generic alias still has its validator fire when the outer value is
+// validated with `!`.
+//
+// `Box<Even>` should validate `item` against `isEven`. A box with an
+// even item succeeds; a box with an odd item fails.
+
+def isEven(value: number): Result {
+  if (value % 2 == 0) {
+    return success(value)
+  }
+  return failure("not even")
+}
+
+@validate(isEven)
+type Even = number
+
+type Box<T> = { item: T }
+
+node main() {
+  const ok: Box<Even>! = { item: 4 }
+  const bad: Box<Even>! = { item: 3 }
+
+  if (isSuccess(ok)) {
+    if (isFailure(bad)) {
+      return ok.value.item
+    }
+  }
+  return -1
+}

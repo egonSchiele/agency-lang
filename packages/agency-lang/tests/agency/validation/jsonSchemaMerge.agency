@@ -1,19 +1,20 @@
 // When @jsonSchema is set at the alias AND at the use-site (on an
 // object property), the two objects merge — use-site keys win on
-// conflict, alias-only keys still propagate.
+// conflict, alias-only keys still propagate. (`description` has its
+// own concatenation behavior; see jsonSchemaDescriptionConcat for that.)
 
-@jsonSchema({ format: "email", description: "alias-level description" })
+@jsonSchema({ format: "email", title: "alias title" })
 type Email = string
 
 type User = {
-  @jsonSchema({ description: "primary contact email" })
+  @jsonSchema({ title: "primary email" })
   contact: Email
 }
 
 node main() {
   const s = schema(User)
   const js = s.toJSONSchema()
-  // alias-level `format` propagated; use-site `description` overrode the
-  // alias-level description.
-  return js.properties.contact.format + "|" + js.properties.contact.description
+  // alias-level `format` propagated; use-site `title` overrode the
+  // alias-level title.
+  return js.properties.contact.format + "|" + js.properties.contact.title
 }

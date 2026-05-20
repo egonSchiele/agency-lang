@@ -648,8 +648,13 @@ export class TypeScriptBuilder {
    * (alias-unaware) zod mapper runs.
    */
   private zodSchemaFor(t: VariableType): string {
-    const resolved = resolveTypeDeep(t, this.scopes.visibleTypeAliasesFull());
-    return mapTypeToValidationSchema(resolved, this.scopes.visibleTypeAliases());
+    const aliasesFull = this.scopes.visibleTypeAliasesFull();
+    const resolved = resolveTypeDeep(t, aliasesFull);
+    return mapTypeToValidationSchema(
+      resolved,
+      this.scopes.visibleTypeAliases(),
+      aliasesFull,
+    );
   }
 
   /**
@@ -664,7 +669,7 @@ export class TypeScriptBuilder {
     const resolved = resolveTypeDeep(t, aliasesFull);
     const aliases = this.scopes.visibleTypeAliases();
     if (!hasAnyValidateTag(resolved, aliasesFull)) {
-      const zodSchema = mapTypeToValidationSchema(resolved, aliases);
+      const zodSchema = mapTypeToValidationSchema(resolved, aliases, aliasesFull);
       return ts.validateType(value, ts.raw(zodSchema));
     }
     const descriptor = buildValidationDescriptor(resolved, aliases, aliasesFull);

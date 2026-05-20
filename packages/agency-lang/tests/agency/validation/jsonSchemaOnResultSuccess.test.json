@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "\"email\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "@jsonSchema on the success type of Result<T> propagates into the success branch of the union JSON Schema"
+    }
+  ]
+}

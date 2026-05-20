@@ -1,0 +1,47 @@
+// Verifies that parameterized validators work end-to-end inside
+// @validate(...) tags. Each is supplied as a PFA: `min.partial(n: 0)`
+// binds `n` and produces a single-argument validator the validation
+// chain invokes on each value.
+
+import { min, max, minLength, maxLength, matches } from "std::validators"
+
+@validate(min.partial(n: 0), max.partial(n: 150))
+type Age = number
+
+@validate(minLength.partial(n: 3), maxLength.partial(n: 8))
+type Username = string
+
+@validate(matches.partial(pattern: "^[A-Z][a-z]+$"))
+type Capitalized = string
+
+node main() {
+  const goodAge: Age! = 30
+  const tooSmall: Age! = -1
+  const tooBig: Age! = 200
+
+  const goodName: Username! = "alice"
+  const tooShortName: Username! = "ab"
+  const tooLongName: Username! = "alexander"
+
+  const goodCap: Capitalized! = "Hello"
+  const badCap: Capitalized! = "hello"
+
+  if (isSuccess(goodAge)) {
+    if (isFailure(tooSmall)) {
+      if (isFailure(tooBig)) {
+        if (isSuccess(goodName)) {
+          if (isFailure(tooShortName)) {
+            if (isFailure(tooLongName)) {
+              if (isSuccess(goodCap)) {
+                if (isFailure(badCap)) {
+                  return goodCap.value
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  return "failed"
+}

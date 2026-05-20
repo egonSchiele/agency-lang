@@ -11,11 +11,12 @@ features that landed together:
   that structured-output LLM calls and downstream Zod consumers see it.
   Internally this becomes a Zod `.meta(...)` call.
 
-The user-facing material currently lives in
-[`docs/site/guide/schemas.md`](../site/guide/schemas.md) (the existing
-`!`-validation guide); a dedicated annotations guide is a planned
-follow-up. This doc focuses on how the implementation is wired up so
-future engineers can change it safely.
+The user-facing material lives in
+[`docs/site/guide/type-validation.md`](../site/guide/type-validation.md); the
+broader `!`-validation model is in
+[`docs/site/guide/schemas.md`](../site/guide/schemas.md). This doc
+focuses on how the implementation is wired up so future engineers can
+change it safely.
 
 ---
 
@@ -94,16 +95,27 @@ tags, the alias's tags and the use-site tags need to be combined:
 | Tag name      | Merge behavior                                                            |
 | ------------- | -------------------------------------------------------------------------- |
 | `validate`    | Concatenate argument lists. Validators run alias-first, use-site-last.     |
-| `jsonSchema`  | Merge the two object literals; use-site keys win on conflict. Spreads are preserved verbatim. |
+| `jsonSchema`  | Merge the two object literals; use-site keys win on conflict, **except** `description` whose plain-string values from both sides are concatenated with `\n`. Spreads are preserved verbatim. |
 | _anything else_ | Pass through per side; not merged across alias/use-site.                  |
 
-A malformed `@jsonSchema(...)` (anything other than a single object
-literal argument) throws from
+`@jsonSchema(...)` accepts one or more object-literal arguments per
+tag, and may be stacked on the same target. Both forms flatten through
+the same merge pass in `mergeJsonSchemaArgs`, which collects every
+entry / splat from every object-literal argument before running the
+description-concat and dedupe passes.
+
+A malformed `@jsonSchema(...)` (no arguments at all, or an argument
+that is not an object literal) throws from
 [`mergeTags.ts`](../../lib/typeChecker/mergeTags.ts) with a
 location-aware error. The parser doesn't reject this earlier because
 the tag-argument grammar is intentionally permissive — see
 [`jsonSchemaArgValidator.ts`](../../lib/typeChecker/jsonSchemaArgValidator.ts)
 for the dedicated check.
+
+`appendMeta` in `typeToZodSchema.ts` calls `mergeJsonSchemaArgs`
+itself whenever it sees more than one `jsonSchema` tag on a single
+type, so the stack-or-multi-arg shape is uniformly merged before being
+emitted as a single `.meta({...})` call.
 
 ---
 
@@ -282,6 +294,42 @@ type Trimmed = string
 
 The bound variable receives the transformed value. See
 [`tests/agency/validation/validateTransform.agency`](../../tests/agency/validation/validateTransform.agency).
+
+### Parameterized validators via PFA
+
+`std::validators` ships parameterized validators (`min`, `max`,
+`minLength`, `maxLength`, `matches`) as ordinary two-argument Agency
+`def` functions where the configuration parameter comes first and the
+value comes last. Users bind the configuration via Agency [partial
+application](../site/guide/partial-application.md) inside the tag:
+
+```agency
+@validate(min.partial(n: 0), max.partial(n: 150))
+type Age = number
+```
+
+The restricted tag-argument grammar accepts
+[`valueAccess`](../../lib/parsers/parsers.ts) expressions (see
+`restrictedTagArgParser`), so `min.partial(n: 0)` parses inline.
+[`tagArgToTs`](../../lib/backends/typescriptGenerator/tagArgToTs.ts)
+prints it as `min.partial({ n: 0 })` — `AgencyFunction.partial` takes a
+single `Record<string, unknown>` of bindings at runtime, and the
+all-named-args shape of a PFA tag arg is collapsed into that object
+literal.
+
+At descriptor-construction time, `min.partial({n: 0})` evaluates to an
+`AgencyFunction` (the imported `min` is an eager Agency `def` export, so
+the binding is live). The descriptor stores that AgencyFunction. When
+validation fires, `callValidator` dispatches the AgencyFunction through
+`invoke({ type: "positional", args: [value] })` — the same machinery as
+any other Agency call — and `n` is already bound, so the underlying
+two-arg `min` runs with `(n, value)`.
+
+This means there is no runtime factory helper and no static-init
+race: the cost of "make this work for `static const` imports" is paid
+once in the parser/printer and never again at runtime. If you add new
+parameterized validators, just add a normal `def`, put the config
+parameter(s) first and the value last, and document the PFA call shape.
 
 ---
 

@@ -1,0 +1,46 @@
+// Exercises the descriptor walker on a structurally deep value: outer
+// object -> array -> middle object -> array -> inner object -> array of
+// validated primitives. The walker recurses through every level and
+// runs the @validate(isEven) check on each leaf number. We stay well
+// below the default depth cap (64), so this also locks in that the
+// walker terminates on legitimate nesting.
+//
+// (True self-referential `type Tree = { children: Tree[] }` aliases
+// are not yet supported by codegen; this test covers the same walker
+// paths via a chain of named aliases.)
+
+def isEven(value: number): Result {
+  if (value % 2 == 0) {
+    return success(value)
+  }
+  return failure("not even")
+}
+
+@validate(isEven)
+type Even = number
+
+type Inner = { items: Even[] }
+type Middle = { inners: Inner[] }
+type Outer = { middles: Middle[] }
+
+node main() {
+  const allGood: Outer! = {
+    middles: [
+      { inners: [{ items: [2, 4] }, { items: [6] }] },
+      { inners: [{ items: [8, 10] }] }
+    ]
+  }
+  const oneOddDeep: Outer! = {
+    middles: [
+      { inners: [{ items: [2, 4] }] },
+      { inners: [{ items: [6, 7] }] }
+    ]
+  }
+
+  if (isSuccess(allGood)) {
+    if (isFailure(oneOddDeep)) {
+      return allGood.value.middles[0].inners[0].items[0]
+    }
+  }
+  return -1
+}

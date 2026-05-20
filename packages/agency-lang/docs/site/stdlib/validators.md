@@ -5,22 +5,31 @@ Validator functions intended for use with `@validate(...)` annotations.
   Each validator takes a single value and returns a `Result` — `success(value)`
   if the value is valid (optionally transformed), or `failure(reason)` if not.
 
-  ## Usage
+  Single-argument validators (`isEmail`, `isUrl`, …) can be used directly:
 
   ```ts
   import { isEmail } from "std::validators"
 
   @validate(isEmail)
   type Email = string
-
-  def main() {
-    const e: Email! = "foo@example.com"   // validated
-  }
   ```
 
-  Validators are only run for types annotated with `!` (the bang operator).
-  See the [schemas guide](../guide/schemas.md) for details on `!`
-  validation and how `@validate(...)` integrates with it.
+  Parameterized validators (`min`, `max`, `minLength`, `maxLength`,
+  `matches`) take their configuration as a first argument. Bind the
+  configuration parameter via Agency [partial
+  application](../guide/partial-application.html) so the result is a
+  single-argument validator the chain can call with each value:
+
+  ```ts
+  import { min, max } from "std::validators"
+
+  @validate(min.partial(n: 0), max.partial(n: 150))
+  type Age = number
+  ```
+
+  Validators only run for types annotated with `!` (the bang operator).
+  See the [type validation guide](../guide/type-validation.md) for full
+  details on `@validate(...)` and how it integrates with `!` validation.
 
 ## Functions
 
@@ -43,7 +52,7 @@ Returns success if value is a syntactically valid email address,
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/validators.agency#L27))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/validators.agency#L36))
 
 ### isUrl
 
@@ -64,7 +73,7 @@ Returns success if value is an http:// or https:// URL,
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/validators.agency#L37))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/validators.agency#L46))
 
 ### isUuid
 
@@ -85,7 +94,7 @@ Returns success if value is a canonical UUID string
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/validators.agency#L47))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/validators.agency#L56))
 
 ### isInt
 
@@ -106,7 +115,7 @@ Returns success if value is an integer (no fractional component),
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/validators.agency#L57))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/validators.agency#L66))
 
 ### isPositive
 
@@ -126,7 +135,7 @@ Returns success if value > 0, failure otherwise.
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/validators.agency#L67))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/validators.agency#L76))
 
 ### isNegative
 
@@ -146,4 +155,122 @@ Returns success if value < 0, failure otherwise.
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/validators.agency#L76))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/validators.agency#L85))
+
+### min
+
+```ts
+min(n: number, value: number): Result
+```
+
+Returns success if `value >= n`, failure otherwise. Bind `n` via PFA
+  before passing to `@validate(...)`, e.g. `@validate(min.partial(n: 0))`.
+
+  @param n - The inclusive minimum allowed value.
+  @param value - The number to check.
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| n | `number` |  |
+| value | `number` |  |
+
+**Returns:** `Result`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/validators.agency#L94))
+
+### max
+
+```ts
+max(n: number, value: number): Result
+```
+
+Returns success if `value <= n`, failure otherwise. Bind `n` via PFA
+  before passing to `@validate(...)`, e.g. `@validate(max.partial(n: 150))`.
+
+  @param n - The inclusive maximum allowed value.
+  @param value - The number to check.
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| n | `number` |  |
+| value | `number` |  |
+
+**Returns:** `Result`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/validators.agency#L105))
+
+### minLength
+
+```ts
+minLength(n: number, value: string): Result
+```
+
+Returns success if `value.length >= n`, failure otherwise. Bind `n`
+  via PFA before passing to `@validate(...)`, e.g.
+  `@validate(minLength.partial(n: 3))`.
+
+  @param n - The inclusive minimum allowed length.
+  @param value - The string to check.
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| n | `number` |  |
+| value | `string` |  |
+
+**Returns:** `Result`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/validators.agency#L116))
+
+### maxLength
+
+```ts
+maxLength(n: number, value: string): Result
+```
+
+Returns success if `value.length <= n`, failure otherwise. Bind `n`
+  via PFA before passing to `@validate(...)`, e.g.
+  `@validate(maxLength.partial(n: 80))`.
+
+  @param n - The inclusive maximum allowed length.
+  @param value - The string to check.
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| n | `number` |  |
+| value | `string` |  |
+
+**Returns:** `Result`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/validators.agency#L128))
+
+### matches
+
+```ts
+matches(pattern: string, value: string): Result
+```
+
+Returns success if `value` matches the regular expression `pattern`,
+  failure otherwise. Bind `pattern` via PFA before passing to
+  `@validate(...)`, e.g. `@validate(matches.partial(pattern: "^[A-Z]"))`.
+
+  @param pattern - The regular expression source to match against.
+  @param value - The string to check.
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| pattern | `string` |  |
+| value | `string` |  |
+
+**Returns:** `Result`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/validators.agency#L140))

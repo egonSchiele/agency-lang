@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "4",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "Validator on a type argument of a generic alias fires when the outer value is validated with !"
+    }
+  ]
+}

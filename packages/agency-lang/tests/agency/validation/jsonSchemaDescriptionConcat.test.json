@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "\"An ISO-8601 timestamp.\\nWhen the event was recorded.\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "@jsonSchema description fields concatenate with newline across alias and use-site"
+    }
+  ]
+}

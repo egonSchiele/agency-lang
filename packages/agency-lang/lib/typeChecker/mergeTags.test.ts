@@ -46,14 +46,14 @@ describe("mergeTagSets", () => {
     expect((merged?.[0].arguments[1] as any).value).toBe("max100");
   });
 
-  it("merges @jsonSchema with use-site keys overriding alias keys", () => {
+  it("merges @jsonSchema with use-site keys overriding alias keys (non-description)", () => {
     const aliasTags = [
       tag("jsonSchema", [
-        obj({ minimum: { type: "number", value: "0" }, description: stringLit("alias desc") }),
+        obj({ minimum: { type: "number", value: "0" }, format: stringLit("alias-fmt") }),
       ]),
     ];
     const useSiteTags = [
-      tag("jsonSchema", [obj({ description: stringLit("prop desc") })]),
+      tag("jsonSchema", [obj({ format: stringLit("use-site-fmt") })]),
     ];
     const merged = mergeTagSets(aliasTags, useSiteTags);
     expect(merged).toHaveLength(1);
@@ -62,7 +62,44 @@ describe("mergeTagSets", () => {
     const entries = mergedObj.entries as any[];
     const byKey = Object.fromEntries(entries.map((e) => [e.key, e.value]));
     expect(byKey.minimum).toMatchObject({ type: "number", value: "0" });
-    expect(byKey.description.segments[0].value).toBe("prop desc");
+    expect(byKey.format.segments[0].value).toBe("use-site-fmt");
+  });
+
+  it("concatenates @jsonSchema literal `description` fields with newlines", () => {
+    const aliasTags = [
+      tag("jsonSchema", [
+        obj({ description: stringLit("alias desc"), format: stringLit("email") }),
+      ]),
+    ];
+    const useSiteTags = [
+      tag("jsonSchema", [obj({ description: stringLit("use-site extra") })]),
+    ];
+    const merged = mergeTagSets(aliasTags, useSiteTags);
+    const entries = (merged?.[0].arguments[0] as any).entries as any[];
+    const byKey = Object.fromEntries(entries.map((e) => [e.key, e.value]));
+    expect(byKey.description.segments[0].value).toBe(
+      "alias desc\nuse-site extra",
+    );
+    // Other keys still merge with use-site-wins semantics.
+    expect(byKey.format.segments[0].value).toBe("email");
+    // The merged `description` keeps the first occurrence's slot, so it
+    // appears before the format entry.
+    expect(entries.map((e) => e.key)).toEqual(["description", "format"]);
+  });
+
+  it("falls back to last-write-wins when a description is not a plain literal", () => {
+    const aliasTags = [
+      tag("jsonSchema", [obj({ description: stringLit("alias desc") })]),
+    ];
+    // A non-literal description (here: an identifier reference) blocks
+    // the concat path; the use-site override wins as before.
+    const useSiteTags = [
+      tag("jsonSchema", [obj({ description: ident("dynamicDesc") })]),
+    ];
+    const merged = mergeTagSets(aliasTags, useSiteTags);
+    const entries = (merged?.[0].arguments[0] as any).entries as any[];
+    const byKey = Object.fromEntries(entries.map((e) => [e.key, e.value]));
+    expect(byKey.description).toMatchObject({ type: "variableName", value: "dynamicDesc" });
   });
 
   it("throws when the same side has multiple @jsonSchema tags", () => {

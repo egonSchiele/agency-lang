@@ -85,7 +85,7 @@ export type Email = string
     }
   });
 
-  it("merges alias-level and use-site @jsonSchema with use-site keys winning", async () => {
+  it("merges alias-level and use-site @jsonSchema: non-description keys win at use-site, descriptions concatenate", async () => {
     const src = `
 @jsonSchema({ description: "Alias-level description.", format: "email" })
 type Email = string
@@ -96,8 +96,13 @@ type User = {
 }
 `;
     const ts = generateWithBuilder(src);
-    // The use-site description should win for the property's schema.
-    expect(ts).toMatch(/description:\s*"Use-site description\."/);
+    // Literal description values from alias and use-site concatenate with a
+    // newline so a reusable alias's description is preserved when the
+    // use-site adds its own. The escaped sequence in the emitted source is
+    // `\n` (two chars).
+    expect(ts).toMatch(
+      /description:\s*"Alias-level description\.\\nUse-site description\."/,
+    );
     // The alias-level format must still propagate since the use-site did not
     // override it.
     expect(ts).toMatch(/format:\s*"email"/);

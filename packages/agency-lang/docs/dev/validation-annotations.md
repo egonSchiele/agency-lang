@@ -95,7 +95,7 @@ tags, the alias's tags and the use-site tags need to be combined:
 | Tag name      | Merge behavior                                                            |
 | ------------- | -------------------------------------------------------------------------- |
 | `validate`    | Concatenate argument lists. Validators run alias-first, use-site-last.     |
-| `jsonSchema`  | Merge the two object literals; use-site keys win on conflict. Spreads are preserved verbatim. |
+| `jsonSchema`  | Merge the two object literals; use-site keys win on conflict, **except** `description` whose plain-string values from both sides are concatenated with `\n`. Spreads are preserved verbatim. |
 | _anything else_ | Pass through per side; not merged across alias/use-site.                  |
 
 A malformed `@jsonSchema(...)` (anything other than a single object

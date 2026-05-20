@@ -1,0 +1,20 @@
+// `@jsonSchema` merges treat `description` specially: when both the
+// alias and the use-site (or two layers of aliases) supply a plain-string
+// description, the two values are concatenated with a newline rather
+// than the later one overwriting the earlier one. This lets a reusable
+// type author attach a base description that consumers can extend
+// without losing the original context.
+
+@jsonSchema({ description: "An ISO-8601 timestamp." })
+type Timestamp = string
+
+type Event = {
+  @jsonSchema({ description: "When the event was recorded." })
+  occurredAt: Timestamp
+}
+
+node main() {
+  const s = schema(Event)
+  const js = s.toJSONSchema()
+  return js.properties.occurredAt.description
+}

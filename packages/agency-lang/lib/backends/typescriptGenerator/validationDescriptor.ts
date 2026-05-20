@@ -137,8 +137,9 @@ function isNullableType(t: VariableType): boolean {
 function schemaNode(
   t: VariableType,
   typeAliases: Record<string, VariableType>,
+  typeAliasesFull?: Record<string, TypeAliasEntry>,
 ): TsNode {
-  return ts.raw(mapTypeToValidationSchema(t, typeAliases));
+  return ts.raw(mapTypeToValidationSchema(t, typeAliases, typeAliasesFull));
 }
 
 function descriptor(
@@ -183,12 +184,12 @@ function descriptor(
     // any use-site validators.
     return objEntries([
       ["kind", ts.str("leaf")],
-      ["schema", schemaNode(variableType, typeAliases)],
+      ["schema", schemaNode(variableType, typeAliases, typeAliasesFull)],
       ["validators", ts.arr(useSiteValidators)],
     ]);
   }
 
-  const schema = schemaNode(variableType, typeAliases);
+  const schema = schemaNode(variableType, typeAliases, typeAliasesFull);
   const validatorsArr = ts.arr(validatorNodes(variableType.tags));
 
   if (variableType.type === "arrayType") {
@@ -255,7 +256,7 @@ function descriptor(
 
   if (variableType.type === "unionType") {
     const branches = variableType.types.map((m) => {
-      const branchSchema = schemaNode(m, typeAliases);
+      const branchSchema = schemaNode(m, typeAliases, typeAliasesFull);
       const branchDesc = descriptor(m, typeAliases, typeAliasesFull, seen);
       // `(v) => (<branchSchema>).safeParse(v).success`
       const test = ts.arrowFn(

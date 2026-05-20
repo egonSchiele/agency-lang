@@ -1,5 +1,5 @@
 import { color } from "@/utils/termcolors.js";
-import { Tag, VariableType } from "../../types.js";
+import { Tag, TypeAliasEntry, VariableType } from "../../types.js";
 import { escape } from "../../utils.js";
 import { tagArgToTs } from "./tagArgToTs.js";
 import { mergeTagSets } from "@/typeChecker/mergeTags.js";
@@ -38,16 +38,29 @@ export function appendMeta(schemaExpr: string, tags: Tag[] | undefined): string 
  * how Result types are converted:
  * - For LLM structured output: returns just the success type schema
  * - For validation: returns a schema that validates the full Result shape
+ *
+ * `typeAliasesFull` is optional; when present it lets the object-property
+ * code path look up alias-level tags for a `typeAliasVariable` reference
+ * and merge them with the use-site property tags. This is what makes
+ * patterns like:
+ *
+ *   @jsonSchema({description: "alias desc"})
+ *   type Email = string
+ *
+ *   type User = { @jsonSchema({description: "primary"}) contact: Email }
+ *
+ * produce a single merged `.meta(...)` at the use site (with description
+ * concatenation per `mergeTagSets`) instead of letting Zod's chained
+ * `.meta()` overwrite the alias-level metadata.
  */
 function mapTypeToSchema(
   variableType: VariableType,
   typeAliases: Record<string, VariableType>,
   resultHandler: (vt: VariableType, ta: Record<string, VariableType>) => string,
+  typeAliasesFull?: Record<string, TypeAliasEntry>,
 ): string {
-  const recurse = (vt: VariableType) =>
-    appendMeta(mapTypeToSchemaInner(vt, typeAliases, resultHandler), vt.tags);
   return appendMeta(
-    mapTypeToSchemaInner(variableType, typeAliases, resultHandler),
+    mapTypeToSchemaInner(variableType, typeAliases, resultHandler, typeAliasesFull),
     variableType.tags,
   );
 }
@@ -56,9 +69,13 @@ function mapTypeToSchemaInner(
   variableType: VariableType,
   typeAliases: Record<string, VariableType>,
   resultHandler: (vt: VariableType, ta: Record<string, VariableType>) => string,
+  typeAliasesFull?: Record<string, TypeAliasEntry>,
 ): string {
   const recurse = (vt: VariableType) =>
-    appendMeta(mapTypeToSchemaInner(vt, typeAliases, resultHandler), vt.tags);
+    appendMeta(
+      mapTypeToSchemaInner(vt, typeAliases, resultHandler, typeAliasesFull),
+      vt.tags,
+    );
 
   if (!variableType) {
     throw new Error(
@@ -102,14 +119,23 @@ function mapTypeToSchemaInner(
   } else if (variableType.type === "objectType") {
     const props = variableType.properties
       .map((prop) => {
-        // Merge alias-level tags (already attached to prop.value during
-        // resolveType) with property-level tags. @jsonSchema keys from
-        // the property override alias keys; @validate validators concat.
-        const mergedTags = mergeTagSets(prop.value.tags, prop.tags);
+        // Merge alias-level tags (either already attached to prop.value
+        // during resolveType, or — for an unresolved `typeAliasVariable`
+        // reference — looked up via `typeAliasesFull`) with the
+        // property-level tags. @jsonSchema keys from the property
+        // override alias keys (with `description` concatenating per
+        // `mergeTagSets`); @validate validators concat.
+        const aliasEntryTags =
+          typeAliasesFull && prop.value.type === "typeAliasVariable"
+            ? typeAliasesFull[prop.value.aliasName]?.tags
+            : undefined;
+        const aliasSideTags = mergeTagSets(aliasEntryTags, prop.value.tags);
+        const mergedTags = mergeTagSets(aliasSideTags, prop.tags);
         const inner = mapTypeToSchemaInner(
           prop.value,
           typeAliases,
           resultHandler,
+          typeAliasesFull,
         );
         // .describe(...) must come BEFORE .meta(...) — Zod requires
         // .meta() to be the final call in the chain or the metadata is
@@ -151,9 +177,13 @@ function mapTypeToSchemaInner(
 export function mapTypeToZodSchema(
   variableType: VariableType,
   typeAliases: Record<string, VariableType>,
+  typeAliasesFull?: Record<string, TypeAliasEntry>,
 ): string {
-  return mapTypeToSchema(variableType, typeAliases, (vt, ta) =>
-    mapTypeToZodSchema((vt as any).successType, ta),
+  return mapTypeToSchema(
+    variableType,
+    typeAliases,
+    (vt, ta) => mapTypeToZodSchema((vt as any).successType, ta, typeAliasesFull),
+    typeAliasesFull,
   );
 }
 
@@ -165,9 +195,19 @@ export function mapTypeToZodSchema(
 export function mapTypeToValidationSchema(
   variableType: VariableType,
   typeAliases: Record<string, VariableType>,
+  typeAliasesFull?: Record<string, TypeAliasEntry>,
 ): string {
-  return mapTypeToSchema(variableType, typeAliases, (vt, ta) => {
-    const successSchema = mapTypeToValidationSchema((vt as any).successType, ta);
-    return `z.union([z.object({ __type: z.literal("resultType"), success: z.literal(true), value: ${successSchema} }), z.object({ __type: z.literal("resultType"), success: z.literal(false), error: z.any() })])`;
-  });
+  return mapTypeToSchema(
+    variableType,
+    typeAliases,
+    (vt, ta) => {
+      const successSchema = mapTypeToValidationSchema(
+        (vt as any).successType,
+        ta,
+        typeAliasesFull,
+      );
+      return `z.union([z.object({ __type: z.literal("resultType"), success: z.literal(true), value: ${successSchema} }), z.object({ __type: z.literal("resultType"), success: z.literal(false), error: z.any() })])`;
+    },
+    typeAliasesFull,
+  );
 }

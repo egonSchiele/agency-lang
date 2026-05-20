@@ -194,6 +194,21 @@ type User = {
 
 Multiple `@jsonSchema(...)` on the same target (alias or property) is an error. Use `...` spread to compose.
 
+`description` is treated specially: if both the alias and the use-site supply a plain-string `description`, the two are concatenated with a newline separator rather than overridden. This lets a reusable alias attach a base description that consumers can extend without losing the original:
+
+```ts
+@jsonSchema({ description: "An ISO-8601 timestamp." })
+type Timestamp = string
+
+type Event = {
+  // Final description: "An ISO-8601 timestamp.\nWhen the event was recorded."
+  @jsonSchema({ description: "When the event was recorded." })
+  occurredAt: Timestamp
+}
+```
+
+If either description is not a plain literal (e.g. comes via a variable reference or `...` spread), the merge falls back to last-write-wins because we cannot inspect a non-literal value at type-check time.
+
 ### Union types
 
 For a union `Email | Url`, the Zod schema picks the matching branch by structure first; only the validators on the matched branch then run:

@@ -239,11 +239,25 @@ describe("appendMeta", () => {
     expect(appendMeta("z.string()", tags)).toMatch(/format:\s*"email"/);
   });
 
-  it("throws when more than one @jsonSchema is attached to the same target", () => {
+  it("merges stacked @jsonSchema tags into a single .meta(...) call", () => {
     const tags = [
       tag("jsonSchema", [obj({ format: stringLit("email") })]),
-      tag("jsonSchema", [obj({ description: stringLit("dup") })]),
+      tag("jsonSchema", [obj({ description: stringLit("user email") })]),
     ];
-    expect(() => appendMeta("z.string()", tags)).toThrow(/Multiple @jsonSchema/);
+    const out = appendMeta("z.string()", tags);
+    expect(out).toMatch(/format:\s*"email"/);
+    expect(out).toMatch(/description:\s*"user email"/);
+  });
+
+  it("merges multiple object-literal arguments inside a single @jsonSchema tag", () => {
+    const tags = [
+      tag("jsonSchema", [
+        obj({ format: stringLit("email") }),
+        obj({ description: stringLit("user email") }),
+      ]),
+    ];
+    const out = appendMeta("z.string()", tags);
+    expect(out).toMatch(/format:\s*"email"/);
+    expect(out).toMatch(/description:\s*"user email"/);
   });
 });

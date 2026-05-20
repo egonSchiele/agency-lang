@@ -98,13 +98,24 @@ tags, the alias's tags and the use-site tags need to be combined:
 | `jsonSchema`  | Merge the two object literals; use-site keys win on conflict, **except** `description` whose plain-string values from both sides are concatenated with `\n`. Spreads are preserved verbatim. |
 | _anything else_ | Pass through per side; not merged across alias/use-site.                  |
 
-A malformed `@jsonSchema(...)` (anything other than a single object
-literal argument) throws from
+`@jsonSchema(...)` accepts one or more object-literal arguments per
+tag, and may be stacked on the same target. Both forms flatten through
+the same merge pass in `mergeJsonSchemaArgs`, which collects every
+entry / splat from every object-literal argument before running the
+description-concat and dedupe passes.
+
+A malformed `@jsonSchema(...)` (no arguments at all, or an argument
+that is not an object literal) throws from
 [`mergeTags.ts`](../../lib/typeChecker/mergeTags.ts) with a
 location-aware error. The parser doesn't reject this earlier because
 the tag-argument grammar is intentionally permissive — see
 [`jsonSchemaArgValidator.ts`](../../lib/typeChecker/jsonSchemaArgValidator.ts)
 for the dedicated check.
+
+`appendMeta` in `typeToZodSchema.ts` calls `mergeJsonSchemaArgs`
+itself whenever it sees more than one `jsonSchema` tag on a single
+type, so the stack-or-multi-arg shape is uniformly merged before being
+emitted as a single `.meta({...})` call.
 
 ---
 

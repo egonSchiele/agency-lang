@@ -1,0 +1,12 @@
+// `@jsonSchema(...)` accepts multiple object-literal arguments in one
+// tag — equivalent to stacking individual tags. Useful for sticking
+// reusable fragments side-by-side without a `...` spread.
+
+@jsonSchema({ format: "email" }, { description: "A user email address." }, { minLength: 3 })
+type Email = string
+
+node main() {
+  const s = schema(Email)
+  const js = s.toJSONSchema()
+  return js.format + "|" + js.description + "|" + js.minLength
+}

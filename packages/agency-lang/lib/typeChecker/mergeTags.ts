@@ -6,10 +6,16 @@ import type { Tag, Expression, AgencyObject, AgencyObjectKV, SplatExpression } f
  *
  * - `@validate(...)`: concatenated across both inputs (alias's validators
  *   first, then use-site's), producing a single combined `@validate` tag.
- * - `@jsonSchema(...)`: object-literal arguments merged left-to-right with
- *   use-site keys overriding alias keys, producing a single combined
- *   `@jsonSchema` tag. Spreads are preserved verbatim (their evaluation
- *   happens at module load time).
+ *   Users may also stack multiple `@validate(...)` tags or pass multiple
+ *   arguments to a single tag — all forms collapse to one chain.
+ * - `@jsonSchema(...)`: object-literal arguments merged left-to-right
+ *   with use-site keys overriding alias keys (with `description`
+ *   concatenating, see `collapseLiteralDescriptions`), producing a
+ *   single combined `@jsonSchema` tag. Users may stack multiple
+ *   `@jsonSchema(...)` tags on the same side OR pass multiple object
+ *   literals to one tag — both shapes flatten into the same merge.
+ *   Spreads are preserved verbatim (their evaluation happens at
+ *   module-load time).
  *
  * Tag names other than `validate` / `jsonSchema` are deliberately not
  * merged here — they have no alias-vs-use-site semantics defined and may
@@ -46,8 +52,6 @@ export function mergeTagSets(
 
   const aliasJson = alias.filter((t) => t.name === "jsonSchema");
   const useSiteJson = useSite.filter((t) => t.name === "jsonSchema");
-  enforceSingleJsonSchema(aliasJson, "alias");
-  enforceSingleJsonSchema(useSiteJson, "use site");
   if (aliasJson.length + useSiteJson.length > 0) {
     const merged = mergeJsonSchemaArgs([...aliasJson, ...useSiteJson]);
     combined.push({
@@ -70,44 +74,37 @@ export function mergeTagSets(
   return combined;
 }
 
-/**
- * Reject having more than one `@jsonSchema(...)` annotation on the same
- * side (alias-level or use-site). Multiple annotations on a single
- * target are ambiguous — callers should combine them into a single
- * object literal instead. Throws a location-aware error listing every
- * offending occurrence.
- */
-function enforceSingleJsonSchema(tags: Tag[], side: string): void {
-  if (tags.length <= 1) return;
-  const locs = tags
-    .map((t) =>
-      t.loc ? `line ${t.loc.line}, col ${t.loc.col}` : "<unknown>",
-    )
-    .join(" and ");
-  throw new Error(
-    `Multiple @jsonSchema(...) annotations on the same target (${side}) are not allowed (found at ${locs}). Combine them into a single object literal.`,
-  );
-}
-
-function mergeJsonSchemaArgs(tags: Tag[]): Expression[] {
-  // Collect every entry / splat from every tag's first object-literal
-  // argument, preserving the order: alias entries first, use-site entries
-  // last. For literal keys present in both, the later (use-site) wins.
-  // Splats are kept verbatim and stay in source order (their runtime
-  // evaluation is what produces the final merged object).
+export function mergeJsonSchemaArgs(tags: Tag[]): Expression[] {
+  // Collect every entry / splat from every object-literal argument of
+  // every tag, preserving source order. A tag may have several
+  // arguments (`@jsonSchema(obj1, obj2)`); multiple tags may stack on
+  // the same target (`@jsonSchema(obj1)\n@jsonSchema(obj2)`); both
+  // shapes flatten into the same entry stream so the dedupe and
+  // description-concat passes operate uniformly. For literal keys
+  // present in more than one object, the later one wins. Splats are
+  // kept verbatim and stay in source order (their runtime evaluation
+  // is what produces the final merged object).
   type Entry = AgencyObjectKV | SplatExpression;
   const entries: Entry[] = [];
   for (const t of tags) {
-    const arg = t.arguments[0];
-    if (!arg || arg.type !== "agencyObject") {
-      const loc = (arg ?? t).loc;
+    if (!t.arguments || t.arguments.length === 0) {
+      const loc = t.loc;
       const where = loc ? ` (line ${loc.line}, col ${loc.col})` : "";
       throw new Error(
-        `@jsonSchema(...) requires a single object-literal argument${where}; got ${arg ? arg.type : "no argument"}.`,
+        `@jsonSchema(...) requires at least one object-literal argument${where}.`,
       );
     }
-    for (const e of (arg as AgencyObject).entries) {
-      entries.push(e);
+    for (const arg of t.arguments) {
+      if (arg.type !== "agencyObject") {
+        const loc = arg.loc ?? t.loc;
+        const where = loc ? ` (line ${loc.line}, col ${loc.col})` : "";
+        throw new Error(
+          `@jsonSchema(...) arguments must be object literals${where}; got ${arg.type}.`,
+        );
+      }
+      for (const e of (arg as AgencyObject).entries) {
+        entries.push(e);
+      }
     }
   }
 

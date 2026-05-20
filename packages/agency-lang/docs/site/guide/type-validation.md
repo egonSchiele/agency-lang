@@ -192,7 +192,25 @@ type User = {
 }
 ```
 
-Multiple `@jsonSchema(...)` on the same target (alias or property) is an error. Use `...` spread to compose.
+You can stack multiple `@jsonSchema(...)` tags on the same target, or pass multiple object-literal arguments to a single tag — both shapes merge into one combined object, exactly like `@validate(...)` chains multiple validators:
+
+```ts
+// Stacked tags
+@jsonSchema({ format: "email" })
+@jsonSchema({ description: "A user email address." })
+@jsonSchema({ minLength: 3 })
+type Email = string
+
+// Equivalent: multiple args in one tag
+@jsonSchema(
+  { format: "email" },
+  { description: "A user email address." },
+  { minLength: 3 },
+)
+type Email2 = string
+```
+
+The merge rules above (later keys override earlier ones, `description` concatenates) apply uniformly across all forms.
 
 `description` is treated specially: if both the alias and the use-site supply a plain-string `description`, the two are concatenated with a newline separator rather than overridden. This lets a reusable alias attach a base description that consumers can extend without losing the original:
 

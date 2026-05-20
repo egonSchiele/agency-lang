@@ -102,19 +102,57 @@ describe("mergeTagSets", () => {
     expect(byKey.description).toMatchObject({ type: "variableName", value: "dynamicDesc" });
   });
 
-  it("throws when the same side has multiple @jsonSchema tags", () => {
+  it("merges stacked @jsonSchema tags on the same side", () => {
     const aliasTags = [
       tag("jsonSchema", [obj({ format: stringLit("email") })]),
-      tag("jsonSchema", [obj({ description: stringLit("dup") })]),
+      tag("jsonSchema", [obj({ description: stringLit("user email") })]),
     ];
-    expect(() => mergeTagSets(aliasTags, undefined)).toThrow(
-      /Multiple @jsonSchema/,
-    );
+    const merged = mergeTagSets(aliasTags, undefined);
+    expect(merged).toHaveLength(1);
+    const entries = (merged?.[0].arguments[0] as any).entries as any[];
+    const byKey = Object.fromEntries(entries.map((e) => [e.key, e.value]));
+    expect(byKey.format.segments[0].value).toBe("email");
+    expect(byKey.description.segments[0].value).toBe("user email");
+  });
+
+  it("merges multiple object-literal arguments inside one @jsonSchema tag", () => {
+    const aliasTags = [
+      tag("jsonSchema", [
+        obj({ format: stringLit("email") }),
+        obj({ description: stringLit("user email") }),
+      ]),
+    ];
+    const merged = mergeTagSets(aliasTags, undefined);
+    expect(merged).toHaveLength(1);
+    const entries = (merged?.[0].arguments[0] as any).entries as any[];
+    const byKey = Object.fromEntries(entries.map((e) => [e.key, e.value]));
+    expect(byKey.format.segments[0].value).toBe("email");
+    expect(byKey.description.segments[0].value).toBe("user email");
+  });
+
+  it("concatenates descriptions across stacked @jsonSchema tags too", () => {
+    const aliasTags = [
+      tag("jsonSchema", [obj({ description: stringLit("first") })]),
+      tag("jsonSchema", [obj({ description: stringLit("second") })]),
+    ];
+    const merged = mergeTagSets(aliasTags, undefined);
+    const entries = (merged?.[0].arguments[0] as any).entries as any[];
+    const byKey = Object.fromEntries(entries.map((e) => [e.key, e.value]));
+    expect(byKey.description.segments[0].value).toBe("first\nsecond");
   });
 
   it("throws on a malformed @jsonSchema whose argument is not an object literal", () => {
     const aliasTags = [tag("jsonSchema", [stringLit("not an object")])];
-    expect(() => mergeTagSets(aliasTags, undefined)).toThrow(/object-literal argument/);
+    expect(() => mergeTagSets(aliasTags, undefined)).toThrow(
+      /must be object literals/,
+    );
+  });
+
+  it("throws on an @jsonSchema with no arguments at all", () => {
+    const aliasTags = [tag("jsonSchema", [])];
+    expect(() => mergeTagSets(aliasTags, undefined)).toThrow(
+      /at least one object-literal argument/,
+    );
   });
 
   it("preserves other tag names verbatim", () => {

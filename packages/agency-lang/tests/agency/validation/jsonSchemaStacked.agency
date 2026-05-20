@@ -1,0 +1,14 @@
+// `@jsonSchema(...)` is now allowed to stack on the same target, just
+// like `@validate(...)`. All stacked tags merge into a single object
+// at codegen time so it works through `schema(T).toJSONSchema()`.
+
+@jsonSchema({ format: "email" })
+@jsonSchema({ description: "A user email address." })
+@jsonSchema({ minLength: 3 })
+type Email = string
+
+node main() {
+  const s = schema(Email)
+  const js = s.toJSONSchema()
+  return js.format + "|" + js.description + "|" + js.minLength
+}

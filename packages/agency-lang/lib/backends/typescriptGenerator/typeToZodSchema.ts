@@ -2,7 +2,7 @@ import { color } from "@/utils/termcolors.js";
 import { Tag, TypeAliasEntry, VariableType } from "../../types.js";
 import { escape } from "../../utils.js";
 import { tagArgToTs } from "./tagArgToTs.js";
-import { mergeTagSets } from "@/typeChecker/mergeTags.js";
+import { mergeJsonSchemaArgs, mergeTagSets } from "@/typeChecker/mergeTags.js";
 
 export const DEFAULT_SCHEMA = "z.string()";
 
@@ -18,19 +18,14 @@ export function appendMeta(schemaExpr: string, tags: Tag[] | undefined): string 
   if (!tags || tags.length === 0) return schemaExpr;
   const jsonSchemas = tags.filter((t) => t.name === "jsonSchema");
   if (jsonSchemas.length === 0) return schemaExpr;
-  if (jsonSchemas.length > 1) {
-    const locs = jsonSchemas
-      .map((t) =>
-        t.loc ? `line ${t.loc.line}, col ${t.loc.col}` : "<unknown>",
-      )
-      .join(" and ");
-    throw new Error(
-      `Multiple @jsonSchema(...) annotations on the same target are not allowed (found at ${locs}). Combine them into a single object literal.`,
-    );
-  }
-  const arg = jsonSchemas[0].arguments[0];
-  if (!arg) return schemaExpr;
-  return `${schemaExpr}.meta(${tagArgToTs(arg)})`;
+  // Multiple `@jsonSchema(...)` tags on the same target — or a single
+  // tag with several object-literal arguments — flatten through the
+  // same merge as alias-vs-use-site combining. `mergeJsonSchemaArgs`
+  // returns a single object expression we render as the `.meta(...)`
+  // argument.
+  const mergedArgs = mergeJsonSchemaArgs(jsonSchemas);
+  if (mergedArgs.length === 0) return schemaExpr;
+  return `${schemaExpr}.meta(${tagArgToTs(mergedArgs[0])})`;
 }
 
 /**

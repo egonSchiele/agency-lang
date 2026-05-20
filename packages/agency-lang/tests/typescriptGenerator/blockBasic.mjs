@@ -275,7 +275,7 @@ const twice = __AgencyFunction.create({
   }],
   toolDefinition: {
     name: "twice",
-    description: `No description provided.`,
+    description: "No description provided.",
     schema: z.object({})
   },
   safe: false,

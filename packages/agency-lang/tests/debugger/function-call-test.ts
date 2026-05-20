@@ -283,7 +283,7 @@ const add = __AgencyFunction.create({
   }],
   toolDefinition: {
     name: "add",
-    description: `No description provided.`,
+    description: "No description provided.",
     schema: z.object({"a": z.string(), "b": z.number(), })
   },
   safe: false,

@@ -374,7 +374,7 @@ const toDigit = __AgencyFunction.create({
   }],
   toolDefinition: {
     name: "toDigit",
-    description: `No description provided.`,
+    description: "No description provided.",
     schema: z.object({"c": z.string(), })
   },
   safe: false,

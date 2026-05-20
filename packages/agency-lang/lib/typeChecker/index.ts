@@ -241,6 +241,36 @@ export class TypeChecker {
       checkValidatedParamReturn(name, def);
     }
 
+    // 1f. Doc strings must not interpolate function/node parameters.
+    // The description is built when the tool object is constructed at module
+    // load time — long before the function is ever called — so parameter
+    // values are simply not bound yet. Catch the obvious case here:
+    // `${param}` as a top-level interpolation expression.
+    const checkDocStringParams = (
+      def: FunctionDefinition | GraphNodeDefinition,
+    ) => {
+      if (!def.docString) return;
+      const paramNames = def.parameters.map((p) => p.name);
+      for (const seg of def.docString.segments) {
+        if (
+          seg.type === "interpolation" &&
+          seg.expression.type === "variableName" &&
+          paramNames.includes(seg.expression.value)
+        ) {
+          this.errors.push({
+            message: `Cannot interpolate parameter '${seg.expression.value}' in doc string — parameter values are not known when the tool description is sent to the LLM. Use a global variable instead.`,
+            loc: seg.loc ?? def.docString.loc,
+          });
+        }
+      }
+    };
+    for (const def of Object.values(this.functionDefs)) {
+      checkDocStringParams(def);
+    }
+    for (const def of Object.values(this.nodeDefs)) {
+      checkDocStringParams(def);
+    }
+
     // 2. Infer return types
     inferReturnTypes(ctx);
 

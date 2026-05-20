@@ -29,3 +29,11 @@ def processData() {
   """Single line docstring"""
 }
 
+const toolVersion = "2.0"
+
+def versionedTool() {
+  """
+  This tool is version ${toolVersion}.
+  """
+}
+

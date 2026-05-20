@@ -272,7 +272,7 @@ const log = __AgencyFunction.create({
   }],
   toolDefinition: {
     name: "log",
-    description: `No description provided.`,
+    description: "No description provided.",
     schema: z.object({"prefix": z.string(), "messages": z.array(z.string()), })
   },
   safe: false,

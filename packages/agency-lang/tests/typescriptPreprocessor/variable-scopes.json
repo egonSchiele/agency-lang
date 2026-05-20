@@ -73,6 +73,12 @@
                     "end": 101
                   },
                   "scope": "global"
+                },
+                "loc": {
+                  "line": 4,
+                  "col": 18,
+                  "start": 90,
+                  "end": 102
                 }
               },
               {
@@ -91,6 +97,12 @@
                     "end": 113
                   },
                   "scope": "local"
+                },
+                "loc": {
+                  "line": 4,
+                  "col": 31,
+                  "start": 103,
+                  "end": 114
                 }
               },
               {
@@ -109,6 +121,12 @@
                     "end": 122
                   },
                   "scope": "args"
+                },
+                "loc": {
+                  "line": 4,
+                  "col": 43,
+                  "start": 115,
+                  "end": 123
                 }
               }
             ]

@@ -259,7 +259,7 @@ const checkAge = __AgencyFunction.create({
   }],
   toolDefinition: {
     name: "checkAge",
-    description: `No description provided.`,
+    description: "No description provided.",
     schema: z.object({"age": z.number(), })
   },
   safe: false,

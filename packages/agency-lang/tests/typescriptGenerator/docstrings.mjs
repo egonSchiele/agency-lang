@@ -72,6 +72,8 @@ const __globalCtx = new RuntimeContext({
   }
 });
 const graph = __globalCtx.graph;
+const __ctx = __globalCtx;
+__initializeGlobals(__globalCtx);
 
 // Path-dependent builtin wrappers
 export function readSkill({filepath}: {filepath: string}): string {
@@ -141,6 +143,7 @@ function registerTools(tools: any[]) {
 
 async function __initializeGlobals(__ctx) {
   __ctx.globals.markInitialized("docstrings.agency")
+  __ctx.globals.set("docstrings.agency", "toolVersion", `2.0`)
 }
 __toolRegistry["readSkill"] = __AgencyFunction.create({
   name: "readSkill",
@@ -552,5 +555,89 @@ const processData = __AgencyFunction.create({
   safe: false,
   exported: false
 }, __toolRegistry);
+async function __versionedTool_impl(__state: InternalFunctionState | undefined = undefined) {
+  const __setupData = setupFunction({
+    state: __state
+  });
+  // __state will be undefined if this function is being called as a tool by an llm
+  const __stateStack = __setupData.stateStack;
+const __stack = __setupData.stack;
+const __step = __setupData.step;
+const __self = __setupData.self;
+const __threads = __setupData.threads;
+const __ctx = __state?.ctx || __globalCtx;
+const statelogClient = __ctx.statelogClient;
+const __graph = __ctx.graph;
+let __forked;
+let __functionCompleted = false;
+  if (!__ctx.globals.isInitialized("docstrings.agency")) {
+    await __initializeGlobals(__ctx)
+  }
+  let __funcStartTime: number = performance.now();
+  await callHook({
+    callbacks: __ctx.callbacks,
+    name: "onFunctionStart",
+    data: {
+      functionName: "versionedTool",
+      args: {},
+      isBuiltin: false,
+      moduleId: "docstrings.agency"
+    }
+  })
+  __self.__retryable = __self.__retryable ?? true;
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "docstrings.agency", scopeName: "versionedTool" });
+  let __resultCheckpointId = -1;
+if (__ctx.stateStack.currentNodeId()) {
+  __resultCheckpointId = __ctx.checkpoints.createPinned(__stateStack, __ctx, { moduleId: "docstrings.agency", scopeName: "versionedTool", stepPath: "", label: "result-entry" });
+}
+if (__ctx._pendingArgOverrides) {
+  const __overrides = __ctx._pendingArgOverrides;
+  __ctx._pendingArgOverrides = undefined;
+
+}
+
+  try {
+    if (runner.halted) { if (isFailure(runner.haltResult)) { runner.haltResult.retryable = runner.haltResult.retryable && __self.__retryable; } return runner.haltResult; }
+  } catch (__error) {
+    if (__error instanceof RestoreSignal) {
+  throw __error;
+}
+return failure(
+  __error instanceof Error ? __error.message : String(__error),
+  {
+    checkpoint: __ctx.getResultCheckpoint(),
+    retryable: __self.__retryable,
+    functionName: "versionedTool",
+    args: __stack.args,
+  }
+);
+
+  } finally {
+    __stateStack.pop()
+    if (__functionCompleted) {
+      await callHook({
+        callbacks: __ctx.callbacks,
+        name: "onFunctionEnd",
+        data: {
+          functionName: "versionedTool",
+          timeTaken: performance.now() - __funcStartTime
+        }
+      })
+    }
+  }
+}
+const versionedTool = __AgencyFunction.create({
+  name: "versionedTool",
+  module: "docstrings.agency",
+  fn: __versionedTool_impl,
+  params: [],
+  toolDefinition: {
+    name: "versionedTool",
+    description: `This tool is version ${__ctx.globals.get("docstrings.agency", "toolVersion")}.`,
+    schema: z.object({})
+  },
+  safe: false,
+  exported: false
+}, __toolRegistry);
 export default graph
-export const __sourceMap = {"docstrings.agency:add":{},"docstrings.agency:greet":{},"docstrings.agency:calculateArea":{},"docstrings.agency:processData":{}};
+export const __sourceMap = {"docstrings.agency:add":{},"docstrings.agency:greet":{},"docstrings.agency:calculateArea":{},"docstrings.agency:processData":{},"docstrings.agency:versionedTool":{}};

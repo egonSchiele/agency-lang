@@ -1,7 +1,7 @@
+static const prompt = "foo"
+
 def greet(name: string): string {
-  const contents = read(
-    dir: "/Users/adityabhargava/agency-lang/packages/agency-lang",
-    filename: "README.md",
-  )
-  print(contents)
+  """
+  Returns a greeting message for the given name ${prompt}.
+  """
 }

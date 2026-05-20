@@ -286,7 +286,7 @@ const mapItems = __AgencyFunction.create({
   }],
   toolDefinition: {
     name: "mapItems",
-    description: `No description provided.`,
+    description: "No description provided.",
     schema: z.object({"items": z.array(z.any()), })
   },
   safe: false,

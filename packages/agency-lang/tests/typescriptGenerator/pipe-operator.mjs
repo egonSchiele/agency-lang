@@ -245,7 +245,7 @@ const double = __AgencyFunction.create({
   }],
   toolDefinition: {
     name: "double",
-    description: `No description provided.`,
+    description: "No description provided.",
     schema: z.object({"x": z.number(), })
   },
   safe: false,
@@ -357,7 +357,7 @@ const multiply = __AgencyFunction.create({
   }],
   toolDefinition: {
     name: "multiply",
-    description: `No description provided.`,
+    description: "No description provided.",
     schema: z.object({"a": z.number(), "b": z.number(), })
   },
   safe: false,
@@ -483,7 +483,7 @@ const safeDivide = __AgencyFunction.create({
   }],
   toolDefinition: {
     name: "safeDivide",
-    description: `No description provided.`,
+    description: "No description provided.",
     schema: z.object({"a": z.number(), "b": z.number(), })
   },
   safe: false,

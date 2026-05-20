@@ -231,7 +231,7 @@ const test = __AgencyFunction.create({
   params: [],
   toolDefinition: {
     name: "test",
-    description: `No description provided.`,
+    description: "No description provided.",
     schema: z.object({})
   },
   safe: false,
@@ -341,7 +341,7 @@ const add = __AgencyFunction.create({
   }],
   toolDefinition: {
     name: "add",
-    description: `No description provided.`,
+    description: "No description provided.",
     schema: z.object({"a": z.string(), "b": z.string(), })
   },
   safe: false,

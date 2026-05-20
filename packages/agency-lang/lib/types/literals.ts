@@ -79,7 +79,7 @@ export type TextSegment = {
   value: string;
 };
 
-export type InterpolationSegment = {
+export type InterpolationSegment = BaseNode & {
   type: "interpolation";
   expression: Expression;
 };

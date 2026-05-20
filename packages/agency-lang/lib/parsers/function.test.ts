@@ -16,44 +16,65 @@ describe("docStringParser", () => {
       input: '"""This is a docstring"""',
       expected: {
         success: true,
-        result: { type: "docString", value: "This is a docstring" },
+        result: {
+          type: "multiLineString",
+          segments: [{ type: "text", value: "This is a docstring" }],
+        },
       },
     },
     {
       input: '"""Simple description"""',
       expected: {
         success: true,
-        result: { type: "docString", value: "Simple description" },
+        result: {
+          type: "multiLineString",
+          segments: [{ type: "text", value: "Simple description" }],
+        },
       },
     },
 
-    // Docstrings with whitespace
+    // Docstrings with whitespace — parser preserves source verbatim;
+    // trimming is applied downstream by `trimDocStringSegments` only
+    // where it's needed (LLM emission, human display).
     {
       input: '"""  Leading and trailing spaces  """',
       expected: {
         success: true,
-        result: { type: "docString", value: "Leading and trailing spaces" },
+        result: {
+          type: "multiLineString",
+          segments: [{ type: "text", value: "  Leading and trailing spaces  " }],
+        },
       },
     },
     {
       input: '"""\nMultiline\ndocstring\n"""',
       expected: {
         success: true,
-        result: { type: "docString", value: "Multiline\ndocstring" },
+        result: {
+          type: "multiLineString",
+          segments: [{ type: "text", value: "\nMultiline\ndocstring\n" }],
+        },
       },
     },
 
-    // Empty docstring (fails because many1Till requires at least one char)
+    // Empty docstring — now succeeds with no segments (multiLineStringParser
+    // uses `many`, not `many1`).
     {
       input: '""""""',
-      expected: { success: false },
+      expected: {
+        success: true,
+        result: { type: "multiLineString", segments: [] },
+      },
     },
-    // Docstring with only whitespace
+    // Docstring with only whitespace — preserved as a text segment.
     {
       input: '"""   """',
       expected: {
         success: true,
-        result: { type: "docString", value: "" },
+        result: {
+          type: "multiLineString",
+          segments: [{ type: "text", value: "   " }],
+        },
       },
     },
 
@@ -63,8 +84,10 @@ describe("docStringParser", () => {
       expected: {
         success: true,
         result: {
-          type: "docString",
-          value: "Docstring with numbers: 123, 456",
+          type: "multiLineString",
+          segments: [
+            { type: "text", value: "Docstring with numbers: 123, 456" },
+          ],
         },
       },
     },
@@ -72,14 +95,20 @@ describe("docStringParser", () => {
       input: '"""Special chars: !@#$%^&*()"""',
       expected: {
         success: true,
-        result: { type: "docString", value: "Special chars: !@#$%^&*()" },
+        result: {
+          type: "multiLineString",
+          segments: [{ type: "text", value: "Special chars: !@#$%^&*()" }],
+        },
       },
     },
     {
       input: '"""Code example: x = 5"""',
       expected: {
         success: true,
-        result: { type: "docString", value: "Code example: x = 5" },
+        result: {
+          type: "multiLineString",
+          segments: [{ type: "text", value: "Code example: x = 5" }],
+        },
       },
     },
 
@@ -89,8 +118,13 @@ describe("docStringParser", () => {
       expected: {
         success: true,
         result: {
-          type: "docString",
-          value: "This function does something. It takes params.",
+          type: "multiLineString",
+          segments: [
+            {
+              type: "text",
+              value: "This function does something. It takes params.",
+            },
+          ],
         },
       },
     },
@@ -98,7 +132,107 @@ describe("docStringParser", () => {
       input: '"""Returns: the result"""',
       expected: {
         success: true,
-        result: { type: "docString", value: "Returns: the result" },
+        result: {
+          type: "multiLineString",
+          segments: [{ type: "text", value: "Returns: the result" }],
+        },
+      },
+    },
+
+    // Interpolation: trailing
+    {
+      input: '"""Hello ${name}"""',
+      expected: {
+        success: true,
+        result: {
+          type: "multiLineString",
+          segments: [
+            { type: "text", value: "Hello " },
+            {
+              type: "interpolation",
+              expression: { type: "variableName", value: "name" },
+            },
+          ],
+        },
+      },
+    },
+    // Interpolation: middle
+    {
+      input: '"""The count is ${count} items"""',
+      expected: {
+        success: true,
+        result: {
+          type: "multiLineString",
+          segments: [
+            { type: "text", value: "The count is " },
+            {
+              type: "interpolation",
+              expression: { type: "variableName", value: "count" },
+            },
+            { type: "text", value: " items" },
+          ],
+        },
+      },
+    },
+    // Interpolation at the start — leading whitespace preserved as a
+    // text segment (parser no longer trims; trimming happens downstream).
+    {
+      input: '"""\n  ${name} is great\n  """',
+      expected: {
+        success: true,
+        result: {
+          type: "multiLineString",
+          segments: [
+            { type: "text", value: "\n  " },
+            {
+              type: "interpolation",
+              expression: { type: "variableName", value: "name" },
+            },
+            { type: "text", value: " is great\n  " },
+          ],
+        },
+      },
+    },
+    // Interpolation at the end — trailing whitespace preserved.
+    {
+      input: '"""Version ${ver}\n  """',
+      expected: {
+        success: true,
+        result: {
+          type: "multiLineString",
+          segments: [
+            { type: "text", value: "Version " },
+            {
+              type: "interpolation",
+              expression: { type: "variableName", value: "ver" },
+            },
+            { type: "text", value: "\n  " },
+          ],
+        },
+      },
+    },
+    // Interpolations separated by inner whitespace — all whitespace
+    // segments preserved verbatim (no trimming at parser level).
+    {
+      input: '"""  ${a}  ${b}  """',
+      expected: {
+        success: true,
+        result: {
+          type: "multiLineString",
+          segments: [
+            { type: "text", value: "  " },
+            {
+              type: "interpolation",
+              expression: { type: "variableName", value: "a" },
+            },
+            { type: "text", value: "  " },
+            {
+              type: "interpolation",
+              expression: { type: "variableName", value: "b" },
+            },
+            { type: "text", value: "  " },
+          ],
+        },
       },
     },
 
@@ -324,8 +458,8 @@ describe("functionParser", () => {
           parameters: [],
           returnType: null,
           docString: {
-            type: "docString",
-            value: "This is a test function",
+            type: "multiLineString",
+            segments: [{ type: "text", value: "This is a test function" }],
           },
           body: [
             {
@@ -347,8 +481,8 @@ describe("functionParser", () => {
           parameters: [],
           returnType: null,
           docString: {
-            type: "docString",
-            value: "Greets the user",
+            type: "multiLineString",
+            segments: [{ type: "text", value: "Greets the user" }],
           },
           body: [
             {
@@ -376,8 +510,8 @@ describe("functionParser", () => {
           parameters: [],
           returnType: null,
           docString: {
-            type: "docString",
-            value: "Calculate something",
+            type: "multiLineString",
+            segments: [{ type: "text", value: "Calculate something" }],
           },
           body: [
             {
@@ -407,8 +541,8 @@ describe("functionParser", () => {
           parameters: [],
           returnType: null,
           docString: {
-            type: "docString",
-            value: "Empty function with docstring",
+            type: "multiLineString",
+            segments: [{ type: "text", value: "Empty function with docstring" }],
           },
           body: [],
         },
@@ -425,8 +559,8 @@ describe("functionParser", () => {
           parameters: [],
           returnType: null,
           docString: {
-            type: "docString",
-            value: "This is a multi-line\n  docstring",
+            type: "multiLineString",
+            segments: [{ type: "text", value: "\n  This is a multi-line\n  docstring\n  " }],
           },
           body: [
             {
@@ -602,8 +736,8 @@ describe("functionParser", () => {
           ],
           returnType: null,
           docString: {
-            type: "docString",
-            value: "Adds two numbers",
+            type: "multiLineString",
+            segments: [{ type: "text", value: "Adds two numbers" }],
           },
           body: [
             {
@@ -1116,8 +1250,8 @@ describe("functionParser", () => {
           ],
           returnType: null,
           docString: {
-            type: "docString",
-            value: "Adds two numbers",
+            type: "multiLineString",
+            segments: [{ type: "text", value: "Adds two numbers" }],
           },
           body: [{ type: "variableName", value: "x" }, { type: "newLine" }],
         },
@@ -1140,8 +1274,8 @@ describe("functionParser", () => {
           ],
           returnType: null,
           docString: {
-            type: "docString",
-            value: "Greets a person by name",
+            type: "multiLineString",
+            segments: [{ type: "text", value: "Greets a person by name" }],
           },
           body: [{ type: "variableName", value: "name" }, { type: "newLine" }],
         },
@@ -1165,8 +1299,8 @@ describe("functionParser", () => {
           ],
           returnType: null,
           docString: {
-            type: "docString",
-            value: "Mix of typed and untyped params",
+            type: "multiLineString",
+            segments: [{ type: "text", value: "Mix of typed and untyped params" }],
           },
           body: [{ type: "variableName", value: "typed" }, { type: "newLine" }],
         },
@@ -1509,8 +1643,8 @@ describe("functionParser", () => {
           ],
           returnType: { type: "primitiveType", value: "number" },
           docString: {
-            type: "docString",
-            value: "Adds two numbers",
+            type: "multiLineString",
+            segments: [{ type: "text", value: "Adds two numbers" }],
           },
           body: [{ type: "variableName", value: "x" }, { type: "newLine" }],
         },
@@ -1533,8 +1667,8 @@ describe("functionParser", () => {
           ],
           returnType: { type: "primitiveType", value: "string" },
           docString: {
-            type: "docString",
-            value: "Greets a person",
+            type: "multiLineString",
+            segments: [{ type: "text", value: "Greets a person" }],
           },
           body: [{ type: "variableName", value: "name" }, { type: "newLine" }],
         },

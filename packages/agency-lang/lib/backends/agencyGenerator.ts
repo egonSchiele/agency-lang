@@ -645,7 +645,18 @@ export class AgencyGenerator {
     this.increaseIndent();
 
     if (node.docString) {
-      const lines = node.docString.value.split("\n").map(l => l.trim());
+      let content = "";
+      for (const seg of node.docString.segments) {
+        if (seg.type === "text") {
+          content += seg.value;
+        } else {
+          content += `\${${this.processNode(seg.expression).trim()}}`;
+        }
+      }
+      // Strip outer whitespace so docstrings format consistently —
+      // the parser preserves raw source verbatim, including the
+      // leading newline + indentation typical of multi-line docstrings.
+      const lines = content.trim().split("\n").map((l) => l.trim());
       const docLines = [`"""`, ...lines, `"""`];
       const docStr = docLines.map((line) => this.indentStr(line)).join("\n");
       result += `${docStr}\n`;
@@ -1033,7 +1044,18 @@ export class AgencyGenerator {
     this.increaseIndent();
 
     if (node.docString) {
-      const lines = node.docString.value.split("\n").map(l => l.trim());
+      let content = "";
+      for (const seg of node.docString.segments) {
+        if (seg.type === "text") {
+          content += seg.value;
+        } else {
+          content += `\${${this.processNode(seg.expression).trim()}}`;
+        }
+      }
+      // Strip outer whitespace so docstrings format consistently —
+      // the parser preserves raw source verbatim, including the
+      // leading newline + indentation typical of multi-line docstrings.
+      const lines = content.trim().split("\n").map((l) => l.trim());
       const docLines = [`"""`, ...lines, `"""`];
       const docStr = docLines.map((line) => this.indentStr(line)).join("\n");
       result += `${docStr}\n`;

@@ -260,7 +260,7 @@ const compute = __AgencyFunction.create({
   }],
   toolDefinition: {
     name: "compute",
-    description: `No description provided.`,
+    description: "No description provided.",
     schema: z.object({"val": z.number(), })
   },
   safe: false,

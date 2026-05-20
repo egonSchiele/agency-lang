@@ -61,7 +61,6 @@ import {
   AgencyNode,
   Assignment,
   BooleanLiteral,
-  DocString,
   Expression,
   FunctionCall,
   FunctionDefinition,
@@ -330,7 +329,7 @@ export const multiLineStringTextSegmentParser: Parser<TextSegment> = map(
   }),
 );
 
-export const interpolationSegmentParser: Parser<InterpolationSegment> = (
+export const interpolationSegmentParser: Parser<InterpolationSegment> = withLoc((
   input: string,
 ) => {
   const parser = seqC(
@@ -352,7 +351,7 @@ export const interpolationSegmentParser: Parser<InterpolationSegment> = (
     },
     result.rest,
   );
-};
+});
 
 const objectParser = (input: string): ParserResult<Record<string, any>> => {
   const kvParser = trace(
@@ -2724,23 +2723,13 @@ export const modifiedAssignmentParser: Parser<Assignment> = withLoc((input: stri
   return success(out, result.rest);
 });
 
-const trim = (s: string) => s.trim();
-export const docStringParser: Parser<DocString> = (input: string) => {
-  const parser = trace(
-    "docStringParser",
-    seqC(
-      set("type", "docString"),
-      str('"""'),
-      capture(map(many1Till(str('"""')), trim), "value"),
-      str('"""'),
-    ),
-  );
-  const result = parser(input);
-  if (result.success) {
-    result.result.value = stripSentinels(result.result.value);
-  }
-  return result;
-};
+// Doc strings are parsed identically to multi-line strings. Trimming of
+// the leading/trailing indentation is applied at the points that
+// actually need normalized text — the LLM tool-description emitter
+// (`typescriptBuilder.buildToolDefinition`) and the human-display
+// helper (`utils/docStringText`) — so the parser preserves the source
+// faithfully for the formatter to round-trip.
+export const docStringParser = multiLineStringParser;
 
 export const bodyParser = (input: string): ParserResult<AgencyNode[]> => {
   const bodyNodeParser = or(

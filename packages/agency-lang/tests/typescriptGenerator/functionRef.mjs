@@ -245,7 +245,7 @@ const greet = __AgencyFunction.create({
   }],
   toolDefinition: {
     name: "greet",
-    description: `No description provided.`,
+    description: "No description provided.",
     schema: z.object({"name": z.string(), })
   },
   safe: false,
@@ -346,7 +346,7 @@ const double = __AgencyFunction.create({
   }],
   toolDefinition: {
     name: "double",
-    description: `No description provided.`,
+    description: "No description provided.",
     schema: z.object({"x": z.number(), })
   },
   safe: false,
@@ -480,7 +480,7 @@ const applyToAll = __AgencyFunction.create({
   }],
   toolDefinition: {
     name: "applyToAll",
-    description: `No description provided.`,
+    description: "No description provided.",
     schema: z.object({"items": z.array(z.number()), })
   },
   safe: false,

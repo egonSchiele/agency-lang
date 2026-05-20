@@ -254,7 +254,7 @@ const safeLookup = __AgencyFunction.create({
   }],
   toolDefinition: {
     name: "safeLookup",
-    description: `No description provided.`,
+    description: "No description provided.",
     schema: z.object({"id": z.string(), })
   },
   safe: true,
@@ -378,7 +378,7 @@ const unsafeSave = __AgencyFunction.create({
   }],
   toolDefinition: {
     name: "unsafeSave",
-    description: `No description provided.`,
+    description: "No description provided.",
     schema: z.object({"id": z.string(), })
   },
   safe: false,

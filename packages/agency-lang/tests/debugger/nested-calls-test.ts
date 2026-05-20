@@ -269,7 +269,7 @@ const double = __AgencyFunction.create({
   }],
   toolDefinition: {
     name: "double",
-    description: `No description provided.`,
+    description: "No description provided.",
     schema: z.object({"n": z.number(), })
   },
   safe: false,
@@ -399,7 +399,7 @@ const addAndDouble = __AgencyFunction.create({
   }],
   toolDefinition: {
     name: "addAndDouble",
-    description: `No description provided.`,
+    description: "No description provided.",
     schema: z.object({"a": z.string(), "b": z.number(), })
   },
   safe: false,

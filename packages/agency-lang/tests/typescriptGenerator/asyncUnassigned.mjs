@@ -266,7 +266,7 @@ const append = __AgencyFunction.create({
   }],
   toolDefinition: {
     name: "append",
-    description: `No description provided.`,
+    description: "No description provided.",
     schema: z.object({"sleepTime": z.number(), "value": z.any(), })
   },
   safe: false,

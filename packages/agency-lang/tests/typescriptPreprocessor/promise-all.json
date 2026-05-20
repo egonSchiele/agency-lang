@@ -46,6 +46,12 @@
                         "end": 76
                       },
                       "scope": "args"
+                    },
+                    "loc": {
+                      "line": 1,
+                      "col": 31,
+                      "start": 69,
+                      "end": 77
                     }
                   }
                 ]
@@ -196,6 +202,12 @@
                     "end": 225
                   },
                   "scope": "local"
+                },
+                "loc": {
+                  "line": 8,
+                  "col": 20,
+                  "start": 222,
+                  "end": 226
                 }
               },
               {
@@ -214,6 +226,12 @@
                     "end": 234
                   },
                   "scope": "local"
+                },
+                "loc": {
+                  "line": 8,
+                  "col": 29,
+                  "start": 231,
+                  "end": 235
                 }
               }
             ]

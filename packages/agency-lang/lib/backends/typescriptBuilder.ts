@@ -29,6 +29,7 @@ import { BlockArgument } from "@/types/blockArgument.js";
 import { DebuggerStatement } from "@/types/debuggerStatement.js";
 import { SchemaExpression } from "@/types/schemaExpression.js";
 import { expressionToString } from "@/utils/node.js";
+import { trimDocStringSegments } from "@/utils/docStringText.js";
 import { toCompiledImportPath } from "../importPaths.js";
 import {
   CONTEXT_INJECTED_BUILTINS,
@@ -1248,16 +1249,46 @@ export class TypeScriptBuilder {
     }
 
     const schemaArg = Object.keys(properties).length > 0 ? `{${schema}}` : "{}";
+    // Trim leading/trailing indentation from doc-string segments before
+    // emission so the LLM sees clean text, while keeping the AST
+    // untouched for faithful formatter round-trips.
+    const trimmedDocSegments = node.docString
+      ? trimDocStringSegments(node.docString.segments)
+      : [];
     return ts.obj({
       name: ts.str(functionName),
-      description: ts.raw(
-        `\`${node.docString?.value || "No description provided."}\``,
-      ),
+      description:
+        trimmedDocSegments.length > 0
+          ? this.generateStringLiteralNode(trimmedDocSegments)
+          : ts.str("No description provided."),
       schema: $.z()
         .prop("object")
         .call([ts.raw(schemaArg)])
         .done(),
     });
+  }
+
+  /**
+   * Returns true if any function or graph node in the compilation unit
+   * has a doc string with at least one interpolation segment.
+   */
+  private hasDocStringInterpolation(): boolean {
+    const fns = Object.values(this.compilationUnit.functionDefinitions);
+    for (const fn of fns) {
+      if (
+        fn.docString?.segments.some((s) => s.type === "interpolation")
+      ) {
+        return true;
+      }
+    }
+    for (const node of this.compilationUnit.graphNodes) {
+      if (
+        node.docString?.segments.some((s) => s.type === "interpolation")
+      ) {
+        return true;
+      }
+    }
+    return false;
   }
 
   /**
@@ -2958,6 +2989,26 @@ export class TypeScriptBuilder {
       ),
       ts.constDecl("graph", $(ts.runtime.globalCtx).prop("graph").done()),
     ];
+
+    // If any function has a doc string with interpolation, the tool
+    // description is evaluated at module load time and may need to
+    // reference module globals via `__ctx.globals.get(...)`. Alias
+    // `__ctx` to `__globalCtx` at module top level (function bodies
+    // shadow this with their own `__ctx2` binding), and trigger global
+    // initialization eagerly so any interpolated reads resolve. This is
+    // gated to modules that actually use the feature, so other modules
+    // see no preamble change.
+    //
+    // Caveat: `__initializeGlobals` is async; for modules with
+    // `static` declarations or async global initializers, top-level
+    // interpolation may still see uninitialized values. Synchronous
+    // literal globals are populated before the function returns.
+    if (this.hasDocStringInterpolation()) {
+      runtimeCtxStatements.push(
+        ts.constDecl("__ctx", ts.id("__globalCtx")),
+        ts.raw(`__initializeGlobals(__globalCtx);`),
+      );
+    }
 
     const runtimeCtx: TsNode = ts.statements(runtimeCtxStatements);
 

@@ -265,7 +265,7 @@ const process = __AgencyFunction.create({
   }],
   toolDefinition: {
     name: "process",
-    description: `No description provided.`,
+    description: "No description provided.",
     schema: z.object({"data": z.number(), })
   },
   safe: false,

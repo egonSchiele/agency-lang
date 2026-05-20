@@ -278,7 +278,7 @@ const isPalindrome = __AgencyFunction.create({
   }],
   toolDefinition: {
     name: "isPalindrome",
-    description: `No description provided.`,
+    description: "No description provided.",
     schema: z.object({"n": z.number(), })
   },
   safe: false,

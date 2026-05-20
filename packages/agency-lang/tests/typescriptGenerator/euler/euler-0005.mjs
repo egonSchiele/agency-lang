@@ -275,7 +275,7 @@ const gcd = __AgencyFunction.create({
   }],
   toolDefinition: {
     name: "gcd",
-    description: `No description provided.`,
+    description: "No description provided.",
     schema: z.object({"a": z.number(), "b": z.number(), })
   },
   safe: false,
@@ -394,7 +394,7 @@ const lcm = __AgencyFunction.create({
   }],
   toolDefinition: {
     name: "lcm",
-    description: `No description provided.`,
+    description: "No description provided.",
     schema: z.object({"a": z.number(), "b": z.number(), })
   },
   safe: false,

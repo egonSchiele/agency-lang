@@ -880,6 +880,50 @@ export const objectPropertyWithDescriptionParser: Parser<ObjectProperty> =
     ),
   );
 
+/**
+ * Parses one or more `@tag(...)` lines, then a property, attaching the
+ * tags to that property's `tags` field. Used inside `objectTypeParser`
+ * so users can write:
+ *
+ *     type User = {
+ *       @validate(isEmail)
+ *       @jsonSchema({ format: "email" })
+ *       email: string
+ *     }
+ */
+export const taggedObjectPropertyParser: Parser<ObjectProperty> = trace(
+  "taggedObjectPropertyParser",
+  (input: string): ParserResult<ObjectProperty> => {
+    const parser = seqC(
+      capture(
+        many1(
+          seqC(
+            captureCaptures(lazy(() => tagParser)),
+            optionalSpacesOrNewline,
+          ),
+        ),
+        "tagWrappers",
+      ),
+      capture(
+        or(
+          lazy(() => objectPropertyWithDescriptionParser),
+          lazy(() => objectPropertyParser),
+        ),
+        "prop",
+      ),
+    );
+    const result = parser(input);
+    if (!result.success) return result;
+    const tags = (result.result.tagWrappers as Array<any>).map(
+      (w) => ({ type: "tag", name: w.name, arguments: w.arguments, loc: w.loc }),
+    ) as Tag[];
+    return success(
+      { ...(result.result.prop as ObjectProperty), tags },
+      result.rest,
+    );
+  },
+);
+
 export const objectTypeParser: Parser<ObjectType> = trace(
   "objectTypeParser",
   (input: string): ParserResult<ObjectType> => {
@@ -891,6 +935,7 @@ export const objectTypeParser: Parser<ObjectType> = trace(
         sepBy(
           objectPropertyDelimiter,
           or(
+            taggedObjectPropertyParser,
             objectPropertyWithDescriptionParser,
             objectPropertyParser,
             commentParser,
@@ -1315,18 +1360,35 @@ export const skillParser = (input: string) => {
 // tag.ts
 // =============================================================================
 
-// A single tag argument: either a quoted string or a bare identifier
-// Both are normalized to plain strings
-const stringArg = map(quotedString, removeQuotes);
-const identArg = many1WithJoin(varNameChar);
-const tagArg = or(stringArg, identArg);
+// A single tag argument: restricted subset of expressions per spec
+// (docs/superpowers/specs/2026-05-19-type-validation-and-json-schema-annotations-design.md).
+//
+// Allowed: string / number / boolean / null literals, identifiers,
+// function calls, object literals (including spread). NOT allowed:
+// ternaries, binary ops, pipes, member access, template strings,
+// array literals.
+//
+// All forward references go through lazy(...) because these parsers
+// are defined later in the file.
+const restrictedTagArgParser: Parser<Expression> = label(
+  "a tag argument (literal, identifier, function call, or object literal)",
+  or(
+    lazy(() => agencyObjectParser),
+    lazy(() => functionCallParser),
+    nullParser,
+    booleanParser,
+    numberParser,
+    simpleStringParser,
+    variableNameParser,
+  ),
+);
 
-// Parenthesized argument list: (arg1, arg2) or ("string arg")
+// Parenthesized argument list: (arg1, arg2)
 const tagArgsList = map(
   seqC(
     char("("),
     optionalSpaces,
-    capture(sepBy(comma, tagArg), "args"),
+    capture(sepBy(comma, restrictedTagArgParser), "args"),
     optionalSpaces,
     char(")"),
   ),
@@ -1341,7 +1403,7 @@ const _tagParserInner = trace(
     char("@"),
     capture(many1WithJoin(varNameChar), "name"),
     capture(
-      or(tagArgsList, succeed([] as string[])),
+      or(tagArgsList, succeed([] as Expression[])),
       "arguments",
     ),
     optionalSemicolon,

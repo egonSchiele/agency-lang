@@ -1,0 +1,9 @@
+import { Email } from "std::types"
+
+node main() {
+  const bad: Email! = "not-email"
+  if (isFailure(bad)) {
+    return "ok"
+  }
+  return "wrong"
+}

@@ -51,6 +51,7 @@ export function resolveImports(
     const functionNames: string[] = [];
     const safeFunctionNames: string[] = [];
     const typeNames: string[] = [];
+    const constantNames: string[] = [];
     const aliases: Record<string, string> = {};
 
     for (const nameType of node.importedNames) {
@@ -94,6 +95,10 @@ export function resolveImports(
             assertExported(name, node.modulePath, symbol.exported, "Type");
             typeNames.push(name);
             break;
+          case "constant":
+            assertExported(name, node.modulePath, symbol.exported, "Constant");
+            constantNames.push(name);
+            break;
         }
       }
     }
@@ -107,8 +112,11 @@ export function resolveImports(
       newNodes.push(nodeImport);
     }
 
-    // Combine functions and types into a single import statement
-    const allNames = [...functionNames, ...typeNames];
+    // Combine functions, types, and static-const imports into a single import statement.
+    // Constants need to flow through even when only referenced via a tag
+    // argument (e.g. `@jsonSchema({ ...emailFormat })`) — without including
+    // them here the generated TS would have a dangling reference.
+    const allNames = [...functionNames, ...typeNames, ...constantNames];
     if (allNames.length > 0) {
       const allAliases: Record<string, string> = {};
       for (const name of allNames) {

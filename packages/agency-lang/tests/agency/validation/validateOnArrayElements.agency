@@ -1,0 +1,15 @@
+import { isEmail } from "std::validators"
+
+@validate(isEmail)
+type Email = string
+
+node main() {
+  const goodList: Email[]! = ["a@b.com", "c@d.com"]
+  const badList: Email[]! = ["a@b.com", "not-an-email"]
+  if (isSuccess(goodList)) {
+    if (isFailure(badList)) {
+      return goodList.value[1]
+    }
+  }
+  return "failed"
+}

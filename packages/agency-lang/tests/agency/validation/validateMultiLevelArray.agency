@@ -1,0 +1,39 @@
+// Verifies that when an array type has its own @validate AND its
+// element type has its own @validate, both fire — element validation
+// runs for each item, then the array-level validation runs on the
+// whole list.
+
+def isEven(value: number): Result {
+  if (value % 2 == 0) {
+    return success(value)
+  }
+  return failure("not even")
+}
+
+def nonEmpty(value: number[]): Result {
+  if (value.length > 0) {
+    return success(value)
+  }
+  return failure("array must be non-empty")
+}
+
+@validate(isEven)
+type Even = number
+
+@validate(nonEmpty)
+type Numbers = Even[]
+
+node main() {
+  const good: Numbers! = [2, 4, 6]
+  const oddInside: Numbers! = [2, 3, 6]
+  const empty: Numbers! = []
+
+  if (isSuccess(good)) {
+    if (isFailure(oddInside)) {
+      if (isFailure(empty)) {
+        return good.value[0]
+      }
+    }
+  }
+  return -1
+}

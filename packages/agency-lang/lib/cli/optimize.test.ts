@@ -94,7 +94,12 @@ node main(msg: string): string {
     expect(tag).toMatchObject({
       type: "tag",
       name: "goal",
-      arguments: ["Classify messages accurately"],
+      arguments: [
+        {
+          type: "string",
+          segments: [{ type: "text", value: "Classify messages accurately" }],
+        },
+      ],
     });
   });
 

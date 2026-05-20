@@ -1,0 +1,17 @@
+// @jsonSchema can sit on an object property's type alias. We expect the
+// `format` field to appear under properties.email in the generated
+// JSON Schema, not at the top level.
+
+@jsonSchema({ format: "email" })
+type Email = string
+
+type User = {
+  name: string,
+  email: Email
+}
+
+node main() {
+  const s = schema(User)
+  const js = s.toJSONSchema()
+  return js.properties.email.format
+}

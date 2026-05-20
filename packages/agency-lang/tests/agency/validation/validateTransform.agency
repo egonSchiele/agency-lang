@@ -1,0 +1,17 @@
+// A validator that always succeeds but transforms the value. The
+// success value flows into the bound variable, so `name.value` should
+// equal the upper-cased string.
+def toUpper(value: string): Result {
+  return success(value.toUpperCase())
+}
+
+@validate(toUpper)
+type Loud = string
+
+node main() {
+  const name: Loud! = "alice"
+  if (isSuccess(name)) {
+    return name.value
+  }
+  return "failed"
+}

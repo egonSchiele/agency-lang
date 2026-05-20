@@ -1,0 +1,37 @@
+/** @module
+  Pre-baked `@jsonSchema(...)` fragments for common formats. Spread them
+  into your own `@jsonSchema(...)` annotations to attach the matching
+  JSON Schema `format` field:
+
+  ```ts
+  import { emailFormat } from "std::schemas"
+
+  @jsonSchema({ ...emailFormat, description: "primary contact" })
+  type Email = string
+  ```
+
+  These are plain object constants — nothing magic. They exist to spare
+  callers from typing `{ format: "..." }` every time and to keep format
+  names consistent across a codebase.
+*/
+
+/** `{ format: "email" }` — RFC 5322 email format. */
+export static const emailFormat = { format: "email" }
+
+/** `{ format: "uri" }` — RFC 3986 URI. */
+export static const urlFormat = { format: "uri" }
+
+/** `{ format: "uuid" }` — canonical 8-4-4-4-12 UUID. */
+export static const uuidFormat = { format: "uuid" }
+
+/** `{ format: "date-time" }` — ISO 8601 date-time. */
+export static const dateTimeFormat = { format: "date-time" }
+
+/** `{ format: "date" }` — ISO 8601 date (no time). */
+export static const dateFormat = { format: "date" }
+
+/** `{ format: "ipv4" }` — dotted-quad IPv4 address. */
+export static const ipv4Format = { format: "ipv4" }
+
+/** `{ format: "ipv6" }` — IPv6 address. */
+export static const ipv6Format = { format: "ipv6" }

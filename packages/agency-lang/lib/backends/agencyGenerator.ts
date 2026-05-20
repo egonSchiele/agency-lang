@@ -465,8 +465,10 @@ export class AgencyGenerator {
     const aliasedTypeStr = this.aliasedTypeToString(node.aliasedType);
     const exportPrefix = node.exported ? "export " : "";
     const typeParamsStr = this.formatTypeParams(node.typeParams);
+    const tags = this.formatAttachedTags(node);
     return (
       this.formatDocComment(node) +
+      tags +
       this.indentStr(
         `${exportPrefix}type ${node.aliasName}${typeParamsStr} = ${aliasedTypeStr}`,
       )
@@ -1265,12 +1267,9 @@ export class AgencyGenerator {
     if (tag.arguments.length === 0) {
       return this.indentStr(`@${tag.name}`);
     }
-    const args = tag.arguments.map((arg: string) => {
-      if (/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(arg)) {
-        return arg;
-      }
-      return JSON.stringify(arg);
-    });
+    const args = tag.arguments.map((arg) =>
+      this.processNode(arg as AgencyNode).trim(),
+    );
     return this.indentStr(`@${tag.name}(${args.join(", ")})`);
   }
 

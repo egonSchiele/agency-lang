@@ -121,7 +121,8 @@ function attachTags(nodes: AgencyNode[]): AgencyNode[] {
 
     if (pendingTags.length > 0) {
       if (node.type === "graphNode" || node.type === "function" ||
-        node.type === "assignment" || node.type === "functionCall") {
+        node.type === "assignment" || node.type === "functionCall" ||
+        node.type === "typeAlias") {
         node.tags = [...(node.tags || []), ...pendingTags];
         pendingTags = [];
       } else {
@@ -174,6 +175,17 @@ export class TypescriptPreprocessor {
         info.graphNodes.map((n) => [n.nodeName, n]),
       );
     }
+  }
+
+  /**
+   * Move standalone `tag` nodes onto the next attach-target node
+   * (function / graphNode / assignment / functionCall / typeAlias).
+   * Public so consumers like the doc generator can run the same
+   * tag-attachment that the full `preprocess()` pipeline runs without
+   * also running every downstream transform.
+   */
+  attachTags(): void {
+    this.program.nodes = collectTags(this.program.nodes);
   }
 
   attachDocComments(): void {

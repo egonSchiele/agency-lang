@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "\"null passes through; valid email passes; invalid email fails\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "Validator is skipped for null/undefined branches of a nullable union"
+    }
+  ]
+}

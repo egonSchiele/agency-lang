@@ -1,0 +1,15 @@
+import { isShort } from "../../helpers/jsValidator.js"
+
+@validate(isShort)
+type ShortString = string
+
+node main() {
+  const good: ShortString! = "abc"
+  const bad: ShortString! = "this is way too long"
+  if (isSuccess(good)) {
+    if (isFailure(bad)) {
+      return good.value
+    }
+  }
+  return "failed"
+}

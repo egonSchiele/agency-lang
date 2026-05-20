@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "\"Alice\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "Validators at two levels: property-level isEven runs on age, object-level hasName runs on the whole record"
+    }
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "\"email|primary contact email\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "Alias-level and use-site @jsonSchema merge: alias keys propagate, use-site keys win on conflict"
+    }
+  ]
+}

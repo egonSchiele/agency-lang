@@ -1,6 +1,7 @@
 import { AgencyMultiLineComment } from "../types.js";
 import type { FunctionParameter } from "./function.js";
 import { BaseNode } from "./base.js";
+import type { Tag } from "./tag.js";
 
 export type VariableType =
   | PrimitiveType
@@ -27,6 +28,7 @@ export type GenericType = {
   type: "genericType";
   name: string;
   typeArgs: VariableType[];
+  tags?: Tag[];
 };
 
 /**
@@ -42,16 +44,22 @@ export type TypeParam = {
 /**
  * Entry in the type alias registry. For non-generic aliases `typeParams`
  * is absent; for generic aliases it carries the declared parameters.
+ *
+ * `tags` carries `@validate(...)` / `@jsonSchema(...)` annotations from
+ * the alias declaration so they propagate across module boundaries and
+ * re-exports. They are attached onto the resolved type by `resolveType`.
  */
 export type TypeAliasEntry = {
   body: VariableType;
   typeParams?: TypeParam[];
+  tags?: Tag[];
 };
 
 export type ResultType = {
   type: "resultType";
   successType: VariableType;
   failureType: VariableType;
+  tags?: Tag[];
 };
 
 /**
@@ -64,53 +72,68 @@ export type ResultType = {
 export type SchemaType = {
   type: "schemaType";
   inner: VariableType;
+  tags?: Tag[];
 };
 
 export type BlockType = {
   type: "blockType";
   params: { name: string; typeAnnotation: VariableType }[];
   returnType: VariableType;
+  tags?: Tag[];
 };
 
 export type PrimitiveType = {
   type: "primitiveType";
   value: string;
+  tags?: Tag[];
 };
 
 export type ArrayType = {
   type: "arrayType";
   elementType: VariableType;
+  tags?: Tag[];
 };
 
 export type StringLiteralType = {
   type: "stringLiteralType";
   value: string;
+  tags?: Tag[];
 };
 
 export type NumberLiteralType = {
   type: "numberLiteralType";
   value: string;
+  tags?: Tag[];
 };
 
 export type BooleanLiteralType = {
   type: "booleanLiteralType";
   value: "true" | "false";
+  tags?: Tag[];
 };
 
 export type UnionType = {
   type: "unionType";
   types: VariableType[];
+  tags?: Tag[];
 };
 
 export type ObjectProperty = {
   key: string;
   value: VariableType;
   description?: string;
+  /**
+   * `@validate(...)` and `@jsonSchema(...)` annotations on this property.
+   * Parsed inside `objectTypeParser` from any `@tag(...)` lines above
+   * the property within an object-type body.
+   */
+  tags?: Tag[];
 };
 
 export type ObjectType = {
   type: "objectType";
   properties: ObjectProperty[];
+  tags?: Tag[];
 };
 
 export type TypeAlias = BaseNode & {
@@ -120,6 +143,7 @@ export type TypeAlias = BaseNode & {
   typeParams?: TypeParam[];
   exported?: boolean;
   docComment?: AgencyMultiLineComment;
+  tags?: Tag[];
 };
 
 export type FunctionRefType = {
@@ -128,9 +152,11 @@ export type FunctionRefType = {
   params: FunctionParameter[];
   returnType: VariableType | null;
   returnTypeValidated?: boolean;
+  tags?: Tag[];
 };
 
 export type TypeAliasVariable = {
   type: "typeAliasVariable";
   aliasName: string;
+  tags?: Tag[];
 };

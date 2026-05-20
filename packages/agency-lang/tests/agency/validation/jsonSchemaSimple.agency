@@ -1,0 +1,13 @@
+// Verifies that a top-level @jsonSchema(...) annotation propagates to
+// the JSON Schema output. We pull the format field back out of the
+// generated JSON Schema and return it so the test runner can match
+// against it.
+
+@jsonSchema({ format: "email", description: "user email" })
+type Email = string
+
+node main() {
+  const s = schema(Email)
+  const js = s.toJSONSchema()
+  return js.format + "|" + js.description
+}

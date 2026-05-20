@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "2",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "Validators at two levels: element-level isEven runs per item, array-level nonEmpty runs on the whole list"
+    }
+  ]
+}

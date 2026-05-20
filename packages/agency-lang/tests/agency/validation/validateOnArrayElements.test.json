@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "\"c@d.com\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "Validator runs for each element of an array type; one bad element fails the whole list"
+    }
+  ]
+}

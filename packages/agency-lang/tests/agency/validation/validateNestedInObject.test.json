@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "\"user@example.com\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "Validator on a property type runs when the parent object is validated with !"
+    }
+  ]
+}

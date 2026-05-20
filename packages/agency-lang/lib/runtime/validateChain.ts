@@ -5,14 +5,19 @@ import { AgencyFunction } from "./agencyFunction.js";
 
 /**
  * Async validator used by `@validate(...)` chains. May be:
- *  - a plain async function `(ctx, value) => Result` (the simplest shape,
- *    used for JS-backed validators in std::validators); or
+ *  - a plain async function `(value) => Result` (the simplest shape;
+ *    users can import `success` / `failure` from the agency-lang runtime
+ *    and return whichever applies);
  *  - an `AgencyFunction` (an Agency `def` referenced by name), which is
  *    invoked via `.invoke({ type: "positional", args: [value] }, { ctx })`
  *    so we go through the same call infrastructure as `__call(...)`.
+ *
+ * Plain JS validators do not receive `ctx`. If you need access to the
+ * execution context, write the validator as an Agency `def` and let the
+ * normal invocation machinery thread `ctx` through for you.
  */
 export type AgencyValidator =
-  | ((ctx: unknown, value: unknown) => Promise<ResultValue> | ResultValue)
+  | ((value: unknown) => Promise<ResultValue> | ResultValue)
   | AgencyFunction;
 
 async function callValidator(
@@ -26,10 +31,7 @@ async function callValidator(
       { ctx },
     )) as ResultValue;
   }
-  return (v as (c: unknown, x: unknown) => Promise<ResultValue> | ResultValue)(
-    ctx,
-    value,
-  );
+  return (v as (x: unknown) => Promise<ResultValue> | ResultValue)(value);
 }
 
 /**

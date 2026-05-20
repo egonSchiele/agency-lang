@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "\"ALICE\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "Validators may transform the value — the transformed value is what the binding receives"
+    }
+  ]
+}

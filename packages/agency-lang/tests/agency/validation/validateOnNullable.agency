@@ -1,0 +1,20 @@
+import { isEmail } from "std::validators"
+
+@validate(isEmail)
+type Email = string
+
+node main() {
+  // null short-circuits validation — the validator is only run on the
+  // non-null branch, so the null assignment should succeed.
+  const nothing: Email | null! = null
+  const good: Email | null! = "user@example.com"
+  const bad: Email | null! = "not-an-email"
+  if (isSuccess(nothing)) {
+    if (isSuccess(good)) {
+      if (isFailure(bad)) {
+        return "null passes through; valid email passes; invalid email fails"
+      }
+    }
+  }
+  return "failed"
+}

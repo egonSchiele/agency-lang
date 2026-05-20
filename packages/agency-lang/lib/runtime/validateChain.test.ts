@@ -10,11 +10,11 @@ import { success, failure, isFailure, isSuccess } from "./result.js";
 
 const ctx = {};
 
-const isPos: AgencyValidator = async (_c, v) =>
+const isPos: AgencyValidator = async (v) =>
   typeof v === "number" && v > 0 ? success(v) : failure("not positive");
-const isEven: AgencyValidator = async (_c, v) =>
+const isEven: AgencyValidator = async (v) =>
   typeof v === "number" && v % 2 === 0 ? success(v) : failure("not even");
-const doubleIt: AgencyValidator = async (_c, v) =>
+const doubleIt: AgencyValidator = async (v) =>
   typeof v === "number" ? success(v * 2) : failure("not number");
 
 describe("__validateChain", () => {
@@ -30,7 +30,7 @@ describe("__validateChain", () => {
 
   it("short-circuits on first validator failure", async () => {
     const later = vi.fn(
-      async (_c: unknown, v: unknown) => success(v),
+      async (v: unknown) => success(v),
     ) as unknown as AgencyValidator;
     const r = await __validateChain(-1, z.number(), [isPos, later], ctx);
     expect(isFailure(r)).toBe(true);
@@ -91,11 +91,11 @@ describe("__validateChainRecursive", () => {
   it("dispatches union to matching branch only", async () => {
     const numCalled = vi.fn();
     const strCalled = vi.fn();
-    const numV: AgencyValidator = async (_c, v) => {
+    const numV: AgencyValidator = async (v) => {
       numCalled();
       return success(v);
     };
-    const strV: AgencyValidator = async (_c, v) => {
+    const strV: AgencyValidator = async (v) => {
       strCalled();
       return success(v);
     };
@@ -120,7 +120,7 @@ describe("__validateChainRecursive", () => {
   });
 
   it("skips inner validators on null in a nullable", async () => {
-    const inner = vi.fn(async (_c: unknown, v: unknown) => success(v));
+    const inner = vi.fn(async (v: unknown) => success(v));
     const desc: TypeValidationDescriptor = {
       kind: "nullable",
       schema: z.number().nullable(),

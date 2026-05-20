@@ -177,6 +177,17 @@ export class TypescriptPreprocessor {
     }
   }
 
+  /**
+   * Move standalone `tag` nodes onto the next attach-target node
+   * (function / graphNode / assignment / functionCall / typeAlias).
+   * Public so consumers like the doc generator can run the same
+   * tag-attachment that the full `preprocess()` pipeline runs without
+   * also running every downstream transform.
+   */
+  attachTags(): void {
+    this.program.nodes = collectTags(this.program.nodes);
+  }
+
   attachDocComments(): void {
     const nodes = this.program.nodes;
     const DECLARATION_TYPES = ["function", "graphNode", "typeAlias"];

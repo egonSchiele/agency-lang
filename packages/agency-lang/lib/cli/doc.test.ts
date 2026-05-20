@@ -403,6 +403,67 @@ node main() {
     );
   });
 
+  it("shows @validate and @jsonSchema annotations on type aliases", () => {
+    const inputDir = path.join(tmpDir, "input");
+    const outputDir = path.join(tmpDir, "output");
+    fs.mkdirSync(inputDir, { recursive: true });
+
+    fs.writeFileSync(
+      path.join(inputDir, "annotated.agency"),
+      `import { isEmail } from "std::validators"
+
+@validate(isEmail)
+@jsonSchema({ format: "email", description: "User email." })
+export type Email = string
+`,
+    );
+
+    generateDoc({}, path.join(inputDir, "annotated.agency"), outputDir);
+    const output = fs.readFileSync(
+      path.join(outputDir, "annotated.md"),
+      "utf-8",
+    );
+
+    // The type alias should appear with its annotations inline.
+    expect(output).toContain("@validate(isEmail)");
+    expect(output).toContain("@jsonSchema(");
+
+    // Structured "Validators:" line should list the validator.
+    expect(output).toMatch(/\*\*Validators:\*\* `isEmail`/);
+
+    // JSON Schema metadata code block should include the object literal.
+    expect(output).toContain("**JSON Schema metadata:**");
+    expect(output).toMatch(/format:\s*"email"/);
+  });
+
+  it("includes exported constants in a Constants section", () => {
+    const inputDir = path.join(tmpDir, "input");
+    const outputDir = path.join(tmpDir, "output");
+    fs.mkdirSync(inputDir, { recursive: true });
+
+    fs.writeFileSync(
+      path.join(inputDir, "consts.agency"),
+      `export static const VERSION = "1.0.0"
+export static const limits = { max: 10 }
+
+const internal = "not exported"
+`,
+    );
+
+    generateDoc({}, path.join(inputDir, "consts.agency"), outputDir);
+    const output = fs.readFileSync(
+      path.join(outputDir, "consts.md"),
+      "utf-8",
+    );
+
+    expect(output).toContain("## Constants");
+    expect(output).toContain("### VERSION");
+    expect(output).toContain('"1.0.0"');
+    expect(output).toContain("### limits");
+    // Internal (non-exported) const should NOT appear.
+    expect(output).not.toContain("### internal");
+  });
+
   it("does not add source links when baseUrl is not configured", () => {
     const inputDir = path.join(tmpDir, "input");
     const outputDir = path.join(tmpDir, "output");

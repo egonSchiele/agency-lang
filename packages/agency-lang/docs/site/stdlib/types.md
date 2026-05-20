@@ -24,7 +24,21 @@ A syntactically valid email address.
 
 ```ts
 /** A syntactically valid email address. */
+@validate(isEmail)
+@jsonSchema({
+  ...emailFormat
+})
 export type Email = string
+```
+
+**Validators:** `isEmail`
+
+**JSON Schema metadata:**
+
+```agency
+{
+  ...emailFormat
+}
 ```
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/types.agency#L25))
@@ -35,7 +49,21 @@ An http:// or https:// URL.
 
 ```ts
 /** An http:// or https:// URL. */
+@validate(isUrl)
+@jsonSchema({
+  ...urlFormat
+})
 export type URL = string
+```
+
+**Validators:** `isUrl`
+
+**JSON Schema metadata:**
+
+```agency
+{
+  ...urlFormat
+}
 ```
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/types.agency#L30))
@@ -46,7 +74,21 @@ A canonical 8-4-4-4-12 hex UUID.
 
 ```ts
 /** A canonical 8-4-4-4-12 hex UUID. */
+@validate(isUuid)
+@jsonSchema({
+  ...uuidFormat
+})
 export type UUID = string
+```
+
+**Validators:** `isUuid`
+
+**JSON Schema metadata:**
+
+```agency
+{
+  ...uuidFormat
+}
 ```
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/types.agency#L35))

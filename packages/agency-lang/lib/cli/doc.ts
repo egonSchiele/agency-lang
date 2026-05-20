@@ -3,7 +3,8 @@ import { AgencyGenerator, generateAgency } from "@/backends/agencyGenerator.js";
 import { parse, readFile } from "./commands.js";
 import { findRecursively } from "./util.js";
 import { variableTypeToString } from "@/backends/typescriptGenerator/typeToString.js";
-import { AgencyMultiLineComment, AgencyProgram } from "@/types.js";
+import { AgencyMultiLineComment, AgencyProgram, Assignment } from "@/types.js";
+import type { Tag } from "@/types/tag.js";
 import { TypeAlias, VariableType } from "@/types/typeHints.js";
 import { FunctionDefinition, FunctionParameter } from "@/types/function.js";
 import { GraphNodeDefinition } from "@/types/graphNode.js";
@@ -71,6 +72,9 @@ export function generateDoc(
       )) {
         symbolRegistry[name] = mdRelPath;
       }
+      for (const c of collectExportedConstants(program)) {
+        symbolRegistry[c.variableName] = mdRelPath;
+      }
     }
 
     // Second pass: generate docs (reusing parsed programs)
@@ -121,6 +125,10 @@ function preprocessProgram(
 ): AgencyProgram {
   const preprocessor = new TypescriptPreprocessor(program, config);
   preprocessor.attachDocComments();
+  // Attach `@validate(...)` / `@jsonSchema(...)` / other tags onto their
+  // target nodes (type aliases, functions, etc.) so the rendered code
+  // block in the docs includes those annotations.
+  preprocessor.attachTags();
   return program;
 }
 
@@ -150,6 +158,7 @@ function generateDocForFile(
       typeAliases.push(node);
     }
   }
+  const constants = collectExportedConstants(program);
 
   const title = path.basename(filePath).replace(/\.agency$/, "");
   const sections: string[] = [heading(1, title)];
@@ -165,6 +174,9 @@ function generateDocForFile(
 
   const typeSection = generateTypeSection(typeAliases, ctx);
   if (typeSection) sections.push(typeSection);
+
+  const constantSection = generateConstantSection(constants, ctx);
+  if (constantSection) sections.push(constantSection);
 
   const functions = Object.values(info.functionDefinitions);
   const functionSection = generateFunctionSection(
@@ -273,6 +285,7 @@ function formatTypeAlias(alias: TypeAlias, ctx: DocContext): string {
     heading(3, alias.aliasName),
     alias.docComment ? formatDocComment(alias.docComment) : null,
     codeFence(code),
+    formatValidatorsAndSchema(alias.tags),
     sourceLink(alias.loc, ctx),
   );
 }
@@ -285,6 +298,83 @@ function generateTypeSection(
   return section(
     heading(2, "Types"),
     ...aliases.map((a) => formatTypeAlias(a, ctx)),
+  );
+}
+
+/**
+ * Format the runtime validators + JSON-schema annotations attached to a
+ * type alias (or any other tagged target). Returns `null` if no
+ * `@validate(...)` or `@jsonSchema(...)` tags are present so callers
+ * can elide the section.
+ */
+function formatValidatorsAndSchema(tags: Tag[] | undefined): string | null {
+  if (!tags || tags.length === 0) return null;
+  const parts: string[] = [];
+
+  const validators: string[] = [];
+  for (const t of tags) {
+    if (t.name !== "validate") continue;
+    for (const arg of t.arguments) {
+      validators.push("`" + generator.processNode(arg).trim() + "`");
+    }
+  }
+  if (validators.length > 0) {
+    parts.push(`${bold("Validators:")} ${validators.join(", ")}`);
+  }
+
+  const jsonSchemaTag = tags.find((t) => t.name === "jsonSchema");
+  if (jsonSchemaTag) {
+    const arg = jsonSchemaTag.arguments[0];
+    if (arg) {
+      const rendered = generator.processNode(arg).trim();
+      parts.push(`${bold("JSON Schema metadata:")}\n\n${codeFence(rendered, "agency")}`);
+    }
+  }
+
+  return parts.length === 0 ? null : parts.join("\n\n");
+}
+
+function collectExportedConstants(program: AgencyProgram): Assignment[] {
+  const out: Assignment[] = [];
+  for (const node of program.nodes) {
+    if (
+      node.type === "assignment" &&
+      node.exported &&
+      node.declKind === "const"
+    ) {
+      out.push(node as Assignment);
+    }
+  }
+  return out;
+}
+
+function formatConstant(c: Assignment, ctx: DocContext): string {
+  // Render the declaration via the agency generator so it picks up any
+  // attached `@validate(...)` / `@jsonSchema(...)` tags and the doc
+  // comment.
+  const code = generateAgency({
+    type: "agencyProgram",
+    nodes: [c],
+  });
+  return section(
+    heading(3, c.variableName),
+    codeFence(code),
+    c.typeHint
+      ? `${bold("Type:")} ${formatTypeLinked(c.typeHint, ctx)}`
+      : null,
+    formatValidatorsAndSchema(c.tags),
+    sourceLink(c.loc, ctx),
+  );
+}
+
+function generateConstantSection(
+  constants: Assignment[],
+  ctx: DocContext,
+): string | null {
+  if (constants.length === 0) return null;
+  return section(
+    heading(2, "Constants"),
+    ...constants.map((c) => formatConstant(c, ctx)),
   );
 }
 

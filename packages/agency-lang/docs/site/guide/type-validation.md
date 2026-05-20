@@ -1,4 +1,4 @@
-# Type Annotations: `@validate` and `@jsonSchema`
+# Type Validation: `@validate` and `@jsonSchema`
 
 Agency lets you attach two kinds of metadata to a type alias:
 
@@ -74,34 +74,32 @@ See [`tests/agency/validation/validatePlainJsFunction.agency`](https://github.co
 
 ### Parameterized validators
 
-The standard library ships factory validators — functions that take a parameter and return a validator. Use them directly inside `@validate(...)`:
+Some validators need a configuration parameter (a length cap, a regex, a minimum). The standard library models these as plain two-argument functions and asks users to bind the configuration parameter via [partial application](./partial-application.md) before passing them to `@validate(...)`:
 
 ```ts
 import { min, max, minLength, maxLength, matches } from "std::validators"
 
-@validate(min(0), max(150))
+@validate(min.partial(n: 0), max.partial(n: 150))
 type Age = number
 
-@validate(minLength(3), maxLength(80))
+@validate(minLength.partial(n: 3), maxLength.partial(n: 80))
 type Username = string
 
-@validate(matches("^[A-Z][a-z]+$"))
+@validate(matches.partial(pattern: "^[A-Z][a-z]+$"))
 type Capitalized = string
 ```
 
-Each factory call runs exactly once, the first time validation fires for the alias. The captured parameter is then applied on every subsequent validation.
+`.partial(...)` returns a new single-argument function with the configuration parameter baked in; the validation chain then calls it with each value to check. Because `min`, `max`, … are ordinary Agency functions, you can also call them directly (`min(0, age)`) anywhere else in your code.
 
-You can write your own factories the same way — a function that returns a validator closure works anywhere in `@validate(...)`:
+You can write your own parameterized validators the same way: an Agency `def` that takes the configuration parameters first and the value last, then bind the configuration via `.partial(...)`:
 
 ```ts
-def divisibleBy(n: number): any {
-  // Returns a validator closure
-  return (value) => value % n == 0
-    ? success(value)
-    : failure("not divisible by " + n)
+def divisibleBy(n: number, value: number): Result {
+  if (value % n == 0) { return success(value) }
+  return failure("not divisible by " + n)
 }
 
-@validate(divisibleBy(7))
+@validate(divisibleBy.partial(n: 7))
 type MultipleOfSeven = number
 ```
 
@@ -157,7 +155,7 @@ The standard library ships several of these in [`std::schemas`](../stdlib/schema
 
 Not allowed: ternaries, binary operators (other than spread), member access, variables from inside functions, interpolated strings.
 
-This restriction exists so the metadata can be lifted to module-load time and serialized into the JSON Schema. Trying to use `@jsonSchema({ format: someLocalVar })` will fail at type-check time.
+This restriction exists so the metadata can be lifted to module-load time and serialized into the JSON Schema. Trying to use `@jsonSchema({ format: someLocalVar })` will fail at codegen time with a clear error.
 
 ## How annotations propagate
 
@@ -230,7 +228,7 @@ const e: Email?! = undefined   // success(undefined); isEmail is NOT called
 
 Three modules ship with `@validate` / `@jsonSchema` infrastructure:
 
-- [`std::validators`](../stdlib/validators.md) — validator functions (`isEmail`, `isUrl`, `isUuid`, `isInt`, `isPositive`, `isNegative`) and parameterized factories (`min`, `max`, `minLength`, `maxLength`, `matches`).
+- [`std::validators`](../stdlib/validators.md) — validator functions (`isEmail`, `isUrl`, `isUuid`, `isInt`, `isPositive`, `isNegative`) and parameterized validators (`min`, `max`, `minLength`, `maxLength`, `matches`) used via `.partial(...)`.
 - [`std::schemas`](../stdlib/schemas.md) — reusable JSON Schema fragments (`emailFormat`, `urlFormat`, `uuidFormat`, `dateTimeFormat`, `dateFormat`, `ipv4Format`, `ipv6Format`).
 - [`std::types`](../stdlib/types.md) — pre-baked aliases that combine the two: `Email`, `URLString`, `UUIDString`.
 

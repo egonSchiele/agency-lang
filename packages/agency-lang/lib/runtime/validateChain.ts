@@ -20,36 +20,6 @@ export type AgencyValidator =
   | ((value: unknown) => Promise<ResultValue> | ResultValue)
   | AgencyFunction;
 
-/**
- * Lazy-instantiate-and-memoize a validator factory. Used by codegen for
- * parameterized validators inside `@validate(...)` tags:
- *
- *   `@validate(min(0))` → `__factory(() => min(0))`
- *
- * The factory call (`min(0)`) is deferred until the first time the
- * validator is invoked. This matters for stdlib factories that are
- * exposed via Agency `static const` re-exports — their bindings are
- * `undefined` at user-module load time and only become defined after
- * `__initializeStatic` runs. By the time validation actually fires the
- * binding is live, so the factory call succeeds.
- *
- * The resulting closure is cached, so each `@validate(min(0))` site
- * instantiates `min(0)` exactly once across all validations.
- */
-export function __factory(
-  getter: () => (
-    value: unknown,
-  ) => Promise<ResultValue> | ResultValue,
-): (value: unknown) => Promise<ResultValue> | ResultValue {
-  let cached:
-    | ((value: unknown) => Promise<ResultValue> | ResultValue)
-    | null = null;
-  return (value: unknown): Promise<ResultValue> | ResultValue => {
-    if (cached === null) cached = getter();
-    return cached(value);
-  };
-}
-
 async function callValidator(
   v: AgencyValidator,
   ctx: unknown,

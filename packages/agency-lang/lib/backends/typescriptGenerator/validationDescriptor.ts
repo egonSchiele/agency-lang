@@ -102,13 +102,11 @@ function hasAliasValidate(
  * expressions, so we delegate to `tagArgToTs` (which returns a TS
  * source string) and wrap with `ts.raw(...)`.
  *
- * Function-call arguments (parameterized validators like `min(0)` or
- * `maxLength(80)`) are wrapped in `__factory(() => …)` so the factory
- * runs lazily — once at first validation — rather than at module-load
- * time. Without the wrapper, calls to stdlib factories exposed via
- * `static const` re-exports would fire while their bindings are still
- * `undefined` (Agency static initialization is async and runs after the
- * descriptor literal evaluates). See `__factory` in `validateChain.ts`.
+ * Tag arguments may be bare identifiers (`@validate(isEmail)`) or PFA
+ * expressions (`@validate(min.partial(n: 0))`). PFA results are
+ * `AgencyFunction` instances — the runtime validation chain handles
+ * both that case and plain JS callable validators (see
+ * `callValidator` in `validateChain.ts`).
  */
 function validatorNodes(tags: Tag[] | undefined): TsNode[] {
   if (!tags) return [];
@@ -116,12 +114,7 @@ function validatorNodes(tags: Tag[] | undefined): TsNode[] {
   for (const t of tags) {
     if (t.name !== "validate") continue;
     for (const arg of t.arguments) {
-      const printed = tagArgToTs(arg);
-      if (arg.type === "functionCall") {
-        out.push(ts.raw(`__factory(() => ${printed})`));
-      } else {
-        out.push(ts.raw(printed));
-      }
+      out.push(ts.raw(tagArgToTs(arg)));
     }
   }
   return out;

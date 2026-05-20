@@ -1,17 +1,17 @@
-// Verifies that parameterized validator factories work end-to-end inside
-// @validate(...) tags. Each factory (min, max, minLength, maxLength,
-// matches) is instantiated once when the descriptor is built; the
-// captured parameter is then applied on every validation.
+// Verifies that parameterized validators work end-to-end inside
+// @validate(...) tags. Each is supplied as a PFA: `min.partial(n: 0)`
+// binds `n` and produces a single-argument validator the validation
+// chain invokes on each value.
 
 import { min, max, minLength, maxLength, matches } from "std::validators"
 
-@validate(min(0), max(150))
+@validate(min.partial(n: 0), max.partial(n: 150))
 type Age = number
 
-@validate(minLength(3), maxLength(8))
+@validate(minLength.partial(n: 3), maxLength.partial(n: 8))
 type Username = string
 
-@validate(matches("^[A-Z][a-z]+$"))
+@validate(matches.partial(pattern: "^[A-Z][a-z]+$"))
 type Capitalized = string
 
 node main() {

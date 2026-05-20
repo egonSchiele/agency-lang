@@ -1371,15 +1371,18 @@ export const skillParser = (input: string) => {
 // All forward references go through lazy(...) because these parsers
 // are defined later in the file.
 const restrictedTagArgParser: Parser<Expression> = label(
-  "a tag argument (literal, identifier, function call, or object literal)",
+  "a tag argument (literal, identifier, function call, PFA, or object literal)",
   or(
     lazy(() => agencyObjectParser),
-    lazy(() => functionCallParser),
     nullParser,
     booleanParser,
     numberParser,
     simpleStringParser,
-    variableNameParser,
+    // `_valueAccessParser` subsumes plain function calls and bare
+    // identifiers (when there is no chain), and also accepts PFA
+    // expressions like `min.partial(n: 0)` so users can configure
+    // parameterized validators inline in `@validate(...)`.
+    lazy(() => _valueAccessParser),
   ),
 );
 

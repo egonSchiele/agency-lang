@@ -45,49 +45,47 @@ export function _isNegative(value: number): ResultValue {
 // ---------------------------------------------------------------------------
 // Parameterized validators
 //
-// Each `_X(...)` is a factory: it captures its parameters and returns a
-// fresh `(value) => ResultValue` validator closure. This means a tag like
-// `@validate(maxLength(80))` instantiates the validator once at module
-// load — the factory does NOT re-run on every validation call.
+// These are plain two-argument validators. The first argument is the
+// configuration parameter (e.g. the minimum value), the second is the
+// value being validated. Users bind the configuration parameter via
+// Agency's partial-application (PFA) syntax when using them inside a
+// `@validate(...)` tag:
 //
-// All five validators here are usable with `@validate(...)` because their
-// returned closure matches the plain-JS validator contract `(value) => Result`.
+//   @validate(min.partial(n: 0))
+//   type NonNegative = number
+//
+// `.partial(n: 0)` produces a single-argument `AgencyFunction` that the
+// validation chain invokes with the value to check. See
+// `docs/site/guide/type-validation.md` for usage details.
 // ---------------------------------------------------------------------------
 
-export function _min(n: number): (value: number) => ResultValue {
-  return (value: number): ResultValue =>
-    value >= n
-      ? success(value)
-      : failure(`expected value >= ${n}, got ${value}`);
+export function _min(n: number, value: number): ResultValue {
+  return value >= n
+    ? success(value)
+    : failure(`expected value >= ${n}, got ${value}`);
 }
 
-export function _max(n: number): (value: number) => ResultValue {
-  return (value: number): ResultValue =>
-    value <= n
-      ? success(value)
-      : failure(`expected value <= ${n}, got ${value}`);
+export function _max(n: number, value: number): ResultValue {
+  return value <= n
+    ? success(value)
+    : failure(`expected value <= ${n}, got ${value}`);
 }
 
-export function _minLength(n: number): (value: string) => ResultValue {
-  return (value: string): ResultValue =>
-    value.length >= n
-      ? success(value)
-      : failure(`expected length >= ${n}, got ${value.length}`);
+export function _minLength(n: number, value: string): ResultValue {
+  return value.length >= n
+    ? success(value)
+    : failure(`expected length >= ${n}, got ${value.length}`);
 }
 
-export function _maxLength(n: number): (value: string) => ResultValue {
-  return (value: string): ResultValue =>
-    value.length <= n
-      ? success(value)
-      : failure(`expected length <= ${n}, got ${value.length}`);
+export function _maxLength(n: number, value: string): ResultValue {
+  return value.length <= n
+    ? success(value)
+    : failure(`expected length <= ${n}, got ${value.length}`);
 }
 
-export function _matches(
-  pattern: string | RegExp,
-): (value: string) => ResultValue {
-  const re = pattern instanceof RegExp ? pattern : new RegExp(pattern);
-  return (value: string): ResultValue =>
-    re.test(value)
-      ? success(value)
-      : failure(`value does not match pattern ${re.source}`);
+export function _matches(pattern: string, value: string): ResultValue {
+  const re = new RegExp(pattern);
+  return re.test(value)
+    ? success(value)
+    : failure(`value does not match pattern ${re.source}`);
 }

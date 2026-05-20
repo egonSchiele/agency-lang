@@ -49,55 +49,40 @@ describe("simple validators", () => {
 });
 
 describe("parameterized validators", () => {
-  it("min(n) accepts >= n and rejects < n", () => {
-    const ge5 = _min(5);
-    expect(isSuccess(ge5(5))).toBe(true);
-    expect(isSuccess(ge5(10))).toBe(true);
-    expect(isFailure(ge5(4))).toBe(true);
+  it("min(n, value) accepts >= n and rejects < n", () => {
+    expect(isSuccess(_min(5, 5))).toBe(true);
+    expect(isSuccess(_min(5, 10))).toBe(true);
+    expect(isFailure(_min(5, 4))).toBe(true);
   });
 
-  it("max(n) accepts <= n and rejects > n", () => {
-    const le10 = _max(10);
-    expect(isSuccess(le10(10))).toBe(true);
-    expect(isSuccess(le10(0))).toBe(true);
-    expect(isFailure(le10(11))).toBe(true);
+  it("max(n, value) accepts <= n and rejects > n", () => {
+    expect(isSuccess(_max(10, 10))).toBe(true);
+    expect(isSuccess(_max(10, 0))).toBe(true);
+    expect(isFailure(_max(10, 11))).toBe(true);
   });
 
-  it("minLength(n) checks string length", () => {
-    const at_least_3 = _minLength(3);
-    expect(isSuccess(at_least_3("abc"))).toBe(true);
-    expect(isSuccess(at_least_3("abcd"))).toBe(true);
-    expect(isFailure(at_least_3("ab"))).toBe(true);
+  it("minLength(n, value) checks string length", () => {
+    expect(isSuccess(_minLength(3, "abc"))).toBe(true);
+    expect(isSuccess(_minLength(3, "abcd"))).toBe(true);
+    expect(isFailure(_minLength(3, "ab"))).toBe(true);
   });
 
-  it("maxLength(n) checks string length", () => {
-    const atMost5 = _maxLength(5);
-    expect(isSuccess(atMost5("hi"))).toBe(true);
-    expect(isSuccess(atMost5("hello"))).toBe(true);
-    expect(isFailure(atMost5("hellos"))).toBe(true);
+  it("maxLength(n, value) checks string length", () => {
+    expect(isSuccess(_maxLength(5, "hi"))).toBe(true);
+    expect(isSuccess(_maxLength(5, "hello"))).toBe(true);
+    expect(isFailure(_maxLength(5, "hellos"))).toBe(true);
   });
 
-  it("matches accepts both string and RegExp patterns", () => {
-    const digits = _matches(/^\d+$/);
-    expect(isSuccess(digits("12345"))).toBe(true);
-    expect(isFailure(digits("abc"))).toBe(true);
+  it("matches accepts a string regex source", () => {
+    expect(isSuccess(_matches("^\\d+$", "12345"))).toBe(true);
+    expect(isFailure(_matches("^\\d+$", "abc"))).toBe(true);
 
-    const fromString = _matches("^abc$");
-    expect(isSuccess(fromString("abc"))).toBe(true);
-    expect(isFailure(fromString("abcd"))).toBe(true);
-  });
-
-  it("each factory call returns a fresh closure that captures its params", () => {
-    // This is the contract that lets users write `@validate(min(5))` AND
-    // `@validate(min(10))` on different aliases without interference.
-    const ge5 = _min(5);
-    const ge10 = _min(10);
-    expect(isSuccess(ge5(7))).toBe(true);
-    expect(isFailure(ge10(7))).toBe(true);
+    expect(isSuccess(_matches("^abc$", "abc"))).toBe(true);
+    expect(isFailure(_matches("^abc$", "abcd"))).toBe(true);
   });
 
   it("failure messages mention the parameter for easy debugging", () => {
-    const r = _min(5)(3);
+    const r = _min(5, 3);
     expect(isFailure(r)).toBe(true);
     if (isFailure(r)) {
       expect(r.error).toMatch(/>= 5/);

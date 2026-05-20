@@ -20,7 +20,7 @@ import {
   deepFreeze as __deepFreeze,
   head, tail, empty,
   success, failure, isSuccess, isFailure, __pipeBind, __tryCall, __catchResult,
-  Schema, __validateType, __validateChain, __validateChainRecursive, __factory,
+  Schema, __validateType, __validateChain, __validateChainRecursive,
   readSkill as _readSkillRaw,
   readSkillTool as __readSkillTool,
   readSkillToolParams as __readSkillToolParams,

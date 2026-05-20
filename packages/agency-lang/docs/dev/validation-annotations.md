@@ -12,7 +12,7 @@ features that landed together:
   Internally this becomes a Zod `.meta(...)` call.
 
 The user-facing material lives in
-[`docs/site/guide/annotations.md`](../site/guide/annotations.md); the
+[`docs/site/guide/type-validation.md`](../site/guide/type-validation.md); the
 broader `!`-validation model is in
 [`docs/site/guide/schemas.md`](../site/guide/schemas.md). This doc
 focuses on how the implementation is wired up so future engineers can
@@ -284,69 +284,41 @@ type Trimmed = string
 The bound variable receives the transformed value. See
 [`tests/agency/validation/validateTransform.agency`](../../tests/agency/validation/validateTransform.agency).
 
-### Parameterized validators (`@validate(min(0))`) and `__factory`
+### Parameterized validators via PFA
 
-`std::validators` ships factory validators (`min`, `max`, `minLength`,
-`maxLength`, `matches`) that take a parameter and return a validator
-closure. The user writes:
+`std::validators` ships parameterized validators (`min`, `max`,
+`minLength`, `maxLength`, `matches`) as ordinary two-argument Agency
+`def` functions where the configuration parameter comes first and the
+value comes last. Users bind the configuration via Agency [partial
+application](../site/guide/partial-application.md) inside the tag:
 
 ```agency
-@validate(min(0), max(150))
+@validate(min.partial(n: 0), max.partial(n: 150))
 type Age = number
 ```
 
-The tag-arg parser already accepts function calls (the restricted
-expression subset includes `functionCall`), so this parses without
-language changes. But the generated descriptor literal runs at
-module-load time, and the stdlib factories are stored in `static const`
-re-exports whose bindings are not bound until `__initializeStatic` runs
-later. A naive `validators: [min(0), max(150)]` would call `min` while
-it is still `undefined`.
+The restricted tag-argument grammar accepts
+[`valueAccess`](../../lib/parsers/parsers.ts) expressions (see
+`restrictedTagArgParser`), so `min.partial(n: 0)` parses inline.
+[`tagArgToTs`](../../lib/backends/typescriptGenerator/tagArgToTs.ts)
+prints it as `min.partial({ n: 0 })` — `AgencyFunction.partial` takes a
+single `Record<string, unknown>` of bindings at runtime, and the
+all-named-args shape of a PFA tag arg is collapsed into that object
+literal.
 
-[`validatorNodes` in
-`validationDescriptor.ts`](../../lib/backends/typescriptGenerator/validationDescriptor.ts)
-detects `functionCall` tag args and wraps them in
-`__factory(() => …)`. The
-[`__factory` runtime helper](../../lib/runtime/validateChain.ts) returns
-a closure that defers the factory call until the first validation:
+At descriptor-construction time, `min.partial({n: 0})` evaluates to an
+`AgencyFunction` (the imported `min` is an eager Agency `def` export, so
+the binding is live). The descriptor stores that AgencyFunction. When
+validation fires, `callValidator` dispatches the AgencyFunction through
+`invoke({ type: "positional", args: [value] })` — the same machinery as
+any other Agency call — and `n` is already bound, so the underlying
+two-arg `min` runs with `(n, value)`.
 
-```ts
-export function __factory(getter) {
-  let cached = null;
-  return (value) => {
-    if (cached === null) cached = getter();
-    return cached(value);
-  };
-}
-```
-
-So the descriptor looks like
-`validators: [__factory(() => min(0)), __factory(() => max(150))]`, and
-by the time validation actually fires (after `__initializeGlobals` ran
-and `min` / `max` are bound) the factory call succeeds. The instantiated
-closure is cached, so each `@validate(min(0))` site instantiates the
-factory exactly once.
-
-Two more pieces make this work:
-
-- [`stdlib/validators.agency`](../../stdlib/validators.agency) exports
-  the parameterized factories as `static const` aliases of the raw JS
-  factories (e.g. `export static const min = _min`).
-- [`partitionProgram` in
-  `sectionAssembler.ts`](../../lib/backends/typescriptBuilder/sectionAssembler.ts)
-  detects when a `static const` value is an identifier that was imported
-  from a non-agency (i.e. plain JS) module and hoists the assignment to
-  a direct top-level `const x = y;` instead of going through the lazy
-  `__initializeStatic` ceremony. Without this hoist, downstream modules
-  would see the binding as `undefined` for the same reason `__factory`
-  exists. The hoist is keyed off `isAgencyImport` on the import
-  statement, so aliases of agency-module-imported names stay on the
-  lazy path (their source is itself lazily initialized).
-
-If you add new parameterized validators, expose them with this same
-`static const` re-export pattern. If you add a new validator-author
-sugar that puts a function call inside a tag, verify the `__factory`
-wrap still triggers (it keys off `arg.type === "functionCall"`).
+This means there is no runtime factory helper and no static-init
+race: the cost of "make this work for `static const` imports" is paid
+once in the parser/printer and never again at runtime. If you add new
+parameterized validators, just add a normal `def`, put the config
+parameter(s) first and the value last, and document the PFA call shape.
 
 ---
 

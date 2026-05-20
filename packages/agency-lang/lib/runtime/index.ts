@@ -110,7 +110,6 @@ export { Schema, __validateType } from "./schema.js";
 export {
   __validateChain,
   __validateChainRecursive,
-  __factory,
 } from "./validateChain.js";
 export type {
   AgencyValidator,

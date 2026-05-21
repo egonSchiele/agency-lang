@@ -78,6 +78,17 @@ export class AgencyGenerator {
   protected functionsUsed: Set<string> = new Set();
   protected importNodes: ImportStatement[] = [];
   protected importedNodes: ImportNodeStatement[] = [];
+  /** Comments / blank lines at the very top of the file that must stay
+   *  above the (sorted) imports block — e.g. file-level `// @tc-nocheck`,
+   *  shebangs, module docstrings. Populated by `partitionImports()`. */
+  protected importHeaderNodes: AgencyNode[] = [];
+  /** Comments attached to each import statement (no blank line between
+   *  them and the import). Travel with the import when imports get
+   *  sorted, so `// @tc-ignore` above an import keeps suppressing it. */
+  protected importAttachedComments: Map<
+    ImportStatement | ImportNodeStatement,
+    AgencyNode[]
+  > = new Map();
   protected functionDefinitions: Record<string, FunctionDefinition> = {};
   protected currentScope: Scope[] = [{ type: "global" }];
   protected program: AgencyProgram | null = null;
@@ -120,6 +131,12 @@ export class AgencyGenerator {
         this.processGraphNodeName(node);
       }
     }
+
+    // Partition the node stream: pull out the header (top-of-file
+    // comments/blanks) and each import statement (with any comments
+    // directly attached to it). This lets the imports block be sorted
+    // while preserving `// @tc-ignore` / `// @tc-nocheck` placement.
+    program.nodes = this.partitionImports(program.nodes);
 
     // Pass 3: Collect all node imports
     for (const node of program.nodes) {
@@ -169,6 +186,7 @@ export class AgencyGenerator {
 
     const output: string[] = [];
 
+    this.addIfNonEmpty(this.renderImportHeader(), output);
     this.addIfNonEmpty(this.sortAndRenderImports(), output);
     this.addIfNonEmpty(this.generatedTypeAliases.join("\n"), output);
     this.addIfNonEmpty(stmtLines.join("\n"), output);
@@ -176,6 +194,106 @@ export class AgencyGenerator {
     return {
       output: output.join("\n"),
     };
+  }
+
+  /**
+   * Split the node stream into three pieces:
+   *
+   *   1. `importHeaderNodes` — contiguous comments/blank lines at the
+   *      very top of the file (before any code or any import-attached
+   *      comment). These render unchanged above the sorted imports block.
+   *   2. Imports + comments attached to each one — tracked in
+   *      `importAttachedComments`. A comment is "attached" iff it sits
+   *      directly above its import with no blank line between them. This
+   *      keeps `// @tc-ignore` above an import even when the import is
+   *      moved by sorting.
+   *   3. Everything else — returned as the new node stream for the
+   *      remaining passes to process normally.
+   *
+   * Imports themselves are kept in `program.nodes` (returned here) so the
+   * existing collection pass for `importNodes` / `importedNodes` still
+   * sees them. The render path skips them because `processNode` for an
+   * import returns "".
+   */
+  private partitionImports(nodes: AgencyNode[]): AgencyNode[] {
+    const isImport = (n: AgencyNode): boolean =>
+      n.type === "importStatement" || n.type === "importNodeStatement";
+    const isComment = (n: AgencyNode): boolean =>
+      n.type === "comment" || n.type === "multiLineComment";
+
+    // 1) Eat top-of-file header (comments + blank lines, stopping at any
+    //    non-(comment|newLine) node).
+    let i = 0;
+    const header: AgencyNode[] = [];
+    while (i < nodes.length) {
+      const n = nodes[i];
+      if (isComment(n) || n.type === "newLine") {
+        header.push(n);
+        i++;
+      } else {
+        break;
+      }
+    }
+
+    // 2) Everything eaten as header stays at the top. We do NOT pop the
+    //    trailing comments back to attach them to the first import: the
+    //    whole contiguous top-of-file region is sacred (per spec: comments
+    //    at the top of the file stay at the top). For `@tc-ignore` to
+    //    travel with an import, the user separates it from the header
+    //    region with a blank line.
+    this.importHeaderNodes = header;
+
+    // 3) Process the rest: for any imports, pull off their directly-
+    //    preceding comments (no blank line between). Comments separated
+    //    by a blank line stay in the stream.
+    const rest: AgencyNode[] = [];
+    let commentBuf: AgencyNode[] = [];
+    while (i < nodes.length) {
+      const n = nodes[i];
+      if (isComment(n)) {
+        commentBuf.push(n);
+        i++;
+        continue;
+      }
+      if (n.type === "newLine") {
+        // Blank line — any buffered comments are not "attached" to a
+        // following import; flush them back into the stream.
+        rest.push(...commentBuf, n);
+        commentBuf = [];
+        i++;
+        continue;
+      }
+      if (isImport(n)) {
+        this.importAttachedComments.set(
+          n as ImportStatement | ImportNodeStatement,
+          commentBuf,
+        );
+        commentBuf = [];
+        rest.push(n);
+        i++;
+        continue;
+      }
+      // Other code — comment buffer wasn't attached to an import.
+      rest.push(...commentBuf, n);
+      commentBuf = [];
+      i++;
+    }
+    rest.push(...commentBuf);
+    return rest;
+  }
+
+  /**
+   * Render the top-of-file header (comments + blank lines that sit above
+   * the imports block). Returns an empty string when there are none.
+   */
+  private renderImportHeader(): string {
+    if (this.importHeaderNodes.length === 0) return "";
+    const lines: string[] = [];
+    for (const n of this.importHeaderNodes) {
+      const code = this.processNode(n);
+      if (code !== "" || n.type === "newLine") lines.push(code);
+    }
+    return lines.join("\n");
   }
 
   addIfNonEmpty(str: string, lines: string[]): void {
@@ -787,6 +905,10 @@ export class AgencyGenerator {
       }
       const kv = entry as AgencyObjectKV;
       const valueCode = this.processNode(kv.value).trim();
+      if (kv.computedKey) {
+        const keyCode = this.processNode(kv.computedKey).trim();
+        return this.indentStr(`[${keyCode}]: ${valueCode}`);
+      }
       return this.indentStr(`${this.addQuotesToKey(kv.key)}: ${valueCode}`);
     });
     this.decreaseIndent();
@@ -1016,12 +1138,26 @@ export class AgencyGenerator {
   private sortAndRenderImports(): string {
     type ImportEntry = { modulePath: string; render: () => string };
 
+    const renderWithAttached = (
+      node: ImportStatement | ImportNodeStatement,
+      body: string,
+    ): string => {
+      const attached = this.importAttachedComments.get(node) ?? [];
+      if (attached.length === 0) return body;
+      const commentLines = attached.map((c) => this.processNode(c));
+      return [...commentLines, body].join("\n");
+    };
+
     const stdlib: ImportEntry[] = [];
     const packages: ImportEntry[] = [];
     const relative: ImportEntry[] = [];
 
     for (const node of this.importNodes) {
-      const entry: ImportEntry = { modulePath: node.modulePath, render: () => this.processImportStatement(node) };
+      const entry: ImportEntry = {
+        modulePath: node.modulePath,
+        render: () =>
+          renderWithAttached(node, this.processImportStatement(node)),
+      };
       if (node.modulePath.startsWith("std::")) {
         stdlib.push(entry);
       } else if (node.modulePath.startsWith("pkg::")) {
@@ -1032,7 +1168,11 @@ export class AgencyGenerator {
     }
 
     for (const node of this.importedNodes) {
-      relative.push({ modulePath: node.agencyFile, render: () => this.processImportNodeStatement(node) });
+      relative.push({
+        modulePath: node.agencyFile,
+        render: () =>
+          renderWithAttached(node, this.processImportNodeStatement(node)),
+      });
     }
 
     const sort = (arr: ImportEntry[]) =>

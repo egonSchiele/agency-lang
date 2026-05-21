@@ -22,13 +22,40 @@ function formatSig(sig: BuiltinSignature): string {
 }
 
 /**
+ * Hover info for keyword-like language constructs that don't parse as a
+ * regular function call (and so aren't in BUILTIN_FUNCTION_TYPES) but still
+ * deserve a hover doc.
+ */
+const KEYWORD_BUILTIN_HOVERS: Record<string, { sig: string; description: string }> = {
+  interrupt: {
+    sig: "interrupt <kind>(message, payload?)",
+    description:
+      "Throw an interrupt of the given kind. The current execution state is captured so that, once responded to, execution resumes from exactly this point.",
+  },
+  schema: {
+    sig: "schema<T>",
+    description:
+      "Expression that returns the Zod schema for a type `T`. Useful when passing a schema to a TypeScript function or validator.",
+  },
+  debugger: {
+    sig: 'debugger "<label>"?',
+    description:
+      "No-op when running the agent normally, but pauses execution when running under the Agency debugger. Accepts an optional label string.",
+  },
+};
+
+/**
  * Hover info for a name that may be a language primitive or JS global.
  * Returns a markdown-formatted string ready for `Hover.contents.value`,
  * or `null` if the name isn't recognized.
  *
  * Currently covers:
  *   - True language primitives in BUILTIN_FUNCTION_TYPES (success,
- *     failure, llm, …).
+ *     failure, llm, fork, race, …).
+ *   - Keyword-like constructs (interrupt, schema, debugger) via
+ *     KEYWORD_BUILTIN_HOVERS — these don't go through BUILTIN_FUNCTION_TYPES
+ *     because they parse as their own AST node, but we still want hover
+ *     docs for them.
  *   - Flat callable JS globals with a populated `sig` (parseInt, …).
  *   - JS namespace bases (JSON, Math, …) — describes the namespace.
  *
@@ -38,12 +65,28 @@ function formatSig(sig: BuiltinSignature): string {
 export function lookupBuiltinHover(name: string): string | null {
   if (Object.prototype.hasOwnProperty.call(BUILTIN_FUNCTION_TYPES, name)) {
     const sig = BUILTIN_FUNCTION_TYPES[name];
-    return [
+    const lines = [
       "```agency",
       `${name}: ${formatSig(sig)}`,
       "```",
       "",
       "_Agency language primitive._",
+    ];
+    if (sig.description) {
+      lines.push("", sig.description);
+    }
+    return lines.join("\n");
+  }
+  if (Object.prototype.hasOwnProperty.call(KEYWORD_BUILTIN_HOVERS, name)) {
+    const entry = KEYWORD_BUILTIN_HOVERS[name];
+    return [
+      "```agency",
+      entry.sig,
+      "```",
+      "",
+      "_Agency language construct._",
+      "",
+      entry.description,
     ].join("\n");
   }
   if (Object.prototype.hasOwnProperty.call(JS_GLOBALS, name)) {

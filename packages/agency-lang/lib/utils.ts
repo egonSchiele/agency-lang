@@ -1,4 +1,86 @@
 import { Message } from "smoltalk";
+import * as fs from "fs";
+import * as path from "path";
+import { findPackageRoot } from "@/importPaths.js";
+
+export type SafeDeleteResult = {
+  success: boolean;
+  message?: string;
+};
+
+// Confirm `target` (already realpath-ed) lives strictly inside the
+// realpath-ed project root for `target`. The trailing `+ path.sep` on the
+// prefix prevents a sibling directory sharing a string prefix from passing.
+// The project root is the nearest package.json walking up from `target`.
+// If no package.json is found above `target`, refuse (target is loose in
+// the filesystem with no project containing it).
+function checkInsideProject(target: string): SafeDeleteResult | null {
+  if (target === "/") {
+    return {
+      success: false,
+      message: `Refusing to delete root dir`,
+    };
+  }
+  let projectRoot: string;
+  try {
+    projectRoot = fs.realpathSync(findPackageRoot(path.dirname(target)));
+  } catch (err) {
+    return {
+      success: false,
+      message: `Refusing to delete '${target}': no project root found above it (${err instanceof Error ? err.message : String(err)}).`,
+    };
+  }
+  if (target === projectRoot || !target.startsWith(projectRoot + path.sep)) {
+    return {
+      success: false,
+      message: `Refusing to delete '${target}': outside project root '${projectRoot}'.`,
+    };
+  }
+  return null;
+}
+
+function safeDelete(
+  targetPath: string,
+  kind: "file" | "directory",
+  dryRun: boolean,
+): SafeDeleteResult {
+  if (!fs.existsSync(targetPath)) {
+    return { success: false, message: `Path does not exist: '${targetPath}'.` };
+  }
+  const resolved = fs.realpathSync(path.resolve(targetPath));
+  const stat = fs.statSync(resolved);
+  const isFile = stat.isFile();
+  const isDir = stat.isDirectory();
+  if (kind === "file" && !isFile) {
+    return { success: false, message: `Not a file: '${resolved}'.` };
+  }
+  if (kind === "directory" && !isDir) {
+    return { success: false, message: `Not a directory: '${resolved}'.` };
+  }
+  const containment = checkInsideProject(resolved);
+  if (containment) return containment;
+
+  if (dryRun) {
+    return { success: true, message: `[DRY RUN]: would have deleted ${resolved}` };
+  }
+  if (kind === "file") fs.unlinkSync(resolved);
+  else fs.rmSync(resolved, { recursive: true });
+  return { success: true };
+}
+
+export function safeDeleteFile(
+  targetPath: string,
+  dryRun: boolean = true,
+): SafeDeleteResult {
+  return safeDelete(targetPath, "file", dryRun);
+}
+
+export function safeDeleteDirectory(
+  targetPath: string,
+  dryRun: boolean = true,
+): SafeDeleteResult {
+  return safeDelete(targetPath, "directory", dryRun);
+}
 
 export function escape(str: string): string {
   return (

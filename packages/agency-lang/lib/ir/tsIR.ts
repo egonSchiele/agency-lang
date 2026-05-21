@@ -140,7 +140,8 @@ export interface TsReturn {
 }
 
 export type TsObjectEntry =
-  | { spread: false; key: string; value: TsNode }
+  | { spread: false; computed?: false; key: string; value: TsNode }
+  | { spread: false; computed: true; key: TsNode; value: TsNode }
   | { spread: true; expr: TsNode };
 
 export interface TsObjectLiteral {

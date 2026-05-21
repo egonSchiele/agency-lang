@@ -205,6 +205,11 @@ function objectLiteralToTs(
   const entries = obj.entries.map((entry) => {
     if ("key" in entry) {
       const kv = entry as AgencyObjectKV;
+      if (kv.computedKey) {
+        throw new Error(
+          "Computed object keys are not supported in @tag arguments.",
+        );
+      }
       // Quote keys with non-identifier characters; bare identifiers stay bare.
       const key = /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(kv.key)
         ? kv.key

@@ -1,4 +1,3 @@
-import { map } from "std::array"
 import { writePolicyFile } from "std::policy"
 import { args } from "std::system"
 import { systemMessage } from "std::thread"

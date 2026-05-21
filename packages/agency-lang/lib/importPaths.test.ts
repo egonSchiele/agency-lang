@@ -401,3 +401,80 @@ describe("RunStrategy.prepareDependencies", () => {
     strategy.prepareDependencies(["nanoid"], fromFile);
   });
 });
+
+import { importKind, isImportAllowed } from "./importPaths.js";
+
+describe("importKind", () => {
+  it("classifies stdlib imports", () => {
+    expect(importKind("std::shell")).toBe("stdlib");
+    expect(importKind("std::index")).toBe("stdlib");
+  });
+  it("classifies pkg imports", () => {
+    expect(importKind("pkg::wikipedia")).toBe("pkg");
+  });
+  it("classifies local imports (relative, absolute, .agency)", () => {
+    expect(importKind("./foo.agency")).toBe("local");
+    expect(importKind("../bar.agency")).toBe("local");
+    expect(importKind("/abs/path/x.agency")).toBe("local");
+    expect(importKind("something.agency")).toBe("local");
+  });
+  it("classifies bare specifiers as node", () => {
+    expect(importKind("fs")).toBe("node");
+    expect(importKind("child_process")).toBe("node");
+    expect(importKind("nanoid")).toBe("node");
+  });
+  it("stdlib/pkg take precedence over .agency suffix", () => {
+    // Hypothetical pkg::foo.agency must be classified as pkg, not local.
+    expect(importKind("pkg::foo.agency")).toBe("pkg");
+    expect(importKind("std::index.agency")).toBe("stdlib");
+  });
+});
+
+describe("isImportAllowed", () => {
+  it("empty policy → default-allow", () => {
+    expect(isImportAllowed("fs", {})).toBe(true);
+    expect(isImportAllowed("./local.agency", {})).toBe(true);
+    expect(isImportAllowed("std::shell", {})).toBe(true);
+  });
+  it("excludeKinds wins over allowKinds", () => {
+    expect(
+      isImportAllowed("std::shell", {
+        allowKinds: ["stdlib"],
+        excludeKinds: ["stdlib"],
+      }),
+    ).toBe(false);
+  });
+  it("excludedPackages wins over allowedPackages", () => {
+    expect(
+      isImportAllowed("std::shell", {
+        allowedPackages: ["std::*"],
+        excludedPackages: ["std::shell"],
+      }),
+    ).toBe(false);
+  });
+  it("allowKinds=['stdlib'] only allows stdlib imports", () => {
+    expect(isImportAllowed("std::shell", { allowKinds: ["stdlib"] })).toBe(true);
+    expect(isImportAllowed("./bar.agency", { allowKinds: ["stdlib"] })).toBe(false);
+    expect(isImportAllowed("fs", { allowKinds: ["stdlib"] })).toBe(false);
+    expect(isImportAllowed("pkg::x", { allowKinds: ["stdlib"] })).toBe(false);
+  });
+  it("union: allowKinds + allowedPackages both pass", () => {
+    const policy = { allowKinds: ["stdlib" as const], allowedPackages: ["pkg::wikipedia"] };
+    expect(isImportAllowed("std::shell", policy)).toBe(true);
+    expect(isImportAllowed("pkg::wikipedia", policy)).toBe(true);
+    expect(isImportAllowed("pkg::other", policy)).toBe(false);
+    expect(isImportAllowed("./bar.agency", policy)).toBe(false);
+  });
+  it("glob matching: std::* covers all stdlib paths", () => {
+    expect(isImportAllowed("std::shell", { allowedPackages: ["std::*"] })).toBe(true);
+    expect(isImportAllowed("std::index", { allowedPackages: ["std::*"] })).toBe(true);
+    expect(isImportAllowed("./foo.agency", { allowedPackages: ["std::*"] })).toBe(false);
+  });
+  it("unknown kind strings in allowKinds match nothing", () => {
+    // With a non-empty allow list, all imports must match SOMETHING. Unknown
+    // kind strings can never match → all imports get rejected.
+    const policy = { allowKinds: ["bogus" as never] };
+    expect(isImportAllowed("std::shell", policy)).toBe(false);
+    expect(isImportAllowed("fs", policy)).toBe(false);
+  });
+});

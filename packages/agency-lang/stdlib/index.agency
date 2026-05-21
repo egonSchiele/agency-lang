@@ -104,20 +104,32 @@ export def read(filename: string, dir: string = "."): Result {
   return try _read(dir, filename)
 }
 
-export def write(filename: string, content: string, dir: string = "."): Result {
+export def write(
+  filename: string,
+  content: string,
+  dir: string = ".",
+  mode: string = "overwrite",
+): Result {
   """
   A tool for writing content to a file. The filename is resolved relative to dir.
+
+  The `mode` parameter controls how an existing file is handled:
+    - "overwrite" (default): replace the file if it exists, create it if not
+    - "append": append to the file if it exists, create it if not
+    - "create-only": fail if the file already exists
 
   @param filename - The file to write
   @param content - The content to write
   @param dir - The directory to resolve the filename against (defaults to ".")
+  @param mode - How to handle an existing file: "overwrite" | "append" | "create-only"
   """
   return interrupt std::write("Are you sure you want to write to this file?", {
     dir: dir,
     filename: filename,
-    content: content
+    content: content,
+    mode: mode
   })
-  return try _write(dir, filename, content)
+  return try _write(dir, filename, content, mode)
 }
 
 export def readImage(filename: string, dir: string = "."): Result {

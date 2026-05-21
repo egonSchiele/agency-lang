@@ -78,25 +78,99 @@ const llmOptions: VariableType = {
  */
 export const BUILTIN_FUNCTION_TYPES: Record<string, BuiltinSignature> = {
   // --- LLM primitive ---
-  llm: { params: ["any", llmOptions], minParams: 1, returnType: string },
+  llm: {
+    params: ["any", llmOptions],
+    minParams: 1,
+    returnType: string,
+    description:
+      "Send a prompt to an LLM and return its response. The return type is inferred from the call-site annotation and compiled to a JSON schema for structured output.",
+  },
 
   // --- Result type (lib/runtime/result.ts) ---
-  success: { params: ["any"], returnType: "any" },
-  failure: { params: ["any", "any"], minParams: 1, returnType: "any" },
-  isSuccess: { params: ["any"], returnType: boolean },
-  isFailure: { params: ["any"], returnType: boolean },
+  success: {
+    params: ["any"],
+    returnType: "any",
+    description: "Wrap a value in a successful `Result`.",
+  },
+  failure: {
+    params: ["any", "any"],
+    minParams: 1,
+    returnType: "any",
+    description: "Wrap an error (and optionally a value) in a failed `Result`.",
+  },
+  isSuccess: {
+    params: ["any"],
+    returnType: boolean,
+    description: "Check whether a `Result` is a success.",
+  },
+  isFailure: {
+    params: ["any"],
+    returnType: boolean,
+    description: "Check whether a `Result` is a failure.",
+  },
 
   // --- Checkpoint / rewind ---
-  restore: { params: ["any", "any"], returnType: voidT },
+  restore: {
+    params: ["any", "any"],
+    returnType: voidT,
+    description:
+      "Restore execution to a previously captured checkpoint. Accepts a checkpoint object or ID and an options object (e.g. `{ maxRestores: 3 }` or variable overrides).",
+  },
 
   // --- Handler outcomes (reserved names) ---
-  approve: { params: ["any"], minParams: 0, returnType: "any" },
-  reject: { params: ["any"], minParams: 0, returnType: "any" },
-  propagate: { params: [], returnType: "any" },
+  approve: {
+    params: ["any"],
+    minParams: 0,
+    returnType: "any",
+    description:
+      "Inside a `handle ... with` block, approve the wrapped action (optionally substituting a return value).",
+  },
+  reject: {
+    params: ["any"],
+    minParams: 0,
+    returnType: "any",
+    description: "Inside a `handle ... with` block, block the wrapped action.",
+  },
+  propagate: {
+    params: [],
+    returnType: "any",
+    description:
+      "Inside a `handle ... with` block, pass the interrupt up to the next handler in the chain.",
+  },
 
   // --- Checkpointing ---
-  checkpoint: { params: [], returnType: number },
-  getCheckpoint: { params: [number], returnType: "any" },
+  checkpoint: {
+    params: [],
+    returnType: number,
+    description:
+      "Take a snapshot of the current execution state and return a checkpoint ID.",
+  },
+  getCheckpoint: {
+    params: [number],
+    returnType: "any",
+    description: "Return the full checkpoint object for a given checkpoint ID.",
+  },
+
+  // --- Concurrency (language constructs with block arguments) ---
+  // `fork` and `race` are special — they take a `string[]` of labels plus a
+  // block, and their return type depends on the block body. We type the
+  // return as `any` for now (no generic-block inference yet) but mark them
+  // `acceptsBlock` so the typechecker doesn't reject the call shape, and
+  // populate `description` so the LSP hover shows useful docs.
+  fork: {
+    params: [anyArray],
+    returnType: anyArray,
+    acceptsBlock: true,
+    description:
+      "Run multiple branches in parallel and wait for all of them to finish. Returns an array of results, one per item. Use as `fork(items) as <name> { ... }`.",
+  },
+  race: {
+    params: [anyArray],
+    returnType: "any",
+    acceptsBlock: true,
+    description:
+      "Like `fork`, but returns as soon as the first branch completes and cancels the rest. Use as `race(items) as <name> { ... }`.",
+  },
 
   // --- Context-injected builtins (codegen rewrites the call to inject __ctx) ---
   // The registry lives in lib/codegenBuiltins/contextInjected.ts and is the

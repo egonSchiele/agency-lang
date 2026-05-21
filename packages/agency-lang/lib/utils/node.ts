@@ -228,7 +228,11 @@ export function* getAllVariablesInBody(
         if ("type" in entry && entry.type === "splat") {
           yield* getAllVariablesInBody([entry.value]);
         } else {
-          yield* getAllVariablesInBody([(entry as any).value]);
+          const kv = entry as { computedKey?: any; value: any };
+          if (kv.computedKey) {
+            yield* getAllVariablesInBody([kv.computedKey]);
+          }
+          yield* getAllVariablesInBody([kv.value]);
         }
       }
     } else if (
@@ -417,10 +421,17 @@ export function* walkNodes(
         scopes,
       );
     } else if (node.type === "agencyObject") {
-      const objValues = node.entries.map((e) =>
-        "type" in e && e.type === "splat" ? e.value : (e as any).value,
-      );
-      yield* walkNodes(objValues as AgencyNode[], [...ancestors, node], scopes);
+      const objChildren: AgencyNode[] = [];
+      for (const e of node.entries) {
+        if ("type" in e && e.type === "splat") {
+          objChildren.push(e.value as AgencyNode);
+        } else {
+          const kv = e as { computedKey?: AgencyNode; value: AgencyNode };
+          if (kv.computedKey) objChildren.push(kv.computedKey);
+          objChildren.push(kv.value);
+        }
+      }
+      yield* walkNodes(objChildren, [...ancestors, node], scopes);
     } else if (
       node.type === "string" ||
       node.type === "multiLineString"

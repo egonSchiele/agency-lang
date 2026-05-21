@@ -204,14 +204,20 @@ A tool for reading the contents of a file and returning it as a string. The file
 ### write
 
 ```ts
-write(filename: string, content: string, dir: string): Result
+write(filename: string, content: string, dir: string, mode: string): Result
 ```
 
 A tool for writing content to a file. The filename is resolved relative to dir.
 
+  The `mode` parameter controls how an existing file is handled:
+    - "overwrite" (default): replace the file if it exists, create it if not
+    - "append": append to the file if it exists, create it if not
+    - "create-only": fail if the file already exists
+
   @param filename - The file to write
   @param content - The content to write
   @param dir - The directory to resolve the filename against (defaults to ".")
+  @param mode - How to handle an existing file: "overwrite" | "append" | "create-only"
 
 **Parameters:**
 
@@ -220,6 +226,7 @@ A tool for writing content to a file. The filename is resolved relative to dir.
 | filename | `string` |  |
 | content | `string` |  |
 | dir | `string` | "." |
+| mode | `string` | "overwrite" |
 
 **Returns:** `Result`
 
@@ -249,7 +256,7 @@ A tool for reading an image file and returning its contents as a Base64-encoded 
 
 **Throws:** `std::readImage`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L123))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L135))
 
 ### notify
 
@@ -270,7 +277,7 @@ A tool for showing a native OS notification with a title and message. Returns tr
 
 **Throws:** `std::notify`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L137))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L149))
 
 ### range
 
@@ -289,7 +296,7 @@ Generate an array of numbers. With one argument, generates from 0 to start-1. Wi
 
 **Returns:** `number[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L148))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L160))
 
 ### mostCommon
 
@@ -307,7 +314,7 @@ Return the most common element in an array. Uses JSON serialization for comparis
 
 **Returns:** `any`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L158))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L170))
 
 ### keys
 
@@ -325,7 +332,7 @@ Return an array of an object's own enumerable property names.
 
 **Returns:** `string[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L165))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L177))
 
 ### values
 
@@ -343,7 +350,7 @@ Return an array of an object's own enumerable property values.
 
 **Returns:** `any[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L172))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L184))
 
 ### entries
 
@@ -361,7 +368,7 @@ Return an array of an object's own enumerable entries, each as { key, value }.
 
 **Returns:** `any[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L179))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L191))
 
 ### emit
 
@@ -377,4 +384,4 @@ Emit a custom event to the calling TypeScript code via the onEmit callback.
 |---|---|---|
 | data |  |  |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L186))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L198))

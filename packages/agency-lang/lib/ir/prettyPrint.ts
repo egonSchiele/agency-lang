@@ -129,6 +129,9 @@ export function printTs(node: TsNode, indent = 0): string {
       const inner = node.entries.map((e) => {
         if (e.spread)
           return `${ind(indent + 1)}...${printTs(e.expr, indent + 1)}`;
+        if (e.computed) {
+          return `${ind(indent + 1)}[${printTs(e.key, indent + 1)}]: ${printTs(e.value, indent + 1)}`;
+        }
         return `${ind(indent + 1)}${e.key}: ${printTs(e.value, indent + 1)}`;
       });
       return `{\n${inner.join(",\n")}\n${ind(indent)}}`;

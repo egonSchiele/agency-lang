@@ -54,6 +54,8 @@ export const RESERVED_FUNCTION_NAMES = new Set<string>([
   "propagate",
   "checkpoint",
   "getCheckpoint",
+  "fork",
+  "race",
 
   // Category 2 — parsed as their own AST node.
   "schema",

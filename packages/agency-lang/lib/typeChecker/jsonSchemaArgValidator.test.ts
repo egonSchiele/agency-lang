@@ -10,6 +10,7 @@ function scope(opts: Partial<JsonSchemaArgScope> = {}): JsonSchemaArgScope {
     topLevelConstNames: opts.topLevelConstNames ?? new Set(),
     importedNames: opts.importedNames ?? new Set(),
     topLevelFunctionNames: opts.topLevelFunctionNames ?? new Set(),
+    valueParamNames: opts.valueParamNames,
   };
 }
 
@@ -92,13 +93,120 @@ describe("validateJsonSchemaArg", () => {
     expect(r.ok).toBe(true);
   });
 
-  it("rejects ternary / binop / template / array literal", () => {
+  it("rejects ternary / binop", () => {
     const ternary = { type: "binOpExpression", op: "?" } as any;
     expect(validateJsonSchemaArg(ternary, scope()).ok).toBe(false);
     const binop = { type: "binOpExpression" } as any;
     expect(validateJsonSchemaArg(binop, scope()).ok).toBe(false);
-    const arr = { type: "agencyArray", items: [] } as any;
+  });
+
+  it("accepts array literals of allowed items (e.g. enum lists)", () => {
+    const arr = {
+      type: "agencyArray",
+      items: [
+        { type: "string", segments: [{ type: "text", value: "a" }] },
+        { type: "string", segments: [{ type: "text", value: "b" }] },
+      ],
+    } as any;
+    expect(validateJsonSchemaArg(arr, scope()).ok).toBe(true);
+  });
+
+  it("rejects array literals whose items are disallowed", () => {
+    const arr = {
+      type: "agencyArray",
+      items: [{ type: "binOpExpression" }],
+    } as any;
     expect(validateJsonSchemaArg(arr, scope()).ok).toBe(false);
+  });
+
+  it("accepts regex and unit literals (post-substitution leaves)", () => {
+    const re = { type: "regex", pattern: "abc", flags: "" } as any;
+    expect(validateJsonSchemaArg(re, scope()).ok).toBe(true);
+    const u = {
+      type: "unitLiteral",
+      value: "30",
+      unit: "s",
+      canonicalValue: 30000,
+      dimension: "time",
+    } as any;
+    expect(validateJsonSchemaArg(u, scope()).ok).toBe(true);
+  });
+
+  it("accepts value-param identifiers when in scope", () => {
+    const r = validateJsonSchemaArg(
+      ident("low"),
+      scope({ valueParamNames: new Set(["low", "high"]) }),
+    );
+    expect(r.ok).toBe(true);
+  });
+
+  it("rejects unbound value-param identifier when scope omits it", () => {
+    const r = validateJsonSchemaArg(ident("low"), scope());
+    expect(r.ok).toBe(false);
+  });
+
+  it("accepts PFA expression: foo.partial(n: 0)", () => {
+    const pfa: Expression = {
+      type: "valueAccess",
+      base: ident("min"),
+      chain: [
+        {
+          kind: "methodCall",
+          functionCall: {
+            type: "functionCall",
+            functionName: "partial",
+            arguments: [{ type: "namedArgument", name: "n", value: nm("0") }],
+          },
+        },
+      ],
+    } as any;
+    const r = validateJsonSchemaArg(
+      pfa,
+      scope({ topLevelFunctionNames: new Set(["min"]) }),
+    );
+    expect(r.ok).toBe(true);
+  });
+
+  it("rejects PFA whose base is a function-call (must be a plain identifier)", () => {
+    // `getMin(1).partial(n: 0)` — the receiver of `.partial(...)` is the
+    // result of a runtime call. PFA must be rooted at a plain identifier
+    // (a top-level validator or imported function), never at the result
+    // of another call. This mirrors `_identOrPfaParser` in the parser.
+    const pfa: Expression = {
+      type: "valueAccess",
+      base: {
+        type: "functionCall",
+        functionName: "getMin",
+        arguments: [nm("1")],
+      } as any,
+      chain: [
+        {
+          kind: "methodCall",
+          functionCall: {
+            type: "functionCall",
+            functionName: "partial",
+            arguments: [{ type: "namedArgument", name: "n", value: nm("0") }],
+          },
+        },
+      ],
+    } as any;
+    const r = validateJsonSchemaArg(
+      pfa,
+      scope({ topLevelFunctionNames: new Set(["getMin"]) }),
+    );
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.reason).toMatch(/PFA base must be a plain identifier/);
+  });
+
+  it("rejects bare valueAccess with only property accesses", () => {
+    const expr: Expression = {
+      type: "valueAccess",
+      base: ident("foo"),
+      chain: [{ kind: "property", name: "bar" }],
+    } as any;
+    const r = validateJsonSchemaArg(expr, scope());
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.reason).toMatch(/PFA expression/);
   });
 
   it("rejects string literals that contain interpolation segments", () => {

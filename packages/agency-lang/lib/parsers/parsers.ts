@@ -99,6 +99,7 @@ import {
   TypeParam,
   UnionType,
   Tag,
+  ValueParam,
 } from "../types.js";
 import { GraphNodeDefinition } from "../types/graphNode.js";
 import { ForLoop } from "../types/forLoop.js";
@@ -516,21 +517,99 @@ export const simpleStringParser: Parser<StringLiteral> = (input: string) => {
   }))(input);
 };
 
-export const _stringParser: Parser<StringLiteral> = (input: string) => {
-  const open = oneOf('"`')(input);
-  if (!open.success) return open as ParserResult<StringLiteral>;
-  const delim = open.result as '"' | "`";
-  const segments = many(
-    or(stringTextSegmentParserFor(delim), interpolationSegmentParser),
-  )(open.rest);
-  if (!segments.success) return segments as ParserResult<StringLiteral>;
-  const close = char(delim)(segments.rest);
-  if (!close.success) return failure(`expected closing ${delim}`, input);
-  return success(
-    { type: "string" as const, segments: segments.result },
-    close.rest,
+// Identifier-only interpolation segment: accepts `${name}` where `name`
+// is a plain identifier. Used in static tag-arg strings so users can
+// embed a value-param identifier (e.g. `${divisor}`) without opening
+// the door to arbitrary runtime expressions. Note: only value-param
+// identifiers are actually supported end-to-end — top-level static
+// consts are rejected later by `validateStringLiteral` and would crash
+// at codegen, since tag strings are emitted where module-level Agency
+// consts are not bound as plain JS names.
+const staticInterpolationSegmentParser: Parser<InterpolationSegment> =
+  withLoc((input: string) => {
+    const parser = seqC(
+      char("$"),
+      char("{"),
+      optionalSpaces,
+      capture(variableNameParser, "expression"),
+      optionalSpaces,
+      char("}"),
+    );
+    const result = parser(input);
+    if (!result.success) return result;
+    return success(
+      {
+        type: "interpolation" as const,
+        expression: result.result.expression,
+      },
+      result.rest,
+    );
+  });
+
+// String literal that allows identifier-only `${name}` interpolation but
+// nothing else. Used by `staticTagArgParser` so e.g.
+// `@jsonSchema({ description: "divisible by ${divisor}" })` is accepted
+// when `divisor` is a value-param name on the surrounding alias, while
+// `"${a + b}"`, `"${foo()}"`, `"${obj.field}"` are rejected by the
+// parser before reaching the type checker / generator. Static const
+// names are not supported here — see the comment on
+// `staticInterpolationSegmentParser`.
+export const staticInterpolatedStringParser: Parser<StringLiteral> =
+  makeInterpolatedStringParser(staticInterpolationSegmentParser);
+
+// Multi-line variant of `staticInterpolatedStringParser`. Same
+// identifier-only interpolation rule for `${...}` slots, used inside
+// `staticTagArgParser` so a tag arg can be a `"""..."""` literal.
+export const staticMultiLineStringParser: Parser<MultiLineStringLiteral> = (
+  input: string,
+) => {
+  const parser = seqC(
+    set("type", "multiLineString"),
+    str('"""'),
+    capture(
+      many(
+        or(multiLineStringTextSegmentParser, staticInterpolationSegmentParser),
+      ),
+      "segments",
+    ),
+    str('"""'),
   );
+  const result = parser(input);
+  if (result.success) {
+    for (const seg of result.result.segments) {
+      if (seg.type === "text") seg.value = stripSentinels(seg.value);
+    }
+  }
+  return result;
 };
+
+// Build a string-literal parser that supports `"..."` / `` `...` ``
+// delimiters, requires matching open/close delimiters, and accepts
+// the given interpolation-segment parser inside `${...}` slots.
+// Shared between the full `_stringParser` (any expression inside
+// `${...}`) and `staticInterpolatedStringParser` (identifier-only).
+function makeInterpolatedStringParser(
+  segmentParser: Parser<InterpolationSegment>,
+): Parser<StringLiteral> {
+  return (input: string) => {
+    const open = oneOf('"`')(input);
+    if (!open.success) return open as ParserResult<StringLiteral>;
+    const delim = open.result as '"' | "`";
+    const segments = many(
+      or(stringTextSegmentParserFor(delim), segmentParser),
+    )(open.rest);
+    if (!segments.success) return segments as ParserResult<StringLiteral>;
+    const close = char(delim)(segments.rest);
+    if (!close.success) return failure(`expected closing ${delim}`, input);
+    return success(
+      { type: "string" as const, segments: segments.result },
+      close.rest,
+    );
+  };
+}
+
+export const _stringParser: Parser<StringLiteral> =
+  makeInterpolatedStringParser(interpolationSegmentParser);
 
 export const stringParser: Parser<StringLiteral> = label("a string", (input: string) => {
   // Allow `_valueAccessParser` on the right of `+` so function calls and
@@ -687,12 +766,43 @@ export const primitiveTypeParser: Parser<PrimitiveType> = trace(
   ),
 );
 
+/**
+ * Shared `(arg1, arg2, ...)` value-arg suffix parser. Used by both
+ * `typeAliasVariableParser` (e.g. `Age(18)`) and `genericTypeParser`
+ * (e.g. `BoundedList<string>(3)`). Each arg is restricted to the
+ * statically-known subset enforced by `staticTagArgParser`.
+ *
+ * Defined as a lazy reference so it can be used by parsers that appear
+ * earlier in the file than `staticTagArgParser` itself.
+ */
+const optionalValueArgsParser = optional(
+  captureCaptures(
+    seqC(
+      char("("),
+      optionalSpaces,
+      capture(
+        sepBy(
+          seqR(optionalSpaces, char(","), optionalSpaces),
+          lazy(() => staticTagArgParser),
+        ),
+        "valueArgs",
+      ),
+      optionalSpaces,
+      char(")"),
+    ),
+  ),
+);
+
 export const typeAliasVariableParser: Parser<TypeAliasVariable> = trace(
   "typeAliasVariableParser",
-  seqC(
-    set("type", "typeAliasVariable"),
-    capture(many1WithJoin(varNameChar), "aliasName"),
-  ),
+  (input: string): ParserResult<TypeAliasVariable> => {
+    const parser = seqC(
+      set("type", "typeAliasVariable"),
+      capture(many1WithJoin(varNameChar), "aliasName"),
+      optionalValueArgsParser,
+    );
+    return parser(input);
+  },
 );
 
 /**
@@ -1163,6 +1273,9 @@ export const genericTypeParser: Parser<GenericType> = trace(
     ),
     optionalSpaces,
     char(">"),
+    // Optional value-arg suffix: combined `<T>(n)` form for
+    // value-parameterized generic aliases (e.g. `BoundedList<string>(3)`).
+    optionalValueArgsParser,
   ),
 );
 
@@ -1207,6 +1320,35 @@ export const typeParamParser: Parser<TypeParam> = trace(
   ),
 );
 
+/**
+ * Value parameter on a value-parameterized alias declaration. Examples:
+ *   min: number              → { name: "min", type: { type: "primitiveType", value: "number" } }
+ *   min: number = 0          → { ..., default: { type: "number", value: "0" } }
+ *
+ * The default expression is restricted to the same statically-known
+ * subset as tag arguments (see `staticTagArgParser`).
+ */
+export const valueParamParser: Parser<ValueParam> = trace(
+  "valueParamParser",
+  seqC(
+    capture(many1WithJoin(varNameChar), "name"),
+    optionalSpaces,
+    char(":"),
+    optionalSpaces,
+    capture(lazy(() => variableTypeParser), "type"),
+    optional(
+      captureCaptures(
+        seqC(
+          optionalSpaces,
+          char("="),
+          optionalSpaces,
+          capture(lazy(() => staticTagArgParser), "default"),
+        ),
+      ),
+    ),
+  ),
+);
+
 const baseTypeAliasParser: Parser<TypeAlias> = withLoc(trace(
   "typeAliasParser",
   seqC(
@@ -1233,6 +1375,26 @@ const baseTypeAliasParser: Parser<TypeAlias> = withLoc(trace(
               ),
               optionalSpaces,
               char(">"),
+            ),
+          ),
+        ),
+        // Optional `(name: T, name: T = default, ...)`. Must come AFTER the
+        // optional `<...>` block: reversed ordering `(...)<...>` is rejected
+        // because nothing here consumes a `<` before the `=`.
+        optional(
+          captureCaptures(
+            seqC(
+              char("("),
+              optionalSpaces,
+              capture(
+                sepBy1(
+                  seqR(optionalSpaces, char(","), optionalSpaces),
+                  valueParamParser,
+                ),
+                "valueParams",
+              ),
+              optionalSpaces,
+              char(")"),
             ),
           ),
         ),
@@ -1360,31 +1522,95 @@ export const skillParser = (input: string) => {
 // tag.ts
 // =============================================================================
 
-// A single tag argument: restricted subset of expressions per spec
-// (docs/superpowers/specs/2026-05-19-type-validation-and-json-schema-annotations-design.md).
+// A single statically-restricted argument expression. Shared by:
+//   1. `@validate(...)` / `@jsonSchema(...)` tag arguments
+//   2. value-parameter default expressions (`= 0`)
+//   3. value-arg expressions at use sites (`Age(18)`)
 //
-// Allowed: string / number / boolean / null literals, identifiers,
-// function calls, object literals (including spread). NOT allowed:
-// ternaries, binary ops, pipes, member access, template strings,
-// array literals.
+// The underlying rule: allowed expressions are exactly those whose value
+// is statically known at compile time, so they can be substituted into a
+// tag expression and emitted as a TypeScript literal.
+//
+// Allowed: string / number / boolean / null literals (NO `${...}`
+// interpolation — see below), identifiers (resolving to a static const
+// or value-param in scope), object literals (including spread), and PFA
+// expressions (e.g. `min.partial(n: 0)`) whose base is a plain
+// identifier.
+//
+// NOT allowed:
+//   - bare function calls (no chain). Use PFA: `min.partial(n: 0)`.
+//   - PFA whose base is a function-call (`getMin(1).partial(...)`) —
+//     base must be a plain identifier.
+//   - ternaries, binary ops, pipes.
+//   - member access (`obj.field`).
+//   - interpolated string segments. Plain `simpleStringParser` accepts
+//     only literal-only strings; any `${...}` inside a string would
+//     embed a runtime expression that can't be folded at compile time.
+//   - array literals. (Could be allowed via constant folding in a
+//     future iteration; deferred until a stdlib use case needs them.)
 //
 // All forward references go through lazy(...) because these parsers
 // are defined later in the file.
-const restrictedTagArgParser: Parser<Expression> = label(
-  "a tag argument (literal, identifier, function call, PFA, or object literal)",
+const _identOrPfaParser: Parser<Expression> = (input: string) => {
+  const result = lazy(() => _valueAccessParser)(input);
+  if (!result.success) return result;
+  // Reject bare function calls (no chain). PFA expressions (function
+  // call followed by a `.partial(...)` style method-call chain) are
+  // `valueAccess` nodes and so survive this filter. Bare identifiers
+  // (`variableName`) are also fine.
+  if (result.result.type === "functionCall") {
+    return failure(
+      "bare function call not allowed; use a literal, identifier, PFA expression (e.g. `min.partial(n: 0)`), or object literal",
+      input,
+    );
+  }
+  // Reject PFA whose base isn't a plain identifier. `foo(1).partial(...)`
+  // and `(get()).partial(...)` are NOT static — they call a function at
+  // runtime to compute the receiver. PFA must be rooted at an identifier
+  // (typically a top-level validator function in scope).
+  if (
+    result.result.type === "valueAccess" &&
+    result.result.base.type !== "variableName"
+  ) {
+    return failure(
+      "PFA base must be a plain identifier (e.g. `min.partial(n: 0)`, not `min(1).partial(...)`)",
+      input,
+    );
+  }
+  return result;
+};
+
+export const staticTagArgParser: Parser<Expression> = label(
+  "a static argument (literal, identifier, PFA expression, array, object, regex, or unit literal)",
   or(
     lazy(() => agencyObjectParser),
+    lazy(() => agencyArrayParser),
+    regexLiteralParser,
     nullParser,
     booleanParser,
+    // Unit literals (`30s`, `$5`, `100KB`, ...) MUST come before
+    // `numberParser` so `30s` matches as a unit and not as `30`
+    // with stray `s`. The IR carries `canonicalValue` (already
+    // normalised to ms / dollars / bytes), which is what codegen
+    // emits.
+    unitLiteralParser,
     numberParser,
-    simpleStringParser,
-    // `_valueAccessParser` subsumes plain function calls and bare
-    // identifiers (when there is no chain), and also accepts PFA
-    // expressions like `min.partial(n: 0)` so users can configure
-    // parameterized validators inline in `@validate(...)`.
-    lazy(() => _valueAccessParser),
+    // Triple-quoted strings before single-quoted so `"""..."""`
+    // isn't first matched as an empty `""` followed by `"..."`.
+    staticMultiLineStringParser,
+    // Allow identifier-only `${name}` interpolation so users can
+    // reference value-param identifiers inside tag strings (e.g.
+    // `description: "must be divisible by ${divisor}"`). Any
+    // non-identifier expression in a `${...}` slot is rejected at
+    // parse time.
+    staticInterpolatedStringParser,
+    _identOrPfaParser,
   ),
 );
+
+// Backwards-compatible alias for the previous name. The current
+// behaviour is the tightened one: bare function calls are rejected.
+const restrictedTagArgParser: Parser<Expression> = staticTagArgParser;
 
 // Parenthesized argument list: (arg1, arg2)
 const tagArgsList = map(

@@ -505,38 +505,38 @@ Having two ways to add descriptions (`# text` and `@jsonSchema({ description: "t
 
 Agency functions compile to async TypeScript functions with runtime infrastructure (step counters, interrupt support, etc.). Zod's `.refine()` expects synchronous predicates; using `.refine()` with async functions would require switching the entire validation path to `safeParseAsync()`, which complicates the existing runtime. Running validators as a post-validation step after Zod's structural check keeps both paths clean and means validator failure messages propagate naturally via the `Result` type.
 
-## Future Work: Value-Parameterized Type Aliases
+## Value-Parameterized Type Aliases
 
 ### Motivation
 
-The annotation system encourages creating reusable validated types. The v1 stdlib ships pre-baked aliases for the common no-parameter cases (`Email`, `URLString`, `UUIDString` — see the "Pre-baked Validated Types" section above).
+The annotation system encourages creating reusable validated types. The stdlib ships pre-baked aliases for the common no-parameter cases (`Email`, `URLString`, `UUIDString` — see the "Pre-baked Validated Types" section above).
 
-However, some validated types need **parameters**. A "number in range" type needs to know the range, and shipping a fixed `Age = NumberInRange(0, 150)` is no good for the user who wants `NumberInRange(1, 100)`. With the current design users must repeat the annotations every time:
+However, some validated types need **parameters**. A "number in range" type needs to know the range, and shipping a fixed `Age = NumberInRange(0, 150)` is no good for the user who wants `NumberInRange(1, 100)`. Without parameterization users would have to repeat the annotations every time:
 
 ```
-@validate(min(0), max(150))
+@validate(min.partial(n: 0), max.partial(n: 150))
 @jsonSchema({ minimum: 0, maximum: 150 })
 type Age = number
 
-@validate(min(1), max(100))
+@validate(min.partial(n: 1), max.partial(n: 100))
 @jsonSchema({ minimum: 1, maximum: 100 })
 type Score = number
 ```
 
-This is verbose and error-prone. Ideally, users could write `NumberInRange(0, 150)` and `NumberInRange(1, 100)`.
+This is verbose and error-prone. With value parameters, both shapes share a single declaration and just vary at the use site: `NumberInRange(0, 150)` and `NumberInRange(1, 100)`.
 
 ### The Problem
 
-Agency's generic type parameters (`<T>`) are types, not values. Writing `type NumberInRange<start, finish> = number` doesn't work because `start` and `finish` are type-level entities that can't be passed to value-level functions like `min(start)`.
+Agency's generic type parameters (`<T>`) are types, not values. Writing `type NumberInRange<start, finish> = number` doesn't work because `start` and `finish` are type-level entities that can't be passed to value-level functions like `min.partial(n: start)`.
 
-This is the fundamental tension between type space and value space. Most languages keep these strictly separated. A few languages have a concept called **dependent types** — types that are parameterized by values. Full dependent types are a complex feature found in academic languages like Idris and Agda. But Agency doesn't need the full generality — just enough to make parameterized validated types work.
+This is the fundamental tension between type space and value space. Most languages keep these strictly separated. A few languages have a concept called **dependent types** — types that are parameterized by values. Full dependent types are a complex feature found in academic languages like Idris and Agda. Agency doesn't need the full generality — just enough to make parameterized validated types work.
 
-### Proposed Solution: Value Parameters with `()`
+### Solution: Value Parameters with `()`
 
-Type aliases can take **value parameters** using `()`, distinct from type parameters using `<>`:
+Type aliases take **value parameters** using `()`, distinct from type parameters using `<>`:
 
 ```
-@validate(min(low), max(high))
+@validate(min.partial(n: low), max.partial(n: high))
 @jsonSchema({ minimum: low, maximum: high })
 type NumberInRange(low: number, high: number) = number
 ```
@@ -550,10 +550,9 @@ type User = {
 }
 ```
 
-The `()` vs `<>` distinction is visually clear: `<>` is for types, `()` is for values. They can be combined:
+The `()` vs `<>` distinction is visually clear: `<>` is for types, `()` is for values. They can be combined (type params first, value params second):
 
 ```
-@validate(minItems(n))
 @jsonSchema({ minItems: n })
 type BoundedList<T>(n: number) = T[]
 
@@ -565,31 +564,27 @@ items: BoundedList<string>(3)
 When the compiler sees `NumberInRange(0, 150)`:
 
 1. It looks up the `NumberInRange` type alias and finds value parameters `(low: number, high: number)`.
-2. It substitutes `low=0, high=150` into the annotations.
-3. `@validate(min(low), max(high))` becomes `@validate(min(0), max(150))`.
+2. It substitutes `low=0, high=150` into the alias's tag expressions via `lib/typeChecker/valueParamSubstitution.ts`.
+3. `@validate(min.partial(n: low), max.partial(n: high))` becomes `@validate(min.partial(n: 0), max.partial(n: 150))`.
 4. `@jsonSchema({ minimum: low, maximum: high })` becomes `@jsonSchema({ minimum: 0, maximum: 150 })`.
-5. The Zod schema and validators are generated with the substituted values.
+5. The Zod schema and validators are emitted inline at the use site with the substituted values.
 
-In the generated TypeScript, each distinct instantiation produces its own Zod schema. `NumberInRange(0, 150)` and `NumberInRange(1, 100)` are different schemas with different `.meta()` properties and different validator calls.
+Each distinct instantiation produces its own inline Zod schema. `NumberInRange(0, 150)` and `NumberInRange(1, 100)` carry different `.meta()` properties and different validator calls. The two instantiations are nominally distinct but mutually assignment-compatible (both bottom out at `number`); validators only fire at `!` sites.
+
+Bare function calls inside tag arguments (`@validate(min(0))`) are rejected — substitution requires a structural handle on each tag arg, and PFA (`min.partial(n: 0)`) provides one. The dev-internals note in `docs/dev/validation-annotations.md` covers the substitution pass, the codegen divergence (no top-level `const` for parameterized aliases, no `__agency_descriptor` side-channel), and the `applyValueArgs` canonical entry point.
 
 ### Standard Library Types
 
-With value parameters, `std::types` (which already exports the no-parameter aliases `Email`, `URLString`, `UUIDString` shipped in v1) can grow a set of reusable parameterized types:
+`std::types` ships these parameterized aliases out of the box:
 
 ```
-// v1 — ships now in std::types
-type Email = string
-type URLString = string
-type UUIDString = string
-
-// Future — added once value parameters land
 type NumberInRange(low: number, high: number) = number
 type StringWithLength(min: number, max: number) = string
 type MatchesPattern(pat: string) = string
 type BoundedArray<T>(min: number, max: number) = T[]
 ```
 
-Users can then write concise type definitions:
+Plus the no-parameter aliases from v1 (`Email`, `URLString`, `UUIDString`). Together they let users write concise validated type definitions without repeating tag annotations:
 
 ```
 import { Email, NumberInRange, BoundedArray } from "std::types"
@@ -600,7 +595,3 @@ type User = {
   tags: BoundedArray<string>(1, 10)
 }
 ```
-
-### Scope
-
-Value-parameterized type aliases are a follow-up feature. The core annotation infrastructure (`@validate`, `@jsonSchema`, tag parser changes, `# description` removal) ships first. Value parameters build on top of that foundation once it is stable.

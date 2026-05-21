@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "{\"a\":true,\"wider\":true,\"tighter\":false,\"sum\":12}",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "Arithmetic erases bounds: `a.value + 5` is plain number, so re-applying validation requires a fresh annotation. A wider bound passes, a tighter bound fails on the literal value alone."
+    }
+  ]
+}

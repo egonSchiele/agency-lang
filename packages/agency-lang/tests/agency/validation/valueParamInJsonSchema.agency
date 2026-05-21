@@ -1,0 +1,13 @@
+// Verifies that value-parameter substitution flows through @jsonSchema(...)
+// the same way it does through @validate(...). The use-site `Bounded(0, 100)`
+// must produce a Zod schema whose JSON Schema output literally contains
+// `minimum: 0` and `maximum: 100`.
+
+@jsonSchema({ minimum: low, maximum: high })
+type Bounded(low: number, high: number) = number
+
+node main() {
+  const s = schema(Bounded(0, 100))
+  const js = s.toJSONSchema()
+  return js.minimum + "|" + js.maximum
+}

@@ -1,0 +1,31 @@
+// Documents that arithmetic ERASES bounds: the result of `a.value + n`
+// is a plain `number`, not the parameterized alias `NumberInRange(0,10)`.
+// To re-apply a bound after arithmetic, the user must annotate the result
+// with a (possibly different) parameterized alias and use the bang.
+//
+// This test pins that behavior so future changes don't silently start
+// propagating bounds through arithmetic without an explicit design
+// decision.
+
+import { min, max } from "std::validators"
+
+@validate(min.partial(n: low), max.partial(n: high))
+type NumberInRange(low: number, high: number) = number
+
+node main() {
+  const a: NumberInRange(0, 10)! = 7
+
+  // After arithmetic the result is just `number`, no bounds carry over.
+  // Re-annotating with a WIDER bound succeeds; re-annotating with a
+  // TIGHTER bound fails on the actual numeric value alone (12 > 10).
+  const sum = a.value + 5
+  const wider: NumberInRange(0, 100)! = sum
+  const tighter: NumberInRange(0, 10)! = sum
+
+  return {
+    a: isSuccess(a),
+    wider: isSuccess(wider),
+    tighter: isSuccess(tighter),
+    sum: sum
+  }
+}

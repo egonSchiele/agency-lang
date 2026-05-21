@@ -56,14 +56,44 @@ describe("tagParser", () => {
     });
   });
 
-  it("parses a tag with a function call argument", () => {
-    const result = tagParser("@validate(min(0), max(150))");
+  it("parses a tag with PFA arguments", () => {
+    const result = tagParser(
+      "@validate(min.partial(n: 0), max.partial(n: 150))",
+    );
     expect(result.success).toBe(true);
     if (!result.success) return;
     expect(result.result.name).toBe("validate");
     expect(result.result.arguments).toHaveLength(2);
-    expect(result.result.arguments[0].type).toBe("functionCall");
-    expect(result.result.arguments[1].type).toBe("functionCall");
+    expect(result.result.arguments[0].type).toBe("valueAccess");
+    expect(result.result.arguments[1].type).toBe("valueAccess");
+  });
+
+  it("rejects bare function call tag arguments (must use PFA)", () => {
+    // After the tag-arg restriction was tightened, `@validate(min(0))` is no
+    // longer a valid tag — the bare function call must be expressed as a
+    // PFA expression like `@validate(min.partial(n: 0))` instead. The tag
+    // parser has a zero-args fallback (so `@name` alone still parses), so
+    // here we assert that the bare-call form does NOT parse into a single
+    // function-call argument: either it fails outright or falls back to
+    // the no-args form with `(min(0))` left unconsumed.
+    const result = tagParser("@validate(min(0))");
+    if (result.success) {
+      expect(result.result.arguments).toHaveLength(0);
+      expect(result.rest.startsWith("(")).toBe(true);
+    }
+  });
+
+  it("rejects PFA whose base is a function-call (must be a plain identifier)", () => {
+    // `getMin(1).partial(n: 0)` is NOT static — it calls `getMin` at
+    // runtime to compute the PFA receiver. The PFA base must be a plain
+    // identifier (a top-level validator function or imported function),
+    // never the result of another call. Same falls-back-to-empty-args
+    // behaviour as the bare-call case.
+    const result = tagParser("@validate(getMin(1).partial(n: 0))");
+    if (result.success) {
+      expect(result.result.arguments).toHaveLength(0);
+      expect(result.rest.startsWith("(")).toBe(true);
+    }
   });
 
   it("parses a tag with an object literal argument", () => {

@@ -1,0 +1,26 @@
+// Regex literal as a value argument. A top-level def validator takes
+// a `regex` parameter; the alias forwards its value-param `pat` into
+// the validator's named arg via PFA. At use sites, `Code(re/.../)`
+// substitutes the regex into the @validate PFA so the bang validates
+// against it.
+
+def matchesRe(pattern: regex, value: string): Result {
+  if (pattern.test(value)) {
+    return success(value)
+  }
+  return failure("does not match")
+}
+
+@validate(matchesRe.partial(pattern: pat))
+type Code(pat: regex) = string
+
+node main() {
+  const okDigits: Code(re/^[0-9]+$/)! = "12345"
+  const badDigits: Code(re/^[0-9]+$/)! = "12a5"
+  const okUpper: Code(re/^[A-Z]+$/)! = "HELLO"
+  return {
+    okDigits: isSuccess(okDigits),
+    badDigits: isSuccess(badDigits),
+    okUpper: isSuccess(okUpper)
+  }
+}

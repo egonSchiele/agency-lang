@@ -96,3 +96,110 @@ export type UUIDString = string
 ```
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/types.agency#L37))
+
+### NumberInRange
+
+A number that must lie within the inclusive range `[low, high]`.
+    Use as `NumberInRange(0, 100)` etc. — both bounds substitute into the
+    `@validate(...)` and `@jsonSchema(...)` tags at the use site.
+
+```ts
+/** A number that must lie within the inclusive range `[low, high]`.
+    Use as `NumberInRange(0, 100)` etc. — both bounds substitute into the
+    `@validate(...)` and `@jsonSchema(...)` tags at the use site. */
+@validate(min.partial(n: low), max.partial(n: high))
+@jsonSchema({
+  minimum: low,
+  maximum: high
+})
+export type NumberInRange(low: number, high: number) = number
+```
+
+**Validators:** `min.partial(n: low)`, `max.partial(n: high)`
+
+**JSON Schema metadata:**
+
+```agency
+{
+  minimum: low,
+  maximum: high
+}
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/types.agency#L44))
+
+### StringWithLength
+
+A string whose length is in the inclusive range `[min, max]`.
+
+```ts
+/** A string whose length is in the inclusive range `[min, max]`. */
+@validate(minLength.partial(n: min), maxLength.partial(n: max))
+@jsonSchema({
+  minLength: min,
+  maxLength: max
+})
+export type StringWithLength(min: number, max: number) = string
+```
+
+**Validators:** `minLength.partial(n: min)`, `maxLength.partial(n: max)`
+
+**JSON Schema metadata:**
+
+```agency
+{
+  minLength: min,
+  maxLength: max
+}
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/types.agency#L49))
+
+### MatchesPattern
+
+A string that matches the given regular expression `pat`.
+
+```ts
+/** A string that matches the given regular expression `pat`. */
+@validate(matches.partial(pattern: pat))
+@jsonSchema({
+  pattern: pat
+})
+export type MatchesPattern(pat: string) = string
+```
+
+**Validators:** `matches.partial(pattern: pat)`
+
+**JSON Schema metadata:**
+
+```agency
+{
+  pattern: pat
+}
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/types.agency#L54))
+
+### BoundedArray
+
+An array whose length is in the inclusive range `[min, max]`.
+
+```ts
+/** An array whose length is in the inclusive range `[min, max]`. */
+@jsonSchema({
+  minItems: min,
+  maxItems: max
+})
+export type BoundedArray<T>(min: number, max: number) = T[]
+```
+
+**JSON Schema metadata:**
+
+```agency
+{
+  minItems: min,
+  maxItems: max
+}
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/types.agency#L58))

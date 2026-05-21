@@ -1,0 +1,32 @@
+// Verifies value-parameterized aliases work in function parameter and
+// return positions. The literal value args travel through the function
+// signature into the body's type annotations and validation runs at the
+// call site.
+
+import { min, max } from "std::validators"
+
+@validate(min.partial(n: low), max.partial(n: high))
+type NumberInRange(low: number, high: number) = number
+
+def doubled(x: number): NumberInRange(0, 200) {
+  return x * 2
+}
+
+def clamp(x: NumberInRange(0, 100)): number {
+  return x
+}
+
+node main() {
+  // Use the function return type as the annotation source for the bang.
+  const ok: NumberInRange(0, 200)! = doubled(50)
+  const overflow: NumberInRange(0, 200)! = doubled(150)
+  const clamped = clamp(42)
+  const okParam: NumberInRange(0, 100)! = clamped
+
+  return {
+    ok: isSuccess(ok),
+    overflow: isSuccess(overflow),
+    okParam: isSuccess(okParam),
+    clamped: clamped
+  }
+}

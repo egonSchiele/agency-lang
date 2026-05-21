@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "\"0|150\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "Value-parameterized alias used as an object property — alias-level @jsonSchema tags are substituted before being merged into the property's .meta(), not emitted as unbound value-param identifiers"
+    }
+  ]
+}

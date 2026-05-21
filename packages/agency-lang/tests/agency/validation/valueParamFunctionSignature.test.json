@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "{\"ok\":true,\"overflow\":false,\"okParam\":true,\"clamped\":42}",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "Value-parameterized aliases in function param and return positions: literal value-args flow through the signature; bang on a returned/argument value still applies the parameterized validators."
+    }
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "{\"goodAdult\":true,\"tooYoung\":false,\"anyPositive\":true,\"negative\":false}",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "Simplest value-parameterized alias: `type Age(low) = number` validated by `min.partial(n: low)`. Returns per-assertion isSuccess() flags."
+    }
+  ]
+}

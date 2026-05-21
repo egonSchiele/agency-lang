@@ -1,0 +1,23 @@
+// Verifies value-param substitution into BRANCHES of a union-typed alias
+// body. Each branch is itself a value-param alias depending on the outer
+// parameter; substitution must reach into every union member.
+
+@jsonSchema({ minimum: low, maximum: high })
+type NumberInRange(low: number, high: number) = number
+
+// Union of two parameterized bounded ranges. When instantiated with
+// (10, 50, 100, 200), branch 1 should carry minimum=10 maximum=50
+// and branch 2 should carry minimum=100 maximum=200.
+type TwoRanges(loA: number, hiA: number, loB: number, hiB: number) = NumberInRange(loA, hiA) | NumberInRange(loB, hiB)
+
+node main() {
+  const s = schema(TwoRanges(10, 50, 100, 200))
+  const js = s.toJSONSchema()
+
+  return {
+    branchAMin: js.anyOf[0].minimum,
+    branchAMax: js.anyOf[0].maximum,
+    branchBMin: js.anyOf[1].minimum,
+    branchBMax: js.anyOf[1].maximum
+  }
+}

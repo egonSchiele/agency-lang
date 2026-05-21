@@ -1,0 +1,28 @@
+// Unit literal as a value argument. `30s` is a time literal that
+// canonicalises to 30000 (milliseconds). After substitution the
+// alias's @jsonSchema embeds the canonical number — so `Timeout(30s)`
+// and `Timeout(1m)` differ only by their canonical values in the
+// schema.
+
+import { min, max } from "std::validators"
+
+@validate(min.partial(n: 0), max.partial(n: ms))
+@jsonSchema({ maximum: ms })
+type Timeout(ms: number) = number
+
+node main() {
+  const sa = schema(Timeout(30s))
+  const sb = schema(Timeout(1m))
+  const ja = sa.toJSONSchema()
+  const jb = sb.toJSONSchema()
+
+  const okFast: Timeout(30s)! = 1000
+  const tooSlow: Timeout(30s)! = 50000
+
+  return {
+    maxA: ja.maximum,
+    maxB: jb.maximum,
+    okFast: isSuccess(okFast),
+    tooSlow: isSuccess(tooSlow)
+  }
+}

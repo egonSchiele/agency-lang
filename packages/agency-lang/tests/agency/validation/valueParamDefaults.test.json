@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "{\"adult\":true,\"childButOk\":true,\"negativeWithEmptyParens\":false,\"childBare\":true,\"negativeBare\":false}",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "Defaults apply equally for explicit args, empty parens, and bare alias references (no parens). Returns per-assertion isSuccess() flags so a regression diff identifies which form misbehaves."
+    }
+  ]
+}

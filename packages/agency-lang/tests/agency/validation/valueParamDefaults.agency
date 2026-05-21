@@ -1,0 +1,29 @@
+// Verifies that omitting a value argument falls back to the declared default.
+// `type Age(min: number = 0)` allows three use-site forms:
+//   Age(18)  — explicit arg
+//   Age()    — empty arg list, default applies
+//   Age      — bare reference (no parens), default applies
+// All three should behave identically when the param has a default.
+
+import { min } from "std::validators"
+
+@validate(min.partial(n: low))
+type Age(low: number = 0) = number
+
+node main() {
+  const adult: Age(18)! = 25
+  const childButOk: Age()! = 5
+  const negativeWithEmptyParens: Age()! = -1
+
+  // Bare reference (no parens) — uses the default just like `Age()`.
+  const childBare: Age! = 5
+  const negativeBare: Age! = -1
+
+  return {
+    adult: isSuccess(adult),
+    childButOk: isSuccess(childButOk),
+    negativeWithEmptyParens: isSuccess(negativeWithEmptyParens),
+    childBare: isSuccess(childBare),
+    negativeBare: isSuccess(negativeBare)
+  }
+}

@@ -1,0 +1,26 @@
+// Verifies a wrapping alias that supplies a literal for one value
+// parameter of the inner alias and FORWARDS its own value parameter
+// for the other. The forwarded identifier (`high`) is substituted at
+// the use site of the outer alias, while the inner alias also sees
+// the literal `18` for its `low` parameter.
+
+import { min, max } from "std::validators"
+
+@validate(min.partial(n: low), max.partial(n: high))
+type NumberInRange(low: number, high: number) = number
+
+// `low` is fixed to 18 here; `high` is still parameterized and
+// forwarded to NumberInRange's `high`.
+type AdultAge(high: number) = NumberInRange(18, high)
+
+node main() {
+  const ok: AdultAge(100)! = 30
+  const tooYoung: AdultAge(100)! = 17
+  const tooOld: AdultAge(100)! = 101
+
+  return {
+    ok: isSuccess(ok),
+    tooYoung: isSuccess(tooYoung),
+    tooOld: isSuccess(tooOld)
+  }
+}

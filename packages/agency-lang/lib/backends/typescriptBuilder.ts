@@ -599,6 +599,13 @@ export class TypeScriptBuilder {
       if (!node.exported) return ts.empty();
       return ts.raw(`export const ${node.aliasName} = undefined;`);
     }
+    // Value-parameterized aliases (e.g. `type NumberInRange(low, high) = ...`)
+    // have no single schema — every use-site inlines a fresh substituted
+    // schema. Emit nothing at the declaration site; importers should never
+    // reference the bare name (use-sites are resolved before codegen).
+    if (node.valueParams && node.valueParams.length > 0) {
+      return ts.empty();
+    }
     const exportPrefix = node.exported ? "export " : "";
     // Thread alias-level @validate / @jsonSchema tags onto the body type so
     // appendMeta (in typeToZodSchema) attaches the `.meta(...)` chain to the

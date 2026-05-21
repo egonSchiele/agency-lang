@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "{\"okDigits\":true,\"badDigits\":false,\"okUpper\":true}",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "Regex literal as a value argument: the alias forwards `pat` into a custom def validator's `pattern: regex` slot via PFA, and the runtime substitutes it into a real RegExp."
+    }
+  ]
+}

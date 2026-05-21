@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "\"approve|reject|string\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "Array literal as a value argument: `OneOf([...])` substitutes the array into the alias's @jsonSchema enum field."
+    }
+  ]
+}

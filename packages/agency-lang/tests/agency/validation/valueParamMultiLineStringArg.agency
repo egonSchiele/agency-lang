@@ -1,0 +1,13 @@
+// Triple-quoted multi-line string as a value argument. Useful for
+// embedding a long description in a parameterized alias without
+// fighting escapes. The description is substituted verbatim.
+
+@jsonSchema({ description: text })
+type Documented(text: string) = number
+
+node main() {
+  const s = schema(Documented("""line one
+line two"""))
+  const js = s.toJSONSchema()
+  return js.description
+}

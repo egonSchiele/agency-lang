@@ -8,6 +8,7 @@ import type {
   Tag,
   TypeAliasEntry,
   TypeParam,
+  ValueParam,
   VariableType,
 } from "./types.js";
 import type {
@@ -46,10 +47,12 @@ export class ScopedTypeAliases {
     body: VariableType,
     typeParams?: TypeParam[],
     tags?: Tag[],
+    valueParams?: ValueParam[],
   ): void {
     if (!this.byScope[scopeKey]) this.byScope[scopeKey] = {};
     const entry: TypeAliasEntry = { body };
     if (typeParams) entry.typeParams = typeParams;
+    if (valueParams) entry.valueParams = valueParams;
     if (tags && tags.length > 0) entry.tags = tags;
     this.byScope[scopeKey][name] = entry;
   }
@@ -221,6 +224,7 @@ export function buildCompilationUnit(
         node.aliasedType,
         node.typeParams,
         tags,
+        node.valueParams,
       );
     }
   }
@@ -272,6 +276,7 @@ export function buildCompilationUnit(
             r.symbol.aliasedType,
             r.symbol.typeParams,
             r.symbol.tags,
+            r.symbol.valueParams,
           );
           // Imported type's body may reference other aliases from its
           // module — pull those transitively too.
@@ -351,6 +356,7 @@ function pullTransitiveAliases(
       found.aliasedType,
       found.typeParams,
       found.tags,
+      found.valueParams,
     );
     // Nested aliases referenced by this type should resolve in the file
     // the type was actually found in (not the original preferFile) — the
@@ -372,13 +378,14 @@ function resolveTypeFromFile(
   symbolTable: SymbolTable,
   name: string,
   preferFile: string | undefined,
-): { aliasedType: VariableType; typeParams?: TypeParam[]; tags?: Tag[]; file: string } | undefined {
+): { aliasedType: VariableType; typeParams?: TypeParam[]; valueParams?: ValueParam[]; tags?: Tag[]; file: string } | undefined {
   if (preferFile) {
     const fileSym = symbolTable.getFile(preferFile)?.[name];
     if (fileSym?.kind === "type") {
       return {
         aliasedType: fileSym.aliasedType,
         typeParams: fileSym.typeParams,
+        valueParams: fileSym.valueParams,
         tags: fileSym.tags,
         file: preferFile,
       };
@@ -390,6 +397,7 @@ function resolveTypeFromFile(
       return {
         aliasedType: sym.aliasedType,
         typeParams: sym.typeParams,
+        valueParams: sym.valueParams,
         tags: sym.tags,
         file,
       };

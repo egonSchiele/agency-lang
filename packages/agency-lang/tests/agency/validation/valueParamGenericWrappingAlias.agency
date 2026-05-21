@@ -1,0 +1,26 @@
+// Regression test for the generic-branch value-arg forwarding bug.
+// A generic wrapper alias whose BODY references another value-
+// parameterized alias used to lose the value-arg substitution: the
+// `n` inside `BoundedList<T>(n)` was not replaced when the outer
+// generic alias was instantiated, leaving an out-of-scope identifier
+// in the generated schema and a corrupt JSON schema.
+//
+// `Wrap<string>(4)` must substitute `n -> 4` inside the body's
+// `BoundedList<string>(n)`, so the resulting JSON schema has
+// `maxItems: 4`.
+
+@jsonSchema({ maxItems: n })
+type BoundedList<T>(n: number) = T[]
+
+type Wrap<T>(n: number) = BoundedList<T>(n)
+
+node main() {
+  const s = schema(Wrap<string>(4))
+  const js = s.toJSONSchema()
+  const okList: Wrap<string>(4)! = ["a", "b", "c", "d"]
+
+  if (isSuccess(okList)) {
+    return js.maxItems + "|" + okList.value[3]
+  }
+  return "failed"
+}

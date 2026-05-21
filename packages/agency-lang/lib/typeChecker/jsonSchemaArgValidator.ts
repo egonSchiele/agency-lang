@@ -4,6 +4,7 @@ import type {
   AgencyObjectKV,
   SplatExpression,
   AgencyProgram,
+  AgencyArray,
 } from "../types.js";
 import type { CompilationUnit } from "../compilationUnit.js";
 
@@ -36,6 +37,15 @@ export type JsonSchemaArgScope = {
   importedNames: Set<string>;
   /** Names of top-level `def` functions. */
   topLevelFunctionNames: Set<string>;
+  /**
+   * Names of value parameters in scope for the current alias's tag
+   * arguments. When validating an alias's RAW tags (pre-substitution)
+   * the alias's own `valueParams` names go here so identifier
+   * references resolve cleanly. When validating tags AFTER
+   * `applyValueArgs` has run, this should be empty — any leftover
+   * value-param identifier is a bug, not a valid reference.
+   */
+  valueParamNames?: Set<string>;
 };
 
 export function validateJsonSchemaArg(
@@ -44,17 +54,30 @@ export function validateJsonSchemaArg(
 ): JsonSchemaArgValidationResult {
   switch (expr.type) {
     case "string":
-      return validateStringLiteral(expr as any);
+    case "multiLineString":
+      return validateStringLiteral(expr as any, scope);
     case "number":
     case "boolean":
     case "null":
+    case "regex":
+    case "unitLiteral":
+      // Atomic literals — no inner expressions to validate. These can
+      // appear after value-arg substitution (e.g. `Timeout(30s)`
+      // substituting a unit literal into `{ maximum: ms }`) and must be
+      // accepted to stay in sync with `staticTagArgParser`.
       return { ok: true };
 
     case "agencyObject":
       return validateObjectLiteral(expr as AgencyObject, scope);
 
+    case "agencyArray":
+      return validateArrayLiteral(expr as AgencyArray, scope);
+
     case "functionCall":
       return validateFunctionCall(expr, scope);
+
+    case "valueAccess":
+      return validateValueAccess(expr as any, scope);
 
     case "variableName":
       return validateIdentifier(expr, scope);
@@ -68,19 +91,129 @@ export function validateJsonSchemaArg(
   }
 }
 
+/**
+ * Alias for `validateJsonSchemaArg` — the same restriction set applies
+ * to `@validate(...)` and `@jsonSchema(...)` tag arguments. Use this
+ * name in new call sites; the legacy export stays for compatibility.
+ */
+export const validateTagArg = validateJsonSchemaArg;
+
+/**
+ * Validate a PFA expression: a `valueAccess` whose chain contains at
+ * least one method-call element. A bare `valueAccess` with only
+ * property accesses (e.g. `foo.bar`) is rejected — member access is
+ * not in the restricted subset.
+ */
+function validateValueAccess(
+  va: { base: any; chain: any[]; loc?: { line: number; col: number } },
+  scope: JsonSchemaArgScope,
+): JsonSchemaArgValidationResult {
+  const hasMethodCall = (va.chain ?? []).some(
+    (el) => el && el.kind === "methodCall",
+  );
+  if (!hasMethodCall) {
+    return {
+      ok: false,
+      reason:
+        "tag arguments must be a literal, identifier, object literal, or PFA expression (e.g. min.partial(n: 0))",
+      loc: va.loc,
+    };
+  }
+  // The base must be a plain identifier (typically a top-level
+  // validator function or imported function). Reject anything else —
+  // `foo(1).partial(...)` and `(get()).partial(...)` are NOT static
+  // expressions because they call a function at runtime to compute the
+  // receiver. This mirrors `_identOrPfaParser` in the parser layer.
+  if (va.base?.type !== "variableName") {
+    return {
+      ok: false,
+      reason:
+        "PFA base must be a plain identifier (e.g. `min.partial(n: 0)`, not `min(1).partial(...)`)",
+      loc: va.loc,
+    };
+  }
+  const baseRes = validateIdentifier(va.base as Expression, scope);
+  if (!baseRes.ok) return baseRes;
+  // Validate each method-call argument as a restricted expression.
+  for (const el of va.chain) {
+    if (el?.kind !== "methodCall") continue;
+    const args = el.functionCall?.arguments ?? [];
+    for (const arg of args) {
+      const inner =
+        arg && arg.type === "namedArgument"
+          ? (arg as any).value
+          : arg && arg.type === "splat"
+            ? (arg as any).value
+            : arg;
+      const r = validateJsonSchemaArg(inner as Expression, scope);
+      if (!r.ok) return r;
+    }
+  }
+  return { ok: true };
+}
+
 function validateStringLiteral(
-  str: { segments?: Array<{ type: string }>; loc?: { line: number; col: number } },
+  str: {
+    segments?: Array<{
+      type: string;
+      expression?: Expression;
+    }>;
+    loc?: { line: number; col: number };
+  },
+  scope: JsonSchemaArgScope,
 ): JsonSchemaArgValidationResult {
   const segments = str.segments ?? [];
   for (const seg of segments) {
-    if (seg.type !== "text") {
+    if (seg.type === "text") continue;
+    if (seg.type !== "interpolation") {
       return {
         ok: false,
-        reason:
-          "@jsonSchema(...) string arguments must be plain literals (no interpolation)",
+        reason: `unexpected string segment type "${seg.type}" in @jsonSchema(...)`,
         loc: str.loc,
       };
     }
+    // Identifier-only interpolation: the segment expression must be a
+    // bare `variableName` that resolves to one of the alias's value
+    // parameters. Top-level static consts are intentionally rejected
+    // here: tag-arg strings are emitted into the generated schema's
+    // `.meta(...)` chain, which is built inside node bodies where
+    // module-level Agency consts are not bound to JS identifiers
+    // (they live in `__ctx.globals`). Forwarding them would require
+    // an extra codegen lowering. Value-param identifiers are folded
+    // away at substitution time so the post-substitution string is
+    // always a plain literal.
+    const expr = seg.expression as Expression | undefined;
+    if (!expr || expr.type !== "variableName") {
+      return {
+        ok: false,
+        reason:
+          "tag-arg string interpolation only accepts a value-param identifier (e.g. `${divisor}`); arbitrary expressions are not allowed",
+        loc: str.loc,
+      };
+    }
+    const name = (expr as Expression & { value: string }).value;
+    if (!scope.valueParamNames || !scope.valueParamNames.has(name)) {
+      return {
+        ok: false,
+        reason: `'${name}' is not a value parameter of this alias — only value-param identifiers may appear in tag-arg string interpolation`,
+        loc: str.loc,
+      };
+    }
+  }
+  return { ok: true };
+}
+
+function validateArrayLiteral(
+  arr: AgencyArray,
+  scope: JsonSchemaArgScope,
+): JsonSchemaArgValidationResult {
+  for (const item of arr.items ?? []) {
+    const inner: Expression =
+      item.type === "splat"
+        ? ((item as SplatExpression).value as Expression)
+        : (item as Expression);
+    const r = validateJsonSchemaArg(inner, scope);
+    if (!r.ok) return r;
   }
   return { ok: true };
 }
@@ -136,7 +269,12 @@ function validateIdentifier(
   scope: JsonSchemaArgScope,
 ): JsonSchemaArgValidationResult {
   const name: string = id.value;
-  if (scope.topLevelConstNames.has(name) || scope.importedNames.has(name)) {
+  if (
+    scope.topLevelConstNames.has(name) ||
+    scope.importedNames.has(name) ||
+    scope.topLevelFunctionNames.has(name) ||
+    (scope.valueParamNames && scope.valueParamNames.has(name))
+  ) {
     return { ok: true };
   }
   return {

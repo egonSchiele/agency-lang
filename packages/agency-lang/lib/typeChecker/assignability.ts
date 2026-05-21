@@ -3,6 +3,7 @@ import { ANY_T, BOOLEAN_T, NUMBER_T, STRING_T } from "./primitives.js";
 import { substituteTypeParams } from "./substitute.js";
 import { mapTypes } from "./typeWalker.js";
 import { mergeTagSets } from "./mergeTags.js";
+import { applyValueArgs } from "./valueParamSubstitution.js";
 
 /**
  * Public resolveType: normalizes a VariableType by resolving type-alias
@@ -68,18 +69,26 @@ function resolveTypeWithGuard(
     if (inProgress.has(vt.aliasName)) return vt;
     const next = new Set(inProgress).add(vt.aliasName);
 
-    if (entry.typeParams) {
-      const args = entry.typeParams.map((p) => p.default!);
+    // Apply value-arg substitution to the alias entry's tags (no-op
+    // when the alias has no `valueParams`). For combined `<T>(n)`
+    // aliases we still substitute type params first via the existing
+    // path below; value-arg substitution touches only the tags.
+    const substitutedEntry = entry.valueParams
+      ? applyValueArgs(entry, vt.valueArgs, vt.aliasName)
+      : entry;
+
+    if (substitutedEntry.typeParams) {
+      const args = substitutedEntry.typeParams.map((p) => p.default!);
       const substituted = substituteTypeParams(
-        entry.body,
-        entry.typeParams.map((p) => p.name),
+        substitutedEntry.body,
+        substitutedEntry.typeParams.map((p) => p.name),
         args,
       );
       const resolved = resolveTypeWithGuard(substituted, typeAliases, next);
-      return attachAliasTags(resolved, entry.tags);
+      return attachAliasTags(resolved, substitutedEntry.tags);
     }
-    const resolved = resolveTypeWithGuard(entry.body, typeAliases, next);
-    return attachAliasTags(resolved, entry.tags);
+    const resolved = resolveTypeWithGuard(substitutedEntry.body, typeAliases, next);
+    return attachAliasTags(resolved, substitutedEntry.tags);
   }
 
   if (vt.type === "genericType") {
@@ -150,8 +159,17 @@ function resolveTypeWithGuard(
       entry.typeParams.map((p) => p.name),
       args,
     );
-    const resolved = resolveTypeWithGuard(substituted, typeAliases, next);
-    return attachAliasTags(resolved, entry.tags);
+    // Apply value-arg substitution (no-op when the alias has no
+    // `valueParams`). Type-param substitution happened first (above);
+    // value-arg substitution must run on the type-substituted body so
+    // forwarded value args inside the body (e.g.
+    // `type Wrap<T>(n: number) = BoundedList<T>(n)`) get the literal
+    // substituted at use sites.
+    const valueSubstituted = entry.valueParams
+      ? applyValueArgs({ ...entry, body: substituted }, vt.valueArgs, vt.name)
+      : { ...entry, body: substituted };
+    const resolved = resolveTypeWithGuard(valueSubstituted.body, typeAliases, next);
+    return attachAliasTags(resolved, valueSubstituted.tags);
   }
 
   return vt;

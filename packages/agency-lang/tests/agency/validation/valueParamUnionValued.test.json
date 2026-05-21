@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "{\"branchAMin\":10,\"branchAMax\":50,\"branchBMin\":100,\"branchBMax\":200}",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "Union-typed alias body: value-arg substitution reaches each branch of the union, so anyOf[0] and anyOf[1] carry their own bounds."
+    }
+  ]
+}

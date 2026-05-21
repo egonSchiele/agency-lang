@@ -1,0 +1,15 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Real LLM call: value-param JSON schema must flow into the structured output sent to the model so the returned rating falls inside [1, 5], and the same parameterized validator passes at runtime. In CI, llmMocks supplies a deterministic in-range rating (4); locally with a real OPENAI_API_KEY the same flow runs end-to-end.",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "llmMocks": [
+        { "return": { "rating": 4 } }
+      ],
+      "retry": 2
+    }
+  ]
+}

@@ -2,7 +2,20 @@ import { AgencyMultiLineComment } from "../types.js";
 import type { FunctionParameter } from "./function.js";
 import { BaseNode } from "./base.js";
 import type { Tag } from "./tag.js";
+import type { Expression } from "../types.js";
 
+/**
+ * When adding a new variant to `VariableType`, also add a case to:
+ *
+ * - `substituteValueArgsInType` and `checkType` in
+ *   `lib/typeChecker/valueParamSubstitution.ts` — both functions have
+ *   exhaustive switches over this union (enforced by a `never`-typed
+ *   default branch, so TypeScript will fail to compile if you forget).
+ *
+ * Codegen sites (`mapTypeToSchema`, `descriptor`, `hasAnyValidateTag`)
+ * also branch on `VariableType.type`; review them when adding a
+ * variant.
+ */
 export type VariableType =
   | PrimitiveType
   | ArrayType
@@ -28,6 +41,12 @@ export type GenericType = {
   type: "genericType";
   name: string;
   typeArgs: VariableType[];
+  /**
+   * Value arguments at the use site of a value-parameterized alias.
+   * Example: `BoundedList<string>(3)` — typeArgs is `[string]`, valueArgs is `[3]`.
+   * Restricted to the same expression subset accepted by tag arguments.
+   */
+  valueArgs?: Expression[];
   tags?: Tag[];
 };
 
@@ -42,6 +61,22 @@ export type TypeParam = {
 };
 
 /**
+ * A value-parameter declaration on a value-parameterized type alias.
+ * Example: in `type NumberInRange(low: number, high: number) = number`,
+ * each of `low` and `high` is a ValueParam.
+ *
+ * The `default` expression, if present, is restricted to the same
+ * subset of expressions accepted by tag arguments (literals,
+ * identifiers that resolve to a top-level `static const`, object
+ * literals built from the above).
+ */
+export type ValueParam = {
+  name: string;
+  type: VariableType;
+  default?: Expression;
+};
+
+/**
  * Entry in the type alias registry. For non-generic aliases `typeParams`
  * is absent; for generic aliases it carries the declared parameters.
  *
@@ -52,6 +87,13 @@ export type TypeParam = {
 export type TypeAliasEntry = {
   body: VariableType;
   typeParams?: TypeParam[];
+  /**
+   * Value parameters for value-parameterized aliases (e.g. `low` and
+   * `high` in `type NumberInRange(low: number, high: number) = number`).
+   * Carried alongside `typeParams` so the resolver can substitute
+   * literal arguments into the alias's tag expressions.
+   */
+  valueParams?: ValueParam[];
   tags?: Tag[];
 };
 
@@ -141,6 +183,11 @@ export type TypeAlias = BaseNode & {
   aliasName: string;
   aliasedType: VariableType;
   typeParams?: TypeParam[];
+  /**
+   * Value parameters declared after the optional `< ... >` block.
+   * Example: `type NumberInRange(low: number, high: number) = number`.
+   */
+  valueParams?: ValueParam[];
   exported?: boolean;
   docComment?: AgencyMultiLineComment;
   tags?: Tag[];
@@ -158,5 +205,11 @@ export type FunctionRefType = {
 export type TypeAliasVariable = {
   type: "typeAliasVariable";
   aliasName: string;
+  /**
+   * Value arguments at the use site of a value-parameterized alias.
+   * Example: `Age(18)` — aliasName is `Age`, valueArgs is `[18]`.
+   * Restricted to the same expression subset accepted by tag arguments.
+   */
+  valueArgs?: Expression[];
   tags?: Tag[];
 };

@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "{\"adult\":true,\"tooYoung\":false}",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "Static const identifier as a value argument: substitution reads the const's value when emitting the @validate PFA."
+    }
+  ]
+}

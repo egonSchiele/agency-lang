@@ -465,12 +465,13 @@ export class AgencyGenerator {
     const aliasedTypeStr = this.aliasedTypeToString(node.aliasedType);
     const exportPrefix = node.exported ? "export " : "";
     const typeParamsStr = this.formatTypeParams(node.typeParams);
+    const valueParamsStr = this.formatValueParams(node.valueParams);
     const tags = this.formatAttachedTags(node);
     return (
       this.formatDocComment(node) +
       tags +
       this.indentStr(
-        `${exportPrefix}type ${node.aliasName}${typeParamsStr} = ${aliasedTypeStr}`,
+        `${exportPrefix}type ${node.aliasName}${typeParamsStr}${valueParamsStr} = ${aliasedTypeStr}`,
       )
     );
   }
@@ -489,6 +490,24 @@ export class AgencyGenerator {
       return `${p.name} = ${def}`;
     });
     return `<${parts.join(", ")}>`;
+  }
+
+  /**
+   * Format the `(low: number, high: number = 10)` chunk of a
+   * value-parameterized alias declaration. Returns an empty string when
+   * there are no value params.
+   */
+  private formatValueParams(
+    params: TypeAlias["valueParams"],
+  ): string {
+    if (!params || params.length === 0) return "";
+    const parts = params.map((p) => {
+      const typeStr = variableTypeToString(p.type, this.typeAliases, true);
+      const base = `${p.name}: ${typeStr}`;
+      if (p.default === undefined) return base;
+      return `${base} = ${this.processNode(p.default).trim()}`;
+    });
+    return `(${parts.join(", ")})`;
   }
 
   // Assignment and literals

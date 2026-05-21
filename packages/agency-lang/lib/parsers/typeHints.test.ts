@@ -2914,3 +2914,157 @@ describe("typeAliasParser with type parameters", () => {
     }
   });
 });
+
+describe("typeAliasParser with value parameters", () => {
+  it("parses a single value parameter: type Age(min: number) = number", () => {
+    const result = typeAliasParser("type Age(min: number) = number");
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.result.aliasName).toBe("Age");
+      expect(result.result.typeParams).toBeUndefined();
+      expect(result.result.valueParams).toHaveLength(1);
+      expect(result.result.valueParams?.[0]).toMatchObject({
+        name: "min",
+        type: { type: "primitiveType", value: "number" },
+      });
+      expect(result.result.valueParams?.[0].default).toBeUndefined();
+      expect(result.result.aliasedType).toMatchObject({
+        type: "primitiveType",
+        value: "number",
+      });
+    }
+  });
+
+  it("parses multiple value parameters: type NumberInRange(low, high) = number", () => {
+    const result = typeAliasParser(
+      "type NumberInRange(low: number, high: number) = number",
+    );
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.result.aliasName).toBe("NumberInRange");
+      expect(result.result.valueParams).toHaveLength(2);
+      expect(result.result.valueParams?.[0].name).toBe("low");
+      expect(result.result.valueParams?.[1].name).toBe("high");
+    }
+  });
+
+  it("parses a value parameter with default: type Age(min: number = 0) = number", () => {
+    const result = typeAliasParser("type Age(min: number = 0) = number");
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.result.valueParams).toHaveLength(1);
+      const vp = result.result.valueParams![0];
+      expect(vp.name).toBe("min");
+      expect(vp.type).toMatchObject({ type: "primitiveType", value: "number" });
+      expect(vp.default).toMatchObject({ type: "number", value: "0" });
+    }
+  });
+
+  it("parses combined type + value params: type BoundedList<T>(n: number) = T[]", () => {
+    const result = typeAliasParser("type BoundedList<T>(n: number) = T[]");
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.result.aliasName).toBe("BoundedList");
+      expect(result.result.typeParams).toEqual([{ name: "T" }]);
+      expect(result.result.valueParams).toHaveLength(1);
+      expect(result.result.valueParams?.[0].name).toBe("n");
+      expect(result.result.aliasedType.type).toBe("arrayType");
+    }
+  });
+
+  it("rejects reversed ordering: type Foo(x: number)<T> = ...", () => {
+    // After the `(x: number)` value-param block is consumed, the parser
+    // requires `=`. A leading `<` is not accepted, so this throws via
+    // the `parseError` guard wrapped around the alias body.
+    expect(() => typeAliasParser("type Foo(x: number)<T> = number")).toThrow();
+  });
+
+  it("non-value-parameterized alias has no valueParams field", () => {
+    const result = typeAliasParser("type Plain = string");
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.result.valueParams).toBeUndefined();
+    }
+  });
+});
+
+describe("type-reference with value arguments", () => {
+  it("typeAliasVariableParser parses Age(18)", () => {
+    const result = typeAliasParser("type User = { age: Age(18) }");
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.result.aliasedType.type).toBe("objectType");
+      const obj = result.result.aliasedType as {
+        type: "objectType";
+        properties: { key: string; value: any }[];
+      };
+      const ageVal = obj.properties[0].value;
+      expect(ageVal.type).toBe("typeAliasVariable");
+      expect(ageVal.aliasName).toBe("Age");
+      expect(ageVal.valueArgs).toHaveLength(1);
+      expect(ageVal.valueArgs[0]).toMatchObject({ type: "number", value: "18" });
+    }
+  });
+
+  it("typeAliasVariableParser parses NumberInRange(0, 150)", () => {
+    const result = typeAliasParser(
+      "type User = { score: NumberInRange(0, 150) }",
+    );
+    expect(result.success).toBe(true);
+    if (result.success) {
+      const obj = result.result.aliasedType as any;
+      const v = obj.properties[0].value;
+      expect(v.type).toBe("typeAliasVariable");
+      expect(v.aliasName).toBe("NumberInRange");
+      expect(v.valueArgs).toHaveLength(2);
+      expect(v.valueArgs[0]).toMatchObject({ type: "number", value: "0" });
+      expect(v.valueArgs[1]).toMatchObject({ type: "number", value: "150" });
+    }
+  });
+
+  it("genericTypeParser parses BoundedList<string>(3)", () => {
+    const result = typeAliasParser(
+      "type Names = BoundedList<string>(3)",
+    );
+    expect(result.success).toBe(true);
+    if (result.success) {
+      const v = result.result.aliasedType as any;
+      expect(v.type).toBe("genericType");
+      expect(v.name).toBe("BoundedList");
+      expect(v.typeArgs).toHaveLength(1);
+      expect(v.typeArgs[0]).toMatchObject({
+        type: "primitiveType",
+        value: "string",
+      });
+      expect(v.valueArgs).toHaveLength(1);
+      expect(v.valueArgs[0]).toMatchObject({ type: "number", value: "3" });
+    }
+  });
+
+  it("typeAliasVariableParser parses Age(DEFAULT_AGE) (identifier arg)", () => {
+    const result = typeAliasParser("type User = { age: Age(DEFAULT_AGE) }");
+    expect(result.success).toBe(true);
+    if (result.success) {
+      const obj = result.result.aliasedType as any;
+      const v = obj.properties[0].value;
+      expect(v.type).toBe("typeAliasVariable");
+      expect(v.valueArgs).toHaveLength(1);
+      expect(v.valueArgs[0]).toMatchObject({
+        type: "variableName",
+        value: "DEFAULT_AGE",
+      });
+    }
+  });
+
+  it("plain alias reference has no valueArgs", () => {
+    const result = typeAliasParser("type User = { email: Email }");
+    expect(result.success).toBe(true);
+    if (result.success) {
+      const obj = result.result.aliasedType as any;
+      const v = obj.properties[0].value;
+      expect(v.type).toBe("typeAliasVariable");
+      expect(v.aliasName).toBe("Email");
+      expect(v.valueArgs).toBeUndefined();
+    }
+  });
+});

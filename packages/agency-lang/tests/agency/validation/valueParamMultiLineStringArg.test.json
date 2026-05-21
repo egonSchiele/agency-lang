@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "\"line one\\nline two\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "Multi-line `\"\"\"...\"\"\"` string as a value argument: substituted verbatim into the alias's @jsonSchema description."
+    }
+  ]
+}

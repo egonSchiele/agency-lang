@@ -1,4 +1,4 @@
-import { TypeAliasEntry, VariableType } from "../types.js";
+import { TypeAliasEntry, ValueParam, VariableType } from "../types.js";
 import { SourceLocation } from "../types/base.js";
 import { TypeCheckError } from "./types.js";
 import { visitTypes } from "./typeWalker.js";
@@ -9,6 +9,57 @@ const BUILTIN_GENERIC_ARITY: Record<string, number> = {
   Schema: 1,
   Record: 2,
 };
+
+/**
+ * Validate value-param arity at a use site. Pushes one error to `errors`
+ * if the arity is wrong. Returns true if a problem was reported.
+ */
+function checkValueArgsArity(
+  aliasName: string,
+  valueParams: ValueParam[] | undefined,
+  valueArgsLen: number,
+  context: string,
+  errors: TypeCheckError[],
+  loc: SourceLocation | undefined,
+): boolean {
+  // Use site has value args, but the alias takes no value params.
+  if ((!valueParams || valueParams.length === 0) && valueArgsLen > 0) {
+    errors.push({
+      message: `Type '${aliasName}' is not a value-parameterized type but was given ${valueArgsLen} value argument${valueArgsLen === 1 ? "" : "s"} (referenced in '${context}').`,
+      loc,
+    });
+    return true;
+  }
+  if (!valueParams) return false;
+
+  if (valueArgsLen > valueParams.length) {
+    errors.push({
+      message: `${aliasName} expects at most ${valueParams.length} value argument${valueParams.length === 1 ? "" : "s"}, got ${valueArgsLen} (referenced in '${context}').`,
+      loc,
+    });
+    return true;
+  }
+  // Each missing value arg must have a default.
+  for (let i = valueArgsLen; i < valueParams.length; i++) {
+    if (!valueParams[i].default) {
+      // Phrase the message based on whether ANY args were supplied.
+      if (valueArgsLen === 0) {
+        const formals = valueParams.map((p) => p.name).join(", ");
+        errors.push({
+          message: `'${aliasName}' is a value-parameterized type and requires value arguments — write '${aliasName}(${formals})' (referenced in '${context}').`,
+          loc,
+        });
+      } else {
+        errors.push({
+          message: `${aliasName} requires at least ${i + 1} value argument${i === 0 ? "" : "s"} (referenced in '${context}').`,
+          loc,
+        });
+      }
+      return true;
+    }
+  }
+  return false;
+}
 
 export function validateTypeReferences(
   vt: VariableType,
@@ -36,6 +87,19 @@ export function validateTypeReferences(
           loc,
         });
       }
+      // Bare reference to a value-parameterized alias is only legal if
+      // every value param has a default. `DivisibleBy` with no args when
+      // `DivisibleBy(divisor: number)` requires one must be flagged here
+      // — otherwise codegen blows up (e.g. `mapTypeToValidationSchema`)
+      // or the program crashes at runtime with `<Name> is not defined`.
+      checkValueArgsArity(
+        t.aliasName,
+        entry.valueParams,
+        t.valueArgs?.length ?? 0,
+        context,
+        errors,
+        loc,
+      );
       return;
     }
 
@@ -82,6 +146,17 @@ export function validateTypeReferences(
           return;
         }
       }
+      // Generic alias may also be value-parameterized (e.g.
+      // `BoundedList<T>(n)`). Validate the value-arg arity the same way
+      // we do for `typeAliasVariable`.
+      checkValueArgsArity(
+        t.name,
+        entry.valueParams,
+        t.valueArgs?.length ?? 0,
+        context,
+        errors,
+        loc,
+      );
     }
   });
 }

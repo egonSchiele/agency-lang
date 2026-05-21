@@ -1,0 +1,26 @@
+// Regression test for the object-property substitution bug.
+// When a value-parameterized alias appears as an object property
+// (e.g. `age: NumberInRange(0, 150)`), the outer object emission
+// looked up the alias's RAW tags (containing unsubstituted value-param
+// identifiers `low`/`high`) and emitted them into the property's
+// `.meta(...)` chain — producing generated TS that referenced
+// out-of-scope identifiers.
+//
+// After the fix, the alias tags are substituted before merging, so
+// the JSON schema for the `age` property contains the literal bounds.
+
+import { min, max } from "std::validators"
+
+@validate(min.partial(n: low), max.partial(n: high))
+@jsonSchema({ minimum: low, maximum: high })
+type NumberInRange(low: number, high: number) = number
+
+type User = {
+  age: NumberInRange(0, 150)
+}
+
+node main() {
+  const s = schema(User)
+  const js = s.toJSONSchema()
+  return js.properties.age.minimum + "|" + js.properties.age.maximum
+}

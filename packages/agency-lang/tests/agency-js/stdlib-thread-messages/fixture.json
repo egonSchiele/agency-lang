@@ -6,15 +6,31 @@
         "messages": [
           {
             "role": "system",
-            "content": "sys-A"
+            "content": "pre-llm-system"
           },
           {
             "role": "user",
-            "content": "usr-B"
+            "content": "first-question"
           },
           {
             "role": "assistant",
-            "content": "ast-C"
+            "content": "first-answer"
+          },
+          {
+            "role": "user",
+            "content": "mid-user"
+          },
+          {
+            "role": "assistant",
+            "content": "mid-assistant"
+          },
+          {
+            "role": "user",
+            "content": "second-question"
+          },
+          {
+            "role": "assistant",
+            "content": "second-answer"
           }
         ]
       }

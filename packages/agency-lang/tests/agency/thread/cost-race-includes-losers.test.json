@@ -3,7 +3,7 @@
     {
       "nodeName": "main",
       "input": "",
-      "expectedOutput": "\"true\"",
+      "expectedOutput": "\"true_0.000009999999999999999\"",
       "evaluationCriteria": [{ "type": "exact" }],
       "useTestLLMProvider": true,
       "llmMocks": [
@@ -14,7 +14,7 @@
         { "return": "c5" },
         { "return": "c6" }
       ],
-      "description": "Race-loser costs are propagated. After race finishes, parent cost must exceed the winner-alone cost (winner does 1 LLM call; losers do 2 and 3). Confirms losing-branch spend is not discarded."
+      "description": "Race-loser cost is propagated EXACTLY: every completed LLM call across winner + losers contributes to parent cost, nothing is over-counted or under-counted. With branches doing 1, 2, 3 LLM calls and the winner being k=1, mocks 1–5 are consumed deterministically (k=3's third call is aborted before completion). Asserts the total equals 5 × DETERMINISTIC_COST exactly. A regression that propagated only the winner, double-counted, or missed a loser would fail."
     }
   ]
 }

@@ -1,17 +1,35 @@
 // Verifies that systemMessage / userMessage / assistantMessage from
-// std::thread actually push onto the active thread store (i.e. the
-// messages are real, observable side-effects — not silently dropped).
+// std::thread actually push onto the active thread store as real,
+// observable side-effects — covering two regression-sensitive cases:
 //
-// This test does not make any llm() calls. The previous version of
-// std::thread used `threads.active()?.push(...)`, which silently
-// no-oped when called before the first llm() created an active
-// thread. The fix uses getOrCreateActive() so messages injected
-// before any llm() still land on the root thread.
+// 1. Pushing BEFORE any llm() call. The previous implementation used
+//    `threads.active()?.push(...)`, which silently no-oped because
+//    the thread store hadn't created an active thread yet
+//    (getOrCreateActive() only runs lazily inside llm()). The fix
+//    uses getOrCreateActive() so pre-llm pushes still land.
+// 2. Pushing AFTER (and between) llm() calls. Each push must land
+//    on the SAME active thread — getOrCreateActive() must not create
+//    a fresh thread when one already exists.
+//
+// The fixture asserts every message ends up on thread 0 in source
+// order, interleaved with the llm-generated user/assistant turns.
 import { systemMessage, userMessage, assistantMessage } from "std::thread"
 
 node main() {
-  systemMessage("sys-A")
-  userMessage("usr-B")
-  assistantMessage("ast-C")
+  // (1) Pre-llm: no active thread yet — the fix must create it.
+  systemMessage("pre-llm-system")
+
+  // First llm call: uses the SAME thread getOrCreateActive() just
+  // returned (must NOT make a new thread).
+  let _r1: string = llm("first-question")
+
+  // (2) Between llm calls: thread exists; push must land on it.
+  userMessage("mid-user")
+  assistantMessage("mid-assistant")
+
+  // Second llm call: pushes the user prompt and the assistant
+  // response onto the same thread, after our injected messages.
+  let _r2: string = llm("second-question")
+
   return "done"
 }

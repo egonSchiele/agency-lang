@@ -1001,9 +1001,20 @@ async function runTsTestDir(
     // DeterministicClient. When the file is absent under deterministic
     // mode we still set the env var to "[]" so any llm() call fails
     // cleanly instead of falling through to the real OpenAI client.
+    //
+    // Activate the deterministic client whenever EITHER:
+    //   - the suite-wide AGENCY_USE_TEST_LLM_PROVIDER env var is set
+    //     (typical for PR CI), OR
+    //   - a `useTestLLMProvider` marker file sits next to test.js
+    //     (mirrors the per-test flag in .test.json — lets a single
+    //     agency-js test pin itself to the deterministic provider even
+    //     on push-to-main CI where the env var is unset).
     const mocksFile = path.join(dir, "llmMocks.json");
+    const useDeterministic =
+      !!process.env.AGENCY_USE_TEST_LLM_PROVIDER ||
+      fs.existsSync(path.join(dir, "useTestLLMProvider"));
     let mocksEnv: Record<string, string> = {};
-    if (process.env.AGENCY_USE_TEST_LLM_PROVIDER) {
+    if (useDeterministic) {
       const mocks = fs.existsSync(mocksFile)
         ? fs.readFileSync(mocksFile, "utf-8")
         : "[]";

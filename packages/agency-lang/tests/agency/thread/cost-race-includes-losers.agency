@@ -5,10 +5,22 @@ import { getCost } from "std::thread"
 // lib/runtime/deterministicClient.ts.
 const DETERMINISTIC_COST = 0.000002
 
-// Each branch performs the same number of LLM calls. Whichever branch
-// resolves first wins the race; the losing branches' completed-call
-// cost must still propagate back to the parent — race-loser work is
-// not free.
+// Each branch performs k LLM calls in source order (1, 2, 3). The
+// deterministic provider's promises resolve synchronously enough that
+// the winner (k=1) finishes its single call first; k=2 and k=3 each
+// complete one extra call before the race-abort signal fires.
+// Empirically (and deterministically across runs) the mocks consumed
+// are: 1 (winner k=1) + 2 (loser k=2 finishes both) + 2 (loser k=3
+// completes 2 of 3 before abort) = 5 calls' worth of cost. The 6th
+// mock (k=3's third call) is never consumed because abort fires
+// first.
+//
+// Asserting exact equality (not just `> winner-alone`) verifies that
+// EVERY completed call across ALL branches contributes to parent
+// cost — no over-counting, no under-counting. Using the same `5 *
+// DETERMINISTIC_COST` expression on both sides keeps the float
+// arithmetic byte-identical.
+const EXPECTED_COMPLETED_CALLS = 5
 
 def doNCalls(n: number): string {
   let i = 0
@@ -25,9 +37,7 @@ node main() {
   }
 
   let total = getCost()
-  // If only the winner's cost (the smallest, 1 call) were counted the
-  // total would be exactly DETERMINISTIC_COST. Losers do extra work, so
-  // total must be strictly greater than that.
-  let lostCostCounted = total > DETERMINISTIC_COST
-  return "${lostCostCounted}"
+  let expected = EXPECTED_COMPLETED_CALLS * DETERMINISTIC_COST
+  let matchesExact = total == expected
+  return "${matchesExact}_${total}"
 }

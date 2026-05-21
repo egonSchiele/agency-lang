@@ -3,14 +3,14 @@
     {
       "nodeName": "main",
       "input": "",
-      "expectedOutput": "\"0_true_true\"",
+      "expectedOutput": "\"true_true_true_true_true\"",
       "evaluationCriteria": [{ "type": "exact" }],
       "useTestLLMProvider": true,
       "llmMocks": [
         { "return": "first response" },
         { "return": "second response" }
       ],
-      "description": "getCost() grows by the deterministic provider's SYNTHETIC_COST after each llm() call. Pins itself to the deterministic provider via useTestLLMProvider so the cost-per-call number is stable on push-to-main CI too."
+      "description": "getCost() and getTokens() both start at 0 and each grow by the deterministic provider's SYNTHETIC_COST / SYNTHETIC_USAGE.totalTokens after each llm() call. Pins itself to the deterministic provider via useTestLLMProvider so the cost/token numbers are stable on push-to-main CI too."
     }
   ]
 }

@@ -1,6 +1,87 @@
+import { Expression } from "../../types.js";
 import { VariableType } from "../../types.js";
 
 const MAX_LENGTH = 50;
+
+/**
+ * Print one entry of `valueArgs` (a tag-arg expression) back to Agency
+ * source text. Inlined here to avoid importing `expressionToString` from
+ * `lib/utils/node.ts`, which already imports `variableTypeToString` and
+ * would form a cycle. The subset matches `staticTagArgParser`: literals,
+ * identifiers, valueAccess (PFA), and object literals. Anything else
+ * falls back to an empty string — a missing arg is preferable to a
+ * crash inside the formatter.
+ */
+function valueArgExprToString(expr: Expression): string {
+  switch (expr.type) {
+    case "variableName":
+      return expr.value;
+    case "number":
+      return expr.value;
+    case "boolean":
+      return String(expr.value);
+    case "null":
+      return "null";
+    case "string":
+    case "multiLineString": {
+      const body = expr.segments
+        .map((seg) =>
+          seg.type === "text"
+            ? seg.value
+            : `\${${valueArgExprToString(seg.expression)}}`,
+        )
+        .join("");
+      return `"${body}"`;
+    }
+    case "valueAccess": {
+      let code = valueArgExprToString(expr.base as Expression);
+      for (const element of expr.chain) {
+        switch (element.kind) {
+          case "property":
+            code += `.${element.name}`;
+            break;
+          case "index":
+            code += `[${valueArgExprToString(element.index as Expression)}]`;
+            break;
+          case "methodCall": {
+            const fc = element.functionCall;
+            const args = fc.arguments
+              .map((arg) => {
+                if ("name" in arg && arg.name) {
+                  return `${arg.name}: ${valueArgExprToString(arg.value as Expression)}`;
+                }
+                return valueArgExprToString(
+                  ("value" in arg ? arg.value : arg) as Expression,
+                );
+              })
+              .join(", ");
+            code += `.${fc.functionName}(${args})`;
+            break;
+          }
+        }
+      }
+      return code;
+    }
+    case "agencyObject":
+      return `{ ${expr.entries
+        .map((entry) => {
+          if ("type" in entry && entry.type === "splat") {
+            return `...${valueArgExprToString(entry.value)}`;
+          }
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const e = entry as any;
+          return `${e.key}: ${valueArgExprToString(e.value)}`;
+        })
+        .join(", ")} }`;
+    default:
+      return "";
+  }
+}
+
+function formatValueArgs(valueArgs: Expression[] | undefined): string {
+  if (!valueArgs || valueArgs.length === 0) return "";
+  return `(${valueArgs.map(valueArgExprToString).join(", ")})`;
+}
 
 /**
  * Converts a VariableType to a string representation for naming/logging
@@ -45,7 +126,7 @@ export function variableTypeToString(
       .join("; ");
     return `{ ${props} }`;
   } else if (variableType.type === "typeAliasVariable") {
-    return variableType.aliasName;
+    return `${variableType.aliasName}${formatValueArgs(variableType.valueArgs)}`;
   } else if (variableType.type === "blockType") {
     const params = variableType.params
       .map((p) => variableTypeToString(p.typeAnnotation, typeAliases, forFormatting))
@@ -62,7 +143,7 @@ export function variableTypeToString(
     const args = variableType.typeArgs
       .map((a) => variableTypeToString(a, typeAliases, forFormatting))
       .join(", ");
-    return `${variableType.name}<${args}>`;
+    return `${variableType.name}<${args}>${formatValueArgs(variableType.valueArgs)}`;
   }
   return "unknown";
 }

@@ -225,27 +225,36 @@ its value can be folded to a TypeScript literal during compilation.
 - identifiers that resolve to a `let` binding, function parameter, or
   local declaration
 
-::: warning String interpolation does not work in tag arguments
-Agency string literals normally support interpolation everywhere — `"hello ${name}"` is a real expression that combines the literal text with whatever `name` evaluates to at runtime. Inside `@validate(...)`, `@jsonSchema(...)`, value-param defaults, and use-site value-args, **only the literal-only form is accepted**:
+::: warning String interpolation is restricted to value-parameter identifiers
+Agency string literals normally support interpolation everywhere — `"hello ${name}"` is a real expression that combines the literal text with whatever `name` evaluates to at runtime. Inside `@validate(...)`, `@jsonSchema(...)`, value-param defaults, and use-site value-args, the only `${...}` form that is accepted is **a bare identifier that names a value parameter of the enclosing alias**:
 
 ```ts
-static const PREFIX = "user-"
-static const SUFFIX = "-foo"
+// ✅ `${divisor}` references a value parameter — substituted at compile time
+@jsonSchema({ description: "Must be divisible by ${divisor}" })
+type DivisibleBy(divisor: number) = number
 
-@jsonSchema({ pattern: "^user-[0-9]+-foo$" })  // ✅ literal string, OK
+// At use sites, `divisor` is folded into the description:
+//   schema(DivisibleBy(3)).toJSONSchema().description  // "Must be divisible by 3"
+//   schema(DivisibleBy(7)).toJSONSchema().description  // "Must be divisible by 7"
+
+// ❌ Arbitrary expressions are still rejected (no ternaries, no calls, no member access)
+@jsonSchema({ pattern: "^${PREFIX}[0-9]+${foo()}$" })
 type UserId = string
 
-@jsonSchema({ pattern: "^${PREFIX}[0-9]+${SUFFIX}$" })  // ❌ interpolation rejected by parser
+// ❌ Top-level static const references in `${...}` are also rejected:
+// tag-arg strings are emitted into node-body schema chains where
+// module-level Agency consts are not bound to JS identifiers.
+static const PREFIX = "user-"
+@jsonSchema({ pattern: "^${PREFIX}[0-9]+$" })  // ❌ not supported today
 type UserId = string
 ```
 
-Interpolation gets rejected because it would embed a runtime expression that can't be folded to a compile-time string. If you need to compose strings, put the composition in a `static const` and pass the const in (which *is* statically known):
+If you need to embed a static const, compose the literal yourself and pass the const in as the whole argument (which *is* statically known):
 
 ```ts
-static const PREFIX = "user-"
 static const PATTERN = "^user-[0-9]+-foo$"  // hand-written literal
 
-@jsonSchema({ pattern: PATTERN })  // ✅ static const reference
+@jsonSchema({ pattern: PATTERN })  // ✅ static const reference (no interpolation)
 type UserId = string
 ```
 :::

@@ -53,7 +53,8 @@ export function validateJsonSchemaArg(
 ): JsonSchemaArgValidationResult {
   switch (expr.type) {
     case "string":
-      return validateStringLiteral(expr as any);
+    case "multiLineString":
+      return validateStringLiteral(expr as any, scope);
     case "number":
     case "boolean":
     case "null":
@@ -142,15 +143,49 @@ function validateValueAccess(
 }
 
 function validateStringLiteral(
-  str: { segments?: Array<{ type: string }>; loc?: { line: number; col: number } },
+  str: {
+    segments?: Array<{
+      type: string;
+      expression?: Expression;
+    }>;
+    loc?: { line: number; col: number };
+  },
+  scope: JsonSchemaArgScope,
 ): JsonSchemaArgValidationResult {
   const segments = str.segments ?? [];
   for (const seg of segments) {
-    if (seg.type !== "text") {
+    if (seg.type === "text") continue;
+    if (seg.type !== "interpolation") {
+      return {
+        ok: false,
+        reason: `unexpected string segment type "${seg.type}" in @jsonSchema(...)`,
+        loc: str.loc,
+      };
+    }
+    // Identifier-only interpolation: the segment expression must be a
+    // bare `variableName` that resolves to one of the alias's value
+    // parameters. Top-level static consts are intentionally rejected
+    // here: tag-arg strings are emitted into the generated schema's
+    // `.meta(...)` chain, which is built inside node bodies where
+    // module-level Agency consts are not bound to JS identifiers
+    // (they live in `__ctx.globals`). Forwarding them would require
+    // an extra codegen lowering. Value-param identifiers are folded
+    // away at substitution time so the post-substitution string is
+    // always a plain literal.
+    const expr = seg.expression as Expression | undefined;
+    if (!expr || expr.type !== "variableName") {
       return {
         ok: false,
         reason:
-          "@jsonSchema(...) string arguments must be plain literals (no interpolation)",
+          "tag-arg string interpolation only accepts a value-param identifier (e.g. `${divisor}`); arbitrary expressions are not allowed",
+        loc: str.loc,
+      };
+    }
+    const name = (expr as Expression & { value: string }).value;
+    if (!scope.valueParamNames || !scope.valueParamNames.has(name)) {
+      return {
+        ok: false,
+        reason: `'${name}' is not a value parameter of this alias — only value-param identifiers may appear in tag-arg string interpolation`,
         loc: str.loc,
       };
     }

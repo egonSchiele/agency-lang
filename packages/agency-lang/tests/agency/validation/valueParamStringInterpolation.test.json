@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "\"Must be a number that is divisible by 3|Must be a number that is divisible by 7\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "Value-param identifier inside a tag-arg string `${...}` slot: substitution folds the literal into the description so each instantiation carries its own value."
+    }
+  ]
+}

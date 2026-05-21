@@ -517,6 +517,55 @@ export const simpleStringParser: Parser<StringLiteral> = (input: string) => {
   }))(input);
 };
 
+// Identifier-only interpolation segment: accepts `${name}` where `name`
+// is a plain identifier. Used in static tag-arg strings so users can
+// embed a value-param identifier or a top-level static const without
+// opening the door to arbitrary runtime expressions.
+const staticInterpolationSegmentParser: Parser<InterpolationSegment> =
+  withLoc((input: string) => {
+    const parser = seqC(
+      char("$"),
+      char("{"),
+      optionalSpaces,
+      capture(variableNameParser, "expression"),
+      optionalSpaces,
+      char("}"),
+    );
+    const result = parser(input);
+    if (!result.success) return result;
+    return success(
+      {
+        type: "interpolation" as const,
+        expression: result.result.expression,
+      },
+      result.rest,
+    );
+  });
+
+// String literal that allows identifier-only `${name}` interpolation but
+// nothing else. Used by `staticTagArgParser` so e.g.
+// `@jsonSchema({ description: "divisible by ${divisor}" })` is accepted
+// when `divisor` is a value-param name (or a top-level static const),
+// while `"${a + b}"`, `"${foo()}"`, `"${obj.field}"` are rejected by
+// the parser before reaching the type checker / generator.
+export const staticInterpolatedStringParser: Parser<StringLiteral> = (
+  input: string,
+) => {
+  const open = oneOf('"`')(input);
+  if (!open.success) return open as ParserResult<StringLiteral>;
+  const delim = open.result as '"' | "`";
+  const segments = many(
+    or(stringTextSegmentParserFor(delim), staticInterpolationSegmentParser),
+  )(open.rest);
+  if (!segments.success) return segments as ParserResult<StringLiteral>;
+  const close = char(delim)(segments.rest);
+  if (!close.success) return failure(`expected closing ${delim}`, input);
+  return success(
+    { type: "string" as const, segments: segments.result },
+    close.rest,
+  );
+};
+
 export const _stringParser: Parser<StringLiteral> = (input: string) => {
   const open = oneOf('"`')(input);
   if (!open.success) return open as ParserResult<StringLiteral>;
@@ -1509,7 +1558,12 @@ export const staticTagArgParser: Parser<Expression> = label(
     nullParser,
     booleanParser,
     numberParser,
-    simpleStringParser,
+    // Allow identifier-only `${name}` interpolation so users can
+    // reference value-param identifiers or static consts inside tag
+    // strings (e.g. `description: "must be divisible by ${divisor}"`).
+    // Any non-identifier expression in a `${...}` slot is rejected at
+    // parse time.
+    staticInterpolatedStringParser,
     _identOrPfaParser,
   ),
 );

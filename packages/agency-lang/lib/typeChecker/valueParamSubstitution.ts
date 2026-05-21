@@ -99,6 +99,9 @@ export function substituteValueArgsInExpression(
       if (bound !== undefined) return cloneExpression(bound);
       return expr;
     }
+    case "string":
+    case "multiLineString":
+      return substituteInString(expr, bindings);
     case "agencyObject":
       return substituteInObject(expr, bindings);
     case "agencyArray":
@@ -108,9 +111,109 @@ export function substituteValueArgsInExpression(
     case "valueAccess":
       return substituteInValueAccess(expr, bindings);
     default:
-      // Literals (number, string, boolean, null) and anything else not
-      // in the restricted tag-arg subset are returned as-is.
+      // Literals (number, boolean, null) and anything else not in the
+      // restricted tag-arg subset are returned as-is.
       return expr;
+  }
+}
+
+/**
+ * Substitute identifier-only `${name}` interpolation segments inside a
+ * tag-arg string literal. If the identifier is bound, we render its
+ * value as text and fuse adjacent text segments together. Unbound
+ * identifiers (typically references to top-level static consts) are
+ * left as-is so they survive to codegen as TS template `${ident}`.
+ */
+function substituteInString(
+  // Use a loose shape because both `string` and `multiLineString`
+  // Expressions share the same `segments` field.
+  expr: Expression,
+  bindings: ValueArgBindings,
+): Expression {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const lit = expr as any;
+  const segments = lit.segments as Array<
+    | { type: "text"; value: string }
+    | { type: "interpolation"; expression: Expression }
+  >;
+  // Fast path: nothing to substitute.
+  const hasBoundInterp = segments.some(
+    (s) =>
+      s.type === "interpolation" &&
+      s.expression.type === "variableName" &&
+      bindings[s.expression.value] !== undefined,
+  );
+  if (!hasBoundInterp) return expr;
+  const out: typeof segments = [];
+  for (const seg of segments) {
+    if (seg.type === "text") {
+      pushText(out, seg.value);
+      continue;
+    }
+    if (seg.expression.type !== "variableName") {
+      // Non-identifier interpolation slot — the parser rejects this,
+      // but be defensive and just pass it through.
+      out.push(seg);
+      continue;
+    }
+    const bound = bindings[seg.expression.value];
+    if (bound === undefined) {
+      // Not a value-param: leave interpolation for codegen.
+      out.push(seg);
+      continue;
+    }
+    const text = literalToText(bound);
+    if (text !== undefined) {
+      pushText(out, text);
+    } else {
+      // Bound to a non-literal expression (e.g. another identifier
+      // forwarded from a wrapping alias) — keep the interpolation but
+      // with the substituted expression in the slot.
+      out.push({ type: "interpolation", expression: cloneExpression(bound) });
+    }
+  }
+  return { ...lit, segments: out } as Expression;
+}
+
+function pushText(
+  out: Array<
+    | { type: "text"; value: string }
+    | { type: "interpolation"; expression: Expression }
+  >,
+  value: string,
+): void {
+  const last = out[out.length - 1];
+  if (last && last.type === "text") {
+    last.value += value;
+  } else {
+    out.push({ type: "text", value });
+  }
+}
+
+function literalToText(expr: Expression): string | undefined {
+  switch (expr.type) {
+    case "number":
+      return (expr as Expression & { value: string }).value;
+    case "boolean":
+      return String((expr as Expression & { value: boolean }).value);
+    case "null":
+      return "null";
+    case "string":
+    case "multiLineString": {
+      // Only inline if every segment is already text; otherwise leave
+      // the substitution to the next layer.
+      const lit = expr as Expression & {
+        segments: Array<{ type: string; value?: string }>;
+      };
+      let raw = "";
+      for (const s of lit.segments) {
+        if (s.type !== "text") return undefined;
+        raw += s.value ?? "";
+      }
+      return raw;
+    }
+    default:
+      return undefined;
   }
 }
 

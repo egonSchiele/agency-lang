@@ -37,24 +37,44 @@ export function tagArgToTs(
         segments: Array<{ type: "text" | "interpolation"; value?: string; expression?: Expression }>;
         loc?: { line: number; col: number };
       };
-      // Tag-arg strings must be plain literals: the parser uses
-      // `simpleStringParser`, which never produces interpolation segments.
-      // If we ever see one here, that's a bug — fail loudly rather than
-      // emit broken TypeScript.
-      let raw = "";
-      for (const seg of lit.segments) {
-        if (seg.type === "text") {
-          raw += seg.value ?? "";
-        } else {
-          const loc = lit.loc
-            ? ` at line ${lit.loc.line}, col ${lit.loc.col}`
-            : "";
-          throw new Error(
-            `Tag arguments must be plain string literals (no interpolation)${loc}`,
-          );
-        }
+      // Tag-arg strings accept identifier-only `${name}` interpolation
+      // (see `staticInterpolatedStringParser`). After value-param
+      // substitution any `${valueParam}` slot has been replaced by a
+      // literal text segment; any remaining interpolation slot must be
+      // an identifier reference (typically a top-level static const)
+      // that we emit as a TS template-literal `${ident}` reference.
+      // If every segment is text, emit a plain JS string literal.
+      const allText = lit.segments.every((s) => s.type === "text");
+      if (allText) {
+        let raw = "";
+        for (const seg of lit.segments) raw += seg.value ?? "";
+        return JSON.stringify(raw);
       }
-      return JSON.stringify(raw);
+      // Any remaining interpolation segments at this point are bugs:
+      // the parser only accepts identifier-only `${name}` slots, and
+      // substitution folds every value-param identifier away into a
+      // text segment. A leftover `${name}` means the identifier did
+      // not resolve to a value parameter of the surrounding alias —
+      // e.g. a top-level static const, which we do not currently
+      // support (tag args are emitted inside node-body schema chains
+      // where module-level consts aren't bound to JS identifiers).
+      const loc = lit.loc
+        ? ` at line ${lit.loc.line}, col ${lit.loc.col}`
+        : "";
+      const offending = lit.segments.find((s) => s.type === "interpolation");
+      const inner = offending?.expression as Expression | undefined;
+      const name =
+        inner && inner.type === "variableName"
+          ? (inner as Literal & { value: string }).value
+          : "<expression>";
+      if (valueParamNames && valueParamNames.indexOf(name) !== -1) {
+        throw new Error(
+          `value param '${name}' left unsubstituted in tag-arg string — substitution pass not invoked?${loc}`,
+        );
+      }
+      throw new Error(
+        `tag-arg string interpolation '${"${"}${name}}' must reference a value parameter of the enclosing type alias${loc}`,
+      );
     }
     case "number":
       return (expr as Literal & { value: string }).value;

@@ -1,0 +1,17 @@
+// Value-parameter identifiers may appear inside `${...}` slots in
+// tag-arg strings. Substitution folds the literal value into the
+// string at compile time so the JSON schema's `description` carries
+// the use-site value (3 here, 7 in the second instantiation).
+
+@jsonSchema({
+  description: "Must be a number that is divisible by ${divisor}"
+})
+type DivisibleBy(divisor: number) = number
+
+node main() {
+  const sa = schema(DivisibleBy(3))
+  const sb = schema(DivisibleBy(7))
+  const a = sa.toJSONSchema()
+  const b = sb.toJSONSchema()
+  return a.description + "|" + b.description
+}

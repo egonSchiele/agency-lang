@@ -4,6 +4,7 @@ import type {
   AgencyObjectKV,
   SplatExpression,
   AgencyProgram,
+  AgencyArray,
 } from "../types.js";
 import type { CompilationUnit } from "../compilationUnit.js";
 
@@ -58,10 +59,19 @@ export function validateJsonSchemaArg(
     case "number":
     case "boolean":
     case "null":
+    case "regex":
+    case "unitLiteral":
+      // Atomic literals — no inner expressions to validate. These can
+      // appear after value-arg substitution (e.g. `Timeout(30s)`
+      // substituting a unit literal into `{ maximum: ms }`) and must be
+      // accepted to stay in sync with `staticTagArgParser`.
       return { ok: true };
 
     case "agencyObject":
       return validateObjectLiteral(expr as AgencyObject, scope);
+
+    case "agencyArray":
+      return validateArrayLiteral(expr as AgencyArray, scope);
 
     case "functionCall":
       return validateFunctionCall(expr, scope);
@@ -189,6 +199,21 @@ function validateStringLiteral(
         loc: str.loc,
       };
     }
+  }
+  return { ok: true };
+}
+
+function validateArrayLiteral(
+  arr: AgencyArray,
+  scope: JsonSchemaArgScope,
+): JsonSchemaArgValidationResult {
+  for (const item of arr.items ?? []) {
+    const inner: Expression =
+      item.type === "splat"
+        ? ((item as SplatExpression).value as Expression)
+        : (item as Expression);
+    const r = validateJsonSchemaArg(inner, scope);
+    if (!r.ok) return r;
   }
   return { ok: true };
 }

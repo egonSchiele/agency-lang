@@ -93,13 +93,43 @@ describe("validateJsonSchemaArg", () => {
     expect(r.ok).toBe(true);
   });
 
-  it("rejects ternary / binop / template / array literal", () => {
+  it("rejects ternary / binop", () => {
     const ternary = { type: "binOpExpression", op: "?" } as any;
     expect(validateJsonSchemaArg(ternary, scope()).ok).toBe(false);
     const binop = { type: "binOpExpression" } as any;
     expect(validateJsonSchemaArg(binop, scope()).ok).toBe(false);
-    const arr = { type: "agencyArray", items: [] } as any;
+  });
+
+  it("accepts array literals of allowed items (e.g. enum lists)", () => {
+    const arr = {
+      type: "agencyArray",
+      items: [
+        { type: "string", segments: [{ type: "text", value: "a" }] },
+        { type: "string", segments: [{ type: "text", value: "b" }] },
+      ],
+    } as any;
+    expect(validateJsonSchemaArg(arr, scope()).ok).toBe(true);
+  });
+
+  it("rejects array literals whose items are disallowed", () => {
+    const arr = {
+      type: "agencyArray",
+      items: [{ type: "binOpExpression" }],
+    } as any;
     expect(validateJsonSchemaArg(arr, scope()).ok).toBe(false);
+  });
+
+  it("accepts regex and unit literals (post-substitution leaves)", () => {
+    const re = { type: "regex", pattern: "abc", flags: "" } as any;
+    expect(validateJsonSchemaArg(re, scope()).ok).toBe(true);
+    const u = {
+      type: "unitLiteral",
+      value: "30",
+      unit: "s",
+      canonicalValue: 30000,
+      dimension: "time",
+    } as any;
+    expect(validateJsonSchemaArg(u, scope()).ok).toBe(true);
   });
 
   it("accepts value-param identifiers when in scope", () => {

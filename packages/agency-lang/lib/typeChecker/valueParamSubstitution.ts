@@ -576,6 +576,28 @@ function checkExpr(
     case "functionCall":
       checkFunctionCallArgs(e as FunctionCall, paramNames, aliasName, tagName);
       break;
+    case "agencyArray":
+      for (const item of (e as AgencyArray).items ?? []) {
+        if (item.type === "splat") {
+          checkExpr(
+            (item as SplatExpression).value as Expression,
+            paramNames,
+            aliasName,
+            tagName,
+          );
+        } else {
+          checkExpr(item as Expression, paramNames, aliasName, tagName);
+        }
+      }
+      break;
+    case "string":
+    case "multiLineString":
+      for (const seg of (e as { segments?: Array<{ type: string; expression?: Expression }> }).segments ?? []) {
+        if (seg.type === "interpolation" && seg.expression) {
+          checkExpr(seg.expression, paramNames, aliasName, tagName);
+        }
+      }
+      break;
   }
 }
 

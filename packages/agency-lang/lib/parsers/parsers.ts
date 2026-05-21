@@ -519,8 +519,12 @@ export const simpleStringParser: Parser<StringLiteral> = (input: string) => {
 
 // Identifier-only interpolation segment: accepts `${name}` where `name`
 // is a plain identifier. Used in static tag-arg strings so users can
-// embed a value-param identifier or a top-level static const without
-// opening the door to arbitrary runtime expressions.
+// embed a value-param identifier (e.g. `${divisor}`) without opening
+// the door to arbitrary runtime expressions. Note: only value-param
+// identifiers are actually supported end-to-end — top-level static
+// consts are rejected later by `validateStringLiteral` and would crash
+// at codegen, since tag strings are emitted where module-level Agency
+// consts are not bound as plain JS names.
 const staticInterpolationSegmentParser: Parser<InterpolationSegment> =
   withLoc((input: string) => {
     const parser = seqC(
@@ -545,26 +549,13 @@ const staticInterpolationSegmentParser: Parser<InterpolationSegment> =
 // String literal that allows identifier-only `${name}` interpolation but
 // nothing else. Used by `staticTagArgParser` so e.g.
 // `@jsonSchema({ description: "divisible by ${divisor}" })` is accepted
-// when `divisor` is a value-param name (or a top-level static const),
-// while `"${a + b}"`, `"${foo()}"`, `"${obj.field}"` are rejected by
-// the parser before reaching the type checker / generator.
-export const staticInterpolatedStringParser: Parser<StringLiteral> = (
-  input: string,
-) => {
-  const open = oneOf('"`')(input);
-  if (!open.success) return open as ParserResult<StringLiteral>;
-  const delim = open.result as '"' | "`";
-  const segments = many(
-    or(stringTextSegmentParserFor(delim), staticInterpolationSegmentParser),
-  )(open.rest);
-  if (!segments.success) return segments as ParserResult<StringLiteral>;
-  const close = char(delim)(segments.rest);
-  if (!close.success) return failure(`expected closing ${delim}`, input);
-  return success(
-    { type: "string" as const, segments: segments.result },
-    close.rest,
-  );
-};
+// when `divisor` is a value-param name on the surrounding alias, while
+// `"${a + b}"`, `"${foo()}"`, `"${obj.field}"` are rejected by the
+// parser before reaching the type checker / generator. Static const
+// names are not supported here — see the comment on
+// `staticInterpolationSegmentParser`.
+export const staticInterpolatedStringParser: Parser<StringLiteral> =
+  makeInterpolatedStringParser(staticInterpolationSegmentParser);
 
 // Multi-line variant of `staticInterpolatedStringParser`. Same
 // identifier-only interpolation rule for `${...}` slots, used inside
@@ -592,21 +583,33 @@ export const staticMultiLineStringParser: Parser<MultiLineStringLiteral> = (
   return result;
 };
 
-export const _stringParser: Parser<StringLiteral> = (input: string) => {
-  const open = oneOf('"`')(input);
-  if (!open.success) return open as ParserResult<StringLiteral>;
-  const delim = open.result as '"' | "`";
-  const segments = many(
-    or(stringTextSegmentParserFor(delim), interpolationSegmentParser),
-  )(open.rest);
-  if (!segments.success) return segments as ParserResult<StringLiteral>;
-  const close = char(delim)(segments.rest);
-  if (!close.success) return failure(`expected closing ${delim}`, input);
-  return success(
-    { type: "string" as const, segments: segments.result },
-    close.rest,
-  );
-};
+// Build a string-literal parser that supports `"..."` / `` `...` ``
+// delimiters, requires matching open/close delimiters, and accepts
+// the given interpolation-segment parser inside `${...}` slots.
+// Shared between the full `_stringParser` (any expression inside
+// `${...}`) and `staticInterpolatedStringParser` (identifier-only).
+function makeInterpolatedStringParser(
+  segmentParser: Parser<InterpolationSegment>,
+): Parser<StringLiteral> {
+  return (input: string) => {
+    const open = oneOf('"`')(input);
+    if (!open.success) return open as ParserResult<StringLiteral>;
+    const delim = open.result as '"' | "`";
+    const segments = many(
+      or(stringTextSegmentParserFor(delim), segmentParser),
+    )(open.rest);
+    if (!segments.success) return segments as ParserResult<StringLiteral>;
+    const close = char(delim)(segments.rest);
+    if (!close.success) return failure(`expected closing ${delim}`, input);
+    return success(
+      { type: "string" as const, segments: segments.result },
+      close.rest,
+    );
+  };
+}
+
+export const _stringParser: Parser<StringLiteral> =
+  makeInterpolatedStringParser(interpolationSegmentParser);
 
 export const stringParser: Parser<StringLiteral> = label("a string", (input: string) => {
   // Allow `_valueAccessParser` on the right of `+` so function calls and

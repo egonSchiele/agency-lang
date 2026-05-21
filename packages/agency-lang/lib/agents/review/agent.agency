@@ -1,5 +1,6 @@
 import { exec } from "std::shell"
 import { args } from "std::system"
+import { systemMessage } from "std::thread"
 systemPrompt = read("./prompts/system.md")
 
 type Severity = "critical" | "warning" | "suggestion"
@@ -38,7 +39,7 @@ node main() {
   }
   // Have the LLM review the code
   thread {
-    system(systemPrompt)
+    systemMessage(systemPrompt)
     let typeErrorMessage = "The type checker found no errors."
     if (typeErrors != "") {
       typeErrorMessage = "The type checker reported the following errors:\n${typeErrors}"

@@ -1,0 +1,51 @@
+import { getCost } from "std::thread"
+
+// Pinned to the deterministic LLM provider via "useTestLLMProvider":
+// true in the .test.json.
+const DETERMINISTIC_COST = 0.000002
+
+// Regression for the resumeRaceWinner cost-accounting bug:
+// race losers' spend is folded into the parent at INTERRUPT time, then
+// the winner resumes and finishes. The winner's final delta must be
+// computed against its own immutable seed baseline (not the parent's
+// now-mutated localCost), otherwise the losers get subtracted out and
+// the total under-counts.
+//
+// k = 1 makes one LLM call and then interrupts (becomes the winner —
+// it resolves first via interrupt). k = 2 and k = 3 each do multiple
+// LLM calls but lose the race; their already-completed-call spend
+// should still propagate to the parent. On resume, the winner makes
+// one more LLM call and returns.
+//
+// Expected accounting after resume:
+//   total = winner_pre_interrupt (1) + winner_post_resume (1)
+//         + loser_spend (k=2 and k=3 contribute their completed calls)
+// The bug would make total = winner spend only (2 calls).
+def doWork(k: number): string {
+  if (k == 1) {
+    let _r = llm("winner-pre")
+    interrupt("approve?")
+    let _s = llm("winner-post")
+    return "done"
+  }
+  let i = 0
+  while (i < k) {
+    let _r = llm("loser-call")
+    i = i + 1
+  }
+  return "done"
+}
+
+node main() {
+  let _w = race([1, 2, 3]) as k {
+    return doWork(k)
+  }
+  let total = getCost()
+  // Bug would yield total == 2 * DETERMINISTIC_COST (only winner counted).
+  // Fix yields total > 2 * DETERMINISTIC_COST because loser spend is
+  // also folded in. Use a strict-greater-than to avoid coupling to race
+  // scheduling: depending on how many loser calls completed before
+  // abort, total ∈ [3, 7] * DETERMINISTIC_COST, all of which exceed 2.
+  let losersCounted = total > 2 * DETERMINISTIC_COST
+  return "${losersCounted}"
+}

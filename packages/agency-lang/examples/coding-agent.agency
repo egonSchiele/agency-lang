@@ -2,6 +2,7 @@ import * as ui from "std::ui"
 import { bash } from "std::shell"
 import { edit, multiedit, applyPatch, mkdir, copy, move, remove } from "std::fs"
 import { cwd } from "std::system"
+import { systemMessage } from "std::thread"
 callback onLLMCallStart(data) {
   ui.chat("", data)
   ui.startSpinner("thinking")
@@ -31,7 +32,7 @@ node main() {
   let userMessage = ui.prompt("What would you like to do?")
   handle {
     thread {
-      system(systemPrompt)
+      systemMessage(systemPrompt)
       let nextAction: NextAction = { 
         type: "respond",
         message: "How can I help?"

@@ -1,0 +1,32 @@
+import { getCost, getTokens } from "std::thread"
+
+// Pinned to the deterministic LLM provider via "useTestLLMProvider":
+// true in the .test.json. Each llm() call adds SYNTHETIC_COST
+// (= 0.000002 USD) and SYNTHETIC_USAGE.totalTokens (= 2) to the
+// active stack — see lib/runtime/deterministicClient.ts. Asserting
+// against these constants (rather than the raw literals in the
+// expectedOutput) keeps the fixture's intent obvious if the
+// synthetic numbers ever change.
+const DETERMINISTIC_COST = 0.000002
+const DETERMINISTIC_TOKENS = 2
+
+node main() {
+  let costBefore = getCost()
+  let tokensBefore = getTokens()
+
+  llm("a")
+  let costAfter1 = getCost()
+  let tokensAfter1 = getTokens()
+
+  llm("b")
+  let costAfter2 = getCost()
+  let tokensAfter2 = getTokens()
+
+  let startsAtZero = costBefore == 0 && tokensBefore == 0
+  let costFirst = (costAfter1 - costBefore) == DETERMINISTIC_COST
+  let costSecond = (costAfter2 - costAfter1) == DETERMINISTIC_COST
+  let tokensFirst = (tokensAfter1 - tokensBefore) == DETERMINISTIC_TOKENS
+  let tokensSecond = (tokensAfter2 - tokensAfter1) == DETERMINISTIC_TOKENS
+
+  return "${startsAtZero}_${costFirst}_${costSecond}_${tokensFirst}_${tokensSecond}"
+}

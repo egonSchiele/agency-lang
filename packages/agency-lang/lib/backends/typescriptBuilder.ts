@@ -1876,23 +1876,18 @@ export class TypeScriptBuilder {
 
     const shouldAwait = !node.async && context !== "valueAccess";
 
-    // system() is a builder macro — not a real function call
-    if (node.functionName === "system") {
-      const argNodes = node.arguments.map((a) => this.processCallArg(a));
-      return $(ts.threads.active())
-        .prop("push")
-        .call([ts.smoltalkSystemMessage(argNodes)])
-        .done();
-    }
-
     // Context-injected builtins: codegen rewrites the call to prepend
-    // `__ctx` as the first positional argument. The actual emit is a
-    // plain direct call (`f(__ctx, ...args)`), like the __-prefixed
-    // branch below — but the registry lookup has to happen FIRST so
-    // we know to inject ctx. See lib/codegenBuiltins/contextInjected.ts.
+    // `__ctx`, `__stateStack`, and `__threads` as the first three
+    // positional arguments. All three are always in scope inside
+    // function/node bodies (bound by classMethod.mustache). The actual
+    // emit is a plain direct call (`f(__ctx, __stateStack, __threads,
+    // ...args)`), like the __-prefixed branch below. See
+    // lib/codegenBuiltins/contextInjected.ts for the contract.
     if (isContextInjectedBuiltin(node.functionName)) {
       return this.emitDirectFunctionCall(node, functionName, shouldAwait, [
         ts.id("__ctx"),
+        ts.id("__stateStack"),
+        ts.id("__threads"),
       ]);
     }
 

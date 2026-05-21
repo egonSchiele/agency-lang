@@ -50,6 +50,14 @@ type TestCase = {
   // when running under AGENCY_USE_TEST_LLM_PROVIDER=1. Each entry maps to
   // one llm() call in the agency code, in source order.
   llmMocks?: LLMMock[];
+  // Force the deterministic LLM provider even when the suite is not
+  // launched with AGENCY_USE_TEST_LLM_PROVIDER=1. Use for tests whose
+  // assertions depend on the deterministic client's fixed per-call cost /
+  // token output (see SYNTHETIC_COST in lib/runtime/deterministicClient.ts).
+  // Without this flag such tests would silently fall through to the real
+  // OpenAI client on push-to-main CI (where the env var is unset) and
+  // become flaky or expensive.
+  useTestLLMProvider?: boolean;
 };
 type Tests = {
   sourceFile?: string;
@@ -565,6 +573,7 @@ async function runSingleTest(
       timeoutMs,
       signal,
       llmMocks: testCase.llmMocks,
+      useTestLLMProvider: testCase.useTestLLMProvider,
     });
     if (result.stdout) log(result.stdout.trimEnd());
     if (result.stderr) log(result.stderr.trimEnd(), "stderr");
@@ -767,7 +776,8 @@ async function runTestFile(
       // gets a clear `skipped` rather than a confusing "no mock provided"
       // failure.
       if (
-        process.env.AGENCY_USE_TEST_LLM_PROVIDER &&
+        (process.env.AGENCY_USE_TEST_LLM_PROVIDER ||
+          testCase.useTestLLMProvider) &&
         testCase.evaluationCriteria.some((c) => c.type === "llmJudge")
       ) {
         log(color.yellow(`  ⊘ Skipped (LLM-as-judge requires real client)`));
@@ -991,9 +1001,20 @@ async function runTsTestDir(
     // DeterministicClient. When the file is absent under deterministic
     // mode we still set the env var to "[]" so any llm() call fails
     // cleanly instead of falling through to the real OpenAI client.
+    //
+    // Activate the deterministic client whenever EITHER:
+    //   - the suite-wide AGENCY_USE_TEST_LLM_PROVIDER env var is set
+    //     (typical for PR CI), OR
+    //   - a `useTestLLMProvider` marker file sits next to test.js
+    //     (mirrors the per-test flag in .test.json — lets a single
+    //     agency-js test pin itself to the deterministic provider even
+    //     on push-to-main CI where the env var is unset).
     const mocksFile = path.join(dir, "llmMocks.json");
+    const useDeterministic =
+      !!process.env.AGENCY_USE_TEST_LLM_PROVIDER ||
+      fs.existsSync(path.join(dir, "useTestLLMProvider"));
     let mocksEnv: Record<string, string> = {};
-    if (process.env.AGENCY_USE_TEST_LLM_PROVIDER) {
+    if (useDeterministic) {
       const mocks = fs.existsSync(mocksFile)
         ? fs.readFileSync(mocksFile, "utf-8")
         : "[]";

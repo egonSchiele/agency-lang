@@ -253,3 +253,47 @@ describe("advanceDebugStep", () => {
     stack.advanceDebugStep("0");
   });
 });
+
+describe("StateStack localCost/localTokens/seedCost serialization", () => {
+  it("defaults to 0 on a fresh stack", () => {
+    const stack = new StateStack();
+    expect(stack.localCost).toBe(0);
+    expect(stack.localTokens).toBe(0);
+    expect(stack.seedCost).toBe(0);
+    expect(stack.seedTokens).toBe(0);
+  });
+
+  it("round-trips localCost/localTokens/seedCost/seedTokens through toJSON/fromJSON", () => {
+    const stack = new StateStack();
+    stack.localCost = 3.5;
+    stack.localTokens = 200;
+    stack.seedCost = 1.25;
+    stack.seedTokens = 75;
+    const json = stack.toJSON();
+    expect(json.localCost).toBe(3.5);
+    expect(json.localTokens).toBe(200);
+    expect(json.seedCost).toBe(1.25);
+    expect(json.seedTokens).toBe(75);
+
+    const restored = StateStack.fromJSON(json);
+    expect(restored.localCost).toBe(3.5);
+    expect(restored.localTokens).toBe(200);
+    expect(restored.seedCost).toBe(1.25);
+    expect(restored.seedTokens).toBe(75);
+  });
+
+  it("fromJSON defaults missing fields to 0 (backward compat with old checkpoints)", () => {
+    const json = {
+      stack: [],
+      mode: "serialize" as const,
+      other: {},
+      deserializeStackLength: 0,
+      nodesTraversed: [],
+    };
+    const restored = StateStack.fromJSON(json);
+    expect(restored.localCost).toBe(0);
+    expect(restored.localTokens).toBe(0);
+    expect(restored.seedCost).toBe(0);
+    expect(restored.seedTokens).toBe(0);
+  });
+});

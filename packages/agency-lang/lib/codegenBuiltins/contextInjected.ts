@@ -1,6 +1,7 @@
 import type { VariableType } from "../types.js";
 import {
   BOOLEAN_T as boolean,
+  NUMBER_T as number,
   STRING_T as string,
   VOID_T as voidT,
   ANY_T,
@@ -9,21 +10,29 @@ import {
 /**
  * Registry of "context-injected builtins": agency-callable identifiers
  * whose call sites are rewritten by the TypeScript builder to inject
- * the runtime context (`__ctx`) as the first positional argument.
+ * runtime locals as the first three positional arguments.
  *
  *   agency:    __internal_recall(query)
- *   generated: await __internal_recall(__ctx, query)
+ *   generated: await __internal_recall(__ctx, __stateStack, __threads, query)
+ *
+ * `__stateStack` is required by per-branch reads (e.g., std::thread's
+ * `getCost` / `getTokens`) and is always in scope inside function/node
+ * bodies. `__threads` is required by message-pushing builtins
+ * (`*Message`) and is also always in scope. Builtins that don't need
+ * one of these accept it as an unused `_stack` / `_threads` param.
  *
  * Used as the single source of truth for two consumers:
  *   - the typechecker (via `BUILTIN_FUNCTION_TYPES`) for arg/return
  *     type validation against the user-visible signature;
  *   - the TypeScript builder for the codegen rewrite that prepends
- *     `__ctx` and emits a direct (non-`__call`) function invocation.
+ *     the three locals and emits a direct (non-`__call`) function
+ *     invocation.
  *
  * Adding a new context-injected builtin: (1) add an entry here with
  * the user-visible signature, (2) export the TS implementation under
  * the same name from one of the importable modules in `lib/stdlib/`
- * (today: `memory.ts`). The arity-parity test in
+ * (today: `memory.ts`, `thread.ts`). The TS impl must take
+ * `(ctx, stack, threads, ...userParams)`. The arity-parity test in
  * `contextInjected.test.ts` will fail loudly if (1) and (2) drift.
  */
 export type ContextInjectedBuiltin = {
@@ -36,11 +45,11 @@ export type ContextInjectedBuiltin = {
    *  the TypeScript builder to emit one `import { ... } from "..."`
    *  block per source module — keeps the "where the impl lives" fact
    *  next to the rest of the entry instead of hardcoded into the
-   *  codegen. Today every entry comes from the memory module; add
-   *  more sources by adding entries with a different `from`. */
+   *  codegen. */
   from: string;
   /** Param types as the user calls the function. The TS impl
-   *  receives `__ctx` plus these, so `impl.length === 1 + params.length`. */
+   *  receives `__ctx`, `__stateStack`, `__threads`, then these, so
+   *  `impl.length === 3 + params.length`. */
   params: (VariableType | "any")[];
   /** If set, calls with at least `minParams` and at most `params.length`
    *  args are valid (i.e. trailing optionals). Same semantics as
@@ -54,6 +63,10 @@ export type ContextInjectedBuiltin = {
 /** Default import source for the memory builtins. Keep the literal
  *  here instead of duplicating it across nine entries. */
 const MEMORY_FROM = "agency-lang/stdlib-lib/memory.js";
+
+/** Import source for the std::thread builtins (`*Message`, `getCost`,
+ *  `getTokens`). */
+const THREAD_FROM = "agency-lang/stdlib-lib/thread.js";
 
 export const CONTEXT_INJECTED_BUILTINS: Record<string, ContextInjectedBuiltin> = {
   __internal_setMemoryId: {
@@ -113,6 +126,36 @@ export const CONTEXT_INJECTED_BUILTINS: Record<string, ContextInjectedBuiltin> =
     from: MEMORY_FROM,
     params: [string],
     returnType: voidT,
+  },
+  __internal_systemMessage: {
+    name: "__internal_systemMessage",
+    from: THREAD_FROM,
+    params: [string],
+    returnType: voidT,
+  },
+  __internal_userMessage: {
+    name: "__internal_userMessage",
+    from: THREAD_FROM,
+    params: [string],
+    returnType: voidT,
+  },
+  __internal_assistantMessage: {
+    name: "__internal_assistantMessage",
+    from: THREAD_FROM,
+    params: [string],
+    returnType: voidT,
+  },
+  __internal_getCost: {
+    name: "__internal_getCost",
+    from: THREAD_FROM,
+    params: [],
+    returnType: number,
+  },
+  __internal_getTokens: {
+    name: "__internal_getTokens",
+    from: THREAD_FROM,
+    params: [],
+    returnType: number,
   },
 };
 

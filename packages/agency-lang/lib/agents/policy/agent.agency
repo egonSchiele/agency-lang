@@ -1,6 +1,7 @@
 import { map } from "std::array"
 import { writePolicyFile } from "std::policy"
 import { args } from "std::system"
+import { systemMessage } from "std::thread"
 
 // crap these comments dont stay in place! So can't ignore a type error
 // in an import
@@ -152,7 +153,7 @@ node main() {
   """
   // fix tc
   // @tc-ignore
-  system(systemPrompt)
+  systemMessage(systemPrompt)
 
   let action: Action = llm(
     """

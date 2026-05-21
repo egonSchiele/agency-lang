@@ -1,0 +1,43 @@
+{
+  "data": "done",
+  "messages": {
+    "threads": {
+      "0": {
+        "messages": [
+          {
+            "role": "system",
+            "content": "pre-llm-system"
+          },
+          {
+            "role": "user",
+            "content": "first-question"
+          },
+          {
+            "role": "assistant",
+            "content": "first-answer"
+          },
+          {
+            "role": "user",
+            "content": "mid-user"
+          },
+          {
+            "role": "assistant",
+            "content": "mid-assistant"
+          },
+          {
+            "role": "user",
+            "content": "second-question"
+          },
+          {
+            "role": "assistant",
+            "content": "second-answer"
+          }
+        ]
+      }
+    },
+    "counter": 1,
+    "activeStack": [
+      "0"
+    ]
+  }
+}

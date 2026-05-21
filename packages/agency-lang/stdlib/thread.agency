@@ -1,0 +1,66 @@
+// `__internal_*` names are context-injected builtins: always in
+// scope (no `import` needed), forbidden as values, and rewritten by
+// the TypeScript builder to receive (`__ctx`, `__stateStack`, `__threads`)
+// as the first three positional arguments. See
+// lib/codegenBuiltins/contextInjected.ts for the registry and
+// lib/stdlib/thread.ts for the implementations.
+
+export def systemMessage(msg: string) {
+  """
+  Add a system message to the current thread's message history.
+  The message becomes part of the conversation context for subsequent
+  llm() calls.
+
+  @param msg - The system message content
+  """
+  __internal_systemMessage(msg)
+}
+
+export def userMessage(msg: string) {
+  """
+  Add a user message to the current thread's message history.
+  Use this when you want to seed the conversation with prior user
+  context that wasn't actually typed by the user this turn.
+
+  @param msg - The user message content
+  """
+  __internal_userMessage(msg)
+}
+
+export def assistantMessage(msg: string) {
+  """
+  Add an assistant message to the current thread's message history.
+  Use this to inject prior assistant turns when reconstructing a
+  conversation programmatically.
+
+  @param msg - The assistant message content
+  """
+  __internal_assistantMessage(msg)
+}
+
+export safe def getCost(): number {
+  """
+  Get the cumulative cost (USD, floating point) of all LLM calls
+  contributing to the current execution branch.
+
+  Inside a fork/race branch, this returns the parent's accumulated
+  cost plus the cost incurred so far inside this branch. After all
+  branches join, the parent sees the sum of its own cost plus every
+  branch's cost (race losers included — their LLM calls really
+  happened and cost real money).
+
+  To measure a specific section, capture getCost() before and after:
+    const before = getCost()
+    // ... do work ...
+    const sectionCost = getCost() - before
+  """
+  return __internal_getCost()
+}
+
+export safe def getTokens(): number {
+  """
+  Get the cumulative token count for the current execution branch.
+  Same per-branch semantics as getCost().
+  """
+  return __internal_getTokens()
+}

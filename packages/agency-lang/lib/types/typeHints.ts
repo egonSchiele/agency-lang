@@ -4,6 +4,18 @@ import { BaseNode } from "./base.js";
 import type { Tag } from "./tag.js";
 import type { Expression } from "../types.js";
 
+/**
+ * When adding a new variant to `VariableType`, also add a case to:
+ *
+ * - `substituteValueArgsInType` and `checkType` in
+ *   `lib/typeChecker/valueParamSubstitution.ts` — both functions have
+ *   exhaustive switches over this union (enforced by a `never`-typed
+ *   default branch, so TypeScript will fail to compile if you forget).
+ *
+ * Codegen sites (`mapTypeToSchema`, `descriptor`, `hasAnyValidateTag`)
+ * also branch on `VariableType.type`; review them when adding a
+ * variant.
+ */
 export type VariableType =
   | PrimitiveType
   | ArrayType

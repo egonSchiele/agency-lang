@@ -270,6 +270,28 @@ substitution well-defined: a value-param identifier (`low`) can flow into
 the named-argument slot of a method call, which we can manipulate as an
 expression tree at compile time.
 
+### Arithmetic erases bounds
+
+Value-parameterized aliases attach validators and JSON schema constraints
+to a specific *type name*, not to the underlying `number`/`string` value
+itself. As a result, arithmetic and other expressions return the plain
+unwrapped type — the bounds do not propagate through operators:
+
+```agency
+@validate(min.partial(n: low), max.partial(n: high))
+type NumberInRange(low: number, high: number) = number
+
+const a: NumberInRange(0, 10)! = 7
+const sum = a.value + 5   // sum is a plain `number`, NOT NumberInRange(0, 10)
+```
+
+If you want to re-validate the result of an arithmetic expression,
+annotate it again with a value-parameterized alias and use the bang:
+
+```agency
+const checked: NumberInRange(0, 100)! = a.value + 5
+```
+
 ### Pre-baked stdlib types
 
 `std::types` already exports the most common parameterized shapes:

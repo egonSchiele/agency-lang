@@ -3,9 +3,9 @@
     {
       "nodeName": "main",
       "input": "",
-      "expectedOutput": "\"ok\"",
+      "expectedOutput": "{\"okMid\":true,\"tooLow\":false,\"tooHigh\":false,\"okTight\":true,\"tightTooLow\":false,\"tightTooHigh\":false}",
       "evaluationCriteria": [{ "type": "exact" }],
-      "description": "Value-parameterized alias with two parameters substitutes both bounds independently"
+      "description": "Value-parameterized alias with two parameters substitutes both bounds independently. Returns per-assertion isSuccess() flags so a regression diff identifies which assertion failed."
     }
   ]
 }

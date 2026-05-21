@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "{\"ok\":true,\"tooYoung\":false,\"tooOld\":false}",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "Wrapping alias with partial forwarding: outer fixes one inner value param to a literal and forwards its own value param for the other. Both bounds must still fire."
+    }
+  ]
+}

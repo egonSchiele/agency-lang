@@ -1,0 +1,26 @@
+// Real LLM call that exercises a value-parameterized alias in a
+// structured output. The JSON schema sent to the model is derived from
+// `Score`, which embeds `NumberInRange(1, 5)`. After substitution, the
+// schema for `rating` must include `minimum: 1` and `maximum: 5` so the
+// LLM returns a value inside that range. We then re-run validation at
+// runtime to confirm both ends — the schema constrained the model and
+// the resulting value satisfies the same @validate tag.
+
+import { min, max } from "std::validators"
+
+@validate(min.partial(n: low), max.partial(n: high))
+@jsonSchema({ minimum: low, maximum: high })
+type NumberInRange(low: number, high: number) = number
+
+type Score = {
+  rating: NumberInRange(1, 5)
+}
+
+node main() {
+  const r: Score = llm("Pick an integer rating between 1 and 5 inclusive for the movie 'The Matrix'. Return ONLY the rating field with an integer.")
+  // Re-validate the LLM-produced value through the same parameterized
+  // alias used in the schema. If the schema propagation worked, the
+  // model returned a number in [1, 5] and this validation succeeds.
+  const checked: NumberInRange(1, 5)! = r.rating
+  return isSuccess(checked)
+}

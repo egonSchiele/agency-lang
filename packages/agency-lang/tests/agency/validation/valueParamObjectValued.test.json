@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "{\"maxAt50\":50,\"maxAt120\":120,\"minAt50\":0}",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "Object-typed alias body: value-param substitution flows into a property type and its merged @jsonSchema tag, so Person(50) and Person(120) differ in age.maximum."
+    }
+  ]
+}

@@ -3,9 +3,9 @@
     {
       "nodeName": "main",
       "input": "",
-      "expectedOutput": "\"ok\"",
+      "expectedOutput": "{\"goodAdult\":true,\"tooYoung\":false,\"anyPositive\":true,\"negative\":false}",
       "evaluationCriteria": [{ "type": "exact" }],
-      "description": "Single value-parameterized alias substitutes a literal into the @validate PFA at the use site"
+      "description": "Simplest value-parameterized alias: `type Age(low) = number` validated by `min.partial(n: low)`. Returns per-assertion isSuccess() flags."
     }
   ]
 }

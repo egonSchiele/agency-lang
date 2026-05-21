@@ -24,10 +24,9 @@ import type {
 export type ValueArgBindings = Record<string, Expression>;
 
 /**
- * True when `vt` is a reference to a value-parameterized alias with
- * use-site value args (i.e. the alias was declared
- * `type Foo(low: number) = ...` and the reference is `Foo(0)`, not bare
- * `Foo`).
+ * True when `vt` is a reference to a value-parameterized alias —
+ * either with explicit use-site value args (`Foo(18)`) or as a bare
+ * reference (`Foo`) on an alias whose value params all have defaults.
  *
  * This is the single canonical predicate for "this reference needs
  * inline-at-use-site emission and `applyValueArgs` substitution". The
@@ -36,12 +35,11 @@ export type ValueArgBindings = Record<string, Expression>;
  * should all use this — keeping the divergence rule expressed in
  * exactly one place.
  *
- * NOTE: a bare `Foo` reference (no use-site value args) on a
- * value-parameterized alias returns `false`. The current invariant is
- * that bare references to value-parameterized aliases don't make sense
- * (there's no single schema/descriptor for them) and the type checker
- * rejects them — but if either side is missing this predicate returns
- * false so the bare-alias path is taken (which will fail clearly).
+ * Why bare refs count too: a value-parameterized alias never emits a
+ * top-level schema const (there's no single schema without args), so
+ * even bare uses must be inlined. `applyValueArgs` handles the
+ * missing-args case by filling defaults or throwing a clear error if a
+ * required (defaultless) param was omitted.
  */
 export function isValueParamInstantiation(
   vt: VariableType,
@@ -50,7 +48,7 @@ export function isValueParamInstantiation(
   return (
     (vt.type === "typeAliasVariable" || vt.type === "genericType") &&
     !!entry?.valueParams &&
-    !!(vt as { valueArgs?: Expression[] }).valueArgs
+    entry.valueParams.length > 0
   );
 }
 
@@ -259,6 +257,12 @@ function substituteInChainElement(
  * Expression subset accepted in tag args is plain data: no functions,
  * no cycles. Suffices for the cases we care about (literals, object
  * literals, PFA expressions).
+ *
+ * PFA support is verified by the unit tests
+ * `substitutes an identifier inside a PFA .partial(n: low) arg` and
+ * `handles PFA validators with value-param refs in @validate`, plus
+ * the e2e fixture `valueParamWrappingAlias.agency` which exercises a
+ * PFA-bearing alias through resolveType → codegen → runtime.
  */
 function cloneExpression(expr: Expression): Expression {
   return JSON.parse(JSON.stringify(expr)) as Expression;
@@ -516,6 +520,20 @@ function checkType(
       for (const p of vt.params) checkType(p.typeAnnotation, paramNames, aliasName);
       checkType(vt.returnType, paramNames, aliasName);
       break;
+    // Leaf types: no inner valueArgs to inspect. Explicit cases plus a
+    // `never`-typed default keep this exhaustive — TypeScript will fail
+    // to compile if a new VariableType variant is added without a case.
+    case "primitiveType":
+    case "stringLiteralType":
+    case "numberLiteralType":
+    case "booleanLiteralType":
+    case "functionRefType":
+      break;
+    default: {
+      const _exhaustive: never = vt;
+      void _exhaustive;
+      break;
+    }
   }
 }
 
@@ -594,10 +612,21 @@ export function substituteValueArgsInType(
         })),
         returnType: substituteValueArgsInType(vt.returnType, bindings),
       };
-    default:
-      // primitiveType, stringLiteralType, numberLiteralType,
-      // booleanLiteralType, functionRefType — no inner VariableType /
-      // valueArgs to walk.
+    // primitiveType, stringLiteralType, numberLiteralType,
+    // booleanLiteralType, functionRefType — no inner VariableType /
+    // valueArgs to walk. The explicit `never`-typed default below
+    // forces TypeScript to flag a compile error if a new VariableType
+    // variant is added without a case here.
+    case "primitiveType":
+    case "stringLiteralType":
+    case "numberLiteralType":
+    case "booleanLiteralType":
+    case "functionRefType":
       return vt;
+    default: {
+      const _exhaustive: never = vt;
+      void _exhaustive;
+      return vt;
+    }
   }
 }

@@ -3,9 +3,9 @@
     {
       "nodeName": "main",
       "input": "",
-      "expectedOutput": "\"ok\"",
+      "expectedOutput": "{\"adult\":true,\"childButOk\":true,\"negativeWithEmptyParens\":false,\"childBare\":true,\"negativeBare\":false}",
       "evaluationCriteria": [{ "type": "exact" }],
-      "description": "Value-parameterized alias applies declared defaults when use-site omits the argument"
+      "description": "Defaults apply equally for explicit args, empty parens, and bare alias references (no parens). Returns per-assertion isSuccess() flags so a regression diff identifies which form misbehaves."
     }
   ]
 }

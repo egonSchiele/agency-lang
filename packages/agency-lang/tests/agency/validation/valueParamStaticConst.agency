@@ -1,6 +1,9 @@
 // Verifies that a static const identifier can be used as a value argument
 // at the use site. Substitution must read the const's value when emitting
 // the @validate PFA so the literal flows through to runtime.
+//
+// Returns an object of per-assertion isSuccess() flags so a regression diff
+// pinpoints which assertion misbehaved.
 
 import { min } from "std::validators"
 
@@ -13,10 +16,8 @@ node main() {
   const adult: Age(DEFAULT_AGE)! = 25
   const tooYoung: Age(DEFAULT_AGE)! = 10
 
-  if (isSuccess(adult)) {
-    if (isFailure(tooYoung)) {
-      return "ok"
-    }
+  return {
+    adult: isSuccess(adult),
+    tooYoung: isSuccess(tooYoung)
   }
-  return "failed"
 }

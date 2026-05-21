@@ -1,0 +1,29 @@
+// Verifies value-param substitution through an OBJECT-typed alias body.
+// `Person(maxAge: number)` is an object with a property whose type is a
+// value-param alias that depends on the outer alias's `maxAge` param.
+// Substitution must reach into the object body and update the property
+// type and its merged @jsonSchema tag.
+
+import { min, max } from "std::validators"
+
+@validate(min.partial(n: low), max.partial(n: high))
+@jsonSchema({ minimum: low, maximum: high })
+type NumberInRange(low: number, high: number) = number
+
+type Person(maxAge: number) = {
+  name: string,
+  age: NumberInRange(0, maxAge)
+}
+
+node main() {
+  const s50 = schema(Person(50))
+  const js50 = s50.toJSONSchema()
+  const s120 = schema(Person(120))
+  const js120 = s120.toJSONSchema()
+
+  return {
+    maxAt50: js50.properties.age.maximum,
+    maxAt120: js120.properties.age.maximum,
+    minAt50: js50.properties.age.minimum
+  }
+}

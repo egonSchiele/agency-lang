@@ -3,9 +3,9 @@
     {
       "nodeName": "main",
       "input": "",
-      "expectedOutput": "\"ok\"",
+      "expectedOutput": "{\"adult\":true,\"tooYoung\":false}",
       "evaluationCriteria": [{ "type": "exact" }],
-      "description": "Value-parameterized alias substitutes a static const identifier as the use-site argument"
+      "description": "Static const identifier as a value argument: substitution reads the const's value when emitting the @validate PFA."
     }
   ]
 }

@@ -1,6 +1,10 @@
 // Verifies that a value-parameterized alias with multiple value parameters
 // substitutes each one into its corresponding @validate PFA. Both the lower
 // and upper bound must fire independently.
+//
+// Returns an object of per-assertion results so a regression diff shows
+// exactly which assertion went wrong, instead of collapsing six checks
+// into one boolean and a single "failed" string.
 
 import { min, max } from "std::validators"
 
@@ -16,18 +20,12 @@ node main() {
   const tightTooLow: NumberInRange(1, 100)! = 0
   const tightTooHigh: NumberInRange(1, 100)! = 101
 
-  if (isSuccess(okMid)) {
-    if (isFailure(tooLow)) {
-      if (isFailure(tooHigh)) {
-        if (isSuccess(okTight)) {
-          if (isFailure(tightTooLow)) {
-            if (isFailure(tightTooHigh)) {
-              return "ok"
-            }
-          }
-        }
-      }
-    }
+  return {
+    okMid: isSuccess(okMid),
+    tooLow: isSuccess(tooLow),
+    tooHigh: isSuccess(tooHigh),
+    okTight: isSuccess(okTight),
+    tightTooLow: isSuccess(tightTooLow),
+    tightTooHigh: isSuccess(tightTooHigh)
   }
-  return "failed"
 }

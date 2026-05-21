@@ -393,6 +393,21 @@ function inferLiteralType(expr: Expression): string | undefined {
       return "boolean";
     case "null":
       return "null";
+    case "unitLiteral":
+      // All unit literals collapse to a number at the IR level
+      // (`canonicalValue`). Treat them as `number` for declared-type
+      // matching so `(t: number)` accepts `30s`, `(c: number)` accepts
+      // `$5`, etc.
+      return "number";
+    case "regex":
+      // Surface as `regex` so users can declare `(pat: regex)` and
+      // get a real arity check. Mismatched declarations (e.g.
+      // `(pat: string)` paired with `re/.../`) raise a clear error.
+      return "regex";
+    case "agencyArray":
+      return "array";
+    case "agencyObject":
+      return "object";
     default:
       return undefined;
   }
@@ -404,6 +419,10 @@ function variableTypeName(t: unknown): string {
   if (node.type === "primitiveType" && typeof node.value === "string") {
     return node.value;
   }
+  // Surface common compound shapes by a stable short name so the
+  // best-effort literal check matches against `inferLiteralType`.
+  if (node.type === "arrayType") return "array";
+  if (node.type === "objectType") return "object";
   return node.type ?? "?";
 }
 

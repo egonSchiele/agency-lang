@@ -73,6 +73,22 @@ function valueArgExprToString(expr: Expression): string {
           return `${e.key}: ${valueArgExprToString(e.value)}`;
         })
         .join(", ")} }`;
+    case "agencyArray":
+      return `[${expr.items
+        .map((item) =>
+          item.type === "splat"
+            ? `...${valueArgExprToString(item.value)}`
+            : valueArgExprToString(item as Expression),
+        )
+        .join(", ")}]`;
+    case "regex":
+      return `re/${expr.pattern}/${expr.flags}`;
+    case "unitLiteral":
+      // Round-trip the source form (`30s`, `$5`, `100KB`, ...). `$`
+      // is the only prefix unit; everything else is a suffix.
+      return expr.unit === "$"
+        ? `$${expr.value}`
+        : `${expr.value}${expr.unit}`;
     default:
       return "";
   }

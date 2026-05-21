@@ -210,18 +210,24 @@ its value can be folded to a TypeScript literal during compilation.
 **Allowed:**
 
 - String / number / boolean / `null` literals
+- Multi-line `"""..."""` strings
+- Unit literals: time (`30s`, `2h`), cost (`$5`), size (`100KB`).
+  These canonicalise to a plain number (ms / dollars / bytes) and the
+  canonical value is what gets substituted
+- Regex literals (`re/pattern/flags`); useful when forwarding to a
+  custom validator declared with `(pat: regex)`
 - Identifiers that resolve to a top-level `static const` (including
   const-bound imports)
 - Other value-param identifiers in scope (so a wrapper alias can forward
   its own value params)
-- Object literals built from any of the above (with `...` spread)
+- Object literals and array literals built from any of the above
+  (with `...` spread)
 
 **Not allowed:**
 
 - bare function calls (`Age(getDefault())`)
 - ternaries, binary operators, pipes
 - member access (`Age(config.min)`)
-- array literals
 - identifiers that resolve to a `let` binding, function parameter, or
   local declaration
 

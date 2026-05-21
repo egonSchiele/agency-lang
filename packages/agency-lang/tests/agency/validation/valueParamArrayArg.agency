@@ -1,0 +1,13 @@
+// Array literal as a value argument. The alias's `@jsonSchema(...)`
+// embeds the value-param identifier `choices` directly into the
+// `enum` field. After substitution the JSON schema carries the
+// literal array, and use-site validation forbids values outside it.
+
+@jsonSchema({ enum: choices })
+type OneOf(choices: string[]) = string
+
+node main() {
+  const s = schema(OneOf(["approve", "reject"]))
+  const js = s.toJSONSchema()
+  return js.enum[0] + "|" + js.enum[1] + "|" + js.type
+}

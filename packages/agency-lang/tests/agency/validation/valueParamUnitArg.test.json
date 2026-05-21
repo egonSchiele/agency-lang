@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "{\"maxA\":30000,\"maxB\":60000,\"okFast\":true,\"tooSlow\":false}",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "Unit literal as a value argument: time literals canonicalise (30s→30000, 1m→60000) before substitution into @validate / @jsonSchema tags."
+    }
+  ]
+}

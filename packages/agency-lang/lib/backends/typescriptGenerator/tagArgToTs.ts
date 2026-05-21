@@ -1,5 +1,6 @@
 import type {
   Expression,
+  AgencyArray,
   AgencyObject,
   AgencyObjectKV,
   FunctionCall,
@@ -93,6 +94,23 @@ export function tagArgToTs(
     }
     case "agencyObject":
       return objectLiteralToTs(expr as AgencyObject, valueParamNames);
+    case "agencyArray":
+      return arrayLiteralToTs(expr as AgencyArray, valueParamNames);
+    case "regex": {
+      // Agency regex literal `re/pattern/flags` → TS `new RegExp(p, f)`.
+      // RegExp is safer than `/p/f` here because it side-steps
+      // forward-slash escaping issues inside an embedded expression.
+      const r = expr as Expression & { pattern: string; flags: string };
+      const flags = JSON.stringify(r.flags ?? "");
+      return `new RegExp(${JSON.stringify(r.pattern)}, ${flags})`;
+    }
+    case "unitLiteral": {
+      // Unit literals carry a `canonicalValue` already normalised
+      // (ms / dollars / bytes). Emit that number; runtime sees the
+      // same value as `30s` → 30000.
+      const u = expr as Expression & { canonicalValue: number };
+      return String(u.canonicalValue);
+    }
     case "functionCall": {
       const fc = expr as FunctionCall;
       return `${fc.functionName}(${functionCallArgsToTs(fc, valueParamNames)})`;
@@ -164,6 +182,20 @@ function renderChainElement(
   throw new Error(
     `tagArgToTs: unsupported access chain element "${(el as any).kind}"`,
   );
+}
+
+function arrayLiteralToTs(
+  arr: AgencyArray,
+  valueParamNames?: ReadonlyArray<string>,
+): string {
+  const items = arr.items.map((item) => {
+    if (item.type === "splat") {
+      const sp = item as SplatExpression;
+      return `...${tagArgToTs(sp.value, valueParamNames)}`;
+    }
+    return tagArgToTs(item as Expression, valueParamNames);
+  });
+  return `[${items.join(", ")}]`;
 }
 
 function objectLiteralToTs(

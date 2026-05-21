@@ -566,6 +566,32 @@ export const staticInterpolatedStringParser: Parser<StringLiteral> = (
   );
 };
 
+// Multi-line variant of `staticInterpolatedStringParser`. Same
+// identifier-only interpolation rule for `${...}` slots, used inside
+// `staticTagArgParser` so a tag arg can be a `"""..."""` literal.
+export const staticMultiLineStringParser: Parser<MultiLineStringLiteral> = (
+  input: string,
+) => {
+  const parser = seqC(
+    set("type", "multiLineString"),
+    str('"""'),
+    capture(
+      many(
+        or(multiLineStringTextSegmentParser, staticInterpolationSegmentParser),
+      ),
+      "segments",
+    ),
+    str('"""'),
+  );
+  const result = parser(input);
+  if (result.success) {
+    for (const seg of result.result.segments) {
+      if (seg.type === "text") seg.value = stripSentinels(seg.value);
+    }
+  }
+  return result;
+};
+
 export const _stringParser: Parser<StringLiteral> = (input: string) => {
   const open = oneOf('"`')(input);
   if (!open.success) return open as ParserResult<StringLiteral>;
@@ -1552,16 +1578,27 @@ const _identOrPfaParser: Parser<Expression> = (input: string) => {
 };
 
 export const staticTagArgParser: Parser<Expression> = label(
-  "a static argument (literal, identifier, PFA expression, or object literal)",
+  "a static argument (literal, identifier, PFA expression, array, object, regex, or unit literal)",
   or(
     lazy(() => agencyObjectParser),
+    lazy(() => agencyArrayParser),
+    regexLiteralParser,
     nullParser,
     booleanParser,
+    // Unit literals (`30s`, `$5`, `100KB`, ...) MUST come before
+    // `numberParser` so `30s` matches as a unit and not as `30`
+    // with stray `s`. The IR carries `canonicalValue` (already
+    // normalised to ms / dollars / bytes), which is what codegen
+    // emits.
+    unitLiteralParser,
     numberParser,
+    // Triple-quoted strings before single-quoted so `"""..."""`
+    // isn't first matched as an empty `""` followed by `"..."`.
+    staticMultiLineStringParser,
     // Allow identifier-only `${name}` interpolation so users can
-    // reference value-param identifiers or static consts inside tag
-    // strings (e.g. `description: "must be divisible by ${divisor}"`).
-    // Any non-identifier expression in a `${...}` slot is rejected at
+    // reference value-param identifiers inside tag strings (e.g.
+    // `description: "must be divisible by ${divisor}"`). Any
+    // non-identifier expression in a `${...}` slot is rejected at
     // parse time.
     staticInterpolatedStringParser,
     _identOrPfaParser,

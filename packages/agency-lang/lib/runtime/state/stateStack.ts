@@ -225,6 +225,8 @@ export type StateStackJSON = {
   nodesTraversed: string[];
   localCost?: number;
   localTokens?: number;
+  seedCost?: number;
+  seedTokens?: number;
 };
 
 export class StateStack {
@@ -249,11 +251,20 @@ export class StateStack {
   // Per-branch cumulative LLM cost (USD) and tokens. Seeded from the parent
   // stack's value when this stack is created as a fork/race branch; otherwise
   // starts at 0. LLM calls in runPrompt add their cost/tokens here. On join,
-  // each branch's delta (branch.localCost - parentForkStartCost) propagates
-  // back to the parent stack. See docs/superpowers/specs/2026-05-20-thread-
+  // each branch's delta (branch.localCost - branch.seedCost) propagates back
+  // to the parent stack. See docs/superpowers/specs/2026-05-20-thread-
   // builtins-and-stdlib-design.md for the full model.
   localCost: number = 0;
   localTokens: number = 0;
+
+  // Immutable baseline captured at branch-creation time: the parent's
+  // localCost/localTokens at the moment this branch was seeded. Used by
+  // Runner.propagateBranchCost to compute the branch's delta independently
+  // of the parent's *current* totals — important when other sibling
+  // branches' deltas have already been folded into the parent (e.g., race
+  // losers propagated at interrupt time, winner propagated later on resume).
+  seedCost: number = 0;
+  seedTokens: number = 0;
 
   constructor(
     stack: State[] = [],
@@ -346,6 +357,8 @@ export class StateStack {
       nodesTraversed: [...this.nodesTraversed],
       localCost: this.localCost,
       localTokens: this.localTokens,
+      seedCost: this.seedCost,
+      seedTokens: this.seedTokens,
     };
   }
 
@@ -371,6 +384,8 @@ export class StateStack {
     stateStack.deserializeStackLength = json.deserializeStackLength || 0;
     stateStack.localCost = json.localCost ?? 0;
     stateStack.localTokens = json.localTokens ?? 0;
+    stateStack.seedCost = json.seedCost ?? 0;
+    stateStack.seedTokens = json.seedTokens ?? 0;
     return stateStack;
   }
 }

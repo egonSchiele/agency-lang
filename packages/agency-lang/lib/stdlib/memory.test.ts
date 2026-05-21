@@ -45,8 +45,12 @@ describe("std::memory ctx-passing concurrency", () => {
     const b = makeFakeCtx();
 
     // Interleave the two calls, simulating two concurrent runNode runs.
-    // `_stack` and `_threads` are unused by memory builtins; pass `null` to
-    // mirror what generated code would pass when not inside a fork branch.
+    // `_stack` and `_threads` are unused by memory builtins, so we pass
+    // `null` here purely as a unit-test placeholder. In real generated
+    // code these positions are ALWAYS filled with live `StateStack` and
+    // `ThreadStore` instances (see lib/backends/typescriptBuilder.ts —
+    // every context-injected call gets `[__ctx, __stateStack, __threads]`
+    // prepended).
     await Promise.all([
       __internal_setMemoryId(a.ctx, null as any, null as any, "scope-A"),
       __internal_setMemoryId(b.ctx, null as any, null as any, "scope-B"),

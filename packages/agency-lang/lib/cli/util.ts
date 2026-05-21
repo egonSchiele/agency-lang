@@ -199,10 +199,16 @@ type ExecuteNodeArgs = {
   signal?: AbortSignal;
   // Optional ordered list of LLM mocks for the deterministic LLM client.
   // Passed to the subprocess as a JSON string in AGENCY_LLM_MOCKS env var
-  // when AGENCY_USE_TEST_LLM_PROVIDER is set. The compiled module's
-  // imports template auto-activates DeterministicClient when this env var
-  // is present.
+  // when AGENCY_USE_TEST_LLM_PROVIDER is set OR when useTestLLMProvider
+  // is true. The compiled module's imports template auto-activates
+  // DeterministicClient when this env var is present.
   llmMocks?: LLMMock[];
+  // Force the deterministic LLM provider for this run even when the
+  // suite-level AGENCY_USE_TEST_LLM_PROVIDER env var is unset. Use for
+  // tests whose assertions depend on the deterministic client's fixed
+  // per-call cost / token output. Setting this is equivalent to running
+  // with AGENCY_USE_TEST_LLM_PROVIDER=1 for the spawned subprocess only.
+  useTestLLMProvider?: boolean;
 };
 
 export async function executeNodeAsync({
@@ -215,6 +221,7 @@ export async function executeNodeAsync({
   timeoutMs,
   signal,
   llmMocks,
+  useTestLLMProvider,
 }: ExecuteNodeArgs): Promise<{ data: any; stdout: string; stderr: string }> {
   let evaluateFile = "";
   let resultsFile = "";
@@ -262,10 +269,19 @@ export async function executeNodeAsync({
     // Pass mocks to the subprocess as a JSON string in an env var. The
     // compiled module's imports template auto-activates DeterministicClient
     // when AGENCY_LLM_MOCKS is set. No temp file, no cleanup needed.
-    // When AGENCY_USE_TEST_LLM_PROVIDER=1, always set the env var (even to
-    // an empty list) so the deterministic client takes over — otherwise a
-    // missing llmMocks would silently fall through to the real OpenAI client.
-    const mocksEnv = process.env.AGENCY_USE_TEST_LLM_PROVIDER
+    //
+    // Activate the deterministic client whenever EITHER:
+    //   - the suite-wide AGENCY_USE_TEST_LLM_PROVIDER env var is set
+    //     (typical for PR CI), OR
+    //   - the per-test `useTestLLMProvider` flag is true (lets a single
+    //     test pin itself to the deterministic provider even on
+    //     push-to-main CI where the env var is unset).
+    // Setting the env var to "[]" when no mocks are provided still
+    // activates the deterministic client so any llm() call fails cleanly
+    // instead of falling through to the real OpenAI client.
+    const useDeterministic =
+      !!process.env.AGENCY_USE_TEST_LLM_PROVIDER || !!useTestLLMProvider;
+    const mocksEnv = useDeterministic
       ? { AGENCY_LLM_MOCKS: JSON.stringify(llmMocks ?? []) }
       : {};
     const { stdout, stderr } = await execFileAsync("node", [evaluateFile], {

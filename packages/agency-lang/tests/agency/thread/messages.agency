@@ -1,8 +1,0 @@
-import { systemMessage, userMessage, assistantMessage } from "std::thread"
-
-node main() {
-  systemMessage("system context")
-  userMessage("user said something earlier")
-  assistantMessage("assistant replied")
-  return "ok"
-}

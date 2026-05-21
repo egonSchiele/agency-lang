@@ -1,15 +1,20 @@
 import { getCost } from "std::thread"
 
+// Pinned to the deterministic LLM provider via "useTestLLMProvider":
+// true in the .test.json. Each llm() call adds SYNTHETIC_COST
+// (= 0.000002 USD) to the active stack — see
+// lib/runtime/deterministicClient.ts. Asserting against this constant
+// (rather than the raw literal in the expectedOutput) keeps the
+// fixture's intent obvious if the synthetic price ever changes.
+const DETERMINISTIC_COST = 0.000002
+
 node main() {
-  const beforeCost = getCost()
-  llm("first call")
-  const afterFirst = getCost()
-  llm("second call")
-  const afterSecond = getCost()
-  // Each deterministic LLM call adds 0.000002 in cost.
-  // We assert that cost grows monotonically and that the second
-  // increment matches the first.
-  const firstDelta = afterFirst - beforeCost
-  const secondDelta = afterSecond - afterFirst
-  return "${beforeCost}_${firstDelta}_${secondDelta}"
+  let before = getCost()
+  llm("a")
+  let after1 = getCost()
+  llm("b")
+  let after2 = getCost()
+  let firstMatches = (after1 - before) == DETERMINISTIC_COST
+  let secondMatches = (after2 - after1) == DETERMINISTIC_COST
+  return "${before}_${firstMatches}_${secondMatches}"
 }

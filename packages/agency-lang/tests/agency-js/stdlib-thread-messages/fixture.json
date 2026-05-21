@@ -1,0 +1,27 @@
+{
+  "data": "done",
+  "messages": {
+    "threads": {
+      "0": {
+        "messages": [
+          {
+            "role": "system",
+            "content": "sys-A"
+          },
+          {
+            "role": "user",
+            "content": "usr-B"
+          },
+          {
+            "role": "assistant",
+            "content": "ast-C"
+          }
+        ]
+      }
+    },
+    "counter": 1,
+    "activeStack": [
+      "0"
+    ]
+  }
+}

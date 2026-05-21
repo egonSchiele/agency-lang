@@ -1,0 +1,17 @@
+// Verifies that systemMessage / userMessage / assistantMessage from
+// std::thread actually push onto the active thread store (i.e. the
+// messages are real, observable side-effects — not silently dropped).
+//
+// This test does not make any llm() calls. The previous version of
+// std::thread used `threads.active()?.push(...)`, which silently
+// no-oped when called before the first llm() created an active
+// thread. The fix uses getOrCreateActive() so messages injected
+// before any llm() still land on the root thread.
+import { systemMessage, userMessage, assistantMessage } from "std::thread"
+
+node main() {
+  systemMessage("sys-A")
+  userMessage("usr-B")
+  assistantMessage("ast-C")
+  return "done"
+}

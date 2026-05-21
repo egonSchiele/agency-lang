@@ -324,9 +324,19 @@ During implementation a few details shifted; recording them here for accuracy.
   `runRace` hold the parent stack in a local). Two small helpers were added
   to `Runner`:
   - `seedBranchCost(branchStack, parentStack)` — copies parent totals into a
-    freshly created branch.
+    freshly created branch AND records an immutable seed baseline
+    (`branchStack.seedCost` / `seedTokens`).
   - `propagateBranchCost(branches, parentStack)` — on join, adds
-    `(branch.localCost - parent.localCost_at_seed)` back into the parent.
+    `(branch.localCost - branch.seedCost)` back into the parent.
+- Per-branch immutable seed baseline (`seedCost` / `seedTokens` on
+  `StateStack`, serialized). Computing each branch's delta against its own
+  seed — instead of against the parent's *current* totals — is what makes
+  the math correct when sibling branches have already folded their spend
+  into the parent. Concretely: in `runRace`'s interrupt path, losers are
+  propagated to the parent before the checkpoint, then the winner resumes
+  and finally propagates. Reading the parent at resume time would
+  double-subtract the losers from the winner's delta and under-count the
+  total. With the immutable seed the winner's delta is preserved exactly.
 - Race losers. `runRace` now propagates losing branches' completed-call
   spend back to the parent before deleting them. Only the *result* of
   losers is discarded; their cost is not. `resumeRaceWinner` separately

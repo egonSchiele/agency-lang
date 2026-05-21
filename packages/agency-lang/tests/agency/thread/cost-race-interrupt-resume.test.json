@@ -1,0 +1,24 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "\"true\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "interruptHandlers": [
+        { "action": "approve" }
+      ],
+      "llmMocks": [
+        { "return": "w-pre" },
+        { "return": "l1a" },
+        { "return": "l1b" },
+        { "return": "l2a" },
+        { "return": "l2b" },
+        { "return": "l2c" },
+        { "return": "w-post" }
+      ],
+      "description": "Regression for the resumeRaceWinner seedCost bug: when the winner branch interrupts and then resumes, the parent's cost-tracking baseline has already been mutated by loser-branch propagation at interrupt time. The winner's final delta must therefore be computed against an immutable per-branch seed (seedCost), not the parent's current localCost — otherwise losers get double-subtracted and the total under-counts. This test asserts that after resume, the parent sees losers' completed-call spend ON TOP of the winner's full spend."
+    }
+  ]
+}

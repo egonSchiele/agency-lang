@@ -13,7 +13,9 @@ import type { ThreadStore } from "../runtime/state/threadStore.js";
  *
  * - Message builtins (`*Message`) push onto the active thread of the
  *   caller's `__threads` store. They ignore `_stack` and use
- *   `threads.active()` directly.
+ *   `threads.getOrCreateActive()` so messages injected before the first
+ *   `llm()` call still land on a real thread (rather than being
+ *   silently dropped by `threads.active()?.push(...)`).
  * - Cost / token builtins (`getCost`, `getTokens`) read the per-branch
  *   accumulator from the caller's `__stateStack` (which has been
  *   seeded by `Runner.runForkAll` / `runRace` to inherit parent
@@ -29,7 +31,7 @@ export async function __internal_systemMessage(
   threads: ThreadStore,
   msg: string,
 ): Promise<void> {
-  threads.active()?.push(smoltalk.systemMessage(msg));
+  threads.getOrCreateActive().push(smoltalk.systemMessage(msg));
 }
 
 export async function __internal_userMessage(
@@ -38,7 +40,7 @@ export async function __internal_userMessage(
   threads: ThreadStore,
   msg: string,
 ): Promise<void> {
-  threads.active()?.push(smoltalk.userMessage(msg));
+  threads.getOrCreateActive().push(smoltalk.userMessage(msg));
 }
 
 export async function __internal_assistantMessage(
@@ -47,7 +49,7 @@ export async function __internal_assistantMessage(
   threads: ThreadStore,
   msg: string,
 ): Promise<void> {
-  threads.active()?.push(smoltalk.assistantMessage(msg));
+  threads.getOrCreateActive().push(smoltalk.assistantMessage(msg));
 }
 
 export async function __internal_getCost(

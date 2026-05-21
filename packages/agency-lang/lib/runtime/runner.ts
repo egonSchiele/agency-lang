@@ -198,30 +198,41 @@ export class Runner {
 
   /** Seed branch.stack.localCost / localTokens from the parent stack
    *  unless they're already populated (e.g., restored from a checkpoint
-   *  on resume). Idempotent. See docs/superpowers/specs/2026-05-20-thread-
-   *  builtins-and-stdlib-design.md. */
+   *  on resume). Idempotent.
+   *
+   *  Also records `seedCost` / `seedTokens` — the IMMUTABLE baseline used
+   *  later by propagateBranchCost to compute this branch's delta. Storing
+   *  the baseline on the branch (rather than re-reading the parent at
+   *  join time) means the delta survives the parent being mutated in the
+   *  meantime — e.g. race losers propagating their spend into the parent
+   *  before the winner resumes. See docs/superpowers/specs/2026-05-20-
+   *  thread-builtins-and-stdlib-design.md. */
   private seedBranchCost(branchStack: StateStack, parentStack: StateStack): void {
     if (branchStack.localCost === 0 && branchStack.localTokens === 0) {
       branchStack.localCost = parentStack.localCost;
       branchStack.localTokens = parentStack.localTokens;
+      branchStack.seedCost = parentStack.localCost;
+      branchStack.seedTokens = parentStack.localTokens;
     }
   }
 
   /** Propagate cost/token deltas from a set of branches back to the
-   *  outer stack. Delta = branch.localCost - parentStack.localCost (the
-   *  inherited baseline). Caller invokes this BEFORE popBranches() or
-   *  deleteBranch — otherwise the branch stacks are gone. */
+   *  outer stack. Delta = branch.localCost - branch.seedCost (the baseline
+   *  captured when the branch was seeded). Using the per-branch seed
+   *  rather than the parent's current totals is what makes the math
+   *  correct when sibling branches have already propagated their spend
+   *  into the parent (race losers → parent before winner resumes).
+   *  Caller invokes this BEFORE popBranches() or deleteBranch —
+   *  otherwise the branch stacks are gone. */
   private propagateBranchCost(
     branches: BranchState[],
     parentStack: StateStack,
   ): void {
-    const baseCost = parentStack.localCost;
-    const baseTokens = parentStack.localTokens;
     let costDelta = 0;
     let tokensDelta = 0;
     for (const branch of branches) {
-      costDelta += branch.stack.localCost - baseCost;
-      tokensDelta += branch.stack.localTokens - baseTokens;
+      costDelta += branch.stack.localCost - branch.stack.seedCost;
+      tokensDelta += branch.stack.localTokens - branch.stack.seedTokens;
     }
     parentStack.localCost += costDelta;
     parentStack.localTokens += tokensDelta;

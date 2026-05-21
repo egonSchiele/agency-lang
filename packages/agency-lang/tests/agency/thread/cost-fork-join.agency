@@ -1,5 +1,10 @@
 import { getCost } from "std::thread"
 
+// Pinned to the deterministic LLM provider via "useTestLLMProvider":
+// true in the .test.json. SYNTHETIC_COST per llm() call lives in
+// lib/runtime/deterministicClient.ts.
+const DETERMINISTIC_COST = 0.000002
+
 node main() {
   llm("seed")
   let beforeFork = getCost()
@@ -11,14 +16,14 @@ node main() {
 
   let afterFork = getCost()
 
-  let expectedBranchCost = beforeFork + 0.000002
+  let expectedBranchCost = beforeFork + DETERMINISTIC_COST
   let allBranchesMatch = branchCosts[0] == expectedBranchCost
     && branchCosts[1] == expectedBranchCost
     && branchCosts[2] == expectedBranchCost
     && branchCosts[3] == expectedBranchCost
 
-  let expectedAfterFork = beforeFork + (4 * 0.000002)
+  let expectedAfterFork = beforeFork + (4 * DETERMINISTIC_COST)
   let mainTotalMatches = afterFork == expectedAfterFork
 
-  return "${allBranchesMatch}_${mainTotalMatches}_${afterFork}"
+  return "${allBranchesMatch}_${mainTotalMatches}"
 }

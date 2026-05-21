@@ -221,18 +221,33 @@ export class AgencyGenerator {
     const isComment = (n: AgencyNode): boolean =>
       n.type === "comment" || n.type === "multiLineComment";
 
-    // 1) Eat top-of-file header (comments + blank lines, stopping at any
-    //    non-(comment|newLine) node).
+    // 1) Eat top-of-file header. The header is the contiguous run of
+    //    comment lines at the very top, terminated by either:
+    //      - a blank line (newLine) — included in the header so the
+    //        visual separation between header and imports is preserved,
+    //      - any other node (code, import) — header ends just before it.
+    //
+    //    A blank line *terminates* header eating. Comments below the
+    //    blank line are NOT header; they participate in import-comment
+    //    attachment instead. This is what lets a user park `// @tc-ignore`
+    //    above an import: separate it from the header region with a
+    //    blank line, and it travels with its import when imports are
+    //    sorted.
     let i = 0;
     const header: AgencyNode[] = [];
     while (i < nodes.length) {
       const n = nodes[i];
-      if (isComment(n) || n.type === "newLine") {
+      if (isComment(n)) {
         header.push(n);
         i++;
-      } else {
-        break;
+        continue;
       }
+      if (n.type === "newLine") {
+        header.push(n);
+        i++;
+        break; // blank line ends the header
+      }
+      break; // any other node — header ends here
     }
 
     // 2) Everything eaten as header stays at the top. We do NOT pop the

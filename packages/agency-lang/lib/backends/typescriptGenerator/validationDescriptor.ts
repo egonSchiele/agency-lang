@@ -4,7 +4,10 @@ import { ts } from "@/ir/builders.js";
 import { mapTypeToValidationSchema } from "./typeToZodSchema.js";
 import { tagArgToTs } from "./tagArgToTs.js";
 import { mergeTagSets } from "@/typeChecker/mergeTags.js";
-import { applyValueArgs } from "@/typeChecker/valueParamSubstitution.js";
+import {
+  applyValueArgs,
+  isValueParamInstantiation,
+} from "@/typeChecker/valueParamSubstitution.js";
 
 /**
  * Build a TS IR node that evaluates to a runtime `TypeValidationDescriptor`.
@@ -71,10 +74,10 @@ export function hasAnyValidateTag(
       // For value-parameterized references, the alias's raw tags may
       // reference value-param identifiers; substitute first so the
       // post-substitution tag set is what we check for `@validate`.
-      const effectiveEntry =
-        entry.valueParams && t.valueArgs
-          ? applyValueArgs(entry, t.valueArgs, t.aliasName)
-          : entry;
+      // See `isValueParamInstantiation` — the canonical predicate.
+      const effectiveEntry = isValueParamInstantiation(t, entry)
+        ? applyValueArgs(entry, t.valueArgs, t.aliasName)
+        : entry;
       if (tagsHaveValidate(effectiveEntry.tags)) return true;
       // Guard against recursive alias self-reference.
       if (seen.has(t.aliasName)) return false;
@@ -169,10 +172,12 @@ function descriptor(
     // Value-parameterized alias instantiation: there is NO
     // `__agency_descriptor` side-channel (those only exist for bare
     // aliases). Inline the descriptor for the substituted body with
-    // substituted tags threaded through.
-    if (entry?.valueParams && variableType.valueArgs) {
+    // substituted tags threaded through. See `isValueParamInstantiation`
+    // — the canonical predicate, also used in `typeToZodSchema` and
+    // `hasAnyValidateTag`.
+    if (isValueParamInstantiation(variableType, entry)) {
       const substituted = applyValueArgs(
-        entry,
+        entry!,
         variableType.valueArgs,
         variableType.aliasName,
       );

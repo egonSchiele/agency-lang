@@ -204,7 +204,10 @@ distinct but are mutually assignment-compatible (both bottom out at
 ### What can appear as a use-site argument
 
 Arguments are evaluated at compile time, not at runtime — they have to be
-*statically known*:
+*statically known*. The underlying rule: an argument is allowed only if
+its value can be folded to a TypeScript literal during compilation.
+
+**Allowed:**
 
 - String / number / boolean / `null` literals
 - Identifiers that resolve to a top-level `static const` (including
@@ -213,10 +216,39 @@ Arguments are evaluated at compile time, not at runtime — they have to be
   its own value params)
 - Object literals built from any of the above (with `...` spread)
 
-**Not allowed:** bare function calls, ternaries, binary operators (other
-than spread), member access, template strings, array literals, or
-identifiers that resolve to a `let` binding, function parameter, or
-local declaration.
+**Not allowed:**
+
+- bare function calls (`Age(getDefault())`)
+- ternaries, binary operators, pipes
+- member access (`Age(config.min)`)
+- array literals
+- identifiers that resolve to a `let` binding, function parameter, or
+  local declaration
+
+::: warning String interpolation does not work in tag arguments
+Agency string literals normally support interpolation everywhere — `"hello ${name}"` is a real expression that combines the literal text with whatever `name` evaluates to at runtime. Inside `@validate(...)`, `@jsonSchema(...)`, value-param defaults, and use-site value-args, **only the literal-only form is accepted**:
+
+```ts
+static const PREFIX = "user-"
+static const SUFFIX = "-foo"
+
+@jsonSchema({ pattern: "^user-[0-9]+-foo$" })  // ✅ literal string, OK
+type UserId = string
+
+@jsonSchema({ pattern: "^${PREFIX}[0-9]+${SUFFIX}$" })  // ❌ interpolation rejected by parser
+type UserId = string
+```
+
+Interpolation gets rejected because it would embed a runtime expression that can't be folded to a compile-time string. If you need to compose strings, put the composition in a `static const` and pass the const in (which *is* statically known):
+
+```ts
+static const PREFIX = "user-"
+static const PATTERN = "^user-[0-9]+-foo$"  // hand-written literal
+
+@jsonSchema({ pattern: PATTERN })  // ✅ static const reference
+type UserId = string
+```
+:::
 
 ### Bare function calls in tag arguments
 

@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "\"4|d\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "Generic wrapper alias forwards its value arg into a value-parameterized type in its body; both type and value substitution flow through"
+    }
+  ]
+}

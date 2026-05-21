@@ -108,9 +108,20 @@ function validateValueAccess(
       loc: va.loc,
     };
   }
-  // Validate the base (must itself be allowed: typically an identifier
-  // referring to a top-level function or const).
-  const baseRes = validateJsonSchemaArg(va.base as Expression, scope);
+  // The base must be a plain identifier (typically a top-level
+  // validator function or imported function). Reject anything else —
+  // `foo(1).partial(...)` and `(get()).partial(...)` are NOT static
+  // expressions because they call a function at runtime to compute the
+  // receiver. This mirrors `_identOrPfaParser` in the parser layer.
+  if (va.base?.type !== "variableName") {
+    return {
+      ok: false,
+      reason:
+        "PFA base must be a plain identifier (e.g. `min.partial(n: 0)`, not `min(1).partial(...)`)",
+      loc: va.loc,
+    };
+  }
+  const baseRes = validateIdentifier(va.base as Expression, scope);
   if (!baseRes.ok) return baseRes;
   // Validate each method-call argument as a restricted expression.
   for (const el of va.chain) {

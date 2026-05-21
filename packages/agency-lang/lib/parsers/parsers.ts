@@ -688,32 +688,40 @@ export const primitiveTypeParser: Parser<PrimitiveType> = trace(
   ),
 );
 
+/**
+ * Shared `(arg1, arg2, ...)` value-arg suffix parser. Used by both
+ * `typeAliasVariableParser` (e.g. `Age(18)`) and `genericTypeParser`
+ * (e.g. `BoundedList<string>(3)`). Each arg is restricted to the
+ * statically-known subset enforced by `staticTagArgParser`.
+ *
+ * Defined as a lazy reference so it can be used by parsers that appear
+ * earlier in the file than `staticTagArgParser` itself.
+ */
+const optionalValueArgsParser = optional(
+  captureCaptures(
+    seqC(
+      char("("),
+      optionalSpaces,
+      capture(
+        sepBy(
+          seqR(optionalSpaces, char(","), optionalSpaces),
+          lazy(() => staticTagArgParser),
+        ),
+        "valueArgs",
+      ),
+      optionalSpaces,
+      char(")"),
+    ),
+  ),
+);
+
 export const typeAliasVariableParser: Parser<TypeAliasVariable> = trace(
   "typeAliasVariableParser",
   (input: string): ParserResult<TypeAliasVariable> => {
     const parser = seqC(
       set("type", "typeAliasVariable"),
       capture(many1WithJoin(varNameChar), "aliasName"),
-      // Optional `(arg1, arg2, ...)` value-arg suffix for
-      // value-parameterized aliases. Each arg is a statically-
-      // restricted expression (literal, identifier, PFA, object literal).
-      optional(
-        captureCaptures(
-          seqC(
-            char("("),
-            optionalSpaces,
-            capture(
-              sepBy(
-                seqR(optionalSpaces, char(","), optionalSpaces),
-                lazy(() => staticTagArgParser),
-              ),
-              "valueArgs",
-            ),
-            optionalSpaces,
-            char(")"),
-          ),
-        ),
-      ),
+      optionalValueArgsParser,
     );
     return parser(input);
   },
@@ -1189,23 +1197,7 @@ export const genericTypeParser: Parser<GenericType> = trace(
     char(">"),
     // Optional value-arg suffix: combined `<T>(n)` form for
     // value-parameterized generic aliases (e.g. `BoundedList<string>(3)`).
-    optional(
-      captureCaptures(
-        seqC(
-          char("("),
-          optionalSpaces,
-          capture(
-            sepBy(
-              seqR(optionalSpaces, char(","), optionalSpaces),
-              lazy(() => staticTagArgParser),
-            ),
-            "valueArgs",
-          ),
-          optionalSpaces,
-          char(")"),
-        ),
-      ),
-    ),
+    optionalValueArgsParser,
   ),
 );
 
@@ -1457,11 +1449,27 @@ export const skillParser = (input: string) => {
 //   2. value-parameter default expressions (`= 0`)
 //   3. value-arg expressions at use sites (`Age(18)`)
 //
-// Allowed: string / number / boolean / null literals, identifiers,
-// object literals (including spread), and PFA expressions
-// (e.g. `min.partial(n: 0)`). NOT allowed: bare function calls
-// (no chain), ternaries, binary ops, pipes, member access on a
-// function-call base, template strings, array literals.
+// The underlying rule: allowed expressions are exactly those whose value
+// is statically known at compile time, so they can be substituted into a
+// tag expression and emitted as a TypeScript literal.
+//
+// Allowed: string / number / boolean / null literals (NO `${...}`
+// interpolation — see below), identifiers (resolving to a static const
+// or value-param in scope), object literals (including spread), and PFA
+// expressions (e.g. `min.partial(n: 0)`) whose base is a plain
+// identifier.
+//
+// NOT allowed:
+//   - bare function calls (no chain). Use PFA: `min.partial(n: 0)`.
+//   - PFA whose base is a function-call (`getMin(1).partial(...)`) —
+//     base must be a plain identifier.
+//   - ternaries, binary ops, pipes.
+//   - member access (`obj.field`).
+//   - interpolated string segments. Plain `simpleStringParser` accepts
+//     only literal-only strings; any `${...}` inside a string would
+//     embed a runtime expression that can't be folded at compile time.
+//   - array literals. (Could be allowed via constant folding in a
+//     future iteration; deferred until a stdlib use case needs them.)
 //
 // All forward references go through lazy(...) because these parsers
 // are defined later in the file.
@@ -1475,6 +1483,19 @@ const _identOrPfaParser: Parser<Expression> = (input: string) => {
   if (result.result.type === "functionCall") {
     return failure(
       "bare function call not allowed; use a literal, identifier, PFA expression (e.g. `min.partial(n: 0)`), or object literal",
+      input,
+    );
+  }
+  // Reject PFA whose base isn't a plain identifier. `foo(1).partial(...)`
+  // and `(get()).partial(...)` are NOT static — they call a function at
+  // runtime to compute the receiver. PFA must be rooted at an identifier
+  // (typically a top-level validator function in scope).
+  if (
+    result.result.type === "valueAccess" &&
+    result.result.base.type !== "variableName"
+  ) {
+    return failure(
+      "PFA base must be a plain identifier (e.g. `min.partial(n: 0)`, not `min(1).partial(...)`)",
       input,
     );
   }

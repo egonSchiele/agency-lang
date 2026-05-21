@@ -3,7 +3,10 @@ import { Tag, TypeAliasEntry, VariableType } from "../../types.js";
 import { escape } from "../../utils.js";
 import { tagArgToTs } from "./tagArgToTs.js";
 import { mergeJsonSchemaArgs, mergeTagSets } from "@/typeChecker/mergeTags.js";
-import { applyValueArgs } from "@/typeChecker/valueParamSubstitution.js";
+import {
+  applyValueArgs,
+  isValueParamInstantiation,
+} from "@/typeChecker/valueParamSubstitution.js";
 
 export const DEFAULT_SCHEMA = "z.string()";
 
@@ -121,10 +124,24 @@ function mapTypeToSchemaInner(
         // property-level tags. @jsonSchema keys from the property
         // override alias keys (with `description` concatenating per
         // `mergeTagSets`); @validate validators concat.
-        const aliasEntryTags =
-          typeAliasesFull && prop.value.type === "typeAliasVariable"
-            ? typeAliasesFull[prop.value.aliasName]?.tags
-            : undefined;
+        let aliasEntryTags: Tag[] | undefined;
+        if (typeAliasesFull && prop.value.type === "typeAliasVariable") {
+          const entry = typeAliasesFull[prop.value.aliasName];
+          // For a value-parameterized alias instantiation
+          // (`age: NumberInRange(0, 150)`), substitute the alias's raw
+          // tags FIRST — otherwise the outer `.meta(...)` for this
+          // property would emit out-of-scope value-param identifiers
+          // (e.g. `low`, `high`) into the generated TS.
+          if (isValueParamInstantiation(prop.value, entry)) {
+            aliasEntryTags = applyValueArgs(
+              entry!,
+              prop.value.valueArgs,
+              prop.value.aliasName,
+            ).tags;
+          } else {
+            aliasEntryTags = entry?.tags;
+          }
+        }
         const aliasSideTags = mergeTagSets(aliasEntryTags, prop.value.tags);
         const mergedTags = mergeTagSets(aliasSideTags, prop.tags);
         const inner = mapTypeToSchemaInner(
@@ -151,26 +168,25 @@ function mapTypeToSchemaInner(
     // Value-parameterized alias reference (e.g. `Age(18)`): there is
     // no single top-level schema const for the alias, so we inline the
     // substituted body's Zod schema at this use-site. The substituted
-    // tags drive `appendMeta`.
-    if (variableType.valueArgs && typeAliasesFull) {
-      const aliasEntry = typeAliasesFull[variableType.aliasName];
-      if (aliasEntry?.valueParams) {
-        const substituted = applyValueArgs(
-          aliasEntry,
-          variableType.valueArgs,
-          variableType.aliasName,
-        );
-        const bodyWithAliasTags: VariableType = {
-          ...substituted.body,
-          tags: mergeTagSets(substituted.tags, substituted.body.tags),
-        };
-        return mapTypeToSchema(
-          bodyWithAliasTags,
-          typeAliases,
-          resultHandler,
-          typeAliasesFull,
-        );
-      }
+    // tags drive `appendMeta`. See `isValueParamInstantiation` for the
+    // canonical predicate (used everywhere this divergence appears).
+    const aliasEntry = typeAliasesFull?.[variableType.aliasName];
+    if (isValueParamInstantiation(variableType, aliasEntry)) {
+      const substituted = applyValueArgs(
+        aliasEntry!,
+        variableType.valueArgs,
+        variableType.aliasName,
+      );
+      const bodyWithAliasTags: VariableType = {
+        ...substituted.body,
+        tags: mergeTagSets(substituted.tags, substituted.body.tags),
+      };
+      return mapTypeToSchema(
+        bodyWithAliasTags,
+        typeAliases,
+        resultHandler,
+        typeAliasesFull,
+      );
     }
     return variableType.aliasName;
   } else if (variableType.type === "genericType") {

@@ -161,12 +161,14 @@ function resolveTypeWithGuard(
     );
     // Apply value-arg substitution (no-op when the alias has no
     // `valueParams`). Type-param substitution happened first (above);
-    // value-arg substitution mutates only the tags carried on the
-    // alias entry.
+    // value-arg substitution must run on the type-substituted body so
+    // forwarded value args inside the body (e.g.
+    // `type Wrap<T>(n: number) = BoundedList<T>(n)`) get the literal
+    // substituted at use sites.
     const valueSubstituted = entry.valueParams
-      ? applyValueArgs(entry, vt.valueArgs, vt.name)
-      : entry;
-    const resolved = resolveTypeWithGuard(substituted, typeAliases, next);
+      ? applyValueArgs({ ...entry, body: substituted }, vt.valueArgs, vt.name)
+      : { ...entry, body: substituted };
+    const resolved = resolveTypeWithGuard(valueSubstituted.body, typeAliases, next);
     return attachAliasTags(resolved, valueSubstituted.tags);
   }
 

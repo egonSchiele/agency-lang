@@ -24,6 +24,37 @@ import type {
 export type ValueArgBindings = Record<string, Expression>;
 
 /**
+ * True when `vt` is a reference to a value-parameterized alias with
+ * use-site value args (i.e. the alias was declared
+ * `type Foo(low: number) = ...` and the reference is `Foo(0)`, not bare
+ * `Foo`).
+ *
+ * This is the single canonical predicate for "this reference needs
+ * inline-at-use-site emission and `applyValueArgs` substitution". The
+ * three codegen branches that diverge from the bare-alias path
+ * (`typeToZodSchema`, `validationDescriptor`, `hasAnyValidateTag`)
+ * should all use this — keeping the divergence rule expressed in
+ * exactly one place.
+ *
+ * NOTE: a bare `Foo` reference (no use-site value args) on a
+ * value-parameterized alias returns `false`. The current invariant is
+ * that bare references to value-parameterized aliases don't make sense
+ * (there's no single schema/descriptor for them) and the type checker
+ * rejects them — but if either side is missing this predicate returns
+ * false so the bare-alias path is taken (which will fail clearly).
+ */
+export function isValueParamInstantiation(
+  vt: VariableType,
+  entry: TypeAliasEntry | undefined,
+): boolean {
+  return (
+    (vt.type === "typeAliasVariable" || vt.type === "genericType") &&
+    !!entry?.valueParams &&
+    !!(vt as { valueArgs?: Expression[] }).valueArgs
+  );
+}
+
+/**
  * Walk a `Tag` (specifically its `arguments` list) and return a fresh
  * Tag whose arguments have every value-parameter `variableName`
  * reference replaced with a structural CLONE of the bound expression.
@@ -336,11 +367,156 @@ export function applyValueArgs(
 
   const newBody = substituteValueArgsInType(entry.body, bindings);
 
+  // Defense in depth: after substitution, no tag argument or nested
+  // valueArg should still reference one of this alias's value-param
+  // names. If any do, substitution missed a spot — surface it loudly
+  // here rather than letting an out-of-scope identifier leak into the
+  // generated TypeScript.
+  const paramNames = new Set(params.map((p) => p.name));
+  if (paramNames.size > 0) {
+    assertNoUnsubstitutedValueParams(newTags, newBody, paramNames, aliasName);
+  }
+
   return {
     ...entry,
     body: newBody,
     tags: newTags,
   };
+}
+
+/**
+ * Walk substituted tags + body looking for any `variableName` whose
+ * `value` is still in `paramNames`. Throws with a precise location if
+ * found. Called from `applyValueArgs` as a safety net — should never
+ * trigger in correct code.
+ */
+function assertNoUnsubstitutedValueParams(
+  tags: Tag[],
+  body: VariableType,
+  paramNames: Set<string>,
+  aliasName: string,
+): void {
+  for (const t of tags) {
+    for (const arg of t.arguments) {
+      checkExpr(arg, paramNames, aliasName, t.name);
+    }
+  }
+  checkType(body, paramNames, aliasName);
+}
+
+function checkExpr(
+  e: Expression,
+  paramNames: Set<string>,
+  aliasName: string,
+  tagName: string,
+): void {
+  if (!e || typeof e !== "object") return;
+  if (e.type === "variableName" && paramNames.has((e as { value: string }).value)) {
+    throw new Error(
+      `value param '${(e as { value: string }).value}' left unsubstituted in @${tagName} on ${aliasName}`,
+    );
+  }
+  switch (e.type) {
+    case "agencyObject":
+      for (const entry of (e as AgencyObject).entries) {
+        if ("key" in entry) {
+          checkExpr(
+            (entry as AgencyObjectKV).value,
+            paramNames,
+            aliasName,
+            tagName,
+          );
+        } else {
+          checkExpr(
+            (entry as SplatExpression).value as Expression,
+            paramNames,
+            aliasName,
+            tagName,
+          );
+        }
+      }
+      break;
+    case "valueAccess": {
+      const va = e as ValueAccess;
+      checkExpr(va.base as Expression, paramNames, aliasName, tagName);
+      for (const el of (va.chain ?? []) as AccessChainElement[]) {
+        const fc = (el as { functionCall?: FunctionCall }).functionCall;
+        if (fc) {
+          checkFunctionCallArgs(fc, paramNames, aliasName, tagName);
+        }
+      }
+      break;
+    }
+    case "functionCall":
+      checkFunctionCallArgs(e as FunctionCall, paramNames, aliasName, tagName);
+      break;
+  }
+}
+
+function checkFunctionCallArgs(
+  fc: FunctionCall,
+  paramNames: Set<string>,
+  aliasName: string,
+  tagName: string,
+): void {
+  for (const a of fc.arguments ?? []) {
+    if (a.type === "namedArgument") {
+      checkExpr((a as NamedArgument).value, paramNames, aliasName, tagName);
+    } else if (a.type === "splat") {
+      checkExpr(
+        (a as SplatExpression).value as Expression,
+        paramNames,
+        aliasName,
+        tagName,
+      );
+    } else {
+      checkExpr(a as Expression, paramNames, aliasName, tagName);
+    }
+  }
+}
+
+function checkType(
+  vt: VariableType,
+  paramNames: Set<string>,
+  aliasName: string,
+): void {
+  switch (vt.type) {
+    case "typeAliasVariable":
+      if (vt.valueArgs) {
+        for (const a of vt.valueArgs) {
+          checkExpr(a, paramNames, aliasName, "<valueArg>");
+        }
+      }
+      break;
+    case "genericType":
+      for (const t of vt.typeArgs) checkType(t, paramNames, aliasName);
+      if (vt.valueArgs) {
+        for (const a of vt.valueArgs) {
+          checkExpr(a, paramNames, aliasName, "<valueArg>");
+        }
+      }
+      break;
+    case "arrayType":
+      checkType(vt.elementType, paramNames, aliasName);
+      break;
+    case "unionType":
+      for (const t of vt.types) checkType(t, paramNames, aliasName);
+      break;
+    case "objectType":
+      for (const p of vt.properties) checkType(p.value, paramNames, aliasName);
+      break;
+    case "resultType":
+      checkType(vt.successType, paramNames, aliasName);
+      checkType(vt.failureType, paramNames, aliasName);
+      break;
+    case "schemaType":
+      checkType(vt.inner, paramNames, aliasName);
+      break;
+    case "blockType":
+      for (const p of vt.params) checkType(p.typeAnnotation, paramNames, aliasName);
+      checkType(vt.returnType, paramNames, aliasName);
+      break;
+  }
 }
 
 /**

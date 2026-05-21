@@ -469,17 +469,70 @@ Zod schemas:
   the descriptor is constructed *inline at the use site* with the
   substituted tags.
 - **Use-site inlining.** `typeToZodSchema.ts` and
-  `validationDescriptor.ts` both check for `variableType.valueArgs` on
-  a `typeAliasVariable` / `genericType` reference, call
-  `applyValueArgs`, and recursively map the substituted entry. The
-  substituted tags drive `appendMeta` and `validatorNodes`.
+  `validationDescriptor.ts` both branch on
+  `isValueParamInstantiation(vt, entry)` (defined in
+  `valueParamSubstitution.ts`) — the single canonical predicate for
+  "this reference needs inline-at-use-site emission". When it matches,
+  they call `applyValueArgs` and recursively map the substituted entry.
+  The substituted tags drive `appendMeta` and `validatorNodes`.
+- **Object-property merge also substitutes.** The object-property branch
+  of `mapTypeToSchemaInner` looks up alias-level tags to merge them onto
+  the property. When the property is a value-parameterized
+  instantiation (e.g. `age: NumberInRange(0, 150)`), the alias tags it
+  pulls in are run through `applyValueArgs` *first* — otherwise the
+  outer `.meta(...)` chain on the property would emit out-of-scope
+  value-param identifiers (e.g. `low`, `high`).
 
-### `tagArgToTs` safety net
+The codegen divergence rule is expressed in exactly one predicate
+(`isValueParamInstantiation`), used at three sites. Adding a new
+emission site that handles `typeAliasVariable` should consult the same
+predicate to stay consistent.
 
-After substitution, the TypeScript printer should never see a
-value-param identifier. If it does (i.e. someone added a code path that
-skipped `applyValueArgs`), `tagArgToTs` throws
-`value param 'X' left unsubstituted` so the bug surfaces immediately.
+### Why inline-at-use-site instead of a schema factory function?
+
+A natural alternative is to emit a factory:
+
+```ts
+const NumberInRange = (low: number, high: number) =>
+  z.number().meta({ minimum: low, maximum: high });
+```
+
+We chose inline-at-use-site instead. Trade-off:
+
+| Concern | Factory emission | Inline at use site (chosen) |
+|---|---|---|
+| Generated TS size | Smaller (one definition per alias) | Duplicated per instantiation |
+| Single place to debug | ✓ | ✗ |
+| Object-property merge | Complex — must *call* the factory and then mergeTagSets the result | Plugs into existing pipeline directly |
+| Descriptor side-channel | Needs `Alias.descriptor = (...) => ({...})`, a new runtime mechanism | Inline reuses the descriptor walker |
+| Tag-merge symmetry with bare aliases | Diverges (bare alias is a value, parameterized is a factory) | Same code path for both |
+| Use-site tag composition | Needs runtime composition (`NumberInRange(0, 150).pipe(z.refine(...))`) | `mergeTagSets` at codegen, single chain |
+
+Every other piece of the validation infrastructure
+(`mergeTagSets`, `appendMeta`, descriptor walker,
+`__agency_descriptor` lookup) deals in *values*, not factories.
+Switching to factories would mean touching all of them — a much larger
+surface change for a smaller-generated-code win. If the duplication
+ever shows up as a real cost (large programs with many instantiations),
+the factory pattern is the natural follow-up.
+
+### Substitution-time safety net
+
+The TypeScript printer should never see an unsubstituted value-param
+identifier. There are two layers of defense:
+
+1. **Substitution-time assertion (primary).** `applyValueArgs` walks
+   the substituted tags + body looking for any `variableName` whose
+   value is still in the alias's `valueParams` set. If any are found
+   it throws `value param 'X' left unsubstituted in @<tag> on <alias>`
+   immediately, with the alias and tag names in the message. Triggers
+   for missing substitution at the substitution boundary itself, not
+   downstream at codegen.
+2. **`tagArgToTs` guard (secondary).** Accepts an optional
+   `valueParamNames` set and throws the same error if a leftover
+   identifier matches. Currently the production call sites all go
+   through `applyValueArgs` first, so this guard exists as a
+   belt-and-suspenders check.
 
 ### Files of record (value-parameterized additions)
 

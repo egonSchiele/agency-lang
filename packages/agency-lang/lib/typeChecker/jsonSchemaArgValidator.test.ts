@@ -137,6 +137,37 @@ describe("validateJsonSchemaArg", () => {
     expect(r.ok).toBe(true);
   });
 
+  it("rejects PFA whose base is a function-call (must be a plain identifier)", () => {
+    // `getMin(1).partial(n: 0)` — the receiver of `.partial(...)` is the
+    // result of a runtime call. PFA must be rooted at a plain identifier
+    // (a top-level validator or imported function), never at the result
+    // of another call. This mirrors `_identOrPfaParser` in the parser.
+    const pfa: Expression = {
+      type: "valueAccess",
+      base: {
+        type: "functionCall",
+        functionName: "getMin",
+        arguments: [nm("1")],
+      } as any,
+      chain: [
+        {
+          kind: "methodCall",
+          functionCall: {
+            type: "functionCall",
+            functionName: "partial",
+            arguments: [{ type: "namedArgument", name: "n", value: nm("0") }],
+          },
+        },
+      ],
+    } as any;
+    const r = validateJsonSchemaArg(
+      pfa,
+      scope({ topLevelFunctionNames: new Set(["getMin"]) }),
+    );
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.reason).toMatch(/PFA base must be a plain identifier/);
+  });
+
   it("rejects bare valueAccess with only property accesses", () => {
     const expr: Expression = {
       type: "valueAccess",

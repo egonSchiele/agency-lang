@@ -83,6 +83,19 @@ describe("tagParser", () => {
     }
   });
 
+  it("rejects PFA whose base is a function-call (must be a plain identifier)", () => {
+    // `getMin(1).partial(n: 0)` is NOT static — it calls `getMin` at
+    // runtime to compute the PFA receiver. The PFA base must be a plain
+    // identifier (a top-level validator function or imported function),
+    // never the result of another call. Same falls-back-to-empty-args
+    // behaviour as the bare-call case.
+    const result = tagParser("@validate(getMin(1).partial(n: 0))");
+    if (result.success) {
+      expect(result.result.arguments).toHaveLength(0);
+      expect(result.rest.startsWith("(")).toBe(true);
+    }
+  });
+
   it("parses a tag with an object literal argument", () => {
     const result = tagParser('@jsonSchema({ format: "email" })');
     expect(result.success).toBe(true);

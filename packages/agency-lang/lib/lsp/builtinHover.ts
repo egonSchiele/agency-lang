@@ -28,17 +28,17 @@ function formatSig(sig: BuiltinSignature): string {
  */
 const KEYWORD_BUILTIN_HOVERS: Record<string, { sig: string; description: string }> = {
   interrupt: {
-    sig: "interrupt <kind>(message, payload?)",
+    sig: "interrupt <kind>(message: string, payload?: Record<string, any>)",
     description:
       "Throw an interrupt of the given kind. The current execution state is captured so that, once responded to, execution resumes from exactly this point.",
   },
   schema: {
-    sig: "schema<T>",
+    sig: "schema(T)",
     description:
       "Expression that returns the Zod schema for a type `T`. Useful when passing a schema to a TypeScript function or validator.",
   },
   debugger: {
-    sig: 'debugger "<label>"?',
+    sig: 'debugger(label?: string)',
     description:
       "No-op when running the agent normally, but pauses execution when running under the Agency debugger. Accepts an optional label string.",
   },

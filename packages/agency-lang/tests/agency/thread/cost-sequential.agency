@@ -1,0 +1,15 @@
+import { getCost } from "std::thread"
+
+node main() {
+  const beforeCost = getCost()
+  llm("first call")
+  const afterFirst = getCost()
+  llm("second call")
+  const afterSecond = getCost()
+  // Each deterministic LLM call adds 0.000002 in cost.
+  // We assert that cost grows monotonically and that the second
+  // increment matches the first.
+  const firstDelta = afterFirst - beforeCost
+  const secondDelta = afterSecond - afterFirst
+  return "${beforeCost}_${firstDelta}_${secondDelta}"
+}

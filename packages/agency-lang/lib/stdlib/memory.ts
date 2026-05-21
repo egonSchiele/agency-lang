@@ -3,14 +3,19 @@ import type {
   ExtractionResult,
   ForgetResult,
 } from "../runtime/memory/index.js";
+import type { StateStack } from "../runtime/state/stateStack.js";
+import type { ThreadStore } from "../runtime/state/threadStore.js";
 
 /**
  * std::memory TS implementations for the context-injected builtins
  * registered in `lib/codegenBuiltins/contextInjected.ts`. Each
- * function takes the per-run `RuntimeContext` as its first argument;
- * the agency-side wrappers in `stdlib/memory.agency` call them
- * without it, and the TypeScript builder prepends `__ctx` at every
- * call site.
+ * function takes the per-run `RuntimeContext` as its first argument,
+ * followed by the caller's local `StateStack` and `ThreadStore`
+ * (unused here — needed by other context-injected builtins like
+ * `std::thread`'s `getCost`/`*Message`). The agency-side wrappers in
+ * `stdlib/memory.agency` call them without any of these prefix args;
+ * the TypeScript builder prepends `__ctx`, `__stateStack`, and
+ * `__threads` at every context-injected call site.
  *
  * If memory isn't configured in `agency.json`, every function is a
  * no-op: side-effecting helpers resolve to `undefined`,
@@ -20,18 +25,26 @@ import type {
 
 export async function __internal_setMemoryId(
   ctx: RuntimeContext<any>,
+  _stack: StateStack,
+  _threads: ThreadStore,
   id: string,
 ): Promise<void> {
   if (!ctx?.memoryManager) return;
   ctx.memoryManager.setMemoryId(id);
 }
 
-export function __internal_shouldRunMemory(ctx: RuntimeContext<any>): boolean {
+export function __internal_shouldRunMemory(
+  ctx: RuntimeContext<any>,
+  _stack: StateStack,
+  _threads: ThreadStore,
+): boolean {
   return ctx?.memoryManager !== undefined;
 }
 
 export async function __internal_buildExtractionPrompt(
   ctx: RuntimeContext<any>,
+  _stack: StateStack,
+  _threads: ThreadStore,
   content: string,
 ): Promise<string> {
   if (!ctx?.memoryManager) return "";
@@ -40,6 +53,8 @@ export async function __internal_buildExtractionPrompt(
 
 export async function __internal_applyExtractionResult(
   ctx: RuntimeContext<any>,
+  _stack: StateStack,
+  _threads: ThreadStore,
   result: ExtractionResult,
 ): Promise<void> {
   if (!ctx?.memoryManager) return;
@@ -48,6 +63,8 @@ export async function __internal_applyExtractionResult(
 
 export async function __internal_buildForgetPrompt(
   ctx: RuntimeContext<any>,
+  _stack: StateStack,
+  _threads: ThreadStore,
   query: string,
 ): Promise<string> {
   if (!ctx?.memoryManager) return "";
@@ -56,6 +73,8 @@ export async function __internal_buildForgetPrompt(
 
 export async function __internal_applyForgetResult(
   ctx: RuntimeContext<any>,
+  _stack: StateStack,
+  _threads: ThreadStore,
   result: ForgetResult,
 ): Promise<void> {
   if (!ctx?.memoryManager) return;
@@ -64,6 +83,8 @@ export async function __internal_applyForgetResult(
 
 export async function __internal_remember(
   ctx: RuntimeContext<any>,
+  _stack: StateStack,
+  _threads: ThreadStore,
   content: string,
 ): Promise<void> {
   if (!ctx?.memoryManager) return;
@@ -72,6 +93,8 @@ export async function __internal_remember(
 
 export async function __internal_recall(
   ctx: RuntimeContext<any>,
+  _stack: StateStack,
+  _threads: ThreadStore,
   query: string,
 ): Promise<string> {
   if (!ctx?.memoryManager) return "";
@@ -80,6 +103,8 @@ export async function __internal_recall(
 
 export async function __internal_forget(
   ctx: RuntimeContext<any>,
+  _stack: StateStack,
+  _threads: ThreadStore,
   query: string,
 ): Promise<void> {
   if (!ctx?.memoryManager) return;

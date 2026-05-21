@@ -1,3 +1,5 @@
+import { systemMessage } from "std::thread"
+
 const SYSTEM_PROMPT = """
     You are a helpful assistant that can calculate Etsy seller fees.
     When a user asks about Etsy fees or wants to know how much they'll pay in fees
@@ -39,7 +41,7 @@ node main() {
   print("I can help you calculate Etsy seller fees for your products.")
   print("What is the price of the item you want to sell on Etsy?")
   print("Type 'exit' or 'quit' to end the conversation.\n")
-  system(SYSTEM_PROMPT)
+  systemMessage(SYSTEM_PROMPT)
   while (true) {
     const msg = input("> ")
     if (msg.toLowerCase() === "exit" || msg.toLowerCase() === "quit") {

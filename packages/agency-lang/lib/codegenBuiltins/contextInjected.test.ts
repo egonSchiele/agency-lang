@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import * as memoryImpls from "../stdlib/memory.js";
+import * as threadImpls from "../stdlib/thread.js";
 import { CONTEXT_INJECTED_BUILTINS } from "./contextInjected.js";
 
 /**
@@ -11,10 +12,11 @@ import { CONTEXT_INJECTED_BUILTINS } from "./contextInjected.js";
  *      module specified by the entry's `from` field. Add new source
  *      modules to `implsByFrom` below as they're introduced.
  *
- *   2. The TS implementation's arity is `1 + params.length` — i.e. it
- *      takes a leading `RuntimeContext` argument followed by exactly
- *      the user-visible params. This is the contract the TypeScript
- *      builder relies on when it prepends `__ctx` at the call site.
+ *   2. The TS implementation's arity is `3 + params.length` — i.e. it
+ *      takes leading `RuntimeContext`, `StateStack`, and `ThreadStore`
+ *      arguments followed by exactly the user-visible params. This is
+ *      the contract the TypeScript builder relies on when it prepends
+ *      `__ctx`, `__stateStack`, and `__threads` at the call site.
  *
  * If either invariant breaks, the registry and the impl have drifted
  * and the codegen will emit broken calls. The fix is usually either
@@ -30,6 +32,7 @@ describe("CONTEXT_INJECTED_BUILTINS drift safeguard", () => {
   // module is added, append it here.
   const implsByFrom: Record<string, Record<string, unknown>> = {
     "agency-lang/stdlib-lib/memory.js": { ...memoryImpls },
+    "agency-lang/stdlib-lib/thread.js": { ...threadImpls },
   };
 
   for (const [name, def] of Object.entries(CONTEXT_INJECTED_BUILTINS)) {
@@ -51,14 +54,14 @@ describe("CONTEXT_INJECTED_BUILTINS drift safeguard", () => {
         expect(mod?.[name]).toBeTypeOf("function");
       });
 
-      it("TS implementation arity is 1 + registry params.length", () => {
+      it("TS implementation arity is 3 + registry params.length", () => {
         const fn = implsByFrom[def.from]?.[name] as
           | ((...args: unknown[]) => unknown)
           | undefined;
         if (typeof fn !== "function") {
           throw new Error(`No impl found for ${name} in ${def.from}`);
         }
-        expect(fn.length).toBe(1 + def.params.length);
+        expect(fn.length).toBe(3 + def.params.length);
       });
     });
   }

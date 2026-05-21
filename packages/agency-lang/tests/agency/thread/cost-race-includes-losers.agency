@@ -1,0 +1,28 @@
+import { getCost } from "std::thread"
+
+// Each branch performs the same number of LLM calls. Whichever branch
+// resolves first wins the race; the losing branches' completed-call
+// cost must still propagate back to the parent — race-loser work is
+// not free.
+
+def doNCalls(n: number): string {
+  let i = 0
+  while (i < n) {
+    let _r = llm("call")
+    i = i + 1
+  }
+  return "done"
+}
+
+node main() {
+  let _w = race([1, 2, 3]) as k {
+    return doNCalls(k)
+  }
+
+  let total = getCost()
+  // If only the winner's cost (the smallest, 1 call) were counted the
+  // total would be 0.000002. Losers do extra work, so total must be
+  // strictly greater than that.
+  let lostCostCounted = total > 0.000002
+  return "${lostCostCounted}"
+}

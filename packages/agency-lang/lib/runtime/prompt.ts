@@ -156,6 +156,14 @@ async function _runPrompt({
     cost: completion.cost,
   });
 
+  // Per-branch accumulator: in addition to the global __tokenStats above,
+  // add cost/tokens to the active stack so std::thread's getCost()/getTokens()
+  // can report per-branch totals. See docs/superpowers/specs/2026-05-20-
+  // thread-builtins-and-stdlib-design.md for the model.
+  const targetStack = stateStack ?? ctx.stateStack;
+  targetStack.localCost += completion.cost?.totalCost ?? 0;
+  targetStack.localTokens += completion.usage?.totalTokens ?? 0;
+
   // Memory layer: auto-extraction and compaction run unconditionally
   // whenever a MemoryManager is attached (resolved decision #6).
   // Tool-call results have not been pushed yet, so we operate on the

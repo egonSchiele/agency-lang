@@ -1,0 +1,15 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "\"0_0.000002_0.000002\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "llmMocks": [
+        { "return": "first response" },
+        { "return": "second response" }
+      ],
+      "description": "getCost() grows by DETERMINISTIC_COST=0.000002 after each llm() call. Asserts the per-call increment is consistent across two consecutive calls."
+    }
+  ]
+}

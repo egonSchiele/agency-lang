@@ -40,6 +40,13 @@ import {
   __internal_setMemoryId,
   __internal_shouldRunMemory,
 } from "agency-lang/stdlib-lib/memory.js";
+import {
+  __internal_assistantMessage,
+  __internal_getCost,
+  __internal_getTokens,
+  __internal_systemMessage,
+  __internal_userMessage,
+} from "agency-lang/stdlib-lib/thread.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);

@@ -45,11 +45,13 @@ describe("std::memory ctx-passing concurrency", () => {
     const b = makeFakeCtx();
 
     // Interleave the two calls, simulating two concurrent runNode runs.
+    // `_stack` and `_threads` are unused by memory builtins; pass `null` to
+    // mirror what generated code would pass when not inside a fork branch.
     await Promise.all([
-      __internal_setMemoryId(a.ctx, "scope-A"),
-      __internal_setMemoryId(b.ctx, "scope-B"),
-      __internal_setMemoryId(a.ctx, "scope-A-2"),
-      __internal_setMemoryId(b.ctx, "scope-B-2"),
+      __internal_setMemoryId(a.ctx, null as any, null as any, "scope-A"),
+      __internal_setMemoryId(b.ctx, null as any, null as any, "scope-B"),
+      __internal_setMemoryId(a.ctx, null as any, null as any, "scope-A-2"),
+      __internal_setMemoryId(b.ctx, null as any, null as any, "scope-B-2"),
     ]);
 
     expect(a.manager.setMemoryIdCalls).toEqual(["scope-A", "scope-A-2"]);
@@ -58,17 +60,17 @@ describe("std::memory ctx-passing concurrency", () => {
 
   it("is a no-op when ctx has no memoryManager", async () => {
     await expect(
-      __internal_setMemoryId({} as any, "ignored"),
+      __internal_setMemoryId({} as any, null as any, null as any, "ignored"),
     ).resolves.toBeUndefined();
     await expect(
-      __internal_setMemoryId(null as any, "ignored"),
+      __internal_setMemoryId(null as any, null as any, null as any, "ignored"),
     ).resolves.toBeUndefined();
   });
 
   it("__internal_shouldRunMemory reflects the ctx it was passed", () => {
     const a = makeFakeCtx();
-    expect(__internal_shouldRunMemory(a.ctx)).toBe(true);
-    expect(__internal_shouldRunMemory({} as any)).toBe(false);
-    expect(__internal_shouldRunMemory(null as any)).toBe(false);
+    expect(__internal_shouldRunMemory(a.ctx, null as any, null as any)).toBe(true);
+    expect(__internal_shouldRunMemory({} as any, null as any, null as any)).toBe(false);
+    expect(__internal_shouldRunMemory(null as any, null as any, null as any)).toBe(false);
   });
 });

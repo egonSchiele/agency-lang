@@ -1,0 +1,18 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "\"true_true_0.000009999999999999999\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "llmMocks": [
+        { "return": "seed" },
+        { "return": "b1" },
+        { "return": "b2" },
+        { "return": "b3" },
+        { "return": "b4" }
+      ],
+      "description": "Per-branch cost tracking: each fork branch is seeded with the parent's cost at creation, accumulates its own, and on join propagates its delta back to the parent. Main's localCost after join = beforeFork + sum(branch deltas)."
+    }
+  ]
+}

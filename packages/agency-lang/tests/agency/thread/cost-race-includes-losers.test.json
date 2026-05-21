@@ -1,0 +1,19 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "\"true\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "llmMocks": [
+        { "return": "c1" },
+        { "return": "c2" },
+        { "return": "c3" },
+        { "return": "c4" },
+        { "return": "c5" },
+        { "return": "c6" }
+      ],
+      "description": "Race-loser costs are propagated. After race finishes, parent cost must exceed the winner-alone cost (winner does 1 LLM call; losers do 2 and 3). Confirms losing-branch spend is not discarded."
+    }
+  ]
+}

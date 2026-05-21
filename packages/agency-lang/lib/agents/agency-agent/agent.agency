@@ -2,6 +2,7 @@ import { addTask, listTasks, markTaskDone } from "./subagents/task.agency"
 import { writeToPlan, readPlan } from "./subagents/plan.agency"
 import { writeCode, appendCode, readCode } from "./subagents/code.agency"
 import { syntaxHighlight } from "../../utils/agentUtils.js"
+import { systemMessage } from "std::thread"
 // todo allow this
 // import { Plan } from "./subagents/plan.agency"
 
@@ -124,7 +125,7 @@ node plan(mode, existingCode, existingFilename: string | null) {
     """
   }
   thread {
-    system("${systemPrompt}\n\n${planPrompt}${modeContext}")
+    systemMessage("${systemPrompt}\n\n${planPrompt}${modeContext}")
     userMsg = input("What would you like to accomplish today? ")
     nextAction: NextAction = { 
       type: "start"
@@ -176,7 +177,7 @@ node design(plan, mode, existingCode, existingFilename: string | null) {
     """
   }
   thread {
-    system(designPrompt)
+    systemMessage(designPrompt)
     userMsg = prompt
     nextAction: DesignAction = { 
       type: "start"

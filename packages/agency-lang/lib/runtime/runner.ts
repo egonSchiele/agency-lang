@@ -5,7 +5,7 @@ import { hasInterrupts } from "./interrupts.js";
 import { __pipeBind } from "./result.js";
 import type { SourceLocationOpts } from "./state/checkpointStore.js";
 import type { RuntimeContext } from "./state/context.js";
-import type { State } from "./state/stateStack.js";
+import type { BranchState, State } from "./state/stateStack.js";
 import { StateStack } from "./state/stateStack.js";
 import type { HandlerFn } from "./types.js";
 
@@ -192,6 +192,39 @@ export class Runner {
 
   private debugFlagKey(id: number): string {
     return `__dbg_${this.stepPath(id)}`;
+  }
+
+  // ── Per-branch cost/token tracking helpers ──
+
+  /** Seed branch.stack.localCost / localTokens from the parent stack
+   *  unless they're already populated (e.g., restored from a checkpoint
+   *  on resume). Idempotent. See docs/superpowers/specs/2026-05-20-thread-
+   *  builtins-and-stdlib-design.md. */
+  private seedBranchCost(branchStack: StateStack, parentStack: StateStack): void {
+    if (branchStack.localCost === 0 && branchStack.localTokens === 0) {
+      branchStack.localCost = parentStack.localCost;
+      branchStack.localTokens = parentStack.localTokens;
+    }
+  }
+
+  /** Propagate cost/token deltas from a set of branches back to the
+   *  outer stack. Delta = branch.localCost - parentStack.localCost (the
+   *  inherited baseline). Caller invokes this BEFORE popBranches() or
+   *  deleteBranch — otherwise the branch stacks are gone. */
+  private propagateBranchCost(
+    branches: BranchState[],
+    parentStack: StateStack,
+  ): void {
+    const baseCost = parentStack.localCost;
+    const baseTokens = parentStack.localTokens;
+    let costDelta = 0;
+    let tokensDelta = 0;
+    for (const branch of branches) {
+      costDelta += branch.stack.localCost - baseCost;
+      tokensDelta += branch.stack.localTokens - baseTokens;
+    }
+    parentStack.localCost += costDelta;
+    parentStack.localTokens += tokensDelta;
   }
 
   // ── Core step method ──
@@ -698,6 +731,10 @@ export class Runner {
           ? AbortSignal.any([parentSignal, existing.abortController.signal])
           : existing.abortController.signal;
       }
+      // Seed per-branch cost/tokens from the parent so getCost() inside the
+      // branch sees "parent's total + my own contributions". Idempotent — on
+      // resume, the restored localCost is preserved.
+      this.seedBranchCost(existing.stack, stateStack);
       branchStartTimes[i] = performance.now();
       return this.ctx.statelogClient
         .runInBranchContext(parentStack, () => blockFn(item, i, existing.stack))
@@ -766,6 +803,16 @@ export class Runner {
       return interrupts;
     }
 
+    // No interrupts — propagate each branch's cost/token delta into the
+    // parent stack BEFORE the caller pops branches. Each branch was seeded
+    // with the parent's totals at creation; delta = branch.localCost - base.
+    const allBranches: BranchState[] = [];
+    for (let i = 0; i < items.length; i++) {
+      const branch = this.frame.getBranch(this.forkBranchKey(id, i));
+      if (branch) allBranches.push(branch);
+    }
+    this.propagateBranchCost(allBranches, stateStack);
+
     return settled.map((s) => (s as PromiseFulfilledResult<any>).value);
   }
 
@@ -806,6 +853,8 @@ export class Runner {
         ? AbortSignal.any([parentSignal, existing.abortController.signal])
         : existing.abortController.signal;
     }
+    // Seed per-branch cost/tokens from the parent (same as runForkAll).
+    this.seedBranchCost(existing.stack, stateStack);
     branchStartTimes[i] = performance.now();
     return this.ctx.statelogClient
       .runInBranchContext(parentSpanStack, () => blockFn(item, i, existing.stack))
@@ -934,6 +983,17 @@ export class Runner {
         winnerValue[0].interruptData,
         winnerValue[0].checkpoint,
       );
+      // Propagate LOSER cost/tokens into the parent before we drop them —
+      // their LLM calls really happened and the user should see that spend.
+      // The winner is still pending; its cost will propagate when it resolves
+      // (in resumeRaceWinner's success path).
+      const losers: BranchState[] = [];
+      for (let i = 0; i < items.length; i++) {
+        if (i === winnerIndex) continue;
+        const loser = this.frame.getBranch(this.forkBranchKey(id, i));
+        if (loser) losers.push(loser);
+      }
+      this.propagateBranchCost(losers, stateStack);
       // Drop the loser branches before serializing — they hold partial state
       // we never want to revisit.
       for (let i = 0; i < items.length; i++) {
@@ -961,6 +1021,15 @@ export class Runner {
 
     // Winner produced a value. Cache it on the winner branch and drop losers.
     this.frame.setResultOnBranch(winnerBranchKey, winnerValue);
+    // Propagate cost/tokens from EVERY branch (winner + losers) into the
+    // parent stack before we delete the loser branches. Loser LLM calls
+    // really happened and the user should see that spend.
+    const allBranches: BranchState[] = [];
+    for (let i = 0; i < items.length; i++) {
+      const branch = this.frame.getBranch(this.forkBranchKey(id, i));
+      if (branch) allBranches.push(branch);
+    }
+    this.propagateBranchCost(allBranches, stateStack);
     for (let i = 0; i < items.length; i++) {
       if (i === winnerIndex) continue;
       this.frame.deleteBranch(this.forkBranchKey(id, i));
@@ -1037,6 +1106,11 @@ export class Runner {
     }
 
     this.frame.setResultOnBranch(branchKey, value);
+    // Propagate the winner's cost/tokens delta into the parent stack now
+    // that the winner has produced a final value. Losers were already
+    // propagated in runRace's interrupt path before they were deleted, so
+    // this single-branch propagation completes the race's total spend.
+    this.propagateBranchCost([existing], stateStack);
     return value;
   }
 

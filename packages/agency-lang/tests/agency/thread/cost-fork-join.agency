@@ -1,0 +1,24 @@
+import { getCost } from "std::thread"
+
+node main() {
+  llm("seed")
+  let beforeFork = getCost()
+
+  let branchCosts = fork([1, 2, 3, 4]) as i {
+    let _r = llm("branch")
+    return getCost()
+  }
+
+  let afterFork = getCost()
+
+  let expectedBranchCost = beforeFork + 0.000002
+  let allBranchesMatch = branchCosts[0] == expectedBranchCost
+    && branchCosts[1] == expectedBranchCost
+    && branchCosts[2] == expectedBranchCost
+    && branchCosts[3] == expectedBranchCost
+
+  let expectedAfterFork = beforeFork + (4 * 0.000002)
+  let mainTotalMatches = afterFork == expectedAfterFork
+
+  return "${allBranchesMatch}_${mainTotalMatches}_${afterFork}"
+}

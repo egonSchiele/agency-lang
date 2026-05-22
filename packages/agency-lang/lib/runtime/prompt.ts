@@ -24,6 +24,13 @@ type Tool = {
   schema: any;
 };
 
+/** Result of `_runPrompt`. `interrupt` carries interrupts raised by an
+ *  `onLLMCallStart` or `onLLMCallEnd` callback so the outer `pr.step` can
+ *  checkpoint and bail uniformly with the tool-interrupt path. */
+export type RunPromptResult =
+  | { kind: "ok"; messages: MessageThread; toolCalls: smoltalk.ToolCallJSON[] }
+  | { kind: "interrupt"; interrupts: Interrupt[] };
+
 async function _runPrompt({
   ctx,
   messages,
@@ -43,7 +50,7 @@ async function _runPrompt({
    * fork/race branch. Used for branch-aware cancellation checks and for
    * scoping the LLM HTTP abort signal to the current branch. */
   stateStack?: StateStack;
-}): Promise<{ messages: MessageThread; toolCalls: smoltalk.ToolCallJSON[] }> {
+}): Promise<RunPromptResult> {
   if (ctx.isCancelled(stateStack)) {
     throw new AgencyCancelledError();
   }
@@ -55,7 +62,7 @@ async function _runPrompt({
   const stream = !!(clientConfig as any)?.stream;
   const startTime = performance.now();
 
-  await callHook({
+  const startInterrupts = await callHook({
     ctx,
     name: "onLLMCallStart",
     data: {
@@ -65,6 +72,7 @@ async function _runPrompt({
       messages: messages.toJSON().messages,
     },
   });
+  if (startInterrupts) return { kind: "interrupt", interrupts: startInterrupts };
 
   // Re-check after hook — cancellation may have occurred during the callback
   if (ctx.isCancelled(stateStack)) {
@@ -192,7 +200,7 @@ async function _runPrompt({
     }
   }
 
-  await callHook({
+  const endInterrupts = await callHook({
     ctx,
     name: "onLLMCallEnd",
     data: {
@@ -204,8 +212,9 @@ async function _runPrompt({
       messages: messages.toJSON().messages,
     },
   });
+  if (endInterrupts) return { kind: "interrupt", interrupts: endInterrupts };
 
-  return { messages, toolCalls };
+  return { kind: "ok", messages, toolCalls };
 }
 
 // eslint-disable-next-line max-lines-per-function -- core prompt execution loop; refactor tracked separately
@@ -342,26 +351,17 @@ export async function runPrompt(args: {
     }
   };
 
-  // Tool calls: restore from frame or make initial LLM call
-  let toolCalls: smoltalk.ToolCallJSON[];
-  if (self.pendingToolCalls) {
-    toolCalls = self.pendingToolCalls;
-    // Resumed run: the original llmCall span ended at the interrupt.
-    // Open a fresh span so subsequent tool executions still have a
-    // parent llmCall to nest under.
-    currentLlmSpanId = ctx.statelogClient.startSpan("llmCall");
-  } else {
-    // Memory injection (resolved decision #6): only retrieves and
-    // injects when the caller passed `memory: true` (or an object) on
-    // this llm() call. Best-effort: failures don't block the LLM call.
-    //
-    // The injected system message is transient — it's for THIS llm()
-    // call only and must not persist into the shared thread, otherwise
-    // subsequent llm() calls would see stacked stale context blobs (and
-    // recallForInjection would re-add a fresh one on top each turn).
-    // We track the exact injected content so we can strip it after the
-    // LLM call resolves, even if compaction (which can reshape indices)
-    // ran inside _runPrompt.
+  // Tool calls: on resume, restore from frame; otherwise start at [] and
+  // let the initialLlmCall step populate it.
+  let toolCalls: smoltalk.ToolCallJSON[] = self.pendingToolCalls ?? [];
+
+  // Initial LLM call wrapped in pr.step so any callback interrupts
+  // (onLLMCallStart / onLLMCallEnd) bail uniformly. To keep the step
+  // body idempotent on re-entry, we capture the messages length before
+  // any mutation and revert if the body bails — this prevents duplicate
+  // user / memory / assistant messages from accumulating across resumes.
+  await pr.step("initialLlmCall", async () => {
+    const lenBefore = messages.getMessages().length;
     let injectedFactsContent: string | null = null;
     if (memoryOption && ctx.memoryManager) {
       try {
@@ -371,7 +371,6 @@ export async function runPrompt(args: {
           messages.push(smoltalk.systemMessage(injectedFactsContent));
         }
       } catch (err) {
-        // Best-effort, same reasoning as the post-turn hook.
         createLogger(ctx.logLevel).warn(
           `[memory] recall injection failed: ${(err as Error).message}`,
         );
@@ -379,7 +378,7 @@ export async function runPrompt(args: {
     }
     messages.push(smoltalk.userMessage(prompt));
     currentLlmSpanId = ctx.statelogClient.startSpan("llmCall");
-    let result;
+    let result: RunPromptResult;
     try {
       result = await _runPrompt({
         ctx,
@@ -394,12 +393,17 @@ export async function runPrompt(args: {
       closeLlmSpan();
       throw e;
     }
+    if (result.kind === "interrupt") {
+      // Revert any messages pushed during this step (user message, memory
+      // injection, and the assistant message pushed by _runPrompt) so
+      // the bailout snapshot captures pre-step state. On resume, the
+      // step body re-runs cleanly from that state.
+      messages.setMessages(messages.getMessages().slice(0, lenBefore));
+      closeLlmSpan();
+      return result.interrupts;
+    }
     messages = result.messages;
     toolCalls = result.toolCalls;
-
-    // Strip the transient memory injection (most recent matching system
-    // message). If compaction inside _runPrompt already removed it, this
-    // is a no-op.
     if (injectedFactsContent !== null) {
       const all = messages.getMessages();
       for (let i = all.length - 1; i >= 0; i--) {
@@ -412,11 +416,15 @@ export async function runPrompt(args: {
         }
       }
     }
-
-    // Save to frame (after stripping the injection so resume sees the
-    // cleaned thread, not a duplicate-injection-on-resume).
     self.messagesJSON = messages.toJSON().messages;
     self.pendingToolCalls = toolCalls.length > 0 ? toolCalls : null;
+  });
+
+  // After resume (initialLlmCall skipped), make sure there's an open
+  // llmCall span if we have pending tool calls — the tool loop expects
+  // one to be open so toolExecution spans nest correctly.
+  if (toolCalls.length > 0 && currentLlmSpanId === undefined) {
+    currentLlmSpanId = ctx.statelogClient.startSpan("llmCall");
   }
 
   let shouldPop = true;
@@ -424,11 +432,18 @@ export async function runPrompt(args: {
     // Handle tool calls
     while (toolCalls.length > 0) {
       if (ctx.isCancelled(stateStack)) throw new AgencyCancelledError();
-      if (self.toolCallRound++ >= maxToolCallRounds) {
+      if (self.toolCallRound >= maxToolCallRounds) {
         throw new Error(
           `Exceeded maximum tool call rounds (${maxToolCallRounds})`,
         );
       }
+      // Capture round BEFORE incrementing so pr.step keys are stable
+      // across resume. The actual increment happens inside the
+      // `nextLlmCall` step body, after a successful LLM round — that
+      // way bailout from a per-tool callback leaves the counter
+      // unchanged and resume re-enters this iteration with the same
+      // `round` value, so completedSteps keys match.
+      const round = self.toolCallRound;
 
       const interrupts: Interrupt[] = [];
 
@@ -493,11 +508,15 @@ export async function runPrompt(args: {
         const branchStack = stack.getOrCreateBranch(branchKey).stack;
 
         const namedArgs = { ...toolCall.arguments };
-        await callHook({
-          ctx,
-          name: "onToolCallStart",
-          data: { toolName: handler.name, args: namedArgs },
-        });
+        await pr.step(
+          `round.${round}.tool.${toolCall.id}.start`,
+          async () =>
+            await callHook({
+              ctx,
+              name: "onToolCallStart",
+              data: { toolName: handler.name, args: namedArgs },
+            }),
+        );
 
         const toolCallStartTime = performance.now();
         const toolSpanId = ctx.statelogClient.startSpan("toolExecution");
@@ -619,15 +638,19 @@ export async function runPrompt(args: {
         stack.setResultOnBranch(branchKey, result);
 
         const toolCallEndTime = performance.now();
-        await callHook({
-          ctx,
-          name: "onToolCallEnd",
-          data: {
-            toolName: handler.name,
-            result,
-            timeTaken: toolCallEndTime - toolCallStartTime,
-          },
-        });
+        await pr.step(
+          `round.${round}.tool.${toolCall.id}.end`,
+          async () =>
+            await callHook({
+              ctx,
+              name: "onToolCallEnd",
+              data: {
+                toolName: handler.name,
+                result,
+                timeTaken: toolCallEndTime - toolCallStartTime,
+              },
+            }),
+        );
         ctx.statelogClient.toolCall({
           toolName: handler.name,
           args: namedArgs,
@@ -663,7 +686,7 @@ export async function runPrompt(args: {
           model: clientConfig.model,
         });
         await pr.step(
-          `round.${self.toolCallRound - 1}.toolInterrupts`,
+          `round.${round}.toolInterrupts`,
           async () => interrupts,
         );
         // unreachable — pr.step throws PromptBailout
@@ -676,26 +699,41 @@ export async function runPrompt(args: {
         (fn) => !removedTools.includes(fn.name),
       );
 
-      // Close the prior llmCall span (its tool executions are done) and
-      // open a fresh one for this next round so per-call latency stays
-      // accurate.
-      closeLlmSpan();
-      currentLlmSpanId = ctx.statelogClient.startSpan("llmCall");
-      const nextResult = await _runPrompt({
-        ctx,
-        messages,
-        tools: tools || [],
-        prompt,
-        responseFormat,
-        clientConfig,
-        stateStack,
+      // Next LLM call wrapped in pr.step. Same idempotency trick as
+      // initialLlmCall: snapshot messages length pre-call and revert if
+      // a callback inside _runPrompt returns interrupts.
+      await pr.step(`round.${round}.nextLlmCall`, async () => {
+        const lenBefore = messages.getMessages().length;
+        closeLlmSpan();
+        currentLlmSpanId = ctx.statelogClient.startSpan("llmCall");
+        let nextResult: RunPromptResult;
+        try {
+          nextResult = await _runPrompt({
+            ctx,
+            messages,
+            tools: tools || [],
+            prompt,
+            responseFormat,
+            clientConfig,
+            stateStack,
+          });
+        } catch (e) {
+          closeLlmSpan();
+          throw e;
+        }
+        if (nextResult.kind === "interrupt") {
+          messages.setMessages(messages.getMessages().slice(0, lenBefore));
+          closeLlmSpan();
+          return nextResult.interrupts;
+        }
+        messages = nextResult.messages;
+        toolCalls = nextResult.toolCalls;
+        // Increment the round counter only after a successful LLM round,
+        // so resume after a callback interrupt re-enters the SAME round.
+        self.toolCallRound = round + 1;
+        self.messagesJSON = messages.toJSON().messages;
+        self.pendingToolCalls = toolCalls.length > 0 ? toolCalls : null;
       });
-      messages = nextResult.messages;
-      toolCalls = nextResult.toolCalls;
-
-      // Save to frame
-      self.messagesJSON = messages.toJSON().messages;
-      self.pendingToolCalls = toolCalls.length > 0 ? toolCalls : null;
     }
   } catch (error) {
     if (error instanceof PromptBailout) {

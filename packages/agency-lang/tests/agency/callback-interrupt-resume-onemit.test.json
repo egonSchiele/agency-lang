@@ -1,0 +1,21 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "callback raising an interrupt from onEmit halts the surrounding node at the emit() substep, surfaces the interrupt, and resumes after approve. cbRuns == 1 (callback fires exactly once total), afterEmit == 1 (the statement after emit runs after resume).",
+      "input": "",
+      "expectedOutput": "[1,1]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "interruptHandlers": [
+        {
+          "action": "approve",
+          "expectedMessage": "pause"
+        }
+      ]
+    }
+  ]
+}

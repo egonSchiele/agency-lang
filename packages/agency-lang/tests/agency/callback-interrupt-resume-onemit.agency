@@ -1,0 +1,27 @@
+
+let cbRuns: number = 0
+let afterEmit: number = 0
+
+// A top-level callback registered on onEmit that raises an interrupt
+// the first time it fires. Runner.hook at the emit() site halts the
+// surrounding node so the interrupt surfaces to the user.
+//
+// On resume the callback's own checkpoint restores the full stack
+// with the callback frame's substep counters intact. The hook
+// re-fires on the emit substep, the callback's setupFunction reuses
+// the saved callback frame, the increment step is already past, and
+// only the interrupt step re-runs — finding the user's response.
+// The hook returns no interrupts the second time, the emit substep
+// advances, and the rest of main runs.
+callback("onEmit") as _data {
+  cbRuns = cbRuns + 1
+  if (cbRuns == 1) {
+    const _y = interrupt("pause")
+  }
+}
+
+node main() {
+  emit("hello")
+  afterEmit = afterEmit + 1
+  return [cbRuns, afterEmit]
+}

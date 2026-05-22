@@ -1,7 +1,7 @@
 import * as fs from "fs";
 import * as path from "path";
 import { MessageJSON } from "smoltalk";
-import { callHook } from "./hooks.js";
+import { callHookAndDrop } from "./hooks.js";
 import type { AgencyCallbacks } from "./hooks.js";
 import type { RuntimeContext } from "./state/context.js";
 import {
@@ -171,7 +171,7 @@ export async function runNode({
     });
   }
 
-  await callHook({
+  await callHookAndDrop({
     ctx: execCtx,
     name: "onAgentStart",
     data: { nodeName, args: data, messages: messages || [], cancel },
@@ -219,7 +219,7 @@ export async function runNode({
             timeTaken: performance.now() - agentStartTime,
             tokenStats: returnObject.tokens,
           });
-          await callHook({
+          await callHookAndDrop({
             ctx: execCtx,
             name: "onAgentEnd",
             data: { nodeName, result: returnObject },

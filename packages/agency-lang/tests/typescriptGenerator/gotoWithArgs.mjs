@@ -182,7 +182,6 @@ let __functionCompleted = false;
     await runner.hook(0, "onNodeStart", {
       nodeName: "greet"
     });
-    if (runner.halted) return runner.haltResult;
     await runner.step(1, async (runner) => {
 const __funcResult = await __call(print, {
         type: "positional",
@@ -242,7 +241,6 @@ let __functionCompleted = false;
     await runner.hook(0, "onNodeStart", {
       nodeName: "main"
     });
-    if (runner.halted) return runner.haltResult;
     await runner.step(1, async (runner) => {
 __stateStack.pop()
 __functionCompleted = true;

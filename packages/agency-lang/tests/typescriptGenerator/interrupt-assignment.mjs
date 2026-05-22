@@ -179,7 +179,6 @@ let __functionCompleted = false;
     await runner.hook(0, "onNodeStart", {
       nodeName: "main"
     });
-    if (runner.halted) return runner.haltResult;
     await runner.step(1, async (runner) => {
 // Resume path: check for a response by interruptId
 const __response = __ctx.getInterruptResponse(__self.__interruptId_1);

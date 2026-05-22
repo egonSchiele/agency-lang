@@ -201,7 +201,6 @@ if (__ctx._pendingArgOverrides) {
       isBuiltin: false,
       moduleId: "multiLineComment.agency"
     });
-    if (runner.halted) { if (isFailure(runner.haltResult)) { runner.haltResult.retryable = runner.haltResult.retryable && __self.__retryable; } return runner.haltResult; }
     await runner.step(1, async (runner) => {
 __functionCompleted = true;
 runner.halt(`hello`)

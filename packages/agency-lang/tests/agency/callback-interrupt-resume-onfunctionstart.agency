@@ -21,7 +21,7 @@ callback("onFunctionStart") as data {
   if (data.functionName == "doWork") {
     calls = calls + 1
     if (calls == 1) {
-      const _y = interrupt("pause")
+      interrupt("pause")
     }
   }
 }

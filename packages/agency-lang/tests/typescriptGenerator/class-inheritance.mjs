@@ -211,7 +211,6 @@ try {
         isBuiltin: false,
         moduleId: "class-inheritance.agency"
       });
-      if (runner.halted) { if (isFailure(runner.haltResult)) { runner.haltResult.retryable = runner.haltResult.retryable && __self.__retryable; } return runner.haltResult; }
       await runner.step(1, async (runner) => {
 __stack.locals.n = this.name;
       });
@@ -324,7 +323,6 @@ try {
         isBuiltin: false,
         moduleId: "class-inheritance.agency"
       });
-      if (runner.halted) { if (isFailure(runner.haltResult)) { runner.haltResult.retryable = runner.haltResult.retryable && __self.__retryable; } return runner.haltResult; }
       await runner.step(1, async (runner) => {
 __stack.locals.n = this.name;
       });
@@ -407,7 +405,6 @@ let __functionCompleted = false;
     await runner.hook(0, "onNodeStart", {
       nodeName: "main"
     });
-    if (runner.halted) return runner.haltResult;
     await runner.step(1, async (runner) => {
 __stack.locals.dog = new Dog(`Rex`, `Labrador`);
     });

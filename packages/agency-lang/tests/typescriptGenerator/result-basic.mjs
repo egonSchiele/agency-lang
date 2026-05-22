@@ -205,7 +205,6 @@ if (__ctx._pendingArgOverrides) {
       isBuiltin: false,
       moduleId: "result-basic.agency"
     });
-    if (runner.halted) { if (isFailure(runner.haltResult)) { runner.haltResult.retryable = runner.haltResult.retryable && __self.__retryable; } return runner.haltResult; }
     await runner.ifElse(1, [
 
   {

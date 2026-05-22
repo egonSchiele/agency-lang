@@ -211,7 +211,6 @@ if (__ctx._pendingArgOverrides) {
       isBuiltin: false,
       moduleId: "function-with-types.agency"
     });
-    if (runner.halted) { if (isFailure(runner.haltResult)) { runner.haltResult.retryable = runner.haltResult.retryable && __self.__retryable; } return runner.haltResult; }
     await runner.step(1, async (runner) => {
 __self.__removedTools = __self.__removedTools || [];
 __stack.locals.result = await runPrompt({
@@ -336,7 +335,6 @@ if (__ctx._pendingArgOverrides) {
       isBuiltin: false,
       moduleId: "function-with-types.agency"
     });
-    if (runner.halted) { if (isFailure(runner.haltResult)) { runner.haltResult.retryable = runner.haltResult.retryable && __self.__retryable; } return runner.haltResult; }
     await runner.step(1, async (runner) => {
 __self.__removedTools = __self.__removedTools || [];
 __stack.locals.message = await runPrompt({
@@ -459,7 +457,6 @@ if (__ctx._pendingArgOverrides) {
       isBuiltin: false,
       moduleId: "function-with-types.agency"
     });
-    if (runner.halted) { if (isFailure(runner.haltResult)) { runner.haltResult.retryable = runner.haltResult.retryable && __self.__retryable; } return runner.haltResult; }
     await runner.step(1, async (runner) => {
 __self.__removedTools = __self.__removedTools || [];
 __stack.locals.output = await runPrompt({
@@ -581,7 +578,6 @@ if (__ctx._pendingArgOverrides) {
       isBuiltin: false,
       moduleId: "function-with-types.agency"
     });
-    if (runner.halted) { if (isFailure(runner.haltResult)) { runner.haltResult.retryable = runner.haltResult.retryable && __self.__retryable; } return runner.haltResult; }
     await runner.step(1, async (runner) => {
 __self.__removedTools = __self.__removedTools || [];
 __stack.locals.result = await runPrompt({
@@ -698,7 +694,6 @@ if (__ctx._pendingArgOverrides) {
       isBuiltin: false,
       moduleId: "function-with-types.agency"
     });
-    if (runner.halted) { if (isFailure(runner.haltResult)) { runner.haltResult.retryable = runner.haltResult.retryable && __self.__retryable; } return runner.haltResult; }
     await runner.step(1, async (runner) => {
 __self.__removedTools = __self.__removedTools || [];
 __stack.locals.result = await runPrompt({
@@ -789,7 +784,6 @@ let __functionCompleted = false;
     await runner.hook(0, "onNodeStart", {
       nodeName: "foo"
     });
-    if (runner.halted) return runner.haltResult;
     await runner.step(1, async (runner) => {
 const __funcResult = await __call(print, {
         type: "positional",
@@ -856,7 +850,6 @@ let __functionCompleted = false;
     await runner.hook(0, "onNodeStart", {
       nodeName: "main"
     });
-    if (runner.halted) return runner.haltResult;
     await runner.step(1, async (runner) => {
 //  Call the functions
     });

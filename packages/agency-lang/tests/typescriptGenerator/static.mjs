@@ -198,7 +198,6 @@ let __functionCompleted = false;
     await runner.hook(0, "onNodeStart", {
       nodeName: "main"
     });
-    if (runner.halted) return runner.haltResult;
     await runner.step(1, async (runner) => {
 runner.halt({
         messages: __threads,

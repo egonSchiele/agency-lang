@@ -179,7 +179,6 @@ let __functionCompleted = false;
     await runner.hook(0, "onNodeStart", {
       nodeName: "main"
     });
-    if (runner.halted) return runner.haltResult;
     await runner.step(1, async (runner) => {
 __stack.locals.arr = [1, 2, 3, 4, 5];
     });

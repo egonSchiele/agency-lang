@@ -1536,9 +1536,11 @@ export class TypeScriptBuilder {
     // Try/catch wrapping the body, with finally to always pop the state stack.
     // onFunctionStart fires inside the try at substep id 0 via
     // runner.hook so an interrupt raised by a callback halts the
-    // runner and surfaces as runner.haltResult; the post-hook halted
-    // check propagates it. Body steps used startId=1 (set by the
-    // caller) so they don't collide.
+    // runner. We do NOT emit a halted check immediately after the hook:
+    // every body runner.step short-circuits via shouldSkip() when the
+    // runner is halted, and the final post-body halted check catches
+    // the halt and returns runner.haltResult. Body steps use startId=1
+    // (set by the caller) so the hook at id 0 doesn't collide.
     const onFunctionStartHook: TsNode[] = skipHooks ? [] : [
       ts.runnerHook({
         id: 0,
@@ -1550,9 +1552,6 @@ export class TypeScriptBuilder {
           moduleId: ts.str(this.moduleId),
         },
       }),
-      ts.raw(
-        "if (runner.halted) { if (isFailure(runner.haltResult)) { runner.haltResult.retryable = runner.haltResult.retryable && __self.__retryable; } return runner.haltResult; }",
-      ),
     ];
     setupStmts.push(
       ts.tryCatch(
@@ -2204,9 +2203,13 @@ export class TypeScriptBuilder {
     // Body wrapped in try-catch so node errors return failure instead of crashing.
     // onNodeStart at the front and onNodeEnd at the back both fire via
     // runner.hook so callback interrupts halt the runner and surface as
-    // runner.haltResult; each is followed by a halted check that
-    // propagates the interrupt up. onNodeEnd only fires on the success
-    // path (the prior halted check returns before reaching it).
+    // runner.haltResult. We do NOT emit a halted check immediately after
+    // onNodeStart: every body runner.step short-circuits via shouldSkip()
+    // when halted, and the post-body halted check catches the halt before
+    // we reach onNodeEnd. The post-onNodeEnd check IS required so a halt
+    // raised by onNodeEnd doesn't fall through to the literal success
+    // return below. onNodeEnd only fires on the success path (the
+    // post-body halted check returns before reaching it).
     stmts.push(
       ts.tryCatch(
         ts.statements([
@@ -2215,7 +2218,6 @@ export class TypeScriptBuilder {
             hookName: "onNodeStart",
             data: { nodeName: ts.str(nodeName) },
           }),
-          ts.raw("if (runner.halted) return runner.haltResult;"),
           ...bodyCode,
           ts.raw("if (runner.halted) return runner.haltResult;"),
           ts.runnerHook({

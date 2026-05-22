@@ -1,5 +1,6 @@
 
-let cbRuns: number = 0
+let beforeInterrupt: number = 0
+let afterInterrupt: number = 0
 let afterEmit: number = 0
 
 // A top-level callback registered on onEmit that raises an interrupt
@@ -9,19 +10,24 @@ let afterEmit: number = 0
 // On resume the callback's own checkpoint restores the full stack
 // with the callback frame's substep counters intact. The hook
 // re-fires on the emit substep, the callback's setupFunction reuses
-// the saved callback frame, the increment step is already past, and
-// only the interrupt step re-runs — finding the user's response.
-// The hook returns no interrupts the second time, the emit substep
-// advances, and the rest of main runs.
+// the saved callback frame, the increment substep is already past
+// (so `beforeInterrupt` does NOT re-fire), only the interrupt step
+// re-runs — finding the user's response. Then the code AFTER the
+// interrupt in the callback body runs for the first time
+// (`afterInterrupt` increments). The hook returns no interrupts,
+// the emit substep advances, and the rest of main runs.
+//
+// Expected: [1, 1, 1] — proves both invariants:
+//   beforeInterrupt == 1 — code BEFORE interrupt does NOT re-fire on resume
+//   afterInterrupt  == 1 — code AFTER interrupt fires once on resume
 callback("onEmit") as _data {
-  cbRuns = cbRuns + 1
-  if (cbRuns == 1) {
-    const _y = interrupt("pause")
-  }
+  beforeInterrupt = beforeInterrupt + 1
+  interrupt("pause")
+  afterInterrupt = afterInterrupt + 1
 }
 
 node main() {
   emit("hello")
   afterEmit = afterEmit + 1
-  return [cbRuns, afterEmit]
+  return [beforeInterrupt, afterInterrupt, afterEmit]
 }

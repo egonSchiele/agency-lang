@@ -216,7 +216,6 @@ if (__ctx._pendingArgOverrides) {
       moduleId: "docstrings.agency"
     });
     if (runner.halted) { if (isFailure(runner.haltResult)) { runner.haltResult.retryable = runner.haltResult.retryable && __self.__retryable; } return runner.haltResult; }
-    if (runner.halted) { if (isFailure(runner.haltResult)) { runner.haltResult.retryable = runner.haltResult.retryable && __self.__retryable; } return runner.haltResult; }
   } catch (__error) {
     if (__error instanceof RestoreSignal) {
   throw __error;
@@ -314,7 +313,6 @@ if (__ctx._pendingArgOverrides) {
       isBuiltin: false,
       moduleId: "docstrings.agency"
     });
-    if (runner.halted) { if (isFailure(runner.haltResult)) { runner.haltResult.retryable = runner.haltResult.retryable && __self.__retryable; } return runner.haltResult; }
     if (runner.halted) { if (isFailure(runner.haltResult)) { runner.haltResult.retryable = runner.haltResult.retryable && __self.__retryable; } return runner.haltResult; }
   } catch (__error) {
     if (__error instanceof RestoreSignal) {
@@ -414,7 +412,6 @@ if (__ctx._pendingArgOverrides) {
       moduleId: "docstrings.agency"
     });
     if (runner.halted) { if (isFailure(runner.haltResult)) { runner.haltResult.retryable = runner.haltResult.retryable && __self.__retryable; } return runner.haltResult; }
-    if (runner.halted) { if (isFailure(runner.haltResult)) { runner.haltResult.retryable = runner.haltResult.retryable && __self.__retryable; } return runner.haltResult; }
   } catch (__error) {
     if (__error instanceof RestoreSignal) {
   throw __error;
@@ -511,7 +508,6 @@ if (__ctx._pendingArgOverrides) {
       moduleId: "docstrings.agency"
     });
     if (runner.halted) { if (isFailure(runner.haltResult)) { runner.haltResult.retryable = runner.haltResult.retryable && __self.__retryable; } return runner.haltResult; }
-    if (runner.halted) { if (isFailure(runner.haltResult)) { runner.haltResult.retryable = runner.haltResult.retryable && __self.__retryable; } return runner.haltResult; }
   } catch (__error) {
     if (__error instanceof RestoreSignal) {
   throw __error;
@@ -591,7 +587,6 @@ if (__ctx._pendingArgOverrides) {
       isBuiltin: false,
       moduleId: "docstrings.agency"
     });
-    if (runner.halted) { if (isFailure(runner.haltResult)) { runner.haltResult.retryable = runner.haltResult.retryable && __self.__retryable; } return runner.haltResult; }
     if (runner.halted) { if (isFailure(runner.haltResult)) { runner.haltResult.retryable = runner.haltResult.retryable && __self.__retryable; } return runner.haltResult; }
   } catch (__error) {
     if (__error instanceof RestoreSignal) {

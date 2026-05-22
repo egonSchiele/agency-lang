@@ -405,7 +405,11 @@ export class Runner {
   async hook(
     id: number,
     hookName: CallbackName,
-    data: Record<string, unknown>,
+    // Hook payload type varies per hook — most hooks pass an object
+    // shape, but onEmit forwards whatever value `emit(...)` was called
+    // with (string, number, custom object, etc.). Use `unknown` so the
+    // generated TypeScript compiles for every hook payload shape.
+    data: unknown,
   ): Promise<void> {
     if (this.shouldSkip()) return;
     if (this.getCounter() > id) return;

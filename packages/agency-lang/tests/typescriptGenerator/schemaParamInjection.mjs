@@ -216,7 +216,6 @@ if (__ctx._pendingArgOverrides) {
       isBuiltin: false,
       moduleId: "schemaParamInjection.agency"
     });
-    if (runner.halted) { if (isFailure(runner.haltResult)) { runner.haltResult.retryable = runner.haltResult.retryable && __self.__retryable; } return runner.haltResult; }
     await runner.step(1, async (runner) => {
 __functionCompleted = true;
 runner.halt(await __callMethod(__stack.args.s, "parseJSON", {
@@ -319,7 +318,6 @@ if (__ctx._pendingArgOverrides) {
       isBuiltin: false,
       moduleId: "schemaParamInjection.agency"
     });
-    if (runner.halted) { if (isFailure(runner.haltResult)) { runner.haltResult.retryable = runner.haltResult.retryable && __self.__retryable; } return runner.haltResult; }
     await runner.step(1, async (runner) => {
 //  Return-position injection: outer return type provides the hint.
     });
@@ -399,7 +397,6 @@ let __functionCompleted = false;
     await runner.hook(0, "onNodeStart", {
       nodeName: "main"
     });
-    if (runner.halted) return runner.haltResult;
     await runner.step(1, async (runner) => {
 //  LHS-annotation injection — Schema<any> inside parseValue receives
 //  z.array(z.number()) synthesized from `number[]`.

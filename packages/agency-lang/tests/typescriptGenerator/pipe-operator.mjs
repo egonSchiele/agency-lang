@@ -205,7 +205,6 @@ if (__ctx._pendingArgOverrides) {
       isBuiltin: false,
       moduleId: "pipe-operator.agency"
     });
-    if (runner.halted) { if (isFailure(runner.haltResult)) { runner.haltResult.retryable = runner.haltResult.retryable && __self.__retryable; } return runner.haltResult; }
     await runner.step(1, async (runner) => {
 __functionCompleted = true;
 runner.halt(__stack.args.x * 2)
@@ -309,7 +308,6 @@ if (__ctx._pendingArgOverrides) {
       isBuiltin: false,
       moduleId: "pipe-operator.agency"
     });
-    if (runner.halted) { if (isFailure(runner.haltResult)) { runner.haltResult.retryable = runner.haltResult.retryable && __self.__retryable; } return runner.haltResult; }
     await runner.step(1, async (runner) => {
 __functionCompleted = true;
 runner.halt(__stack.args.a * __stack.args.b)
@@ -418,7 +416,6 @@ if (__ctx._pendingArgOverrides) {
       isBuiltin: false,
       moduleId: "pipe-operator.agency"
     });
-    if (runner.halted) { if (isFailure(runner.haltResult)) { runner.haltResult.retryable = runner.haltResult.retryable && __self.__retryable; } return runner.haltResult; }
     await runner.ifElse(1, [
 
   {
@@ -509,7 +506,6 @@ let __functionCompleted = false;
     await runner.hook(0, "onNodeStart", {
       nodeName: "main"
     });
-    if (runner.halted) return runner.haltResult;
     await runner.step(1, async (runner) => {
 __stack.locals.__pipe_0 = await success(5);
     });

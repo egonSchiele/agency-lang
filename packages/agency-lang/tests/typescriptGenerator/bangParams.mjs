@@ -210,7 +210,6 @@ if (__ctx._pendingArgOverrides) {
       isBuiltin: false,
       moduleId: "bangParams.agency"
     });
-    if (runner.halted) { if (isFailure(runner.haltResult)) { runner.haltResult.retryable = runner.haltResult.retryable && __self.__retryable; } return runner.haltResult; }
     await runner.step(1, async (runner) => {
 const __funcResult = await __call(print, {
         type: "positional",
@@ -297,7 +296,6 @@ let __functionCompleted = false;
     await runner.hook(0, "onNodeStart", {
       nodeName: "main"
     });
-    if (runner.halted) return runner.haltResult;
     await runner.step(1, async (runner) => {
 __stack.locals.result = await __call(process, {
         type: "positional",

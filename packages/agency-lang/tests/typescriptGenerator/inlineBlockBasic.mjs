@@ -205,7 +205,6 @@ if (__ctx._pendingArgOverrides) {
       isBuiltin: false,
       moduleId: "inlineBlockBasic.agency"
     });
-    if (runner.halted) { if (isFailure(runner.haltResult)) { runner.haltResult.retryable = runner.haltResult.retryable && __self.__retryable; } return runner.haltResult; }
     await runner.step(1, async (runner) => {
 __stack.locals.a = await __call(__stack.args.block, {
         type: "positional",
@@ -307,7 +306,6 @@ let __functionCompleted = false;
     await runner.hook(0, "onNodeStart", {
       nodeName: "main"
     });
-    if (runner.halted) return runner.haltResult;
     await runner.step(1, async (runner) => {
 __stack.locals.results = await __call(twice, {
         type: "positional",

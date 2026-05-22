@@ -205,7 +205,6 @@ if (__ctx._pendingArgOverrides) {
       isBuiltin: false,
       moduleId: "functionRef.agency"
     });
-    if (runner.halted) { if (isFailure(runner.haltResult)) { runner.haltResult.retryable = runner.haltResult.retryable && __self.__retryable; } return runner.haltResult; }
     await runner.step(1, async (runner) => {
 __functionCompleted = true;
 runner.halt(`hi ${__stack.args.name}`)
@@ -303,7 +302,6 @@ if (__ctx._pendingArgOverrides) {
       isBuiltin: false,
       moduleId: "functionRef.agency"
     });
-    if (runner.halted) { if (isFailure(runner.haltResult)) { runner.haltResult.retryable = runner.haltResult.retryable && __self.__retryable; } return runner.haltResult; }
     await runner.step(1, async (runner) => {
 __functionCompleted = true;
 runner.halt(__stack.args.x * 2)
@@ -407,7 +405,6 @@ if (__ctx._pendingArgOverrides) {
       isBuiltin: false,
       moduleId: "functionRef.agency"
     });
-    if (runner.halted) { if (isFailure(runner.haltResult)) { runner.haltResult.retryable = runner.haltResult.retryable && __self.__retryable; } return runner.haltResult; }
     await runner.step(1, async (runner) => {
 __stack.locals.result = [];
     });
@@ -506,7 +503,6 @@ let __functionCompleted = false;
     await runner.hook(0, "onNodeStart", {
       nodeName: "main"
     });
-    if (runner.halted) return runner.haltResult;
     await runner.step(1, async (runner) => {
 __stack.locals.fn = greet;
     });

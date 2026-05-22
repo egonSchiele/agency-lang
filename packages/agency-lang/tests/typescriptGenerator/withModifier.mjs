@@ -198,7 +198,6 @@ if (__ctx._pendingArgOverrides) {
       isBuiltin: false,
       moduleId: "withModifier.agency"
     });
-    if (runner.halted) { if (isFailure(runner.haltResult)) { runner.haltResult.retryable = runner.haltResult.retryable && __self.__retryable; } return runner.haltResult; }
     await runner.step(1, async (runner) => {
 // Resume path: check for a response by interruptId
 const __response = __ctx.getInterruptResponse(__self.__interruptId_1);
@@ -301,7 +300,6 @@ let __functionCompleted = false;
     await runner.hook(0, "onNodeStart", {
       nodeName: "main"
     });
-    if (runner.halted) return runner.haltResult;
     await runner.handle(1, async (__data: any) => approve(), async (runner) => {
 await runner.step(0, async (runner) => {
 __stack.locals.result = await __call(foo, {

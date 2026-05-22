@@ -179,7 +179,6 @@ let __functionCompleted = false;
     await runner.hook(0, "onNodeStart", {
       nodeName: "foo"
     });
-    if (runner.halted) return runner.haltResult;
     await runner.step(1, async (runner) => {
 const __funcResult = await __call(print, {
         type: "positional",

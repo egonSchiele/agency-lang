@@ -211,7 +211,6 @@ if (__ctx._pendingArgOverrides) {
       isBuiltin: false,
       moduleId: "interrupt-2-deep-in-function.agency"
     });
-    if (runner.halted) { if (isFailure(runner.haltResult)) { runner.haltResult.retryable = runner.haltResult.retryable && __self.__retryable; } return runner.haltResult; }
     await runner.step(1, async (runner) => {
 // Resume path: check for a response by interruptId
 const __response = __ctx.getInterruptResponse(__self.__interruptId_1);
@@ -361,7 +360,6 @@ if (__ctx._pendingArgOverrides) {
       isBuiltin: false,
       moduleId: "interrupt-2-deep-in-function.agency"
     });
-    if (runner.halted) { if (isFailure(runner.haltResult)) { runner.haltResult.retryable = runner.haltResult.retryable && __self.__retryable; } return runner.haltResult; }
     await runner.step(1, async (runner) => {
 await __call(print, {
         type: "positional",
@@ -485,7 +483,6 @@ let __functionCompleted = false;
     await runner.hook(0, "onNodeStart", {
       nodeName: "sayHi"
     });
-    if (runner.halted) return runner.haltResult;
     await runner.step(1, async (runner) => {
 const __funcResult = await __call(print, {
         type: "positional",

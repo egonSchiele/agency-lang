@@ -182,7 +182,6 @@ let __functionCompleted = false;
     await runner.hook(0, "onNodeStart", {
       nodeName: "analyzeData"
     });
-    if (runner.halted) return runner.haltResult;
     await runner.step(1, async (runner) => {
 __self.__removedTools = __self.__removedTools || [];
 __stack.locals.result = await runPrompt({

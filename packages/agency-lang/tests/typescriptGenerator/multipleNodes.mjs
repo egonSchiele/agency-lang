@@ -179,7 +179,6 @@ let __functionCompleted = false;
     await runner.hook(0, "onNodeStart", {
       nodeName: "greet"
     });
-    if (runner.halted) return runner.haltResult;
     await runner.step(1, async (runner) => {
 __self.__removedTools = __self.__removedTools || [];
 __stack.locals.greeting = await runPrompt({
@@ -258,7 +257,6 @@ let __functionCompleted = false;
     await runner.hook(0, "onNodeStart", {
       nodeName: "processGreeting"
     });
-    if (runner.halted) return runner.haltResult;
     await runner.step(1, async (runner) => {
 __self.__removedTools = __self.__removedTools || [];
 __stack.locals.result = await runPrompt({
@@ -340,7 +338,6 @@ let __functionCompleted = false;
     await runner.hook(0, "onNodeStart", {
       nodeName: "main"
     });
-    if (runner.halted) return runner.haltResult;
     await runner.step(1, async (runner) => {
 __stateStack.pop()
 __functionCompleted = true;

@@ -213,7 +213,6 @@ if (__ctx._pendingArgOverrides) {
       isBuiltin: false,
       moduleId: "euler-0005.agency"
     });
-    if (runner.halted) { if (isFailure(runner.haltResult)) { runner.haltResult.retryable = runner.haltResult.retryable && __self.__retryable; } return runner.haltResult; }
     await runner.step(1, async (runner) => {
 __stack.locals.x = __stack.args.a;
     });
@@ -339,7 +338,6 @@ if (__ctx._pendingArgOverrides) {
       isBuiltin: false,
       moduleId: "euler-0005.agency"
     });
-    if (runner.halted) { if (isFailure(runner.haltResult)) { runner.haltResult.retryable = runner.haltResult.retryable && __self.__retryable; } return runner.haltResult; }
     await runner.step(1, async (runner) => {
 __functionCompleted = true;
 runner.halt(__stack.args.a / await __call(gcd, {
@@ -423,7 +421,6 @@ let __functionCompleted = false;
     await runner.hook(0, "onNodeStart", {
       nodeName: "main"
     });
-    if (runner.halted) return runner.haltResult;
     await runner.step(1, async (runner) => {
 __stack.locals.result = 1;
     });

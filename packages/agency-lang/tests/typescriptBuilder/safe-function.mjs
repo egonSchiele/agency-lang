@@ -207,7 +207,6 @@ if (__ctx._pendingArgOverrides) {
       isBuiltin: false,
       moduleId: "safe-function.agency"
     });
-    if (runner.halted) { if (isFailure(runner.haltResult)) { runner.haltResult.retryable = runner.haltResult.retryable && __self.__retryable; } return runner.haltResult; }
     await runner.step(1, async (runner) => {
 __functionCompleted = true;
 runner.halt(await __call(lookupItem, {
@@ -312,7 +311,6 @@ if (__ctx._pendingArgOverrides) {
       isBuiltin: false,
       moduleId: "safe-function.agency"
     });
-    if (runner.halted) { if (isFailure(runner.haltResult)) { runner.haltResult.retryable = runner.haltResult.retryable && __self.__retryable; } return runner.haltResult; }
     await runner.step(1, async (runner) => {
 __self.__retryable = false;
 const __funcResult = await __call(saveItem, {
@@ -407,7 +405,6 @@ let __functionCompleted = false;
     await runner.hook(0, "onNodeStart", {
       nodeName: "main"
     });
-    if (runner.halted) return runner.haltResult;
     await runner.step(1, async (runner) => {
 __self.__removedTools = __self.__removedTools || [];
 __stack.locals.result = await runPrompt({

@@ -502,12 +502,10 @@ export async function runPrompt(args: {
           }
 
           const branchKey = `tool_${toolCall.id}`;
-          const existing = stack.getBranch(branchKey);
-          // Cached-result short-circuit (resume case): on a prior pass
-          // this tool ran to completion; its toolMessage is already in
-          // the restored `messagesJSON`. Skip without re-invoking.
-          if (existing?.result !== undefined) return;
-
+          // Note: a "cached result" short-circuit used to live here for
+          // resume after a sibling interrupt; idempotency is now handled
+          // uniformly by completedSteps inside b.step (start/invoke/end
+          // each get marked done on success and skipped on resume).
           const branchStack = stack.getOrCreateBranch(branchKey).stack;
           const namedArgs = { ...toolCall.arguments };
 

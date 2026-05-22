@@ -1,0 +1,20 @@
+// Bare callback("onX") { body } form — no `as data` clause. Regression
+// guard for the preprocessor's parameter-synthesis fix: without a
+// synthesized `data` param the runtime would pass event data into the
+// AgencyFunction's `__state` slot and the body would never observe
+// that the hook fired.
+
+let fired: string = ""
+
+callback("onFunctionStart") {
+  fired = fired + "x,"
+}
+
+def helper(): string {
+  return "h"
+}
+
+node main(): string {
+  helper()
+  return fired
+}

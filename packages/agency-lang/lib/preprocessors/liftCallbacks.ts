@@ -1,6 +1,7 @@
 import type { AgencyNode, AgencyProgram, Expression } from "@/types.js";
 import type { FunctionCall, FunctionDefinition } from "@/types/function.js";
 import type { VariableNameLiteral } from "@/types/literals.js";
+import { walkNodes } from "@/utils/node.js";
 
 /**
  * Lifts `callback("onX") as data { ... body ... }` (or the bare `{ ... }`
@@ -51,7 +52,40 @@ export function liftCallbackBlocks(program: AgencyProgram): AgencyProgram {
     newNodes.push(transformTopLevel(node, lifted));
   }
 
-  return { ...program, nodes: [...lifted, ...newNodes] };
+  const result: AgencyProgram = { ...program, nodes: [...lifted, ...newNodes] };
+  assertNoUnliftedCallbackBlocks(result);
+  return result;
+}
+
+/**
+ * After lifting, scan the whole program for any `callback("...") { ... }`
+ * call that still carries a `block`. These can only come from positions
+ * the statement-oriented transformer doesn't descend into — currently
+ * non-statement expression positions like a function argument
+ * (`outer(callback("onX") { ... })`), a binop operand, or an array/object
+ * literal element. `callback()` returns nothing, so these uses don't make
+ * semantic sense; rather than silently emit an inline `__AgencyFunction.create({ fn: ... })`
+ * closure that would re-introduce the resume-bug this whole module
+ * exists to fix, fail loudly with a clear diagnostic pointing at the
+ * source location.
+ */
+function assertNoUnliftedCallbackBlocks(program: AgencyProgram): void {
+  for (const { node } of walkNodes(program.nodes)) {
+    if (
+      node.type === "functionCall" &&
+      node.functionName === "callback" &&
+      node.block
+    ) {
+      const loc = node.loc
+        ? ` at line ${node.loc.line}, col ${node.loc.col}`
+        : "";
+      throw new Error(
+        `callback("...") { ... } block is only supported at statement ` +
+          `position${loc}. Bind to a let/const first, or use the named-function ` +
+          `form: callback("...", myFn).`,
+      );
+    }
+  }
 }
 
 /**
@@ -185,14 +219,32 @@ function transformFunctionCall(
   block.body = transformBody(block.body, scopeName, lifted);
 
   const name = nextName(scopeName);
+  // Runtime hook dispatch always invokes the callback's AgencyFunction
+  // via `fn.invoke({ type: "positional", args: [eventData] })`
+  // (see `invokeCallback` in lib/runtime/hooks.ts), which lowers to
+  // `__cb_*_impl(eventData, __state)` at the JS level. If we declare
+  // zero parameters here the event data lands in the synthesized
+  // `__state` slot instead — silently corrupting state for any callback
+  // body that uses the bare `callback("onX") { ... }` form (no
+  // `as data`). Synthesize a single `data: any` parameter when the
+  // source omits it; user code can't reference it (the name isn't in
+  // scope without `as data`), but the calling convention stays
+  // consistent with the named-fn form.
+  const parameters = block.params.length > 0
+    ? block.params.map((p) => ({
+        type: "functionParameter" as const,
+        name: p.name,
+        typeHint: { type: "primitiveType" as const, value: "any" as const },
+      }))
+    : [{
+        type: "functionParameter" as const,
+        name: "data",
+        typeHint: { type: "primitiveType" as const, value: "any" as const },
+      }];
   const liftedDef: FunctionDefinition = {
     type: "function",
     functionName: name,
-    parameters: block.params.map((p) => ({
-      type: "functionParameter",
-      name: p.name,
-      typeHint: { type: "primitiveType", value: "any" },
-    })),
+    parameters,
     body: block.body,
     returnType: null,
     loc: block.loc ?? call.loc,

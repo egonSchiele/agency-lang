@@ -139,12 +139,27 @@ describe("liftCallbackBlocks", () => {
     expect(findFn(out, "__cb_wrap_0")).toBeDefined();
   });
 
-  it("handles a bare-body callback form (no `as` clause)", () => {
-    // Verify parser shape first — block.params may be [] for bare form.
+  it("throws if a callback block survives in a non-statement (expression) position", () => {
+    // `print(...)` takes any expression. If a `callback("...") { ... }` block
+    // sneaks in as a function argument the statement-oriented transformer
+    // won't descend into it; the post-pass assertion should catch it
+    // rather than silently emit a closure that would re-introduce the
+    // resume bug.
+    expect(() =>
+      lift(`node main() {\n  print(callback("onNodeStart") { 1 })\n}\n`),
+    ).toThrow(/statement position/);
+  });
+
+  it("synthesizes a `data` param for the bare-body callback form (no `as` clause)", () => {
+    // The runtime hook dispatch always invokes the lifted AgencyFunction
+    // with the event data as a positional arg; without a declared
+    // parameter that data would land in the synthesized `__state` slot
+    // and silently corrupt state. The preprocessor must therefore
+    // synthesize a `data: any` param even when the source omits `as`.
     const out = lift(`callback("onNodeStart") { print("hi") }\n`);
     const lifted = findFn(out, "__cb_top_0");
     expect(lifted).toBeDefined();
-    // No params → empty function-parameter array.
-    expect(lifted!.parameters).toHaveLength(0);
+    expect(lifted!.parameters).toHaveLength(1);
+    expect(lifted!.parameters[0].name).toBe("data");
   });
 });

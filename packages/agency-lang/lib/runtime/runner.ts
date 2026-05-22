@@ -382,14 +382,21 @@ export class Runner {
    * onEmit, onNodeStart, onNodeEnd) as a resumable substep.
    *
    * If any registered callback for `hookName` halts with `Interrupt[]`,
-   * we stamp a pinned checkpoint at this substep's path and halt the
-   * runner. The interrupts are surfaced via `runner.haltResult` so the
-   * surrounding generated function returns them up the stack. The
-   * substep counter is NOT advanced on halt — on resume this method
-   * re-enters and re-fires the hook, at which point the user's response
-   * (keyed by each Interrupt's interruptId) is consulted by the callback
-   * body's saved `__interruptId_N` local, exactly like any other
-   * interrupt resume.
+   * we halt this runner so the surrounding generated function returns
+   * the interrupts up the stack via `runner.haltResult`. The substep
+   * counter is NOT advanced on halt, so on resume the hook re-fires and
+   * the callback's frame (preserved in the callback's own checkpoint
+   * stamped at its interrupt site) is re-entered in deserialize mode —
+   * its substep counters point straight at the interrupt step, which
+   * finds the user's response keyed by the saved __interruptId_N and
+   * completes without re-running earlier substeps.
+   *
+   * We deliberately do NOT stamp a separate checkpoint here: the
+   * callback's interrupt site already stamps one that captures the full
+   * stack including the callback frame with its substep counters and
+   * saved interrupt ids. `respondToInterrupts` reads `intr.checkpoint`
+   * first, so the callback-stamped checkpoint is what gets used on
+   * resume.
    *
    * If the hook returns no interrupts the substep counter advances, so
    * subsequent resumes skip the hook (no duplicate analytics events
@@ -415,22 +422,6 @@ export class Runner {
         data: data as CallbackMap[keyof CallbackMap],
       });
       if (hasInterrupts(result)) {
-        // Codegen-emitted hook sites always run inside a generated
-        // function/node where the Runner is constructed with a `stack`
-        // opt. Without it we cannot stamp a checkpoint that the user
-        // can later resume from.
-        if (!this.stack) {
-          throw new Error(
-            `Runner.hook(${hookName}) requires the runner to be constructed ` +
-              `with a 'stack' opt so the hook-interrupt checkpoint can be stamped`,
-          );
-        }
-        const cpId = this.ctx.checkpoints.createPinned(
-          this.stack,
-          this.ctx,
-          { ...this.getCheckpointInfo(), label: null },
-        );
-        for (const intr of result) intr.checkpointId = cpId;
         if (this.nodeContext) {
           this.halt({ ...this.state, data: result });
         } else {

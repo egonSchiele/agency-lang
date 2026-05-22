@@ -568,7 +568,7 @@ describe("Runner", () => {
       expect(frame.step).toBe(5);
     });
 
-    it("halt on interrupts: stamps checkpoint, sets haltResult, leaves counter unchanged", async () => {
+    it("halt on interrupts: halts with the interrupt batch and leaves counter unchanged", async () => {
       const frame = makeFrame();
       const ctx = makeMockCtx();
       const intr: any = { type: "interrupt", interruptId: "i-1" };
@@ -582,9 +582,10 @@ describe("Runner", () => {
       expect(runner.halted).toBe(true);
       expect(Array.isArray(runner.haltResult)).toBe(true);
       expect(runner.haltResult[0]).toBe(intr);
-      // checkpointId must be stamped onto every returned interrupt so
-      // the surrounding generated function can propagate it.
-      expect(typeof intr.checkpointId).toBe("number");
+      // No checkpoint is stamped here — the callback's interrupt site
+      // already stamped one that captures the callback frame and its
+      // saved __interruptId_N. respondToInterrupts reads intr.checkpoint
+      // first, so the callback-stamped checkpoint is what gets used.
       // Counter must NOT advance — resume must re-enter the hook so the
       // callback body can read its saved __interruptId_N local.
       expect(frame.step).toBe(0);

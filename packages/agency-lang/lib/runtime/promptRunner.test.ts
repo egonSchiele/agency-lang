@@ -52,11 +52,11 @@ describe("PromptRunner.step", () => {
     let ran = 0;
     await runner.step("a", async () => { ran++; });
     expect(ran).toBe(1);
-    expect(self.runnerState.completedSteps.a).toBe(true);
+    expect(self.runnerState.completedSteps.includes("a")).toBe(true);
   });
 
   it("skips a body whose key is already completed (resume case)", async () => {
-    const self: any = { runnerState: { completedSteps: { a: true } } };
+    const self: any = { runnerState: { completedSteps: ["a"] } };
     const { runner } = makeRunner({ self });
     let ran = 0;
     await runner.step("a", async () => { ran++; });
@@ -78,9 +78,9 @@ describe("PromptRunner.step", () => {
         }
       });
     await expect(tryStep()).rejects.toBeInstanceOf(PromptBailout);
-    expect(self.runnerState.completedSteps.a).toBeUndefined();
+    expect(self.runnerState.completedSteps.includes("a")).toBe(false);
     await tryStep();
-    expect(self.runnerState.completedSteps.a).toBe(true);
+    expect(self.runnerState.completedSteps.includes("a")).toBe(true);
   });
 
   it("sequential steps: second bails, first key stays marked completed", async () => {
@@ -89,12 +89,12 @@ describe("PromptRunner.step", () => {
     // on resume they are skipped (avoiding duplicate LLM calls, etc.).
     const { runner, self } = makeRunner();
     await runner.step("a", async () => {});
-    expect(self.runnerState.completedSteps.a).toBe(true);
+    expect(self.runnerState.completedSteps.includes("a")).toBe(true);
     await expect(
       runner.step("b", async () => [fakeInterrupt()] as any),
     ).rejects.toBeInstanceOf(PromptBailout);
-    expect(self.runnerState.completedSteps.a).toBe(true);
-    expect(self.runnerState.completedSteps.b).toBeUndefined();
+    expect(self.runnerState.completedSteps.includes("a")).toBe(true);
+    expect(self.runnerState.completedSteps.includes("b")).toBe(false);
   });
 
   it("step body returning [] is treated as 'no interrupts' and marks completed", async () => {
@@ -103,7 +103,7 @@ describe("PromptRunner.step", () => {
     // empty interrupt array would silently never re-run.
     const { runner, self } = makeRunner();
     await runner.step("a", async () => [] as any);
-    expect(self.runnerState.completedSteps.a).toBe(true);
+    expect(self.runnerState.completedSteps.includes("a")).toBe(true);
   });
 });
 
@@ -137,7 +137,7 @@ describe("PromptRunner.step interrupt handling", () => {
     await expect(
       runner.step("a", async () => [fakeInterrupt()] as any),
     ).rejects.toBeInstanceOf(PromptBailout);
-    expect(self.runnerState.completedSteps.a).toBeUndefined();
+    expect(self.runnerState.completedSteps.includes("a")).toBe(false);
   });
 
   it("snapshots messages and stamps a checkpoint with the per-key stepPath", async () => {
@@ -276,7 +276,7 @@ describe("PromptRunner.parallel", () => {
   });
 
   it("skips a branch step whose key was already completed on a prior pass", async () => {
-    const self: any = { runnerState: { completedSteps: { "a.s1": true } } };
+    const self: any = { runnerState: { completedSteps: ["a.s1"] } };
     const { runner } = makeRunner({ self });
     let ran = 0;
     await runner.parallel("group", ["a"], async (item, b) => {
@@ -341,8 +341,8 @@ describe("PromptRunner.parallel", () => {
     expect(caught).not.toBeNull();
     expect(caught!.interrupts.length).toBe(1);
     expect((caught!.interrupts[0] as any).kind).toBe("a");
-    expect(self.runnerState.completedSteps["a.s1"]).toBeUndefined();
-    expect(self.runnerState.completedSteps["b.s1"]).toBe(true);
+    expect(self.runnerState.completedSteps.includes("a.s1")).toBe(false);
+    expect(self.runnerState.completedSteps.includes("b.s1")).toBe(true);
   });
 
   it("parallel snapshots messages on merged bailout", async () => {
@@ -401,7 +401,7 @@ describe("PromptRunner.parallel", () => {
     // void this time; the bailout does not fire; A's key is now marked
     // and B's step body is never re-entered.
     const self: any = {
-      runnerState: { completedSteps: { "b.s1": true } },
+      runnerState: { completedSteps: ["b.s1"] },
     };
     const { runner } = makeRunner({ self });
     let aRan = 0;
@@ -414,6 +414,6 @@ describe("PromptRunner.parallel", () => {
     });
     expect(aRan).toBe(1);
     expect(bRan).toBe(0);
-    expect(self.runnerState.completedSteps["a.s1"]).toBe(true);
+    expect(self.runnerState.completedSteps.includes("a.s1")).toBe(true);
   });
 });

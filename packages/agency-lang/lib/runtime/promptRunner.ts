@@ -22,10 +22,12 @@ export class PromptBailout extends Error {
 /**
  * Frame-backed completion tracking. Lives on `self.runnerState` so it
  * survives checkpoint/restore the same way `self.messagesJSON` does:
- * the frame's `locals` object is what gets serialized.
+ * the frame's `locals` object is what gets serialized. An array (used
+ * as a set) keeps the format JSON-safe and matches the project's
+ * "arrays instead of sets" convention.
  */
 export type RunnerState = {
-  completedSteps: Record<string, true>;
+  completedSteps: string[];
 };
 
 export type PromptRunnerOpts = {
@@ -51,7 +53,7 @@ export type PromptRunnerOpts = {
  */
 export class PromptRunner {
   constructor(private opts: PromptRunnerOpts) {
-    this.opts.self.runnerState ??= { completedSteps: {} };
+    this.opts.self.runnerState ??= { completedSteps: [] };
   }
 
   /**
@@ -59,8 +61,9 @@ export class PromptRunner {
    *
    * If `key` is already recorded as completed (resume case), this is a
    * no-op. Otherwise the body runs:
-   *   - if it returns `Interrupt[]`, snapshot messages, stamp a pinned
-   *     checkpoint, attach the checkpoint id to every interrupt, and
+   *   - if it returns `Interrupt[]`, snapshot messages, stamp a
+   *     checkpoint (non-pinned, matching `Runner`'s interrupt
+   *     checkpoints), attach the checkpoint id to every interrupt, and
    *     throw `PromptBailout` so `runPrompt` can return the batch up
    *     the stack. The key is NOT marked completed — on resume, the
    *     step re-enters, the body re-runs, and the saved
@@ -78,7 +81,7 @@ export class PromptRunner {
     key: string,
     body: () => Promise<Interrupt[] | void>,
   ): Promise<void> {
-    if (this.opts.self.runnerState.completedSteps[key]) return;
+    if (this.opts.self.runnerState.completedSteps.includes(key)) return;
     const result = await body();
     if (result && hasInterrupts(result)) {
       this.opts.self.messagesJSON = this.opts.snapshotMessages();
@@ -109,7 +112,7 @@ export class PromptRunner {
       });
       throw new PromptBailout(result);
     }
-    this.opts.self.runnerState.completedSteps[key] = true;
+    this.opts.self.runnerState.completedSteps.push(key);
   }
 
   /**
@@ -120,7 +123,7 @@ export class PromptRunner {
    * shared checkpoint (mirrors {@link runForkAll} semantics).
    *
    * If any branch's `step` collected interrupts, snapshot messages,
-   * stamp ONE pinned checkpoint at `${checkpointInfo.stepPath}/${keyPrefix}`,
+   * stamp ONE checkpoint at `${checkpointInfo.stepPath}/${keyPrefix}`,
    * attach it to every collected interrupt, and throw `PromptBailout` so
    * `runPrompt` returns the merged batch up the stack.
    *
@@ -197,7 +200,7 @@ export class BranchRunner {
   public interrupts: Interrupt[] | null = null;
 
   constructor(private self: any) {
-    this.self.runnerState ??= { completedSteps: {} };
+    this.self.runnerState ??= { completedSteps: [] };
   }
 
   async step(
@@ -205,12 +208,12 @@ export class BranchRunner {
     body: () => Promise<Interrupt[] | void>,
   ): Promise<void> {
     if (this.interrupts) return;
-    if (this.self.runnerState.completedSteps[key]) return;
+    if (this.self.runnerState.completedSteps.includes(key)) return;
     const result = await body();
     if (result && hasInterrupts(result)) {
       this.interrupts = result;
       return;
     }
-    this.self.runnerState.completedSteps[key] = true;
+    this.self.runnerState.completedSteps.push(key);
   }
 }

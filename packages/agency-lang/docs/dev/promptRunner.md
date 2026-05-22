@@ -12,7 +12,7 @@ It is intentionally separate from `Runner` (the generated-code step engine in [l
 A `step()` body returns either `void` (happy path) or `Interrupt[]` (a callback inside the body collected interrupts and wants to halt). When the body returns interrupts, `PromptRunner.step`:
 
 1. Snapshots the current messages via the `snapshotMessages` callback supplied at construction time. This snapshot lands on `self.messagesJSON` so the next `runPrompt` invocation can restore it.
-2. Creates a pinned checkpoint at `${checkpointInfo.stepPath}/${key}`. The per-key suffix matters: multiple `step()` calls in one `runPrompt` would otherwise collide on the same `stepPath`.
+2. Creates a checkpoint at `${checkpointInfo.stepPath}/${key}` via `ctx.checkpoints.create(...)` (non-pinned, matching `Runner`'s own interrupt checkpoints in `lib/runtime/runner.ts`). The per-key suffix matters: multiple `step()` calls in one `runPrompt` would otherwise collide on the same `stepPath`.
 3. Attaches the checkpoint to every interrupt in the batch and emits a `checkpointCreated` statelog event.
 4. Throws `PromptBailout`, which is caught at the top of `runPrompt` and converted to a return value (the interrupts).
 
@@ -31,7 +31,7 @@ Callback bodies themselves also re-run from the top on resume (the `interrupt()`
 
 ## `parallel` and merged interrupts
 
-`PromptRunner.parallel(keyPrefix, items, branchFn)` runs `branchFn` for every item concurrently via `Promise.all`. Each branch receives a `BranchRunner` whose `step()` **collects** interrupts on `b.interrupts` rather than throwing. After all branches settle, `parallel` merges their interrupts (if any) into one `PromptBailout` and stamps a single pinned checkpoint at `${checkpointInfo.stepPath}/${keyPrefix}`. The semantic mirrors `runForkAll` in `docs/dev/concurrent-interrupts.md`: siblings always run to completion so interrupts surface in one batch.
+`PromptRunner.parallel(keyPrefix, items, branchFn)` runs `branchFn` for every item concurrently via `Promise.all`. Each branch receives a `BranchRunner` whose `step()` **collects** interrupts on `b.interrupts` rather than throwing. After all branches settle, `parallel` merges their interrupts (if any) into one `PromptBailout` and stamps a single checkpoint at `${checkpointInfo.stepPath}/${keyPrefix}`. The semantic mirrors `runForkAll` in `docs/dev/concurrent-interrupts.md`: siblings always run to completion so interrupts surface in one batch.
 
 Inside a `branchFn`, use `b.step(...)` (collects) — not `pr.step(...)` (throws). A throw inside `Promise.all` propagates out of `parallel` uncaught.
 

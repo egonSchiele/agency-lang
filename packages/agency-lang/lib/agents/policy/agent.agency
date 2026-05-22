@@ -59,7 +59,6 @@ def addToPolicy(
     action: action
   })
 
-  // @tc-ignore
   return success(currentPolicy)
 }
 

@@ -564,6 +564,7 @@ export function createProgram(deps: CliDependencies = {}): Command {
   program
     .command("typecheck")
     .alias("tc")
+    .alias("check")
     .description("Type check .agency file(s) (reads from stdin if no input)")
     .argument("[inputs...]", "Paths to .agency input files")
     .option("--strict", "Enable strict types (untyped variables are errors)")

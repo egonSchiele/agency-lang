@@ -179,6 +179,17 @@ export function declareVariable(
     return;
   }
 
+  // Property / index writes (`obj.field = x`, `votes["k"] = v`) are
+  // mutations, never declarations. Falling through to the auto-declare
+  // branch below would invent a fresh binding shadowing the real
+  // variable — particularly bad for module-level lets, which aren't
+  // visible in function scopes today: `currentPolicy[k] = []` inside a
+  // function would silently rebind `currentPolicy` to `any[]`, and
+  // subsequent `success(currentPolicy)` would infer `Result<any[], any>`
+  // instead of `Result<Policy, …>`. Skip the declare; if the variable
+  // truly is undefined, the undefined-variable diagnostic surfaces it.
+  if (node.accessChain) return;
+
   if (ctx.config.typechecker?.strictTypes) {
     ctx.errors.push({
       message: `Variable '${node.variableName}' has no type annotation (strict mode).`,

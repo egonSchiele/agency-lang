@@ -185,19 +185,6 @@ let __functionCompleted = false;
     await __initializeGlobals(__ctx)
   }
   let __funcStartTime: number = performance.now();
-  await callHook({
-    ctx: __ctx,
-    name: "onFunctionStart",
-    data: {
-      functionName: "log",
-      args: {
-        prefix: prefix,
-        messages: messages
-      },
-      isBuiltin: false,
-      moduleId: "variadic.agency"
-    }
-  })
   __stack.args["prefix"] = prefix;
   __stack.args["messages"] = messages;
   __self.__retryable = __self.__retryable ?? true;
@@ -221,7 +208,17 @@ if (__ctx._pendingArgOverrides) {
 }
 
   try {
-    await runner.step(0, async (runner) => {
+    await runner.hook(0, "onFunctionStart", {
+      functionName: "log",
+      args: {
+        prefix: prefix,
+        messages: messages
+      },
+      isBuiltin: false,
+      moduleId: "variadic.agency"
+    });
+    if (runner.halted) { if (isFailure(runner.haltResult)) { runner.haltResult.retryable = runner.haltResult.retryable && __self.__retryable; } return runner.haltResult; }
+    await runner.step(1, async (runner) => {
 const __funcResult = await __call(print, {
         type: "positional",
         args: [__stack.args.prefix, ...__stack.args.messages]
@@ -289,4 +286,4 @@ const log = __AgencyFunction.create({
   exported: false
 }, __toolRegistry);
 export default graph
-export const __sourceMap = {"variadic.agency:log":{"0":{"line":1,"col":2}}};
+export const __sourceMap = {"variadic.agency:log":{"1":{"line":1,"col":2}}};

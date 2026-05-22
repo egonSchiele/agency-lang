@@ -175,19 +175,16 @@ const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
 let __forked;
 let __functionCompleted = false;
-  await callHook({
-    ctx: __ctx,
-    name: "onNodeStart",
-    data: {
-      nodeName: "greet"
-    }
-  })
   const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "graph-node-with-types.agency", scopeName: "greet" });
   if (!__state.isResume) {
     __stack.args["name"] = __state.data.name;
   }
   try {
-    await runner.step(0, async (runner) => {
+    await runner.hook(0, "onNodeStart", {
+      nodeName: "greet"
+    });
+    if (runner.halted) return runner.haltResult;
+    await runner.step(1, async (runner) => {
 __self.__removedTools = __self.__removedTools || [];
 __stack.locals.greeting = await runPrompt({
         ctx: __ctx,
@@ -209,7 +206,7 @@ if (hasInterrupts(__stack.locals.greeting)) {
         return;
       }
     });
-    await runner.step(1, async (runner) => {
+    await runner.step(2, async (runner) => {
 const __funcResult = await __call(print, {
         type: "positional",
         args: [__stack.locals.greeting]
@@ -228,14 +225,11 @@ if (hasInterrupts(__funcResult)) {
       }
     });
     if (runner.halted) return runner.haltResult;
-    await callHook({
-      ctx: __ctx,
-      name: "onNodeEnd",
-      data: {
-        nodeName: "greet",
-        data: undefined
-      }
-    })
+    await runner.hook(3, "onNodeEnd", {
+      nodeName: "greet",
+      data: undefined
+    });
+    if (runner.halted) return runner.haltResult;
     return {
       messages: __threads,
       data: undefined
@@ -267,4 +261,4 @@ export async function greet(name: string, { messages, callbacks }: { messages?: 
 }
 export const __greetNodeParams = ["name"];
 export default graph
-export const __sourceMap = {"graph-node-with-types.agency:greet":{"0":{"line":3,"col":2},"1":{"line":4,"col":2}}};
+export const __sourceMap = {"graph-node-with-types.agency:greet":{"1":{"line":3,"col":2},"2":{"line":4,"col":2}}};

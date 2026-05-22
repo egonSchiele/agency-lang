@@ -198,19 +198,6 @@ let __functionCompleted = false;
     await __initializeGlobals(__ctx)
   }
   let __funcStartTime: number = performance.now();
-  await callHook({
-    ctx: __ctx,
-    name: "onFunctionStart",
-    data: {
-      functionName: "greet",
-      args: {
-        name: name,
-        greeting: greeting
-      },
-      isBuiltin: false,
-      moduleId: "namedArgs.agency"
-    }
-  })
   __stack.args["name"] = name;
   __stack.args["greeting"] = (greeting === __UNSET ? (`Hello`) : (greeting));
   __self.__retryable = __self.__retryable ?? true;
@@ -234,7 +221,17 @@ if (__ctx._pendingArgOverrides) {
 }
 
   try {
-    await runner.step(0, async (runner) => {
+    await runner.hook(0, "onFunctionStart", {
+      functionName: "greet",
+      args: {
+        name: name,
+        greeting: greeting
+      },
+      isBuiltin: false,
+      moduleId: "namedArgs.agency"
+    });
+    if (runner.halted) { if (isFailure(runner.haltResult)) { runner.haltResult.retryable = runner.haltResult.retryable && __self.__retryable; } return runner.haltResult; }
+    await runner.step(1, async (runner) => {
 const __funcResult = await __call(print, {
         type: "positional",
         args: [__stack.args.greeting, __stack.args.name]
@@ -302,4 +299,4 @@ const greet = __AgencyFunction.create({
   exported: false
 }, __toolRegistry);
 export default graph
-export const __sourceMap = {"namedArgs.agency:greet":{"0":{"line":1,"col":2}}};
+export const __sourceMap = {"namedArgs.agency:greet":{"1":{"line":1,"col":2}}};

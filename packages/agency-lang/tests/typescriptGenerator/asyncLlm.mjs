@@ -174,16 +174,13 @@ const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
 let __forked;
 let __functionCompleted = false;
-  await callHook({
-    ctx: __ctx,
-    name: "onNodeStart",
-    data: {
-      nodeName: "main"
-    }
-  })
   const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "asyncLlm.agency", scopeName: "main" });
   try {
-    await runner.step(0, async (runner) => {
+    await runner.hook(0, "onNodeStart", {
+      nodeName: "main"
+    });
+    if (runner.halted) return runner.haltResult;
+    await runner.step(1, async (runner) => {
 __self.__removedTools = __self.__removedTools || [];
 __stack.locals.x = runPrompt({
         ctx: __ctx,
@@ -197,7 +194,7 @@ __stack.locals.x = runPrompt({
       });
 __self.__pendingKey_x = __ctx.pendingPromises.add(__stack.locals.x, (val) => { __stack.locals.x = val; });
     });
-    await runner.step(1, async (runner) => {
+    await runner.step(2, async (runner) => {
 __self.__removedTools = __self.__removedTools || [];
 __stack.locals.y = runPrompt({
         ctx: __ctx,
@@ -211,10 +208,10 @@ __stack.locals.y = runPrompt({
       });
 __self.__pendingKey_y = __ctx.pendingPromises.add(__stack.locals.y, (val) => { __stack.locals.y = val; });
     });
-    await runner.step(2, async (runner) => {
+    await runner.step(3, async (runner) => {
 await __ctx.pendingPromises.awaitPending([__self.__pendingKey_x, __self.__pendingKey_y]);
     });
-    await runner.step(3, async (runner) => {
+    await runner.step(4, async (runner) => {
 runner.halt({
         messages: __threads,
         data: [__stack.locals.x, __stack.locals.y]
@@ -222,14 +219,11 @@ runner.halt({
 return;
     });
     if (runner.halted) return runner.haltResult;
-    await callHook({
-      ctx: __ctx,
-      name: "onNodeEnd",
-      data: {
-        nodeName: "main",
-        data: undefined
-      }
-    })
+    await runner.hook(5, "onNodeEnd", {
+      nodeName: "main",
+      data: undefined
+    });
+    if (runner.halted) return runner.haltResult;
     return {
       messages: __threads,
       data: undefined
@@ -271,4 +265,4 @@ if (__process.argv[1] === fileURLToPath(import.meta.url)) {
   }
 }
 export default graph
-export const __sourceMap = {"asyncLlm.agency:main":{"0":{"line":1,"col":2},"1":{"line":2,"col":2},"3":{"line":3,"col":2}}};
+export const __sourceMap = {"asyncLlm.agency:main":{"1":{"line":1,"col":2},"2":{"line":2,"col":2},"4":{"line":3,"col":2}}};

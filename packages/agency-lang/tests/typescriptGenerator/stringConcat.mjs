@@ -174,16 +174,13 @@ const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
 let __forked;
 let __functionCompleted = false;
-  await callHook({
-    ctx: __ctx,
-    name: "onNodeStart",
-    data: {
-      nodeName: "foo"
-    }
-  })
   const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "stringConcat.agency", scopeName: "foo" });
   try {
-    await runner.step(0, async (runner) => {
+    await runner.hook(0, "onNodeStart", {
+      nodeName: "foo"
+    });
+    if (runner.halted) return runner.haltResult;
+    await runner.step(1, async (runner) => {
 const __funcResult = await __call(print, {
         type: "positional",
         args: [`What is your name?`]
@@ -201,7 +198,7 @@ if (hasInterrupts(__funcResult)) {
         return;
       }
     });
-    await runner.step(1, async (runner) => {
+    await runner.step(2, async (runner) => {
 __stack.locals.name = await __call(input, {
         type: "positional",
         args: [`> `]
@@ -219,7 +216,7 @@ if (hasInterrupts(__stack.locals.name)) {
         return;
       }
     });
-    await runner.step(2, async (runner) => {
+    await runner.step(3, async (runner) => {
 const __funcResult = await __call(print, {
         type: "positional",
         args: [`Hello, ${__stack.locals.name}!`]
@@ -238,14 +235,11 @@ if (hasInterrupts(__funcResult)) {
       }
     });
     if (runner.halted) return runner.haltResult;
-    await callHook({
-      ctx: __ctx,
-      name: "onNodeEnd",
-      data: {
-        nodeName: "foo",
-        data: undefined
-      }
-    })
+    await runner.hook(4, "onNodeEnd", {
+      nodeName: "foo",
+      data: undefined
+    });
+    if (runner.halted) return runner.haltResult;
     return {
       messages: __threads,
       data: undefined
@@ -275,4 +269,4 @@ export async function foo({ messages, callbacks }: { messages?: any; callbacks?:
 }
 export const __fooNodeParams = [];
 export default graph
-export const __sourceMap = {"stringConcat.agency:foo":{"0":{"line":1,"col":2},"1":{"line":2,"col":2},"2":{"line":3,"col":2}}};
+export const __sourceMap = {"stringConcat.agency:foo":{"1":{"line":1,"col":2},"2":{"line":2,"col":2},"3":{"line":3,"col":2}}};

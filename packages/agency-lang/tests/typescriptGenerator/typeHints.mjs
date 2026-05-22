@@ -174,16 +174,13 @@ const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
 let __forked;
 let __functionCompleted = false;
-  await callHook({
-    ctx: __ctx,
-    name: "onNodeStart",
-    data: {
-      nodeName: "main"
-    }
-  })
   const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "typeHints.agency", scopeName: "main" });
   try {
-    await runner.step(0, async (runner) => {
+    await runner.hook(0, "onNodeStart", {
+      nodeName: "main"
+    });
+    if (runner.halted) return runner.haltResult;
+    await runner.step(1, async (runner) => {
 __self.__removedTools = __self.__removedTools || [];
 __stack.locals.count = await runPrompt({
         ctx: __ctx,
@@ -208,7 +205,7 @@ if (hasInterrupts(__stack.locals.count)) {
         return;
       }
     });
-    await runner.step(1, async (runner) => {
+    await runner.step(2, async (runner) => {
 __self.__removedTools = __self.__removedTools || [];
 __stack.locals.message = await runPrompt({
         ctx: __ctx,
@@ -230,7 +227,7 @@ if (hasInterrupts(__stack.locals.message)) {
         return;
       }
     });
-    await runner.step(2, async (runner) => {
+    await runner.step(3, async (runner) => {
 const __funcResult = await __call(print, {
         type: "positional",
         args: [__stack.locals.count]
@@ -248,7 +245,7 @@ if (hasInterrupts(__funcResult)) {
         return;
       }
     });
-    await runner.step(3, async (runner) => {
+    await runner.step(4, async (runner) => {
 const __funcResult = await __call(print, {
         type: "positional",
         args: [__stack.locals.message]
@@ -267,14 +264,11 @@ if (hasInterrupts(__funcResult)) {
       }
     });
     if (runner.halted) return runner.haltResult;
-    await callHook({
-      ctx: __ctx,
-      name: "onNodeEnd",
-      data: {
-        nodeName: "main",
-        data: undefined
-      }
-    })
+    await runner.hook(5, "onNodeEnd", {
+      nodeName: "main",
+      data: undefined
+    });
+    if (runner.halted) return runner.haltResult;
     return {
       messages: __threads,
       data: undefined
@@ -316,4 +310,4 @@ if (__process.argv[1] === fileURLToPath(import.meta.url)) {
   }
 }
 export default graph
-export const __sourceMap = {"typeHints.agency:main":{"0":{"line":1,"col":2},"1":{"line":3,"col":2},"2":{"line":5,"col":2},"3":{"line":6,"col":2}}};
+export const __sourceMap = {"typeHints.agency:main":{"1":{"line":1,"col":2},"2":{"line":3,"col":2},"3":{"line":5,"col":2},"4":{"line":6,"col":2}}};

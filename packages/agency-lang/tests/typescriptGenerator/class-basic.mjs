@@ -192,16 +192,6 @@ if (!__ctx.globals.isInitialized("class-basic.agency")) {
       await __initializeGlobals(__ctx)
     }
 let __funcStartTime: number = performance.now();
-await callHook({
-      ctx: __ctx,
-      name: "onFunctionStart",
-      data: {
-        functionName: "Counter.increment",
-        args: {},
-        isBuiltin: false,
-        moduleId: "class-basic.agency"
-      }
-    })
 __self.__retryable = __self.__retryable ?? true;
 const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "class-basic.agency", scopeName: "Counter.increment" });
 let __resultCheckpointId = -1;
@@ -215,10 +205,17 @@ if (__ctx._pendingArgOverrides) {
 }
 
 try {
-      await runner.step(0, async (runner) => {
+      await runner.hook(0, "onFunctionStart", {
+        functionName: "Counter.increment",
+        args: {},
+        isBuiltin: false,
+        moduleId: "class-basic.agency"
+      });
+      if (runner.halted) { if (isFailure(runner.haltResult)) { runner.haltResult.retryable = runner.haltResult.retryable && __self.__retryable; } return runner.haltResult; }
+      await runner.step(1, async (runner) => {
 this.value = this.value + 1;
       });
-      await runner.step(1, async (runner) => {
+      await runner.step(2, async (runner) => {
 __functionCompleted = true;
 runner.halt(this.value)
 return;
@@ -288,19 +285,16 @@ const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
 let __forked;
 let __functionCompleted = false;
-  await callHook({
-    ctx: __ctx,
-    name: "onNodeStart",
-    data: {
-      nodeName: "main"
-    }
-  })
   const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "class-basic.agency", scopeName: "main" });
   try {
-    await runner.step(0, async (runner) => {
+    await runner.hook(0, "onNodeStart", {
+      nodeName: "main"
+    });
+    if (runner.halted) return runner.haltResult;
+    await runner.step(1, async (runner) => {
 __stack.locals.c = new Counter(0);
     });
-    await runner.step(1, async (runner) => {
+    await runner.step(2, async (runner) => {
 await __callMethod(__stack.locals.c, "increment", {
         type: "positional",
         args: []
@@ -310,7 +304,7 @@ await __callMethod(__stack.locals.c, "increment", {
         stateStack: __stateStack
       })
     });
-    await runner.step(2, async (runner) => {
+    await runner.step(3, async (runner) => {
 runner.halt({
         messages: __threads,
         data: await __callMethod(__stack.locals.c, "increment", {
@@ -325,14 +319,11 @@ runner.halt({
 return;
     });
     if (runner.halted) return runner.haltResult;
-    await callHook({
-      ctx: __ctx,
-      name: "onNodeEnd",
-      data: {
-        nodeName: "main",
-        data: undefined
-      }
-    })
+    await runner.hook(4, "onNodeEnd", {
+      nodeName: "main",
+      data: undefined
+    });
+    if (runner.halted) return runner.haltResult;
     return {
       messages: __threads,
       data: undefined
@@ -374,4 +365,4 @@ if (__process.argv[1] === fileURLToPath(import.meta.url)) {
   }
 }
 export default graph
-export const __sourceMap = {"class-basic.agency:Counter.increment":{"0":{"line":4,"col":4},"1":{"line":5,"col":4}},"class-basic.agency:main":{"0":{"line":10,"col":2},"1":{"line":11,"col":2},"2":{"line":12,"col":2}}};
+export const __sourceMap = {"class-basic.agency:Counter.increment":{"1":{"line":4,"col":4},"2":{"line":5,"col":4}},"class-basic.agency:main":{"1":{"line":10,"col":2},"2":{"line":11,"col":2},"3":{"line":12,"col":2}}};

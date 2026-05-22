@@ -179,19 +179,6 @@ let __functionCompleted = false;
     await __initializeGlobals(__ctx)
   }
   let __funcStartTime: number = performance.now();
-  await callHook({
-    ctx: __ctx,
-    name: "onFunctionStart",
-    data: {
-      functionName: "greet",
-      args: {
-        name: name,
-        age: age
-      },
-      isBuiltin: false,
-      moduleId: "interrupt-in-node.agency"
-    }
-  })
   __stack.args["name"] = name;
   __stack.args["age"] = age;
   __self.__retryable = __self.__retryable ?? true;
@@ -215,9 +202,19 @@ if (__ctx._pendingArgOverrides) {
 }
 
   try {
-    await runner.step(0, async (runner) => {
+    await runner.hook(0, "onFunctionStart", {
+      functionName: "greet",
+      args: {
+        name: name,
+        age: age
+      },
+      isBuiltin: false,
+      moduleId: "interrupt-in-node.agency"
+    });
+    if (runner.halted) { if (isFailure(runner.haltResult)) { runner.haltResult.retryable = runner.haltResult.retryable && __self.__retryable; } return runner.haltResult; }
+    await runner.step(1, async (runner) => {
 // Resume path: check for a response by interruptId
-const __response = __ctx.getInterruptResponse(__self.__interruptId_0);
+const __response = __ctx.getInterruptResponse(__self.__interruptId_1);
 if (__response) {
   if (__response.type === "approve") {
     // approved, continue execution
@@ -242,8 +239,8 @@ if (__response) {
   if (!isApproved(__handlerResult)) {
     // No handler — propagate interrupt array to TypeScript caller
     // Store interruptId on frame BEFORE checkpoint so it's captured in the snapshot
-    __self.__interruptId_0 = __handlerResult[0].interruptId;
-    const __checkpointId = __ctx.checkpoints.create(__stateStack, __ctx, { moduleId: "interrupt-in-node.agency", scopeName: "greet", stepPath: "0" });
+    __self.__interruptId_1 = __handlerResult[0].interruptId;
+    const __checkpointId = __ctx.checkpoints.create(__stateStack, __ctx, { moduleId: "interrupt-in-node.agency", scopeName: "greet", stepPath: "1" });
     __handlerResult[0].checkpointId = __checkpointId;
     __handlerResult[0].checkpoint = __ctx.checkpoints.get(__checkpointId);
     
@@ -256,7 +253,7 @@ if (__response) {
 }
 
     });
-    await runner.step(1, async (runner) => {
+    await runner.step(2, async (runner) => {
 __functionCompleted = true;
 runner.halt(`Kya chal raha jai, ${__stack.args.name}! You are ${__stack.args.age} years old.`)
 return;
@@ -327,20 +324,17 @@ const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
 let __forked;
 let __functionCompleted = false;
-  await callHook({
-    ctx: __ctx,
-    name: "onNodeStart",
-    data: {
-      nodeName: "foo2"
-    }
-  })
   const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "interrupt-in-node.agency", scopeName: "foo2" });
   if (!__state.isResume) {
     __stack.args["name"] = __state.data.name;
     __stack.args["age"] = __state.data.age;
   }
   try {
-    await runner.step(0, async (runner) => {
+    await runner.hook(0, "onNodeStart", {
+      nodeName: "foo2"
+    });
+    if (runner.halted) return runner.haltResult;
+    await runner.step(1, async (runner) => {
 await __call(print, {
         type: "positional",
         args: [`In foo2, name is ${__stack.args.name} and age is ${__stack.args.age}, this message should only print once...`]
@@ -350,7 +344,7 @@ await __call(print, {
         stateStack: __stateStack
       }) + greet
     });
-    await runner.step(1, async (runner) => {
+    await runner.step(2, async (runner) => {
 __self.__removedTools = __self.__removedTools || [];
 __stack.locals.response = await runPrompt({
         ctx: __ctx,
@@ -372,7 +366,7 @@ if (hasInterrupts(__stack.locals.response)) {
         return;
       }
     });
-    await runner.step(2, async (runner) => {
+    await runner.step(3, async (runner) => {
 const __funcResult = await __call(print, {
         type: "positional",
         args: [`Greeted, age is still ${__stack.args.age}...`]
@@ -390,7 +384,7 @@ if (hasInterrupts(__funcResult)) {
         return;
       }
     });
-    await runner.step(3, async (runner) => {
+    await runner.step(4, async (runner) => {
 runner.halt({
         messages: __threads,
         data: __stack.locals.response
@@ -398,14 +392,11 @@ runner.halt({
 return;
     });
     if (runner.halted) return runner.haltResult;
-    await callHook({
-      ctx: __ctx,
-      name: "onNodeEnd",
-      data: {
-        nodeName: "foo2",
-        data: undefined
-      }
-    })
+    await runner.hook(5, "onNodeEnd", {
+      nodeName: "foo2",
+      data: undefined
+    });
+    if (runner.halted) return runner.haltResult;
     return {
       messages: __threads,
       data: undefined
@@ -436,19 +427,16 @@ const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
 let __forked;
 let __functionCompleted = false;
-  await callHook({
-    ctx: __ctx,
-    name: "onNodeStart",
-    data: {
-      nodeName: "sayHi"
-    }
-  })
   const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "interrupt-in-node.agency", scopeName: "sayHi" });
   if (!__state.isResume) {
     __stack.args["name"] = __state.data.name;
   }
   try {
-    await runner.step(0, async (runner) => {
+    await runner.hook(0, "onNodeStart", {
+      nodeName: "sayHi"
+    });
+    if (runner.halted) return runner.haltResult;
+    await runner.step(1, async (runner) => {
 const __funcResult = await __call(print, {
         type: "positional",
         args: [`Saying hi to ${__stack.args.name}...`]
@@ -466,10 +454,10 @@ if (hasInterrupts(__funcResult)) {
         return;
       }
     });
-    await runner.step(1, async (runner) => {
+    await runner.step(2, async (runner) => {
 __stack.locals.age = 30;
     });
-    await runner.step(2, async (runner) => {
+    await runner.step(3, async (runner) => {
 __stateStack.pop()
 __functionCompleted = true;
 runner.halt(goToNode("foo2", {
@@ -483,14 +471,11 @@ runner.halt(goToNode("foo2", {
 return;
     });
     if (runner.halted) return runner.haltResult;
-    await callHook({
-      ctx: __ctx,
-      name: "onNodeEnd",
-      data: {
-        nodeName: "sayHi",
-        data: undefined
-      }
-    })
+    await runner.hook(4, "onNodeEnd", {
+      nodeName: "sayHi",
+      data: undefined
+    });
+    if (runner.halted) return runner.haltResult;
     return {
       messages: __threads,
       data: undefined
@@ -538,4 +523,4 @@ export async function sayHi(name: any, { messages, callbacks }: { messages?: any
 }
 export const __sayHiNodeParams = ["name"];
 export default graph
-export const __sourceMap = {"interrupt-in-node.agency:greet":{"0":{"line":1,"col":2},"1":{"line":2,"col":2}},"interrupt-in-node.agency:foo2":{"1":{"line":8,"col":2},"2":{"line":9,"col":2},"3":{"line":10,"col":2}},"interrupt-in-node.agency:sayHi":{"0":{"line":14,"col":2},"1":{"line":15,"col":2},"2":{"line":16,"col":2}}};
+export const __sourceMap = {"interrupt-in-node.agency:greet":{"1":{"line":1,"col":2},"2":{"line":2,"col":2}},"interrupt-in-node.agency:foo2":{"2":{"line":8,"col":2},"3":{"line":9,"col":2},"4":{"line":10,"col":2}},"interrupt-in-node.agency:sayHi":{"1":{"line":14,"col":2},"2":{"line":15,"col":2},"3":{"line":16,"col":2}}};

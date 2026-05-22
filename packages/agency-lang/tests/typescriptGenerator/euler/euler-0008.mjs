@@ -182,18 +182,6 @@ let __functionCompleted = false;
     await __initializeGlobals(__ctx)
   }
   let __funcStartTime: number = performance.now();
-  await callHook({
-    ctx: __ctx,
-    name: "onFunctionStart",
-    data: {
-      functionName: "toDigit",
-      args: {
-        c: c
-      },
-      isBuiltin: false,
-      moduleId: "euler-0008.agency"
-    }
-  })
   __stack.args["c"] = c;
   __self.__retryable = __self.__retryable ?? true;
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "euler-0008.agency", scopeName: "toDigit" });
@@ -212,7 +200,16 @@ if (__ctx._pendingArgOverrides) {
 }
 
   try {
-    await runner.ifElse(0, [
+    await runner.hook(0, "onFunctionStart", {
+      functionName: "toDigit",
+      args: {
+        c: c
+      },
+      isBuiltin: false,
+      moduleId: "euler-0008.agency"
+    });
+    if (runner.halted) { if (isFailure(runner.haltResult)) { runner.haltResult.retryable = runner.haltResult.retryable && __self.__retryable; } return runner.haltResult; }
+    await runner.ifElse(1, [
 
   {
     condition: async () => __stack.args.c === `1`,
@@ -226,7 +223,7 @@ return;
   },
 
 ]);
-    await runner.ifElse(1, [
+    await runner.ifElse(2, [
 
   {
     condition: async () => __stack.args.c === `2`,
@@ -240,7 +237,7 @@ return;
   },
 
 ]);
-    await runner.ifElse(2, [
+    await runner.ifElse(3, [
 
   {
     condition: async () => __stack.args.c === `3`,
@@ -254,7 +251,7 @@ return;
   },
 
 ]);
-    await runner.ifElse(3, [
+    await runner.ifElse(4, [
 
   {
     condition: async () => __stack.args.c === `4`,
@@ -268,7 +265,7 @@ return;
   },
 
 ]);
-    await runner.ifElse(4, [
+    await runner.ifElse(5, [
 
   {
     condition: async () => __stack.args.c === `5`,
@@ -282,7 +279,7 @@ return;
   },
 
 ]);
-    await runner.ifElse(5, [
+    await runner.ifElse(6, [
 
   {
     condition: async () => __stack.args.c === `6`,
@@ -296,7 +293,7 @@ return;
   },
 
 ]);
-    await runner.ifElse(6, [
+    await runner.ifElse(7, [
 
   {
     condition: async () => __stack.args.c === `7`,
@@ -310,7 +307,7 @@ return;
   },
 
 ]);
-    await runner.ifElse(7, [
+    await runner.ifElse(8, [
 
   {
     condition: async () => __stack.args.c === `8`,
@@ -324,7 +321,7 @@ return;
   },
 
 ]);
-    await runner.ifElse(8, [
+    await runner.ifElse(9, [
 
   {
     condition: async () => __stack.args.c === `9`,
@@ -338,7 +335,7 @@ return;
   },
 
 ]);
-    await runner.step(9, async (runner) => {
+    await runner.step(10, async (runner) => {
 __functionCompleted = true;
 runner.halt(0)
 return;
@@ -404,25 +401,22 @@ const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
 let __forked;
 let __functionCompleted = false;
-  await callHook({
-    ctx: __ctx,
-    name: "onNodeStart",
-    data: {
-      nodeName: "main"
-    }
-  })
   const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "euler-0008.agency", scopeName: "main" });
   try {
-    await runner.step(0, async (runner) => {
+    await runner.hook(0, "onNodeStart", {
+      nodeName: "main"
+    });
+    if (runner.halted) return runner.haltResult;
+    await runner.step(1, async (runner) => {
 __stack.locals.digits = `7316717653133062491922511967442657474235534919493496983520312774506326239578318016984801869478851843858615607891129494954595017379583319528532088055111254069874715852386305071569329096329522744304355766896648950445244523161731856403098711121722383113622298934233803081353362766142828064444866452387493035890729629049156044077239071381051585930796086670172427121883998797908792274921901699720888093776657273330010533678812202354218097512545405947522435258490771167055601360483958644670632441572215539753697817977846174064955149290862569321978468622482839722413756570560574902614079729686524145351004748216637048440319989000889524345065854122758866688116427171479924442928230863465674813919123162824586178664583591245665294765456828489128831426076900422421902267105562632111110937054421750694165896040807198403850962455444362981230987879927244284909188845801561660979191338754992005240636899125607176060588611646710940507754100225698315520005593572972571636269561882670428252483600823257530420752963450`;
     });
-    await runner.step(1, async (runner) => {
+    await runner.step(2, async (runner) => {
 __stack.locals.maxProduct = 0;
     });
-    await runner.step(2, async (runner) => {
+    await runner.step(3, async (runner) => {
 __stack.locals.i = 0;
     });
-    await runner.whileLoop(3, async () => __stack.locals.i <= __stack.locals.digits.length - 13, async (runner) => {
+    await runner.whileLoop(4, async () => __stack.locals.i <= __stack.locals.digits.length - 13, async (runner) => {
 await runner.step(0, async (runner) => {
 __stack.locals.product = 1;
       });
@@ -460,7 +454,7 @@ await runner.step(4, async (runner) => {
 __stack.locals.i = __stack.locals.i + 1;
       });
     });
-    await runner.step(4, async (runner) => {
+    await runner.step(5, async (runner) => {
 runner.halt({
         messages: __threads,
         data: __stack.locals.maxProduct
@@ -468,14 +462,11 @@ runner.halt({
 return;
     });
     if (runner.halted) return runner.haltResult;
-    await callHook({
-      ctx: __ctx,
-      name: "onNodeEnd",
-      data: {
-        nodeName: "main",
-        data: undefined
-      }
-    })
+    await runner.hook(6, "onNodeEnd", {
+      nodeName: "main",
+      data: undefined
+    });
+    if (runner.halted) return runner.haltResult;
     return {
       messages: __threads,
       data: undefined
@@ -517,4 +508,4 @@ if (__process.argv[1] === fileURLToPath(import.meta.url)) {
   }
 }
 export default graph
-export const __sourceMap = {"euler-0008.agency:toDigit":{"0":{"line":5,"col":2},"1":{"line":6,"col":2},"2":{"line":7,"col":2},"3":{"line":8,"col":2},"4":{"line":9,"col":2},"5":{"line":10,"col":2},"6":{"line":11,"col":2},"7":{"line":12,"col":2},"8":{"line":13,"col":2},"9":{"line":14,"col":2},"0.0":{"line":5,"col":18},"1.0":{"line":6,"col":18},"2.0":{"line":7,"col":18},"3.0":{"line":8,"col":18},"4.0":{"line":9,"col":18},"5.0":{"line":10,"col":18},"6.0":{"line":11,"col":18},"7.0":{"line":12,"col":18},"8.0":{"line":13,"col":18}},"euler-0008.agency:main":{"0":{"line":18,"col":2},"1":{"line":19,"col":2},"2":{"line":20,"col":2},"3":{"line":21,"col":2},"4":{"line":33,"col":2},"3.0":{"line":22,"col":4},"3.1":{"line":23,"col":4},"3.2.0":{"line":25,"col":6},"3.2.1":{"line":26,"col":6},"3.2":{"line":24,"col":4},"3.3.0":{"line":29,"col":6},"3.3":{"line":28,"col":4},"3.4":{"line":31,"col":4}}};
+export const __sourceMap = {"euler-0008.agency:toDigit":{"1":{"line":5,"col":2},"2":{"line":6,"col":2},"3":{"line":7,"col":2},"4":{"line":8,"col":2},"5":{"line":9,"col":2},"6":{"line":10,"col":2},"7":{"line":11,"col":2},"8":{"line":12,"col":2},"9":{"line":13,"col":2},"10":{"line":14,"col":2},"1.0":{"line":5,"col":18},"2.0":{"line":6,"col":18},"3.0":{"line":7,"col":18},"4.0":{"line":8,"col":18},"5.0":{"line":9,"col":18},"6.0":{"line":10,"col":18},"7.0":{"line":11,"col":18},"8.0":{"line":12,"col":18},"9.0":{"line":13,"col":18}},"euler-0008.agency:main":{"1":{"line":18,"col":2},"2":{"line":19,"col":2},"3":{"line":20,"col":2},"4":{"line":21,"col":2},"5":{"line":33,"col":2},"4.0":{"line":22,"col":4},"4.1":{"line":23,"col":4},"4.2.0":{"line":25,"col":6},"4.2.1":{"line":26,"col":6},"4.2":{"line":24,"col":4},"4.3.0":{"line":29,"col":6},"4.3":{"line":28,"col":4},"4.4":{"line":31,"col":4}}};

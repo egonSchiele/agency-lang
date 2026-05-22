@@ -179,16 +179,6 @@ let __functionCompleted = false;
     await __initializeGlobals(__ctx)
   }
   let __funcStartTime: number = performance.now();
-  await callHook({
-    ctx: __ctx,
-    name: "onFunctionStart",
-    data: {
-      functionName: "foo",
-      args: {},
-      isBuiltin: false,
-      moduleId: "withModifier.agency"
-    }
-  })
   __self.__retryable = __self.__retryable ?? true;
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "withModifier.agency", scopeName: "foo" });
   let __resultCheckpointId = -1;
@@ -202,9 +192,16 @@ if (__ctx._pendingArgOverrides) {
 }
 
   try {
-    await runner.step(0, async (runner) => {
+    await runner.hook(0, "onFunctionStart", {
+      functionName: "foo",
+      args: {},
+      isBuiltin: false,
+      moduleId: "withModifier.agency"
+    });
+    if (runner.halted) { if (isFailure(runner.haltResult)) { runner.haltResult.retryable = runner.haltResult.retryable && __self.__retryable; } return runner.haltResult; }
+    await runner.step(1, async (runner) => {
 // Resume path: check for a response by interruptId
-const __response = __ctx.getInterruptResponse(__self.__interruptId_0);
+const __response = __ctx.getInterruptResponse(__self.__interruptId_1);
 if (__response) {
   if (__response.type === "approve") {
     // approved, continue execution
@@ -229,8 +226,8 @@ if (__response) {
   if (!isApproved(__handlerResult)) {
     // No handler — propagate interrupt array to TypeScript caller
     // Store interruptId on frame BEFORE checkpoint so it's captured in the snapshot
-    __self.__interruptId_0 = __handlerResult[0].interruptId;
-    const __checkpointId = __ctx.checkpoints.create(__stateStack, __ctx, { moduleId: "withModifier.agency", scopeName: "foo", stepPath: "0" });
+    __self.__interruptId_1 = __handlerResult[0].interruptId;
+    const __checkpointId = __ctx.checkpoints.create(__stateStack, __ctx, { moduleId: "withModifier.agency", scopeName: "foo", stepPath: "1" });
     __handlerResult[0].checkpointId = __checkpointId;
     __handlerResult[0].checkpoint = __ctx.checkpoints.get(__checkpointId);
     
@@ -299,16 +296,13 @@ const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
 let __forked;
 let __functionCompleted = false;
-  await callHook({
-    ctx: __ctx,
-    name: "onNodeStart",
-    data: {
-      nodeName: "main"
-    }
-  })
   const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "withModifier.agency", scopeName: "main" });
   try {
-    await runner.handle(0, async (__data: any) => approve(), async (runner) => {
+    await runner.hook(0, "onNodeStart", {
+      nodeName: "main"
+    });
+    if (runner.halted) return runner.haltResult;
+    await runner.handle(1, async (__data: any) => approve(), async (runner) => {
 await runner.step(0, async (runner) => {
 __stack.locals.result = await __call(foo, {
           type: "positional",
@@ -328,7 +322,7 @@ if (hasInterrupts(__stack.locals.result)) {
         }
       });
     });
-    await runner.step(1, async (runner) => {
+    await runner.step(2, async (runner) => {
 runner.halt({
         messages: __threads,
         data: __stack.locals.result
@@ -336,14 +330,11 @@ runner.halt({
 return;
     });
     if (runner.halted) return runner.haltResult;
-    await callHook({
-      ctx: __ctx,
-      name: "onNodeEnd",
-      data: {
-        nodeName: "main",
-        data: undefined
-      }
-    })
+    await runner.hook(3, "onNodeEnd", {
+      nodeName: "main",
+      data: undefined
+    });
+    if (runner.halted) return runner.haltResult;
     return {
       messages: __threads,
       data: undefined
@@ -385,4 +376,4 @@ if (__process.argv[1] === fileURLToPath(import.meta.url)) {
   }
 }
 export default graph
-export const __sourceMap = {"withModifier.agency:foo":{"0":{"line":1,"col":2}},"withModifier.agency:main":{"0":{"line":5,"col":2},"1":{"line":6,"col":2},"0.0":{"line":5,"col":2}}};
+export const __sourceMap = {"withModifier.agency:foo":{"1":{"line":1,"col":2}},"withModifier.agency:main":{"1":{"line":5,"col":2},"2":{"line":6,"col":2},"1.0":{"line":5,"col":2}}};

@@ -183,19 +183,6 @@ let __functionCompleted = false;
     await __initializeGlobals(__ctx)
   }
   let __funcStartTime: number = performance.now();
-  await callHook({
-    ctx: __ctx,
-    name: "onFunctionStart",
-    data: {
-      functionName: "add",
-      args: {
-        a: a,
-        b: b
-      },
-      isBuiltin: false,
-      moduleId: "docstrings.agency"
-    }
-  })
   __stack.args["a"] = a;
   __stack.args["b"] = b;
   __self.__retryable = __self.__retryable ?? true;
@@ -219,6 +206,16 @@ if (__ctx._pendingArgOverrides) {
 }
 
   try {
+    await runner.hook(0, "onFunctionStart", {
+      functionName: "add",
+      args: {
+        a: a,
+        b: b
+      },
+      isBuiltin: false,
+      moduleId: "docstrings.agency"
+    });
+    if (runner.halted) { if (isFailure(runner.haltResult)) { runner.haltResult.retryable = runner.haltResult.retryable && __self.__retryable; } return runner.haltResult; }
     if (runner.halted) { if (isFailure(runner.haltResult)) { runner.haltResult.retryable = runner.haltResult.retryable && __self.__retryable; } return runner.haltResult; }
   } catch (__error) {
     if (__error instanceof RestoreSignal) {
@@ -291,18 +288,6 @@ let __functionCompleted = false;
     await __initializeGlobals(__ctx)
   }
   let __funcStartTime: number = performance.now();
-  await callHook({
-    ctx: __ctx,
-    name: "onFunctionStart",
-    data: {
-      functionName: "greet",
-      args: {
-        name: name
-      },
-      isBuiltin: false,
-      moduleId: "docstrings.agency"
-    }
-  })
   __stack.args["name"] = name;
   __self.__retryable = __self.__retryable ?? true;
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "docstrings.agency", scopeName: "greet" });
@@ -321,6 +306,15 @@ if (__ctx._pendingArgOverrides) {
 }
 
   try {
+    await runner.hook(0, "onFunctionStart", {
+      functionName: "greet",
+      args: {
+        name: name
+      },
+      isBuiltin: false,
+      moduleId: "docstrings.agency"
+    });
+    if (runner.halted) { if (isFailure(runner.haltResult)) { runner.haltResult.retryable = runner.haltResult.retryable && __self.__retryable; } return runner.haltResult; }
     if (runner.halted) { if (isFailure(runner.haltResult)) { runner.haltResult.retryable = runner.haltResult.retryable && __self.__retryable; } return runner.haltResult; }
   } catch (__error) {
     if (__error instanceof RestoreSignal) {
@@ -387,19 +381,6 @@ let __functionCompleted = false;
     await __initializeGlobals(__ctx)
   }
   let __funcStartTime: number = performance.now();
-  await callHook({
-    ctx: __ctx,
-    name: "onFunctionStart",
-    data: {
-      functionName: "calculateArea",
-      args: {
-        width: width,
-        height: height
-      },
-      isBuiltin: false,
-      moduleId: "docstrings.agency"
-    }
-  })
   __stack.args["width"] = width;
   __stack.args["height"] = height;
   __self.__retryable = __self.__retryable ?? true;
@@ -423,6 +404,16 @@ if (__ctx._pendingArgOverrides) {
 }
 
   try {
+    await runner.hook(0, "onFunctionStart", {
+      functionName: "calculateArea",
+      args: {
+        width: width,
+        height: height
+      },
+      isBuiltin: false,
+      moduleId: "docstrings.agency"
+    });
+    if (runner.halted) { if (isFailure(runner.haltResult)) { runner.haltResult.retryable = runner.haltResult.retryable && __self.__retryable; } return runner.haltResult; }
     if (runner.halted) { if (isFailure(runner.haltResult)) { runner.haltResult.retryable = runner.haltResult.retryable && __self.__retryable; } return runner.haltResult; }
   } catch (__error) {
     if (__error instanceof RestoreSignal) {
@@ -500,16 +491,6 @@ let __functionCompleted = false;
     await __initializeGlobals(__ctx)
   }
   let __funcStartTime: number = performance.now();
-  await callHook({
-    ctx: __ctx,
-    name: "onFunctionStart",
-    data: {
-      functionName: "processData",
-      args: {},
-      isBuiltin: false,
-      moduleId: "docstrings.agency"
-    }
-  })
   __self.__retryable = __self.__retryable ?? true;
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "docstrings.agency", scopeName: "processData" });
   let __resultCheckpointId = -1;
@@ -523,6 +504,13 @@ if (__ctx._pendingArgOverrides) {
 }
 
   try {
+    await runner.hook(0, "onFunctionStart", {
+      functionName: "processData",
+      args: {},
+      isBuiltin: false,
+      moduleId: "docstrings.agency"
+    });
+    if (runner.halted) { if (isFailure(runner.haltResult)) { runner.haltResult.retryable = runner.haltResult.retryable && __self.__retryable; } return runner.haltResult; }
     if (runner.halted) { if (isFailure(runner.haltResult)) { runner.haltResult.retryable = runner.haltResult.retryable && __self.__retryable; } return runner.haltResult; }
   } catch (__error) {
     if (__error instanceof RestoreSignal) {
@@ -584,16 +572,6 @@ let __functionCompleted = false;
     await __initializeGlobals(__ctx)
   }
   let __funcStartTime: number = performance.now();
-  await callHook({
-    ctx: __ctx,
-    name: "onFunctionStart",
-    data: {
-      functionName: "versionedTool",
-      args: {},
-      isBuiltin: false,
-      moduleId: "docstrings.agency"
-    }
-  })
   __self.__retryable = __self.__retryable ?? true;
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "docstrings.agency", scopeName: "versionedTool" });
   let __resultCheckpointId = -1;
@@ -607,6 +585,13 @@ if (__ctx._pendingArgOverrides) {
 }
 
   try {
+    await runner.hook(0, "onFunctionStart", {
+      functionName: "versionedTool",
+      args: {},
+      isBuiltin: false,
+      moduleId: "docstrings.agency"
+    });
+    if (runner.halted) { if (isFailure(runner.haltResult)) { runner.haltResult.retryable = runner.haltResult.retryable && __self.__retryable; } return runner.haltResult; }
     if (runner.halted) { if (isFailure(runner.haltResult)) { runner.haltResult.retryable = runner.haltResult.retryable && __self.__retryable; } return runner.haltResult; }
   } catch (__error) {
     if (__error instanceof RestoreSignal) {

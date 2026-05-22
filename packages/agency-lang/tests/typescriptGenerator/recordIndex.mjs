@@ -175,28 +175,25 @@ const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
 let __forked;
 let __functionCompleted = false;
-  await callHook({
-    ctx: __ctx,
-    name: "onNodeStart",
-    data: {
-      nodeName: "main"
-    }
-  })
   const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "recordIndex.agency", scopeName: "main" });
   try {
-    await runner.step(0, async (runner) => {
+    await runner.hook(0, "onNodeStart", {
+      nodeName: "main"
+    });
+    if (runner.halted) return runner.haltResult;
+    await runner.step(1, async (runner) => {
 __stack.locals.votes = {
         "alice": `approve`,
         "bob": `reject`
       };
     });
-    await runner.step(1, async (runner) => {
+    await runner.step(2, async (runner) => {
 __stack.locals.votes[`carol`] = `approve`;
     });
-    await runner.step(2, async (runner) => {
+    await runner.step(3, async (runner) => {
 __stack.locals.v = __stack.locals.votes[`alice`];
     });
-    await runner.step(3, async (runner) => {
+    await runner.step(4, async (runner) => {
 const __funcResult = await __call(print, {
         type: "positional",
         args: [__stack.locals.v]
@@ -214,7 +211,7 @@ if (hasInterrupts(__funcResult)) {
         return;
       }
     });
-    await runner.loop(4, __stack.locals.votes, async (k, _, runner) => {
+    await runner.loop(5, __stack.locals.votes, async (k, _, runner) => {
 await runner.step(0, async (runner) => {
 const __funcResult = await __call(print, {
           type: "positional",
@@ -235,14 +232,11 @@ if (hasInterrupts(__funcResult)) {
       });
     });
     if (runner.halted) return runner.haltResult;
-    await callHook({
-      ctx: __ctx,
-      name: "onNodeEnd",
-      data: {
-        nodeName: "main",
-        data: undefined
-      }
-    })
+    await runner.hook(6, "onNodeEnd", {
+      nodeName: "main",
+      data: undefined
+    });
+    if (runner.halted) return runner.haltResult;
     return {
       messages: __threads,
       data: undefined
@@ -284,4 +278,4 @@ if (__process.argv[1] === fileURLToPath(import.meta.url)) {
   }
 }
 export default graph
-export const __sourceMap = {"recordIndex.agency:main":{"0":{"line":3,"col":2},"1":{"line":4,"col":2},"2":{"line":5,"col":2},"3":{"line":6,"col":2},"4":{"line":7,"col":2},"4.0":{"line":8,"col":4}}};
+export const __sourceMap = {"recordIndex.agency:main":{"1":{"line":3,"col":2},"2":{"line":4,"col":2},"3":{"line":5,"col":2},"4":{"line":6,"col":2},"5":{"line":7,"col":2},"5.0":{"line":8,"col":4}}};

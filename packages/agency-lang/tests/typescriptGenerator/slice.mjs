@@ -174,51 +174,45 @@ const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
 let __forked;
 let __functionCompleted = false;
-  await callHook({
-    ctx: __ctx,
-    name: "onNodeStart",
-    data: {
-      nodeName: "main"
-    }
-  })
   const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "slice.agency", scopeName: "main" });
   try {
-    await runner.step(0, async (runner) => {
+    await runner.hook(0, "onNodeStart", {
+      nodeName: "main"
+    });
+    if (runner.halted) return runner.haltResult;
+    await runner.step(1, async (runner) => {
 __stack.locals.arr = [1, 2, 3, 4, 5];
     });
-    await runner.step(1, async (runner) => {
+    await runner.step(2, async (runner) => {
 __stack.locals.bothBounds = __stack.locals.arr.slice(1, 3);
     });
-    await runner.step(2, async (runner) => {
+    await runner.step(3, async (runner) => {
 __stack.locals.startOnly = __stack.locals.arr.slice(2);
     });
-    await runner.step(3, async (runner) => {
+    await runner.step(4, async (runner) => {
 __stack.locals.endOnly = __stack.locals.arr.slice(0, 3);
     });
-    await runner.step(4, async (runner) => {
+    await runner.step(5, async (runner) => {
 __stack.locals.noBounds = __stack.locals.arr.slice();
     });
-    await runner.step(5, async (runner) => {
+    await runner.step(6, async (runner) => {
 __stack.locals.negativeStart = __stack.locals.arr.slice(-2);
     });
-    await runner.step(6, async (runner) => {
+    await runner.step(7, async (runner) => {
 __stack.locals.optionalSlice = __stack.locals.arr?.slice(1, 3);
     });
-    await runner.step(7, async (runner) => {
+    await runner.step(8, async (runner) => {
 __stack.locals.str = `hello`;
     });
-    await runner.step(8, async (runner) => {
+    await runner.step(9, async (runner) => {
 __stack.locals.stringSlice = __stack.locals.str.slice(1, 3);
     });
     if (runner.halted) return runner.haltResult;
-    await callHook({
-      ctx: __ctx,
-      name: "onNodeEnd",
-      data: {
-        nodeName: "main",
-        data: undefined
-      }
-    })
+    await runner.hook(10, "onNodeEnd", {
+      nodeName: "main",
+      data: undefined
+    });
+    if (runner.halted) return runner.haltResult;
     return {
       messages: __threads,
       data: undefined
@@ -260,4 +254,4 @@ if (__process.argv[1] === fileURLToPath(import.meta.url)) {
   }
 }
 export default graph
-export const __sourceMap = {"slice.agency:main":{"0":{"line":1,"col":2},"1":{"line":2,"col":2},"2":{"line":3,"col":2},"3":{"line":4,"col":2},"4":{"line":5,"col":2},"5":{"line":6,"col":2},"6":{"line":7,"col":2},"7":{"line":8,"col":2},"8":{"line":9,"col":2}}};
+export const __sourceMap = {"slice.agency:main":{"1":{"line":1,"col":2},"2":{"line":2,"col":2},"3":{"line":3,"col":2},"4":{"line":4,"col":2},"5":{"line":5,"col":2},"6":{"line":6,"col":2},"7":{"line":7,"col":2},"8":{"line":8,"col":2},"9":{"line":9,"col":2}}};

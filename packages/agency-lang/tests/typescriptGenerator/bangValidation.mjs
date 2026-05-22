@@ -176,20 +176,17 @@ const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
 let __forked;
 let __functionCompleted = false;
-  await callHook({
-    ctx: __ctx,
-    name: "onNodeStart",
-    data: {
-      nodeName: "main"
-    }
-  })
   const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "bangValidation.agency", scopeName: "main" });
   try {
-    await runner.step(0, async (runner) => {
+    await runner.hook(0, "onNodeStart", {
+      nodeName: "main"
+    });
+    if (runner.halted) return runner.haltResult;
+    await runner.step(1, async (runner) => {
 __stack.locals.result = `bug`;
 __stack.locals.result = __validateType(__stack.locals.result, Category);
     });
-    await runner.step(1, async (runner) => {
+    await runner.step(2, async (runner) => {
 const __funcResult = await __call(print, {
         type: "positional",
         args: [__stack.locals.result]
@@ -208,14 +205,11 @@ if (hasInterrupts(__funcResult)) {
       }
     });
     if (runner.halted) return runner.haltResult;
-    await callHook({
-      ctx: __ctx,
-      name: "onNodeEnd",
-      data: {
-        nodeName: "main",
-        data: undefined
-      }
-    })
+    await runner.hook(3, "onNodeEnd", {
+      nodeName: "main",
+      data: undefined
+    });
+    if (runner.halted) return runner.haltResult;
     return {
       messages: __threads,
       data: undefined
@@ -257,4 +251,4 @@ if (__process.argv[1] === fileURLToPath(import.meta.url)) {
   }
 }
 export default graph
-export const __sourceMap = {"bangValidation.agency:main":{"0":{"line":3,"col":2},"1":{"line":4,"col":2}}};
+export const __sourceMap = {"bangValidation.agency:main":{"1":{"line":3,"col":2},"2":{"line":4,"col":2}}};

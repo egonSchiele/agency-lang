@@ -179,18 +179,6 @@ let __functionCompleted = false;
     await __initializeGlobals(__ctx)
   }
   let __funcStartTime: number = performance.now();
-  await callHook({
-    ctx: __ctx,
-    name: "onFunctionStart",
-    data: {
-      functionName: "twice",
-      args: {
-        block: block
-      },
-      isBuiltin: false,
-      moduleId: "blockBasic.agency"
-    }
-  })
   __stack.args["block"] = block;
   __self.__retryable = __self.__retryable ?? true;
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "blockBasic.agency", scopeName: "twice" });
@@ -209,7 +197,16 @@ if (__ctx._pendingArgOverrides) {
 }
 
   try {
-    await runner.step(0, async (runner) => {
+    await runner.hook(0, "onFunctionStart", {
+      functionName: "twice",
+      args: {
+        block: block
+      },
+      isBuiltin: false,
+      moduleId: "blockBasic.agency"
+    });
+    if (runner.halted) { if (isFailure(runner.haltResult)) { runner.haltResult.retryable = runner.haltResult.retryable && __self.__retryable; } return runner.haltResult; }
+    await runner.step(1, async (runner) => {
 __stack.locals.a = await __call(__stack.args.block, {
         type: "positional",
         args: []
@@ -224,7 +221,7 @@ if (hasInterrupts(__stack.locals.a)) {
         return;
       }
     });
-    await runner.step(1, async (runner) => {
+    await runner.step(2, async (runner) => {
 __stack.locals.b = await __call(__stack.args.block, {
         type: "positional",
         args: []
@@ -239,7 +236,7 @@ if (hasInterrupts(__stack.locals.b)) {
         return;
       }
     });
-    await runner.step(2, async (runner) => {
+    await runner.step(3, async (runner) => {
 __functionCompleted = true;
 runner.halt([__stack.locals.a, __stack.locals.b])
 return;
@@ -305,16 +302,13 @@ const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
 let __forked;
 let __functionCompleted = false;
-  await callHook({
-    ctx: __ctx,
-    name: "onNodeStart",
-    data: {
-      nodeName: "main"
-    }
-  })
   const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "blockBasic.agency", scopeName: "main" });
   try {
-    await runner.step(0, async (runner) => {
+    await runner.hook(0, "onNodeStart", {
+      nodeName: "main"
+    });
+    if (runner.halted) return runner.haltResult;
+    await runner.step(1, async (runner) => {
 __stack.locals.results = await __call(twice, {
         type: "positional",
         args: [__AgencyFunction.create({ name: "__block_0", module: "blockBasic.agency", fn: async () => {
@@ -347,7 +341,7 @@ if (hasInterrupts(__stack.locals.results)) {
         return;
       }
     });
-    await runner.step(1, async (runner) => {
+    await runner.step(2, async (runner) => {
 const __funcResult = await __call(print, {
         type: "positional",
         args: [__stack.locals.results]
@@ -366,14 +360,11 @@ if (hasInterrupts(__funcResult)) {
       }
     });
     if (runner.halted) return runner.haltResult;
-    await callHook({
-      ctx: __ctx,
-      name: "onNodeEnd",
-      data: {
-        nodeName: "main",
-        data: undefined
-      }
-    })
+    await runner.hook(3, "onNodeEnd", {
+      nodeName: "main",
+      data: undefined
+    });
+    if (runner.halted) return runner.haltResult;
     return {
       messages: __threads,
       data: undefined
@@ -415,4 +406,4 @@ if (__process.argv[1] === fileURLToPath(import.meta.url)) {
   }
 }
 export default graph
-export const __sourceMap = {"blockBasic.agency:twice":{"0":{"line":1,"col":2},"1":{"line":2,"col":2},"2":{"line":3,"col":2}},"blockBasic.agency:main":{"0":{"line":7,"col":2},"1":{"line":10,"col":2}},"blockBasic.agency:__block_0":{"0.0":{"line":8,"col":4}}};
+export const __sourceMap = {"blockBasic.agency:twice":{"1":{"line":1,"col":2},"2":{"line":2,"col":2},"3":{"line":3,"col":2}},"blockBasic.agency:main":{"1":{"line":7,"col":2},"2":{"line":10,"col":2}},"blockBasic.agency:__block_0":{"1.0":{"line":8,"col":4}}};

@@ -180,18 +180,6 @@ let __functionCompleted = false;
     await __initializeGlobals(__ctx)
   }
   let __funcStartTime: number = performance.now();
-  await callHook({
-    ctx: __ctx,
-    name: "onFunctionStart",
-    data: {
-      functionName: "process",
-      args: {
-        c: c
-      },
-      isBuiltin: false,
-      moduleId: "genericAliasValidation.agency"
-    }
-  })
   __stack.args["c"] = c;
   __self.__retryable = __self.__retryable ?? true;
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "genericAliasValidation.agency", scopeName: "process" });
@@ -215,7 +203,16 @@ if (__ctx._pendingArgOverrides) {
       return __vr_c;
     }
     __stack.args["c"] = __vr_c.value;
-    await runner.step(0, async (runner) => {
+    await runner.hook(0, "onFunctionStart", {
+      functionName: "process",
+      args: {
+        c: c
+      },
+      isBuiltin: false,
+      moduleId: "genericAliasValidation.agency"
+    });
+    if (runner.halted) { if (isFailure(runner.haltResult)) { runner.haltResult.retryable = runner.haltResult.retryable && __self.__retryable; } return runner.haltResult; }
+    await runner.step(1, async (runner) => {
 const __funcResult = await __call(print, {
         type: "positional",
         args: [__stack.args.c.value]
@@ -230,7 +227,7 @@ if (hasInterrupts(__funcResult)) {
         return;
       }
     });
-    await runner.step(1, async (runner) => {
+    await runner.step(2, async (runner) => {
 __functionCompleted = true;
 runner.halt(__stack.args.c)
 return;
@@ -296,16 +293,13 @@ const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
 let __forked;
 let __functionCompleted = false;
-  await callHook({
-    ctx: __ctx,
-    name: "onNodeStart",
-    data: {
-      nodeName: "main"
-    }
-  })
   const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "genericAliasValidation.agency", scopeName: "main" });
   try {
-    await runner.step(0, async (runner) => {
+    await runner.hook(0, "onNodeStart", {
+      nodeName: "main"
+    });
+    if (runner.halted) return runner.haltResult;
+    await runner.step(1, async (runner) => {
 __stack.locals.c = await __call(process, {
         type: "positional",
         args: [{
@@ -325,7 +319,7 @@ if (hasInterrupts(__stack.locals.c)) {
         return;
       }
     });
-    await runner.step(1, async (runner) => {
+    await runner.step(2, async (runner) => {
 const __funcResult = await __call(print, {
         type: "positional",
         args: [__stack.locals.c.value]
@@ -344,14 +338,11 @@ if (hasInterrupts(__funcResult)) {
       }
     });
     if (runner.halted) return runner.haltResult;
-    await callHook({
-      ctx: __ctx,
-      name: "onNodeEnd",
-      data: {
-        nodeName: "main",
-        data: undefined
-      }
-    })
+    await runner.hook(3, "onNodeEnd", {
+      nodeName: "main",
+      data: undefined
+    });
+    if (runner.halted) return runner.haltResult;
     return {
       messages: __threads,
       data: undefined
@@ -393,4 +384,4 @@ if (__process.argv[1] === fileURLToPath(import.meta.url)) {
   }
 }
 export default graph
-export const __sourceMap = {"genericAliasValidation.agency:process":{"0":{"line":3,"col":2},"1":{"line":4,"col":2}},"genericAliasValidation.agency:main":{"0":{"line":8,"col":2},"1":{"line":9,"col":2}}};
+export const __sourceMap = {"genericAliasValidation.agency:process":{"1":{"line":3,"col":2},"2":{"line":4,"col":2}},"genericAliasValidation.agency:main":{"1":{"line":8,"col":2},"2":{"line":9,"col":2}}};

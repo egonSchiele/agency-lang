@@ -179,16 +179,6 @@ let __functionCompleted = false;
     await __initializeGlobals(__ctx)
   }
   let __funcStartTime: number = performance.now();
-  await callHook({
-    ctx: __ctx,
-    name: "onFunctionStart",
-    data: {
-      functionName: "foo",
-      args: {},
-      isBuiltin: false,
-      moduleId: "threadsAndSubthreads.agency"
-    }
-  })
   __self.__retryable = __self.__retryable ?? true;
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "threadsAndSubthreads.agency", scopeName: "foo" });
   let __resultCheckpointId = -1;
@@ -202,7 +192,14 @@ if (__ctx._pendingArgOverrides) {
 }
 
   try {
-    await runner.thread(0, __threads, "create", async (runner) => {
+    await runner.hook(0, "onFunctionStart", {
+      functionName: "foo",
+      args: {},
+      isBuiltin: false,
+      moduleId: "threadsAndSubthreads.agency"
+    });
+    if (runner.halted) { if (isFailure(runner.haltResult)) { runner.haltResult.retryable = runner.haltResult.retryable && __self.__retryable; } return runner.haltResult; }
+    await runner.thread(1, __threads, "create", async (runner) => {
 await runner.step(0, async (runner) => {
 __self.__removedTools = __self.__removedTools || [];
 __stack.locals.res1 = await runPrompt({
@@ -322,7 +319,7 @@ if (hasInterrupts(__stack.locals.res4)) {
         });
       });
     });
-    await runner.step(1, async (runner) => {
+    await runner.step(2, async (runner) => {
 const __funcResult = await __call(print, {
         type: "positional",
         args: [`res1`, __stack.locals.res1]
@@ -337,7 +334,7 @@ if (hasInterrupts(__funcResult)) {
         return;
       }
     });
-    await runner.step(2, async (runner) => {
+    await runner.step(3, async (runner) => {
 const __funcResult = await __call(print, {
         type: "positional",
         args: [`res2`, __stack.locals.res2]
@@ -352,7 +349,7 @@ if (hasInterrupts(__funcResult)) {
         return;
       }
     });
-    await runner.step(3, async (runner) => {
+    await runner.step(4, async (runner) => {
 const __funcResult = await __call(print, {
         type: "positional",
         args: [`res3`, __stack.locals.res3]
@@ -367,7 +364,7 @@ if (hasInterrupts(__funcResult)) {
         return;
       }
     });
-    await runner.step(4, async (runner) => {
+    await runner.step(5, async (runner) => {
 const __funcResult = await __call(print, {
         type: "positional",
         args: [`res4`, __stack.locals.res4]
@@ -382,7 +379,7 @@ if (hasInterrupts(__funcResult)) {
         return;
       }
     });
-    await runner.step(5, async (runner) => {
+    await runner.step(6, async (runner) => {
 const __funcResult = await __call(print, {
         type: "positional",
         args: [`res5`, __stack.locals.res5]
@@ -453,16 +450,13 @@ const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
 let __forked;
 let __functionCompleted = false;
-  await callHook({
-    ctx: __ctx,
-    name: "onNodeStart",
-    data: {
-      nodeName: "main"
-    }
-  })
   const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "threadsAndSubthreads.agency", scopeName: "main" });
   try {
-    await runner.thread(0, __threads, "create", async (runner) => {
+    await runner.hook(0, "onNodeStart", {
+      nodeName: "main"
+    });
+    if (runner.halted) return runner.haltResult;
+    await runner.thread(1, __threads, "create", async (runner) => {
 await runner.step(0, async (runner) => {
 __self.__removedTools = __self.__removedTools || [];
 __stack.locals.res1 = await runPrompt({
@@ -597,7 +591,7 @@ if (hasInterrupts(__stack.locals.res4)) {
         });
       });
     });
-    await runner.step(1, async (runner) => {
+    await runner.step(2, async (runner) => {
 const __funcResult = await __call(print, {
         type: "positional",
         args: [`res1`, __stack.locals.res1]
@@ -615,7 +609,7 @@ if (hasInterrupts(__funcResult)) {
         return;
       }
     });
-    await runner.step(2, async (runner) => {
+    await runner.step(3, async (runner) => {
 const __funcResult = await __call(print, {
         type: "positional",
         args: [`res2`, __stack.locals.res2]
@@ -633,7 +627,7 @@ if (hasInterrupts(__funcResult)) {
         return;
       }
     });
-    await runner.step(3, async (runner) => {
+    await runner.step(4, async (runner) => {
 const __funcResult = await __call(print, {
         type: "positional",
         args: [`res3`, __stack.locals.res3]
@@ -651,7 +645,7 @@ if (hasInterrupts(__funcResult)) {
         return;
       }
     });
-    await runner.step(4, async (runner) => {
+    await runner.step(5, async (runner) => {
 const __funcResult = await __call(print, {
         type: "positional",
         args: [`res4`, __stack.locals.res4]
@@ -669,7 +663,7 @@ if (hasInterrupts(__funcResult)) {
         return;
       }
     });
-    await runner.step(5, async (runner) => {
+    await runner.step(6, async (runner) => {
 const __funcResult = await __call(print, {
         type: "positional",
         args: [`res5`, __stack.locals.res5]
@@ -688,14 +682,11 @@ if (hasInterrupts(__funcResult)) {
       }
     });
     if (runner.halted) return runner.haltResult;
-    await callHook({
-      ctx: __ctx,
-      name: "onNodeEnd",
-      data: {
-        nodeName: "main",
-        data: undefined
-      }
-    })
+    await runner.hook(7, "onNodeEnd", {
+      nodeName: "main",
+      data: undefined
+    });
+    if (runner.halted) return runner.haltResult;
     return {
       messages: __threads,
       data: undefined
@@ -737,4 +728,4 @@ if (__process.argv[1] === fileURLToPath(import.meta.url)) {
   }
 }
 export default graph
-export const __sourceMap = {"threadsAndSubthreads.agency:foo":{"0":{"line":1,"col":2},"1":{"line":16,"col":2},"2":{"line":17,"col":2},"3":{"line":18,"col":2},"4":{"line":19,"col":2},"5":{"line":20,"col":2},"0.0":{"line":2,"col":4},"0.1.0":{"line":4,"col":6},"0.1.1.0":{"line":6,"col":8},"0.1.1":{"line":5,"col":6},"0.1.2.0":{"line":9,"col":8},"0.1.2":{"line":8,"col":6},"0.1":{"line":3,"col":4},"0.2.0":{"line":13,"col":6},"0.2":{"line":12,"col":4}},"threadsAndSubthreads.agency:main":{"0":{"line":24,"col":2},"1":{"line":39,"col":2},"2":{"line":40,"col":2},"3":{"line":41,"col":2},"4":{"line":42,"col":2},"5":{"line":43,"col":2},"0.0":{"line":25,"col":4},"0.1.0":{"line":27,"col":6},"0.1.1.0":{"line":29,"col":8},"0.1.1":{"line":28,"col":6},"0.1.2.0":{"line":32,"col":8},"0.1.2":{"line":31,"col":6},"0.1":{"line":26,"col":4},"0.2.0":{"line":36,"col":6},"0.2":{"line":35,"col":4}}};
+export const __sourceMap = {"threadsAndSubthreads.agency:foo":{"1":{"line":1,"col":2},"2":{"line":16,"col":2},"3":{"line":17,"col":2},"4":{"line":18,"col":2},"5":{"line":19,"col":2},"6":{"line":20,"col":2},"1.0":{"line":2,"col":4},"1.1.0":{"line":4,"col":6},"1.1.1.0":{"line":6,"col":8},"1.1.1":{"line":5,"col":6},"1.1.2.0":{"line":9,"col":8},"1.1.2":{"line":8,"col":6},"1.1":{"line":3,"col":4},"1.2.0":{"line":13,"col":6},"1.2":{"line":12,"col":4}},"threadsAndSubthreads.agency:main":{"1":{"line":24,"col":2},"2":{"line":39,"col":2},"3":{"line":40,"col":2},"4":{"line":41,"col":2},"5":{"line":42,"col":2},"6":{"line":43,"col":2},"1.0":{"line":25,"col":4},"1.1.0":{"line":27,"col":6},"1.1.1.0":{"line":29,"col":8},"1.1.1":{"line":28,"col":6},"1.1.2.0":{"line":32,"col":8},"1.1.2":{"line":31,"col":6},"1.1":{"line":26,"col":4},"1.2.0":{"line":36,"col":6},"1.2":{"line":35,"col":4}}};

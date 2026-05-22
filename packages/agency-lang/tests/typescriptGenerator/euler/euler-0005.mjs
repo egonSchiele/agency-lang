@@ -181,19 +181,6 @@ let __functionCompleted = false;
     await __initializeGlobals(__ctx)
   }
   let __funcStartTime: number = performance.now();
-  await callHook({
-    ctx: __ctx,
-    name: "onFunctionStart",
-    data: {
-      functionName: "gcd",
-      args: {
-        a: a,
-        b: b
-      },
-      isBuiltin: false,
-      moduleId: "euler-0005.agency"
-    }
-  })
   __stack.args["a"] = a;
   __stack.args["b"] = b;
   __self.__retryable = __self.__retryable ?? true;
@@ -217,13 +204,23 @@ if (__ctx._pendingArgOverrides) {
 }
 
   try {
-    await runner.step(0, async (runner) => {
+    await runner.hook(0, "onFunctionStart", {
+      functionName: "gcd",
+      args: {
+        a: a,
+        b: b
+      },
+      isBuiltin: false,
+      moduleId: "euler-0005.agency"
+    });
+    if (runner.halted) { if (isFailure(runner.haltResult)) { runner.haltResult.retryable = runner.haltResult.retryable && __self.__retryable; } return runner.haltResult; }
+    await runner.step(1, async (runner) => {
 __stack.locals.x = __stack.args.a;
     });
-    await runner.step(1, async (runner) => {
+    await runner.step(2, async (runner) => {
 __stack.locals.y = __stack.args.b;
     });
-    await runner.whileLoop(2, async () => __stack.locals.y !== 0, async (runner) => {
+    await runner.whileLoop(3, async () => __stack.locals.y !== 0, async (runner) => {
 await runner.step(0, async (runner) => {
 __stack.locals.temp = __stack.locals.y;
       });
@@ -234,7 +231,7 @@ await runner.step(2, async (runner) => {
 __stack.locals.x = __stack.locals.temp;
       });
     });
-    await runner.step(3, async (runner) => {
+    await runner.step(4, async (runner) => {
 __functionCompleted = true;
 runner.halt(__stack.locals.x)
 return;
@@ -310,19 +307,6 @@ let __functionCompleted = false;
     await __initializeGlobals(__ctx)
   }
   let __funcStartTime: number = performance.now();
-  await callHook({
-    ctx: __ctx,
-    name: "onFunctionStart",
-    data: {
-      functionName: "lcm",
-      args: {
-        a: a,
-        b: b
-      },
-      isBuiltin: false,
-      moduleId: "euler-0005.agency"
-    }
-  })
   __stack.args["a"] = a;
   __stack.args["b"] = b;
   __self.__retryable = __self.__retryable ?? true;
@@ -346,7 +330,17 @@ if (__ctx._pendingArgOverrides) {
 }
 
   try {
-    await runner.step(0, async (runner) => {
+    await runner.hook(0, "onFunctionStart", {
+      functionName: "lcm",
+      args: {
+        a: a,
+        b: b
+      },
+      isBuiltin: false,
+      moduleId: "euler-0005.agency"
+    });
+    if (runner.halted) { if (isFailure(runner.haltResult)) { runner.haltResult.retryable = runner.haltResult.retryable && __self.__retryable; } return runner.haltResult; }
+    await runner.step(1, async (runner) => {
 __functionCompleted = true;
 runner.halt(__stack.args.a / await __call(gcd, {
         type: "positional",
@@ -424,19 +418,16 @@ const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
 let __forked;
 let __functionCompleted = false;
-  await callHook({
-    ctx: __ctx,
-    name: "onNodeStart",
-    data: {
-      nodeName: "main"
-    }
-  })
   const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "euler-0005.agency", scopeName: "main" });
   try {
-    await runner.step(0, async (runner) => {
+    await runner.hook(0, "onNodeStart", {
+      nodeName: "main"
+    });
+    if (runner.halted) return runner.haltResult;
+    await runner.step(1, async (runner) => {
 __stack.locals.result = 1;
     });
-    await runner.loop(1, Array.from({length: 21 - 2}, (_, __i) => __i + 2), async (i, _, runner) => {
+    await runner.loop(2, Array.from({length: 21 - 2}, (_, __i) => __i + 2), async (i, _, runner) => {
 await runner.step(0, async (runner) => {
 __stack.locals.result = await __call(lcm, {
           type: "positional",
@@ -456,7 +447,7 @@ if (hasInterrupts(__stack.locals.result)) {
         }
       });
     });
-    await runner.step(2, async (runner) => {
+    await runner.step(3, async (runner) => {
 runner.halt({
         messages: __threads,
         data: __stack.locals.result
@@ -464,14 +455,11 @@ runner.halt({
 return;
     });
     if (runner.halted) return runner.haltResult;
-    await callHook({
-      ctx: __ctx,
-      name: "onNodeEnd",
-      data: {
-        nodeName: "main",
-        data: undefined
-      }
-    })
+    await runner.hook(4, "onNodeEnd", {
+      nodeName: "main",
+      data: undefined
+    });
+    if (runner.halted) return runner.haltResult;
     return {
       messages: __threads,
       data: undefined
@@ -513,4 +501,4 @@ if (__process.argv[1] === fileURLToPath(import.meta.url)) {
   }
 }
 export default graph
-export const __sourceMap = {"euler-0005.agency:gcd":{"0":{"line":4,"col":2},"1":{"line":5,"col":2},"2":{"line":6,"col":2},"3":{"line":11,"col":2},"2.0":{"line":7,"col":4},"2.1":{"line":8,"col":4},"2.2":{"line":9,"col":4}},"euler-0005.agency:lcm":{"0":{"line":15,"col":2}},"euler-0005.agency:main":{"0":{"line":19,"col":2},"1":{"line":20,"col":2},"2":{"line":23,"col":2},"1.0":{"line":21,"col":4}}};
+export const __sourceMap = {"euler-0005.agency:gcd":{"1":{"line":4,"col":2},"2":{"line":5,"col":2},"3":{"line":6,"col":2},"4":{"line":11,"col":2},"3.0":{"line":7,"col":4},"3.1":{"line":8,"col":4},"3.2":{"line":9,"col":4}},"euler-0005.agency:lcm":{"1":{"line":15,"col":2}},"euler-0005.agency:main":{"1":{"line":19,"col":2},"2":{"line":20,"col":2},"3":{"line":23,"col":2},"2.0":{"line":21,"col":4}}};

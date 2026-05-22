@@ -182,16 +182,6 @@ let __functionCompleted = false;
     await __initializeGlobals(__ctx)
   }
   let __funcStartTime: number = performance.now();
-  await callHook({
-    ctx: __ctx,
-    name: "onFunctionStart",
-    data: {
-      functionName: "greet",
-      args: {},
-      isBuiltin: false,
-      moduleId: "multiLineComment.agency"
-    }
-  })
   __self.__retryable = __self.__retryable ?? true;
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "multiLineComment.agency", scopeName: "greet" });
   let __resultCheckpointId = -1;
@@ -205,7 +195,14 @@ if (__ctx._pendingArgOverrides) {
 }
 
   try {
-    await runner.step(0, async (runner) => {
+    await runner.hook(0, "onFunctionStart", {
+      functionName: "greet",
+      args: {},
+      isBuiltin: false,
+      moduleId: "multiLineComment.agency"
+    });
+    if (runner.halted) { if (isFailure(runner.haltResult)) { runner.haltResult.retryable = runner.haltResult.retryable && __self.__retryable; } return runner.haltResult; }
+    await runner.step(1, async (runner) => {
 __functionCompleted = true;
 runner.halt(`hello`)
 return;
@@ -253,4 +250,4 @@ const greet = __AgencyFunction.create({
   exported: false
 }, __toolRegistry);
 export default graph
-export const __sourceMap = {"multiLineComment.agency:greet":{"0":{"line":8,"col":2}}};
+export const __sourceMap = {"multiLineComment.agency:greet":{"1":{"line":8,"col":2}}};

@@ -1,0 +1,29 @@
+let count: number = 0
+let caught: string = ""
+
+callback("onLLMCallEnd") as data {
+  count = count + 1
+  if (count == 1) {
+    interrupt myapp::pause("from callback", { count: count })
+  }
+}
+
+def doLLM(): string {
+  return llm("say hi")
+}
+
+node main() {
+  // The callback fires from inside llm() → runPrompt. With Phase 1, the
+  // interrupt returns out of runPrompt. The handle block here is on the
+  // active call stack at the firing site, so the existing handler-
+  // propagation machinery catches it inline — `runPrompt` returns
+  // interrupts to the compiled llm() site, which routes them through
+  // the handler. The JS caller never sees an interrupt.
+  handle {
+    const response = doLLM()
+    return [response, count, caught]
+  } with (intr) {
+    caught = intr.kind
+    return approve()
+  }
+}

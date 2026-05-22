@@ -1,0 +1,21 @@
+let count: number = 0
+let toolExecutions: number = 0
+
+def greet(): string {
+  toolExecutions = toolExecutions + 1
+  return "hi"
+}
+
+callback("onToolCallEnd") as data {
+  if (data.toolName == "greet") {
+    count = count + 1
+    if (count == 1) {
+      interrupt myapp::pause("toolEnd", { count: count })
+    }
+  }
+}
+
+node main() {
+  const response = llm("call greet", { tools: [greet] })
+  return [response, count, toolExecutions]
+}

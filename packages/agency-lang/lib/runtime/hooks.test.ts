@@ -1,8 +1,27 @@
 import { describe, it, expect, vi } from "vitest";
 import { AgencyFunction } from "./agencyFunction.js";
 import { AgencyCancelledError, RestoreSignal } from "./errors.js";
-import { callHook } from "./hooks.js";
+import { callHook, callHookAndDrop } from "./hooks.js";
 import { State, StateStack } from "./state/stateStack.js";
+
+// Minimal fake context shape. Only the fields callHook touches.
+function fakeCtx(): any {
+  return {
+    topLevelCallbacks: [],
+    callbacks: {},
+    stateStack: { collectScopedCallbacks: () => [] },
+  };
+}
+
+// Build an AgencyFunction stub whose `.invoke(...)` returns the given value.
+function fakeAgencyFn(invokeResult: any): AgencyFunction {
+  const fn = {
+    name: "fake-cb",
+    invoke: vi.fn(async () => invokeResult),
+  } as unknown as AgencyFunction;
+  (fn as any).__agencyFunction = true;
+  return fn;
+}
 
 function ctxWithStack(
   stack: State[],
@@ -147,11 +166,11 @@ describe("callHook (rewritten)", () => {
     expect(calls).toEqual(["a", "b", "c"]);
   });
 
-  it("throws loudly when a callback halts with an unhandled Interrupt[]", async () => {
-    // Simulate an AgencyFunction callback body that produced an interrupt
-    // value (i.e. interrupt was raised inside the callback and no handler
-    // on the call stack caught it). callHook must surface this instead of
-    // silently dropping the interrupt.
+  it("returns the Interrupt[] when a callback halts with an unhandled interrupt", async () => {
+    // After Phase 0, callHook no longer logs and drops on unhandled
+    // interrupts — it returns the Interrupt[] so the caller can decide
+    // what to do (callHookAndDrop logs; future codegen sites will
+    // checkpoint + propagate).
     const consoleErr = vi.spyOn(console, "error").mockImplementation(() => {});
     const fakeInterrupt = { type: "interrupt", kind: "myapp::oops", message: "x" };
     const callbackFn = AgencyFunction.create(
@@ -167,14 +186,11 @@ describe("callHook (rewritten)", () => {
     const inner = new State();
     inner.scopedCallbacks = [{ name: "onNodeStart", fn: callbackFn }];
     const ctx = ctxWithStack([inner]);
-    await callHook({ ctx, name: "onNodeStart", data: { nodeName: "x" } } as any);
-    // Error is logged (not rethrown — fireWithGuard's catch turns it into a
-    // console.error to keep one buggy callback from killing the whole run),
-    // but it MUST be visible.
-    expect(consoleErr).toHaveBeenCalled();
-    const logged = consoleErr.mock.calls.map((c) => String(c[1])).join("\n");
-    expect(logged).toMatch(/unhandled interrupt/i);
-    expect(logged).toMatch(/myapp::oops/);
+    const out = await callHook({ ctx, name: "onNodeStart", data: { nodeName: "x" } } as any);
+    expect(out).toEqual([fakeInterrupt]);
+    // callHook itself no longer logs the unhandled interrupt — that
+    // responsibility moves to callHookAndDrop.
+    expect(consoleErr).not.toHaveBeenCalled();
     consoleErr.mockRestore();
   });
 
@@ -195,5 +211,84 @@ describe("callHook (rewritten)", () => {
     ctxHolder.ctx = ctxWithStack([inner]);
     await callHook({ ctx: ctxHolder.ctx, name: "onNodeStart", data: { nodeName: "x" } } as any);
     expect(maxDepth).toBe(1);
+  });
+});
+
+describe("invokeCallback / fireWithGuard interrupt return", () => {
+  it("returns the interrupt array when an AgencyFunction callback halts with interrupts", async () => {
+    const ctx = fakeCtx();
+    const intr = { type: "interrupt", kind: "myapp::test", message: "hi", data: null, origin: "x", interruptId: "i-1" };
+    const cb = fakeAgencyFn([intr]);
+    ctx.topLevelCallbacks = [{ name: "onNodeStart", fn: cb }];
+
+    const out = await callHook({ ctx, name: "onNodeStart", data: { nodeName: "n" } });
+    expect(out).toEqual([intr]);
+  });
+
+  it("collects interrupts from every callback even when earlier ones halt", async () => {
+    const ctx = fakeCtx();
+    const intrA = { type: "interrupt", kind: "a::k", message: "A", data: null, origin: "x", interruptId: "i-a" };
+    const intrB = { type: "interrupt", kind: "b::k", message: "B", data: null, origin: "x", interruptId: "i-b" };
+    const cbA = fakeAgencyFn([intrA]);
+    const cbB = fakeAgencyFn([intrB]);
+    ctx.topLevelCallbacks = [
+      { name: "onNodeStart", fn: cbA },
+      { name: "onNodeStart", fn: cbB },
+    ];
+
+    const out = await callHook({ ctx, name: "onNodeStart", data: { nodeName: "n" } });
+    expect(out).toEqual([intrA, intrB]);
+    // Both callbacks must have been invoked — an interrupt in A must not
+    // short-circuit B. This is the concurrent-batching invariant that
+    // mirrors runForkAll: every sibling runs to completion, all halts
+    // are batched together.
+    expect((cbA as any).invoke).toHaveBeenCalledTimes(1);
+    expect((cbB as any).invoke).toHaveBeenCalledTimes(1);
+  });
+
+  it("returns undefined when no callback halts", async () => {
+    const ctx = fakeCtx();
+    ctx.topLevelCallbacks = [{ name: "onNodeStart", fn: fakeAgencyFn(undefined) }];
+    const out = await callHook({ ctx, name: "onNodeStart", data: { nodeName: "n" } });
+    expect(out).toBeUndefined();
+  });
+
+  it("real JS errors in a callback do NOT appear in the returned interrupts", async () => {
+    const ctx = fakeCtx();
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const cbCrash = {
+      invoke: vi.fn(async () => { throw new Error("boom"); }),
+    } as unknown as AgencyFunction;
+    (cbCrash as any).__agencyFunction = true;
+    ctx.topLevelCallbacks = [{ name: "onNodeStart", fn: cbCrash }];
+    const out = await callHook({ ctx, name: "onNodeStart", data: { nodeName: "n" } });
+    expect(out).toBeUndefined();
+    expect(errSpy).toHaveBeenCalled();
+    errSpy.mockRestore();
+  });
+});
+
+describe("callHookAndDrop", () => {
+  it("returns void and logs to console.error when interrupts come back", async () => {
+    const ctx = fakeCtx();
+    const intr = { type: "interrupt", kind: "x::y", message: "", data: null, origin: "x", interruptId: "i-1" };
+    ctx.topLevelCallbacks = [{ name: "onNodeStart", fn: fakeAgencyFn([intr]) }];
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const out: void = await callHookAndDrop({ ctx, name: "onNodeStart", data: { nodeName: "n" } });
+    expect(out).toBeUndefined();
+    expect(errSpy).toHaveBeenCalledWith(
+      expect.stringContaining("[agency] onNodeStart callback raised an unhandled interrupt"),
+      expect.anything(),
+    );
+    errSpy.mockRestore();
+  });
+
+  it("returns void with no logging when no interrupts are raised", async () => {
+    const ctx = fakeCtx();
+    ctx.topLevelCallbacks = [{ name: "onNodeStart", fn: fakeAgencyFn(undefined) }];
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    await callHookAndDrop({ ctx, name: "onNodeStart", data: { nodeName: "n" } });
+    expect(errSpy).not.toHaveBeenCalled();
+    errSpy.mockRestore();
   });
 });

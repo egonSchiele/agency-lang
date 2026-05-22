@@ -147,3 +147,97 @@ describe("PromptRunner.step interrupt handling", () => {
     });
   });
 });
+
+describe("PromptRunner.parallel", () => {
+  it("runs every branch concurrently", async () => {
+    const { runner } = makeRunner();
+    const order: string[] = [];
+    await runner.parallel("group", ["a", "b", "c"], async (item, b) => {
+      await b.step(`${item}.s1`, async () => {
+        order.push(`start-${item}`);
+      });
+      await new Promise((r) => setTimeout(r, 5));
+      await b.step(`${item}.s2`, async () => {
+        order.push(`end-${item}`);
+      });
+    });
+    // All three starts happen before any end (concurrent).
+    expect(order.indexOf("start-c")).toBeLessThan(order.indexOf("end-a"));
+  });
+
+  it("merges interrupts from multiple branches into one bailout with one shared checkpoint", async () => {
+    let cpCount = 0;
+    const ctx: any = {
+      checkpoints: {
+        create: () => {
+          cpCount++;
+          return `cp-${cpCount}`;
+        },
+        get: () => ({ moduleId: "", scopeName: "", stepPath: "" }),
+      },
+      statelogClient: { checkpointCreated: () => {} },
+    };
+    const { runner } = makeRunner({ ctx });
+    let caught: PromptBailout | null = null;
+    try {
+      await runner.parallel("group", ["a", "b"], async (item, b) => {
+        await b.step(`${item}.s1`, async () => [fakeInterrupt(item)] as any);
+      });
+    } catch (e) {
+      if (e instanceof PromptBailout) caught = e;
+    }
+    expect(caught).not.toBeNull();
+    expect(caught!.interrupts.length).toBe(2);
+    expect(cpCount).toBe(1);
+    expect(caught!.interrupts.every((i) => i.checkpointId === "cp-1")).toBe(
+      true,
+    );
+  });
+
+  it("skips a branch step whose key was already completed on a prior pass", async () => {
+    const self: any = { runnerState: { completedSteps: { "a.s1": true } } };
+    const { runner } = makeRunner({ self });
+    let ran = 0;
+    await runner.parallel("group", ["a"], async (item, b) => {
+      await b.step(`${item}.s1`, async () => {
+        ran++;
+      });
+    });
+    expect(ran).toBe(0);
+  });
+
+  it("once a branch step has collected interrupts, later steps on that branch are no-ops", async () => {
+    const { runner } = makeRunner();
+    let later = 0;
+    try {
+      await runner.parallel("group", ["a"], async (item, b) => {
+        await b.step(`${item}.s1`, async () => [fakeInterrupt(item)] as any);
+        await b.step(`${item}.s2`, async () => {
+          later++;
+        });
+      });
+    } catch {
+      // expected PromptBailout
+    }
+    expect(later).toBe(0);
+  });
+
+  it("does NOT create a checkpoint when no branch collects interrupts", async () => {
+    let cpCount = 0;
+    const ctx: any = {
+      checkpoints: {
+        create: () => {
+          cpCount++;
+          return `cp-${cpCount}`;
+        },
+        get: () => ({ moduleId: "", scopeName: "", stepPath: "" }),
+      },
+      statelogClient: { checkpointCreated: () => {} },
+    };
+    const { runner } = makeRunner({ ctx });
+    await runner.parallel("group", ["a", "b"], async (item, b) => {
+      await b.step(`${item}.s1`, async () => {});
+    });
+    expect(cpCount).toBe(0);
+  });
+});

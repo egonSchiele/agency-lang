@@ -111,4 +111,95 @@ export class PromptRunner {
     }
     this.opts.self.runnerState.completedSteps[key] = true;
   }
+
+  /**
+   * Run `branchFn` concurrently for every item in `items`. Each call
+   * receives a {@link BranchRunner} which exposes its own `step()` that
+   * COLLECTS interrupts rather than throwing — siblings keep running
+   * even when one halts so we can batch all interrupts into a single
+   * shared checkpoint (mirrors {@link runForkAll} semantics).
+   *
+   * If any branch's `step` collected interrupts, snapshot messages,
+   * stamp ONE pinned checkpoint at `${checkpointInfo.stepPath}/${keyPrefix}`,
+   * attach it to every collected interrupt, and throw `PromptBailout` so
+   * `runPrompt` returns the merged batch up the stack.
+   *
+   * IMPORTANT: do NOT call `pr.step(...)` (which throws) from inside a
+   * branch — use `b.step(...)` instead. A throw from `branchFn` is not
+   * caught and will propagate out of `Promise.all`.
+   */
+  async parallel<T>(
+    keyPrefix: string,
+    items: T[],
+    branchFn: (item: T, b: BranchRunner) => Promise<void>,
+  ): Promise<void> {
+    const branches = items.map(() => new BranchRunner(this.opts.self));
+    await Promise.all(items.map((item, i) => branchFn(item, branches[i])));
+    const merged: Interrupt[] = [];
+    for (const b of branches) if (b.interrupts) merged.push(...b.interrupts);
+    if (merged.length === 0) return;
+
+    this.opts.self.messagesJSON = this.opts.snapshotMessages();
+    const basePath = this.opts.checkpointInfo?.stepPath ?? "";
+    const stepPath = basePath ? `${basePath}/${keyPrefix}` : keyPrefix;
+    const cpId = this.opts.ctx.checkpoints.create(
+      this.opts.stateStack,
+      this.opts.ctx,
+      {
+        moduleId: this.opts.checkpointInfo?.moduleId ?? "",
+        scopeName: this.opts.checkpointInfo?.scopeName ?? "",
+        stepPath,
+      },
+    );
+    const cp = this.opts.ctx.checkpoints.get(cpId)!;
+    for (const intr of merged) {
+      intr.checkpoint = cp;
+      intr.checkpointId = cpId;
+    }
+    this.opts.ctx.statelogClient.checkpointCreated({
+      checkpointId: cpId,
+      reason: "interrupt",
+      sourceLocation: {
+        moduleId: cp.moduleId,
+        scopeName: cp.scopeName,
+        stepPath: cp.stepPath,
+      },
+    });
+    throw new PromptBailout(merged);
+  }
+}
+
+/**
+ * Branch-local step runner produced by {@link PromptRunner.parallel}.
+ *
+ * Differs from `PromptRunner.step` in two ways:
+ *   - On interrupt, collects them on `this.interrupts` rather than
+ *     throwing. The parallel orchestrator merges across siblings.
+ *   - All subsequent `step()` calls on the same branch short-circuit
+ *     once `interrupts` is set — the branch is effectively halted.
+ *
+ * Completion keys live on the same `self.runnerState.completedSteps`
+ * map as the outer runner, so callers must pick keys that are unique
+ * per-branch (e.g. include the per-item id in the key).
+ */
+export class BranchRunner {
+  public interrupts: Interrupt[] | null = null;
+
+  constructor(private self: any) {
+    this.self.runnerState ??= { completedSteps: {} };
+  }
+
+  async step(
+    key: string,
+    body: () => Promise<Interrupt[] | void>,
+  ): Promise<void> {
+    if (this.interrupts) return;
+    if (this.self.runnerState.completedSteps[key]) return;
+    const result = await body();
+    if (result && hasInterrupts(result)) {
+      this.interrupts = result;
+      return;
+    }
+    this.self.runnerState.completedSteps[key] = true;
+  }
 }

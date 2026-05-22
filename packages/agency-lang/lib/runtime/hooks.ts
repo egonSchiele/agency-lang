@@ -190,6 +190,24 @@ export async function callHook<K extends keyof CallbackMap>(args: {
     if (result) collected.push(...result);
   }
 
+  // Defensive: onAgentStart / onAgentEnd fire outside any agency frame so
+  // there is no Runner to halt and nowhere for the user to respond from.
+  // Reject loudly so a developer who accidentally registers an
+  // interrupt-raising callback for these hooks sees a clear error
+  // instead of silent failure (callHookAndDrop would log + drop them).
+  if (
+    collected.length > 0 &&
+    (name === "onAgentStart" || name === "onAgentEnd")
+  ) {
+    throw new Error(
+      `[agency] ${name} callbacks cannot raise interrupts: the agent has ` +
+        `no active frame to checkpoint, so there is nowhere for the user ` +
+        `to respond from. Remove the interrupt() call from the callback ` +
+        `body, or move the registration to a hook that fires inside an ` +
+        `agency call frame (onFunctionStart, onNodeStart, etc.).`,
+    );
+  }
+
   return collected.length > 0 ? collected : undefined;
 }
 

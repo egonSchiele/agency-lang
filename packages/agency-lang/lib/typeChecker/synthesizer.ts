@@ -20,6 +20,7 @@ import {
 } from "./primitiveMembers.js";
 import type { BuiltinSignature } from "./types.js";
 import { walkNodes } from "../utils/node.js";
+import { uniqBy } from "../utils.js";
 import type { BlockArgument } from "../types/blockArgument.js";
 import { UNDEFINED_T, VOID_T } from "./primitives.js";
 
@@ -416,9 +417,7 @@ function synthObject(
       ...computedValueTypes,
     ];
     if (allValueTypes.length === 0) return "any";
-    const seen = new Map<string, VariableType>();
-    for (const t of allValueTypes) seen.set(JSON.stringify(t), t);
-    const unique = Array.from(seen.values());
+    const unique = uniqBy(allValueTypes, (t) => JSON.stringify(t));
     const valueType: VariableType =
       unique.length === 1
         ? unique[0]

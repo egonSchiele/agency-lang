@@ -1,6 +1,7 @@
 import { writePolicyFile } from "std::policy"
 import { args } from "std::system"
 import { systemMessage } from "std::thread"
+import { map } from "std::array"
 
 // crap these comments dont stay in place! So can't ignore a type error
 // in an import

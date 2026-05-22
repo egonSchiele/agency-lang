@@ -59,9 +59,8 @@ export async function _read(dir: string, filename: string): Promise<string> {
   return data.toString("utf8");
 }
 
-export type WriteMode = "overwrite" | "append" | "create-only";
-
-const VALID_WRITE_MODES: WriteMode[] = ["overwrite", "append", "create-only"];
+const VALID_WRITE_MODES = ["overwrite", "append", "create-only"] as const;
+export type WriteMode = typeof VALID_WRITE_MODES[number];
 
 export async function _write(
   dir: string,

@@ -69,11 +69,17 @@ function resolveInSandbox(
   const mustExist = opts.mustExist ?? true;
   const sandboxRoot = realpathSync(resolve(dir));
   const resolved = resolve(sandboxRoot, filename);
-  const target = mustExist
-    ? realpathSync(resolved)
-    : existsSync(resolved)
-      ? realpathSync(resolved)
-      : resolved;
+  // Realpath the target whenever it exists so symlinks get collapsed and
+  // can't punch out of the sandbox. The only branch that skips realpath
+  // is "the target doesn't exist yet AND the caller said that's fine" —
+  // used by write-style callers (writeAST) that are about to create the
+  // file.
+  let target: string;
+  if (mustExist || existsSync(resolved)) {
+    target = realpathSync(resolved);
+  } else {
+    target = resolved;
+  }
   if (!target.startsWith(sandboxRoot + sep)) {
     throw new Error(
       `Sandbox violation: '${filename}' resolves to '${target}', which is outside the sandbox dir '${sandboxRoot}'.`,
@@ -220,17 +226,9 @@ export function _getNodesOfType(
     .filter((n) => wanted.has(n.type));
 }
 
-export function _getImports(source: string): AgencyNode[] {
-  return _getNodesOfType(source, ["importStatement"]);
-}
-
-export function _getFunctions(source: string): AgencyNode[] {
-  return _getNodesOfType(source, ["function"]);
-}
-
-export function _getGraphNodes(source: string): AgencyNode[] {
-  return _getNodesOfType(source, ["graphNode"]);
-}
+// _getImports / _getFunctions / _getGraphNodes are convenience wrappers
+// around _getNodesOfType. They live in stdlib/agency.agency as Agency
+// functions that call getNodesOfType directly — no need for TS stubs.
 
 // ---------------------------------------------------------------------------
 // filterImports

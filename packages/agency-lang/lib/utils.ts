@@ -63,9 +63,21 @@ function safeDelete(
   if (dryRun) {
     return { success: true, message: `[DRY RUN]: would have deleted ${resolved}` };
   }
-  if (kind === "file") fs.unlinkSync(resolved);
-  else fs.rmSync(resolved, { recursive: true });
-  return { success: true };
+  // Best-effort: callers often use this in `finally` blocks where a
+  // throw would mask the real error or turn a clean exit into a crash.
+  // `force: true` swallows ENOENT/permission errors that race against
+  // the real delete; if anything else goes wrong, return the message
+  // instead of propagating.
+  try {
+    if (kind === "file") fs.unlinkSync(resolved);
+    else fs.rmSync(resolved, { recursive: true, force: true });
+    return { success: true };
+  } catch (err) {
+    return {
+      success: false,
+      message: `Failed to delete '${resolved}': ${err instanceof Error ? err.message : String(err)}`,
+    };
+  }
 }
 
 export function safeDeleteFile(
@@ -107,6 +119,24 @@ export function zip<T, U>(arr1: T[], arr2: U[]): Array<[T, U]> {
 
 export function uniq<T>(arr: T[]): T[] {
   return Array.from(new Set(arr));
+}
+
+/**
+ * Like `uniq`, but de-duplicates by a derived key. The first occurrence
+ * of each key is kept; later duplicates are dropped. Useful for de-duping
+ * structured values where identity-based Set comparison wouldn't work
+ * (e.g. compare-by-JSON.stringify).
+ */
+export function uniqBy<T, K>(arr: T[], keyFn: (item: T) => K): T[] {
+  const seen = new Set<K>();
+  const result: T[] = [];
+  for (const item of arr) {
+    const key = keyFn(item);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    result.push(item);
+  }
+  return result;
 }
 
 /**

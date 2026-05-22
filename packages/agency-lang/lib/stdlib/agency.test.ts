@@ -18,9 +18,6 @@ import {
   _formatFile,
   _walkAST,
   _getNodesOfType,
-  _getImports,
-  _getFunctions,
-  _getGraphNodes,
   _filterImports,
 } from "./agency.js";
 import type { AgencyNode } from "../types.js";
@@ -431,8 +428,13 @@ node aux() {
     expect(() => _getNodesOfType(")))", ["function"])).toThrowError();
   });
 
-  it("_getImports returns all importStatement nodes", () => {
-    const imports = _getImports(fixture);
+  // The Agency-level convenience wrappers (getImports / getFunctions /
+  // getGraphNodes) are one-liners that call getNodesOfType with a single
+  // type string. We exercise the underlying TS primitive here; the Agency
+  // wrappers themselves live in stdlib/agency.agency.
+
+  it("getNodesOfType(['importStatement']) returns all importStatement nodes", () => {
+    const imports = _getNodesOfType(fixture, ["importStatement"]);
     expect(imports.length).toBe(2);
     const paths = imports
       .map((n) => (n as ImportStatement).modulePath)
@@ -440,22 +442,22 @@ node aux() {
     expect(paths).toEqual(["./bar.agency", "std::shell"]);
   });
 
-  it("_getFunctions returns all function definitions", () => {
-    const fns = _getFunctions(fixture);
+  it("getNodesOfType(['function']) returns all function definitions", () => {
+    const fns = _getNodesOfType(fixture, ["function"]);
     expect(fns.length).toBe(2);
     expect(fns.every((n) => n.type === "function")).toBe(true);
   });
 
-  it("_getGraphNodes returns all graph node definitions", () => {
-    const nodes = _getGraphNodes(fixture);
+  it("getNodesOfType(['graphNode']) returns all graph node definitions", () => {
+    const nodes = _getNodesOfType(fixture, ["graphNode"]);
     expect(nodes.length).toBe(2);
     expect(nodes.every((n) => n.type === "graphNode")).toBe(true);
   });
 
   it("returns empty arrays for an empty source", () => {
-    expect(_getImports("")).toEqual([]);
-    expect(_getFunctions("")).toEqual([]);
-    expect(_getGraphNodes("")).toEqual([]);
+    expect(_getNodesOfType("", ["importStatement"])).toEqual([]);
+    expect(_getNodesOfType("", ["function"])).toEqual([]);
+    expect(_getNodesOfType("", ["graphNode"])).toEqual([]);
   });
 });
 

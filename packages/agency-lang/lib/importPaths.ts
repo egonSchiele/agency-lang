@@ -2,6 +2,7 @@ import * as fs from "fs";
 import * as path from "path";
 import { fileURLToPath } from "url";
 import { createRequire } from "module";
+import picomatch from "picomatch";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -141,15 +142,8 @@ export type ImportPolicy = {
   excludeKinds?: ImportKind[];
 };
 
-// Lazy-loaded picomatch — keeps module load cheap when no policy is used.
-let _picomatch: ((pattern: string) => (s: string) => boolean) | null = null;
 function matchGlob(pattern: string, value: string): boolean {
-  if (!_picomatch) {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const picomatch = createRequire(import.meta.url)("picomatch");
-    _picomatch = picomatch as (pattern: string) => (s: string) => boolean;
-  }
-  return _picomatch(pattern)(value);
+  return picomatch(pattern)(value);
 }
 
 export function isImportAllowed(modulePath: string, policy: ImportPolicy): boolean {

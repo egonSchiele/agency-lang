@@ -30,12 +30,12 @@ node main() { return foo(42) }
     expect(result.success).toBe(false);
   });
 
-  it("rejects local relative imports when restrictImports is set", () => {
+  it("rejects local relative imports when imports policy is stdlib-only", () => {
     const source = `
 import { foo } from "./bar.agency"
 node main() { return foo() }
 `;
-    const result = compileSource(source, { restrictImports: true });
+    const result = compileSource(source, { imports: { allowKinds: ["stdlib"] } });
     expect(result.success).toBe(false);
     if (!result.success) {
       expect(result.errors[0]).toContain("not allowed");
@@ -43,12 +43,12 @@ node main() { return foo() }
     }
   });
 
-  it("rejects absolute-path .agency imports when restrictImports is set", () => {
+  it("rejects absolute-path .agency imports when imports policy is stdlib-only", () => {
     const source = `
 import { foo } from "/abs/path/bar.agency"
 node main() { return foo() }
 `;
-    const result = compileSource(source, { restrictImports: true });
+    const result = compileSource(source, { imports: { allowKinds: ["stdlib"] } });
     expect(result.success).toBe(false);
     if (!result.success) {
       expect(result.errors[0]).toContain("not allowed");
@@ -56,24 +56,24 @@ node main() { return foo() }
     }
   });
 
-  it("allows stdlib imports with restrictImports", () => {
+  it("allows stdlib imports with stdlib-only imports policy", () => {
     const source = `
 import { exists } from "std::shell"
 node main() { return exists("/tmp") }
 `;
-    const result = compileSource(source, { restrictImports: true });
+    const result = compileSource(source, { imports: { allowKinds: ["stdlib"] } });
     expect(result.success).toBe(true);
   });
 
   // --- Coverage for the previously-undetected hole: getImports() filters
   // out non-agency imports, which let raw npm/Node modules sail past the
   // restriction. compileSource now uses getAllImports() instead.
-  it("rejects raw npm/Node module imports when restrictImports is set", () => {
+  it("rejects raw npm/Node module imports when imports policy is stdlib-only", () => {
     const source = `
 import * as fs from "fs"
 node main() { return "hi" }
 `;
-    const result = compileSource(source, { restrictImports: true });
+    const result = compileSource(source, { imports: { allowKinds: ["stdlib"] } });
     expect(result.success).toBe(false);
     if (!result.success) {
       expect(result.errors[0]).toContain("not allowed");
@@ -81,24 +81,24 @@ node main() { return "hi" }
     }
   });
 
-  it("rejects child_process imports when restrictImports is set", () => {
+  it("rejects child_process imports when imports policy is stdlib-only", () => {
     const source = `
 import { execSync } from "child_process"
 node main() { return "hi" }
 `;
-    const result = compileSource(source, { restrictImports: true });
+    const result = compileSource(source, { imports: { allowKinds: ["stdlib"] } });
     expect(result.success).toBe(false);
     if (!result.success) {
       expect(result.errors[0]).toContain("'child_process'");
     }
   });
 
-  it("rejects pkg:: imports when restrictImports is set", () => {
+  it("rejects pkg:: imports when imports policy is stdlib-only", () => {
     const source = `
 import { foo } from "pkg::some-package"
 node main() { return foo() }
 `;
-    const result = compileSource(source, { restrictImports: true });
+    const result = compileSource(source, { imports: { allowKinds: ["stdlib"] } });
     expect(result.success).toBe(false);
     if (!result.success) {
       expect(result.errors[0]).toContain("not allowed");
@@ -106,10 +106,10 @@ node main() { return foo() }
     }
   });
 
-  // Negative control: without restrictImports, raw npm/Node imports must
+  // Negative control: without imports policy, raw npm/Node imports must
   // be allowed. This proves the rejection in the tests above is gated by
   // the flag, not happening unconditionally.
-  it("allows raw npm/Node module imports when restrictImports is NOT set", () => {
+  it("allows raw npm/Node module imports when imports policy is unset", () => {
     const source = `
 import * as fs from "fs"
 node main() { return "hi" }
@@ -118,12 +118,12 @@ node main() { return "hi" }
     expect(result.success).toBe(true);
   });
 
-  it("rejects 'import nodes' (importNodeStatement) when restrictImports is set", () => {
+  it("rejects 'import nodes' (importNodeStatement) when imports policy is stdlib-only", () => {
     const source = `
 import nodes { helper } from "./helpers.agency"
 node main() { return "hi" }
 `;
-    const result = compileSource(source, { restrictImports: true });
+    const result = compileSource(source, { imports: { allowKinds: ["stdlib"] } });
     expect(result.success).toBe(false);
     if (!result.success) {
       expect(result.errors[0]).toContain("not allowed");
@@ -133,7 +133,7 @@ node main() { return "hi" }
 });
 
 describe("compileSource imports policy (Task 8)", () => {
-  it("imports: { allowKinds: ['stdlib'] } matches restrictImports: true behavior", () => {
+  it("imports: { allowKinds: ['stdlib'] } matches legacy behavior", () => {
     const source = `
 import { foo } from "./bar.agency"
 node main() { return foo() }
@@ -161,20 +161,6 @@ node main() { return foo() }
       expect(all).toContain("'./bar.agency'");
       expect(all).toContain("'fs'");
       expect(all).toContain("'pkg::y'");
-    }
-  });
-
-  it("passing both restrictImports and imports fails the compile with a clear message", () => {
-    const source = `node main() { return 1 }`;
-    const result = compileSource(source, {
-      restrictImports: true,
-      imports: { allowKinds: ["stdlib"] },
-    });
-    expect(result.success).toBe(false);
-    if (!result.success) {
-      expect(result.errors.join("\n")).toMatch(
-        /either `imports` or `restrictImports`/,
-      );
     }
   });
 

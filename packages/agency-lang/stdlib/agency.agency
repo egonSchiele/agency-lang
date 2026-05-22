@@ -1,4 +1,4 @@
-import { _compile, _compileFile, _typecheck, _typecheckFile, _parseAST, _writeAST, _format, _formatFile, _walkAST, _getNodesOfType, _getImports, _getFunctions, _getGraphNodes, _filterImports } from "agency-lang/stdlib-lib/agency.js"
+import { _compile, _compileFile, _typecheck, _typecheckFile, _parseAST, _writeAST, _format, _formatFile, _walkAST, _getNodesOfType, _filterImports } from "agency-lang/stdlib-lib/agency.js"
 
 type CompiledProgram = {
   moduleId: string
@@ -226,7 +226,7 @@ export def getImports(source: string): Result {
 
   @param source - Agency source code as a string
   """
-  return try _getImports(source)
+  return getNodesOfType(source, ["importStatement"])
 }
 
 export def getFunctions(source: string): Result {
@@ -235,7 +235,7 @@ export def getFunctions(source: string): Result {
 
   @param source - Agency source code as a string
   """
-  return try _getFunctions(source)
+  return getNodesOfType(source, ["function"])
 }
 
 export def getGraphNodes(source: string): Result {
@@ -244,7 +244,7 @@ export def getGraphNodes(source: string): Result {
 
   @param source - Agency source code as a string
   """
-  return try _getGraphNodes(source)
+  return getNodesOfType(source, ["graphNode"])
 }
 
 export def filterImports(

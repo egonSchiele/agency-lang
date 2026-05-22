@@ -1,0 +1,645 @@
+import { fileURLToPath } from "url";
+import __process from "process";
+import { readFileSync, writeFileSync } from "fs";
+import { z } from "agency-lang/zod";
+import { goToNode, color, nanoid } from "agency-lang";
+import { smoltalk } from "agency-lang";
+import path from "path";
+import type { GraphState, InternalFunctionState, Interrupt, InterruptResponse, Checkpoint, LLMClient } from "agency-lang/runtime";
+import {
+  RuntimeContext, MessageThread, ThreadStore, Runner, McpManager,
+  setupNode, setupFunction, runNode, runPrompt, callHook,
+  checkpoint as __checkpoint_impl, getCheckpoint as __getCheckpoint_impl, restore as __restore_impl, _run as __runtime_run_impl,
+  interrupt, isInterrupt, hasInterrupts, isDebugger, isRejected, isApproved, interruptWithHandlers, debugStep,
+  respondToInterrupts as _respondToInterrupts,
+  rewindFrom as _rewindFrom,
+  RestoreSignal,
+  deepClone as __deepClone,
+  deepFreeze as __deepFreeze,
+  head, tail, empty,
+  success, failure, isSuccess, isFailure, __pipeBind, __tryCall, __catchResult,
+  Schema, __validateType, __validateChain, __validateChainRecursive,
+  readSkill as _readSkillRaw,
+  readSkillTool as __readSkillTool,
+  readSkillToolParams as __readSkillToolParams,
+  AgencyFunction as __AgencyFunction, UNSET as __UNSET,
+  __call, __callMethod,
+  functionRefReviver as __functionRefReviver,
+  DeterministicClient as __DeterministicClient,
+} from "agency-lang/runtime";
+import {
+  __internal_applyExtractionResult,
+  __internal_applyForgetResult,
+  __internal_buildExtractionPrompt,
+  __internal_buildForgetPrompt,
+  __internal_forget,
+  __internal_recall,
+  __internal_remember,
+  __internal_setMemoryId,
+  __internal_shouldRunMemory,
+} from "agency-lang/stdlib-lib/memory.js";
+import {
+  __internal_assistantMessage,
+  __internal_getCost,
+  __internal_getTokens,
+  __internal_systemMessage,
+  __internal_userMessage,
+} from "agency-lang/stdlib-lib/thread.js";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const __cwd = __process.cwd();
+
+const getDirname = () => __dirname;
+
+const __globalCtx = new RuntimeContext({
+  statelogConfig: {
+    host: "https://statelog.adit.io",
+    apiKey: __process.env["STATELOG_API_KEY"] || "",
+    projectId: "",
+    debugMode: false,
+    observability: false
+  },
+  smoltalkDefaults: {
+    openAiApiKey: __process.env["OPENAI_API_KEY"] || "",
+    googleApiKey: __process.env["GEMINI_API_KEY"] || "",
+    model: "gpt-4o-mini",
+    logLevel: "warn",
+    statelog: {
+      host: "https://statelog.adit.io",
+      projectId: "smoltalk",
+      apiKey: __process.env["STATELOG_SMOLTALK_API_KEY"] || "",
+      traceId: nanoid()
+    }
+  },
+  dirname: __dirname,
+  logLevel: "info",
+  traceConfig: {
+    program: "schemaParamInjection.agency"
+  }
+});
+const graph = __globalCtx.graph;
+
+// Path-dependent builtin wrappers
+export function readSkill({filepath}: {filepath: string}): string {
+  return _readSkillRaw({ filepath, dirname: __dirname });
+}
+
+// Handler result builtins and interrupt response constructors (unified types)
+export function approve(value?: any) { return { type: "approve" as const, value }; }
+export function reject(value?: any) { return { type: "reject" as const, value }; }
+function propagate() { return { type: "propagate" as const }; }
+
+// Interrupt and rewind re-exports bound to this module's context
+export { interrupt, isInterrupt, hasInterrupts, isDebugger };
+export const respondToInterrupts = (interrupts: Interrupt[], responses: InterruptResponse[], opts?: { overrides?: Record<string, unknown>; metadata?: Record<string, any> }) => _respondToInterrupts({ ctx: __globalCtx, interrupts, responses, overrides: opts?.overrides, metadata: opts?.metadata });
+export const rewindFrom = (checkpoint: Checkpoint, overrides: Record<string, unknown>, opts?: { metadata?: Record<string, any> }) => _rewindFrom({ ctx: __globalCtx, checkpoint, overrides, metadata: opts?.metadata });
+
+export const __setDebugger = (dbg: any) => { __globalCtx.debuggerState = dbg; };
+// Reconfigure the trace file path at runtime. Mutates the module-level
+// traceConfig; the next call to runNode (mod.main / mod.someNode) will
+// truncate the file and per-execCtx writers will append to it for the
+// duration of that run. NOTE: traceFile is process-wide and cannot be
+// used safely with concurrent runs of the same agent — for production
+// concurrency, use traceDir instead (each run gets its own
+// {traceDir}/{runId}.agencytrace).
+export const __setTraceFile = (filePath: string) => {
+  __globalCtx.traceConfig.traceFile = filePath;
+};
+export const __setLLMClient = (client: LLMClient) => { __globalCtx.setLLMClient(client); };
+export const __getCheckpoints = () => __globalCtx.checkpoints;
+
+// Auto-activate the deterministic LLM client when AGENCY_LLM_MOCKS is set.
+// The test runner (lib/cli/util.ts) populates this env var as a JSON string
+// when AGENCY_USE_TEST_LLM_PROVIDER=1. Both the agency evaluate template
+// and the agency-js test.js paths import this module, so this single block
+// covers both code paths.
+if (__process.env.AGENCY_LLM_MOCKS) {
+  __globalCtx.setLLMClient(
+    new __DeterministicClient(JSON.parse(__process.env.AGENCY_LLM_MOCKS))
+  );
+}
+
+export const __toolRegistry: Record<string, any> = {};
+
+function __registerTool(value: unknown, name?: string) {
+  if (__AgencyFunction.isAgencyFunction(value)) {
+    __toolRegistry[name ?? value.name] = value;
+  }
+}
+
+// Wrap stateful runtime functions as AgencyFunction instances
+const checkpoint = __AgencyFunction.create({ name: "checkpoint", module: "__runtime", fn: __checkpoint_impl, params: [], toolDefinition: null }, __toolRegistry);
+const getCheckpoint = __AgencyFunction.create({ name: "getCheckpoint", module: "__runtime", fn: __getCheckpoint_impl, params: [{ name: "checkpointId", hasDefault: false, defaultValue: undefined, variadic: false }], toolDefinition: null }, __toolRegistry);
+const restore = __AgencyFunction.create({ name: "restore", module: "__runtime", fn: __restore_impl, params: [{ name: "checkpointIdOrCheckpoint", hasDefault: false, defaultValue: undefined, variadic: false }, { name: "options", hasDefault: false, defaultValue: undefined, variadic: false }], toolDefinition: null }, __toolRegistry);
+const _run = __AgencyFunction.create({ name: "_run", module: "__runtime", fn: __runtime_run_impl, params: [{ name: "compiled", hasDefault: false, defaultValue: undefined, variadic: false }, { name: "node", hasDefault: false, defaultValue: undefined, variadic: false }, { name: "args", hasDefault: false, defaultValue: undefined, variadic: false }, { name: "wallClock", hasDefault: false, defaultValue: undefined, variadic: false }, { name: "memory", hasDefault: false, defaultValue: undefined, variadic: false }, { name: "ipcPayload", hasDefault: false, defaultValue: undefined, variadic: false }, { name: "stdout", hasDefault: false, defaultValue: undefined, variadic: false }], toolDefinition: null }, __toolRegistry);
+function setLLMClient(client: LLMClient) {
+  __globalCtx.setLLMClient(client);
+}
+
+
+function registerTools(tools: any[]) {
+  for (const tool of tools) {
+    if (__AgencyFunction.isAgencyFunction(tool)) {
+      __toolRegistry[tool.name] = tool;
+    }
+  }
+}
+
+async function __initializeGlobals(__ctx) {
+  __ctx.globals.markInitialized("schemaParamInjection.agency")
+}
+__toolRegistry["readSkill"] = __AgencyFunction.create({
+  name: "readSkill",
+  module: "schemaParamInjection.agency",
+  fn: readSkill,
+  params: __readSkillToolParams.map(p => ({ name: p, hasDefault: false, defaultValue: undefined, variadic: false })),
+  toolDefinition: __readSkillTool,
+}, __toolRegistry);
+__functionRefReviver.registry = __toolRegistry;
+//  Verifies the schema-parameter-injection feature.
+// 
+//  When a function declares a Schema<...> parameter and the caller does
+//  not pass it explicitly, the compiler injects a Zod schema synthesized
+//  from the LHS type annotation.
+async function __parseValue_impl(input: string, s: Schema<any>, __state: InternalFunctionState | undefined = undefined) {
+  const __setupData = setupFunction({
+    state: __state
+  });
+  // __state will be undefined if this function is being called as a tool by an llm
+  const __stateStack = __setupData.stateStack;
+const __stack = __setupData.stack;
+const __step = __setupData.step;
+const __self = __setupData.self;
+const __threads = __setupData.threads;
+const __ctx = __state?.ctx || __globalCtx;
+const statelogClient = __ctx.statelogClient;
+const __graph = __ctx.graph;
+let __forked;
+let __functionCompleted = false;
+  if (!__ctx.globals.isInitialized("schemaParamInjection.agency")) {
+    await __initializeGlobals(__ctx)
+  }
+  let __funcStartTime: number = performance.now();
+  await callHook({
+    callbacks: __ctx.callbacks,
+    name: "onFunctionStart",
+    data: {
+      functionName: "parseValue",
+      args: {
+        input: input,
+        s: s
+      },
+      isBuiltin: false,
+      moduleId: "schemaParamInjection.agency"
+    }
+  })
+  __stack.args["input"] = input;
+  __stack.args["s"] = s;
+  __self.__retryable = __self.__retryable ?? true;
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "schemaParamInjection.agency", scopeName: "parseValue" });
+  let __resultCheckpointId = -1;
+if (__ctx.stateStack.currentNodeId()) {
+  __resultCheckpointId = __ctx.checkpoints.createPinned(__stateStack, __ctx, { moduleId: "schemaParamInjection.agency", scopeName: "parseValue", stepPath: "", label: "result-entry" });
+}
+if (__ctx._pendingArgOverrides) {
+  const __overrides = __ctx._pendingArgOverrides;
+  __ctx._pendingArgOverrides = undefined;
+  if ("input" in __overrides) {
+    input = __overrides["input"];
+    __stack.args["input"] = input;
+  }
+  if ("s" in __overrides) {
+    s = __overrides["s"];
+    __stack.args["s"] = s;
+  }
+
+}
+
+  try {
+    await runner.step(0, async (runner) => {
+__functionCompleted = true;
+runner.halt(await __callMethod(__stack.args.s, "parseJSON", {
+        type: "positional",
+        args: [__stack.args.input]
+      }, {
+        ctx: __ctx,
+        threads: __threads,
+        stateStack: __stateStack
+      }))
+return;
+    });
+    if (runner.halted) { if (isFailure(runner.haltResult)) { runner.haltResult.retryable = runner.haltResult.retryable && __self.__retryable; } return runner.haltResult; }
+  } catch (__error) {
+    if (__error instanceof RestoreSignal) {
+  throw __error;
+}
+return failure(
+  __error instanceof Error ? __error.message : String(__error),
+  {
+    checkpoint: __ctx.getResultCheckpoint(),
+    retryable: __self.__retryable,
+    functionName: "parseValue",
+    args: __stack.args,
+  }
+);
+
+  } finally {
+    __stateStack.pop()
+    if (__functionCompleted) {
+      await callHook({
+        callbacks: __ctx.callbacks,
+        name: "onFunctionEnd",
+        data: {
+          functionName: "parseValue",
+          timeTaken: performance.now() - __funcStartTime
+        }
+      })
+    }
+  }
+}
+const parseValue = __AgencyFunction.create({
+  name: "parseValue",
+  module: "schemaParamInjection.agency",
+  fn: __parseValue_impl,
+  params: [{
+    name: "input",
+    hasDefault: false,
+    defaultValue: undefined,
+    variadic: false
+  }, {
+    name: "s",
+    hasDefault: false,
+    defaultValue: undefined,
+    variadic: false
+  }],
+  toolDefinition: {
+    name: "parseValue",
+    description: "No description provided.",
+    schema: z.object({"input": z.string(), "s": z.string(), })
+  },
+  safe: false,
+  exported: false
+}, __toolRegistry);
+async function __wrapper_impl(__state: InternalFunctionState | undefined = undefined) {
+  const __setupData = setupFunction({
+    state: __state
+  });
+  // __state will be undefined if this function is being called as a tool by an llm
+  const __stateStack = __setupData.stateStack;
+const __stack = __setupData.stack;
+const __step = __setupData.step;
+const __self = __setupData.self;
+const __threads = __setupData.threads;
+const __ctx = __state?.ctx || __globalCtx;
+const statelogClient = __ctx.statelogClient;
+const __graph = __ctx.graph;
+let __forked;
+let __functionCompleted = false;
+  if (!__ctx.globals.isInitialized("schemaParamInjection.agency")) {
+    await __initializeGlobals(__ctx)
+  }
+  let __funcStartTime: number = performance.now();
+  await callHook({
+    callbacks: __ctx.callbacks,
+    name: "onFunctionStart",
+    data: {
+      functionName: "wrapper",
+      args: {},
+      isBuiltin: false,
+      moduleId: "schemaParamInjection.agency"
+    }
+  })
+  __self.__retryable = __self.__retryable ?? true;
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "schemaParamInjection.agency", scopeName: "wrapper" });
+  let __resultCheckpointId = -1;
+if (__ctx.stateStack.currentNodeId()) {
+  __resultCheckpointId = __ctx.checkpoints.createPinned(__stateStack, __ctx, { moduleId: "schemaParamInjection.agency", scopeName: "wrapper", stepPath: "", label: "result-entry" });
+}
+if (__ctx._pendingArgOverrides) {
+  const __overrides = __ctx._pendingArgOverrides;
+  __ctx._pendingArgOverrides = undefined;
+
+}
+
+  try {
+    await runner.step(0, async (runner) => {
+//  Return-position injection: outer return type provides the hint.
+    });
+    await runner.step(1, async (runner) => {
+__functionCompleted = true;
+runner.halt(await __call(parseValue, {
+        type: "named",
+        positionalArgs: [`[1,2,3]`],
+        namedArgs: {
+          s: new Schema(z.array(z.number()))
+        }
+      }, {
+        ctx: __ctx,
+        threads: __threads,
+        stateStack: __stateStack
+      }))
+return;
+    });
+    if (runner.halted) { if (isFailure(runner.haltResult)) { runner.haltResult.retryable = runner.haltResult.retryable && __self.__retryable; } return runner.haltResult; }
+  } catch (__error) {
+    if (__error instanceof RestoreSignal) {
+  throw __error;
+}
+return failure(
+  __error instanceof Error ? __error.message : String(__error),
+  {
+    checkpoint: __ctx.getResultCheckpoint(),
+    retryable: __self.__retryable,
+    functionName: "wrapper",
+    args: __stack.args,
+  }
+);
+
+  } finally {
+    __stateStack.pop()
+    if (__functionCompleted) {
+      await callHook({
+        callbacks: __ctx.callbacks,
+        name: "onFunctionEnd",
+        data: {
+          functionName: "wrapper",
+          timeTaken: performance.now() - __funcStartTime
+        }
+      })
+    }
+  }
+}
+const wrapper = __AgencyFunction.create({
+  name: "wrapper",
+  module: "schemaParamInjection.agency",
+  fn: __wrapper_impl,
+  params: [],
+  toolDefinition: {
+    name: "wrapper",
+    description: "No description provided.",
+    schema: z.object({})
+  },
+  safe: false,
+  exported: false
+}, __toolRegistry);
+graph.node("main", async (__state: GraphState) => {
+  const __setupData = setupNode({
+    state: __state
+  });
+  const __stateStack = __state.ctx.stateStack;
+const __stack = __setupData.stack;
+const __step = __setupData.step;
+const __self = __setupData.self;
+const __threads = __setupData.threads;
+const __ctx = __state.ctx;
+const statelogClient = __ctx.statelogClient;
+const __graph = __ctx.graph;
+let __forked;
+let __functionCompleted = false;
+  await callHook({
+    callbacks: __ctx.callbacks,
+    name: "onNodeStart",
+    data: {
+      nodeName: "main"
+    }
+  })
+  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "schemaParamInjection.agency", scopeName: "main" });
+  try {
+    await runner.step(0, async (runner) => {
+//  LHS-annotation injection — Schema<any> inside parseValue receives
+//  z.array(z.number()) synthesized from `number[]`.
+    });
+    await runner.step(1, async (runner) => {
+__stack.locals.nums = await __call(parseValue, {
+        type: "named",
+        positionalArgs: [`[1,2,3]`],
+        namedArgs: {
+          s: new Schema(z.array(z.number()))
+        }
+      }, {
+        ctx: __ctx,
+        threads: __threads,
+        stateStack: __stateStack
+      });
+if (hasInterrupts(__stack.locals.nums)) {
+        await __ctx.pendingPromises.awaitAll()
+        runner.halt({
+          ...__state,
+          data: __stack.locals.nums
+        })
+        return;
+      }
+    });
+    await runner.step(2, async (runner) => {
+const __funcResult = await __call(print, {
+        type: "positional",
+        args: [__stack.locals.nums]
+      }, {
+        ctx: __ctx,
+        threads: __threads,
+        stateStack: __stateStack
+      });
+if (hasInterrupts(__funcResult)) {
+        await __ctx.pendingPromises.awaitAll()
+        runner.halt({
+          ...__state,
+          data: __funcResult
+        })
+        return;
+      }
+//  `any` LHS — degenerate but valid: injects `z.any()`. No assertion
+//  about runtime shape, just verifies it compiles.
+    });
+    await runner.step(3, async (runner) => {
+__stack.locals.anything = await __call(parseValue, {
+        type: "named",
+        positionalArgs: [`42`],
+        namedArgs: {
+          s: new Schema(z.any())
+        }
+      }, {
+        ctx: __ctx,
+        threads: __threads,
+        stateStack: __stateStack
+      });
+if (hasInterrupts(__stack.locals.anything)) {
+        await __ctx.pendingPromises.awaitAll()
+        runner.halt({
+          ...__state,
+          data: __stack.locals.anything
+        })
+        return;
+      }
+    });
+    await runner.step(4, async (runner) => {
+const __funcResult = await __call(print, {
+        type: "positional",
+        args: [__stack.locals.anything]
+      }, {
+        ctx: __ctx,
+        threads: __threads,
+        stateStack: __stateStack
+      });
+if (hasInterrupts(__funcResult)) {
+        await __ctx.pendingPromises.awaitAll()
+        runner.halt({
+          ...__state,
+          data: __funcResult
+        })
+        return;
+      }
+//  `!` validation on the LHS: injection still fires with the bare
+//  type. `!` triggers a separate runtime validation pass at the
+//  assignment site; the injected schema and the validator schema are
+//  built from the same LHS type, so they agree.
+    });
+    await runner.step(5, async (runner) => {
+__stack.locals.validated = await __call(parseValue, {
+        type: "named",
+        positionalArgs: [`[1,2,3]`],
+        namedArgs: {
+          s: new Schema(z.array(z.number()))
+        }
+      }, {
+        ctx: __ctx,
+        threads: __threads,
+        stateStack: __stateStack
+      });
+if (hasInterrupts(__stack.locals.validated)) {
+        await __ctx.pendingPromises.awaitAll()
+        runner.halt({
+          ...__state,
+          data: __stack.locals.validated
+        })
+        return;
+      }
+__stack.locals.validated = __validateType(__stack.locals.validated, z.array(z.number()));
+    });
+    await runner.step(6, async (runner) => {
+const __funcResult = await __call(print, {
+        type: "positional",
+        args: [__stack.locals.validated]
+      }, {
+        ctx: __ctx,
+        threads: __threads,
+        stateStack: __stateStack
+      });
+if (hasInterrupts(__funcResult)) {
+        await __ctx.pendingPromises.awaitAll()
+        runner.halt({
+          ...__state,
+          data: __funcResult
+        })
+        return;
+      }
+//  Explicit override: the user-supplied schema wins, no injection.
+    });
+    await runner.step(7, async (runner) => {
+__stack.locals.explicit = await __call(parseValue, {
+        type: "positional",
+        args: [`[1,2,3]`, new Schema(z.any())]
+      }, {
+        ctx: __ctx,
+        threads: __threads,
+        stateStack: __stateStack
+      });
+if (hasInterrupts(__stack.locals.explicit)) {
+        await __ctx.pendingPromises.awaitAll()
+        runner.halt({
+          ...__state,
+          data: __stack.locals.explicit
+        })
+        return;
+      }
+    });
+    await runner.step(8, async (runner) => {
+const __funcResult = await __call(print, {
+        type: "positional",
+        args: [__stack.locals.explicit]
+      }, {
+        ctx: __ctx,
+        threads: __threads,
+        stateStack: __stateStack
+      });
+if (hasInterrupts(__funcResult)) {
+        await __ctx.pendingPromises.awaitAll()
+        runner.halt({
+          ...__state,
+          data: __funcResult
+        })
+        return;
+      }
+//  Bare expression statement — no LHS, no return position, no injection.
+//  The Schema param is omitted; the function would fail at runtime
+//  because s is undefined. This case exists to lock in "no spooky
+//  injection without a clear context."
+    });
+    await runner.step(9, async (runner) => {
+const __funcResult = await __call(parseValue, {
+        type: "positional",
+        args: [`[1,2,3]`]
+      }, {
+        ctx: __ctx,
+        threads: __threads,
+        stateStack: __stateStack
+      });
+if (hasInterrupts(__funcResult)) {
+        await __ctx.pendingPromises.awaitAll()
+        runner.halt({
+          ...__state,
+          data: __funcResult
+        })
+        return;
+      }
+    });
+    if (runner.halted) return runner.haltResult;
+    await callHook({
+      callbacks: __ctx.callbacks,
+      name: "onNodeEnd",
+      data: {
+        nodeName: "main",
+        data: undefined
+      }
+    })
+    return {
+      messages: __threads,
+      data: undefined
+    };
+  } catch (__error) {
+    if (__error instanceof RestoreSignal) {
+      throw __error
+    }
+    console.error(`\nAgent crashed: ${__error.message}`)
+    console.error(__error.stack)
+    return {
+      messages: __threads,
+      data: failure(__error instanceof Error ? __error.message : String(__error), { functionName: "main" })
+    };
+  }
+})
+export async function main({ messages, callbacks }: { messages?: any; callbacks?: any } = {}): Promise<RunNodeResult<any>> {
+  return runNode({
+    ctx: __globalCtx,
+    nodeName: "main",
+    data: {},
+    messages: messages,
+    callbacks: callbacks,
+    initializeGlobals: __initializeGlobals
+  });
+}
+export const __mainNodeParams = [];
+if (__process.argv[1] === fileURLToPath(import.meta.url)) {
+  try {
+    const initialState = {
+      messages: new ThreadStore(),
+      data: {}
+    };
+    await main(initialState)
+  } catch (__error: any) {
+    console.error(`\nAgent crashed: ${__error.message}`)
+    throw __error
+  }
+}
+export default graph
+export const __sourceMap = {"schemaParamInjection.agency:parseValue":{"0":{"line":7,"col":2}},"schemaParamInjection.agency:wrapper":{"1":{"line":12,"col":2}},"schemaParamInjection.agency:main":{"1":{"line":18,"col":2},"2":{"line":19,"col":2},"3":{"line":23,"col":2},"4":{"line":24,"col":2},"5":{"line":30,"col":2},"6":{"line":31,"col":2},"7":{"line":34,"col":2},"8":{"line":35,"col":2},"9":{"line":41,"col":2}}};

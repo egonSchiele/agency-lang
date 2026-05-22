@@ -26,6 +26,7 @@ import {
 import { Scope } from "./scope.js";
 import { BOOLEAN_T, REGEX_T, STRING_T } from "./primitives.js";
 import type { BlockType } from "../types/typeHints.js";
+import { isSchemaTypeHint } from "../utils/schemaParam.js";
 
 /**
  * Derive arity bounds and per-position param types from a parameter list,
@@ -63,8 +64,15 @@ function paramListSignature(
 } {
   const lastParam = params[params.length - 1];
   const hasRest = lastParam?.variadic === true;
+  // Schema<...> parameters are injection-eligible: the preprocessor's
+  // `injectSchemaArgs` pass fills them in from the call's expected type
+  // (LHS annotation or enclosing return type) when omitted, so they are
+  // effectively optional from the type checker's perspective.
   const minArgs = params.filter(
-    (p) => p.defaultValue === undefined && !p.variadic,
+    (p) =>
+      p.defaultValue === undefined &&
+      !p.variadic &&
+      !isSchemaTypeHint(p.typeHint),
   ).length;
   const maxArgs = hasRest ? Infinity : params.length;
 

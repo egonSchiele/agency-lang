@@ -1,0 +1,33 @@
+// End-to-end runtime test for the schema-parameter-injection feature.
+//
+// Each node exercises a different shape of injection:
+//   - LHS-annotation drives the schema (number[] → z.array(z.number()))
+//   - return-position drives the schema (outer function's return type)
+//   - explicit arg suppresses injection
+
+def parseValue(input: string, s: Schema<any>): any {
+  const r = s.parseJSON(input)
+  if (isSuccess(r)) {
+    return r.value
+  }
+  return "failed"
+}
+
+def parseInRet(): number[] {
+  // Return-position injection: outer return type provides the hint.
+  return parseValue("[1,2,3]")
+}
+
+node parseNumbersFromLHS() {
+  const xs: number[] = parseValue("[1,2,3]")
+  return xs
+}
+
+node parseNumbersFromReturn() {
+  return parseInRet()
+}
+
+node explicitOverride() {
+  // Explicit schema arg wins; injection does not fire.
+  return parseValue("[1,2,3]", schema(any))
+}

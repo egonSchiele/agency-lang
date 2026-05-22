@@ -30,6 +30,7 @@ import {
   walkNodesArray,
 } from "@/utils/node.js";
 import { desugarParallelInBody } from "./parallelDesugar.js";
+import { injectSchemaArgsInProgram } from "./injectSchemaArgs.js";
 
 /**
  * Recursively apply a transform function to all body arrays in a node tree.
@@ -323,6 +324,11 @@ export class TypescriptPreprocessor {
       this.getGraphNodeDefinitions();
     }
     this.propagateBlockTypes();
+    injectSchemaArgsInProgram(
+      this.program,
+      this.functionDefinitions,
+      this.importedFunctions,
+    );
     this.collectSkills();
     this.addAwaitPendingCalls();
     this.filterExcludedNodeTypes();

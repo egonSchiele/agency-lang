@@ -1,10 +1,24 @@
 import { main, hasInterrupts, approve, respondToInterrupts } from "./agent.js";
-import { writeFileSync, readFileSync, existsSync, unlinkSync } from "fs";
+import { writeFileSync } from "fs";
 
-// Clean statelog so we count only THIS run's events.
-if (existsSync("statelog.log")) unlinkSync("statelog.log");
+// Regression test for tool-branch idempotency on resume.
+//
+// Scenario: on the FIRST pass, the tool runs to completion (success),
+// the onToolCallEnd hook fires, the branch is fully done. Then the
+// follow-up LLM call's onLLMCallStart (count==2) interrupts. On
+// resume, `pr.parallel` re-enters the tool branch but every `b.step`
+// inside it is already marked done — so none of the start/invoke/end
+// /log steps re-execute. We observe that here by counting TS-side
+// onToolCallEnd fires: if the end-step isn't wrapped in `b.step`, the
+// hook would fire AGAIN on resume (count=2). Idempotent => count=1.
+let tsEndCallCount = 0;
+const callbacks = {
+  onToolCallEnd: ({ toolName }) => {
+    if (toolName === "greet") tsEndCallCount++;
+  },
+};
 
-const initial = await main();
+const initial = await main({ callbacks });
 
 if (!hasInterrupts(initial.data)) {
   throw new Error(
@@ -12,28 +26,21 @@ if (!hasInterrupts(initial.data)) {
   );
 }
 
-const final = await respondToInterrupts(initial.data, [approve()]);
-
-// Count statelog.toolCall events across the whole run (first pass +
-// resume). If pr.parallel re-executes a fully-completed branch on
-// resume and the `statelogClient.toolCall(...)` call is OUTSIDE any
-// b.step guard, this event is logged TWICE (regression). Gating it on
-// a per-tool completion key (its own b.step) makes it exactly ONCE.
-let toolCallEvents = 0;
-const lines = readFileSync("statelog.log", "utf8").split("\n").filter(Boolean);
-for (const line of lines) {
-  const ev = JSON.parse(line);
-  if (ev?.data?.type === "toolCall" && ev.data.toolName === "greet") {
-    toolCallEvents++;
-  }
-}
+// Each runNode / respondToInterrupts call creates a fresh execCtx, so
+// the TS callbacks must be re-attached on resume via `metadata.callbacks`
+// (otherwise the TS-side callback wouldn't fire at all on resume — even
+// when an unintended re-execution happens — and the regression would
+// be silently swallowed).
+const final = await respondToInterrupts(initial.data, [approve()], {
+  metadata: { callbacks },
+});
 
 writeFileSync(
   "__result.json",
   JSON.stringify(
     {
       data: final.data,
-      toolCallEvents,
+      tsEndCallCount,
     },
     null,
     2,

@@ -6,6 +6,7 @@ import { AgencyConfig } from "@/config.js";
 import { AgencyProgram, generateTypeScript } from "@/index.js";
 import { resolveImports } from "@/preprocessors/importResolver.js";
 import { resolveReExports } from "@/preprocessors/resolveReExports.js";
+import { liftCallbackBlocks } from "@/preprocessors/liftCallbacks.js";
 import { buildCompilationUnit } from "@/compilationUnit.js";
 import { SymbolTable } from "@/symbolTable.js";
 import { formatErrors, typeCheck } from "@/typeChecker/index.js";
@@ -120,9 +121,15 @@ export function compileSource(
     const reExportedProgram = resolveReExports(program, symbolTable, syntheticPath);
     const resolvedProgram = resolveImports(reExportedProgram, symbolTable, syntheticPath);
 
+    // 3a. Lift `callback("onX") { ... }` block bodies to top-level defs.
+    // Must run BEFORE buildCompilationUnit (so lifted defs appear in
+    // functionDefinitions) and BEFORE typecheck (so undefined-variable
+    // diagnostics catch captures of enclosing locals).
+    const liftedProgram = liftCallbackBlocks(resolvedProgram);
+
     // 4. Build compilation unit
     const info = buildCompilationUnit(
-      resolvedProgram,
+      liftedProgram,
       symbolTable,
       syntheticPath,
       source,
@@ -130,7 +137,7 @@ export function compileSource(
 
     // 5. Type check
     if (config.typechecker?.enabled || config.typechecker?.strict) {
-      const { errors } = typeCheck(resolvedProgram, config, info);
+      const { errors } = typeCheck(liftedProgram, config, info);
       if (errors.length > 0) {
         const hasFatal = errors.some(
           (e) => (e.severity ?? "error") === "error",
@@ -146,7 +153,7 @@ export function compileSource(
 
     // 6. Rewrite import paths
     const strategy = new CompileStrategy({ targetExt: ".js" });
-    resolvedProgram.nodes.forEach((node) => {
+    liftedProgram.nodes.forEach((node) => {
       if (node.type !== "importStatement") return;
       if (isStdlibImport(node.modulePath) || isPkgImport(node.modulePath))
         return;
@@ -159,7 +166,7 @@ export function compileSource(
     // 7. Generate TypeScript
     const outputPath = path.join(os.tmpdir(), `${moduleId}.js`);
     const generatedCode = generateTypeScript(
-      resolvedProgram,
+      liftedProgram,
       config,
       info,
       moduleId,

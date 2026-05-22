@@ -5,6 +5,7 @@
 import { AgencyProgram } from "@/index.js";
 import { resolveImports } from "@/preprocessors/importResolver.js";
 import { resolveReExports } from "@/preprocessors/resolveReExports.js";
+import { liftCallbackBlocks } from "@/preprocessors/liftCallbacks.js";
 import { buildCompilationUnit } from "@/compilationUnit.js";
 import { SymbolTable } from "@/symbolTable.js";
 import { typeCheck } from "@/typeChecker/index.js";
@@ -103,8 +104,9 @@ export function typeCheckSource(
     const symbolTable = SymbolTable.build(syntheticPath, {});
     const reExported = resolveReExports(program, symbolTable, syntheticPath);
     const resolved = resolveImports(reExported, symbolTable, syntheticPath);
-    const info = buildCompilationUnit(resolved, symbolTable, syntheticPath, source);
-    const { errors } = typeCheck(resolved, { typechecker: { enabled: true } }, info);
+    const lifted = liftCallbackBlocks(resolved);
+    const info = buildCompilationUnit(lifted, symbolTable, syntheticPath, source);
+    const { errors } = typeCheck(lifted, { typechecker: { enabled: true } }, info);
 
     // Partition into errors and warnings in a single pass. The only severity
     // values the type-checker emits are "error" and "warning" (see

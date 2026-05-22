@@ -3,6 +3,7 @@ import { AgencyConfig, loadConfigSafe } from "@/config.js";
 import { AgencyProgram, generateTypeScript } from "@/index.js";
 import { resolveImports } from "@/preprocessors/importResolver.js";
 import { resolveReExports } from "@/preprocessors/resolveReExports.js";
+import { liftCallbackBlocks } from "@/preprocessors/liftCallbacks.js";
 import { buildCompilationUnit } from "@/compilationUnit.js";
 import { SymbolTable } from "@/symbolTable.js";
 import { formatErrors, typeCheck } from "@/typeChecker/index.js";
@@ -231,8 +232,12 @@ export function compile(
     symbolTable,
     absoluteInputFile,
   );
+  // Lift `callback("onX") { ... }` block bodies to top-level defs.
+  // Must run BEFORE buildCompilationUnit and typecheck so the lifted defs
+  // appear in functionDefinitions and get their bodies typechecked.
+  const liftedProgram = liftCallbackBlocks(resolvedProgram);
   const info = buildCompilationUnit(
-    resolvedProgram,
+    liftedProgram,
     symbolTable,
     absoluteInputFile,
     contents,
@@ -240,7 +245,7 @@ export function compile(
 
   const tc = config.typechecker;
   if (tc?.enabled || tc?.strict) {
-    const { errors } = typeCheck(resolvedProgram, config, info);
+    const { errors } = typeCheck(liftedProgram, config, info);
     if (errors.length > 0) {
       if (tc?.strict) {
         console.error(formatErrors(errors));
@@ -266,7 +271,7 @@ export function compile(
     options?.importStrategy ?? new CompileStrategy({ targetExt: ".js" });
   const nonAgencyImports: string[] = [];
 
-  resolvedProgram.nodes.forEach((node) => {
+  liftedProgram.nodes.forEach((node) => {
     if (node.type !== "importStatement") return;
     if (isStdlibImport(node.modulePath) || isPkgImport(node.modulePath)) return;
 
@@ -290,7 +295,7 @@ export function compile(
   const moduleId = path.relative(process.cwd(), absoluteInputFile);
   const absoluteOutputFile = path.resolve(outputFile);
   const generatedCode = generateTypeScript(
-    resolvedProgram,
+    liftedProgram,
     config,
     info,
     moduleId,

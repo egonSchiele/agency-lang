@@ -1,9 +1,5 @@
 import { describe, it, expect } from "vitest";
-import {
-  isSchemaTypeHint,
-  schemaInnerType,
-  findSchemaParam,
-} from "./schemaParam.js";
+import { isSchemaTypeHint, findSchemaParam } from "./schemaParam.js";
 import type { FunctionParameter } from "../types/function.js";
 
 describe("isSchemaTypeHint", () => {
@@ -50,41 +46,6 @@ describe("isSchemaTypeHint", () => {
 
   it("rejects undefined", () => {
     expect(isSchemaTypeHint(undefined)).toBe(false);
-  });
-});
-
-describe("schemaInnerType", () => {
-  it("returns the inner type from `schemaType`", () => {
-    expect(
-      schemaInnerType({
-        type: "schemaType",
-        inner: { type: "primitiveType", value: "string" },
-      }),
-    ).toEqual({ type: "primitiveType", value: "string" });
-  });
-
-  it("returns the first typeArg from `genericType Schema<...>`", () => {
-    expect(
-      schemaInnerType({
-        type: "genericType",
-        name: "Schema",
-        typeArgs: [
-          {
-            type: "arrayType",
-            elementType: { type: "primitiveType", value: "number" },
-          },
-        ],
-      }),
-    ).toEqual({
-      type: "arrayType",
-      elementType: { type: "primitiveType", value: "number" },
-    });
-  });
-
-  it("returns undefined for non-Schema types", () => {
-    expect(
-      schemaInnerType({ type: "primitiveType", value: "string" }),
-    ).toBeUndefined();
   });
 });
 

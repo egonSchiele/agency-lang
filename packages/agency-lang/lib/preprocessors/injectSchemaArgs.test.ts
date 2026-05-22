@@ -344,4 +344,194 @@ describe("injectSchemaArgsInProgram", () => {
 
     expect(call.arguments).toHaveLength(0);
   });
+
+  it("injects for `let` assignments the same as `const`", () => {
+    // let xs: number[] = parseValue("[1,2,3]")
+    const call = buildCall("parseValue", [buildStringLiteral("[1,2,3]")]);
+    const assignment: Assignment = {
+      type: "assignment",
+      declKind: "let",
+      variableName: "xs",
+      typeHint: {
+        type: "arrayType",
+        elementType: { type: "primitiveType", value: "number" },
+      },
+      value: call,
+    };
+    const program: AgencyProgram = {
+      type: "agencyProgram",
+      nodes: [assignment],
+    };
+
+    injectSchemaArgsInProgram(
+      program,
+      { parseValue: buildParseValueDef() },
+      {},
+    );
+
+    expect(call.arguments).toHaveLength(2);
+    if (call.arguments[1].type !== "namedArgument") return;
+    if (call.arguments[1].value.type !== "schemaExpression") return;
+    expect(call.arguments[1].value.typeArg).toEqual({
+      type: "arrayType",
+      elementType: { type: "primitiveType", value: "number" },
+    });
+  });
+
+  it("does not inject when a splat appears before the Schema slot", () => {
+    // const xs: number[] = parseValue(...args)
+    // We can't tell statically whether the splat fills the Schema slot,
+    // so injection must be conservative and skip.
+    const splat = {
+      type: "splat",
+      value: { type: "variableReference", name: "args" },
+    } as unknown as FunctionCall["arguments"][number];
+    const call = buildCall("parseValue", [splat]);
+    const program: AgencyProgram = {
+      type: "agencyProgram",
+      nodes: [
+        buildConstAssignment(
+          "xs",
+          {
+            type: "arrayType",
+            elementType: { type: "primitiveType", value: "number" },
+          },
+          call,
+        ),
+      ],
+    };
+
+    injectSchemaArgsInProgram(
+      program,
+      { parseValue: buildParseValueDef() },
+      {},
+    );
+
+    // Still just the splat — no synthetic Schema arg appended.
+    expect(call.arguments).toHaveLength(1);
+    expect(call.arguments[0].type).toBe("splat");
+  });
+
+  it("injects for calls to imported functions with a Schema parameter", () => {
+    // Same shape as parseValue, but reached via `importedFunctions`
+    // instead of `functionDefinitions`.
+    const call = buildCall("parseValue", [buildStringLiteral("[1,2,3]")]);
+    const program: AgencyProgram = {
+      type: "agencyProgram",
+      nodes: [
+        buildConstAssignment(
+          "xs",
+          {
+            type: "arrayType",
+            elementType: { type: "primitiveType", value: "number" },
+          },
+          call,
+        ),
+      ],
+    };
+
+    injectSchemaArgsInProgram(
+      program,
+      {},
+      {
+        parseValue: {
+          parameters: buildParseValueDef().parameters,
+          returnType: { type: "primitiveType", value: "any" },
+        },
+      },
+    );
+
+    expect(call.arguments).toHaveLength(2);
+    if (call.arguments[1].type !== "namedArgument") return;
+    expect(call.arguments[1].value.type).toBe("schemaExpression");
+  });
+
+  it("throws when an imported function declares more than one Schema parameter", () => {
+    // Same multi-Schema declaration as the earlier test, but reached
+    // through `importedFunctions`. Validates that the up-front
+    // uniqueness check scans imports too.
+    const params: FunctionParameter[] = [
+      {
+        type: "functionParameter",
+        name: "a",
+        typeHint: {
+          type: "genericType",
+          name: "Schema",
+          typeArgs: [{ type: "primitiveType", value: "any" }],
+        },
+      },
+      {
+        type: "functionParameter",
+        name: "b",
+        typeHint: {
+          type: "genericType",
+          name: "Schema",
+          typeArgs: [{ type: "primitiveType", value: "any" }],
+        },
+      },
+    ];
+    const program: AgencyProgram = {
+      type: "agencyProgram",
+      nodes: [],
+    };
+
+    expect(() =>
+      injectSchemaArgsInProgram(
+        program,
+        {},
+        {
+          twoSchemas: {
+            parameters: params,
+            returnType: { type: "primitiveType", value: "any" },
+          },
+        },
+      ),
+    ).toThrowError(/more than one Schema parameter/);
+  });
+
+  it("injects inside a class method body using the method's return type", () => {
+    // class Foo { parse(): number[] { return parseValue("[1,2,3]") } }
+    const call = buildCall("parseValue", [buildStringLiteral("[1,2,3]")]);
+    const program: AgencyProgram = {
+      type: "agencyProgram",
+      nodes: [
+        {
+          type: "classDefinition",
+          className: "Foo",
+          fields: [],
+          methods: [
+            {
+              type: "classMethod",
+              name: "parse",
+              parameters: [],
+              returnType: {
+                type: "arrayType",
+                elementType: { type: "primitiveType", value: "number" },
+              },
+              body: [
+                {
+                  type: "returnStatement",
+                  value: call,
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    };
+
+    injectSchemaArgsInProgram(
+      program,
+      { parseValue: buildParseValueDef() },
+      {},
+    );
+
+    expect(call.arguments).toHaveLength(2);
+    if (call.arguments[1].type !== "namedArgument") return;
+    if (call.arguments[1].value.type !== "schemaExpression") return;
+    expect(call.arguments[1].value.typeArg).toEqual({
+      type: "arrayType",
+      elementType: { type: "primitiveType", value: "number" },
+    });
+  });
 });

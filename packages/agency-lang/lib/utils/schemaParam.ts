@@ -26,23 +26,6 @@ export function isSchemaTypeHint(t: VariableType | undefined): boolean {
 }
 
 /**
- * Extract the `inner` type parameter from a Schema type hint, if any.
- * Returns undefined when the hint isn't a Schema type. Used by the
- * type checker to validate that the LHS-derived schema is structurally
- * assignable to the param's declared inner type.
- */
-export function schemaInnerType(
-  t: VariableType | undefined,
-): VariableType | undefined {
-  if (!t) return undefined;
-  if (t.type === "schemaType") return t.inner;
-  if (t.type === "genericType" && t.name === "Schema" && t.typeArgs[0]) {
-    return t.typeArgs[0];
-  }
-  return undefined;
-}
-
-/**
  * Find the unique Schema-typed parameter in a function's parameter list,
  * if any. Throws when more than one Schema parameter is declared — the
  * compiler currently restricts functions to at most one Schema parameter

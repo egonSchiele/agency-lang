@@ -53,7 +53,13 @@ export type PromptRunnerOpts = {
  */
 export class PromptRunner {
   constructor(private opts: PromptRunnerOpts) {
-    this.opts.self.runnerState ??= { completedSteps: [] };
+    // Defensive init: an older / partially-restored frame may have a
+    // `runnerState` object that lacks `completedSteps` (e.g. a checkpoint
+    // taken before this field existed). Initialize both fields
+    // independently so `step()` doesn't blow up when reading
+    // `runnerState.completedSteps` on resume.
+    this.opts.self.runnerState ??= {};
+    this.opts.self.runnerState.completedSteps ??= [];
   }
 
   /**
@@ -200,7 +206,9 @@ export class BranchRunner {
   public interrupts: Interrupt[] | null = null;
 
   constructor(private self: any) {
-    this.self.runnerState ??= { completedSteps: [] };
+    // Same defensive init as PromptRunner — see comment there.
+    this.self.runnerState ??= {};
+    this.self.runnerState.completedSteps ??= [];
   }
 
   async step(

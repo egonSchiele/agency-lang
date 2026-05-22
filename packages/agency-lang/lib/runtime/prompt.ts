@@ -665,7 +665,6 @@ export async function runPrompt(args: {
           );
           if (b.interrupts) return;
 
-          const toolCallStartTime = performance.now();
           const toolSpanId = ctx.statelogClient.startSpan("toolExecution");
           let toolResult: any;
           let invokeOutcome:
@@ -675,7 +674,19 @@ export async function runPrompt(args: {
             | "interrupted"
             | "crashed" = "success";
 
+          // Persist the measured tool execution duration in
+          // self.runnerState so resume (where the invoke step is
+          // skipped) doesn't report ~0ms to onToolCallEnd /
+          // statelogClient.toolCall. Keyed per tool call id; rides
+          // along with completedSteps on the same frame.
+          self.runnerState.toolTimings ??= {};
+          // IMPORTANT: keep the toolExecution span open across the
+          // invoke + end-hook + log steps so the toolCall event inherits
+          // the toolExecution span_id (logsViewer aggregates tool
+          // duration off that). try/finally guarantees we close it even
+          // on bailout / unexpected throw.
           try {
+            const toolCallStartTime = performance.now();
             // Invoke step: returns the interrupts when the tool halts
             // with them so BranchRunner.step can collect. All other
             // outcomes (success, failure, reject, crash) update outer
@@ -694,57 +705,65 @@ export async function runPrompt(args: {
                 });
                 toolResult = outcome.toolResult;
                 invokeOutcome = outcome.invokeOutcome;
+                if (outcome.invokeOutcome === "success") {
+                  self.runnerState.toolTimings[toolCall.id] =
+                    performance.now() - toolCallStartTime;
+                }
                 return outcome.interrupts;
+              },
+            );
+
+            if (b.interrupts || invokeOutcome !== "success") return;
+
+            // On resume after an end-hook bailout, the `invoke` step is
+            // skipped and `toolResult` is undefined. Restore it from the
+            // per-branch result that `setResultOnBranch` persisted before
+            // the bailout, so the end-hook sees the actual tool output.
+            if (toolResult === undefined) {
+              toolResult = stack.getBranch(branchKey)?.result?.result;
+            }
+
+            // Reuse the persisted duration so onToolCallEnd /
+            // statelogClient.toolCall always report the real exec time,
+            // not the resume pass's overhead.
+            const timeTaken: number =
+              self.runnerState.toolTimings[toolCall.id] ?? 0;
+            await b.step(
+              `round.${round}.tool.${toolCall.id}.end`,
+              async () =>
+                await callHook({
+                  ctx,
+                  name: "onToolCallEnd",
+                  data: {
+                    toolName: handler.name,
+                    result: toolResult,
+                    timeTaken,
+                  },
+                }),
+            );
+            // If onToolCallEnd collected interrupts, the branch is halted —
+            // don't log toolCall (it would duplicate when the step re-runs on
+            // resume).
+            if (b.interrupts) return;
+            // Wrap the toolCall log in its own b.step so it's idempotent
+            // when pr.parallel re-runs a fully-completed branch on resume
+            // (e.g. after a later `nextLlmCall` step bails). Without this
+            // guard, every re-entry would emit a duplicate toolCall event.
+            await b.step(
+              `round.${round}.tool.${toolCall.id}.log`,
+              async () => {
+                ctx.statelogClient.toolCall({
+                  toolName: handler.name,
+                  args: namedArgs,
+                  output: toolResult,
+                  model: JSON.stringify(clientConfig.model),
+                  timeTaken,
+                });
               },
             );
           } finally {
             ctx.statelogClient.endSpan(toolSpanId);
           }
-
-          if (b.interrupts || invokeOutcome !== "success") return;
-
-          // On resume after an end-hook bailout, the `invoke` step is
-          // skipped and `toolResult` is undefined. Restore it from the
-          // per-branch result that `setResultOnBranch` persisted before
-          // the bailout, so the end-hook sees the actual tool output.
-          if (toolResult === undefined) {
-            toolResult = stack.getBranch(branchKey)?.result?.result;
-          }
-
-          const toolCallEndTime = performance.now();
-          await b.step(
-            `round.${round}.tool.${toolCall.id}.end`,
-            async () =>
-              await callHook({
-                ctx,
-                name: "onToolCallEnd",
-                data: {
-                  toolName: handler.name,
-                  result: toolResult,
-                  timeTaken: toolCallEndTime - toolCallStartTime,
-                },
-              }),
-          );
-          // If onToolCallEnd collected interrupts, the branch is halted —
-          // don't log toolCall (it would duplicate when the step re-runs on
-          // resume).
-          if (b.interrupts) return;
-          // Wrap the toolCall log in its own b.step so it's idempotent
-          // when pr.parallel re-runs a fully-completed branch on resume
-          // (e.g. after a later `nextLlmCall` step bails). Without this
-          // guard, every re-entry would emit a duplicate toolCall event.
-          await b.step(
-            `round.${round}.tool.${toolCall.id}.log`,
-            async () => {
-              ctx.statelogClient.toolCall({
-                toolName: handler.name,
-                args: namedArgs,
-                output: toolResult,
-                model: JSON.stringify(clientConfig.model),
-                timeTaken: toolCallEndTime - toolCallStartTime,
-              });
-            },
-          );
         },
       );
 

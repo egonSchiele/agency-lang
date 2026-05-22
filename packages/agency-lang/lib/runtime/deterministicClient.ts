@@ -83,18 +83,12 @@ export class DeterministicClient implements LLMClient {
     }
 
     if ("toolCalls" in mock) {
-      const calls = mock.toolCalls.map((tc, i) => {
-        if (!tc.args) {
-          throw new Error(
-            `DeterministicClient: tool call mock for '${tc.name}' is missing args.`,
-          );
-        }
-        return new ToolCall(
-          `mock-tool-${this.callIndex}-${i}`,
-          tc.name,
-          tc.args,
-        );
-      });
+      // `args` is typed optional in MultiToolCallMock; default to {} so
+      // mocks for tools that take no arguments can omit it cleanly.
+      const calls = mock.toolCalls.map(
+        (tc, i) =>
+          new ToolCall(`mock-tool-${this.callIndex}-${i}`, tc.name, tc.args ?? {}),
+      );
       return {
         success: true,
         value: {
@@ -107,18 +101,15 @@ export class DeterministicClient implements LLMClient {
       };
     }
 
-    // Single tool call mock
+    // Single tool call mock — same args-default behavior as the
+    // multi-tool branch above so callers don't have to write `args: {}`
+    // for tools that take no arguments.
     const { name, args } = mock.toolCall;
-    if (!args) {
-      throw new Error(
-        `DeterministicClient: tool call mock for '${name}' is missing args.`
-      );
-    }
     return {
       success: true,
       value: {
         output: null,
-        toolCalls: [new ToolCall(`mock-tool-${this.callIndex}`, name, args)],
+        toolCalls: [new ToolCall(`mock-tool-${this.callIndex}`, name, args ?? {})],
         model: "deterministic",
         usage: SYNTHETIC_USAGE,
         cost: SYNTHETIC_COST,

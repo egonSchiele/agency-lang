@@ -1,6 +1,19 @@
 import { describe, it, expect } from "vitest";
 import { PromptRunner, PromptBailout } from "./promptRunner.js";
 
+/** Stub statelog client. Includes the minimum surface PromptRunner touches:
+ *  checkpointCreated for `step()`, snapshotStack / runInBranchContext for
+ *  `parallel()`. The branch-context stub just calls the fn directly — the
+ *  AsyncLocalStorage isolation isn't relevant to these unit tests. */
+function stubStatelogClient(extras: Partial<any> = {}) {
+  return {
+    checkpointCreated: () => {},
+    snapshotStack: () => undefined,
+    runInBranchContext: (_s: any, fn: () => any) => fn(),
+    ...extras,
+  };
+}
+
 /** Build a PromptRunner with stub deps. Override fields as needed. */
 function makeRunner(overrides: Partial<any> = {}) {
   const self: any = {};
@@ -9,7 +22,7 @@ function makeRunner(overrides: Partial<any> = {}) {
       create: () => 1,
       get: () => ({ moduleId: "", scopeName: "", stepPath: "" }),
     },
-    statelogClient: { checkpointCreated: () => {} },
+    statelogClient: stubStatelogClient(),
   };
   const opts = {
     self,
@@ -61,7 +74,9 @@ describe("PromptRunner.step interrupt handling", () => {
 
   it("does NOT mark the key completed when bailing", async () => {
     const { runner, self } = makeRunner();
-    await runner.step("a", async () => [fakeInterrupt()] as any).catch(() => {});
+    await expect(
+      runner.step("a", async () => [fakeInterrupt()] as any),
+    ).rejects.toBeInstanceOf(PromptBailout);
     expect(self.runnerState.completedSteps.a).toBeUndefined();
   });
 
@@ -72,7 +87,7 @@ describe("PromptRunner.step interrupt handling", () => {
         create: (_s: any, _c: any, info: any) => { createdWith = info; return 42; },
         get: () => ({ moduleId: "m", scopeName: "s", stepPath: "p/a" }),
       },
-      statelogClient: { checkpointCreated: () => {} },
+      statelogClient: stubStatelogClient(),
     };
     const self: any = {};
     const snapshots: any[] = [];
@@ -87,7 +102,9 @@ describe("PromptRunner.step interrupt handling", () => {
       },
     });
     const intr = fakeInterrupt();
-    await runner.step("a", async () => [intr] as any).catch(() => {});
+    await expect(
+      runner.step("a", async () => [intr] as any),
+    ).rejects.toBeInstanceOf(PromptBailout);
     // stepPath is `${basePath}/${key}` so the per-call key (`a`) is
     // appended to the runPrompt-level checkpointInfo.stepPath (`p`).
     expect(createdWith.moduleId).toBe("m");
@@ -105,7 +122,7 @@ describe("PromptRunner.step interrupt handling", () => {
         create: (_s: any, _c: any, info: any) => { createdWith = info; return 7; },
         get: () => ({ moduleId: "", scopeName: "", stepPath: "a" }),
       },
-      statelogClient: { checkpointCreated: () => {} },
+      statelogClient: stubStatelogClient(),
     };
     const runner = new PromptRunner({
       self: {},
@@ -114,7 +131,9 @@ describe("PromptRunner.step interrupt handling", () => {
       checkpointInfo: undefined,
       snapshotMessages: () => [],
     });
-    await runner.step("a", async () => [fakeInterrupt()] as any).catch(() => {});
+    await expect(
+      runner.step("a", async () => [fakeInterrupt()] as any),
+    ).rejects.toBeInstanceOf(PromptBailout);
     expect(createdWith.stepPath).toBe("a");
   });
 
@@ -125,9 +144,9 @@ describe("PromptRunner.step interrupt handling", () => {
         create: () => 5,
         get: () => ({ moduleId: "m", scopeName: "s", stepPath: "p/a" }),
       },
-      statelogClient: {
+      statelogClient: stubStatelogClient({
         checkpointCreated: (args: any) => { logged.push(args); },
-      },
+      }),
     };
     const runner = new PromptRunner({
       self: {},
@@ -136,7 +155,9 @@ describe("PromptRunner.step interrupt handling", () => {
       checkpointInfo: { moduleId: "m", scopeName: "s", stepPath: "p" },
       snapshotMessages: () => [],
     });
-    await runner.step("a", async () => [fakeInterrupt()] as any).catch(() => {});
+    await expect(
+      runner.step("a", async () => [fakeInterrupt()] as any),
+    ).rejects.toBeInstanceOf(PromptBailout);
     expect(logged.length).toBe(1);
     expect(logged[0].checkpointId).toBe(5);
     expect(logged[0].reason).toBe("interrupt");
@@ -175,7 +196,7 @@ describe("PromptRunner.parallel", () => {
         },
         get: () => ({ moduleId: "", scopeName: "", stepPath: "" }),
       },
-      statelogClient: { checkpointCreated: () => {} },
+      statelogClient: stubStatelogClient(),
     };
     const { runner } = makeRunner({ ctx });
     let caught: PromptBailout | null = null;
@@ -209,16 +230,14 @@ describe("PromptRunner.parallel", () => {
   it("once a branch step has collected interrupts, later steps on that branch are no-ops", async () => {
     const { runner } = makeRunner();
     let later = 0;
-    try {
-      await runner.parallel("group", ["a"], async (item, b) => {
+    await expect(
+      runner.parallel("group", ["a"], async (item, b) => {
         await b.step(`${item}.s1`, async () => [fakeInterrupt(item)] as any);
         await b.step(`${item}.s2`, async () => {
           later++;
         });
-      });
-    } catch {
-      // expected PromptBailout
-    }
+      }),
+    ).rejects.toBeInstanceOf(PromptBailout);
     expect(later).toBe(0);
   });
 
@@ -232,7 +251,7 @@ describe("PromptRunner.parallel", () => {
         },
         get: () => ({ moduleId: "", scopeName: "", stepPath: "" }),
       },
-      statelogClient: { checkpointCreated: () => {} },
+      statelogClient: stubStatelogClient(),
     };
     const { runner } = makeRunner({ ctx });
     await runner.parallel("group", ["a", "b"], async (item, b) => {

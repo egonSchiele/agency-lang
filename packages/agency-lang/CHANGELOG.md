@@ -1,11 +1,3 @@
-## Unreleased
-
-### Callbacks
-- `callback` is auto-imported in every `.agency` file; explicit `import { callback } from "std::agency"` is no longer needed.
-- `callback` is now a reserved name and cannot be redefined.
-- Callback bodies (`callback("onX") as data { ... }`) are lifted to module-level functions at compile time. They cannot reference enclosing function/node locals — use a global or the callback's own parameter. (With `typechecker.undefinedVariables: "warn"` or `"error"`, the compiler reports `"Variable 'x' is not defined."` for any such capture.)
-- Top-level and scoped callbacks now survive interrupt + resume. Top-level callbacks are re-registered on every fresh run and resume; scoped callbacks serialize through the function registry like any other AgencyFunction reference.
-
 ## May 18 2026 — v0.2
 
 ### Language

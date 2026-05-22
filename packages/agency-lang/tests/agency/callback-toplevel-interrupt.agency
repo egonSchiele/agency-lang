@@ -1,0 +1,30 @@
+
+let fired: number = 0
+let caught: string = ""
+
+def doWork(): string {
+  return "x"
+}
+
+// A *top-level* callback (registered at module init, lifted to a
+// module-level def) that raises an interrupt. The interrupt must
+// propagate to the handle block on the active call stack at the
+// firing site, even though the callback itself lives outside any
+// agency call frame. This proves top-level lifted callbacks integrate
+// with the same handler-propagation machinery as scoped ones.
+callback("onFunctionEnd") as data {
+  if (data.functionName == "doWork") {
+    fired = fired + 1
+    interrupt myapp::fromTopLevel("from top-level", data)
+  }
+}
+
+node main() {
+  handle {
+    doWork()
+  } with (intr) {
+    caught = caught + intr.kind + ","
+    return approve()
+  }
+  return [fired, caught]
+}

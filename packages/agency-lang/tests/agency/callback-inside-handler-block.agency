@@ -1,0 +1,29 @@
+
+let count: number = 0
+
+def helper(): string {
+  return "x"
+}
+
+// A scoped callback registered INSIDE a `handle` block. Like `if`/`while`
+// blocks, handle blocks share their enclosing function/node's frame for
+// callback scoping — the registration attaches to main()'s frame, so the
+// callback continues to fire for helper() calls made after the handle
+// block exits. (See callback-block-shares-frame for the analogous if-block
+// behavior.) Verifies that the handle block's interrupt-handling
+// machinery does not interfere with callback registration or cleanup.
+node main() {
+  handle {
+    callback("onFunctionStart") as data {
+      if (data.functionName == "helper") {
+        count = count + 1
+      }
+    }
+    helper()  // fires → count = 1
+    helper()  // fires → count = 2
+  } with (intr) {
+    return approve()
+  }
+  helper()  // still inside main → callback still fires → count = 3
+  return count
+}

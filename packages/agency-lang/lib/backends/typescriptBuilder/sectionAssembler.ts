@@ -140,9 +140,15 @@ export function partitionProgram(
  * into named-fn calls of this shape, so this single shape covers both
  * source forms.
  *
- * `with handler { callback(...) }` is intentionally NOT matched: the
- * handler wrapping is semantically meaningful and the registration must
- * stay inside the global-init phase where the handler context applies.
+ * Handler-wrapped top-level forms — `callback(...) with myHandler` and a
+ * `handle { callback(...) } with (...)` block at module scope — are NOT
+ * matched here and fall through to globalInitStatements. Today they do
+ * not survive interrupt + resume (only topLevelCallbackStatements are
+ * re-registered on resume) and the top-level `handle { ... }` form does
+ * not even compile (a separate issue in stepPathTracker). This is a
+ * known limitation: register top-level callbacks at module scope without
+ * a wrapping handler, or move the registration into a node body where
+ * the handle machinery works correctly.
  */
 function isTopLevelCallbackCall(node: AgencyNode): boolean {
   return node.type === "functionCall" && node.functionName === "callback";

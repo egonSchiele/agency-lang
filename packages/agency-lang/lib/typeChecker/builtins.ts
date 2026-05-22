@@ -172,6 +172,14 @@ export const BUILTIN_FUNCTION_TYPES: Record<string, BuiltinSignature> = {
       "Like `fork`, but returns as soon as the first branch completes and cancels the rest. Use as `race(items) as <name> { ... }`.",
   },
 
+  callback: {
+    params: [string],
+    returnType: "any",
+    acceptsBlock: true,
+    description:
+      "Register a callback. Use as `callback('<eventName>') as data { ... }`. The block receives event data as an argument.",
+  },
+
   // --- Context-injected builtins (codegen rewrites the call to inject __ctx) ---
   // The registry lives in lib/codegenBuiltins/contextInjected.ts and is the
   // single source of truth for both the typechecker (here) and the

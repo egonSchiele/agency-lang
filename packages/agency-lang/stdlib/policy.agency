@@ -4,15 +4,23 @@ import {
   _writePolicyFile,
  } from "agency-lang/stdlib-lib/policy.js"
 
+export type InterruptDataKey = string
+
+export type InterruptDataVal = string
+
+export type InterruptKind = string
+
 export type PolicyRule = {
-  match?: Record<string, any>;
+  match?: Record<InterruptDataKey, InterruptDataVal>;
   action: "approve" | "reject" | "propagate"
 }
 
-// Record<string, PolicyRule[]>
-export type Policy = object
+export type Policy = Record<InterruptKind, PolicyRule[]>
 
-export def checkPolicy(policy: Record<string, any>, interrupt: Record<string, any>) {
+export def checkPolicy(
+  policy: Record<string, any>,
+  interrupt: Record<string, any>,
+) {
   """
   Evaluate a policy against an interrupt. Returns approve(), reject(), or propagate() based on the first matching rule. Policy is a JSON object keyed by interrupt kind, where each kind maps to an ordered array of rules with optional match fields (glob patterns) and an action.
   """

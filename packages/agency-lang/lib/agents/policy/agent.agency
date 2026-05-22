@@ -1,12 +1,13 @@
-import { writePolicyFile } from "std::policy"
-import { args } from "std::system"
-import { systemMessage } from "std::thread"
 import { map } from "std::array"
-import { callback } from "std::agency"
-
-// crap these comments dont stay in place! So can't ignore a type error
-// in an import
-// @tc-ignore
+import {
+  writePolicyFile,
+  Policy,
+  InterruptKind,
+  InterruptDataKey,
+  InterruptDataVal,
+ } from "std::policy"
+import { args } from "std::system"
+import { systemMessage, userMessage, assistantMessage } from "std::thread"
 
 callback("onToolCallStart") as data {
   print("Calling ${data.toolName}...")
@@ -17,12 +18,10 @@ callback("onToolCallEnd") as data {
 }
 
 systemPrompt = read(
-  dir: "/Users/adityabhargava/agency-lang/packages/agency-lang/lib/agents/agency-agent/prompts/",
+  dir: "/Users/adit/agency-lang/packages/agency-lang/lib/agents/policy/prompts/",
   filename: "system.md",
 ) with approve
 
-// doesn't hoist, so we can't have types depending on
-// other types defined later in the file
 type Question = {
   type: "askQuestion";
   question: string
@@ -36,26 +35,22 @@ type Action = Question | Done
 
 type PolicyAction = "approve" | "reject" | "propagate"
 
-let currentPolicy = {}
+let currentPolicy: Policy = {}
 
 def addToPolicy(
-  interruptKind: string,
-  matchArgName: string,
-  matchArgValue: string,
+  interruptKind: InterruptKind,
+  matchArgName: InterruptDataKey,
+  matchArgValue: InterruptDataVal,
   action: PolicyAction!,
-) {
+): Result<Policy> {
   """
   Add a rule to the current policy for the given interrupt kind, matching on the specified argument and value, with the specified action.
   Use only "approve", "reject", or "propagate" as the action. DO NOT use "allow" or "deny".
   Returns the current policy after adding the rule.
   """
-  // this should be allowed
-  /*   const match = {
+  const match = {
     [matchArgName]: matchArgValue
   }
- */
-  const match: any = {}
-  match[matchArgName] = matchArgValue
   if (!currentPolicy[interruptKind]) {
     currentPolicy[interruptKind] = []
   }
@@ -63,17 +58,29 @@ def addToPolicy(
     match: match,
     action: action
   })
-  return currentPolicy
+
+  // @tc-ignore
+  return success(currentPolicy)
 }
 
-def getPolicy() {
+def getPolicy(): Policy {
   """
   Get the current policy object.
   """
   return currentPolicy
 }
 
-def deleteFromPolicy(interruptKind: string, index: number): boolean {
+def setPolicy(newPolicy: Policy): Policy {
+  """
+  Replace the current policy with a new policy object. Returns the new policy.
+
+  @param newPolicy - The new policy object to set as the current policy.
+  """
+  currentPolicy = newPolicy
+  return currentPolicy
+}
+
+def deleteFromPolicy(interruptKind: InterruptKind, index: number): boolean {
   """
   Delete the rule at the specified index for the given interrupt kind from the current policy.
   Returns true if the rule was successfully deleted, or false if the index was out of bounds.
@@ -94,15 +101,6 @@ def savePolicy(path: string) {
   return writePolicyFile(path, currentPolicy)
 }
 
-const tools = [
-  addToPolicy,
-  getPolicy,
-  deleteFromPolicy,
-  savePolicy.partial(
-  path: "/Users/adityabhargava/agency-lang/packages/agency-lang/testPolicy.json",
-),
-]
-
 def get(array: any[], index: number) {
   if (index < array.length) {
     return success(array[index])
@@ -121,25 +119,31 @@ node main() {
   const outputPath = cliArgs[1]
   const existingPolicy = get(cliArgs, 3) |> parseJSON
 
-  if (isFailure(interruptKinds)) {
-    print("Failed to parse interrupt kinds: ${interruptKinds.error}")
+  if (interruptKinds is failure(error)) {
+    print("Failed to parse interrupt kinds: ${error}")
     return
   }
 
   let contextMessage = "This agent can produce the following interrupts:\n${map(interruptKinds.value, \kind -> "- ${kind}\n").join("")}"
 
-  if (isSuccess(existingPolicy)) {
-    currentPolicy = existingPolicy.value
-    contextMessage = contextMessage + """
+  if (existingPolicy is success(thePolicy)) {
+    currentPolicy = thePolicy
+    contextMessage = """
+    ${contextMessage}
+
     Current policy:
     ```json
-    ${existingPolicy.value}
+    ${JSON.stringify(currentPolicy, null, 2)}
     ```
 
     What would you like to change?
     """
   } else {
-    contextMessage = contextMessage + "\nWhat actions would you like to allow?"
+    contextMessage = """
+    ${contextMessage}
+
+    What actions would you like to allow?
+    """
   }
 
   print(contextMessage)
@@ -152,24 +156,22 @@ node main() {
 
   Decide the next step. If the user is describing what they want, build or update the policy and use showPolicy. If the user approves the shown policy, use writePolicy. If you need clarification, use askQuestion.
   """
-  // fix tc
-  // @tc-ignore
+
   systemMessage(systemPrompt)
+  assistantMessage(contextMessage)
+  userMessage(userInput)
 
-  let action: Action = llm(
-    """
-  Assistant:
-  ${contextMessage}
-  User:
-  ${userInput}
+  const tools = [
+    addToPolicy,
+    getPolicy,
+    setPolicy,
+    deleteFromPolicy,
+    savePolicy.partial(path: "/Users/adit/agency-lang/packages/agency-lang/testPolicy.json"),
+  ]
 
-  ${prompt}
-
-  """,
-    {
+  let action: Action = llm(prompt, {
     tools: tools
-  },
-  )
+  })
   while (action.type != "done") {
     print(action.question)
     let userInput = input("> ")

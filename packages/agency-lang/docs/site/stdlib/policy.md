@@ -2,24 +2,48 @@
 
 ## Types
 
-### PolicyRule
+### InterruptDataKey
 
 ```ts
-export type PolicyRule = {
-  match?: Record<string, any>;
-  action: "approve" | "reject" | "propagate"
-}
+export type InterruptDataKey = string
 ```
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/policy.agency#L7))
 
-### Policy
+### InterruptDataVal
 
 ```ts
-export type Policy = object
+export type InterruptDataVal = string
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/policy.agency#L9))
+
+### InterruptKind
+
+```ts
+export type InterruptKind = string
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/policy.agency#L11))
+
+### PolicyRule
+
+```ts
+export type PolicyRule = {
+  match?: Record<InterruptDataKey, InterruptDataVal>;
+  action: "approve" | "reject" | "propagate"
+}
 ```
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/policy.agency#L13))
+
+### Policy
+
+```ts
+export type Policy = Record<InterruptKind, PolicyRule[]>
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/policy.agency#L18))
 
 ## Functions
 
@@ -38,7 +62,7 @@ Evaluate a policy against an interrupt. Returns approve(), reject(), or propagat
 | policy | `Record<string, any>` |  |
 | interrupt | `Record<string, any>` |  |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/policy.agency#L15))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/policy.agency#L20))
 
 ### validatePolicy
 
@@ -54,7 +78,7 @@ Validate that a policy object is well-formed. Returns { success: true } if valid
 |---|---|---|
 | policy | `Record<string, any>` |  |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/policy.agency#L22))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/policy.agency#L30))
 
 ### writePolicyFile
 
@@ -71,4 +95,4 @@ Validate and write a policy to a JSON file. Throws if the policy is invalid.
 | path | `string` |  |
 | policy | [Policy](#policy) |  |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/policy.agency#L29))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/policy.agency#L37))

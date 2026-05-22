@@ -208,7 +208,12 @@ function checkSingleFunctionCall(
     return;
   }
 
-  if (Object.prototype.hasOwnProperty.call(BUILTIN_FUNCTION_TYPES, call.functionName)) {
+  if (
+    Object.prototype.hasOwnProperty.call(
+      BUILTIN_FUNCTION_TYPES,
+      call.functionName,
+    )
+  ) {
     checkCallAgainstBuiltinSig(
       call,
       BUILTIN_FUNCTION_TYPES[call.functionName],
@@ -263,7 +268,10 @@ function checkCallAgainstBuiltinSig(
   }
   const minArgs = sig.minParams ?? sig.params.length;
   const hasRest = sig.restParam !== undefined;
-  const maxArgs = hasRest ? Infinity : sig.params.length;
+  let maxArgs = hasRest ? Infinity : sig.params.length;
+  if (sig.acceptsBlock) {
+    maxArgs += 1;
+  }
   if (!checkArity(call, minArgs, maxArgs, hasSplatArg, ctx)) return;
   const slots: ParamSlot[] = sig.params.map((type) => ({
     type,

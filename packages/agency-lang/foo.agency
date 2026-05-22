@@ -4,4 +4,11 @@ def greet(name: string): string {
   """
   Returns a greeting message for the given name ${prompt}.
   """
+
+  return interrupt foo::greet("Are you sure you want to greet ${name}?")
+}
+
+node main() {
+  const greeting = greet("Alice")
+  print(greeting)
 }

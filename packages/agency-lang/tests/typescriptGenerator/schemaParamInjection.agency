@@ -1,0 +1,43 @@
+// Verifies the schema-parameter-injection feature.
+//
+// When a function declares a Schema<...> parameter and the caller does
+// not pass it explicitly, the compiler injects a Zod schema synthesized
+// from the LHS type annotation.
+
+def parseValue(input: string, s: Schema<any>): any {
+  return s.parseJSON(input)
+}
+
+def wrapper(): number[] {
+  // Return-position injection: outer return type provides the hint.
+  return parseValue("[1,2,3]")
+}
+
+node main() {
+  // LHS-annotation injection — Schema<any> inside parseValue receives
+  // z.array(z.number()) synthesized from `number[]`.
+  const nums: number[] = parseValue("[1,2,3]")
+  print(nums)
+
+  // `any` LHS — degenerate but valid: injects `z.any()`. No assertion
+  // about runtime shape, just verifies it compiles.
+  const anything: any = parseValue("42")
+  print(anything)
+
+  // `!` validation on the LHS: injection still fires with the bare
+  // type. `!` triggers a separate runtime validation pass at the
+  // assignment site; the injected schema and the validator schema are
+  // built from the same LHS type, so they agree.
+  const validated: number[]! = parseValue("[1,2,3]")
+  print(validated)
+
+  // Explicit override: the user-supplied schema wins, no injection.
+  const explicit = parseValue("[1,2,3]", schema(any))
+  print(explicit)
+
+  // Bare expression statement — no LHS, no return position, no injection.
+  // The Schema param is omitted; the function would fail at runtime
+  // because s is undefined. This case exists to lock in "no spooky
+  // injection without a clear context."
+  parseValue("[1,2,3]")
+}

@@ -88,6 +88,10 @@ export default defineConfig({
               text: "Advanced Types",
               link: "/appendix/advanced-types",
             },
+            {
+              text: "Schema Parameter Injection",
+              link: "/appendix/schema-parameter-injection",
+            },
           ],
         },
       ],
@@ -144,6 +148,10 @@ export default defineConfig({
             {
               text: "Built-in Functions",
               link: "/appendix/builtins",
+            },
+            {
+              text: "Schema Parameter Injection",
+              link: "/appendix/schema-parameter-injection",
             },
           ],
         },

@@ -1,0 +1,26 @@
+{
+  "sourceFile": "schema-param-injection.agency",
+  "tests": [
+    {
+      "nodeName": "parseNumbersFromLHS",
+      "input": "",
+      "expectedOutput": "[1,2,3]",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "LHS annotation `number[]` drives Schema injection"
+    },
+    {
+      "nodeName": "parseNumbersFromReturn",
+      "input": "",
+      "expectedOutput": "[1,2,3]",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "Enclosing function's return type drives Schema injection"
+    },
+    {
+      "nodeName": "explicitOverride",
+      "input": "",
+      "expectedOutput": "[1,2,3]",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "Explicit schema arg wins; no injection happens"
+    }
+  ]
+}

@@ -1,0 +1,22 @@
+let startCount: number = 0
+
+def greet(): string {
+  return "hi"
+}
+
+// Bail on the SECOND onLLMCallStart fire — i.e. the LLM call that
+// follows a fully-completed tool round. That bailout happens AFTER the
+// tool branch has already logged its `statelog.toolCall`. On resume, the
+// branch re-runs (b.steps short-circuit), and the test asserts that the
+// statelog.toolCall event for greet appears exactly ONCE total — not
+// twice (the regression case).
+callback("onLLMCallStart") as data {
+  startCount = startCount + 1
+  if (startCount == 2) {
+    interrupt myapp::pause("second LLM call", { startCount: startCount })
+  }
+}
+
+node main() {
+  return llm("call greet", { tools: [greet] })
+}

@@ -2,7 +2,8 @@
   "data": [
     "greeted",
     2,
-    1
+    1,
+    "hi"
   ],
   "preResumeToolCalls": 0
 }

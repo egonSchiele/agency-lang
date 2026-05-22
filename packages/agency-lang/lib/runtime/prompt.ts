@@ -355,6 +355,8 @@ export async function runPrompt(args: {
   // let the initialLlmCall step populate it.
   let toolCalls: smoltalk.ToolCallJSON[] = self.pendingToolCalls ?? [];
 
+  let shouldPop = true;
+  try {
   // Initial LLM call wrapped in pr.step so any callback interrupts
   // (onLLMCallStart / onLLMCallEnd) bail uniformly. To keep the step
   // body idempotent on re-entry, we capture the messages length before
@@ -427,8 +429,6 @@ export async function runPrompt(args: {
     currentLlmSpanId = ctx.statelogClient.startSpan("llmCall");
   }
 
-  let shouldPop = true;
-  try {
     // Handle tool calls
     while (toolCalls.length > 0) {
       if (ctx.isCancelled(stateStack)) throw new AgencyCancelledError();

@@ -7,6 +7,7 @@ import { callHook } from "./hooks.js";
 import { Interrupt, hasInterrupts, isRejected } from "./interrupts.js";
 import type { PromptConfig } from "./llmClient.js";
 import { setupFunction } from "./node.js";
+// See docs/dev/promptRunner.md for the control-flow abstraction used here.
 import { PromptBailout, PromptRunner } from "./promptRunner.js";
 import { isFailure } from "./result.js";
 import type { SourceLocationOpts } from "./state/checkpointStore.js";

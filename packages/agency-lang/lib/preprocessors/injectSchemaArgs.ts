@@ -31,24 +31,31 @@ import { findSchemaParam } from "@/utils/schemaParam.js";
  *     for it already works (it's the same node `schema(T)` produces).
  *
  * Rules:
- *   - At most one Schema-typed parameter per function (enforced lazily,
- *     only when the function is actually called from a context where
- *     the rule matters; see `findSchemaParam`).
+ *   - At most one Schema-typed parameter per function. Enforced once
+ *     up front by `validateSchemaParamUniqueness`, so the error fires
+ *     at declaration time regardless of whether the function is ever
+ *     called from an injection-eligible context.
  *   - If the caller passes the Schema arg explicitly (positional or
  *     named), no injection happens.
- *   - If no expected type is available, no injection happens and the
- *     missing argument is reported as a normal type error elsewhere.
- *     (Practically, the type checker skips arity for Schema params,
- *     so the user would see a downstream runtime error when the
- *     function tries to use the missing schema. We trade that for a
- *     simpler implementation; the documentation in `appendix/`
- *     spells out the contract for users.)
+ *   - If no expected type is available, no injection happens. The
+ *     type checker also skips Schema params in its arity check, so
+ *     the missing argument is *not* surfaced as a compile error —
+ *     the function will fail at runtime when it tries to use the
+ *     undefined schema. The documentation in
+ *     `docs/site/appendix/schema-parameter-injection.md` describes
+ *     this contract for users.
  */
 export function injectSchemaArgsInProgram(
   program: AgencyProgram,
   functionDefinitions: Record<string, FunctionDefinition>,
   importedFunctions: Record<string, ImportedFunctionSignature>,
 ): void {
+  // Up-front structural validation: catch multi-Schema-param declarations
+  // before any call-site logic runs, so the error is surfaced even when
+  // the offending function is never called (or is only called in
+  // non-injecting contexts).
+  validateSchemaParamUniqueness(functionDefinitions, importedFunctions);
+
   const lookup = (name: string): FunctionParameter[] | undefined =>
     functionDefinitions[name]?.parameters ??
     importedFunctions[name]?.parameters;
@@ -65,8 +72,26 @@ export function injectSchemaArgsInProgram(
 
   for (const node of program.nodes) {
     if (node.type === "graphNode") {
-      walkBody(node.body, undefined, lookup);
+      walkBody(node.body, node.returnType ?? undefined, lookup);
     }
+  }
+}
+
+/**
+ * Scan every function we know about and ensure none declare more than
+ * one Schema parameter. Runs once at the start of the pass so the
+ * "at most one Schema parameter" rule is enforced at the source
+ * declaration rather than incidentally at the first matching call.
+ */
+function validateSchemaParamUniqueness(
+  functionDefinitions: Record<string, FunctionDefinition>,
+  importedFunctions: Record<string, ImportedFunctionSignature>,
+): void {
+  for (const [name, fn] of Object.entries(functionDefinitions)) {
+    findSchemaParam(fn.parameters, name);
+  }
+  for (const [name, sig] of Object.entries(importedFunctions)) {
+    findSchemaParam(sig.parameters, name);
   }
 }
 
@@ -145,14 +170,15 @@ function handleAssignment(
 }
 
 /**
- * Try to inject a schema arg into a call expression. The expression is
- * accepted as a function call directly, or as an `if`/`match` whose
- * branches each yield a call — recurses through those to inject in
- * every branch (each branch's call gets the same expected type).
+ * Try to inject a schema arg into a call expression. Only direct
+ * function calls are injection sites in v1; binary ops, value access,
+ * pipe chains, etc. are left alone — the user can always pass the
+ * schema explicitly when they need it in those positions.
  *
- * Other expression shapes (binary ops, value access, etc.) are not
- * recursed into. The user can always pass the schema explicitly when
- * they need it in those positions.
+ * (`ReturnStatement.value` is typed as `Expression`, which doesn't
+ * include `ifElse`/`matchBlock` — Agency parses `if`/`match` as
+ * statements, not expressions — so there's no need to recurse into
+ * branch bodies here.)
  */
 function handleExpectedAt(
   expr: AgencyNode,
@@ -161,22 +187,6 @@ function handleExpectedAt(
 ): void {
   if (expr.type === "functionCall") {
     maybeInject(expr, expectedType, lookup);
-    return;
-  }
-  if (expr.type === "ifElse") {
-    for (const stmt of expr.thenBody) {
-      if (stmt.type === "returnStatement" && stmt.value) {
-        handleExpectedAt(stmt.value, expectedType, lookup);
-      }
-    }
-    if (expr.elseBody) {
-      for (const stmt of expr.elseBody) {
-        if (stmt.type === "returnStatement" && stmt.value) {
-          handleExpectedAt(stmt.value, expectedType, lookup);
-        }
-      }
-    }
-    return;
   }
 }
 

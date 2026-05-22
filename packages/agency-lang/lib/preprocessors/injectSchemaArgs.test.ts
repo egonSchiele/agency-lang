@@ -1,12 +1,15 @@
 import { describe, it, expect } from "vitest";
 import { injectSchemaArgsInProgram } from "./injectSchemaArgs.js";
-import type { AgencyProgram, FunctionDefinition } from "../types.js";
+import type {
+  AgencyProgram,
+  Assignment,
+  FunctionCall,
+  FunctionDefinition,
+} from "../types.js";
 import type { FunctionParameter } from "../types/function.js";
 
 /**
  * Helper: builds a `def parseValue(input: string, s: Schema<any>): any` shape.
- * The default returnType is `any`; pass a different one to test return-position
- * scenarios where the function declares a more specific return type.
  */
 function buildParseValueDef(): FunctionDefinition {
   const params: FunctionParameter[] = [
@@ -34,31 +37,59 @@ function buildParseValueDef(): FunctionDefinition {
   };
 }
 
+/**
+ * Helper: builds `const <name>: <typeHint> = <call>` as a real
+ * Assignment AST node. Uses the real `variableName` field — earlier
+ * versions of this test used a fictional `target` field, which
+ * worked only because the calls were cast to `any`.
+ */
+function buildConstAssignment(
+  name: string,
+  typeHint: Assignment["typeHint"],
+  call: FunctionCall,
+): Assignment {
+  return {
+    type: "assignment",
+    declKind: "const",
+    variableName: name,
+    typeHint,
+    value: call,
+  };
+}
+
+function buildCall(
+  functionName: string,
+  args: FunctionCall["arguments"] = [],
+): FunctionCall {
+  return {
+    type: "functionCall",
+    functionName,
+    arguments: args,
+  };
+}
+
+function buildStringLiteral(value: string) {
+  return {
+    type: "string" as const,
+    segments: [{ type: "text" as const, value }],
+  };
+}
+
 describe("injectSchemaArgsInProgram", () => {
   it("injects a schema arg from an assignment's LHS type", () => {
     // const xs: number[] = parseValue("[1,2,3]")
+    const call = buildCall("parseValue", [buildStringLiteral("[1,2,3]")]);
     const program: AgencyProgram = {
       type: "agencyProgram",
       nodes: [
-        {
-          type: "assignment",
-          declKind: "const",
-          target: "xs",
-          typeHint: {
+        buildConstAssignment(
+          "xs",
+          {
             type: "arrayType",
             elementType: { type: "primitiveType", value: "number" },
           },
-          value: {
-            type: "functionCall",
-            functionName: "parseValue",
-            arguments: [
-              {
-                type: "string",
-                segments: [{ type: "text", value: "[1,2,3]" }],
-              },
-            ],
-          },
-        } as any,
+          call,
+        ),
       ],
     };
 
@@ -68,11 +99,12 @@ describe("injectSchemaArgsInProgram", () => {
       {},
     );
 
-    const call = (program.nodes[0] as any).value;
     expect(call.arguments).toHaveLength(2);
     expect(call.arguments[1].type).toBe("namedArgument");
+    if (call.arguments[1].type !== "namedArgument") return;
     expect(call.arguments[1].name).toBe("s");
     expect(call.arguments[1].value.type).toBe("schemaExpression");
+    if (call.arguments[1].value.type !== "schemaExpression") return;
     expect(call.arguments[1].value.typeArg).toEqual({
       type: "arrayType",
       elementType: { type: "primitiveType", value: "number" },
@@ -80,32 +112,24 @@ describe("injectSchemaArgsInProgram", () => {
   });
 
   it("does not inject when the schema arg is supplied explicitly (positional)", () => {
+    const call = buildCall("parseValue", [
+      buildStringLiteral("[1,2,3]"),
+      {
+        type: "schemaExpression",
+        typeArg: { type: "primitiveType", value: "string" },
+      },
+    ]);
     const program: AgencyProgram = {
       type: "agencyProgram",
       nodes: [
-        {
-          type: "assignment",
-          declKind: "const",
-          target: "xs",
-          typeHint: {
+        buildConstAssignment(
+          "xs",
+          {
             type: "arrayType",
             elementType: { type: "primitiveType", value: "number" },
           },
-          value: {
-            type: "functionCall",
-            functionName: "parseValue",
-            arguments: [
-              {
-                type: "string",
-                segments: [{ type: "text", value: "[1,2,3]" }],
-              },
-              {
-                type: "schemaExpression",
-                typeArg: { type: "primitiveType", value: "string" },
-              },
-            ],
-          },
-        } as any,
+          call,
+        ),
       ],
     };
 
@@ -115,10 +139,10 @@ describe("injectSchemaArgsInProgram", () => {
       {},
     );
 
-    const call = (program.nodes[0] as any).value;
     expect(call.arguments).toHaveLength(2);
     // The user-supplied schema (string) is preserved.
     expect(call.arguments[1].type).toBe("schemaExpression");
+    if (call.arguments[1].type !== "schemaExpression") return;
     expect(call.arguments[1].typeArg).toEqual({
       type: "primitiveType",
       value: "string",
@@ -126,33 +150,25 @@ describe("injectSchemaArgsInProgram", () => {
   });
 
   it("does not inject when the schema arg is supplied by name", () => {
+    const call = buildCall("parseValue", [
+      buildStringLiteral("[1,2,3]"),
+      {
+        type: "namedArgument",
+        name: "s",
+        value: {
+          type: "schemaExpression",
+          typeArg: { type: "primitiveType", value: "number" },
+        },
+      },
+    ]);
     const program: AgencyProgram = {
       type: "agencyProgram",
       nodes: [
-        {
-          type: "assignment",
-          declKind: "const",
-          target: "xs",
-          typeHint: { type: "primitiveType", value: "any" },
-          value: {
-            type: "functionCall",
-            functionName: "parseValue",
-            arguments: [
-              {
-                type: "string",
-                segments: [{ type: "text", value: "[1,2,3]" }],
-              },
-              {
-                type: "namedArgument",
-                name: "s",
-                value: {
-                  type: "schemaExpression",
-                  typeArg: { type: "primitiveType", value: "number" },
-                },
-              },
-            ],
-          },
-        } as any,
+        buildConstAssignment(
+          "xs",
+          { type: "primitiveType", value: "any" },
+          call,
+        ),
       ],
     };
 
@@ -162,8 +178,11 @@ describe("injectSchemaArgsInProgram", () => {
       {},
     );
 
-    const call = (program.nodes[0] as any).value;
     expect(call.arguments).toHaveLength(2);
+    expect(call.arguments[1].type).toBe("namedArgument");
+    if (call.arguments[1].type !== "namedArgument") return;
+    expect(call.arguments[1].value.type).toBe("schemaExpression");
+    if (call.arguments[1].value.type !== "schemaExpression") return;
     expect(call.arguments[1].value.typeArg).toEqual({
       type: "primitiveType",
       value: "number",
@@ -172,25 +191,11 @@ describe("injectSchemaArgsInProgram", () => {
 
   it("does not inject when there is no LHS annotation", () => {
     // const xs = parseValue("[1,2,3]")   // no `: T` annotation
+    const call = buildCall("parseValue", [buildStringLiteral("[1,2,3]")]);
     const program: AgencyProgram = {
       type: "agencyProgram",
       nodes: [
-        {
-          type: "assignment",
-          declKind: "const",
-          target: "xs",
-          // intentionally no typeHint
-          value: {
-            type: "functionCall",
-            functionName: "parseValue",
-            arguments: [
-              {
-                type: "string",
-                segments: [{ type: "text", value: "[1,2,3]" }],
-              },
-            ],
-          },
-        } as any,
+        buildConstAssignment("xs", undefined, call),
       ],
     };
 
@@ -200,12 +205,12 @@ describe("injectSchemaArgsInProgram", () => {
       {},
     );
 
-    const call = (program.nodes[0] as any).value;
     expect(call.arguments).toHaveLength(1);
   });
 
   it("injects from return-position when the enclosing function's return type is known", () => {
     // def wrapper(): number[] { return parseValue("[1,2,3]") }
+    const call = buildCall("parseValue", [buildStringLiteral("[1,2,3]")]);
     const wrapper: FunctionDefinition = {
       type: "function",
       functionName: "wrapper",
@@ -217,17 +222,8 @@ describe("injectSchemaArgsInProgram", () => {
       body: [
         {
           type: "returnStatement",
-          value: {
-            type: "functionCall",
-            functionName: "parseValue",
-            arguments: [
-              {
-                type: "string",
-                segments: [{ type: "text", value: "[1,2,3]" }],
-              },
-            ],
-          },
-        } as any,
+          value: call,
+        },
       ],
     };
     const program: AgencyProgram = {
@@ -241,16 +237,57 @@ describe("injectSchemaArgsInProgram", () => {
       {},
     );
 
-    const ret = wrapper.body[0] as any;
-    const call = ret.value;
     expect(call.arguments).toHaveLength(2);
+    if (call.arguments[1].type !== "namedArgument") return;
+    if (call.arguments[1].value.type !== "schemaExpression") return;
     expect(call.arguments[1].value.typeArg).toEqual({
       type: "arrayType",
       elementType: { type: "primitiveType", value: "number" },
     });
   });
 
-  it("throws when a function declares more than one Schema parameter", () => {
+  it("injects from return-position when an enclosing graph node's return type is known", () => {
+    // node main(): number[] { return parseValue("[1,2,3]") }
+    const call = buildCall("parseValue", [buildStringLiteral("[1,2,3]")]);
+    const program: AgencyProgram = {
+      type: "agencyProgram",
+      nodes: [
+        {
+          type: "graphNode",
+          nodeName: "main",
+          parameters: [],
+          returnType: {
+            type: "arrayType",
+            elementType: { type: "primitiveType", value: "number" },
+          },
+          body: [
+            {
+              type: "returnStatement",
+              value: call,
+            },
+          ],
+        },
+      ],
+    };
+
+    injectSchemaArgsInProgram(
+      program,
+      { parseValue: buildParseValueDef() },
+      {},
+    );
+
+    expect(call.arguments).toHaveLength(2);
+    if (call.arguments[1].type !== "namedArgument") return;
+    if (call.arguments[1].value.type !== "schemaExpression") return;
+    expect(call.arguments[1].value.typeArg).toEqual({
+      type: "arrayType",
+      elementType: { type: "primitiveType", value: "number" },
+    });
+  });
+
+  it("throws at declaration time when a function declares more than one Schema parameter", () => {
+    // `doubled` is never called — the error should still fire because
+    // the structural validation pass scans every function definition.
     const twoSchemas: FunctionDefinition = {
       type: "function",
       functionName: "doubled",
@@ -279,54 +316,32 @@ describe("injectSchemaArgsInProgram", () => {
     };
     const program: AgencyProgram = {
       type: "agencyProgram",
-      nodes: [
-        {
-          type: "assignment",
-          declKind: "const",
-          target: "x",
-          typeHint: { type: "primitiveType", value: "string" },
-          value: {
-            type: "functionCall",
-            functionName: "doubled",
-            arguments: [],
-          },
-        } as any,
-      ],
+      nodes: [],
     };
 
     expect(() =>
-      injectSchemaArgsInProgram(
-        program,
-        { doubled: twoSchemas },
-        {},
-      ),
+      injectSchemaArgsInProgram(program, { doubled: twoSchemas }, {}),
     ).toThrowError(/more than one Schema parameter/);
   });
 
   it("leaves calls to unknown functions alone (e.g. JS / builtins)", () => {
+    const call = buildCall("unknownFn");
     const program: AgencyProgram = {
       type: "agencyProgram",
       nodes: [
-        {
-          type: "assignment",
-          declKind: "const",
-          target: "xs",
-          typeHint: {
+        buildConstAssignment(
+          "xs",
+          {
             type: "arrayType",
             elementType: { type: "primitiveType", value: "number" },
           },
-          value: {
-            type: "functionCall",
-            functionName: "unknownFn",
-            arguments: [],
-          },
-        } as any,
+          call,
+        ),
       ],
     };
 
     injectSchemaArgsInProgram(program, {}, {});
 
-    const call = (program.nodes[0] as any).value;
     expect(call.arguments).toHaveLength(0);
   });
 });

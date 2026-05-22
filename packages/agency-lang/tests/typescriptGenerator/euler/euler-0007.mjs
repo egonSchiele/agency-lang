@@ -92,8 +92,8 @@ function propagate() { return { type: "propagate" as const }; }
 
 // Interrupt and rewind re-exports bound to this module's context
 export { interrupt, isInterrupt, hasInterrupts, isDebugger };
-export const respondToInterrupts = (interrupts: Interrupt[], responses: InterruptResponse[], opts?: { overrides?: Record<string, unknown>; metadata?: Record<string, any> }) => _respondToInterrupts({ ctx: __globalCtx, interrupts, responses, overrides: opts?.overrides, metadata: opts?.metadata });
-export const rewindFrom = (checkpoint: Checkpoint, overrides: Record<string, unknown>, opts?: { metadata?: Record<string, any> }) => _rewindFrom({ ctx: __globalCtx, checkpoint, overrides, metadata: opts?.metadata });
+export const respondToInterrupts = (interrupts: Interrupt[], responses: InterruptResponse[], opts?: { overrides?: Record<string, unknown>; metadata?: Record<string, any> }) => _respondToInterrupts({ ctx: __globalCtx, interrupts, responses, overrides: opts?.overrides, metadata: opts?.metadata, registerTopLevelCallbacks: __registerTopLevelCallbacks });
+export const rewindFrom = (checkpoint: Checkpoint, overrides: Record<string, unknown>, opts?: { metadata?: Record<string, any> }) => _rewindFrom({ ctx: __globalCtx, checkpoint, overrides, metadata: opts?.metadata, registerTopLevelCallbacks: __registerTopLevelCallbacks });
 
 export const __setDebugger = (dbg: any) => { __globalCtx.debuggerState = dbg; };
 // Reconfigure the trace file path at runtime. Mutates the module-level
@@ -148,6 +148,9 @@ function registerTools(tools: any[]) {
 
 async function __initializeGlobals(__ctx) {
   __ctx.globals.markInitialized("euler-0007.agency")
+}
+async function __registerTopLevelCallbacks(__ctx) {
+  __ctx.topLevelCallbacks = [];
 }
 __toolRegistry["readSkill"] = __AgencyFunction.create({
   name: "readSkill",
@@ -416,7 +419,8 @@ export async function main({ messages, callbacks }: { messages?: any; callbacks?
     data: {},
     messages: messages,
     callbacks: callbacks,
-    initializeGlobals: __initializeGlobals
+    initializeGlobals: __initializeGlobals,
+    registerTopLevelCallbacks: __registerTopLevelCallbacks
   });
 }
 export const __mainNodeParams = [];

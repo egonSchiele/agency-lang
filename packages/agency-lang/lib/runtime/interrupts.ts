@@ -334,6 +334,12 @@ export async function respondToInterrupts(args: {
   responses: InterruptResponse[];
   overrides?: Record<string, unknown>;
   metadata?: Record<string, any>;
+  // See runNode's docstring on the same field — on resume we have to
+  // re-register module top-level callbacks because `topLevelCallbacks`
+  // lives on the (fresh) execCtx and is not checkpointed.
+  registerTopLevelCallbacks?: (
+    ctx: RuntimeContext<GraphState>,
+  ) => void | Promise<void>;
 }): Promise<any> {
   const { ctx, interrupts, responses, metadata = {} } = args;
   const responseMap = buildResponseMap(interrupts, responses);
@@ -372,6 +378,15 @@ export async function respondToInterrupts(args: {
       outcome,
       resolvedBy: "user",
     });
+  }
+  // Re-register top-level callbacks BEFORE restoreState so the
+  // `_callbackImpl` routing check (`stateStack.isGlobalContext()`)
+  // sees the still-empty stack and pushes onto `ctx.topLevelCallbacks`.
+  // After `restoreState`, the stack carries the checkpoint frames and
+  // the same registration would instead bind to a caller frame and be
+  // popped immediately as the restored frames unwind.
+  if (args.registerTopLevelCallbacks) {
+    await args.registerTopLevelCallbacks(execCtx);
   }
   execCtx.restoreState(checkpoint);
   execCtx.setInterruptResponses(responseMap);

@@ -40,6 +40,17 @@ export type ProgramPartition = {
   globalInitStatements: TsNode[];
   /** Top-level declarations (functions, graph nodes, type aliases, classes). */
   topLevelStatements: TsNode[];
+  /**
+   * Top-level `callback(...)` registration calls. Kept separate from
+   * `globalInitStatements` so the codegen can emit them inside a
+   * rerunnable `__registerTopLevelCallbacks(__ctx)` helper that fires on
+   * every fresh run AND every resume. Globals are checkpointed and
+   * restored on resume; the `topLevelCallbacks` array on the runtime
+   * context is not — so the callbacks must be re-registered after the
+   * state is restored or top-level callbacks silently stop firing after
+   * an interrupt round-trip.
+   */
+  topLevelCallbackStatements: TsNode[];
 };
 
 /**
@@ -63,8 +74,14 @@ export function partitionProgram(
   const staticInitStatements: TsNode[] = [];
   const globalInitStatements: TsNode[] = [];
   const topLevelStatements: TsNode[] = [];
+  const topLevelCallbackStatements: TsNode[] = [];
 
   for (const node of program.nodes) {
+    if (isTopLevelCallbackCall(node)) {
+      topLevelCallbackStatements.push(deps.processNodeInGlobalInit(node));
+      continue;
+    }
+
     const staticAssign = unwrapStaticAssignment(node);
     if (staticAssign) {
       const { stmt, handlerName } = staticAssign;
@@ -112,7 +129,23 @@ export function partitionProgram(
     staticInitStatements,
     globalInitStatements,
     topLevelStatements,
+    topLevelCallbackStatements,
   };
+}
+
+/**
+ * Detect a top-level statement that registers a callback via the stdlib
+ * `callback(name, fn)` function. After the `liftCallbackBlocks`
+ * preprocessor runs, block-form callbacks have already been rewritten
+ * into named-fn calls of this shape, so this single shape covers both
+ * source forms.
+ *
+ * `with handler { callback(...) }` is intentionally NOT matched: the
+ * handler wrapping is semantically meaningful and the registration must
+ * stay inside the global-init phase where the handler context applies.
+ */
+function isTopLevelCallbackCall(node: AgencyNode): boolean {
+  return node.type === "functionCall" && node.functionName === "callback";
 }
 
 /** If `node` is a `static x = ...` (optionally wrapped in `with handler`), return its parts. */
@@ -165,6 +198,7 @@ export type AssembleSectionsOpts = {
   exportedStaticVarNames: Set<string>;
   staticInitStatements: TsNode[];
   globalInitStatements: TsNode[];
+  topLevelCallbackStatements: TsNode[];
   generatedStatements: TsNode[];
   postprocess: TsNode[];
   /** JSON-stringified source map, embedded into the generated module. */
@@ -217,6 +251,8 @@ export function assembleSections(opts: AssembleSectionsOpts): TsNode {
   }
 
   sections.push(buildInitializeGlobalsFn(opts));
+
+  sections.push(buildRegisterTopLevelCallbacksFn(opts));
 
   sections.push(ts.statements(opts.generatedStatements));
 
@@ -325,6 +361,36 @@ function buildInitializeGlobalsFn(opts: AssembleSectionsOpts): TsNode {
 
   return ts.functionDecl(
     "__initializeGlobals",
+    [{ name: "__ctx" }],
+    ts.statements(body),
+    { async: true },
+  );
+}
+
+/**
+ * Emit:
+ *   async function __registerTopLevelCallbacks(__ctx) {
+ *     __ctx.topLevelCallbacks = []
+ *     …topLevelCallbackStatements
+ *   }
+ *
+ * The body clears any previously-registered top-level callbacks before
+ * re-registering so this is safe to call on every fresh run and every
+ * resume without accumulating duplicate registrations across restores.
+ * Always emitted (even when empty) so the calling runtime can call it
+ * unconditionally — generated modules don't have to detect the no-op
+ * case.
+ */
+function buildRegisterTopLevelCallbacksFn(opts: AssembleSectionsOpts): TsNode {
+  const body: TsNode[] = [
+    ts.assign(
+      ts.prop(ts.runtime.ctx, "topLevelCallbacks"),
+      ts.arr([]),
+    ),
+    ...opts.topLevelCallbackStatements,
+  ];
+  return ts.functionDecl(
+    "__registerTopLevelCallbacks",
     [{ name: "__ctx" }],
     ts.statements(body),
     { async: true },

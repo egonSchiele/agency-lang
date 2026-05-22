@@ -92,6 +92,7 @@ export async function runNode({
   messages,
   callbacks,
   initializeGlobals,
+  registerTopLevelCallbacks,
   abortSignal,
 }: {
   // global execution context
@@ -111,6 +112,18 @@ export async function runNode({
 
   // initializes global variables on the execution context
   initializeGlobals?: (ctx: RuntimeContext<GraphState>) => void | Promise<void>;
+
+  // Re-registers any module top-level `callback(name, fn) { ... }` blocks
+  // on the live execCtx. Module top-level callbacks are stored on
+  // `ctx.topLevelCallbacks`, which is reset on every new execCtx and is
+  // NOT serialized into checkpoints — so a separate, rerunnable
+  // registration phase is required (instead of folding it into
+  // `initializeGlobals`, which only runs once per module). The same
+  // helper is also re-invoked on resume from `respondToInterrupts` so
+  // top-level callbacks survive interrupt round-trips.
+  registerTopLevelCallbacks?: (
+    ctx: RuntimeContext<GraphState>,
+  ) => void | Promise<void>;
 
   // An AbortSignal for cancelling the agent mid-execution.
   // When aborted, in-flight LLM requests are torn down and a AgencyCancelledError is thrown.
@@ -132,6 +145,14 @@ export async function runNode({
   const execCtx = await ctx.createExecutionContext(runId);
   if (initializeGlobals) {
     await initializeGlobals(execCtx);
+  }
+  // Top-level callbacks are re-registered every fresh run AFTER global
+  // init so any module-level vars they reference (via `__ctx.globals`)
+  // are already set up. The registration sequence mirrors what
+  // `respondToInterrupts` does on resume — keep them in sync if you
+  // touch either site.
+  if (registerTopLevelCallbacks) {
+    await registerTopLevelCallbacks(execCtx);
   }
   // Externally-passed callbacks are stored on ctx; hook execution merges them
   // with scoped/top-level callbacks at call time.

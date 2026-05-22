@@ -1,0 +1,24 @@
+
+let log: string = ""
+
+def helper(): string {
+  return "helper"
+}
+
+// Scoped callback registered inside wrap. We expect this callback's
+// registration on the caller frame to survive interrupt+resume so the
+// helper() call AFTER the resumed interrupt still fires the callback.
+def wrap(): string {
+  callback("onFunctionStart") as data {
+    if (data.functionName == "helper") {
+      log = log + "fired,"
+    }
+  }
+  const _y = interrupt("pause")
+  helper()
+  return log
+}
+
+node main(): string {
+  return wrap()
+}

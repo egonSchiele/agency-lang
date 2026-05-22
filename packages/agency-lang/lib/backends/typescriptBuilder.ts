@@ -376,6 +376,7 @@ export class TypeScriptBuilder {
       exportedStaticVarNames: partition.exportedStaticVarNames,
       staticInitStatements: partition.staticInitStatements,
       globalInitStatements: partition.globalInitStatements,
+      topLevelCallbackStatements: partition.topLevelCallbackStatements,
       generatedStatements: this.generatedStatements,
       postprocess: this.postprocess(),
       sourceMapJson: JSON.stringify(this._sourceMapBuilder.build()),
@@ -3206,6 +3207,9 @@ export class TypeScriptBuilder {
                   messages: ts.id("messages"),
                   callbacks: ts.id("callbacks"),
                   initializeGlobals: ts.id("__initializeGlobals"),
+                  registerTopLevelCallbacks: ts.id(
+                    "__registerTopLevelCallbacks",
+                  ),
                 }),
               ])
               .done(),

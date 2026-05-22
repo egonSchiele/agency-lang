@@ -32,29 +32,68 @@ import { walkNodes } from "@/utils/node.js";
 
 const NAME_PREFIX = "__cb";
 
-let counter = 0;
+/**
+ * Generates fresh `__cb_<scope>_<n>` names. Closes over a per-invocation
+ * counter so concurrent `liftCallbackBlocks(...)` calls in the same
+ * process (worker pools, parallel test files, the recursive `compile()`
+ * walk that hits the same module twice) can't interleave and produce
+ * duplicate identifiers within one transformed program.
+ */
+type NameGen = (scope: string) => string;
 
-function nextName(scope: string): string {
-  return `${NAME_PREFIX}_${scope}_${counter++}`;
-}
-
-/** Reset for deterministic tests. Production callers never need this. */
-export function resetCallbackCounter(): void {
-  counter = 0;
+function makeNameGen(): NameGen {
+  let counter = 0;
+  return (scope: string) => `${NAME_PREFIX}_${scope}_${counter++}`;
 }
 
 export function liftCallbackBlocks(program: AgencyProgram): AgencyProgram {
-  resetCallbackCounter();
+  const nextName = makeNameGen();
   const lifted: FunctionDefinition[] = [];
   const newNodes: AgencyNode[] = [];
 
+  assertNoWrappedTopLevelCallbacks(program);
+
   for (const node of program.nodes) {
-    newNodes.push(transformTopLevel(node, lifted));
+    newNodes.push(transformTopLevel(node, lifted, nextName));
   }
 
   const result: AgencyProgram = { ...program, nodes: [...lifted, ...newNodes] };
   assertNoUnliftedCallbackBlocks(result);
   return result;
+}
+
+/**
+ * Top-level callback registrations CANNOT be wrapped in a `with` modifier.
+ * `callback(...) with myHandler` at module scope doesn't survive
+ * interrupt + resume (only the `topLevelCallbackStatements` bucket is
+ * re-registered on resume; wrapped forms fall through to
+ * `globalInitStatements` which only runs on fresh starts). It also
+ * crashes or mis-parses today depending on whether the handler is a
+ * built-in (`with approve` → StepPathTracker crash) or a user-defined
+ * name (parser splits `with` and the name into separate garbage
+ * statements). Rather than silently regressing on resume, reject the
+ * form at compile time with a clear diagnostic. See PR #181 review
+ * thread for the broader top-level-handler limitation this case
+ * inherits from.
+ */
+function assertNoWrappedTopLevelCallbacks(program: AgencyProgram): void {
+  for (const node of program.nodes) {
+    if (
+      node.type === "withModifier" &&
+      node.statement.type === "functionCall" &&
+      node.statement.functionName === "callback"
+    ) {
+      const loc = node.statement.loc
+        ? ` at line ${node.statement.loc.line}, col ${node.statement.loc.col}`
+        : "";
+      throw new Error(
+        `Top-level callback registration cannot be wrapped in \`with ${node.handlerName}\`${loc}. ` +
+          `The handler would only wrap the synchronous registration call (which never fails) ` +
+          `and the wrapped form does not survive interrupt + resume. ` +
+          `Remove the \`with ${node.handlerName}\` modifier, or move the registration into a node body.`,
+      );
+    }
+  }
 }
 
 /**
@@ -97,31 +136,33 @@ function assertNoUnliftedCallbackBlocks(program: AgencyProgram): void {
 function transformTopLevel(
   node: AgencyNode,
   lifted: FunctionDefinition[],
+  nextName: NameGen,
 ): AgencyNode {
   if (node.type === "function") {
-    node.body = transformBody(node.body, node.functionName, lifted);
+    node.body = transformBody(node.body, node.functionName, lifted, nextName);
     return node;
   }
   if (node.type === "graphNode") {
-    node.body = transformBody(node.body, node.nodeName, lifted);
+    node.body = transformBody(node.body, node.nodeName, lifted, nextName);
     return node;
   }
   if (node.type === "classDefinition") {
     for (const m of node.methods) {
-      m.body = transformBody(m.body, `${node.className}_${m.name}`, lifted);
+      m.body = transformBody(m.body, `${node.className}_${m.name}`, lifted, nextName);
     }
     return node;
   }
   // Statements at module top level (assignments, top-level callback calls).
-  return transformStatement(node, "top", lifted);
+  return transformStatement(node, "top", lifted, nextName);
 }
 
 function transformBody(
   body: AgencyNode[],
   scopeName: string,
   lifted: FunctionDefinition[],
+  nextName: NameGen,
 ): AgencyNode[] {
-  return body.map((n) => transformStatement(n, scopeName, lifted));
+  return body.map((n) => transformStatement(n, scopeName, lifted, nextName));
 }
 
 /**
@@ -134,38 +175,39 @@ function transformStatement(
   node: AgencyNode,
   scopeName: string,
   lifted: FunctionDefinition[],
+  nextName: NameGen,
 ): AgencyNode {
   switch (node.type) {
     case "functionCall":
-      return transformFunctionCall(node, scopeName, lifted);
+      return transformFunctionCall(node, scopeName, lifted, nextName);
     case "ifElse":
-      node.thenBody = transformBody(node.thenBody, scopeName, lifted);
-      if (node.elseBody) node.elseBody = transformBody(node.elseBody, scopeName, lifted);
+      node.thenBody = transformBody(node.thenBody, scopeName, lifted, nextName);
+      if (node.elseBody) node.elseBody = transformBody(node.elseBody, scopeName, lifted, nextName);
       return node;
     case "forLoop":
     case "whileLoop":
     case "messageThread":
-      node.body = transformBody(node.body, scopeName, lifted);
+      node.body = transformBody(node.body, scopeName, lifted, nextName);
       return node;
     case "handleBlock":
-      node.body = transformBody(node.body, scopeName, lifted);
+      node.body = transformBody(node.body, scopeName, lifted, nextName);
       if (node.handler.kind === "inline") {
-        node.handler.body = transformBody(node.handler.body, scopeName, lifted);
+        node.handler.body = transformBody(node.handler.body, scopeName, lifted, nextName);
       }
       return node;
     case "matchBlock":
       for (const c of node.cases) {
         if (c.type === "comment") continue;
         if (c.type === "newLine") continue;
-        c.body = transformBody([c.body as any], scopeName, lifted)[0] as any;
+        c.body = transformBody([c.body as any], scopeName, lifted, nextName)[0] as any;
       }
       return node;
     case "withModifier":
-      node.statement = transformBody([node.statement as any], scopeName, lifted)[0];
+      node.statement = transformBody([node.statement as any], scopeName, lifted, nextName)[0];
       return node;
     case "parallelBlock":
     case "seqBlock":
-      node.body = transformBody(node.body, scopeName, lifted);
+      node.body = transformBody(node.body, scopeName, lifted, nextName);
       return node;
     case "assignment":
       // RHS may itself be a function call with a block (e.g. `let x = foo() { ... }`).
@@ -174,6 +216,7 @@ function transformStatement(
           node.value as FunctionCall,
           scopeName,
           lifted,
+          nextName,
         ) as any;
       }
       return node;
@@ -183,6 +226,7 @@ function transformStatement(
           node.value as FunctionCall,
           scopeName,
           lifted,
+          nextName,
         ) as any;
       }
       return node;
@@ -199,11 +243,12 @@ function transformFunctionCall(
   call: FunctionCall,
   scopeName: string,
   lifted: FunctionDefinition[],
+  nextName: NameGen,
 ): FunctionCall {
   // Recurse into a non-callback block body first so nested callback blocks
   // inside e.g. `xs.map()` get lifted too.
   if (call.block && call.functionName !== "callback") {
-    call.block.body = transformBody(call.block.body, scopeName, lifted);
+    call.block.body = transformBody(call.block.body, scopeName, lifted, nextName);
     return call;
   }
 
@@ -216,7 +261,7 @@ function transformFunctionCall(
   // is lifted before we lift the outer one. Lifted ordering doesn't matter
   // (all lifted defs go to module top), but recursion preserves source
   // ordering within `lifted`, which makes test output predictable.
-  block.body = transformBody(block.body, scopeName, lifted);
+  block.body = transformBody(block.body, scopeName, lifted, nextName);
 
   const name = nextName(scopeName);
   // Runtime hook dispatch always invokes the callback's AgencyFunction

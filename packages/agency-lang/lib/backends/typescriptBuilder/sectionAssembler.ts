@@ -46,9 +46,19 @@ export type ProgramPartition = {
    * rerunnable `__registerTopLevelCallbacks(__ctx)` helper that fires on
    * every fresh run AND every resume. Globals are checkpointed and
    * restored on resume; the `topLevelCallbacks` array on the runtime
-   * context is not — so the callbacks must be re-registered after the
-   * state is restored or top-level callbacks silently stop firing after
-   * an interrupt round-trip.
+   * context is not — so the callbacks must be re-registered on every
+   * resume cycle.
+   *
+   * Critical ordering: resume paths (`respondToInterrupts`,
+   * `rewindFrom`) call `registerTopLevelCallbacks(execCtx)` BEFORE
+   * `restoreState(...)`. The `_callbackImpl` stdlib helper routes a
+   * registration to `ctx.topLevelCallbacks` only when the state stack is
+   * empty (i.e., the call is happening at module-init / top-level
+   * position); once `restoreState` has rebuilt a non-empty stack, the
+   * same registration call would be misrouted as a scoped callback on
+   * the wrong frame. If you change the order of these two calls, every
+   * top-level callback registered after the first interrupt cycle will
+   * either silently land on a foreign frame or not fire at all.
    */
   topLevelCallbackStatements: TsNode[];
 };
@@ -142,13 +152,14 @@ export function partitionProgram(
  *
  * Handler-wrapped top-level forms — `callback(...) with myHandler` and a
  * `handle { callback(...) } with (...)` block at module scope — are NOT
- * matched here and fall through to globalInitStatements. Today they do
- * not survive interrupt + resume (only topLevelCallbackStatements are
- * re-registered on resume) and the top-level `handle { ... }` form does
- * not even compile (a separate issue in stepPathTracker). This is a
- * known limitation: register top-level callbacks at module scope without
- * a wrapping handler, or move the registration into a node body where
- * the handle machinery works correctly.
+ * matched here. The `with`-modifier form is rejected at compile time by
+ * `assertNoWrappedTopLevelCallbacks` in `liftCallbackBlocks` (it would
+ * silently drop on resume). The `handle { ... }` form at module scope
+ * is a pre-existing top-level-handle limitation that crashes the
+ * typescriptBuilder via `StepPathTracker: currentId() called with empty
+ * path`. Until top-level `handle` is supported, register top-level
+ * callbacks at module scope without a wrapping handler, or move the
+ * registration into a node body where the handle machinery works.
  */
 function isTopLevelCallbackCall(node: AgencyNode): boolean {
   return node.type === "functionCall" && node.functionName === "callback";

@@ -1,6 +1,6 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect } from "vitest";
 import { parseAgency } from "@/parser.js";
-import { liftCallbackBlocks, resetCallbackCounter } from "./liftCallbacks.js";
+import { liftCallbackBlocks } from "./liftCallbacks.js";
 import type { AgencyProgram, AgencyNode } from "@/types.js";
 import type { FunctionDefinition, FunctionCall } from "@/types/function.js";
 
@@ -11,7 +11,9 @@ function parse(src: string): AgencyProgram {
 }
 
 function lift(src: string): AgencyProgram {
-  resetCallbackCounter();
+  // No counter reset needed — `liftCallbackBlocks` closes over a fresh
+  // counter per invocation, so each call to `lift()` produces stable
+  // `__cb_<scope>_0`, `__cb_<scope>_1`, ... names regardless of prior runs.
   return liftCallbackBlocks(parse(src));
 }
 
@@ -36,8 +38,6 @@ function findCalls(nodes: AgencyNode[], fnName: string): FunctionCall[] {
 }
 
 describe("liftCallbackBlocks", () => {
-  beforeEach(() => resetCallbackCounter());
-
   it("lifts a top-level callback block to __cb_top_0", () => {
     const out = lift(`callback("onNodeStart") as data {\n  print(data.nodeName)\n}\n`);
     const lifted = findFn(out, "__cb_top_0");
@@ -161,5 +161,33 @@ describe("liftCallbackBlocks", () => {
     expect(lifted).toBeDefined();
     expect(lifted!.parameters).toHaveLength(1);
     expect(lifted!.parameters[0].name).toBe("data");
+  });
+
+  it("rejects a top-level callback registration wrapped in `with` modifier", () => {
+    // Wrapping a top-level callback registration with a `with` modifier
+    // (`callback(...) with approve`) is unsupported: the wrap only covers
+    // the synchronous registration call (which never fails) and the
+    // wrapped form does not survive interrupt + resume because it falls
+    // through to globalInitStatements instead of the rerunnable
+    // topLevelCallbackStatements bucket. Fail loudly with the source
+    // location instead of silently regressing on resume.
+    expect(() =>
+      lift(
+        `def myFn(data: any) { print(data) }\n` +
+          `callback("onNodeStart", myFn) with approve\n`,
+      ),
+    ).toThrow(/cannot be wrapped in `with approve`/);
+  });
+
+  it("issues distinct names across separate liftCallbackBlocks invocations", () => {
+    // The counter must be per-invocation, not module-level. Two
+    // independent lift() calls each get a fresh counter; both should
+    // produce `__cb_top_0` rather than the second one drifting to
+    // `__cb_top_1`. This protects against concurrent compile sessions
+    // sharing the counter and producing identifier collisions.
+    const a = lift(`callback("onNodeStart") as data { print(data) }\n`);
+    const b = lift(`callback("onNodeEnd") as data { print(data) }\n`);
+    expect(findFn(a, "__cb_top_0")).toBeDefined();
+    expect(findFn(b, "__cb_top_0")).toBeDefined();
   });
 });

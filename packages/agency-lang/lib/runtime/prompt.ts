@@ -682,6 +682,10 @@ export async function runPrompt(args: {
                 },
               }),
           );
+          // If onToolCallEnd collected interrupts, the branch is halted —
+          // don't log toolCall (it would duplicate when the step re-runs on
+          // resume).
+          if (b.interrupts) return;
           ctx.statelogClient.toolCall({
             toolName: handler.name,
             args: namedArgs,

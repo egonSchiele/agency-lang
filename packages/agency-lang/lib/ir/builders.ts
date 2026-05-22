@@ -294,6 +294,10 @@ export const ts = {
     return { spread: false, key, value };
   },
 
+  setComputed(key: TsNode, value: TsNode): TsObjectEntry {
+    return { spread: false, computed: true, key, value };
+  },
+
   arr(items: TsNode[]): TsArrayLiteral {
     return { kind: "arrayLiteral", items };
   },

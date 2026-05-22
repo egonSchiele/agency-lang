@@ -16,6 +16,8 @@ import * as path from "path";
 import * as os from "os";
 import { parseAgency } from "@/parser.js";
 import {
+  ImportPolicy,
+  isImportAllowed,
   isStdlibImport,
   isPkgImport,
 } from "../importPaths.js";
@@ -37,57 +39,53 @@ export type CompileResult = CompileSuccess | CompileFailure;
 
 // Options accepted by compileSource. Mostly the standard AgencyConfig that
 // the rest of the pipeline takes, plus one compileSource-specific knob:
-// `restrictImports`. We keep `restrictImports` out of the global AgencyConfig
-// because it's only meaningful at this entry point — used when compiling
+// `imports`. We keep `imports` out of the global AgencyConfig because it's
+// only meaningful at this entry point — used when compiling
 // agent-supplied source destined for subprocess execution.
 export type CompileSourceOptions = AgencyConfig & {
-  /** When true, reject every import that isn't a std:: import. This includes
-   *  relative .agency files, pkg:: imports, and raw npm/Node modules
-   *  (`fs`, `child_process`, etc.). Set by std::agency.compile so that the
-   *  compiled subprocess code can only call into the standard library. */
-  restrictImports?: boolean;
+  /**
+   * Declarative import policy. Disallowed imports cause compilation to
+   * fail with one error per violating import path.
+   * See `lib/importPaths.ts` for the ImportPolicy shape.
+   */
+  imports?: ImportPolicy;
 };
 
-// Human-readable label for the kind of disallowed import. Used in error
-// messages so the user knows whether they wrote an npm import, a pkg::
-// import, or a path-based .agency import. Note: ".agency file import"
-// covers both relative and absolute paths — we don't distinguish because
-// both are equally rejected here.
-function classifyImport(importPath: string): string {
-  if (isPkgImport(importPath)) return "package import";
-  if (importPath.endsWith(".agency")) return ".agency file import";
-  return "npm/Node module import";
-}
-
-// Walk every import in the program and reject anything that isn't a std::
-// import. Returns null if all imports pass, or a CompileFailure describing
-// the offender.
+// Walk every import in the program and reject anything that fails the
+// policy. Returns null if all imports pass, or a CompileFailure listing
+// every violating import (not just the first).
 //
 // IMPORTANT: uses getAllImports (NOT getImports) so we see EVERY import,
 // including raw npm/Node modules. getImports filters those out and would
 // let `import fs from "fs"` slip past the check — that was the bug this
-// helper exists to close.
-function checkRestrictedImports(program: AgencyProgram): CompileFailure | null {
-  for (const { path: importPath, kind } of getAllImports(program)) {
-    if (kind === "node") {
-      // `import nodes { ... }` always references another .agency file.
-      // The path can be relative or absolute — we reject both forms here
-      // since neither is a stdlib import.
-      return {
-        success: false,
-        errors: [`Tool/node import '${importPath}' is not allowed when restrictImports is set. Only standard library (std::) imports are permitted.`],
-      };
-    }
-    if (!isStdlibImport(importPath)) {
-      const what = classifyImport(importPath);
-      return {
-        success: false,
-        errors: [`${what} '${importPath}' is not allowed. Only standard library (std::) imports are permitted.`],
-      };
+// check exists to close.
+//
+// `import nodes { ... }` (deprecated) is reported with kind "node" by
+// getAllImports — but to the policy that's a "local" import because it
+// always references another .agency file. Classify it that way so a
+// `allowKinds: ["stdlib"]` policy still rejects it (the legacy behavior).
+function checkImportPolicy(
+  program: AgencyProgram,
+  policy: ImportPolicy,
+): CompileFailure | null {
+  const violations: string[] = [];
+  // getAllImports surfaces both `importStatement` and the deprecated
+  // `import nodes { ... }` form. importKind() already classifies any
+  // path ending in `.agency` as "local", so we can pass paths through
+  // unchanged regardless of which import form they came from.
+  for (const { path: importPath } of getAllImports(program)) {
+    if (!isImportAllowed(importPath, policy)) {
+      violations.push(
+        `Import '${importPath}' is not allowed under the configured import policy.`,
+      );
     }
   }
-  return null;
+  if (violations.length === 0) return null;
+  return { success: false, errors: violations };
 }
+
+export { typeCheckSource } from "./typecheck.js";
+export type { TypeCheckDiagnostic, TypeCheckReport } from "./typecheck.js";
 
 export function compileSource(
   source: string,
@@ -111,9 +109,9 @@ export function compileSource(
     }
     const program: AgencyProgram = parseResult.result;
 
-    // 2. Check for restricted imports — only std:: allowed.
-    if (config.restrictImports) {
-      const failure = checkRestrictedImports(program);
+    // 2. Check imports against policy.
+    if (config.imports) {
+      const failure = checkImportPolicy(program, config.imports);
       if (failure) return failure;
     }
 

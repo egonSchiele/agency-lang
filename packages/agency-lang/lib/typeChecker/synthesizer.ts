@@ -20,6 +20,7 @@ import {
 } from "./primitiveMembers.js";
 import type { BuiltinSignature } from "./types.js";
 import { walkNodes } from "../utils/node.js";
+import { uniqBy } from "../utils.js";
 import type { BlockArgument } from "../types/blockArgument.js";
 import { UNDEFINED_T, VOID_T } from "./primitives.js";
 
@@ -380,6 +381,11 @@ function synthObject(
   // Use a Map so later entries overwrite earlier ones (later-wins for splats
   // followed by explicit keys, e.g. { ...a, x: "new" } produces x's literal type).
   const properties = new Map<string, VariableType>();
+  // Track value types from computed-key entries — we can't know the key
+  // statically, so the whole object degrades to a Record whose value type
+  // is the union of all entry value types (static + computed).
+  const computedValueTypes: VariableType[] = [];
+  let hasComputedKey = false;
   for (const entry of expr.entries) {
     if ("type" in entry && entry.type === "splat") {
       const splatType = synthType(entry.value, scope, ctx);
@@ -389,12 +395,38 @@ function synthObject(
         properties.set(prop.key, prop.value);
       continue;
     }
-    const kv = entry as { key: string; value: AgencyNode };
+    const kv = entry as {
+      key: string;
+      computedKey?: AgencyNode;
+      value: AgencyNode;
+    };
     const valueType = synthType(kv.value, scope, ctx);
     if (valueType === "any") {
       return "any";
     }
+    if (kv.computedKey) {
+      hasComputedKey = true;
+      computedValueTypes.push(valueType);
+      continue;
+    }
     properties.set(kv.key, valueType);
+  }
+  if (hasComputedKey) {
+    const allValueTypes = [
+      ...Array.from(properties.values()),
+      ...computedValueTypes,
+    ];
+    if (allValueTypes.length === 0) return "any";
+    const unique = uniqBy(allValueTypes, (t) => JSON.stringify(t));
+    const valueType: VariableType =
+      unique.length === 1
+        ? unique[0]
+        : { type: "unionType" as const, types: unique };
+    return {
+      type: "genericType",
+      name: "Record",
+      typeArgs: [{ type: "primitiveType", value: "string" }, valueType],
+    };
   }
   return {
     type: "objectType",

@@ -246,7 +246,7 @@ function checkCallAgainstBuiltinSig(
     });
     return;
   }
-  if (call.block) {
+  if (call.block && !sig.acceptsBlock) {
     ctx.errors.push({
       message: `'${call.functionName}' does not accept a block argument.`,
       loc: call.block.loc ?? call.loc,

@@ -2,6 +2,7 @@ import * as fs from "fs";
 import * as path from "path";
 import { fileURLToPath } from "url";
 import { createRequire } from "module";
+import picomatch from "picomatch";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -92,6 +93,78 @@ export function getTestDir(): string {
  */
 export function isStdlibImport(importPath: string): boolean {
   return importPath.startsWith("std::");
+}
+
+/**
+ * Classification of an import path. Used by ImportPolicy to allow / reject
+ * imports by category.
+ *
+ *   - "stdlib" — `std::*` (e.g. `std::shell`)
+ *   - "pkg"    — `pkg::*` (e.g. `pkg::wikipedia`)
+ *   - "local"  — relative or absolute file paths (e.g. `./util.agency`)
+ *   - "node"   — bare specifiers resolved by Node (e.g. `fs`, `child_process`)
+ *
+ * Order is load-bearing: stdlib and pkg are checked first so that a
+ * `pkg::foo.agency` style path is never mis-classified as "local".
+ */
+export type ImportKind = "stdlib" | "pkg" | "local" | "node";
+
+export function importKind(modulePath: string): ImportKind {
+  if (isStdlibImport(modulePath)) return "stdlib";
+  if (isPkgImport(modulePath)) return "pkg";
+  if (
+    modulePath.startsWith("./") ||
+    modulePath.startsWith("../") ||
+    modulePath.startsWith("/") ||
+    modulePath.endsWith(".agency")
+  ) {
+    return "local";
+  }
+  return "node";
+}
+
+/**
+ * Declarative import-allow-list / deny-list. Used by both `compileSource`
+ * (to reject disallowed imports up front) and `_filterImports` in the
+ * stdlib (to strip them from source).
+ *
+ * Semantics (see isImportAllowed):
+ *   - Exclude rules always win: if a path matches anything in
+ *     `excludedPackages` or `excludeKinds`, it is rejected.
+ *   - When all four lists are empty, every import is allowed (default-allow).
+ *   - When at least one allow list is non-empty, an import must match an
+ *     allowed kind OR an allowed package glob (union across the two axes).
+ */
+export type ImportPolicy = {
+  allowedPackages?: string[];
+  excludedPackages?: string[];
+  allowKinds?: ImportKind[];
+  excludeKinds?: ImportKind[];
+};
+
+function matchGlob(pattern: string, value: string): boolean {
+  return picomatch(pattern)(value);
+}
+
+export function isImportAllowed(modulePath: string, policy: ImportPolicy): boolean {
+  const kind = importKind(modulePath);
+  const allowKinds = policy.allowKinds ?? [];
+  const allowPkgs = policy.allowedPackages ?? [];
+  const excludeKinds = policy.excludeKinds ?? [];
+  const excludePkgs = policy.excludedPackages ?? [];
+
+  // Exclude rules — any match wins, regardless of allow rules.
+  if (excludeKinds.includes(kind)) return false;
+  if (excludePkgs.some((g) => matchGlob(g, modulePath))) return false;
+
+  // No allow rules of either kind → default-allow.
+  if (allowKinds.length === 0 && allowPkgs.length === 0) return true;
+
+  // Union across the two axes: match either an allowed kind OR an
+  // allowed package glob.
+  const kindMatched = allowKinds.includes(kind);
+  const pkgMatched = allowPkgs.some((g) => matchGlob(g, modulePath));
+  return kindMatched || pkgMatched;
 }
 
 /**

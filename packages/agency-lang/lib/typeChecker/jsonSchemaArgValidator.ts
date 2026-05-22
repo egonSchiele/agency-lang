@@ -6,6 +6,7 @@ import type {
   AgencyProgram,
   AgencyArray,
 } from "../types.js";
+import type { SourceLocation } from "../types/base.js";
 import type { CompilationUnit } from "../compilationUnit.js";
 
 /**
@@ -225,6 +226,13 @@ function validateObjectLiteral(
   for (const entry of obj.entries) {
     if ("key" in entry) {
       const kv = entry as AgencyObjectKV;
+      if (kv.computedKey) {
+        return {
+          ok: false,
+          reason: "computed object keys are not allowed inside @jsonSchema(...)",
+          loc: (kv.computedKey as { loc?: SourceLocation }).loc,
+        };
+      }
       const r = validateJsonSchemaArg(kv.value, scope);
       if (!r.ok) return r;
     } else {

@@ -695,6 +695,12 @@ export class TypeScriptBuilder {
         return ts.setSpread(this.processNode(entry.value));
       }
       const kv = entry as AgencyObjectKV;
+      if (kv.computedKey) {
+        return ts.setComputed(
+          this.processNode(kv.computedKey),
+          this.processNode(kv.value),
+        );
+      }
       const keyCode = kv.key.replace(/"/g, '\\"');
       return ts.set(`"${keyCode}"`, this.processNode(kv.value));
     });

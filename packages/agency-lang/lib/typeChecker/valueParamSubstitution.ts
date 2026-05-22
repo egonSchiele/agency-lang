@@ -228,6 +228,9 @@ function substituteInObject(
         const kv = entry as AgencyObjectKV;
         return {
           ...kv,
+          computedKey: kv.computedKey
+            ? substituteValueArgsInExpression(kv.computedKey, bindings)
+            : undefined,
           value: substituteValueArgsInExpression(kv.value, bindings),
         };
       }
@@ -546,12 +549,11 @@ function checkExpr(
     case "agencyObject":
       for (const entry of (e as AgencyObject).entries) {
         if ("key" in entry) {
-          checkExpr(
-            (entry as AgencyObjectKV).value,
-            paramNames,
-            aliasName,
-            tagName,
-          );
+          const kv = entry as AgencyObjectKV;
+          if (kv.computedKey) {
+            checkExpr(kv.computedKey, paramNames, aliasName, tagName);
+          }
+          checkExpr(kv.value, paramNames, aliasName, tagName);
         } else {
           checkExpr(
             (entry as SplatExpression).value as Expression,

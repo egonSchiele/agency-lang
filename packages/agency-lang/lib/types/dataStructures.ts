@@ -18,7 +18,13 @@ export type AgencyArray = BaseNode & {
 };
 
 export type AgencyObjectKV = {
+  /** Static key. When `computedKey` is set, this is `""` and consumers
+   *  should use `computedKey` instead. */
   key: string;
+  /** Computed key expression (`{ [expr]: value }`). When set, the entry's
+   *  key is determined at runtime; consumers that need a static key must
+   *  fall back to treating the containing object as `Record<string, V>`. */
+  computedKey?: Expression;
   value: Expression;
 };
 export type AgencyObject = BaseNode & {

@@ -1,6 +1,7 @@
 import * as readline from "readline";
 import process from "process";
-import { readFile, writeFile } from "fs/promises";
+import { readFile, writeFile, appendFile } from "fs/promises";
+import { existsSync } from "fs";
 import { execFile } from "child_process";
 import { promisify } from "util";
 import { detectPlatform } from "./utils.js";
@@ -58,8 +59,32 @@ export async function _read(dir: string, filename: string): Promise<string> {
   return data.toString("utf8");
 }
 
-export async function _write(dir: string, filename: string, content: string): Promise<boolean> {
+const VALID_WRITE_MODES = ["overwrite", "append", "create-only"] as const;
+export type WriteMode = typeof VALID_WRITE_MODES[number];
+
+export async function _write(
+  dir: string,
+  filename: string,
+  content: string,
+  mode: WriteMode = "overwrite",
+): Promise<boolean> {
+  if (!VALID_WRITE_MODES.includes(mode)) {
+    throw new Error(
+      `Invalid mode '${mode}'. Must be one of: ${VALID_WRITE_MODES.join(", ")}.`,
+    );
+  }
   const filePath = await resolvePath(dir, filename);
+  if (mode === "create-only") {
+    if (existsSync(filePath)) {
+      throw new Error(`File already exists: '${filePath}' (mode is 'create-only').`);
+    }
+    await writeFile(filePath, content, "utf8");
+    return true;
+  }
+  if (mode === "append") {
+    await appendFile(filePath, content, "utf8");
+    return true;
+  }
   await writeFile(filePath, content, "utf8");
   return true;
 }

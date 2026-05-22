@@ -119,6 +119,7 @@ export function checkExcessObjectProperties(
   const known = new Set(resolved.properties.map((p) => p.key));
   for (const entry of literal.entries) {
     if ("type" in entry) continue; // splat
+    if (entry.computedKey) continue; // computed key — can't statically check
     if (!known.has(entry.key)) {
       ctx.errors.push({
         message: `Unknown property '${entry.key}' on type '${formatTypeHint(expectedType)}' (${context}).`,

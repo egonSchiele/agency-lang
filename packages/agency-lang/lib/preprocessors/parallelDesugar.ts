@@ -256,7 +256,9 @@ function walkForReferences(node: AgencyNode, refs: Set<string>): void {
         if ("type" in e && e.type === "splat") {
           walkForReferences(e.value as AgencyNode, refs);
         } else {
-          walkForReferences((e as any).value as AgencyNode, refs);
+          const kv = e as { computedKey?: AgencyNode; value: AgencyNode };
+          if (kv.computedKey) walkForReferences(kv.computedKey, refs);
+          walkForReferences(kv.value, refs);
         }
       }
       return;

@@ -42,6 +42,11 @@ export type BuiltinSignature = {
   returnType: VariableType | "any";
   minParams?: number; // if set, arity is [minParams, params.length]; otherwise exact
   restParam?: VariableType | "any"; // if set, accepts unlimited extra args of this type after the fixed params
+  /** One-line markdown description shown in LSP hover. */
+  description?: string;
+  /** If true, the typechecker allows a block argument on calls to this
+   *  builtin. Used by language-construct builtins like `fork` / `race`. */
+  acceptsBlock?: boolean;
 };
 
 export type TypeCheckerContext = {

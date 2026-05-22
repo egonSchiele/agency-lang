@@ -81,6 +81,10 @@ export default defineConfig({
               link: "/appendix/agency-stdlib",
             },
             {
+              text: "Built-in Functions",
+              link: "/appendix/builtins",
+            },
+            {
               text: "Advanced Types",
               link: "/appendix/advanced-types",
             },
@@ -136,6 +140,10 @@ export default defineConfig({
             {
               text: "Agency's Standard Library",
               link: "/appendix/agency-stdlib",
+            },
+            {
+              text: "Built-in Functions",
+              link: "/appendix/builtins",
             },
           ],
         },

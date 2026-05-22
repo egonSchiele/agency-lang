@@ -1678,26 +1678,48 @@ export const agencyArrayParser: Parser<AgencyArray> = (
   return parser(input);
 };
 
+const agencyObjectComputedKVParser: Parser<AgencyObjectKV> = trace(
+  "agencyObjectComputedKVParser",
+  seqC(
+    optionalSpaces,
+    char("["),
+    optionalSpaces,
+    set("key", ""),
+    capture(
+      lazy(() => exprParser),
+      "computedKey",
+    ),
+    optionalSpaces,
+    char("]"),
+    optionalSpaces,
+    char(":"),
+    optionalSpaces,
+    capture(
+      lazy(() => exprParser),
+      "value",
+    ),
+  ),
+);
+
+const agencyObjectStaticKVParser: Parser<AgencyObjectKV> = trace(
+  "agencyObjectStaticKVParser",
+  seqC(
+    optionalSpaces,
+    capture(or(map(quotedString, removeQuotes), many1WithJoin(varNameChar)), "key"),
+    optionalSpaces,
+    char(":"),
+    optionalSpaces,
+    capture(
+      lazy(() => exprParser),
+      "value",
+    ),
+  ),
+);
+
 export const agencyObjectKVParser: Parser<AgencyObjectKV> = (
   input: string,
-): ParserResult<AgencyObjectKV> => {
-  const parser = trace(
-    "agencyObjectKVParser",
-    seqC(
-      optionalSpaces,
-      capture(or(map(quotedString, removeQuotes), many1WithJoin(varNameChar)), "key"),
-      optionalSpaces,
-      char(":"),
-      optionalSpaces,
-      capture(
-        lazy(() => exprParser),
-        "value",
-      ),
-    ),
-  );
-
-  return parser(input);
-};
+): ParserResult<AgencyObjectKV> =>
+  or(agencyObjectComputedKVParser, agencyObjectStaticKVParser)(input);
 
 export const agencyObjectParser: Parser<AgencyObject> = seqC(
   set("type", "agencyObject"),

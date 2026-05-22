@@ -395,6 +395,29 @@ describe("StateStack.callerFrame / collectScopedCallbacks", () => {
   });
 });
 
+describe("StateStack.isGlobalContext", () => {
+  function stackWithFrames(n: number): StateStack {
+    const stack = new StateStack();
+    for (let i = 0; i < n; i++) stack.stack.push(new State());
+    return stack;
+  }
+
+  it("returns true when stack is empty (defensive)", () => {
+    expect(new StateStack().isGlobalContext()).toBe(true);
+  });
+
+  it("returns true when only the callback's own frame is on the stack (top-level)", () => {
+    // When `callback(...)` runs at module top-level (inside __initializeGlobals),
+    // the only frame on the stack is `callback`'s own. There is no real caller.
+    expect(stackWithFrames(1).isGlobalContext()).toBe(true);
+  });
+
+  it("returns false when there is a real caller frame", () => {
+    expect(stackWithFrames(2).isGlobalContext()).toBe(false);
+    expect(stackWithFrames(5).isGlobalContext()).toBe(false);
+  });
+});
+
 describe("_callback", () => {
   function ctxWithFrames(n: number): any {
     const stack = new StateStack();
@@ -432,5 +455,41 @@ describe("_callback", () => {
     expect(() =>
       _callbackImpl("notAHook", () => {}, { ctx } as any),
     ).toThrow(/Unknown callback/);
+  });
+
+  it("throws when fn is a string (non-callable)", () => {
+    const ctx = ctxWithFrames(2);
+    expect(() =>
+      _callbackImpl("onNodeStart", "not a function" as any, { ctx } as any),
+    ).toThrow(/must be a function/i);
+  });
+
+  it("throws when fn is a number (non-callable)", () => {
+    const ctx = ctxWithFrames(2);
+    expect(() =>
+      _callbackImpl("onNodeStart", 42 as any, { ctx } as any),
+    ).toThrow(/must be a function/i);
+  });
+
+  it("throws when fn is null", () => {
+    const ctx = ctxWithFrames(2);
+    expect(() =>
+      _callbackImpl("onNodeStart", null as any, { ctx } as any),
+    ).toThrow(/must be a function/i);
+  });
+
+  it("throws when fn is undefined", () => {
+    const ctx = ctxWithFrames(2);
+    expect(() =>
+      _callbackImpl("onNodeStart", undefined as any, { ctx } as any),
+    ).toThrow(/must be a function/i);
+  });
+
+  it("accepts a plain function", () => {
+    const ctx = ctxWithFrames(2);
+    const fn = (_data: any) => {};
+    expect(() =>
+      _callbackImpl("onNodeStart", fn, { ctx } as any),
+    ).not.toThrow();
   });
 });

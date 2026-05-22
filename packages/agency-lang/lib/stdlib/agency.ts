@@ -55,11 +55,16 @@ export function _callbackImpl(
       `Unknown callback '${name}'. Valid: ${VALID_CALLBACK_NAMES.join(", ")}`,
     );
   }
+  if (typeof fn !== "function" && !AgencyFunction.isAgencyFunction(fn)) {
+    throw new Error(
+      `callback('${name}', fn): fn must be a function, got ${fn === null ? "null" : typeof fn}`,
+    );
+  }
   const ctx = __state.ctx;
   // Top-level: we're inside __initializeGlobals. The only frame on the stack
   // is `callback`'s own (or none, defensively). There is no caller frame
   // that survives past init, so route to ctx.topLevelCallbacks.
-  if (ctx.stateStack.stack.length <= 1) {
+  if (ctx.stateStack.isGlobalContext()) {
     ctx.topLevelCallbacks.push({ name, fn });
     return;
   }

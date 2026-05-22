@@ -347,6 +347,14 @@ export class StateStack {
       : this.stack[0];
   }
 
+  /** True when the only frame on the stack is the currently-running call's own
+   *  frame (i.e. there is no caller). This happens during module-level
+   *  initialization (e.g. inside `__initializeGlobals`) where calls like
+   *  `callback(...)` have no real caller frame to register against. */
+  isGlobalContext(): boolean {
+    return this.stack.length <= 1;
+  }
+
   /** All scoped callbacks registered anywhere in the active stack for this hook,
    *  ordered innermost first (deepest frame's callbacks come first). */
   collectScopedCallbacks(name: string): any[] {

@@ -1,0 +1,25 @@
+import { callback } from "std::agency"
+
+let observed: string = ""
+
+// Top-level callback. We expect this to remain active across the
+// interrupt/resume round-trip. (Currently fails — see the topLevelCallbacks
+// architectural issue.)
+callback("onFunctionStart") as data {
+  if (data.functionName == "helper") {
+    observed = observed + "fired,"
+  }
+}
+
+def helper(): string {
+  return "x"
+}
+
+node main() {
+  // Interrupt forces the host to serialize and resume execution. The
+  // helper() call below only runs after deserialize, so if the callback
+  // fires for it, we know the registration survives the round-trip.
+  const _y = interrupt("pause")
+  helper()
+  return observed
+}

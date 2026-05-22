@@ -1,0 +1,21 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "top-level callback survives interrupt serialization and fires after resume",
+      "input": "",
+      "expectedOutput": "\"fired,\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "interruptHandlers": [
+        {
+          "action": "approve",
+          "expectedMessage": "pause"
+        }
+      ]
+    }
+  ]
+}

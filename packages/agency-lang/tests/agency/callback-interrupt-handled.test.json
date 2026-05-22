@@ -1,0 +1,9 @@
+{
+  "tests": [{
+    "nodeName": "main",
+    "input": "",
+    "expectedOutput": "\"caught:myapp::guarded,\"",
+    "evaluationCriteria": [{ "type": "exact" }],
+    "description": "callback interrupt is caught by enclosing handle block"
+  }]
+}

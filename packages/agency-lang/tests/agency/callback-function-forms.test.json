@@ -1,0 +1,9 @@
+{
+  "tests": [{
+    "nodeName": "main",
+    "input": "",
+    "expectedOutput": "[1,1]",
+    "evaluationCriteria": [{ "type": "exact" }],
+    "description": "callback accepts both as-data trailing-block and named-function forms"
+  }]
+}

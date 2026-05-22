@@ -1,4 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
+import { AgencyFunction } from "./agencyFunction.js";
+import { AgencyCancelledError, RestoreSignal } from "./errors.js";
 import { callHook } from "./hooks.js";
 import { State, StateStack } from "./state/stateStack.js";
 
@@ -68,18 +70,28 @@ describe("callHook (rewritten)", () => {
     consoleErr.mockRestore();
   });
 
-  it("propagates interrupt errors", async () => {
-    const interrupt = Object.assign(new Error("interrupt"), {
-      __agencyInterrupt: true,
-    });
+  it("rethrows RestoreSignal control-flow errors", async () => {
+    const signal = new RestoreSignal({ id: 1 } as any);
     const inner = new State();
     inner.scopedCallbacks = [
-      { name: "onNodeStart", fn: () => { throw interrupt; } },
+      { name: "onNodeStart", fn: () => { throw signal; } },
     ];
     const ctx = ctxWithStack([inner]);
     await expect(
       callHook({ ctx, name: "onNodeStart", data: { nodeName: "x" } } as any),
-    ).rejects.toBe(interrupt);
+    ).rejects.toBe(signal);
+  });
+
+  it("rethrows AgencyCancelledError", async () => {
+    const cancelled = new AgencyCancelledError("user cancelled");
+    const inner = new State();
+    inner.scopedCallbacks = [
+      { name: "onNodeStart", fn: () => { throw cancelled; } },
+    ];
+    const ctx = ctxWithStack([inner]);
+    await expect(
+      callHook({ ctx, name: "onNodeStart", data: { nodeName: "x" } } as any),
+    ).rejects.toBe(cancelled);
   });
 
   it("TS-passed onLLMCallStart return value is discarded (message override removed)", async () => {
@@ -133,6 +145,37 @@ describe("callHook (rewritten)", () => {
     const ctx = ctxWithStack([frame]);
     await callHook({ ctx, name: "onNodeStart", data: { nodeName: "x" } } as any);
     expect(calls).toEqual(["a", "b", "c"]);
+  });
+
+  it("throws loudly when a callback halts with an unhandled Interrupt[]", async () => {
+    // Simulate an AgencyFunction callback body that produced an interrupt
+    // value (i.e. interrupt was raised inside the callback and no handler
+    // on the call stack caught it). callHook must surface this instead of
+    // silently dropping the interrupt.
+    const consoleErr = vi.spyOn(console, "error").mockImplementation(() => {});
+    const fakeInterrupt = { type: "interrupt", kind: "myapp::oops", message: "x" };
+    const callbackFn = AgencyFunction.create(
+      {
+        name: "__bad_cb",
+        module: "test",
+        fn: async () => [fakeInterrupt],
+        params: [{ name: "data", hasDefault: false, defaultValue: undefined, variadic: false }],
+        toolDefinition: null,
+      },
+      {},
+    );
+    const inner = new State();
+    inner.scopedCallbacks = [{ name: "onNodeStart", fn: callbackFn }];
+    const ctx = ctxWithStack([inner]);
+    await callHook({ ctx, name: "onNodeStart", data: { nodeName: "x" } } as any);
+    // Error is logged (not rethrown — fireWithGuard's catch turns it into a
+    // console.error to keep one buggy callback from killing the whole run),
+    // but it MUST be visible.
+    expect(consoleErr).toHaveBeenCalled();
+    const logged = consoleErr.mock.calls.map((c) => String(c[1])).join("\n");
+    expect(logged).toMatch(/unhandled interrupt/i);
+    expect(logged).toMatch(/myapp::oops/);
+    consoleErr.mockRestore();
   });
 
   it("per-instance recursion guard skips re-entry of the same fn", async () => {

@@ -8,6 +8,8 @@ import type {
 } from "smoltalk";
 import type { CallbackName } from "../types/function.js";
 import { AgencyFunction } from "./agencyFunction.js";
+import { AgencyCancelledError, RestoreSignal } from "./errors.js";
+import { hasInterrupts } from "./interrupts.js";
 import type { RuntimeContext } from "./state/context.js";
 import type { TraceEvent } from "./trace/types.js";
 import type { RunNodeResult } from "./types.js";
@@ -93,20 +95,30 @@ export function registerGlobalHook<K extends keyof CallbackMap>(
   _globalHooks[name]!.push(fn);
 }
 
-function isAgencyInterrupt(e: unknown): boolean {
-  return !!(e && typeof e === "object" && (e as any).__agencyInterrupt === true);
-}
-
 async function invokeCallback(
   fn: any,
   data: unknown,
   ctx: RuntimeContext<any>,
+  errorLabel: string,
 ): Promise<void> {
   if (AgencyFunction.isAgencyFunction(fn)) {
-    await (fn as AgencyFunction).invoke(
+    const result = await (fn as AgencyFunction).invoke(
       { type: "positional", args: [data] },
       { ctx },
     );
+    // If the callback body halts with an unhandled Interrupt[] (i.e. an
+    // `interrupt` statement was executed inside the callback body but no
+    // enclosing `handle` block caught it), surface it instead of silently
+    // dropping it. Callbacks fire outside the normal step-driven control
+    // flow, so we can't propagate the interrupt up the call stack; the only
+    // safe behavior is to fail loudly.
+    if (hasInterrupts(result)) {
+      throw new Error(
+        `[agency] ${errorLabel} callback raised an unhandled interrupt ` +
+        `(kind="${result[0].kind}"). Interrupts inside callbacks must be ` +
+        `caught by a \`handle\` block on the enclosing call stack.`,
+      );
+    }
     return;
   }
   await fn(data);
@@ -122,9 +134,11 @@ async function fireWithGuard(
   if (_activeCallbacks.has(key)) return;
   _activeCallbacks.add(key);
   try {
-    await invokeCallback(fn, data, ctx);
+    await invokeCallback(fn, data, ctx, errorLabel);
   } catch (error) {
-    if (isAgencyInterrupt(error)) throw error;
+    // Never swallow real control-flow exceptions used by the runtime.
+    if (error instanceof RestoreSignal) throw error;
+    if (error instanceof AgencyCancelledError) throw error;
     console.error(`[agency] ${errorLabel} callback error:`, error);
   } finally {
     _activeCallbacks.delete(key);

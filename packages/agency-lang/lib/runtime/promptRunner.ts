@@ -134,7 +134,18 @@ export class PromptRunner {
     branchFn: (item: T, b: BranchRunner) => Promise<void>,
   ): Promise<void> {
     const branches = items.map(() => new BranchRunner(this.opts.self));
-    await Promise.all(items.map((item, i) => branchFn(item, branches[i])));
+    // Snapshot once before scheduling, then run each branch inside its own
+    // ALS-backed span context seeded from that snapshot. Without this,
+    // sibling branches share the root span stack and concurrent
+    // startSpan/endSpan calls interleave (mirrors Runner.runForkAll).
+    const parentStack = this.opts.ctx.statelogClient.snapshotStack();
+    await Promise.all(
+      items.map((item, i) =>
+        this.opts.ctx.statelogClient.runInBranchContext(parentStack, () =>
+          branchFn(item, branches[i]),
+        ),
+      ),
+    );
     const merged: Interrupt[] = [];
     for (const b of branches) if (b.interrupts) merged.push(...b.interrupts);
     if (merged.length === 0) return;

@@ -1,0 +1,13 @@
+let count: number = 0
+
+callback("onLLMCallEnd") as data {
+  count = count + 1
+  if (count == 1) {
+    interrupt myapp::pause("budget", { count: count })
+  }
+}
+
+node main() {
+  const response = llm("say hi")
+  return [response, count]
+}

@@ -61,6 +61,11 @@ export const RESERVED_FUNCTION_NAMES = new Set<string>([
   "schema",
   "interrupt",
   "debugger",
+
+  // Category 3 — auto-imported from `std::index` (see stdlib/index.agency).
+  // Redefinition would shadow the import and break compile-time lifting
+  // of `callback("onX") { ... }` blocks (see lib/preprocessors/liftCallbacks.ts).
+  "callback",
 ]);
 
 /**

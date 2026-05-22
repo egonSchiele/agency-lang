@@ -1,5 +1,4 @@
 import { setMemoryId, remember } from "std::memory"
-import { callback } from "std::agency"
 
 // Stores a fact, then makes an llm() call with memory: true. The
 // memory layer should inject a "Relevant context from memory:" system

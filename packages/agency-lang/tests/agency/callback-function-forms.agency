@@ -1,4 +1,3 @@
-import { callback } from "std::agency"
 
 let blockCount: number = 0
 let namedCount: number = 0

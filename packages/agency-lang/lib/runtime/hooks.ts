@@ -99,7 +99,6 @@ async function invokeCallback(
   fn: any,
   data: unknown,
   ctx: RuntimeContext<any>,
-  _errorLabel: string,
 ): Promise<Interrupt[] | undefined> {
   if (AgencyFunction.isAgencyFunction(fn)) {
     const result = await (fn as AgencyFunction).invoke(
@@ -132,7 +131,7 @@ async function fireWithGuard(
   if (_activeCallbacks.has(key)) return undefined;
   _activeCallbacks.add(key);
   try {
-    return await invokeCallback(fn, data, ctx, errorLabel);
+    return await invokeCallback(fn, data, ctx);
   } catch (error) {
     // Never swallow real control-flow exceptions used by the runtime.
     if (error instanceof RestoreSignal) throw error;
@@ -221,8 +220,11 @@ export async function callHookAndDrop<K extends keyof CallbackMap>(args: {
       `[agency] ${args.name} callback raised an unhandled interrupt ` +
         `(kind="${result[0].kind}") at a runtime call site that does not ` +
         `support interrupt propagation. The interrupt is being dropped. ` +
-        `Move the hook firing into an agency-controlled scope, or wait for ` +
-        `Phase 2 of the callback-interrupts work.`,
+        `Some sites (onAgentStart/onAgentEnd) fundamentally cannot ` +
+        `propagate because they fire outside any agency frame; others ` +
+        `(LLM/tool hooks) may gain propagation in a future phase. To ` +
+        `respond to this interrupt, register the callback on a hook ` +
+        `that fires inside an agency call frame instead.`,
       result,
     );
   }

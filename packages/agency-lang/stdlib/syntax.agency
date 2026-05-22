@@ -1,0 +1,20 @@
+import {
+  syntaxHighlight as _syntaxHighlight,
+ } from "agency-lang/stdlib-lib/syntax.js"
+
+export type HighlightMode = "shell" | "web"
+
+export def highlight(
+  code: string,
+  language: string = "plaintext",
+  mode: HighlightMode = "shell",
+): string {
+  """
+  A tool for syntax highlighting code snippets. Specify the programming language for accurate highlighting (e.g., "javascript", "python", "json"). Defaults to plain text if no language is provided.
+
+  @param code - The code snippet to highlight
+  @param language - The programming language of the code (optional, defaults to "plaintext")
+  @param mode - The output format for the highlighted code: "shell" for terminal output
+  """
+  return _syntaxHighlight(code, language)
+}

@@ -1,4 +1,4 @@
-/** @module
+/**
 The imports from this file get auto-imported into every .agency file, so you can use these tools without needing to import them manually.
 
 ### Partial Application for Safety
@@ -15,8 +15,30 @@ const githubAPI = fetchJSON.partial(
 const repos = githubAPI(path: "/user/repos")
 ```
 */
-import { _print, _printJSON, _parseJSON, _input, _sleep, _round, _fetch, _fetchJSON, _read, _write, _readImage, _notify, _range, _mostCommon, _keys, _values, _entries } from "agency-lang/stdlib-lib/builtins.js"
 import { _callback } from "agency-lang/stdlib-lib/agency.js"
+import {
+  _print,
+  _printJSON,
+  _parseJSON,
+  _input,
+  _sleep,
+  _round,
+  _fetch,
+  _fetchJSON,
+  _read,
+  _write,
+  _readImage,
+  _notify,
+  _range,
+  _mostCommon,
+  _keys,
+  _values,
+  _entries,
+ } from "agency-lang/stdlib-lib/builtins.js"
+import {
+  syntaxHighlight as _syntaxHighlight,
+ } from "agency-lang/stdlib-lib/syntax.js"
+
 export safe def print(...messages) {
   """
   A tool for printing a message to the console.
@@ -24,11 +46,15 @@ export safe def print(...messages) {
   _print(...messages)
 }
 
-export safe def printJSON(obj) {
+export safe def printJSON(obj: any, highlight: boolean = false) {
   """
   A tool for printing an object as formatted JSON to the console.
   """
-  _printJSON(obj)
+  if (highlight) {
+    _print(_syntaxHighlight(JSON.stringify(obj, null, 2), "json"))
+  } else {
+    _print(JSON.stringify(obj, null, 2))
+  }
 }
 
 export safe def parseJSON(text: string): any {
@@ -59,7 +85,12 @@ export safe def round(num: number, precision: number): number {
   return _round(num, precision)
 }
 
-export def fetch(baseUrl: string, path: string = "", headers: Record<string, any> = {}, allowedDomains: string[] = []): Result {
+export def fetch(
+  baseUrl: string,
+  path: string = "",
+  headers: Record<string, any> = {},
+  allowedDomains: string[] = [],
+): Result {
   """
   A tool for fetching a URL and returning the response as text. Provide baseUrl and optionally path (they are joined). Set headers for custom request headers. Set allowedDomains to restrict which domains can be fetched.
 
@@ -75,7 +106,12 @@ export def fetch(baseUrl: string, path: string = "", headers: Record<string, any
   return try _fetch(baseUrl, path, headers, allowedDomains)
 }
 
-export def fetchJSON(baseUrl: string, path: string = "", headers: Record<string, any> = {}, allowedDomains: string[] = []): Result {
+export def fetchJSON(
+  baseUrl: string,
+  path: string = "",
+  headers: Record<string, any> = {},
+  allowedDomains: string[] = [],
+): Result {
   """
   A tool for fetching a URL and returning the response as parsed JSON. Provide baseUrl and optionally path (they are joined). Set headers for custom request headers. Set allowedDomains to restrict which domains can be fetched.
 
@@ -115,9 +151,9 @@ export def write(
   A tool for writing content to a file. The filename is resolved relative to dir.
 
   The `mode` parameter controls how an existing file is handled:
-    - "overwrite" (default): replace the file if it exists, create it if not
-    - "append": append to the file if it exists, create it if not
-    - "create-only": fail if the file already exists
+  - "overwrite" (default): replace the file if it exists, create it if not
+  - "append": append to the file if it exists, create it if not
+  - "create-only": fail if the file already exists
 
   @param filename - The file to write
   @param content - The content to write

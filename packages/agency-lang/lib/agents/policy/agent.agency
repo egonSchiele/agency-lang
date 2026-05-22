@@ -6,6 +6,7 @@ import {
   InterruptDataKey,
   InterruptDataVal,
  } from "std::policy"
+import { highlight } from "std::syntax"
 import { args } from "std::system"
 import { systemMessage, userMessage, assistantMessage } from "std::thread"
 
@@ -107,6 +108,10 @@ def get(array: any[], index: number) {
   return failure("Index out of bounds: ${index} >= ${array.length}")
 }
 
+def highlightJSON(obj: Record<string, any>): string {
+  return highlight(JSON.stringify(obj, null, 2), "json")
+}
+
 node main() {
   const cliArgs = args()
   if (cliArgs.length < 2) {
@@ -116,7 +121,7 @@ node main() {
 
   const interruptKinds = cliArgs[0] |> parseJSON
   const outputPath = cliArgs[1]
-  const existingPolicy = get(cliArgs, 3) |> parseJSON
+  const existingPolicy = get(cliArgs, 2) |> parseJSON
 
   if (interruptKinds is failure(error)) {
     print("Failed to parse interrupt kinds: ${error}")
@@ -128,20 +133,20 @@ node main() {
   if (existingPolicy is success(thePolicy)) {
     currentPolicy = thePolicy
     contextMessage = """
-    ${contextMessage}
+${contextMessage}
 
-    Current policy:
-    ```json
-    ${JSON.stringify(currentPolicy, null, 2)}
-    ```
+Current policy:
+```json
+${highlightJSON(currentPolicy)}
+```
 
-    What would you like to change?
+What would you like to change?
     """
   } else {
     contextMessage = """
-    ${contextMessage}
+${contextMessage}
 
-    What actions would you like to allow?
+What actions would you like to allow?
     """
   }
 
@@ -151,22 +156,16 @@ node main() {
   // didn't catch `policy` var is undefined??
   // doesn't typecheck in string segments??
   const prompt = """
-  Current policy: ${currentPolicy}
+  Current policy: ${JSON.stringify(currentPolicy, null, 2)}
 
-  Decide the next step. If the user is describing what they want, build or update the policy and use showPolicy. If the user approves the shown policy, use writePolicy. If you need clarification, use askQuestion.
+  Decide the next step. If the user is describing what they want, build or update the policy and use addToPolicy, setPolicy, or deleteFromPolicy. Show the user the policy and get confirmation that it looks good. When you are done, return  { type: "done" }. Otherwise, ask the user a question to clarify what they want, and return { type: "askQuestion", question: "..." }.
   """
 
   systemMessage(systemPrompt)
   assistantMessage(contextMessage)
   userMessage(userInput)
 
-  const tools = [
-    addToPolicy,
-    getPolicy,
-    setPolicy,
-    deleteFromPolicy,
-    savePolicy.partial(path: "/Users/adit/agency-lang/packages/agency-lang/testPolicy.json"),
-  ]
+  const tools = [addToPolicy, getPolicy, setPolicy, deleteFromPolicy]
 
   let action: Action = llm(prompt, {
     tools: tools
@@ -178,5 +177,12 @@ node main() {
       tools: tools
     })
   }
-  print("Done.")
+  print("Done. Final policy:")
+  printJSON(currentPolicy)
+  const result = savePolicy(outputPath)
+  if (result is failure(error)) {
+    print("Failed to save policy: ${error}")
+    return
+  }
+  print("Saved policy to ${outputPath}.")
 }

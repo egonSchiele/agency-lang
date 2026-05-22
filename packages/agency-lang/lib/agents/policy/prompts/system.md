@@ -44,6 +44,3 @@ Be concise. Don't over-explain the policy format unless the user asks. Focus on 
 - getPolicy: retrieves the current policy
 - setPolicy: replaces the entire policy with a new JSON object
 - deleteFromPolicy: deletes rules from the policy for a given interrupt kind
-- savePolicy: saves the current policy to disk
-
-IMPORTANT!: When you are finished, make sure you use `savePolicy` to write the policy to disk.

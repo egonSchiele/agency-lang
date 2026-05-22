@@ -38,5 +38,5 @@ export def writePolicyFile(path: string, policy: Policy) {
   """
   Validate and write a policy to a JSON file. Throws if the policy is invalid.
   """
-  return _writePolicyFile(path, policy)
+  return try _writePolicyFile(path, policy)
 }

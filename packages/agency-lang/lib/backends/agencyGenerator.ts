@@ -28,7 +28,11 @@ import {
   AgencyObject,
   AgencyObjectKV,
 } from "../types/dataStructures.js";
-import { FunctionCall, FunctionDefinition, FunctionParameter } from "../types/function.js";
+import {
+  FunctionCall,
+  FunctionDefinition,
+  FunctionParameter,
+} from "../types/function.js";
 import { GraphNodeDefinition } from "../types/graphNode.js";
 import { IfElse } from "../types/ifElse.js";
 import {
@@ -157,7 +161,12 @@ export class AgencyGenerator {
 
     // Types that should have a blank line before/after them at the top level
     const BLOCK_TYPES = new Set(["graphNode", "function", "typeAlias"]);
-    const NO_SPACE_TYPES = new Set(["comment", "multiLineComment", "tag", "newLine"]);
+    const NO_SPACE_TYPES = new Set([
+      "comment",
+      "multiLineComment",
+      "tag",
+      "newLine",
+    ]);
 
     // Pass 5: Process all nodes and generate code
     const stmtPairs: { type: string; code: string }[] = [];
@@ -317,7 +326,7 @@ export class AgencyGenerator {
     }
   }
 
-  protected preprocessAST(): void { }
+  protected preprocessAST(): void {}
 
   protected generateBuiltins(): string {
     return "";
@@ -339,7 +348,7 @@ export class AgencyGenerator {
     this.functionDefinitions[node.functionName] = node;
   }
 
-  protected processGraphNodeName(node: GraphNodeDefinition): void { }
+  protected processGraphNodeName(node: GraphNodeDefinition): void {}
 
   public processNode(node: AgencyNode): string {
     const result = this.processNodeInner(node);
@@ -457,7 +466,8 @@ export class AgencyGenerator {
   protected needsParensLeft(child: BinOpArgument, parentOp: Operator): boolean {
     if (child.type !== "binOpExpression") return false;
     // For right-associative ops like **, (2 ** 3) ** 4 needs parens on the left
-    if (parentOp === "**") return PRECEDENCE[child.operator] <= PRECEDENCE[parentOp];
+    if (parentOp === "**")
+      return PRECEDENCE[child.operator] <= PRECEDENCE[parentOp];
     return PRECEDENCE[child.operator] < PRECEDENCE[parentOp];
   }
 
@@ -533,7 +543,11 @@ export class AgencyGenerator {
         ? ` = ${this.processNode(p.defaultValue).trim()}`
         : "";
       if (p.typeHint) {
-        const typeStr = variableTypeToString(p.typeHint, this.typeAliases, true);
+        const typeStr = variableTypeToString(
+          p.typeHint,
+          this.typeAliases,
+          true,
+        );
         const bang = p.validated ? "!" : "";
         return `${prefix}${p.name}: ${typeStr}${bang}${defaultSuffix}`;
       } else {
@@ -613,9 +627,7 @@ export class AgencyGenerator {
    * Format the `<T, U = string, ...>` chunk of a generic alias declaration.
    * Returns an empty string when there are no type params.
    */
-  private formatTypeParams(
-    params: TypeAlias["typeParams"],
-  ): string {
+  private formatTypeParams(params: TypeAlias["typeParams"]): string {
     if (!params || params.length === 0) return "";
     const parts = params.map((p) => {
       if (!p.default) return p.name;
@@ -630,9 +642,7 @@ export class AgencyGenerator {
    * value-parameterized alias declaration. Returns an empty string when
    * there are no value params.
    */
-  private formatValueParams(
-    params: TypeAlias["valueParams"],
-  ): string {
+  private formatValueParams(params: TypeAlias["valueParams"]): string {
     if (!params || params.length === 0) return "";
     const parts = params.map((p) => {
       const typeStr = variableTypeToString(p.type, this.typeAliases, true);
@@ -669,7 +679,9 @@ export class AgencyGenerator {
     }
     return (
       tags +
-      this.indentStr(`${exportPrefix}${staticPrefix}${declPrefix}${lhs} = ${valueCode}`)
+      this.indentStr(
+        `${exportPrefix}${staticPrefix}${declPrefix}${lhs} = ${valueCode}`,
+      )
     );
   }
 
@@ -768,10 +780,10 @@ export class AgencyGenerator {
       }
     }
     result += '"""';
-    return result
-      .split("\n")
+    return result;
+    /* .split("\n")
       .map((line) => this.indentStr(line.trim()))
-      .join("\n");
+      .join("\n"); */
   }
 
   // Function methods
@@ -782,7 +794,9 @@ export class AgencyGenerator {
 
     const returnTypeBang = node.returnTypeValidated ? "!" : "";
     const returnTypeStr = node.returnType
-      ? ": " + variableTypeToString(node.returnType, this.typeAliases, true) + returnTypeBang
+      ? ": " +
+        variableTypeToString(node.returnType, this.typeAliases, true) +
+        returnTypeBang
       : "";
 
     const prefixes: string[] = [];
@@ -792,7 +806,13 @@ export class AgencyGenerator {
 
     const prefix = `${prefixes.join(" ")} ${functionName}`;
     const renderedParams = this.renderParams(parameters);
-    const signature = this.wrapList(renderedParams, prefix, "(", ")", `${returnTypeStr} {`);
+    const signature = this.wrapList(
+      renderedParams,
+      prefix,
+      "(",
+      ")",
+      `${returnTypeStr} {`,
+    );
 
     let result = this.indentStr(`${signature}\n`);
 
@@ -810,7 +830,10 @@ export class AgencyGenerator {
       // Strip outer whitespace so docstrings format consistently —
       // the parser preserves raw source verbatim, including the
       // leading newline + indentation typical of multi-line docstrings.
-      const lines = content.trim().split("\n").map((l) => l.trim());
+      const lines = content
+        .trim()
+        .split("\n")
+        .map((l) => l.trim());
       const docLines = [`"""`, ...lines, `"""`];
       const docStr = docLines.map((line) => this.indentStr(line)).join("\n");
       result += `${docStr}\n`;
@@ -835,7 +858,10 @@ export class AgencyGenerator {
   }
 
   // Render each argument to a string array
-  protected renderArgs(args: FunctionCall["arguments"], block?: BlockArgument): string[] {
+  protected renderArgs(
+    args: FunctionCall["arguments"],
+    block?: BlockArgument,
+  ): string[] {
     const rendered = args.map((arg) => {
       if (arg.type === "namedArgument") {
         return `${arg.name}: ${this.processNode(arg.value).trim()}`;
@@ -860,7 +886,10 @@ export class AgencyGenerator {
   }
 
   // Format args as inline parenthesized list (no wrapping — used by access chain callers)
-  protected renderArgList(args: FunctionCall["arguments"], block?: BlockArgument): string {
+  protected renderArgList(
+    args: FunctionCall["arguments"],
+    block?: BlockArgument,
+  ): string {
     const rendered = this.renderArgs(args, block);
     return `(${rendered.join(", ")})`;
   }
@@ -879,7 +908,13 @@ export class AgencyGenerator {
     const block = node.block;
     const inlineBlock = block?.inline ? block : undefined;
     const rendered = this.renderArgs(node.arguments, inlineBlock);
-    let result = this.wrapList(rendered, `${asyncPrefix}${node.functionName}`, "(", ")", "");
+    let result = this.wrapList(
+      rendered,
+      `${asyncPrefix}${node.functionName}`,
+      "(",
+      ")",
+      "",
+    );
 
     if (block && !block.inline) {
       let asClause = "as ";
@@ -977,7 +1012,7 @@ export class AgencyGenerator {
 
       if (caseNode.type === "newLine") {
         result += this.processNewLine(caseNode);
-        continue
+        continue;
       }
 
       const pattern =
@@ -1087,7 +1122,9 @@ export class AgencyGenerator {
     return this.indentStr(`/*${node.content}*/`);
   }
 
-  protected formatDocComment(node: { docComment?: AgencyMultiLineComment }): string {
+  protected formatDocComment(node: {
+    docComment?: AgencyMultiLineComment;
+  }): string {
     if (!node.docComment) return "";
     return this.processMultiLineComment(node.docComment) + "\n";
   }
@@ -1099,14 +1136,19 @@ export class AgencyGenerator {
     const suffix = ` from "${modulePath}"`;
 
     // For single named import, use wrapList
-    if (node.importedNames.length === 1 && node.importedNames[0].type === "namedImport") {
+    if (
+      node.importedNames.length === 1 &&
+      node.importedNames[0].type === "namedImport"
+    ) {
       const namedImport = node.importedNames[0];
       const names = namedImport.importedNames.map((name) => {
         const alias = namedImport.aliases[name];
         const base = alias ? `${name} as ${alias}` : name;
         return namedImport.safeNames?.includes(name) ? `safe ${base}` : base;
       });
-      return this.indentStr(this.wrapList(names, "import ", "{ ", " }", suffix));
+      return this.indentStr(
+        this.wrapList(names, "import ", "{ ", " }", suffix),
+      );
     }
 
     // Default/namespace/mixed imports — always inline
@@ -1142,12 +1184,16 @@ export class AgencyGenerator {
       return this.indentStr(`export * from "${node.modulePath}"`);
     }
     const items = node.body.names.map((name) => {
-      const alias = node.body.kind === "namedExport" ? node.body.aliases[name] : undefined;
-      const safe = node.body.kind === "namedExport" && node.body.safeNames.includes(name);
+      const alias =
+        node.body.kind === "namedExport" ? node.body.aliases[name] : undefined;
+      const safe =
+        node.body.kind === "namedExport" && node.body.safeNames.includes(name);
       const base = alias ? `${name} as ${alias}` : name;
       return safe ? `safe ${base}` : base;
     });
-    return this.indentStr(`export { ${items.join(", ")} } from "${node.modulePath}"`);
+    return this.indentStr(
+      `export { ${items.join(", ")} } from "${node.modulePath}"`,
+    );
   }
 
   private sortAndRenderImports(): string {
@@ -1202,18 +1248,25 @@ export class AgencyGenerator {
     return groups.join("\n\n");
   }
 
-
   protected processGraphNode(node: GraphNodeDefinition): string {
     const tags = this.formatAttachedTags(node);
     const { nodeName, body, parameters } = node;
     const returnTypeBang = node.returnTypeValidated ? "!" : "";
     const returnTypeStr = node.returnType
-      ? ": " + variableTypeToString(node.returnType, this.typeAliases, true) + returnTypeBang
+      ? ": " +
+        variableTypeToString(node.returnType, this.typeAliases, true) +
+        returnTypeBang
       : "";
     const exportPrefix = node.exported ? "export " : "";
     const prefix = `${exportPrefix}node ${nodeName}`;
     const renderedParams = this.renderParams(parameters);
-    const signature = this.wrapList(renderedParams, prefix, "(", ")", `${returnTypeStr} {`);
+    const signature = this.wrapList(
+      renderedParams,
+      prefix,
+      "(",
+      ")",
+      `${returnTypeStr} {`,
+    );
 
     let result = this.indentStr(`${signature}\n`);
 
@@ -1231,7 +1284,10 @@ export class AgencyGenerator {
       // Strip outer whitespace so docstrings format consistently —
       // the parser preserves raw source verbatim, including the
       // leading newline + indentation typical of multi-line docstrings.
-      const lines = content.trim().split("\n").map((l) => l.trim());
+      const lines = content
+        .trim()
+        .split("\n")
+        .map((l) => l.trim());
       const docLines = [`"""`, ...lines, `"""`];
       const docStr = docLines.map((line) => this.indentStr(line)).join("\n");
       result += `${docStr}\n`;
@@ -1291,7 +1347,6 @@ export class AgencyGenerator {
     return "";
   }
 
-
   protected processNewLine(_node: NewLine): string {
     return "";
   }
@@ -1321,18 +1376,14 @@ export class AgencyGenerator {
     this.increaseIndent();
     const bodyCodeStr = this.renderBody(node.body);
     this.decreaseIndent();
-    return this.indentStr(
-      `parallel {\n${bodyCodeStr}${this.indentStr("}")}`,
-    );
+    return this.indentStr(`parallel {\n${bodyCodeStr}${this.indentStr("}")}`);
   }
 
   protected processSeqBlock(node: SeqBlock): string {
     this.increaseIndent();
     const bodyCodeStr = this.renderBody(node.body);
     this.decreaseIndent();
-    return this.indentStr(
-      `seq {\n${bodyCodeStr}${this.indentStr("}")}`,
-    );
+    return this.indentStr(`seq {\n${bodyCodeStr}${this.indentStr("}")}`);
   }
 
   protected processHandleBlock(node: HandleBlock): string {
@@ -1387,7 +1438,9 @@ export class AgencyGenerator {
     const leftStr = this.processNode(node.left).trim();
     const rightStr = this.processNode(node.right).trim();
     const left = this.needsParensLeft(node.left, op) ? `(${leftStr})` : leftStr;
-    const right = this.needsParensRight(node.right, op) ? `(${rightStr})` : rightStr;
+    const right = this.needsParensRight(node.right, op)
+      ? `(${rightStr})`
+      : rightStr;
     const inline = `${left} ${op} ${right}`;
 
     // For pipe chains, break into multiple lines if the inline version is too long
@@ -1459,8 +1512,10 @@ export class AgencyGenerator {
 
 export function generateAgency(program: AgencyProgram): string {
   const generator = new AgencyGenerator();
-  return generator.generate(program).output
-    .trim()
-    .replace(/[ \t]+$/gm, "")
-    + "\n";
+  return (
+    generator
+      .generate(program)
+      .output.trim()
+      .replace(/[ \t]+$/gm, "") + "\n"
+  );
 }

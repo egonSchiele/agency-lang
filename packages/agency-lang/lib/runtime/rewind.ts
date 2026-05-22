@@ -22,6 +22,12 @@ export async function rewindFrom(args: {
   checkpoint: Checkpoint;
   overrides: Record<string, unknown>;
   metadata?: Record<string, any>;
+  // See respondToInterrupts / runNode — every fresh execCtx loses
+  // ctx.topLevelCallbacks and needs to re-run module-level
+  // `callback(...)` registrations.
+  registerTopLevelCallbacks?: (
+    ctx: RuntimeContext<GraphState>,
+  ) => void | Promise<void>;
 }): Promise<any> {
   const { ctx, overrides, metadata = {} } = args;
   const checkpoint = deepClone(args.checkpoint);
@@ -35,6 +41,12 @@ export async function rewindFrom(args: {
   // runs in trace files, which matches the actual execution semantics.
   const runId = (ctx as any).runId ?? nanoid();
   const execCtx = await ctx.createExecutionContext(runId);
+  // Must run before restoreState so the empty stack routes the
+  // registration to `ctx.topLevelCallbacks`. See the matching comment
+  // in `respondToInterrupts`.
+  if (args.registerTopLevelCallbacks) {
+    await args.registerTopLevelCallbacks(execCtx);
+  }
   execCtx.restoreState(checkpoint);
   execCtx._skipNextCheckpoint = true;
 

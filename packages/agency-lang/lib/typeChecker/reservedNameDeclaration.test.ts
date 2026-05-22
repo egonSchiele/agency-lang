@@ -82,4 +82,28 @@ describe("reserved-name declaration check", () => {
     );
     expect(reserved).toHaveLength(0);
   });
+
+  it("blocks `def callback(...)` at top level (auto-imported from std::index)", () => {
+    const errors = errorsFrom(`def callback(x: any) { return x }\n`);
+    const reserved = errors.filter(
+      (e) => e.message.includes("callback") && e.message.includes("reserved"),
+    );
+    expect(reserved.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("blocks `let callback = 5` inside a node body", () => {
+    const errors = errorsFrom(`node main() { let callback = 5\n print(callback) }\n`);
+    const reserved = errors.filter(
+      (e) => e.message.includes("callback") && e.message.includes("reserved"),
+    );
+    expect(reserved).toHaveLength(1);
+  });
+
+  it("blocks `static const callback = 1` at top level", () => {
+    const errors = errorsFrom(`static const callback = 1\nnode main() { print(callback) }\n`);
+    const reserved = errors.filter(
+      (e) => e.message.includes("callback") && e.message.includes("reserved"),
+    );
+    expect(reserved).toHaveLength(1);
+  });
 });

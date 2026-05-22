@@ -1,0 +1,21 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "scoped callback registered before an interrupt survives serialization and fires after resume",
+      "input": "",
+      "expectedOutput": "\"fired,\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "interruptHandlers": [
+        {
+          "action": "approve",
+          "expectedMessage": "pause"
+        }
+      ]
+    }
+  ]
+}

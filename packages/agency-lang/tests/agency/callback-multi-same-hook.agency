@@ -1,0 +1,33 @@
+
+let log: string = ""
+
+def helper(): string {
+  return "x"
+}
+
+// Multiple callbacks on the same hook all fire on each event, with no
+// silent dedup. Mixed forms (lifted block + named-fn) and mixed sources
+// (top-level + scoped) coexist.
+def onTopA(data: any) {
+  if (data.functionName == "helper") {
+    log = log + "topA,"
+  }
+}
+
+callback("onFunctionStart", onTopA)
+
+callback("onFunctionStart") as data {
+  if (data.functionName == "helper") {
+    log = log + "topB,"
+  }
+}
+
+node main() {
+  callback("onFunctionStart") as data {
+    if (data.functionName == "helper") {
+      log = log + "scoped,"
+    }
+  }
+  helper()
+  return log
+}

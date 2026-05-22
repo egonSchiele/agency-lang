@@ -1,0 +1,9 @@
+{
+  "tests": [{
+    "nodeName": "main",
+    "input": "",
+    "expectedOutput": "\"scoped,topA,topB,\"",
+    "evaluationCriteria": [{ "type": "exact" }],
+    "description": "multiple callbacks on the same hook all fire (scoped first, then top-level in registration order)"
+  }]
+}

@@ -1,0 +1,15 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "bare callback(\"onX\") { ... } form (no `as data`) fires correctly — regression guard for the lifter's synthesized data parameter",
+      "input": "",
+      "expectedOutput": "\"x,\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    }
+  ]
+}

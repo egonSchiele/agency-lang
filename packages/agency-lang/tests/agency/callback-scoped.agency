@@ -1,4 +1,3 @@
-import { callback } from "std::agency"
 
 let fireCount: number = 0
 

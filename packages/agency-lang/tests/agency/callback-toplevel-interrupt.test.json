@@ -1,0 +1,9 @@
+{
+  "tests": [{
+    "nodeName": "main",
+    "input": "",
+    "expectedOutput": "[1,\"myapp::fromTopLevel,\"]",
+    "evaluationCriteria": [{ "type": "exact" }],
+    "description": "a top-level callback that throws an interrupt is caught by the active handle block at the firing site"
+  }]
+}

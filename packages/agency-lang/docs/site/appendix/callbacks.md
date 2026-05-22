@@ -5,10 +5,18 @@ Agency exposes a number of hooks. It's possible to write callbacks for these hoo
 ## Callbacks in Agency files
 
 ```ts
-callback onNodeStart(data) {
-  print(`Node ${node.id} started.`)
+import { callback } from "std::agency"
+
+callback("onNodeStart") as data {
+  print(`Node ${data.nodeName} started.`)
 }
 ```
+
+Callbacks registered with `callback(name, fn)` are scoped to the dynamic
+extent of the function or node that calls `callback(...)`. When that function
+or node returns, the callback is automatically unregistered. Callbacks
+registered at module top-level (outside any function or node) are active for
+the entire run.
 
 ## Callbacks in TypeScript
 

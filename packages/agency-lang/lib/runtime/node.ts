@@ -133,8 +133,8 @@ export async function runNode({
   if (initializeGlobals) {
     await initializeGlobals(execCtx);
   }
-  execCtx.installRegisteredCallbacks(ctx);
-  // Externally-passed callbacks override registered ones and receive only data.
+  // Externally-passed callbacks are stored on ctx; hook execution merges them
+  // with scoped/top-level callbacks at call time.
   if (callbacks) {
     Object.assign(execCtx.callbacks, callbacks);
   }
@@ -151,7 +151,7 @@ export async function runNode({
   }
 
   await callHook({
-    callbacks: execCtx.callbacks,
+    ctx: execCtx,
     name: "onAgentStart",
     data: { nodeName, args: data, messages: messages || [], cancel },
   });
@@ -199,7 +199,7 @@ export async function runNode({
             tokenStats: returnObject.tokens,
           });
           await callHook({
-            callbacks: execCtx.callbacks,
+            ctx: execCtx,
             name: "onAgentEnd",
             data: { nodeName, result: returnObject },
           });

@@ -177,7 +177,7 @@ let __functionCompleted = false;
   }
   let __funcStartTime: number = performance.now();
   await callHook({
-    callbacks: __ctx.callbacks,
+    ctx: __ctx,
     name: "onFunctionStart",
     data: {
       functionName: "add",
@@ -258,7 +258,7 @@ return failure(
     __stateStack.pop()
     if (__functionCompleted) {
       await callHook({
-        callbacks: __ctx.callbacks,
+        ctx: __ctx,
         name: "onFunctionEnd",
         data: {
           functionName: "add",
@@ -311,7 +311,7 @@ let __functionCompleted = false;
   }
   let __funcStartTime: number = performance.now();
   await callHook({
-    callbacks: __ctx.callbacks,
+    ctx: __ctx,
     name: "onFunctionStart",
     data: {
       functionName: "greet",
@@ -383,7 +383,7 @@ return failure(
     __stateStack.pop()
     if (__functionCompleted) {
       await callHook({
-        callbacks: __ctx.callbacks,
+        ctx: __ctx,
         name: "onFunctionEnd",
         data: {
           functionName: "greet",
@@ -431,7 +431,7 @@ let __functionCompleted = false;
   }
   let __funcStartTime: number = performance.now();
   await callHook({
-    callbacks: __ctx.callbacks,
+    ctx: __ctx,
     name: "onFunctionStart",
     data: {
       functionName: "mixed",
@@ -509,7 +509,7 @@ return failure(
     __stateStack.pop()
     if (__functionCompleted) {
       await callHook({
-        callbacks: __ctx.callbacks,
+        ctx: __ctx,
         name: "onFunctionEnd",
         data: {
           functionName: "mixed",
@@ -562,7 +562,7 @@ let __functionCompleted = false;
   }
   let __funcStartTime: number = performance.now();
   await callHook({
-    callbacks: __ctx.callbacks,
+    ctx: __ctx,
     name: "onFunctionStart",
     data: {
       functionName: "processArray",
@@ -634,7 +634,7 @@ return failure(
     __stateStack.pop()
     if (__functionCompleted) {
       await callHook({
-        callbacks: __ctx.callbacks,
+        ctx: __ctx,
         name: "onFunctionEnd",
         data: {
           functionName: "processArray",
@@ -682,7 +682,7 @@ let __functionCompleted = false;
   }
   let __funcStartTime: number = performance.now();
   await callHook({
-    callbacks: __ctx.callbacks,
+    ctx: __ctx,
     name: "onFunctionStart",
     data: {
       functionName: "flexible",
@@ -754,7 +754,7 @@ return failure(
     __stateStack.pop()
     if (__functionCompleted) {
       await callHook({
-        callbacks: __ctx.callbacks,
+        ctx: __ctx,
         name: "onFunctionEnd",
         data: {
           functionName: "flexible",
@@ -797,7 +797,7 @@ const __graph = __ctx.graph;
 let __forked;
 let __functionCompleted = false;
   await callHook({
-    callbacks: __ctx.callbacks,
+    ctx: __ctx,
     name: "onNodeStart",
     data: {
       nodeName: "foo"
@@ -832,7 +832,7 @@ return;
     });
     if (runner.halted) return runner.haltResult;
     await callHook({
-      callbacks: __ctx.callbacks,
+      ctx: __ctx,
       name: "onNodeEnd",
       data: {
         nodeName: "foo",
@@ -870,7 +870,7 @@ const __graph = __ctx.graph;
 let __forked;
 let __functionCompleted = false;
   await callHook({
-    callbacks: __ctx.callbacks,
+    ctx: __ctx,
     name: "onNodeStart",
     data: {
       nodeName: "main"
@@ -973,7 +973,7 @@ if (hasInterrupts(__stack.locals.flexResult)) {
     });
     if (runner.halted) return runner.haltResult;
     await callHook({
-      callbacks: __ctx.callbacks,
+      ctx: __ctx,
       name: "onNodeEnd",
       data: {
         nodeName: "main",

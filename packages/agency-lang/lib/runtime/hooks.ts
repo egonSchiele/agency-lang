@@ -7,6 +7,8 @@ import type {
   ToolCallJSON,
 } from "smoltalk";
 import type { CallbackName } from "../types/function.js";
+import { AgencyFunction } from "./agencyFunction.js";
+import type { RuntimeContext } from "./state/context.js";
 import type { TraceEvent } from "./trace/types.js";
 import type { RunNodeResult } from "./types.js";
 
@@ -62,22 +64,20 @@ export type CallbackMap = {
 type _AssertNamesMatchMap = CallbackName extends keyof CallbackMap ? keyof CallbackMap extends CallbackName ? true : false : false;
 const _callbackNamesInSync: _AssertNamesMatchMap = true;
 
-export type CallbackReturn<K extends keyof CallbackMap> = K extends
-  | "onLLMCallStart"
-  | "onLLMCallEnd"
-  ? MessageJSON[] | void
-  : void;
+/** All callbacks (scoped + top-level + TS-passed) now return `void`. The old
+ *  message-override capability on `onLLMCallStart`/`onLLMCallEnd` has been
+ *  removed — return values are discarded. */
+export type CallbackReturn<K extends keyof CallbackMap> = void;
 
 export type AgencyCallbacks = {
   [K in keyof CallbackMap]?: (
     data: CallbackMap[K],
-  ) => CallbackReturn<K> | Promise<CallbackReturn<K>>;
+  ) => void | Promise<void>;
 };
 
-// Tracks which hooks are currently executing to prevent infinite recursion
-// when a callback calls a helper function that would re-trigger the same hook.
-// Keyed by callbacks object so concurrent executions don't block each other.
-const _activeHooks = new WeakMap<AgencyCallbacks, Set<string>>();
+// Per-instance recursion guard: prevents a callback that triggers helper
+// functions which re-fire the same hook from recursing into itself.
+const _activeCallbacks = new WeakSet<object>();
 
 // Global hook registry: allows external packages (e.g., @agency-lang/mcp) to
 // register callbacks that fire alongside user-provided callbacks.
@@ -93,41 +93,74 @@ export function registerGlobalHook<K extends keyof CallbackMap>(
   _globalHooks[name]!.push(fn);
 }
 
+function isAgencyInterrupt(e: unknown): boolean {
+  return !!(e && typeof e === "object" && (e as any).__agencyInterrupt === true);
+}
+
+async function invokeCallback(
+  fn: any,
+  data: unknown,
+  ctx: RuntimeContext<any>,
+): Promise<void> {
+  if (AgencyFunction.isAgencyFunction(fn)) {
+    await (fn as AgencyFunction).invoke(
+      { type: "positional", args: [data] },
+      { ctx },
+    );
+    return;
+  }
+  await fn(data);
+}
+
+async function fireWithGuard(
+  fn: any,
+  data: unknown,
+  ctx: RuntimeContext<any>,
+  errorLabel: string,
+): Promise<void> {
+  const key = fn as object;
+  if (_activeCallbacks.has(key)) return;
+  _activeCallbacks.add(key);
+  try {
+    await invokeCallback(fn, data, ctx);
+  } catch (error) {
+    if (isAgencyInterrupt(error)) throw error;
+    console.error(`[agency] ${errorLabel} callback error:`, error);
+  } finally {
+    _activeCallbacks.delete(key);
+  }
+}
+
+function gatherCallbacks<K extends keyof CallbackMap>(
+  ctx: RuntimeContext<any>,
+  name: K,
+): any[] {
+  // Order: innermost stack-frame scoped callbacks → outermost → top-level
+  // (registered during module init) → TS-passed callback. Top-level comes
+  // after stack-walked because conceptually they are "the outermost scope".
+  const scoped = ctx.stateStack.collectScopedCallbacks(name);
+  const topLevel = (ctx.topLevelCallbacks ?? [])
+    .filter((cb) => cb.name === name)
+    .map((cb) => cb.fn);
+  const tsCb = ctx.callbacks[name];
+  const out: any[] = [...scoped, ...topLevel];
+  if (tsCb) out.push(tsCb);
+  return out;
+}
+
 export async function callHook<K extends keyof CallbackMap>(args: {
-  callbacks: AgencyCallbacks;
+  ctx: RuntimeContext<any>;
   name: K;
   data: CallbackMap[K];
-}): Promise<CallbackReturn<K> | undefined> {
-  const { callbacks, name, data } = args;
+}): Promise<void> {
+  const { ctx, name, data } = args;
 
-  // Fire global hooks (from external packages)
-  const globalFns = _globalHooks[name];
-  if (globalFns) {
-    for (const fn of globalFns) {
-      try {
-        await fn(data);
-      } catch (error) {
-        console.error(`[agency] global ${name} hook error:`, error);
-      }
-    }
+  // Fire global hooks (from external packages) first
+  for (const fn of _globalHooks[name] ?? []) {
+    await fireWithGuard(fn, data, ctx, `global ${name}`);
   }
 
-  const hook = callbacks[name];
-  if (!hook) return undefined;
-  let active = _activeHooks.get(callbacks);
-  if (!active) {
-    active = new Set();
-    _activeHooks.set(callbacks, active);
+  for (const fn of gatherCallbacks(ctx, name)) {
+    await fireWithGuard(fn, data, ctx, name);
   }
-  if (!active.has(name)) {
-    active.add(name);
-    try {
-      return (await hook(data)) as CallbackReturn<K>;
-    } catch (error) {
-      console.error(`[agency] ${name} callback error:`, error);
-    } finally {
-      active.delete(name);
-    }
-  }
-  return undefined;
 }

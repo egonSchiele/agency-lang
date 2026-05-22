@@ -177,7 +177,7 @@ let __functionCompleted = false;
   }
   let __funcStartTime: number = performance.now();
   await callHook({
-    callbacks: __ctx.callbacks,
+    ctx: __ctx,
     name: "onFunctionStart",
     data: {
       functionName: "mapItems",
@@ -266,7 +266,7 @@ return failure(
     __stateStack.pop()
     if (__functionCompleted) {
       await callHook({
-        callbacks: __ctx.callbacks,
+        ctx: __ctx,
         name: "onFunctionEnd",
         data: {
           functionName: "mapItems",
@@ -314,7 +314,7 @@ const __graph = __ctx.graph;
 let __forked;
 let __functionCompleted = false;
   await callHook({
-    callbacks: __ctx.callbacks,
+    ctx: __ctx,
     name: "onNodeStart",
     data: {
       nodeName: "main"
@@ -329,7 +329,7 @@ __stack.locals.items = [1, 2, 3];
 __stack.locals.doubled = await __call(mapItems, {
         type: "positional",
         args: [__stack.locals.items, __AgencyFunction.create({ name: "__block_0", module: "inlineBlockParams.agency", fn: async (x: any) => {
-          const __bsetup = setupFunction({ state: { ctx: __ctx, threads: __threads } });
+          const __bsetup = setupFunction({ state: { ctx: __ctx, threads: typeof __threads !== "undefined" ? __threads : undefined } });
 const __bstack = __bsetup.stack;
 const __self = __bstack.locals;
 
@@ -369,7 +369,7 @@ return;
     });
     if (runner.halted) return runner.haltResult;
     await callHook({
-      callbacks: __ctx.callbacks,
+      ctx: __ctx,
       name: "onNodeEnd",
       data: {
         nodeName: "main",

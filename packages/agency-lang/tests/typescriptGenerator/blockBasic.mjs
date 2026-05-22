@@ -177,7 +177,7 @@ let __functionCompleted = false;
   }
   let __funcStartTime: number = performance.now();
   await callHook({
-    callbacks: __ctx.callbacks,
+    ctx: __ctx,
     name: "onFunctionStart",
     data: {
       functionName: "twice",
@@ -260,7 +260,7 @@ return failure(
     __stateStack.pop()
     if (__functionCompleted) {
       await callHook({
-        callbacks: __ctx.callbacks,
+        ctx: __ctx,
         name: "onFunctionEnd",
         data: {
           functionName: "twice",
@@ -303,7 +303,7 @@ const __graph = __ctx.graph;
 let __forked;
 let __functionCompleted = false;
   await callHook({
-    callbacks: __ctx.callbacks,
+    ctx: __ctx,
     name: "onNodeStart",
     data: {
       nodeName: "main"
@@ -315,7 +315,7 @@ let __functionCompleted = false;
 __stack.locals.results = await __call(twice, {
         type: "positional",
         args: [__AgencyFunction.create({ name: "__block_0", module: "blockBasic.agency", fn: async () => {
-          const __bsetup = setupFunction({ state: { ctx: __ctx, threads: __threads } });
+          const __bsetup = setupFunction({ state: { ctx: __ctx, threads: typeof __threads !== "undefined" ? __threads : undefined } });
 const __bstack = __bsetup.stack;
 const __self = __bstack.locals;
 
@@ -364,7 +364,7 @@ if (hasInterrupts(__funcResult)) {
     });
     if (runner.halted) return runner.haltResult;
     await callHook({
-      callbacks: __ctx.callbacks,
+      ctx: __ctx,
       name: "onNodeEnd",
       data: {
         nodeName: "main",

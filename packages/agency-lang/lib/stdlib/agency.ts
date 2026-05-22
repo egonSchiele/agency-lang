@@ -14,6 +14,68 @@ import {
 import type { AgencyProgram, AgencyNode } from "../types.js";
 import type { ImportStatement } from "../types/importStatement.js";
 import { _write } from "./builtins.js";
+import {
+  VALID_CALLBACK_NAMES,
+  type CallbackName,
+} from "../types/function.js";
+import type { InternalFunctionState } from "../runtime/types.js";
+import { AgencyFunction } from "../runtime/agencyFunction.js";
+
+const VALID_CALLBACK_NAME_SET: ReadonlySet<string> = new Set(VALID_CALLBACK_NAMES);
+
+/**
+ * Register a scoped callback for the dynamic extent of the caller's function
+ * or node. Implementation backing for `callback(name, fn)` in std::agency.
+ *
+ * Frame targeting:
+ *   - At top level (inside `__initializeGlobals`, before any node frame is
+ *     pushed) — route to `ctx.topLevelCallbacks`, which lives on the
+ *     execution context for the whole run.
+ *   - Otherwise — push onto the caller's stack frame, which auto-cleans up
+ *     when the caller's frame pops.
+ *
+ * NOTE on the AgencyFunction wrapping: this function needs access to the
+ * runtime state (to walk the stateStack and find the caller's frame), and
+ * the only way a TS-implemented stdlib export receives that state is by
+ * being wrapped as an AgencyFunction. `__call`'s plain-function branch
+ * silently drops the state argument; the AgencyFunction branch routes
+ * through `invoke()`, which passes state as the last positional arg to the
+ * underlying TS function. See `_run` in `lib/runtime/ipc.ts` for the
+ * established pattern.
+ */
+// Exported as `_callbackImpl` so unit tests can call it directly without
+// going through the AgencyFunction wrapper / `invoke()` indirection.
+export function _callbackImpl(
+  name: string,
+  fn: unknown,
+  __state: InternalFunctionState,
+): void {
+  if (!VALID_CALLBACK_NAME_SET.has(name)) {
+    throw new Error(
+      `Unknown callback '${name}'. Valid: ${VALID_CALLBACK_NAMES.join(", ")}`,
+    );
+  }
+  const ctx = __state.ctx;
+  // Top-level: we're inside __initializeGlobals. The only frame on the stack
+  // is `callback`'s own (or none, defensively). There is no caller frame
+  // that survives past init, so route to ctx.topLevelCallbacks.
+  if (ctx.stateStack.stack.length <= 1) {
+    ctx.topLevelCallbacks.push({ name, fn });
+    return;
+  }
+  ctx.stateStack.callerFrame().addScopedCallback(name as CallbackName, fn);
+}
+
+export const _callback = new AgencyFunction({
+  name: "_callback",
+  module: "agency-lang/stdlib-lib/agency.js",
+  fn: _callbackImpl,
+  params: [
+    { name: "name", hasDefault: false, defaultValue: undefined, variadic: false },
+    { name: "fn", hasDefault: false, defaultValue: undefined, variadic: false },
+  ],
+  toolDefinition: null,
+});
 
 function compileAndPersist(source: string): { moduleId: string; path: string } {
   const result = compileSource(source, {

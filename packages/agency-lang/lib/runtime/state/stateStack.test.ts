@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { StateStack, State, BranchState } from "./stateStack.js";
+import { _callbackImpl } from "../../stdlib/agency.js";
 
 type FrameOpts = {
   args?: Record<string, any>;
@@ -295,5 +296,141 @@ describe("StateStack localCost/localTokens/seedCost serialization", () => {
     expect(restored.localTokens).toBe(0);
     expect(restored.seedCost).toBe(0);
     expect(restored.seedTokens).toBe(0);
+  });
+});
+
+describe("State.scopedCallbacks", () => {
+  it("defaults to undefined when no callbacks are registered", () => {
+    expect(new State().scopedCallbacks).toBeUndefined();
+  });
+
+  it("addScopedCallback initializes the array lazily and appends", () => {
+    const state = new State();
+    const fn = () => {};
+    state.addScopedCallback("onNodeStart", fn);
+    state.addScopedCallback("onNodeEnd", fn);
+    expect(state.scopedCallbacks).toEqual([
+      { name: "onNodeStart", fn },
+      { name: "onNodeEnd", fn },
+    ]);
+  });
+
+  it("toJSON/fromJSON round-trip preserves scopedCallbacks (in-memory)", () => {
+    // Verifies State.toJSON/fromJSON pass-through. Full JSON-string round-trip
+    // through nativeTypeReplacer is exercised by the Agency-level resume test
+    // (callback-resume.agency), where fn is a real AgencyFunction.
+    const state = new State();
+    const fn = () => {};
+    state.addScopedCallback("onNodeStart", fn);
+    const restored = State.fromJSON(state.toJSON());
+    expect(restored.scopedCallbacks).toHaveLength(1);
+    expect(restored.scopedCallbacks![0].name).toBe("onNodeStart");
+    expect(restored.scopedCallbacks![0].fn).toBe(fn);
+  });
+
+  it("does not include scopedCallbacks in JSON when empty", () => {
+    expect(new State().toJSON().scopedCallbacks).toBeUndefined();
+  });
+});
+
+describe("StateStack.callerFrame / collectScopedCallbacks", () => {
+  function stackWithFrames(n: number): StateStack {
+    const stack = new StateStack();
+    for (let i = 0; i < n; i++) stack.stack.push(new State());
+    return stack;
+  }
+
+  it("callerFrame returns the second-from-top frame when stack has >= 2 frames", () => {
+    const stack = stackWithFrames(2);
+    expect(stack.callerFrame()).toBe(stack.stack[0]);
+  });
+
+  it("callerFrame falls back to the root frame when stack has 1 frame", () => {
+    const stack = stackWithFrames(1);
+    expect(stack.callerFrame()).toBe(stack.stack[0]);
+  });
+
+  it("callerFrame throws when stack is empty", () => {
+    expect(() => new StateStack().callerFrame()).toThrow();
+  });
+
+  it("collectScopedCallbacks returns innermost → outermost matching the name", () => {
+    const stack = stackWithFrames(3);
+    const a = () => {};
+    const b = () => {};
+    const c = () => {};
+    stack.stack[0].addScopedCallback("onNodeStart", a); // outermost
+    stack.stack[1].addScopedCallback("onNodeStart", b);
+    stack.stack[1].addScopedCallback("onNodeEnd", () => {}); // wrong name, ignored
+    stack.stack[2].addScopedCallback("onNodeStart", c); // innermost
+    expect(stack.collectScopedCallbacks("onNodeStart")).toEqual([c, b, a]);
+  });
+
+  it("collectScopedCallbacks preserves registration order within a single frame", () => {
+    const stack = stackWithFrames(1);
+    const a = () => {};
+    const b = () => {};
+    const c = () => {};
+    stack.stack[0].addScopedCallback("onNodeStart", a);
+    stack.stack[0].addScopedCallback("onNodeStart", b);
+    stack.stack[0].addScopedCallback("onNodeStart", c);
+    expect(stack.collectScopedCallbacks("onNodeStart")).toEqual([a, b, c]);
+  });
+
+  it("collectScopedCallbacks combines same-frame and cross-frame ordering", () => {
+    // Frame layout: outer has two callbacks; inner has one. Result is
+    // inner's callback first, then outer's two in registration order.
+    const stack = stackWithFrames(2);
+    const a = () => {};
+    const b = () => {};
+    const c = () => {};
+    stack.stack[0].addScopedCallback("onNodeStart", a);
+    stack.stack[0].addScopedCallback("onNodeStart", b);
+    stack.stack[1].addScopedCallback("onNodeStart", c);
+    expect(stack.collectScopedCallbacks("onNodeStart")).toEqual([c, a, b]);
+  });
+
+  it("collectScopedCallbacks returns empty when nothing matches", () => {
+    expect(stackWithFrames(2).collectScopedCallbacks("onNodeStart")).toEqual([]);
+  });
+});
+
+describe("_callback", () => {
+  function ctxWithFrames(n: number): any {
+    const stack = new StateStack();
+    for (let i = 0; i < n; i++) stack.stack.push(new State());
+    return { stateStack: stack, topLevelCallbacks: [] };
+  }
+
+  it("registers on the caller frame when stack has >= 2 frames", () => {
+    const ctx = ctxWithFrames(2); // [caller, callback's own frame]
+    const fn = () => {};
+    _callbackImpl("onNodeStart", fn, { ctx } as any);
+    expect(ctx.stateStack.stack[0].scopedCallbacks).toEqual([
+      { name: "onNodeStart", fn },
+    ]);
+    expect(ctx.stateStack.stack[1].scopedCallbacks).toBeUndefined();
+    expect(ctx.topLevelCallbacks).toEqual([]);
+  });
+
+  it("routes to ctx.topLevelCallbacks when stack length <= 1 (module init)", () => {
+    const ctx = ctxWithFrames(1); // only callback's own frame — top level
+    const fn = () => {};
+    _callbackImpl("onNodeStart", fn, { ctx } as any);
+    expect(ctx.topLevelCallbacks).toEqual([{ name: "onNodeStart", fn }]);
+    expect(ctx.stateStack.stack[0].scopedCallbacks).toBeUndefined();
+  });
+
+  it("routes to ctx.topLevelCallbacks when stack is empty (defensive)", () => {
+    const ctx = ctxWithFrames(0);
+    _callbackImpl("onNodeStart", () => {}, { ctx } as any);
+    expect(ctx.topLevelCallbacks).toHaveLength(1);
+  });
+
+  it("throws on unknown callback name", () => {
+    const ctx = ctxWithFrames(2);
+    expect(() =>
+      _callbackImpl("notAHook", () => {}, { ctx } as any),
+    ).toThrow(/Unknown callback/);
   });
 });

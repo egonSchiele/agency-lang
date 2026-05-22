@@ -1612,7 +1612,7 @@ export class TypeScriptBuilder {
     });
 
     const implName = `__${functionName}_impl`;
-    const setupStmts = this.buildFunctionBody({ functionName, parameters, bodyCode, skipHooks: node.callback, hoistedAliases });
+    const setupStmts = this.buildFunctionBody({ functionName, parameters, bodyCode, skipHooks: false, hoistedAliases });
 
     const funcDecl = ts.functionDecl(implName, fnParams, ts.statements(setupStmts), {
       async: true,
@@ -1652,14 +1652,6 @@ export class TypeScriptBuilder {
 
     const constDecl = ts.varDecl("const", functionName, createCall);
     const exportedConst = node.exported ? ts.export(constDecl) : constDecl;
-
-    if (node.callback) {
-      return ts.statements([
-        funcDecl,
-        exportedConst,
-        ts.raw(`__globalCtx._registeredCallbacks.${functionName} = ${functionName};`),
-      ]);
-    }
 
     return ts.statements([funcDecl, exportedConst]);
   }

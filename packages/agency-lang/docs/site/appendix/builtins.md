@@ -53,4 +53,4 @@ For the auto-imported standard library (`print`, `sleep`, `read`, `fetch`, `rang
 
 | Name | Signature | Description |
 |---|---|---|
-| `debugger` | `debugger "<label>"?` | No-op when running the agent normally, but pauses execution when running under the Agency debugger. Accepts an optional label string. See [Debugger](/guide/debugger). |
+| `debugger` | `debugger "<label>"?` | No-op when running the agent normally, but pauses execution when running under the Agency debugger. Accepts an optional label string. See [Debugger](/cli/debug). |

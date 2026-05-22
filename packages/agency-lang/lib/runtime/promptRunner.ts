@@ -1,0 +1,114 @@
+import type { MessageJSON } from "smoltalk";
+import { hasInterrupts, type Interrupt } from "./interrupts.js";
+import type { SourceLocationOpts } from "./state/checkpointStore.js";
+import type { RuntimeContext } from "./state/context.js";
+import type { StateStack } from "./state/stateStack.js";
+
+/**
+ * Thrown by {@link PromptRunner.step} when a step body returns interrupts.
+ *
+ * Caught only at the top of `runPrompt`, which extracts the batched
+ * `interrupts` and returns them as `runPrompt`'s result so the generated
+ * caller can checkpoint and propagate them. NEVER propagates outside
+ * `lib/runtime/prompt.ts`.
+ */
+export class PromptBailout extends Error {
+  constructor(public readonly interrupts: Interrupt[]) {
+    super("PromptBailout");
+    this.name = "PromptBailout";
+  }
+}
+
+/**
+ * Frame-backed completion tracking. Lives on `self.runnerState` so it
+ * survives checkpoint/restore the same way `self.messagesJSON` does:
+ * the frame's `locals` object is what gets serialized.
+ */
+export type RunnerState = {
+  completedSteps: Record<string, true>;
+};
+
+export type PromptRunnerOpts = {
+  /** Frame-local `self` object (== the function's locals bag). */
+  self: any;
+  ctx: RuntimeContext<any>;
+  stateStack: StateStack;
+  /** Source location of the surrounding generated call site. Used as the
+   *  base `stepPath` when stamping a checkpoint on bailout — see
+   *  `step()` for the per-key suffix.  */
+  checkpointInfo: SourceLocationOpts | undefined;
+  /** Callback that snapshots the current message thread JSON. Called only
+   *  on bailout so it doesn't pay the cost on the happy path. */
+  snapshotMessages: () => MessageJSON[];
+};
+
+/**
+ * Control-flow helper for `runPrompt`. Owns the idempotent-step +
+ * checkpoint-on-interrupt machinery so the surrounding `runPrompt`
+ * body can be a linear script.
+ *
+ * See `docs/superpowers/plans/2026-05-22-prompt-runner.md`.
+ */
+export class PromptRunner {
+  constructor(private opts: PromptRunnerOpts) {
+    this.opts.self.runnerState ??= { completedSteps: {} };
+  }
+
+  /**
+   * Run `body` as an idempotent step, identified by `key`.
+   *
+   * If `key` is already recorded as completed (resume case), this is a
+   * no-op. Otherwise the body runs:
+   *   - if it returns `Interrupt[]`, snapshot messages, stamp a pinned
+   *     checkpoint, attach the checkpoint id to every interrupt, and
+   *     throw `PromptBailout` so `runPrompt` can return the batch up
+   *     the stack. The key is NOT marked completed — on resume, the
+   *     step re-enters, the body re-runs, and the saved
+   *     `__interruptId_N` matches the user's response.
+   *   - if it returns nothing (the happy path), the key is marked
+   *     completed so the next resume skips this step.
+   *
+   * The checkpoint's `stepPath` is `${checkpointInfo.stepPath}/${key}`
+   * so multiple steps within one `runPrompt` produce distinct
+   * checkpoints. Without this they would all share the runPrompt-level
+   * `stepPath` and the checkpoint store could not tell them apart on
+   * resume.
+   */
+  async step(
+    key: string,
+    body: () => Promise<Interrupt[] | void>,
+  ): Promise<void> {
+    if (this.opts.self.runnerState.completedSteps[key]) return;
+    const result = await body();
+    if (result && hasInterrupts(result)) {
+      this.opts.self.messagesJSON = this.opts.snapshotMessages();
+      const basePath = this.opts.checkpointInfo?.stepPath ?? "";
+      const stepPath = basePath ? `${basePath}/${key}` : key;
+      const cpId = this.opts.ctx.checkpoints.create(
+        this.opts.stateStack,
+        this.opts.ctx,
+        {
+          moduleId: this.opts.checkpointInfo?.moduleId ?? "",
+          scopeName: this.opts.checkpointInfo?.scopeName ?? "",
+          stepPath,
+        },
+      );
+      const cp = this.opts.ctx.checkpoints.get(cpId)!;
+      for (const intr of result) {
+        intr.checkpoint = cp;
+        intr.checkpointId = cpId;
+      }
+      this.opts.ctx.statelogClient.checkpointCreated({
+        checkpointId: cpId,
+        reason: "interrupt",
+        sourceLocation: {
+          moduleId: cp.moduleId,
+          scopeName: cp.scopeName,
+          stepPath: cp.stepPath,
+        },
+      });
+      throw new PromptBailout(result);
+    }
+    this.opts.self.runnerState.completedSteps[key] = true;
+  }
+}

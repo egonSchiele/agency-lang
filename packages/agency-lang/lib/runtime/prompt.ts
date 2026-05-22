@@ -445,252 +445,253 @@ export async function runPrompt(args: {
       // `round` value, so completedSteps keys match.
       const round = self.toolCallRound;
 
-      const interrupts: Interrupt[] = [];
+      // Tool calls in one round run concurrently via pr.parallel. Each
+      // tool gets its own BranchRunner. If any branch's `step` returns
+      // interrupts, sibling branches still run to completion; pr.parallel
+      // batches the collected interrupts, stamps ONE shared checkpoint,
+      // and throws PromptBailout — bailout is caught at the outer try.
+      //
+      // `removedTools` and `toolErrorCounts` use eventually-consistent
+      // semantics across branches (strategy B in the plan): same-round
+      // removal is best-effort and removals always take effect from the
+      // NEXT round (the .filter() after this parallel call).
+      await pr.parallel(
+        `round.${round}.tools`,
+        toolCalls,
+        async (toolCall, b) => {
+          if (ctx.isCancelled(stateStack)) throw new AgencyCancelledError();
 
-      for (const toolCall of toolCalls) {
-        if (ctx.isCancelled(stateStack)) throw new AgencyCancelledError();
-
-        const handler = toolFunctions.find((fn) => fn.name === toolCall.name);
-        if (!handler) {
-          console.error(
-            `No handler found for tool call: ${toolCall.name}. This error will be sent back to the LLM.`,
+          const handler = toolFunctions.find(
+            (fn) => fn.name === toolCall.name,
           );
-          messages.push(
-            smoltalk.toolMessage(
-              `Error: No handler found for tool call ${toolCall.name}`,
-              { tool_call_id: toolCall.id, name: toolCall.name },
-            ),
-          );
-          continue;
-        }
-
-        if (removedTools.includes(handler.name)) {
-          messages.push(
-            smoltalk.toolMessage(
-              `Error: Handler for tool call ${handler.name} has been removed already due to previous errors, and will not be executed.`,
-              { tool_call_id: toolCall.id, name: toolCall.name },
-            ),
-          );
-          continue;
-        }
-
-        const branchKey = `tool_${toolCall.id}`;
-        const existing = stack.getBranch(branchKey);
-
-        // Skip completed branches (cached result from previous interrupt cycle).
-        // The toolMessage was already pushed in the original run and restored
-        // via messagesJSON, so we don't push it again here.
-        if (existing?.result !== undefined) {
-          continue;
-        }
-
-        // Note: there used to be a coarse short-circuit here that, when
-        // existing.interruptId was set and the user's response was "reject",
-        // pushed "tool call rejected" and removed the tool without
-        // re-invoking it. That broke fork-in-tool: the tool branch only
-        // tracks `result[0].interruptId`, so a reject of the first interrupt
-        // ignored every per-interrupt response on sibling fork branches.
-        //
-        // Instead, we always re-invoke the tool on resume. Each inner
-        // interrupt site reads its own response via ctx.getInterruptResponse
-        // and either continues or halts with `failure("interrupt rejected")`.
-        // - Simple tool, user rejected → tool returns the failure Result;
-        //   the isFailure path below pushes "Error: interrupt rejected ..."
-        //   and removes the tool. Same observable outcome as the old
-        //   short-circuit, just routed through the failure path.
-        // - Fork-in-tool with rejects → each branch produces success or
-        //   failure independently; fork returns a mixed array; the tool
-        //   returns it as a regular value. It's the agency author's job to
-        //   detect embedded failures (e.g. with isFailure / isSuccess) and
-        //   surface them to the LLM however they want.
-
-        // Create or restore branch stack
-        const branchStack = stack.getOrCreateBranch(branchKey).stack;
-
-        const namedArgs = { ...toolCall.arguments };
-        await pr.step(
-          `round.${round}.tool.${toolCall.id}.start`,
-          async () =>
-            await callHook({
-              ctx,
-              name: "onToolCallStart",
-              data: { toolName: handler.name, args: namedArgs },
-            }),
-        );
-
-        const toolCallStartTime = performance.now();
-        const toolSpanId = ctx.statelogClient.startSpan("toolExecution");
-        let result: any;
-        try { // try/finally for toolExecution span
-        ctx.enterToolCall();
-        try {
-          const toolThreads = new ThreadStore();
-          toolThreads.setStatelogClient(ctx.statelogClient);
-          result = await handler.invoke(
-            { type: "named", positionalArgs: [], namedArgs },
-            {
-              ctx,
-              threads: toolThreads,
-              stateStack: branchStack,
-            },
-          );
-        } catch (error: unknown) {
-          const errorMessage =
-            error instanceof Error ? error.message : String(error);
-          console.error(`Tool call "${handler.name}" crashed: ${errorMessage}`);
-          ctx.statelogClient.error({
-            errorType: "toolError",
-            message: errorMessage,
-            functionName: handler.name,
-            retryable: false,
-          });
-          toolErrorCounts[handler.name] =
-            (toolErrorCounts[handler.name] || 0) + 1;
-          messages.push(
-            smoltalk.toolMessage(
-              `Error: ${errorMessage}. This tool failed after performing side effects and cannot be retried.`,
-              { tool_call_id: toolCall.id, name: toolCall.name },
-            ),
-          );
-          removedTools.push(handler.name);
-          stack.deleteBranch(branchKey);
-          continue;
-        } finally {
-          ctx.exitToolCall();
-        }
-
-        // Tool returned a failure Result — handle retry logic
-        if (isFailure(result)) {
-          const errorMessage =
-            typeof result.error === "string"
-              ? result.error
-              : String(result.error);
-          toolErrorCounts[handler.name] =
-            (toolErrorCounts[handler.name] || 0) + 1;
-          ctx.statelogClient.error({
-            errorType: "toolError",
-            message: errorMessage,
-            functionName: handler.name,
-            retryable: !!result.retryable,
-          });
-
-          if (result.retryable && toolErrorCounts[handler.name] < 5) {
-            messages.push(
-              smoltalk.toolMessage(
-                `Error: ${errorMessage}. You may retry this tool call with corrected arguments.`,
-                { tool_call_id: toolCall.id, name: toolCall.name },
-              ),
-            );
-          } else if (result.retryable) {
-            messages.push(
-              smoltalk.toolMessage(
-                `Error: ${errorMessage}. This tool has failed too many times and can no longer be called.`,
-                { tool_call_id: toolCall.id, name: toolCall.name },
-              ),
-            );
-            removedTools.push(handler.name);
-          } else {
-            messages.push(
-              smoltalk.toolMessage(
-                `Error: ${errorMessage}. This operation failed and cannot be retried.`,
-                { tool_call_id: toolCall.id, name: toolCall.name },
-              ),
-            );
-            removedTools.push(handler.name);
-          }
-          stack.deleteBranch(branchKey);
-          continue;
-        }
-
-        if (isRejected(result)) {
-          const message =
-            typeof result.value === "string"
-              ? result.value
-              : "Tool call rejected by policy";
-          messages.push(
-            smoltalk.toolMessage(message, {
-              tool_call_id: toolCall.id,
-              name: toolCall.name,
-            }),
-          );
-          stack.deleteBranch(branchKey);
-          continue;
-        }
-
-        // Check for interrupts
-        // Note: interruptThrown is already emitted by interruptWithHandlers
-        // when the interrupt propagates, so we don't emit it again here.
-        if (hasInterrupts(result)) {
-          interrupts.push(...result);
-          stack.setInterruptOnBranch(
-            branchKey,
-            result[0].interruptId,
-            result[0].interruptData,
-            result[0].checkpoint,
-          );
-          continue;
-        }
-
-        // Success — cache result and add tool message
-        result =
-          result ||
-          `${handler.name} ran successfully but did not return a value`;
-        stack.setResultOnBranch(branchKey, result);
-
-        const toolCallEndTime = performance.now();
-        await pr.step(
-          `round.${round}.tool.${toolCall.id}.end`,
-          async () =>
-            await callHook({
-              ctx,
-              name: "onToolCallEnd",
-              data: {
-                toolName: handler.name,
-                result,
-                timeTaken: toolCallEndTime - toolCallStartTime,
+          if (!handler) {
+            await b.step(
+              `round.${round}.tool.${toolCall.id}.unhandled`,
+              async () => {
+                console.error(
+                  `No handler found for tool call: ${toolCall.name}. This error will be sent back to the LLM.`,
+                );
+                messages.push(
+                  smoltalk.toolMessage(
+                    `Error: No handler found for tool call ${toolCall.name}`,
+                    { tool_call_id: toolCall.id, name: toolCall.name },
+                  ),
+                );
               },
-            }),
-        );
-        ctx.statelogClient.toolCall({
-          toolName: handler.name,
-          args: namedArgs,
-          output: result,
-          model: JSON.stringify(clientConfig.model),
-          timeTaken: toolCallEndTime - toolCallStartTime,
-        });
+            );
+            return;
+          }
 
-        } finally { // end toolExecution span
-          ctx.statelogClient.endSpan(toolSpanId);
-        }
+          // Gated start (strategy B): if the tool is already in
+          // removedTools (either from a prior round or from an earlier
+          // sibling in this round that pushed first), skip with a
+          // notice toolMessage.
+          if (removedTools.includes(handler.name)) {
+            await b.step(
+              `round.${round}.tool.${toolCall.id}.removed`,
+              async () => {
+                messages.push(
+                  smoltalk.toolMessage(
+                    `Error: Handler for tool call ${handler.name} has been removed already due to previous errors, and will not be executed.`,
+                    { tool_call_id: toolCall.id, name: toolCall.name },
+                  ),
+                );
+              },
+            );
+            return;
+          }
 
-        messages.push(
-          smoltalk.toolMessage(result, {
-            tool_call_id: toolCall.id,
-            name: toolCall.name,
-          }),
-        );
-        // Don't deleteBranch here. If a sibling tool in this same round
-        // interrupts, the saved messagesJSON already contains this success's
-        // toolMessage; on resume, the cached-result short-circuit relies on
-        // `existing.result` being present to avoid re-invoking the tool.
-        // popBranches() at the end of a successful round handles cleanup.
-      }
+          const branchKey = `tool_${toolCall.id}`;
+          const existing = stack.getBranch(branchKey);
+          // Cached-result short-circuit (resume case): on a prior pass
+          // this tool ran to completion; its toolMessage is already in
+          // the restored `messagesJSON`. Skip without re-invoking.
+          if (existing?.result !== undefined) return;
 
-      // If any tool calls interrupted, route through pr.step so the
-      // checkpoint + bailout happen uniformly with every other interrupt
-      // site. This step is unique — it always throws when reached, so
-      // the completedSteps marker is irrelevant.
-      if (interrupts.length > 0) {
-        ctx.statelogClient.debug(`Tool call interrupted execution.`, {
-          messages: messages.getMessages(),
-          model: clientConfig.model,
-        });
-        await pr.step(
-          `round.${round}.toolInterrupts`,
-          async () => interrupts,
-        );
-        // unreachable — pr.step throws PromptBailout
-      }
+          const branchStack = stack.getOrCreateBranch(branchKey).stack;
+          const namedArgs = { ...toolCall.arguments };
+
+          await b.step(
+            `round.${round}.tool.${toolCall.id}.start`,
+            async () =>
+              await callHook({
+                ctx,
+                name: "onToolCallStart",
+                data: { toolName: handler.name, args: namedArgs },
+              }),
+          );
+          if (b.interrupts) return;
+
+          const toolCallStartTime = performance.now();
+          const toolSpanId = ctx.statelogClient.startSpan("toolExecution");
+          let toolResult: any;
+          let invokeOutcome:
+            | "success"
+            | "failed"
+            | "rejected"
+            | "interrupted"
+            | "crashed" = "success";
+
+          try {
+            // Invoke step: returns the interrupts when the tool halts
+            // with them so BranchRunner.step can collect. All other
+            // outcomes (success, failure, reject, crash) update outer
+            // state in place; the step completes (returns void) and is
+            // marked done so resume skips this whole block.
+            await b.step(
+              `round.${round}.tool.${toolCall.id}.invoke`,
+              async () => {
+                ctx.enterToolCall();
+                try {
+                  const toolThreads = new ThreadStore();
+                  toolThreads.setStatelogClient(ctx.statelogClient);
+                  toolResult = await handler.invoke(
+                    { type: "named", positionalArgs: [], namedArgs },
+                    { ctx, threads: toolThreads, stateStack: branchStack },
+                  );
+                } catch (error: unknown) {
+                  const errorMessage =
+                    error instanceof Error ? error.message : String(error);
+                  console.error(
+                    `Tool call "${handler.name}" crashed: ${errorMessage}`,
+                  );
+                  ctx.statelogClient.error({
+                    errorType: "toolError",
+                    message: errorMessage,
+                    functionName: handler.name,
+                    retryable: false,
+                  });
+                  toolErrorCounts[handler.name] =
+                    (toolErrorCounts[handler.name] || 0) + 1;
+                  messages.push(
+                    smoltalk.toolMessage(
+                      `Error: ${errorMessage}. This tool failed after performing side effects and cannot be retried.`,
+                      { tool_call_id: toolCall.id, name: toolCall.name },
+                    ),
+                  );
+                  removedTools.push(handler.name);
+                  stack.deleteBranch(branchKey);
+                  invokeOutcome = "crashed";
+                  return;
+                } finally {
+                  ctx.exitToolCall();
+                }
+
+                if (isFailure(toolResult)) {
+                  const errorMessage =
+                    typeof toolResult.error === "string"
+                      ? toolResult.error
+                      : String(toolResult.error);
+                  toolErrorCounts[handler.name] =
+                    (toolErrorCounts[handler.name] || 0) + 1;
+                  ctx.statelogClient.error({
+                    errorType: "toolError",
+                    message: errorMessage,
+                    functionName: handler.name,
+                    retryable: !!toolResult.retryable,
+                  });
+                  if (
+                    toolResult.retryable &&
+                    toolErrorCounts[handler.name] < 5
+                  ) {
+                    messages.push(
+                      smoltalk.toolMessage(
+                        `Error: ${errorMessage}. You may retry this tool call with corrected arguments.`,
+                        { tool_call_id: toolCall.id, name: toolCall.name },
+                      ),
+                    );
+                  } else if (toolResult.retryable) {
+                    messages.push(
+                      smoltalk.toolMessage(
+                        `Error: ${errorMessage}. This tool has failed too many times and can no longer be called.`,
+                        { tool_call_id: toolCall.id, name: toolCall.name },
+                      ),
+                    );
+                    removedTools.push(handler.name);
+                  } else {
+                    messages.push(
+                      smoltalk.toolMessage(
+                        `Error: ${errorMessage}. This operation failed and cannot be retried.`,
+                        { tool_call_id: toolCall.id, name: toolCall.name },
+                      ),
+                    );
+                    removedTools.push(handler.name);
+                  }
+                  stack.deleteBranch(branchKey);
+                  invokeOutcome = "failed";
+                  return;
+                }
+
+                if (isRejected(toolResult)) {
+                  const message =
+                    typeof toolResult.value === "string"
+                      ? toolResult.value
+                      : "Tool call rejected by policy";
+                  messages.push(
+                    smoltalk.toolMessage(message, {
+                      tool_call_id: toolCall.id,
+                      name: toolCall.name,
+                    }),
+                  );
+                  stack.deleteBranch(branchKey);
+                  invokeOutcome = "rejected";
+                  return;
+                }
+
+                if (hasInterrupts(toolResult)) {
+                  stack.setInterruptOnBranch(
+                    branchKey,
+                    toolResult[0].interruptId,
+                    toolResult[0].interruptData,
+                    toolResult[0].checkpoint,
+                  );
+                  invokeOutcome = "interrupted";
+                  return toolResult;
+                }
+
+                // Success: cache the result, push tool message.
+                toolResult =
+                  toolResult ||
+                  `${handler.name} ran successfully but did not return a value`;
+                stack.setResultOnBranch(branchKey, toolResult);
+                messages.push(
+                  smoltalk.toolMessage(toolResult, {
+                    tool_call_id: toolCall.id,
+                    name: toolCall.name,
+                  }),
+                );
+                invokeOutcome = "success";
+              },
+            );
+          } finally {
+            ctx.statelogClient.endSpan(toolSpanId);
+          }
+
+          if (b.interrupts || invokeOutcome !== "success") return;
+
+          const toolCallEndTime = performance.now();
+          await b.step(
+            `round.${round}.tool.${toolCall.id}.end`,
+            async () =>
+              await callHook({
+                ctx,
+                name: "onToolCallEnd",
+                data: {
+                  toolName: handler.name,
+                  result: toolResult,
+                  timeTaken: toolCallEndTime - toolCallStartTime,
+                },
+              }),
+          );
+          ctx.statelogClient.toolCall({
+            toolName: handler.name,
+            args: namedArgs,
+            output: toolResult,
+            model: JSON.stringify(clientConfig.model),
+            timeTaken: toolCallEndTime - toolCallStartTime,
+          });
+        },
+      );
 
       // All tool calls complete — clean up branches, next LLM round
       stack.popBranches();

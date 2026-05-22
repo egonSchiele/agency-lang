@@ -171,7 +171,7 @@ describe("PromptRunner.parallel", () => {
       checkpoints: {
         create: () => {
           cpCount++;
-          return `cp-${cpCount}`;
+          return 100 + cpCount;
         },
         get: () => ({ moduleId: "", scopeName: "", stepPath: "" }),
       },
@@ -189,7 +189,7 @@ describe("PromptRunner.parallel", () => {
     expect(caught).not.toBeNull();
     expect(caught!.interrupts.length).toBe(2);
     expect(cpCount).toBe(1);
-    expect(caught!.interrupts.every((i) => i.checkpointId === "cp-1")).toBe(
+    expect(caught!.interrupts.every((i) => i.checkpointId === 101)).toBe(
       true,
     );
   });
@@ -228,7 +228,7 @@ describe("PromptRunner.parallel", () => {
       checkpoints: {
         create: () => {
           cpCount++;
-          return `cp-${cpCount}`;
+          return 100 + cpCount;
         },
         get: () => ({ moduleId: "", scopeName: "", stepPath: "" }),
       },

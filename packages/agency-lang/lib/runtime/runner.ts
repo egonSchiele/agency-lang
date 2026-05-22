@@ -1,6 +1,8 @@
 import { nanoid } from "nanoid";
 import type { SpanContext } from "../statelogClient.js";
+import type { CallbackName } from "../types/function.js";
 import { debugStep } from "./debugger.js";
+import { callHook, type CallbackMap } from "./hooks.js";
 import { hasInterrupts } from "./interrupts.js";
 import { __pipeBind } from "./result.js";
 import type { SourceLocationOpts } from "./state/checkpointStore.js";
@@ -366,6 +368,78 @@ export class Runner {
     } finally {
       this.path.pop();
       this.ctx.popHandler();
+    }
+
+    if (this.halted) return;
+    this.clearDebugFlag(id);
+    this.setCounter(id + 1);
+  }
+
+  // ── Specialized: hook ──
+
+  /**
+   * Fire a codegen-emitted callback hook (onFunctionStart, onFunctionEnd,
+   * onEmit, onNodeStart, onNodeEnd) as a resumable substep.
+   *
+   * If any registered callback for `hookName` halts with `Interrupt[]`,
+   * we stamp a pinned checkpoint at this substep's path and halt the
+   * runner. The interrupts are surfaced via `runner.haltResult` so the
+   * surrounding generated function returns them up the stack. The
+   * substep counter is NOT advanced on halt — on resume this method
+   * re-enters and re-fires the hook, at which point the user's response
+   * (keyed by each Interrupt's interruptId) is consulted by the callback
+   * body's saved `__interruptId_N` local, exactly like any other
+   * interrupt resume.
+   *
+   * If the hook returns no interrupts the substep counter advances, so
+   * subsequent resumes skip the hook (no duplicate analytics events
+   * after every interrupt cycle).
+   */
+  async hook(
+    id: number,
+    hookName: CallbackName,
+    data: Record<string, unknown>,
+  ): Promise<void> {
+    if (this.shouldSkip()) return;
+    if (this.getCounter() > id) return;
+
+    if (await this.maybeDebugHook(id)) return;
+
+    this.ctx.coverageCollector?.hit(this.moduleId, this.scopeName, this.stepPath(id));
+
+    this.path.push(id);
+    try {
+      const result = await callHook({
+        ctx: this.ctx,
+        name: hookName as keyof CallbackMap,
+        data: data as CallbackMap[keyof CallbackMap],
+      });
+      if (hasInterrupts(result)) {
+        // Codegen-emitted hook sites always run inside a generated
+        // function/node where the Runner is constructed with a `stack`
+        // opt. Without it we cannot stamp a checkpoint that the user
+        // can later resume from.
+        if (!this.stack) {
+          throw new Error(
+            `Runner.hook(${hookName}) requires the runner to be constructed ` +
+              `with a 'stack' opt so the hook-interrupt checkpoint can be stamped`,
+          );
+        }
+        const cpId = this.ctx.checkpoints.createPinned(
+          this.stack,
+          this.ctx,
+          { ...this.getCheckpointInfo(), label: null },
+        );
+        for (const intr of result) intr.checkpointId = cpId;
+        if (this.nodeContext) {
+          this.halt({ ...this.state, data: result });
+        } else {
+          this.halt(result);
+        }
+        return;
+      }
+    } finally {
+      this.path.pop();
     }
 
     if (this.halted) return;

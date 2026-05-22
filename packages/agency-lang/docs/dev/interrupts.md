@@ -199,6 +199,37 @@ The iteration skipping, substep guards, and end-of-iteration reset all work iden
 
 The IR node is `TsForSteps`, with code generation handled by `forSteps.mustache`.
 
+## Callback hook firing
+
+Codegen-emitted hook sites (`onFunctionStart`, `onNodeStart`,
+`onNodeEnd`, `onEmit`) are compiled as a specialized Runner step type:
+`Runner.hook(id, hookName, data)` in `lib/runtime/runner.ts`.
+
+The step type follows the same skeleton as `Runner.handle` /
+`Runner.thread`: substep-counter resume-skipping, debugger pause,
+coverage hit, halt protocol. The hook-specific piece is calling
+`callHook(...)` and, if any callback halts with `Interrupt[]`, halting
+the runner without advancing the counter so the surrounding generated
+function returns the interrupts up the stack.
+
+`Runner.hook` deliberately does NOT stamp its own checkpoint. The
+callback's interrupt site already stamps one (via the
+`interruptReturn` template) that captures the full stack including
+the callback frame with its substep counters and saved
+`__interruptId_N`. `respondToInterrupts` reads `intr.checkpoint`
+first, so the callback-stamped checkpoint is what drives the resume.
+On resume, the callback's `setupFunction` reuses the saved frame from
+the deserialize queue and the callback body's substep counters point
+straight at the interrupt step — the user's response resolves it
+without re-running earlier substeps. **A callback that raises an
+interrupt fires exactly once total across a respond/resume cycle.**
+
+See `lib/runtime/runner.ts` (`hook` method) and
+`docs/dev/callback-hooks.md` for the full semantics, including known
+limitations (`onFunctionEnd` still uses a raw `callHook` in `finally`;
+`onNodeEnd` only fires for void-returning nodes; multiple callbacks
+on the same hook can't cleanly batch-resume yet).
+
 ## Overriding local variables when resuming from an interrupt
 
 All interrupt response functions (`approveInterrupt`, `rejectInterrupt`, `modifyInterrupt`, `resolveInterrupt`) accept an optional `overrides` parameter that lets you modify local variables in the execution state before resuming.

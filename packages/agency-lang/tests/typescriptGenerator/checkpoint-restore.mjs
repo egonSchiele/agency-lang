@@ -174,16 +174,12 @@ const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
 let __forked;
 let __functionCompleted = false;
-  await callHook({
-    ctx: __ctx,
-    name: "onNodeStart",
-    data: {
-      nodeName: "main"
-    }
-  })
   const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "checkpoint-restore.agency", scopeName: "main" });
   try {
-    await runner.step(0, async (runner) => {
+    await runner.hook(0, "onNodeStart", {
+      nodeName: "main"
+    });
+    await runner.step(1, async (runner) => {
 __stack.locals.cp = await __call(checkpoint, {
         type: "positional",
         args: []
@@ -193,7 +189,7 @@ __stack.locals.cp = await __call(checkpoint, {
         stateStack: __stateStack,
         moduleId: "checkpoint-restore.agency",
         scopeName: "main",
-        stepPath: "0"
+        stepPath: "1"
       });
 if (hasInterrupts(__stack.locals.cp)) {
         await __ctx.pendingPromises.awaitAll()
@@ -204,10 +200,10 @@ if (hasInterrupts(__stack.locals.cp)) {
         return;
       }
     });
-    await runner.step(1, async (runner) => {
+    await runner.step(2, async (runner) => {
 __stack.locals.x = 1;
     });
-    await runner.step(2, async (runner) => {
+    await runner.step(3, async (runner) => {
 const __funcResult = await __call(restore, {
         type: "positional",
         args: [__stack.locals.cp, {}]
@@ -225,7 +221,7 @@ if (hasInterrupts(__funcResult)) {
         return;
       }
     });
-    await runner.step(3, async (runner) => {
+    await runner.step(4, async (runner) => {
 runner.halt({
         messages: __threads,
         data: __stack.locals.x
@@ -233,14 +229,11 @@ runner.halt({
 return;
     });
     if (runner.halted) return runner.haltResult;
-    await callHook({
-      ctx: __ctx,
-      name: "onNodeEnd",
-      data: {
-        nodeName: "main",
-        data: undefined
-      }
-    })
+    await runner.hook(5, "onNodeEnd", {
+      nodeName: "main",
+      data: undefined
+    });
+    if (runner.halted) return runner.haltResult;
     return {
       messages: __threads,
       data: undefined
@@ -282,4 +275,4 @@ if (__process.argv[1] === fileURLToPath(import.meta.url)) {
   }
 }
 export default graph
-export const __sourceMap = {"checkpoint-restore.agency:main":{"0":{"line":1,"col":2},"1":{"line":2,"col":2},"2":{"line":3,"col":2},"3":{"line":4,"col":2}}};
+export const __sourceMap = {"checkpoint-restore.agency:main":{"1":{"line":1,"col":2},"2":{"line":2,"col":2},"3":{"line":3,"col":2},"4":{"line":4,"col":2}}};

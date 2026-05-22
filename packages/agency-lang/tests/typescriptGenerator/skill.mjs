@@ -174,19 +174,15 @@ const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
 let __forked;
 let __functionCompleted = false;
-  await callHook({
-    ctx: __ctx,
-    name: "onNodeStart",
-    data: {
-      nodeName: "analyzeData"
-    }
-  })
   const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "skill.agency", scopeName: "analyzeData" });
   if (!__state.isResume) {
     __stack.args["input"] = __state.data.input;
   }
   try {
-    await runner.step(0, async (runner) => {
+    await runner.hook(0, "onNodeStart", {
+      nodeName: "analyzeData"
+    });
+    await runner.step(1, async (runner) => {
 __self.__removedTools = __self.__removedTools || [];
 __stack.locals.result = await runPrompt({
         ctx: __ctx,
@@ -209,14 +205,11 @@ if (hasInterrupts(__stack.locals.result)) {
       }
     });
     if (runner.halted) return runner.haltResult;
-    await callHook({
-      ctx: __ctx,
-      name: "onNodeEnd",
-      data: {
-        nodeName: "analyzeData",
-        data: undefined
-      }
-    })
+    await runner.hook(2, "onNodeEnd", {
+      nodeName: "analyzeData",
+      data: undefined
+    });
+    if (runner.halted) return runner.haltResult;
     return {
       messages: __threads,
       data: undefined
@@ -248,4 +241,4 @@ export async function analyzeData(input: string, { messages, callbacks }: { mess
 }
 export const __analyzeDataNodeParams = ["input"];
 export default graph
-export const __sourceMap = {"skill.agency:analyzeData":{"0":{"line":2,"col":2}}};
+export const __sourceMap = {"skill.agency:analyzeData":{"1":{"line":2,"col":2}}};

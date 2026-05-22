@@ -1,6 +1,8 @@
 import { nanoid } from "nanoid";
 import type { SpanContext } from "../statelogClient.js";
+import type { CallbackName } from "../types/function.js";
 import { debugStep } from "./debugger.js";
+import { callHook, type CallbackMap } from "./hooks.js";
 import { hasInterrupts } from "./interrupts.js";
 import { __pipeBind } from "./result.js";
 import type { SourceLocationOpts } from "./state/checkpointStore.js";
@@ -366,6 +368,73 @@ export class Runner {
     } finally {
       this.path.pop();
       this.ctx.popHandler();
+    }
+
+    if (this.halted) return;
+    this.clearDebugFlag(id);
+    this.setCounter(id + 1);
+  }
+
+  // ── Specialized: hook ──
+
+  /**
+   * Fire a codegen-emitted callback hook (onFunctionStart, onFunctionEnd,
+   * onEmit, onNodeStart, onNodeEnd) as a resumable substep.
+   *
+   * If any registered callback for `hookName` halts with `Interrupt[]`,
+   * we halt this runner so the surrounding generated function returns
+   * the interrupts up the stack via `runner.haltResult`. The substep
+   * counter is NOT advanced on halt, so on resume the hook re-fires and
+   * the callback's frame (preserved in the callback's own checkpoint
+   * stamped at its interrupt site) is re-entered in deserialize mode —
+   * its substep counters point straight at the interrupt step, which
+   * finds the user's response keyed by the saved __interruptId_N and
+   * completes without re-running earlier substeps.
+   *
+   * We deliberately do NOT stamp a separate checkpoint here: the
+   * callback's interrupt site already stamps one that captures the full
+   * stack including the callback frame with its substep counters and
+   * saved interrupt ids. `respondToInterrupts` reads `intr.checkpoint`
+   * first, so the callback-stamped checkpoint is what gets used on
+   * resume.
+   *
+   * If the hook returns no interrupts the substep counter advances, so
+   * subsequent resumes skip the hook (no duplicate analytics events
+   * after every interrupt cycle).
+   */
+  async hook(
+    id: number,
+    hookName: CallbackName,
+    // Hook payload type varies per hook — most hooks pass an object
+    // shape, but onEmit forwards whatever value `emit(...)` was called
+    // with (string, number, custom object, etc.). Use `unknown` so the
+    // generated TypeScript compiles for every hook payload shape.
+    data: unknown,
+  ): Promise<void> {
+    if (this.shouldSkip()) return;
+    if (this.getCounter() > id) return;
+
+    if (await this.maybeDebugHook(id)) return;
+
+    this.ctx.coverageCollector?.hit(this.moduleId, this.scopeName, this.stepPath(id));
+
+    this.path.push(id);
+    try {
+      const result = await callHook({
+        ctx: this.ctx,
+        name: hookName as keyof CallbackMap,
+        data: data as CallbackMap[keyof CallbackMap],
+      });
+      if (hasInterrupts(result)) {
+        if (this.nodeContext) {
+          this.halt({ ...this.state, data: result });
+        } else {
+          this.halt(result);
+        }
+        return;
+      }
+    } finally {
+      this.path.pop();
     }
 
     if (this.halted) return;

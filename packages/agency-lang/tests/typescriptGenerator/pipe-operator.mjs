@@ -179,18 +179,6 @@ let __functionCompleted = false;
     await __initializeGlobals(__ctx)
   }
   let __funcStartTime: number = performance.now();
-  await callHook({
-    ctx: __ctx,
-    name: "onFunctionStart",
-    data: {
-      functionName: "double",
-      args: {
-        x: x
-      },
-      isBuiltin: false,
-      moduleId: "pipe-operator.agency"
-    }
-  })
   __stack.args["x"] = x;
   __self.__retryable = __self.__retryable ?? true;
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "pipe-operator.agency", scopeName: "double" });
@@ -209,7 +197,15 @@ if (__ctx._pendingArgOverrides) {
 }
 
   try {
-    await runner.step(0, async (runner) => {
+    await runner.hook(0, "onFunctionStart", {
+      functionName: "double",
+      args: {
+        x: x
+      },
+      isBuiltin: false,
+      moduleId: "pipe-operator.agency"
+    });
+    await runner.step(1, async (runner) => {
 __functionCompleted = true;
 runner.halt(__stack.args.x * 2)
 return;
@@ -280,19 +276,6 @@ let __functionCompleted = false;
     await __initializeGlobals(__ctx)
   }
   let __funcStartTime: number = performance.now();
-  await callHook({
-    ctx: __ctx,
-    name: "onFunctionStart",
-    data: {
-      functionName: "multiply",
-      args: {
-        a: a,
-        b: b
-      },
-      isBuiltin: false,
-      moduleId: "pipe-operator.agency"
-    }
-  })
   __stack.args["a"] = a;
   __stack.args["b"] = b;
   __self.__retryable = __self.__retryable ?? true;
@@ -316,7 +299,16 @@ if (__ctx._pendingArgOverrides) {
 }
 
   try {
-    await runner.step(0, async (runner) => {
+    await runner.hook(0, "onFunctionStart", {
+      functionName: "multiply",
+      args: {
+        a: a,
+        b: b
+      },
+      isBuiltin: false,
+      moduleId: "pipe-operator.agency"
+    });
+    await runner.step(1, async (runner) => {
 __functionCompleted = true;
 runner.halt(__stack.args.a * __stack.args.b)
 return;
@@ -392,19 +384,6 @@ let __functionCompleted = false;
     await __initializeGlobals(__ctx)
   }
   let __funcStartTime: number = performance.now();
-  await callHook({
-    ctx: __ctx,
-    name: "onFunctionStart",
-    data: {
-      functionName: "safeDivide",
-      args: {
-        a: a,
-        b: b
-      },
-      isBuiltin: false,
-      moduleId: "pipe-operator.agency"
-    }
-  })
   __stack.args["a"] = a;
   __stack.args["b"] = b;
   __self.__retryable = __self.__retryable ?? true;
@@ -428,7 +407,16 @@ if (__ctx._pendingArgOverrides) {
 }
 
   try {
-    await runner.ifElse(0, [
+    await runner.hook(0, "onFunctionStart", {
+      functionName: "safeDivide",
+      args: {
+        a: a,
+        b: b
+      },
+      isBuiltin: false,
+      moduleId: "pipe-operator.agency"
+    });
+    await runner.ifElse(1, [
 
   {
     condition: async () => __stack.args.b === 0,
@@ -442,7 +430,7 @@ return;
   },
 
 ]);
-    await runner.step(1, async (runner) => {
+    await runner.step(2, async (runner) => {
 __functionCompleted = true;
 runner.halt(await success(__stack.args.a / __stack.args.b))
 return;
@@ -513,19 +501,15 @@ const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
 let __forked;
 let __functionCompleted = false;
-  await callHook({
-    ctx: __ctx,
-    name: "onNodeStart",
-    data: {
-      nodeName: "main"
-    }
-  })
   const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "pipe-operator.agency", scopeName: "main" });
   try {
-    await runner.step(0, async (runner) => {
+    await runner.hook(0, "onNodeStart", {
+      nodeName: "main"
+    });
+    await runner.step(1, async (runner) => {
 __stack.locals.__pipe_0 = await success(5);
     });
-    __stack.locals.r1 = await runner.pipe(1, __stack.locals.__pipe_0, async (__pipeArg) => await __call(double, {
+    __stack.locals.r1 = await runner.pipe(2, __stack.locals.__pipe_0, async (__pipeArg) => await __call(double, {
       type: "positional",
       args: [__pipeArg]
     }, {
@@ -533,10 +517,10 @@ __stack.locals.__pipe_0 = await success(5);
       threads: __threads,
       stateStack: __stateStack
     }));
-    await runner.step(2, async (runner) => {
+    await runner.step(3, async (runner) => {
 __stack.locals.__pipe_1 = await success(5);
     });
-    __stack.locals.r2 = await runner.pipe(3, __stack.locals.__pipe_1, async (__pipeArg) => await __call(await __callMethod(multiply, "partial", {
+    __stack.locals.r2 = await runner.pipe(4, __stack.locals.__pipe_1, async (__pipeArg) => await __call(await __callMethod(multiply, "partial", {
       type: "named",
       positionalArgs: [],
       namedArgs: {
@@ -554,10 +538,10 @@ __stack.locals.__pipe_1 = await success(5);
       threads: __threads,
       stateStack: __stateStack
     }));
-    await runner.step(4, async (runner) => {
+    await runner.step(5, async (runner) => {
 __stack.locals.__pipe_2 = await success(10);
     });
-    __stack.locals.__pipe_2 = await runner.pipe(5, __stack.locals.__pipe_2, async (__pipeArg) => await __call(double, {
+    __stack.locals.__pipe_2 = await runner.pipe(6, __stack.locals.__pipe_2, async (__pipeArg) => await __call(double, {
       type: "positional",
       args: [__pipeArg]
     }, {
@@ -565,7 +549,7 @@ __stack.locals.__pipe_2 = await success(10);
       threads: __threads,
       stateStack: __stateStack
     }));
-    __stack.locals.r3 = await runner.pipe(6, __stack.locals.__pipe_2, async (__pipeArg) => await __call(await __callMethod(multiply, "partial", {
+    __stack.locals.r3 = await runner.pipe(7, __stack.locals.__pipe_2, async (__pipeArg) => await __call(await __callMethod(multiply, "partial", {
       type: "named",
       positionalArgs: [],
       namedArgs: {
@@ -583,10 +567,10 @@ __stack.locals.__pipe_2 = await success(10);
       threads: __threads,
       stateStack: __stateStack
     }));
-    await runner.step(7, async (runner) => {
+    await runner.step(8, async (runner) => {
 __stack.locals.__pipe_3 = await failure(`nope`);
     });
-    __stack.locals.r4 = await runner.pipe(8, __stack.locals.__pipe_3, async (__pipeArg) => await __call(double, {
+    __stack.locals.r4 = await runner.pipe(9, __stack.locals.__pipe_3, async (__pipeArg) => await __call(double, {
       type: "positional",
       args: [__pipeArg]
     }, {
@@ -594,10 +578,10 @@ __stack.locals.__pipe_3 = await failure(`nope`);
       threads: __threads,
       stateStack: __stateStack
     }));
-    await runner.step(9, async (runner) => {
+    await runner.step(10, async (runner) => {
 __stack.locals.__pipe_4 = await success(10);
     });
-    __stack.locals.r5 = await runner.pipe(10, __stack.locals.__pipe_4, async (__pipeArg) => await __call(await __callMethod(safeDivide, "partial", {
+    __stack.locals.r5 = await runner.pipe(11, __stack.locals.__pipe_4, async (__pipeArg) => await __call(await __callMethod(safeDivide, "partial", {
       type: "named",
       positionalArgs: [],
       namedArgs: {
@@ -616,14 +600,11 @@ __stack.locals.__pipe_4 = await success(10);
       stateStack: __stateStack
     }));
     if (runner.halted) return runner.haltResult;
-    await callHook({
-      ctx: __ctx,
-      name: "onNodeEnd",
-      data: {
-        nodeName: "main",
-        data: undefined
-      }
-    })
+    await runner.hook(12, "onNodeEnd", {
+      nodeName: "main",
+      data: undefined
+    });
+    if (runner.halted) return runner.haltResult;
     return {
       messages: __threads,
       data: undefined
@@ -665,4 +646,4 @@ if (__process.argv[1] === fileURLToPath(import.meta.url)) {
   }
 }
 export default graph
-export const __sourceMap = {"pipe-operator.agency:double":{"0":{"line":1,"col":2}},"pipe-operator.agency:multiply":{"0":{"line":5,"col":2}},"pipe-operator.agency:safeDivide":{"0":{"line":9,"col":2},"1":{"line":12,"col":2},"0.0":{"line":10,"col":4}},"pipe-operator.agency:main":{"0":{"line":16,"col":2},"1":{"line":16,"col":2},"2":{"line":17,"col":2},"3":{"line":17,"col":2},"4":{"line":18,"col":2},"5":{"line":18,"col":2},"6":{"line":18,"col":2},"7":{"line":19,"col":2},"8":{"line":19,"col":2},"9":{"line":20,"col":2},"10":{"line":20,"col":2}}};
+export const __sourceMap = {"pipe-operator.agency:double":{"1":{"line":1,"col":2}},"pipe-operator.agency:multiply":{"1":{"line":5,"col":2}},"pipe-operator.agency:safeDivide":{"1":{"line":9,"col":2},"2":{"line":12,"col":2},"1.0":{"line":10,"col":4}},"pipe-operator.agency:main":{"1":{"line":16,"col":2},"2":{"line":16,"col":2},"3":{"line":17,"col":2},"4":{"line":17,"col":2},"5":{"line":18,"col":2},"6":{"line":18,"col":2},"7":{"line":18,"col":2},"8":{"line":19,"col":2},"9":{"line":19,"col":2},"10":{"line":20,"col":2},"11":{"line":20,"col":2}}};

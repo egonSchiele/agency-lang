@@ -192,16 +192,6 @@ if (!__ctx.globals.isInitialized("class-inheritance.agency")) {
       await __initializeGlobals(__ctx)
     }
 let __funcStartTime: number = performance.now();
-await callHook({
-      ctx: __ctx,
-      name: "onFunctionStart",
-      data: {
-        functionName: "Animal.speak",
-        args: {},
-        isBuiltin: false,
-        moduleId: "class-inheritance.agency"
-      }
-    })
 __self.__retryable = __self.__retryable ?? true;
 const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "class-inheritance.agency", scopeName: "Animal.speak" });
 let __resultCheckpointId = -1;
@@ -215,10 +205,16 @@ if (__ctx._pendingArgOverrides) {
 }
 
 try {
-      await runner.step(0, async (runner) => {
-__stack.locals.n = this.name;
+      await runner.hook(0, "onFunctionStart", {
+        functionName: "Animal.speak",
+        args: {},
+        isBuiltin: false,
+        moduleId: "class-inheritance.agency"
       });
       await runner.step(1, async (runner) => {
+__stack.locals.n = this.name;
+      });
+      await runner.step(2, async (runner) => {
 __functionCompleted = true;
 runner.halt(__stack.locals.n + ` makes a sound`)
 return;
@@ -308,16 +304,6 @@ if (!__ctx.globals.isInitialized("class-inheritance.agency")) {
       await __initializeGlobals(__ctx)
     }
 let __funcStartTime: number = performance.now();
-await callHook({
-      ctx: __ctx,
-      name: "onFunctionStart",
-      data: {
-        functionName: "Dog.speak",
-        args: {},
-        isBuiltin: false,
-        moduleId: "class-inheritance.agency"
-      }
-    })
 __self.__retryable = __self.__retryable ?? true;
 const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "class-inheritance.agency", scopeName: "Dog.speak" });
 let __resultCheckpointId = -1;
@@ -331,10 +317,16 @@ if (__ctx._pendingArgOverrides) {
 }
 
 try {
-      await runner.step(0, async (runner) => {
-__stack.locals.n = this.name;
+      await runner.hook(0, "onFunctionStart", {
+        functionName: "Dog.speak",
+        args: {},
+        isBuiltin: false,
+        moduleId: "class-inheritance.agency"
       });
       await runner.step(1, async (runner) => {
+__stack.locals.n = this.name;
+      });
+      await runner.step(2, async (runner) => {
 __functionCompleted = true;
 runner.halt(__stack.locals.n + ` barks`)
 return;
@@ -408,19 +400,15 @@ const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
 let __forked;
 let __functionCompleted = false;
-  await callHook({
-    ctx: __ctx,
-    name: "onNodeStart",
-    data: {
-      nodeName: "main"
-    }
-  })
   const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "class-inheritance.agency", scopeName: "main" });
   try {
-    await runner.step(0, async (runner) => {
-__stack.locals.dog = new Dog(`Rex`, `Labrador`);
+    await runner.hook(0, "onNodeStart", {
+      nodeName: "main"
     });
     await runner.step(1, async (runner) => {
+__stack.locals.dog = new Dog(`Rex`, `Labrador`);
+    });
+    await runner.step(2, async (runner) => {
 __stack.locals.result = await __callMethod(__stack.locals.dog, "speak", {
         type: "positional",
         args: []
@@ -430,7 +418,7 @@ __stack.locals.result = await __callMethod(__stack.locals.dog, "speak", {
         stateStack: __stateStack
       });
     });
-    await runner.step(2, async (runner) => {
+    await runner.step(3, async (runner) => {
 runner.halt({
         messages: __threads,
         data: __stack.locals.result
@@ -438,14 +426,11 @@ runner.halt({
 return;
     });
     if (runner.halted) return runner.haltResult;
-    await callHook({
-      ctx: __ctx,
-      name: "onNodeEnd",
-      data: {
-        nodeName: "main",
-        data: undefined
-      }
-    })
+    await runner.hook(4, "onNodeEnd", {
+      nodeName: "main",
+      data: undefined
+    });
+    if (runner.halted) return runner.haltResult;
     return {
       messages: __threads,
       data: undefined
@@ -487,4 +472,4 @@ if (__process.argv[1] === fileURLToPath(import.meta.url)) {
   }
 }
 export default graph
-export const __sourceMap = {"class-inheritance.agency:Animal.speak":{"0":{"line":4,"col":4},"1":{"line":5,"col":4}},"class-inheritance.agency:Dog.speak":{"0":{"line":13,"col":4},"1":{"line":14,"col":4}},"class-inheritance.agency:main":{"0":{"line":19,"col":2},"1":{"line":20,"col":2},"2":{"line":21,"col":2}}};
+export const __sourceMap = {"class-inheritance.agency:Animal.speak":{"1":{"line":4,"col":4},"2":{"line":5,"col":4}},"class-inheritance.agency:Dog.speak":{"1":{"line":13,"col":4},"2":{"line":14,"col":4}},"class-inheritance.agency:main":{"1":{"line":19,"col":2},"2":{"line":20,"col":2},"3":{"line":21,"col":2}}};

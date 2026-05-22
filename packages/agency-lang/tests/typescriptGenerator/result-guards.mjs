@@ -179,18 +179,6 @@ let __functionCompleted = false;
     await __initializeGlobals(__ctx)
   }
   let __funcStartTime: number = performance.now();
-  await callHook({
-    ctx: __ctx,
-    name: "onFunctionStart",
-    data: {
-      functionName: "checkValue",
-      args: {
-        r: r
-      },
-      isBuiltin: false,
-      moduleId: "result-guards.agency"
-    }
-  })
   __stack.args["r"] = r;
   __self.__retryable = __self.__retryable ?? true;
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "result-guards.agency", scopeName: "checkValue" });
@@ -209,7 +197,15 @@ if (__ctx._pendingArgOverrides) {
 }
 
   try {
-    await runner.ifElse(0, [
+    await runner.hook(0, "onFunctionStart", {
+      functionName: "checkValue",
+      args: {
+        r: r
+      },
+      isBuiltin: false,
+      moduleId: "result-guards.agency"
+    });
+    await runner.ifElse(1, [
 
   {
     condition: async () => await isSuccess(__stack.args.r),
@@ -223,7 +219,7 @@ return;
   },
 
 ]);
-    await runner.step(1, async (runner) => {
+    await runner.step(2, async (runner) => {
 __functionCompleted = true;
 runner.halt(`error`)
 return;
@@ -276,4 +272,4 @@ const checkValue = __AgencyFunction.create({
   exported: false
 }, __toolRegistry);
 export default graph
-export const __sourceMap = {"result-guards.agency:checkValue":{"0":{"line":1,"col":2},"1":{"line":4,"col":2},"0.0":{"line":2,"col":4}}};
+export const __sourceMap = {"result-guards.agency:checkValue":{"1":{"line":1,"col":2},"2":{"line":4,"col":2},"1.0":{"line":2,"col":4}}};

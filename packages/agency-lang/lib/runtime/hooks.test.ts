@@ -430,3 +430,34 @@ describe("Phase 0: hasInterrupts edge cases at the callback boundary", () => {
     expect(out).toBeUndefined();
   });
 });
+
+describe("Phase 1: onAgentStart / onAgentEnd reject interrupts", () => {
+  // These two hooks fire outside any agency frame (no Runner is in scope
+  // at the call site, no stateStack to checkpoint, no body to resume).
+  // A callback that raises an interrupt for them has no way to be
+  // responded to, so callHook throws instead of silently dropping.
+  it("throws when an onAgentStart callback raises an interrupt", async () => {
+    const ctx = fakeCtx();
+    const intr = [{ type: "interrupt", kind: "x::y", message: "", data: null, interruptId: "i1" }];
+    ctx.topLevelCallbacks = [{ name: "onAgentStart", fn: fakeAgencyFn(intr) }];
+    await expect(
+      callHook({ ctx, name: "onAgentStart", data: {} as any }),
+    ).rejects.toThrow(/onAgentStart callbacks cannot raise interrupts/);
+  });
+
+  it("throws when an onAgentEnd callback raises an interrupt", async () => {
+    const ctx = fakeCtx();
+    const intr = [{ type: "interrupt", kind: "x::y", message: "", data: null, interruptId: "i2" }];
+    ctx.topLevelCallbacks = [{ name: "onAgentEnd", fn: fakeAgencyFn(intr) }];
+    await expect(
+      callHook({ ctx, name: "onAgentEnd", data: {} as any }),
+    ).rejects.toThrow(/onAgentEnd callbacks cannot raise interrupts/);
+  });
+
+  it("does NOT throw when an onAgentStart callback completes without interrupts", async () => {
+    const ctx = fakeCtx();
+    ctx.topLevelCallbacks = [{ name: "onAgentStart", fn: fakeAgencyFn(undefined) }];
+    const out = await callHook({ ctx, name: "onAgentStart", data: {} as any });
+    expect(out).toBeUndefined();
+  });
+});

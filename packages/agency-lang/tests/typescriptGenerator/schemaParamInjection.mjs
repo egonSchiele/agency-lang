@@ -184,19 +184,6 @@ let __functionCompleted = false;
     await __initializeGlobals(__ctx)
   }
   let __funcStartTime: number = performance.now();
-  await callHook({
-    ctx: __ctx,
-    name: "onFunctionStart",
-    data: {
-      functionName: "parseValue",
-      args: {
-        input: input,
-        s: s
-      },
-      isBuiltin: false,
-      moduleId: "schemaParamInjection.agency"
-    }
-  })
   __stack.args["input"] = input;
   __stack.args["s"] = s;
   __self.__retryable = __self.__retryable ?? true;
@@ -220,7 +207,16 @@ if (__ctx._pendingArgOverrides) {
 }
 
   try {
-    await runner.step(0, async (runner) => {
+    await runner.hook(0, "onFunctionStart", {
+      functionName: "parseValue",
+      args: {
+        input: input,
+        s: s
+      },
+      isBuiltin: false,
+      moduleId: "schemaParamInjection.agency"
+    });
+    await runner.step(1, async (runner) => {
 __functionCompleted = true;
 runner.halt(await __callMethod(__stack.args.s, "parseJSON", {
         type: "positional",
@@ -303,16 +299,6 @@ let __functionCompleted = false;
     await __initializeGlobals(__ctx)
   }
   let __funcStartTime: number = performance.now();
-  await callHook({
-    ctx: __ctx,
-    name: "onFunctionStart",
-    data: {
-      functionName: "wrapper",
-      args: {},
-      isBuiltin: false,
-      moduleId: "schemaParamInjection.agency"
-    }
-  })
   __self.__retryable = __self.__retryable ?? true;
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "schemaParamInjection.agency", scopeName: "wrapper" });
   let __resultCheckpointId = -1;
@@ -326,10 +312,16 @@ if (__ctx._pendingArgOverrides) {
 }
 
   try {
-    await runner.step(0, async (runner) => {
-//  Return-position injection: outer return type provides the hint.
+    await runner.hook(0, "onFunctionStart", {
+      functionName: "wrapper",
+      args: {},
+      isBuiltin: false,
+      moduleId: "schemaParamInjection.agency"
     });
     await runner.step(1, async (runner) => {
+//  Return-position injection: outer return type provides the hint.
+    });
+    await runner.step(2, async (runner) => {
 __functionCompleted = true;
 runner.halt(await __call(parseValue, {
         type: "named",
@@ -400,20 +392,16 @@ const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
 let __forked;
 let __functionCompleted = false;
-  await callHook({
-    ctx: __ctx,
-    name: "onNodeStart",
-    data: {
-      nodeName: "main"
-    }
-  })
   const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "schemaParamInjection.agency", scopeName: "main" });
   try {
-    await runner.step(0, async (runner) => {
+    await runner.hook(0, "onNodeStart", {
+      nodeName: "main"
+    });
+    await runner.step(1, async (runner) => {
 //  LHS-annotation injection — Schema<any> inside parseValue receives
 //  z.array(z.number()) synthesized from `number[]`.
     });
-    await runner.step(1, async (runner) => {
+    await runner.step(2, async (runner) => {
 __stack.locals.nums = await __call(parseValue, {
         type: "named",
         positionalArgs: [`[1,2,3]`],
@@ -434,7 +422,7 @@ if (hasInterrupts(__stack.locals.nums)) {
         return;
       }
     });
-    await runner.step(2, async (runner) => {
+    await runner.step(3, async (runner) => {
 const __funcResult = await __call(print, {
         type: "positional",
         args: [__stack.locals.nums]
@@ -454,7 +442,7 @@ if (hasInterrupts(__funcResult)) {
 //  `any` LHS — degenerate but valid: injects `z.any()`. No assertion
 //  about runtime shape, just verifies it compiles.
     });
-    await runner.step(3, async (runner) => {
+    await runner.step(4, async (runner) => {
 __stack.locals.anything = await __call(parseValue, {
         type: "named",
         positionalArgs: [`42`],
@@ -475,7 +463,7 @@ if (hasInterrupts(__stack.locals.anything)) {
         return;
       }
     });
-    await runner.step(4, async (runner) => {
+    await runner.step(5, async (runner) => {
 const __funcResult = await __call(print, {
         type: "positional",
         args: [__stack.locals.anything]
@@ -497,7 +485,7 @@ if (hasInterrupts(__funcResult)) {
 //  assignment site; the injected schema and the validator schema are
 //  built from the same LHS type, so they agree.
     });
-    await runner.step(5, async (runner) => {
+    await runner.step(6, async (runner) => {
 __stack.locals.validated = await __call(parseValue, {
         type: "named",
         positionalArgs: [`[1,2,3]`],
@@ -519,7 +507,7 @@ if (hasInterrupts(__stack.locals.validated)) {
       }
 __stack.locals.validated = __validateType(__stack.locals.validated, z.array(z.number()));
     });
-    await runner.step(6, async (runner) => {
+    await runner.step(7, async (runner) => {
 const __funcResult = await __call(print, {
         type: "positional",
         args: [__stack.locals.validated]
@@ -538,7 +526,7 @@ if (hasInterrupts(__funcResult)) {
       }
 //  Explicit override: the user-supplied schema wins, no injection.
     });
-    await runner.step(7, async (runner) => {
+    await runner.step(8, async (runner) => {
 __stack.locals.explicit = await __call(parseValue, {
         type: "positional",
         args: [`[1,2,3]`, new Schema(z.any())]
@@ -556,7 +544,7 @@ if (hasInterrupts(__stack.locals.explicit)) {
         return;
       }
     });
-    await runner.step(8, async (runner) => {
+    await runner.step(9, async (runner) => {
 const __funcResult = await __call(print, {
         type: "positional",
         args: [__stack.locals.explicit]
@@ -578,7 +566,7 @@ if (hasInterrupts(__funcResult)) {
 //  because s is undefined. This case exists to lock in "no spooky
 //  injection without a clear context."
     });
-    await runner.step(9, async (runner) => {
+    await runner.step(10, async (runner) => {
 const __funcResult = await __call(parseValue, {
         type: "positional",
         args: [`[1,2,3]`]
@@ -597,14 +585,11 @@ if (hasInterrupts(__funcResult)) {
       }
     });
     if (runner.halted) return runner.haltResult;
-    await callHook({
-      ctx: __ctx,
-      name: "onNodeEnd",
-      data: {
-        nodeName: "main",
-        data: undefined
-      }
-    })
+    await runner.hook(11, "onNodeEnd", {
+      nodeName: "main",
+      data: undefined
+    });
+    if (runner.halted) return runner.haltResult;
     return {
       messages: __threads,
       data: undefined
@@ -646,4 +631,4 @@ if (__process.argv[1] === fileURLToPath(import.meta.url)) {
   }
 }
 export default graph
-export const __sourceMap = {"schemaParamInjection.agency:parseValue":{"0":{"line":7,"col":2}},"schemaParamInjection.agency:wrapper":{"1":{"line":12,"col":2}},"schemaParamInjection.agency:main":{"1":{"line":18,"col":2},"2":{"line":19,"col":2},"3":{"line":23,"col":2},"4":{"line":24,"col":2},"5":{"line":30,"col":2},"6":{"line":31,"col":2},"7":{"line":34,"col":2},"8":{"line":35,"col":2},"9":{"line":41,"col":2}}};
+export const __sourceMap = {"schemaParamInjection.agency:parseValue":{"1":{"line":7,"col":2}},"schemaParamInjection.agency:wrapper":{"2":{"line":12,"col":2}},"schemaParamInjection.agency:main":{"2":{"line":18,"col":2},"3":{"line":19,"col":2},"4":{"line":23,"col":2},"5":{"line":24,"col":2},"6":{"line":30,"col":2},"7":{"line":31,"col":2},"8":{"line":34,"col":2},"9":{"line":35,"col":2},"10":{"line":41,"col":2}}};

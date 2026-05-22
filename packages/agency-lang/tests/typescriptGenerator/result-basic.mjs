@@ -179,18 +179,6 @@ let __functionCompleted = false;
     await __initializeGlobals(__ctx)
   }
   let __funcStartTime: number = performance.now();
-  await callHook({
-    ctx: __ctx,
-    name: "onFunctionStart",
-    data: {
-      functionName: "checkAge",
-      args: {
-        age: age
-      },
-      isBuiltin: false,
-      moduleId: "result-basic.agency"
-    }
-  })
   __stack.args["age"] = age;
   __self.__retryable = __self.__retryable ?? true;
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "result-basic.agency", scopeName: "checkAge" });
@@ -209,7 +197,15 @@ if (__ctx._pendingArgOverrides) {
 }
 
   try {
-    await runner.ifElse(0, [
+    await runner.hook(0, "onFunctionStart", {
+      functionName: "checkAge",
+      args: {
+        age: age
+      },
+      isBuiltin: false,
+      moduleId: "result-basic.agency"
+    });
+    await runner.ifElse(1, [
 
   {
     condition: async () => __stack.args.age >= 18,
@@ -223,7 +219,7 @@ return;
   },
 
 ]);
-    await runner.step(1, async (runner) => {
+    await runner.step(2, async (runner) => {
 __functionCompleted = true;
 runner.halt(failure(`too young`, { checkpoint: __ctx.getResultCheckpoint(), functionName: "checkAge", args: __stack.args }))
 return;
@@ -276,4 +272,4 @@ const checkAge = __AgencyFunction.create({
   exported: false
 }, __toolRegistry);
 export default graph
-export const __sourceMap = {"result-basic.agency:checkAge":{"0":{"line":1,"col":2},"1":{"line":4,"col":2},"0.0":{"line":2,"col":4}}};
+export const __sourceMap = {"result-basic.agency:checkAge":{"1":{"line":1,"col":2},"2":{"line":4,"col":2},"1.0":{"line":2,"col":4}}};

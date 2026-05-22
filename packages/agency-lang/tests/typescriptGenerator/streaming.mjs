@@ -174,16 +174,12 @@ const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
 let __forked;
 let __functionCompleted = false;
-  await callHook({
-    ctx: __ctx,
-    name: "onNodeStart",
-    data: {
-      nodeName: "foo"
-    }
-  })
   const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "streaming.agency", scopeName: "foo" });
   try {
-    await runner.step(0, async (runner) => {
+    await runner.hook(0, "onNodeStart", {
+      nodeName: "foo"
+    });
+    await runner.step(1, async (runner) => {
 __self.__removedTools = __self.__removedTools || [];
 __stack.locals.response = await runPrompt({
         ctx: __ctx,
@@ -207,7 +203,7 @@ if (hasInterrupts(__stack.locals.response)) {
         return;
       }
     });
-    await runner.step(1, async (runner) => {
+    await runner.step(2, async (runner) => {
 const __funcResult = await __call(print, {
         type: "positional",
         args: [__stack.locals.response]
@@ -225,7 +221,7 @@ if (hasInterrupts(__funcResult)) {
         return;
       }
     });
-    await runner.step(2, async (runner) => {
+    await runner.step(3, async (runner) => {
 __self.__removedTools = __self.__removedTools || [];
 __stack.locals.response2 = await runPrompt({
         ctx: __ctx,
@@ -250,7 +246,7 @@ if (hasInterrupts(__stack.locals.response2)) {
         return;
       }
     });
-    await runner.step(3, async (runner) => {
+    await runner.step(4, async (runner) => {
 const __funcResult = await __call(print, {
         type: "positional",
         args: [__stack.locals.response2]
@@ -269,14 +265,11 @@ if (hasInterrupts(__funcResult)) {
       }
     });
     if (runner.halted) return runner.haltResult;
-    await callHook({
-      ctx: __ctx,
-      name: "onNodeEnd",
-      data: {
-        nodeName: "foo",
-        data: undefined
-      }
-    })
+    await runner.hook(5, "onNodeEnd", {
+      nodeName: "foo",
+      data: undefined
+    });
+    if (runner.halted) return runner.haltResult;
     return {
       messages: __threads,
       data: undefined
@@ -306,4 +299,4 @@ export async function foo({ messages, callbacks }: { messages?: any; callbacks?:
 }
 export const __fooNodeParams = [];
 export default graph
-export const __sourceMap = {"streaming.agency:foo":{"0":{"line":1,"col":2},"1":{"line":4,"col":2},"2":{"line":6,"col":2},"3":{"line":10,"col":2}}};
+export const __sourceMap = {"streaming.agency:foo":{"1":{"line":1,"col":2},"2":{"line":4,"col":2},"3":{"line":6,"col":2},"4":{"line":10,"col":2}}};

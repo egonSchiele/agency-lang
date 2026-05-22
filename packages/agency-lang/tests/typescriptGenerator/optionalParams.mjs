@@ -191,19 +191,6 @@ let __functionCompleted = false;
     await __initializeGlobals(__ctx)
   }
   let __funcStartTime: number = performance.now();
-  await callHook({
-    ctx: __ctx,
-    name: "onFunctionStart",
-    data: {
-      functionName: "greet",
-      args: {
-        name: name,
-        greeting: greeting
-      },
-      isBuiltin: false,
-      moduleId: "optionalParams.agency"
-    }
-  })
   __stack.args["name"] = name;
   __stack.args["greeting"] = (greeting === __UNSET ? (null) : (greeting));
   __self.__retryable = __self.__retryable ?? true;
@@ -227,7 +214,16 @@ if (__ctx._pendingArgOverrides) {
 }
 
   try {
-    await runner.step(0, async (runner) => {
+    await runner.hook(0, "onFunctionStart", {
+      functionName: "greet",
+      args: {
+        name: name,
+        greeting: greeting
+      },
+      isBuiltin: false,
+      moduleId: "optionalParams.agency"
+    });
+    await runner.step(1, async (runner) => {
 const __funcResult = await __call(print, {
         type: "positional",
         args: [__stack.args.greeting, __stack.args.name]
@@ -295,4 +291,4 @@ const greet = __AgencyFunction.create({
   exported: false
 }, __toolRegistry);
 export default graph
-export const __sourceMap = {"optionalParams.agency:greet":{"0":{"line":1,"col":2}}};
+export const __sourceMap = {"optionalParams.agency:greet":{"1":{"line":1,"col":2}}};

@@ -174,23 +174,19 @@ const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
 let __forked;
 let __functionCompleted = false;
-  await callHook({
-    ctx: __ctx,
-    name: "onNodeStart",
-    data: {
-      nodeName: "main"
-    }
-  })
   const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "matchBlock.agency", scopeName: "main" });
   try {
-    await runner.step(0, async (runner) => {
+    await runner.hook(0, "onNodeStart", {
+      nodeName: "main"
+    });
+    await runner.step(1, async (runner) => {
 //  Test match blocks (pattern matching)
 //  Simple match with string literals
     });
-    await runner.step(1, async (runner) => {
+    await runner.step(2, async (runner) => {
 __stack.locals.action = `start`;
     });
-    await runner.ifElse(2, [
+    await runner.ifElse(3, [
 
   {
     condition: async () => __stack.locals.action === `start`,
@@ -244,13 +240,13 @@ await __call(print, {
           stateStack: __stateStack
         })
 });
-    await runner.step(3, async (runner) => {
+    await runner.step(4, async (runner) => {
 //  Match with number literals
     });
-    await runner.step(4, async (runner) => {
+    await runner.step(5, async (runner) => {
 __stack.locals.statusCode = 200;
     });
-    await runner.ifElse(5, [
+    await runner.ifElse(6, [
 
   {
     condition: async () => __stack.locals.statusCode === 200,
@@ -304,16 +300,16 @@ await __call(print, {
           stateStack: __stateStack
         })
 });
-    await runner.step(6, async (runner) => {
+    await runner.step(7, async (runner) => {
 //  Match with variable assignment in body
     });
-    await runner.step(7, async (runner) => {
+    await runner.step(8, async (runner) => {
 __stack.locals.grade = `A`;
     });
-    await runner.step(8, async (runner) => {
+    await runner.step(9, async (runner) => {
 __stack.locals.points = 0;
     });
-    await runner.ifElse(9, [
+    await runner.ifElse(10, [
 
   {
     condition: async () => __stack.locals.grade === `A`,
@@ -346,13 +342,13 @@ __stack.locals.d = 55;
 ], async (runner) => {
 __stack.locals.e = 0;
 });
-    await runner.step(10, async (runner) => {
+    await runner.step(11, async (runner) => {
 //  Match with function calls in body
     });
-    await runner.step(11, async (runner) => {
+    await runner.step(12, async (runner) => {
 __stack.locals.level = `debug`;
     });
-    await runner.ifElse(12, [
+    await runner.ifElse(13, [
 
   {
     condition: async () => __stack.locals.level === `debug`,
@@ -411,13 +407,13 @@ await __call(print, {
   },
 
 ]);
-    await runner.step(13, async (runner) => {
+    await runner.step(14, async (runner) => {
 //  Match with array results
     });
-    await runner.step(14, async (runner) => {
+    await runner.step(15, async (runner) => {
 __stack.locals.resultType = `array`;
     });
-    await runner.ifElse(15, [
+    await runner.ifElse(16, [
 
   {
     condition: async () => __stack.locals.resultType === `array`,
@@ -439,13 +435,13 @@ __stack.locals.data2 = {
 ], async (runner) => {
 __stack.locals.data3 = [];
 });
-    await runner.step(16, async (runner) => {
+    await runner.step(17, async (runner) => {
 //  Match with object results
     });
-    await runner.step(17, async (runner) => {
+    await runner.step(18, async (runner) => {
 __stack.locals.format = `json`;
     });
-    await runner.ifElse(18, [
+    await runner.ifElse(19, [
 
   {
     condition: async () => __stack.locals.format === `xml`,
@@ -484,14 +480,11 @@ __stack.locals.output4 = {
         };
 });
     if (runner.halted) return runner.haltResult;
-    await callHook({
-      ctx: __ctx,
-      name: "onNodeEnd",
-      data: {
-        nodeName: "main",
-        data: undefined
-      }
-    })
+    await runner.hook(20, "onNodeEnd", {
+      nodeName: "main",
+      data: undefined
+    });
+    if (runner.halted) return runner.haltResult;
     return {
       messages: __threads,
       data: undefined
@@ -533,4 +526,4 @@ if (__process.argv[1] === fileURLToPath(import.meta.url)) {
   }
 }
 export default graph
-export const __sourceMap = {"matchBlock.agency:main":{"1":{"line":4,"col":2},"2":{"line":5,"col":2},"4":{"line":13,"col":2},"5":{"line":14,"col":2},"7":{"line":22,"col":2},"8":{"line":23,"col":2},"9":{"line":24,"col":2},"11":{"line":33,"col":2},"12":{"line":34,"col":2},"14":{"line":42,"col":2},"15":{"line":43,"col":2},"17":{"line":53,"col":2},"18":{"line":54,"col":2}}};
+export const __sourceMap = {"matchBlock.agency:main":{"2":{"line":4,"col":2},"3":{"line":5,"col":2},"5":{"line":13,"col":2},"6":{"line":14,"col":2},"8":{"line":22,"col":2},"9":{"line":23,"col":2},"10":{"line":24,"col":2},"12":{"line":33,"col":2},"13":{"line":34,"col":2},"15":{"line":42,"col":2},"16":{"line":43,"col":2},"18":{"line":53,"col":2},"19":{"line":54,"col":2}}};

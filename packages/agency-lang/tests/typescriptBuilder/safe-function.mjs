@@ -181,18 +181,6 @@ let __functionCompleted = false;
     await __initializeGlobals(__ctx)
   }
   let __funcStartTime: number = performance.now();
-  await callHook({
-    ctx: __ctx,
-    name: "onFunctionStart",
-    data: {
-      functionName: "safeLookup",
-      args: {
-        id: id
-      },
-      isBuiltin: false,
-      moduleId: "safe-function.agency"
-    }
-  })
   __stack.args["id"] = id;
   __self.__retryable = __self.__retryable ?? true;
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "safe-function.agency", scopeName: "safeLookup" });
@@ -211,7 +199,15 @@ if (__ctx._pendingArgOverrides) {
 }
 
   try {
-    await runner.step(0, async (runner) => {
+    await runner.hook(0, "onFunctionStart", {
+      functionName: "safeLookup",
+      args: {
+        id: id
+      },
+      isBuiltin: false,
+      moduleId: "safe-function.agency"
+    });
+    await runner.step(1, async (runner) => {
 __functionCompleted = true;
 runner.halt(await __call(lookupItem, {
         type: "positional",
@@ -289,18 +285,6 @@ let __functionCompleted = false;
     await __initializeGlobals(__ctx)
   }
   let __funcStartTime: number = performance.now();
-  await callHook({
-    ctx: __ctx,
-    name: "onFunctionStart",
-    data: {
-      functionName: "unsafeSave",
-      args: {
-        id: id
-      },
-      isBuiltin: false,
-      moduleId: "safe-function.agency"
-    }
-  })
   __stack.args["id"] = id;
   __self.__retryable = __self.__retryable ?? true;
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "safe-function.agency", scopeName: "unsafeSave" });
@@ -319,7 +303,15 @@ if (__ctx._pendingArgOverrides) {
 }
 
   try {
-    await runner.step(0, async (runner) => {
+    await runner.hook(0, "onFunctionStart", {
+      functionName: "unsafeSave",
+      args: {
+        id: id
+      },
+      isBuiltin: false,
+      moduleId: "safe-function.agency"
+    });
+    await runner.step(1, async (runner) => {
 __self.__retryable = false;
 const __funcResult = await __call(saveItem, {
         type: "positional",
@@ -335,7 +327,7 @@ if (hasInterrupts(__funcResult)) {
         return;
       }
     });
-    await runner.step(1, async (runner) => {
+    await runner.step(2, async (runner) => {
 __functionCompleted = true;
 runner.halt(await __call(lookupItem, {
         type: "positional",
@@ -408,16 +400,12 @@ const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
 let __forked;
 let __functionCompleted = false;
-  await callHook({
-    ctx: __ctx,
-    name: "onNodeStart",
-    data: {
-      nodeName: "main"
-    }
-  })
   const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "safe-function.agency", scopeName: "main" });
   try {
-    await runner.step(0, async (runner) => {
+    await runner.hook(0, "onNodeStart", {
+      nodeName: "main"
+    });
+    await runner.step(1, async (runner) => {
 __self.__removedTools = __self.__removedTools || [];
 __stack.locals.result = await runPrompt({
         ctx: __ctx,
@@ -441,7 +429,7 @@ if (hasInterrupts(__stack.locals.result)) {
         return;
       }
     });
-    await runner.step(1, async (runner) => {
+    await runner.step(2, async (runner) => {
 runner.halt({
         messages: __threads,
         data: __stack.locals.result
@@ -449,14 +437,11 @@ runner.halt({
 return;
     });
     if (runner.halted) return runner.haltResult;
-    await callHook({
-      ctx: __ctx,
-      name: "onNodeEnd",
-      data: {
-        nodeName: "main",
-        data: undefined
-      }
-    })
+    await runner.hook(3, "onNodeEnd", {
+      nodeName: "main",
+      data: undefined
+    });
+    if (runner.halted) return runner.haltResult;
     return {
       messages: __threads,
       data: undefined
@@ -498,4 +483,4 @@ if (__process.argv[1] === fileURLToPath(import.meta.url)) {
   }
 }
 export default graph
-export const __sourceMap = {"safe-function.agency:safeLookup":{"0":{"line":3,"col":2}},"safe-function.agency:unsafeSave":{"0":{"line":7,"col":2},"1":{"line":8,"col":2}},"safe-function.agency:main":{"0":{"line":12,"col":2},"1":{"line":13,"col":2}}};
+export const __sourceMap = {"safe-function.agency:safeLookup":{"1":{"line":3,"col":2}},"safe-function.agency:unsafeSave":{"1":{"line":7,"col":2},"2":{"line":8,"col":2}},"safe-function.agency:main":{"1":{"line":12,"col":2},"2":{"line":13,"col":2}}};

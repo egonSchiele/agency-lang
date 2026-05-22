@@ -179,20 +179,6 @@ let __functionCompleted = false;
     await __initializeGlobals(__ctx)
   }
   let __funcStartTime: number = performance.now();
-  await callHook({
-    ctx: __ctx,
-    name: "onFunctionStart",
-    data: {
-      functionName: "greet",
-      args: {
-        name: name,
-        greeting: greeting,
-        punctuation: punctuation
-      },
-      isBuiltin: false,
-      moduleId: "namedArgsReorder.agency"
-    }
-  })
   __stack.args["name"] = name;
   __stack.args["greeting"] = (greeting === __UNSET ? (`Hello`) : (greeting));
   __stack.args["punctuation"] = (punctuation === __UNSET ? (`!`) : (punctuation));
@@ -221,7 +207,17 @@ if (__ctx._pendingArgOverrides) {
 }
 
   try {
-    await runner.step(0, async (runner) => {
+    await runner.hook(0, "onFunctionStart", {
+      functionName: "greet",
+      args: {
+        name: name,
+        greeting: greeting,
+        punctuation: punctuation
+      },
+      isBuiltin: false,
+      moduleId: "namedArgsReorder.agency"
+    });
+    await runner.step(1, async (runner) => {
 __functionCompleted = true;
 runner.halt(__stack.args.greeting + ` ${__stack.args.name}${__stack.args.punctuation}`)
 return;
@@ -297,19 +293,15 @@ const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
 let __forked;
 let __functionCompleted = false;
-  await callHook({
-    ctx: __ctx,
-    name: "onNodeStart",
-    data: {
-      nodeName: "main"
-    }
-  })
   const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "namedArgsReorder.agency", scopeName: "main" });
   try {
-    await runner.step(0, async (runner) => {
-//  Reordered named args
+    await runner.hook(0, "onNodeStart", {
+      nodeName: "main"
     });
     await runner.step(1, async (runner) => {
+//  Reordered named args
+    });
+    await runner.step(2, async (runner) => {
 __stack.locals.a = await __call(greet, {
         type: "named",
         positionalArgs: [],
@@ -332,7 +324,7 @@ if (hasInterrupts(__stack.locals.a)) {
       }
 //  Skip middle param with named args
     });
-    await runner.step(2, async (runner) => {
+    await runner.step(3, async (runner) => {
 __stack.locals.b = await __call(greet, {
         type: "named",
         positionalArgs: [],
@@ -355,7 +347,7 @@ if (hasInterrupts(__stack.locals.b)) {
       }
 //  Mixed positional + named
     });
-    await runner.step(3, async (runner) => {
+    await runner.step(4, async (runner) => {
 __stack.locals.c = await __call(greet, {
         type: "named",
         positionalArgs: [`world`],
@@ -376,7 +368,7 @@ if (hasInterrupts(__stack.locals.c)) {
         return;
       }
     });
-    await runner.step(4, async (runner) => {
+    await runner.step(5, async (runner) => {
 runner.halt({
         messages: __threads,
         data: __stack.locals.a + ` | ${__stack.locals.b} | ${__stack.locals.c}`
@@ -384,14 +376,11 @@ runner.halt({
 return;
     });
     if (runner.halted) return runner.haltResult;
-    await callHook({
-      ctx: __ctx,
-      name: "onNodeEnd",
-      data: {
-        nodeName: "main",
-        data: undefined
-      }
-    })
+    await runner.hook(6, "onNodeEnd", {
+      nodeName: "main",
+      data: undefined
+    });
+    if (runner.halted) return runner.haltResult;
     return {
       messages: __threads,
       data: undefined
@@ -433,4 +422,4 @@ if (__process.argv[1] === fileURLToPath(import.meta.url)) {
   }
 }
 export default graph
-export const __sourceMap = {"namedArgsReorder.agency:greet":{"0":{"line":1,"col":2}},"namedArgsReorder.agency:main":{"1":{"line":6,"col":2},"2":{"line":8,"col":2},"3":{"line":10,"col":2},"4":{"line":11,"col":2}}};
+export const __sourceMap = {"namedArgsReorder.agency:greet":{"1":{"line":1,"col":2}},"namedArgsReorder.agency:main":{"2":{"line":6,"col":2},"3":{"line":8,"col":2},"4":{"line":10,"col":2},"5":{"line":11,"col":2}}};

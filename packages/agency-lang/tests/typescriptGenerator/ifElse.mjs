@@ -174,22 +174,18 @@ const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
 let __forked;
 let __functionCompleted = false;
-  await callHook({
-    ctx: __ctx,
-    name: "onNodeStart",
-    data: {
-      nodeName: "main"
-    }
-  })
   const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "ifElse.agency", scopeName: "main" });
   try {
-    await runner.step(0, async (runner) => {
-//  Basic if statement with boolean variable
+    await runner.hook(0, "onNodeStart", {
+      nodeName: "main"
     });
     await runner.step(1, async (runner) => {
+//  Basic if statement with boolean variable
+    });
+    await runner.step(2, async (runner) => {
 __stack.locals.flag = true;
     });
-    await runner.ifElse(2, [
+    await runner.ifElse(3, [
 
   {
     condition: async () => __stack.locals.flag,
@@ -201,7 +197,7 @@ __stack.locals.result = `condition was true`;
   },
 
 ]);
-    await runner.ifElse(3, [
+    await runner.ifElse(4, [
 
   {
     condition: async () => await __call(isReady, {
@@ -220,15 +216,15 @@ __stack.locals.status = `ready`;
   },
 
 ]);
-    await runner.step(4, async (runner) => {
+    await runner.step(5, async (runner) => {
 //  If statement with property access
     });
-    await runner.step(5, async (runner) => {
+    await runner.step(6, async (runner) => {
 __stack.locals.obj = {
         "active": true
       };
     });
-    await runner.ifElse(6, [
+    await runner.ifElse(7, [
 
   {
     condition: async () => __stack.locals.obj.active,
@@ -240,13 +236,13 @@ __stack.locals.message = `object is active`;
   },
 
 ]);
-    await runner.step(7, async (runner) => {
+    await runner.step(8, async (runner) => {
 //  Nested if statements
     });
-    await runner.step(8, async (runner) => {
+    await runner.step(9, async (runner) => {
 __stack.locals.outer = true;
     });
-    await runner.ifElse(9, [
+    await runner.ifElse(10, [
 
   {
     condition: async () => __stack.locals.outer,
@@ -270,7 +266,7 @@ __stack.locals.nested = `both true`;
   },
 
 ]);
-    await runner.step(10, async (runner) => {
+    await runner.step(11, async (runner) => {
 //  TODO fix
 //  If with index access
 //  arr = [1, 2, 3]
@@ -279,10 +275,10 @@ __stack.locals.nested = `both true`;
 //  }
 //  Multiple statements in then body
     });
-    await runner.step(11, async (runner) => {
+    await runner.step(12, async (runner) => {
 __stack.locals.condition = true;
     });
-    await runner.ifElse(12, [
+    await runner.ifElse(13, [
 
   {
     condition: async () => __stack.locals.condition,
@@ -300,13 +296,13 @@ __stack.locals.c = 3;
   },
 
 ]);
-    await runner.step(13, async (runner) => {
+    await runner.step(14, async (runner) => {
 //  Multiple statements in both then and else bodies
     });
-    await runner.step(14, async (runner) => {
+    await runner.step(15, async (runner) => {
 __stack.locals.value = false;
     });
-    await runner.ifElse(15, [
+    await runner.ifElse(16, [
 
   {
     condition: async () => __stack.locals.value,
@@ -321,10 +317,10 @@ __stack.locals.y = 20;
   },
 
 ]);
-    await runner.step(16, async (runner) => {
+    await runner.step(17, async (runner) => {
 //  Basic else
     });
-    await runner.ifElse(17, [
+    await runner.ifElse(18, [
 
   {
     condition: async () => __stack.locals.flag,
@@ -340,10 +336,10 @@ await runner.step(1, async (runner) => {
 __stack.locals.result = `no`;
         });
 });
-    await runner.step(18, async (runner) => {
+    await runner.step(19, async (runner) => {
 //  else if chain
     });
-    await runner.ifElse(19, [
+    await runner.ifElse(20, [
 
   {
     condition: async () => __stack.locals.a === 1,
@@ -369,14 +365,11 @@ __stack.locals.result = `other`;
         });
 });
     if (runner.halted) return runner.haltResult;
-    await callHook({
-      ctx: __ctx,
-      name: "onNodeEnd",
-      data: {
-        nodeName: "main",
-        data: undefined
-      }
-    })
+    await runner.hook(21, "onNodeEnd", {
+      nodeName: "main",
+      data: undefined
+    });
+    if (runner.halted) return runner.haltResult;
     return {
       messages: __threads,
       data: undefined
@@ -418,4 +411,4 @@ if (__process.argv[1] === fileURLToPath(import.meta.url)) {
   }
 }
 export default graph
-export const __sourceMap = {"ifElse.agency:main":{"1":{"line":2,"col":2},"2":{"line":3,"col":2},"3":{"line":7,"col":2},"5":{"line":12,"col":2},"6":{"line":15,"col":2},"8":{"line":20,"col":2},"9":{"line":21,"col":2},"11":{"line":35,"col":2},"12":{"line":36,"col":2},"14":{"line":43,"col":2},"15":{"line":44,"col":2},"17":{"line":50,"col":2},"19":{"line":57,"col":2},"2.0":{"line":4,"col":4},"3.0":{"line":8,"col":4},"6.0":{"line":16,"col":4},"9.0":{"line":22,"col":4},"9.1.0":{"line":24,"col":6},"9.1":{"line":23,"col":4},"12.0":{"line":37,"col":4},"12.1":{"line":38,"col":4},"12.2":{"line":39,"col":4},"15.0":{"line":45,"col":4},"15.1":{"line":46,"col":4},"17.0":{"line":51,"col":4},"17.1":{"line":53,"col":4},"19.0":{"line":58,"col":4},"19.1":{"line":60,"col":4},"19.2":{"line":62,"col":4}}};
+export const __sourceMap = {"ifElse.agency:main":{"2":{"line":2,"col":2},"3":{"line":3,"col":2},"4":{"line":7,"col":2},"6":{"line":12,"col":2},"7":{"line":15,"col":2},"9":{"line":20,"col":2},"10":{"line":21,"col":2},"12":{"line":35,"col":2},"13":{"line":36,"col":2},"15":{"line":43,"col":2},"16":{"line":44,"col":2},"18":{"line":50,"col":2},"20":{"line":57,"col":2},"3.0":{"line":4,"col":4},"4.0":{"line":8,"col":4},"7.0":{"line":16,"col":4},"10.0":{"line":22,"col":4},"10.1.0":{"line":24,"col":6},"10.1":{"line":23,"col":4},"13.0":{"line":37,"col":4},"13.1":{"line":38,"col":4},"13.2":{"line":39,"col":4},"16.0":{"line":45,"col":4},"16.1":{"line":46,"col":4},"18.0":{"line":51,"col":4},"18.1":{"line":53,"col":4},"20.0":{"line":58,"col":4},"20.1":{"line":60,"col":4},"20.2":{"line":62,"col":4}}};

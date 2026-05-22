@@ -179,19 +179,6 @@ let __functionCompleted = false;
     await __initializeGlobals(__ctx)
   }
   let __funcStartTime: number = performance.now();
-  await callHook({
-    ctx: __ctx,
-    name: "onFunctionStart",
-    data: {
-      functionName: "append",
-      args: {
-        sleepTime: sleepTime,
-        value: value
-      },
-      isBuiltin: false,
-      moduleId: "asyncUnassigned.agency"
-    }
-  })
   __stack.args["sleepTime"] = sleepTime;
   __stack.args["value"] = value;
   __self.__retryable = __self.__retryable ?? true;
@@ -215,7 +202,16 @@ if (__ctx._pendingArgOverrides) {
 }
 
   try {
-    await runner.step(0, async (runner) => {
+    await runner.hook(0, "onFunctionStart", {
+      functionName: "append",
+      args: {
+        sleepTime: sleepTime,
+        value: value
+      },
+      isBuiltin: false,
+      moduleId: "asyncUnassigned.agency"
+    });
+    await runner.step(1, async (runner) => {
 const __funcResult = await __call(sleep, {
         type: "positional",
         args: [__stack.args.sleepTime]
@@ -296,34 +292,10 @@ const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
 let __forked;
 let __functionCompleted = false;
-  await callHook({
-    ctx: __ctx,
-    name: "onNodeStart",
-    data: {
-      nodeName: "main"
-    }
-  })
   const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "asyncUnassigned.agency", scopeName: "main" });
   try {
-    await runner.branchStep(0, "0", async (runner) => {
-if ((__stack.branches && __stack.branches["0"])) {
-        __forked = __stack.branches["0"].stack;
-        __forked.deserializeMode()
-      } else {
-        __forked = __ctx.forkStack();
-      }
-__stack.branches = (__stack.branches || {});
-__stack.branches["0"] = {
-        stack: __forked
-      };
-__ctx.pendingPromises.add(__call(append, {
-  type: "positional",
-  args: [1, `hello`]
-}, {
-  ctx: __ctx,
-  threads: __threads,
-  stateStack: __forked
-}))
+    await runner.hook(0, "onNodeStart", {
+      nodeName: "main"
     });
     await runner.branchStep(1, "1", async (runner) => {
 if ((__stack.branches && __stack.branches["1"])) {
@@ -338,6 +310,26 @@ __stack.branches["1"] = {
       };
 __ctx.pendingPromises.add(__call(append, {
   type: "positional",
+  args: [1, `hello`]
+}, {
+  ctx: __ctx,
+  threads: __threads,
+  stateStack: __forked
+}))
+    });
+    await runner.branchStep(2, "2", async (runner) => {
+if ((__stack.branches && __stack.branches["2"])) {
+        __forked = __stack.branches["2"].stack;
+        __forked.deserializeMode()
+      } else {
+        __forked = __ctx.forkStack();
+      }
+__stack.branches = (__stack.branches || {});
+__stack.branches["2"] = {
+        stack: __forked
+      };
+__ctx.pendingPromises.add(__call(append, {
+  type: "positional",
   args: [0.5, `world`]
 }, {
   ctx: __ctx,
@@ -345,7 +337,7 @@ __ctx.pendingPromises.add(__call(append, {
   stateStack: __forked
 }))
     });
-    await runner.step(2, async (runner) => {
+    await runner.step(3, async (runner) => {
 runner.halt({
         messages: __threads,
         data: `done`
@@ -353,14 +345,11 @@ runner.halt({
 return;
     });
     if (runner.halted) return runner.haltResult;
-    await callHook({
-      ctx: __ctx,
-      name: "onNodeEnd",
-      data: {
-        nodeName: "main",
-        data: undefined
-      }
-    })
+    await runner.hook(4, "onNodeEnd", {
+      nodeName: "main",
+      data: undefined
+    });
+    if (runner.halted) return runner.haltResult;
     return {
       messages: __threads,
       data: undefined
@@ -402,4 +391,4 @@ if (__process.argv[1] === fileURLToPath(import.meta.url)) {
   }
 }
 export default graph
-export const __sourceMap = {"asyncUnassigned.agency:append":{"0":{"line":1,"col":2}},"asyncUnassigned.agency:main":{"0":{"line":5,"col":2},"1":{"line":6,"col":2},"2":{"line":7,"col":2}}};
+export const __sourceMap = {"asyncUnassigned.agency:append":{"1":{"line":1,"col":2}},"asyncUnassigned.agency:main":{"1":{"line":5,"col":2},"2":{"line":6,"col":2},"3":{"line":7,"col":2}}};

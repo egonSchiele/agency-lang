@@ -179,19 +179,6 @@ let __functionCompleted = false;
     await __initializeGlobals(__ctx)
   }
   let __funcStartTime: number = performance.now();
-  await callHook({
-    ctx: __ctx,
-    name: "onFunctionStart",
-    data: {
-      functionName: "mapItems",
-      args: {
-        items: items,
-        block: block
-      },
-      isBuiltin: false,
-      moduleId: "inlineBlockParams.agency"
-    }
-  })
   __stack.args["items"] = items;
   __stack.args["block"] = block;
   __self.__retryable = __self.__retryable ?? true;
@@ -215,10 +202,19 @@ if (__ctx._pendingArgOverrides) {
 }
 
   try {
-    await runner.step(0, async (runner) => {
+    await runner.hook(0, "onFunctionStart", {
+      functionName: "mapItems",
+      args: {
+        items: items,
+        block: block
+      },
+      isBuiltin: false,
+      moduleId: "inlineBlockParams.agency"
+    });
+    await runner.step(1, async (runner) => {
 __stack.locals.results = [];
     });
-    await runner.loop(1, __stack.args.items, async (item, _, runner) => {
+    await runner.loop(2, __stack.args.items, async (item, _, runner) => {
 await runner.step(0, async (runner) => {
 __stack.locals.result = await __call(__stack.args.block, {
           type: "positional",
@@ -245,7 +241,7 @@ __stack.locals.results = await __callMethod(__stack.locals.results, "concat", {
         });
       });
     });
-    await runner.step(2, async (runner) => {
+    await runner.step(3, async (runner) => {
 __functionCompleted = true;
 runner.halt(__stack.locals.results)
 return;
@@ -316,19 +312,15 @@ const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
 let __forked;
 let __functionCompleted = false;
-  await callHook({
-    ctx: __ctx,
-    name: "onNodeStart",
-    data: {
-      nodeName: "main"
-    }
-  })
   const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "inlineBlockParams.agency", scopeName: "main" });
   try {
-    await runner.step(0, async (runner) => {
-__stack.locals.items = [1, 2, 3];
+    await runner.hook(0, "onNodeStart", {
+      nodeName: "main"
     });
     await runner.step(1, async (runner) => {
+__stack.locals.items = [1, 2, 3];
+    });
+    await runner.step(2, async (runner) => {
 __stack.locals.doubled = await __call(mapItems, {
         type: "positional",
         args: [__stack.locals.items, __AgencyFunction.create({ name: "__block_0", module: "inlineBlockParams.agency", fn: async (x: any) => {
@@ -363,7 +355,7 @@ if (hasInterrupts(__stack.locals.doubled)) {
         return;
       }
     });
-    await runner.step(2, async (runner) => {
+    await runner.step(3, async (runner) => {
 runner.halt({
         messages: __threads,
         data: __stack.locals.doubled
@@ -371,14 +363,11 @@ runner.halt({
 return;
     });
     if (runner.halted) return runner.haltResult;
-    await callHook({
-      ctx: __ctx,
-      name: "onNodeEnd",
-      data: {
-        nodeName: "main",
-        data: undefined
-      }
-    })
+    await runner.hook(4, "onNodeEnd", {
+      nodeName: "main",
+      data: undefined
+    });
+    if (runner.halted) return runner.haltResult;
     return {
       messages: __threads,
       data: undefined
@@ -420,4 +409,4 @@ if (__process.argv[1] === fileURLToPath(import.meta.url)) {
   }
 }
 export default graph
-export const __sourceMap = {"inlineBlockParams.agency:mapItems":{"0":{"line":1,"col":2},"1":{"line":2,"col":2},"2":{"line":6,"col":2},"1.0":{"line":3,"col":4},"1.1":{"line":4,"col":4}},"inlineBlockParams.agency:main":{"0":{"line":10,"col":2},"1":{"line":11,"col":2},"2":{"line":12,"col":2}},"inlineBlockParams.agency:__block_0":{}};
+export const __sourceMap = {"inlineBlockParams.agency:mapItems":{"1":{"line":1,"col":2},"2":{"line":2,"col":2},"3":{"line":6,"col":2},"2.0":{"line":3,"col":4},"2.1":{"line":4,"col":4}},"inlineBlockParams.agency:main":{"1":{"line":10,"col":2},"2":{"line":11,"col":2},"3":{"line":12,"col":2}},"inlineBlockParams.agency:__block_0":{}};

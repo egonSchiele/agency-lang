@@ -174,36 +174,29 @@ const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
 let __forked;
 let __functionCompleted = false;
-  await callHook({
-    ctx: __ctx,
-    name: "onNodeStart",
-    data: {
-      nodeName: "main"
-    }
-  })
   const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "sliceAssign.agency", scopeName: "main" });
   try {
-    await runner.step(0, async (runner) => {
-__stack.locals.arr = [1, 2, 3, 4, 5];
+    await runner.hook(0, "onNodeStart", {
+      nodeName: "main"
     });
     await runner.step(1, async (runner) => {
-__stack.locals.arr.splice(1, 3 - 1, ...[10, 20])
+__stack.locals.arr = [1, 2, 3, 4, 5];
     });
     await runner.step(2, async (runner) => {
-__stack.locals.arr.splice(2, __stack.locals.arr.length - 2, ...[30])
+__stack.locals.arr.splice(1, 3 - 1, ...[10, 20])
     });
     await runner.step(3, async (runner) => {
+__stack.locals.arr.splice(2, __stack.locals.arr.length - 2, ...[30])
+    });
+    await runner.step(4, async (runner) => {
 __stack.locals.arr.splice(0, 2 - 0, ...[40, 50])
     });
     if (runner.halted) return runner.haltResult;
-    await callHook({
-      ctx: __ctx,
-      name: "onNodeEnd",
-      data: {
-        nodeName: "main",
-        data: undefined
-      }
-    })
+    await runner.hook(5, "onNodeEnd", {
+      nodeName: "main",
+      data: undefined
+    });
+    if (runner.halted) return runner.haltResult;
     return {
       messages: __threads,
       data: undefined
@@ -245,4 +238,4 @@ if (__process.argv[1] === fileURLToPath(import.meta.url)) {
   }
 }
 export default graph
-export const __sourceMap = {"sliceAssign.agency:main":{"0":{"line":1,"col":2},"1":{"line":2,"col":2},"2":{"line":3,"col":2},"3":{"line":4,"col":2}}};
+export const __sourceMap = {"sliceAssign.agency:main":{"1":{"line":1,"col":2},"2":{"line":2,"col":2},"3":{"line":3,"col":2},"4":{"line":4,"col":2}}};

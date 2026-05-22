@@ -174,16 +174,12 @@ const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
 let __forked;
 let __functionCompleted = false;
-  await callHook({
-    ctx: __ctx,
-    name: "onNodeStart",
-    data: {
-      nodeName: "greet"
-    }
-  })
   const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "multipleNodes.agency", scopeName: "greet" });
   try {
-    await runner.step(0, async (runner) => {
+    await runner.hook(0, "onNodeStart", {
+      nodeName: "greet"
+    });
+    await runner.step(1, async (runner) => {
 __self.__removedTools = __self.__removedTools || [];
 __stack.locals.greeting = await runPrompt({
         ctx: __ctx,
@@ -205,7 +201,7 @@ if (hasInterrupts(__stack.locals.greeting)) {
         return;
       }
     });
-    await runner.step(1, async (runner) => {
+    await runner.step(2, async (runner) => {
 __stateStack.pop()
 __functionCompleted = true;
 runner.halt(goToNode("processGreeting", {
@@ -218,14 +214,11 @@ runner.halt(goToNode("processGreeting", {
 return;
     });
     if (runner.halted) return runner.haltResult;
-    await callHook({
-      ctx: __ctx,
-      name: "onNodeEnd",
-      data: {
-        nodeName: "greet",
-        data: undefined
-      }
-    })
+    await runner.hook(3, "onNodeEnd", {
+      nodeName: "greet",
+      data: undefined
+    });
+    if (runner.halted) return runner.haltResult;
     return {
       messages: __threads,
       data: undefined
@@ -256,19 +249,15 @@ const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
 let __forked;
 let __functionCompleted = false;
-  await callHook({
-    ctx: __ctx,
-    name: "onNodeStart",
-    data: {
-      nodeName: "processGreeting"
-    }
-  })
   const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "multipleNodes.agency", scopeName: "processGreeting" });
   if (!__state.isResume) {
     __stack.args["msg"] = __state.data.msg;
   }
   try {
-    await runner.step(0, async (runner) => {
+    await runner.hook(0, "onNodeStart", {
+      nodeName: "processGreeting"
+    });
+    await runner.step(1, async (runner) => {
 __self.__removedTools = __self.__removedTools || [];
 __stack.locals.result = await runPrompt({
         ctx: __ctx,
@@ -290,7 +279,7 @@ if (hasInterrupts(__stack.locals.result)) {
         return;
       }
     });
-    await runner.step(1, async (runner) => {
+    await runner.step(2, async (runner) => {
 const __funcResult = await __call(print, {
         type: "positional",
         args: [__stack.locals.result]
@@ -309,14 +298,11 @@ if (hasInterrupts(__funcResult)) {
       }
     });
     if (runner.halted) return runner.haltResult;
-    await callHook({
-      ctx: __ctx,
-      name: "onNodeEnd",
-      data: {
-        nodeName: "processGreeting",
-        data: undefined
-      }
-    })
+    await runner.hook(3, "onNodeEnd", {
+      nodeName: "processGreeting",
+      data: undefined
+    });
+    if (runner.halted) return runner.haltResult;
     return {
       messages: __threads,
       data: undefined
@@ -347,16 +333,12 @@ const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
 let __forked;
 let __functionCompleted = false;
-  await callHook({
-    ctx: __ctx,
-    name: "onNodeStart",
-    data: {
-      nodeName: "main"
-    }
-  })
   const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "multipleNodes.agency", scopeName: "main" });
   try {
-    await runner.step(0, async (runner) => {
+    await runner.hook(0, "onNodeStart", {
+      nodeName: "main"
+    });
+    await runner.step(1, async (runner) => {
 __stateStack.pop()
 __functionCompleted = true;
 runner.halt(goToNode("greet", {
@@ -367,14 +349,11 @@ runner.halt(goToNode("greet", {
 return;
     });
     if (runner.halted) return runner.haltResult;
-    await callHook({
-      ctx: __ctx,
-      name: "onNodeEnd",
-      data: {
-        nodeName: "main",
-        data: undefined
-      }
-    })
+    await runner.hook(2, "onNodeEnd", {
+      nodeName: "main",
+      data: undefined
+    });
+    if (runner.halted) return runner.haltResult;
     return {
       messages: __threads,
       data: undefined
@@ -444,4 +423,4 @@ if (__process.argv[1] === fileURLToPath(import.meta.url)) {
   }
 }
 export default graph
-export const __sourceMap = {"multipleNodes.agency:greet":{"0":{"line":1,"col":2},"1":{"line":2,"col":2}},"multipleNodes.agency:processGreeting":{"0":{"line":6,"col":2},"1":{"line":7,"col":2}},"multipleNodes.agency:main":{"0":{"line":11,"col":2}}};
+export const __sourceMap = {"multipleNodes.agency:greet":{"1":{"line":1,"col":2},"2":{"line":2,"col":2}},"multipleNodes.agency:processGreeting":{"1":{"line":6,"col":2},"2":{"line":7,"col":2}},"multipleNodes.agency:main":{"1":{"line":11,"col":2}}};

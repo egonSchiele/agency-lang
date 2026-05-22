@@ -179,18 +179,6 @@ let __functionCompleted = false;
     await __initializeGlobals(__ctx)
   }
   let __funcStartTime: number = performance.now();
-  await callHook({
-    ctx: __ctx,
-    name: "onFunctionStart",
-    data: {
-      functionName: "greet",
-      args: {
-        name: name
-      },
-      isBuiltin: false,
-      moduleId: "functionRef.agency"
-    }
-  })
   __stack.args["name"] = name;
   __self.__retryable = __self.__retryable ?? true;
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "functionRef.agency", scopeName: "greet" });
@@ -209,7 +197,15 @@ if (__ctx._pendingArgOverrides) {
 }
 
   try {
-    await runner.step(0, async (runner) => {
+    await runner.hook(0, "onFunctionStart", {
+      functionName: "greet",
+      args: {
+        name: name
+      },
+      isBuiltin: false,
+      moduleId: "functionRef.agency"
+    });
+    await runner.step(1, async (runner) => {
 __functionCompleted = true;
 runner.halt(`hi ${__stack.args.name}`)
 return;
@@ -280,18 +276,6 @@ let __functionCompleted = false;
     await __initializeGlobals(__ctx)
   }
   let __funcStartTime: number = performance.now();
-  await callHook({
-    ctx: __ctx,
-    name: "onFunctionStart",
-    data: {
-      functionName: "double",
-      args: {
-        x: x
-      },
-      isBuiltin: false,
-      moduleId: "functionRef.agency"
-    }
-  })
   __stack.args["x"] = x;
   __self.__retryable = __self.__retryable ?? true;
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "functionRef.agency", scopeName: "double" });
@@ -310,7 +294,15 @@ if (__ctx._pendingArgOverrides) {
 }
 
   try {
-    await runner.step(0, async (runner) => {
+    await runner.hook(0, "onFunctionStart", {
+      functionName: "double",
+      args: {
+        x: x
+      },
+      isBuiltin: false,
+      moduleId: "functionRef.agency"
+    });
+    await runner.step(1, async (runner) => {
 __functionCompleted = true;
 runner.halt(__stack.args.x * 2)
 return;
@@ -381,19 +373,6 @@ let __functionCompleted = false;
     await __initializeGlobals(__ctx)
   }
   let __funcStartTime: number = performance.now();
-  await callHook({
-    ctx: __ctx,
-    name: "onFunctionStart",
-    data: {
-      functionName: "applyToAll",
-      args: {
-        items: items,
-        transform: transform
-      },
-      isBuiltin: false,
-      moduleId: "functionRef.agency"
-    }
-  })
   __stack.args["items"] = items;
   __stack.args["transform"] = transform;
   __self.__retryable = __self.__retryable ?? true;
@@ -417,10 +396,19 @@ if (__ctx._pendingArgOverrides) {
 }
 
   try {
-    await runner.step(0, async (runner) => {
+    await runner.hook(0, "onFunctionStart", {
+      functionName: "applyToAll",
+      args: {
+        items: items,
+        transform: transform
+      },
+      isBuiltin: false,
+      moduleId: "functionRef.agency"
+    });
+    await runner.step(1, async (runner) => {
 __stack.locals.result = [];
     });
-    await runner.loop(1, __stack.args.items, async (item, _, runner) => {
+    await runner.loop(2, __stack.args.items, async (item, _, runner) => {
 await runner.step(0, async (runner) => {
 await __callMethod(__stack.locals.result, "push", {
           type: "positional",
@@ -439,7 +427,7 @@ await __callMethod(__stack.locals.result, "push", {
         })
       });
     });
-    await runner.step(2, async (runner) => {
+    await runner.step(3, async (runner) => {
 __functionCompleted = true;
 runner.halt(__stack.locals.result)
 return;
@@ -510,19 +498,15 @@ const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
 let __forked;
 let __functionCompleted = false;
-  await callHook({
-    ctx: __ctx,
-    name: "onNodeStart",
-    data: {
-      nodeName: "main"
-    }
-  })
   const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "functionRef.agency", scopeName: "main" });
   try {
-    await runner.step(0, async (runner) => {
-__stack.locals.fn = greet;
+    await runner.hook(0, "onNodeStart", {
+      nodeName: "main"
     });
     await runner.step(1, async (runner) => {
+__stack.locals.fn = greet;
+    });
+    await runner.step(2, async (runner) => {
 __stack.locals.result = await __call(__stack.locals.fn, {
         type: "positional",
         args: [`Bob`]
@@ -540,7 +524,7 @@ if (hasInterrupts(__stack.locals.result)) {
         return;
       }
     });
-    await runner.step(2, async (runner) => {
+    await runner.step(3, async (runner) => {
 __stack.locals.doubled = await __call(applyToAll, {
         type: "positional",
         args: [[1, 2, 3], double]
@@ -559,14 +543,11 @@ if (hasInterrupts(__stack.locals.doubled)) {
       }
     });
     if (runner.halted) return runner.haltResult;
-    await callHook({
-      ctx: __ctx,
-      name: "onNodeEnd",
-      data: {
-        nodeName: "main",
-        data: undefined
-      }
-    })
+    await runner.hook(4, "onNodeEnd", {
+      nodeName: "main",
+      data: undefined
+    });
+    if (runner.halted) return runner.haltResult;
     return {
       messages: __threads,
       data: undefined
@@ -608,4 +589,4 @@ if (__process.argv[1] === fileURLToPath(import.meta.url)) {
   }
 }
 export default graph
-export const __sourceMap = {"functionRef.agency:greet":{"0":{"line":1,"col":2}},"functionRef.agency:double":{"0":{"line":5,"col":2}},"functionRef.agency:applyToAll":{"0":{"line":9,"col":2},"1":{"line":10,"col":2},"2":{"line":13,"col":2},"1.0":{"line":11,"col":4}},"functionRef.agency:main":{"0":{"line":17,"col":2},"1":{"line":18,"col":2},"2":{"line":19,"col":2}}};
+export const __sourceMap = {"functionRef.agency:greet":{"1":{"line":1,"col":2}},"functionRef.agency:double":{"1":{"line":5,"col":2}},"functionRef.agency:applyToAll":{"1":{"line":9,"col":2},"2":{"line":10,"col":2},"3":{"line":13,"col":2},"2.0":{"line":11,"col":4}},"functionRef.agency:main":{"1":{"line":17,"col":2},"2":{"line":18,"col":2},"3":{"line":19,"col":2}}};

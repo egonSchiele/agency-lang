@@ -181,18 +181,6 @@ let __functionCompleted = false;
     await __initializeGlobals(__ctx)
   }
   let __funcStartTime: number = performance.now();
-  await callHook({
-    ctx: __ctx,
-    name: "onFunctionStart",
-    data: {
-      functionName: "isPrime",
-      args: {
-        n: n
-      },
-      isBuiltin: false,
-      moduleId: "euler-0007.agency"
-    }
-  })
   __stack.args["n"] = n;
   __self.__retryable = __self.__retryable ?? true;
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "euler-0007.agency", scopeName: "isPrime" });
@@ -211,7 +199,15 @@ if (__ctx._pendingArgOverrides) {
 }
 
   try {
-    await runner.ifElse(0, [
+    await runner.hook(0, "onFunctionStart", {
+      functionName: "isPrime",
+      args: {
+        n: n
+      },
+      isBuiltin: false,
+      moduleId: "euler-0007.agency"
+    });
+    await runner.ifElse(1, [
 
   {
     condition: async () => __stack.args.n < 2,
@@ -225,7 +221,7 @@ return;
   },
 
 ]);
-    await runner.ifElse(1, [
+    await runner.ifElse(2, [
 
   {
     condition: async () => __stack.args.n < 4,
@@ -239,7 +235,7 @@ return;
   },
 
 ]);
-    await runner.ifElse(2, [
+    await runner.ifElse(3, [
 
   {
     condition: async () => __stack.args.n % 2 === 0 || __stack.args.n % 3 === 0,
@@ -253,10 +249,10 @@ return;
   },
 
 ]);
-    await runner.step(3, async (runner) => {
+    await runner.step(4, async (runner) => {
 __stack.locals.i = 5;
     });
-    await runner.whileLoop(4, async () => __stack.locals.i * __stack.locals.i <= __stack.args.n, async (runner) => {
+    await runner.whileLoop(5, async () => __stack.locals.i * __stack.locals.i <= __stack.args.n, async (runner) => {
 await runner.ifElse(0, [
 
   {
@@ -275,7 +271,7 @@ await runner.step(1, async (runner) => {
 __stack.locals.i = __stack.locals.i + 6;
       });
     });
-    await runner.step(5, async (runner) => {
+    await runner.step(6, async (runner) => {
 __functionCompleted = true;
 runner.halt(true)
 return;
@@ -341,22 +337,18 @@ const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
 let __forked;
 let __functionCompleted = false;
-  await callHook({
-    ctx: __ctx,
-    name: "onNodeStart",
-    data: {
-      nodeName: "main"
-    }
-  })
   const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "euler-0007.agency", scopeName: "main" });
   try {
-    await runner.step(0, async (runner) => {
-__stack.locals.count = 0;
+    await runner.hook(0, "onNodeStart", {
+      nodeName: "main"
     });
     await runner.step(1, async (runner) => {
+__stack.locals.count = 0;
+    });
+    await runner.step(2, async (runner) => {
 __stack.locals.num = 1;
     });
-    await runner.whileLoop(2, async () => __stack.locals.count < 10001, async (runner) => {
+    await runner.whileLoop(3, async () => __stack.locals.count < 10001, async (runner) => {
 await runner.step(0, async (runner) => {
 __stack.locals.num = __stack.locals.num + 1;
       });
@@ -380,7 +372,7 @@ __stack.locals.count = __stack.locals.count + 1;
 
 ]);
     });
-    await runner.step(3, async (runner) => {
+    await runner.step(4, async (runner) => {
 runner.halt({
         messages: __threads,
         data: __stack.locals.num
@@ -388,14 +380,11 @@ runner.halt({
 return;
     });
     if (runner.halted) return runner.haltResult;
-    await callHook({
-      ctx: __ctx,
-      name: "onNodeEnd",
-      data: {
-        nodeName: "main",
-        data: undefined
-      }
-    })
+    await runner.hook(5, "onNodeEnd", {
+      nodeName: "main",
+      data: undefined
+    });
+    if (runner.halted) return runner.haltResult;
     return {
       messages: __threads,
       data: undefined
@@ -437,4 +426,4 @@ if (__process.argv[1] === fileURLToPath(import.meta.url)) {
   }
 }
 export default graph
-export const __sourceMap = {"euler-0007.agency:isPrime":{"0":{"line":4,"col":2},"1":{"line":5,"col":2},"2":{"line":6,"col":2},"3":{"line":7,"col":2},"4":{"line":8,"col":2},"5":{"line":12,"col":2},"0.0":{"line":4,"col":15},"1.0":{"line":5,"col":15},"2.0":{"line":6,"col":34},"4.0.0":{"line":9,"col":42},"4.0":{"line":9,"col":4},"4.1":{"line":10,"col":4}},"euler-0007.agency:main":{"0":{"line":16,"col":2},"1":{"line":17,"col":2},"2":{"line":18,"col":2},"3":{"line":24,"col":2},"2.0":{"line":19,"col":4},"2.1.0":{"line":21,"col":6},"2.1":{"line":20,"col":4}}};
+export const __sourceMap = {"euler-0007.agency:isPrime":{"1":{"line":4,"col":2},"2":{"line":5,"col":2},"3":{"line":6,"col":2},"4":{"line":7,"col":2},"5":{"line":8,"col":2},"6":{"line":12,"col":2},"1.0":{"line":4,"col":15},"2.0":{"line":5,"col":15},"3.0":{"line":6,"col":34},"5.0.0":{"line":9,"col":42},"5.0":{"line":9,"col":4},"5.1":{"line":10,"col":4}},"euler-0007.agency:main":{"1":{"line":16,"col":2},"2":{"line":17,"col":2},"3":{"line":18,"col":2},"4":{"line":24,"col":2},"3.0":{"line":19,"col":4},"3.1.0":{"line":21,"col":6},"3.1":{"line":20,"col":4}}};

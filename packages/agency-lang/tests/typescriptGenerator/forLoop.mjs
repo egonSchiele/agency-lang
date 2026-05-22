@@ -174,22 +174,18 @@ const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
 let __forked;
 let __functionCompleted = false;
-  await callHook({
-    ctx: __ctx,
-    name: "onNodeStart",
-    data: {
-      nodeName: "main"
-    }
-  })
   const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "forLoop.agency", scopeName: "main" });
   try {
-    await runner.step(0, async (runner) => {
-//  Basic for-of loop
+    await runner.hook(0, "onNodeStart", {
+      nodeName: "main"
     });
     await runner.step(1, async (runner) => {
+//  Basic for-of loop
+    });
+    await runner.step(2, async (runner) => {
 __stack.locals.items = [`a`, `b`, `c`];
     });
-    await runner.loop(2, __stack.locals.items, async (item, _, runner) => {
+    await runner.loop(3, __stack.locals.items, async (item, _, runner) => {
 await runner.step(0, async (runner) => {
 const __funcResult = await __call(print, {
           type: "positional",
@@ -209,10 +205,10 @@ if (hasInterrupts(__funcResult)) {
         }
       });
     });
-    await runner.step(3, async (runner) => {
+    await runner.step(4, async (runner) => {
 //  Range-based for loop
     });
-    await runner.loop(4, Array.from({length: 5 - 0}, (_, __i) => __i + 0), async (i, _, runner) => {
+    await runner.loop(5, Array.from({length: 5 - 0}, (_, __i) => __i + 0), async (i, _, runner) => {
 await runner.step(0, async (runner) => {
 const __funcResult = await __call(print, {
           type: "positional",
@@ -232,13 +228,13 @@ if (hasInterrupts(__funcResult)) {
         }
       });
     });
-    await runner.step(5, async (runner) => {
+    await runner.step(6, async (runner) => {
 //  Indexed for loop
     });
-    await runner.step(6, async (runner) => {
+    await runner.step(7, async (runner) => {
 __stack.locals.names = [`alice`, `bob`];
     });
-    await runner.loop(7, __stack.locals.names, async (name, index, runner) => {
+    await runner.loop(8, __stack.locals.names, async (name, index, runner) => {
 await runner.step(0, async (runner) => {
 const __funcResult = await __call(print, {
           type: "positional",
@@ -277,14 +273,11 @@ if (hasInterrupts(__funcResult)) {
       });
     });
     if (runner.halted) return runner.haltResult;
-    await callHook({
-      ctx: __ctx,
-      name: "onNodeEnd",
-      data: {
-        nodeName: "main",
-        data: undefined
-      }
-    })
+    await runner.hook(9, "onNodeEnd", {
+      nodeName: "main",
+      data: undefined
+    });
+    if (runner.halted) return runner.haltResult;
     return {
       messages: __threads,
       data: undefined
@@ -326,4 +319,4 @@ if (__process.argv[1] === fileURLToPath(import.meta.url)) {
   }
 }
 export default graph
-export const __sourceMap = {"forLoop.agency:main":{"1":{"line":2,"col":2},"2":{"line":3,"col":2},"4":{"line":8,"col":2},"6":{"line":13,"col":2},"7":{"line":14,"col":2},"2.0":{"line":4,"col":4},"4.0":{"line":9,"col":4},"7.0":{"line":15,"col":4},"7.1":{"line":16,"col":4}}};
+export const __sourceMap = {"forLoop.agency:main":{"2":{"line":2,"col":2},"3":{"line":3,"col":2},"5":{"line":8,"col":2},"7":{"line":13,"col":2},"8":{"line":14,"col":2},"3.0":{"line":4,"col":4},"5.0":{"line":9,"col":4},"8.0":{"line":15,"col":4},"8.1":{"line":16,"col":4}}};

@@ -41,6 +41,7 @@ import type {
   TsRunnerStep,
   TsRunnerThread,
   TsRunnerHandle,
+  TsRunnerHook,
   TsRunnerIfElse,
   TsRunnerLoop,
   TsRunnerWhileLoop,
@@ -447,6 +448,23 @@ export const ts = {
 
   runnerHandle(opts: { id: number; handler: TsNode; body: TsNode[] }): TsRunnerHandle {
     return { kind: "runnerHandle", ...opts };
+  },
+
+  /**
+   * Emit `await runner.hook(id, "<hookName>", { ... })`. Used by
+   * typescriptBuilder for the five callback hook sites — `Runner.hook`
+   * (in `lib/runtime/runner.ts`) owns the substep / halt / checkpoint
+   * machinery for callback interrupts.
+   */
+  runnerHook(opts: {
+    id: number;
+    hookName: string;
+    data: Record<string, TsNode> | TsNode;
+  }): TsRunnerHook {
+    const dataNode = "kind" in opts.data
+      ? (opts.data as TsNode)
+      : ts.obj(opts.data as Record<string, TsNode>);
+    return { kind: "runnerHook", id: opts.id, hookName: opts.hookName, data: dataNode };
   },
 
   withHandler(handler: TsNode, body: TsNode): TsWithHandler {

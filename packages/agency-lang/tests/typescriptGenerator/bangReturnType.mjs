@@ -179,18 +179,6 @@ let __functionCompleted = false;
     await __initializeGlobals(__ctx)
   }
   let __funcStartTime: number = performance.now();
-  await callHook({
-    ctx: __ctx,
-    name: "onFunctionStart",
-    data: {
-      functionName: "process",
-      args: {
-        x: x
-      },
-      isBuiltin: false,
-      moduleId: "bangReturnType.agency"
-    }
-  })
   __stack.args["x"] = x;
   __self.__retryable = __self.__retryable ?? true;
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "bangReturnType.agency", scopeName: "process" });
@@ -209,7 +197,15 @@ if (__ctx._pendingArgOverrides) {
 }
 
   try {
-    await runner.step(0, async (runner) => {
+    await runner.hook(0, "onFunctionStart", {
+      functionName: "process",
+      args: {
+        x: x
+      },
+      isBuiltin: false,
+      moduleId: "bangReturnType.agency"
+    });
+    await runner.step(1, async (runner) => {
 __functionCompleted = true;
 runner.halt(__validateType(__stack.args.x, z.number()))
 return;
@@ -275,16 +271,12 @@ const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
 let __forked;
 let __functionCompleted = false;
-  await callHook({
-    ctx: __ctx,
-    name: "onNodeStart",
-    data: {
-      nodeName: "main"
-    }
-  })
   const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "bangReturnType.agency", scopeName: "main" });
   try {
-    await runner.step(0, async (runner) => {
+    await runner.hook(0, "onNodeStart", {
+      nodeName: "main"
+    });
+    await runner.step(1, async (runner) => {
 __stack.locals.result = await __call(process, {
         type: "positional",
         args: [42]
@@ -302,7 +294,7 @@ if (hasInterrupts(__stack.locals.result)) {
         return;
       }
     });
-    await runner.step(1, async (runner) => {
+    await runner.step(2, async (runner) => {
 const __funcResult = await __call(print, {
         type: "positional",
         args: [__stack.locals.result]
@@ -321,14 +313,11 @@ if (hasInterrupts(__funcResult)) {
       }
     });
     if (runner.halted) return runner.haltResult;
-    await callHook({
-      ctx: __ctx,
-      name: "onNodeEnd",
-      data: {
-        nodeName: "main",
-        data: undefined
-      }
-    })
+    await runner.hook(3, "onNodeEnd", {
+      nodeName: "main",
+      data: undefined
+    });
+    if (runner.halted) return runner.haltResult;
     return {
       messages: __threads,
       data: undefined
@@ -370,4 +359,4 @@ if (__process.argv[1] === fileURLToPath(import.meta.url)) {
   }
 }
 export default graph
-export const __sourceMap = {"bangReturnType.agency:process":{"0":{"line":1,"col":2}},"bangReturnType.agency:main":{"0":{"line":5,"col":2},"1":{"line":6,"col":2}}};
+export const __sourceMap = {"bangReturnType.agency:process":{"1":{"line":1,"col":2}},"bangReturnType.agency:main":{"1":{"line":5,"col":2},"2":{"line":6,"col":2}}};

@@ -1,9 +1,0 @@
-{
-  "tests": [{
-    "nodeName": "main",
-    "input": "",
-    "expectedOutput": "\"ok\"",
-    "evaluationCriteria": [{ "type": "exact" }],
-    "description": "interrupt raised by an onAgentEnd callback (TS-side runtime site) is logged and dropped via callHookAndDrop; the program completes with its original return value"
-  }]
-}

@@ -187,16 +187,6 @@ let __functionCompleted = false;
     await __initializeGlobals(__ctx)
   }
   let __funcStartTime: number = performance.now();
-  await callHook({
-    ctx: __ctx,
-    name: "onFunctionStart",
-    data: {
-      functionName: "greet",
-      args: {},
-      isBuiltin: false,
-      moduleId: "comments.agency"
-    }
-  })
   __self.__retryable = __self.__retryable ?? true;
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "comments.agency", scopeName: "greet" });
   let __resultCheckpointId = -1;
@@ -210,14 +200,20 @@ if (__ctx._pendingArgOverrides) {
 }
 
   try {
-    await runner.step(0, async (runner) => {
-//  Comment inside function
+    await runner.hook(0, "onFunctionStart", {
+      functionName: "greet",
+      args: {},
+      isBuiltin: false,
+      moduleId: "comments.agency"
     });
     await runner.step(1, async (runner) => {
+//  Comment inside function
+    });
+    await runner.step(2, async (runner) => {
 __stack.locals.message = `Hello, World!`;
 //  Another comment
     });
-    await runner.step(2, async (runner) => {
+    await runner.step(3, async (runner) => {
 __functionCompleted = true;
 runner.halt(__stack.locals.message)
 return;
@@ -278,19 +274,15 @@ const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
 let __forked;
 let __functionCompleted = false;
-  await callHook({
-    ctx: __ctx,
-    name: "onNodeStart",
-    data: {
-      nodeName: "main"
-    }
-  })
   const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "comments.agency", scopeName: "main" });
   try {
-    await runner.step(0, async (runner) => {
-//  Comment before function call
+    await runner.hook(0, "onNodeStart", {
+      nodeName: "main"
     });
     await runner.step(1, async (runner) => {
+//  Comment before function call
+    });
+    await runner.step(2, async (runner) => {
 __stack.locals.result = await __call(greet, {
         type: "positional",
         args: []
@@ -308,7 +300,7 @@ if (hasInterrupts(__stack.locals.result)) {
         return;
       }
     });
-    await runner.step(2, async (runner) => {
+    await runner.step(3, async (runner) => {
 const __funcResult = await __call(print, {
         type: "positional",
         args: [__stack.locals.result]
@@ -327,14 +319,14 @@ if (hasInterrupts(__funcResult)) {
       }
 //  Testing comments in different contexts
     });
-    await runner.step(3, async (runner) => {
+    await runner.step(4, async (runner) => {
 __stack.locals.age = 25;
 //  2. Before conditionals
     });
-    await runner.step(4, async (runner) => {
+    await runner.step(5, async (runner) => {
 __stack.locals.status = `active`;
     });
-    await runner.ifElse(5, [
+    await runner.ifElse(6, [
 
   {
     condition: async () => __stack.locals.status === `inactive`,
@@ -351,18 +343,15 @@ await __call(print, {
   },
 
 ]);
-    await runner.step(6, async (runner) => {
+    await runner.step(7, async (runner) => {
 //  Final comment at end of file
     });
     if (runner.halted) return runner.haltResult;
-    await callHook({
-      ctx: __ctx,
-      name: "onNodeEnd",
-      data: {
-        nodeName: "main",
-        data: undefined
-      }
-    })
+    await runner.hook(8, "onNodeEnd", {
+      nodeName: "main",
+      data: undefined
+    });
+    if (runner.halted) return runner.haltResult;
     return {
       messages: __threads,
       data: undefined
@@ -404,4 +393,4 @@ if (__process.argv[1] === fileURLToPath(import.meta.url)) {
   }
 }
 export default graph
-export const __sourceMap = {"comments.agency:greet":{"1":{"line":13,"col":2},"2":{"line":15,"col":2}},"comments.agency:main":{"1":{"line":20,"col":2},"2":{"line":21,"col":2},"3":{"line":24,"col":2},"4":{"line":27,"col":2},"5":{"line":28,"col":2}}};
+export const __sourceMap = {"comments.agency:greet":{"2":{"line":13,"col":2},"3":{"line":15,"col":2}},"comments.agency:main":{"2":{"line":20,"col":2},"3":{"line":21,"col":2},"4":{"line":24,"col":2},"5":{"line":27,"col":2},"6":{"line":28,"col":2}}};

@@ -177,22 +177,18 @@ const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
 let __forked;
 let __functionCompleted = false;
-  await callHook({
-    ctx: __ctx,
-    name: "onNodeStart",
-    data: {
-      nodeName: "main"
-    }
-  })
   const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "euler-0006.agency", scopeName: "main" });
   try {
-    await runner.step(0, async (runner) => {
-__stack.locals.sumOfSquares = 0;
+    await runner.hook(0, "onNodeStart", {
+      nodeName: "main"
     });
     await runner.step(1, async (runner) => {
+__stack.locals.sumOfSquares = 0;
+    });
+    await runner.step(2, async (runner) => {
 __stack.locals.sum = 0;
     });
-    await runner.loop(2, Array.from({length: 101 - 1}, (_, __i) => __i + 1), async (i, _, runner) => {
+    await runner.loop(3, Array.from({length: 101 - 1}, (_, __i) => __i + 1), async (i, _, runner) => {
 await runner.step(0, async (runner) => {
 __stack.locals.sumOfSquares = __stack.locals.sumOfSquares + i * i;
       });
@@ -200,10 +196,10 @@ await runner.step(1, async (runner) => {
 __stack.locals.sum = __stack.locals.sum + i;
       });
     });
-    await runner.step(3, async (runner) => {
+    await runner.step(4, async (runner) => {
 __stack.locals.squareOfSum = __stack.locals.sum * __stack.locals.sum;
     });
-    await runner.step(4, async (runner) => {
+    await runner.step(5, async (runner) => {
 runner.halt({
         messages: __threads,
         data: __stack.locals.squareOfSum - __stack.locals.sumOfSquares
@@ -211,14 +207,11 @@ runner.halt({
 return;
     });
     if (runner.halted) return runner.haltResult;
-    await callHook({
-      ctx: __ctx,
-      name: "onNodeEnd",
-      data: {
-        nodeName: "main",
-        data: undefined
-      }
-    })
+    await runner.hook(6, "onNodeEnd", {
+      nodeName: "main",
+      data: undefined
+    });
+    if (runner.halted) return runner.haltResult;
     return {
       messages: __threads,
       data: undefined
@@ -260,4 +253,4 @@ if (__process.argv[1] === fileURLToPath(import.meta.url)) {
   }
 }
 export default graph
-export const __sourceMap = {"euler-0006.agency:main":{"0":{"line":5,"col":2},"1":{"line":6,"col":2},"2":{"line":7,"col":2},"3":{"line":11,"col":2},"4":{"line":12,"col":2},"2.0":{"line":8,"col":4},"2.1":{"line":9,"col":4}}};
+export const __sourceMap = {"euler-0006.agency:main":{"1":{"line":5,"col":2},"2":{"line":6,"col":2},"3":{"line":7,"col":2},"4":{"line":11,"col":2},"5":{"line":12,"col":2},"3.0":{"line":8,"col":4},"3.1":{"line":9,"col":4}}};

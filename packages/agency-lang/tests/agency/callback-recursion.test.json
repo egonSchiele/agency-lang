@@ -1,0 +1,9 @@
+{
+  "tests": [{
+    "nodeName": "main",
+    "input": "",
+    "expectedOutput": "1",
+    "evaluationCriteria": [{ "type": "exact" }],
+    "description": "per-instance recursion guard prevents self-reentry"
+  }]
+}

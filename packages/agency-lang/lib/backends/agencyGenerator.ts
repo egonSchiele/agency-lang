@@ -788,7 +788,7 @@ export class AgencyGenerator {
     const prefixes: string[] = [];
     if (node.exported) prefixes.push("export");
     if (node.safe) prefixes.push("safe");
-    prefixes.push(node.callback ? "callback" : "def");
+    prefixes.push("def");
 
     const prefix = `${prefixes.join(" ")} ${functionName}`;
     const renderedParams = this.renderParams(parameters);

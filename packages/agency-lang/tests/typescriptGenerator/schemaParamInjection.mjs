@@ -182,7 +182,7 @@ let __functionCompleted = false;
   }
   let __funcStartTime: number = performance.now();
   await callHook({
-    callbacks: __ctx.callbacks,
+    ctx: __ctx,
     name: "onFunctionStart",
     data: {
       functionName: "parseValue",
@@ -248,7 +248,7 @@ return failure(
     __stateStack.pop()
     if (__functionCompleted) {
       await callHook({
-        callbacks: __ctx.callbacks,
+        ctx: __ctx,
         name: "onFunctionEnd",
         data: {
           functionName: "parseValue",
@@ -301,7 +301,7 @@ let __functionCompleted = false;
   }
   let __funcStartTime: number = performance.now();
   await callHook({
-    callbacks: __ctx.callbacks,
+    ctx: __ctx,
     name: "onFunctionStart",
     data: {
       functionName: "wrapper",
@@ -360,7 +360,7 @@ return failure(
     __stateStack.pop()
     if (__functionCompleted) {
       await callHook({
-        callbacks: __ctx.callbacks,
+        ctx: __ctx,
         name: "onFunctionEnd",
         data: {
           functionName: "wrapper",
@@ -398,7 +398,7 @@ const __graph = __ctx.graph;
 let __forked;
 let __functionCompleted = false;
   await callHook({
-    callbacks: __ctx.callbacks,
+    ctx: __ctx,
     name: "onNodeStart",
     data: {
       nodeName: "main"
@@ -595,7 +595,7 @@ if (hasInterrupts(__funcResult)) {
     });
     if (runner.halted) return runner.haltResult;
     await callHook({
-      callbacks: __ctx.callbacks,
+      ctx: __ctx,
       name: "onNodeEnd",
       data: {
         nodeName: "main",

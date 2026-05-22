@@ -38,7 +38,6 @@ export async function rewindFrom(args: {
   execCtx.restoreState(checkpoint);
   execCtx._skipNextCheckpoint = true;
 
-  execCtx.installRegisteredCallbacks(ctx);
   if (metadata.callbacks) {
     Object.assign(execCtx.callbacks, metadata.callbacks);
   }

@@ -1,6 +1,8 @@
+import { callback } from "std::agency"
+
 let emittedData = null
 
-callback onEmit(data) {
+callback("onEmit") as data {
   emittedData = data
 }
 

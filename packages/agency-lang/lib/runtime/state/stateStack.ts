@@ -39,6 +39,7 @@ export class State {
   step: number;
   private branches?: Record<string, BranchState>;
   private deletedBranches?: Set<string>;
+  scopedCallbacks?: Array<{ name: string; fn: any }>;
 
   constructor(
     opts: {
@@ -80,6 +81,13 @@ export class State {
 
   removeDebugFlags(): void {
     this.clearLocalsWithPrefix("__dbg_");
+  }
+
+  /** The sanctioned way to register a scoped callback on this frame. Initializes
+   *  the array on first call so frames with no callbacks pay no overhead. */
+  addScopedCallback(name: string, fn: any): void {
+    if (!this.scopedCallbacks) this.scopedCallbacks = [];
+    this.scopedCallbacks.push({ name, fn });
   }
 
   newBranch(key: string): BranchState {
@@ -163,6 +171,15 @@ export class State {
       threads: this.threads ? deepClone(this.threads) : null,
       step: this.step,
     };
+    if (this.scopedCallbacks && this.scopedCallbacks.length > 0) {
+      // Pass `fn` through as a reference — the outer serializer (with
+      // nativeTypeReplacer) handles AgencyFunctions correctly via the
+      // functionRef registry. deepClone-ing here would lose plain functions.
+      json.scopedCallbacks = this.scopedCallbacks.map((cb) => ({
+        name: cb.name,
+        fn: cb.fn,
+      }));
+    }
     if (this.branches) {
       json.branches = {};
       for (const [key, branch] of Object.entries(this.branches)) {
@@ -192,6 +209,12 @@ export class State {
       threads: json.threads,
       step: json.step,
     });
+    if (json.scopedCallbacks && json.scopedCallbacks.length > 0) {
+      state.scopedCallbacks = json.scopedCallbacks.map((cb) => ({
+        name: cb.name,
+        fn: cb.fn,
+      }));
+    }
     if (json.branches) {
       state.branches = {};
       for (const [key, branch] of Object.entries(json.branches)) {
@@ -215,6 +238,7 @@ export type StateJSON = {
   threads: ThreadStoreJSON | null;
   step: number;
   branches?: Record<string, BranchStateJSON>;
+  scopedCallbacks?: Array<{ name: string; fn: any }>;
 };
 
 export type StateStackJSON = {
@@ -309,6 +333,40 @@ export class StateStack {
 
   lastFrame(): State {
     return this.stack[this.stack.length - 1];
+  }
+
+  /** The frame one below the top. Top is the "current" frame for whatever code
+   *  is running right now; the caller's frame is what owns scoped registrations
+   *  made by the current call. Falls back to the root frame at the top level. */
+  callerFrame(): State {
+    if (this.stack.length === 0) {
+      throw new Error("callerFrame() called on empty stack");
+    }
+    return this.stack.length >= 2
+      ? this.stack[this.stack.length - 2]
+      : this.stack[0];
+  }
+
+  /** True when the only frame on the stack is the currently-running call's own
+   *  frame (i.e. there is no caller). This happens during module-level
+   *  initialization (e.g. inside `__initializeGlobals`) where calls like
+   *  `callback(...)` have no real caller frame to register against. */
+  isGlobalContext(): boolean {
+    return this.stack.length <= 1;
+  }
+
+  /** All scoped callbacks registered anywhere in the active stack for this hook,
+   *  ordered innermost first (deepest frame's callbacks come first). */
+  collectScopedCallbacks(name: string): any[] {
+    const out: any[] = [];
+    for (let i = this.stack.length - 1; i >= 0; i--) {
+      const cbs = this.stack[i].scopedCallbacks;
+      if (!cbs) continue;
+      for (const cb of cbs) {
+        if (cb.name === name) out.push(cb.fn);
+      }
+    }
+    return out;
   }
 
   static lastFrameJSON(json: StateStackJSON): StateJSON {

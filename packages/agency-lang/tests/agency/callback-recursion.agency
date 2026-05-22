@@ -1,0 +1,20 @@
+import { callback } from "std::agency"
+
+let fireCount: number = 0
+
+def doWork(): string {
+  return "x"
+}
+
+node main() {
+  callback("onFunctionStart") as data {
+    if (data.functionName == "doWork") {
+      fireCount = fireCount + 1
+      // Calling doWork inside the callback would normally re-fire onFunctionStart.
+      // The recursion guard should skip the re-entry of this same callback.
+      doWork()
+    }
+  }
+  doWork()
+  return fireCount
+}

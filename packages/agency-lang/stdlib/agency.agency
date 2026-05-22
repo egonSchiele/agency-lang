@@ -1,4 +1,4 @@
-import { _compile, _compileFile, _typecheck, _typecheckFile, _parseAST, _writeAST, _format, _formatFile, _walkAST, _getNodesOfType, _filterImports } from "agency-lang/stdlib-lib/agency.js"
+import { _compile, _compileFile, _typecheck, _typecheckFile, _parseAST, _writeAST, _format, _formatFile, _walkAST, _getNodesOfType, _filterImports, _callback } from "agency-lang/stdlib-lib/agency.js"
 
 type CompiledProgram = {
   moduleId: string
@@ -31,6 +31,18 @@ export def compile(source: string): Result {
   @param source - Agency source code as a string
   """
   return try _compile(source)
+}
+
+export def callback(name: string, fn: any) {
+  """
+  Register a scoped callback for the dynamic extent of the calling function or node.
+  When the caller returns, the callback is automatically removed. Top-level callbacks
+  (registered outside any function or node) are active for the whole run.
+
+  @param name - One of the Agency callback hook names (e.g. "onNodeStart", "onFunctionStart", "onLLMCallEnd")
+  @param fn - A function that receives the event data
+  """
+  _callback(name, fn)
 }
 
 export def run(

@@ -2,16 +2,17 @@ import { writePolicyFile } from "std::policy"
 import { args } from "std::system"
 import { systemMessage } from "std::thread"
 import { map } from "std::array"
+import { callback } from "std::agency"
 
 // crap these comments dont stay in place! So can't ignore a type error
 // in an import
 // @tc-ignore
 
-callback onToolCallStart(data) {
+callback("onToolCallStart") as data {
   print("Calling ${data.toolName}...")
 }
 
-callback onToolCallEnd(data) {
+callback("onToolCallEnd") as data {
   print("Finished calling ${data.toolName}.")
 }
 

@@ -1,0 +1,9 @@
+{
+  "tests": [{
+    "nodeName": "main",
+    "input": "",
+    "expectedOutput": "\"inner,outerA,outerB,\"",
+    "evaluationCriteria": [{ "type": "exact" }],
+    "description": "nested callbacks fire innermost-first across frames, registration-order within a frame"
+  }]
+}

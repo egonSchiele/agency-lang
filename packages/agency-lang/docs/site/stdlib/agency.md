@@ -60,7 +60,7 @@ type FilterImportsResult = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/agency.agency#L122))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/agency.agency#L134))
 
 ## Functions
 
@@ -82,6 +82,28 @@ Compile Agency source code. Returns a CompiledProgram on success, or a failure w
 **Returns:** `Result`
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/agency.agency#L28))
+
+### callback
+
+```ts
+callback(name: string, fn: any)
+```
+
+Register a scoped callback for the dynamic extent of the calling function or node.
+  When the caller returns, the callback is automatically removed. Top-level callbacks
+  (registered outside any function or node) are active for the whole run.
+
+  @param name - One of the Agency callback hook names (e.g. "onNodeStart", "onFunctionStart", "onLLMCallEnd")
+  @param fn - A function that receives the event data
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| name | `string` |  |
+| fn | `any` |  |
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/agency.agency#L36))
 
 ### run
 
@@ -117,7 +139,7 @@ Execute a compiled Agency program in a subprocess. The parent's handler chain ex
 
 **Throws:** `std::run`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/agency.agency#L36))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/agency.agency#L48))
 
 ### runFile
 
@@ -159,7 +181,7 @@ Compile and execute an Agency file in a subprocess. The file is read from dir/fi
 
 **Throws:** `std::run`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/agency.agency#L68))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/agency.agency#L80))
 
 ### typecheck
 
@@ -181,7 +203,7 @@ Type-check Agency source code without compiling or running it. Returns a TypeChe
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/agency.agency#L111))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/agency.agency#L123))
 
 ### parseAST
 
@@ -203,7 +225,7 @@ Parse Agency source code into an abstract syntax tree. Returns the raw AST as a 
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/agency.agency#L127))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/agency.agency#L139))
 
 ### writeAST
 
@@ -235,7 +257,7 @@ Format an AST as Agency source and write it to dir/filename. The AST is typicall
 
 **Throws:** `std::write`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/agency.agency#L138))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/agency.agency#L150))
 
 ### format
 
@@ -257,7 +279,7 @@ Format Agency source code using the standard Agency formatter (the same one used
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/agency.agency#L164))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/agency.agency#L176))
 
 ### formatFile
 
@@ -285,7 +307,7 @@ Format an Agency file in place. Reads dir/filename, formats it with the standard
 
 **Throws:** `std::write`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/agency.agency#L175))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/agency.agency#L187))
 
 ### walkAST
 
@@ -311,7 +333,7 @@ Walk every node in a deep-cloned copy of the AST, invoking the visitor with each
 
 **Returns:** `any`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/agency.agency#L193))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/agency.agency#L205))
 
 ### getNodesOfType
 
@@ -335,7 +357,7 @@ Parse Agency source code and return all AST nodes whose `type` field matches any
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/agency.agency#L211))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/agency.agency#L223))
 
 ### getImports
 
@@ -355,7 +377,7 @@ Return all import statements in the source (i.e. `import { x } from "..."`).
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/agency.agency#L223))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/agency.agency#L235))
 
 ### getFunctions
 
@@ -375,7 +397,7 @@ Return all function definitions (`def foo(...) { ... }`) in the source.
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/agency.agency#L232))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/agency.agency#L244))
 
 ### getGraphNodes
 
@@ -395,7 +417,7 @@ Return all graph node definitions (`node main() { ... }`) in the source. Note: "
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/agency.agency#L241))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/agency.agency#L253))
 
 ### filterImports
 
@@ -438,7 +460,7 @@ Parse Agency source, drop imports that fail the policy, and return the resulting
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/agency.agency#L250))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/agency.agency#L262))
 
 ### typecheckFile
 
@@ -468,4 +490,4 @@ Type-check an Agency file on disk. The file is read from dir/filename, and relat
 
 **Throws:** `std::read`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/agency.agency#L284))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/agency.agency#L296))

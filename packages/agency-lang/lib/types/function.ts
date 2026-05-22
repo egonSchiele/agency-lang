@@ -52,7 +52,6 @@ export type FunctionDefinition = BaseNode & {
   async?: boolean;
   safe?: boolean;
   exported?: boolean;
-  callback?: boolean;
   tags?: Tag[];
 };
 

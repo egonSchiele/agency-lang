@@ -32,7 +32,7 @@ A tool for printing a message to the console.
 |---|---|---|
 | messages |  |  |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L19))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L20))
 
 ### printJSON
 
@@ -48,7 +48,7 @@ A tool for printing an object as formatted JSON to the console.
 |---|---|---|
 | obj |  |  |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L26))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L27))
 
 ### parseJSON
 
@@ -66,7 +66,7 @@ Parse a JSON string and return the corresponding value (object, array, string, n
 
 **Returns:** `any`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L33))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L34))
 
 ### input
 
@@ -84,7 +84,7 @@ A tool for prompting the user for input and returning their response.
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L40))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L41))
 
 ### sleep
 
@@ -100,7 +100,7 @@ Pause execution for the given duration in milliseconds. Use with unit literals f
 |---|---|---|
 | ms | `number` |  |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L47))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L48))
 
 ### round
 
@@ -119,7 +119,7 @@ A tool for rounding a number to a specified number of decimal places.
 
 **Returns:** `number`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L54))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L55))
 
 ### fetch
 
@@ -147,7 +147,7 @@ A tool for fetching a URL and returning the response as text. Provide baseUrl an
 
 **Throws:** `std::fetch`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L61))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L62))
 
 ### fetchJSON
 
@@ -175,7 +175,7 @@ A tool for fetching a URL and returning the response as parsed JSON. Provide bas
 
 **Throws:** `std::fetchJSON`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L77))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L78))
 
 ### read
 
@@ -199,7 +199,7 @@ A tool for reading the contents of a file and returning it as a string. The file
 
 **Throws:** `std::read`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L93))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L94))
 
 ### write
 
@@ -232,7 +232,7 @@ A tool for writing content to a file. The filename is resolved relative to dir.
 
 **Throws:** `std::write`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L107))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L108))
 
 ### readImage
 
@@ -256,7 +256,7 @@ A tool for reading an image file and returning its contents as a Base64-encoded 
 
 **Throws:** `std::readImage`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L135))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L136))
 
 ### notify
 
@@ -277,7 +277,7 @@ A tool for showing a native OS notification with a title and message. Returns tr
 
 **Throws:** `std::notify`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L149))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L150))
 
 ### range
 
@@ -296,7 +296,7 @@ Generate an array of numbers. With one argument, generates from 0 to start-1. Wi
 
 **Returns:** `number[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L160))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L161))
 
 ### mostCommon
 
@@ -314,7 +314,7 @@ Return the most common element in an array. Uses JSON serialization for comparis
 
 **Returns:** `any`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L170))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L171))
 
 ### keys
 
@@ -332,7 +332,7 @@ Return an array of an object's own enumerable property names.
 
 **Returns:** `string[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L177))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L178))
 
 ### values
 
@@ -350,7 +350,7 @@ Return an array of an object's own enumerable property values.
 
 **Returns:** `any[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L184))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L185))
 
 ### entries
 
@@ -368,7 +368,7 @@ Return an array of an object's own enumerable entries, each as { key, value }.
 
 **Returns:** `any[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L191))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L192))
 
 ### emit
 
@@ -384,4 +384,26 @@ Emit a custom event to the calling TypeScript code via the onEmit callback.
 |---|---|---|
 | data |  |  |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L198))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L199))
+
+### callback
+
+```ts
+callback(name: string, fn: any)
+```
+
+Register a scoped callback for the dynamic extent of the calling function or node.
+  When the caller returns, the callback is automatically removed. Top-level callbacks
+  (registered outside any function or node) are active for the whole run.
+
+  @param name - One of the Agency callback hook names (e.g. "onNodeStart", "onFunctionStart", "onLLMCallEnd")
+  @param fn - A function that receives the event data
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| name | `string` |  |
+| fn | `any` |  |
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L206))

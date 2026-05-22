@@ -3,7 +3,7 @@
 // Any manual changes will be lost.
 import { apply } from "typestache";
 
-export const template = `const __bsetup = setupFunction({ state: { ctx: __ctx, threads: __threads } });
+export const template = `const __bsetup = setupFunction({ state: { ctx: __ctx, threads: typeof __threads !== "undefined" ? __threads : undefined } });
 const __bstack = __bsetup.stack;
 const __self = __bstack.locals;
 {{#params}}

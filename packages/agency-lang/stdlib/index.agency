@@ -16,6 +16,7 @@ const repos = githubAPI(path: "/user/repos")
 ```
 */
 import { _print, _printJSON, _parseJSON, _input, _sleep, _round, _fetch, _fetchJSON, _read, _write, _readImage, _notify, _range, _mostCommon, _keys, _values, _entries } from "agency-lang/stdlib-lib/builtins.js"
+import { _callback } from "agency-lang/stdlib-lib/agency.js"
 export safe def print(...messages) {
   """
   A tool for printing a message to the console.
@@ -200,4 +201,16 @@ export safe def emit(data) {
   Emit a custom event to the calling TypeScript code via the onEmit callback.
   """
   _emit(data)
+}
+
+export def callback(name: string, fn: any) {
+  """
+  Register a scoped callback for the dynamic extent of the calling function or node.
+  When the caller returns, the callback is automatically removed. Top-level callbacks
+  (registered outside any function or node) are active for the whole run.
+
+  @param name - One of the Agency callback hook names (e.g. "onNodeStart", "onFunctionStart", "onLLMCallEnd")
+  @param fn - A function that receives the event data
+  """
+  _callback(name, fn)
 }

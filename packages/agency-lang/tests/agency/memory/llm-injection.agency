@@ -1,4 +1,5 @@
 import { setMemoryId, remember } from "std::memory"
+import { callback } from "std::agency"
 
 // Stores a fact, then makes an llm() call with memory: true. The
 // memory layer should inject a "Relevant context from memory:" system
@@ -9,7 +10,7 @@ import { setMemoryId, remember } from "std::memory"
 // (the deterministic client returns the next mock for any prompt).
 let injected: boolean = false
 
-callback onLLMCallStart(data) {
+callback("onLLMCallStart") as data {
   for (msg in data.messages) {
     if (msg.role == "system" && msg.content != null) {
       const idx = msg.content.indexOf("Relevant context from memory:")

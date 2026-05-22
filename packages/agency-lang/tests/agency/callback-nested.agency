@@ -1,0 +1,35 @@
+import { callback } from "std::agency"
+
+let order: string = ""
+
+def helper(): string {
+  return "x"
+}
+
+def inner() {
+  callback("onFunctionStart") as data {
+    if (data.functionName == "helper") {
+      order = order + "inner,"
+    }
+  }
+  helper()
+}
+
+def outer() {
+  callback("onFunctionStart") as data {
+    if (data.functionName == "helper") {
+      order = order + "outerA,"
+    }
+  }
+  callback("onFunctionStart") as data {
+    if (data.functionName == "helper") {
+      order = order + "outerB,"
+    }
+  }
+  inner()
+}
+
+node main() {
+  outer()
+  return order
+}

@@ -1,0 +1,9 @@
+{
+  "tests": [{
+    "nodeName": "main",
+    "input": "",
+    "expectedOutput": "3",
+    "evaluationCriteria": [{ "type": "exact" }],
+    "description": "callback registered inside a block (if/for/etc.) is scoped to the enclosing function, not the block"
+  }]
+}

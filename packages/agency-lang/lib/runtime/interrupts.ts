@@ -375,7 +375,6 @@ export async function respondToInterrupts(args: {
   }
   execCtx.restoreState(checkpoint);
   execCtx.setInterruptResponses(responseMap);
-  execCtx.installRegisteredCallbacks(ctx);
   if (metadata.callbacks) Object.assign(execCtx.callbacks, metadata.callbacks);
   if (metadata.debugger) execCtx.debuggerState = metadata.debugger;
 

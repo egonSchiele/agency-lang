@@ -72,41 +72,6 @@ await approveInterrupt(response, { callbacks });
 await rejectInterrupt(response, { callbacks });
 ```
 
-## Modifying Messages in LLM Hooks
-
-The `onLLMCallStart` and `onLLMCallEnd` hooks receive the current `messages` array (as serialized `MessageJSON[]`) and can optionally return a new messages array to replace it.
-
-### Modifying messages before the LLM call
-
-Return a new array from `onLLMCallStart` to change what gets sent to the model:
-
-```ts
-const callbacks: AgencyCallbacks = {
-  onLLMCallStart: ({ messages, prompt, model }) => {
-    // Add a system message before every LLM call
-    return [
-      { role: "system", content: "Always respond in JSON." },
-      ...messages,
-    ];
-  },
-};
-```
-
-### Modifying messages after the LLM response
-
-Return a new array from `onLLMCallEnd` to change the conversation history going forward:
-
-```ts
-const callbacks: AgencyCallbacks = {
-  onLLMCallEnd: ({ messages, result }) => {
-    // Remove the first message (e.g. a one-shot system prompt)
-    return messages.slice(1);
-  },
-};
-```
-
-If the callback does not return a value (or returns `undefined`), the messages are left unchanged. You can also mutate the `messages` array in-place; since it is passed by reference, changes will be reflected without needing to return a new array.
-
 ## Hook Data Reference
 
 ### `onAgentStart`
@@ -166,7 +131,7 @@ Fires when a `def` function finishes executing.
 
 ### `onLLMCallStart`
 
-Fires before an LLM call is made. Can return a `MessageJSON[]` to replace the messages sent to the model.
+Fires before an LLM call is made.
 
 | Field | Type | Description |
 |-------|------|-------------|
@@ -177,7 +142,7 @@ Fires before an LLM call is made. Can return a `MessageJSON[]` to replace the me
 
 ### `onLLMCallEnd`
 
-Fires after an LLM response is received. Can return a `MessageJSON[]` to replace the message history going forward.
+Fires after an LLM response is received.
 
 | Field | Type | Description |
 |-------|------|-------------|

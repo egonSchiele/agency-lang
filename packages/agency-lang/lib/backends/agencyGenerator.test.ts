@@ -275,14 +275,6 @@ describe("AgencyGenerator - Class Definitions", () => {
     expect(output).toContain("new Counter(0)");
   });
 
-  it("should format callback declarations with the callback keyword", () => {
-    const input = `callback onLLMCallEnd(data) {
-  log(data)
-}`;
-    const output = formatAgency(input);
-    expect(output).toContain("callback onLLMCallEnd(data)");
-    expect(output).not.toContain("def onLLMCallEnd");
-  });
 });
 
 describe("AgencyGenerator - Doc Comments", () => {

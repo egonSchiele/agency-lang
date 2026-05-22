@@ -1,0 +1,30 @@
+import { callback } from "std::agency"
+
+let blockCount: number = 0
+let namedCount: number = 0
+
+def helper(): string {
+  return "x"
+}
+
+// Named function used as a callback target (no `as data` block syntax).
+def onNamed(data: any) {
+  if (data.functionName == "helper") {
+    namedCount = namedCount + 1
+  }
+}
+
+node main() {
+  // Form 1: trailing as-data block (already covered elsewhere; sanity check)
+  callback("onFunctionStart") as data {
+    if (data.functionName == "helper") {
+      blockCount = blockCount + 1
+    }
+  }
+
+  // Form 2: named function reference
+  callback("onFunctionStart", onNamed)
+
+  helper()
+  return [blockCount, namedCount]
+}

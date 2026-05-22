@@ -1,0 +1,25 @@
+import { callback } from "std::agency"
+
+let fireCount: number = 0
+
+def helper(): string {
+  return "x"
+}
+
+def registerAndCall() {
+  callback("onFunctionStart") as data {
+    if (data.functionName == "helper") {
+      fireCount = fireCount + 1
+    }
+  }
+  helper()  // fires the callback → fireCount = 1
+}
+
+node main() {
+  registerAndCall()
+  // After registerAndCall() returns, its frame pops and the scoped callback
+  // is gone. The next helper() call must NOT trigger the callback.
+  helper()
+  helper()
+  return fireCount
+}

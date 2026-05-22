@@ -1,0 +1,15 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "4",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "description": "scoped callback fires only inside its scope; cleanup makes repeated wrapper calls behave independently"
+    }
+  ]
+}

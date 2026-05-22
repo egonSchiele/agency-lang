@@ -516,7 +516,7 @@ export const ts = {
     const dataNode = "kind" in data ? data as TsNode : ts.obj(data as Record<string, TsNode>);
     return ts.awaitCall(ts.id("callHook"), [
       ts.obj({
-        callbacks: ts.prop(ts.runtime.ctx, "callbacks"),
+        ctx: ts.runtime.ctx,
         name: ts.str(hookName),
         data: dataNode,
       }),

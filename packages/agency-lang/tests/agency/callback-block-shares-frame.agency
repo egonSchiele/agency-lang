@@ -1,0 +1,25 @@
+import { callback } from "std::agency"
+
+let fireCount: number = 0
+
+def helper(): string {
+  return "x"
+}
+
+node main() {
+  // Callback is registered inside an if-block, but the block does NOT
+  // push its own frame for callback scoping. The registration must attach
+  // to main()'s frame, so the callback survives past the if-block's end
+  // and fires for helper() calls made after the if-block too.
+  if (true) {
+    callback("onFunctionStart") as data {
+      if (data.functionName == "helper") {
+        fireCount = fireCount + 1
+      }
+    }
+    helper()  // fires → fireCount = 1
+  }
+  helper()    // still inside main → callback should still fire → fireCount = 2
+  helper()    // fireCount = 3
+  return fireCount
+}

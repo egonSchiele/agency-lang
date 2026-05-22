@@ -1,0 +1,24 @@
+import { callback } from "std::agency"
+
+let fireCount: number = 0
+
+def helper(): string {
+  return "hello"
+}
+
+def withCallback(): boolean {
+  callback("onFunctionStart") as data {
+    fireCount = fireCount + 1
+  }
+  helper()
+  helper()
+  return true
+}
+
+node main() {
+  withCallback()
+  helper()
+  withCallback()
+  helper()
+  return fireCount
+}

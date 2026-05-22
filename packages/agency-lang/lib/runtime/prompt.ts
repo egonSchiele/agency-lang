@@ -54,8 +54,8 @@ async function _runPrompt({
   const stream = !!(clientConfig as any)?.stream;
   const startTime = performance.now();
 
-  const startHookResult = await callHook({
-    callbacks: ctx.callbacks,
+  await callHook({
+    ctx,
     name: "onLLMCallStart",
     data: {
       prompt,
@@ -64,9 +64,6 @@ async function _runPrompt({
       messages: messages.toJSON().messages,
     },
   });
-  if (startHookResult) {
-    messages = MessageThread.fromJSON(startHookResult);
-  }
 
   // Re-check after hook — cancellation may have occurred during the callback
   if (ctx.isCancelled(stateStack)) {
@@ -194,8 +191,8 @@ async function _runPrompt({
     }
   }
 
-  const endHookResult = await callHook({
-    callbacks: ctx.callbacks,
+  await callHook({
+    ctx,
     name: "onLLMCallEnd",
     data: {
       model: JSON.stringify(modelName),
@@ -206,9 +203,6 @@ async function _runPrompt({
       messages: messages.toJSON().messages,
     },
   });
-  if (endHookResult) {
-    messages = MessageThread.fromJSON(endHookResult);
-  }
 
   return { messages, toolCalls };
 }
@@ -487,7 +481,7 @@ export async function runPrompt(args: {
 
         const namedArgs = { ...toolCall.arguments };
         await callHook({
-          callbacks: ctx.callbacks,
+          ctx,
           name: "onToolCallStart",
           data: { toolName: handler.name, args: namedArgs },
         });
@@ -613,7 +607,7 @@ export async function runPrompt(args: {
 
         const toolCallEndTime = performance.now();
         await callHook({
-          callbacks: ctx.callbacks,
+          ctx,
           name: "onToolCallEnd",
           data: {
             toolName: handler.name,

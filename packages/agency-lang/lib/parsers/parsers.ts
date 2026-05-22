@@ -64,7 +64,6 @@ import {
   Expression,
   FunctionCall,
   FunctionDefinition,
-  VALID_CALLBACK_NAMES,
   FunctionParameter,
   InterpolationSegment,
   Literal,
@@ -3478,7 +3477,7 @@ const _baseFunctionParser: Parser<any> = trace(
   "_baseFunctionParser",
   seqC(
     set("type", "function"),
-    capture(or(str("callback"), str("def")), "keyword"),
+    capture(str("def"), "keyword"),
     many1(space),
     capture(many1Till(char("(")), "functionName"),
     char("("),
@@ -3523,7 +3522,7 @@ const safeKeywordParser: Parser<boolean> = or(
   succeed(false),
 );
 
-// Parse "export" and "safe" in any order before "def"/"callback"
+// Parse "export" and "safe" in any order before "def"
 function parseFunctionModifiers(input: string): { success: true; rest: string; isExported: boolean; isSafe: boolean } | { success: false } {
   let rest = input;
   let isExported = false;
@@ -3561,42 +3560,11 @@ const _functionParserInner: Parser<FunctionDefinition> = (input: string) => {
   const baseResult = _baseFunctionParser(mods.rest);
   if (!baseResult.success) return baseResult;
 
-  const { keyword, returnTypeValidated: _rtv, ...rest } = baseResult.result as any;
+  const { keyword: _keyword, returnTypeValidated: _rtv, ...rest } = baseResult.result as any;
   const result = { ...rest } as FunctionDefinition;
   if (_rtv) result.returnTypeValidated = true;
-  const isCallback = keyword === "callback";
   if (isExported) result.exported = true;
   if (isSafe) result.safe = true;
-  if (isCallback) {
-    result.callback = true;
-    if (isExported) {
-      throw new Error(`Callback '${result.functionName}' cannot be exported`);
-    }
-    if (isSafe) {
-      throw new Error(`Callback '${result.functionName}' cannot be marked safe`);
-    }
-    const validNames: ReadonlySet<string> = new Set(VALID_CALLBACK_NAMES);
-    if (!validNames.has(result.functionName)) {
-      throw new Error(
-        `Unknown callback '${result.functionName}'. Valid callbacks: ${VALID_CALLBACK_NAMES.join(", ")}`,
-      );
-    }
-    if (result.parameters.length !== 1) {
-      throw new Error(
-        `Callback '${result.functionName}' must declare exactly one parameter`,
-      );
-    }
-    if (result.parameters[0].variadic) {
-      throw new Error(
-        `Callback '${result.functionName}' parameter '${result.parameters[0].name}' cannot be variadic`,
-      );
-    }
-    if (result.parameters[0].defaultValue) {
-      throw new Error(
-        `Callback '${result.functionName}' parameter '${result.parameters[0].name}' cannot have a default value`,
-      );
-    }
-  }
 
   // Validate parameter ordering: required → optional (with defaults) → variadic
   const params = result.parameters;

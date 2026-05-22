@@ -1,0 +1,22 @@
+
+// A top-level callback that raises an interrupt on `onAgentEnd`.
+// `onAgentEnd` fires from `lib/runtime/node.ts`, OUTSIDE any agency call
+// frame, via `callHookAndDrop`. The callHookAndDrop path must log the
+// interrupt to console.error and let the program complete normally —
+// it must NOT crash the run, throw an exception, or cause the agent's
+// final result to change.
+//
+// This is the Phase 0 contract for TS-side runtime sites: unhandled
+// callback interrupts are dropped, the program output is unaffected.
+
+callback("onAgentEnd") as data {
+  interrupt myapp::droppedAtRuntimeSite("from onAgentEnd", data)
+}
+
+def helper(): string {
+  return "ok"
+}
+
+node main() {
+  return helper()
+}

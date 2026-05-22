@@ -3,7 +3,7 @@ import { PromptResult, Result, StreamChunk, ToolCallJSON } from "smoltalk";
 import { createLogger } from "../logger.js";
 import { AgencyFunction } from "./agencyFunction.js";
 import { AgencyCancelledError, isAbortError } from "./errors.js";
-import { callHook } from "./hooks.js";
+import { callHookAndDrop } from "./hooks.js";
 import { Interrupt, hasInterrupts, isRejected } from "./interrupts.js";
 import type { PromptConfig } from "./llmClient.js";
 import { setupFunction } from "./node.js";
@@ -54,7 +54,7 @@ async function _runPrompt({
   const stream = !!(clientConfig as any)?.stream;
   const startTime = performance.now();
 
-  await callHook({
+  await callHookAndDrop({
     ctx,
     name: "onLLMCallStart",
     data: {
@@ -191,7 +191,7 @@ async function _runPrompt({
     }
   }
 
-  await callHook({
+  await callHookAndDrop({
     ctx,
     name: "onLLMCallEnd",
     data: {
@@ -480,7 +480,7 @@ export async function runPrompt(args: {
         const branchStack = stack.getOrCreateBranch(branchKey).stack;
 
         const namedArgs = { ...toolCall.arguments };
-        await callHook({
+        await callHookAndDrop({
           ctx,
           name: "onToolCallStart",
           data: { toolName: handler.name, args: namedArgs },
@@ -606,7 +606,7 @@ export async function runPrompt(args: {
         stack.setResultOnBranch(branchKey, result);
 
         const toolCallEndTime = performance.now();
-        await callHook({
+        await callHookAndDrop({
           ctx,
           name: "onToolCallEnd",
           data: {

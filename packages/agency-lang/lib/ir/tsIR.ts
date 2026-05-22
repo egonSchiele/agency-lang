@@ -35,6 +35,7 @@ export type TsNode =
   | TsRunnerStep
   | TsRunnerThread
   | TsRunnerHandle
+  | TsRunnerHook
   | TsRunnerIfElse
   | TsRunnerLoop
   | TsRunnerWhileLoop
@@ -325,6 +326,17 @@ export interface TsRunnerHandle {
   id: number;
   handler: TsNode;
   body: TsNode[];
+}
+
+/** await runner.hook(id, "onFunctionStart", { ... }) — codegen for the
+ *  five callback hook sites (onFunctionStart, onFunctionEnd, onEmit,
+ *  onNodeStart, onNodeEnd). Runner.hook handles substep-counter
+ *  resume-skipping, halt-on-interrupt, and checkpoint stamping. */
+export interface TsRunnerHook {
+  kind: "runnerHook";
+  id: number;
+  hookName: string;
+  data: TsNode;
 }
 
 /** runner.ifElse(id, branches, elseBranch?) */

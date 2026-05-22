@@ -298,6 +298,11 @@ export function printTs(node: TsNode, indent = 0): string {
       return `await runner.handle(${node.id}, ${handler}, async (runner) => {\n${body}\n${ind(indent)}});`;
     }
 
+    case "runnerHook": {
+      const data = printTs(node.data, indent);
+      return `await runner.hook(${node.id}, ${JSON.stringify(node.hookName)}, ${data});`;
+    }
+
     case "withHandler": {
       const handler = printTs(node.handler, indent);
       const body = `${ind(indent + 1)}${printTs(node.body, indent + 1)}`;

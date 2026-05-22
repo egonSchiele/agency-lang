@@ -140,6 +140,7 @@ const COMPOUND_ASSIGN_TO_BINARY: Record<string, string> = {
  *  must NOT be wrapped inside a runnerStep by processBodyAsParts. */
 const COMPOUND_RUNNER_KINDS: ReadonlySet<TsNode["kind"]> = new Set([
   "runnerHandle",
+  "runnerHook",
   "runnerIfElse",
   "runnerLoop",
   "runnerWhileLoop",

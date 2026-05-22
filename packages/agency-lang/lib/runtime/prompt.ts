@@ -7,6 +7,7 @@ import { callHookAndDrop } from "./hooks.js";
 import { Interrupt, hasInterrupts, isRejected } from "./interrupts.js";
 import type { PromptConfig } from "./llmClient.js";
 import { setupFunction } from "./node.js";
+import { PromptBailout, PromptRunner } from "./promptRunner.js";
 import { isFailure } from "./result.js";
 import type { SourceLocationOpts } from "./state/checkpointStore.js";
 import type { RuntimeContext } from "./state/context.js";
@@ -315,6 +316,18 @@ export async function runPrompt(args: {
   } else {
     messages = new MessageThread();
   }
+
+  // Resumable-step + checkpoint-on-interrupt helper. See
+  // docs/superpowers/plans/2026-05-22-prompt-runner.md.
+  // `snapshotMessages` reads the current `messages` binding at call time;
+  // reassignments below (e.g. `messages = result.messages`) are observed.
+  const pr = new PromptRunner({
+    self,
+    ctx,
+    stateStack,
+    checkpointInfo,
+    snapshotMessages: () => messages.toJSON().messages,
+  });
 
   // Manage llmCall spans across the prompt round-trip loop. Each
   // llmCall span covers one `_runPrompt` call PLUS the tool executions
@@ -640,32 +653,20 @@ export async function runPrompt(args: {
         // popBranches() at the end of a successful round handles cleanup.
       }
 
-      // If any tool calls interrupted, create checkpoint and return
+      // If any tool calls interrupted, route through pr.step so the
+      // checkpoint + bailout happen uniformly with every other interrupt
+      // site. This step is unique — it always throws when reached, so
+      // the completedSteps marker is irrelevant.
       if (interrupts.length > 0) {
-        self.messagesJSON = messages.toJSON().messages;
-        const cpId = ctx.checkpoints.create(stateStack, ctx, {
-          moduleId: checkpointInfo?.moduleId ?? "",
-          scopeName: checkpointInfo?.scopeName ?? "",
-          stepPath: checkpointInfo?.stepPath ?? "",
-        });
-        const cp = ctx.checkpoints.get(cpId)!;
-        for (const intr of interrupts) {
-          intr.checkpoint = cp;
-          intr.checkpointId = cpId;
-        }
-
-        ctx.statelogClient.checkpointCreated({
-          checkpointId: cpId,
-          reason: "interrupt",
-          sourceLocation: { moduleId: cp.moduleId, scopeName: cp.scopeName, stepPath: cp.stepPath },
-        });
         ctx.statelogClient.debug(`Tool call interrupted execution.`, {
           messages: messages.getMessages(),
           model: clientConfig.model,
         });
-
-        shouldPop = false;
-        return interrupts;
+        await pr.step(
+          `round.${self.toolCallRound - 1}.toolInterrupts`,
+          async () => interrupts,
+        );
+        // unreachable — pr.step throws PromptBailout
       }
 
       // All tool calls complete — clean up branches, next LLM round
@@ -697,6 +698,10 @@ export async function runPrompt(args: {
       self.pendingToolCalls = toolCalls.length > 0 ? toolCalls : null;
     }
   } catch (error) {
+    if (error instanceof PromptBailout) {
+      shouldPop = false;
+      return error.interrupts;
+    }
     if (isAbortError(error)) throw error;
     throw error;
   } finally {

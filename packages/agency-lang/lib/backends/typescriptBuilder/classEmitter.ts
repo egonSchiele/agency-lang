@@ -26,7 +26,7 @@ export type ClassEmitterDeps = {
   moduleId: string;
   enterScope: (scopeName: string) => void;
   hoistBodyTypeAliases: (body: AgencyNode[]) => TsNode[];
-  processBodyAsParts: (body: AgencyNode[]) => TsNode[];
+  processBodyAsParts: (body: AgencyNode[], startId?: number) => TsNode[];
   buildFunctionBody: (opts: {
     functionName: string;
     parameters: FunctionParameter[];
@@ -101,7 +101,10 @@ export class ClassEmitter {
     this.deps.scopes.inSafeFunction = !!method.safe;
     // Hoist body-local type aliases to the method's outer scope.
     const hoistedAliases = this.deps.hoistBodyTypeAliases(method.body);
-    const bodyCode = this.deps.processBodyAsParts(method.body);
+    // Body steps occupy substep ids 1..N — id 0 is reserved for the
+    // onFunctionStart runner.hook so callback interrupts can halt
+    // before any body step runs.
+    const bodyCode = this.deps.processBodyAsParts(method.body, 1);
     this.deps.scopes.inSafeFunction = prevSafe;
     this.deps.scopes.pop();
 

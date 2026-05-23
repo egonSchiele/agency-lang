@@ -30,6 +30,35 @@
  * `runForkAll` / `runRace` behavior; callers that need both must catch
  * inside `invoke`). PromptBailout-style throws need to be converted to
  * returns at their call site before that site migrates to `runBatch`.
+ *
+ * Audit findings (2026-05-22, recorded at Task 4 step 1):
+ *  - `lib/runtime/interrupts.ts` (`interruptWithHandlers`,
+ *    `respondToInterrupts`, `runHandlerChain`): NO `Interrupt[]` throws.
+ *    Errors thrown are `Error`s on contract violations or other
+ *    bookkeeping bugs, never the interrupt array itself.
+ *  - `lib/runtime/agencyFunction.ts` (`AgencyFunction.invoke`): NO
+ *    `Interrupt[]` throws. Returns interrupts as values.
+ *  - `lib/runtime/prompt.ts` (`runInvokeStep` and the tool loop body):
+ *    NO `Interrupt[]` throws. Returns via `b.step`'s collector pattern.
+ *  - `lib/runtime/promptRunner.ts`: `PromptBailout` IS thrown (twice).
+ *    These are deliberate Error subclasses (not raw `Interrupt[]`) and
+ *    are converted to returns in Task 4 before migration.
+ *
+ * Other adopters considering migration should re-run this audit on their
+ * code path (`grep -nE "throw .*[Ii]nterrupt"`).
+ *
+ * Branch-result recording (see `recordBranchOutcomes`):
+ *  - Default `true`: runBatch records the per-branch outcome via
+ *    `setResultOnBranch` (success) or `setInterruptOnBranch` (interrupt).
+ *    This is what fork/race need.
+ *  - `false`: the caller's `invoke` is responsible for recording branch
+ *    state itself (via `stack.setResultOnBranch` etc. inside the body).
+ *    runBatch still stamps the shared checkpoint and overwrites
+ *    `intr.checkpoint`/`checkpointId`, but does NOT touch BranchState
+ *    fields. This is what runPrompt's tool loop needs because the tool
+ *    body already records the real tool result on the branch before
+ *    returning — letting runBatch then call `setResultOnBranch(key,
+ *    undefined)` would overwrite the meaningful value with undefined.
  */
 import { hasInterrupts, type Interrupt } from "./interrupts.js";
 import type { RuntimeContext } from "./state/context.js";
@@ -109,6 +138,15 @@ export type RunBatchOpts<T> = {
    * index is persisted. The caller (race adapter) computes
    * `__race_winner_${id}` and passes it. */
   raceWinnerLocalKey?: string;
+  /** When `true` (default), runBatch records the per-branch outcome on
+   * `parentFrame.branches` via `setResultOnBranch` (success) or
+   * `setInterruptOnBranch` (interrupt). When `false`, the caller's
+   * `invoke` is responsible for managing branch state itself — runBatch
+   * still stamps the shared checkpoint and overwrites
+   * `intr.checkpoint`/`checkpointId`, but does NOT touch BranchState
+   * fields. Used by runPrompt's tool loop where the body manages the
+   * real tool result on the branch. */
+  recordBranchOutcomes?: boolean;
   hooks?: BatchHooks;
 };
 
@@ -214,10 +252,21 @@ export async function runBatch<T>(
     return runRaceResume(opts, persistedWinner);
   }
 
-  // 1. Set up tasks (branches).
+  // 1. Set up tasks (branches). When `recordBranchOutcomes` is false the
+  //    caller is responsible for setting branch.result, AND for idempotent
+  //    re-execution of the body on resume — branch.result being set does
+  //    NOT mean "the body is fully done" (it may only mean "the tool's
+  //    invoke step succeeded; the .end + .log steps may still need to
+  //    fire"). So skip the cached-branch short-circuit in that mode.
+  const recordOutcomes = opts.recordBranchOutcomes !== false;
   const tasks: Task<T>[] = children.map((child) => {
     const branch = parentFrame.getOrCreateBranch(child.key);
-    return { child, branch, startedAt: 0, cached: branch.result !== undefined };
+    return {
+      child,
+      branch,
+      startedAt: 0,
+      cached: recordOutcomes && branch.result !== undefined,
+    };
   });
   const parentSpanStack = ctx.statelogClient.snapshotStack();
 
@@ -264,17 +313,21 @@ export async function runBatch<T>(
     if (hasInterrupts(value)) {
       if (!cached) hooks?.onBranchEnd?.(child.key, i, "interrupted", timeMs);
       interrupts.push(...value);
-      parentFrame.setInterruptOnBranch(
-        child.key,
-        value[0].interruptId,
-        value[0].interruptData,
-        // The leaf's per-branch checkpoint goes here — it vehicles the
-        // pre-pop branch stack into State.toJSON's branches walk.
-        value[0].checkpoint,
-      );
+      if (recordOutcomes) {
+        parentFrame.setInterruptOnBranch(
+          child.key,
+          value[0].interruptId,
+          value[0].interruptData,
+          // The leaf's per-branch checkpoint goes here — it vehicles the
+          // pre-pop branch stack into State.toJSON's branches walk.
+          value[0].checkpoint,
+        );
+      }
     } else {
       if (!cached) hooks?.onBranchEnd?.(child.key, i, "success", timeMs);
-      parentFrame.setResultOnBranch(child.key, value as any);
+      if (recordOutcomes) {
+        parentFrame.setResultOnBranch(child.key, value as any);
+      }
     }
   }
 

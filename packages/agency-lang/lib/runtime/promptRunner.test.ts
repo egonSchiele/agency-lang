@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { PromptRunner, PromptBailout } from "./promptRunner.js";
+import { State, StateStack } from "./state/stateStack.js";
 
 /** Stub statelog client. Includes the minimum surface PromptRunner touches:
  *  checkpointCreated for `step()`, snapshotStack / runInBranchContext for
@@ -14,7 +15,9 @@ function stubStatelogClient(extras: Partial<any> = {}) {
   };
 }
 
-/** Build a PromptRunner with stub deps. Override fields as needed. */
+/** Build a PromptRunner with stub deps. Override fields as needed. The
+ *  parallel() path requires a real StateStack/State so runBatch can do
+ *  branch lifecycle; build them by default. */
 function makeRunner(overrides: Partial<any> = {}) {
   const self: any = {};
   const ctx: any = {
@@ -24,15 +27,19 @@ function makeRunner(overrides: Partial<any> = {}) {
     },
     statelogClient: stubStatelogClient(),
   };
+  const stateStack = new StateStack();
+  const parentFrame = new State();
+  stateStack.stack.push(parentFrame);
   const opts = {
     self,
     ctx,
-    stateStack: {} as any,
+    stateStack,
+    parentFrame,
     checkpointInfo: undefined,
     snapshotMessages: () => [],
     ...overrides,
   };
-  return { runner: new PromptRunner(opts), self, ctx };
+  return { runner: new PromptRunner(opts), self, ctx, parentFrame };
 }
 
 /** Build an Interrupt-shaped object (matches `isInterrupt`'s `type === "interrupt"`). */
@@ -230,23 +237,34 @@ describe("PromptRunner.step interrupt handling", () => {
 });
 
 describe("PromptRunner.parallel", () => {
+  // Helper that supplies the per-item branch key. The real call site
+  // passes `(toolCall) => "tool_" + toolCall.id` — for tests we just
+  // use the item itself + index.
+  const keyFor = (item: any, i: number) => `k_${item}_${i}`;
+
   it("runs every branch concurrently", async () => {
     const { runner } = makeRunner();
     const order: string[] = [];
-    await runner.parallel("group", ["a", "b", "c"], async (item, b) => {
-      await b.step(`${item}.s1`, async () => {
-        order.push(`start-${item}`);
-      });
-      await new Promise((r) => setTimeout(r, 5));
-      await b.step(`${item}.s2`, async () => {
-        order.push(`end-${item}`);
-      });
-    });
+    const result = await runner.parallel(
+      "group",
+      ["a", "b", "c"],
+      keyFor,
+      async (item, b) => {
+        await b.step(`${item}.s1`, async () => {
+          order.push(`start-${item}`);
+        });
+        await new Promise((r) => setTimeout(r, 5));
+        await b.step(`${item}.s2`, async () => {
+          order.push(`end-${item}`);
+        });
+      },
+    );
+    expect(result.kind).toBe("values");
     // All three starts happen before any end (concurrent).
     expect(order.indexOf("start-c")).toBeLessThan(order.indexOf("end-a"));
   });
 
-  it("merges interrupts from multiple branches into one bailout with one shared checkpoint", async () => {
+  it("merges interrupts from multiple branches into kind='interrupts' with one shared checkpoint", async () => {
     let cpCount = 0;
     const ctx: any = {
       checkpoints: {
@@ -259,45 +277,54 @@ describe("PromptRunner.parallel", () => {
       statelogClient: stubStatelogClient(),
     };
     const { runner } = makeRunner({ ctx });
-    let caught: PromptBailout | null = null;
-    try {
-      await runner.parallel("group", ["a", "b"], async (item, b) => {
+    const result = await runner.parallel(
+      "group",
+      ["a", "b"],
+      keyFor,
+      async (item, b) => {
         await b.step(`${item}.s1`, async () => [fakeInterrupt(item)] as any);
-      });
-    } catch (e) {
-      if (e instanceof PromptBailout) caught = e;
-    }
-    expect(caught).not.toBeNull();
-    expect(caught!.interrupts.length).toBe(2);
-    expect(cpCount).toBe(1);
-    expect(caught!.interrupts.every((i) => i.checkpointId === 101)).toBe(
-      true,
+      },
     );
+    expect(result.kind).toBe("interrupts");
+    if (result.kind !== "interrupts") return;
+    expect(result.interrupts.length).toBe(2);
+    expect(cpCount).toBe(1);
+    expect(result.interrupts.every((i) => i.checkpointId === 101)).toBe(true);
   });
 
   it("skips a branch step whose key was already completed on a prior pass", async () => {
     const self: any = { runnerState: { completedSteps: ["a.s1"] } };
     const { runner } = makeRunner({ self });
     let ran = 0;
-    await runner.parallel("group", ["a"], async (item, b) => {
-      await b.step(`${item}.s1`, async () => {
-        ran++;
-      });
-    });
+    const result = await runner.parallel(
+      "group",
+      ["a"],
+      keyFor,
+      async (item, b) => {
+        await b.step(`${item}.s1`, async () => {
+          ran++;
+        });
+      },
+    );
+    expect(result.kind).toBe("values");
     expect(ran).toBe(0);
   });
 
   it("once a branch step has collected interrupts, later steps on that branch are no-ops", async () => {
     const { runner } = makeRunner();
     let later = 0;
-    await expect(
-      runner.parallel("group", ["a"], async (item, b) => {
+    const result = await runner.parallel(
+      "group",
+      ["a"],
+      keyFor,
+      async (item, b) => {
         await b.step(`${item}.s1`, async () => [fakeInterrupt(item)] as any);
         await b.step(`${item}.s2`, async () => {
           later++;
         });
-      }),
-    ).rejects.toBeInstanceOf(PromptBailout);
+      },
+    );
+    expect(result.kind).toBe("interrupts");
     expect(later).toBe(0);
   });
 
@@ -314,42 +341,52 @@ describe("PromptRunner.parallel", () => {
       statelogClient: stubStatelogClient(),
     };
     const { runner } = makeRunner({ ctx });
-    await runner.parallel("group", ["a", "b"], async (item, b) => {
-      await b.step(`${item}.s1`, async () => {});
-    });
+    const result = await runner.parallel(
+      "group",
+      ["a", "b"],
+      keyFor,
+      async (item, b) => {
+        await b.step(`${item}.s1`, async () => {});
+      },
+    );
+    expect(result.kind).toBe("values");
     expect(cpCount).toBe(0);
   });
 
   it("mixed branches: A interrupts, B completes — merged batch has only A, B's key is marked", async () => {
     // The real-world parallel-tool case: one tool needs approval, the
-    // others finish. The merged bailout must surface only the bailing
+    // others finish. The merged result must surface only the bailing
     // branch's interrupts, and the completed branch's step must be marked
     // so resume doesn't re-run it.
     const { runner, self } = makeRunner();
-    let caught: PromptBailout | null = null;
-    try {
-      await runner.parallel("group", ["a", "b"], async (item, b) => {
+    const result = await runner.parallel(
+      "group",
+      ["a", "b"],
+      keyFor,
+      async (item, b) => {
         if (item === "a") {
           await b.step(`${item}.s1`, async () => [fakeInterrupt(item)] as any);
         } else {
           await b.step(`${item}.s1`, async () => {});
         }
-      });
-    } catch (e) {
-      if (e instanceof PromptBailout) caught = e;
-    }
-    expect(caught).not.toBeNull();
-    expect(caught!.interrupts.length).toBe(1);
-    expect((caught!.interrupts[0] as any).kind).toBe("a");
+      },
+    );
+    expect(result.kind).toBe("interrupts");
+    if (result.kind !== "interrupts") return;
+    expect(result.interrupts.length).toBe(1);
+    expect((result.interrupts[0] as any).kind).toBe("a");
     expect(self.runnerState.completedSteps.includes("a.s1")).toBe(false);
     expect(self.runnerState.completedSteps.includes("b.s1")).toBe(true);
   });
 
-  it("parallel snapshots messages on merged bailout", async () => {
+  it("parallel snapshots messages on merged interrupts", async () => {
     // `step()` already covers this; `parallel()` runs the same snapshot
     // logic but via a different code path. Verify it actually fires.
     const snapshots: any[] = [];
     const self: any = {};
+    const stateStack = new StateStack();
+    const parentFrame = new State();
+    stateStack.stack.push(parentFrame);
     const runner = new PromptRunner({
       self,
       ctx: {
@@ -359,26 +396,31 @@ describe("PromptRunner.parallel", () => {
         },
         statelogClient: stubStatelogClient(),
       } as any,
-      stateStack: {} as any,
+      stateStack,
+      parentFrame,
       checkpointInfo: undefined,
       snapshotMessages: () => {
         snapshots.push("snap");
         return [{ role: "user", content: "x" }] as any;
       },
     });
-    await expect(
-      runner.parallel("group", ["a"], async (item, b) => {
+    const result = await runner.parallel(
+      "group",
+      ["a"],
+      keyFor,
+      async (item, b) => {
         await b.step(`${item}.s1`, async () => [fakeInterrupt(item)] as any);
-      }),
-    ).rejects.toBeInstanceOf(PromptBailout);
+      },
+    );
+    expect(result.kind).toBe("interrupts");
     expect(snapshots.length).toBe(1);
     expect(self.messagesJSON).toEqual([{ role: "user", content: "x" }]);
   });
 
-  it("parallel with empty items list: no checkpoint, no throw", async () => {
+  it("parallel with empty items list: no checkpoint, returns kind='values'", async () => {
     // Defensive — runPrompt may legitimately have a tool round with zero
     // tool calls, and parallel(...) should be a no-op rather than
-    // bailing or stamping an empty checkpoint.
+    // surfacing interrupts or stamping an empty checkpoint.
     let cpCount = 0;
     const ctx: any = {
       checkpoints: {
@@ -391,27 +433,34 @@ describe("PromptRunner.parallel", () => {
       statelogClient: stubStatelogClient(),
     };
     const { runner } = makeRunner({ ctx });
-    await runner.parallel("group", [], async () => {});
+    const result = await runner.parallel("group", [], keyFor, async () => {});
+    expect(result.kind).toBe("values");
     expect(cpCount).toBe(0);
   });
 
   it("parallel resume: B already complete, A re-runs and now succeeds", async () => {
     // Round 1 (not exercised here): A bailed, B completed → self.runnerState
     // has b.s1 marked. Round 2 (this test): the branchFn for A returns
-    // void this time; the bailout does not fire; A's key is now marked
-    // and B's step body is never re-entered.
+    // void this time; the interrupt path does not fire; A's key is now
+    // marked and B's step body is never re-entered.
     const self: any = {
       runnerState: { completedSteps: ["b.s1"] },
     };
     const { runner } = makeRunner({ self });
     let aRan = 0;
     let bRan = 0;
-    await runner.parallel("group", ["a", "b"], async (item, b) => {
-      await b.step(`${item}.s1`, async () => {
-        if (item === "a") aRan++;
-        else bRan++;
-      });
-    });
+    const result = await runner.parallel(
+      "group",
+      ["a", "b"],
+      keyFor,
+      async (item, b) => {
+        await b.step(`${item}.s1`, async () => {
+          if (item === "a") aRan++;
+          else bRan++;
+        });
+      },
+    );
+    expect(result.kind).toBe("values");
     expect(aRan).toBe(1);
     expect(bRan).toBe(0);
     expect(self.runnerState.completedSteps.includes("a.s1")).toBe(true);

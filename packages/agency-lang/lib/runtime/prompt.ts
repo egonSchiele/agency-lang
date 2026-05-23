@@ -600,9 +600,13 @@ export async function runPrompt(args: {
       // semantics across branches (strategy B in the plan): same-round
       // removal is best-effort and removals always take effect from the
       // NEXT round (the .filter() after this parallel call).
-      await pr.parallel(
+      const parallelResult = await pr.parallel(
         `round.${round}.tools`,
         toolCalls,
+        // keyFor: MUST match the branchKey the body uses below
+        // (`stack.getOrCreateBranch(branchKey)`) so runBatch and the body
+        // operate on the same branch.
+        (toolCall) => `tool_${toolCall.id}`,
         async (toolCall, b) => {
           if (ctx.isCancelled(stateStack)) throw new AgencyCancelledError();
 
@@ -767,7 +771,20 @@ export async function runPrompt(args: {
         },
       );
 
-      // All tool calls complete — clean up branches, next LLM round
+      // pr.parallel returns a RunBatchResult tagged union; if any tool
+      // branch surfaced interrupts, runBatch already stamped the shared
+      // checkpoint. Bail out of runPrompt with the merged batch — the
+      // outer caller checkpoints / propagates as usual. (Replaces the
+      // former PromptBailout throw with an explicit return so runBatch's
+      // no-throw-Interrupt contract is preserved.)
+      if (parallelResult.kind === "interrupts") {
+        shouldPop = false;
+        return parallelResult.interrupts;
+      }
+
+      // All tool calls complete — runBatch already popped branches on the
+      // no-interrupt success path, but call again defensively in case any
+      // branchFn-level cleanup added new branches mid-flight.
       stack.popBranches();
       tools = tools.filter((t) => !removedTools.includes(t.name));
       toolFunctions = toolFunctions.filter(

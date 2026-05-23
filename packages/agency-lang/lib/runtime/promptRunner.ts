@@ -1,8 +1,9 @@
 import type { MessageJSON } from "smoltalk";
 import { hasInterrupts, type Interrupt } from "./interrupts.js";
+import { runBatch, type RunBatchResult } from "./runBatch.js";
 import type { SourceLocationOpts } from "./state/checkpointStore.js";
 import type { RuntimeContext } from "./state/context.js";
-import type { StateStack } from "./state/stateStack.js";
+import type { State, StateStack } from "./state/stateStack.js";
 
 /**
  * Thrown by {@link PromptRunner.step} when a step body returns interrupts.
@@ -35,6 +36,11 @@ export type PromptRunnerOpts = {
   self: any;
   ctx: RuntimeContext<any>;
   stateStack: StateStack;
+  /** The runPrompt frame (== `stateStack.lastFrame()`). Used by
+   * `parallel()` as `runBatch`'s `parentFrame` for per-tool branch
+   * lifecycle. Defaulted from `stateStack.lastFrame()` for callers that
+   * don't pass it explicitly. */
+  parentFrame?: State;
   /** Source location of the surrounding generated call site. Used as the
    *  base `stepPath` when stamping a checkpoint on bailout — see
    *  `step()` for the per-key suffix.  */
@@ -126,66 +132,104 @@ export class PromptRunner {
    * receives a {@link BranchRunner} which exposes its own `step()` that
    * COLLECTS interrupts rather than throwing — siblings keep running
    * even when one halts so we can batch all interrupts into a single
-   * shared checkpoint (mirrors {@link runForkAll} semantics).
+   * shared checkpoint.
    *
-   * If any branch's `step` collected interrupts, snapshot messages,
-   * stamp ONE checkpoint at `${checkpointInfo.stepPath}/${keyPrefix}`,
-   * attach it to every collected interrupt, and throw `PromptBailout` so
-   * `runPrompt` returns the merged batch up the stack.
+   * Thin adapter over {@link runBatch} with `mode: "all"` and
+   * `recordBranchOutcomes: false` (the caller's `branchFn` body manages
+   * branch state itself via `stack.setResultOnBranch` / `deleteBranch`).
+   * `runBatch` owns: per-branch abort composition, ALS-isolated invoke,
+   * settle, shared checkpoint stamp at
+   * `${checkpointInfo.stepPath}/${keyPrefix}` with
+   * `intr.checkpoint`/`checkpointId` overwrite, and `popBranches` on
+   * the no-interrupt success path. Returns a {@link RunBatchResult}
+   * tagged union — `"interrupts"` if any branch halted (the caller
+   * bails out of runPrompt with `result.interrupts`), `"values"`
+   * otherwise.
    *
-   * IMPORTANT: do NOT call `pr.step(...)` (which throws) from inside a
-   * branch — use `b.step(...)` instead. A throw from `branchFn` is not
-   * caught and will propagate out of `Promise.all`.
+   * `keyFor(item, i)` MUST produce the same branch key the `branchFn`
+   * body uses for its `stack.getOrCreateBranch(...)` — otherwise
+   * `runBatch` would allocate a separate branch from the one the body
+   * manages, and the leaf-checkpoint vehicle into State.toJSON's
+   * branches walk would be lost.
+   *
+   * IMPORTANT: do NOT call `pr.step(...)` (which throws `PromptBailout`)
+   * from inside a branch — use `b.step(...)` instead. A throw from
+   * `branchFn` propagates out of `runBatch` and aborts the whole batch.
    */
   async parallel<T>(
     keyPrefix: string,
     items: T[],
+    keyFor: (item: T, index: number) => string,
     branchFn: (item: T, b: BranchRunner) => Promise<void>,
-  ): Promise<void> {
+  ): Promise<RunBatchResult<void>> {
     const branches = items.map(() => new BranchRunner(this.opts.self));
-    // Snapshot once before scheduling, then run each branch inside its own
-    // ALS-backed span context seeded from that snapshot. Without this,
-    // sibling branches share the root span stack and concurrent
-    // startSpan/endSpan calls interleave (mirrors Runner.runForkAll).
-    const parentStack = this.opts.ctx.statelogClient.snapshotStack();
-    await Promise.all(
-      items.map((item, i) =>
-        this.opts.ctx.statelogClient.runInBranchContext(parentStack, () =>
-          branchFn(item, branches[i]),
-        ),
-      ),
-    );
-    const merged: Interrupt[] = [];
-    for (const b of branches) if (b.interrupts) merged.push(...b.interrupts);
-    if (merged.length === 0) return;
-
-    this.opts.self.messagesJSON = this.opts.snapshotMessages();
+    const parentFrame = this.opts.parentFrame ?? this.opts.stateStack.lastFrame();
     const basePath = this.opts.checkpointInfo?.stepPath ?? "";
     const stepPath = basePath ? `${basePath}/${keyPrefix}` : keyPrefix;
-    const cpId = this.opts.ctx.checkpoints.create(
-      this.opts.stateStack,
-      this.opts.ctx,
-      {
+
+    const result = await runBatch<void>({
+      ctx: this.opts.ctx,
+      parentStack: this.opts.stateStack,
+      parentFrame,
+      checkpointLocation: {
         moduleId: this.opts.checkpointInfo?.moduleId ?? "",
         scopeName: this.opts.checkpointInfo?.scopeName ?? "",
         stepPath,
       },
-    );
-    const cp = this.opts.ctx.checkpoints.get(cpId)!;
-    for (const intr of merged) {
-      intr.checkpoint = cp;
-      intr.checkpointId = cpId;
-    }
-    this.opts.ctx.statelogClient.checkpointCreated({
-      checkpointId: cpId,
-      reason: "interrupt",
-      sourceLocation: {
-        moduleId: cp.moduleId,
-        scopeName: cp.scopeName,
-        stepPath: cp.stepPath,
+      mode: "all",
+      // The branchFn body sets branch.result / interrupt info itself via
+      // `stack.setResultOnBranch` / `setInterruptOnBranch` in
+      // runInvokeStep. runBatch must NOT also call these — letting it
+      // overwrite branch.result with the body's `undefined` return value
+      // would destroy the meaningful tool result that runPrompt needs to
+      // read on resume (e.g. line 723 of prompt.ts).
+      recordBranchOutcomes: false,
+      children: items.map((item, i) => ({
+        key: keyFor(item, i),
+        invoke: async () => {
+          await branchFn(item, branches[i]);
+          // Surface the branch's collected interrupts (if any) as the
+          // invoke's return value. runBatch will batch them with sibling
+          // interrupts and stamp the shared checkpoint.
+          return branches[i].interrupts ?? undefined;
+        },
+      })),
+      hooks: {
+        // Snapshot the message thread INTO `self.messagesJSON` BEFORE
+        // runBatch calls `ctx.checkpoints.create`. The checkpoint deep-
+        // clones `self.locals` synchronously, so mutating messagesJSON
+        // after `create` would NOT be visible in the captured state.
+        //
+        // This matters because each tool branch's body pushes its
+        // `tool` response onto the shared `MessageThread` via
+        // `messages.push(...)` during the batch — but those pushes
+        // never refresh `self.messagesJSON`. If we let runBatch stamp
+        // the checkpoint with stale messagesJSON, every successful
+        // sibling's tool response is lost on resume (the resumed run
+        // restores from messagesJSON and skips the completed branches,
+        // so their messages.push doesn't re-fire). The next LLM call
+        // then receives an assistant message with N tool_calls but
+        // only M < N matching tool responses, which real APIs reject.
+        // See tests/agency-js/parallel-tools-resume-messages-intact.
+        beforeCheckpoint: () => {
+          this.opts.self.messagesJSON = this.opts.snapshotMessages();
+        },
+        onCheckpoint: (cpId) => {
+          const cp = this.opts.ctx.checkpoints.get(cpId)!;
+          this.opts.ctx.statelogClient.checkpointCreated({
+            checkpointId: cpId,
+            reason: "interrupt",
+            sourceLocation: {
+              moduleId: cp.moduleId,
+              scopeName: cp.scopeName,
+              stepPath: cp.stepPath,
+            },
+          });
+        },
       },
     });
-    throw new PromptBailout(merged);
+
+    return result;
   }
 }
 

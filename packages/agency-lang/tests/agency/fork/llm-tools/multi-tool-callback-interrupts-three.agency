@@ -1,0 +1,51 @@
+// Three tools called in parallel; each tool's onToolCallStart callback
+// raises an interrupt. All three interrupts must batch under one shared
+// checkpoint and resume cleanly.
+
+let firedA: number = 0
+let firedB: number = 0
+let firedC: number = 0
+
+def toolA(): string {
+  return "A done"
+}
+
+def toolB(): string {
+  return "B done"
+}
+
+def toolC(): string {
+  return "C done"
+}
+
+callback("onToolCallStart") as data {
+  if (data.toolName == "toolA") {
+    firedA = firedA + 1
+    if (firedA == 1) {
+      interrupt myapp::pauseA("approve A?", {})
+    }
+  }
+  if (data.toolName == "toolB") {
+    firedB = firedB + 1
+    if (firedB == 1) {
+      interrupt myapp::pauseB("approve B?", {})
+    }
+  }
+  if (data.toolName == "toolC") {
+    firedC = firedC + 1
+    if (firedC == 1) {
+      interrupt myapp::pauseC("approve C?", {})
+    }
+  }
+}
+
+type Response = {
+  results: string[]
+}
+
+node main() {
+  const result: Response = llm("You must call toolA, toolB, AND toolC in a SINGLE response in parallel. Then return a 'results' field that is an array containing the three return values.", {
+    tools: [toolA, toolB, toolC]
+  })
+  return result.results
+}

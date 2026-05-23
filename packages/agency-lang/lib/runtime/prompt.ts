@@ -3,7 +3,7 @@ import { PromptResult, Result, StreamChunk, ToolCallJSON } from "smoltalk";
 import { createLogger } from "../logger.js";
 import { AgencyFunction } from "./agencyFunction.js";
 import { AgencyCancelledError, isAbortError } from "./errors.js";
-import { callHook } from "./hooks.js";
+import { callHook, invokeCallbacks } from "./hooks.js";
 import { Interrupt, hasInterrupts, isRejected } from "./interrupts.js";
 import type { PromptConfig } from "./llmClient.js";
 import { setupFunction } from "./node.js";
@@ -661,10 +661,16 @@ export async function runPrompt(args: {
           await b.step(
             `round.${round}.tool.${toolCall.id}.start`,
             async () =>
-              await callHook({
+              // Use `invokeCallbacks` with `branchStack` so any callback
+              // that raises an interrupt captures a checkpoint with this
+              // tool branch's slice (rather than the parent runPrompt
+              // stack). Without this, `setInterruptOnBranch` would not
+              // find the right frame on resume. See Plan 1 / Bug 2.
+              await invokeCallbacks({
                 ctx,
                 name: "onToolCallStart",
                 data: { toolName: handler.name, args: namedArgs },
+                stateStack: branchStack,
               }),
           );
           if (b.interrupts) return;
@@ -735,7 +741,9 @@ export async function runPrompt(args: {
             await b.step(
               `round.${round}.tool.${toolCall.id}.end`,
               async () =>
-                await callHook({
+                // Same slice-rule reason as the .start hook above —
+                // callback interrupts must capture the branch's stack.
+                await invokeCallbacks({
                   ctx,
                   name: "onToolCallEnd",
                   data: {
@@ -743,6 +751,7 @@ export async function runPrompt(args: {
                     result: toolResult,
                     timeTaken,
                   },
+                  stateStack: branchStack,
                 }),
             );
             // If onToolCallEnd collected interrupts, the branch is halted —

@@ -1,0 +1,21 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Two parallel tool calls; only one tool's onToolCallStart callback raises an interrupt. The sole interrupt produces a batched checkpoint and resume completes the other branch normally.",
+      "input": "",
+      "expectedOutput": "",
+      "evaluationCriteria": [
+        {
+          "type": "llmJudge",
+          "judgePrompt": "The output should be an object with a 'fact' field containing text about cats and a 'joke' field containing text about dogs.",
+          "desiredAccuracy": 70
+        }
+      ],
+      "interruptHandlers": [
+        { "action": "approve" }
+      ],
+      "retry": 2
+    }
+  ]
+}

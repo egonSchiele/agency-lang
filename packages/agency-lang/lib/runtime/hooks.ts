@@ -11,6 +11,7 @@ import { AgencyFunction } from "./agencyFunction.js";
 import { AgencyCancelledError, RestoreSignal } from "./errors.js";
 import { hasInterrupts, type Interrupt } from "./interrupts.js";
 import type { RuntimeContext } from "./state/context.js";
+import type { StateStack } from "./state/stateStack.js";
 import type { TraceEvent } from "./trace/types.js";
 import type { RunNodeResult } from "./types.js";
 
@@ -99,11 +100,18 @@ async function invokeCallback(
   fn: any,
   data: unknown,
   ctx: RuntimeContext<any>,
+  stateStack?: StateStack,
 ): Promise<Interrupt[] | undefined> {
   if (AgencyFunction.isAgencyFunction(fn)) {
+    // When `stateStack` is set, the callback frame is pushed onto that
+    // stack rather than `ctx.stateStack`. This matters inside parallel
+    // tool branches: the callback's interrupt checkpoint must capture
+    // the branch's slice (so `setInterruptOnBranch` finds the right
+    // frame), not the parent's stack. See Plan 1 / Bug 2 in
+    // docs/notes/parallel-callback-investigation.md.
     const result = await (fn as AgencyFunction).invoke(
       { type: "positional", args: [data] },
-      { ctx },
+      stateStack ? { ctx, stateStack } : { ctx },
     );
     // The callback body completed with an unhandled `interrupt` statement.
     // Surface the interrupts so the caller can decide what to do — Phase 0
@@ -126,12 +134,13 @@ async function fireWithGuard(
   data: unknown,
   ctx: RuntimeContext<any>,
   errorLabel: string,
+  stateStack?: StateStack,
 ): Promise<Interrupt[] | undefined> {
   const key = fn as object;
   if (_activeCallbacks.has(key)) return undefined;
   _activeCallbacks.add(key);
   try {
-    return await invokeCallback(fn, data, ctx);
+    return await invokeCallback(fn, data, ctx, stateStack);
   } catch (error) {
     // Never swallow real control-flow exceptions used by the runtime.
     if (error instanceof RestoreSignal) throw error;
@@ -146,14 +155,20 @@ async function fireWithGuard(
   }
 }
 
-function gatherCallbacks<K extends keyof CallbackMap>(
+/** Gather every callback registered for `name`, in fire order. `stack` is
+ *  the stack to walk for scoped callbacks — pass `ctx.stateStack` from
+ *  top-level call sites, or a branch's own stack from inside a fork branch
+ *  (otherwise scoped callbacks registered inside the branch's frame chain
+ *  are missed). */
+export function gatherCallbacks<K extends keyof CallbackMap>(
   ctx: RuntimeContext<any>,
   name: K,
+  stack: StateStack,
 ): any[] {
   // Order: innermost stack-frame scoped callbacks → outermost → top-level
   // (registered during module init) → TS-passed callback. Top-level comes
   // after stack-walked because conceptually they are "the outermost scope".
-  const scoped = ctx.stateStack.collectScopedCallbacks(name);
+  const scoped = stack.collectScopedCallbacks(name);
   const topLevel = (ctx.topLevelCallbacks ?? [])
     .filter((cb) => cb.name === name)
     .map((cb) => cb.fn);
@@ -163,12 +178,25 @@ function gatherCallbacks<K extends keyof CallbackMap>(
   return out;
 }
 
-export async function callHook<K extends keyof CallbackMap>(args: {
+/** Fire every callback registered for `name`, sequentially. When
+ *  `stateStack` is supplied, callbacks run on that stack (so any interrupt
+ *  raised inside a callback captures a checkpoint with the right slice and
+ *  `setInterruptOnBranch` finds the right frame). When `stateStack` is
+ *  omitted, behaviour is identical to today's `callHook`: scoped callbacks
+ *  are walked from `ctx.stateStack` and the callback frame pushes onto
+ *  `ctx.stateStack`.
+ *
+ *  Used directly by sites that fire inside a fork/tool branch (e.g. the
+ *  per-tool `onToolCallStart` / `onToolCallEnd` in `prompt.ts`). The
+ *  public `callHook` is now a thin wrapper that omits `stateStack`. */
+export async function invokeCallbacks<K extends keyof CallbackMap>(args: {
   ctx: RuntimeContext<any>;
   name: K;
   data: CallbackMap[K];
+  stateStack?: StateStack;
 }): Promise<Interrupt[] | undefined> {
-  const { ctx, name, data } = args;
+  const { ctx, name, data, stateStack } = args;
+  const walkStack = stateStack ?? ctx.stateStack;
 
   // Single shared collector. Mirrors the runForkAll pattern of "let every
   // sibling run to completion, batch all interrupts together at the end"
@@ -182,11 +210,11 @@ export async function callHook<K extends keyof CallbackMap>(args: {
   // and have no interrupt mechanism, so they can't contribute to the
   // batch.
   for (const fn of _globalHooks[name] ?? []) {
-    await fireWithGuard(fn, data, ctx, `global ${name}`);
+    await fireWithGuard(fn, data, ctx, `global ${name}`, stateStack);
   }
 
-  for (const fn of gatherCallbacks(ctx, name)) {
-    const result = await fireWithGuard(fn, data, ctx, name);
+  for (const fn of gatherCallbacks(ctx, name, walkStack)) {
+    const result = await fireWithGuard(fn, data, ctx, name, stateStack);
     if (result) collected.push(...result);
   }
 
@@ -209,6 +237,16 @@ export async function callHook<K extends keyof CallbackMap>(args: {
   }
 
   return collected.length > 0 ? collected : undefined;
+}
+
+/** Today's call sites that fire on the top-level stack. Thin wrapper over
+ *  `invokeCallbacks` with no `stateStack` override. */
+export async function callHook<K extends keyof CallbackMap>(args: {
+  ctx: RuntimeContext<any>;
+  name: K;
+  data: CallbackMap[K];
+}): Promise<Interrupt[] | undefined> {
+  return invokeCallbacks(args);
 }
 
 /**

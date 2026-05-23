@@ -1,0 +1,55 @@
+// Two tools called in parallel; both onToolCallStart callbacks raise
+// interrupts. The user approves one and REJECTS the other. The callback
+// whose interrupt was rejected receives a failure value back from the
+// interrupt expression; both tools still run to completion afterwards
+// because the callback bodies don't propagate the failure.
+
+let firedA: number = 0
+let firedB: number = 0
+let outcomeA: string = "none"
+let outcomeB: string = "none"
+
+def quickFact(topic: string): string {
+  return "fact about ${topic}"
+}
+
+def quickJoke(topic: string): string {
+  return "joke about ${topic}"
+}
+
+callback("onToolCallStart") as data {
+  if (data.toolName == "quickFact") {
+    firedA = firedA + 1
+    if (firedA == 1) {
+      const r = interrupt myapp::pauseA("approve quickFact?", {})
+      if (isFailure(r)) {
+        outcomeA = "rejected"
+      } else {
+        outcomeA = "approved"
+      }
+    }
+  }
+  if (data.toolName == "quickJoke") {
+    firedB = firedB + 1
+    if (firedB == 1) {
+      const r = interrupt myapp::pauseB("approve quickJoke?", {})
+      if (isFailure(r)) {
+        outcomeB = "rejected"
+      } else {
+        outcomeB = "approved"
+      }
+    }
+  }
+}
+
+type Response = {
+  fact: string
+  joke: string
+}
+
+node main() {
+  const result: Response = llm("Call quickFact with topic='cats' AND quickJoke with topic='dogs' in the SAME response in parallel. Then return a 'fact' field with the quickFact result and a 'joke' field with the quickJoke result.", {
+    tools: [quickFact, quickJoke]
+  })
+  return result
+}

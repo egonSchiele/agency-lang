@@ -1,0 +1,47 @@
+// Two tools called in parallel; an onToolCallStart callback interrupts
+// from each branch with a SPECIFIC kind that a surrounding handle block
+// catches and approves automatically. No user-side interrupt is needed —
+// the per-branch handler chain catches the callback's interrupt inside
+// its own branch's slice.
+
+let firedA: number = 0
+let firedB: number = 0
+
+def quickFact(topic: string): string {
+  return "fact about ${topic}"
+}
+
+def quickJoke(topic: string): string {
+  return "joke about ${topic}"
+}
+
+callback("onToolCallStart") as data {
+  if (data.toolName == "quickFact") {
+    firedA = firedA + 1
+    if (firedA == 1) {
+      interrupt myapp::auto("auto-approve A?", {})
+    }
+  }
+  if (data.toolName == "quickJoke") {
+    firedB = firedB + 1
+    if (firedB == 1) {
+      interrupt myapp::auto("auto-approve B?", {})
+    }
+  }
+}
+
+type Response = {
+  fact: string
+  joke: string
+}
+
+node main() {
+  handle {
+    const result: Response = llm("Call quickFact with topic='cats' AND quickJoke with topic='dogs' in the SAME response in parallel. Then return a 'fact' field with the quickFact result and a 'joke' field with the quickJoke result.", {
+      tools: [quickFact, quickJoke]
+    })
+    return result
+  } with (intr) {
+    return approve()
+  }
+}

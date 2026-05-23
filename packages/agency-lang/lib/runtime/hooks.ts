@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from "node:async_hooks";
 import type {
   CostEstimate,
   MessageJSON,
@@ -78,9 +79,34 @@ export type AgencyCallbacks = {
   ) => void | Promise<void>;
 };
 
-// Per-instance recursion guard: prevents a callback that triggers helper
-// functions which re-fire the same hook from recursing into itself.
-const _activeCallbacks = new WeakSet<object>();
+// Recursion guard: prevents a callback that triggers helper functions
+// which re-fire the same hook from recursing into itself
+// (tests/agency/callback-recursion).
+//
+// Scope = one async-call chain. Backed by `AsyncLocalStorage` so the
+// "currently firing" set is inherited through `await` boundaries and
+// nested function calls — but a fork branch that gets its own ALS
+// context (via `statelogClient.runInBranchContext` in `runBatch`)
+// starts with an EMPTY set. That means concurrent fork/tool branches
+// can each fire the same callback in parallel without dropping
+// sibling invocations, while a callback that synchronously triggers
+// its own re-fire (through a helper-function call on the same async
+// chain) is still detected.
+//
+// Why ALS rather than a per-stack or module-level WeakSet:
+//   - Module-level WeakSet (pre-Task 5 behaviour) dropped legitimate
+//     parallel-branch invocations because every branch shared the
+//     same set.
+//   - Per-stack WeakSet didn't catch recursion: each runBatch call
+//     creates a NEW branch stack, so the recursive fire (which
+//     happens on the new stack) never sees the outer fire's entry.
+//   - ALS naturally inherits the set through both sync calls and
+//     awaited continuations, but stops at branch-context boundaries.
+//
+// Set entries are live-only — never serialized. Always cleared in
+// the `finally` block, so a checkpoint can never capture a "stuck"
+// entry.
+const _activeCallbacksALS = new AsyncLocalStorage<Set<object>>();
 
 // Global hook registry: allows external packages (e.g., @agency-lang/mcp) to
 // register callbacks that fire alongside user-provided callbacks.
@@ -137,10 +163,20 @@ async function fireWithGuard(
   stateStack?: StateStack,
 ): Promise<Interrupt[] | undefined> {
   const key = fn as object;
-  if (_activeCallbacks.has(key)) return undefined;
-  _activeCallbacks.add(key);
+  // Recursion guard scoped to the current ALS context. See
+  // `_activeCallbacksALS` docstring for why ALS (not module-level
+  // WeakSet, not per-stack WeakSet).
+  const inherited = _activeCallbacksALS.getStore();
+  if (inherited?.has(key)) return undefined;
+  // Always allocate a fresh set per fire — we need our own copy so a
+  // deeper fire can safely re-enter without corrupting the outer set.
+  // The new set carries over the inherited entries plus our own key.
+  const active = new Set<object>(inherited);
+  active.add(key);
   try {
-    return await invokeCallback(fn, data, ctx, stateStack);
+    return await _activeCallbacksALS.run(active, () =>
+      invokeCallback(fn, data, ctx, stateStack),
+    );
   } catch (error) {
     // Never swallow real control-flow exceptions used by the runtime.
     if (error instanceof RestoreSignal) throw error;
@@ -150,8 +186,6 @@ async function fireWithGuard(
     // from invokeCallback now.
     console.error(`[agency] ${errorLabel} callback error:`, error);
     return undefined;
-  } finally {
-    _activeCallbacks.delete(key);
   }
 }
 

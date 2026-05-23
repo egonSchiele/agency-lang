@@ -1,0 +1,33 @@
+// Verifies callback-rejection-propagation plan, Task 4 (LLM hook category).
+//
+// When a callback registered for onLLMCallStart raises an interrupt
+// and the user rejects it, the rejection must abort the surrounding
+// `llm()` call so the call site receives a Failure value instead of
+// the LLM's response.
+//
+// This was previously blocked by the callHook-resume frame-loss bug:
+// the callback's frame was pushed onto ctx.stateStack and lost when
+// pr.step overwrote the leaf checkpoint, so on resume the callback
+// re-entered fresh, didn't find its saved __interruptId_N, and raised
+// a brand-new interrupt ("Unexpected interrupt #2: too expensive")
+// instead of consuming the user's reject response.
+//
+// The fix routes onLLMCallStart / onLLMCallEnd through `pr.fireHook`,
+// a runBatch-based fire path that preserves each callback's frame on
+// its own per-callback branch. On resume runBatch's cached-branch
+// path re-invokes only the interrupted callback with its frame
+// restored, the codegen `if (__response)` short-circuit consumes the
+// reject response, and the callback returns the failure that
+// `_runPrompt` then surfaces to the user's llm() call site.
+
+callback("onLLMCallStart") as data {
+  interrupt myapp::abort("too expensive", {})
+}
+
+node main() {
+  const result: string = llm("Reply with the single word: pong")
+  if (isFailure(result)) {
+    return "rejected"
+  }
+  return "got: " + result
+}

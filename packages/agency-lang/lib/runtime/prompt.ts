@@ -3,7 +3,7 @@ import { PromptResult, Result, StreamChunk, ToolCallJSON } from "smoltalk";
 import { createLogger } from "../logger.js";
 import { AgencyFunction } from "./agencyFunction.js";
 import { AgencyCancelledError, isAbortError } from "./errors.js";
-import { callHook, invokeCallbacks } from "./hooks.js";
+import { invokeCallbacks } from "./hooks.js";
 import { Interrupt, hasInterrupts, isRejected } from "./interrupts.js";
 import type { PromptConfig } from "./llmClient.js";
 import { setupFunction } from "./node.js";
@@ -45,6 +45,8 @@ async function _runPrompt({
   responseFormat,
   clientConfig,
   stateStack,
+  pr,
+  stepPrefix,
 }: {
   ctx: RuntimeContext<GraphState>;
   messages: MessageThread;
@@ -56,6 +58,18 @@ async function _runPrompt({
    * fork/race branch. Used for branch-aware cancellation checks and for
    * scoping the LLM HTTP abort signal to the current branch. */
   stateStack?: StateStack;
+  /** The outer runPrompt's PromptRunner. Used for LLM hook firing via
+   *  `pr.fireHook` so each callback's frame is preserved on its own
+   *  runBatch branch (per Plan
+   *  docs/superpowers/plans/2026-05-23-callback-rejection-propagation.md
+   *  — using `callHook` here breaks resume because the callback's frame
+   *  is lost when the outer `pr.step` overwrites the leaf checkpoint). */
+  pr: PromptRunner;
+  /** Unique suffix that disambiguates this LLM call's hook checkpoint
+   *  step paths from any sibling `_runPrompt` invocation in the same
+   *  runPrompt frame. Pass `"initialLlmCall"` for the first call and
+   *  `"round.${round}.nextLlmCall"` for tool-followup calls. */
+  stepPrefix: string;
 }): Promise<RunPromptResult> {
   if (ctx.isCancelled(stateStack)) {
     throw new AgencyCancelledError();
@@ -68,16 +82,28 @@ async function _runPrompt({
   const stream = !!(clientConfig as any)?.stream;
   const startTime = performance.now();
 
-  const startOutcome = await callHook({
-    ctx,
-    name: "onLLMCallStart",
-    data: {
+  // Route through `pr.fireHook` (runBatch-based) instead of `callHook`
+  // so each callback's frame is preserved on its own per-callback branch
+  // via runBatch's cached-branch resume path. With plain `callHook`, the
+  // callback frame would be pushed straight onto ctx.stateStack, the
+  // outer `pr.step` would overwrite the leaf checkpoint with its own
+  // stamp, and on resume the callback frame would be missing from the
+  // deserialize queue — `setupFunction` would fall back to serialize
+  // mode, the callback would re-enter fresh without its saved
+  // `__interruptId_N`, and a brand-new interrupt would fire instead of
+  // consuming the user's response. See plan
+  // docs/superpowers/plans/2026-05-23-callback-rejection-propagation.md.
+  const startOutcome = await pr.fireHook(
+    `${stepPrefix}.llmStart`,
+    "onLLMCallStart",
+    {
       prompt,
       tools,
       model: clientConfig.model,
       messages: messages.toJSON().messages,
     },
-  });
+    stateStack,
+  );
   if (startOutcome.kind === "interrupts") return { kind: "interrupt", interrupts: startOutcome.interrupts };
   if (startOutcome.kind === "failure") return { kind: "failure", failure: startOutcome.failure };
 
@@ -207,10 +233,12 @@ async function _runPrompt({
     }
   }
 
-  const endOutcome = await callHook({
-    ctx,
-    name: "onLLMCallEnd",
-    data: {
+  // Same reason as the start hook above: route through runBatch via
+  // `pr.fireHook` so the callback frame survives resume.
+  const endOutcome = await pr.fireHook(
+    `${stepPrefix}.llmEnd`,
+    "onLLMCallEnd",
+    {
       model: JSON.stringify(modelName),
       result: completion,
       usage: completion.usage,
@@ -218,7 +246,8 @@ async function _runPrompt({
       timeTaken: endTime - startTime,
       messages: messages.toJSON().messages,
     },
-  });
+    stateStack,
+  );
   if (endOutcome.kind === "interrupts") return { kind: "interrupt", interrupts: endOutcome.interrupts };
   if (endOutcome.kind === "failure") return { kind: "failure", failure: endOutcome.failure };
 
@@ -403,6 +432,8 @@ export async function runPrompt(args: {
         responseFormat,
         clientConfig,
         stateStack,
+        pr,
+        stepPrefix: "initialLlmCall",
       });
     } catch (e) {
       closeLlmSpan();
@@ -697,12 +728,13 @@ export async function runPrompt(args: {
                 stateStack: branchStack,
               });
               if (outcome.kind === "interrupts") return outcome.interrupts;
-              // Callback failures on tool start/end currently fall through
-              // as "callback no-op'd"; full rejection routing through the
-              // existing `isRejected(toolResult)` rail is tracked as
-              // future work in
+              // Callback failures (rejected interrupts) on tool start/end
+              // currently fall through as "callback no-op'd": full
+              // failure routing through a rejection toolMessage requires
+              // tool-branch callback-frame preservation across resume,
+              // which is a separate bug. See plan
               // docs/superpowers/plans/2026-05-23-callback-rejection-
-              // propagation.md Task 5.
+              // propagation.md "Implementation status" header (Task 5).
               return;
             },
           );
@@ -855,6 +887,8 @@ export async function runPrompt(args: {
             responseFormat,
             clientConfig,
             stateStack,
+            pr,
+            stepPrefix: `round.${round}.nextLlmCall`,
           });
         } catch (e) {
           closeLlmSpan();

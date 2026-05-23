@@ -1,5 +1,13 @@
 import type { MessageJSON } from "smoltalk";
+import {
+  type CallbackMap,
+  type CallbackOutcome,
+  fireGlobalHooks,
+  gatherCallbacks,
+  invokeOneCallback,
+} from "./hooks.js";
 import { hasInterrupts, type Interrupt } from "./interrupts.js";
+import { isFailure, type ResultFailure } from "./result.js";
 import { runBatch, type RunBatchResult } from "./runBatch.js";
 import type { SourceLocationOpts } from "./state/checkpointStore.js";
 import type { RuntimeContext } from "./state/context.js";
@@ -230,6 +238,123 @@ export class PromptRunner {
     });
 
     return result;
+  }
+
+  /**
+   * Fire all registered callbacks for `hookName` via {@link runBatch}
+   * with one sequential child per callback. Mirrors `Runner.hook`'s
+   * substrate so the same resume guarantees apply to LLM-call sites:
+   *
+   *   - On the first run, if a callback raises an interrupt, runBatch
+   *     stamps a shared checkpoint that captures every per-callback
+   *     branch's stack (including the interrupted callback's frame).
+   *   - On resume, runBatch re-invokes only the un-resolved branch
+   *     (others are short-circuited via the cached-branch path). The
+   *     re-invoked callback's frame is restored from the snapshot in
+   *     deserialize mode, finds its saved `__interruptId_N`, consumes
+   *     the user's response, and returns naturally.
+   *
+   * Why this replaces direct `callHook` at LLM sites: `callHook` pushes
+   * the callback frame straight onto `ctx.stateStack`. When the
+   * surrounding `pr.step` stamps its own outer checkpoint on bailout,
+   * the callback's frame is captured but never preserved as a
+   * resumable branch — on resume `setupFunction` falls back to serialize
+   * mode, the callback re-enters with a fresh frame, and the saved
+   * `__interruptId_N` is lost. Routing through `runBatch` keeps each
+   * callback's frame on its own branch so the cached-branch resume path
+   * works exactly as it does for codegen hook sites.
+   *
+   * Failures (a handler rejected the callback's interrupt) travel as
+   * the child's `T`-value and are folded into `CallbackOutcome.failure`
+   * with first-failure-wins precedence — same as `Runner.hook`'s
+   * post-batch walk.
+   */
+  async fireHook<K extends keyof CallbackMap>(
+    keyPrefix: string,
+    hookName: K,
+    data: CallbackMap[K],
+    stateStack?: StateStack,
+  ): Promise<CallbackOutcome> {
+    const ctx = this.opts.ctx;
+    const walkStack = stateStack ?? this.opts.stateStack;
+
+    // Global hooks (registered by external packages) fire first, inline.
+    // They are plain JS and have no interrupt mechanism, so they cannot
+    // contribute to the batch.
+    await fireGlobalHooks(ctx, hookName, data, stateStack);
+
+    const callbacks = gatherCallbacks(ctx, hookName, walkStack);
+    if (callbacks.length === 0) return { kind: "ok" };
+
+    const parentFrame =
+      this.opts.parentFrame ?? this.opts.stateStack.lastFrame();
+    const basePath = this.opts.checkpointInfo?.stepPath ?? "";
+    const stepPath = basePath ? `${basePath}/${keyPrefix}` : keyPrefix;
+
+    const result = await runBatch<ResultFailure | undefined>({
+      ctx,
+      parentStack: this.opts.stateStack,
+      parentFrame,
+      checkpointLocation: {
+        moduleId: this.opts.checkpointInfo?.moduleId ?? "",
+        scopeName: this.opts.checkpointInfo?.scopeName ?? "",
+        stepPath,
+      },
+      // Sequential preserves the historical "callbacks fire in declared
+      // order" contract that callHook honored.
+      mode: "sequential",
+      children: callbacks.map((fn, i) => ({
+        key: `hook_${keyPrefix}_${i}`,
+        invoke: async (branchStack) => {
+          const outcome = await invokeOneCallback({
+            ctx,
+            fn,
+            name: hookName,
+            data,
+            stateStack: branchStack,
+          });
+          // Interrupts flow through runBatch's own machinery.
+          if (outcome.kind === "interrupts") return outcome.interrupts;
+          // Failures travel as the child T-value; first-failure-wins
+          // selection happens below the runBatch call.
+          if (outcome.kind === "failure") return outcome.failure;
+          return undefined;
+        },
+      })),
+      hooks: {
+        // Snapshot the messages INTO `self.messagesJSON` BEFORE the
+        // shared checkpoint deep-clones, so any messages pushed by the
+        // surrounding LLM step (e.g. the assistant message before
+        // onLLMCallEnd fires) are captured. Same reason as `parallel()`'s
+        // beforeCheckpoint.
+        beforeCheckpoint: () => {
+          this.opts.self.messagesJSON = this.opts.snapshotMessages();
+        },
+        onCheckpoint: (cpId) => {
+          const cp = ctx.checkpoints.get(cpId)!;
+          ctx.statelogClient.checkpointCreated({
+            checkpointId: cpId,
+            reason: "interrupt",
+            sourceLocation: {
+              moduleId: cp.moduleId,
+              scopeName: cp.scopeName,
+              stepPath: cp.stepPath,
+            },
+          });
+        },
+      },
+    });
+
+    if (result.kind === "interrupts") {
+      return { kind: "interrupts", interrupts: result.interrupts };
+    }
+    // First failure wins — matches Runner.hook's post-batch walk and
+    // invokeCallbacks's sequential loop.
+    const firstFailure = result.values.find(
+      (v): v is ResultFailure => v !== undefined && isFailure(v),
+    );
+    if (firstFailure) return { kind: "failure", failure: firstFailure };
+    return { kind: "ok" };
   }
 }
 

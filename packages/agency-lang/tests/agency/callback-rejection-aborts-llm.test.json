@@ -1,0 +1,21 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Rejecting an onLLMCallStart callback's interrupt aborts the surrounding llm() call so the call site receives a Failure.",
+      "input": "",
+      "expectedOutput": "\"rejected\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "interruptHandlers": [
+        {
+          "action": "reject",
+          "expectedMessage": "too expensive"
+        }
+      ]
+    }
+  ]
+}

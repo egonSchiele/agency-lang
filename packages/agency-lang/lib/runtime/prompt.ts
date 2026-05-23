@@ -9,7 +9,7 @@ import type { PromptConfig } from "./llmClient.js";
 import { setupFunction } from "./node.js";
 // See docs/dev/promptRunner.md for the control-flow abstraction used here.
 import { PromptBailout, PromptRunner } from "./promptRunner.js";
-import { isFailure } from "./result.js";
+import { isFailure, type ResultFailure } from "./result.js";
 import type { SourceLocationOpts } from "./state/checkpointStore.js";
 import type { RuntimeContext } from "./state/context.js";
 import { MessageThread } from "./state/messageThread.js";
@@ -27,10 +27,15 @@ type Tool = {
 
 /** Result of `_runPrompt`. `interrupt` carries interrupts raised by an
  *  `onLLMCallStart` or `onLLMCallEnd` callback so the outer `pr.step` can
- *  checkpoint and bail uniformly with the tool-interrupt path. */
+ *  checkpoint and bail uniformly with the tool-interrupt path. `failure`
+ *  carries a rejected-interrupt failure (the handler returned reject)
+ *  surfaced from one of the LLM hooks; the outer `runPrompt` returns it
+ *  so the user's `llm()` call site receives a Failure value. See
+ *  docs/superpowers/plans/2026-05-23-callback-rejection-propagation.md. */
 export type RunPromptResult =
   | { kind: "ok"; messages: MessageThread; toolCalls: smoltalk.ToolCallJSON[] }
-  | { kind: "interrupt"; interrupts: Interrupt[] };
+  | { kind: "interrupt"; interrupts: Interrupt[] }
+  | { kind: "failure"; failure: ResultFailure };
 
 async function _runPrompt({
   ctx,
@@ -63,7 +68,7 @@ async function _runPrompt({
   const stream = !!(clientConfig as any)?.stream;
   const startTime = performance.now();
 
-  const startInterrupts = await callHook({
+  const startOutcome = await callHook({
     ctx,
     name: "onLLMCallStart",
     data: {
@@ -73,7 +78,8 @@ async function _runPrompt({
       messages: messages.toJSON().messages,
     },
   });
-  if (startInterrupts) return { kind: "interrupt", interrupts: startInterrupts };
+  if (startOutcome.kind === "interrupts") return { kind: "interrupt", interrupts: startOutcome.interrupts };
+  if (startOutcome.kind === "failure") return { kind: "failure", failure: startOutcome.failure };
 
   // Re-check after hook — cancellation may have occurred during the callback
   if (ctx.isCancelled(stateStack)) {
@@ -201,7 +207,7 @@ async function _runPrompt({
     }
   }
 
-  const endInterrupts = await callHook({
+  const endOutcome = await callHook({
     ctx,
     name: "onLLMCallEnd",
     data: {
@@ -213,7 +219,8 @@ async function _runPrompt({
       messages: messages.toJSON().messages,
     },
   });
-  if (endInterrupts) return { kind: "interrupt", interrupts: endInterrupts };
+  if (endOutcome.kind === "interrupts") return { kind: "interrupt", interrupts: endOutcome.interrupts };
+  if (endOutcome.kind === "failure") return { kind: "failure", failure: endOutcome.failure };
 
   return { kind: "ok", messages, toolCalls };
 }
@@ -357,6 +364,11 @@ export async function runPrompt(args: {
   let toolCalls: smoltalk.ToolCallJSON[] = self.pendingToolCalls ?? [];
 
   let shouldPop = true;
+  // Set when an LLM hook (onLLMCallStart/End) callback raises an
+  // interrupt that a handler rejects. Surfaced as runPrompt's return
+  // value so the user's `llm()` call site sees a Failure. See
+  // docs/superpowers/plans/2026-05-23-callback-rejection-propagation.md.
+  let llmFailure: ResultFailure | undefined;
   try {
   // Initial LLM call wrapped in pr.step so any callback interrupts
   // (onLLMCallStart / onLLMCallEnd) bail uniformly. To keep the step
@@ -405,6 +417,14 @@ export async function runPrompt(args: {
       closeLlmSpan();
       return result.interrupts;
     }
+    if (result.kind === "failure") {
+      // A hook callback raised an interrupt that was rejected. The LLM
+      // call already happened; we don't revert messages — there's no
+      // resume coming. Stash the failure so the outer code returns it.
+      llmFailure = result.failure;
+      closeLlmSpan();
+      return;
+    }
     messages = result.messages;
     toolCalls = result.toolCalls;
     if (injectedFactsContent !== null) {
@@ -422,6 +442,10 @@ export async function runPrompt(args: {
     self.messagesJSON = messages.toJSON().messages;
     self.pendingToolCalls = toolCalls.length > 0 ? toolCalls : null;
   });
+
+  // A rejected hook callback halted the initial LLM call — surface the
+  // failure to the caller (user's `llm()` site) and exit.
+  if (llmFailure) return llmFailure;
 
   // After resume (initialLlmCall skipped), make sure there's an open
   // llmCall span if we have pending tool calls — the tool loop expects
@@ -660,18 +684,27 @@ export async function runPrompt(args: {
 
           await b.step(
             `round.${round}.tool.${toolCall.id}.start`,
-            async () =>
+            async () => {
               // Use `invokeCallbacks` with `branchStack` so any callback
               // that raises an interrupt captures a checkpoint with this
               // tool branch's slice (rather than the parent runPrompt
               // stack). Without this, `setInterruptOnBranch` would not
               // find the right frame on resume. See Plan 1 / Bug 2.
-              await invokeCallbacks({
+              const outcome = await invokeCallbacks({
                 ctx,
                 name: "onToolCallStart",
                 data: { toolName: handler.name, args: namedArgs },
                 stateStack: branchStack,
-              }),
+              });
+              if (outcome.kind === "interrupts") return outcome.interrupts;
+              // Callback failures on tool start/end currently fall through
+              // as "callback no-op'd"; full rejection routing through the
+              // existing `isRejected(toolResult)` rail is tracked as
+              // future work in
+              // docs/superpowers/plans/2026-05-23-callback-rejection-
+              // propagation.md Task 5.
+              return;
+            },
           );
           if (b.interrupts) return;
 
@@ -740,10 +773,10 @@ export async function runPrompt(args: {
               self.runnerState.toolTimings[toolCall.id] ?? 0;
             await b.step(
               `round.${round}.tool.${toolCall.id}.end`,
-              async () =>
+              async () => {
                 // Same slice-rule reason as the .start hook above —
                 // callback interrupts must capture the branch's stack.
-                await invokeCallbacks({
+                const outcome = await invokeCallbacks({
                   ctx,
                   name: "onToolCallEnd",
                   data: {
@@ -752,7 +785,12 @@ export async function runPrompt(args: {
                     timeTaken,
                   },
                   stateStack: branchStack,
-                }),
+                });
+                if (outcome.kind === "interrupts") return outcome.interrupts;
+                // See note on the .start hook above re: callback failure
+                // routing for tool hooks (tracked separately).
+                return;
+              },
             );
             // If onToolCallEnd collected interrupts, the branch is halted —
             // don't log toolCall (it would duplicate when the step re-runs on
@@ -827,6 +865,12 @@ export async function runPrompt(args: {
           closeLlmSpan();
           return nextResult.interrupts;
         }
+        if (nextResult.kind === "failure") {
+          // See initialLlmCall — rejected hook callback halts this round.
+          llmFailure = nextResult.failure;
+          closeLlmSpan();
+          return;
+        }
         messages = nextResult.messages;
         toolCalls = nextResult.toolCalls;
         // Increment the round counter only after a successful LLM round,
@@ -835,6 +879,10 @@ export async function runPrompt(args: {
         self.messagesJSON = messages.toJSON().messages;
         self.pendingToolCalls = toolCalls.length > 0 ? toolCalls : null;
       });
+
+      // Exit the tool loop on hook-rejection failure — same surface
+      // semantics as the initialLlmCall case.
+      if (llmFailure) return llmFailure;
     }
   } catch (error) {
     if (error instanceof PromptBailout) {

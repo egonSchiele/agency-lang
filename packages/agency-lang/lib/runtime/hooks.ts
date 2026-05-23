@@ -11,6 +11,7 @@ import type { CallbackName } from "../types/function.js";
 import { AgencyFunction } from "./agencyFunction.js";
 import { AgencyCancelledError, RestoreSignal } from "./errors.js";
 import { hasInterrupts, type Interrupt } from "./interrupts.js";
+import { isFailure, type ResultFailure } from "./result.js";
 import type { RuntimeContext } from "./state/context.js";
 import type { StateStack } from "./state/stateStack.js";
 import type { TraceEvent } from "./trace/types.js";
@@ -132,12 +133,35 @@ export function registerGlobalHook<K extends keyof CallbackMap>(
   _globalHooks[name]!.push(fn);
 }
 
+/** Outcome of firing a callback. `ok` means the callback completed
+ *  normally; `interrupts` means it raised one or more agency interrupts
+ *  that need user response; `failure` means the user (or a handler)
+ *  rejected an interrupt the callback raised — see
+ *  `docs/superpowers/plans/2026-05-23-callback-rejection-propagation.md`. */
+export type CallbackOutcome =
+  | { kind: "ok" }
+  | { kind: "interrupts"; interrupts: Interrupt[] }
+  | { kind: "failure"; failure: ResultFailure };
+
+/** Extract a Failure from a callback's return value, handling both the
+ *  bare `failure(...)` shape (used by `def`-style callbacks) and the
+ *  node-context envelope `{ messages, data: failure(...) }` produced by
+ *  callbacks compiled inside a node-style scope. Returns the unwrapped
+ *  failure or undefined if neither shape matches. */
+function extractCallbackFailure(result: any): ResultFailure | undefined {
+  if (isFailure(result)) return result;
+  if (result && typeof result === "object" && isFailure((result as any).data)) {
+    return (result as any).data;
+  }
+  return undefined;
+}
+
 async function invokeCallback(
   fn: any,
   data: unknown,
   ctx: RuntimeContext<any>,
   stateStack?: StateStack,
-): Promise<Interrupt[] | undefined> {
+): Promise<CallbackOutcome> {
   if (AgencyFunction.isAgencyFunction(fn)) {
     // When `stateStack` is set, the callback frame is pushed onto that
     // stack rather than `ctx.stateStack`. This matters inside parallel
@@ -150,19 +174,23 @@ async function invokeCallback(
       stateStack ? { ctx, stateStack } : { ctx },
     );
     // The callback body completed with an unhandled `interrupt` statement.
-    // Surface the interrupts so the caller can decide what to do — Phase 0
-    // callers (`callHookAndDrop`) log them; Phase 1+ codegen sites stamp a
-    // checkpoint and propagate them up the runner.
+    // Surface the interrupts so the caller can decide what to do.
     if (hasInterrupts(result)) {
-      return result as Interrupt[];
+      return { kind: "interrupts", interrupts: result as Interrupt[] };
     }
-    return undefined;
+    // The callback raised an interrupt that a handler (or the user) rejected.
+    // Generated `interrupt` codegen translates rejection to
+    // `runner.halt(failure("interrupt rejected", ...))`, so the callback's
+    // return value is a Failure — possibly wrapped in a node-context envelope.
+    const failure = extractCallbackFailure(result);
+    if (failure) return { kind: "failure", failure };
+    return { kind: "ok" };
   }
   // Plain JS callbacks (from AgencyCallbacks TS arg) have no interrupt
   // mechanism — they're just async functions. Errors thrown by them still
   // get caught by fireWithGuard below.
   await fn(data);
-  return undefined;
+  return { kind: "ok" };
 }
 
 async function fireWithGuard(
@@ -171,13 +199,13 @@ async function fireWithGuard(
   ctx: RuntimeContext<any>,
   errorLabel: string,
   stateStack?: StateStack,
-): Promise<Interrupt[] | undefined> {
+): Promise<CallbackOutcome> {
   const key = fn as object;
   // Recursion guard scoped to the current ALS context. See
   // `_activeCallbacksALS` docstring for why ALS (not module-level
   // WeakSet, not per-stack WeakSet).
   const inherited = _activeCallbacksALS.getStore();
-  if (inherited?.has(key)) return undefined;
+  if (inherited?.has(key)) return { kind: "ok" };
   // Always allocate a fresh set per fire — we need our own copy so a
   // deeper fire can safely re-enter without corrupting the outer set.
   // The new set carries over the inherited entries plus our own key.
@@ -195,7 +223,7 @@ async function fireWithGuard(
     // Interrupts no longer flow through this path — they return normally
     // from invokeCallback now.
     console.error(`[agency] ${errorLabel} callback error:`, error);
-    return undefined;
+    return { kind: "ok" };
   }
 }
 
@@ -238,7 +266,7 @@ export async function invokeCallbacks<K extends keyof CallbackMap>(args: {
   name: K;
   data: CallbackMap[K];
   stateStack?: StateStack;
-}): Promise<Interrupt[] | undefined> {
+}): Promise<CallbackOutcome> {
   const { ctx, name, data, stateStack } = args;
   const walkStack = stateStack ?? ctx.stateStack;
 
@@ -258,8 +286,15 @@ export async function invokeCallbacks<K extends keyof CallbackMap>(args: {
   }
 
   for (const fn of gatherCallbacks(ctx, name, walkStack)) {
-    const result = await fireWithGuard(fn, data, ctx, name, stateStack);
-    if (result) collected.push(...result);
+    const outcome = await fireWithGuard(fn, data, ctx, name, stateStack);
+    // First failure wins — later callbacks don't fire. Matches how a JS
+    // error inside a Runner.step body short-circuits the rest of that
+    // step. See docs/superpowers/plans/2026-05-23-callback-rejection-
+    // propagation.md.
+    if (outcome.kind === "failure") return outcome;
+    if (outcome.kind === "interrupts") {
+      collected.push(...outcome.interrupts);
+    }
   }
 
   // Defensive: onAgentStart / onAgentEnd fire outside any agency frame so
@@ -280,7 +315,9 @@ export async function invokeCallbacks<K extends keyof CallbackMap>(args: {
     );
   }
 
-  return collected.length > 0 ? collected : undefined;
+  return collected.length > 0
+    ? { kind: "interrupts", interrupts: collected }
+    : { kind: "ok" };
 }
 
 /** Today's call sites that fire on the top-level stack. Thin wrapper over
@@ -289,15 +326,15 @@ export async function callHook<K extends keyof CallbackMap>(args: {
   ctx: RuntimeContext<any>;
   name: K;
   data: CallbackMap[K];
-}): Promise<Interrupt[] | undefined> {
+}): Promise<CallbackOutcome> {
   return invokeCallbacks(args);
 }
 
 /** Fire a SINGLE specific callback (already extracted from
- *  `gatherCallbacks`) on the given `stateStack`. Returns any interrupts
- *  raised inside the callback. Used by `Runner.hook`'s per-callback
- *  runBatch path so each batch child corresponds to exactly one
- *  callback — letting runBatch's cached-branch short-circuit skip
+ *  `gatherCallbacks`) on the given `stateStack`. Returns the callback's
+ *  outcome (ok / interrupts / failure). Used by `Runner.hook`'s
+ *  per-callback runBatch path so each batch child corresponds to exactly
+ *  one callback — letting runBatch's cached-branch short-circuit skip
  *  already-resolved callbacks on resume. */
 export async function invokeOneCallback<K extends keyof CallbackMap>(args: {
   ctx: RuntimeContext<any>;
@@ -305,7 +342,7 @@ export async function invokeOneCallback<K extends keyof CallbackMap>(args: {
   name: K;
   data: CallbackMap[K];
   stateStack?: StateStack;
-}): Promise<Interrupt[] | undefined> {
+}): Promise<CallbackOutcome> {
   return fireWithGuard(args.fn, args.data, args.ctx, args.name, args.stateStack);
 }
 
@@ -345,18 +382,27 @@ export async function callHookAndDrop<K extends keyof CallbackMap>(args: {
   name: K;
   data: CallbackMap[K];
 }): Promise<void> {
-  const result = await callHook(args);
-  if (result) {
+  const outcome = await callHook(args);
+  if (outcome.kind === "interrupts") {
     console.error(
       `[agency] ${args.name} callback raised an unhandled interrupt ` +
-        `(kind="${result[0].kind}") at a runtime call site that does not ` +
+        `(kind="${outcome.interrupts[0].kind}") at a runtime call site that does not ` +
         `support interrupt propagation. The interrupt is being dropped. ` +
         `Some sites (onAgentStart/onAgentEnd) fundamentally cannot ` +
         `propagate because they fire outside any agency frame; others ` +
         `(LLM/tool hooks) may gain propagation in a future phase. To ` +
         `respond to this interrupt, register the callback on a hook ` +
         `that fires inside an agency call frame instead.`,
-      result,
+      outcome.interrupts,
+    );
+  } else if (outcome.kind === "failure") {
+    console.error(
+      `[agency] ${args.name} callback halted with a rejected interrupt ` +
+        `(error="${outcome.failure.error}") at a runtime call site that ` +
+        `does not support failure propagation. The failure is being ` +
+        `dropped. Top-level hooks (onAgentStart/onAgentEnd) fundamentally ` +
+        `cannot propagate because they fire outside any agency frame.`,
+      outcome.failure,
     );
   }
 }

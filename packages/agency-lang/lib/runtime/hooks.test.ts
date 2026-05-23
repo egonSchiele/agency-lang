@@ -88,7 +88,7 @@ describe("callHook (rewritten)", () => {
       name: "onLLMCallEnd",
       data: {},
     } as any);
-    expect(result).toBeUndefined();
+    expect(result).toEqual({ kind: "ok" });
   });
 
   it("catches and logs ordinary errors, continues firing others", async () => {
@@ -140,7 +140,7 @@ describe("callHook (rewritten)", () => {
       name: "onLLMCallStart",
       data: { messages: [{ role: "user", content: "original" }] },
     } as any);
-    expect(result).toBeUndefined();
+    expect(result).toEqual({ kind: "ok" });
   });
 
   it("fires scoped → top-level → TS-passed (in that order)", async () => {
@@ -204,7 +204,7 @@ describe("callHook (rewritten)", () => {
     inner.scopedCallbacks = [{ name: "onNodeStart", fn: callbackFn }];
     const ctx = ctxWithStack([inner]);
     const out = await callHook({ ctx, name: "onNodeStart", data: { nodeName: "x" } } as any);
-    expect(out).toEqual([fakeInterrupt]);
+    expect(out).toEqual({ kind: "interrupts", interrupts: [fakeInterrupt] });
     // callHook itself no longer logs the unhandled interrupt — that
     // responsibility moves to callHookAndDrop.
     expect(consoleErr).not.toHaveBeenCalled();
@@ -239,7 +239,7 @@ describe("invokeCallback / fireWithGuard interrupt return", () => {
     ctx.topLevelCallbacks = [{ name: "onNodeStart", fn: cb }];
 
     const out = await callHook({ ctx, name: "onNodeStart", data: { nodeName: "n" } });
-    expect(out).toEqual([intr]);
+    expect(out).toEqual({ kind: "interrupts", interrupts: [intr] });
   });
 
   it("collects interrupts from every callback even when earlier ones halt", async () => {
@@ -254,7 +254,7 @@ describe("invokeCallback / fireWithGuard interrupt return", () => {
     ];
 
     const out = await callHook({ ctx, name: "onNodeStart", data: { nodeName: "n" } });
-    expect(out).toEqual([intrA, intrB]);
+    expect(out).toEqual({ kind: "interrupts", interrupts: [intrA, intrB] });
     // Both callbacks must have been invoked — an interrupt in A must not
     // short-circuit B. This is the concurrent-batching invariant that
     // mirrors runForkAll: every sibling runs to completion, all halts
@@ -267,7 +267,7 @@ describe("invokeCallback / fireWithGuard interrupt return", () => {
     const ctx = fakeCtx();
     ctx.topLevelCallbacks = [{ name: "onNodeStart", fn: fakeAgencyFn(undefined) }];
     const out = await callHook({ ctx, name: "onNodeStart", data: { nodeName: "n" } });
-    expect(out).toBeUndefined();
+    expect(out).toEqual({ kind: "ok" });
   });
 
   it("real JS errors in a callback do NOT appear in the returned interrupts", async () => {
@@ -279,7 +279,7 @@ describe("invokeCallback / fireWithGuard interrupt return", () => {
     (cbCrash as any).__agencyFunction = true;
     ctx.topLevelCallbacks = [{ name: "onNodeStart", fn: cbCrash }];
     const out = await callHook({ ctx, name: "onNodeStart", data: { nodeName: "n" } });
-    expect(out).toBeUndefined();
+    expect(out).toEqual({ kind: "ok" });
     expect(errSpy).toHaveBeenCalled();
     errSpy.mockRestore();
   });
@@ -323,7 +323,7 @@ describe("Phase 0: end-to-end shape (real AgencyFunction)", () => {
     const ctx = fakeCtx();
     ctx.topLevelCallbacks = [{ name: "onNodeStart", fn: realAgencyFn([intrA]) }];
     const out = await callHook({ ctx, name: "onNodeStart", data: { nodeName: "n" } });
-    expect(out).toEqual([intrA]);
+    expect(out).toEqual({ kind: "interrupts", interrupts: [intrA] });
   });
 
   it("mixed batch: halt → succeed → halt yields [first, third] in order", async () => {
@@ -336,7 +336,7 @@ describe("Phase 0: end-to-end shape (real AgencyFunction)", () => {
     const out = await callHook({ ctx, name: "onNodeStart", data: { nodeName: "n" } });
     // The undefined return in the middle must not break the loop, must not
     // add anything to the batch, and must not perturb ordering.
-    expect(out).toEqual([intrA, intrC]);
+    expect(out).toEqual({ kind: "interrupts", interrupts: [intrA, intrC] });
   });
 
   it("cross-source ordering: scoped first, then top-level, in the returned batch", async () => {
@@ -351,7 +351,7 @@ describe("Phase 0: end-to-end shape (real AgencyFunction)", () => {
     // gatherCallbacks order: scoped → top-level → TS-passed. The interrupt
     // batch must preserve that firing order. (TS-passed is plain JS and
     // can't contribute — covered in a separate test below.)
-    expect(out).toEqual([intrA, intrB]);
+    expect(out).toEqual({ kind: "interrupts", interrupts: [intrA, intrB] });
   });
 });
 
@@ -365,7 +365,7 @@ describe("Phase 0: scoped-callback halt path", () => {
     inner.scopedCallbacks = [{ name: "onNodeStart", fn: realAgencyFn([intr]) }];
     const ctx = ctxWithStack([inner]);
     const out = await callHook({ ctx, name: "onNodeStart", data: { nodeName: "n" } } as any);
-    expect(out).toEqual([intr]);
+    expect(out).toEqual({ kind: "interrupts", interrupts: [intr] });
   });
 });
 
@@ -379,14 +379,14 @@ describe("Phase 0: non-AgencyFunction callbacks cannot contribute to the batch",
     inner.scopedCallbacks = [{ name: "onNodeStart", fn: () => fakeShape }];
     const ctx = ctxWithStack([inner]);
     const out = await callHook({ ctx, name: "onNodeStart", data: { nodeName: "n" } } as any);
-    expect(out).toBeUndefined();
+    expect(out).toEqual({ kind: "ok" });
   });
 
   it("TS-passed callback returning interrupt-shaped value is silently dropped", async () => {
     const fakeShape = [{ type: "interrupt", kind: "js::oops", message: "" }];
     const ctx = ctxWithStack([new State()], { onNodeStart: () => fakeShape });
     const out = await callHook({ ctx, name: "onNodeStart", data: { nodeName: "n" } } as any);
-    expect(out).toBeUndefined();
+    expect(out).toEqual({ kind: "ok" });
   });
 
   it("global hook returning interrupt-shaped value is silently dropped", async () => {
@@ -398,7 +398,7 @@ describe("Phase 0: non-AgencyFunction callbacks cannot contribute to the batch",
     registerGlobalHook("onEmit", (() => fakeShape) as any);
     const ctx = fakeCtx();
     const out = await callHook({ ctx, name: "onEmit", data: undefined as any });
-    expect(out).toBeUndefined();
+    expect(out).toEqual({ kind: "ok" });
   });
 });
 
@@ -407,7 +407,7 @@ describe("Phase 0: hasInterrupts edge cases at the callback boundary", () => {
     const ctx = fakeCtx();
     ctx.topLevelCallbacks = [{ name: "onNodeStart", fn: realAgencyFn([]) }];
     const out = await callHook({ ctx, name: "onNodeStart", data: { nodeName: "n" } });
-    expect(out).toBeUndefined();
+    expect(out).toEqual({ kind: "ok" });
   });
 
   it("mixed array (interrupt + non-interrupt) is treated as non-interrupt (dropped)", async () => {
@@ -417,7 +417,7 @@ describe("Phase 0: hasInterrupts edge cases at the callback boundary", () => {
     const intr = { type: "interrupt", kind: "x::y", message: "" };
     ctx.topLevelCallbacks = [{ name: "onNodeStart", fn: realAgencyFn([intr, "not-an-interrupt"]) }];
     const out = await callHook({ ctx, name: "onNodeStart", data: { nodeName: "n" } });
-    expect(out).toBeUndefined();
+    expect(out).toEqual({ kind: "ok" });
   });
 
   it("single interrupt object (not array-wrapped) is treated as non-interrupt (dropped)", async () => {
@@ -427,7 +427,7 @@ describe("Phase 0: hasInterrupts edge cases at the callback boundary", () => {
     const intr = { type: "interrupt", kind: "x::y", message: "" };
     ctx.topLevelCallbacks = [{ name: "onNodeStart", fn: realAgencyFn(intr) }];
     const out = await callHook({ ctx, name: "onNodeStart", data: { nodeName: "n" } });
-    expect(out).toBeUndefined();
+    expect(out).toEqual({ kind: "ok" });
   });
 });
 
@@ -458,6 +458,6 @@ describe("Phase 1: onAgentStart / onAgentEnd reject interrupts", () => {
     const ctx = fakeCtx();
     ctx.topLevelCallbacks = [{ name: "onAgentStart", fn: fakeAgencyFn(undefined) }];
     const out = await callHook({ ctx, name: "onAgentStart", data: {} as any });
-    expect(out).toBeUndefined();
+    expect(out).toEqual({ kind: "ok" });
   });
 });

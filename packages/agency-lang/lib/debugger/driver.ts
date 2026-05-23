@@ -504,9 +504,17 @@ export class DebuggerDriver {
 
     this.ui.state.resetOverrides();
 
-    // Reset call depth — it will be rebuilt by hooks during replay
-    this.debuggerState.resetCallDepth();
-    this.ui.state.resetCallStack();
+    // NOTE: we deliberately do NOT reset callDepth here. With the new
+    // runner.hook substep model, onFunctionStart fires once (as a
+    // resumable substep) and its counter advances past it on success,
+    // so the hook does NOT re-fire on resume. enterCall therefore is
+    // not called again during replay. The callDepth tracked at the
+    // moment of the pause is already correct — we preserve it so that
+    // stepOut/next can compare against it accurately.
+    //
+    // exitCall still fires for each function we leave because
+    // onFunctionEnd is emitted from the finally block via callHook
+    // (not via runner.hook), so it runs whenever the function unwinds.
 
     return await this.resumeInterrupt(() =>
       this.mod.respondToInterrupts([interrupt], [{ type: "approve" }], {

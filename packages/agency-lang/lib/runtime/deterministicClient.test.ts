@@ -69,13 +69,19 @@ describe("DeterministicClient", () => {
     );
   });
 
-  it("throws when tool call mock is missing args", async () => {
+  it("defaults missing tool call args to an empty object", async () => {
+    // Args are optional in the mock so callers don't have to write
+    // `args: {}` for tools that take no arguments. See `deterministicClient.ts`.
     const client = new DeterministicClient([
       { toolCall: { name: "add" } },
     ]);
-    await expect(client.text(baseConfig)).rejects.toThrow(
-      "missing args"
-    );
+    const result = await client.text(baseConfig);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.value.toolCalls).toHaveLength(1);
+      expect(result.value.toolCalls[0].name).toBe("add");
+      expect(result.value.toolCalls[0].arguments).toEqual({});
+    }
   });
 
   it("textStream yields a single done chunk", async () => {

@@ -85,6 +85,51 @@ export safe def round(num: number, precision: number): number {
   return _round(num, precision)
 }
 
+// Internal helper for `guard`. Lives here (rather than in std::thread)
+// because scoped callbacks bound via `.partial()` need their underlying
+// function to be in the user's tool registry at resume time — users
+// only get the names they explicitly import, but every export of
+// `std::index` is auto-imported into every .agency file, so
+// __guardCheck is reachable from any program that calls `guard()`. The
+// `__` prefix signals "implementation detail, do not call directly."
+export def __guardCheck(state: { start: number, limit: number }, data: any) {
+  const spent = __internal_getCost() - state.start
+  if (spent > state.limit) {
+    state.limit = interrupt std::guard_exceeded(
+      "Cost limit exceeded: spent $${spent}, limit $${state.limit}",
+      { spent: spent, limit: state.limit }
+    )
+  }
+}
+
+export def guard(limit: number, block: () => any): any {
+  """
+  Run a block with a cost limit. After every LLM call inside the
+  block, the cumulative cost since `guard` started is compared to
+  `limit`. If the spend exceeds the limit, an `std::guard_exceeded`
+  interrupt is raised with `{ spent, limit }`.
+
+  The user responds with a new (raised) limit as a number to continue
+  execution; the callback captures the response and uses it as the
+  new limit for subsequent checks. To abort, the user stops responding
+  to the interrupt (kills the agent process).
+
+  Nested guards each register their own scoped callback and check
+  independently — the innermost guard's limit triggers first. Inside
+  fork branches the per-branch cost-tracking semantics (see
+  `std::thread.getCost`) already account for branch spend.
+
+  Memory-layer LLM calls (memory.text / memory.embed) bypass the LLM
+  callback and do NOT count toward the limit.
+
+  @param limit - Maximum cost in dollars (USD)
+  @param block - The block to execute
+  """
+  const state = { start: __internal_getCost(), limit: limit }
+  callback("onLLMCallEnd", __guardCheck.partial(state: state))
+  return block()
+}
+
 export def fetch(
   baseUrl: string,
   path: string = "",

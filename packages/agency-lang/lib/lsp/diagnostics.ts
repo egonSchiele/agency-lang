@@ -22,7 +22,8 @@ import { resolveAgencyImportPath } from "../importPaths.js";
 const STDLIB_AUTO_IMPORTS: string[] = [
   "print", "printJSON", "parseJSON", "input", "sleep", "round", "fetch",
   "fetchJSON", "read", "write", "readImage", "notify", "range",
-  "mostCommon", "keys", "values", "entries", "emit",
+  "mostCommon", "keys", "values", "entries", "emit", "callback", "guard",
+  "__guardCheck",
 ];
 
 /**

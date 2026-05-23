@@ -1,0 +1,29 @@
+// Example / smoke test for `guard(limit, block)`.
+//
+// Intentionally has NO accompanying .test.json — three runtime gaps
+// currently prevent end-to-end automation:
+//   1. LLM substep not marked complete when onLLMCallEnd callback
+//      raises an interrupt → the LLM call re-runs on each resume.
+//   2. Mutation of PFA-bound state (state.limit = newLimit) does not
+//      survive serialize/deserialize, so a raised limit is forgotten.
+//   3. Callback rejection silently no-ops (failure value dropped by
+//      Runner.hook / hooks.ts) instead of halting the caller.
+//
+// See:
+//   docs/superpowers/plans/2026-05-23-callback-end-hook-substep-completion.md
+//   docs/superpowers/plans/2026-05-23-guard-statestack-architecture.md
+//   docs/superpowers/plans/2026-05-23-callback-rejection-propagation.md
+//
+// When those land, this file can be promoted to a real fixture with
+// a `.test.json` that supplies interrupt responses and asserts
+// expected output.
+//
+// `guard` is auto-imported from std::index — no explicit import needed.
+
+node main() {
+  const result: string = guard(0.0000001) as {
+    const reply: string = llm("Reply with the single word: pong")
+    return "done"
+  }
+  return result
+}

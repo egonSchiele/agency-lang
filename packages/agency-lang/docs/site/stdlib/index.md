@@ -106,6 +106,61 @@ A tool for rounding a number to a specified number of decimal places.
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L81))
 
+### __guardCheck
+
+```ts
+__guardCheck(state: { start: number; limit: number }, data: any)
+```
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| state | `{ start: number; limit: number }` |  |
+| data | `any` |  |
+
+**Throws:** `std::guard_exceeded`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L95))
+
+### guard
+
+```ts
+guard(limit: number, block: () => any): any
+```
+
+Run a block with a cost limit. After every LLM call inside the
+  block, the cumulative cost since `guard` started is compared to
+  `limit`. If the spend exceeds the limit, an `std::guard_exceeded`
+  interrupt is raised with `{ spent, limit }`.
+
+  The user responds with a new (raised) limit as a number to continue
+  execution; the callback captures the response and uses it as the
+  new limit for subsequent checks. To abort, the user stops responding
+  to the interrupt (kills the agent process).
+
+  Nested guards each register their own scoped callback and check
+  independently — the innermost guard's limit triggers first. Inside
+  fork branches the per-branch cost-tracking semantics (see
+  `std::thread.getCost`) already account for branch spend.
+
+  Memory-layer LLM calls (memory.text / memory.embed) bypass the LLM
+  callback and do NOT count toward the limit.
+
+  @param limit - Maximum cost in dollars (USD)
+  @param block - The block to execute
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| limit | `number` |  |
+| block | `() => any` |  |
+
+**Returns:** `any`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L105))
+
 ### fetch
 
 ```ts
@@ -132,7 +187,7 @@ A tool for fetching a URL and returning the response as text. Provide baseUrl an
 
 **Throws:** `std::fetch`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L88))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L133))
 
 ### fetchJSON
 
@@ -160,7 +215,7 @@ A tool for fetching a URL and returning the response as parsed JSON. Provide bas
 
 **Throws:** `std::fetchJSON`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L109))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L154))
 
 ### read
 
@@ -184,7 +239,7 @@ A tool for reading the contents of a file and returning it as a string. The file
 
 **Throws:** `std::read`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L130))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L175))
 
 ### write
 
@@ -217,7 +272,7 @@ A tool for writing content to a file. The filename is resolved relative to dir.
 
 **Throws:** `std::write`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L144))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L189))
 
 ### readImage
 
@@ -241,7 +296,7 @@ A tool for reading an image file and returning its contents as a Base64-encoded 
 
 **Throws:** `std::readImage`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L172))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L217))
 
 ### notify
 
@@ -262,7 +317,7 @@ A tool for showing a native OS notification with a title and message. Returns tr
 
 **Throws:** `std::notify`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L186))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L231))
 
 ### range
 
@@ -281,7 +336,7 @@ Generate an array of numbers. With one argument, generates from 0 to start-1. Wi
 
 **Returns:** `number[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L197))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L242))
 
 ### mostCommon
 
@@ -299,7 +354,7 @@ Return the most common element in an array. Uses JSON serialization for comparis
 
 **Returns:** `any`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L207))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L252))
 
 ### keys
 
@@ -317,7 +372,7 @@ Return an array of an object's own enumerable property names.
 
 **Returns:** `string[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L214))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L259))
 
 ### values
 
@@ -335,7 +390,7 @@ Return an array of an object's own enumerable property values.
 
 **Returns:** `any[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L221))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L266))
 
 ### entries
 
@@ -353,7 +408,7 @@ Return an array of an object's own enumerable entries, each as { key, value }.
 
 **Returns:** `any[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L228))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L273))
 
 ### emit
 
@@ -369,7 +424,7 @@ Emit a custom event to the calling TypeScript code via the onEmit callback.
 |---|---|---|
 | data |  |  |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L235))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L280))
 
 ### callback
 
@@ -391,4 +446,4 @@ Register a scoped callback for the dynamic extent of the calling function or nod
 | name | `string` |  |
 | fn | `any` |  |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L242))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L287))

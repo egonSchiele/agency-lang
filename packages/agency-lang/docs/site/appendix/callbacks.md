@@ -81,21 +81,6 @@ Callbacks fire in declared order. Sequential mode is required, not a
 preference — using `mode: "all"` would silently turn ordered side
 effects into a concurrent race.
 
-#### Checkpoint format compatibility
-
-Callback-hook checkpoints written by versions BEFORE the per-callback
-`runBatch` migration (Task 6 of the runBatch concurrent-interrupt
-plan) are **NOT forward-compatible**. The previous format stored the
-hook's state under the runner's substep counter only; the new format
-adds per-callback branch state on the hook's frame. Resuming an
-old-format checkpoint will fail to find the per-callback branches and
-mis-attribute interrupt responses.
-
-No migration shim is provided — consistent with the project's small
-user base and "breaking changes acceptable across versions" stance.
-Run any pending interrupt cycles to completion on the old version
-before upgrading.
-
 ### Concurrent firing across fork branches
 
 A separate sense of "concurrent" is when the *same hook* fires from

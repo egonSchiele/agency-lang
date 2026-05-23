@@ -83,15 +83,23 @@ export type AgencyCallbacks = {
 // which re-fire the same hook from recursing into itself
 // (tests/agency/callback-recursion).
 //
-// Scope = one async-call chain. Backed by `AsyncLocalStorage` so the
-// "currently firing" set is inherited through `await` boundaries and
-// nested function calls — but a fork branch that gets its own ALS
-// context (via `statelogClient.runInBranchContext` in `runBatch`)
-// starts with an EMPTY set. That means concurrent fork/tool branches
-// can each fire the same callback in parallel without dropping
-// sibling invocations, while a callback that synchronously triggers
-// its own re-fire (through a helper-function call on the same async
-// chain) is still detected.
+// Each `fireWithGuard` call wraps the callback in
+// `_activeCallbacksALS.run(active, ...)` with a freshly-allocated
+// `new Set<object>(inherited)` that adds the current callback's key.
+// The Set is inherited through `await` boundaries and nested sync
+// calls inside that scope, so a synchronous re-fire of the same
+// callback (via a helper-function call on the same async chain) sees
+// its own key in the set and is skipped.
+//
+// Concurrent sibling branches (e.g. `Promise.allSettled([fireA(),
+// fireB()])`) each enter their OWN `_activeCallbacksALS.run(...)`
+// scope, so A's added key is visible only inside A's continuation
+// chain, not inside B's. That's why parallel fork/tool branches can
+// each fire the same callback without dropping sibling invocations.
+// (Note: `statelogClient.runInBranchContext` scopes a different ALS
+// — `spanStorage` for Statelog spans — and does NOT touch this
+// callback guard. Sibling isolation here comes purely from each fire
+// allocating its own Set and entering its own ALS scope.)
 //
 // Why ALS rather than a per-stack or module-level WeakSet:
 //   - Module-level WeakSet (pre-Task 5 behaviour) dropped legitimate
@@ -101,11 +109,13 @@ export type AgencyCallbacks = {
 //     creates a NEW branch stack, so the recursive fire (which
 //     happens on the new stack) never sees the outer fire's entry.
 //   - ALS naturally inherits the set through both sync calls and
-//     awaited continuations, but stops at branch-context boundaries.
+//     awaited continuations, and each fire's `.run(...)` scope
+//     isolates siblings from one another.
 //
-// Set entries are live-only — never serialized. Always cleared in
-// the `finally` block, so a checkpoint can never capture a "stuck"
-// entry.
+// Set entries are live-only — never serialized. Cleanup is automatic:
+// the entry is only visible inside the `_activeCallbacksALS.run(...)`
+// scope of its fire, which exits when the callback resolves, so a
+// checkpoint can never capture a "stuck" entry.
 const _activeCallbacksALS = new AsyncLocalStorage<Set<object>>();
 
 // Global hook registry: allows external packages (e.g., @agency-lang/mcp) to

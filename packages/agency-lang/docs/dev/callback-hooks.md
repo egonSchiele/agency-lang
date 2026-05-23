@@ -172,16 +172,20 @@ callback that synchronously re-fires its own hook (via a helper
 function call) from recursing into itself
 (tests/agency/callback-recursion).
 
-Scope = one async-call chain. The "currently firing" set is
-inherited through `await` boundaries and nested sync calls — but a
-fork branch that gets its own ALS context (via the statelogClient
-`runInBranchContext` already used inside `runBatch`) starts with the
-inherited copy, and any sibling branches each get their own fresh
-copy. That means concurrent fork/tool branches can each fire the
-same callback in parallel without dropping sibling invocations,
-while recursion-via-helper-function within a single chain is still
-detected. ALS state is live-only — never serialised, always cleared
-when the ALS scope exits.
+Each `fireWithGuard` call enters its own `_activeCallbacksALS.run(...)`
+scope with a freshly-allocated `new Set<object>(inherited)` containing
+the parent scope's entries plus the current callback's key. Within that
+scope the Set is inherited through `await` boundaries and nested sync
+calls, so a synchronous re-fire of the same callback (via a
+helper-function call on the same async chain) sees its own key and is
+skipped. Concurrent sibling branches each enter their OWN
+`_activeCallbacksALS.run(...)` scope, so one branch's added key is
+invisible to the other — that's how parallel fork/tool branches each
+fire the same callback without dropping sibling invocations.
+(`statelogClient.runInBranchContext` scopes a separate ALS for
+Statelog spans and does NOT touch this guard.) ALS state is
+live-only — never serialised, automatically released when the
+`_activeCallbacksALS.run(...)` scope exits.
 
 ## Why the batch-and-return shape
 

@@ -1,5 +1,4 @@
 import { nanoid } from "nanoid";
-import type { SpanContext } from "../statelogClient.js";
 import type { CallbackName } from "../types/function.js";
 import { debugStep } from "./debugger.js";
 import { callHook, type CallbackMap } from "./hooks.js";
@@ -723,22 +722,11 @@ export class Runner {
     const readWinner = () =>
       this.frame.locals[this.raceWinnerKey(id)] as number | undefined;
     try {
-      // Race resume: if a winner was already chosen on a previous run,
-      // resume only that branch — skip the race entirely.
-      const raceWinnerKey = this.raceWinnerKey(id);
-      if (mode === "race" && this.frame.locals[raceWinnerKey] !== undefined) {
-        result = await this.resumeRaceWinner(
-          id,
-          items,
-          blockFn,
-          stateStack,
-          this.frame.locals[raceWinnerKey] as number,
-        );
-        if (hasInterrupts(result)) {
-          winnerIndex = readWinner();
-          return result;
-        }
-      } else if (mode === "all") {
+      // Both runForkAll and runRace are now thin adapters over runBatch.
+      // The race adapter internally handles "first run" vs. "resume only
+      // the winner" via the persisted __race_winner_<id> key, so the
+      // caller does NOT need to dispatch between them.
+      if (mode === "all") {
         result = await this.runForkAll(id, items, blockFn, stateStack, forkId);
         if (hasInterrupts(result)) return result;
       } else {
@@ -842,91 +830,16 @@ export class Runner {
   }
 
   /** Run all branches concurrently but return as soon as one settles.
-   * On interrupt: record the winner, abort the losers, clear loser branches,
-   * stamp a checkpoint, and return the interrupt array.
-   * On value: return the value (losers' work is discarded). */
-  /** Build a single race branch's tagged promise. Wires up the
-   * AbortController, records the branch start time, and tags both
-   * resolutions and rejections so the racer can identify the winner /
-   * first-failing branch. */
-  private buildRaceBranchPromise(
-    id: number,
-    i: number,
-    item: any,
-    blockFn: (
-      item: any,
-      index: number,
-      branchStack: StateStack,
-    ) => Promise<any>,
-    stateStack: StateStack,
-    branchStartTimes: number[],
-    parentSpanStack: SpanContext[],
-  ): Promise<{ index: number; value: any }> {
-    const branchKey = this.forkBranchKey(id, i);
-    const existing = this.frame.getOrCreateBranch(branchKey);
-    if (existing.result !== undefined) {
-      return Promise.resolve({ index: i, value: existing.result.result });
-    }
-    if (!existing.abortController) {
-      existing.abortController = new AbortController();
-      // Compose with the parent stack's signal so nested race aborts
-      // propagate down through every level. The branch's signal is
-      // attached to its stack so any code holding the stack (runPrompt,
-      // ctx.isCancelled checks, etc.) observes a branch-only abort.
-      const parentSignal = stateStack.abortSignal;
-      existing.stack.abortSignal = parentSignal
-        ? AbortSignal.any([parentSignal, existing.abortController.signal])
-        : existing.abortController.signal;
-    }
-    // Seed per-branch cost/tokens from the parent (same as runForkAll).
-    this.seedBranchCost(existing.stack, stateStack);
-    branchStartTimes[i] = performance.now();
-    return this.ctx.statelogClient
-      .runInBranchContext(parentSpanStack, () => blockFn(item, i, existing.stack))
-      .then(
-        (value) => ({ index: i, value }),
-        // Tag the rejection so the racer can identify which branch died.
-        (err) => Promise.reject({ index: i, err }),
-      );
-  }
-
-  /** After a race winner is chosen, abort the loser branches and emit
-   * a `forkBranchEnd` event for every branch (winner + losers). The
-   * abort is best-effort: synchronous code that has already reached an
-   * `interrupt()` call before we get here will still resolve its orphan
-   * promise — runRace's caller discards those resolutions. */
-  private abortLoserBranchesAndEmitEnds(
-    id: number,
-    itemCount: number,
-    winnerIndex: number,
-    winnerValue: any,
-    winnerTime: number,
-    branchStartTimes: number[],
-    forkId: string,
-  ): void {
-    for (let i = 0; i < itemCount; i++) {
-      if (i === winnerIndex) continue;
-      const branchKey = this.forkBranchKey(id, i);
-      const branch = this.frame.getBranch(branchKey);
-      branch?.abortController?.abort();
-      this.ctx.statelogClient.forkBranchEnd({
-        forkId,
-        branchIndex: i,
-        outcome: "aborted",
-        // Losers ran at least this long before the winner finished and we
-        // told them to stop. They may continue running briefly after this
-        // until the abort is observed.
-        timeTaken: performance.now() - branchStartTimes[i],
-      });
-    }
-    this.ctx.statelogClient.forkBranchEnd({
-      forkId,
-      branchIndex: winnerIndex,
-      outcome: hasInterrupts(winnerValue) ? "interrupted" : "success",
-      timeTaken: winnerTime,
-    });
-  }
-
+   *
+   * Thin adapter over `runBatch({ mode: "race" })`. The primitive owns
+   * branch lifecycle, abort composition, settle (`Promise.race` with
+   * loser abort), shared checkpoint stamp + intr.checkpoint overwrite,
+   * winner-index persistence under `raceWinnerLocalKey`, loser-branch
+   * deletion, and resume dispatch (re-running only the recorded winner
+   * when a persisted winner is present). The adapter wires up race-
+   * specific statelog events and the asymmetric cost-propagation hooks:
+   * losers propagate eagerly at race time, winner propagates when it
+   * finally completes (no-interrupt resume). */
   private async runRace(
     id: number,
     items: any[],
@@ -938,205 +851,58 @@ export class Runner {
     stateStack: StateStack,
     forkId: string,
   ): Promise<any> {
-    const branchStartTimes: number[] = new Array(items.length).fill(0);
-    // Snapshot the current span stack ONCE — each race branch will run
-    // inside its own ALS context seeded from this snapshot, so concurrent
-    // branches cannot interleave span pushes/pops on the parent stack.
-    const parentSpanStack = this.ctx.statelogClient.snapshotStack();
-    const taggedPromises = items.map((item, i) =>
-      this.buildRaceBranchPromise(
-        id,
-        i,
-        item,
-        blockFn,
-        stateStack,
-        branchStartTimes,
-        parentSpanStack,
-      ),
-    );
-
-    // Promise.race resolves/rejects with whichever settles first.
-    let winnerIndex: number;
-    let winnerValue: any;
-    let winnerTime: number;
-    try {
-      const winner = await Promise.race(taggedPromises);
-      winnerIndex = winner.index;
-      winnerValue = winner.value;
-      winnerTime = performance.now() - branchStartTimes[winnerIndex];
-    } catch (tagged) {
-      // A branch rejected first — we know which one thanks to tagging.
-      const { index: failedIndex, err } = tagged as { index: number; err: any };
-      this.ctx.statelogClient.forkBranchEnd({
-        forkId,
-        branchIndex: failedIndex,
-        outcome: "failure",
-        timeTaken: performance.now() - branchStartTimes[failedIndex],
-      });
-      // Abort the still-running branches. Each branch already runs in
-      // its own ALS-scoped span context, so no parent span bookkeeping
-      // needs balancing here — losers' span stacks simply go away with
-      // their async contexts.
-      for (let i = 0; i < items.length; i++) {
-        if (i === failedIndex) continue;
-        this.frame.getBranch(this.forkBranchKey(id, i))?.abortController?.abort();
-      }
-      throw err;
-    }
-
-    this.abortLoserBranchesAndEmitEnds(
-      id,
-      items.length,
-      winnerIndex,
-      winnerValue,
-      winnerTime,
-      branchStartTimes,
-      forkId,
-    );
-
-    // Record the winner so a resume on the same race step replays only this
-    // branch (not the abandoned losers).
-    this.frame.locals[this.raceWinnerKey(id)] = winnerIndex;
-
-    const winnerBranchKey = this.forkBranchKey(id, winnerIndex);
-
-    if (hasInterrupts(winnerValue)) {
-      // Save the winner's interrupt info on its branch so resume can find it.
-      this.frame.setInterruptOnBranch(
-        winnerBranchKey,
-        winnerValue[0].interruptId,
-        winnerValue[0].interruptData,
-        winnerValue[0].checkpoint,
-      );
-      // Propagate LOSER cost/tokens into the parent before we drop them —
-      // their LLM calls really happened and the user should see that spend.
-      // The winner is still pending; its cost will propagate when it resolves
-      // (in resumeRaceWinner's success path).
-      const losers: BranchState[] = [];
-      for (let i = 0; i < items.length; i++) {
-        if (i === winnerIndex) continue;
-        const loser = this.frame.getBranch(this.forkBranchKey(id, i));
-        if (loser) losers.push(loser);
-      }
-      this.propagateBranchCost(losers, stateStack);
-      // Drop the loser branches before serializing — they hold partial state
-      // we never want to revisit.
-      for (let i = 0; i < items.length; i++) {
-        if (i === winnerIndex) continue;
-        this.frame.deleteBranch(this.forkBranchKey(id, i));
-      }
-      // Stamp a checkpoint capturing only the winner's slice.
-      const cpId = this.ctx.checkpoints.create(stateStack, this.ctx, {
+    const result = await runBatch<any>({
+      ctx: this.ctx,
+      parentStack: stateStack,
+      parentFrame: this.frame,
+      checkpointLocation: {
         moduleId: this.moduleId,
         scopeName: this.scopeName,
         stepPath: this.stepPath(id),
-      });
-      const cp = this.ctx.checkpoints.get(cpId)!;
-      this.ctx.statelogClient.checkpointCreated({
-        checkpointId: cpId,
-        reason: "race",
-        sourceLocation: { moduleId: cp.moduleId, scopeName: cp.scopeName, stepPath: cp.stepPath },
-      });
-      for (const intr of winnerValue) {
-        intr.checkpoint = cp;
-        intr.checkpointId = cpId;
-      }
-      return winnerValue;
-    }
-
-    // Winner produced a value. Cache it on the winner branch and drop losers.
-    this.frame.setResultOnBranch(winnerBranchKey, winnerValue);
-    // Propagate cost/tokens from EVERY branch (winner + losers) into the
-    // parent stack before we delete the loser branches. Loser LLM calls
-    // really happened and the user should see that spend.
-    const allBranches: BranchState[] = [];
-    for (let i = 0; i < items.length; i++) {
-      const branch = this.frame.getBranch(this.forkBranchKey(id, i));
-      if (branch) allBranches.push(branch);
-    }
-    this.propagateBranchCost(allBranches, stateStack);
-    for (let i = 0; i < items.length; i++) {
-      if (i === winnerIndex) continue;
-      this.frame.deleteBranch(this.forkBranchKey(id, i));
-    }
-    return winnerValue;
-  }
-
-  /** Race resume: only the recorded winner is re-executed. */
-  private async resumeRaceWinner(
-    id: number,
-    items: any[],
-    blockFn: (
-      item: any,
-      index: number,
-      branchStack: StateStack,
-    ) => Promise<any>,
-    stateStack: StateStack,
-    winnerIndex: number,
-  ): Promise<any> {
-    const branchKey = this.forkBranchKey(id, winnerIndex);
-    const existing = this.frame.getBranch(branchKey);
-    if (!existing) {
-      throw new Error(
-        `Race resume: winner branch ${branchKey} (index ${winnerIndex}) is missing — state may be corrupted.`,
-      );
-    }
-
-    // Already-completed winner: return cached result.
-    if (existing.result !== undefined) {
-      return existing.result.result;
-    }
-
-    // Pending winner: re-run blockFn with the existing branch stack. We
-    // start a fresh AbortController for the resumed run; the branch stack
-    // hasn't been re-attached to a stack signal yet, but resume only re-runs
-    // the winner so there are no losers to abort. (If the winner itself
-    // contains nested fork/race, those will install their own signals.)
-    if (!existing.abortController) {
-      existing.abortController = new AbortController();
-      existing.stack.abortSignal = existing.abortController.signal;
-    }
-    // Run the resumed winner inside its own branch-local span context
-    // so its spans nest under the (resumed) race span rather than
-    // mutating the outer stack directly.
-    const parentSpanStack = this.ctx.statelogClient.snapshotStack();
-    const value = await this.ctx.statelogClient.runInBranchContext(
-      parentSpanStack,
-      () => blockFn(items[winnerIndex], winnerIndex, existing.stack),
-    );
-
-    if (hasInterrupts(value)) {
-      this.frame.setInterruptOnBranch(
-        branchKey,
-        value[0].interruptId,
-        value[0].interruptData,
-        value[0].checkpoint,
-      );
-      const cpId = this.ctx.checkpoints.create(stateStack, this.ctx, {
-        moduleId: this.moduleId,
-        scopeName: this.scopeName,
-        stepPath: this.stepPath(id),
-      });
-      const cp = this.ctx.checkpoints.get(cpId)!;
-      this.ctx.statelogClient.checkpointCreated({
-        checkpointId: cpId,
-        reason: "race",
-        sourceLocation: { moduleId: cp.moduleId, scopeName: cp.scopeName, stepPath: cp.stepPath },
-      });
-      for (const intr of value) {
-        intr.checkpoint = cp;
-        intr.checkpointId = cpId;
-      }
-      return value;
-    }
-
-    this.frame.setResultOnBranch(branchKey, value);
-    // Propagate the winner's cost/tokens delta into the parent stack now
-    // that the winner has produced a final value. Losers were already
-    // propagated in runRace's interrupt path before they were deleted, so
-    // this single-branch propagation completes the race's total spend.
-    this.propagateBranchCost([existing], stateStack);
-    return value;
+      },
+      mode: "race",
+      // Keep the existing key shape — changing to stepPath would silently
+      // break any in-flight serialized checkpoint stamped before this
+      // migration.
+      raceWinnerLocalKey: this.raceWinnerKey(id),
+      children: items.map((item, i) => ({
+        key: this.forkBranchKey(id, i),
+        invoke: (branchStack) => blockFn(item, i, branchStack),
+      })),
+      hooks: {
+        seedBranchCost: (childStack, parentStack) =>
+          this.seedBranchCost(childStack, parentStack),
+        // Asymmetric cost-propagation: losers eagerly, winner deferred.
+        // Both delegate to the same propagateBranchCost helper — the
+        // delta math (branch.localCost - branch.seedCost) is identical;
+        // only the timing differs.
+        propagateLoserCost: (losers, parentStack) =>
+          this.propagateBranchCost(losers, parentStack),
+        propagateWinnerCost: (winner, parentStack) =>
+          this.propagateBranchCost([winner], parentStack),
+        onBranchEnd: (_key, branchIndex, outcome, timeTaken) => {
+          this.ctx.statelogClient.forkBranchEnd({
+            forkId,
+            branchIndex,
+            outcome,
+            timeTaken,
+          });
+        },
+        onCheckpoint: (cpId) => {
+          const cp = this.ctx.checkpoints.get(cpId)!;
+          this.ctx.statelogClient.checkpointCreated({
+            checkpointId: cpId,
+            reason: "race",
+            sourceLocation: {
+              moduleId: cp.moduleId,
+              scopeName: cp.scopeName,
+              stepPath: cp.stepPath,
+            },
+          });
+        },
+      },
+    });
+    return result.kind === "interrupts" ? result.interrupts : result.values[0];
   }
 
   private raceWinnerKey(id: number): string {

@@ -470,7 +470,7 @@ describe("runBatch — mode 'race'", () => {
     expect(result).toEqual({ kind: "values", values: ["b"] });
   });
 
-  it("race resume with cached winner result skips invoke entirely", async () => {
+  it("race resume with cached winner result skips invoke entirely and does not double-bill cost", async () => {
     const { ctx } = makeCtx();
     const { parentStack, parentFrame } = makeParent();
     parentFrame.locals[WINNER_KEY] = 0;
@@ -493,7 +493,10 @@ describe("runBatch — mode 'race'", () => {
       hooks: { propagateWinnerCost: () => { winnerCostCalls++; } },
     });
     expect(invokes).toBe(0);
-    expect(winnerCostCalls).toBe(1);
+    // Cost was already propagated when winner first completed; defensive
+    // cached path must NOT propagate again (matches today's
+    // resumeRaceWinner cached-branch behavior).
+    expect(winnerCostCalls).toBe(0);
     expect(result).toEqual({ kind: "values", values: ["cached"] });
   });
 

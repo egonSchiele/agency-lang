@@ -444,9 +444,10 @@ async function runRaceResume<T>(
     );
   }
 
-  // Cached winner — return its value, propagate cost as if it just completed.
+  // Cached winner — return cached result. Cost was already propagated
+  // when the winner first completed; don't double-bill on this defensive
+  // path. (Matches today's resumeRaceWinner cached-branch behavior.)
   if (branch.result !== undefined) {
-    hooks?.propagateWinnerCost?.(branch, parentStack);
     return { kind: "values", values: [branch.result.result as T] };
   }
 

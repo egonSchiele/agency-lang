@@ -249,6 +249,37 @@ export async function callHook<K extends keyof CallbackMap>(args: {
   return invokeCallbacks(args);
 }
 
+/** Fire a SINGLE specific callback (already extracted from
+ *  `gatherCallbacks`) on the given `stateStack`. Returns any interrupts
+ *  raised inside the callback. Used by `Runner.hook`'s per-callback
+ *  runBatch path so each batch child corresponds to exactly one
+ *  callback — letting runBatch's cached-branch short-circuit skip
+ *  already-resolved callbacks on resume. */
+export async function invokeOneCallback<K extends keyof CallbackMap>(args: {
+  ctx: RuntimeContext<any>;
+  fn: any;
+  name: K;
+  data: CallbackMap[K];
+  stateStack?: StateStack;
+}): Promise<Interrupt[] | undefined> {
+  return fireWithGuard(args.fn, args.data, args.ctx, args.name, args.stateStack);
+}
+
+/** Fire every globally-registered hook (from `registerGlobalHook`) for
+ *  `name`. Global hooks are plain JS with no interrupt mechanism, so
+ *  they always run inline — `Runner.hook` calls this before delegating
+ *  the scoped/top-level/ts callbacks to runBatch. */
+export async function fireGlobalHooks<K extends keyof CallbackMap>(
+  ctx: RuntimeContext<any>,
+  name: K,
+  data: CallbackMap[K],
+  stateStack?: StateStack,
+): Promise<void> {
+  for (const fn of _globalHooks[name] ?? []) {
+    await fireWithGuard(fn, data, ctx, `global ${name}`, stateStack);
+  }
+}
+
 /**
  * Fire a hook with the today-style "log + drop" interrupt behavior.
  *

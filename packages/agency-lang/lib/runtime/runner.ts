@@ -1,7 +1,12 @@
 import { nanoid } from "nanoid";
 import type { CallbackName } from "../types/function.js";
 import { debugStep } from "./debugger.js";
-import { callHook, type CallbackMap } from "./hooks.js";
+import {
+  fireGlobalHooks,
+  gatherCallbacks,
+  invokeOneCallback,
+  type CallbackMap,
+} from "./hooks.js";
 import { hasInterrupts } from "./interrupts.js";
 import { __pipeBind } from "./result.js";
 import { runBatch } from "./runBatch.js";
@@ -425,18 +430,90 @@ export class Runner {
 
     this.path.push(id);
     try {
-      const result = await callHook({
-        ctx: this.ctx,
-        name: hookName as keyof CallbackMap,
-        data: data as CallbackMap[keyof CallbackMap],
-      });
-      if (hasInterrupts(result)) {
-        if (this.nodeContext) {
-          this.halt({ ...this.state, data: result });
-        } else {
-          this.halt(result);
+      // Walk the right slice for scoped-callback discovery. If this Runner
+      // was instantiated inside a fork branch (forkBlockSetup template
+      // sets `stack: __forkBranchStack`), `this.stack` is the branch's
+      // own stack — scoped callbacks registered in the branch's frame
+      // chain live there, NOT on `ctx.stateStack`.
+      const parentStack = this.stack ?? this.ctx.stateStack;
+
+      // (A previous draft of this method had a defensive
+      // `frame.hasBranches() && !this.stack` assertion meant to catch a
+      // codegen-template that forgot to wire `stack: branchStack` into
+      // a fork-branch Runner. Dropped: the assertion false-positives on
+      // resume after Runner.hook itself opens per-callback branches via
+      // runBatch, because those branches persist on `this.frame` until
+      // the hook completes. A more precise check would have to inspect
+      // branch keys, which couples the assertion to the key scheme.
+      // Forkblock-template correctness is currently enforced by the
+      // existing fork-suite tests instead.)
+
+      // Global hooks (registered by external packages, e.g. mcp) fire
+      // first — same order as today's callHook. They have no interrupt
+      // mechanism so they run inline.
+      await fireGlobalHooks(
+        this.ctx,
+        hookName as keyof CallbackMap,
+        data as CallbackMap[keyof CallbackMap],
+        this.stack,
+      );
+
+      const callbacks = gatherCallbacks(
+        this.ctx,
+        hookName as keyof CallbackMap,
+        parentStack,
+      );
+
+      // Fast path: nothing to fire via runBatch. Done.
+      if (callbacks.length === 0) {
+        // fall through to the normal post-body cleanup below.
+      } else {
+        // Per-callback runBatch: each callback fires as a separate
+        // sequential child branch. When one interrupts, runBatch stamps
+        // a shared checkpoint and surfaces all collected interrupts;
+        // the per-branch `result`/`interrupt` recording on
+        // `parentFrame.branches` means resume short-circuits (via the
+        // cached-branch path in runBatch) any callback whose interrupt
+        // was already responded to, re-firing only the un-resolved
+        // ones. Without this, every resume cycle re-fired every
+        // callback from scratch, breaking side-effect-once semantics
+        // for multi-callback hooks.
+        const result = await runBatch<undefined>({
+          ctx: this.ctx,
+          parentStack,
+          parentFrame: this.frame,
+          checkpointLocation: this.getCheckpointInfo(),
+          // Sequential is REQUIRED here — `callHook` historically fires
+          // callbacks in declared order, and using `mode: "all"` would
+          // silently turn ordered side effects into a concurrent race.
+          mode: "sequential",
+          children: callbacks.map((fn, i) => ({
+            key: this.hookBranchKey(id, i),
+            invoke: async (branchStack) => {
+              // Fire this single callback on the branch's own stack so
+              // any interrupt raised inside captures a checkpoint with
+              // the right slice. We already extracted `fn` from the
+              // outer `gatherCallbacks` call — don't re-gather inside
+              // the child.
+              const interrupts = await invokeOneCallback({
+                ctx: this.ctx,
+                fn,
+                name: hookName as keyof CallbackMap,
+                data: data as CallbackMap[keyof CallbackMap],
+                stateStack: branchStack,
+              });
+              return interrupts ?? undefined;
+            },
+          })),
+        });
+        if (result.kind === "interrupts") {
+          if (this.nodeContext) {
+            this.halt({ ...this.state, data: result.interrupts });
+          } else {
+            this.halt(result.interrupts);
+          }
+          return;
         }
-        return;
       }
     } finally {
       this.path.pop();
@@ -445,6 +522,12 @@ export class Runner {
     if (this.halted) return;
     this.clearDebugFlag(id);
     this.setCounter(id + 1);
+  }
+
+  private hookBranchKey(id: number, index: number): string {
+    return this.path.length === 0
+      ? `hook_${id}_${index}`
+      : `hook_${this.key()}_${id}_${index}`;
   }
 
   // ── Specialized: ifElse ──

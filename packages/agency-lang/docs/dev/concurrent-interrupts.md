@@ -73,51 +73,19 @@ Each `StateStack` carries an optional `abortSignal?: AbortSignal`. When `runBatc
 
 ## The `runBatch` primitive
 
-`runBatch` lives in [`lib/runtime/runBatch.ts`](../../lib/runtime/runBatch.ts). Single function, three modes, one tagged-union return type.
-
-### Signature
+`runBatch` lives in [`lib/runtime/runBatch.ts`](../../lib/runtime/runBatch.ts). Single function, three modes (`"all"`, `"sequential"`, `"race"`), tagged-union return:
 
 ```ts
 export async function runBatch<T>(opts: RunBatchOpts<T>): Promise<RunBatchResult<T>>;
-
-export type RunBatchOpts<T> = {
-  ctx: RuntimeContext<any>;
-  /** The parent's local state stack — used as the capture stack for the
-   *  shared batch-level checkpoint. MUST be the local slice (e.g. the
-   *  branch stack if `runBatch` is itself called inside a child of an
-   *  outer `runBatch`), NOT `ctx.stateStack`. This is the one discipline
-   *  the caller of `runBatch` must observe. */
-  parentStack: StateStack;
-  /** The frame where branch state lives. Usually `parentStack.lastFrame()`. */
-  parentFrame: State;
-  /** Where the shared checkpoint records its location. */
-  checkpointLocation: { moduleId: string; scopeName: string; stepPath: string };
-  /** "all" → Promise.allSettled, concurrent;
-   *  "sequential" → for...of, strict ordering;
-   *  "race" → first to settle wins, others aborted. */
-  mode: "all" | "sequential" | "race";
-  children: BatchChild<T>[];
-  /** Mode "race" only: the `parentFrame.locals` key under which the winner
-   *  index is persisted. */
-  raceWinnerLocalKey?: string;
-  /** Default true. When false, the caller's `invoke` is responsible for
-   *  managing BranchState fields (setResultOnBranch / setInterruptOnBranch
-   *  / deleteBranch) — runBatch only handles abort, settle, checkpoint
-   *  stamp, overwrite. Also disables the cached-branch short-circuit. */
-  recordBranchOutcomes?: boolean;
-  hooks?: BatchHooks;
-};
-
-export type BatchChild<T> = {
-  key: string;
-  /** MUST RETURN T | Interrupt[]; MUST NOT THROW Interrupt[]. */
-  invoke: (childStack: StateStack, abortSignal: AbortSignal) => Promise<T | Interrupt[]>;
-};
-
-export type RunBatchResult<T> =
-  | { kind: "values"; values: T[] }
-  | { kind: "interrupts"; interrupts: Interrupt[] };
+//   RunBatchResult<T> = { kind: "values"; values: T[] } | { kind: "interrupts"; interrupts: Interrupt[] }
 ```
+
+For the full option set (`parentStack`, `parentFrame`, `checkpointLocation`, `children`, `raceWinnerLocalKey`, `recordBranchOutcomes`, `hooks`) and the `BatchChild` contract, read the JSDoc on `RunBatchOpts` in [`lib/runtime/runBatch.ts`](../../lib/runtime/runBatch.ts). Don't re-document those fields here — the source is the canonical reference.
+
+The two callers-must-observe rules are:
+
+- **`parentStack` MUST be the local slice** (the branch stack you were handed), NOT `ctx.stateStack`. See "Slice-only checkpoint composition" below.
+- **`BatchChild.invoke` MUST RETURN `T | Interrupt[]`**, never throw an interrupt array. Other JS errors may be thrown. See "Inherited invariants → Errors win over interrupts" below.
 
 ### What `runBatch` owns
 
@@ -157,8 +125,8 @@ When this flag is false, `runBatch` also **disables the cached-branch short-circ
 
 These behaviours come from the pre-refactor code; `runBatch` preserves them exactly.
 
-- **Errors win over interrupts.** If any child rejects (throws a non-interrupt error), `runBatch` rethrows that error and abandons any interrupts that sibling branches successfully halted with. Matches today's `runForkAll` / `runRace`. Callers that need both must catch inside their `invoke`.
-- **Race cost asymmetry.** Losers' cost propagates eagerly at race time (so their partial LLM spend is billed). The winner's cost propagates only when the winner's branch finally completes via a no-interrupt resume.
+- **Internal runtime errors win over interrupts.** Agency itself uses Result/Failure for user-facing tool errors, not JS exceptions ([guide → error handling](https://agency-lang.com/guide/error-handling.html)). The case this invariant covers is narrower: if a child's promise *rejects* — i.e., a JS error escapes from the runtime layer (a bug in agency itself, or unhandled TypeScript code called from within a branch) — `runBatch` rethrows that error and abandons any interrupts that sibling branches collected. Same behaviour as today's `runForkAll` / `runRace`. A child that needs to surface both a failure and sibling interrupts must catch the JS error inside its own `invoke` and translate it into a Failure value.
+- **Race cost asymmetry.** When the winner settles and `runBatch` aborts the losers, each loser's accumulated cost (any LLM calls it actually made before being aborted) is propagated to the parent right then. The winner's cost is *deferred*: it isn't propagated until the winner's branch finally pops on a no-interrupt resume. This matches the pre-refactor `runRace` semantics.
 - **The leaf stamps its own per-branch checkpoint** at `interruptReturn`. `runBatch` reads it off the surfaced interrupt and stores it on `BranchState.checkpoint`. Do not move leaf stamping anywhere.
 
 ---
@@ -177,8 +145,6 @@ The adapter:
 - Hooks: `seedBranchCost`, `propagateBranchCost` delegate to `Runner`'s existing helpers. `onBranchEnd → forkBranchEnd` and `onCheckpoint → checkpointCreated` wire up the statelog events. No `propagateLoserCost`/`propagateWinnerCost` (not race).
 - Returns: `result.kind === "interrupts" ? result.interrupts : result.values`.
 
-What that replaces: ~110 lines of hand-rolled `Promise.allSettled` plumbing + per-branch abort setup + per-branch cost seeding + outcome loop + checkpoint stamping + cost propagation + `popBranches`.
-
 ### `Runner.runRace` (`lib/runtime/runner.ts`)
 
 Mode: `"race"`. `recordBranchOutcomes` defaults to true. `raceWinnerLocalKey: this.raceWinnerKey(id)` (which evaluates to the existing `__race_winner_<id>` shape — unchanged for in-flight checkpoint compatibility).
@@ -189,7 +155,7 @@ The adapter:
 - Hooks: `seedBranchCost`, **asymmetric** `propagateLoserCost` / `propagateWinnerCost` (both delegating to the same `propagateBranchCost` helper; only the timing differs). `onBranchEnd → forkBranchEnd` (`"aborted"` for losers, `"interrupted"`/`"success"` for winner, `"failure"` for the first rejecting branch). `onCheckpoint → checkpointCreated` with `reason: "race"`.
 - Returns: `result.kind === "interrupts" ? result.interrupts : result.values[0]` (race always has exactly one winner).
 
-What that replaces: ~280 lines (`runRace` + `buildRaceBranchPromise` + `abortLoserBranchesAndEmitEnds` + `resumeRaceWinner`) plus the dispatch in `Runner.fork`. `Runner.fork` no longer needs to distinguish "first run" from "resume winner" — `runBatch`'s mode-`"race"` resume-dispatch path handles both.
+`Runner.fork` doesn't dispatch between "first run" and "resume winner" — it unconditionally calls the race adapter, and `runBatch`'s race-resume path inside the primitive handles the resume case via `raceWinnerLocalKey`.
 
 ### `runPrompt`'s tool loop (`lib/runtime/prompt.ts` + `lib/runtime/promptRunner.ts`)
 
@@ -232,7 +198,7 @@ if (parallelResult.kind === "interrupts") {
 // continue: parallelResult.kind === "values"
 ```
 
-What that replaces: the merged-checkpoint stamping in `PromptRunner.parallel` (was lines 158–188) plus the `PromptBailout` throw / catch dance. `PromptBailout` is still thrown by `PromptRunner.step` (the per-step helper, not parallel); the parallel path's no-throw return preserves the runBatch `invoke` no-throw-`Interrupt[]` contract.
+`PromptBailout` is still thrown by `PromptRunner.step` (the per-step helper, not by `parallel`); the parallel path returns its result instead of throwing so the `runBatch` `invoke` no-throw-`Interrupt[]` contract is preserved.
 
 ### Audit notes for prompt.ts migration
 
@@ -344,8 +310,9 @@ Any new site needs at least these tests:
 
 1. All children succeed → returns `kind: "values"`.
 2. One child interrupts, others succeed → returns `kind: "interrupts"`; on resume after `respondToInterrupts`, the previously-successful children short-circuit (their `setResultOnBranch` survived), the previously-interrupted child runs once more and succeeds; final result matches the all-succeed case.
-3. Multi-cycle: the previously-interrupted child interrupts AGAIN on its first re-run; one more `respondToInterrupts`; everything completes.
-4. Mode-specific failure case — for race, a loser was aborted mid-flight; for fork, the rejection-wins-over-interrupts invariant.
+3. Multiple children interrupt in the same batch → returns `kind: "interrupts"` with every collected interrupt sharing the same `checkpointId`; one `respondToInterrupts` with N responses resumes them all together. This is the case the `intr.checkpoint` overwrite is designed for and the most common source of subtle bugs in concurrent-interrupt code.
+4. Multi-cycle: a previously-interrupted child interrupts AGAIN on its first re-run; another `respondToInterrupts`; everything completes.
+5. Mode-specific failure case — for race, a loser was aborted mid-flight; for fork, the rejection-wins-over-interrupts invariant.
 
 The existing `tests/agency/fork/*` suite gives you templates for each.
 
@@ -562,4 +529,3 @@ If you change anything in this area, make sure these still hold:
 - **Handler that calls `interrupt()` recursively invokes itself.** See the skipped `tests/agency/fork/handlers/handler-throws-interrupt.test.json`. Whether handler-issued interrupts should bypass the active handler is an open design question.
 - **Race + reject of winner**: rejection becomes the race result (a failure `Result`). There's no automatic re-race against the surviving losers — the user must run `race` again at a higher level if they want that semantics.
 - **The runPrompt tool loop's `recordBranchOutcomes: false` arrangement is the only current site that opts out of `runBatch`'s branch-state recording.** If a future adopter needs the same arrangement, follow the same pattern (and re-read the comment in `runBatch.ts` explaining why the cached-branch short-circuit is also disabled in that mode).
-- **Subprocess interrupts (Plan 3, `docs/superpowers/plans/2026-05-10-subprocess-propagation-and-resume.md`) have the same _logical_ shape as a single-child `runBatch`** but the `invoke` crosses an IPC boundary (JSON serialisation, separate process lifetime, separate checkpoint store). Modeling subprocess as `runBatch({ children: [{ key: "sub", invoke: ipcCall }] })` is correct in shape but the IPC layer still needs to (a) reconstruct serialised checkpoints, (b) translate the subprocess's internal `Interrupt[]` JSON into runtime `Interrupt` objects with `.checkpoint` reconstructed via `Checkpoint.fromJSON`, (c) handle subprocess lifecycle. `runBatch` provides the surrounding shape; the IPC layer is separate work.

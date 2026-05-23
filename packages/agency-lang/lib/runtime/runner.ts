@@ -5,6 +5,7 @@ import { debugStep } from "./debugger.js";
 import { callHook, type CallbackMap } from "./hooks.js";
 import { hasInterrupts } from "./interrupts.js";
 import { __pipeBind } from "./result.js";
+import { runBatch } from "./runBatch.js";
 import type { SourceLocationOpts } from "./state/checkpointStore.js";
 import type { RuntimeContext } from "./state/context.js";
 import type { BranchState, State } from "./state/stateStack.js";
@@ -778,7 +779,13 @@ export class Runner {
   }
 
   /** Run all branches in parallel (fork mode). Returns an array of values,
-   * or an Interrupt[] if any branch interrupted. */
+   * or an Interrupt[] if any branch interrupted.
+   *
+   * Thin adapter over `runBatch({ mode: "all" })`. The primitive owns:
+   * branch lifecycle, abort composition, settle, leaf checkpoint capture,
+   * shared checkpoint stamp + intr.checkpoint overwrite, popBranches on
+   * success. This adapter wires up the fork-specific statelog events and
+   * cost propagation. */
   private async runForkAll(
     id: number,
     items: any[],
@@ -790,115 +797,48 @@ export class Runner {
     stateStack: StateStack,
     forkId: string,
   ): Promise<any> {
-    const branchStartTimes: number[] = [];
-    const branchEndTimes: number[] = [];
-    // Snapshot the current span stack ONCE, before branches are scheduled.
-    // Each branch runs inside its own ALS context seeded from this snapshot,
-    // so spans pushed in one branch never leak to siblings or the parent.
-    const parentStack = this.ctx.statelogClient.snapshotStack();
-    const promises = items.map((item, i) => {
-      const branchKey = this.forkBranchKey(id, i);
-      const existing = this.frame.getOrCreateBranch(branchKey);
-      if (existing.result !== undefined) {
-        branchStartTimes[i] = 0;
-        branchEndTimes[i] = 0;
-        return Promise.resolve(existing.result.result);
-      }
-      // Each fork branch gets its own AbortController. For fork-all this is
-      // mainly there for parity with race; we don't currently abort fork-all
-      // branches, but having a signal in place lets generated code use it.
-      if (!existing.abortController) {
-        existing.abortController = new AbortController();
-        // Compose with the parent stack's signal so nested fork/race aborts
-        // propagate down through every level.
-        const parentSignal = stateStack.abortSignal;
-        existing.stack.abortSignal = parentSignal
-          ? AbortSignal.any([parentSignal, existing.abortController.signal])
-          : existing.abortController.signal;
-      }
-      // Seed per-branch cost/tokens from the parent so getCost() inside the
-      // branch sees "parent's total + my own contributions". Idempotent — on
-      // resume, the restored localCost is preserved.
-      this.seedBranchCost(existing.stack, stateStack);
-      branchStartTimes[i] = performance.now();
-      return this.ctx.statelogClient
-        .runInBranchContext(parentStack, () => blockFn(item, i, existing.stack))
-        .finally(() => {
-          branchEndTimes[i] = performance.now();
-        });
-    });
-
-    const settled = await Promise.allSettled(promises);
-    const interrupts: any[] = [];
-
-    for (let i = 0; i < settled.length; i++) {
-      const s = settled[i];
-      const branchKey = this.forkBranchKey(id, i);
-      const branchTime = (branchEndTimes[i] || 0) - (branchStartTimes[i] || 0);
-      if (s.status === "rejected") {
-        this.ctx.statelogClient.forkBranchEnd({
-          forkId,
-          branchIndex: i,
-          outcome: "failure",
-          timeTaken: branchTime,
-        });
-        throw s.reason;
-      }
-      if (hasInterrupts(s.value)) {
-        this.ctx.statelogClient.forkBranchEnd({
-          forkId,
-          branchIndex: i,
-          outcome: "interrupted",
-          timeTaken: branchTime,
-        });
-        interrupts.push(...s.value);
-        this.frame.setInterruptOnBranch(
-          branchKey,
-          s.value[0].interruptId,
-          s.value[0].interruptData,
-          s.value[0].checkpoint,
-        );
-      } else {
-        this.ctx.statelogClient.forkBranchEnd({
-          forkId,
-          branchIndex: i,
-          outcome: "success",
-          timeTaken: branchTime,
-        });
-        this.frame.setResultOnBranch(branchKey, s.value);
-      }
-    }
-
-    if (interrupts.length > 0) {
-      const cpId = this.ctx.checkpoints.create(stateStack, this.ctx, {
+    const result = await runBatch<any>({
+      ctx: this.ctx,
+      parentStack: stateStack,
+      parentFrame: this.frame,
+      checkpointLocation: {
         moduleId: this.moduleId,
         scopeName: this.scopeName,
         stepPath: this.stepPath(id),
-      });
-      const cp = this.ctx.checkpoints.get(cpId)!;
-      this.ctx.statelogClient.checkpointCreated({
-        checkpointId: cpId,
-        reason: "fork",
-        sourceLocation: { moduleId: cp.moduleId, scopeName: cp.scopeName, stepPath: cp.stepPath },
-      });
-      for (const intr of interrupts) {
-        intr.checkpoint = cp;
-        intr.checkpointId = cpId;
-      }
-      return interrupts;
-    }
-
-    // No interrupts — propagate each branch's cost/token delta into the
-    // parent stack BEFORE the caller pops branches. Each branch was seeded
-    // with the parent's totals at creation; delta = branch.localCost - base.
-    const allBranches: BranchState[] = [];
-    for (let i = 0; i < items.length; i++) {
-      const branch = this.frame.getBranch(this.forkBranchKey(id, i));
-      if (branch) allBranches.push(branch);
-    }
-    this.propagateBranchCost(allBranches, stateStack);
-
-    return settled.map((s) => (s as PromiseFulfilledResult<any>).value);
+      },
+      mode: "all",
+      children: items.map((item, i) => ({
+        key: this.forkBranchKey(id, i),
+        invoke: (branchStack) => blockFn(item, i, branchStack),
+      })),
+      hooks: {
+        seedBranchCost: (childStack, parentStack) =>
+          this.seedBranchCost(childStack, parentStack),
+        propagateBranchCost: (branches, parentStack) =>
+          this.propagateBranchCost(branches, parentStack),
+        onBranchEnd: (_key, branchIndex, outcome, timeTaken) => {
+          this.ctx.statelogClient.forkBranchEnd({
+            forkId,
+            branchIndex,
+            outcome,
+            timeTaken,
+          });
+        },
+        onCheckpoint: (cpId) => {
+          const cp = this.ctx.checkpoints.get(cpId)!;
+          this.ctx.statelogClient.checkpointCreated({
+            checkpointId: cpId,
+            reason: "fork",
+            sourceLocation: {
+              moduleId: cp.moduleId,
+              scopeName: cp.scopeName,
+              stepPath: cp.stepPath,
+            },
+          });
+        },
+      },
+    });
+    return result.kind === "interrupts" ? result.interrupts : result.values;
   }
 
   /** Run all branches concurrently but return as soon as one settles.

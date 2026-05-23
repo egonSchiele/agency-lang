@@ -196,21 +196,17 @@ const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
 let __forked;
 let __functionCompleted = false;
-  await callHook({
-    ctx: __ctx,
-    name: "onNodeStart",
-    data: {
-      nodeName: "main"
-    }
-  })
   const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "tests/debugger/interrupt-test.agency", scopeName: "main" });
   try {
-    await runner.step(0, async (runner) => {
-__stack.locals.x = 1;
+    await runner.hook(0, "onNodeStart", {
+      nodeName: "main"
     });
     await runner.step(1, async (runner) => {
+__stack.locals.x = 1;
+    });
+    await runner.step(2, async (runner) => {
 // Resume path: check for a response by interruptId
-const __response = __ctx.getInterruptResponse(__self.__interruptId_1);
+const __response = __ctx.getInterruptResponse(__self.__interruptId_2);
 if (__response) {
   if (__response.type === "approve") {
     if (__response.value !== undefined) {
@@ -241,8 +237,8 @@ if (__response) {
   } else {
     // No handler — propagate interrupt array to TypeScript caller
     // Store interruptId on frame BEFORE checkpoint so it's captured in the snapshot
-    __self.__interruptId_1 = __handlerResult[0].interruptId;
-    const __checkpointId = __ctx.checkpoints.create(__stateStack, __ctx, { moduleId: "tests/debugger/interrupt-test.agency", scopeName: "main", stepPath: "1" });
+    __self.__interruptId_2 = __handlerResult[0].interruptId;
+    const __checkpointId = __ctx.checkpoints.create(__stateStack, __ctx, { moduleId: "tests/debugger/interrupt-test.agency", scopeName: "main", stepPath: "2" });
     __handlerResult[0].checkpointId = __checkpointId;
     __handlerResult[0].checkpoint = __ctx.checkpoints.get(__checkpointId);
     
@@ -254,10 +250,10 @@ if (__response) {
 }
 
     });
-    await runner.step(2, async (runner) => {
+    await runner.step(3, async (runner) => {
 __stack.locals.z = __stack.locals.x + __stack.locals.y;
     });
-    await runner.step(3, async (runner) => {
+    await runner.step(4, async (runner) => {
 runner.halt({
         messages: __threads,
         data: __stack.locals.z
@@ -265,14 +261,11 @@ runner.halt({
 return;
     });
     if (runner.halted) return runner.haltResult;
-    await callHook({
-      ctx: __ctx,
-      name: "onNodeEnd",
-      data: {
-        nodeName: "main",
-        data: undefined
-      }
-    })
+    await runner.hook(5, "onNodeEnd", {
+      nodeName: "main",
+      data: undefined
+    });
+    if (runner.halted) return runner.haltResult;
     return {
       messages: __threads,
       data: undefined
@@ -314,4 +307,4 @@ if (__process.argv[1] === fileURLToPath(import.meta.url)) {
   }
 }
 export default graph
-export const __sourceMap = {"tests/debugger/interrupt-test.agency:main":{"0":{"line":1,"col":2},"1":{"line":2,"col":2},"2":{"line":3,"col":2},"3":{"line":4,"col":2}}};
+export const __sourceMap = {"tests/debugger/interrupt-test.agency:main":{"1":{"line":1,"col":2},"2":{"line":2,"col":2},"3":{"line":3,"col":2},"4":{"line":4,"col":2}}};

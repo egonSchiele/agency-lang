@@ -45,12 +45,10 @@ export class DebuggerState {
   }
 
   enterCall() {
-    // console.log(color.blue(`[DebuggerState] enterCall at depth ${this.callDepth}, target: ${this.stepTarget ? JSON.stringify(this.stepTarget) : "n/a"}`));
     this.callDepth++;
   }
 
   exitCall() {
-    // console.log(color.blue(`[DebuggerState] exitCall at depth ${this.callDepth}, target: ${this.stepTarget ? JSON.stringify(this.stepTarget) : "n/a"}`));
     if (this.callDepth > 0) {
       this.callDepth--;
     }
@@ -71,7 +69,6 @@ export class DebuggerState {
 
   stepIn() {
     this.stepping();
-    // console.log(color.red(`[DebuggerState] stepIn called at call depth ${this.callDepth}, setting target to ${this.callDepth + 1}`));
     this.stepTarget = {
       type: "stepIn",
       targetDepth: this.callDepth + 1,

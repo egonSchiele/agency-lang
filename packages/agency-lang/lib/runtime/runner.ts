@@ -414,7 +414,12 @@ export class Runner {
     if (this.shouldSkip()) return;
     if (this.getCounter() > id) return;
 
-    if (await this.maybeDebugHook(id)) return;
+    // NOTE: codegen-emitted hook substeps (onNodeStart/onNodeEnd/onEmit/
+    // onFunctionStart/onFunctionEnd) are invisible to the debugger.
+    // They have no source mapping and aren't user-authored code, so
+    // pausing on them would surprise the user (single-step would land
+    // on an internal hook with no current line). We intentionally do
+    // NOT call maybeDebugHook here.
 
     this.ctx.coverageCollector?.hit(this.moduleId, this.scopeName, this.stepPath(id));
 

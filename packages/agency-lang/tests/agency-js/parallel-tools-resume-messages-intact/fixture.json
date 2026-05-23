@@ -1,0 +1,6 @@
+{
+  "finalData": "all done",
+  "llmCallCount": 2,
+  "secondCallToolResponseCount": 2,
+  "toolCallIds": ["call-interrupt", "call-succeed"]
+}

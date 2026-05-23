@@ -108,6 +108,18 @@ export type BatchHooks = {
     outcome: "success" | "interrupted" | "failure" | "aborted",
     timeMs: number,
   ) => void;
+  /** Called once immediately before `ctx.checkpoints.create` deep-clones
+   * the parent frame. Use this to flush state that was mutated by
+   * sibling branches during the batch into frame-backed locals that need
+   * to survive the checkpoint. Concretely: runPrompt's tool loop pushes
+   * `tool` messages onto the shared `MessageThread` from inside each
+   * branch's body, but `self.messagesJSON` (the snapshot the checkpoint
+   * captures) isn't refreshed by those pushes — the adapter uses this
+   * hook to do `self.messagesJSON = snapshotMessages()` so the
+   * deep-clone sees the up-to-date thread. Without this hook the
+   * checkpoint would carry the pre-batch messages and successful
+   * sibling tool responses would be silently lost on resume. */
+  beforeCheckpoint?: () => void;
   /** Called once when the batch stamps its shared checkpoint. */
   onCheckpoint?: (checkpointId: number) => void;
 };
@@ -161,6 +173,28 @@ type Task<T> = {
   cached: boolean;
 };
 
+/** (Re)compose the branch's abort signal from the parent stack's signal
+ * and the branch's own controller. Always overwrites `stack.abortSignal`
+ * so that re-entries (e.g. race resume that reuses a deserialized
+ * branch) don't carry a stale signal. The controller is created on
+ * first use and persists for the life of the branch in this run; the
+ * field is live-only on BranchState and not serialized, so resumes
+ * start from a fresh controller. */
+function composeBranchAbortSignal(
+  branch: BranchState,
+  parentStack: StateStack,
+): AbortSignal {
+  if (!branch.abortController) {
+    branch.abortController = new AbortController();
+  }
+  const parentSig = parentStack.abortSignal;
+  const composed = parentSig
+    ? AbortSignal.any([parentSig, branch.abortController.signal])
+    : branch.abortController.signal;
+  branch.stack.abortSignal = composed;
+  return composed;
+}
+
 /** Wire up a branch's AbortController + composed signal, seed cost, and
  * fire `onBranchStart`. Returns the child's `invoke` promise (or a
  * resolved promise for cached branches). Centralized so all three modes
@@ -175,18 +209,12 @@ function startInvoke<T>(
   if (t.cached) {
     return Promise.resolve(t.branch.result!.result);
   }
-  if (!t.branch.abortController) {
-    t.branch.abortController = new AbortController();
-    const parentSig = parentStack.abortSignal;
-    t.branch.stack.abortSignal = parentSig
-      ? AbortSignal.any([parentSig, t.branch.abortController.signal])
-      : t.branch.abortController.signal;
-  }
+  const signal = composeBranchAbortSignal(t.branch, parentStack);
   hooks?.seedBranchCost?.(t.branch.stack, parentStack);
   hooks?.onBranchStart?.(t.child.key, i);
   t.startedAt = performance.now();
   return ctx.statelogClient.runInBranchContext(parentSpanStack, () =>
-    t.child.invoke(t.branch.stack, t.branch.stack.abortSignal!),
+    t.child.invoke(t.branch.stack, signal),
   );
 }
 
@@ -197,6 +225,12 @@ function stampSharedCheckpoint<T>(
   interrupts: Interrupt[],
 ): void {
   const { ctx, parentStack, checkpointLocation, hooks } = opts;
+  // Give the caller a last chance to mutate frame state that needs to
+  // be visible in the deep-cloned checkpoint (see beforeCheckpoint
+  // hook docstring). runPrompt's parallel-tool adapter uses this to
+  // snapshot the per-tool `messages.push(...)`es that happened during
+  // the batch into `self.messagesJSON` before the deep-clone fires.
+  hooks?.beforeCheckpoint?.();
   const cpId = ctx.checkpoints.create(parentStack, ctx, checkpointLocation);
   const cp = ctx.checkpoints.get(cpId)!;
   for (const intr of interrupts) {
@@ -504,12 +538,12 @@ async function runRaceResume<T>(
     return { kind: "values", values: [branch.result.result as T] };
   }
 
-  // Set up a fresh abort controller for the resumed winner. Unlike the
-  // first-time path there are no losers to compose with.
-  if (!branch.abortController) {
-    branch.abortController = new AbortController();
-    branch.stack.abortSignal = branch.abortController.signal;
-  }
+  // Compose the resumed winner's abort signal with the current parent
+  // stack's signal so an outer abort (e.g. a surrounding race that
+  // cancels this branch) propagates into the resumed work. Uses the
+  // same helper as `startInvoke` so the composition rule lives in one
+  // place.
+  const signal = composeBranchAbortSignal(branch, parentStack);
 
   const parentSpanStack = ctx.statelogClient.snapshotStack();
   const startedAt = performance.now();
@@ -517,7 +551,7 @@ async function runRaceResume<T>(
   let value: T | Interrupt[];
   try {
     value = await ctx.statelogClient.runInBranchContext(parentSpanStack, () =>
-      child.invoke(branch.stack, branch.stack.abortSignal!),
+      child.invoke(branch.stack, signal),
     );
   } catch (err) {
     hooks?.onBranchEnd?.(

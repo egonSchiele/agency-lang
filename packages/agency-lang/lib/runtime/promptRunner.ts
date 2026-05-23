@@ -195,6 +195,25 @@ export class PromptRunner {
         },
       })),
       hooks: {
+        // Snapshot the message thread INTO `self.messagesJSON` BEFORE
+        // runBatch calls `ctx.checkpoints.create`. The checkpoint deep-
+        // clones `self.locals` synchronously, so mutating messagesJSON
+        // after `create` would NOT be visible in the captured state.
+        //
+        // This matters because each tool branch's body pushes its
+        // `tool` response onto the shared `MessageThread` via
+        // `messages.push(...)` during the batch — but those pushes
+        // never refresh `self.messagesJSON`. If we let runBatch stamp
+        // the checkpoint with stale messagesJSON, every successful
+        // sibling's tool response is lost on resume (the resumed run
+        // restores from messagesJSON and skips the completed branches,
+        // so their messages.push doesn't re-fire). The next LLM call
+        // then receives an assistant message with N tool_calls but
+        // only M < N matching tool responses, which real APIs reject.
+        // See tests/agency-js/parallel-tools-resume-messages-intact.
+        beforeCheckpoint: () => {
+          this.opts.self.messagesJSON = this.opts.snapshotMessages();
+        },
         onCheckpoint: (cpId) => {
           const cp = this.opts.ctx.checkpoints.get(cpId)!;
           this.opts.ctx.statelogClient.checkpointCreated({
@@ -209,12 +228,6 @@ export class PromptRunner {
         },
       },
     });
-
-    // Snapshot messages so the bailout checkpoint captures the
-    // pre-bailout message state (matches today's parallel behavior).
-    if (result.kind === "interrupts") {
-      this.opts.self.messagesJSON = this.opts.snapshotMessages();
-    }
 
     return result;
   }

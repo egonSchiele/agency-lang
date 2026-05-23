@@ -32,8 +32,6 @@ function fakeInterrupt(idSuffix = "1", checkpointId = 100): Interrupt {
 
 type StubCtx = {
   ctx: any;
-  /** Latest checkpoint id handed out by `checkpoints.create`. */
-  lastCheckpointId: () => number | undefined;
   /** List of `create` invocations (so tests can assert "stamped once"). */
   createCalls: Array<{ stack: any; opts: any }>;
 };
@@ -64,11 +62,7 @@ function makeCtx(): StubCtx {
       runInBranchContext: (_s: any, fn: () => any) => fn(),
     },
   };
-  return {
-    ctx,
-    lastCheckpointId: () => createCalls.at(-1)?.opts?.cpId,
-    createCalls,
-  };
+  return { ctx, createCalls };
 }
 
 function makeParent() {
@@ -231,6 +225,56 @@ describe("runBatch — mode 'all'", () => {
     expect(result).toEqual({ kind: "values", values: [] });
     expect(createCalls).toHaveLength(0);
     expect(propagateCalls).toBe(1);
+  });
+
+  it("beforeCheckpoint hook fires immediately before ctx.checkpoints.create and can mutate frame locals visible in the deep-clone", async () => {
+    // Regression test for the messagesJSON-ordering bug surfaced in
+    // PR #186 review (Copilot inline comment). Without this hook
+    // runPrompt's tool loop loses successful sibling tool responses
+    // on resume because `ctx.checkpoints.create` deep-clones
+    // `self.locals` synchronously at create time, so any post-create
+    // mutation isn't reflected in the captured state.
+    const { ctx, createCalls } = makeCtx();
+    const { parentStack, parentFrame } = makeParent();
+    // Seed locals with a stale value the way prompt.ts line 422 does.
+    parentFrame.locals.messagesJSON = ["stale"];
+    const order: string[] = [];
+    const result = await runBatch({
+      ctx,
+      parentStack,
+      parentFrame,
+      checkpointLocation: cpLoc,
+      mode: "all",
+      children: [
+        {
+          key: "c0",
+          invoke: async () => {
+            // Simulate the per-tool body pushing a new entry that
+            // belongs in messagesJSON but isn't reflected there yet.
+            order.push("invoke");
+            return [fakeInterrupt("with-before-cp")];
+          },
+        },
+      ],
+      hooks: {
+        beforeCheckpoint: () => {
+          order.push("beforeCheckpoint");
+          // Caller is expected to flush the up-to-date snapshot here.
+          parentFrame.locals.messagesJSON = ["stale", "fresh"];
+        },
+        onCheckpoint: () => order.push("onCheckpoint"),
+      },
+    });
+    expect(result.kind).toBe("interrupts");
+    // Hook fires after invoke completes and BEFORE checkpoint is stamped.
+    expect(order).toEqual(["invoke", "beforeCheckpoint", "onCheckpoint"]);
+    expect(createCalls).toHaveLength(1);
+    // The mutation done inside beforeCheckpoint is observable to the
+    // checkpoint's deep-clone (proxy: the live frame holds the fresh
+    // value at create time; deep-clone in checkpointStore captures
+    // exactly that — covered end-to-end by the agency-js test
+    // `parallel-tools-resume-messages-intact`).
+    expect(parentFrame.locals.messagesJSON).toEqual(["stale", "fresh"]);
   });
 
   it("duplicate child keys throw with a clear message and no side effects", async () => {

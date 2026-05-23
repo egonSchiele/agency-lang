@@ -41,6 +41,21 @@ export function makeMockCtx(opts: {
       pushActive: () => {},
       popActive: () => {},
     },
+    // Minimal statelogClient stub. runBatch (used by Runner.hook's
+    // per-callback machinery) needs `snapshotStack` and
+    // `runInBranchContext`; everything else is a no-op.
+    statelogClient: {
+      snapshotStack: () => [],
+      runInBranchContext: <T>(_stack: unknown, fn: () => T): T => fn(),
+      startSpan: () => "span-mock",
+      endSpan: () => {},
+      forkStart: () => {},
+      forkEnd: () => {},
+      forkBranchEnd: () => {},
+      checkpointCreated: () => {},
+      error: () => {},
+      toolCall: () => {},
+    },
     hasDebugger() { return this.debuggerState !== null; },
     hasTraceWriter() { return false; },
     isInsideToolCall() { return this._toolCallDepth > 0; },

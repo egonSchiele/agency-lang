@@ -1,0 +1,48 @@
+
+let preA: number = 0
+let postA: number = 0
+let preB: number = 0
+let postB: number = 0
+let order: string = ""
+
+// Two top-level callbacks on onNodeStart. Each increments a "pre"
+// counter, raises an interrupt, then increments a "post" counter.
+//
+// Per-callback runBatch semantics (Task 6) guarantee:
+//   1. Each counter increments EXACTLY ONCE across the resume cycle.
+//      The callback's own checkpoint (stamped inside its interrupt
+//      step) preserves the callback frame's substep counters — on
+//      resume the pre-side increment is skipped and only the interrupt
+//      step re-runs.
+//   2. Callbacks fire in DECLARED ORDER (sequential mode of runBatch):
+//      A runs to completion (which means "until it interrupts") before
+//      B starts. On the first pass both A's pre-counter and B's
+//      pre-counter fire, both raise interrupts, runBatch surfaces them
+//      together under one shared checkpoint. On resume A's post fires,
+//      then B's post fires.
+//
+// Expected post-resume:
+//   preA=1,postA=1,preB=1,postB=1,order=preA,preB,postA,postB,
+callback("onNodeStart") as data {
+  if (data.nodeName == "main") {
+    preA = preA + 1
+    order = order + "preA,"
+    interrupt myapp::pauseA("approve A?", {})
+    postA = postA + 1
+    order = order + "postA,"
+  }
+}
+
+callback("onNodeStart") as data {
+  if (data.nodeName == "main") {
+    preB = preB + 1
+    order = order + "preB,"
+    interrupt myapp::pauseB("approve B?", {})
+    postB = postB + 1
+    order = order + "postB,"
+  }
+}
+
+node main() {
+  return "preA=${preA},postA=${postA},preB=${preB},postB=${postB},order=${order}"
+}

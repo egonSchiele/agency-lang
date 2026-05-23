@@ -116,36 +116,84 @@ relies on.
 3. Top-level callbacks (registered at module init), in registration order
 4. The TS-passed `ctx.callbacks[name]` callback, if any
 
-`callHook` invokes them in that order and collects interrupts as it
-goes. The returned `Interrupt[]` preserves the firing order.
+`Runner.hook` fires them in that order via `runBatch` with
+`mode: "sequential"` — each callback becomes its own batch child.
+See [`docs/dev/runBatch.md`](runBatch.md). The returned `Interrupt[]`
+preserves the firing order.
 
-**Resume limitation when multiple callbacks raise interrupts.** When
-two callbacks on the same hook both raise an interrupt, the user
-receives a batch of two interrupts. Each interrupt's `checkpoint`
-property captures the stack at *its own* interrupt step — including
-its own callback frame, but not its siblings'. `respondToInterrupts`
-uses `interrupts[0].checkpoint` to drive the resume, so only the first
-callback's frame is restored. On resume the hook re-fires, the first
-callback's frame is reused from the deserialize queue and it completes
-with the user's response, but the second callback is invoked fresh
-(no saved frame, no saved `__interruptId`) — its body re-runs from the
-top and re-raises a new interrupt, producing an unexpected extra
-interrupt cycle.
+**Multi-callback resume (Task 6).** Each callback fires as a
+separate `runBatch` child branch with its own per-branch state on the
+hook's frame. When one (or more) callback halts with an interrupt,
+`runBatch` stamps a SHARED checkpoint and surfaces every collected
+interrupt under that one resume point. On resume:
 
-A correct fix mirrors the fork pattern (`docs/dev/concurrent-interrupts.md`):
-fire each callback on its own branch, stamp a single shared
-hook-level checkpoint capturing all branches, store each branch's
-interruptId in `setInterruptOnBranch`, and on resume re-enter only the
-branches that haven't completed. That refactor is out of scope for
-Phase 1. Today, prefer at most one interrupt-raising callback per
-hook; if you must have multiple, expect to handle extra resume cycles
-manually.
+- Callbacks whose branch already recorded a `result` (they completed
+  normally on the prior pass) short-circuit via the cached-branch
+  path in `runBatch` — their `invoke` is not called again, no side
+  effects re-run.
+- Callbacks whose branch holds an interrupt re-enter their own
+  `invoke`. The leaf checkpoint stamped at the callback's own
+  `interrupt` step preserves the callback frame's substep counters,
+  so the callback's body skips already-completed substeps and
+  re-enters at the interrupt step, which finds the user's response
+  via the saved `__interruptId_N`.
+
+Net effect: each callback's pre- and post-interrupt side effects run
+**exactly once** across any number of resume cycles. This used to be
+true only for the single-callback case (the leaf-checkpoint
+mechanism handled it); for two or more callbacks the pre-Task-6
+behaviour would re-run every callback from the top on each resume.
+
+Because `mode: "sequential"`, callback B does not start until
+callback A finishes — including waiting for A's interrupt response.
+On a multi-callback batch that all interrupt, the firing order is:
+`A.pre → (A interrupts) → B.pre → (B interrupts) → [batch]` and on
+resume `A.post → B.post`. Use `mode: "all"` would silently turn
+ordered side effects into a concurrent race; sequential is required
+here, not a preference.
+
+## Parallel-branch callbacks (per-tool firings)
+
+When a callback fires from inside a parallel branch — e.g. the
+per-tool `onToolCallStart` / `onToolCallEnd` in `runPrompt`'s tool
+loop — it must run on the **branch's own stack**, not on
+`ctx.stateStack`. Otherwise any callback-raised interrupt captures a
+checkpoint with the wrong slice and `setInterruptOnBranch` cannot
+find the right frame on resume.
+
+This is enforced via `invokeCallbacks({ ..., stateStack: branchStack })`
+in `prompt.ts`. The per-branch firing also requires per-branch
+recursion-guard isolation — see "Recursion guard" below.
+
+## Recursion guard
+
+`fireWithGuard` uses an `AsyncLocalStorage`-scoped Set to prevent a
+callback that synchronously re-fires its own hook (via a helper
+function call) from recursing into itself
+(tests/agency/callback-recursion).
+
+Each `fireWithGuard` call enters its own `_activeCallbacksALS.run(...)`
+scope with a freshly-allocated `new Set<object>(inherited)` containing
+the parent scope's entries plus the current callback's key. Within that
+scope the Set is inherited through `await` boundaries and nested sync
+calls, so a synchronous re-fire of the same callback (via a
+helper-function call on the same async chain) sees its own key and is
+skipped. Concurrent sibling branches each enter their OWN
+`_activeCallbacksALS.run(...)` scope, so one branch's added key is
+invisible to the other — that's how parallel fork/tool branches each
+fire the same callback without dropping sibling invocations.
+(`statelogClient.runInBranchContext` scopes a separate ALS for
+Statelog spans and does NOT touch this guard.) ALS state is
+live-only — never serialised, automatically released when the
+`_activeCallbacksALS.run(...)` scope exits.
 
 ## Why the batch-and-return shape
 
 This mirrors `runForkAll` / `runRace` from
-`docs/dev/concurrent-interrupts.md`. Callbacks are sequential rather
-than parallel, but the invariant is the same: each callback runs to
-completion regardless of what its siblings did, and the caller gets
-every halt batched together so the user can respond to all of them in
-one cycle of `respondToInterrupts`.
+`docs/dev/concurrent-interrupts.md`. Today the implementation IS the
+same primitive (`runBatch` with `mode: "sequential"` for hook
+callbacks vs. `"all"` / `"race"` for fork / race). The invariant is
+the same: each callback runs to completion regardless of what its
+siblings did, and the caller gets every halt batched together so the
+user can respond to all of them in one cycle of
+`respondToInterrupts`.

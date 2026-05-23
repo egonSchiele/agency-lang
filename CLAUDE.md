@@ -99,6 +99,7 @@ Pipeline and architecture:
 - `docs/dev/config.md` — AgencyConfig options for compiler and runtime configuration
 - `docs/dev/debugger.md` — Interactive debugger for stepping through and rewinding execution
 - `docs/dev/concurrent-interrupts.md` — Supporting multiple concurrent threads that interrupt simultaneously
+- `docs/dev/runBatch.md` — The `runBatch` primitive: signature, three modes, slice rule, invoke no-throw contract, defensive guards
 - `docs/dev/pkg-imports.md` — Importing Agency code from npm packages using `pkg::` prefix
 - `docs/dev/trace.md` — Execution traces capturing checkpoints at every step
 - `docs/dev/binop-parser.md` — Binary expression parser using precedence climbing

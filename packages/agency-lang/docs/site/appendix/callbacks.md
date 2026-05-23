@@ -53,11 +53,11 @@ The table below summarizes the current state per hook. Three columns:
 |-------------------|------------------------------|------------------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `onAgentStart`    | ❌ Compile + runtime error    | N/A                                | Fires outside any agency frame — there is no stack to checkpoint and nowhere to resume from. The typechecker errors at build; `callHook` also throws at runtime as a defense-in-depth.                                                         |
 | `onAgentEnd`      | ❌ Compile + runtime error    | N/A                                | Same as `onAgentStart`.                                                                                                                                                                                                                        |
-| `onNodeStart`     | ✅ Yes                        | ⚠️ Batched, but resume is partial   | Fires inside the node's runner as a resumable substep. Single-callback resume works cleanly (exactly-once semantics). Multi-callback: see the **single-callback constraint** below.                                                            |
-| `onNodeEnd`       | ⚠️ Only on void-returning nodes | ⚠️ Same as `onNodeStart`           | Nodes that exit via `return value` halt the runner first; the post-body halted check short-circuits the End hook, so it never fires. Use a void node body if you need `onNodeEnd` to fire.                                                     |
-| `onFunctionStart` | ✅ Yes                        | ⚠️ Batched, but resume is partial   | Fires inside the function's runner as a resumable substep. Same as `onNodeStart`.                                                                                                                                                              |
-| `onFunctionEnd`   | ❌ Silently dropped           | ❌                                  | Fires from a `finally` block. The function has already returned by the time the hook fires, so interrupts cannot be propagated back into the runner. Today they are discarded with no log or throw. Move to a hook that fires outside `finally` if you need interrupts. |
-| `onEmit`          | ✅ Yes                        | ⚠️ Batched, but resume is partial   | Fires as a substep at the call site of `emit(...)`. Verified end-to-end (code before the interrupt does NOT re-run on resume; code after the interrupt fires exactly once on resume).                                                          |
+| `onNodeStart`     | ✅ Yes                        | ✅ Batched                          | Fires inside the node's runner as a resumable substep. Per-callback `runBatch` (mode `"sequential"`) gives full multi-callback resume — each callback's side effects fire exactly once across any number of resume cycles.                     |
+| `onNodeEnd`       | ⚠️ Only on void-returning nodes | ✅ Batched                          | Nodes that exit via `return value` halt the runner first; the post-body halted check short-circuits the End hook, so it never fires. Use a void node body if you need `onNodeEnd` to fire. Multi-callback resume otherwise identical to `onNodeStart`. |
+| `onFunctionStart` | ✅ Yes                        | ✅ Batched                          | Fires inside the function's runner as a resumable substep. Same as `onNodeStart`.                                                                                                                                                              |
+| `onFunctionEnd`   | ❌ Silently dropped           | ❌                                  | Fires from a `finally` block. The function has already returned by the time the hook fires, so interrupts cannot be propagated back into the runner. Today they are discarded with no log or throw. Move to a hook that fires outside `finally` if you need interrupts. (Not addressed by the multi-callback work — still raw `callHook`.) |
+| `onEmit`          | ✅ Yes                        | ✅ Batched                          | Fires as a substep at the call site of `emit(...)`. Same multi-callback resume guarantees as `onNodeStart`.                                                                                                                                    |
 | `onLLMCallStart`  | ✅ Yes                        | ✅ Batched                          | Propagates through `runPrompt`. Pending LLM call does not run. Resume re-enters `runPrompt` and the call is attempted from scratch.                                                                                                            |
 | `onLLMCallEnd`    | ✅ Yes                        | ✅ Batched                          | Propagates through `runPrompt`. The LLM response is preserved across the resume cycle by `runPrompt`'s internal state machine.                                                                                                                 |
 | `onToolCallStart` | ✅ Yes                        | ✅ Batched                          | Per-tool branch (`b.step`) captures the interrupt. Resume re-fires only the interrupted tool — sibling tools' results are preserved. The tool itself does not execute on the first cycle.                                                      |
@@ -65,25 +65,21 @@ The table below summarizes the current state per hook. Three columns:
 | `onStream`        | 🚫 N/A                        | 🚫 N/A                              | Invoked directly by the streaming pipeline (`ctx.callbacks.onStream(...)`), never goes through `callHook`. Agency `callback("onStream", ...)` registrations are never fired.                                                                   |
 | `onTrace`         | 🚫 N/A                        | 🚫 N/A                              | Same as `onStream` — direct invocation, not via `callHook`.                                                                                                                                                                                    |
 
-### Single-callback constraint (current limitation)
+### Multi-callback resume
 
-For the hooks marked **⚠️ Batched, but resume is partial**, the runtime
-correctly batches all interrupts into a single `Interrupt[]` and
-surfaces them to the user. The catch is on resume: `respondToInterrupts`
-uses the first interrupt's checkpoint to drive the restore — so only
-that callback's frame is reused from the deserialize queue. Sibling
-callbacks' bodies re-run from the top, which means their pre-interrupt
-side effects fire again, and they may raise fresh interrupts that
-require additional resume cycles.
+Every hook in the table marked **✅ Batched** now supports full
+multi-callback resume: multiple callbacks registered for the same
+hook can each raise an interrupt, and each callback's side effects
+run **exactly once** across any number of resume cycles. Each
+callback fires as its own `runBatch` child branch with its own
+per-branch state; `runBatch` stamps one shared checkpoint and
+surfaces every collected interrupt; the cached-branch short-circuit
+plus the leaf checkpoint's preserved substep counters give each
+callback its own resume point.
 
-**Practical guidance:** prefer at most one interrupt-raising callback
-per hook. Pure observers (callbacks with no `interrupt(...)` call) can
-freely coexist alongside an interrupter — they just re-run on resume.
-
-A future change will move callbacks to a fork-style branched model
-that batches resume correctly. The hooks marked **✅ Batched** (LLM and
-tool hooks) already get fork-style branched resume for free, because
-they fire inside `runPrompt`'s branch machinery.
+Callbacks fire in declared order. Sequential mode is required, not a
+preference — using `mode: "all"` would silently turn ordered side
+effects into a concurrent race.
 
 ### Concurrent firing across fork branches
 

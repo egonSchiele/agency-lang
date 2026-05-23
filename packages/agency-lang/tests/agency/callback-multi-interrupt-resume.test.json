@@ -1,0 +1,19 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Two top-level onNodeStart callbacks each with pre- and post-interrupt counters. Per-callback runBatch in Runner.hook guarantees each counter increments exactly once across the resume cycle AND callbacks fire in declared order (sequential mode).",
+      "input": "",
+      "expectedOutput": "\"preA=1,postA=1,preB=1,postB=1,order=preA,preB,postA,postB,\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "interruptHandlers": [
+        { "action": "approve", "expectedMessage": "approve A?" },
+        { "action": "approve", "expectedMessage": "approve B?" }
+      ]
+    }
+  ]
+}

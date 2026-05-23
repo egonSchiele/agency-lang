@@ -1,0 +1,22 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Two parallel tool calls — A's onToolCallStart and B's onToolCallEnd both interrupt. Tests that start-side and end-side callback interrupts batch correctly across different lifecycle phases within the same round.",
+      "input": "",
+      "expectedOutput": "",
+      "evaluationCriteria": [
+        {
+          "type": "llmJudge",
+          "judgePrompt": "The output should be an object with a 'fact' field containing text about cats and a 'joke' field containing text about dogs.",
+          "desiredAccuracy": 70
+        }
+      ],
+      "interruptHandlers": [
+        { "action": "approve" },
+        { "action": "approve" }
+      ],
+      "retry": 2
+    }
+  ]
+}

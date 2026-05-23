@@ -1,0 +1,41 @@
+// Multiple tools called in parallel. ONLY onToolCallStart callbacks
+// raise interrupts (no onToolCallEnd interrupts). Tests that the start-
+// side hook fires inside the branch's slice and batches cleanly.
+
+let firedA: number = 0
+let firedB: number = 0
+
+def quickFact(topic: string): string {
+  return "fact about ${topic}"
+}
+
+def quickJoke(topic: string): string {
+  return "joke about ${topic}"
+}
+
+callback("onToolCallStart") as data {
+  if (data.toolName == "quickFact") {
+    firedA = firedA + 1
+    if (firedA == 1) {
+      interrupt myapp::startA("approve start of quickFact?", {})
+    }
+  }
+  if (data.toolName == "quickJoke") {
+    firedB = firedB + 1
+    if (firedB == 1) {
+      interrupt myapp::startB("approve start of quickJoke?", {})
+    }
+  }
+}
+
+type Response = {
+  fact: string
+  joke: string
+}
+
+node main() {
+  const result: Response = llm("Call quickFact with topic='cats' AND quickJoke with topic='dogs' in the SAME response in parallel. Then return a 'fact' field with the quickFact result and a 'joke' field with the quickJoke result.", {
+    tools: [quickFact, quickJoke]
+  })
+  return result
+}

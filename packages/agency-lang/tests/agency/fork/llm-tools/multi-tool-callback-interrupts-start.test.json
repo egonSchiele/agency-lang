@@ -1,0 +1,22 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Two parallel tool calls; ONLY onToolCallStart callbacks raise interrupts (no onToolCallEnd interrupts). Verifies start-side hook fires inside the branch's slice.",
+      "input": "",
+      "expectedOutput": "",
+      "evaluationCriteria": [
+        {
+          "type": "llmJudge",
+          "judgePrompt": "The output should be an object with a 'fact' field containing text about cats and a 'joke' field containing text about dogs.",
+          "desiredAccuracy": 70
+        }
+      ],
+      "interruptHandlers": [
+        { "action": "approve" },
+        { "action": "approve" }
+      ],
+      "retry": 2
+    }
+  ]
+}

@@ -2,23 +2,68 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task.
 
-**Goal:** Make `onLLMCallEnd` (and, in scope-extension, every other "end"-shaped hook) mark its enclosing substep complete BEFORE firing the user callback, so that an interrupt raised inside the callback does not cause the substep — and the work it performed — to re-run on resume.
+**Goal:** Make `onLLMCallEnd` interrupts in `runPrompt` resume WITHOUT re-running the LLM API call. After resume the user-supplied callback re-fires (giving the user another chance to approve), but the underlying `_runPrompt` work — the API request, the assistant message push, the token-stat update — happens exactly once.
 
-**Surfaced by:** the `guard()` stdlib function (added in the same PR as this plan). With a `$0.0000001` limit, the first `llm()` call costs ~6e-6 and trips the callback's interrupt; on each resume the `llm()` re-fires, adding another ~6e-6 of cost per cycle. Observed sequence: spent grows 6e-6 → 12e-6 → 18e-6 → 24e-6 → 30e-6 across 5 cycles, linear, exactly one extra LLM call per cycle.
-
-**Root cause:** `Runner.step(id, body)` increments the substep counter (`setCounter(id + 1)`) *after* `body` returns successfully. `onLLMCallEnd` is fired from inside `prompt.ts` while it is still executing inside the surrounding `runner.step` body. If the callback raises an interrupt, the runner halts, the step body returns early, and `setCounter` never runs. On resume, the counter still points at the LLM step, so the step re-executes — re-invoking `llm()` and re-spending real money.
-
-This is the same shape as the bug class addressed by `docs/superpowers/plans/2026-05-22-callback-interrupts-deferred-return.md` for `onNodeEnd` (value-returning case) and `onFunctionEnd` (finally-block case). The "end" hook fires before the surrounding step's completion is committed.
-
-**Tech Stack:** TypeScript runtime (`lib/runtime/runner.ts`, `lib/runtime/prompt.ts`, `lib/runtime/promptRunner.ts`), `lib/runtime/hooks.ts`, fixtures.
+**Surfaced by:** the `guard()` stdlib function. With a `$0.0000001` budget the first `llm()` call costs ~6e-6 and trips the callback's interrupt; on each resume the LLM call re-fires, adding another ~6e-6 of spend per cycle. Observed linearly: 6e-6 → 12e-6 → 18e-6 → 24e-6 → 30e-6 across five cycles.
 
 ---
 
-### Task 1: Failing fixture
+## Root cause (revised — earlier draft of this plan misdiagnosed it)
+
+The blame is NOT on the outer user-code `Runner.step` wrapping the `llm(...)` call site. That outer step *does* receive a `Promise<Interrupt[]>` return value, halts correctly, and writes its own counter correctly. The re-execution lives one frame deeper: inside `runPrompt`'s OWN substep machinery, implemented by `PromptRunner` in `lib/runtime/promptRunner.ts`.
+
+Current shape of the LLM substep inside `runPrompt` ([prompt.ts L366-424](file:///Users/adityabhargava/agency-lang/packages/agency-lang/lib/runtime/prompt.ts#L366-L424)):
+
+```ts
+await pr.step("initialLlmCall", async () => {
+  const lenBefore = messages.getMessages().length;
+  messages.push(smoltalk.userMessage(prompt));
+  ...
+  const result = await _runPrompt({ ctx, messages, ... });   // ← fires onLLMCallStart, calls API, pushes assistant msg,
+                                                              //   updates token stats, runs memory hooks, fires onLLMCallEnd
+  if (result.kind === "interrupt") {
+    messages.setMessages(messages.getMessages().slice(0, lenBefore));   // ← REWIND
+    closeLlmSpan();
+    return result.interrupts;                                            // ← bail without marking step complete
+  }
+  ...
+});
+```
+
+`PromptRunner.step` ([promptRunner.ts L92-128](file:///Users/adityabhargava/agency-lang/packages/agency-lang/lib/runtime/promptRunner.ts#L92-L128)) deliberately does NOT push the key to `completedSteps` when the body returns interrupts — its design contract is "rewind to before this step on resume."
+
+That contract was correct when the only interrupts that could surface inside a step were "before the work" hooks (`onLLMCallStart`). It is fatally wrong for `onLLMCallEnd`, which fires AFTER the LLM API call has already happened and been paid for. The body's `messages.setMessages(...slice(0, lenBefore))` then throws the assistant message on the floor too — completing the waste.
+
+So the fix is to **split the single `initialLlmCall` substep into a sequence of finer-grained substeps**, each of which is small enough that the "rewind on interrupt" contract is correct for it:
+
+```diagram
+╭──────────────╮  ╭──────────────╮  ╭──────────────╮  ╭──────────────╮
+│ .user        │→ │ .start       │→ │ .api         │→ │ .end         │
+│ push user    │  │ onLLMCall    │  │ API call +   │  │ onLLMCall    │
+│ + memory     │  │ Start hook   │  │ msg push +   │  │ End hook     │
+│ injection    │  │              │  │ token stats  │  │              │
+╰──────────────╯  ╰──────────────╯  ╰──────────────╯  ╰──────────────╯
+                                                              ↑
+                                                              └─ user
+                                                                 callback
+                                                                 can
+                                                                 safely
+                                                                 re-fire
+```
+
+`.api` has no user-controlled hooks → cannot interrupt → never re-runs. `.end` can interrupt freely; on resume the prior three substeps are skipped and `.end` re-fires with persisted hook data. Symmetric split for `nextLlmCall`.
+
+This is the same shape already used by the parallel tool branches: `start` / `invoke` / `end` / `log` are four separate `b.step` calls ([prompt.ts L661-776](file:///Users/adityabhargava/agency-lang/packages/agency-lang/lib/runtime/prompt.ts#L661-L776)). We're applying the same pattern one level up.
+
+**Tech Stack:** TypeScript runtime — primarily `lib/runtime/prompt.ts` (refactor `_runPrompt` and its two call sites). No changes to `promptRunner.ts`, `runner.ts`, `hooks.ts`, or codegen.
+
+---
+
+### Task 1: Failing fixtures
 
 **Files:**
-- Create: `tests/agency/guard-cost.test.json` (promote the existing `tests/agency/guard-cost.agency` example to a real fixture with handlers)
-- Create: `tests/agency/onllmcallend-interrupt-no-rerun.agency` + `.test.json` (minimal reproducer that does NOT use `guard` — just a top-level `callback("onLLMCallEnd") as data { interrupt(...) }` plus a node that calls `llm(...)` once and counts via a module-level `let counter` how many times the body ran)
+- Create: `tests/agency/onllmcallend-interrupt-no-rerun.agency` + `.test.json`
+- Create: `tests/agency/guard-cost.test.json` (promote the existing `tests/agency/guard-cost.agency` example to a real fixture)
 
 - [ ] **Step 1: Minimal reproducer**
 
@@ -31,14 +76,14 @@ callback("onLLMCallEnd") as data {
 
 node main() {
   runs = runs + 1
-  llm("Say hi")
+  llm("Reply with the single word: pong")
   return runs
 }
 ```
 
-Expected after one approve cycle: `runs == 1`. Today: `runs == 2`.
+`.test.json` supplies one interrupt response (any shape — the callback's return value is irrelevant to the cost-tracking question). Expected after one approve cycle: `expectedOutput == 1`. Today: `expectedOutput == 2`.
 
-- [ ] **Step 2: Promote guard-cost to a real fixture** — supply enough interrupt handlers (or use `{action: "approve"}` with `resolvedValue` matching the original limit) to drive the run to completion, asserting `expectedOutput == "done"`.
+- [ ] **Step 2: Promote guard-cost** — supply enough interrupt handlers to drive the run to completion. With the bug fixed, ONE approve handler suffices (today the example bleeds to four+ because of the linear re-spend); the fixture asserts `expectedOutput == "done"` AND `expectedTotalCost <= 1e-5` (one LLM call's worth).
 
 - [ ] **Step 3: Confirm both fail**
 
@@ -47,104 +92,247 @@ pnpm run agency test tests/agency/onllmcallend-interrupt-no-rerun.agency > /tmp/
 pnpm run agency test tests/agency/guard-cost.agency >> /tmp/end-hook-rerun.log 2>&1
 ```
 
+Expected failure messages: counter == 2 (not 1); cost grows linearly across resumes.
+
 - [ ] **Step 4: Commit**
 
 ---
 
-### Task 2: Audit every end-hook fire site
+### Task 2: Trace what `_runPrompt` does between substep entry and `onLLMCallEnd`
 
 **Files:**
-- Read: `lib/runtime/prompt.ts` — find every `invokeCallbacks(..., name: "onLLMCallEnd" ...)` and `b.step(...)` that fires an end-shaped hook.
-- Read: `lib/runtime/promptRunner.ts` — same.
-- Read: `lib/runtime/node.ts` — `onAgentEnd`.
-- Read: `lib/backends/typescriptBuilder.ts` — codegen for `onNodeEnd` (already migrated to `runner.hook`) and `onFunctionEnd` (still in `finally`).
+- Read: `lib/runtime/prompt.ts` — focus on `_runPrompt` body and the `pr.step("initialLlmCall", ...)` / `pr.step("round.${round}.nextLlmCall", ...)` wrappers.
 
-- [ ] **Step 1: Build the table**
+Build the mutation table (delete after Task 4 ships). For each piece of mutable state `_runPrompt` touches, note:
+- WHAT it is (`messages`, `self.messagesJSON`, `targetStack.localCost`, `ctx.globals.__tokenStats`, `self.pendingToolCalls`, etc.)
+- WHEN it is mutated (before/after API call, before/after `onLLMCallEnd`)
+- WHETHER its state needs to be preserved across `onLLMCallEnd` interrupt + resume (yes for messages and cost; no for the locally-scoped `endTime`)
+- HOW resume can recover it (already in `self.messagesJSON`? need a new `self.runnerState` slot? recoverable from messages themselves?)
 
-For each end-hook fire site, write down in `docs/notes/end-hook-fire-sites.md` (delete in Task 5):
-- Hook name
-- Caller (file/function)
-- Whether the fire is inside a `runner.step` body or outside any runner
-- Whether the substep counter is incremented BEFORE the fire or AFTER it (or there is no counter)
-- Whether the fire CAN currently propagate an interrupt up the runner
+Three slots demand particular attention because they currently live ONLY in the `_runPrompt` closure:
 
-The table drives Task 3's strategy: sites that already commit-before-fire are unaffected; sites that commit-after-fire need the deferred completion treatment.
+- `completion` (smoltalk PromptResult) — `onLLMCallEnd` reads `usage`, `cost`, `finishReason`, `output`. Must be persisted.
+- `toolCalls` (`smoltalk.ToolCallJSON[]`) — used after `_runPrompt` returns to drive the tool loop. Already recoverable from the last assistant message's `toolCalls` field, OR we can persist `self.pendingToolCalls` earlier (today it's set after the step body).
+- `endTime - startTime` (number) — passed to `onLLMCallEnd` as `timeTaken`. Must be persisted.
+
+These are exactly the shape of the per-tool-branch persistence already done at [L692](file:///Users/adityabhargava/agency-lang/packages/agency-lang/lib/runtime/prompt.ts#L692) (`self.runnerState.toolTimings ??= {}`). We'll mirror that pattern.
 
 ---
 
-### Task 3: Add a `Runner.commitStep` primitive
+### Task 3: Split `_runPrompt` into `.start` / `.api` / `.end` substeps
 
 **Files:**
-- Modify: `lib/runtime/runner.ts`
+- Modify: `lib/runtime/prompt.ts`
 
-The simplest fix: a `commitStep(id)` method that callers (specifically `runner.step` itself, before firing a *trailing* hook) call to advance the counter BEFORE the hook fires.
+The cleanest refactor: change `_runPrompt`'s signature to accept the `PromptRunner` and a `keyPrefix`, and have IT call `pr.step` for each substep. The outer `pr.step("initialLlmCall", ...)` wrapper goes away — `runPrompt` calls `_runPrompt({ ..., pr, keyPrefix: "initialLlmCall" })` directly.
 
-- [ ] **Step 1: Add the helper**
+- [ ] **Step 1: New `_runPrompt` signature**
 
 ```ts
-/** Mark a step complete so that an interrupt raised in trailing hook
- *  bookkeeping (e.g. onLLMCallEnd raising from inside prompt.ts) does
- *  NOT cause the step's body to re-run on resume. Idempotent. */
-commitStep(id: number): void {
-  if (this.getCounter() <= id) {
-    this.setCounter(id + 1);
+type RunPromptOutcome = { messages: MessageThread; toolCalls: smoltalk.ToolCallJSON[] };
+
+async function _runPrompt({
+  ctx,
+  messages,
+  ...,
+  pr,
+  keyPrefix,
+}: {
+  ...existing fields...
+  pr: PromptRunner;
+  keyPrefix: string;
+}): Promise<RunPromptOutcome> { ... }
+```
+
+The function no longer returns `RunPromptResult` with `kind: "interrupt"` — interrupts inside `pr.step` throw `PromptBailout` which propagates straight up to `runPrompt`'s outer `try/catch`. The tagged-union return type goes away. (`RunPromptResult` exported type can be deleted.)
+
+- [ ] **Step 2: Three `pr.step` calls inside `_runPrompt`**
+
+```ts
+// SubStep 1: start hook
+await pr.step(`${keyPrefix}.start`, async () => {
+  const startInterrupts = await callHook({
+    ctx, name: "onLLMCallStart",
+    data: { prompt, tools, model: clientConfig.model, messages: messages.toJSON().messages },
+  });
+  return startInterrupts ?? undefined;
+});
+
+// SubStep 2: API call + assistant push + token stats + memory hooks
+// NOTE: no user-controlled hook fires inside this step. It cannot
+// produce interrupts. The `pr.step` wrapper is here for completed-
+// step bookkeeping only.
+let completion: PromptResult | undefined;
+let toolCalls: ToolCallJSON[] = [];
+await pr.step(`${keyPrefix}.api`, async () => {
+  // re-check cancellation
+  if (ctx.isCancelled(stateStack)) throw new AgencyCancelledError();
+
+  // (existing API request, response handling, push assistant message,
+  //  updateTokenStats, targetStack.localCost/localTokens, memory hooks)
+  ...
+  completion = response.value;
+  toolCalls = completion.toolCalls || [];
+  messages.push(smoltalk.assistantMessage(completion.output, toolCalls.length > 0 ? { toolCalls } : undefined));
+  updateTokenStats(...);
+  targetStack.localCost += ...;
+  targetStack.localTokens += ...;
+  // memory hooks (best-effort, log-and-continue)
+
+  // Persist the data .end will need on resume. Keyed by keyPrefix so
+  // a later `nextLlmCall` step doesn't clobber `initialLlmCall`.
+  self.runnerState.llmCallData ??= {};
+  self.runnerState.llmCallData[keyPrefix] = {
+    model: completion.model ?? clientConfig.model ?? "unknown model",
+    usage: completion.usage,
+    cost: completion.cost,
+    finishReason: (completion as any).finishReason ?? (completion as any).finish_reason,
+    output: completion.output,
+    timeTaken: endTime - startTime,
+  };
+  // toolCalls are recoverable from messages, but cache for clarity.
+  self.runnerState.llmCallData[keyPrefix].toolCalls = toolCalls;
+});
+
+// SubStep 3: end hook
+await pr.step(`${keyPrefix}.end`, async () => {
+  const persisted = self.runnerState.llmCallData[keyPrefix];
+  const endInterrupts = await callHook({
+    ctx, name: "onLLMCallEnd",
+    data: {
+      model: JSON.stringify(persisted.model),
+      result: persisted,           // shaped like a PromptResult
+      usage: persisted.usage,
+      cost: persisted.cost,
+      timeTaken: persisted.timeTaken,
+      messages: messages.toJSON().messages,
+    },
+  });
+  return endInterrupts ?? undefined;
+});
+
+// Recover completion-derived locals from persistence so the caller
+// reads consistent values on both fresh runs and resumes.
+const persisted = self.runnerState.llmCallData[keyPrefix];
+return {
+  messages,
+  toolCalls: persisted.toolCalls ?? [],
+};
+```
+
+- [ ] **Step 3: Move `statelogClient.promptCompletion(...)` into `.api`**
+
+It currently fires after the API call. Moving it inside the `.api` body keeps it idempotent (runs exactly once) and inherits the surrounding `llmCall` span.
+
+---
+
+### Task 4: Rewire the two call sites in `runPrompt`
+
+**Files:**
+- Modify: `lib/runtime/prompt.ts`
+
+- [ ] **Step 1: Replace the `initialLlmCall` wrapper**
+
+Before:
+```ts
+await pr.step("initialLlmCall", async () => {
+  const lenBefore = messages.getMessages().length;
+  // memory recall + system message + user message push
+  ...
+  const result = await _runPrompt({ ... });
+  if (result.kind === "interrupt") {
+    messages.setMessages(messages.getMessages().slice(0, lenBefore));
+    closeLlmSpan();
+    return result.interrupts;
   }
+  ...
+});
+```
+
+After:
+```ts
+// .user step: memory recall + system + user message push
+let injectedFactsContent: string | null = null;
+await pr.step("initialLlmCall.user", async () => {
+  if (memoryOption && ctx.memoryManager) { ... }
+  messages.push(smoltalk.userMessage(prompt));
+});
+
+currentLlmSpanId = ctx.statelogClient.startSpan("llmCall");
+try {
+  const result = await _runPrompt({
+    ctx, messages, tools, prompt, responseFormat, clientConfig,
+    stateStack, pr, keyPrefix: "initialLlmCall",
+  });
+  messages = result.messages;
+  toolCalls = result.toolCalls;
+  // (existing memory-injection cleanup, self.messagesJSON, self.pendingToolCalls)
+} catch (e) {
+  if (e instanceof PromptBailout) { closeLlmSpan(); throw e; }
+  closeLlmSpan();
+  throw e;
 }
 ```
 
-- [ ] **Step 2: Unit test**
+The `messages.setMessages(... .slice(0, lenBefore))` revert disappears — each individual substep is small enough that "rewind to before this step" is the correct semantics. (The `.user` step pushes the user message and either completes — leaving it pushed and remembered on resume — or interrupts inside the memory recall code path, in which case nothing was pushed yet and the next resume re-runs cleanly.)
 
-`lib/runtime/runner-commitStep.test.ts` — verify: stamps counter, idempotent on second call, no effect when called for an older step.
+- [ ] **Step 2: Same restructure for `nextLlmCall`**
+
+```ts
+await pr.step(`round.${round}.nextLlmCall.prep`, async () => {
+  closeLlmSpan();
+  // (no-op pre-call setup; reserve the substep so the LLM API call below
+  //  can read `closeLlmSpan` having already happened)
+});
+currentLlmSpanId = ctx.statelogClient.startSpan("llmCall");
+try {
+  const nextResult = await _runPrompt({
+    ..., pr, keyPrefix: `round.${round}.nextLlmCall`,
+  });
+  messages = nextResult.messages;
+  toolCalls = nextResult.toolCalls;
+  self.toolCallRound = round + 1;
+  self.messagesJSON = messages.toJSON().messages;
+  self.pendingToolCalls = toolCalls.length > 0 ? toolCalls : null;
+} catch (e) {
+  if (e instanceof PromptBailout) { closeLlmSpan(); throw e; }
+  closeLlmSpan();
+  throw e;
+}
+```
+
+(The `.prep` step exists only if span bookkeeping needs idempotence; usually a no-op wrapper is unnecessary because `startSpan` is safe to re-call on resume — the prior span is already closed by `pr`'s checkpoint-time finalization. Pick whichever is simpler after re-reading the span code.)
+
+- [ ] **Step 3: Run the fixtures**
+
+```bash
+pnpm run agency test tests/agency/onllmcallend-interrupt-no-rerun.agency > /tmp/end-hook-rerun.log 2>&1
+pnpm run agency test tests/agency/guard-cost.agency >> /tmp/end-hook-rerun.log 2>&1
+```
+
+Both must pass.
+
+- [ ] **Step 4: Wide regression sweep**
+
+```bash
+pnpm test:run -- prompt promptRunner callback fork llm-tools memory > /tmp/regr.log 2>&1
+```
+
+Check for: token-stat drift, doubled `statelogClient.promptCompletion` events, memory-hook re-execution, missing `closeLlmSpan` calls on resume.
+
+- [ ] **Step 5: Commit**
 
 ---
 
-### Task 4: Wire `commitStep` into the LLM call path
-
-**Files:**
-- Modify: `lib/runtime/prompt.ts` (the place where `onLLMCallEnd` is fired after the LLM call)
-- Modify: `lib/runtime/promptRunner.ts` if applicable
-
-The cleanest plumbing: in `runPrompt` / `PromptRunner`, after the LLM call completes (and its result is recorded into the parent frame's locals so resume can read it back), call `runner.commitStep(currentId)` BEFORE firing `onLLMCallEnd`. The result must already be safely captured on the frame — otherwise resume reads the wrong value.
-
-- [ ] **Step 1: Identify what "the LLM call's result" looks like on the frame**
-
-Is it stored on `__stack.locals.__llm_result_${id}`? On a deferred-return slot? Trace through `prompt.ts` for one canonical case.
-
-- [ ] **Step 2: Insert `runner.commitStep(id)` between "result captured" and "fire onLLMCallEnd"**
-
-The substep that owns the LLM call site (whichever id it was in the caller's body) is committed. On resume, the runner skips re-executing that step and reads the captured result from the frame.
-
-- [ ] **Step 3: Run the failing fixture from Task 1**
-
-```bash
-pnpm run agency test tests/agency/onllmcallend-interrupt-no-rerun.agency
-```
-
-Must pass: `runs == 1`.
-
-- [ ] **Step 4: Run the broader callback-interrupt fixture family**
-
-```bash
-pnpm test:run -- callback fork/llm-tools/multi-tool-callback-interrupts > /tmp/cb.log 2>&1
-```
-
-Must not regress.
-
-- [ ] **Step 5: Run the full suite** — this touches the LLM call path and may shake out interactions with cost tracking, span bookkeeping, and runPrompt's tool loop.
-
-- [ ] **Step 6: Commit**
-
----
-
-### Task 5: Extend (if scope allows) to other end hooks
+### Task 5: Cross-link with sibling end-hook plans
 
 `onAgentEnd` fires outside any runner (intentional). No fix needed.
 
-`onNodeEnd` (value-returning) and `onFunctionEnd` (finally-block) are covered by `docs/superpowers/plans/2026-05-22-callback-interrupts-deferred-return.md`. Cross-link from that plan back to this one — the deferred-return mechanism is a more invasive version of the same fix.
+`onNodeEnd` (value-returning) and `onFunctionEnd` (finally-block) are codegen-level end hooks covered by `docs/superpowers/plans/2026-05-22-callback-interrupts-deferred-return.md`. The substep-split pattern from this plan is the runtime analog of that codegen change — they're solving the same shape of bug at different layers.
 
-- [ ] **Step 1: Update the deferred-return plan** to note the `commitStep` primitive can be reused for its node-end refactor (Task 4 of that plan).
+- [ ] **Step 1: Update the deferred-return plan** to add a "see also" pointer to this plan.
 
-- [ ] **Step 2: Delete `docs/notes/end-hook-fire-sites.md`**
+- [ ] **Step 2: Delete the mutation table** from Task 2 if you kept it.
 
 - [ ] **Step 3: Commit**
 
@@ -153,15 +341,23 @@ Must not regress.
 ### Validation checklist
 
 - [ ] `tests/agency/onllmcallend-interrupt-no-rerun` passes; counter shows exactly-once body execution.
-- [ ] `tests/agency/guard-cost` passes when supplied with one interrupt handler (no longer needs 4+).
-- [ ] No regressions in the multi-tool callback interrupt fixtures.
-- [ ] No regressions in the broader callback suite.
+- [ ] `tests/agency/guard-cost` passes with a SINGLE approve handler and total cost ≤ one LLM call's worth.
+- [ ] `statelogClient.promptCompletion` fires exactly once per LLM call across approve cycles (check fixture event counts).
+- [ ] No regressions in multi-tool callback interrupt fixtures, fork/race fixtures, or memory fixtures.
 - [ ] `make` succeeds, `pnpm run lint:structure` clean.
 
 ---
 
 ### Risks and dependencies
 
-- **Result-on-frame contract:** Task 4 step 1 must verify the LLM result is captured on a serializable frame slot BEFORE we commit the step. If we commit early but the result is held only in a live JS closure, resume reads `undefined`. Inspect carefully.
-- **Span / cost bookkeeping in trailing hooks:** the existing `onLLMCallEnd` data includes `usage`, `cost`, `timeTaken`. None of these need the substep to be uncommitted — they're computed values that the hook receives by value. Safe to commit first.
-- **Backwards compatibility with serialized checkpoints:** if an in-flight checkpoint was stamped under the pre-fix counter (still pointing at the LLM step), resuming it on the post-fix runtime will skip the step — which is what we want, BUT the LLM result on the frame must be valid. Same concern as the result-on-frame contract; verifying it covers both cases.
+- **`PromptBailout` propagation through `_runPrompt`:** the refactored `_runPrompt` now lets `PromptBailout` escape (thrown by inner `pr.step`). The caller's `try/catch` must distinguish `PromptBailout` from `AgencyCancelledError` and other throws (it already does — see the outer `try/catch` at [L478-484](file:///Users/adityabhargava/agency-lang/packages/agency-lang/lib/runtime/prompt.ts#L478-L484)). Verify the new intermediate `try/catch` around `_runPrompt` calls in `runPrompt` re-throws `PromptBailout` after `closeLlmSpan()`.
+
+- **`self.runnerState.llmCallData[keyPrefix]` serialization:** this data must survive checkpoint/restore. It rides on the `runnerState` object already serialized as part of `self.locals` (same vehicle as `completedSteps`). Sanity-check by inspecting a checkpoint snapshot.
+
+- **`statelogClient.promptCompletion` idempotence on resume:** moved into the `.api` substep so resume skips it. Verify event counts in a fixture that resumes through a `.end` interrupt.
+
+- **`llmCall` span lifecycle across resumes:** `closeLlmSpan` is called from the outer `finally` and from the `try/catch` wrappers. On resume, a fresh span is opened. Ensure no leaked spans by checking span open/close counts in a multi-resume fixture.
+
+- **Memory-hook re-execution on resume:** memory's `onTurn` and `compactIfNeeded` run inside `.api` today. After the refactor they still do, and `.api` is skipped on resume — so they fire exactly once. This is actually a bonus correctness win (today memory hooks would re-fire on every approve cycle).
+
+- **Out of scope:** PFA-bound state mutation (plan 2) and callback rejection propagation (plan 3) are separate; this plan does not touch them.

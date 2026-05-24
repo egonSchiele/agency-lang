@@ -8,7 +8,7 @@ import {
   type CallbackMap,
 } from "./hooks.js";
 import { hasInterrupts } from "./interrupts.js";
-import { __pipeBind } from "./result.js";
+import { __pipeBind, isFailure, type ResultFailure } from "./result.js";
 import { runBatch } from "./runBatch.js";
 import type { SourceLocationOpts } from "./state/checkpointStore.js";
 import type { RuntimeContext } from "./state/context.js";
@@ -478,7 +478,7 @@ export class Runner {
         // ones. Without this, every resume cycle re-fired every
         // callback from scratch, breaking side-effect-once semantics
         // for multi-callback hooks.
-        const result = await runBatch<undefined>({
+        const result = await runBatch<ResultFailure | undefined>({
           ctx: this.ctx,
           parentStack,
           parentFrame: this.frame,
@@ -495,14 +495,22 @@ export class Runner {
               // the right slice. We already extracted `fn` from the
               // outer `gatherCallbacks` call — don't re-gather inside
               // the child.
-              const interrupts = await invokeOneCallback({
+              const outcome = await invokeOneCallback({
                 ctx: this.ctx,
                 fn,
                 name: hookName as keyof CallbackMap,
                 data: data as CallbackMap[keyof CallbackMap],
                 stateStack: branchStack,
               });
-              return interrupts ?? undefined;
+              // Interrupts flow through runBatch's own machinery.
+              if (outcome.kind === "interrupts") return outcome.interrupts;
+              // Failures travel as the child's T-value; the post-batch
+              // walk below halts the surrounding runner with the first
+              // failure it finds. See
+              // docs/superpowers/plans/2026-05-23-callback-rejection-
+              // propagation.md.
+              if (outcome.kind === "failure") return outcome.failure;
+              return undefined;
             },
           })),
         });
@@ -511,6 +519,17 @@ export class Runner {
             this.halt({ ...this.state, data: result.interrupts });
           } else {
             this.halt(result.interrupts);
+          }
+          return;
+        }
+        // "first failure wins" — same precedence as invokeCallbacks's
+        // sequential loop.
+        const firstFailure = result.values.find((v) => v !== undefined && isFailure(v));
+        if (firstFailure) {
+          if (this.nodeContext) {
+            this.halt({ ...this.state, data: firstFailure });
+          } else {
+            this.halt(firstFailure);
           }
           return;
         }

@@ -1,5 +1,5 @@
 // @ts-nocheck
-import { print, printJSON, parseJSON, input, sleep, round, fetch, fetchJSON, read, write, readImage, notify, range, mostCommon, keys, values, entries, emit, callback } from "agency-lang/stdlib/index.js";
+import { print, printJSON, parseJSON, input, sleep, round, fetch, fetchJSON, read, write, readImage, notify, range, mostCommon, keys, values, entries, emit, callback, guard, __guardCheck } from "agency-lang/stdlib/index.js";
 import { fileURLToPath } from "url";
 import __process from "process";
 import { readFileSync, writeFileSync } from "fs";
@@ -167,6 +167,8 @@ __registerTool(values);
 __registerTool(entries);
 __registerTool(emit);
 __registerTool(callback);
+__registerTool(guard);
+__registerTool(__guardCheck);
 async function __initializeGlobals(__ctx) {
   __ctx.globals.markInitialized("tests/debugger/nested-calls-test.agency")
 }

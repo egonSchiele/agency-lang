@@ -208,14 +208,20 @@ if (__ctx._pendingArgOverrides) {
 }
 
   try {
-    await runner.hook(0, "onFunctionStart", {
-      functionName: "log",
-      args: {
-        prefix: prefix,
-        messages: messages
-      },
-      isBuiltin: false,
-      moduleId: "variadic.agency"
+    await runner.hook(0, async () => {
+await callHook({
+        ctx: __ctx,
+        name: "onFunctionStart",
+        data: {
+          functionName: "log",
+          args: {
+            prefix: prefix,
+            messages: messages
+          },
+          isBuiltin: false,
+          moduleId: "variadic.agency"
+        }
+      })
     });
     await runner.step(1, async (runner) => {
 const __funcResult = await __call(print, {

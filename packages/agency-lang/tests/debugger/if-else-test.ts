@@ -201,8 +201,14 @@ let __functionCompleted = false;
     __stack.args["x"] = __state.data.x;
   }
   try {
-    await runner.hook(0, "onNodeStart", {
-      nodeName: "main"
+    await runner.hook(0, async () => {
+await callHook({
+        ctx: __ctx,
+        name: "onNodeStart",
+        data: {
+          nodeName: "main"
+        }
+      })
     });
     await runner.ifElse(1, [
 
@@ -228,11 +234,16 @@ runner.halt({
 return;
     });
     if (runner.halted) return runner.haltResult;
-    await runner.hook(3, "onNodeEnd", {
-      nodeName: "main",
-      data: undefined
+    await runner.hook(3, async () => {
+await callHook({
+        ctx: __ctx,
+        name: "onNodeEnd",
+        data: {
+          nodeName: "main",
+          data: undefined
+        }
+      })
     });
-    if (runner.halted) return runner.haltResult;
     return {
       messages: __threads,
       data: undefined

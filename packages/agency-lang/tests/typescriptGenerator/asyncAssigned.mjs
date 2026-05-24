@@ -197,13 +197,19 @@ if (__ctx._pendingArgOverrides) {
 }
 
   try {
-    await runner.hook(0, "onFunctionStart", {
-      functionName: "compute",
-      args: {
-        val: val
-      },
-      isBuiltin: false,
-      moduleId: "asyncAssigned.agency"
+    await runner.hook(0, async () => {
+await callHook({
+        ctx: __ctx,
+        name: "onFunctionStart",
+        data: {
+          functionName: "compute",
+          args: {
+            val: val
+          },
+          isBuiltin: false,
+          moduleId: "asyncAssigned.agency"
+        }
+      })
     });
     await runner.step(1, async (runner) => {
 const __funcResult = await __call(sleep, {
@@ -288,8 +294,14 @@ let __forked;
 let __functionCompleted = false;
   const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "asyncAssigned.agency", scopeName: "main" });
   try {
-    await runner.hook(0, "onNodeStart", {
-      nodeName: "main"
+    await runner.hook(0, async () => {
+await callHook({
+        ctx: __ctx,
+        name: "onNodeStart",
+        data: {
+          nodeName: "main"
+        }
+      })
     });
     await runner.branchStep(1, "1", async (runner) => {
 if ((__stack.branches && __stack.branches["1"])) {
@@ -344,11 +356,16 @@ runner.halt({
 return;
     });
     if (runner.halted) return runner.haltResult;
-    await runner.hook(5, "onNodeEnd", {
-      nodeName: "main",
-      data: undefined
+    await runner.hook(5, async () => {
+await callHook({
+        ctx: __ctx,
+        name: "onNodeEnd",
+        data: {
+          nodeName: "main",
+          data: undefined
+        }
+      })
     });
-    if (runner.halted) return runner.haltResult;
     return {
       messages: __threads,
       data: undefined

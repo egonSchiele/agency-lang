@@ -197,13 +197,19 @@ if (__ctx._pendingArgOverrides) {
 }
 
   try {
-    await runner.hook(0, "onFunctionStart", {
-      functionName: "greet",
-      args: {
-        name: name
-      },
-      isBuiltin: false,
-      moduleId: "functionRef.agency"
+    await runner.hook(0, async () => {
+await callHook({
+        ctx: __ctx,
+        name: "onFunctionStart",
+        data: {
+          functionName: "greet",
+          args: {
+            name: name
+          },
+          isBuiltin: false,
+          moduleId: "functionRef.agency"
+        }
+      })
     });
     await runner.step(1, async (runner) => {
 __functionCompleted = true;
@@ -294,13 +300,19 @@ if (__ctx._pendingArgOverrides) {
 }
 
   try {
-    await runner.hook(0, "onFunctionStart", {
-      functionName: "double",
-      args: {
-        x: x
-      },
-      isBuiltin: false,
-      moduleId: "functionRef.agency"
+    await runner.hook(0, async () => {
+await callHook({
+        ctx: __ctx,
+        name: "onFunctionStart",
+        data: {
+          functionName: "double",
+          args: {
+            x: x
+          },
+          isBuiltin: false,
+          moduleId: "functionRef.agency"
+        }
+      })
     });
     await runner.step(1, async (runner) => {
 __functionCompleted = true;
@@ -396,14 +408,20 @@ if (__ctx._pendingArgOverrides) {
 }
 
   try {
-    await runner.hook(0, "onFunctionStart", {
-      functionName: "applyToAll",
-      args: {
-        items: items,
-        transform: transform
-      },
-      isBuiltin: false,
-      moduleId: "functionRef.agency"
+    await runner.hook(0, async () => {
+await callHook({
+        ctx: __ctx,
+        name: "onFunctionStart",
+        data: {
+          functionName: "applyToAll",
+          args: {
+            items: items,
+            transform: transform
+          },
+          isBuiltin: false,
+          moduleId: "functionRef.agency"
+        }
+      })
     });
     await runner.step(1, async (runner) => {
 __stack.locals.result = [];
@@ -500,8 +518,14 @@ let __forked;
 let __functionCompleted = false;
   const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "functionRef.agency", scopeName: "main" });
   try {
-    await runner.hook(0, "onNodeStart", {
-      nodeName: "main"
+    await runner.hook(0, async () => {
+await callHook({
+        ctx: __ctx,
+        name: "onNodeStart",
+        data: {
+          nodeName: "main"
+        }
+      })
     });
     await runner.step(1, async (runner) => {
 __stack.locals.fn = greet;
@@ -543,11 +567,16 @@ if (hasInterrupts(__stack.locals.doubled)) {
       }
     });
     if (runner.halted) return runner.haltResult;
-    await runner.hook(4, "onNodeEnd", {
-      nodeName: "main",
-      data: undefined
+    await runner.hook(4, async () => {
+await callHook({
+        ctx: __ctx,
+        name: "onNodeEnd",
+        data: {
+          nodeName: "main",
+          data: undefined
+        }
+      })
     });
-    if (runner.halted) return runner.haltResult;
     return {
       messages: __threads,
       data: undefined

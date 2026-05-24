@@ -202,14 +202,20 @@ if (__ctx._pendingArgOverrides) {
 }
 
   try {
-    await runner.hook(0, "onFunctionStart", {
-      functionName: "add",
-      args: {
-        x: x,
-        y: y
-      },
-      isBuiltin: false,
-      moduleId: "function-with-types.agency"
+    await runner.hook(0, async () => {
+await callHook({
+        ctx: __ctx,
+        name: "onFunctionStart",
+        data: {
+          functionName: "add",
+          args: {
+            x: x,
+            y: y
+          },
+          isBuiltin: false,
+          moduleId: "function-with-types.agency"
+        }
+      })
     });
     await runner.step(1, async (runner) => {
 __self.__removedTools = __self.__removedTools || [];
@@ -327,13 +333,19 @@ if (__ctx._pendingArgOverrides) {
 }
 
   try {
-    await runner.hook(0, "onFunctionStart", {
-      functionName: "greet",
-      args: {
-        name: name
-      },
-      isBuiltin: false,
-      moduleId: "function-with-types.agency"
+    await runner.hook(0, async () => {
+await callHook({
+        ctx: __ctx,
+        name: "onFunctionStart",
+        data: {
+          functionName: "greet",
+          args: {
+            name: name
+          },
+          isBuiltin: false,
+          moduleId: "function-with-types.agency"
+        }
+      })
     });
     await runner.step(1, async (runner) => {
 __self.__removedTools = __self.__removedTools || [];
@@ -448,14 +460,20 @@ if (__ctx._pendingArgOverrides) {
 }
 
   try {
-    await runner.hook(0, "onFunctionStart", {
-      functionName: "mixed",
-      args: {
-        count: count,
-        label: label
-      },
-      isBuiltin: false,
-      moduleId: "function-with-types.agency"
+    await runner.hook(0, async () => {
+await callHook({
+        ctx: __ctx,
+        name: "onFunctionStart",
+        data: {
+          functionName: "mixed",
+          args: {
+            count: count,
+            label: label
+          },
+          isBuiltin: false,
+          moduleId: "function-with-types.agency"
+        }
+      })
     });
     await runner.step(1, async (runner) => {
 __self.__removedTools = __self.__removedTools || [];
@@ -570,13 +588,19 @@ if (__ctx._pendingArgOverrides) {
 }
 
   try {
-    await runner.hook(0, "onFunctionStart", {
-      functionName: "processArray",
-      args: {
-        items: items
-      },
-      isBuiltin: false,
-      moduleId: "function-with-types.agency"
+    await runner.hook(0, async () => {
+await callHook({
+        ctx: __ctx,
+        name: "onFunctionStart",
+        data: {
+          functionName: "processArray",
+          args: {
+            items: items
+          },
+          isBuiltin: false,
+          moduleId: "function-with-types.agency"
+        }
+      })
     });
     await runner.step(1, async (runner) => {
 __self.__removedTools = __self.__removedTools || [];
@@ -686,13 +710,19 @@ if (__ctx._pendingArgOverrides) {
 }
 
   try {
-    await runner.hook(0, "onFunctionStart", {
-      functionName: "flexible",
-      args: {
-        value: value
-      },
-      isBuiltin: false,
-      moduleId: "function-with-types.agency"
+    await runner.hook(0, async () => {
+await callHook({
+        ctx: __ctx,
+        name: "onFunctionStart",
+        data: {
+          functionName: "flexible",
+          args: {
+            value: value
+          },
+          isBuiltin: false,
+          moduleId: "function-with-types.agency"
+        }
+      })
     });
     await runner.step(1, async (runner) => {
 __self.__removedTools = __self.__removedTools || [];
@@ -781,8 +811,14 @@ let __forked;
 let __functionCompleted = false;
   const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "function-with-types.agency", scopeName: "foo" });
   try {
-    await runner.hook(0, "onNodeStart", {
-      nodeName: "foo"
+    await runner.hook(0, async () => {
+await callHook({
+        ctx: __ctx,
+        name: "onNodeStart",
+        data: {
+          nodeName: "foo"
+        }
+      })
     });
     await runner.step(1, async (runner) => {
 const __funcResult = await __call(print, {
@@ -810,11 +846,16 @@ runner.halt({
 return;
     });
     if (runner.halted) return runner.haltResult;
-    await runner.hook(3, "onNodeEnd", {
-      nodeName: "foo",
-      data: undefined
+    await runner.hook(3, async () => {
+await callHook({
+        ctx: __ctx,
+        name: "onNodeEnd",
+        data: {
+          nodeName: "foo",
+          data: undefined
+        }
+      })
     });
-    if (runner.halted) return runner.haltResult;
     return {
       messages: __threads,
       data: undefined
@@ -847,8 +888,14 @@ let __forked;
 let __functionCompleted = false;
   const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "function-with-types.agency", scopeName: "main" });
   try {
-    await runner.hook(0, "onNodeStart", {
-      nodeName: "main"
+    await runner.hook(0, async () => {
+await callHook({
+        ctx: __ctx,
+        name: "onNodeStart",
+        data: {
+          nodeName: "main"
+        }
+      })
     });
     await runner.step(1, async (runner) => {
 //  Call the functions
@@ -944,11 +991,16 @@ if (hasInterrupts(__stack.locals.flexResult)) {
       }
     });
     if (runner.halted) return runner.haltResult;
-    await runner.hook(7, "onNodeEnd", {
-      nodeName: "main",
-      data: undefined
+    await runner.hook(7, async () => {
+await callHook({
+        ctx: __ctx,
+        name: "onNodeEnd",
+        data: {
+          nodeName: "main",
+          data: undefined
+        }
+      })
     });
-    if (runner.halted) return runner.haltResult;
     return {
       messages: __threads,
       data: undefined

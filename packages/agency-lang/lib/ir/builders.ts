@@ -41,6 +41,7 @@ import type {
   TsRunnerStep,
   TsRunnerThread,
   TsRunnerHandle,
+  TsRunnerHookStep,
   TsRunnerIfElse,
   TsRunnerLoop,
   TsRunnerWhileLoop,
@@ -447,6 +448,13 @@ export const ts = {
 
   runnerHandle(opts: { id: number; handler: TsNode; body: TsNode[] }): TsRunnerHandle {
     return { kind: "runnerHandle", ...opts };
+  },
+
+  /** Emit `await runner.hook(id, async () => { ...body... })` — a
+   *  substep-counter-idempotent wrapper for codegen-emitted callback
+   *  hook sites. See `Runner.hook`'s JSDoc. */
+  runnerHookStep(opts: { id: number; body: TsNode[] }): TsRunnerHookStep {
+    return { kind: "runnerHookStep", ...opts };
   },
 
   withHandler(handler: TsNode, body: TsNode): TsWithHandler {

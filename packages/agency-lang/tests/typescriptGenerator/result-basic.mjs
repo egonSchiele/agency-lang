@@ -197,13 +197,19 @@ if (__ctx._pendingArgOverrides) {
 }
 
   try {
-    await runner.hook(0, "onFunctionStart", {
-      functionName: "checkAge",
-      args: {
-        age: age
-      },
-      isBuiltin: false,
-      moduleId: "result-basic.agency"
+    await runner.hook(0, async () => {
+await callHook({
+        ctx: __ctx,
+        name: "onFunctionStart",
+        data: {
+          functionName: "checkAge",
+          args: {
+            age: age
+          },
+          isBuiltin: false,
+          moduleId: "result-basic.agency"
+        }
+      })
     });
     await runner.ifElse(1, [
 

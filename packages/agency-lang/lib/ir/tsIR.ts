@@ -35,6 +35,7 @@ export type TsNode =
   | TsRunnerStep
   | TsRunnerThread
   | TsRunnerHandle
+  | TsRunnerHookStep
   | TsRunnerIfElse
   | TsRunnerLoop
   | TsRunnerWhileLoop
@@ -324,6 +325,17 @@ export interface TsRunnerHandle {
   kind: "runnerHandle";
   id: number;
   handler: TsNode;
+  body: TsNode[];
+}
+
+/** await runner.hook(id, async () => { ... }) — a substep-counter-
+ *  idempotent wrapper for codegen-emitted callback hook firing sites
+ *  (onFunctionStart, onNodeStart, onNodeEnd, onEmit). Unlike
+ *  `runner.step`, this does NOT call the debug hook — codegen-emitted
+ *  hook sites have no user-visible source line. */
+export interface TsRunnerHookStep {
+  kind: "runnerHookStep";
+  id: number;
   body: TsNode[];
 }
 

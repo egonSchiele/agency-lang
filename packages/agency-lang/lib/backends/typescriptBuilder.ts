@@ -140,6 +140,7 @@ const COMPOUND_ASSIGN_TO_BINARY: Record<string, string> = {
  *  must NOT be wrapped inside a runnerStep by processBodyAsParts. */
 const COMPOUND_RUNNER_KINDS: ReadonlySet<TsNode["kind"]> = new Set([
   "runnerHandle",
+  "runnerHookStep",
   "runnerIfElse",
   "runnerLoop",
   "runnerWhileLoop",
@@ -1533,16 +1534,24 @@ export class TypeScriptBuilder {
     }
 
     // Try/catch wrapping the body, with finally to always pop the state stack.
-    // onFunctionStart fires inside the try as an inline `await callHook(...)`.
-    // Callback bodies cannot raise interrupts (statically forbidden by
-    // the typechecker — see `checkCallbackBodyInterrupts`), so the hook
-    // is fire-and-forget and does not need a Runner substep slot.
+    // onFunctionStart fires inside the try at substep id 0 as a wrapped
+    // `await runner.step(0, async () => await callHook(...))`. The
+    // runner.step wrapper gives the hook substep-counter idempotency so
+    // it fires exactly once across resume cycles (without it the function
+    // would re-fire onFunctionStart on every resume). Callback bodies
+    // cannot raise interrupts (statically forbidden by the typechecker —
+    // see `checkCallbackBodyInterrupts`).
     const onFunctionStartHook: TsNode[] = skipHooks ? [] : [
-      ts.callHook("onFunctionStart", {
-        functionName: ts.str(functionName),
-        args: ts.obj(argsObj),
-        isBuiltin: ts.bool(false),
-        moduleId: ts.str(this.moduleId),
+      ts.runnerHookStep({
+        id: 0,
+        body: [
+          ts.callHook("onFunctionStart", {
+            functionName: ts.str(functionName),
+            args: ts.obj(argsObj),
+            isBuiltin: ts.bool(false),
+            moduleId: ts.str(this.moduleId),
+          }),
+        ],
       }),
     ];
     setupStmts.push(
@@ -1595,12 +1604,9 @@ export class TypeScriptBuilder {
     // Hoist body-local type aliases to the function's outer scope so
     // every runner.step closure can reference the generated zod schemas.
     const hoistedAliases = this.hoistBodyTypeAliases(node.body);
-    // Body steps occupy substep ids 1..N. Id 0 is left unused — historically
-    // it was a slot reserved for the onFunctionStart runner.hook substep so
-    // its callback interrupts could halt before any body step ran. The hook
-    // is now an inline `await callHook(...)` that cannot interrupt, but the
-    // start-id stays at 1 to keep existing serialized checkpoints' step
-    // paths valid.
+    // Body steps occupy substep ids 1..N — id 0 is reserved for the
+    // onFunctionStart hook (wrapped in `runner.step` for substep-counter
+    // idempotency on resume).
     const bodyCode = this.processBodyAsParts(node.body, 1);
     this.scopes.inSafeFunction = prevSafe;
     this.scopes.pop();
@@ -1831,10 +1837,12 @@ export class TypeScriptBuilder {
         this.processCallArg(arg),
       );
       const data = argNodes.length > 0 ? argNodes[0] : ts.id("undefined");
-      // Inline `await callHook(...)`. onEmit callback bodies cannot raise
-      // interrupts (typechecker-enforced), so no Runner substep slot is
-      // needed.
-      return ts.callHook("onEmit", data);
+      // Wrap in `runner.hook(id, ...)` for substep-counter idempotency on
+      // resume — without it, every resume cycle would re-fire onEmit.
+      return ts.runnerHookStep({
+        id: this.steps.currentId(),
+        body: [ts.callHook("onEmit", data)],
+      });
     }
 
     if (node.functionName === "__objectRest") {
@@ -2132,12 +2140,12 @@ export class TypeScriptBuilder {
     // runner.step closure can reference the generated zod schemas.
     const hoistedAliases = this.hoistBodyTypeAliases(body);
 
-    // Body steps occupy substep ids 1..N. Historically id 0 was reserved
-    // for the onNodeStart runner.hook substep so its callback interrupts
-    // could halt before any body step ran. The hook is now an inline
-    // `await callHook(...)` that cannot interrupt, but the start-id stays
-    // at 1 to keep existing serialized checkpoints' step paths valid.
+    // Body steps occupy substep ids 1..N. Id 0 is reserved for the
+    // onNodeStart hook (wrapped in runner.step for idempotency on
+    // resume). onNodeEnd sits at id N+1.
     const bodyCode = this.processBodyAsParts(body, 1);
+    const onNodeStartId = 0;
+    const onNodeEndId = bodyCode.length + 1;
 
     this.adjacentNodes[nodeName] = [...this.currentAdjacentNodes];
     this.isInsideGraphNode = false;
@@ -2179,20 +2187,32 @@ export class TypeScriptBuilder {
       stmts.push(ts.if(ts.raw("!__state.isResume"), ts.statements(paramStmts)));
     }
 
-    // Body wrapped in try-catch so node errors return failure instead of crashing.
-    // onNodeStart and onNodeEnd fire as inline `await callHook(...)` calls.
-    // Callback bodies cannot raise interrupts (typechecker-enforced via
-    // `checkCallbackBodyInterrupts`), so the hooks are fire-and-forget.
-    // The post-body halted check covers ordinary user-code interrupts.
+    // Body wrapped in try-catch so node errors return failure instead
+    // of crashing. onNodeStart at id 0 and onNodeEnd at id N+1 are both
+    // wrapped in `runner.step` for substep-counter idempotency on
+    // resume. Callback bodies cannot raise interrupts (typechecker-
+    // enforced via `checkCallbackBodyInterrupts`), so the hooks are
+    // fire-and-forget. The post-body halted check covers ordinary
+    // user-code interrupts.
     stmts.push(
       ts.tryCatch(
         ts.statements([
-          ts.callHook("onNodeStart", { nodeName: ts.str(nodeName) }),
+          ts.runnerHookStep({
+            id: onNodeStartId,
+            body: [
+              ts.callHook("onNodeStart", { nodeName: ts.str(nodeName) }),
+            ],
+          }),
           ...bodyCode,
           ts.raw("if (runner.halted) return runner.haltResult;"),
-          ts.callHook("onNodeEnd", {
-            nodeName: ts.str(nodeName),
-            data: ts.id("undefined"),
+          ts.runnerHookStep({
+            id: onNodeEndId,
+            body: [
+              ts.callHook("onNodeEnd", {
+                nodeName: ts.str(nodeName),
+                data: ts.id("undefined"),
+              }),
+            ],
           }),
           ts.return(
             ts.obj({

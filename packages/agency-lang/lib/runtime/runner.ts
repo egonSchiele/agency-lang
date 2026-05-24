@@ -263,6 +263,39 @@ export class Runner {
     this.setCounter(id + 1);
   }
 
+  // ── Specialized: hook ──
+
+  /**
+   * Fire a codegen-emitted callback hook (onFunctionStart, onNodeStart,
+   * onNodeEnd, onEmit) as a substep-counter-idempotent step. Unlike
+   * `runner.step`, this does NOT call `maybeDebugHook` — codegen-emitted
+   * hook sites have no user-visible source line, so pausing on them
+   * would surprise the user (single-step would land on an internal hook
+   * with no current line).
+   *
+   * Callback bodies cannot raise interrupts (statically forbidden by the
+   * typechecker — see `checkCallbackBodyInterrupts`), so `bodyFn` is
+   * fire-and-forget. The substep counter advances after `bodyFn`
+   * resolves so resume re-entries (after a deeper interrupt or debug
+   * pause) skip the hook instead of re-firing it.
+   */
+  async hook(id: number, bodyFn: () => Promise<void>): Promise<void> {
+    if (this.shouldSkip()) return;
+    if (this.getCounter() > id) return;
+
+    this.ctx.coverageCollector?.hit(this.moduleId, this.scopeName, this.stepPath(id));
+
+    this.path.push(id);
+    try {
+      await bodyFn();
+    } finally {
+      this.path.pop();
+    }
+
+    if (this.halted) return;
+    this.setCounter(id + 1);
+  }
+
   async debugger(id: number, label: string): Promise<void> {
     if (this.shouldSkip()) return;
     if (this.getCounter() > id) return;

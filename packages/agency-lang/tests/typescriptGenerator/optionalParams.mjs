@@ -214,14 +214,20 @@ if (__ctx._pendingArgOverrides) {
 }
 
   try {
-    await runner.hook(0, "onFunctionStart", {
-      functionName: "greet",
-      args: {
-        name: name,
-        greeting: greeting
-      },
-      isBuiltin: false,
-      moduleId: "optionalParams.agency"
+    await runner.hook(0, async () => {
+await callHook({
+        ctx: __ctx,
+        name: "onFunctionStart",
+        data: {
+          functionName: "greet",
+          args: {
+            name: name,
+            greeting: greeting
+          },
+          isBuiltin: false,
+          moduleId: "optionalParams.agency"
+        }
+      })
     });
     await runner.step(1, async (runner) => {
 const __funcResult = await __call(print, {

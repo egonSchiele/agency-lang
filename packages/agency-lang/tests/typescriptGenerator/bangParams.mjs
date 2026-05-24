@@ -202,13 +202,19 @@ if (__ctx._pendingArgOverrides) {
       return __vr_data;
     }
     __stack.args["data"] = __vr_data.value;
-    await runner.hook(0, "onFunctionStart", {
-      functionName: "process",
-      args: {
-        data: data
-      },
-      isBuiltin: false,
-      moduleId: "bangParams.agency"
+    await runner.hook(0, async () => {
+await callHook({
+        ctx: __ctx,
+        name: "onFunctionStart",
+        data: {
+          functionName: "process",
+          args: {
+            data: data
+          },
+          isBuiltin: false,
+          moduleId: "bangParams.agency"
+        }
+      })
     });
     await runner.step(1, async (runner) => {
 const __funcResult = await __call(print, {
@@ -293,8 +299,14 @@ let __forked;
 let __functionCompleted = false;
   const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "bangParams.agency", scopeName: "main" });
   try {
-    await runner.hook(0, "onNodeStart", {
-      nodeName: "main"
+    await runner.hook(0, async () => {
+await callHook({
+        ctx: __ctx,
+        name: "onNodeStart",
+        data: {
+          nodeName: "main"
+        }
+      })
     });
     await runner.step(1, async (runner) => {
 __stack.locals.result = await __call(process, {
@@ -333,11 +345,16 @@ if (hasInterrupts(__funcResult)) {
       }
     });
     if (runner.halted) return runner.haltResult;
-    await runner.hook(3, "onNodeEnd", {
-      nodeName: "main",
-      data: undefined
+    await runner.hook(3, async () => {
+await callHook({
+        ctx: __ctx,
+        name: "onNodeEnd",
+        data: {
+          nodeName: "main",
+          data: undefined
+        }
+      })
     });
-    if (runner.halted) return runner.haltResult;
     return {
       messages: __threads,
       data: undefined

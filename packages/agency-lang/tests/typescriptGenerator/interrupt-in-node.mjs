@@ -202,14 +202,20 @@ if (__ctx._pendingArgOverrides) {
 }
 
   try {
-    await runner.hook(0, "onFunctionStart", {
-      functionName: "greet",
-      args: {
-        name: name,
-        age: age
-      },
-      isBuiltin: false,
-      moduleId: "interrupt-in-node.agency"
+    await runner.hook(0, async () => {
+await callHook({
+        ctx: __ctx,
+        name: "onFunctionStart",
+        data: {
+          functionName: "greet",
+          args: {
+            name: name,
+            age: age
+          },
+          isBuiltin: false,
+          moduleId: "interrupt-in-node.agency"
+        }
+      })
     });
     await runner.step(1, async (runner) => {
 // Resume path: check for a response by interruptId
@@ -329,8 +335,14 @@ let __functionCompleted = false;
     __stack.args["age"] = __state.data.age;
   }
   try {
-    await runner.hook(0, "onNodeStart", {
-      nodeName: "foo2"
+    await runner.hook(0, async () => {
+await callHook({
+        ctx: __ctx,
+        name: "onNodeStart",
+        data: {
+          nodeName: "foo2"
+        }
+      })
     });
     await runner.step(1, async (runner) => {
 await __call(print, {
@@ -390,11 +402,16 @@ runner.halt({
 return;
     });
     if (runner.halted) return runner.haltResult;
-    await runner.hook(5, "onNodeEnd", {
-      nodeName: "foo2",
-      data: undefined
+    await runner.hook(5, async () => {
+await callHook({
+        ctx: __ctx,
+        name: "onNodeEnd",
+        data: {
+          nodeName: "foo2",
+          data: undefined
+        }
+      })
     });
-    if (runner.halted) return runner.haltResult;
     return {
       messages: __threads,
       data: undefined
@@ -430,8 +447,14 @@ let __functionCompleted = false;
     __stack.args["name"] = __state.data.name;
   }
   try {
-    await runner.hook(0, "onNodeStart", {
-      nodeName: "sayHi"
+    await runner.hook(0, async () => {
+await callHook({
+        ctx: __ctx,
+        name: "onNodeStart",
+        data: {
+          nodeName: "sayHi"
+        }
+      })
     });
     await runner.step(1, async (runner) => {
 const __funcResult = await __call(print, {
@@ -468,11 +491,16 @@ runner.halt(goToNode("foo2", {
 return;
     });
     if (runner.halted) return runner.haltResult;
-    await runner.hook(4, "onNodeEnd", {
-      nodeName: "sayHi",
-      data: undefined
+    await runner.hook(4, async () => {
+await callHook({
+        ctx: __ctx,
+        name: "onNodeEnd",
+        data: {
+          nodeName: "sayHi",
+          data: undefined
+        }
+      })
     });
-    if (runner.halted) return runner.haltResult;
     return {
       messages: __threads,
       data: undefined

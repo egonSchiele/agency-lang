@@ -202,14 +202,20 @@ if (__ctx._pendingArgOverrides) {
 }
 
   try {
-    await runner.hook(0, "onFunctionStart", {
-      functionName: "mapItems",
-      args: {
-        items: items,
-        block: block
-      },
-      isBuiltin: false,
-      moduleId: "inlineBlockParams.agency"
+    await runner.hook(0, async () => {
+await callHook({
+        ctx: __ctx,
+        name: "onFunctionStart",
+        data: {
+          functionName: "mapItems",
+          args: {
+            items: items,
+            block: block
+          },
+          isBuiltin: false,
+          moduleId: "inlineBlockParams.agency"
+        }
+      })
     });
     await runner.step(1, async (runner) => {
 __stack.locals.results = [];
@@ -314,8 +320,14 @@ let __forked;
 let __functionCompleted = false;
   const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "inlineBlockParams.agency", scopeName: "main" });
   try {
-    await runner.hook(0, "onNodeStart", {
-      nodeName: "main"
+    await runner.hook(0, async () => {
+await callHook({
+        ctx: __ctx,
+        name: "onNodeStart",
+        data: {
+          nodeName: "main"
+        }
+      })
     });
     await runner.step(1, async (runner) => {
 __stack.locals.items = [1, 2, 3];
@@ -363,11 +375,16 @@ runner.halt({
 return;
     });
     if (runner.halted) return runner.haltResult;
-    await runner.hook(4, "onNodeEnd", {
-      nodeName: "main",
-      data: undefined
+    await runner.hook(4, async () => {
+await callHook({
+        ctx: __ctx,
+        name: "onNodeEnd",
+        data: {
+          nodeName: "main",
+          data: undefined
+        }
+      })
     });
-    if (runner.halted) return runner.haltResult;
     return {
       messages: __threads,
       data: undefined

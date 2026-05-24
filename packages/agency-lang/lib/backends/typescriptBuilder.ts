@@ -140,7 +140,6 @@ const COMPOUND_ASSIGN_TO_BINARY: Record<string, string> = {
  *  must NOT be wrapped inside a runnerStep by processBodyAsParts. */
 const COMPOUND_RUNNER_KINDS: ReadonlySet<TsNode["kind"]> = new Set([
   "runnerHandle",
-  "runnerHook",
   "runnerIfElse",
   "runnerLoop",
   "runnerWhileLoop",
@@ -1534,23 +1533,16 @@ export class TypeScriptBuilder {
     }
 
     // Try/catch wrapping the body, with finally to always pop the state stack.
-    // onFunctionStart fires inside the try at substep id 0 via
-    // runner.hook so an interrupt raised by a callback halts the
-    // runner. We do NOT emit a halted check immediately after the hook:
-    // every body runner.step short-circuits via shouldSkip() when the
-    // runner is halted, and the final post-body halted check catches
-    // the halt and returns runner.haltResult. Body steps use startId=1
-    // (set by the caller) so the hook at id 0 doesn't collide.
+    // onFunctionStart fires inside the try as an inline `await callHook(...)`.
+    // Callback bodies cannot raise interrupts (statically forbidden by
+    // the typechecker — see `checkCallbackBodyInterrupts`), so the hook
+    // is fire-and-forget and does not need a Runner substep slot.
     const onFunctionStartHook: TsNode[] = skipHooks ? [] : [
-      ts.runnerHook({
-        id: 0,
-        hookName: "onFunctionStart",
-        data: {
-          functionName: ts.str(functionName),
-          args: ts.obj(argsObj),
-          isBuiltin: ts.bool(false),
-          moduleId: ts.str(this.moduleId),
-        },
+      ts.callHook("onFunctionStart", {
+        functionName: ts.str(functionName),
+        args: ts.obj(argsObj),
+        isBuiltin: ts.bool(false),
+        moduleId: ts.str(this.moduleId),
       }),
     ];
     setupStmts.push(
@@ -1571,12 +1563,6 @@ export class TypeScriptBuilder {
         ),
         "__error",
         // finally block: pop state stack and conditionally fire onFunctionEnd.
-        // Note: onFunctionEnd remains a raw callHook here (not migrated to
-        // runner.hook) because firing from `finally` cannot propagate
-        // interrupts back into the runner — the function has already
-        // returned by the time finally runs. Migrating onFunctionEnd
-        // requires moving it out of finally and threading hook info
-        // through functionReturn; tracked as a follow-up to Phase 1.
         ts.statements([
           ts.raw("__stateStack.pop()"),
           ...(skipHooks ? [] : [
@@ -1609,9 +1595,12 @@ export class TypeScriptBuilder {
     // Hoist body-local type aliases to the function's outer scope so
     // every runner.step closure can reference the generated zod schemas.
     const hoistedAliases = this.hoistBodyTypeAliases(node.body);
-    // Body steps occupy substep ids 1..N — id 0 is reserved for the
-    // onFunctionStart runner.hook so its interrupts can halt before
-    // any body step runs.
+    // Body steps occupy substep ids 1..N. Id 0 is left unused — historically
+    // it was a slot reserved for the onFunctionStart runner.hook substep so
+    // its callback interrupts could halt before any body step ran. The hook
+    // is now an inline `await callHook(...)` that cannot interrupt, but the
+    // start-id stays at 1 to keep existing serialized checkpoints' step
+    // paths valid.
     const bodyCode = this.processBodyAsParts(node.body, 1);
     this.scopes.inSafeFunction = prevSafe;
     this.scopes.pop();
@@ -1842,16 +1831,10 @@ export class TypeScriptBuilder {
         this.processCallArg(arg),
       );
       const data = argNodes.length > 0 ? argNodes[0] : ts.id("undefined");
-      // Use runner.hook so an interrupt thrown by an onEmit callback
-      // propagates up via the normal substep/halt protocol. Id comes
-      // from the surrounding processBodyAsParts loop — emit() is a
-      // body part with its own step id once runnerHook is treated as
-      // a compound runner kind.
-      return ts.runnerHook({
-        id: this.steps.currentId(),
-        hookName: "onEmit",
-        data,
-      });
+      // Inline `await callHook(...)`. onEmit callback bodies cannot raise
+      // interrupts (typechecker-enforced), so no Runner substep slot is
+      // needed.
+      return ts.callHook("onEmit", data);
     }
 
     if (node.functionName === "__objectRest") {
@@ -2149,12 +2132,12 @@ export class TypeScriptBuilder {
     // runner.step closure can reference the generated zod schemas.
     const hoistedAliases = this.hoistBodyTypeAliases(body);
 
-    // Body steps occupy substep ids 1..N — id 0 is reserved for the
-    // onNodeStart hook so its interrupts can halt before any body step
-    // runs. onNodeEnd sits at id N+1.
+    // Body steps occupy substep ids 1..N. Historically id 0 was reserved
+    // for the onNodeStart runner.hook substep so its callback interrupts
+    // could halt before any body step ran. The hook is now an inline
+    // `await callHook(...)` that cannot interrupt, but the start-id stays
+    // at 1 to keep existing serialized checkpoints' step paths valid.
     const bodyCode = this.processBodyAsParts(body, 1);
-    const onNodeStartId = 0;
-    const onNodeEndId = bodyCode.length + 1;
 
     this.adjacentNodes[nodeName] = [...this.currentAdjacentNodes];
     this.isInsideGraphNode = false;
@@ -2179,10 +2162,6 @@ export class TypeScriptBuilder {
         graph: ts.ctx("graph"),
       }),
 
-      // Create runner BEFORE the onNodeStart hook so runner.hook can
-      // fire it as a resumable substep (was previously a raw callHook
-      // outside the Runner scope, which made callback interrupts
-      // unrecoverable).
       ts.raw(
         `const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: ${JSON.stringify(this.moduleId)}, scopeName: ${JSON.stringify(nodeName)} });`,
       ),
@@ -2201,34 +2180,20 @@ export class TypeScriptBuilder {
     }
 
     // Body wrapped in try-catch so node errors return failure instead of crashing.
-    // onNodeStart at the front and onNodeEnd at the back both fire via
-    // runner.hook so callback interrupts halt the runner and surface as
-    // runner.haltResult. We do NOT emit a halted check immediately after
-    // onNodeStart: every body runner.step short-circuits via shouldSkip()
-    // when halted, and the post-body halted check catches the halt before
-    // we reach onNodeEnd. The post-onNodeEnd check IS required so a halt
-    // raised by onNodeEnd doesn't fall through to the literal success
-    // return below. onNodeEnd only fires on the success path (the
-    // post-body halted check returns before reaching it).
+    // onNodeStart and onNodeEnd fire as inline `await callHook(...)` calls.
+    // Callback bodies cannot raise interrupts (typechecker-enforced via
+    // `checkCallbackBodyInterrupts`), so the hooks are fire-and-forget.
+    // The post-body halted check covers ordinary user-code interrupts.
     stmts.push(
       ts.tryCatch(
         ts.statements([
-          ts.runnerHook({
-            id: onNodeStartId,
-            hookName: "onNodeStart",
-            data: { nodeName: ts.str(nodeName) },
-          }),
+          ts.callHook("onNodeStart", { nodeName: ts.str(nodeName) }),
           ...bodyCode,
           ts.raw("if (runner.halted) return runner.haltResult;"),
-          ts.runnerHook({
-            id: onNodeEndId,
-            hookName: "onNodeEnd",
-            data: {
-              nodeName: ts.str(nodeName),
-              data: ts.id("undefined"),
-            },
+          ts.callHook("onNodeEnd", {
+            nodeName: ts.str(nodeName),
+            data: ts.id("undefined"),
           }),
-          ts.raw("if (runner.halted) return runner.haltResult;"),
           ts.return(
             ts.obj({
               messages: ts.runtime.threads,

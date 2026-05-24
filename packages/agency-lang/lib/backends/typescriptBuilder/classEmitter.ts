@@ -101,9 +101,10 @@ export class ClassEmitter {
     this.deps.scopes.inSafeFunction = !!method.safe;
     // Hoist body-local type aliases to the method's outer scope.
     const hoistedAliases = this.deps.hoistBodyTypeAliases(method.body);
-    // Body steps occupy substep ids 1..N — id 0 is reserved for the
-    // onFunctionStart runner.hook so callback interrupts can halt
-    // before any body step runs.
+    // Body steps occupy substep ids 1..N. Historically id 0 was reserved
+    // for the onFunctionStart runner.hook substep; the hook is now an
+    // inline `await callHook(...)` that cannot interrupt, but the
+    // start-id stays at 1 for serialized-checkpoint compatibility.
     const bodyCode = this.deps.processBodyAsParts(method.body, 1);
     this.deps.scopes.inSafeFunction = prevSafe;
     this.deps.scopes.pop();

@@ -4,7 +4,7 @@ import { createLogger } from "../logger.js";
 import { AgencyFunction } from "./agencyFunction.js";
 import { AgencyCancelledError, isAbortError } from "./errors.js";
 import { callHook, invokeCallbacks } from "./hooks.js";
-import { Interrupt, hasInterrupts, isRejected } from "./interrupts.js";
+import { hasInterrupts, isRejected } from "./interrupts.js";
 import type { PromptConfig } from "./llmClient.js";
 import { setupFunction } from "./node.js";
 // See docs/dev/promptRunner.md for the control-flow abstraction used here.
@@ -25,12 +25,14 @@ type Tool = {
   schema: any;
 };
 
-/** Result of `_runPrompt`. `interrupt` carries interrupts raised by an
- *  `onLLMCallStart` or `onLLMCallEnd` callback so the outer `pr.step` can
- *  checkpoint and bail uniformly with the tool-interrupt path. */
-export type RunPromptResult =
-  | { kind: "ok"; messages: MessageThread; toolCalls: smoltalk.ToolCallJSON[] }
-  | { kind: "interrupt"; interrupts: Interrupt[] };
+/** Result of `_runPrompt`. Callback bodies cannot raise interrupts
+ *  (typechecker-enforced), so the result is always a plain `{messages,
+ *  toolCalls}` shape — the LLM hooks (onLLMCallStart, onLLMCallEnd)
+ *  fire as side effects only. */
+export type RunPromptResult = {
+  messages: MessageThread;
+  toolCalls: smoltalk.ToolCallJSON[];
+};
 
 async function _runPrompt({
   ctx,
@@ -63,7 +65,7 @@ async function _runPrompt({
   const stream = !!(clientConfig as any)?.stream;
   const startTime = performance.now();
 
-  const startInterrupts = await callHook({
+  await callHook({
     ctx,
     name: "onLLMCallStart",
     data: {
@@ -73,7 +75,6 @@ async function _runPrompt({
       messages: messages.toJSON().messages,
     },
   });
-  if (startInterrupts) return { kind: "interrupt", interrupts: startInterrupts };
 
   // Re-check after hook — cancellation may have occurred during the callback
   if (ctx.isCancelled(stateStack)) {
@@ -201,7 +202,7 @@ async function _runPrompt({
     }
   }
 
-  const endInterrupts = await callHook({
+  await callHook({
     ctx,
     name: "onLLMCallEnd",
     data: {
@@ -213,9 +214,8 @@ async function _runPrompt({
       messages: messages.toJSON().messages,
     },
   });
-  if (endInterrupts) return { kind: "interrupt", interrupts: endInterrupts };
 
-  return { kind: "ok", messages, toolCalls };
+  return { messages, toolCalls };
 }
 
 // eslint-disable-next-line max-lines-per-function -- core prompt execution loop; refactor tracked separately
@@ -358,13 +358,9 @@ export async function runPrompt(args: {
 
   let shouldPop = true;
   try {
-  // Initial LLM call wrapped in pr.step so any callback interrupts
-  // (onLLMCallStart / onLLMCallEnd) bail uniformly. To keep the step
-  // body idempotent on re-entry, we capture the messages length before
-  // any mutation and revert if the body bails — this prevents duplicate
-  // user / memory / assistant messages from accumulating across resumes.
+  // Initial LLM call wrapped in pr.step so it's idempotent on resume
+  // (re-entries after a later tool-batch bailout skip this step).
   await pr.step("initialLlmCall", async () => {
-    const lenBefore = messages.getMessages().length;
     let injectedFactsContent: string | null = null;
     if (memoryOption && ctx.memoryManager) {
       try {
@@ -395,15 +391,6 @@ export async function runPrompt(args: {
     } catch (e) {
       closeLlmSpan();
       throw e;
-    }
-    if (result.kind === "interrupt") {
-      // Revert any messages pushed during this step (user message, memory
-      // injection, and the assistant message pushed by _runPrompt) so
-      // the bailout snapshot captures pre-step state. On resume, the
-      // step body re-runs cleanly from that state.
-      messages.setMessages(messages.getMessages().slice(0, lenBefore));
-      closeLlmSpan();
-      return result.interrupts;
     }
     messages = result.messages;
     toolCalls = result.toolCalls;
@@ -660,18 +647,19 @@ export async function runPrompt(args: {
 
           await b.step(
             `round.${round}.tool.${toolCall.id}.start`,
-            async () =>
-              // Use `invokeCallbacks` with `branchStack` so any callback
-              // that raises an interrupt captures a checkpoint with this
-              // tool branch's slice (rather than the parent runPrompt
-              // stack). Without this, `setInterruptOnBranch` would not
-              // find the right frame on resume. See Plan 1 / Bug 2.
+            async () => {
+              // Pass `branchStack` so scoped callbacks registered inside
+              // the branch's frame chain are discovered by
+              // `gatherCallbacks`. Callback bodies cannot interrupt
+              // (typechecker-enforced), so this is purely about scope
+              // discovery, not interrupt routing.
               await invokeCallbacks({
                 ctx,
                 name: "onToolCallStart",
                 data: { toolName: handler.name, args: namedArgs },
                 stateStack: branchStack,
-              }),
+              });
+            },
           );
           if (b.interrupts) return;
 
@@ -740,9 +728,8 @@ export async function runPrompt(args: {
               self.runnerState.toolTimings[toolCall.id] ?? 0;
             await b.step(
               `round.${round}.tool.${toolCall.id}.end`,
-              async () =>
-                // Same slice-rule reason as the .start hook above —
-                // callback interrupts must capture the branch's stack.
+              async () => {
+                // Same scope-discovery rationale as the .start hook.
                 await invokeCallbacks({
                   ctx,
                   name: "onToolCallEnd",
@@ -752,12 +739,9 @@ export async function runPrompt(args: {
                     timeTaken,
                   },
                   stateStack: branchStack,
-                }),
+                });
+              },
             );
-            // If onToolCallEnd collected interrupts, the branch is halted —
-            // don't log toolCall (it would duplicate when the step re-runs on
-            // resume).
-            if (b.interrupts) return;
             // Wrap the toolCall log in its own b.step so it's idempotent
             // when pr.parallel re-runs a fully-completed branch on resume
             // (e.g. after a later `nextLlmCall` step bails). Without this
@@ -800,11 +784,9 @@ export async function runPrompt(args: {
         (fn) => !removedTools.includes(fn.name),
       );
 
-      // Next LLM call wrapped in pr.step. Same idempotency trick as
-      // initialLlmCall: snapshot messages length pre-call and revert if
-      // a callback inside _runPrompt returns interrupts.
+      // Next LLM call wrapped in pr.step for resume idempotency. Once
+      // marked done, resume re-entries skip the LLM call.
       await pr.step(`round.${round}.nextLlmCall`, async () => {
-        const lenBefore = messages.getMessages().length;
         closeLlmSpan();
         currentLlmSpanId = ctx.statelogClient.startSpan("llmCall");
         let nextResult: RunPromptResult;
@@ -822,15 +804,10 @@ export async function runPrompt(args: {
           closeLlmSpan();
           throw e;
         }
-        if (nextResult.kind === "interrupt") {
-          messages.setMessages(messages.getMessages().slice(0, lenBefore));
-          closeLlmSpan();
-          return nextResult.interrupts;
-        }
         messages = nextResult.messages;
         toolCalls = nextResult.toolCalls;
         // Increment the round counter only after a successful LLM round,
-        // so resume after a callback interrupt re-enters the SAME round.
+        // so resume after a tool-batch interrupt re-enters the SAME round.
         self.toolCallRound = round + 1;
         self.messagesJSON = messages.toJSON().messages;
         self.pendingToolCalls = toolCalls.length > 0 ? toolCalls : null;

@@ -202,9 +202,12 @@ The IR node is `TsForSteps`, with code generation handled by `forSteps.mustache`
 ## Callback hook firing
 
 Codegen-emitted hook sites (`onFunctionStart`, `onFunctionEnd`,
-`onNodeStart`, `onNodeEnd`, `onEmit`) fire via inline
-`await callHook({ ctx, name, data })`. They are not Runner substeps —
-no counter advances, no checkpoint is stamped, no halt protocol.
+`onNodeStart`, `onNodeEnd`, `onEmit`) are wrapped in
+`await runner.hook(id, async () => { await callHook({ ctx, name, data }) })`.
+The `runner.hook` wrapper advances the substep counter (so the hook
+fires exactly once across resume cycles) but intentionally skips the
+debug hook — codegen-emitted hook sites have no user-visible source
+line, so pausing on one would surprise the debugger user.
 
 Callback bodies cannot raise interrupts: the typechecker rejects any
 `interrupt` statement inside a `callback(...) { ... }` body (see

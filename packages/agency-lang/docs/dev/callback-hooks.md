@@ -62,10 +62,14 @@ exits.
 
 ## Codegen-emitted call sites
 
-The compiler emits `await callHook({ ctx, name, data })` for each of:
-`onFunctionStart`, `onFunctionEnd`, `onNodeStart`, `onNodeEnd`,
-`onEmit`. These are plain inline `await` expressions — not Runner
-substeps. No counter advances, no checkpoint is stamped.
+The compiler emits
+`await runner.hook(id, async () => { await callHook({ ctx, name, data }) })`
+for each of: `onFunctionStart`, `onFunctionEnd`, `onNodeStart`,
+`onNodeEnd`, `onEmit`. The `runner.hook` wrapper advances the substep
+counter (so the hook fires exactly once across resume cycles) but
+intentionally skips the debug hook — codegen-emitted hook sites have
+no user-visible source line, so pausing on one would surprise the
+debugger user.
 
 ## Parallel-branch callbacks (per-tool firings)
 

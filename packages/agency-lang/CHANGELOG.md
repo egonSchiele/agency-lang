@@ -1,23 +1,3 @@
-## Unreleased
-
-### Breaking
-- **`interrupt` is no longer allowed inside callback bodies.** The
-  typechecker now rejects any `interrupt(...)` (direct or transitive)
-  inside a `callback(...) { ... }` body. Callbacks fire as side
-  effects; their body cannot pause execution to ask the user a
-  question. Migration: move the `interrupt(...)` into the calling
-  node or function that owns the work, or use a runtime guard if you
-  wanted budget enforcement. See `docs/site/appendix/callbacks.md`.
-
-### Internal
-- Removed `Runner.hook`, `runnerHook` IR node, `CallbackOutcome`,
-  `callHookAndDrop`, `invokeOneCallback`, `fireGlobalHooks` (folded
-  into `invokeCallbacks`), and the `RunPromptResult.interrupt`
-  variant.
-- Codegen-emitted hook sites (`onFunctionStart`, `onFunctionEnd`,
-  `onNodeStart`, `onNodeEnd`, `onEmit`) now emit inline `await
-  callHook(...)`.
-
 ## May 18 2026 — v0.2
 
 ### Language

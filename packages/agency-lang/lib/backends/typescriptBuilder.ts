@@ -1535,8 +1535,8 @@ export class TypeScriptBuilder {
 
     // Try/catch wrapping the body, with finally to always pop the state stack.
     // onFunctionStart fires inside the try at substep id 0 as a wrapped
-    // `await runner.step(0, async () => await callHook(...))`. The
-    // runner.step wrapper gives the hook substep-counter idempotency so
+    // `await runner.hook(0, async () => await callHook(...))`. The
+    // runner.hook wrapper gives the hook substep-counter idempotency so
     // it fires exactly once across resume cycles (without it the function
     // would re-fire onFunctionStart on every resume). Callback bodies
     // cannot raise interrupts (statically forbidden by the typechecker —
@@ -1605,7 +1605,7 @@ export class TypeScriptBuilder {
     // every runner.step closure can reference the generated zod schemas.
     const hoistedAliases = this.hoistBodyTypeAliases(node.body);
     // Body steps occupy substep ids 1..N — id 0 is reserved for the
-    // onFunctionStart hook (wrapped in `runner.step` for substep-counter
+    // onFunctionStart hook (wrapped in `runner.hook` for substep-counter
     // idempotency on resume).
     const bodyCode = this.processBodyAsParts(node.body, 1);
     this.scopes.inSafeFunction = prevSafe;
@@ -2141,7 +2141,7 @@ export class TypeScriptBuilder {
     const hoistedAliases = this.hoistBodyTypeAliases(body);
 
     // Body steps occupy substep ids 1..N. Id 0 is reserved for the
-    // onNodeStart hook (wrapped in runner.step for idempotency on
+    // onNodeStart hook (wrapped in runner.hook for idempotency on
     // resume). onNodeEnd sits at id N+1.
     const bodyCode = this.processBodyAsParts(body, 1);
     const onNodeStartId = 0;
@@ -2189,7 +2189,7 @@ export class TypeScriptBuilder {
 
     // Body wrapped in try-catch so node errors return failure instead
     // of crashing. onNodeStart at id 0 and onNodeEnd at id N+1 are both
-    // wrapped in `runner.step` for substep-counter idempotency on
+    // wrapped in `runner.hook` for substep-counter idempotency on
     // resume. Callback bodies cannot raise interrupts (typechecker-
     // enforced via `checkCallbackBodyInterrupts`), so the hooks are
     // fire-and-forget. The post-body halted check covers ordinary

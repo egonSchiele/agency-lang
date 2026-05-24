@@ -20,13 +20,14 @@ print(response)
 
 ### Limitation: structured output inside block bodies
 
-When you write `return llm(...)` as the last statement of a block
-body (a `fork(...) as item { ... }` branch, a `guard(cost: $X) as { ... }`
-body, or any user-defined function that takes a block parameter),
-Agency currently has no way to know the block's declared return type
-at codegen time — so the structured-output schema falls back to
-`string`. The block still runs and returns the LLM's text reply, but
-you cannot get a typed object out of it.
+Any `return llm(...)` inside a block body — anywhere in the block,
+not just at the end — falls back to a `string` structured-output
+schema. This applies to `fork(...) as item { ... }` branches,
+`guard(cost: $X) as { ... }` bodies, and any user-defined function
+that takes a block parameter. Agency currently has no way to know
+the block's declared return type at codegen time, so the LLM is
+asked for a plain string. The block still runs and returns the
+LLM's text reply, but you cannot get a typed object out of it.
 
 ```ts
 type Response = { capital: string }

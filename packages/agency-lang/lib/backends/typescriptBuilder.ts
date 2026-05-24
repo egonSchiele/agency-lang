@@ -2317,6 +2317,32 @@ export class TypeScriptBuilder {
       if (this.isInterruptExpression(node.value)) {
         return this.processInterruptStatement(node.value as InterruptStatement);
       }
+      // `return llm(...)` from a block: processLlmCall emits multiple
+      // statements (assigning the result to __prompt), so we must hoist
+      // them above the runnerHalt and pass the result var as the halt
+      // value — wrapping the statements list directly in runnerHalt
+      // would produce invalid TS like `runner.halt(stmt; stmt; ...)`.
+      // Scope must be "block" so processLlmCall assigns into
+      // `__bstack.locals.__prompt`, which is what `ts.self(...)`
+      // resolves to inside a block (where `__self = __bstack.locals`).
+      // The block's declared return type is unknown to the builder
+      // (see ScopeManager.returnType comment), so processLlmCall falls
+      // back to a string-typed structured-output schema.
+      if (
+        node.value.type === "functionCall" &&
+        node.value.functionName === "llm"
+      ) {
+        const llmNode = this.processLlmCall(
+          DEFAULT_PROMPT_NAME,
+          this.scopes.returnType(),
+          node.value,
+          "block",
+        );
+        return ts.statements([
+          llmNode,
+          ts.runnerHalt(ts.self(DEFAULT_PROMPT_NAME)),
+        ]);
+      }
       const valueNode = this.processNode(node.value);
       return ts.runnerHalt(valueNode);
     }

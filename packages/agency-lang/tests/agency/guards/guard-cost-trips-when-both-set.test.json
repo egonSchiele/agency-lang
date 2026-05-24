@@ -1,0 +1,15 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "\"tripped:guardFailure:maxCost=0.000001:maxTime=null\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        { "return": "pong" }
+      ],
+      "description": "Symmetric to guard-time-and-cost. Both cost and time limits set, but cost is the tight one and trips first. Verifies __internal_pushGuard actually installs the cost guard when both args are passed — a bug that silently dropped one would slip past guard-time-and-cost (which only exercises the time path)."
+    }
+  ]
+}

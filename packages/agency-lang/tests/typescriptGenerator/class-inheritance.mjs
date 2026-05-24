@@ -196,7 +196,7 @@ if (!__ctx.globals.isInitialized("class-inheritance.agency")) {
     }
 let __funcStartTime: number = performance.now();
 __self.__retryable = __self.__retryable ?? true;
-const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "class-inheritance.agency", scopeName: "Animal.speak" });
+const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "class-inheritance.agency", scopeName: "Animal.speak", stack: __stateStack });
 let __resultCheckpointId = -1;
 if (__ctx.stateStack.currentNodeId()) {
   __resultCheckpointId = __ctx.checkpoints.createPinned(__stateStack, __ctx, { moduleId: "class-inheritance.agency", scopeName: "Animal.speak", stepPath: "", label: "result-entry" });
@@ -322,7 +322,7 @@ if (!__ctx.globals.isInitialized("class-inheritance.agency")) {
     }
 let __funcStartTime: number = performance.now();
 __self.__retryable = __self.__retryable ?? true;
-const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "class-inheritance.agency", scopeName: "Dog.speak" });
+const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "class-inheritance.agency", scopeName: "Dog.speak", stack: __stateStack });
 let __resultCheckpointId = -1;
 if (__ctx.stateStack.currentNodeId()) {
   __resultCheckpointId = __ctx.checkpoints.createPinned(__stateStack, __ctx, { moduleId: "class-inheritance.agency", scopeName: "Dog.speak", stepPath: "", label: "result-entry" });
@@ -431,7 +431,7 @@ const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
 let __forked;
 let __functionCompleted = false;
-  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "class-inheritance.agency", scopeName: "main" });
+  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "class-inheritance.agency", scopeName: "main", stack: __stateStack });
   try {
     await runner.hook(0, async () => {
 await callHook({

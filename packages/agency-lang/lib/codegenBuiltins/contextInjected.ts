@@ -157,16 +157,21 @@ export const CONTEXT_INJECTED_BUILTINS: Record<string, ContextInjectedBuiltin> =
     params: [],
     returnType: number,
   },
+  // Push 0 or more guards (cost, time, or both) and return the count
+  // pushed so the caller knows how many to pop. Param types are "any"
+  // because each can be `number | null` (null = "no limit on this
+  // dimension"). The stdlib `guard` function threads the count to
+  // `__internal_popGuard(count)`.
   __internal_pushGuard: {
     name: "__internal_pushGuard",
     from: THREAD_FROM,
-    params: [number],
-    returnType: voidT,
+    params: [ANY_T, ANY_T],
+    returnType: number,
   },
   __internal_popGuard: {
     name: "__internal_popGuard",
     from: THREAD_FROM,
-    params: [],
+    params: [number],
     returnType: voidT,
   },
 };

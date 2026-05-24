@@ -1,4 +1,5 @@
-import type { GuardEntry } from "../guard.js";
+import type { Guard, GuardJSON } from "../guard.js";
+import { guardFromJSON } from "../guard.js";
 import { Checkpoint } from "../index.js";
 import { deepClone } from "../utils.js";
 import { ThreadStoreJSON } from "./threadStore.js";
@@ -252,7 +253,7 @@ export type StateStackJSON = {
   localTokens?: number;
   seedCost?: number;
   seedTokens?: number;
-  guards?: GuardEntry[];
+  guards?: GuardJSON[];
 };
 
 export class StateStack {
@@ -293,19 +294,22 @@ export class StateStack {
   seedTokens: number = 0;
 
   // Active guard scopes on this stack, innermost last. Walked after
-  // every LLM cost accumulation in prompt.ts to enforce limits.
-  // Serialized so guards survive interrupt/resume cycles. Cloned to
-  // child branches by Runner.seedBranchCost so cost spent inside a
-  // branch counts toward ancestor limits at join time.
-  // See lib/runtime/guard.ts.
-  guards: GuardEntry[] = [];
+  // every LLM cost accumulation in prompt.ts (CostGuard) and on every
+  // Runner.shouldSkip (TimeGuard) to enforce limits.
+  // Serialized so guards survive interrupt/resume cycles. Each guard
+  // decides whether it gets cloned into fork/race branches via
+  // `cloneForBranch` — see lib/runtime/guard.ts.
+  guards: Guard[] = [];
 
-  pushGuard(entry: GuardEntry): void {
-    this.guards.push(entry);
+  pushGuard(guard: Guard): void {
+    guard.install(this);
+    this.guards.push(guard);
   }
 
-  popGuard(): GuardEntry | undefined {
-    return this.guards.pop();
+  popGuard(): Guard | undefined {
+    const guard = this.guards.pop();
+    if (guard) guard.uninstall(this);
+    return guard;
   }
 
   constructor(
@@ -435,7 +439,7 @@ export class StateStack {
       localTokens: this.localTokens,
       seedCost: this.seedCost,
       seedTokens: this.seedTokens,
-      guards: this.guards.map((g) => ({ ...g })),
+      guards: this.guards.map((g) => g.toJSON()),
     };
   }
 
@@ -465,7 +469,10 @@ export class StateStack {
     stateStack.seedTokens = json.seedTokens ?? 0;
     // Nullish coalesce handles checkpoints written before the
     // `guards` field existed (back-compat with pre-guard snapshots).
-    stateStack.guards = (json.guards ?? []).map((g) => ({ ...g }));
+    // We do NOT call install() on deserialized guards — install effects
+    // (e.g. composing abort signals) are runtime state and will be
+    // re-established by resume() at the first runner step.
+    stateStack.guards = (json.guards ?? []).map(guardFromJSON);
     return stateStack;
   }
 }

@@ -1,4 +1,5 @@
 import * as smoltalk from "smoltalk";
+import { CostGuard, TimeGuard } from "../runtime/guard.js";
 import type { RuntimeContext } from "../runtime/state/context.js";
 import type { StateStack } from "../runtime/state/stateStack.js";
 import type { ThreadStore } from "../runtime/state/threadStore.js";
@@ -69,29 +70,56 @@ export async function __internal_getTokens(
 }
 
 /**
- * Open a guard scope on the caller's stack. `costAtPush` captures the
- * baseline so the guard's "spent" reading is the DELTA since the
- * guard opened, not the absolute localCost (which would include cost
- * spent before the guard scope began). See lib/runtime/guard.ts.
+ * Open 0..2 guard scopes on the caller's stack, depending on which
+ * limits were passed. Returns the count actually pushed so the
+ * surrounding `guard` stdlib function knows how many to pop. Either
+ * argument may be `null` (meaning "no limit on this dimension"); at
+ * least one must be non-null.
+ *
+ * When both cost and time are set, both guards trip independently —
+ * whichever exceeds its limit first throws GuardExceededError. They
+ * are pushed in order [cost, time] so popping LIFO returns the time
+ * guard first (uninstall ordering doesn't matter for correctness, but
+ * matters for the structured guard.uninstall stack-mutation cleanup).
+ *
+ * See lib/runtime/guard.ts.
  */
 export async function __internal_pushGuard(
   _ctx: RuntimeContext<any>,
   stack: StateStack,
   _threads: ThreadStore,
-  costLimit: number,
-): Promise<void> {
-  stack.pushGuard({ costLimit, costAtPush: stack.localCost });
+  costLimit: number | null,
+  timeLimit: number | null,
+): Promise<number> {
+  if (costLimit == null && timeLimit == null) {
+    throw new Error(
+      "guard() requires at least one of: cost, time",
+    );
+  }
+  let count = 0;
+  if (costLimit != null) {
+    stack.pushGuard(new CostGuard(costLimit));
+    count++;
+  }
+  if (timeLimit != null) {
+    stack.pushGuard(new TimeGuard(timeLimit));
+    count++;
+  }
+  return count;
 }
 
 /**
- * Close the innermost guard scope on the caller's stack. A no-op if
- * the stack has no active guard (defensive — the surrounding `guard`
- * stdlib function always pairs push/pop).
+ * Close the most-recently-opened `count` guard scopes on the caller's
+ * stack. Paired with `__internal_pushGuard`'s return value so the
+ * caller pops exactly the guards it pushed.
  */
 export async function __internal_popGuard(
   _ctx: RuntimeContext<any>,
   stack: StateStack,
   _threads: ThreadStore,
+  count: number,
 ): Promise<void> {
-  stack.popGuard();
+  for (let i = 0; i < count; i++) {
+    stack.popGuard();
+  }
 }

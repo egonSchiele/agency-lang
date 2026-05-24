@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "\"done\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "A generous time budget (5s) wrapping a brief sleep (10ms) does not trip. The block runs to completion and result.value is the block's return."
+    }
+  ]
+}

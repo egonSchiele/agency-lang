@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { StateStack, State, BranchState } from "./stateStack.js";
 import { _callbackImpl } from "../../stdlib/agency.js";
+import { CostGuard } from "../guard.js";
 
 type FrameOpts = {
   args?: Record<string, any>;
@@ -498,13 +499,16 @@ describe("StateStack guards", () => {
   it("pushGuard appends and popGuard removes from the end", () => {
     const stack = new StateStack();
     expect(stack.guards).toEqual([]);
-    stack.pushGuard({ costLimit: 1.0, costAtPush: 0.0 });
-    stack.pushGuard({ costLimit: 2.0, costAtPush: 0.5 });
+    const a = new CostGuard(1.0);
+    const b = new CostGuard(2.0);
+    stack.localCost = 0.5;
+    stack.pushGuard(a);
+    stack.pushGuard(b);
     expect(stack.guards).toHaveLength(2);
     const popped = stack.popGuard();
-    expect(popped).toEqual({ costLimit: 2.0, costAtPush: 0.5 });
+    expect(popped).toBe(b);
     expect(stack.guards).toHaveLength(1);
-    expect(stack.guards[0]).toEqual({ costLimit: 1.0, costAtPush: 0.0 });
+    expect(stack.guards[0]).toBe(a);
   });
 
   it("popGuard on empty stack returns undefined", () => {
@@ -514,15 +518,20 @@ describe("StateStack guards", () => {
 
   it("toJSON / fromJSON preserves guards", () => {
     const stack = new StateStack();
-    stack.pushGuard({ costLimit: 1.5, costAtPush: 0.2 });
-    stack.pushGuard({ costLimit: 0.5, costAtPush: 0.4 });
+    stack.localCost = 0.2;
+    stack.pushGuard(new CostGuard(1.5));
+    stack.localCost = 0.4;
+    stack.pushGuard(new CostGuard(0.5));
     const json = stack.toJSON();
     expect(json.guards).toEqual([
-      { costLimit: 1.5, costAtPush: 0.2 },
-      { costLimit: 0.5, costAtPush: 0.4 },
+      { kind: "cost", costLimit: 1.5, costAtPush: 0.2 },
+      { kind: "cost", costLimit: 0.5, costAtPush: 0.4 },
     ]);
     const restored = StateStack.fromJSON(json);
-    expect(restored.guards).toEqual(stack.guards);
+    expect(restored.guards).toHaveLength(2);
+    expect(restored.guards[0]).toBeInstanceOf(CostGuard);
+    expect((restored.guards[0] as CostGuard).costLimit).toBe(1.5);
+    expect((restored.guards[1] as CostGuard).costLimit).toBe(0.5);
   });
 
   it("fromJSON defaults guards to [] when the field is absent (pre-guard checkpoints)", () => {
@@ -537,11 +546,16 @@ describe("StateStack guards", () => {
     expect(restored.guards).toEqual([]);
   });
 
-  it("toJSON returns guards as a fresh copy (mutation-safe)", () => {
+  it("pushGuard calls install() (captures costAtPush)", () => {
     const stack = new StateStack();
-    stack.pushGuard({ costLimit: 1.0, costAtPush: 0.0 });
+    stack.localCost = 1.23;
+    const g = new CostGuard(5);
+    stack.pushGuard(g);
     const json = stack.toJSON();
-    json.guards![0].costLimit = 999;
-    expect(stack.guards[0].costLimit).toBe(1.0);
+    expect(json.guards![0]).toEqual({
+      kind: "cost",
+      costLimit: 5,
+      costAtPush: 1.23,
+    });
   });
 });

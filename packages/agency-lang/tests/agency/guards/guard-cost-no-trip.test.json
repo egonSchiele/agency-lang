@@ -1,0 +1,15 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "\"pong\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        { "return": "pong" }
+      ],
+      "description": "A guard with a generous cost limit does not trip; the block runs to completion and the wrapped success value is returned."
+    }
+  ]
+}

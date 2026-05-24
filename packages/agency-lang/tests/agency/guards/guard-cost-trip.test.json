@@ -1,0 +1,15 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "\"tripped:guardFailure:0.000001:true\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        { "return": "pong" }
+      ],
+      "description": "A guard with a tiny cost limit trips on the first LLM call. The stdlib guard function catches the GuardExceededError and surfaces a Failure with the structured GuardFailureData ({ type, maxCost, actualCost }). actualCost is positive because the deterministic provider records SYNTHETIC_COST after the call completes."
+    }
+  ]
+}

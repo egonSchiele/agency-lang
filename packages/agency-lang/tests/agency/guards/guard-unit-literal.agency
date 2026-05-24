@@ -1,0 +1,16 @@
+import { guard } from "std::thread"
+
+// Verifies the `$X` unit literal is accepted as the cost argument and
+// reaches the runtime as a plain number. Per the unit-literals guide,
+// `$0.000001` compiles to `0.000001`. The fixture mirrors guard-cost-
+// trip but with the unit literal at the call site.
+node main() {
+  const r = guard(cost: $0.000001) as {
+    const reply = llm("Reply with: pong")
+    return reply
+  }
+  if (isFailure(r)) {
+    return "tripped:${r.error.maxCost}"
+  }
+  return "did not trip"
+}

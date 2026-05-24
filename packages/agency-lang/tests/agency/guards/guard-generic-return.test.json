@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "60",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "Generic block return type: `guard<T>` should propagate T = number[] from the block's return, so r.value supports number-array indexing and arithmetic."
+    }
+  ]
+}

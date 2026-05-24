@@ -1,0 +1,21 @@
+import { guard } from "std::thread"
+
+// Guard inside a `def` function (bare failure shape) instead of a
+// `node` (envelope failure shape). The function-body auto-wrap in
+// codegen differs between def and node; both must re-throw
+// GuardExceededError so the surrounding `guard` function's `try`
+// can convert it to a structured GuardFailureData.
+def doGuardedWork(): Result<string, GuardFailureData> {
+  return guard(cost: 0.000001) as {
+    const r = llm("Reply with: pong")
+    return r
+  }
+}
+
+node main() {
+  const result = doGuardedWork()
+  if (isFailure(result)) {
+    return "def-trip:${result.error.maxCost}"
+  }
+  return "did not trip"
+}

@@ -1,0 +1,31 @@
+import { guard } from "std::thread"
+
+// Both guards' limits are below SYNTHETIC_COST (0.000002), so the
+// single LLM call inside the inner guard trips BOTH at once. The
+// runtime must scan innermost-first and throw a GuardExceededError
+// whose `limit` is the inner's (0.0000005), not the outer's
+// (0.0000001).
+//
+// The inner `try` catches the error and __tryCall packs it into a
+// Failure whose `maxCost` reflects the thrown error's limit. So:
+//   correct (innermost-first): inner.maxCost = 0.0000005
+//   buggy   (outer-first):     inner.maxCost = 0.0000001
+//
+// The outer guard's body catches the inner Failure and returns a
+// string that exposes inner.maxCost, which the test asserts.
+node main() {
+  const outer = guard(cost: 0.0000001) as {
+    const inner = guard(cost: 0.0000005) as {
+      const r = llm("hi")
+      return r
+    }
+    if (isFailure(inner)) {
+      return "inner.max=${inner.error.maxCost}"
+    }
+    return "no trip"
+  }
+  if (isFailure(outer)) {
+    return "outer also surfaced — unexpected"
+  }
+  return outer.value
+}

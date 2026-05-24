@@ -1,0 +1,24 @@
+import { guard } from "std::thread"
+
+// Two guards run back-to-back at the same scope. The first trips, the
+// second has a generous budget and must not be polluted by the first.
+// This regression-tests __popGuard cleanup: if the first guard's entry
+// leaked onto the stack, the second guard's LLM call would also trip
+// against the leaked tiny limit and the second test branch would fail.
+node main() {
+  const r1 = guard(cost: 0.000001) as {
+    const a = llm("first")
+    return a
+  }
+  const r2 = guard(cost: 10.0) as {
+    const b = llm("second")
+    return b
+  }
+  if (!isFailure(r1)) {
+    return "r1 did not trip (unexpected)"
+  }
+  if (isFailure(r2)) {
+    return "r2 tripped — popGuard leaked"
+  }
+  return "ok"
+}

@@ -1,0 +1,18 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "\"tripped-after-fork:true\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        { "return": "b1" },
+        { "return": "b2" },
+        { "return": "b3" },
+        { "return": "after" }
+      ],
+      "description": "Outer guard wraps a fork. Branch costs propagate to the parent stack on fork completion; the next LLM call's cost check sees total spend and trips. Documents the V1 limitation that mid-fork branches do NOT eagerly notify the outer guard."
+    }
+  ]
+}

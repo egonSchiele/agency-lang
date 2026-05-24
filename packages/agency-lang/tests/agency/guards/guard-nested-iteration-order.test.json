@@ -1,0 +1,15 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "\"inner.max=5e-7\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        { "return": "hi" }
+      ],
+      "description": "When inner and outer guards both trip on the same LLM call, the innermost limit must be reported. JS renders 0.0000005 as \"5e-7\"."
+    }
+  ]
+}

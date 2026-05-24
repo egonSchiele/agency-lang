@@ -157,6 +157,18 @@ export const CONTEXT_INJECTED_BUILTINS: Record<string, ContextInjectedBuiltin> =
     params: [],
     returnType: number,
   },
+  __internal_pushGuard: {
+    name: "__internal_pushGuard",
+    from: THREAD_FROM,
+    params: [number],
+    returnType: voidT,
+  },
+  __internal_popGuard: {
+    name: "__internal_popGuard",
+    from: THREAD_FROM,
+    params: [],
+    returnType: voidT,
+  },
 };
 
 /** True iff `name` is registered as a context-injected builtin. */

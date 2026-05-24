@@ -44,6 +44,8 @@ import {
   __internal_assistantMessage,
   __internal_getCost,
   __internal_getTokens,
+  __internal_popGuard,
+  __internal_pushGuard,
   __internal_systemMessage,
   __internal_userMessage,
 } from "agency-lang/stdlib-lib/thread.js";

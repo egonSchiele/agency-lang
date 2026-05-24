@@ -177,7 +177,7 @@ const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
 let __forked;
 let __functionCompleted = false;
-  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "withParam.agency", scopeName: "main" });
+  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "withParam.agency", scopeName: "main", stack: __stateStack });
   if (!__state.isResume) {
     __stack.args["input"] = __state.data.input;
   }

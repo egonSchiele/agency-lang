@@ -1,0 +1,19 @@
+import { guard } from "std::thread"
+
+// Both limits set. The time budget is tight (20ms) and there are no
+// LLM calls, so the time guard must trip first. Verifies that:
+//   1. `guard(cost:, time:)` pushes both guards
+//   2. either guard tripping triggers the Failure path
+//   3. the time variant produces "timeoutFailure" with maxTime set
+//      and the cost fields null.
+node main() {
+  const result = guard(cost: $1.0, time: 20ms) as {
+    sleep(150ms)
+    sleep(1ms)
+    return "did not trip"
+  }
+  if (isFailure(result)) {
+    return "tripped:${result.error.type}:maxTime=${result.error.maxTime}:maxCost=${result.error.maxCost}"
+  }
+  return result.value
+}

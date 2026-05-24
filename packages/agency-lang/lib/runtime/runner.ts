@@ -86,8 +86,25 @@ export class Runner {
   // ── Halt ──
 
   halt(result: any): void {
+    // Charge in-flight elapsed time to any TimeGuards on the stack
+    // BEFORE flipping the halted flag, so the elapsed delta captures
+    // every ms up to the halt boundary. Idempotent: subsequent halts
+    // from outer Runners propagating the same interrupt see "paused"
+    // and no-op. CostGuards' pause() is a no-op.
+    this.stack?.guards.forEach((g) => g.pause());
     this.halted = true;
     this.haltResult = result;
+  }
+
+  /** Resume any paused guards on the active stack. Idempotent — a
+   *  guard already in "running" state no-ops. Called at the top of
+   *  every step-equivalent entry point (step, hook, pipe, thread,
+   *  fork, debugger). After a halt, the first step entry re-arms
+   *  TimeGuards' timers; subsequent entries within the same active
+   *  window are no-ops. Also rebuilds non-serialized runtime state
+   *  (AbortController, abortSignal composition) after deserialization. */
+  private beforeStep(): void {
+    this.stack?.guards.forEach((g) => g.resume(this.stack!));
   }
 
   // ── Loop control ──
@@ -106,10 +123,34 @@ export class Runner {
   }
 
   /** Check if execution should skip (halted, breaking, or continuing).
-   * Also halts if the runner's branch stack has been aborted (race loser). */
+   *  Also halts if the runner's branch stack has been aborted — but
+   *  if any guard's `check()` reports a trip, throw the structured
+   *  GuardExceededError instead of silently halting. That lets the
+   *  stdlib `guard` function's `try block()` convert it to a Failure
+   *  with maxTime/actualTime (or maxCost/actualCost). Race-loser
+   *  branch cancels (no guard tripped) still halt silently.
+   *
+   *  Three-way decision when `abortSignal.aborted`:
+   *   1. Some guard.check() returns an error → throw it (first trip
+   *      reaches user code via stdlib `guard`'s `try`).
+   *   2. No guard returns an error but some guard.isTripped() → the
+   *      abort came from a guard whose trip is already consumed
+   *      (caught by `try`). The popGuard cleanup steps still need to
+   *      run, so don't halt; fall through.
+   *   3. No guard returns an error and none isTripped() → external
+   *      abort (race-loser branch cancel). Halt silently as before. */
   private shouldSkip(): boolean {
     if (this.stack?.abortSignal?.aborted && !this.halted) {
-      this.halt(undefined);
+      // Walk innermost-first so the deepest guard reports its trip
+      // first. Mirrors the order in prompt.ts's cost-check loop.
+      for (let i = this.stack.guards.length - 1; i >= 0; i--) {
+        const err = this.stack.guards[i].check(this.stack);
+        if (err) throw err;
+      }
+      const guardOwnsAbort = this.stack.guards.some((g) => g.isTripped());
+      if (!guardOwnsAbort) {
+        this.halt(undefined);
+      }
     }
     return this.halted || this._break || this._continue;
   }
@@ -276,6 +317,7 @@ export class Runner {
     id: number,
     callback: (runner: Runner) => Promise<void>,
   ): Promise<void> {
+    this.beforeStep();
     if (this.shouldSkip()) return;
     if (this.getCounter() > id) return;
 
@@ -312,6 +354,7 @@ export class Runner {
    * pause) skip the hook instead of re-firing it.
    */
   async hook(id: number, bodyFn: () => Promise<void>): Promise<void> {
+    this.beforeStep();
     if (this.shouldSkip()) return;
     if (this.getCounter() > id) return;
 
@@ -329,6 +372,7 @@ export class Runner {
   }
 
   async debugger(id: number, label: string): Promise<void> {
+    this.beforeStep();
     if (this.shouldSkip()) return;
     if (this.getCounter() > id) return;
     if (await this.maybeDebugHook(id, label, true)) return;
@@ -341,6 +385,7 @@ export class Runner {
   // ── Specialized: pipe ──
 
   async pipe(id: number, input: any, fn: (value: any) => any): Promise<any> {
+    this.beforeStep();
     if (this.shouldSkip()) return input;
     if (this.getCounter() > id)
       return this.frame.locals[`__pipe_result_${this.stepPath(id)}`] ?? input;
@@ -375,6 +420,7 @@ export class Runner {
     method: "create" | "createSubthread",
     callback: (runner: Runner) => Promise<void>,
   ): Promise<void> {
+    this.beforeStep();
     if (this.shouldSkip()) return;
     if (this.getCounter() > id) return;
 
@@ -683,6 +729,7 @@ export class Runner {
     mode: "all" | "race",
     stateStack: StateStack,
   ): Promise<any> {
+    this.beforeStep();
     if (this.shouldSkip()) return undefined;
     if (this.getCounter() > id) {
       return this.frame.locals[this.forkResultKey(id)];

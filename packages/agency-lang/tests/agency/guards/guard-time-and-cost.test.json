@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "\"tripped:timeoutFailure:maxTime=20:maxCost=null\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "guard(cost:, time:) pushes both guards. With a tight 20ms time budget and no LLM calls, the time guard trips first. The Failure carries the time variant (maxTime set, cost fields null)."
+    }
+  ]
+}

@@ -185,7 +185,7 @@ let __functionCompleted = false;
   let __funcStartTime: number = performance.now();
   __stack.args["c"] = c;
   __self.__retryable = __self.__retryable ?? true;
-  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "genericAliasValidation.agency", scopeName: "process" });
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "genericAliasValidation.agency", scopeName: "process", stack: __stateStack });
   let __resultCheckpointId = -1;
 if (__ctx.stateStack.currentNodeId()) {
   __resultCheckpointId = __ctx.checkpoints.createPinned(__stateStack, __ctx, { moduleId: "genericAliasValidation.agency", scopeName: "process", stepPath: "", label: "result-entry" });
@@ -309,7 +309,7 @@ const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
 let __forked;
 let __functionCompleted = false;
-  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "genericAliasValidation.agency", scopeName: "main" });
+  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "genericAliasValidation.agency", scopeName: "main", stack: __stateStack });
   try {
     await runner.hook(0, async () => {
 await callHook({

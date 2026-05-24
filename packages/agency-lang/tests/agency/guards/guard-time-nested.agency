@@ -1,0 +1,24 @@
+import { guard } from "std::thread"
+
+// Nested time guards. The inner guard has a tight budget (20ms) and
+// trips on the long sleep; the outer has a generous budget (5s) and
+// catches the inner's Failure without itself tripping. Verifies that
+// inner trips don't leak into the outer scope (uninstall properly
+// restores the outer's abort plumbing).
+node main() {
+  const outer = guard(time: 5s) as {
+    const inner = guard(time: 20ms) as {
+      sleep(150ms)
+      sleep(1ms)
+      return "inner ran"
+    }
+    if (isFailure(inner)) {
+      return "inner tripped"
+    }
+    return "inner did not trip"
+  }
+  if (isFailure(outer)) {
+    return "outer tripped (unexpected)"
+  }
+  return outer.value
+}

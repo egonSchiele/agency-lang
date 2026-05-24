@@ -218,6 +218,59 @@ describe("TimeGuard", () => {
     g.install(parent);
     expect(g.cloneForBranch(parent, child)).toBeUndefined();
   });
+
+  it("check() charges in-flight window so spent reflects elapsed time", () => {
+    // Without inFlight-charging, a tripped guard whose check is called
+    // mid-window would report spent=0 because no pause has happened.
+    const stack = new StateStack();
+    const g = new TimeGuard(100);
+    g.install(stack);
+    vi.advanceTimersByTime(250); // timer fires at 100, but window still "running"
+    const err = g.check(stack)!;
+    expect(err.spent).toBeGreaterThanOrEqual(100);
+  });
+
+  it("check() consumes the trip — subsequent calls return null", () => {
+    // The stdlib `guard`'s `try` catches the first trip and translates
+    // it to a Failure. The next runner step would re-trip on the same
+    // still-aborted signal without consumption.
+    const stack = new StateStack();
+    const g = new TimeGuard(100);
+    g.install(stack);
+    vi.advanceTimersByTime(150);
+    expect(g.check(stack)).toBeInstanceOf(GuardExceededError);
+    expect(g.check(stack)).toBeNull();
+    expect(g.check(stack)).toBeNull();
+  });
+
+  it("isTripped() stays true after check consumes the trip", () => {
+    // Runner.shouldSkip uses isTripped() to distinguish a still-aborted
+    // signal owned by an already-consumed guard (don't silent-halt
+    // cleanup steps) from a race-loser branch cancel.
+    const stack = new StateStack();
+    const g = new TimeGuard(100);
+    g.install(stack);
+    expect(g.isTripped()).toBe(false);
+    vi.advanceTimersByTime(150);
+    expect(g.isTripped()).toBe(true);
+    g.check(stack); // consume
+    expect(g.isTripped()).toBe(true);
+  });
+});
+
+describe("CostGuard.isTripped", () => {
+  it("always returns false — cost guards don't mutate abortSignal", () => {
+    const stack = new StateStack();
+    stack.localCost = 0;
+    const g = new CostGuard(1);
+    g.install(stack);
+    expect(g.isTripped()).toBe(false);
+    stack.localCost = 100; // way over limit
+    expect(g.check(stack)).toBeInstanceOf(GuardExceededError);
+    // Even with a tripped check, the CostGuard doesn't claim the abort
+    // signal — it has none.
+    expect(g.isTripped()).toBe(false);
+  });
 });
 
 describe("StateStack guard lifecycle", () => {

@@ -185,7 +185,7 @@ let __functionCompleted = false;
   __stack.args["items"] = items;
   __stack.args["block"] = block;
   __self.__retryable = __self.__retryable ?? true;
-  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "blockParams.agency", scopeName: "mapItems" });
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "blockParams.agency", scopeName: "mapItems", stack: __stateStack });
   let __resultCheckpointId = -1;
 if (__ctx.stateStack.currentNodeId()) {
   __resultCheckpointId = __ctx.checkpoints.createPinned(__stateStack, __ctx, { moduleId: "blockParams.agency", scopeName: "mapItems", stepPath: "", label: "result-entry" });
@@ -334,7 +334,7 @@ const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
 let __forked;
 let __functionCompleted = false;
-  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "blockParams.agency", scopeName: "main" });
+  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "blockParams.agency", scopeName: "main", stack: __stateStack });
   try {
     await runner.hook(0, async () => {
 await callHook({
@@ -358,7 +358,7 @@ const __self = __bstack.locals;
 
 __bstack.args["x"] = x;
 
-const runner = new Runner(__ctx, __bstack, { state: __bstack, moduleId: "blockParams.agency", scopeName: "__block_0" });
+const runner = new Runner(__ctx, __bstack, { state: __bstack, moduleId: "blockParams.agency", scopeName: "__block_0", stack: __ctx.stateStack });
 try {
 await runner.step(0, async (runner) => {
 runner.halt(__bstack.args.x * 2)

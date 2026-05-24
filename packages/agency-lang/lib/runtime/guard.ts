@@ -42,6 +42,14 @@ export type Guard = {
   pause(): void;
   resume(stack: StateStack): void;
   check(stack: StateStack): GuardExceededError | null;
+  /** True iff this guard's limit has been exceeded — even if `check`
+   *  has already returned the trip once. Lets `Runner.shouldSkip`
+   *  distinguish a still-aborted signal that originated from a
+   *  guard's own controller (already consumed by user code via the
+   *  stdlib `guard`'s `try`) from an external abort like a race
+   *  loser. Without this distinction, popping a tripped guard would
+   *  re-throw on every sync point. */
+  isTripped(): boolean;
   cloneForBranch(
     parentStack: StateStack,
     childStack: StateStack,
@@ -96,6 +104,12 @@ export class CostGuard implements Guard {
       return new GuardExceededError("cost", this.costLimit, spent);
     }
     return null;
+  }
+
+  /** CostGuards never mutate `stack.abortSignal`, so they can't be
+   *  the cause of a stuck abort. Always returns false. */
+  isTripped(): boolean {
+    return false;
   }
 
   cloneForBranch(_parentStack: StateStack, childStack: StateStack): Guard {
@@ -167,6 +181,13 @@ export class TimeGuard implements Guard {
   /** Set when the abort signal fires. Read by check() to convert the
    *  silent abort into a typed throw at the next sync point. */
   private tripped: boolean = false;
+  /** Set after `check()` returns the trip error once. Subsequent
+   *  `check()` calls return null so the trip propagates exactly once
+   *  to the stdlib `guard`'s `try`. `isTripped()` keeps returning
+   *  true so `Runner.shouldSkip` knows the still-aborted signal is
+   *  ours (already-consumed) and doesn't silent-halt the cleanup
+   *  steps (popGuard) on its way out. */
+  private consumed: boolean = false;
 
   constructor(public readonly timeLimit: number) {}
 
@@ -210,8 +231,26 @@ export class TimeGuard implements Guard {
   }
 
   check(_stack: StateStack): GuardExceededError | null {
-    if (!this.tripped) return null;
-    return new GuardExceededError("time", this.timeLimit, this.elapsedMs);
+    if (!this.tripped || this.consumed) return null;
+    // Charge any in-flight window delta so `spent` reflects the
+    // true elapsed time at the moment of the trip. Without this,
+    // checking inside an active window (the common case — abort
+    // fires during a sleep / LLM call, runner steps next) would
+    // report `elapsedMs === 0` because no pause has happened.
+    const inFlight =
+      this.state === "running"
+        ? performance.now() - this.windowStart!
+        : 0;
+    this.consumed = true;
+    return new GuardExceededError(
+      "time",
+      this.timeLimit,
+      this.elapsedMs + inFlight,
+    );
+  }
+
+  isTripped(): boolean {
+    return this.tripped;
   }
 
   cloneForBranch(

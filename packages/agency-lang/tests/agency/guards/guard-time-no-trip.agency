@@ -1,0 +1,14 @@
+import { guard } from "std::thread"
+
+// A generous time budget that the block stays well under. The block
+// runs to completion and result.value is the block's return.
+node main() {
+  const result = guard(time: 5s) as {
+    sleep(10ms)
+    return "done"
+  }
+  if (isFailure(result)) {
+    return "unexpected trip"
+  }
+  return result.value
+}

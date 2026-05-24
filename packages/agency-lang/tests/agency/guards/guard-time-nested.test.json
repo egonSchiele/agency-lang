@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "\"inner tripped\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "Nested time guards are independent. The inner trips on 150ms > 20ms budget; the outer (5s budget) catches the Failure and never trips itself. Verifies that the inner's uninstall restores the outer's abort plumbing cleanly."
+    }
+  ]
+}

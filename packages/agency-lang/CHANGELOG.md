@@ -1,3 +1,17 @@
+## Unreleased
+
+### Added
+- `guard(cost: $X) as { ... }` in `std::thread` — automatic cost-limit
+  enforcement for blocks of LLM-using code. Returns a `Result` so
+  callers can branch on success vs over-budget. See
+  [docs/site/guide/cost-guards.md](./docs/site/guide/cost-guards.md).
+
+### Fixed
+- Trailing block argument is now correctly passed when a function is
+  called with named arguments (`f(name: val) as { ... }`). Previously
+  the block was silently dropped, surfacing as a "Missing required
+  argument" runtime error.
+
 ## May 18 2026 — v0.2
 
 ### Language

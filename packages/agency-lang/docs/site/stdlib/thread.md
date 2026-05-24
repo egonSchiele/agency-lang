@@ -1,5 +1,19 @@
 # thread
 
+## Types
+
+### GuardFailureData
+
+```ts
+export type GuardFailureData = {
+  type: string;
+  maxCost: number;
+  actualCost: number
+}
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/thread.agency#L68))
+
 ## Functions
 
 ### systemMessage
@@ -98,3 +112,52 @@ Get the cumulative token count for the current execution branch.
 **Returns:** `number`
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/thread.agency#L60))
+
+### guard
+
+```ts
+guard(cost: number, block: () => any): any
+```
+
+Run a block with a cost limit. If LLM calls inside the block cause
+  the cumulative cost to exceed the limit, the block halts and `guard`
+  returns a failure carrying the limit and the actual spend.
+
+  On success, returns `success(blockReturnValue)`. The block's local
+  variables are scoped to the block — only the block's return value
+  is observable from the caller. Use isFailure(result) to branch and
+  read result.error.maxCost and result.error.actualCost.
+
+  Nested guards are independent: an inner trip does not trip an outer
+  guard. Fork/race branches inherit the outer guards at branch-creation
+  time, but a branch's cost only rolls up to the outer guard at
+  branch-completion — outer guards cannot pre-empt mid-fork.
+
+  Memory layer LLM calls (memory.text / memory.embed) currently bypass
+  the guard.
+
+  @param cost - Maximum cost in dollars (e.g. $2.00 or 2.00)
+  @param block - The work to run under the guard
+
+  Example:
+    const result = guard(cost: $2.0) as {
+      const a = llm("step 1")
+      const b = llm("step 2")
+      return a + b
+    }
+    if (isFailure(result)) {
+      print("Budget exceeded: spent " + result.error.actualCost)
+    } else {
+      print(result.value)
+    }
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| cost | `number` |  |
+| block | `() => any` |  |
+
+**Returns:** `any`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/thread.agency#L74))

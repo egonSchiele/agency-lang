@@ -15,7 +15,18 @@ export type FuncParam = {
 
 export type CallType =
   | { type: "positional"; args: unknown[] }
-  | { type: "named"; positionalArgs: unknown[]; namedArgs: Record<string, unknown> };
+  | {
+      type: "named";
+      positionalArgs: unknown[];
+      namedArgs: Record<string, unknown>;
+      /** Trailing-block argument from `f(name: val) as { ... }` syntax.
+       *  Filled into the last unfilled non-variadic parameter (by
+       *  convention the block param) during resolveNamed. Separate
+       *  from positionalArgs because the block always binds to the
+       *  trailing block parameter, regardless of which earlier params
+       *  named args have filled. */
+      blockArg?: unknown;
+    };
 
 export type ToolDefinition = {
   name: string;
@@ -212,7 +223,11 @@ export class AgencyFunction {
     if (descriptor.type === "positional") {
       return this.resolvePositional(descriptor.args);
     }
-    return this.resolveNamed(descriptor.positionalArgs, descriptor.namedArgs);
+    return this.resolveNamed(
+      descriptor.positionalArgs,
+      descriptor.namedArgs,
+      descriptor.blockArg,
+    );
   }
 
   private resolvePositional(args: unknown[]): unknown[] {
@@ -243,7 +258,11 @@ export class AgencyFunction {
     return result;
   }
 
-  private resolveNamed(positionalArgs: unknown[], namedArgs: Record<string, unknown>): unknown[] {
+  private resolveNamed(
+    positionalArgs: unknown[],
+    namedArgs: Record<string, unknown>,
+    blockArg?: unknown,
+  ): unknown[] {
     // Validate named args: no unknowns, no conflicts with positional
     for (const name of Object.keys(namedArgs)) {
       const paramIdx = this._nonVariadicUnbound.findIndex(p => p.name === name);
@@ -257,6 +276,26 @@ export class AgencyFunction {
           `Named argument '${name}' conflicts with positional argument at position ${paramIdx + 1} in call to '${this.name}'`,
         );
       }
+    }
+
+    // A trailing block argument (from `f(name: val) as { ... }` syntax)
+    // binds to the LAST non-variadic unbound parameter. By convention
+    // that's the block-typed param. We synthesize it into namedArgs
+    // here so the rest of the fill logic treats it uniformly.
+    const hasBlock = blockArg !== undefined;
+    if (hasBlock) {
+      const lastParam = this._nonVariadicUnbound[this._nonVariadicUnbound.length - 1];
+      if (!lastParam) {
+        throw new Error(
+          `Call to '${this.name}' passed a trailing block but the function takes no parameters`,
+        );
+      }
+      if (Object.hasOwn(namedArgs, lastParam.name)) {
+        throw new Error(
+          `Trailing block conflicts with named argument '${lastParam.name}' in call to '${this.name}'`,
+        );
+      }
+      namedArgs = { ...namedArgs, [lastParam.name]: blockArg };
     }
 
     // Build result: positional args first, then fill from named args in parameter order

@@ -2005,11 +2005,20 @@ export class TypeScriptBuilder {
         }
       }
 
-      return ts.obj({
+      // Pass any trailing block as a dedicated descriptor field so
+      // the runtime can bind it to the last (block) parameter — see
+      // CallType.blockArg in lib/runtime/agencyFunction.ts. Without
+      // this, `f(name: val) as { ... }` would drop the block on the
+      // floor and the runtime would report a missing-arg error.
+      const descriptor: Record<string, TsNode> = {
         type: ts.str("named"),
         positionalArgs: ts.arr(positionalNodes),
         namedArgs: ts.obj(namedEntries),
-      });
+      };
+      if (node.block) {
+        descriptor.blockArg = this.processBlockArgument(node);
+      }
+      return ts.obj(descriptor);
     }
 
     const argNodes: TsNode[] = [];

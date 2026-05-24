@@ -1,3 +1,4 @@
+import type { GuardEntry } from "../guard.js";
 import { Checkpoint } from "../index.js";
 import { deepClone } from "../utils.js";
 import { ThreadStoreJSON } from "./threadStore.js";
@@ -251,6 +252,7 @@ export type StateStackJSON = {
   localTokens?: number;
   seedCost?: number;
   seedTokens?: number;
+  guards?: GuardEntry[];
 };
 
 export class StateStack {
@@ -289,6 +291,22 @@ export class StateStack {
   // losers propagated at interrupt time, winner propagated later on resume).
   seedCost: number = 0;
   seedTokens: number = 0;
+
+  // Active guard scopes on this stack, innermost last. Walked after
+  // every LLM cost accumulation in prompt.ts to enforce limits.
+  // Serialized so guards survive interrupt/resume cycles. Cloned to
+  // child branches by Runner.seedBranchCost so cost spent inside a
+  // branch counts toward ancestor limits at join time.
+  // See lib/runtime/guard.ts.
+  guards: GuardEntry[] = [];
+
+  pushGuard(entry: GuardEntry): void {
+    this.guards.push(entry);
+  }
+
+  popGuard(): GuardEntry | undefined {
+    return this.guards.pop();
+  }
 
   constructor(
     stack: State[] = [],
@@ -417,6 +435,7 @@ export class StateStack {
       localTokens: this.localTokens,
       seedCost: this.seedCost,
       seedTokens: this.seedTokens,
+      guards: this.guards.map((g) => ({ ...g })),
     };
   }
 
@@ -444,6 +463,9 @@ export class StateStack {
     stateStack.localTokens = json.localTokens ?? 0;
     stateStack.seedCost = json.seedCost ?? 0;
     stateStack.seedTokens = json.seedTokens ?? 0;
+    // Nullish coalesce handles checkpoints written before the
+    // `guards` field existed (back-compat with pre-guard snapshots).
+    stateStack.guards = (json.guards ?? []).map((g) => ({ ...g }));
     return stateStack;
   }
 }

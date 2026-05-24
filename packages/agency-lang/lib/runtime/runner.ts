@@ -221,6 +221,13 @@ export class Runner {
       branchStack.seedCost = parentStack.localCost;
       branchStack.seedTokens = parentStack.localTokens;
     }
+    // Clone parent guards so LLM calls inside the branch are checked
+    // against ancestor limits. Per-entry copy keeps the parent's
+    // entries safe from mutation if the child later pushes its own.
+    // LIMITATION: deltas from a child branch only roll back into the
+    // parent at branch completion (propagateBranchCost), so an outer
+    // guard cannot trip mid-fork — only after the fork completes.
+    branchStack.guards = parentStack.guards.map((g) => ({ ...g }));
   }
 
   /** Propagate cost/token deltas from a set of branches back to the

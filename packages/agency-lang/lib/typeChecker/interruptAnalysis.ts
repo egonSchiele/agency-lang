@@ -179,14 +179,6 @@ export function checkUnhandledInterruptWarnings(
   }
 }
 
-/**
- * Hooks that fire outside any agency frame — `callHook` throws at
- * runtime if a callback registered on these hooks raises an interrupt.
- * The typechecker catches the same misuse at compile time so the
- * developer sees the problem before they run the program.
- */
-const HOOKS_THAT_REJECT_INTERRUPTS = ["onAgentStart", "onAgentEnd"];
-
 /** Narrow a call-argument slot (which may be a positional Expression,
  *  a SplatExpression, or a NamedArgument) to a positional Expression.
  *  Returns null for splat / named arguments — we only act on the
@@ -212,10 +204,10 @@ function extractStaticString(expr: Expression): string | null {
 }
 
 /**
- * Compile-time complement of the runtime check in `lib/runtime/hooks.ts`:
- * a callback registered on `onAgentStart` / `onAgentEnd` cannot raise
- * an interrupt because there is no agency frame to checkpoint and
- * nowhere for the user to respond from.
+ * `interrupt` is not allowed inside any callback body. Callbacks fire as
+ * side effects; their body cannot pause execution to ask the user a
+ * question. Move the `interrupt` into the calling node/function instead,
+ * or use a runtime guard if you wanted budget enforcement.
  *
  * After the `liftCallbacks` preprocessor runs, every
  * `callback(...) { ... }` block becomes
@@ -224,7 +216,7 @@ function extractStaticString(expr: Expression): string | null {
  * function. We look that function up in `interruptKindsByFunction`
  * (transitively populated) and emit an error if it may interrupt.
  */
-export function checkAgentLifecycleCallbackInterrupts(
+export function checkCallbackBodyInterrupts(
   scopes: ScopeInfo[],
   interruptKindsByFunction: Record<string, InterruptKind[]>,
   ctx: TypeCheckerContext,
@@ -239,7 +231,6 @@ export function checkAgentLifecycleCallbackInterrupts(
       if (!hookArg) continue;
       const hookName = extractStaticString(hookArg);
       if (!hookName) continue;
-      if (!HOOKS_THAT_REJECT_INTERRUPTS.includes(hookName)) continue;
 
       const fnArg = positionalArg(node.arguments[1]);
       const fnName = fnArg && fnArg.type === "variableName" ? fnArg.value : null;
@@ -251,12 +242,12 @@ export function checkAgentLifecycleCallbackInterrupts(
       const kindList = kinds.map((ik) => ik.kind).join(", ");
       ctx.errors.push({
         message:
-          `Callback registered on '${hookName}' may raise interrupts [${kindList}], ` +
-          `but '${hookName}' fires outside any agency frame — there is no ` +
-          `runner to halt and nowhere for the user to respond from. Remove ` +
-          `the interrupt() call from the callback body, or move the ` +
-          `registration to a hook that fires inside an agency call frame ` +
-          `(onFunctionStart, onNodeStart, etc.).`,
+          `\`interrupt\` is not allowed inside a callback body ` +
+          `(callback registered on '${hookName}' may raise [${kindList}]). ` +
+          `Callbacks fire as side effects; their body cannot pause execution ` +
+          `to ask the user a question. Move the \`interrupt\` into the ` +
+          `calling node/function instead, or use a runtime guard if you ` +
+          `wanted budget enforcement.`,
         severity: "error",
         loc: node.loc,
       });

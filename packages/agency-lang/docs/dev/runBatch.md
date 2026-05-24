@@ -1,15 +1,12 @@
 # `runBatch` — the concurrent-interrupt primitive
 
 `lib/runtime/runBatch.ts` is the single runtime primitive that owns
-concurrent-interrupt orchestration. Four callers delegate to it:
+concurrent-interrupt orchestration. Three callers delegate to it:
 
 - `Runner.runForkAll` — `fork(items) as item { ... }` (mode `"all"`).
 - `Runner.runRace`    — `race(items) as item { ... }` (mode `"race"`).
 - `PromptRunner.parallel` — parallel tool calls inside `runPrompt`
   (mode `"all"`, `recordBranchOutcomes: false`).
-- `Runner.hook` — codegen-emitted callback hooks
-  (`onFunctionStart`, `onNodeStart`, `onNodeEnd`, `onEmit`)
-  with multiple registered callbacks (mode `"sequential"`).
 
 The full architectural context — what BranchState looks like, why the
 slice rule exists, how the leaf checkpoint vehicles into the parent's
@@ -42,14 +39,12 @@ source — it's the canonical reference and stays in sync with the code.
   dispatch is folded in: if `raceWinnerLocalKey` holds a number, only
   the winner re-runs.
 
-### Sequential vs. all for hook callbacks
+### Sequential mode
 
-`Runner.hook` uses `"sequential"`. Using `"all"` here would silently
-turn ordered callback side effects into a concurrent race — today's
-`callHook` semantics fire callbacks strictly in declared order, and
-many callbacks rely on that for telemetry / side-effect ordering.
-Sequential is therefore **required** for callback-batch sites, not a
-preference.
+`"sequential"` is currently unused by any caller — `Runner.hook` was
+the previous user and was removed when callback-interrupt propagation
+was deleted. The mode is preserved for callers that want ordered side
+effects with shared batch-checkpoint semantics.
 
 ## The slice rule (caller contract)
 
@@ -61,9 +56,9 @@ wrong slice yields a checkpoint that captures the wrong frame chain
 and silently breaks resume.
 
 This is the **one** discipline `runBatch` callers must observe. Every
-existing adapter (`runForkAll`, `runRace`, `PromptRunner.parallel`,
-`Runner.hook`) gets this right; review any new adapter against the
-slice rule before merging.
+existing adapter (`runForkAll`, `runRace`, `PromptRunner.parallel`)
+gets this right; review any new adapter against the slice rule before
+merging.
 
 ## The `invoke` no-throw contract
 

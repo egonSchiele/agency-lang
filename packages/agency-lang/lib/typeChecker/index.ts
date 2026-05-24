@@ -35,7 +35,7 @@ import { effectiveReturnType } from "./validation.js";
 import {
   analyzeInterruptsFromScopes,
   checkUnhandledInterruptWarnings,
-  checkAgentLifecycleCallbackInterrupts,
+  checkCallbackBodyInterrupts,
 } from "./interruptAnalysis.js";
 import { checkUndefinedFunctions } from "./undefinedFunctionDiagnostic.js";
 import { checkUndefinedVariables } from "./undefinedVariableDiagnostic.js";
@@ -287,10 +287,9 @@ export class TypeChecker {
     // 6. Check for unhandled interrupt warnings (uses transitive results)
     checkUnhandledInterruptWarnings(scopes, interruptKindsByFunction, ctx);
 
-    // 6a. Compile-time complement of the runtime onAgentStart/onAgentEnd
-    // reject in lib/runtime/hooks.ts — surface the misuse at build time
-    // instead of waiting for the program to run.
-    checkAgentLifecycleCallbackInterrupts(scopes, interruptKindsByFunction, ctx);
+    // 6a. Reject `interrupt` inside any callback body. Callbacks fire as
+    // side effects; their body cannot pause execution.
+    checkCallbackBodyInterrupts(scopes, interruptKindsByFunction, ctx);
 
     // 7. Check for undefined function calls (config-controlled severity).
     checkUndefinedFunctions(scopes, ctx);

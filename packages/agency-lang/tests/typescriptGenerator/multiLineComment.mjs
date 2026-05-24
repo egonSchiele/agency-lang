@@ -195,11 +195,17 @@ if (__ctx._pendingArgOverrides) {
 }
 
   try {
-    await runner.hook(0, "onFunctionStart", {
-      functionName: "greet",
-      args: {},
-      isBuiltin: false,
-      moduleId: "multiLineComment.agency"
+    await runner.hook(0, async () => {
+await callHook({
+        ctx: __ctx,
+        name: "onFunctionStart",
+        data: {
+          functionName: "greet",
+          args: {},
+          isBuiltin: false,
+          moduleId: "multiLineComment.agency"
+        }
+      })
     });
     await runner.step(1, async (runner) => {
 __functionCompleted = true;

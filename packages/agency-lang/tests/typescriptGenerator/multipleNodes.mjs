@@ -176,8 +176,14 @@ let __forked;
 let __functionCompleted = false;
   const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "multipleNodes.agency", scopeName: "greet" });
   try {
-    await runner.hook(0, "onNodeStart", {
-      nodeName: "greet"
+    await runner.hook(0, async () => {
+await callHook({
+        ctx: __ctx,
+        name: "onNodeStart",
+        data: {
+          nodeName: "greet"
+        }
+      })
     });
     await runner.step(1, async (runner) => {
 __self.__removedTools = __self.__removedTools || [];
@@ -214,11 +220,16 @@ runner.halt(goToNode("processGreeting", {
 return;
     });
     if (runner.halted) return runner.haltResult;
-    await runner.hook(3, "onNodeEnd", {
-      nodeName: "greet",
-      data: undefined
+    await runner.hook(3, async () => {
+await callHook({
+        ctx: __ctx,
+        name: "onNodeEnd",
+        data: {
+          nodeName: "greet",
+          data: undefined
+        }
+      })
     });
-    if (runner.halted) return runner.haltResult;
     return {
       messages: __threads,
       data: undefined
@@ -254,8 +265,14 @@ let __functionCompleted = false;
     __stack.args["msg"] = __state.data.msg;
   }
   try {
-    await runner.hook(0, "onNodeStart", {
-      nodeName: "processGreeting"
+    await runner.hook(0, async () => {
+await callHook({
+        ctx: __ctx,
+        name: "onNodeStart",
+        data: {
+          nodeName: "processGreeting"
+        }
+      })
     });
     await runner.step(1, async (runner) => {
 __self.__removedTools = __self.__removedTools || [];
@@ -298,11 +315,16 @@ if (hasInterrupts(__funcResult)) {
       }
     });
     if (runner.halted) return runner.haltResult;
-    await runner.hook(3, "onNodeEnd", {
-      nodeName: "processGreeting",
-      data: undefined
+    await runner.hook(3, async () => {
+await callHook({
+        ctx: __ctx,
+        name: "onNodeEnd",
+        data: {
+          nodeName: "processGreeting",
+          data: undefined
+        }
+      })
     });
-    if (runner.halted) return runner.haltResult;
     return {
       messages: __threads,
       data: undefined
@@ -335,8 +357,14 @@ let __forked;
 let __functionCompleted = false;
   const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "multipleNodes.agency", scopeName: "main" });
   try {
-    await runner.hook(0, "onNodeStart", {
-      nodeName: "main"
+    await runner.hook(0, async () => {
+await callHook({
+        ctx: __ctx,
+        name: "onNodeStart",
+        data: {
+          nodeName: "main"
+        }
+      })
     });
     await runner.step(1, async (runner) => {
 __stateStack.pop()
@@ -349,11 +377,16 @@ runner.halt(goToNode("greet", {
 return;
     });
     if (runner.halted) return runner.haltResult;
-    await runner.hook(2, "onNodeEnd", {
-      nodeName: "main",
-      data: undefined
+    await runner.hook(2, async () => {
+await callHook({
+        ctx: __ctx,
+        name: "onNodeEnd",
+        data: {
+          nodeName: "main",
+          data: undefined
+        }
+      })
     });
-    if (runner.halted) return runner.haltResult;
     return {
       messages: __threads,
       data: undefined

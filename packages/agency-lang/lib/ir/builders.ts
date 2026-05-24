@@ -41,7 +41,7 @@ import type {
   TsRunnerStep,
   TsRunnerThread,
   TsRunnerHandle,
-  TsRunnerHook,
+  TsRunnerHookStep,
   TsRunnerIfElse,
   TsRunnerLoop,
   TsRunnerWhileLoop,
@@ -450,21 +450,11 @@ export const ts = {
     return { kind: "runnerHandle", ...opts };
   },
 
-  /**
-   * Emit `await runner.hook(id, "<hookName>", { ... })`. Used by
-   * typescriptBuilder for the five callback hook sites — `Runner.hook`
-   * (in `lib/runtime/runner.ts`) owns the substep / halt / checkpoint
-   * machinery for callback interrupts.
-   */
-  runnerHook(opts: {
-    id: number;
-    hookName: string;
-    data: Record<string, TsNode> | TsNode;
-  }): TsRunnerHook {
-    const dataNode = "kind" in opts.data
-      ? (opts.data as TsNode)
-      : ts.obj(opts.data as Record<string, TsNode>);
-    return { kind: "runnerHook", id: opts.id, hookName: opts.hookName, data: dataNode };
+  /** Emit `await runner.hook(id, async () => { ...body... })` — a
+   *  substep-counter-idempotent wrapper for codegen-emitted callback
+   *  hook sites. See `Runner.hook`'s JSDoc. */
+  runnerHookStep(opts: { id: number; body: TsNode[] }): TsRunnerHookStep {
+    return { kind: "runnerHookStep", ...opts };
   },
 
   withHandler(handler: TsNode, body: TsNode): TsWithHandler {
@@ -533,18 +523,9 @@ export const ts = {
   /**
    * Emit `await callHook({ ctx, name, data })`.
    *
-   * Phase 0 (the migration that introduced `Interrupt[]` returns from
-   * `callHook`) preserves the codegen-side behavior: the generated `await`
-   * expression evaluates to `Interrupt[] | undefined`, but the surrounding
-   * statement context discards it. That matches the today-style behavior
-   * of "interrupts raised by callbacks fire-and-forget at codegen-emitted
-   * sites" — see `lib/runtime/hooks.ts` `callHookAndDrop` for the
-   * equivalent at TS-side runtime call sites.
-   *
-   * Phase 1 will replace this builder (or add a sibling like
-   * `ts.runnerHook(...)`) that emits the interrupt-propagation pattern
-   * via a specialized Runner step type. See
-   * `docs/superpowers/plans/2026-05-22-callback-interrupts-phase-1-codegen-sites.md`.
+   * Callback bodies cannot raise interrupts (statically forbidden by the
+   * typechecker — see `checkCallbackBodyInterrupts`). `callHook` returns
+   * `void`; the codegen-emitted hook sites fire-and-forget.
    */
   callHook(hookName: string, data: Record<string, TsNode> | TsNode): TsNode {
     const dataNode = "kind" in data ? data as TsNode : ts.obj(data as Record<string, TsNode>);

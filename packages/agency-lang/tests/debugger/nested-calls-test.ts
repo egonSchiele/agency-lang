@@ -219,13 +219,19 @@ if (__ctx._pendingArgOverrides) {
 }
 
   try {
-    await runner.hook(0, "onFunctionStart", {
-      functionName: "double",
-      args: {
-        n: n
-      },
-      isBuiltin: false,
-      moduleId: "tests/debugger/nested-calls-test.agency"
+    await runner.hook(0, async () => {
+await callHook({
+        ctx: __ctx,
+        name: "onFunctionStart",
+        data: {
+          functionName: "double",
+          args: {
+            n: n
+          },
+          isBuiltin: false,
+          moduleId: "tests/debugger/nested-calls-test.agency"
+        }
+      })
     });
     await runner.step(1, async (runner) => {
 __stack.locals.result = __stack.args.n * 2;
@@ -324,14 +330,20 @@ if (__ctx._pendingArgOverrides) {
 }
 
   try {
-    await runner.hook(0, "onFunctionStart", {
-      functionName: "addAndDouble",
-      args: {
-        a: a,
-        b: b
-      },
-      isBuiltin: false,
-      moduleId: "tests/debugger/nested-calls-test.agency"
+    await runner.hook(0, async () => {
+await callHook({
+        ctx: __ctx,
+        name: "onFunctionStart",
+        data: {
+          functionName: "addAndDouble",
+          args: {
+            a: a,
+            b: b
+          },
+          isBuiltin: false,
+          moduleId: "tests/debugger/nested-calls-test.agency"
+        }
+      })
     });
     await runner.step(1, async (runner) => {
 __stack.locals.sum = __stack.args.a + __stack.args.b;
@@ -424,8 +436,14 @@ let __forked;
 let __functionCompleted = false;
   const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "tests/debugger/nested-calls-test.agency", scopeName: "main" });
   try {
-    await runner.hook(0, "onNodeStart", {
-      nodeName: "main"
+    await runner.hook(0, async () => {
+await callHook({
+        ctx: __ctx,
+        name: "onNodeStart",
+        data: {
+          nodeName: "main"
+        }
+      })
     });
     await runner.step(1, async (runner) => {
 __stack.locals.x = await __call(addAndDouble, {
@@ -453,11 +471,16 @@ runner.halt({
 return;
     });
     if (runner.halted) return runner.haltResult;
-    await runner.hook(3, "onNodeEnd", {
-      nodeName: "main",
-      data: undefined
+    await runner.hook(3, async () => {
+await callHook({
+        ctx: __ctx,
+        name: "onNodeEnd",
+        data: {
+          nodeName: "main",
+          data: undefined
+        }
+      })
     });
-    if (runner.halted) return runner.haltResult;
     return {
       messages: __threads,
       data: undefined

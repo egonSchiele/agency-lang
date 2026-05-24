@@ -180,8 +180,14 @@ let __functionCompleted = false;
     __stack.args["name"] = __state.data.name;
   }
   try {
-    await runner.hook(0, "onNodeStart", {
-      nodeName: "greet"
+    await runner.hook(0, async () => {
+await callHook({
+        ctx: __ctx,
+        name: "onNodeStart",
+        data: {
+          nodeName: "greet"
+        }
+      })
     });
     await runner.step(1, async (runner) => {
 __self.__removedTools = __self.__removedTools || [];
@@ -224,11 +230,16 @@ if (hasInterrupts(__funcResult)) {
       }
     });
     if (runner.halted) return runner.haltResult;
-    await runner.hook(3, "onNodeEnd", {
-      nodeName: "greet",
-      data: undefined
+    await runner.hook(3, async () => {
+await callHook({
+        ctx: __ctx,
+        name: "onNodeEnd",
+        data: {
+          nodeName: "greet",
+          data: undefined
+        }
+      })
     });
-    if (runner.halted) return runner.haltResult;
     return {
       messages: __threads,
       data: undefined

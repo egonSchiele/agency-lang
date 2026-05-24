@@ -1,4 +1,0 @@
-[
-  { "toolCalls": [{ "name": "greet", "args": {} }] },
-  { "return": "greeted" }
-]

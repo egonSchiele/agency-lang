@@ -298,9 +298,9 @@ export function printTs(node: TsNode, indent = 0): string {
       return `await runner.handle(${node.id}, ${handler}, async (runner) => {\n${body}\n${ind(indent)}});`;
     }
 
-    case "runnerHook": {
-      const data = printTs(node.data, indent);
-      return `await runner.hook(${node.id}, ${JSON.stringify(node.hookName)}, ${data});`;
+    case "runnerHookStep": {
+      const body = node.body.map((n) => printTs(n, indent + 1)).join("\n");
+      return `await runner.hook(${node.id}, async () => {\n${body}\n${ind(indent)}});`;
     }
 
     case "withHandler": {

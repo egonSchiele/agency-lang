@@ -10,7 +10,6 @@ import type {
 import type { CallbackName } from "../types/function.js";
 import { AgencyFunction } from "./agencyFunction.js";
 import { AgencyCancelledError, RestoreSignal } from "./errors.js";
-import { hasInterrupts, type Interrupt } from "./interrupts.js";
 import type { RuntimeContext } from "./state/context.js";
 import type { StateStack } from "./state/stateStack.js";
 import type { TraceEvent } from "./trace/types.js";
@@ -68,9 +67,10 @@ export type CallbackMap = {
 type _AssertNamesMatchMap = CallbackName extends keyof CallbackMap ? keyof CallbackMap extends CallbackName ? true : false : false;
 const _callbackNamesInSync: _AssertNamesMatchMap = true;
 
-/** All callbacks (scoped + top-level + TS-passed) now return `void`. The old
- *  message-override capability on `onLLMCallStart`/`onLLMCallEnd` has been
- *  removed — return values are discarded. */
+/** All callbacks (scoped + top-level + TS-passed) return `void`. Callback
+ *  bodies cannot raise interrupts — that is enforced statically by the
+ *  typechecker (see `checkCallbackBodyInterrupts`). A callback that
+ *  throws a JS error is caught and logged by `fireWithGuard`. */
 export type CallbackReturn<K extends keyof CallbackMap> = void;
 
 export type AgencyCallbacks = {
@@ -137,32 +137,20 @@ async function invokeCallback(
   data: unknown,
   ctx: RuntimeContext<any>,
   stateStack?: StateStack,
-): Promise<Interrupt[] | undefined> {
+): Promise<void> {
   if (AgencyFunction.isAgencyFunction(fn)) {
     // When `stateStack` is set, the callback frame is pushed onto that
     // stack rather than `ctx.stateStack`. This matters inside parallel
-    // tool branches: the callback's interrupt checkpoint must capture
-    // the branch's slice (so `setInterruptOnBranch` finds the right
-    // frame), not the parent's stack. See Plan 1 / Bug 2 in
-    // docs/notes/parallel-callback-investigation.md.
-    const result = await (fn as AgencyFunction).invoke(
+    // tool branches: scoped callbacks registered inside a branch's
+    // frame chain must be discovered via the branch's stack.
+    await (fn as AgencyFunction).invoke(
       { type: "positional", args: [data] },
       stateStack ? { ctx, stateStack } : { ctx },
     );
-    // The callback body completed with an unhandled `interrupt` statement.
-    // Surface the interrupts so the caller can decide what to do — Phase 0
-    // callers (`callHookAndDrop`) log them; Phase 1+ codegen sites stamp a
-    // checkpoint and propagate them up the runner.
-    if (hasInterrupts(result)) {
-      return result as Interrupt[];
-    }
-    return undefined;
+    return;
   }
-  // Plain JS callbacks (from AgencyCallbacks TS arg) have no interrupt
-  // mechanism — they're just async functions. Errors thrown by them still
-  // get caught by fireWithGuard below.
+  // Plain JS callbacks (from AgencyCallbacks TS arg) — just async funcs.
   await fn(data);
-  return undefined;
 }
 
 async function fireWithGuard(
@@ -171,31 +159,30 @@ async function fireWithGuard(
   ctx: RuntimeContext<any>,
   errorLabel: string,
   stateStack?: StateStack,
-): Promise<Interrupt[] | undefined> {
+): Promise<void> {
   const key = fn as object;
   // Recursion guard scoped to the current ALS context. See
   // `_activeCallbacksALS` docstring for why ALS (not module-level
   // WeakSet, not per-stack WeakSet).
   const inherited = _activeCallbacksALS.getStore();
-  if (inherited?.has(key)) return undefined;
+  if (inherited?.has(key)) return;
   // Always allocate a fresh set per fire — we need our own copy so a
   // deeper fire can safely re-enter without corrupting the outer set.
   // The new set carries over the inherited entries plus our own key.
   const active = new Set<object>(inherited);
   active.add(key);
   try {
-    return await _activeCallbacksALS.run(active, () =>
+    await _activeCallbacksALS.run(active, () =>
       invokeCallback(fn, data, ctx, stateStack),
     );
   } catch (error) {
     // Never swallow real control-flow exceptions used by the runtime.
     if (error instanceof RestoreSignal) throw error;
     if (error instanceof AgencyCancelledError) throw error;
-    // Real JS errors (e.g. a callback body crashed) still get logged here.
-    // Interrupts no longer flow through this path — they return normally
-    // from invokeCallback now.
+    // Real JS errors (e.g. a callback body crashed) are logged and dropped.
+    // Callback bodies cannot raise interrupts (typechecker-enforced), so
+    // there is no interrupt path to surface here.
     console.error(`[agency] ${errorLabel} callback error:`, error);
-    return undefined;
   }
 }
 
@@ -223,12 +210,11 @@ export function gatherCallbacks<K extends keyof CallbackMap>(
 }
 
 /** Fire every callback registered for `name`, sequentially. When
- *  `stateStack` is supplied, callbacks run on that stack (so any interrupt
- *  raised inside a callback captures a checkpoint with the right slice and
- *  `setInterruptOnBranch` finds the right frame). When `stateStack` is
- *  omitted, behaviour is identical to today's `callHook`: scoped callbacks
- *  are walked from `ctx.stateStack` and the callback frame pushes onto
- *  `ctx.stateStack`.
+ *  `stateStack` is supplied, callbacks run on that stack (so scoped
+ *  callbacks registered inside a branch's frame chain are found). When
+ *  `stateStack` is omitted, behaviour is identical to today's `callHook`:
+ *  scoped callbacks are walked from `ctx.stateStack` and the callback
+ *  frame pushes onto `ctx.stateStack`.
  *
  *  Used directly by sites that fire inside a fork/tool branch (e.g. the
  *  per-tool `onToolCallStart` / `onToolCallEnd` in `prompt.ts`). The
@@ -238,49 +224,19 @@ export async function invokeCallbacks<K extends keyof CallbackMap>(args: {
   name: K;
   data: CallbackMap[K];
   stateStack?: StateStack;
-}): Promise<Interrupt[] | undefined> {
+}): Promise<void> {
   const { ctx, name, data, stateStack } = args;
   const walkStack = stateStack ?? ctx.stateStack;
 
-  // Single shared collector. Mirrors the runForkAll pattern of "let every
-  // sibling run to completion, batch all interrupts together at the end"
-  // (see docs/dev/concurrent-interrupts.md). Callbacks are sequential
-  // here (not parallel like fork branches), but the batching semantics
-  // are the same: an interrupt from callback A must not short-circuit
-  // callback B.
-  const collected: Interrupt[] = [];
-
-  // Fire global hooks (from external packages) first. They are plain JS
-  // and have no interrupt mechanism, so they can't contribute to the
-  // batch.
+  // Fire global hooks (from external packages) first. Order matches the
+  // pre-refactor behaviour of callHook.
   for (const fn of _globalHooks[name] ?? []) {
     await fireWithGuard(fn, data, ctx, `global ${name}`, stateStack);
   }
 
   for (const fn of gatherCallbacks(ctx, name, walkStack)) {
-    const result = await fireWithGuard(fn, data, ctx, name, stateStack);
-    if (result) collected.push(...result);
+    await fireWithGuard(fn, data, ctx, name, stateStack);
   }
-
-  // Defensive: onAgentStart / onAgentEnd fire outside any agency frame so
-  // there is no Runner to halt and nowhere for the user to respond from.
-  // Reject loudly so a developer who accidentally registers an
-  // interrupt-raising callback for these hooks sees a clear error
-  // instead of silent failure (callHookAndDrop would log + drop them).
-  if (
-    collected.length > 0 &&
-    (name === "onAgentStart" || name === "onAgentEnd")
-  ) {
-    throw new Error(
-      `[agency] ${name} callbacks cannot raise interrupts: the agent has ` +
-        `no active frame to checkpoint, so there is nowhere for the user ` +
-        `to respond from. Remove the interrupt() call from the callback ` +
-        `body, or move the registration to a hook that fires inside an ` +
-        `agency call frame (onFunctionStart, onNodeStart, etc.).`,
-    );
-  }
-
-  return collected.length > 0 ? collected : undefined;
 }
 
 /** Today's call sites that fire on the top-level stack. Thin wrapper over
@@ -289,74 +245,6 @@ export async function callHook<K extends keyof CallbackMap>(args: {
   ctx: RuntimeContext<any>;
   name: K;
   data: CallbackMap[K];
-}): Promise<Interrupt[] | undefined> {
-  return invokeCallbacks(args);
-}
-
-/** Fire a SINGLE specific callback (already extracted from
- *  `gatherCallbacks`) on the given `stateStack`. Returns any interrupts
- *  raised inside the callback. Used by `Runner.hook`'s per-callback
- *  runBatch path so each batch child corresponds to exactly one
- *  callback — letting runBatch's cached-branch short-circuit skip
- *  already-resolved callbacks on resume. */
-export async function invokeOneCallback<K extends keyof CallbackMap>(args: {
-  ctx: RuntimeContext<any>;
-  fn: any;
-  name: K;
-  data: CallbackMap[K];
-  stateStack?: StateStack;
-}): Promise<Interrupt[] | undefined> {
-  return fireWithGuard(args.fn, args.data, args.ctx, args.name, args.stateStack);
-}
-
-/** Fire every globally-registered hook (from `registerGlobalHook`) for
- *  `name`. Global hooks are plain JS with no interrupt mechanism, so
- *  they always run inline — `Runner.hook` calls this before delegating
- *  the scoped/top-level/ts callbacks to runBatch. */
-export async function fireGlobalHooks<K extends keyof CallbackMap>(
-  ctx: RuntimeContext<any>,
-  name: K,
-  data: CallbackMap[K],
-  stateStack?: StateStack,
-): Promise<void> {
-  for (const fn of _globalHooks[name] ?? []) {
-    await fireWithGuard(fn, data, ctx, `global ${name}`, stateStack);
-  }
-}
-
-/**
- * Fire a hook with the today-style "log + drop" interrupt behavior.
- *
- * Existing TS-side runtime call sites (in `lib/runtime/node.ts` and
- * `lib/runtime/prompt.ts`) wrap `callHook` with this helper because
- * they cannot propagate callback interrupts up the agency runner: they
- * sit either outside any agency frame (onAgentStart / onAgentEnd) or
- * inside `runPrompt`'s internal state machine which has no resumable
- * substep machinery yet. Phase 2 of the callback-interrupts work will
- * give the LLM/tool sites real propagation; until then they continue
- * to log and drop, matching the pre-refactor behavior.
- *
- * Codegen-emitted hook sites (the `ts.callHook(...)` builder) get
- * actual propagation in Phase 1 by emitting `callHook` directly and
- * checking the return value inline.
- */
-export async function callHookAndDrop<K extends keyof CallbackMap>(args: {
-  ctx: RuntimeContext<any>;
-  name: K;
-  data: CallbackMap[K];
 }): Promise<void> {
-  const result = await callHook(args);
-  if (result) {
-    console.error(
-      `[agency] ${args.name} callback raised an unhandled interrupt ` +
-        `(kind="${result[0].kind}") at a runtime call site that does not ` +
-        `support interrupt propagation. The interrupt is being dropped. ` +
-        `Some sites (onAgentStart/onAgentEnd) fundamentally cannot ` +
-        `propagate because they fire outside any agency frame; others ` +
-        `(LLM/tool hooks) may gain propagation in a future phase. To ` +
-        `respond to this interrupt, register the callback on a hook ` +
-        `that fires inside an agency call frame instead.`,
-      result,
-    );
-  }
+  await invokeCallbacks(args);
 }

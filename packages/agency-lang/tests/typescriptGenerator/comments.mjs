@@ -200,11 +200,17 @@ if (__ctx._pendingArgOverrides) {
 }
 
   try {
-    await runner.hook(0, "onFunctionStart", {
-      functionName: "greet",
-      args: {},
-      isBuiltin: false,
-      moduleId: "comments.agency"
+    await runner.hook(0, async () => {
+await callHook({
+        ctx: __ctx,
+        name: "onFunctionStart",
+        data: {
+          functionName: "greet",
+          args: {},
+          isBuiltin: false,
+          moduleId: "comments.agency"
+        }
+      })
     });
     await runner.step(1, async (runner) => {
 //  Comment inside function
@@ -276,8 +282,14 @@ let __forked;
 let __functionCompleted = false;
   const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "comments.agency", scopeName: "main" });
   try {
-    await runner.hook(0, "onNodeStart", {
-      nodeName: "main"
+    await runner.hook(0, async () => {
+await callHook({
+        ctx: __ctx,
+        name: "onNodeStart",
+        data: {
+          nodeName: "main"
+        }
+      })
     });
     await runner.step(1, async (runner) => {
 //  Comment before function call
@@ -347,11 +359,16 @@ await __call(print, {
 //  Final comment at end of file
     });
     if (runner.halted) return runner.haltResult;
-    await runner.hook(8, "onNodeEnd", {
-      nodeName: "main",
-      data: undefined
+    await runner.hook(8, async () => {
+await callHook({
+        ctx: __ctx,
+        name: "onNodeEnd",
+        data: {
+          nodeName: "main",
+          data: undefined
+        }
+      })
     });
-    if (runner.halted) return runner.haltResult;
     return {
       messages: __threads,
       data: undefined

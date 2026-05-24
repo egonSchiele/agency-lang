@@ -176,8 +176,14 @@ let __forked;
 let __functionCompleted = false;
   const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "goto.agency", scopeName: "foo" });
   try {
-    await runner.hook(0, "onNodeStart", {
-      nodeName: "foo"
+    await runner.hook(0, async () => {
+await callHook({
+        ctx: __ctx,
+        name: "onNodeStart",
+        data: {
+          nodeName: "foo"
+        }
+      })
     });
     await runner.step(1, async (runner) => {
 const __funcResult = await __call(print, {
@@ -198,11 +204,16 @@ if (hasInterrupts(__funcResult)) {
       }
     });
     if (runner.halted) return runner.haltResult;
-    await runner.hook(2, "onNodeEnd", {
-      nodeName: "foo",
-      data: undefined
+    await runner.hook(2, async () => {
+await callHook({
+        ctx: __ctx,
+        name: "onNodeEnd",
+        data: {
+          nodeName: "foo",
+          data: undefined
+        }
+      })
     });
-    if (runner.halted) return runner.haltResult;
     return {
       messages: __threads,
       data: undefined
@@ -235,8 +246,14 @@ let __forked;
 let __functionCompleted = false;
   const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "goto.agency", scopeName: "main" });
   try {
-    await runner.hook(0, "onNodeStart", {
-      nodeName: "main"
+    await runner.hook(0, async () => {
+await callHook({
+        ctx: __ctx,
+        name: "onNodeStart",
+        data: {
+          nodeName: "main"
+        }
+      })
     });
     await runner.step(1, async (runner) => {
 __stateStack.pop()
@@ -249,11 +266,16 @@ runner.halt(goToNode("foo", {
 return;
     });
     if (runner.halted) return runner.haltResult;
-    await runner.hook(2, "onNodeEnd", {
-      nodeName: "main",
-      data: undefined
+    await runner.hook(2, async () => {
+await callHook({
+        ctx: __ctx,
+        name: "onNodeEnd",
+        data: {
+          nodeName: "main",
+          data: undefined
+        }
+      })
     });
-    if (runner.halted) return runner.haltResult;
     return {
       messages: __threads,
       data: undefined

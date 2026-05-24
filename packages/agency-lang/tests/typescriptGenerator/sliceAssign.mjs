@@ -176,8 +176,14 @@ let __forked;
 let __functionCompleted = false;
   const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "sliceAssign.agency", scopeName: "main" });
   try {
-    await runner.hook(0, "onNodeStart", {
-      nodeName: "main"
+    await runner.hook(0, async () => {
+await callHook({
+        ctx: __ctx,
+        name: "onNodeStart",
+        data: {
+          nodeName: "main"
+        }
+      })
     });
     await runner.step(1, async (runner) => {
 __stack.locals.arr = [1, 2, 3, 4, 5];
@@ -192,11 +198,16 @@ __stack.locals.arr.splice(2, __stack.locals.arr.length - 2, ...[30])
 __stack.locals.arr.splice(0, 2 - 0, ...[40, 50])
     });
     if (runner.halted) return runner.haltResult;
-    await runner.hook(5, "onNodeEnd", {
-      nodeName: "main",
-      data: undefined
+    await runner.hook(5, async () => {
+await callHook({
+        ctx: __ctx,
+        name: "onNodeEnd",
+        data: {
+          nodeName: "main",
+          data: undefined
+        }
+      })
     });
-    if (runner.halted) return runner.haltResult;
     return {
       messages: __threads,
       data: undefined

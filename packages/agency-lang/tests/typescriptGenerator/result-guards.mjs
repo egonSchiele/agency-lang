@@ -197,13 +197,19 @@ if (__ctx._pendingArgOverrides) {
 }
 
   try {
-    await runner.hook(0, "onFunctionStart", {
-      functionName: "checkValue",
-      args: {
-        r: r
-      },
-      isBuiltin: false,
-      moduleId: "result-guards.agency"
+    await runner.hook(0, async () => {
+await callHook({
+        ctx: __ctx,
+        name: "onFunctionStart",
+        data: {
+          functionName: "checkValue",
+          args: {
+            r: r
+          },
+          isBuiltin: false,
+          moduleId: "result-guards.agency"
+        }
+      })
     });
     await runner.ifElse(1, [
 

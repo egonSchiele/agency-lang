@@ -222,12 +222,15 @@ describe("TimeGuard", () => {
   it("check() charges in-flight window so spent reflects elapsed time", () => {
     // Without inFlight-charging, a tripped guard whose check is called
     // mid-window would report spent=0 because no pause has happened.
+    // Assert the real elapsed (~250) — a bug that returned timeLimit
+    // instead of elapsedMs + inFlight would slip past `>= 100`.
     const stack = new StateStack();
     const g = new TimeGuard(100);
     g.install(stack);
-    vi.advanceTimersByTime(250); // timer fires at 100, but window still "running"
+    vi.advanceTimersByTime(250);
     const err = g.check(stack)!;
-    expect(err.spent).toBeGreaterThanOrEqual(100);
+    expect(err.spent).toBeGreaterThan(200);
+    expect(err.spent).toBeLessThan(300);
   });
 
   it("check() consumes the trip — subsequent calls return null", () => {
@@ -255,6 +258,12 @@ describe("TimeGuard", () => {
     expect(g.isTripped()).toBe(true);
     g.check(stack); // consume
     expect(g.isTripped()).toBe(true);
+  });
+});
+
+describe("guardFromJSON", () => {
+  it("throws on an unknown kind rather than silently returning undefined", () => {
+    expect(() => guardFromJSON({ kind: "depth" } as any)).toThrow();
   });
 });
 

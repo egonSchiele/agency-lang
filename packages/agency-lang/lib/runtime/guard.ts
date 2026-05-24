@@ -319,6 +319,15 @@ export function guardFromJSON(json: GuardJSON): Guard {
       return CostGuard.fromJSON(json);
     case "time":
       return TimeGuard.fromJSON(json);
+    default: {
+      // Fail loudly rather than returning undefined (which would
+      // surface as a downstream "cannot read properties of undefined"
+      // far from the source). Hit if a checkpoint serialized a guard
+      // kind that the current binary doesn't know how to deserialize
+      // (e.g. forward-compat with a future "depth" guard).
+      const k: string = (json as { kind: string }).kind;
+      throw new Error(`Unknown guard kind in checkpoint: ${k}`);
+    }
   }
 }
 

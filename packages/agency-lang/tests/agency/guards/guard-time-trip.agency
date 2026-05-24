@@ -13,7 +13,10 @@ node main() {
     return "did not trip"
   }
   if (isFailure(result)) {
-    return "tripped:${result.error.type}:${result.error.maxTime}:${result.error.actualTime > 0}"
+    // actualTime > maxTime catches a bug where actualTime is just set
+    // to the limit instead of the real elapsed; actualTime > 0 alone
+    // would not.
+    return "tripped:${result.error.type}:${result.error.maxTime}:${result.error.actualTime > result.error.maxTime}"
   }
   return result.value
 }

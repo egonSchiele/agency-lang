@@ -1,0 +1,18 @@
+import { guard } from "std::thread"
+
+// Symmetric to guard-time-and-cost: both limits set, but this time
+// the cost limit is the tight one (0.000001 < SYNTHETIC_COST = 0.000002)
+// and time is generous (5s). Verifies that __internal_pushGuard
+// actually installs the cost guard when both args are passed — a
+// bug that silently dropped one would slip past guard-time-and-cost
+// (where only the time guard is exercised).
+node main() {
+  const result = guard(cost: 0.000001, time: 5s) as {
+    const reply = llm("Reply with: pong")
+    return reply
+  }
+  if (isFailure(result)) {
+    return "tripped:${result.error.type}:maxCost=${result.error.maxCost}:maxTime=${result.error.maxTime}"
+  }
+  return "did not trip"
+}

@@ -1,29 +1,294 @@
+import type { StateStack } from "./state/stateStack.js";
+
 /**
- * Per-guard scope state. Held on `StateStack.guards` as an array;
- * `pushGuard` appends, `popGuard` removes the last entry. Serialized
- * with the rest of the stack via `toJSON`/`fromJSON` so guards
+ * Per-guard scope state for cost / time limits. Held on
+ * `StateStack.guards` as an array; `pushGuard` appends + calls
+ * `install`, `popGuard` removes + calls `uninstall`. Serialized with
+ * the rest of the stack via `toJSON` / `guardFromJSON` so guards
  * survive interrupt + resume cycles.
  *
- * V1 only supports cost guards. The shape leaves room for additional
- * limit types (e.g. `timeoutMs`) without forcing a breaking change to
- * GuardFailureData consumers.
+ * The interface keeps per-variant logic (cost vs time) inside the
+ * implementing class. `StateStack` and `Runner` only ever talk to the
+ * interface — no `instanceof` checks, no variant-specific branching.
+ *
+ * Lifecycle in execution order:
+ *   1. `install(stack)`  — on push. May mutate the stack
+ *      (e.g. compose an AbortController into `stack.abortSignal`).
+ *   2. `resume(stack)`   — at every Runner step entry; idempotent.
+ *      First call after a halt or fresh deserialize actually arms
+ *      timers / rebuilds runtime state, subsequent calls are no-ops.
+ *   3. `pause()`         — on Runner.halt; idempotent.
+ *   4. `check(stack)`    — at every LLM-cost-accumulation site and
+ *      inside `Runner.shouldSkip`; returns the trip error or null.
+ *   5. `uninstall(stack)` — on pop. Must undo whatever install() did.
+ *
+ * `cloneForBranch` lets each variant decide whether a fork/race
+ * branch needs an independent copy:
+ *   - `CostGuard` returns a fresh clone (branch independently
+ *     accumulates cost; trip must throw from inside the branch).
+ *   - `TimeGuard` returns `undefined` — the parent's timer is the
+ *     single source of truth; abort cascade via the composed
+ *     `stack.abortSignal` propagates the trip to every branch's
+ *     Runner.shouldSkip without an independent guard entry.
+ *
+ * `toJSON` serializes ONLY persistent state — runtime fields
+ * (AbortControllers, setTimeout handles, performance.now() stamps)
+ * are NOT included. They're re-established by `resume()` at the first
+ * runner step after deserialization.
  */
-export type GuardEntry = {
-  /** The limit, in dollars. */
-  costLimit: number;
-  /** Stack cost at the moment this guard scope opened. The guard trips
-   *  when `(currentLocalCost - costAtPush) > costLimit`. Storing the
-   *  baseline keeps the check independent of any siblings' cost that
-   *  was already on the stack before the guard scope began. */
-  costAtPush: number;
+export type Guard = {
+  install(stack: StateStack): void;
+  uninstall(stack: StateStack): void;
+  pause(): void;
+  resume(stack: StateStack): void;
+  check(stack: StateStack): GuardExceededError | null;
+  cloneForBranch(
+    parentStack: StateStack,
+    childStack: StateStack,
+  ): Guard | undefined;
+  toJSON(): GuardJSON;
 };
+
+/** Discriminated-union JSON shape. `guardFromJSON` dispatches on `kind`. */
+export type GuardJSON =
+  | { kind: "cost"; costLimit: number; costAtPush: number }
+  | { kind: "time"; timeLimit: number; elapsedMs: number };
+
+/**
+ * Cost guard. Trips when `(stack.localCost - costAtPush) > costLimit`.
+ *
+ * `install` captures the baseline cost so the trip math is independent
+ * of any siblings' spend that was already on the stack before the guard
+ * opened. `pause` / `resume` are no-ops — cost is checked at sync
+ * points (every LLM call), so there's no in-process timer to freeze.
+ *
+ * `cloneForBranch` creates a fresh guard with `costAtPush` rebased onto
+ * the child's `localCost` (which `Runner.seedBranchCost` has already
+ * seeded with the parent's `localCost`). The branch then independently
+ * tracks cost-since-push and trips its own guard from inside its
+ * `Runner.shouldSkip`. The trip math matches what the parent would see
+ * for the same delta.
+ */
+export class CostGuard implements Guard {
+  private costAtPush: number = 0;
+
+  constructor(public readonly costLimit: number) {}
+
+  install(stack: StateStack): void {
+    this.costAtPush = stack.localCost;
+  }
+
+  uninstall(_stack: StateStack): void {
+    /* nothing */
+  }
+
+  pause(): void {
+    /* nothing — cost is checked at sync points */
+  }
+
+  resume(_stack: StateStack): void {
+    /* nothing */
+  }
+
+  check(stack: StateStack): GuardExceededError | null {
+    const spent = stack.localCost - this.costAtPush;
+    if (spent > this.costLimit) {
+      return new GuardExceededError("cost", this.costLimit, spent);
+    }
+    return null;
+  }
+
+  cloneForBranch(_parentStack: StateStack, childStack: StateStack): Guard {
+    const g = new CostGuard(this.costLimit);
+    g.costAtPush = childStack.localCost;
+    return g;
+  }
+
+  toJSON(): GuardJSON {
+    return {
+      kind: "cost",
+      costLimit: this.costLimit,
+      costAtPush: this.costAtPush,
+    };
+  }
+
+  static fromJSON(j: { costLimit: number; costAtPush: number }): CostGuard {
+    const g = new CostGuard(j.costLimit);
+    g.costAtPush = j.costAtPush;
+    return g;
+  }
+}
+
+/**
+ * Time guard. Trips when the cumulative compute-time spent inside the
+ * guarded scope exceeds `timeLimit` (milliseconds). "Compute-time"
+ * means wall-clock time while a Runner is actively executing — time
+ * spent paused on an interrupt does NOT count. On checkpoint resume,
+ * the timer is re-armed with `(timeLimit - elapsedMs)`.
+ *
+ * Mechanism: install() creates an AbortController and composes its
+ * signal into `stack.abortSignal`. A `setTimeout` fires
+ * `controller.abort()` when the budget elapses. Smoltalk already
+ * honors `stack.abortSignal` via `ctx.getAbortSignal()`, so in-flight
+ * LLM calls cancel; `Runner.shouldSkip` already halts on it, so
+ * Agency tool bodies stop at the next step boundary. (JS-bodied tool
+ * calls cannot be aborted mid-execution in V1 — documented.)
+ *
+ * Fork/race branches: NOT cloned (`cloneForBranch` returns
+ * `undefined`). The parent's timer is the single source of truth; the
+ * abort cascade from `composeBranchAbortSignal` propagates the trip
+ * to every branch's `stack.abortSignal`. Branches halt silently in
+ * their own `Runner.shouldSkip` (no guard present → no throw), and
+ * the parent's next sync point sees its own TimeGuard's
+ * `tripped === true` and throws `GuardExceededError("time", ...)`.
+ *
+ * Idempotency: `pause()` / `resume()` use the `state` field so
+ * multiple Runners halting/stepping in the same JS tick don't
+ * double-charge `elapsedMs` or double-arm the timer.
+ */
+export class TimeGuard implements Guard {
+  /** Cumulative compute-time ms charged across all (pause, resume) windows. */
+  private elapsedMs: number = 0;
+  /** Lifecycle state. Pause/resume use this for idempotency so
+   *  multiple Runners halting/stepping in the same JS tick don't
+   *  double-charge or double-arm. Starts paused — install() flips to
+   *  running via startWindow(). */
+  private state: "running" | "paused" = "paused";
+  /** performance.now() stamp of the current window's start. Only
+   *  valid when state === "running". */
+  private windowStart: number | undefined = undefined;
+  /** AbortController whose .abort() fires when the timer expires. */
+  private controller: AbortController | undefined = undefined;
+  /** The `stack.abortSignal` that existed before install — restored
+   *  by uninstall so the outer abort plumbing comes back unchanged. */
+  private previousSignal: AbortSignal | undefined = undefined;
+  /** Node setTimeout handle for the in-process timer. */
+  private timerHandle: ReturnType<typeof setTimeout> | undefined = undefined;
+  /** Set when the abort signal fires. Read by check() to convert the
+   *  silent abort into a typed throw at the next sync point. */
+  private tripped: boolean = false;
+
+  constructor(public readonly timeLimit: number) {}
+
+  install(stack: StateStack): void {
+    this.installAbortPlumbing(stack);
+    this.startWindow();
+  }
+
+  uninstall(stack: StateStack): void {
+    // Pop-race fix: clear timer FIRST so a late-fire can't trip the
+    // outer scope. Then restore the signal so the outer abort
+    // plumbing is back in place before the next sync point. Even if
+    // setTimeout's callback is already queued, abortController is
+    // about to be released and stack.abortSignal no longer references
+    // our composed signal.
+    this.cancelTimer();
+    if (this.state === "running") {
+      this.elapsedMs += performance.now() - this.windowStart!;
+      this.windowStart = undefined;
+      this.state = "paused";
+    }
+    stack.abortSignal = this.previousSignal;
+    this.previousSignal = undefined;
+    this.controller = undefined;
+  }
+
+  pause(): void {
+    if (this.state === "paused") return;
+    this.elapsedMs += performance.now() - this.windowStart!;
+    this.windowStart = undefined;
+    this.cancelTimer();
+    this.state = "paused";
+  }
+
+  resume(stack: StateStack): void {
+    if (this.state === "running") return;
+    // After deserialization, controller is undefined — re-establish
+    // plumbing. (toJSON only serializes elapsedMs + timeLimit.)
+    if (!this.controller) this.installAbortPlumbing(stack);
+    this.startWindow();
+  }
+
+  check(_stack: StateStack): GuardExceededError | null {
+    if (!this.tripped) return null;
+    return new GuardExceededError("time", this.timeLimit, this.elapsedMs);
+  }
+
+  cloneForBranch(
+    _parentStack: StateStack,
+    _childStack: StateStack,
+  ): undefined {
+    return undefined;
+  }
+
+  toJSON(): GuardJSON {
+    // If we're called while running, charge the in-flight window
+    // before serializing so the snapshot reflects all elapsed time.
+    const inFlight =
+      this.state === "running"
+        ? performance.now() - this.windowStart!
+        : 0;
+    return {
+      kind: "time",
+      timeLimit: this.timeLimit,
+      elapsedMs: this.elapsedMs + inFlight,
+    };
+  }
+
+  static fromJSON(j: { timeLimit: number; elapsedMs: number }): TimeGuard {
+    const g = new TimeGuard(j.timeLimit);
+    g.elapsedMs = j.elapsedMs;
+    // state stays "paused"; resume() at first runner step re-arms.
+    return g;
+  }
+
+  private installAbortPlumbing(stack: StateStack): void {
+    this.controller = new AbortController();
+    this.previousSignal = stack.abortSignal;
+    stack.abortSignal = stack.abortSignal
+      ? AbortSignal.any([stack.abortSignal, this.controller.signal])
+      : this.controller.signal;
+    this.controller.signal.addEventListener("abort", () => {
+      this.tripped = true;
+    });
+  }
+
+  private startWindow(): void {
+    const remaining = this.timeLimit - this.elapsedMs;
+    const delay = remaining > 0 ? remaining : 0;
+    this.timerHandle = setTimeout(
+      () => this.controller?.abort(),
+      delay,
+    );
+    this.windowStart = performance.now();
+    this.state = "running";
+  }
+
+  private cancelTimer(): void {
+    if (this.timerHandle) {
+      clearTimeout(this.timerHandle);
+      this.timerHandle = undefined;
+    }
+  }
+}
+
+/** Dispatch a serialized guard back to its class instance. Add a case
+ *  per new guard variant. */
+export function guardFromJSON(json: GuardJSON): Guard {
+  switch (json.kind) {
+    case "cost":
+      return CostGuard.fromJSON(json);
+    case "time":
+      return TimeGuard.fromJSON(json);
+  }
+}
 
 /**
  * Thrown by `prompt.ts` immediately after an LLM call's cost is
- * accumulated into `targetStack.localCost`, when any active guard's
- * spend has exceeded its limit. Propagates as a normal JS error
- * through the call stack; the `guard` stdlib function's `try` catches
- * it and returns a Failure.
+ * accumulated, and by `Runner.shouldSkip` when a time guard's abort
+ * signal has fired. Propagates as a normal JS error through the call
+ * stack; the `guard` stdlib function's `try` catches it and returns a
+ * Failure with the structured `GuardFailureData` shape.
  *
  * Deliberately not an interrupt — see
  * `docs/superpowers/specs/2026-05-20-cost-and-guard-tracking-design.md`
@@ -31,7 +296,7 @@ export type GuardEntry = {
  */
 export class GuardExceededError extends Error {
   constructor(
-    public readonly type: "cost",
+    public readonly type: "cost" | "time",
     public readonly limit: number,
     public readonly spent: number,
   ) {

@@ -7,8 +7,10 @@
 ```ts
 export type GuardFailureData = {
   type: string;
-  maxCost: number;
-  actualCost: number
+  maxCost: number | null;
+  actualCost: number | null;
+  maxTime: number | null;
+  actualTime: number | null
 }
 ```
 
@@ -116,37 +118,58 @@ Get the cumulative token count for the current execution branch.
 ### guard
 
 ```ts
-guard(cost: number, block: () => any): Result
+guard(cost: number | null, time: number | null, block: () => any): Result
 ```
 
-Run a block with a cost limit. If LLM calls inside the block cause
-  the cumulative cost to exceed the limit, the block halts and `guard`
-  returns a failure carrying the limit and the actual spend.
+Run a block under a cost limit, a time limit, or both. The block
+  aborts as soon as either limit is exceeded; whichever fires first
+  wins. At least one of `cost` or `time` must be supplied.
 
   On success, returns `success(blockReturnValue)`. The block's local
   variables are scoped to the block — only the block's return value
-  is observable from the caller. Use isFailure(result) to branch and
-  read result.error.maxCost and result.error.actualCost.
+  is observable from the caller. Use isFailure(result) to branch on
+  the trip; inspect `result.error.type` to distinguish:
+    - "guardFailure" — cumulative LLM cost exceeded `cost`. Read
+      `result.error.maxCost` and `result.error.actualCost`.
+    - "timeoutFailure" — compute time inside the block exceeded
+      `time`. Read `result.error.maxTime` and `result.error.actualTime`
+      (milliseconds).
+
+  Time semantics are compute-time: wall clock only ticks while a
+  Runner is actively executing inside the guarded scope. Time spent
+  paused on an interrupt (e.g. waiting for user input) does NOT count
+  against the budget; on resume the timer is re-armed with the
+  remaining budget.
 
   Nested guards are independent: an inner trip does not trip an outer
-  guard. Fork/race branches inherit the outer guards at branch-creation
-  time, but a branch's cost only rolls up to the outer guard at
-  branch-completion — outer guards cannot pre-empt mid-fork.
+  guard. Fork/race branches: cost guards are cloned per branch (each
+  branch independently tracks cost-since-push); time guards are NOT
+  cloned — the parent's timer is the single source of truth and the
+  abort cascade propagates to every branch.
 
-  Memory layer LLM calls (memory.text / memory.embed) currently bypass
-  the guard.
+  `thread { ... }` and `subthread { ... }` isolate message history
+  but NOT cost or abort plumbing. A guard wrapping a thread block
+  sees every LLM call inside it.
 
-  @param cost - Maximum cost in dollars (e.g. $2.00 or 2.00)
-  @param block - The work to run under the guard
+  Limitations: tool calls whose body is a JS function (rather than
+  Agency code) cannot be aborted mid-execution — the JS function runs
+  to completion in the background and its result is discarded. Memory
+  layer LLM calls (memory.text / memory.embed) currently bypass cost
+  guards. Cost deltas from inside a fork only propagate to an outer
+  cost guard at fork completion, not mid-flight.
+
+  @param cost - Maximum cost in dollars (e.g. $2.00 or 2.00). null = no cost limit.
+  @param time - Maximum compute time in milliseconds (e.g. 30s, 5m, or a raw number). null = no time limit.
+  @param block - The work to run under the guard.
 
   Example:
-    const result = guard(cost: $2.0) as {
+    const result = guard(cost: $2.0, time: 30s) as {
       const a = llm("step 1")
       const b = llm("step 2")
       return a + b
     }
     if (isFailure(result)) {
-      print("Budget exceeded: spent " + result.error.actualCost)
+      print("Guard tripped: " + result.error.type)
     } else {
       print(result.value)
     }
@@ -155,9 +178,10 @@ Run a block with a cost limit. If LLM calls inside the block cause
 
 | Name | Type | Default |
 |---|---|---|
-| cost | `number` |  |
-| block | `() => any` |  |
+| cost | `number \| null` | null |
+| time | `number \| null` | null |
+| block | `() => any` | null |
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/thread.agency#L74))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/thread.agency#L80))

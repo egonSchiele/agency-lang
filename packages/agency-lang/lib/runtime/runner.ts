@@ -226,13 +226,26 @@ export class Runner {
     branchStack.seedCost = parentStack.localCost;
     branchStack.seedTokens = parentStack.localTokens;
 
-    // Clone parent guards so LLM calls inside the branch are checked
-    // against ancestor limits. Per-entry copy keeps the parent's
-    // entries safe from mutation if the child later pushes its own.
-    // LIMITATION: deltas from a child branch only roll back into the
-    // parent at branch completion (propagateBranchCost), so an outer
-    // guard cannot trip mid-fork — only after the fork completes.
-    branchStack.guards = parentStack.guards.map((g) => ({ ...g }));
+    // Delegate to each guard's cloneForBranch: CostGuard returns a
+    // fresh clone with costAtPush rebased onto the child's localCost
+    // (just set above), so LLM calls inside the branch are checked
+    // against the same delta the parent would see. TimeGuard returns
+    // undefined — the parent's timer is the single source of truth
+    // and abort cascades through composeBranchAbortSignal. The filter
+    // drops the undefineds so branches see a sparser-than-parent
+    // guards list.
+    //
+    // Direct assignment (not stack.pushGuard) so install() isn't
+    // re-invoked on already-running clones.
+    //
+    // LIMITATION: cost deltas from a child branch only roll back into
+    // the parent at branch completion (propagateBranchCost), so an
+    // outer cost guard cannot trip mid-fork — only after the fork
+    // completes. Time guards do not have this limitation since the
+    // parent's timer trips directly on wall-clock.
+    branchStack.guards = parentStack.guards
+      .map((g) => g.cloneForBranch(parentStack, branchStack))
+      .filter((g): g is NonNullable<typeof g> => g !== undefined);
   }
 
   /** Propagate cost/token deltas from a set of branches back to the

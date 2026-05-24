@@ -65,16 +65,30 @@ export async function __tryCall(fn: () => any, opts?: FailureOpts): Promise<Resu
     return success(value);
   } catch (error) {
     // Preserve GuardExceededError's structured data so the stdlib
-    // `guard` function can surface { type, maxCost, actualCost }
-    // directly via `result.error`. Without this branch the user
-    // would see only the stringified error message and lose the
-    // numeric limits. See lib/runtime/guard.ts.
+    // `guard` function can surface { type, maxCost, actualCost,
+    // maxTime, actualTime } directly via `result.error`. Without
+    // this branch the user would see only the stringified error
+    // message and lose the numeric limits. See lib/runtime/guard.ts.
     if (isGuardExceededError(error)) {
+      if (error.type === "time") {
+        return failure(
+          {
+            type: "timeoutFailure",
+            maxCost: null,
+            actualCost: null,
+            maxTime: error.limit,
+            actualTime: error.spent,
+          },
+          opts,
+        );
+      }
       return failure(
         {
           type: "guardFailure",
           maxCost: error.limit,
           actualCost: error.spent,
+          maxTime: null,
+          actualTime: null,
         },
         opts,
       );

@@ -71,7 +71,7 @@ export type GuardFailureData = {
   actualCost: number,
 }
 
-export def guard(cost: number, block: () => any): any {
+export def guard(cost: number, block: () => any): Result {
   """
   Run a block with a cost limit. If LLM calls inside the block cause
   the cumulative cost to exceed the limit, the block halts and `guard`

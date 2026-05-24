@@ -116,7 +116,7 @@ Get the cumulative token count for the current execution branch.
 ### guard
 
 ```ts
-guard(cost: number, block: () => any): any
+guard(cost: number, block: () => any): Result
 ```
 
 Run a block with a cost limit. If LLM calls inside the block cause
@@ -158,6 +158,6 @@ Run a block with a cost limit. If LLM calls inside the block cause
 | cost | `number` |  |
 | block | `() => any` |  |
 
-**Returns:** `any`
+**Returns:** `Result`
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/thread.agency#L74))

@@ -20,11 +20,17 @@ export type CallType =
       positionalArgs: unknown[];
       namedArgs: Record<string, unknown>;
       /** Trailing-block argument from `f(name: val) as { ... }` syntax.
-       *  Filled into the last unfilled non-variadic parameter (by
-       *  convention the block param) during resolveNamed. Separate
-       *  from positionalArgs because the block always binds to the
-       *  trailing block parameter, regardless of which earlier params
-       *  named args have filled. */
+       *
+       *  In the positional case the block is simply appended to `args`
+       *  (it's always the next positional slot), so no separate field
+       *  is needed. In the named case earlier params may be filled by
+       *  name and intermediate params may need UNSET padding, so the
+       *  block must be bound by NAME to the last non-variadic
+       *  parameter — appending it as positional[N] would mis-fill
+       *  parameter N. resolveNamed synthesizes it into namedArgs under
+       *  the last param's name so the rest of fill logic treats it
+       *  uniformly. Without this, `f(name: val) as { ... }` silently
+       *  dropped the block. */
       blockArg?: unknown;
     };
 

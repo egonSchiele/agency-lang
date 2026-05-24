@@ -1,0 +1,15 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "\"def-trip:0.000001\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        { "return": "pong" }
+      ],
+      "description": "Guard inside a `def` function must work the same as inside a `node`. Tests the def-flavored function-body auto-wrap allow-list for GuardExceededError."
+    }
+  ]
+}

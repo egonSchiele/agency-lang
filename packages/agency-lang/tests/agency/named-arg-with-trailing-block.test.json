@@ -1,0 +1,25 @@
+{
+  "tests": [
+    {
+      "nodeName": "singleNamedArg",
+      "input": "",
+      "expectedOutput": "\"hello: world\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "Trailing `as` block is preserved when a single arg is passed by name."
+    },
+    {
+      "nodeName": "mixedPositionalAndNamed",
+      "input": "",
+      "expectedOutput": "\"start 42 end\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "Trailing `as` block binds correctly when args are mixed positional + named."
+    },
+    {
+      "nodeName": "namedReordered",
+      "input": "",
+      "expectedOutput": "\"start 7 end\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "Trailing `as` block binds correctly when named args appear out of declaration order."
+    }
+  ]
+}

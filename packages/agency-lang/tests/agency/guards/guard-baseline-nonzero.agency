@@ -1,0 +1,24 @@
+import { guard } from "std::thread"
+
+// SYNTHETIC_COST per LLM call is 0.000002.
+//
+// Spend one LLM call BEFORE opening the guard so the stack's localCost
+// is 0.000002 at push time (costAtPush = 0.000002). Then the guard's
+// budget of 0.0000025 must accommodate one inside-guard call of
+// 0.000002 (delta = 0.000002, under 0.0000025). The guard must NOT
+// trip.
+//
+// Bug to catch: a cost check that uses `localCost` instead of
+// `localCost - guard.costAtPush` would see total spend
+// 0.000002 + 0.000002 = 0.000004, > 0.0000025 → trip incorrectly.
+node main() {
+  const before = llm("outside")
+  const r = guard(cost: 0.0000025) as {
+    const inside = llm("inside")
+    return inside
+  }
+  if (isFailure(r)) {
+    return "wrong: tripped (delta calc bug — costAtPush not subtracted)"
+  }
+  return r.value
+}

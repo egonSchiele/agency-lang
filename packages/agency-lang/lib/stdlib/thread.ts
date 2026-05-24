@@ -67,3 +67,31 @@ export async function __internal_getTokens(
 ): Promise<number> {
   return stack.localTokens;
 }
+
+/**
+ * Open a guard scope on the caller's stack. `costAtPush` captures the
+ * baseline so the guard's "spent" reading is the DELTA since the
+ * guard opened, not the absolute localCost (which would include cost
+ * spent before the guard scope began). See lib/runtime/guard.ts.
+ */
+export async function __internal_pushGuard(
+  _ctx: RuntimeContext<any>,
+  stack: StateStack,
+  _threads: ThreadStore,
+  costLimit: number,
+): Promise<void> {
+  stack.pushGuard({ costLimit, costAtPush: stack.localCost });
+}
+
+/**
+ * Close the innermost guard scope on the caller's stack. A no-op if
+ * the stack has no active guard (defensive — the surrounding `guard`
+ * stdlib function always pairs push/pop).
+ */
+export async function __internal_popGuard(
+  _ctx: RuntimeContext<any>,
+  stack: StateStack,
+  _threads: ThreadStore,
+): Promise<void> {
+  stack.popGuard();
+}

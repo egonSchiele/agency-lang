@@ -1,0 +1,16 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "\"inside\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        { "return": "outside" },
+        { "return": "inside" }
+      ],
+      "description": "Baseline cost > 0 at guard push. The guard's spend tracking must subtract costAtPush; otherwise pre-guard cost gets counted against the guard's limit and it trips spuriously."
+    }
+  ]
+}

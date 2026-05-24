@@ -1,0 +1,14 @@
+import { guard } from "std::thread"
+
+// A budget that is well above SYNTHETIC_COST never trips. The guard's
+// block runs to completion and result.value is the block's return.
+node main() {
+  const result = guard(cost: 10.0) as {
+    const reply = llm("Reply with: pong")
+    return reply
+  }
+  if (isFailure(result)) {
+    return "unexpected trip"
+  }
+  return result.value
+}

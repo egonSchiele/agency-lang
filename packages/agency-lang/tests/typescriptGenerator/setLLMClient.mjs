@@ -15,6 +15,7 @@ import {
   respondToInterrupts as _respondToInterrupts,
   rewindFrom as _rewindFrom,
   RestoreSignal,
+  GuardExceededError,
   deepClone as __deepClone,
   deepFreeze as __deepFreeze,
   head, tail, empty,
@@ -43,6 +44,8 @@ import {
   __internal_assistantMessage,
   __internal_getCost,
   __internal_getTokens,
+  __internal_popGuard,
+  __internal_pushGuard,
   __internal_systemMessage,
   __internal_userMessage,
 } from "agency-lang/stdlib-lib/thread.js";
@@ -251,6 +254,9 @@ await callHook({
     };
   } catch (__error) {
     if (__error instanceof RestoreSignal) {
+      throw __error
+    }
+    if (__error instanceof GuardExceededError) {
       throw __error
     }
     console.error(`\nAgent crashed: ${__error.message}`)

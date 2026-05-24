@@ -1,0 +1,22 @@
+import { guard } from "std::thread"
+
+// Inner guard with a tiny limit trips on the LLM call; outer guard
+// with a generous limit catches the inner Failure and proceeds. This
+// proves that guards are scoped — an inner trip does not pollute the
+// outer guard's bookkeeping.
+node main() {
+  const outer = guard(cost: 10.0) as {
+    const inner = guard(cost: 0.000001) as {
+      const r = llm("Reply with: pong")
+      return r
+    }
+    if (isFailure(inner)) {
+      return "inner tripped"
+    }
+    return "inner ok"
+  }
+  if (isFailure(outer)) {
+    return "outer tripped unexpectedly"
+  }
+  return outer.value
+}

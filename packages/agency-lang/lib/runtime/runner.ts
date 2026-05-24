@@ -208,12 +208,31 @@ export class Runner {
    *  before the winner resumes. See docs/superpowers/specs/2026-05-20-
    *  thread-builtins-and-stdlib-design.md. */
   private seedBranchCost(branchStack: StateStack, parentStack: StateStack): void {
-    if (branchStack.localCost === 0 && branchStack.localTokens === 0) {
-      branchStack.localCost = parentStack.localCost;
-      branchStack.localTokens = parentStack.localTokens;
-      branchStack.seedCost = parentStack.localCost;
-      branchStack.seedTokens = parentStack.localTokens;
-    }
+    // Fresh-branch detection: seedBranchCost can be called more than
+    // once for the same branch (e.g. a branch interrupts mid-flight
+    // and the parent resumes runBatch on the next response cycle).
+    // We must not clobber state the branch has already accumulated.
+    // A branch is "fresh" iff it has no cost, no tokens, AND no guard
+    // entries — the last check matters when a branch pushes its own
+    // guard before any LLM call and then interrupts.
+    const isFresh =
+      branchStack.localCost === 0 &&
+      branchStack.localTokens === 0 &&
+      branchStack.guards.length === 0;
+    if (!isFresh) return;
+
+    branchStack.localCost = parentStack.localCost;
+    branchStack.localTokens = parentStack.localTokens;
+    branchStack.seedCost = parentStack.localCost;
+    branchStack.seedTokens = parentStack.localTokens;
+
+    // Clone parent guards so LLM calls inside the branch are checked
+    // against ancestor limits. Per-entry copy keeps the parent's
+    // entries safe from mutation if the child later pushes its own.
+    // LIMITATION: deltas from a child branch only roll back into the
+    // parent at branch completion (propagateBranchCost), so an outer
+    // guard cannot trip mid-fork — only after the fork completes.
+    branchStack.guards = parentStack.guards.map((g) => ({ ...g }));
   }
 
   /** Propagate cost/token deltas from a set of branches back to the

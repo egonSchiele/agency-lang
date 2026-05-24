@@ -493,3 +493,55 @@ describe("_callback", () => {
     ).not.toThrow();
   });
 });
+
+describe("StateStack guards", () => {
+  it("pushGuard appends and popGuard removes from the end", () => {
+    const stack = new StateStack();
+    expect(stack.guards).toEqual([]);
+    stack.pushGuard({ costLimit: 1.0, costAtPush: 0.0 });
+    stack.pushGuard({ costLimit: 2.0, costAtPush: 0.5 });
+    expect(stack.guards).toHaveLength(2);
+    const popped = stack.popGuard();
+    expect(popped).toEqual({ costLimit: 2.0, costAtPush: 0.5 });
+    expect(stack.guards).toHaveLength(1);
+    expect(stack.guards[0]).toEqual({ costLimit: 1.0, costAtPush: 0.0 });
+  });
+
+  it("popGuard on empty stack returns undefined", () => {
+    const stack = new StateStack();
+    expect(stack.popGuard()).toBeUndefined();
+  });
+
+  it("toJSON / fromJSON preserves guards", () => {
+    const stack = new StateStack();
+    stack.pushGuard({ costLimit: 1.5, costAtPush: 0.2 });
+    stack.pushGuard({ costLimit: 0.5, costAtPush: 0.4 });
+    const json = stack.toJSON();
+    expect(json.guards).toEqual([
+      { costLimit: 1.5, costAtPush: 0.2 },
+      { costLimit: 0.5, costAtPush: 0.4 },
+    ]);
+    const restored = StateStack.fromJSON(json);
+    expect(restored.guards).toEqual(stack.guards);
+  });
+
+  it("fromJSON defaults guards to [] when the field is absent (pre-guard checkpoints)", () => {
+    const json: any = {
+      stack: [],
+      mode: "serialize",
+      other: {},
+      deserializeStackLength: 0,
+      nodesTraversed: [],
+    };
+    const restored = StateStack.fromJSON(json);
+    expect(restored.guards).toEqual([]);
+  });
+
+  it("toJSON returns guards as a fresh copy (mutation-safe)", () => {
+    const stack = new StateStack();
+    stack.pushGuard({ costLimit: 1.0, costAtPush: 0.0 });
+    const json = stack.toJSON();
+    json.guards![0].costLimit = 999;
+    expect(stack.guards[0].costLimit).toBe(1.0);
+  });
+});

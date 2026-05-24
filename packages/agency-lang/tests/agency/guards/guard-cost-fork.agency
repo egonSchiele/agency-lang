@@ -1,0 +1,29 @@
+import { guard } from "std::thread"
+
+// Fork inside a guard. Each of 3 branches spends SYNTHETIC_COST
+// = 0.000002. After the fork completes, Runner.propagateBranchCost
+// rolls the deltas back to the parent stack: parent localCost grows
+// by 0.000006. The subsequent LLM call ("after") triggers the cost
+// check in prompt.ts, which sees total guard-scope spend = 0.000008
+// (> 0.000001) and trips.
+//
+// NOTE: there is a separate, pre-existing codegen bug
+// (`Unknown scope type: block` in scopeManager.returnType) that
+// prevents `return llm(...)` inside a fork block. This fixture
+// works around it by assigning the LLM result instead of returning
+// it. Cost propagation behaves identically.
+node main() {
+  const result = guard(cost: 0.000001) as {
+    fork([1, 2, 3]) as n {
+      const r = llm("branch ${n}")
+    }
+    // Without this trailing call, cost would propagate but no guard
+    // check would fire (the check is only invoked after LLM calls).
+    const after = llm("after")
+    return after
+  }
+  if (isFailure(result)) {
+    return "tripped-after-fork:${result.error.actualCost > 0}"
+  }
+  return "did not trip"
+}

@@ -1,0 +1,16 @@
+import { guard } from "std::thread"
+
+// The deterministic LLM provider charges SYNTHETIC_COST = 0.000002 per
+// call. Setting the limit to 0.000001 (just below SYNTHETIC_COST)
+// guarantees the first llm() call inside the guard trips the budget
+// and propagates a GuardExceededError that the stdlib guard catches.
+node main() {
+  const result = guard(cost: 0.000001) as {
+    const reply = llm("Reply with: pong")
+    return reply
+  }
+  if (isFailure(result)) {
+    return "tripped:${result.error.type}:${result.error.maxCost}:${result.error.actualCost > 0}"
+  }
+  return "did not trip"
+}

@@ -14,6 +14,7 @@ import {
   respondToInterrupts as _respondToInterrupts,
   rewindFrom as _rewindFrom,
   RestoreSignal,
+  GuardExceededError,
   deepClone as __deepClone,
   deepFreeze as __deepFreeze,
   head, tail, empty,
@@ -42,6 +43,8 @@ import {
   __internal_assistantMessage,
   __internal_getCost,
   __internal_getTokens,
+  __internal_popGuard,
+  __internal_pushGuard,
   __internal_systemMessage,
   __internal_userMessage,
 } from "agency-lang/stdlib-lib/thread.js";
@@ -247,6 +250,14 @@ if (hasInterrupts(__funcResult)) {
     if (runner.halted) { if (isFailure(runner.haltResult)) { runner.haltResult.retryable = runner.haltResult.retryable && __self.__retryable; } return runner.haltResult; }
   } catch (__error) {
     if (__error instanceof RestoreSignal) {
+  throw __error;
+}
+// GuardExceededError must propagate up to the stdlib `guard`
+// function's try/catch (in lib/runtime/result.ts via `try block()`).
+// If we converted it to a Failure here, the guard would never see
+// the trip and every guarded block would appear to succeed even
+// over budget. See lib/runtime/guard.ts.
+if (__error instanceof GuardExceededError) {
   throw __error;
 }
 return failure(

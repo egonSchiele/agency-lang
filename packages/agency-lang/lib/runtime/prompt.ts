@@ -3,6 +3,7 @@ import { PromptResult, Result, StreamChunk, ToolCallJSON } from "smoltalk";
 import { createLogger } from "../logger.js";
 import { AgencyFunction } from "./agencyFunction.js";
 import { AgencyCancelledError, isAbortError } from "./errors.js";
+import { GuardExceededError } from "./guard.js";
 import { callHook, invokeCallbacks } from "./hooks.js";
 import { hasInterrupts, isRejected } from "./interrupts.js";
 import type { PromptConfig } from "./llmClient.js";
@@ -171,6 +172,27 @@ async function _runPrompt({
   const targetStack = stateStack ?? ctx.stateStack;
   targetStack.localCost += completion.cost?.totalCost ?? 0;
   targetStack.localTokens += completion.usage?.totalTokens ?? 0;
+
+  // Enforce active cost guards. Walked innermost-first so the
+  // deepest (most recently pushed) guard reports its trip first.
+  // Innermost-first is not the same as "smallest limit first" —
+  // a shallower outer guard with a tighter budget would still trip
+  // on a later LLM call if the inner guard doesn't fail first.
+  // This ordering is a stable, scope-local rule rather than a
+  // global-minimum search. The thrown GuardExceededError propagates
+  // up through _runPrompt / runPrompt / the user's code; the stdlib
+  // `guard` function's `try` catches it and returns a Failure. The
+  // function-body auto-wrap re-throws GuardExceededError so it
+  // cannot be silently converted to a generic failure value. See
+  // lib/runtime/guard.ts and docs/superpowers/specs/2026-05-20-
+  // cost-and-guard-tracking-design.md.
+  for (let i = targetStack.guards.length - 1; i >= 0; i--) {
+    const guard = targetStack.guards[i];
+    const spent = targetStack.localCost - guard.costAtPush;
+    if (spent > guard.costLimit) {
+      throw new GuardExceededError("cost", guard.costLimit, spent);
+    }
+  }
 
   // Memory layer: auto-extraction and compaction run unconditionally
   // whenever a MemoryManager is attached (resolved decision #6).

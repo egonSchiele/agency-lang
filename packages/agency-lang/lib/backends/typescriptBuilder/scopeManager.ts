@@ -85,7 +85,24 @@ export class ScopeManager {
 
   /**
    * Declared return type of the currently-executing function or graph node,
-   * or `undefined` for global scope or a function with no annotation.
+   * or `undefined` for global scope, a function with no annotation, or a
+   * block scope.
+   *
+   * Block scopes (`fork(...) as item { ... }`, `guard(cost: $X) as { ... }`,
+   * any `as { ... }` body) currently return `undefined` because we don't
+   * carry the block's declared return type onto `Scope.block`. The only
+   * caller that matters is `processLlmCall` for a `return llm(...)` inside
+   * a block — and `processLlmCall` already defaults `undefined` to
+   * `string` for structured-output inference. So today, a bare
+   * `return llm(...)` from a block is always typed as `string`.
+   *
+   * Propagating the block's declared return type (from the enclosing
+   * function's block-parameter signature) into the builder would require
+   * either threading the parameter type through every `scopes.push({
+   * type: "block", ... })` site or looking it up via the typechecker —
+   * both substantial. Documented in docs/site/guide/llm.md as a known
+   * limitation; users who want a non-string structured type should
+   * assign the call: `const x: Foo = llm(...); return x`.
    */
   returnType(): VariableType | undefined {
     const scope = this.current();
@@ -102,6 +119,8 @@ export class ScopeManager {
         );
         return graphNode?.returnType ?? undefined;
       }
+      case "block":
+        return undefined;
       default:
         throw new Error(`Unknown scope type: ${(scope as any).type}`);
     }

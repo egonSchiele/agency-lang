@@ -1,0 +1,20 @@
+// Regression test for two related codegen bugs that previously
+// crashed compilation whenever `return llm(...)` appeared inside any
+// block body (fork branches, guard blocks, user-defined block
+// arguments, etc.):
+//
+//   1. ScopeManager.returnType() threw "Unknown scope type: block".
+//   2. processReturnStatement for block scope wrapped the multi-
+//      statement output of processLlmCall in `runner.halt(...)`,
+//      producing invalid TS like `runner.halt(stmt; stmt; ...)`.
+//
+// Both are now fixed. The block's declared return type is not
+// propagated into the builder, so structured-output type defaults
+// to `string` — documented limitation in docs/site/guide/llm.md.
+
+node main() {
+  const replies = fork(["a"]) as item {
+    return llm("echo " + item)
+  }
+  return replies[0]
+}

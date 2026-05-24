@@ -18,6 +18,37 @@ const response: Response = llm("What is the capital of France?")
 print(response)
 ```
 
+### Limitation: structured output inside block bodies
+
+When you write `return llm(...)` as the last statement of a block
+body (a `fork(...) as item { ... }` branch, a `guard(cost: $X) as { ... }`
+body, or any user-defined function that takes a block parameter),
+Agency currently has no way to know the block's declared return type
+at codegen time — so the structured-output schema falls back to
+`string`. The block still runs and returns the LLM's text reply, but
+you cannot get a typed object out of it.
+
+```ts
+type Response = { capital: string }
+
+// ❌ The annotation on `result` is NOT propagated into the block.
+// Each branch returns a plain string from the LLM.
+const result: Response[] = fork(["France", "Spain"]) as country {
+  return llm(`What is the capital of ${country}?`)
+}
+```
+
+The workaround is to assign the LLM call to a typed local first, then
+return it:
+
+```ts
+// ✅ The annotation on `reply` controls the LLM's structured output.
+const result: Response[] = fork(["France", "Spain"]) as country {
+  const reply: Response = llm(`What is the capital of ${country}?`)
+  return reply
+}
+```
+
 Any function defined in Agency can automatically be used as a tool for the LLM. Pass the function in the `tools` option:
 
 ```ts

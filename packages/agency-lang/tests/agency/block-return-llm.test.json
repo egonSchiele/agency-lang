@@ -1,0 +1,15 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "\"echoA\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        { "return": "echoA" }
+      ],
+      "description": "`return llm(...)` from inside a fork block compiles cleanly and the block's halt value is the LLM result. Regression for ScopeManager.returnType throwing on block scope and runner.halt wrapping multi-statement codegen."
+    }
+  ]
+}

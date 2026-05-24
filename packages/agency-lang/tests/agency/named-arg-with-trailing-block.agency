@@ -1,0 +1,37 @@
+// Regression test for the bug fixed alongside builtin guards:
+// `foo(named: x) as { ... }` used to silently drop the trailing
+// `as` block when at least one argument was passed by name. The
+// named-args descriptor path didn't carry blockArg through to
+// resolveNamed.
+//
+// Covered shapes:
+//  - one named arg + trailing block (the original repro)
+//  - mixed positional + named + trailing block
+//  - typed block param + trailing block
+
+def withBlock(label: string, block: () => any): string {
+  return label + ": " + block()
+}
+
+def withMixed(prefix: string, suffix: string, block: () => number): string {
+  return prefix + " " + block() + " " + suffix
+}
+
+node singleNamedArg() {
+  return withBlock(label: "hello") as {
+    return "world"
+  }
+}
+
+node mixedPositionalAndNamed() {
+  return withMixed("start", suffix: "end") as {
+    return 42
+  }
+}
+
+node namedReordered() {
+  // suffix is passed BEFORE prefix by name — common case for named args
+  return withMixed(suffix: "end", prefix: "start") as {
+    return 7
+  }
+}

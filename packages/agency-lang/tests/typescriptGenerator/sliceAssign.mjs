@@ -14,6 +14,7 @@ import {
   respondToInterrupts as _respondToInterrupts,
   rewindFrom as _rewindFrom,
   RestoreSignal,
+  GuardExceededError,
   deepClone as __deepClone,
   deepFreeze as __deepFreeze,
   head, tail, empty,
@@ -205,6 +206,9 @@ __stack.locals.arr.splice(0, 2 - 0, ...[40, 50])
     };
   } catch (__error) {
     if (__error instanceof RestoreSignal) {
+      throw __error
+    }
+    if (__error instanceof GuardExceededError) {
       throw __error
     }
     console.error(`\nAgent crashed: ${__error.message}`)

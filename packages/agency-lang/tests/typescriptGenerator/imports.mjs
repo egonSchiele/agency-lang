@@ -29,6 +29,7 @@ import {
   respondToInterrupts as _respondToInterrupts,
   rewindFrom as _rewindFrom,
   RestoreSignal,
+  GuardExceededError,
   deepClone as __deepClone,
   deepFreeze as __deepFreeze,
   head, tail, empty,

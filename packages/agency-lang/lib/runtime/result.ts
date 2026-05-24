@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { isGuardExceededError } from "./guard.js";
 import { hasInterrupts } from "./interrupts.js";
 
 export type ResultValue = ResultSuccess | ResultFailure;
@@ -63,6 +64,21 @@ export async function __tryCall(fn: () => any, opts?: FailureOpts): Promise<Resu
     if (resultValueSchema.safeParse(value).success) return value;
     return success(value);
   } catch (error) {
+    // Preserve GuardExceededError's structured data so the stdlib
+    // `guard` function can surface { type, maxCost, actualCost }
+    // directly via `result.error`. Without this branch the user
+    // would see only the stringified error message and lose the
+    // numeric limits. See lib/runtime/guard.ts.
+    if (isGuardExceededError(error)) {
+      return failure(
+        {
+          type: "guardFailure",
+          maxCost: error.limit,
+          actualCost: error.spent,
+        },
+        opts,
+      );
+    }
     return failure(
       error instanceof Error ? error.message : String(error),
       opts,

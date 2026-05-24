@@ -2241,6 +2241,10 @@ export class TypeScriptBuilder {
             ts.raw("__error instanceof RestoreSignal"),
             ts.statements([ts.throw("__error")]),
           ),
+          ts.if(
+            ts.raw("__error instanceof GuardExceededError"),
+            ts.statements([ts.throw("__error")]),
+          ),
           ts.consoleError(
             ts.template([
               {

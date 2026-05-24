@@ -27,6 +27,7 @@ export const template = `  async {{{methodName}}}({{{params}}}__state: any = und
       __functionCompleted = true;
     } catch (__error) {
       if (__error instanceof RestoreSignal) { throw __error; }
+      if (__error instanceof GuardExceededError) { throw __error; }
       throw __error;
     } finally {
       __stateStack.pop()

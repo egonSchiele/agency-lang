@@ -14,6 +14,7 @@ import {
   respondToInterrupts as _respondToInterrupts,
   rewindFrom as _rewindFrom,
   RestoreSignal,
+  GuardExceededError,
   deepClone as __deepClone,
   deepFreeze as __deepFreeze,
   head, tail, empty,
@@ -229,6 +230,9 @@ return;
     if (__error instanceof RestoreSignal) {
       throw __error
     }
+    if (__error instanceof GuardExceededError) {
+      throw __error
+    }
     console.error(`\nAgent crashed: ${__error.message}`)
     console.error(__error.stack)
     return {
@@ -313,6 +317,9 @@ if (hasInterrupts(__funcResult)) {
     if (__error instanceof RestoreSignal) {
       throw __error
     }
+    if (__error instanceof GuardExceededError) {
+      throw __error
+    }
     console.error(`\nAgent crashed: ${__error.message}`)
     console.error(__error.stack)
     return {
@@ -362,6 +369,9 @@ return;
     };
   } catch (__error) {
     if (__error instanceof RestoreSignal) {
+      throw __error
+    }
+    if (__error instanceof GuardExceededError) {
       throw __error
     }
     console.error(`\nAgent crashed: ${__error.message}`)

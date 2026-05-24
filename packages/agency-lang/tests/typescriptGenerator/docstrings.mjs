@@ -14,6 +14,7 @@ import {
   respondToInterrupts as _respondToInterrupts,
   rewindFrom as _rewindFrom,
   RestoreSignal,
+  GuardExceededError,
   deepClone as __deepClone,
   deepFreeze as __deepFreeze,
   head, tail, empty,
@@ -222,6 +223,14 @@ if (__ctx._pendingArgOverrides) {
     if (__error instanceof RestoreSignal) {
   throw __error;
 }
+// GuardExceededError must propagate up to the stdlib `guard`
+// function's try/catch (in lib/runtime/result.ts via `try block()`).
+// If we converted it to a Failure here, the guard would never see
+// the trip and every guarded block would appear to succeed even
+// over budget. See lib/runtime/guard.ts.
+if (__error instanceof GuardExceededError) {
+  throw __error;
+}
 return failure(
   __error instanceof Error ? __error.message : String(__error),
   {
@@ -318,6 +327,14 @@ if (__ctx._pendingArgOverrides) {
     if (runner.halted) { if (isFailure(runner.haltResult)) { runner.haltResult.retryable = runner.haltResult.retryable && __self.__retryable; } return runner.haltResult; }
   } catch (__error) {
     if (__error instanceof RestoreSignal) {
+  throw __error;
+}
+// GuardExceededError must propagate up to the stdlib `guard`
+// function's try/catch (in lib/runtime/result.ts via `try block()`).
+// If we converted it to a Failure here, the guard would never see
+// the trip and every guarded block would appear to succeed even
+// over budget. See lib/runtime/guard.ts.
+if (__error instanceof GuardExceededError) {
   throw __error;
 }
 return failure(
@@ -418,6 +435,14 @@ if (__ctx._pendingArgOverrides) {
     if (__error instanceof RestoreSignal) {
   throw __error;
 }
+// GuardExceededError must propagate up to the stdlib `guard`
+// function's try/catch (in lib/runtime/result.ts via `try block()`).
+// If we converted it to a Failure here, the guard would never see
+// the trip and every guarded block would appear to succeed even
+// over budget. See lib/runtime/guard.ts.
+if (__error instanceof GuardExceededError) {
+  throw __error;
+}
 return failure(
   __error instanceof Error ? __error.message : String(__error),
   {
@@ -514,6 +539,14 @@ if (__ctx._pendingArgOverrides) {
     if (__error instanceof RestoreSignal) {
   throw __error;
 }
+// GuardExceededError must propagate up to the stdlib `guard`
+// function's try/catch (in lib/runtime/result.ts via `try block()`).
+// If we converted it to a Failure here, the guard would never see
+// the trip and every guarded block would appear to succeed even
+// over budget. See lib/runtime/guard.ts.
+if (__error instanceof GuardExceededError) {
+  throw __error;
+}
 return failure(
   __error instanceof Error ? __error.message : String(__error),
   {
@@ -592,6 +625,14 @@ if (__ctx._pendingArgOverrides) {
     if (runner.halted) { if (isFailure(runner.haltResult)) { runner.haltResult.retryable = runner.haltResult.retryable && __self.__retryable; } return runner.haltResult; }
   } catch (__error) {
     if (__error instanceof RestoreSignal) {
+  throw __error;
+}
+// GuardExceededError must propagate up to the stdlib `guard`
+// function's try/catch (in lib/runtime/result.ts via `try block()`).
+// If we converted it to a Failure here, the guard would never see
+// the trip and every guarded block would appear to succeed even
+// over budget. See lib/runtime/guard.ts.
+if (__error instanceof GuardExceededError) {
   throw __error;
 }
 return failure(

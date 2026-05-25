@@ -51,6 +51,28 @@ import {
   _isAuthorized,
   _revokeAuth,
 } from "../oauth.js";
+import { runInTestContext } from "../../runtime/asyncContext.js";
+import { RuntimeContext } from "../../runtime/state/context.js";
+import { StateStack } from "../../runtime/state/stateStack.js";
+import { ThreadStore } from "../../runtime/state/threadStore.js";
+
+// Wrap calls into ALS-reading stdlib helpers so getRuntimeContext()
+// finds a frame. Each call gets its own fresh ctx/stack/threads —
+// these tests don't exercise checkpoint or guard state, so a minimal
+// context suffices.
+function withCtx<T>(fn: () => Promise<T>): Promise<T> {
+  const ctx = new RuntimeContext({
+    statelogConfig: {
+      host: "https://example.com",
+      apiKey: "test-api-key",
+      projectId: "test-project",
+      debugMode: false,
+    },
+    smoltalkDefaults: {},
+    dirname: "/tmp",
+  });
+  return runInTestContext(ctx, new StateStack(), new ThreadStore(), fn);
+}
 
 function mockFetchResponse(body: unknown, status = 200) {
   return vi.fn().mockResolvedValue({
@@ -120,7 +142,7 @@ describe("_getAccessToken", () => {
   });
 
   it("throws when no tokens exist", async () => {
-    await expect(_getAccessToken("no-such-provider")).rejects.toThrow(
+    await expect(withCtx(() => _getAccessToken("no-such-provider"))).rejects.toThrow(
       "No OAuth tokens found"
     );
   });
@@ -139,7 +161,7 @@ describe("_getAccessToken", () => {
       })
     );
 
-    const token = await _getAccessToken("token-test");
+    const token = await withCtx(() => _getAccessToken("token-test"));
     expect(token).toBe("valid-token");
   });
 
@@ -163,7 +185,7 @@ describe("_getAccessToken", () => {
       expires_in: 3600,
     });
 
-    const token = await _getAccessToken("token-test");
+    const token = await withCtx(() => _getAccessToken("token-test"));
     expect(token).toBe("new-token");
 
     const saved = JSON.parse(await fs.readFile(testTokenPath, "utf-8"));
@@ -190,7 +212,7 @@ describe("_getAccessToken", () => {
       expires_in: 3600,
     });
 
-    await _getAccessToken("token-test");
+    await withCtx(() => _getAccessToken("token-test"));
 
     const saved = JSON.parse(await fs.readFile(testTokenPath, "utf-8"));
     expect(saved.refresh_token).toBe("keep-this-refresh");
@@ -216,7 +238,7 @@ describe("_getAccessToken", () => {
     });
     globalThis.fetch = mockFetch;
 
-    await _getAccessToken("token-test");
+    await withCtx(() => _getAccessToken("token-test"));
 
     const [url, init] = mockFetch.mock.calls[0];
     expect(url).toBe("https://auth.example.com/token");
@@ -243,7 +265,7 @@ describe("_getAccessToken", () => {
 
     globalThis.fetch = mockFetchResponse({ error: "invalid_grant" }, 400);
 
-    await expect(_getAccessToken("token-test")).rejects.toThrow(
+    await expect(withCtx(() => _getAccessToken("token-test"))).rejects.toThrow(
       "OAuth token exchange failed (400)"
     );
   });
@@ -262,7 +284,7 @@ describe("_getAccessToken", () => {
       })
     );
 
-    await expect(_getAccessToken("token-test")).rejects.toThrow(
+    await expect(withCtx(() => _getAccessToken("token-test"))).rejects.toThrow(
       "no refresh token"
     );
   });
@@ -292,8 +314,8 @@ describe("_getAccessToken", () => {
     });
 
     const [token1, token2] = await Promise.all([
-      _getAccessToken("token-test"),
-      _getAccessToken("token-test"),
+      withCtx(() => _getAccessToken("token-test")),
+      withCtx(() => _getAccessToken("token-test")),
     ]);
 
     expect(token1).toBe("refreshed");

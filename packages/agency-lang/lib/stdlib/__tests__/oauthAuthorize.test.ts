@@ -24,6 +24,27 @@ vi.mock("../oauthEncryption.js", () => ({
 }));
 
 import { _authorize, _isAuthorized, _getAccessToken } from "../oauth.js";
+import { runInTestContext } from "../../runtime/asyncContext.js";
+import { RuntimeContext } from "../../runtime/state/context.js";
+import { StateStack } from "../../runtime/state/stateStack.js";
+import { ThreadStore } from "../../runtime/state/threadStore.js";
+
+// Wrap calls into ALS-reading stdlib helpers so getRuntimeContext()
+// finds a frame. These tests don't exercise checkpoint or guard
+// state, so a minimal context suffices.
+function withCtx<T>(fn: () => Promise<T>): Promise<T> {
+  const ctx = new RuntimeContext({
+    statelogConfig: {
+      host: "https://example.com",
+      apiKey: "test-api-key",
+      projectId: "test-project",
+      debugMode: false,
+    },
+    smoltalkDefaults: {},
+    dirname: "/tmp",
+  });
+  return runInTestContext(ctx, new StateStack(), new ThreadStore(), fn);
+}
 
 describe("_authorize", () => {
   let tokenDir: string;
@@ -60,14 +81,16 @@ describe("_authorize", () => {
     }) as any;
 
     // Start authorize (it listens for the callback, then exchanges the code)
-    const authorizePromise = _authorize("test-provider", {
-      authUrl: "https://localhost/auth",
-      tokenUrl: "https://localhost/token",
-      clientId: "test-client-id",
-      clientSecret: "test-client-secret",
-      scopes: "read write",
-      port: TEST_PORT,
-    });
+    const authorizePromise = withCtx(() =>
+      _authorize("test-provider", {
+        authUrl: "https://localhost/auth",
+        tokenUrl: "https://localhost/token",
+        clientId: "test-client-id",
+        clientSecret: "test-client-secret",
+        scopes: "read write",
+        port: TEST_PORT,
+      })
+    );
 
     // Wait for the callback server to start
     await new Promise((r) => setTimeout(r, 200));
@@ -126,30 +149,34 @@ describe("_authorize", () => {
 
     // Tokens should be stored and retrievable
     expect(await _isAuthorized("test-provider")).toBe(true);
-    expect(await _getAccessToken("test-provider")).toBe("mock-access-token");
+    expect(await withCtx(() => _getAccessToken("test-provider"))).toBe("mock-access-token");
   });
 
   it("rejects non-HTTPS token URL (except localhost)", async () => {
     await expect(
-      _authorize("http-token-test", {
-        authUrl: "https://localhost/auth",
-        tokenUrl: "http://evil.com/token",
-        clientId: "id",
-        clientSecret: "secret",
-        scopes: "read",
-      })
+      withCtx(() =>
+        _authorize("http-token-test", {
+          authUrl: "https://localhost/auth",
+          tokenUrl: "http://evil.com/token",
+          clientId: "id",
+          clientSecret: "secret",
+          scopes: "read",
+        })
+      )
     ).rejects.toThrow("must use HTTPS");
   });
 
   it("rejects non-HTTPS auth URL (except localhost)", async () => {
     await expect(
-      _authorize("http-test", {
-        authUrl: "http://evil.com/auth",
-        tokenUrl: "https://localhost/token",
-        clientId: "id",
-        clientSecret: "secret",
-        scopes: "read",
-      })
+      withCtx(() =>
+        _authorize("http-test", {
+          authUrl: "http://evil.com/auth",
+          tokenUrl: "https://localhost/token",
+          clientId: "id",
+          clientSecret: "secret",
+          scopes: "read",
+        })
+      )
     ).rejects.toThrow("must use HTTPS");
   });
 });

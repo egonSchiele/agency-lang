@@ -7,6 +7,7 @@ import { execFile } from "child_process";
 import { getEncryptionKey, encrypt, decrypt } from "./oauthEncryption.js";
 import { runHttp } from "./http.js";
 import { AgencyCancelledError } from "../runtime/errors.js";
+import { getRuntimeContext } from "../runtime/asyncContext.js";
 import type { RuntimeContext } from "../runtime/state/context.js";
 import type { StateStack } from "../runtime/state/stateStack.js";
 import type { ThreadStore } from "../runtime/state/threadStore.js";
@@ -343,17 +344,12 @@ async function authorizeImpl(
   return { success: true };
 }
 
-/** Non-cancellable variant for internal stdlib callers (e.g.,
- *  calendar.ts's `_authorizeCalendar`). Agency-side callers go
- *  through {@link __internal_authorize} for full cancellation. */
-export async function _authorize(
-  name: string,
-  config: OAuthConfig,
-): Promise<{ success: boolean }> {
-  return authorizeImpl(name, config, undefined);
-}
-
 /**
+ * Deprecated context-injected wrapper kept in place during the ALS
+ * migration so the registry/codegen path keeps working until the
+ * follow-up cleanup PR removes it. New stdlib `.agency` files should
+ * call `_authorize` instead.
+ *
  * Context-injected: the 5-minute callback wait, the local server, and
  * the token-exchange `fetch` all see the abort signal so an aborted
  * run doesn't leave a server listening on the OAuth port.
@@ -365,6 +361,20 @@ export async function __internal_authorize(
   name: string,
   config: OAuthConfig,
 ): Promise<{ success: boolean }> {
+  return authorizeImpl(name, config, ctx.getAbortSignal(stack));
+}
+
+/**
+ * ALS-reading replacement for `__internal_authorize`. Reads ctx/stack
+ * from the AsyncLocalStorage frame so callers (both agency-side and
+ * internal stdlib callers like `calendar.ts`'s `_authorizeCalendar`)
+ * get full cancellation without needing to thread params.
+ */
+export async function _authorize(
+  name: string,
+  config: OAuthConfig,
+): Promise<{ success: boolean }> {
+  const { ctx, stack } = getRuntimeContext();
   return authorizeImpl(name, config, ctx.getAbortSignal(stack));
 }
 
@@ -424,12 +434,11 @@ async function getAccessTokenImpl(
   return refreshPromise;
 }
 
-/** Non-cancellable variant for internal stdlib callers. */
-export async function _getAccessToken(name: string): Promise<string> {
-  return getAccessTokenImpl(name, undefined);
-}
-
 /**
+ * Deprecated context-injected wrapper kept in place during the ALS
+ * migration; see comment on `__internal_authorize`. New stdlib
+ * `.agency` files should call `_getAccessToken` instead.
+ *
  * Context-injected: a refresh-token exchange `fetch` can stall on
  * a slow OAuth provider; abort tears it down.
  */
@@ -439,6 +448,17 @@ export async function __internal_getAccessToken(
   _threads: ThreadStore,
   name: string,
 ): Promise<string> {
+  return getAccessTokenImpl(name, ctx.getAbortSignal(stack));
+}
+
+/**
+ * ALS-reading replacement for `__internal_getAccessToken`. Reads
+ * ctx/stack from the AsyncLocalStorage frame so callers (both
+ * agency-side and internal stdlib callers like `calendar.ts`) get
+ * full refresh-token cancellation without needing to thread params.
+ */
+export async function _getAccessToken(name: string): Promise<string> {
+  const { ctx, stack } = getRuntimeContext();
   return getAccessTokenImpl(name, ctx.getAbortSignal(stack));
 }
 

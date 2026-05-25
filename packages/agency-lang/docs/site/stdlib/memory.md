@@ -48,7 +48,7 @@ Set the memory scope for this agent run. Call this before other
 |---|---|---|
 | id | `string` |  |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/memory.agency#L23))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/memory.agency#L31))
 
 ### remember
 
@@ -73,7 +73,7 @@ Extract and store structured facts from the given text into the
 |---|---|---|
 | content | `string` |  |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/memory.agency#L37))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/memory.agency#L45))
 
 ### recall
 
@@ -98,7 +98,7 @@ Retrieve relevant facts from the knowledge graph as a formatted
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/memory.agency#L59))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/memory.agency#L67))
 
 ### forget
 
@@ -122,4 +122,4 @@ Soft-delete facts matching the query from the knowledge graph.
 |---|---|---|
 | query | `string` |  |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/memory.agency#L73))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/memory.agency#L81))

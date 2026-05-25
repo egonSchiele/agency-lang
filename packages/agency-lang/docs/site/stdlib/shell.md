@@ -12,7 +12,7 @@ type ExecResult = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/shell.agency#L10))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/shell.agency#L12))
 
 ### LsEntry
 
@@ -25,7 +25,7 @@ type LsEntry = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/shell.agency#L91))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/shell.agency#L93))
 
 ### GrepMatch
 
@@ -37,7 +37,7 @@ type GrepMatch = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/shell.agency#L113))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/shell.agency#L115))
 
 ### StatInfo
 
@@ -50,7 +50,7 @@ type StatInfo = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/shell.agency#L164))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/shell.agency#L166))
 
 ## Functions
 
@@ -86,7 +86,7 @@ Run an executable directly with an array of arguments, bypassing the shell. This
 
 **Throws:** `std::exec`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/shell.agency#L16))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/shell.agency#L18))
 
 ### bash
 
@@ -116,7 +116,7 @@ Run a shell command string via sh -c and return its stdout, stderr, and exit cod
 
 **Throws:** `std::bash`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/shell.agency#L57))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/shell.agency#L59))
 
 ### ls
 
@@ -140,7 +140,7 @@ List entries in a directory. Each entry includes name, path, type ("file", "dir"
 
 **Throws:** `std::ls`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/shell.agency#L98))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/shell.agency#L100))
 
 ### grep
 
@@ -168,7 +168,7 @@ Search for a regex pattern in files under a directory. Returns matches with file
 
 **Throws:** `std::grep`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/shell.agency#L119))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/shell.agency#L121))
 
 ### glob
 
@@ -194,7 +194,7 @@ Find files whose paths match a glob pattern (e.g. "src/**/*.ts"). Returns paths 
 
 **Throws:** `std::glob`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/shell.agency#L143))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/shell.agency#L145))
 
 ### stat
 
@@ -212,7 +212,7 @@ Return metadata about a filesystem entry: whether it exists, its type ("file", "
 
 **Returns:** [StatInfo](#statinfo)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/shell.agency#L171))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/shell.agency#L173))
 
 ### exists
 
@@ -230,7 +230,7 @@ Return true if a file or directory exists at the given path.
 
 **Returns:** `boolean`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/shell.agency#L178))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/shell.agency#L180))
 
 ### which
 
@@ -248,4 +248,4 @@ Locate an executable in PATH and return its absolute path. Returns an empty stri
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/shell.agency#L185))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/shell.agency#L187))

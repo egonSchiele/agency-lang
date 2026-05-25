@@ -70,8 +70,15 @@ function validateUrl(
  * the agency-side `try` wrapper doesn't silently convert it into a
  * `Failure` value — the cancellation propagates to the runner the
  * same way an aborted LLM call does.
+ *
+ * Exported so other stdlib JS modules that do their own `fetch`
+ * (oauth.ts token exchange, speech.ts whisper upload, browserUse.ts
+ * session creation/polling) can share the same abort-error translation
+ * without each one re-implementing it. Each caller still has to thread
+ * the `AbortSignal` from `ctx.getAbortSignal(stack)` into its `fetch`
+ * call — this helper only handles the catch side.
  */
-async function runHttp<T>(fn: () => Promise<T>, url: string): Promise<T> {
+export async function runHttp<T>(fn: () => Promise<T>, url: string): Promise<T> {
   try {
     return await fn();
   } catch (e) {

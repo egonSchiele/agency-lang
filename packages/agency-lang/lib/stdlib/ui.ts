@@ -2,7 +2,11 @@ import * as readline from "readline";
 import process from "process";
 import { color } from "../utils/termcolors.js";
 import { syntaxHighlight } from "./syntax.js";
-import { _input } from "./builtins.js";
+import { __internal_input } from "./builtins.js";
+import { AgencyCancelledError } from "../runtime/errors.js";
+import type { RuntimeContext } from "../runtime/state/context.js";
+import type { StateStack } from "../runtime/state/stateStack.js";
+import type { ThreadStore } from "../runtime/state/threadStore.js";
 
 // Evaluated once at load time — the env var is set by the debugger CLI
 // before any compiled agency code runs and never changes.
@@ -408,16 +412,33 @@ export function _stopSpinner(): void {
   }
 }
 
-export function _prompt(question: string): Promise<string> {
+/**
+ * Context-injected so the readline prompt closes on abort.
+ * Without it, a blocked `prompt("?")` after Ctrl-C or a race-loser
+ * abort would hold stdin until the user hits Enter. On abort we
+ * close the active readline interface (releasing stdin), reset the
+ * input/hint state, and reject with `AgencyCancelledError`.
+ */
+export function __internal_prompt(
+  ctx: RuntimeContext<any>,
+  stack: StateStack,
+  threads: ThreadStore,
+  question: string,
+): Promise<string> {
   // Delegate to the builtin input() which supports the __agencyInputOverride
   // hook and works inside handler bodies (where interrupts are forbidden).
-  if (isDebuggerMode) return _input(question);
+  if (isDebuggerMode) return __internal_input(ctx, stack, threads, question);
   if (!initialized) {
     return Promise.resolve("");
   }
   _stopSpinner();
 
-  return new Promise<string>((resolve) => {
+  const signal = ctx.getAbortSignal(stack);
+  if (signal.aborted) {
+    return Promise.reject(new AgencyCancelledError("prompt cancelled"));
+  }
+
+  return new Promise<string>((resolve, reject) => {
     // Update hint, clear input, position cursor on the input row
     hintContent = question;
     inputContent = "";
@@ -434,7 +455,18 @@ export function _prompt(question: string): Promise<string> {
     });
     activeRl = rl;
 
+    const onAbort = () => {
+      try { rl.close(); } catch {}
+      activeRl = null;
+      inputContent = "";
+      hintContent = "";
+      if (initialized) renderFixedArea();
+      reject(new AgencyCancelledError("prompt cancelled"));
+    };
+    signal.addEventListener("abort", onAbort, { once: true });
+
     rl.on("line", (answer: string) => {
+      signal.removeEventListener("abort", onAbort);
       rl.close();
       activeRl = null;
       inputContent = "";

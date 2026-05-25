@@ -89,6 +89,8 @@ getAccessToken(name: string): Result
 
 Get a valid OAuth access token for a previously authorized provider. Automatically refreshes the token if it has expired. Returns the access token string. Throws if not yet authorized.
 
+  Cancellation: an in-flight refresh-token fetch is torn down on Ctrl-C, race-loser, or time-guard abort.
+
 **Parameters:**
 
 | Name | Type | Default |
@@ -117,7 +119,7 @@ Check if OAuth tokens exist for a given provider name. Returns true if tokens ar
 
 **Returns:** `boolean`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/oauth.agency#L90))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/oauth.agency#L92))
 
 ### revokeAuth
 
@@ -137,4 +139,4 @@ Delete stored OAuth tokens for a provider. The user will need to run authorize a
 
 **Throws:** `std::revokeAuth`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/oauth.agency#L97))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/oauth.agency#L99))

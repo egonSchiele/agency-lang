@@ -1,4 +1,4 @@
-import { _initUI, _destroyUI, _log, _status, _chat, _code, _diff, _separator, _startSpinner, _stopSpinner, _prompt, _emptyLine } from "agency-lang/stdlib-lib/ui.js"
+import { _initUI, _destroyUI, _log, _status, _chat, _code, _diff, _separator, _startSpinner, _stopSpinner, _emptyLine } from "agency-lang/stdlib-lib/ui.js"
 export def initUI(title: string) {
   """
   Initialize a terminal UI with a scrollable output area and a fixed input bar at the bottom. Call this once at the start of your agent. The title is shown in the scrollable output area on init; use status() to populate the status bar.
@@ -84,15 +84,17 @@ export safe def stopSpinner() {
 export def prompt(question: string): string {
   """
   Prompt the user for text input in the fixed input bar at the bottom of the screen. The question appears as a hint. Returns the user's input as a string.
+
+  Cancellation: a blocked prompt is released on Ctrl-C, race-loser, or time-guard abort, surfacing as an AgencyCancelledError.
   """
-  return _prompt(question)
+  return __internal_prompt(question)
 }
 
 export def getConfirmation(question: string): boolean {
   """
   Ask the user a yes/no question in the input bar. Returns true if the user answers yes (y/yes), false otherwise. Useful inside handler blocks to approve or reject interrupts interactively.
   """
-  let answer = _prompt(question + " (y/n)").trim().toLowerCase()
+  let answer = __internal_prompt(question + " (y/n)").trim().toLowerCase()
   if (answer == "y" || answer == "yes") {
     return true
   }

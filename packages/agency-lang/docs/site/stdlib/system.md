@@ -10,6 +10,8 @@ screenshot(filepath: string, x: number, y: number, width: number, height: number
 
 A tool for taking a screenshot and saving it to a file. Optionally specify x, y, width, and height to capture a specific region.
 
+  Cancellation: an in-progress screencapture is interrupted on Ctrl-C, race-loser, or time-guard abort.
+
   @param filepath - Path to save the screenshot
   @param x - X coordinate of capture region
   @param y - Y coordinate of capture region
@@ -47,7 +49,7 @@ Terminate the process immediately with the given exit code. Use with caution —
 
 **Throws:** `std::exit`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/system.agency#L20))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/system.agency#L22))
 
 ### args
 
@@ -59,7 +61,7 @@ Return the command-line arguments passed to the Agency program (excluding the no
 
 **Returns:** `string[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/system.agency#L31))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/system.agency#L33))
 
 ### cwd
 
@@ -71,7 +73,7 @@ Return the absolute path of the current working directory of the Agency process.
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/system.agency#L38))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/system.agency#L40))
 
 ### env
 
@@ -89,7 +91,7 @@ Read an environment variable. Returns null if the variable is not set.
 
 **Returns:** `string | null`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/system.agency#L45))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/system.agency#L47))
 
 ### setEnv
 
@@ -113,7 +115,7 @@ Set an environment variable in the current process. Fails if the name is empty o
 
 **Throws:** `std::setEnv`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/system.agency#L52))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/system.agency#L54))
 
 ### openUrl
 
@@ -122,6 +124,8 @@ openUrl(url: string): Result
 ```
 
 Open a URL in the user's default browser. Currently macOS-only.
+
+  Cancellation: the in-flight `open` subprocess is killed on Ctrl-C, race-loser, or time-guard abort.
 
 **Parameters:**
 
@@ -133,4 +137,4 @@ Open a URL in the user's default browser. Currently macOS-only.
 
 **Throws:** `std::openUrl`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/system.agency#L66))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/system.agency#L68))

@@ -1,4 +1,4 @@
-import { _authorize, _getAccessToken, _isAuthorized, _revokeAuth } from "agency-lang/stdlib-lib/oauth.js"
+import { _isAuthorized, _revokeAuth } from "agency-lang/stdlib-lib/oauth.js"
 import { fetchJSON } from "std::http"
 
 /** @module
@@ -65,7 +65,7 @@ export def authorize(name: string, authUrl: string, tokenUrl: string, clientId: 
     scopes: scopes
   })
 
-  return try _authorize(name, {
+  return try __internal_authorize(name, {
     authUrl: authUrl,
     tokenUrl: tokenUrl,
     clientId: clientId,
@@ -79,12 +79,14 @@ export def authorize(name: string, authUrl: string, tokenUrl: string, clientId: 
 export def getAccessToken(name: string): Result {
   """
   Get a valid OAuth access token for a previously authorized provider. Automatically refreshes the token if it has expired. Returns the access token string. Throws if not yet authorized.
+
+  Cancellation: an in-flight refresh-token fetch is torn down on Ctrl-C, race-loser, or time-guard abort.
   """
   return interrupt std::getAccessToken("Are you sure you want to retrieve an OAuth access token? This exposes a sensitive credential.", {
     name: name
   })
 
-  return try _getAccessToken(name)
+  return try __internal_getAccessToken(name)
 }
 
 export safe def isAuthorized(name: string): boolean {

@@ -1,6 +1,4 @@
 import {
-  _exec,
-  _bash,
   _ls,
   _grep,
   _glob,
@@ -43,7 +41,7 @@ export def exec(
     stdin: stdin
   })
 
-  return _exec(
+  return __internal_exec(
     command,
     args,
     cwd,
@@ -79,7 +77,7 @@ export def bash(
     stdin: stdin
   })
 
-  return _bash(
+  return __internal_bash(
     command,
     cwd,
     timeout,

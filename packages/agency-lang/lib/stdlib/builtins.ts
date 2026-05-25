@@ -6,6 +6,11 @@ import { execFile } from "child_process";
 import { promisify } from "util";
 import { detectPlatform } from "./utils.js";
 import { resolvePath } from "./resolvePath.js";
+import { AgencyCancelledError } from "../runtime/errors.js";
+import type { RuntimeContext } from "../runtime/state/context.js";
+import type { StateStack } from "../runtime/state/stateStack.js";
+import type { ThreadStore } from "../runtime/state/threadStore.js";
+import { abortableSleep } from "./abortable.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -21,29 +26,60 @@ export function _parseJSON(text: string): any {
   return JSON.parse(text);
 }
 
-export function _input(prompt: string): Promise<string> {
+/**
+ * Context-injected so it can react to abort. Readline holds stdin
+ * exclusively, so a blocked `input("?")` after Ctrl-C or a race-loser
+ * abort would otherwise sit there forever. On abort we close the
+ * readline interface (releasing stdin) and reject with
+ * `AgencyCancelledError`, which `__tryCall` re-throws so cancellation
+ * actually propagates.
+ */
+export function __internal_input(
+  ctx: RuntimeContext<any>,
+  stack: StateStack,
+  _threads: ThreadStore,
+  prompt: string,
+): Promise<string> {
   const override = (globalThis as any).__agencyInputOverride as
     | ((prompt: string) => Promise<string>)
     | undefined;
   if (override) {
     return override(prompt);
   }
+  const signal = ctx.getAbortSignal(stack);
+  if (signal.aborted) {
+    return Promise.reject(new AgencyCancelledError("input cancelled"));
+  }
   const rl = readline.createInterface({
     input: process.stdin,
     output: process.stdout,
   });
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
+    const onAbort = () => {
+      try { rl.close(); } catch {}
+      reject(new AgencyCancelledError("input cancelled"));
+    };
+    signal.addEventListener("abort", onAbort, { once: true });
     rl.question(prompt, (answer: string) => {
+      signal.removeEventListener("abort", onAbort);
       rl.close();
       resolve(answer);
     });
   });
 }
 
-export function _sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => {
-    setTimeout(resolve, ms);
-  });
+/**
+ * Context-injected so a long sleep wakes up immediately on abort.
+ * A plain `setTimeout` sleep would block the whole agent for the
+ * full duration even after Ctrl-C.
+ */
+export function __internal_sleep(
+  ctx: RuntimeContext<any>,
+  stack: StateStack,
+  _threads: ThreadStore,
+  ms: number,
+): Promise<void> {
+  return abortableSleep(ms, ctx.getAbortSignal(stack));
 }
 
 export function _round(num: number, precision: number): number {

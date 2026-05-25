@@ -31,6 +31,13 @@ import {
   DeterministicClient as __DeterministicClient,
 } from "agency-lang/runtime";
 import {
+  __internal_browserUse,
+} from "agency-lang/stdlib-lib/browserUse.js";
+import {
+  __internal_input,
+  __internal_sleep,
+} from "agency-lang/stdlib-lib/builtins.js";
+import {
   __internal_fetch,
   __internal_fetchJSON,
   __internal_fetchMarkdown,
@@ -47,6 +54,23 @@ import {
   __internal_shouldRunMemory,
 } from "agency-lang/stdlib-lib/memory.js";
 import {
+  __internal_authorize,
+  __internal_getAccessToken,
+} from "agency-lang/stdlib-lib/oauth.js";
+import {
+  __internal_bash,
+  __internal_exec,
+} from "agency-lang/stdlib-lib/shell.js";
+import {
+  __internal_record,
+  __internal_speak,
+  __internal_transcribe,
+} from "agency-lang/stdlib-lib/speech.js";
+import {
+  __internal_openUrl,
+  __internal_screenshot,
+} from "agency-lang/stdlib-lib/system.js";
+import {
   __internal_assistantMessage,
   __internal_getCost,
   __internal_getTokens,
@@ -55,6 +79,9 @@ import {
   __internal_systemMessage,
   __internal_userMessage,
 } from "agency-lang/stdlib-lib/thread.js";
+import {
+  __internal_prompt,
+} from "agency-lang/stdlib-lib/ui.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);

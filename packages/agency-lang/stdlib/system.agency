@@ -1,8 +1,10 @@
-import { _args, _screenshot, _cwd, _env, _setEnv, _openUrl, _exit } from "agency-lang/stdlib-lib/system.js"
+import { _args, _cwd, _env, _setEnv, _exit } from "agency-lang/stdlib-lib/system.js"
 
 export def screenshot(filepath: string, x: number = -1, y: number = -1, width: number = -1, height: number = -1) {
   """
   A tool for taking a screenshot and saving it to a file. Optionally specify x, y, width, and height to capture a specific region.
+
+  Cancellation: an in-progress screencapture is interrupted on Ctrl-C, race-loser, or time-guard abort.
 
   @param filepath - Path to save the screenshot
   @param x - X coordinate of capture region
@@ -14,7 +16,7 @@ export def screenshot(filepath: string, x: number = -1, y: number = -1, width: n
     filepath: filepath
   })
 
-  _screenshot(filepath, x, y, width, height)
+  __internal_screenshot(filepath, x, y, width, height)
 }
 
 export def exit(code: number = 0) {
@@ -66,10 +68,12 @@ export def setEnv(name: string, value: string): Result {
 export def openUrl(url: string): Result {
   """
   Open a URL in the user's default browser. Currently macOS-only.
+
+  Cancellation: the in-flight `open` subprocess is killed on Ctrl-C, race-loser, or time-guard abort.
   """
   return interrupt std::openUrl("Are you sure you want to open this URL in the browser?", {
     url: url
   })
 
-  return try _openUrl(url)
+  return try __internal_openUrl(url)
 }

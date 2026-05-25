@@ -1,7 +1,43 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { _browserUse as browserUse } from "../browserUse.js";
+import {
+  __internal_browserUse,
+  type BrowserUseOptions,
+  type BrowserUseResult,
+} from "../browserUse.js";
+import { RuntimeContext } from "../../runtime/state/context.js";
+import { StateStack } from "../../runtime/state/stateStack.js";
+import { ThreadStore } from "../../runtime/state/threadStore.js";
 
 const FAKE_KEY = "bu_test-key-123";
+
+function makeMockCtx(): RuntimeContext<any> {
+  return new RuntimeContext({
+    statelogConfig: {
+      host: "https://example.com",
+      apiKey: "test-api-key",
+      projectId: "test-project",
+      debugMode: false,
+    },
+    smoltalkDefaults: {},
+    dirname: "/tmp",
+  });
+}
+
+/** Adapter so the existing test bodies stay readable: build a fresh
+ *  ctx/stack/threads per call and forward the user-visible args to
+ *  the context-injected impl. */
+function browserUse(
+  task: string,
+  options?: BrowserUseOptions,
+): Promise<BrowserUseResult> {
+  return __internal_browserUse(
+    makeMockCtx(),
+    new StateStack(),
+    new ThreadStore(),
+    task,
+    options,
+  );
+}
 
 function mockFetchResponse(body: unknown, status = 200) {
   return vi.fn().mockResolvedValue({

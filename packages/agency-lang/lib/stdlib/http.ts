@@ -63,13 +63,13 @@ function validateUrl(
 
 /**
  * Run an HTTP request, translating any abort-shaped error into the
- * runtime's `AgencyCancelledError`. Without this translation a
- * cancelled fetch surfaces as a `DOMException("AbortError")` or
- * `TypeError("fetch failed")`, which the agency `try` wrapper
- * would silently convert into a `Failure` value — defeating the
- * whole point of cancellation propagation. By throwing
- * `AgencyCancelledError`, `__tryCall` (which re-throws it like
- * `GuardExceededError`) lets the cancellation reach the runner.
+ * runtime's `AgencyCancelledError`. Node's `fetch` surfaces an
+ * aborted request as a `DOMException` with `name === "AbortError"`,
+ * which `isAbortError` matches. Translating to `AgencyCancelledError`
+ * lets `__tryCall` re-throw it (alongside `GuardExceededError`) so
+ * the agency-side `try` wrapper doesn't silently convert it into a
+ * `Failure` value — the cancellation propagates to the runner the
+ * same way an aborted LLM call does.
  */
 async function runHttp<T>(fn: () => Promise<T>, url: string): Promise<T> {
   try {

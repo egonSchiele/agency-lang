@@ -108,8 +108,17 @@ describe("HTTP fetch abort integration", () => {
 
   afterEach(() => {
     // Force-close anything mid-flight so the server.close() promise
-    // resolves promptly even after an aborted fetch.
-    for (const r of pendingResponses) r.end();
+    // resolves promptly even after an aborted fetch. The happy-path
+    // test ends its response normally, so a second `.end()` here
+    // would throw ERR_STREAM_WRITE_AFTER_END — swallow because we're
+    // in test cleanup and only care that the socket is gone.
+    for (const r of pendingResponses) {
+      try {
+        r.end();
+      } catch {
+        /* already ended; nothing to do */
+      }
+    }
     pendingResponses = [];
     return new Promise<void>((resolve) => server.close(() => resolve()));
   });

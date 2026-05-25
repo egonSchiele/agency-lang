@@ -1,3 +1,4 @@
+import { getRuntimeContext } from "../runtime/asyncContext.js";
 import type { RuntimeContext } from "../runtime/state/context.js";
 import type {
   ExtractionResult,
@@ -107,6 +108,62 @@ export async function __internal_forget(
   _threads: ThreadStore,
   query: string,
 ): Promise<void> {
+  if (!ctx?.memoryManager) return;
+  await ctx.memoryManager.forget(query);
+}
+
+// ── ALS-reading replacements for the `__internal_*` exports above ──
+// All memory helpers only need `ctx`; `stack`/`threads` are unused.
+
+export async function _setMemoryId(id: string): Promise<void> {
+  const { ctx } = getRuntimeContext();
+  if (!ctx?.memoryManager) return;
+  ctx.memoryManager.setMemoryId(id);
+}
+
+export function _shouldRunMemory(): boolean {
+  const { ctx } = getRuntimeContext();
+  return ctx?.memoryManager !== undefined;
+}
+
+export async function _buildExtractionPrompt(content: string): Promise<string> {
+  const { ctx } = getRuntimeContext();
+  if (!ctx?.memoryManager) return "";
+  return ctx.memoryManager.buildExtractionPromptFor(content);
+}
+
+export async function _applyExtractionResult(result: ExtractionResult): Promise<void> {
+  const { ctx } = getRuntimeContext();
+  if (!ctx?.memoryManager) return;
+  await ctx.memoryManager.applyExtractionFromLLM(result);
+}
+
+export async function _buildForgetPrompt(query: string): Promise<string> {
+  const { ctx } = getRuntimeContext();
+  if (!ctx?.memoryManager) return "";
+  return ctx.memoryManager.buildForgetPromptFor(query);
+}
+
+export async function _applyForgetResult(result: ForgetResult): Promise<void> {
+  const { ctx } = getRuntimeContext();
+  if (!ctx?.memoryManager) return;
+  await ctx.memoryManager.applyForgetFromLLM(result);
+}
+
+export async function _remember(content: string): Promise<void> {
+  const { ctx } = getRuntimeContext();
+  if (!ctx?.memoryManager) return;
+  await ctx.memoryManager.remember(content);
+}
+
+export async function _recall(query: string): Promise<string> {
+  const { ctx } = getRuntimeContext();
+  if (!ctx?.memoryManager) return "";
+  return ctx.memoryManager.recall(query);
+}
+
+export async function _forget(query: string): Promise<void> {
+  const { ctx } = getRuntimeContext();
   if (!ctx?.memoryManager) return;
   await ctx.memoryManager.forget(query);
 }

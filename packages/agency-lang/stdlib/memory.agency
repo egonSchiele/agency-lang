@@ -14,11 +14,19 @@ type ForgetResult = {
   relations: { fromName: string, toName: string, type: string }[]
 }
 
-// `__internal_*` names are context-injected builtins: always in
-// scope (no `import` needed), forbidden as values, and rewritten by
-// the TypeScript builder to receive the runtime context as the
-// first positional argument. See lib/codegenBuiltins/contextInjected.ts
-// for the registry and lib/stdlib/memory.ts for the implementations.
+// `_*` exports read ctx from AsyncLocalStorage (see
+// `lib/runtime/asyncContext.ts`); no `__ctx` arg is plumbed at the
+// call site. The deprecated `__internal_*` exports remain in
+// `lib/stdlib/memory.ts` for the migration window.
+import {
+  _setMemoryId,
+  _shouldRunMemory,
+  _buildExtractionPrompt,
+  _applyExtractionResult,
+  _buildForgetPrompt,
+  _applyForgetResult,
+  _recall,
+} from "agency-lang/stdlib-lib/memory.js"
 
 export def setMemoryId(id: string) {
   """
@@ -31,7 +39,7 @@ export def setMemoryId(id: string) {
 
   @param id - A unique identifier for the memory scope (e.g. user ID)
   """
-  __internal_setMemoryId(id)
+  _setMemoryId(id)
 }
 
 export def remember(content: string) {
@@ -47,11 +55,11 @@ export def remember(content: string) {
 
   @param content - Natural language text containing facts to remember
   """
-  if (__internal_shouldRunMemory()) {
+  if (_shouldRunMemory()) {
     thread {
-      const prompt = __internal_buildExtractionPrompt(content)
+      const prompt = _buildExtractionPrompt(content)
       const result: ExtractionResult = llm(prompt)
-      __internal_applyExtractionResult(result)
+      _applyExtractionResult(result)
     }
   }
 }
@@ -67,7 +75,7 @@ export safe def recall(query: string): string {
 
   @param query - A natural language query describing what to recall
   """
-  return __internal_recall(query)
+  return _recall(query)
 }
 
 export def forget(query: string) {
@@ -82,11 +90,11 @@ export def forget(query: string) {
 
   @param query - A natural language description of what to forget
   """
-  if (__internal_shouldRunMemory()) {
+  if (_shouldRunMemory()) {
     thread {
-      const prompt = __internal_buildForgetPrompt(query)
+      const prompt = _buildForgetPrompt(query)
       const result: ForgetResult = llm(prompt)
-      __internal_applyForgetResult(result)
+      _applyForgetResult(result)
     }
   }
 }

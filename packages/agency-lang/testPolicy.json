@@ -1,0 +1,10 @@
+{
+  "std::read": [
+    {
+      "match": {
+        "*": "*"
+      },
+      "action": "approve"
+    }
+  ]
+}

@@ -24,8 +24,11 @@ import type { StateStack } from "./state/stateStack.js";
  *
  * `cloneForBranch` lets each variant decide whether a fork/race
  * branch needs an independent copy:
- *   - `CostGuard` returns a fresh clone (branch independently
- *     accumulates cost; trip must throw from inside the branch).
+ *   - `CostGuard` returns `this` (a shared in-memory reference). The
+ *     parent's guard appears on every descendant branch's `guards`
+ *     array via `StateStack.rehydrateInheritedGuardsFrom`, so a
+ *     `charge()` from any branch mutates the same counter the parent
+ *     and siblings see — real-time mid-fork enforcement.
  *   - `TimeGuard` returns `undefined` — the parent's timer is the
  *     single source of truth; abort cascade via the composed
  *     `stack.abortSignal` propagates the trip to every branch's

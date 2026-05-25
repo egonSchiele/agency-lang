@@ -541,9 +541,31 @@ export class StateStack {
       seedCost: this.seedCost,
       seedTokens: this.seedTokens,
       // Serialize only branch-owned guards. Inherited guards are
-      // parent-owned (shared references like CostGuard); they're
-      // serialized exactly once on the parent's snapshot and
-      // re-prepended at resume by `runBatch`.
+      // parent-owned (shared references like CostGuard) and MUST NOT
+      // be re-serialized on every descendant — doing so would
+      // duplicate the JS object on deserialize, defeating the whole
+      // shared-counter model (sibling A and sibling B would each
+      // charge a different OUTER clone).
+      //
+      // Invariant this relies on: every descendant branch is re-entered
+      // on resume through `runBatch` (the only code path that creates
+      // branches in the first place), which calls
+      // `StateStack.rehydrateInheritedGuardsFrom(parentStack)` to
+      // re-prepend live references to the parent's guards before any
+      // user code on that branch reads `stack.guards`. The parent
+      // itself is restored either:
+      //   - directly from the top-level checkpoint (root stack), or
+      //   - by being rehydrated via the same chain from ITS parent
+      //     (deeper nesting), so a depth-N branch sees the same
+      //     OUTER reference all the way up to root after N successive
+      //     `rehydrateInheritedGuardsFrom` calls.
+      //
+      // Concretely: a checkpoint stamped on a non-root stack (e.g.
+      // nested `runBatch`, or `pr.step` inside a fork branch) will
+      // drop its inherited guards from this snapshot. That is safe
+      // ONLY because the OUTER runBatch chain always re-stamps with
+      // its own parent stack on the way up, and the final resume
+      // root is always a stack whose `inheritedGuardCount === 0`.
       guards: this.guards.slice(this.inheritedGuardCount).map((g) => g.toJSON()),
       inheritedGuardCount: this.inheritedGuardCount,
     };

@@ -253,8 +253,15 @@ function startInvoke<T>(
  *  `getRuntimeContext().stack.abortSignal` immediately observes the
  *  branch's signal — including for race losers that get aborted while
  *  in-flight. If no parent frame exists (e.g. runBatch invoked outside
- *  a runner-managed scope), we synthesize a frame with the parent
- *  ctx's `stateStack` as a fallback for `threads`. */
+ *  a runner-managed scope), we skip seeding and just invoke `fn()` —
+ *  the generated function/node body inside the branch will install
+ *  its own scoped frame via the Runner's per-step wrap. A stdlib
+ *  helper that reads `getRuntimeContext()` directly between the branch
+ *  start and that first Runner step would throw; in practice every
+ *  runBatch call site today runs inside a Runner scope, so the
+ *  fallback path is dead code for the migration's existing call sites
+ *  and exists purely to keep `runBatch` usable from future contexts
+ *  that haven't installed a top-level frame yet. */
 function runInBranchAlsFrame<T>(
   ctx: RuntimeContext<any>,
   branchStack: StateStack,

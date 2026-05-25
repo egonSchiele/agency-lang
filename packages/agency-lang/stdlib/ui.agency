@@ -1,4 +1,4 @@
-import { _initUI, _destroyUI, _log, _status, _chat, _code, _diff, _separator, _startSpinner, _stopSpinner, _emptyLine } from "agency-lang/stdlib-lib/ui.js"
+import { _initUI, _destroyUI, _log, _status, _chat, _code, _diff, _separator, _startSpinner, _stopSpinner, _emptyLine, _prompt } from "agency-lang/stdlib-lib/ui.js"
 export def initUI(title: string) {
   """
   Initialize a terminal UI with a scrollable output area and a fixed input bar at the bottom. Call this once at the start of your agent. The title is shown in the scrollable output area on init; use status() to populate the status bar.
@@ -87,14 +87,14 @@ export def prompt(question: string): string {
 
   Cancellation: a blocked prompt is released on Ctrl-C, race-loser, or time-guard abort, surfacing as an AgencyCancelledError.
   """
-  return __internal_prompt(question)
+  return _prompt(question)
 }
 
 export def getConfirmation(question: string): boolean {
   """
   Ask the user a yes/no question in the input bar. Returns true if the user answers yes (y/yes), false otherwise. Useful inside handler blocks to approve or reject interrupts interactively.
   """
-  let answer = __internal_prompt(question + " (y/n)").trim().toLowerCase()
+  let answer = _prompt(question + " (y/n)").trim().toLowerCase()
   if (answer == "y" || answer == "yes") {
     return true
   }

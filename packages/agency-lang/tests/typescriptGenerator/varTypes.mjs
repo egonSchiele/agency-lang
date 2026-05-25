@@ -177,7 +177,6 @@ __stack.locals.person = {
     await runner.step(2, async (runner) => {
 __self.__removedTools = __self.__removedTools || [];
 __stack.locals.response = await runPrompt({
-        ctx: __ctx,
         prompt: `Say hi to ${__stack.locals.person.name}, who is ${__stack.locals.person.age} years old.`,
         messages: __threads.getOrCreateActive(),
         responseFormat: z.object({
@@ -185,7 +184,6 @@ __stack.locals.response = await runPrompt({
         }),
         clientConfig: {},
         maxToolCallRounds: 10,
-        stateStack: __stateStack,
         removedTools: __self.__removedTools,
         checkpointInfo: runner.getCheckpointInfo()
       });

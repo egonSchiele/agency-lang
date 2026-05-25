@@ -180,12 +180,10 @@ __stack.locals.greeting = `Hello, ${__stack.locals.user.name}!`;
     await runner.step(3, async (runner) => {
 __self.__removedTools = __self.__removedTools || [];
 __stack.locals.result = await runPrompt({
-        ctx: __ctx,
         prompt: `Tell me about ${__stack.locals.user.name} who is ${__stack.locals.user.age} years old`,
         messages: __threads.getOrCreateActive(),
         clientConfig: {},
         maxToolCallRounds: 10,
-        stateStack: __stateStack,
         removedTools: __self.__removedTools,
         checkpointInfo: runner.getCheckpointInfo()
       });

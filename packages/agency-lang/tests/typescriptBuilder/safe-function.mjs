@@ -413,14 +413,12 @@ await callHook({
     await runner.step(1, async (runner) => {
 __self.__removedTools = __self.__removedTools || [];
 __stack.locals.result = await runPrompt({
-        ctx: __ctx,
         prompt: `Use the tools`,
         messages: __threads.getOrCreateActive(),
         clientConfig: {
           "tools": [safeLookup, unsafeSave]
         },
         maxToolCallRounds: 10,
-        stateStack: __stateStack,
         removedTools: __self.__removedTools,
         checkpointInfo: runner.getCheckpointInfo()
       });

@@ -2,6 +2,7 @@ import * as smoltalk from "smoltalk";
 import { PromptResult, ToolCallJSON } from "smoltalk";
 import { createLogger } from "../logger.js";
 import { AgencyFunction } from "./agencyFunction.js";
+import { getRuntimeContext } from "./asyncContext.js";
 import { AgencyCancelledError, isAbortError } from "./errors.js";
 import { callHook, invokeCallbacks } from "./hooks.js";
 import { hasInterrupts, isRejected } from "./interrupts.js";
@@ -252,33 +253,35 @@ async function _runPrompt({
 
 // eslint-disable-next-line max-lines-per-function -- core prompt execution loop; refactor tracked separately
 export async function runPrompt(args: {
-  ctx: RuntimeContext<GraphState>;
   prompt: string;
   messages: MessageThread;
   responseFormat?: any;
   clientConfig: Partial<smoltalk.SmolConfig> & { tools?: any[] };
   maxToolCallRounds?: number;
-  stateStack?: StateStack;
   removedTools?: string[];
   checkpointInfo?: SourceLocationOpts;
 }): Promise<any> {
   const {
-    ctx,
     prompt,
     responseFormat,
     maxToolCallRounds = 10,
     checkpointInfo,
   } = args;
 
+  // ctx + stack come from the active ALS frame — the codegen used to
+  // pass them explicitly as `ctx` / `stateStack` keys on `args`, but
+  // post-ALS migration every Agency execution path runs inside an
+  // `agencyStore.run(...)` frame seeded with the same values.
+  const { ctx: alsCtx, stack: alsStack } = getRuntimeContext();
+  const ctx = alsCtx as RuntimeContext<GraphState>;
+
   // Push a frame onto the state stack — runPrompt participates like any other function
   const { stateStack, stack } = setupFunction({
-    state: args.stateStack
-      ? {
-        stateStack: args.stateStack,
-        ctx: args.ctx,
-        threads: new ThreadStore(),
-      }
-      : undefined,
+    state: {
+      stateStack: alsStack,
+      ctx,
+      threads: new ThreadStore(),
+    },
   });
   const self = stack.locals;
 

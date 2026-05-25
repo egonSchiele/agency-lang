@@ -171,12 +171,10 @@ await callHook({
     await runner.step(1, async (runner) => {
 __self.__removedTools = __self.__removedTools || [];
 __stack.locals.x = runPrompt({
-        ctx: __ctx,
         prompt: `What is 2+2?`,
         messages: __threads.createAndReturnSubthread(),
         clientConfig: {},
         maxToolCallRounds: 10,
-        stateStack: __stateStack,
         removedTools: __self.__removedTools,
         checkpointInfo: runner.getCheckpointInfo()
       });
@@ -185,12 +183,10 @@ __self.__pendingKey_x = __ctx.pendingPromises.add(__stack.locals.x, (val) => { _
     await runner.step(2, async (runner) => {
 __self.__removedTools = __self.__removedTools || [];
 __stack.locals.y = runPrompt({
-        ctx: __ctx,
         prompt: `What is 3+3?`,
         messages: __threads.createAndReturnSubthread(),
         clientConfig: {},
         maxToolCallRounds: 10,
-        stateStack: __stateStack,
         removedTools: __self.__removedTools,
         checkpointInfo: runner.getCheckpointInfo()
       });

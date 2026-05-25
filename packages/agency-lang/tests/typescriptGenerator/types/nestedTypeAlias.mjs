@@ -175,7 +175,6 @@ await callHook({
     await runner.step(1, async (runner) => {
 __self.__removedTools = __self.__removedTools || [];
 __stack.locals.user = await runPrompt({
-        ctx: __ctx,
         prompt: `give me a user`,
         messages: __threads.getOrCreateActive(),
         responseFormat: z.object({
@@ -183,7 +182,6 @@ __stack.locals.user = await runPrompt({
         }),
         clientConfig: {},
         maxToolCallRounds: 10,
-        stateStack: __stateStack,
         removedTools: __self.__removedTools,
         checkpointInfo: runner.getCheckpointInfo()
       });

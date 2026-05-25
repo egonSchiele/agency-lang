@@ -171,7 +171,6 @@ await callHook({
     await runner.step(1, async (runner) => {
 __self.__removedTools = __self.__removedTools || [];
 __stack.locals.numbers = await runPrompt({
-        ctx: __ctx,
         prompt: `the first 5 prime numbers`,
         messages: __threads.getOrCreateActive(),
         responseFormat: z.object({
@@ -179,7 +178,6 @@ __stack.locals.numbers = await runPrompt({
         }),
         clientConfig: {},
         maxToolCallRounds: 10,
-        stateStack: __stateStack,
         removedTools: __self.__removedTools,
         checkpointInfo: runner.getCheckpointInfo()
       });
@@ -210,7 +208,6 @@ if (hasInterrupts(__funcResult)) {
     await runner.step(3, async (runner) => {
 __self.__removedTools = __self.__removedTools || [];
 __stack.locals.greetings = await runPrompt({
-        ctx: __ctx,
         prompt: `a list of 3 common greetings in different languages`,
         messages: __threads.getOrCreateActive(),
         responseFormat: z.object({
@@ -218,7 +215,6 @@ __stack.locals.greetings = await runPrompt({
         }),
         clientConfig: {},
         maxToolCallRounds: 10,
-        stateStack: __stateStack,
         removedTools: __self.__removedTools,
         checkpointInfo: runner.getCheckpointInfo()
       });

@@ -174,7 +174,6 @@ await callHook({
     await runner.step(1, async (runner) => {
 __self.__removedTools = __self.__removedTools || [];
 __stack.locals.foo = await runPrompt({
-        ctx: __ctx,
         prompt: `What are 5 numbers?`,
         messages: __threads.getOrCreateActive(),
         responseFormat: z.object({
@@ -182,7 +181,6 @@ __stack.locals.foo = await runPrompt({
         }),
         clientConfig: __ctx.globals.get("llmConfigParam.agency", "config"),
         maxToolCallRounds: 10,
-        stateStack: __stateStack,
         removedTools: __self.__removedTools,
         checkpointInfo: runner.getCheckpointInfo()
       });
@@ -199,7 +197,6 @@ if (hasInterrupts(__stack.locals.foo)) {
     await runner.step(2, async (runner) => {
 __self.__removedTools = __self.__removedTools || [];
 __stack.locals.foo2 = await runPrompt({
-        ctx: __ctx,
         prompt: `What are 5 numbers?`,
         messages: __threads.getOrCreateActive(),
         responseFormat: z.object({
@@ -209,7 +206,6 @@ __stack.locals.foo2 = await runPrompt({
           "maxTokens": 100
         },
         maxToolCallRounds: 10,
-        stateStack: __stateStack,
         removedTools: __self.__removedTools,
         checkpointInfo: runner.getCheckpointInfo()
       });

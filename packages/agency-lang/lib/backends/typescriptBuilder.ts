@@ -2581,9 +2581,10 @@ export class TypeScriptBuilder {
       threadExpr = ts.threads.createAndReturnSubthread();
     }
 
-    // Build runPrompt config object
+    // Build runPrompt config object. `ctx` and `stateStack` are no longer
+    // passed at the call site — `runPrompt` reads them from the active
+    // ALS frame via `getRuntimeContext()`.
     const runPromptEntries: Record<string, TsNode> = {
-      ctx: ts.runtime.ctx,
       prompt: promptNode,
       messages: $(threadExpr).done(),
     };
@@ -2597,7 +2598,6 @@ export class TypeScriptBuilder {
     runPromptEntries.maxToolCallRounds = ts.num(
       this.agencyConfig.maxToolCallRounds || 10,
     );
-    runPromptEntries.stateStack = ts.id("__stateStack");
     runPromptEntries.removedTools = ts.self("__removedTools");
     runPromptEntries.checkpointInfo = ts.raw("runner.getCheckpointInfo()");
 

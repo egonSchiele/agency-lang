@@ -191,7 +191,6 @@ await callHook({
 await runner.step(0, async (runner) => {
 __self.__removedTools = __self.__removedTools || [];
 __stack.locals.res1 = await runPrompt({
-          ctx: __ctx,
           prompt: `What are the first 5 prime numbers?`,
           messages: __threads.getOrCreateActive(),
           responseFormat: z.object({
@@ -199,7 +198,6 @@ __stack.locals.res1 = await runPrompt({
           }),
           clientConfig: {},
           maxToolCallRounds: 10,
-          stateStack: __stateStack,
           removedTools: __self.__removedTools,
           checkpointInfo: runner.getCheckpointInfo()
         });
@@ -214,7 +212,6 @@ await runner.thread(1, __threads, "createSubthread", async (runner) => {
 await runner.step(0, async (runner) => {
 __self.__removedTools = __self.__removedTools || [];
 __stack.locals.res2 = await runPrompt({
-            ctx: __ctx,
             prompt: `What are the next 2 prime numbers after those?`,
             messages: __threads.getOrCreateActive(),
             responseFormat: z.object({
@@ -222,7 +219,6 @@ __stack.locals.res2 = await runPrompt({
             }),
             clientConfig: {},
             maxToolCallRounds: 10,
-            stateStack: __stateStack,
             removedTools: __self.__removedTools,
             checkpointInfo: runner.getCheckpointInfo()
           });
@@ -237,7 +233,6 @@ await runner.thread(1, __threads, "createSubthread", async (runner) => {
 await runner.step(0, async (runner) => {
 __self.__removedTools = __self.__removedTools || [];
 __stack.locals.res3 = await runPrompt({
-              ctx: __ctx,
               prompt: `And what is the sum of all those numbers combined?`,
               messages: __threads.getOrCreateActive(),
               responseFormat: z.object({
@@ -245,7 +240,6 @@ __stack.locals.res3 = await runPrompt({
               }),
               clientConfig: {},
               maxToolCallRounds: 10,
-              stateStack: __stateStack,
               removedTools: __self.__removedTools,
               checkpointInfo: runner.getCheckpointInfo()
             });
@@ -261,7 +255,6 @@ await runner.thread(2, __threads, "create", async (runner) => {
 await runner.step(0, async (runner) => {
 __self.__removedTools = __self.__removedTools || [];
 __stack.locals.res5 = await runPrompt({
-              ctx: __ctx,
               prompt: `And what is the sum of all those numbers combined?`,
               messages: __threads.getOrCreateActive(),
               responseFormat: z.object({
@@ -269,7 +262,6 @@ __stack.locals.res5 = await runPrompt({
               }),
               clientConfig: {},
               maxToolCallRounds: 10,
-              stateStack: __stateStack,
               removedTools: __self.__removedTools,
               checkpointInfo: runner.getCheckpointInfo()
             });
@@ -286,7 +278,6 @@ await runner.thread(2, __threads, "createSubthread", async (runner) => {
 await runner.step(0, async (runner) => {
 __self.__removedTools = __self.__removedTools || [];
 __stack.locals.res4 = await runPrompt({
-            ctx: __ctx,
             prompt: `And what is the sum of all those numbers combined?`,
             messages: __threads.getOrCreateActive(),
             responseFormat: z.object({
@@ -294,7 +285,6 @@ __stack.locals.res4 = await runPrompt({
             }),
             clientConfig: {},
             maxToolCallRounds: 10,
-            stateStack: __stateStack,
             removedTools: __self.__removedTools,
             checkpointInfo: runner.getCheckpointInfo()
           });
@@ -441,7 +431,6 @@ await callHook({
 await runner.step(0, async (runner) => {
 __self.__removedTools = __self.__removedTools || [];
 __stack.locals.res1 = await runPrompt({
-          ctx: __ctx,
           prompt: `What are the first 5 prime numbers?`,
           messages: __threads.getOrCreateActive(),
           responseFormat: z.object({
@@ -449,7 +438,6 @@ __stack.locals.res1 = await runPrompt({
           }),
           clientConfig: {},
           maxToolCallRounds: 10,
-          stateStack: __stateStack,
           removedTools: __self.__removedTools,
           checkpointInfo: runner.getCheckpointInfo()
         });
@@ -467,7 +455,6 @@ await runner.thread(1, __threads, "createSubthread", async (runner) => {
 await runner.step(0, async (runner) => {
 __self.__removedTools = __self.__removedTools || [];
 __stack.locals.res2 = await runPrompt({
-            ctx: __ctx,
             prompt: `What are the next 2 prime numbers after those?`,
             messages: __threads.getOrCreateActive(),
             responseFormat: z.object({
@@ -475,7 +462,6 @@ __stack.locals.res2 = await runPrompt({
             }),
             clientConfig: {},
             maxToolCallRounds: 10,
-            stateStack: __stateStack,
             removedTools: __self.__removedTools,
             checkpointInfo: runner.getCheckpointInfo()
           });
@@ -493,7 +479,6 @@ await runner.thread(1, __threads, "createSubthread", async (runner) => {
 await runner.step(0, async (runner) => {
 __self.__removedTools = __self.__removedTools || [];
 __stack.locals.res3 = await runPrompt({
-              ctx: __ctx,
               prompt: `And what is the sum of all those numbers combined?`,
               messages: __threads.getOrCreateActive(),
               responseFormat: z.object({
@@ -501,7 +486,6 @@ __stack.locals.res3 = await runPrompt({
               }),
               clientConfig: {},
               maxToolCallRounds: 10,
-              stateStack: __stateStack,
               removedTools: __self.__removedTools,
               checkpointInfo: runner.getCheckpointInfo()
             });
@@ -520,7 +504,6 @@ await runner.thread(2, __threads, "create", async (runner) => {
 await runner.step(0, async (runner) => {
 __self.__removedTools = __self.__removedTools || [];
 __stack.locals.res5 = await runPrompt({
-              ctx: __ctx,
               prompt: `And what is the sum of all those numbers combined?`,
               messages: __threads.getOrCreateActive(),
               responseFormat: z.object({
@@ -528,7 +511,6 @@ __stack.locals.res5 = await runPrompt({
               }),
               clientConfig: {},
               maxToolCallRounds: 10,
-              stateStack: __stateStack,
               removedTools: __self.__removedTools,
               checkpointInfo: runner.getCheckpointInfo()
             });
@@ -548,7 +530,6 @@ await runner.thread(2, __threads, "createSubthread", async (runner) => {
 await runner.step(0, async (runner) => {
 __self.__removedTools = __self.__removedTools || [];
 __stack.locals.res4 = await runPrompt({
-            ctx: __ctx,
             prompt: `And what is the sum of all those numbers combined?`,
             messages: __threads.getOrCreateActive(),
             responseFormat: z.object({
@@ -556,7 +537,6 @@ __stack.locals.res4 = await runPrompt({
             }),
             clientConfig: {},
             maxToolCallRounds: 10,
-            stateStack: __stateStack,
             removedTools: __self.__removedTools,
             checkpointInfo: runner.getCheckpointInfo()
           });

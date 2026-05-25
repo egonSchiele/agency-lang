@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import * as httpImpls from "../stdlib/http.js";
 import * as memoryImpls from "../stdlib/memory.js";
 import * as threadImpls from "../stdlib/thread.js";
 import { CONTEXT_INJECTED_BUILTINS } from "./contextInjected.js";
@@ -33,6 +34,7 @@ describe("CONTEXT_INJECTED_BUILTINS drift safeguard", () => {
   const implsByFrom: Record<string, Record<string, unknown>> = {
     "agency-lang/stdlib-lib/memory.js": { ...memoryImpls },
     "agency-lang/stdlib-lib/thread.js": { ...threadImpls },
+    "agency-lang/stdlib-lib/http.js": { ...httpImpls },
   };
 
   for (const [name, def] of Object.entries(CONTEXT_INJECTED_BUILTINS)) {

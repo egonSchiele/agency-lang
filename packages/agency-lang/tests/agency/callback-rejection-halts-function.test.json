@@ -1,0 +1,21 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Rejecting a callback's interrupt halts the function whose hook fired the callback. doWork's body must NOT run.",
+      "input": "",
+      "expectedOutput": "\"rejected, body ran=false\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "interruptHandlers": [
+        {
+          "action": "reject",
+          "expectedMessage": "really continue?"
+        }
+      ]
+    }
+  ]
+}

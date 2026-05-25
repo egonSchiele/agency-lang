@@ -30,6 +30,11 @@ import {
   DeterministicClient as __DeterministicClient,
 } from "agency-lang/runtime";
 import {
+  __internal_fetch,
+  __internal_fetchJSON,
+  __internal_fetchMarkdown,
+} from "agency-lang/stdlib-lib/http.js";
+import {
   __internal_applyExtractionResult,
   __internal_applyForgetResult,
   __internal_buildExtractionPrompt,

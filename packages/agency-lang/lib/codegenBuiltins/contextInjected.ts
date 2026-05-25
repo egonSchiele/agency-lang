@@ -68,6 +68,18 @@ const MEMORY_FROM = "agency-lang/stdlib-lib/memory.js";
  *  `getTokens`). */
 const THREAD_FROM = "agency-lang/stdlib-lib/thread.js";
 
+/** Import source for the std::http builtins (`__internal_fetch`,
+ *  `__internal_fetchJSON`, `__internal_fetchMarkdown`). Context-
+ *  injected so each fetch can pass `ctx.getAbortSignal(stack)` to
+ *  the underlying global `fetch` — that's what makes Ctrl-C and
+ *  per-branch race-loser aborts tear down in-flight HTTP requests
+ *  instead of leaving them running. */
+const HTTP_FROM = "agency-lang/stdlib-lib/http.js";
+
+/** Param list shared by all three HTTP fetch builtins:
+ *  (baseUrl, path, headers, allowedDomains). */
+const HTTP_FETCH_PARAMS: (VariableType | "any")[] = [string, string, ANY_T, ANY_T];
+
 export const CONTEXT_INJECTED_BUILTINS: Record<string, ContextInjectedBuiltin> = {
   __internal_setMemoryId: {
     name: "__internal_setMemoryId",
@@ -173,6 +185,27 @@ export const CONTEXT_INJECTED_BUILTINS: Record<string, ContextInjectedBuiltin> =
     from: THREAD_FROM,
     params: [number],
     returnType: voidT,
+  },
+  __internal_fetch: {
+    name: "__internal_fetch",
+    from: HTTP_FROM,
+    params: HTTP_FETCH_PARAMS,
+    returnType: string,
+  },
+  // Return shape is parsed JSON — could be anything. Caller's agency
+  // type annotation on the surrounding `def fetchJSON` is what
+  // narrows it for downstream consumers.
+  __internal_fetchJSON: {
+    name: "__internal_fetchJSON",
+    from: HTTP_FROM,
+    params: HTTP_FETCH_PARAMS,
+    returnType: ANY_T,
+  },
+  __internal_fetchMarkdown: {
+    name: "__internal_fetchMarkdown",
+    from: HTTP_FROM,
+    params: HTTP_FETCH_PARAMS,
+    returnType: string,
   },
 };
 

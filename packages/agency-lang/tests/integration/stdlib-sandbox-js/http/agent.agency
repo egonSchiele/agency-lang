@@ -1,4 +1,4 @@
-import { webfetch } from "std::http"
+import { fetchMarkdown } from "std::http"
 import { env } from "std::system"
 
 node main() {
@@ -9,7 +9,7 @@ node main() {
   const url = "http://127.0.0.1:" + port
 
   handle {
-    const result = webfetch(url)
+    const result = fetchMarkdown(url)
     return result catch "fetch failed"
   } with (data) {
     return approve()

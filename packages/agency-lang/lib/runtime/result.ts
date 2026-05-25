@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { isAbortError } from "./errors.js";
 import { isGuardExceededError } from "./guard.js";
 import { hasInterrupts } from "./interrupts.js";
 
@@ -64,6 +65,17 @@ export async function __tryCall(fn: () => any, opts?: FailureOpts): Promise<Resu
     if (resultValueSchema.safeParse(value).success) return value;
     return success(value);
   } catch (error) {
+    // Cancellation must always propagate — never get silently
+    // converted into a Failure value. A `try fetch(...)` whose
+    // underlying request was aborted by Ctrl-C, race-loser cleanup,
+    // or a time guard must surface as an actual cancellation up
+    // the call stack, not as a vague Failure that the caller might
+    // swallow with `catch fallback`. See lib/stdlib/http.ts's
+    // `runHttp` helper that translates DOMException("AbortError")
+    // into AgencyCancelledError specifically so this re-throw fires.
+    if (isAbortError(error)) {
+      throw error;
+    }
     // Preserve GuardExceededError's structured data so the stdlib
     // `guard` function can surface { type, maxCost, actualCost,
     // maxTime, actualTime } directly via `result.error`. Without

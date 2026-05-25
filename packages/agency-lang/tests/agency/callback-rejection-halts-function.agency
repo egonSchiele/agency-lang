@@ -1,0 +1,32 @@
+// Verifies callback-rejection-propagation plan, Task 1 (function/node category).
+//
+// When a callback body raises an interrupt and the user rejects it,
+// the rejection must halt the function whose hook fired the callback.
+// Today the rejection is silently dropped, so doWork's body runs to
+// completion and main sees a success result.
+//
+// Test driver supplies `{action: "reject"}`. With the fix, doWork()
+// returns a Failure before its body runs, main detects isFailure, and
+// returns "rejected, body ran=false". Today, main returns
+// "succeeded, body ran=true".
+
+let bodyRan: boolean = false
+
+callback("onFunctionStart") as data {
+  if (data.functionName == "doWork") {
+    interrupt myapp::abort("really continue?", {})
+  }
+}
+
+def doWork(): string {
+  bodyRan = true
+  return "x"
+}
+
+node main() {
+  let result: string = doWork()
+  if (isFailure(result)) {
+    return "rejected, body ran=" + bodyRan
+  }
+  return "succeeded, body ran=" + bodyRan
+}

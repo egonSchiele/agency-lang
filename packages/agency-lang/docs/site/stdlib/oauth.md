@@ -79,7 +79,7 @@ Start an OAuth 2.0 authorization flow. Opens the user's browser for consent, cap
 
 **Throws:** `std::authorize`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/oauth.agency#L48))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/oauth.agency#L49))
 
 ### getAccessToken
 
@@ -99,7 +99,7 @@ Get a valid OAuth access token for a previously authorized provider. Automatical
 
 **Throws:** `std::getAccessToken`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/oauth.agency#L78))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/oauth.agency#L79))
 
 ### isAuthorized
 
@@ -117,7 +117,7 @@ Check if OAuth tokens exist for a given provider name. Returns true if tokens ar
 
 **Returns:** `boolean`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/oauth.agency#L89))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/oauth.agency#L90))
 
 ### revokeAuth
 
@@ -137,4 +137,4 @@ Delete stored OAuth tokens for a provider. The user will need to run authorize a
 
 **Throws:** `std::revokeAuth`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/oauth.agency#L96))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/oauth.agency#L97))

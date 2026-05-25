@@ -1,9 +1,18 @@
-// `__internal_*` names are context-injected builtins: always in
-// scope (no `import` needed), forbidden as values, and rewritten by
-// the TypeScript builder to receive (`__ctx`, `__stateStack`, `__threads`)
-// as the first three positional arguments. See
-// lib/codegenBuiltins/contextInjected.ts for the registry and
-// lib/stdlib/thread.ts for the implementations.
+// `_*` exports read ctx/stack/threads from AsyncLocalStorage (see
+// `lib/runtime/asyncContext.ts`) so message pushes target the active
+// scope's thread, cost/token reads see the branch-local
+// accumulators, and guard scopes push/pop on the right stack. The
+// deprecated `__internal_*` exports remain in `lib/stdlib/thread.ts`
+// for the migration window.
+import {
+  _systemMessage,
+  _userMessage,
+  _assistantMessage,
+  _getCost,
+  _getTokens,
+  _pushGuard,
+  _popGuard,
+} from "agency-lang/stdlib-lib/thread.js"
 
 export def systemMessage(msg: string) {
   """
@@ -13,7 +22,7 @@ export def systemMessage(msg: string) {
 
   @param msg - The system message content
   """
-  __internal_systemMessage(msg)
+  _systemMessage(msg)
 }
 
 export def userMessage(msg: string) {
@@ -24,7 +33,7 @@ export def userMessage(msg: string) {
 
   @param msg - The user message content
   """
-  __internal_userMessage(msg)
+  _userMessage(msg)
 }
 
 export def assistantMessage(msg: string) {
@@ -35,7 +44,7 @@ export def assistantMessage(msg: string) {
 
   @param msg - The assistant message content
   """
-  __internal_assistantMessage(msg)
+  _assistantMessage(msg)
 }
 
 export safe def getCost(): number {
@@ -54,7 +63,7 @@ export safe def getCost(): number {
     // ... do work ...
     const sectionCost = getCost() - before
   """
-  return __internal_getCost()
+  return _getCost()
 }
 
 export safe def getTokens(): number {
@@ -62,7 +71,7 @@ export safe def getTokens(): number {
   Get the cumulative token count for the current execution branch.
   Same per-branch semantics as getCost().
   """
-  return __internal_getTokens()
+  return _getTokens()
 }
 
 export type GuardFailureData = {
@@ -132,8 +141,8 @@ export def guard(cost: (number | null) = null, time: (number | null) = null, blo
       print(result.value)
     }
   """
-  const count = __internal_pushGuard(cost, time)
+  const count = _pushGuard(cost, time)
   const result = try block()
-  __internal_popGuard(count)
+  _popGuard(count)
   return result
 }

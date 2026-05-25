@@ -10,39 +10,46 @@ Adding a new module to the agency standard library follows a general pattern.
 
 ## Accessing runtime state from a TS binding
 
-If a stdlib TS helper needs to read or mutate per-run state (memory manager, statelog client, abort controller, etc.) it MUST take the `RuntimeContext` as its first argument. Do not reach for a module-level singleton — multiple `runNode` calls can share a Node.js process and would race on it.
+If a stdlib TS helper needs to read or mutate per-run state (memory manager, statelog client, abort controller, etc.) it MUST read the `RuntimeContext` from the active `AsyncLocalStorage` frame. Do not reach for a module-level singleton — multiple `runNode` calls can share a Node.js process and would race on it.
 
-The runtime context is threaded into the call site by codegen via the **context-injected builtins** mechanism. Add an entry to the registry in `lib/codegenBuiltins/contextInjected.ts`, export the TS implementation under the same `__internal_*` name, and the agency-side wrapper can call it as if `__ctx` weren't a parameter:
+The runtime context is exposed via `getRuntimeContext()`, which returns the `{ctx, stack, threads}` triple of the currently-running Agency scope. Frames are installed by the runtime at three points: `runNode` (top of each agent run), `Runner.runInScope` (every step/hook/pipe), and `runBatch`'s branch wrapper (each fork/race branch). Stdlib helpers don't need to know which frame they're in — `getRuntimeContext()` always returns the innermost one.
 
 ```ts
 // lib/stdlib/foo.ts
-import type { RuntimeContext } from "../runtime/state/context.js";
+import { getRuntimeContext } from "../runtime/asyncContext.js";
 
-export async function __internal_doThing(
-  ctx: RuntimeContext<any>,
-  arg: string,
-): Promise<void> {
-  if (!ctx?.someResource) return; // tolerate missing config
-  await ctx.someResource.handle(arg);
+export async function _doThing(arg: string): Promise<void> {
+  const { ctx, stack } = getRuntimeContext();
+  const signal = ctx.getAbortSignal(stack);
+  await ctx.someResource.handle(arg, { signal });
 }
-```
-
-```ts
-// lib/codegenBuiltins/contextInjected.ts (add to the registry)
-__internal_doThing: {
-  name: "__internal_doThing",
-  params: [string],
-  returnType: voidT,
-},
 ```
 
 ```agency
-// stdlib/foo.agency — no `import` needed; __internal_* are builtins
+// stdlib/foo.agency
+import { _doThing } from "agency-lang/stdlib-lib/foo.js"
+
 export def doThing(arg: string) {
-  __internal_doThing(arg)
+  _doThing(arg)
 }
 ```
 
-The TypeScript builder rewrites every call to `__internal_doThing(arg)` as `await __internal_doThing(__ctx, arg)`, so user code never holds a reference to the runtime context. Type the TS parameter as `RuntimeContext<any>` so the implementation retains access to internal fields the agency type system intentionally hides.
+That's it — `_doThing` is an ordinary imported function from the codegen's perspective. The convention is to prefix the JS export with a single underscore (`_doThing`) so it's clearly a stdlib JS helper that's only meant to be called from a corresponding `.agency` wrapper. The single-underscore name is just a convention; the codegen treats it like any other imported function.
 
-Names beginning with `__internal_` are reserved for this mechanism. The typechecker rejects any reference to a `__internal_*` identifier outside the callee position of a function call (e.g. `let f = __internal_doThing` is an error), and any `__internal_*` name not in the registry is reported as an unknown internal builtin.
+If you call `_doThing` directly from another stdlib TS file (e.g. one stdlib helper delegates to another), it works automatically — the ALS frame established by the outermost Agency call is inherited through every `await`.
+
+For tests that call `_doThing` from non-Agency code (e.g. vitest), wrap the call in `runInTestContext`:
+
+```ts
+import { runInTestContext } from "agency-lang/runtime/asyncContext.js";
+import { RuntimeContext } from "agency-lang/runtime/state/context.js";
+import { StateStack } from "agency-lang/runtime/state/stateStack.js";
+import { ThreadStore } from "agency-lang/runtime/state/threadStore.js";
+
+it("works", async () => {
+  const ctx = new RuntimeContext({ /* ... */ });
+  await runInTestContext(ctx, new StateStack(), new ThreadStore(), () =>
+    _doThing("hello"),
+  );
+});
+```

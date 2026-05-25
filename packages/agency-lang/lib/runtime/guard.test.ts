@@ -102,6 +102,16 @@ describe("CostGuard", () => {
     restored.charge(2);
     expect(restored.check(new StateStack())!.spent).toBeCloseTo(3.5, 5);
   });
+
+  it("fromJSON throws on the legacy {costAtPush} shape", () => {
+    // Clean breaking change: pre-shared-cost-guards checkpoints used
+    // {costLimit, costAtPush} (no `spent`). Restoring them silently
+    // would set spent=undefined → check() compares undefined > limit
+    // → false → guard never trips. Fail loudly instead.
+    expect(() =>
+      CostGuard.fromJSON({ costLimit: 2.0, costAtPush: 0.5 } as any),
+    ).toThrow(/spent/);
+  });
 });
 
 describe("TimeGuard", () => {

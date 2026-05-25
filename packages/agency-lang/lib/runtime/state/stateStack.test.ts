@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { StateStack, State, BranchState } from "./stateStack.js";
 import { _callbackImpl } from "../../stdlib/agency.js";
-import { CostGuard } from "../guard.js";
+import { CostGuard, GuardExceededError } from "../guard.js";
 
 type FrameOpts = {
   args?: Record<string, any>;
@@ -559,5 +559,136 @@ describe("StateStack guards", () => {
       costLimit: 5,
       spent: 1.23,
     });
+  });
+});
+
+describe("StateStack.enforceGuards", () => {
+  it("is a no-op when no guards are present", () => {
+    const stack = new StateStack();
+    expect(() => stack.enforceGuards()).not.toThrow();
+  });
+
+  it("is a no-op when every guard is below its limit", () => {
+    const stack = new StateStack();
+    const g = new CostGuard(5);
+    stack.pushGuard(g);
+    g.charge(2);
+    expect(() => stack.enforceGuards()).not.toThrow();
+  });
+
+  it("throws the trip error from the innermost (last-pushed) guard first", () => {
+    // Innermost-first order is the contract — a deeper guard with a
+    // tighter budget should report its trip before a shallower outer.
+    const stack = new StateStack();
+    const outer = new CostGuard(10);
+    stack.pushGuard(outer);
+    const inner = new CostGuard(1);
+    stack.pushGuard(inner);
+    outer.charge(11); // outer is over too
+    inner.charge(2); // inner is over
+    try {
+      stack.enforceGuards();
+      throw new Error("expected enforceGuards to throw");
+    } catch (err) {
+      expect(err).toBeInstanceOf(GuardExceededError);
+      const e = err as GuardExceededError;
+      // Inner's limit is 1, not outer's 10 — proves innermost-first.
+      expect(e.limit).toBe(1);
+    }
+  });
+});
+
+describe("StateStack.chargeGuards", () => {
+  it("calls charge(amount) on every guard", () => {
+    const stack = new StateStack();
+    const g1 = new CostGuard(5);
+    const g2 = new CostGuard(5);
+    stack.pushGuard(g1);
+    stack.pushGuard(g2);
+    stack.chargeGuards(1.5);
+    // Charging makes both guards' spent = 1.5; verify via check() at
+    // the boundary.
+    g1.charge(3.6); // 1.5 + 3.6 = 5.1 > 5
+    expect(g1.check(stack)?.spent).toBeCloseTo(5.1, 5);
+    g2.charge(3.6);
+    expect(g2.check(stack)?.spent).toBeCloseTo(5.1, 5);
+  });
+
+  it("is a no-op when no guards are present", () => {
+    const stack = new StateStack();
+    expect(() => stack.chargeGuards(1)).not.toThrow();
+  });
+});
+
+describe("StateStack.rehydrateInheritedGuardsFrom", () => {
+  it("prepends parent guards via cloneForBranch on a fresh child", () => {
+    const parent = new StateStack();
+    const g = new CostGuard(5);
+    parent.pushGuard(g);
+    const child = new StateStack();
+
+    child.rehydrateInheritedGuardsFrom(parent);
+
+    expect(child.guards).toHaveLength(1);
+    expect(child.guards[0]).toBe(g); // shared reference
+    expect(child.inheritedGuardCount).toBe(1);
+  });
+
+  it("preserves branch-owned guards by prepending parent guards in front", () => {
+    const parent = new StateStack();
+    const outer = new CostGuard(10);
+    parent.pushGuard(outer);
+
+    const child = new StateStack();
+    const inner = new CostGuard(2);
+    // Simulate a resumed child where the inner was deserialized first.
+    child.guards = [inner];
+
+    child.rehydrateInheritedGuardsFrom(parent);
+
+    expect(child.guards).toHaveLength(2);
+    expect(child.guards[0]).toBe(outer); // inherited first
+    expect(child.guards[1]).toBe(inner); // own preserved
+    expect(child.inheritedGuardCount).toBe(1);
+  });
+
+  it("validates persisted inheritedGuardCount on resume; throws on mismatch", () => {
+    // On resume, the child's `inheritedGuardCount` was restored from
+    // JSON. If the parent's guards array has drifted (e.g. the parent
+    // pushed an extra guard between snapshot and resume), the recomputed
+    // inheritedRefs length won't match the persisted count and we throw
+    // — silently inheriting a different set of guards would be a
+    // correctness bug far from its source.
+    const parent = new StateStack();
+    const outer = new CostGuard(10);
+    parent.pushGuard(outer);
+    const newer = new CostGuard(20);
+    parent.pushGuard(newer);
+
+    const child = new StateStack();
+    child.inheritedGuardCount = 1; // snapshot said 1, parent now yields 2
+
+    expect(() => child.rehydrateInheritedGuardsFrom(parent)).toThrow(
+      /inheritedGuardCount/,
+    );
+  });
+
+  it("filters out guards whose cloneForBranch returns undefined", () => {
+    // TimeGuard returns undefined from cloneForBranch — the parent's
+    // timer is the single source of truth, no branch ref needed. The
+    // child's inheritedGuardCount must reflect the number actually
+    // prepended (zero, in the all-TimeGuards case).
+    const parent = new StateStack();
+    // Pretend-time-guard that returns undefined from cloneForBranch.
+    const ignored: any = {
+      cloneForBranch: () => undefined,
+    };
+    parent.guards = [ignored];
+    const child = new StateStack();
+
+    child.rehydrateInheritedGuardsFrom(parent);
+
+    expect(child.guards).toEqual([]);
+    expect(child.inheritedGuardCount).toBe(0);
   });
 });

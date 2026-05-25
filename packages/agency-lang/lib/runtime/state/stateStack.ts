@@ -265,8 +265,12 @@ export type StateStackJSON = {
    *  serialized on the parent's snapshot and re-prepended at resume by
    *  `runBatch`. See StateStack.guards. */
   guards?: GuardJSON[];
-  /** Number of leading entries in `guards` that are inherited from the
-   *  parent stack. Always 0 for the root stack. */
+  /** Number of parent-owned guard references that were prepended onto
+   *  this stack's `guards` at branch creation. NOT a count of entries
+   *  in the serialized `guards` array (those are branch-owned only).
+   *  Used by `StateStack.rehydrateInheritedGuardsFrom` on resume to
+   *  validate that the parent's guard stack hasn't drifted. Always 0
+   *  for the root stack. */
   inheritedGuardCount?: number;
 };
 
@@ -334,6 +338,79 @@ export class StateStack {
     const guard = this.guards.pop();
     if (guard) guard.uninstall(this);
     return guard;
+  }
+
+  /**
+   * Walk active guards innermost-first and throw the first
+   * `GuardExceededError` returned by `guard.check(this)`. Used by
+   * `prompt.ts` as both the pre-call gate (refuse to issue a request
+   * we're already over budget for) and the post-call check (trip after
+   * the response cost has been billed).
+   *
+   * Innermost-first means the most recently pushed guard reports its
+   * trip first. This is a stable, scope-local rule rather than a
+   * global-minimum search; a shallower outer guard with a tighter
+   * budget would still trip on a later LLM call if the inner doesn't
+   * fail first.
+   */
+  enforceGuards(): void {
+    for (let i = this.guards.length - 1; i >= 0; i--) {
+      const err = this.guards[i].check(this);
+      if (err) throw err;
+    }
+  }
+
+  /**
+   * Charge every active guard with this call's cost. Shared parent
+   * guards (CostGuard.cloneForBranch returns `this`) accumulate
+   * descendant spend in real time — this is what makes mid-fork trip
+   * detection work without waiting for the fork to settle. TimeGuard's
+   * charge is a no-op.
+   */
+  chargeGuards(amount: number): void {
+    for (const g of this.guards) g.charge(amount);
+  }
+
+  /**
+   * Prepend the parent stack's inherited guard references onto this
+   * (child) stack's `guards` array, and stamp `inheritedGuardCount` so
+   * future serialization slices them off.
+   *
+   * Handles both fresh and resumed branches:
+   *  - Fresh branch: `inheritedGuardCount` is 0; the recomputed count
+   *    is stamped onto the stack.
+   *  - Resumed branch: `inheritedGuardCount` was restored from JSON;
+   *    the recomputed count is validated against it. A mismatch (e.g.
+   *    parent pushed an extra guard between snapshot and resume) throws
+   *    rather than silently inheriting a different set of guards.
+   *
+   * Always invokes `guard.cloneForBranch(parent, child)` on each parent
+   * guard so per-guard semantics (CostGuard returns `this`; TimeGuard
+   * returns `undefined`) drive what gets prepended. Slicing the parent
+   * by `inheritedGuardCount` would lose this filter information.
+   *
+   * Caller (runBatch) owns the per-execution idempotency check via
+   * `BranchState.guardsRehydrated` — this method itself is NOT idempotent;
+   * calling it twice on the same stack will double-prepend.
+   */
+  rehydrateInheritedGuardsFrom(parentStack: StateStack): void {
+    const inheritedRefs = parentStack.guards
+      .map((g) => g.cloneForBranch(parentStack, this))
+      .filter((g): g is Guard => g !== undefined);
+    if (
+      this.inheritedGuardCount > 0 &&
+      inheritedRefs.length !== this.inheritedGuardCount
+    ) {
+      throw new Error(
+        `Inherited guard count mismatch on resume: snapshot recorded ` +
+          `inheritedGuardCount=${this.inheritedGuardCount} parent-owned ` +
+          `guards, but parent now yields ${inheritedRefs.length} via ` +
+          `cloneForBranch. Parent's guard stack drifted between snapshot ` +
+          `and resume — state corruption.`,
+      );
+    }
+    this.guards = [...inheritedRefs, ...this.guards];
+    this.inheritedGuardCount = inheritedRefs.length;
   }
 
   constructor(

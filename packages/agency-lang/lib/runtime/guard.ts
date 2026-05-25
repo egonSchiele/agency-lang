@@ -172,6 +172,19 @@ export class CostGuard implements Guard {
   }
 
   static fromJSON(j: { costLimit: number; spent: number }): CostGuard {
+    // Clean break with the prior `{costAtPush}` JSON shape: refuse to
+    // restore a guard whose `spent` is missing rather than silently
+    // initializing it to NaN/undefined and producing nonsense trips.
+    // Older checkpoints from the per-branch-clone era are not
+    // supported by this binary — re-run from scratch.
+    if (typeof j.spent !== "number") {
+      throw new Error(
+        `CostGuard.fromJSON: missing or invalid 'spent' field ` +
+          `(got ${JSON.stringify(j.spent)}). This checkpoint may have ` +
+          `been written by a pre-shared-cost-guards version of the ` +
+          `runtime; that format is no longer supported.`,
+      );
+    }
     const g = new CostGuard(j.costLimit);
     g.spent = j.spent;
     return g;

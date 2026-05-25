@@ -2,6 +2,21 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task.
 
+> **Divergence from this plan (recorded during implementation):**
+> This plan originally specified that `CostGuard` would also install
+> an `AbortController` (mirroring `TimeGuard`) and fire it on trip to
+> cascade-cancel sibling branches. That was REMOVED during
+> implementation because it caused nested guards to both trip
+> simultaneously — violating the innermost-first reporting contract
+> guaranteed by `guard-nested-iteration-order` (an inner guard's
+> abort signal would also fire the outer's `check()` via the composed
+> signal). The current implementation has `CostGuard.install` /
+> `pause` / `resume` / `uninstall` as no-ops; enforcement happens
+> entirely through the pre-call gate and post-call checks walking
+> `stack.guards` in `prompt.ts`. Wherever this doc says "AbortController",
+> "abort cascade", or "OUTER.resume() rebuilds controllers", treat
+> that as plan-only — it does not describe shipped behavior.
+
 **Goal:** Make `guard(cost: $X)` enforce its budget across all concurrent descendants in real time, not just on fork-join. Today each fork branch gets an isolated clone of the parent's `CostGuard`, so an outer `$2.00` budget can be silently exceeded mid-fork when two branches each reach `$1.25` — neither inner clone trips, and the trip only fires after the fork settles. After this change the parent's guard is a single shared in-memory object referenced by every descendant branch; any LLM call that pushes total spend over the limit trips the outer guard immediately, aborting all siblings via the existing `composeBranchAbortSignal` cascade.
 
 This also adds a **pre-call gate** to `prompt.ts`: before sending an LLM request, check every guard on the stack. If we're already over budget (because of siblings' spend or a prior call), refuse the new call instead of incurring its cost and tripping after the fact.

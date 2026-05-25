@@ -15,8 +15,12 @@ import { guard } from "std::thread"
 //   All 3 interrupt. Harness approves all 3.
 //   Resume: branch X's 2nd call charges +$0.000002 → $0.000008 (no
 //   trip — `spent > limit` is false at equality). Next branch's 2nd
-//   call → $0.000010 → TRIP. Remaining branches abort via the
-//   shared OUTER's AbortController cascade.
+//   call → $0.000010 → TRIP at its post-call check, GuardExceededError
+//   thrown out of the branch. (CostGuard has no AbortController; trips
+//   propagate via post-call check on each branch — remaining branches
+//   that haven't yet completed their 2nd call will trip on their own
+//   post-call check or be refused by the pre-call gate at their next
+//   sync point.)
 //
 // If the inheritedGuardCount machinery or the rehydrate re-link
 // were broken, the resumed branch would not see the parent's

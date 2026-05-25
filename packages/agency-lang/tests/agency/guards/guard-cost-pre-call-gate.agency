@@ -14,20 +14,31 @@ import { guard } from "std::thread"
 // walk goes innermost-first: INNER trips ($0.000004 > $0.000003),
 // the throw is caught by the INNER's stdlib try, and the branch
 // returns "inner-trip". OUTER's check is skipped at that site (loop
-// breaks on first trip). But OUTER was already CHARGED ($0.000002
-// per call × 4 calls = $0.000008). With OUTER limit $0.000005,
-// OUTER's `spent` is now over its budget.
+// breaks on first trip). But OUTER was already CHARGED. After
+// branch 1's "b" charges OUTER from $0.000004 to $0.000006, OUTER's
+// `spent` is over its $0.000005 budget.
 //
-// After the fork returns, OUTER's body issues llm("after"). The
-// pre-call gate walks the stack — OUTER's check returns
-// GuardExceededError ($0.000008 > $0.000005) — the call is REFUSED
-// before smoltalk.complete() runs. The mock for "after" is never
-// consumed.
+// Now the pre-call gate fires in two distinct places (timing-
+// dependent on JS microtask ordering — both are valid outcomes):
 //
-// llmMocks provides EXACTLY 4 mocks (a1, b1, a2, b2). If the
-// pre-call gate is broken, "after" would be sent and the
-// DeterministicClient would throw "too many calls" because a 5th
-// mock is required.
+//   (A) Branch 2's "b" pre-gate sees OUTER over budget and refuses
+//       before sending. Branch 2's INNER catches via try, returns
+//       'inner-trip'. After the fork, llm("after") also pre-gate-
+//       refused. Mocks consumed: 3 (a1, b1, a2). actualCost =
+//       $0.000006.
+//   (B) Branch 2's "b" was already in-flight when branch 1's "b"
+//       post-charged OUTER. Both b's complete; both inner-trips
+//       caught. After the fork, llm("after") pre-gate-refused.
+//       Mocks consumed: 4. actualCost = $0.000008.
+//
+// Without the pre-call gate: llm("after") would be sent. Either it
+// would charge OUTER to $0.000010 (post-trip) or DeterministicClient
+// would throw 'too many calls' (since we provide only 4 mocks).
+//
+// Assertion: `actualCost < 0.000010` covers both pre-gate outcomes
+// and rejects the broken case. The mock-count cap acts as a second
+// independent signal: if 5+ calls are issued, DeterministicClient
+// throws and the test fails before any string assertion.
 def doInner(n: number): string {
   let r = guard(cost: 0.000003) as {
     const a = llm("a ${n}")
@@ -48,7 +59,9 @@ node main() {
     return "got: ${after}"
   }
   if (isFailure(outer)) {
-    return "outer-tripped-via-pre-gate:${outer.error.actualCost > 0.000005}"
+    // Pre-gate works: actualCost ∈ {$0.000006, $0.000008}.
+    // Pre-gate broken: actualCost == $0.000010 (or "too many calls").
+    return "pre-gate-trip:${outer.error.actualCost < 0.00001}"
   }
   return "unexpected: ${outer.value}"
 }

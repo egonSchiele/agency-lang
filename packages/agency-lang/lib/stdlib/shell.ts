@@ -15,6 +15,7 @@ import {
   seqC,
   str,
 } from "tarsec";
+import { getRuntimeContext } from "../runtime/asyncContext.js";
 import type { RuntimeContext } from "../runtime/state/context.js";
 import type { StateStack } from "../runtime/state/stateStack.js";
 import type { ThreadStore } from "../runtime/state/threadStore.js";
@@ -44,16 +45,14 @@ export type ExecOptions = {
 };
 
 /**
- * Context-injected so a long-running `exec(...)` dies on abort.
- * `abortableSpawn` sends SIGTERM to the child when the signal fires
- * and rejects with `AgencyCancelledError`. Previously a slow
- * subprocess kept running and held its stdout/stderr pipes open even
- * after the user cancelled the run.
+ * Run a subprocess with abort propagation. `abortableSpawn` sends
+ * SIGTERM to the child when the signal fires and rejects with
+ * `AgencyCancelledError`. Previously a slow subprocess kept running
+ * and held its stdout/stderr pipes open even after the user cancelled.
  */
-export async function __internal_exec(
+async function execImpl(
   ctx: RuntimeContext<any>,
   stack: StateStack,
-  _threads: ThreadStore,
   command: string,
   args: string[],
   cwd: string,
@@ -71,19 +70,47 @@ export async function __internal_exec(
   return abortableSpawn(command, args, buildSpawnOptions(cwd, timeout, stdin, signal));
 }
 
+/** Deprecated context-injected wrapper kept during the ALS migration;
+ *  see `_exec`. */
+export async function __internal_exec(
+  ctx: RuntimeContext<any>,
+  stack: StateStack,
+  _threads: ThreadStore,
+  command: string,
+  args: string[],
+  cwd: string,
+  timeout: number,
+  stdin: string,
+  options?: ExecOptions,
+): Promise<SpawnResult> {
+  return execImpl(ctx, stack, command, args, cwd, timeout, stdin, options);
+}
+
+/** ALS-reading replacement for `__internal_exec`. */
+export async function _exec(
+  command: string,
+  args: string[],
+  cwd: string,
+  timeout: number,
+  stdin: string,
+  options?: ExecOptions,
+): Promise<SpawnResult> {
+  const { ctx, stack } = getRuntimeContext();
+  return execImpl(ctx, stack, command, args, cwd, timeout, stdin, options);
+}
+
 export type BashOptions = {
   blockedCommands?: string[];
 };
 
 /**
- * Context-injected: see {@link __internal_exec}. `sh -c` chains
- * (pipes, subshells) get torn down when SIGTERM hits the parent
- * shell, which then propagates to its children.
+ * Like {@link execImpl} but routes the command through `sh -c`. Pipes
+ * and subshells get torn down when SIGTERM hits the parent shell,
+ * which then propagates to its children.
  */
-export async function __internal_bash(
+async function bashImpl(
   ctx: RuntimeContext<any>,
   stack: StateStack,
-  _threads: ThreadStore,
   command: string,
   cwd: string,
   timeout: number,
@@ -100,6 +127,33 @@ export async function __internal_bash(
   }
   const signal = ctx.getAbortSignal(stack);
   return abortableSpawn("sh", ["-c", command], buildSpawnOptions(cwd, timeout, stdin, signal));
+}
+
+/** Deprecated context-injected wrapper kept during the ALS migration;
+ *  see `_bash`. */
+export async function __internal_bash(
+  ctx: RuntimeContext<any>,
+  stack: StateStack,
+  _threads: ThreadStore,
+  command: string,
+  cwd: string,
+  timeout: number,
+  stdin: string,
+  options?: BashOptions,
+): Promise<SpawnResult> {
+  return bashImpl(ctx, stack, command, cwd, timeout, stdin, options);
+}
+
+/** ALS-reading replacement for `__internal_bash`. */
+export async function _bash(
+  command: string,
+  cwd: string,
+  timeout: number,
+  stdin: string,
+  options?: BashOptions,
+): Promise<SpawnResult> {
+  const { ctx, stack } = getRuntimeContext();
+  return bashImpl(ctx, stack, command, cwd, timeout, stdin, options);
 }
 
 export type LsEntry = {

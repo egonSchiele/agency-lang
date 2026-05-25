@@ -166,7 +166,7 @@ let __functionCompleted = false;
   }
   let __funcStartTime: number = performance.now();
   __self.__retryable = __self.__retryable ?? true;
-  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "multiLineComment.agency", scopeName: "greet", stack: __stateStack, threads: __threads });
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "multiLineComment.agency", scopeName: "greet" });
   let __resultCheckpointId = -1;
 if (__ctx.stateStack.currentNodeId()) {
   __resultCheckpointId = __ctx.checkpoints.createPinned(__stateStack, __ctx, { moduleId: "multiLineComment.agency", scopeName: "greet", stepPath: "", label: "result-entry" });
@@ -180,7 +180,6 @@ if (__ctx._pendingArgOverrides) {
   try {
     await runner.hook(0, async () => {
 await callHook({
-        ctx: __ctx,
         name: "onFunctionStart",
         data: {
           functionName: "greet",
@@ -222,7 +221,6 @@ return failure(
     __stateStack.pop()
     if (__functionCompleted) {
       await callHook({
-        ctx: __ctx,
         name: "onFunctionEnd",
         data: {
           functionName: "greet",

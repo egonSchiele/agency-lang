@@ -165,7 +165,7 @@ let __functionCompleted = false;
   __stack.args["name"] = name;
   __stack.args["age"] = age;
   __self.__retryable = __self.__retryable ?? true;
-  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "interrupt-in-node.agency", scopeName: "greet", stack: __stateStack, threads: __threads });
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "interrupt-in-node.agency", scopeName: "greet" });
   let __resultCheckpointId = -1;
 if (__ctx.stateStack.currentNodeId()) {
   __resultCheckpointId = __ctx.checkpoints.createPinned(__stateStack, __ctx, { moduleId: "interrupt-in-node.agency", scopeName: "greet", stepPath: "", label: "result-entry" });
@@ -187,7 +187,6 @@ if (__ctx._pendingArgOverrides) {
   try {
     await runner.hook(0, async () => {
 await callHook({
-        ctx: __ctx,
         name: "onFunctionStart",
         data: {
           functionName: "greet",
@@ -273,7 +272,6 @@ return failure(
     __stateStack.pop()
     if (__functionCompleted) {
       await callHook({
-        ctx: __ctx,
         name: "onFunctionEnd",
         data: {
           functionName: "greet",
@@ -320,7 +318,7 @@ const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
 let __forked;
 let __functionCompleted = false;
-  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "interrupt-in-node.agency", scopeName: "foo2", stack: __stateStack, threads: __threads });
+  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "interrupt-in-node.agency", scopeName: "foo2" });
   if (!__state.isResume) {
     __stack.args["name"] = __state.data.name;
     __stack.args["age"] = __state.data.age;
@@ -328,7 +326,6 @@ let __functionCompleted = false;
   try {
     await runner.hook(0, async () => {
 await callHook({
-        ctx: __ctx,
         name: "onNodeStart",
         data: {
           nodeName: "foo2"
@@ -385,7 +382,6 @@ return;
     if (runner.halted) return runner.haltResult;
     await runner.hook(5, async () => {
 await callHook({
-        ctx: __ctx,
         name: "onNodeEnd",
         data: {
           nodeName: "foo2",
@@ -426,14 +422,13 @@ const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
 let __forked;
 let __functionCompleted = false;
-  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "interrupt-in-node.agency", scopeName: "sayHi", stack: __stateStack, threads: __threads });
+  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "interrupt-in-node.agency", scopeName: "sayHi" });
   if (!__state.isResume) {
     __stack.args["name"] = __state.data.name;
   }
   try {
     await runner.hook(0, async () => {
 await callHook({
-        ctx: __ctx,
         name: "onNodeStart",
         data: {
           nodeName: "sayHi"
@@ -473,7 +468,6 @@ return;
     if (runner.halted) return runner.haltResult;
     await runner.hook(4, async () => {
 await callHook({
-        ctx: __ctx,
         name: "onNodeEnd",
         data: {
           nodeName: "sayHi",

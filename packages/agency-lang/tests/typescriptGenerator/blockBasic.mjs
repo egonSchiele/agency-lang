@@ -164,7 +164,7 @@ let __functionCompleted = false;
   let __funcStartTime: number = performance.now();
   __stack.args["block"] = block;
   __self.__retryable = __self.__retryable ?? true;
-  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "blockBasic.agency", scopeName: "twice", stack: __stateStack, threads: __threads });
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "blockBasic.agency", scopeName: "twice" });
   let __resultCheckpointId = -1;
 if (__ctx.stateStack.currentNodeId()) {
   __resultCheckpointId = __ctx.checkpoints.createPinned(__stateStack, __ctx, { moduleId: "blockBasic.agency", scopeName: "twice", stepPath: "", label: "result-entry" });
@@ -182,7 +182,6 @@ if (__ctx._pendingArgOverrides) {
   try {
     await runner.hook(0, async () => {
 await callHook({
-        ctx: __ctx,
         name: "onFunctionStart",
         data: {
           functionName: "twice",
@@ -248,7 +247,6 @@ return failure(
     __stateStack.pop()
     if (__functionCompleted) {
       await callHook({
-        ctx: __ctx,
         name: "onFunctionEnd",
         data: {
           functionName: "twice",
@@ -290,11 +288,10 @@ const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
 let __forked;
 let __functionCompleted = false;
-  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "blockBasic.agency", scopeName: "main", stack: __stateStack, threads: __threads });
+  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "blockBasic.agency", scopeName: "main" });
   try {
     await runner.hook(0, async () => {
 await callHook({
-        ctx: __ctx,
         name: "onNodeStart",
         data: {
           nodeName: "main"
@@ -309,7 +306,7 @@ __stack.locals.results = await __call(twice, {
 const __bstack = __bsetup.stack;
 const __self = __bstack.locals;
 
-const runner = new Runner(__ctx, __bstack, { state: __bstack, moduleId: "blockBasic.agency", scopeName: "__block_0", stack: __ctx.stateStack });
+const runner = new Runner(__ctx, __bstack, { state: __bstack, moduleId: "blockBasic.agency", scopeName: "__block_0" });
 try {
 await runner.step(0, async (runner) => {
 runner.halt(`hello`)
@@ -347,7 +344,6 @@ if (hasInterrupts(__funcResult)) {
     if (runner.halted) return runner.haltResult;
     await runner.hook(3, async () => {
 await callHook({
-        ctx: __ctx,
         name: "onNodeEnd",
         data: {
           nodeName: "main",

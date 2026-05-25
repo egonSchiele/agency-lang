@@ -158,14 +158,13 @@ const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
 let __forked;
 let __functionCompleted = false;
-  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "graph-node-with-types.agency", scopeName: "greet", stack: __stateStack, threads: __threads });
+  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "graph-node-with-types.agency", scopeName: "greet" });
   if (!__state.isResume) {
     __stack.args["name"] = __state.data.name;
   }
   try {
     await runner.hook(0, async () => {
 await callHook({
-        ctx: __ctx,
         name: "onNodeStart",
         data: {
           nodeName: "greet"
@@ -209,7 +208,6 @@ if (hasInterrupts(__funcResult)) {
     if (runner.halted) return runner.haltResult;
     await runner.hook(3, async () => {
 await callHook({
-        ctx: __ctx,
         name: "onNodeEnd",
         data: {
           nodeName: "greet",

@@ -177,7 +177,7 @@ let __functionCompleted = false;
   __stack.args["name"] = name;
   __stack.args["greeting"] = (greeting === __UNSET ? (`Hello`) : (greeting));
   __self.__retryable = __self.__retryable ?? true;
-  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "defaultValues.agency", scopeName: "greet", stack: __stateStack, threads: __threads });
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "defaultValues.agency", scopeName: "greet" });
   let __resultCheckpointId = -1;
 if (__ctx.stateStack.currentNodeId()) {
   __resultCheckpointId = __ctx.checkpoints.createPinned(__stateStack, __ctx, { moduleId: "defaultValues.agency", scopeName: "greet", stepPath: "", label: "result-entry" });
@@ -199,7 +199,6 @@ if (__ctx._pendingArgOverrides) {
   try {
     await runner.hook(0, async () => {
 await callHook({
-        ctx: __ctx,
         name: "onFunctionStart",
         data: {
           functionName: "greet",
@@ -250,7 +249,6 @@ return failure(
     __stateStack.pop()
     if (__functionCompleted) {
       await callHook({
-        ctx: __ctx,
         name: "onFunctionEnd",
         data: {
           functionName: "greet",

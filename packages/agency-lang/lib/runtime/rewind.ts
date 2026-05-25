@@ -1,7 +1,9 @@
 import type { Checkpoint } from "./state/checkpointStore.js";
+import { agencyStore } from "./asyncContext.js";
 import { RestoreSignal } from "./errors.js";
 import { RuntimeContext } from "./state/context.js";
 import { StateStack } from "./state/stateStack.js";
+import { ThreadStore } from "./state/threadStore.js";
 import type { GraphState } from "./types.js";
 import { createReturnObject, deepClone } from "./utils.js";
 import { color } from "@/utils/termcolors.js";
@@ -59,21 +61,31 @@ export async function rewindFrom(args: {
   }
 
   let nodeName = checkpoint.nodeId;
+  // See `runResumeLoop` in lib/runtime/interrupts.ts — stdlib helpers
+  // and `callHook` lookups go through `getRuntimeContext()` now, so the
+  // rewind path needs to seed its own ALS frame too. The threads slot is
+  // a placeholder; generated node bodies re-enter ALS inside each
+  // `Runner.runInScope` with the per-scope ThreadStore.
+  const threadStore = ThreadStore.withDefaultActive(execCtx.statelogClient);
 
   try {
     while (true) {
       try {
-        const result = await execCtx.graph.run(
-          nodeName,
-          {
-            data: {},
-            ctx: execCtx,
-            isResume: true,
-          },
-          {
-            onNodeEnter: (id) => execCtx.stateStack.nodesTraversed.push(id),
-            statelogClient: execCtx.statelogClient,
-          },
+        const result = await agencyStore.run(
+          { ctx: execCtx, stack: execCtx.stateStack, threads: threadStore },
+          () =>
+            execCtx.graph.run(
+              nodeName,
+              {
+                data: {},
+                ctx: execCtx,
+                isResume: true,
+              },
+              {
+                onNodeEnter: (id) => execCtx.stateStack.nodesTraversed.push(id),
+                statelogClient: execCtx.statelogClient,
+              },
+            ),
         );
         await execCtx.pendingPromises.awaitAll();
         return createReturnObject({ result, globals: execCtx.globals });

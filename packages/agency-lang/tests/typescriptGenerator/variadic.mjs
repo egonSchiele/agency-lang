@@ -171,7 +171,7 @@ let __functionCompleted = false;
   __stack.args["prefix"] = prefix;
   __stack.args["messages"] = messages;
   __self.__retryable = __self.__retryable ?? true;
-  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "variadic.agency", scopeName: "log", stack: __stateStack, threads: __threads });
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "variadic.agency", scopeName: "log" });
   let __resultCheckpointId = -1;
 if (__ctx.stateStack.currentNodeId()) {
   __resultCheckpointId = __ctx.checkpoints.createPinned(__stateStack, __ctx, { moduleId: "variadic.agency", scopeName: "log", stepPath: "", label: "result-entry" });
@@ -193,7 +193,6 @@ if (__ctx._pendingArgOverrides) {
   try {
     await runner.hook(0, async () => {
 await callHook({
-        ctx: __ctx,
         name: "onFunctionStart",
         data: {
           functionName: "log",
@@ -244,7 +243,6 @@ return failure(
     __stateStack.pop()
     if (__functionCompleted) {
       await callHook({
-        ctx: __ctx,
         name: "onFunctionEnd",
         data: {
           functionName: "log",

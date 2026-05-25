@@ -164,7 +164,7 @@ let __functionCompleted = false;
   let __funcStartTime: number = performance.now();
   __stack.args["x"] = x;
   __self.__retryable = __self.__retryable ?? true;
-  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "pipe-operator.agency", scopeName: "double", stack: __stateStack, threads: __threads });
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "pipe-operator.agency", scopeName: "double" });
   let __resultCheckpointId = -1;
 if (__ctx.stateStack.currentNodeId()) {
   __resultCheckpointId = __ctx.checkpoints.createPinned(__stateStack, __ctx, { moduleId: "pipe-operator.agency", scopeName: "double", stepPath: "", label: "result-entry" });
@@ -182,7 +182,6 @@ if (__ctx._pendingArgOverrides) {
   try {
     await runner.hook(0, async () => {
 await callHook({
-        ctx: __ctx,
         name: "onFunctionStart",
         data: {
           functionName: "double",
@@ -226,7 +225,6 @@ return failure(
     __stateStack.pop()
     if (__functionCompleted) {
       await callHook({
-        ctx: __ctx,
         name: "onFunctionEnd",
         data: {
           functionName: "double",
@@ -276,7 +274,7 @@ let __functionCompleted = false;
   __stack.args["a"] = a;
   __stack.args["b"] = b;
   __self.__retryable = __self.__retryable ?? true;
-  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "pipe-operator.agency", scopeName: "multiply", stack: __stateStack, threads: __threads });
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "pipe-operator.agency", scopeName: "multiply" });
   let __resultCheckpointId = -1;
 if (__ctx.stateStack.currentNodeId()) {
   __resultCheckpointId = __ctx.checkpoints.createPinned(__stateStack, __ctx, { moduleId: "pipe-operator.agency", scopeName: "multiply", stepPath: "", label: "result-entry" });
@@ -298,7 +296,6 @@ if (__ctx._pendingArgOverrides) {
   try {
     await runner.hook(0, async () => {
 await callHook({
-        ctx: __ctx,
         name: "onFunctionStart",
         data: {
           functionName: "multiply",
@@ -343,7 +340,6 @@ return failure(
     __stateStack.pop()
     if (__functionCompleted) {
       await callHook({
-        ctx: __ctx,
         name: "onFunctionEnd",
         data: {
           functionName: "multiply",
@@ -398,7 +394,7 @@ let __functionCompleted = false;
   __stack.args["a"] = a;
   __stack.args["b"] = b;
   __self.__retryable = __self.__retryable ?? true;
-  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "pipe-operator.agency", scopeName: "safeDivide", stack: __stateStack, threads: __threads });
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "pipe-operator.agency", scopeName: "safeDivide" });
   let __resultCheckpointId = -1;
 if (__ctx.stateStack.currentNodeId()) {
   __resultCheckpointId = __ctx.checkpoints.createPinned(__stateStack, __ctx, { moduleId: "pipe-operator.agency", scopeName: "safeDivide", stepPath: "", label: "result-entry" });
@@ -420,7 +416,6 @@ if (__ctx._pendingArgOverrides) {
   try {
     await runner.hook(0, async () => {
 await callHook({
-        ctx: __ctx,
         name: "onFunctionStart",
         data: {
           functionName: "safeDivide",
@@ -479,7 +474,6 @@ return failure(
     __stateStack.pop()
     if (__functionCompleted) {
       await callHook({
-        ctx: __ctx,
         name: "onFunctionEnd",
         data: {
           functionName: "safeDivide",
@@ -526,11 +520,10 @@ const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
 let __forked;
 let __functionCompleted = false;
-  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "pipe-operator.agency", scopeName: "main", stack: __stateStack, threads: __threads });
+  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "pipe-operator.agency", scopeName: "main" });
   try {
     await runner.hook(0, async () => {
 await callHook({
-        ctx: __ctx,
         name: "onNodeStart",
         data: {
           nodeName: "main"
@@ -597,7 +590,6 @@ __stack.locals.__pipe_4 = await success(10);
     if (runner.halted) return runner.haltResult;
     await runner.hook(12, async () => {
 await callHook({
-        ctx: __ctx,
         name: "onNodeEnd",
         data: {
           nodeName: "main",

@@ -521,17 +521,18 @@ export const ts = {
   },
 
   /**
-   * Emit `await callHook({ ctx, name, data })`.
+   * Emit `await callHook({ name, data })`.
    *
-   * Callback bodies cannot raise interrupts (statically forbidden by the
-   * typechecker — see `checkCallbackBodyInterrupts`). `callHook` returns
-   * `void`; the codegen-emitted hook sites fire-and-forget.
+   * `callHook` reads `ctx` from the active `agencyStore` frame, so the
+   * codegen no longer needs to thread `__ctx` through every emission
+   * site. Callback bodies cannot raise interrupts (statically forbidden
+   * by the typechecker — see `checkCallbackBodyInterrupts`). `callHook`
+   * returns `void`; the codegen-emitted hook sites fire-and-forget.
    */
   callHook(hookName: string, data: Record<string, TsNode> | TsNode): TsNode {
     const dataNode = "kind" in data ? data as TsNode : ts.obj(data as Record<string, TsNode>);
     return ts.awaitCall(ts.id("callHook"), [
       ts.obj({
-        ctx: ts.runtime.ctx,
         name: ts.str(hookName),
         data: dataNode,
       }),

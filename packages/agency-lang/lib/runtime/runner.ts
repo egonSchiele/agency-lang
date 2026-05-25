@@ -65,8 +65,15 @@ export class Runner {
     this.state = opts?.state ?? {};
     this.moduleId = opts?.moduleId ?? "";
     this.scopeName = opts?.scopeName ?? "";
-    this.stack = opts?.stack;
-    this.threads = opts?.threads;
+    // Post-ALS migration the codegen no longer emits `stack` / `threads`
+    // as part of the Runner opts — both values live in the active
+    // `agencyStore` frame and are recovered here. Direct test usages of
+    // `new Runner(ctx, frame)` outside an ALS frame fall back to
+    // `undefined`, which matches the pre-migration behaviour (no
+    // guard/abort-signal observation, no per-step ALS re-wrap).
+    const als = agencyStore.getStore();
+    this.stack = opts?.stack ?? als?.stack;
+    this.threads = opts?.threads ?? als?.threads;
   }
 
   /** Run `fn` inside an `agencyStore.run` frame seeded with this

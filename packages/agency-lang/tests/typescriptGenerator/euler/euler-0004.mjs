@@ -166,7 +166,7 @@ let __functionCompleted = false;
   let __funcStartTime: number = performance.now();
   __stack.args["n"] = n;
   __self.__retryable = __self.__retryable ?? true;
-  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "euler-0004.agency", scopeName: "isPalindrome", stack: __stateStack, threads: __threads });
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "euler-0004.agency", scopeName: "isPalindrome" });
   let __resultCheckpointId = -1;
 if (__ctx.stateStack.currentNodeId()) {
   __resultCheckpointId = __ctx.checkpoints.createPinned(__stateStack, __ctx, { moduleId: "euler-0004.agency", scopeName: "isPalindrome", stepPath: "", label: "result-entry" });
@@ -184,7 +184,6 @@ if (__ctx._pendingArgOverrides) {
   try {
     await runner.hook(0, async () => {
 await callHook({
-        ctx: __ctx,
         name: "onFunctionStart",
         data: {
           functionName: "isPalindrome",
@@ -259,7 +258,6 @@ return failure(
     __stateStack.pop()
     if (__functionCompleted) {
       await callHook({
-        ctx: __ctx,
         name: "onFunctionEnd",
         data: {
           functionName: "isPalindrome",
@@ -301,11 +299,10 @@ const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
 let __forked;
 let __functionCompleted = false;
-  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "euler-0004.agency", scopeName: "main", stack: __stateStack, threads: __threads });
+  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "euler-0004.agency", scopeName: "main" });
   try {
     await runner.hook(0, async () => {
 await callHook({
-        ctx: __ctx,
         name: "onNodeStart",
         data: {
           nodeName: "main"
@@ -359,7 +356,6 @@ return;
     if (runner.halted) return runner.haltResult;
     await runner.hook(5, async () => {
 await callHook({
-        ctx: __ctx,
         name: "onNodeEnd",
         data: {
           nodeName: "main",

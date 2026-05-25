@@ -157,11 +157,10 @@ const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
 let __forked;
 let __functionCompleted = false;
-  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "multipleNodes.agency", scopeName: "greet", stack: __stateStack, threads: __threads });
+  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "multipleNodes.agency", scopeName: "greet" });
   try {
     await runner.hook(0, async () => {
 await callHook({
-        ctx: __ctx,
         name: "onNodeStart",
         data: {
           nodeName: "greet"
@@ -203,7 +202,6 @@ return;
     if (runner.halted) return runner.haltResult;
     await runner.hook(3, async () => {
 await callHook({
-        ctx: __ctx,
         name: "onNodeEnd",
         data: {
           nodeName: "greet",
@@ -244,14 +242,13 @@ const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
 let __forked;
 let __functionCompleted = false;
-  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "multipleNodes.agency", scopeName: "processGreeting", stack: __stateStack, threads: __threads });
+  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "multipleNodes.agency", scopeName: "processGreeting" });
   if (!__state.isResume) {
     __stack.args["msg"] = __state.data.msg;
   }
   try {
     await runner.hook(0, async () => {
 await callHook({
-        ctx: __ctx,
         name: "onNodeStart",
         data: {
           nodeName: "processGreeting"
@@ -295,7 +292,6 @@ if (hasInterrupts(__funcResult)) {
     if (runner.halted) return runner.haltResult;
     await runner.hook(3, async () => {
 await callHook({
-        ctx: __ctx,
         name: "onNodeEnd",
         data: {
           nodeName: "processGreeting",
@@ -336,11 +332,10 @@ const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
 let __forked;
 let __functionCompleted = false;
-  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "multipleNodes.agency", scopeName: "main", stack: __stateStack, threads: __threads });
+  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "multipleNodes.agency", scopeName: "main" });
   try {
     await runner.hook(0, async () => {
 await callHook({
-        ctx: __ctx,
         name: "onNodeStart",
         data: {
           nodeName: "main"
@@ -360,7 +355,6 @@ return;
     if (runner.halted) return runner.haltResult;
     await runner.hook(2, async () => {
 await callHook({
-        ctx: __ctx,
         name: "onNodeEnd",
         data: {
           nodeName: "main",

@@ -1,8 +1,14 @@
-import { _speak, _record, _transcribe } from "agency-lang/stdlib-lib/speech.js"
+// `__internal_speak`, `__internal_record`, and `__internal_transcribe`
+// are context-injected so each one tears down its in-flight work on
+// abort: the `say` subprocess gets SIGTERM, the `rec` subprocess gets
+// SIGTERM and stdin is restored, and the Whisper upload fetch is
+// cancelled. See lib/codegenBuiltins/contextInjected.ts.
 
 export def speak(text: string, voice: string = "", rate: number = 0, outputFile: string = "") {
   """
   A tool for speaking text aloud using text-to-speech. Optionally specify a voice name, rate in words per minute, and an output file to save the audio to instead of playing it.
+
+  Cancellation: in-progress speech playback is stopped on Ctrl-C, race-loser, or time-guard abort.
 
   @param text - The text to speak
   @param voice - Voice name
@@ -13,7 +19,7 @@ export def speak(text: string, voice: string = "", rate: number = 0, outputFile:
     textLength: text.length
   })
 
-  _speak(text, voice, rate, outputFile)
+  __internal_speak(text, voice, rate, outputFile)
 }
 
 export def record(outputFile: string = "", silenceTimeout: number = 2000): string {
@@ -26,17 +32,21 @@ export def record(outputFile: string = "", silenceTimeout: number = 2000): strin
   Agency's unit literals: record(silenceTimeout: 3s), record(silenceTimeout: 500ms).
   Set to 0 for no timeout.
 
+  Cancellation: an in-progress recording is stopped on Ctrl-C, race-loser, or time-guard abort, surfacing as an AgencyCancelledError.
+
   @param outputFile - File path to save audio to (auto-generated if empty)
   @param silenceTimeout - Silence before auto-stopping in ms (0 to disable)
   """
   return interrupt std::record("Allow microphone recording?", {})
 
-  return _record(outputFile, silenceTimeout)
+  return __internal_record(outputFile, silenceTimeout)
 }
 
 export def transcribe(filepath: string, language: string = ""): string {
   """
   A tool for transcribing an audio file to text using OpenAI's Whisper API. Optionally specify a language code (e.g. "en") for better accuracy.
+
+  Cancellation: an in-flight Whisper upload tears down on Ctrl-C, race-loser, or time-guard abort.
 
   @param filepath - Path to the audio file
   @param language - Language code for better accuracy
@@ -45,5 +55,5 @@ export def transcribe(filepath: string, language: string = ""): string {
     filepath: filepath
   })
 
-  return _transcribe(filepath, language)
+  return __internal_transcribe(filepath, language)
 }

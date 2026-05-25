@@ -25,8 +25,6 @@ import {
   _print,
   _printJSON,
   _parseJSON,
-  _input,
-  _sleep,
   _round,
   _read,
   _write,
@@ -70,15 +68,19 @@ export safe def parseJSON(text: string): any {
 export safe def input(prompt: string): string {
   """
   A tool for prompting the user for input and returning their response.
+
+  Cancellation: a blocked input prompt is released on Ctrl-C, race-loser, or time-guard abort, surfacing as an AgencyCancelledError.
   """
-  return _input(prompt)
+  return __internal_input(prompt)
 }
 
 export safe def sleep(ms: number) {
   """
   Pause execution for the given duration in milliseconds. Use with unit literals for clarity: sleep(1s), sleep(500ms), sleep(2m).
+
+  Cancellation: a long sleep wakes up immediately on Ctrl-C, race-loser, or time-guard abort.
   """
-  _sleep(ms)
+  __internal_sleep(ms)
 }
 
 export safe def round(num: number, precision: number): number {

@@ -1,4 +1,3 @@
-import { spawn, SpawnOptions } from "child_process";
 import process from "process";
 import fs from "fs/promises";
 import { constants as fsConstants } from "fs";
@@ -16,102 +15,81 @@ import {
   seqC,
   str,
 } from "tarsec";
+import type { RuntimeContext } from "../runtime/state/context.js";
+import type { StateStack } from "../runtime/state/stateStack.js";
+import type { ThreadStore } from "../runtime/state/threadStore.js";
+import {
+  abortableSpawn,
+  AbortableSpawnOptions,
+  SpawnResult,
+} from "./abortable.js";
+import { checkAllowBlockList } from "./allowBlockList.js";
 
-function spawnAsync(
-  command: string,
-  args: string[],
-  options: SpawnOptions & { input?: string; timeout?: number },
-): Promise<{ stdout: string; stderr: string; exitCode: number }> {
-  return new Promise((resolve, reject) => {
-    const child = spawn(command, args, {
-      ...options,
-      stdio: ["pipe", "pipe", "pipe"],
-    });
-
-    let stdout = "";
-    let stderr = "";
-    let timedOut = false;
-    let timer: ReturnType<typeof setTimeout> | undefined;
-
-    child.stdout!.setEncoding("utf8");
-    child.stderr!.setEncoding("utf8");
-    child.stdout!.on("data", (data: string) => { stdout += data; });
-    child.stderr!.on("data", (data: string) => { stderr += data; });
-
-    if (options.input) {
-      child.stdin!.write(options.input);
-      child.stdin!.end();
-    } else {
-      child.stdin!.end();
-    }
-
-    if (options.timeout && options.timeout > 0) {
-      timer = setTimeout(() => {
-        timedOut = true;
-        child.kill("SIGTERM");
-      }, options.timeout);
-    }
-
-    child.on("close", (code) => {
-      if (timer) clearTimeout(timer);
-      if (timedOut) {
-        resolve({ stdout, stderr: stderr + "\nProcess timed out", exitCode: 1 });
-      } else {
-        resolve({ stdout, stderr, exitCode: code ?? 1 });
-      }
-    });
-    child.on("error", (err) => {
-      if (timer) clearTimeout(timer);
-      reject(err);
-    });
-  });
-}
-
-type SpawnAsyncOptions = SpawnOptions & { input?: string; timeout?: number };
-
-function buildSpawnOptions(cwd: string, timeout: number, stdin: string): SpawnAsyncOptions {
-  const options: SpawnAsyncOptions = {};
+function buildSpawnOptions(
+  cwd: string,
+  timeout: number,
+  stdin: string,
+  signal: AbortSignal,
+): AbortableSpawnOptions {
+  const options: AbortableSpawnOptions = { signal };
   if (cwd) options.cwd = cwd;
   if (timeout > 0) options.timeout = timeout;
   if (stdin) options.input = stdin;
   return options;
 }
 
-import { checkAllowBlockList } from "./allowBlockList.js";
-
 export type ExecOptions = {
   allowedCommands?: string[];
   blockedCommands?: string[];
 };
 
-export async function _exec(
+/**
+ * Context-injected so a long-running `exec(...)` dies on abort.
+ * `abortableSpawn` sends SIGTERM to the child when the signal fires
+ * and rejects with `AgencyCancelledError`. Previously a slow
+ * subprocess kept running and held its stdout/stderr pipes open even
+ * after the user cancelled the run.
+ */
+export async function __internal_exec(
+  ctx: RuntimeContext<any>,
+  stack: StateStack,
+  _threads: ThreadStore,
   command: string,
   args: string[],
   cwd: string,
   timeout: number,
   stdin: string,
   options?: ExecOptions,
-): Promise<{ stdout: string; stderr: string; exitCode: number }> {
+): Promise<SpawnResult> {
   const cmdError = checkAllowBlockList(
     [command],
     options?.allowedCommands ?? [],
     options?.blockedCommands ?? [],
   );
   if (cmdError) throw new Error(cmdError);
-  return spawnAsync(command, args, buildSpawnOptions(cwd, timeout, stdin));
+  const signal = ctx.getAbortSignal(stack);
+  return abortableSpawn(command, args, buildSpawnOptions(cwd, timeout, stdin, signal));
 }
 
 export type BashOptions = {
   blockedCommands?: string[];
 };
 
-export async function _bash(
+/**
+ * Context-injected: see {@link __internal_exec}. `sh -c` chains
+ * (pipes, subshells) get torn down when SIGTERM hits the parent
+ * shell, which then propagates to its children.
+ */
+export async function __internal_bash(
+  ctx: RuntimeContext<any>,
+  stack: StateStack,
+  _threads: ThreadStore,
   command: string,
   cwd: string,
   timeout: number,
   stdin: string,
   options?: BashOptions,
-): Promise<{ stdout: string; stderr: string; exitCode: number }> {
+): Promise<SpawnResult> {
   if (options?.blockedCommands && options.blockedCommands.length > 0) {
     const trimmed = command.trimStart();
     for (const blocked of options.blockedCommands) {
@@ -120,7 +98,8 @@ export async function _bash(
       }
     }
   }
-  return spawnAsync("sh", ["-c", command], buildSpawnOptions(cwd, timeout, stdin));
+  const signal = ctx.getAbortSignal(stack);
+  return abortableSpawn("sh", ["-c", command], buildSpawnOptions(cwd, timeout, stdin, signal));
 }
 
 export type LsEntry = {

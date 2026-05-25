@@ -1,11 +1,12 @@
 import { guard } from "std::thread"
 
 // A tiny time budget (20ms) wrapping a sleep that overruns it. The
-// timer fires while the JS-bodied sleep is in flight; the in-flight
-// sleep itself can't be aborted (V1 limitation), but the next runner
-// step boundary after it returns sees the abort and throws
-// GuardExceededError("time", ...). The stdlib guard's `try` converts
-// it to a Failure with type "timeoutFailure".
+// timer fires while the JS-bodied sleep is in flight; sleep is
+// abortable, so it wakes promptly on the guard's abort signal. The
+// next runner step boundary then throws GuardExceededError("time",
+// ...). The stdlib guard's `try` converts it to a Failure with type
+// "timeoutFailure". Because sleep now wakes at the abort moment,
+// actualTime can be roughly equal to maxTime; we assert `>=`.
 node main() {
   const result = guard(time: 20ms) as {
     sleep(150ms)
@@ -13,10 +14,9 @@ node main() {
     return "did not trip"
   }
   if (isFailure(result)) {
-    // actualTime > maxTime catches a bug where actualTime is just set
-    // to the limit instead of the real elapsed; actualTime > 0 alone
-    // would not.
-    return "tripped:${result.error.type}:${result.error.maxTime}:${result.error.actualTime > result.error.maxTime}"
+    // actualTime >= maxTime catches a bug where actualTime is just set
+    // to 0 (or some sentinel); actualTime > 0 alone wouldn't.
+    return "tripped:${result.error.type}:${result.error.maxTime}:${result.error.actualTime >= result.error.maxTime}"
   }
   return result.value
 }

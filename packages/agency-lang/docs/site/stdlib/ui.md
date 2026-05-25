@@ -174,6 +174,8 @@ prompt(question: string): string
 
 Prompt the user for text input in the fixed input bar at the bottom of the screen. The question appears as a hint. Returns the user's input as a string.
 
+  Cancellation: a blocked prompt is released on Ctrl-C, race-loser, or time-guard abort, surfacing as an AgencyCancelledError.
+
 **Parameters:**
 
 | Name | Type | Default |
@@ -200,7 +202,7 @@ Ask the user a yes/no question in the input bar. Returns true if the user answer
 
 **Returns:** `boolean`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L91))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L93))
 
 ### emptyLine
 
@@ -210,4 +212,4 @@ emptyLine()
 
 Print an empty line. Useful for adding spacing in the output.
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L102))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L104))

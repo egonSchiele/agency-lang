@@ -10,6 +10,8 @@ speak(text: string, voice: string, rate: number, outputFile: string)
 
 A tool for speaking text aloud using text-to-speech. Optionally specify a voice name, rate in words per minute, and an output file to save the audio to instead of playing it.
 
+  Cancellation: in-progress speech playback is stopped on Ctrl-C, race-loser, or time-guard abort.
+
   @param text - The text to speak
   @param voice - Voice name
   @param rate - Words per minute
@@ -26,7 +28,7 @@ A tool for speaking text aloud using text-to-speech. Optionally specify a voice 
 
 **Throws:** `std::speak`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/speech.agency#L3))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/speech.agency#L7))
 
 ### record
 
@@ -42,6 +44,8 @@ Record audio from the microphone. Stops when the user presses Enter,
   Agency's unit literals: record(silenceTimeout: 3s), record(silenceTimeout: 500ms).
   Set to 0 for no timeout.
 
+  Cancellation: an in-progress recording is stopped on Ctrl-C, race-loser, or time-guard abort, surfacing as an AgencyCancelledError.
+
   @param outputFile - File path to save audio to (auto-generated if empty)
   @param silenceTimeout - Silence before auto-stopping in ms (0 to disable)
 
@@ -56,7 +60,7 @@ Record audio from the microphone. Stops when the user presses Enter,
 
 **Throws:** `std::record`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/speech.agency#L19))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/speech.agency#L25))
 
 ### transcribe
 
@@ -65,6 +69,8 @@ transcribe(filepath: string, language: string): string
 ```
 
 A tool for transcribing an audio file to text using OpenAI's Whisper API. Optionally specify a language code (e.g. "en") for better accuracy.
+
+  Cancellation: an in-flight Whisper upload tears down on Ctrl-C, race-loser, or time-guard abort.
 
   @param filepath - Path to the audio file
   @param language - Language code for better accuracy
@@ -80,4 +86,4 @@ A tool for transcribing an audio file to text using OpenAI's Whisper API. Option
 
 **Throws:** `std::transcribe`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/speech.agency#L37))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/speech.agency#L45))

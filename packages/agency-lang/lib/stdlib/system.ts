@@ -1,10 +1,10 @@
-import { execFile } from "child_process";
 import path from "path";
 import process from "process";
 import { detectPlatform } from "./utils.js";
-import { promisify } from "util";
-
-const execFileAsync = promisify(execFile);
+import { abortableExec } from "./abortable.js";
+import type { RuntimeContext } from "../runtime/state/context.js";
+import type { StateStack } from "../runtime/state/stateStack.js";
+import type { ThreadStore } from "../runtime/state/threadStore.js";
 
 export function _args(): string[] {
   return process.argv.slice(2);
@@ -41,12 +41,21 @@ export function _setEnv(name: string, value: string): void {
 /**
  * Open a URL in the user's default browser.
  * Currently macOS-only (uses the `open` command). Throws on other platforms.
+ *
+ * Context-injected so the `open` subprocess gets SIGTERM if the run
+ * is cancelled before the browser launch completes.
  */
-export async function _openUrl(url: string): Promise<void> {
+export async function __internal_openUrl(
+  ctx: RuntimeContext<any>,
+  stack: StateStack,
+  _threads: ThreadStore,
+  url: string,
+): Promise<void> {
   const platform = await detectPlatform();
+  const signal = ctx.getAbortSignal(stack);
 
   if (platform === "macos") {
-    await execFileAsync("open", ["--", url]);
+    await abortableExec("open", ["--", url], signal);
   } else {
     throw new Error(
       `openUrl is currently only supported on macOS (detected: ${platform}). ` +
@@ -55,7 +64,16 @@ export async function _openUrl(url: string): Promise<void> {
   }
 }
 
-export async function _screenshot(
+/**
+ * Context-injected: `screencapture` in interactive-region mode can
+ * sit waiting for the user to drag a selection, and a long Linux
+ * `import` capture pulls the full window — both deserve to die on
+ * abort instead of blocking the agent.
+ */
+export async function __internal_screenshot(
+  ctx: RuntimeContext<any>,
+  stack: StateStack,
+  _threads: ThreadStore,
   filepath: string,
   x: number,
   y: number,
@@ -65,18 +83,19 @@ export async function _screenshot(
   const platform = await detectPlatform();
   const resolvedPath = path.resolve(process.cwd(), filepath);
   const hasRegion = x >= 0 && y >= 0 && width >= 0 && height >= 0;
+  const signal = ctx.getAbortSignal(stack);
 
   if (platform === "macos") {
     if (hasRegion) {
-      await execFileAsync("screencapture", ["-R", `${x},${y},${width},${height}`, resolvedPath]);
+      await abortableExec("screencapture", ["-R", `${x},${y},${width},${height}`, resolvedPath], signal);
     } else {
-      await execFileAsync("screencapture", ["-x", resolvedPath]);
+      await abortableExec("screencapture", ["-x", resolvedPath], signal);
     }
   } else if (platform === "linux") {
     if (hasRegion) {
-      await execFileAsync("import", ["-crop", `${width}x${height}+${x}+${y}`, "-window", "root", resolvedPath]);
+      await abortableExec("import", ["-crop", `${width}x${height}+${x}+${y}`, "-window", "root", resolvedPath], signal);
     } else {
-      await execFileAsync("import", ["-window", "root", resolvedPath]);
+      await abortableExec("import", ["-window", "root", resolvedPath], signal);
     }
   } else {
     console.error(

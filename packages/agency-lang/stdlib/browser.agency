@@ -1,5 +1,3 @@
-import { _browserUse } from "agency-lang/stdlib-lib/browserUse.js"
-
 /** @module
   Usage from Agency code:
   ```ts
@@ -36,7 +34,7 @@ export def browserUse(task: string, model: string = "", maxCostUsd: number = 0, 
     model: model
   })
 
-  return try _browserUse(task, {
+  return try __internal_browserUse(task, {
     model: model,
     maxCostUsd: maxCostUsd,
     proxyCountryCode: proxyCountryCode,

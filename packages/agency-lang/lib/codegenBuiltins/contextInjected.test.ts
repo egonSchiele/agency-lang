@@ -2,6 +2,13 @@ import { describe, it, expect } from "vitest";
 import * as httpImpls from "../stdlib/http.js";
 import * as memoryImpls from "../stdlib/memory.js";
 import * as threadImpls from "../stdlib/thread.js";
+import * as builtinsImpls from "../stdlib/builtins.js";
+import * as uiImpls from "../stdlib/ui.js";
+import * as shellImpls from "../stdlib/shell.js";
+import * as systemImpls from "../stdlib/system.js";
+import * as speechImpls from "../stdlib/speech.js";
+import * as browserUseImpls from "../stdlib/browserUse.js";
+import * as oauthImpls from "../stdlib/oauth.js";
 import { CONTEXT_INJECTED_BUILTINS } from "./contextInjected.js";
 
 /**
@@ -35,6 +42,13 @@ describe("CONTEXT_INJECTED_BUILTINS drift safeguard", () => {
     "agency-lang/stdlib-lib/memory.js": { ...memoryImpls },
     "agency-lang/stdlib-lib/thread.js": { ...threadImpls },
     "agency-lang/stdlib-lib/http.js": { ...httpImpls },
+    "agency-lang/stdlib-lib/builtins.js": { ...builtinsImpls },
+    "agency-lang/stdlib-lib/ui.js": { ...uiImpls },
+    "agency-lang/stdlib-lib/shell.js": { ...shellImpls },
+    "agency-lang/stdlib-lib/system.js": { ...systemImpls },
+    "agency-lang/stdlib-lib/speech.js": { ...speechImpls },
+    "agency-lang/stdlib-lib/browserUse.js": { ...browserUseImpls },
+    "agency-lang/stdlib-lib/oauth.js": { ...oauthImpls },
   };
 
   for (const [name, def] of Object.entries(CONTEXT_INJECTED_BUILTINS)) {

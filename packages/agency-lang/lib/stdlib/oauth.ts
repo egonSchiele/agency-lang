@@ -5,6 +5,11 @@ import os from "os";
 import path from "path";
 import { execFile } from "child_process";
 import { getEncryptionKey, encrypt, decrypt } from "./oauthEncryption.js";
+import { runHttp } from "./http.js";
+import { AgencyCancelledError } from "../runtime/errors.js";
+import type { RuntimeContext } from "../runtime/state/context.js";
+import type { StateStack } from "../runtime/state/stateStack.js";
+import type { ThreadStore } from "../runtime/state/threadStore.js";
 
 function getTokenDir(): string {
   return process.env.AGENCY_OAUTH_TOKEN_DIR || path.join(os.homedir(), ".agency", "oauth");
@@ -90,7 +95,8 @@ function openBrowser(url: string): void {
 }
 
 function waitForCallback(
-  port: number
+  port: number,
+  signal: AbortSignal | undefined,
 ): Promise<{ code: string; state: string }> {
   return new Promise((resolve, reject) => {
     let settled = false;
@@ -119,8 +125,7 @@ function waitForCallback(
         settled = true;
         res.writeHead(400, { "Content-Type": "text/html" });
         res.end(`<h1>Authorization failed</h1><p>${escapeHtml(error)}</p>`);
-        clearTimeout(timer);
-        server.close();
+        cleanup();
         reject(new Error(`OAuth authorization failed: ${error}`));
         return;
       }
@@ -136,14 +141,13 @@ function waitForCallback(
       res.end(
         "<h1>Authorization successful!</h1><p>You can close this tab and return to your terminal.</p>"
       );
-      clearTimeout(timer);
-      server.close();
+      cleanup();
       resolve({ code, state });
     });
 
     server.on("error", (err: NodeJS.ErrnoException) => {
       settled = true;
-      clearTimeout(timer);
+      cleanup();
       if (err.code === "EADDRINUSE") {
         reject(new Error(`OAuth callback port ${port} is already in use. Try a different port.`));
       } else {
@@ -156,47 +160,71 @@ function waitForCallback(
     const timer = setTimeout(() => {
       if (!settled) {
         settled = true;
-        server.close();
+        cleanup();
         reject(new Error("OAuth authorization timed out (5 minutes)"));
       }
     }, AUTH_TIMEOUT_MS);
     timer.unref();
+
+    // On abort we tear down the listening server (otherwise it would
+    // sit on the port for the full 5-minute timeout) and reject with
+    // cancellation so `__tryCall` re-throws.
+    const onAbort = () => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      reject(new AgencyCancelledError("OAuth authorize cancelled"));
+    };
+    if (signal) {
+      if (signal.aborted) onAbort();
+      else signal.addEventListener("abort", onAbort, { once: true });
+    }
+
+    function cleanup() {
+      clearTimeout(timer);
+      server.close();
+      if (signal) signal.removeEventListener("abort", onAbort);
+    }
   });
 }
 
 async function exchangeCodeForTokens(
   tokenUrl: string,
-  params: Record<string, string>
+  params: Record<string, string>,
+  signal: AbortSignal | undefined,
 ): Promise<{ access_token: string; refresh_token: string; expires_in: number }> {
   const body = new URLSearchParams(params);
 
-  const response = await fetch(tokenUrl, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: body.toString(),
-  });
+  return runHttp(async () => {
+    const response = await fetch(tokenUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: body.toString(),
+      signal,
+    });
 
-  if (!response.ok) {
-    const responseBody = await response.text();
-    const truncated = responseBody.length > 200
-      ? responseBody.slice(0, 200) + "..."
-      : responseBody;
-    throw new Error(
-      `OAuth token exchange failed (${response.status}): ${truncated}`
-    );
-  }
+    if (!response.ok) {
+      const responseBody = await response.text();
+      const truncated = responseBody.length > 200
+        ? responseBody.slice(0, 200) + "..."
+        : responseBody;
+      throw new Error(
+        `OAuth token exchange failed (${response.status}): ${truncated}`
+      );
+    }
 
-  const data = (await response.json()) as Record<string, unknown>;
+    const data = (await response.json()) as Record<string, unknown>;
 
-  if (!data.access_token) {
-    throw new Error("OAuth token response missing access_token");
-  }
+    if (!data.access_token) {
+      throw new Error("OAuth token response missing access_token");
+    }
 
-  return {
-    access_token: data.access_token as string,
-    refresh_token: (data.refresh_token as string) ?? "",
-    expires_in: Number(data.expires_in) || 3600,
-  };
+    return {
+      access_token: data.access_token as string,
+      refresh_token: (data.refresh_token as string) ?? "",
+      expires_in: Number(data.expires_in) || 3600,
+    };
+  }, tokenUrl);
 }
 
 async function saveTokens(name: string, tokens: StoredTokens): Promise<void> {
@@ -236,9 +264,19 @@ async function loadTokens(name: string): Promise<StoredTokens | null> {
   }
 }
 
-export async function _authorize(
+/**
+ * Core authorize implementation. Takes an optional `AbortSignal` so
+ * both the agency-side context-injected wrapper ({@link __internal_authorize})
+ * and internal stdlib callers (calendar.ts's `_authorizeCalendar`,
+ * which is itself agency-callable but hasn't been migrated to the
+ * context-injected pattern yet) can share one body. When `signal` is
+ * present, the local callback server, the timeout, and the token-
+ * exchange `fetch` all tear down on abort.
+ */
+async function authorizeImpl(
   name: string,
-  config: OAuthConfig
+  config: OAuthConfig,
+  signal: AbortSignal | undefined,
 ): Promise<{ success: boolean }> {
   requireHttps(config.authUrl, "authUrl");
   requireHttps(config.tokenUrl, "tokenUrl");
@@ -271,7 +309,7 @@ export async function _authorize(
     }
   }
 
-  const callbackPromise = waitForCallback(port);
+  const callbackPromise = waitForCallback(port, signal);
   openBrowser(authorizationUrl.toString());
 
   const { code, state: returnedState } = await callbackPromise;
@@ -289,7 +327,7 @@ export async function _authorize(
   };
   if (config.clientSecret) exchangeParams.client_secret = config.clientSecret;
 
-  const tokenResponse = await exchangeCodeForTokens(config.tokenUrl, exchangeParams);
+  const tokenResponse = await exchangeCodeForTokens(config.tokenUrl, exchangeParams, signal);
 
   const tokens: StoredTokens = {
     access_token: tokenResponse.access_token,
@@ -305,7 +343,35 @@ export async function _authorize(
   return { success: true };
 }
 
-export async function _getAccessToken(name: string): Promise<string> {
+/** Non-cancellable variant for internal stdlib callers (e.g.,
+ *  calendar.ts's `_authorizeCalendar`). Agency-side callers go
+ *  through {@link __internal_authorize} for full cancellation. */
+export async function _authorize(
+  name: string,
+  config: OAuthConfig,
+): Promise<{ success: boolean }> {
+  return authorizeImpl(name, config, undefined);
+}
+
+/**
+ * Context-injected: the 5-minute callback wait, the local server, and
+ * the token-exchange `fetch` all see the abort signal so an aborted
+ * run doesn't leave a server listening on the OAuth port.
+ */
+export async function __internal_authorize(
+  ctx: RuntimeContext<any>,
+  stack: StateStack,
+  _threads: ThreadStore,
+  name: string,
+  config: OAuthConfig,
+): Promise<{ success: boolean }> {
+  return authorizeImpl(name, config, ctx.getAbortSignal(stack));
+}
+
+async function getAccessTokenImpl(
+  name: string,
+  signal: AbortSignal | undefined,
+): Promise<string> {
   const tokens = await loadTokens(name);
   if (!tokens) {
     throw new Error(
@@ -337,7 +403,7 @@ export async function _getAccessToken(name: string): Promise<string> {
       };
       if (tokens.client_secret) refreshParams.client_secret = tokens.client_secret;
 
-      const refreshResponse = await exchangeCodeForTokens(tokens.token_url, refreshParams);
+      const refreshResponse = await exchangeCodeForTokens(tokens.token_url, refreshParams, signal);
 
       tokens.access_token = refreshResponse.access_token;
       tokens.expires_at = Date.now() + refreshResponse.expires_in * 1000;
@@ -356,6 +422,24 @@ export async function _getAccessToken(name: string): Promise<string> {
 
   refreshLocks[name] = refreshPromise;
   return refreshPromise;
+}
+
+/** Non-cancellable variant for internal stdlib callers. */
+export async function _getAccessToken(name: string): Promise<string> {
+  return getAccessTokenImpl(name, undefined);
+}
+
+/**
+ * Context-injected: a refresh-token exchange `fetch` can stall on
+ * a slow OAuth provider; abort tears it down.
+ */
+export async function __internal_getAccessToken(
+  ctx: RuntimeContext<any>,
+  stack: StateStack,
+  _threads: ThreadStore,
+  name: string,
+): Promise<string> {
+  return getAccessTokenImpl(name, ctx.getAbortSignal(stack));
 }
 
 export async function _isAuthorized(name: string): Promise<boolean> {

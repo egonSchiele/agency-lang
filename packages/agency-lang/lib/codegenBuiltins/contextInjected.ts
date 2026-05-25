@@ -76,6 +76,19 @@ const THREAD_FROM = "agency-lang/stdlib-lib/thread.js";
  *  instead of leaving them running. */
 const HTTP_FROM = "agency-lang/stdlib-lib/http.js";
 
+/** Import sources for the other stdlib builtins promoted to
+ *  context-injected so they honour Ctrl-C / race-loser / time guard
+ *  cancellation. Same wiring as HTTP: each impl receives `__ctx` and
+ *  uses `ctx.getAbortSignal(stack)` to tear down its in-flight work
+ *  (subprocess via SIGTERM, sleep/input via teardown callbacks). */
+const BUILTINS_FROM = "agency-lang/stdlib-lib/builtins.js";
+const UI_FROM = "agency-lang/stdlib-lib/ui.js";
+const SHELL_FROM = "agency-lang/stdlib-lib/shell.js";
+const SYSTEM_FROM = "agency-lang/stdlib-lib/system.js";
+const SPEECH_FROM = "agency-lang/stdlib-lib/speech.js";
+const BROWSER_USE_FROM = "agency-lang/stdlib-lib/browserUse.js";
+const OAUTH_FROM = "agency-lang/stdlib-lib/oauth.js";
+
 /** Param list shared by all three HTTP fetch builtins:
  *  (baseUrl, path, headers, allowedDomains). */
 const HTTP_FETCH_PARAMS: (VariableType | "any")[] = [string, string, ANY_T, ANY_T];
@@ -205,6 +218,99 @@ export const CONTEXT_INJECTED_BUILTINS: Record<string, ContextInjectedBuiltin> =
     name: "__internal_fetchMarkdown",
     from: HTTP_FROM,
     params: HTTP_FETCH_PARAMS,
+    returnType: string,
+  },
+  __internal_sleep: {
+    name: "__internal_sleep",
+    from: BUILTINS_FROM,
+    params: [number],
+    returnType: voidT,
+  },
+  __internal_input: {
+    name: "__internal_input",
+    from: BUILTINS_FROM,
+    params: [string],
+    returnType: string,
+  },
+  __internal_prompt: {
+    name: "__internal_prompt",
+    from: UI_FROM,
+    params: [string],
+    returnType: string,
+  },
+  // exec: (command, args, cwd, timeout, stdin, options)
+  // `options` is the trailing { allowedCommands, blockedCommands }
+  // object the agency wrapper constructs — `any` because the agency
+  // wrapper is what enforces the shape, not the typechecker.
+  __internal_exec: {
+    name: "__internal_exec",
+    from: SHELL_FROM,
+    params: [string, ANY_T, string, number, string, ANY_T],
+    minParams: 5,
+    returnType: ANY_T,
+  },
+  // bash: (command, cwd, timeout, stdin, options)
+  __internal_bash: {
+    name: "__internal_bash",
+    from: SHELL_FROM,
+    params: [string, string, number, string, ANY_T],
+    minParams: 4,
+    returnType: ANY_T,
+  },
+  __internal_openUrl: {
+    name: "__internal_openUrl",
+    from: SYSTEM_FROM,
+    params: [string],
+    returnType: voidT,
+  },
+  // screenshot: (filepath, x, y, width, height)
+  __internal_screenshot: {
+    name: "__internal_screenshot",
+    from: SYSTEM_FROM,
+    params: [string, number, number, number, number],
+    returnType: voidT,
+  },
+  // speak: (text, voice, rate, outputFile)
+  __internal_speak: {
+    name: "__internal_speak",
+    from: SPEECH_FROM,
+    params: [string, string, number, string],
+    returnType: voidT,
+  },
+  // record: (outputFile, silenceTimeout) -> path
+  __internal_record: {
+    name: "__internal_record",
+    from: SPEECH_FROM,
+    params: [string, number],
+    returnType: string,
+  },
+  // transcribe: (filepath, language) -> text
+  __internal_transcribe: {
+    name: "__internal_transcribe",
+    from: SPEECH_FROM,
+    params: [string, string],
+    returnType: string,
+  },
+  // browserUse: (task, options?) -> { output, status, sessionId }
+  __internal_browserUse: {
+    name: "__internal_browserUse",
+    from: BROWSER_USE_FROM,
+    params: [string, ANY_T],
+    minParams: 1,
+    returnType: ANY_T,
+  },
+  // authorize: (name, config) -> { success: boolean }
+  __internal_authorize: {
+    name: "__internal_authorize",
+    from: OAUTH_FROM,
+    params: [string, ANY_T],
+    returnType: ANY_T,
+  },
+  // getAccessToken: (name) -> string
+  __internal_getAccessToken: {
+    name: "__internal_getAccessToken",
+    from: OAUTH_FROM,
+    params: [string],
     returnType: string,
   },
 };

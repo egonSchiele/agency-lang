@@ -1,4 +1,4 @@
-import { _args, _cwd, _env, _setEnv, _exit } from "agency-lang/stdlib-lib/system.js"
+import { _args, _cwd, _env, _setEnv, _exit, _openUrl, _screenshot } from "agency-lang/stdlib-lib/system.js"
 
 export def screenshot(filepath: string, x: number = -1, y: number = -1, width: number = -1, height: number = -1) {
   """
@@ -16,7 +16,7 @@ export def screenshot(filepath: string, x: number = -1, y: number = -1, width: n
     filepath: filepath
   })
 
-  __internal_screenshot(filepath, x, y, width, height)
+  _screenshot(filepath, x, y, width, height)
 }
 
 export def exit(code: number = 0) {
@@ -75,5 +75,5 @@ export def openUrl(url: string): Result {
     url: url
   })
 
-  return try __internal_openUrl(url)
+  return try _openUrl(url)
 }

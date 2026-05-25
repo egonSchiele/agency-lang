@@ -1,5 +1,6 @@
 import { runHttp } from "./http.js";
 import { abortableSleep } from "./abortable.js";
+import { getRuntimeContext } from "../runtime/asyncContext.js";
 import type { RuntimeContext } from "../runtime/state/context.js";
 import type { StateStack } from "../runtime/state/stateStack.js";
 import type { ThreadStore } from "../runtime/state/threadStore.js";
@@ -79,16 +80,15 @@ async function pollSession(
 }
 
 /**
- * Context-injected so the session-creation fetch, the polling fetch,
- * and the inter-poll sleep all see `ctx.getAbortSignal(stack)`. A
- * browser-use task can run for many minutes, and previously an
- * aborted run kept polling the remote service and burning the user's
+ * Drives the Browser Use remote browser. The session-creation fetch,
+ * the polling fetch, and the inter-poll sleep all see
+ * `ctx.getAbortSignal(stack)`. A browser-use task can run for many
+ * minutes, and an aborted run that kept polling would burn the user's
  * quota.
  */
-export async function __internal_browserUse(
+async function browserUseImpl(
   ctx: RuntimeContext<any>,
   stack: StateStack,
-  _threads: ThreadStore,
   task: string,
   options?: BrowserUseOptions
 ): Promise<BrowserUseResult> {
@@ -152,4 +152,25 @@ export async function __internal_browserUse(
     status: result.status,
     sessionId: result.id,
   };
+}
+
+/** Deprecated context-injected wrapper kept during the ALS migration;
+ *  see `_browserUse`. */
+export async function __internal_browserUse(
+  ctx: RuntimeContext<any>,
+  stack: StateStack,
+  _threads: ThreadStore,
+  task: string,
+  options?: BrowserUseOptions,
+): Promise<BrowserUseResult> {
+  return browserUseImpl(ctx, stack, task, options);
+}
+
+/** ALS-reading replacement for `__internal_browserUse`. */
+export async function _browserUse(
+  task: string,
+  options?: BrowserUseOptions,
+): Promise<BrowserUseResult> {
+  const { ctx, stack } = getRuntimeContext();
+  return browserUseImpl(ctx, stack, task, options);
 }

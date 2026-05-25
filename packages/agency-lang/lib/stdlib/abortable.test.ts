@@ -99,7 +99,13 @@ describe("__internal_exec / __internal_bash", () => {
     const ctx = makeMockCtx();
     const stack = new StateStack();
     const threads = new ThreadStore();
-    const p = __internal_bash(ctx, stack, threads, "sleep 60", "", 0, "");
+    // `exec sleep 60` so the shell replaces itself with the sleep
+    // process — without `exec`, dash on Ubuntu CI keeps sh and sleep
+    // as separate processes, and our SIGTERM only kills sh while
+    // sleep (with inherited pipes) keeps the close event from firing
+    // for the full 60s. macOS/bash optimizes this exec away, so the
+    // test passed locally but timed out on Linux runners.
+    const p = __internal_bash(ctx, stack, threads, "exec sleep 60", "", 0, "");
     // See `__internal_exec` above re: 200ms timer.
     setTimeout(() => ctx.cancel("test"), 200);
     await expect(p).rejects.toBeInstanceOf(AgencyCancelledError);

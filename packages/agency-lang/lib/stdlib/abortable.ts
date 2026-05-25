@@ -47,8 +47,16 @@ export function abortableSpawn(
   options: AbortableSpawnOptions,
 ): Promise<SpawnResult> {
   return new Promise((resolve, reject) => {
+    // Strip our custom keys out before handing to Node. `signal` in
+    // particular: we handle it ourselves (see the docblock above) and
+    // don't want Node's built-in handler racing with ours.
+    const { signal: _sig, input: _in, timeout: _to, ...spawnOptions } = options;
+    if (options.signal?.aborted) {
+      reject(new AgencyCancelledError(`${command} cancelled`));
+      return;
+    }
     const child = spawn(command, args, {
-      ...options,
+      ...spawnOptions,
       stdio: ["pipe", "pipe", "pipe"],
     });
 
@@ -129,6 +137,10 @@ export function abortableExec(
   signal: AbortSignal | undefined,
 ): Promise<void> {
   return new Promise((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(new AgencyCancelledError(`${command} cancelled`));
+      return;
+    }
     const child: ChildProcess = spawn(command, args, {
       stdio: ["ignore", "ignore", "pipe"],
     });
@@ -150,12 +162,16 @@ export function abortableExec(
       if (signal) signal.removeEventListener("abort", onAbort);
     };
 
-    child.on("close", (code) => {
+    child.on("close", (code, sig) => {
       cleanup();
       if (aborted) {
         reject(new AgencyCancelledError(`${command} cancelled`));
-      } else if (code === 0 || code === null) {
+      } else if (code === 0) {
         resolve();
+      } else if (code === null) {
+        // Child exited due to a signal we didn't send (aborted is false).
+        // Surface it so callers don't see a silent success.
+        reject(new Error(`${command} killed by signal ${sig}: ${stderr}`));
       } else {
         reject(new Error(`${command} exited with code ${code}: ${stderr}`));
       }

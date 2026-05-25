@@ -198,10 +198,6 @@ await callHook({
 const __funcResult = await __call(sleep, {
         type: "positional",
         args: [100]
-      }, {
-        ctx: __ctx,
-        threads: __threads,
-        stateStack: __stateStack
       });
 if (hasInterrupts(__funcResult)) {
         await __ctx.pendingPromises.awaitAll()
@@ -308,10 +304,6 @@ __stack.branches["1"] = {
 __stack.locals.x = __call(compute, {
         type: "positional",
         args: [5]
-      }, {
-        ctx: __ctx,
-        threads: __threads,
-        stateStack: __forked
       });
 __self.__pendingKey_x = __ctx.pendingPromises.add(__stack.locals.x, (val) => { __stack.locals.x = val; });
     });
@@ -329,10 +321,6 @@ __stack.branches["2"] = {
 __stack.locals.y = __call(compute, {
         type: "positional",
         args: [10]
-      }, {
-        ctx: __ctx,
-        threads: __threads,
-        stateStack: __forked
       });
 __self.__pendingKey_y = __ctx.pendingPromises.add(__stack.locals.y, (val) => { __stack.locals.y = val; });
     });

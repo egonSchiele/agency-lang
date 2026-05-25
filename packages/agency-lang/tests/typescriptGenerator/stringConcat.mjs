@@ -172,10 +172,6 @@ await callHook({
 const __funcResult = await __call(print, {
         type: "positional",
         args: [`What is your name?`]
-      }, {
-        ctx: __ctx,
-        threads: __threads,
-        stateStack: __stateStack
       });
 if (hasInterrupts(__funcResult)) {
         await __ctx.pendingPromises.awaitAll()
@@ -190,10 +186,6 @@ if (hasInterrupts(__funcResult)) {
 __stack.locals.name = await __call(input, {
         type: "positional",
         args: [`> `]
-      }, {
-        ctx: __ctx,
-        threads: __threads,
-        stateStack: __stateStack
       });
 if (hasInterrupts(__stack.locals.name)) {
         await __ctx.pendingPromises.awaitAll()
@@ -208,10 +200,6 @@ if (hasInterrupts(__stack.locals.name)) {
 const __funcResult = await __call(print, {
         type: "positional",
         args: [`Hello, ${__stack.locals.name}!`]
-      }, {
-        ctx: __ctx,
-        threads: __threads,
-        stateStack: __stateStack
       });
 if (hasInterrupts(__funcResult)) {
         await __ctx.pendingPromises.awaitAll()

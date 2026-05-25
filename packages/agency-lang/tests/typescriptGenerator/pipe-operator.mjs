@@ -543,10 +543,6 @@ __stack.locals.__pipe_0 = await success(5);
     __stack.locals.r1 = await runner.pipe(2, __stack.locals.__pipe_0, async (__pipeArg) => await __call(double, {
       type: "positional",
       args: [__pipeArg]
-    }, {
-      ctx: __ctx,
-      threads: __threads,
-      stateStack: __stateStack
     }));
     await runner.step(3, async (runner) => {
 __stack.locals.__pipe_1 = await success(5);
@@ -557,17 +553,9 @@ __stack.locals.__pipe_1 = await success(5);
       namedArgs: {
         a: 10
       }
-    }, {
-      ctx: __ctx,
-      threads: __threads,
-      stateStack: __stateStack
     }), {
       type: "positional",
       args: [__pipeArg]
-    }, {
-      ctx: __ctx,
-      threads: __threads,
-      stateStack: __stateStack
     }));
     await runner.step(5, async (runner) => {
 __stack.locals.__pipe_2 = await success(10);
@@ -575,10 +563,6 @@ __stack.locals.__pipe_2 = await success(10);
     __stack.locals.__pipe_2 = await runner.pipe(6, __stack.locals.__pipe_2, async (__pipeArg) => await __call(double, {
       type: "positional",
       args: [__pipeArg]
-    }, {
-      ctx: __ctx,
-      threads: __threads,
-      stateStack: __stateStack
     }));
     __stack.locals.r3 = await runner.pipe(7, __stack.locals.__pipe_2, async (__pipeArg) => await __call(await __callMethod(multiply, "partial", {
       type: "named",
@@ -586,17 +570,9 @@ __stack.locals.__pipe_2 = await success(10);
       namedArgs: {
         a: 3
       }
-    }, {
-      ctx: __ctx,
-      threads: __threads,
-      stateStack: __stateStack
     }), {
       type: "positional",
       args: [__pipeArg]
-    }, {
-      ctx: __ctx,
-      threads: __threads,
-      stateStack: __stateStack
     }));
     await runner.step(8, async (runner) => {
 __stack.locals.__pipe_3 = await failure(`nope`);
@@ -604,10 +580,6 @@ __stack.locals.__pipe_3 = await failure(`nope`);
     __stack.locals.r4 = await runner.pipe(9, __stack.locals.__pipe_3, async (__pipeArg) => await __call(double, {
       type: "positional",
       args: [__pipeArg]
-    }, {
-      ctx: __ctx,
-      threads: __threads,
-      stateStack: __stateStack
     }));
     await runner.step(10, async (runner) => {
 __stack.locals.__pipe_4 = await success(10);
@@ -618,17 +590,9 @@ __stack.locals.__pipe_4 = await success(10);
       namedArgs: {
         b: 2
       }
-    }, {
-      ctx: __ctx,
-      threads: __threads,
-      stateStack: __stateStack
     }), {
       type: "positional",
       args: [__pipeArg]
-    }, {
-      ctx: __ctx,
-      threads: __threads,
-      stateStack: __stateStack
     }));
     if (runner.halted) return runner.haltResult;
     await runner.hook(12, async () => {

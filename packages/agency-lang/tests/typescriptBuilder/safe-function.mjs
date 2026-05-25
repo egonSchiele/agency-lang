@@ -201,10 +201,6 @@ __functionCompleted = true;
 runner.halt(await __call(lookupItem, {
         type: "positional",
         args: [__stack.args.id]
-      }, {
-        ctx: __ctx,
-        threads: __threads,
-        stateStack: __stateStack
       }))
 return;
     });
@@ -319,10 +315,6 @@ __self.__retryable = false;
 const __funcResult = await __call(saveItem, {
         type: "positional",
         args: [__stack.args.id]
-      }, {
-        ctx: __ctx,
-        threads: __threads,
-        stateStack: __stateStack
       });
 if (hasInterrupts(__funcResult)) {
         await __ctx.pendingPromises.awaitAll()
@@ -335,10 +327,6 @@ __functionCompleted = true;
 runner.halt(await __call(lookupItem, {
         type: "positional",
         args: [__stack.args.id]
-      }, {
-        ctx: __ctx,
-        threads: __threads,
-        stateStack: __stateStack
       }))
 return;
     });

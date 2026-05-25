@@ -15,7 +15,7 @@ export type AssignmentEmitterDeps = {
   moduleId: string;
   processNode: (node: AgencyNode) => TsNode;
   buildCallDescriptor: (call: FunctionCall) => TsNode;
-  buildStateConfig: () => TsNode;
+  buildStateConfig: () => TsNode | undefined;
 };
 
 /**
@@ -93,12 +93,14 @@ export class AssignmentEmitter {
           break;
         case "methodCall": {
           const fnCall = el.functionCall;
-          const callExpr = ts.call(ts.id("__callMethod"), [
+          const config = this.deps.buildStateConfig();
+          const callArgs: TsNode[] = [
             result,
             ts.str(fnCall.functionName),
             this.deps.buildCallDescriptor(fnCall),
-            this.deps.buildStateConfig(),
-          ]);
+          ];
+          if (config) callArgs.push(config);
+          const callExpr = ts.call(ts.id("__callMethod"), callArgs);
           result = ts.await(callExpr);
           break;
         }

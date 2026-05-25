@@ -196,10 +196,6 @@ if (hasInterrupts(__stack.locals.response)) {
 const __funcResult = await __call(print, {
         type: "positional",
         args: [__stack.locals.response]
-      }, {
-        ctx: __ctx,
-        threads: __threads,
-        stateStack: __stateStack
       });
 if (hasInterrupts(__funcResult)) {
         await __ctx.pendingPromises.awaitAll()
@@ -239,10 +235,6 @@ if (hasInterrupts(__stack.locals.response2)) {
 const __funcResult = await __call(print, {
         type: "positional",
         args: [__stack.locals.response2]
-      }, {
-        ctx: __ctx,
-        threads: __threads,
-        stateStack: __stateStack
       });
 if (hasInterrupts(__funcResult)) {
         await __ctx.pendingPromises.awaitAll()

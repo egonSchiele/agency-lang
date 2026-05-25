@@ -429,10 +429,6 @@ await runner.step(0, async (runner) => {
 __stack.locals.product = __stack.locals.product * await __call(toDigit, {
             type: "positional",
             args: [__stack.locals.digits[__stack.locals.i + __stack.locals.j]]
-          }, {
-            ctx: __ctx,
-            threads: __threads,
-            stateStack: __stateStack
           });
         });
 await runner.step(1, async (runner) => {

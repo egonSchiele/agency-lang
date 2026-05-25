@@ -208,10 +208,6 @@ await runner.step(0, async (runner) => {
 __stack.locals.result = await __call(__stack.args.block, {
           type: "positional",
           args: [item]
-        }, {
-          ctx: __ctx,
-          threads: __threads,
-          stateStack: __stateStack
         });
 if (hasInterrupts(__stack.locals.result)) {
           await __ctx.pendingPromises.awaitAll()
@@ -223,10 +219,6 @@ await runner.step(1, async (runner) => {
 __stack.locals.results = await __call(append, {
           type: "positional",
           args: [__stack.locals.results, __stack.locals.result]
-        }, {
-          ctx: __ctx,
-          threads: __threads,
-          stateStack: __stateStack
         });
 if (hasInterrupts(__stack.locals.results)) {
           await __ctx.pendingPromises.awaitAll()
@@ -349,10 +341,6 @@ return runner.halted ? runner.haltResult : undefined;
 __ctx.stateStack.pop();
 }
         }, params: [{ name: "x", hasDefault: false, defaultValue: undefined, variadic: false }], toolDefinition: null }, __toolRegistry)]
-      }, {
-        ctx: __ctx,
-        threads: __threads,
-        stateStack: __stateStack
       });
 if (hasInterrupts(__stack.locals.doubled)) {
         await __ctx.pendingPromises.awaitAll()
@@ -367,10 +355,6 @@ if (hasInterrupts(__stack.locals.doubled)) {
 const __funcResult = await __call(print, {
         type: "positional",
         args: [__stack.locals.doubled]
-      }, {
-        ctx: __ctx,
-        threads: __threads,
-        stateStack: __stateStack
       });
 if (hasInterrupts(__funcResult)) {
         await __ctx.pendingPromises.awaitAll()

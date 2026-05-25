@@ -847,10 +847,6 @@ await callHook({
 const __funcResult = await __call(print, {
         type: "positional",
         args: [`This is a node with a return type`]
-      }, {
-        ctx: __ctx,
-        threads: __threads,
-        stateStack: __stateStack
       });
 if (hasInterrupts(__funcResult)) {
         await __ctx.pendingPromises.awaitAll()
@@ -930,10 +926,6 @@ await callHook({
 __stack.locals.sum = await __call(add, {
         type: "positional",
         args: [5, 10]
-      }, {
-        ctx: __ctx,
-        threads: __threads,
-        stateStack: __stateStack
       });
 if (hasInterrupts(__stack.locals.sum)) {
         await __ctx.pendingPromises.awaitAll()
@@ -948,10 +940,6 @@ if (hasInterrupts(__stack.locals.sum)) {
 __stack.locals.greeting = await __call(greet, {
         type: "positional",
         args: [`Alice`]
-      }, {
-        ctx: __ctx,
-        threads: __threads,
-        stateStack: __stateStack
       });
 if (hasInterrupts(__stack.locals.greeting)) {
         await __ctx.pendingPromises.awaitAll()
@@ -966,10 +954,6 @@ if (hasInterrupts(__stack.locals.greeting)) {
 __stack.locals.labeled = await __call(mixed, {
         type: "positional",
         args: [42, `Answer`]
-      }, {
-        ctx: __ctx,
-        threads: __threads,
-        stateStack: __stateStack
       });
 if (hasInterrupts(__stack.locals.labeled)) {
         await __ctx.pendingPromises.awaitAll()
@@ -984,10 +968,6 @@ if (hasInterrupts(__stack.locals.labeled)) {
 __stack.locals.processed = await __call(processArray, {
         type: "positional",
         args: [[1, 2, 3, 4, 5]]
-      }, {
-        ctx: __ctx,
-        threads: __threads,
-        stateStack: __stateStack
       });
 if (hasInterrupts(__stack.locals.processed)) {
         await __ctx.pendingPromises.awaitAll()
@@ -1002,10 +982,6 @@ if (hasInterrupts(__stack.locals.processed)) {
 __stack.locals.flexResult = await __call(flexible, {
         type: "positional",
         args: [`test`]
-      }, {
-        ctx: __ctx,
-        threads: __threads,
-        stateStack: __stateStack
       });
 if (hasInterrupts(__stack.locals.flexResult)) {
         await __ctx.pendingPromises.awaitAll()

@@ -185,10 +185,6 @@ __stack.locals.v = __stack.locals.votes[`alice`];
 const __funcResult = await __call(print, {
         type: "positional",
         args: [__stack.locals.v]
-      }, {
-        ctx: __ctx,
-        threads: __threads,
-        stateStack: __stateStack
       });
 if (hasInterrupts(__funcResult)) {
         await __ctx.pendingPromises.awaitAll()
@@ -204,10 +200,6 @@ await runner.step(0, async (runner) => {
 const __funcResult = await __call(print, {
           type: "positional",
           args: [k]
-        }, {
-          ctx: __ctx,
-          threads: __threads,
-          stateStack: __stateStack
         });
 if (hasInterrupts(__funcResult)) {
           await __ctx.pendingPromises.awaitAll()

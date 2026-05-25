@@ -177,20 +177,12 @@ __stack.locals.s = new Schema(Category);
 __stack.locals.result = await __callMethod(__stack.locals.s, "parse", {
         type: "positional",
         args: [`bug`]
-      }, {
-        ctx: __ctx,
-        threads: __threads,
-        stateStack: __stateStack
       });
     });
     await runner.step(3, async (runner) => {
 const __funcResult = await __call(print, {
         type: "positional",
         args: [__stack.locals.result]
-      }, {
-        ctx: __ctx,
-        threads: __threads,
-        stateStack: __stateStack
       });
 if (hasInterrupts(__funcResult)) {
         await __ctx.pendingPromises.awaitAll()

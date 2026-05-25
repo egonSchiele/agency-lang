@@ -346,10 +346,6 @@ __functionCompleted = true;
 runner.halt(__stack.args.a / await __call(gcd, {
         type: "positional",
         args: [__stack.args.a, __stack.args.b]
-      }, {
-        ctx: __ctx,
-        threads: __threads,
-        stateStack: __stateStack
       }) * __stack.args.b)
 return;
     });
@@ -446,10 +442,6 @@ await runner.step(0, async (runner) => {
 __stack.locals.result = await __call(lcm, {
           type: "positional",
           args: [__stack.locals.result, i]
-        }, {
-          ctx: __ctx,
-          threads: __threads,
-          stateStack: __stateStack
         });
 if (hasInterrupts(__stack.locals.result)) {
           await __ctx.pendingPromises.awaitAll()

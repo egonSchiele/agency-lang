@@ -311,10 +311,6 @@ if (hasInterrupts(__stack.locals.res4)) {
 const __funcResult = await __call(print, {
         type: "positional",
         args: [`res1`, __stack.locals.res1]
-      }, {
-        ctx: __ctx,
-        threads: __threads,
-        stateStack: __stateStack
       });
 if (hasInterrupts(__funcResult)) {
         await __ctx.pendingPromises.awaitAll()
@@ -326,10 +322,6 @@ if (hasInterrupts(__funcResult)) {
 const __funcResult = await __call(print, {
         type: "positional",
         args: [`res2`, __stack.locals.res2]
-      }, {
-        ctx: __ctx,
-        threads: __threads,
-        stateStack: __stateStack
       });
 if (hasInterrupts(__funcResult)) {
         await __ctx.pendingPromises.awaitAll()
@@ -341,10 +333,6 @@ if (hasInterrupts(__funcResult)) {
 const __funcResult = await __call(print, {
         type: "positional",
         args: [`res3`, __stack.locals.res3]
-      }, {
-        ctx: __ctx,
-        threads: __threads,
-        stateStack: __stateStack
       });
 if (hasInterrupts(__funcResult)) {
         await __ctx.pendingPromises.awaitAll()
@@ -356,10 +344,6 @@ if (hasInterrupts(__funcResult)) {
 const __funcResult = await __call(print, {
         type: "positional",
         args: [`res4`, __stack.locals.res4]
-      }, {
-        ctx: __ctx,
-        threads: __threads,
-        stateStack: __stateStack
       });
 if (hasInterrupts(__funcResult)) {
         await __ctx.pendingPromises.awaitAll()
@@ -371,10 +355,6 @@ if (hasInterrupts(__funcResult)) {
 const __funcResult = await __call(print, {
         type: "positional",
         args: [`res5`, __stack.locals.res5]
-      }, {
-        ctx: __ctx,
-        threads: __threads,
-        stateStack: __stateStack
       });
 if (hasInterrupts(__funcResult)) {
         await __ctx.pendingPromises.awaitAll()
@@ -596,10 +576,6 @@ if (hasInterrupts(__stack.locals.res4)) {
 const __funcResult = await __call(print, {
         type: "positional",
         args: [`res1`, __stack.locals.res1]
-      }, {
-        ctx: __ctx,
-        threads: __threads,
-        stateStack: __stateStack
       });
 if (hasInterrupts(__funcResult)) {
         await __ctx.pendingPromises.awaitAll()
@@ -614,10 +590,6 @@ if (hasInterrupts(__funcResult)) {
 const __funcResult = await __call(print, {
         type: "positional",
         args: [`res2`, __stack.locals.res2]
-      }, {
-        ctx: __ctx,
-        threads: __threads,
-        stateStack: __stateStack
       });
 if (hasInterrupts(__funcResult)) {
         await __ctx.pendingPromises.awaitAll()
@@ -632,10 +604,6 @@ if (hasInterrupts(__funcResult)) {
 const __funcResult = await __call(print, {
         type: "positional",
         args: [`res3`, __stack.locals.res3]
-      }, {
-        ctx: __ctx,
-        threads: __threads,
-        stateStack: __stateStack
       });
 if (hasInterrupts(__funcResult)) {
         await __ctx.pendingPromises.awaitAll()
@@ -650,10 +618,6 @@ if (hasInterrupts(__funcResult)) {
 const __funcResult = await __call(print, {
         type: "positional",
         args: [`res4`, __stack.locals.res4]
-      }, {
-        ctx: __ctx,
-        threads: __threads,
-        stateStack: __stateStack
       });
 if (hasInterrupts(__funcResult)) {
         await __ctx.pendingPromises.awaitAll()
@@ -668,10 +632,6 @@ if (hasInterrupts(__funcResult)) {
 const __funcResult = await __call(print, {
         type: "positional",
         args: [`res5`, __stack.locals.res5]
-      }, {
-        ctx: __ctx,
-        threads: __threads,
-        stateStack: __stateStack
       });
 if (hasInterrupts(__funcResult)) {
         await __ctx.pendingPromises.awaitAll()

@@ -204,10 +204,6 @@ await callHook({
 const __funcResult = await __call(sleep, {
         type: "positional",
         args: [__stack.args.sleepTime]
-      }, {
-        ctx: __ctx,
-        threads: __threads,
-        stateStack: __stateStack
       });
 if (hasInterrupts(__funcResult)) {
         await __ctx.pendingPromises.awaitAll()
@@ -314,10 +310,6 @@ __stack.branches["1"] = {
 __ctx.pendingPromises.add(__call(append, {
   type: "positional",
   args: [1, `hello`]
-}, {
-  ctx: __ctx,
-  threads: __threads,
-  stateStack: __forked
 }))
     });
     await runner.branchStep(2, "2", async (runner) => {
@@ -334,10 +326,6 @@ __stack.branches["2"] = {
 __ctx.pendingPromises.add(__call(append, {
   type: "positional",
   args: [0.5, `world`]
-}, {
-  ctx: __ctx,
-  threads: __threads,
-  stateStack: __forked
 }))
     });
     await runner.step(3, async (runner) => {

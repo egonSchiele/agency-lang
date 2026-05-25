@@ -178,10 +178,6 @@ __stack.locals.result = __validateType(__stack.locals.result, Category);
 const __funcResult = await __call(print, {
         type: "positional",
         args: [__stack.locals.result]
-      }, {
-        ctx: __ctx,
-        threads: __threads,
-        stateStack: __stateStack
       });
 if (hasInterrupts(__funcResult)) {
         await __ctx.pendingPromises.awaitAll()

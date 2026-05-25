@@ -194,10 +194,6 @@ if (hasInterrupts(__stack.locals.greeting)) {
 const __funcResult = await __call(print, {
         type: "positional",
         args: [__stack.locals.greeting]
-      }, {
-        ctx: __ctx,
-        threads: __threads,
-        stateStack: __stateStack
       });
 if (hasInterrupts(__funcResult)) {
         await __ctx.pendingPromises.awaitAll()

@@ -179,10 +179,6 @@ await runner.step(0, async (runner) => {
 const __funcResult = await __call(print, {
           type: "positional",
           args: [item]
-        }, {
-          ctx: __ctx,
-          threads: __threads,
-          stateStack: __stateStack
         });
 if (hasInterrupts(__funcResult)) {
           await __ctx.pendingPromises.awaitAll()
@@ -202,10 +198,6 @@ await runner.step(0, async (runner) => {
 const __funcResult = await __call(print, {
           type: "positional",
           args: [i]
-        }, {
-          ctx: __ctx,
-          threads: __threads,
-          stateStack: __stateStack
         });
 if (hasInterrupts(__funcResult)) {
           await __ctx.pendingPromises.awaitAll()
@@ -228,10 +220,6 @@ await runner.step(0, async (runner) => {
 const __funcResult = await __call(print, {
           type: "positional",
           args: [name]
-        }, {
-          ctx: __ctx,
-          threads: __threads,
-          stateStack: __stateStack
         });
 if (hasInterrupts(__funcResult)) {
           await __ctx.pendingPromises.awaitAll()
@@ -246,10 +234,6 @@ await runner.step(1, async (runner) => {
 const __funcResult = await __call(print, {
           type: "positional",
           args: [index]
-        }, {
-          ctx: __ctx,
-          threads: __threads,
-          stateStack: __stateStack
         });
 if (hasInterrupts(__funcResult)) {
           await __ctx.pendingPromises.awaitAll()

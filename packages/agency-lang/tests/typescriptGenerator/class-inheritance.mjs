@@ -429,10 +429,6 @@ __stack.locals.dog = new Dog(`Rex`, `Labrador`);
 __stack.locals.result = await __callMethod(__stack.locals.dog, "speak", {
         type: "positional",
         args: []
-      }, {
-        ctx: __ctx,
-        threads: __threads,
-        stateStack: __stateStack
       });
     });
     await runner.step(3, async (runner) => {

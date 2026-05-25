@@ -391,15 +391,7 @@ const __funcResult = await __call(print, {
         args: [await __call(test, {
           type: "positional",
           args: []
-        }, {
-          ctx: __ctx,
-          threads: __threads,
-          stateStack: __stateStack
         })]
-      }, {
-        ctx: __ctx,
-        threads: __threads,
-        stateStack: __stateStack
       });
 if (hasInterrupts(__funcResult)) {
         await __ctx.pendingPromises.awaitAll()

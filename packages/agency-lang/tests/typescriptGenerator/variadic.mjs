@@ -210,10 +210,6 @@ await callHook({
 const __funcResult = await __call(print, {
         type: "positional",
         args: [__stack.args.prefix, ...__stack.args.messages]
-      }, {
-        ctx: __ctx,
-        threads: __threads,
-        stateStack: __stateStack
       });
 if (hasInterrupts(__funcResult)) {
         await __ctx.pendingPromises.awaitAll()

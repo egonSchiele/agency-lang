@@ -821,16 +821,26 @@ export class TypeScriptBuilder {
           const fnCall = element.functionCall;
           const descriptor = this.buildCallDescriptor(fnCall);
           const configObj = this.buildStateConfig();
-          const callArgs: TsNode[] = [result, ts.str(fnCall.functionName), descriptor, configObj];
-          if (element.optional) callArgs.push(ts.bool(true));
+          const callArgs: TsNode[] = [result, ts.str(fnCall.functionName), descriptor];
+          if (element.optional) {
+            callArgs.push(configObj ?? ts.id("undefined"));
+            callArgs.push(ts.bool(true));
+          } else if (configObj) {
+            callArgs.push(configObj);
+          }
           result = this.awaitChainCall(ts.call(ts.id("__callMethod"), callArgs), element === node.chain[node.chain.length - 1]);
           break;
         }
         case "call": {
           const descriptor = this.buildCallDescriptor(element);
           const configObj = this.buildStateConfig();
-          const callArgs: TsNode[] = [result, descriptor, configObj];
-          if (element.optional) callArgs.push(ts.bool(true));
+          const callArgs: TsNode[] = [result, descriptor];
+          if (element.optional) {
+            callArgs.push(configObj ?? ts.id("undefined"));
+            callArgs.push(ts.bool(true));
+          } else if (configObj) {
+            callArgs.push(configObj);
+          }
           result = this.awaitChainCall(ts.call(ts.id("__call"), callArgs), element === node.chain[node.chain.length - 1]);
           break;
         }
@@ -962,23 +972,33 @@ export class TypeScriptBuilder {
   }
 
   /**
-   * Build the standard state config for __call/__callMethod dispatch.
-   * During global init, only ctx is available; otherwise includes threads
-   * and stateStack.
+   * Build the state config passed as the third argument to `__call` /
+   * `__callMethod`.
+   *
+   * After the ALS migration, the runtime helpers read `ctx`/`threads`/
+   * `stateStack` from `agencyStore` (see lib/runtime/call.ts), so call
+   * sites no longer need to thread those locals. This helper returns
+   * `undefined` for the common case — the caller MUST omit the arg
+   * entirely so the emitted code stays minimal.
+   *
+   * It still returns a real object in two situations:
+   *  - `insideGlobalInit`: globals run before the ALS frame is
+   *    installed, so the bag must carry `{ ctx }` explicitly.
+   *  - When `opts.extra` is provided (currently the `checkpoint` /
+   *    `getCheckpoint` / `restore` location info — `moduleId`,
+   *    `scopeName`, `stepPath`): these extras are merged into the
+   *    runtime-built bag by `__call`.
    */
   private buildStateConfig(opts?: {
-    stateStack?: TsNode;
     extra?: Record<string, TsNode>;
-  }): TsNode {
+  }): TsNode | undefined {
     if (this.insideGlobalInit) {
       return ts.functionCallConfig({ ctx: ts.runtime.ctx });
     }
-    return ts.functionCallConfig({
-      ctx: ts.runtime.ctx,
-      threads: ts.runtime.threads,
-      stateStack: opts?.stateStack ?? ts.id("__stateStack"),
-      ...opts?.extra,
-    });
+    if (opts?.extra && Object.keys(opts.extra).length > 0) {
+      return ts.obj(opts.extra);
+    }
+    return undefined;
   }
 
 
@@ -1909,7 +1929,7 @@ export class TypeScriptBuilder {
     node: FunctionCall,
     functionName: string,
     shouldAwait: boolean,
-    options?: { stateStack?: TsNode },
+    _options?: { stateStack?: TsNode },
   ): TsNode {
     const descriptor = this.buildCallDescriptor(node);
 
@@ -1919,7 +1939,6 @@ export class TypeScriptBuilder {
       stepPath: ts.str(this.steps.joined()),
     } : undefined;
     const configObj = this.buildStateConfig({
-      stateStack: options?.stateStack,
       extra: locationOpts,
     });
 
@@ -1927,7 +1946,9 @@ export class TypeScriptBuilder {
       ? ts.scopedVar(functionName, node.scope, this.moduleId)
       : ts.id(functionName);
 
-    const callExpr = ts.call(ts.id("__call"), [callee, descriptor, configObj]);
+    const callArgs: TsNode[] = [callee, descriptor];
+    if (configObj) callArgs.push(configObj);
+    const callExpr = ts.call(ts.id("__call"), callArgs);
     return shouldAwait ? ts.await(callExpr) : callExpr;
   }
 
@@ -2831,7 +2852,10 @@ export class TypeScriptBuilder {
       type: ts.str("positional"),
       args: ts.arr(args),
     });
-    const callExpr = ts.call(ts.id("__call"), [ts.id(handlerName), descriptor, this.buildStateConfig()]);
+    const configObj = this.buildStateConfig();
+    const callArgs: TsNode[] = [ts.id(handlerName), descriptor];
+    if (configObj) callArgs.push(configObj);
+    const callExpr = ts.call(ts.id("__call"), callArgs);
     return ts.arrowFn(
       [{ name: "__data", typeAnnotation: "any" }],
       ts.await(callExpr),

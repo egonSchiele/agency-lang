@@ -308,10 +308,6 @@ await runner.step(0, async (runner) => {
 __stack.locals.result = await __call(foo, {
           type: "positional",
           args: []
-        }, {
-          ctx: __ctx,
-          threads: __threads,
-          stateStack: __stateStack
         });
 if (hasInterrupts(__stack.locals.result)) {
           await __ctx.pendingPromises.awaitAll()

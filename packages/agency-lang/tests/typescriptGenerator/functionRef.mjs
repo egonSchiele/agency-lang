@@ -432,15 +432,7 @@ await __callMethod(__stack.locals.result, "push", {
           args: [await __call(__stack.args.transform, {
             type: "positional",
             args: [item]
-          }, {
-            ctx: __ctx,
-            threads: __threads,
-            stateStack: __stateStack
           })]
-        }, {
-          ctx: __ctx,
-          threads: __threads,
-          stateStack: __stateStack
         })
       });
     });
@@ -541,10 +533,6 @@ __stack.locals.fn = greet;
 __stack.locals.result = await __call(__stack.locals.fn, {
         type: "positional",
         args: [`Bob`]
-      }, {
-        ctx: __ctx,
-        threads: __threads,
-        stateStack: __stateStack
       });
 if (hasInterrupts(__stack.locals.result)) {
         await __ctx.pendingPromises.awaitAll()
@@ -559,10 +547,6 @@ if (hasInterrupts(__stack.locals.result)) {
 __stack.locals.doubled = await __call(applyToAll, {
         type: "positional",
         args: [[1, 2, 3], double]
-      }, {
-        ctx: __ctx,
-        threads: __threads,
-        stateStack: __stateStack
       });
 if (hasInterrupts(__stack.locals.doubled)) {
         await __ctx.pendingPromises.awaitAll()

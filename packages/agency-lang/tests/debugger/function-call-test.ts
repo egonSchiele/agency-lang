@@ -323,10 +323,6 @@ __stack.locals.x = 1;
 __stack.locals.y = await __call(add, {
         type: "positional",
         args: [__stack.locals.x, 2]
-      }, {
-        ctx: __ctx,
-        threads: __threads,
-        stateStack: __stateStack
       });
 if (hasInterrupts(__stack.locals.y)) {
         await __ctx.pendingPromises.awaitAll()

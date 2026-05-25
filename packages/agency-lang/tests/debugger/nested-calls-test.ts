@@ -341,10 +341,6 @@ __stack.locals.sum = __stack.args.a + __stack.args.b;
 __stack.locals.result = await __call(double, {
         type: "positional",
         args: [__stack.locals.sum]
-      }, {
-        ctx: __ctx,
-        threads: __threads,
-        stateStack: __stateStack
       });
 if (hasInterrupts(__stack.locals.result)) {
         await __ctx.pendingPromises.awaitAll()
@@ -446,10 +442,6 @@ await callHook({
 __stack.locals.x = await __call(addAndDouble, {
         type: "positional",
         args: [1, 2]
-      }, {
-        ctx: __ctx,
-        threads: __threads,
-        stateStack: __stateStack
       });
 if (hasInterrupts(__stack.locals.x)) {
         await __ctx.pendingPromises.awaitAll()

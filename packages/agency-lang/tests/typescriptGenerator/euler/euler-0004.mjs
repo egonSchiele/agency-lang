@@ -332,10 +332,6 @@ await runner.ifElse(1, [
     condition: async () => __stack.locals.product > __stack.locals.largest && await __call(isPalindrome, {
               type: "positional",
               args: [__stack.locals.product]
-            }, {
-              ctx: __ctx,
-              threads: __threads,
-              stateStack: __stateStack
             }),
     body: async (runner) => {
 await runner.step(0, async (runner) => {

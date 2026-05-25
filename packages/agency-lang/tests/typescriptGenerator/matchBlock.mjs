@@ -183,10 +183,6 @@ __stack.locals.action = `start`;
 await __call(print, {
             type: "positional",
             args: [`Starting...`]
-          }, {
-            ctx: __ctx,
-            threads: __threads,
-            stateStack: __stateStack
           })
     },
   },
@@ -197,10 +193,6 @@ await __call(print, {
 await __call(print, {
             type: "positional",
             args: [`Stopping...`]
-          }, {
-            ctx: __ctx,
-            threads: __threads,
-            stateStack: __stateStack
           })
     },
   },
@@ -211,10 +203,6 @@ await __call(print, {
 await __call(print, {
             type: "positional",
             args: [`Restarting...`]
-          }, {
-            ctx: __ctx,
-            threads: __threads,
-            stateStack: __stateStack
           })
     },
   },
@@ -223,10 +211,6 @@ await __call(print, {
 await __call(print, {
           type: "positional",
           args: [`Unknown action`]
-        }, {
-          ctx: __ctx,
-          threads: __threads,
-          stateStack: __stateStack
         })
 });
     await runner.step(4, async (runner) => {
@@ -243,10 +227,6 @@ __stack.locals.statusCode = 200;
 await __call(print, {
             type: "positional",
             args: [`OK`]
-          }, {
-            ctx: __ctx,
-            threads: __threads,
-            stateStack: __stateStack
           })
     },
   },
@@ -257,10 +237,6 @@ await __call(print, {
 await __call(print, {
             type: "positional",
             args: [`Not Found`]
-          }, {
-            ctx: __ctx,
-            threads: __threads,
-            stateStack: __stateStack
           })
     },
   },
@@ -271,10 +247,6 @@ await __call(print, {
 await __call(print, {
             type: "positional",
             args: [`Internal Server Error`]
-          }, {
-            ctx: __ctx,
-            threads: __threads,
-            stateStack: __stateStack
           })
     },
   },
@@ -283,10 +255,6 @@ await __call(print, {
 await __call(print, {
           type: "positional",
           args: [`Unknown status`]
-        }, {
-          ctx: __ctx,
-          threads: __threads,
-          stateStack: __stateStack
         })
 });
     await runner.step(7, async (runner) => {
@@ -345,10 +313,6 @@ __stack.locals.level = `debug`;
 await __call(print, {
             type: "positional",
             args: [`Debug mode enabled`]
-          }, {
-            ctx: __ctx,
-            threads: __threads,
-            stateStack: __stateStack
           })
     },
   },
@@ -359,10 +323,6 @@ await __call(print, {
 await __call(print, {
             type: "positional",
             args: [`Info level logging`]
-          }, {
-            ctx: __ctx,
-            threads: __threads,
-            stateStack: __stateStack
           })
     },
   },
@@ -373,10 +333,6 @@ await __call(print, {
 await __call(print, {
             type: "positional",
             args: [`Warning level`]
-          }, {
-            ctx: __ctx,
-            threads: __threads,
-            stateStack: __stateStack
           })
     },
   },
@@ -387,10 +343,6 @@ await __call(print, {
 await __call(print, {
             type: "positional",
             args: [`Error level`]
-          }, {
-            ctx: __ctx,
-            threads: __threads,
-            stateStack: __stateStack
           })
     },
   },

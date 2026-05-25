@@ -312,10 +312,6 @@ __stack.locals.a = await __call(greet, {
           greeting: `Hi`,
           name: `world`
         }
-      }, {
-        ctx: __ctx,
-        threads: __threads,
-        stateStack: __stateStack
       });
 if (hasInterrupts(__stack.locals.a)) {
         await __ctx.pendingPromises.awaitAll()
@@ -335,10 +331,6 @@ __stack.locals.b = await __call(greet, {
           name: `world`,
           punctuation: `.`
         }
-      }, {
-        ctx: __ctx,
-        threads: __threads,
-        stateStack: __stateStack
       });
 if (hasInterrupts(__stack.locals.b)) {
         await __ctx.pendingPromises.awaitAll()
@@ -357,10 +349,6 @@ __stack.locals.c = await __call(greet, {
         namedArgs: {
           punctuation: `?`
         }
-      }, {
-        ctx: __ctx,
-        threads: __threads,
-        stateStack: __stateStack
       });
 if (hasInterrupts(__stack.locals.c)) {
         await __ctx.pendingPromises.awaitAll()

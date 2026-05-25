@@ -30,7 +30,7 @@ export type PipeChainEmitterDeps = {
     varName: string,
     accessChain?: AccessChainElement[],
   ) => TsNode;
-  buildStateConfig: () => TsNode;
+  buildStateConfig: () => TsNode | undefined;
   /**
    * Build a zod validation schema string for a VariableType taken from
    * user source. Must deep-resolve generic aliases before lowering, just
@@ -170,7 +170,10 @@ export class PipeChainEmitter {
       if (lastElement?.kind === "methodCall" && lastElement.functionCall.arguments.length > 0) {
         const fnExpr = this.deps.processNode(stage);
         const descriptor = ts.obj({ type: ts.str("positional"), args: ts.arr([pipeArg]) });
-        const callExpr = ts.call(ts.id("__call"), [fnExpr, descriptor, this.deps.buildStateConfig()]);
+        const config = this.deps.buildStateConfig();
+        const callArgs: TsNode[] = [fnExpr, descriptor];
+        if (config) callArgs.push(config);
+        const callExpr = ts.call(ts.id("__call"), callArgs);
         return ts.arrowFn([{ name: "__pipeArg" }], ts.await(callExpr), { async: true });
       }
 
@@ -182,16 +185,19 @@ export class PipeChainEmitter {
           : null;
       if (propName) {
         const descriptor = ts.obj({ type: ts.str("positional"), args: ts.arr([pipeArg]) });
-        const callExpr = ts.call(
-          ts.id("__callMethod"),
-          [receiver, ts.str(propName), descriptor, this.deps.buildStateConfig()],
-        );
+        const config = this.deps.buildStateConfig();
+        const callArgs: TsNode[] = [receiver, ts.str(propName), descriptor];
+        if (config) callArgs.push(config);
+        const callExpr = ts.call(ts.id("__callMethod"), callArgs);
         return ts.arrowFn([{ name: "__pipeArg" }], ts.await(callExpr), { async: true });
       }
       // Fallback for non-property access (e.g. index): use __call
       const callee = this.deps.processNode(stage);
       const descriptor = ts.obj({ type: ts.str("positional"), args: ts.arr([pipeArg]) });
-      const callExpr = ts.call(ts.id("__call"), [callee, descriptor, this.deps.buildStateConfig()]);
+      const config = this.deps.buildStateConfig();
+      const callArgs: TsNode[] = [callee, descriptor];
+      if (config) callArgs.push(config);
+      const callExpr = ts.call(ts.id("__call"), callArgs);
       return ts.arrowFn([{ name: "__pipeArg" }], ts.await(callExpr), { async: true });
     }
 
@@ -225,7 +231,10 @@ export class PipeChainEmitter {
     if (stage.type === "variableName") {
       const callee = this.deps.processNode(stage);
       const descriptor = ts.obj({ type: ts.str("positional"), args: ts.arr([pipeArg]) });
-      return ts.await(ts.call(ts.id("__call"), [callee, descriptor, this.deps.buildStateConfig()]));
+      const config = this.deps.buildStateConfig();
+      const callArgs: TsNode[] = [callee, descriptor];
+      if (config) callArgs.push(config);
+      return ts.await(ts.call(ts.id("__call"), callArgs));
     }
 
     if (stage.type === "functionCall") {
@@ -240,7 +249,10 @@ export class PipeChainEmitter {
         // e.g. map.partial(func: \x -> x * 2) — call the method, then invoke result with piped value
         const fnExpr = this.deps.processNode(stage);
         const descriptor = ts.obj({ type: ts.str("positional"), args: ts.arr([pipeArg]) });
-        return ts.await(ts.call(ts.id("__call"), [fnExpr, descriptor, this.deps.buildStateConfig()]));
+        const config = this.deps.buildStateConfig();
+        const callArgs: TsNode[] = [fnExpr, descriptor];
+        if (config) callArgs.push(config);
+        return ts.await(ts.call(ts.id("__call"), callArgs));
       }
       // Bare method/property reference — use __callMethod
       const receiver = this.processValueAccessPartial(stage);
@@ -250,14 +262,17 @@ export class PipeChainEmitter {
           : null;
       if (propName) {
         const descriptor = ts.obj({ type: ts.str("positional"), args: ts.arr([pipeArg]) });
-        return ts.await(ts.call(
-          ts.id("__callMethod"),
-          [receiver, ts.str(propName), descriptor, this.deps.buildStateConfig()],
-        ));
+        const config = this.deps.buildStateConfig();
+        const callArgs: TsNode[] = [receiver, ts.str(propName), descriptor];
+        if (config) callArgs.push(config);
+        return ts.await(ts.call(ts.id("__callMethod"), callArgs));
       }
       const callee = this.deps.processNode(stage);
       const descriptor = ts.obj({ type: ts.str("positional"), args: ts.arr([pipeArg]) });
-      return ts.await(ts.call(ts.id("__call"), [callee, descriptor, this.deps.buildStateConfig()]));
+      const config = this.deps.buildStateConfig();
+      const callArgs: TsNode[] = [callee, descriptor];
+      if (config) callArgs.push(config);
+      return ts.await(ts.call(ts.id("__call"), callArgs));
     }
 
     throw new Error(`Unsupported pipe stage type in catch: ${stage.type}`);

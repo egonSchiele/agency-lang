@@ -210,10 +210,6 @@ __functionCompleted = true;
 runner.halt(await __callMethod(__stack.args.s, "parseJSON", {
         type: "positional",
         args: [__stack.args.input]
-      }, {
-        ctx: __ctx,
-        threads: __threads,
-        stateStack: __stateStack
       }))
 return;
     });
@@ -332,10 +328,6 @@ runner.halt(await __call(parseValue, {
         namedArgs: {
           s: new Schema(z.array(z.number()))
         }
-      }, {
-        ctx: __ctx,
-        threads: __threads,
-        stateStack: __stateStack
       }))
 return;
     });
@@ -425,10 +417,6 @@ __stack.locals.nums = await __call(parseValue, {
         namedArgs: {
           s: new Schema(z.array(z.number()))
         }
-      }, {
-        ctx: __ctx,
-        threads: __threads,
-        stateStack: __stateStack
       });
 if (hasInterrupts(__stack.locals.nums)) {
         await __ctx.pendingPromises.awaitAll()
@@ -443,10 +431,6 @@ if (hasInterrupts(__stack.locals.nums)) {
 const __funcResult = await __call(print, {
         type: "positional",
         args: [__stack.locals.nums]
-      }, {
-        ctx: __ctx,
-        threads: __threads,
-        stateStack: __stateStack
       });
 if (hasInterrupts(__funcResult)) {
         await __ctx.pendingPromises.awaitAll()
@@ -466,10 +450,6 @@ __stack.locals.anything = await __call(parseValue, {
         namedArgs: {
           s: new Schema(z.any())
         }
-      }, {
-        ctx: __ctx,
-        threads: __threads,
-        stateStack: __stateStack
       });
 if (hasInterrupts(__stack.locals.anything)) {
         await __ctx.pendingPromises.awaitAll()
@@ -484,10 +464,6 @@ if (hasInterrupts(__stack.locals.anything)) {
 const __funcResult = await __call(print, {
         type: "positional",
         args: [__stack.locals.anything]
-      }, {
-        ctx: __ctx,
-        threads: __threads,
-        stateStack: __stateStack
       });
 if (hasInterrupts(__funcResult)) {
         await __ctx.pendingPromises.awaitAll()
@@ -509,10 +485,6 @@ __stack.locals.validated = await __call(parseValue, {
         namedArgs: {
           s: new Schema(z.array(z.number()))
         }
-      }, {
-        ctx: __ctx,
-        threads: __threads,
-        stateStack: __stateStack
       });
 if (hasInterrupts(__stack.locals.validated)) {
         await __ctx.pendingPromises.awaitAll()
@@ -528,10 +500,6 @@ __stack.locals.validated = __validateType(__stack.locals.validated, z.array(z.nu
 const __funcResult = await __call(print, {
         type: "positional",
         args: [__stack.locals.validated]
-      }, {
-        ctx: __ctx,
-        threads: __threads,
-        stateStack: __stateStack
       });
 if (hasInterrupts(__funcResult)) {
         await __ctx.pendingPromises.awaitAll()
@@ -547,10 +515,6 @@ if (hasInterrupts(__funcResult)) {
 __stack.locals.explicit = await __call(parseValue, {
         type: "positional",
         args: [`[1,2,3]`, new Schema(z.any())]
-      }, {
-        ctx: __ctx,
-        threads: __threads,
-        stateStack: __stateStack
       });
 if (hasInterrupts(__stack.locals.explicit)) {
         await __ctx.pendingPromises.awaitAll()
@@ -565,10 +529,6 @@ if (hasInterrupts(__stack.locals.explicit)) {
 const __funcResult = await __call(print, {
         type: "positional",
         args: [__stack.locals.explicit]
-      }, {
-        ctx: __ctx,
-        threads: __threads,
-        stateStack: __stateStack
       });
 if (hasInterrupts(__funcResult)) {
         await __ctx.pendingPromises.awaitAll()
@@ -587,10 +547,6 @@ if (hasInterrupts(__funcResult)) {
 const __funcResult = await __call(parseValue, {
         type: "positional",
         args: [`[1,2,3]`]
-      }, {
-        ctx: __ctx,
-        threads: __threads,
-        stateStack: __stateStack
       });
 if (hasInterrupts(__funcResult)) {
         await __ctx.pendingPromises.awaitAll()

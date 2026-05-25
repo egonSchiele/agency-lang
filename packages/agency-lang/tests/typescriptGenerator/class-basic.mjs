@@ -299,10 +299,6 @@ __stack.locals.c = new Counter(0);
 await __callMethod(__stack.locals.c, "increment", {
         type: "positional",
         args: []
-      }, {
-        ctx: __ctx,
-        threads: __threads,
-        stateStack: __stateStack
       })
     });
     await runner.step(3, async (runner) => {
@@ -311,10 +307,6 @@ runner.halt({
         data: await __callMethod(__stack.locals.c, "increment", {
           type: "positional",
           args: []
-        }, {
-          ctx: __ctx,
-          threads: __threads,
-          stateStack: __stateStack
         })
       })
 return;

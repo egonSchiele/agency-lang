@@ -1,17 +1,44 @@
 import { AgencyFunction } from "./agencyFunction.js";
 import type { CallType } from "./agencyFunction.js";
+import { agencyStore } from "./asyncContext.js";
+
+/**
+ * Construct the `__state` bag that flows into AgencyFunction.invoke() from
+ * the active ALS frame, merged with any caller-provided extras (e.g.
+ * `moduleId`/`scopeName`/`stepPath` for checkpoint sites, or `{ ctx }`
+ * when called from inside `__initializeGlobals` which runs before the
+ * ALS frame is installed).
+ *
+ * Returning `undefined` here preserves the pre-ALS semantics where some
+ * sites called `target.invoke(descriptor)` with no state.
+ */
+function buildStateFromALS(extras?: unknown): unknown {
+  const store = agencyStore.getStore();
+  if (!store) {
+    // Outside an ALS frame (e.g., global init): rely entirely on
+    // whatever the caller passed.
+    return extras;
+  }
+  const base = {
+    ctx: store.ctx,
+    threads: store.threads,
+    stateStack: store.stack,
+  };
+  if (!extras) return base;
+  return { ...base, ...(extras as Record<string, unknown>) };
+}
 
 export async function __call(
   target: unknown,
   descriptor: CallType,
-  state?: unknown,
+  stateExtras?: unknown,
   optional?: boolean,
 ): Promise<unknown> {
   if (optional && (target === null || target === undefined)) {
     return undefined;
   }
   if (AgencyFunction.isAgencyFunction(target)) {
-    return target.invoke(descriptor, state);
+    return target.invoke(descriptor, buildStateFromALS(stateExtras));
   }
   if (typeof target !== "function") {
     throw new Error(`Cannot call non-function value: ${String(target)}`);
@@ -28,7 +55,7 @@ export async function __callMethod(
   obj: unknown,
   prop: string | number,
   descriptor: CallType,
-  state?: unknown,
+  stateExtras?: unknown,
   optional?: boolean,
 ): Promise<unknown> {
   if (optional && (obj === null || obj === undefined)) {
@@ -64,7 +91,7 @@ export async function __callMethod(
 
   const target = (obj as any)[prop];
   if (AgencyFunction.isAgencyFunction(target)) {
-    return target.invoke(descriptor, state);
+    return target.invoke(descriptor, buildStateFromALS(stateExtras));
   }
   if (typeof target !== "function") {
     throw new Error(`Cannot call non-function value at property '${String(prop)}': ${String(target)}`);

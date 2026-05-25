@@ -172,10 +172,6 @@ await callHook({
 __stack.locals.message = await __call(input, {
         type: "positional",
         args: [`Please enter a message: `]
-      }, {
-        ctx: __ctx,
-        threads: __threads,
-        stateStack: __stateStack
       });
 if (hasInterrupts(__stack.locals.message)) {
         await __ctx.pendingPromises.awaitAll()
@@ -215,10 +211,6 @@ if (hasInterrupts(__stack.locals.sentiment)) {
 const __funcResult = await __call(print, {
         type: "positional",
         args: [__stack.locals.sentiment]
-      }, {
-        ctx: __ctx,
-        threads: __threads,
-        stateStack: __stateStack
       });
 if (hasInterrupts(__funcResult)) {
         await __ctx.pendingPromises.awaitAll()

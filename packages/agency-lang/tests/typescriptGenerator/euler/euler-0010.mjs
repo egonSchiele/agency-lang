@@ -358,10 +358,6 @@ await runner.ifElse(0, [
     condition: async () => await __call(isPrime, {
             type: "positional",
             args: [__stack.locals.n]
-          }, {
-            ctx: __ctx,
-            threads: __threads,
-            stateStack: __stateStack
           }),
     body: async (runner) => {
 await runner.step(0, async (runner) => {

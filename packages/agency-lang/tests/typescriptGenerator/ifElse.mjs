@@ -192,10 +192,6 @@ __stack.locals.result = `condition was true`;
     condition: async () => await __call(isReady, {
           type: "positional",
           args: []
-        }, {
-          ctx: __ctx,
-          threads: __threads,
-          stateStack: __stateStack
         }),
     body: async (runner) => {
 await runner.step(0, async (runner) => {

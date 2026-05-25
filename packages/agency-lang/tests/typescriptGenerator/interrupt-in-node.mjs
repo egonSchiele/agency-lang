@@ -339,10 +339,6 @@ await callHook({
 await __call(print, {
         type: "positional",
         args: [`In foo2, name is ${__stack.args.name} and age is ${__stack.args.age}, this message should only print once...`]
-      }, {
-        ctx: __ctx,
-        threads: __threads,
-        stateStack: __stateStack
       }) + greet
     });
     await runner.step(2, async (runner) => {
@@ -371,10 +367,6 @@ if (hasInterrupts(__stack.locals.response)) {
 const __funcResult = await __call(print, {
         type: "positional",
         args: [`Greeted, age is still ${__stack.args.age}...`]
-      }, {
-        ctx: __ctx,
-        threads: __threads,
-        stateStack: __stateStack
       });
 if (hasInterrupts(__funcResult)) {
         await __ctx.pendingPromises.awaitAll()
@@ -454,10 +446,6 @@ await callHook({
 const __funcResult = await __call(print, {
         type: "positional",
         args: [`Saying hi to ${__stack.args.name}...`]
-      }, {
-        ctx: __ctx,
-        threads: __threads,
-        stateStack: __stateStack
       });
 if (hasInterrupts(__funcResult)) {
         await __ctx.pendingPromises.awaitAll()

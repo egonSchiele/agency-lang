@@ -51,7 +51,10 @@ export function _round(num: number, precision: number): number {
   return Math.round(num * factor) / factor;
 }
 
-export { _fetch, _fetchJSON } from "./http.js";
+// `__internal_fetch`, `__internal_fetchJSON`, and `__internal_fetchMarkdown`
+// are context-injected builtins (see lib/codegenBuiltins/contextInjected.ts)
+// — they're imported directly from `./http.js` by the generated code, no
+// re-export needed here.
 
 export async function _read(dir: string, filename: string): Promise<string> {
   const filePath = await resolvePath(dir, filename);

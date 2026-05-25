@@ -20,8 +20,8 @@ import { resolveAgencyImportPath } from "../importPaths.js";
 // Names auto-imported from std::index by the parser template. Kept in sync
 // with lib/templates/backends/agency/template.mustache.
 const STDLIB_AUTO_IMPORTS: string[] = [
-  "print", "printJSON", "parseJSON", "input", "sleep", "round", "fetch",
-  "fetchJSON", "read", "write", "readImage", "notify", "range",
+  "print", "printJSON", "parseJSON", "input", "sleep", "round",
+  "read", "write", "readImage", "notify", "range",
   "mostCommon", "keys", "values", "entries", "emit",
 ];
 

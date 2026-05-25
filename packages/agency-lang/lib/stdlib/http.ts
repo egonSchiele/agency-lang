@@ -1,6 +1,15 @@
+import { AgencyCancelledError, isAbortError } from "../runtime/errors.js";
+import type { RuntimeContext } from "../runtime/state/context.js";
+import type { StateStack } from "../runtime/state/stateStack.js";
+import type { ThreadStore } from "../runtime/state/threadStore.js";
+
 const MAX_BODY_BYTES = 10 * 1024 * 1024;
 
-async function readBodyCapped(response: Response, url: string): Promise<string> {
+async function readBodyCapped(
+  response: Response,
+  url: string,
+  signal: AbortSignal,
+): Promise<string> {
   if (!response.body) {
     return "";
   }
@@ -8,6 +17,16 @@ async function readBodyCapped(response: Response, url: string): Promise<string> 
   const decoder = new TextDecoder("utf-8");
   const chunks: string[] = [];
   let total = 0;
+  // Cancel the body read when the AbortSignal fires (e.g., user
+  // hit Ctrl-C while we're streaming a large response). `fetch`'s
+  // signal handles connect/headers; the streaming body read needs
+  // its own listener because the in-flight reader.read() promise
+  // won't auto-reject on signal abort.
+  const onAbort = () => {
+    reader.cancel().catch(() => {});
+  };
+  if (signal.aborted) onAbort();
+  else signal.addEventListener("abort", onAbort, { once: true });
   try {
     while (true) {
       const { done, value } = await reader.read();
@@ -22,6 +41,7 @@ async function readBodyCapped(response: Response, url: string): Promise<string> 
       chunks.push(decoder.decode(value, { stream: true }));
     }
   } finally {
+    signal.removeEventListener("abort", onAbort);
     try {
       reader.releaseLock();
     } catch {}
@@ -41,51 +61,91 @@ function validateUrl(
   return url;
 }
 
-export async function _fetch(
+/**
+ * Run an HTTP request, translating any abort-shaped error into the
+ * runtime's `AgencyCancelledError`. Without this translation a
+ * cancelled fetch surfaces as a `DOMException("AbortError")` or
+ * `TypeError("fetch failed")`, which the agency `try` wrapper
+ * would silently convert into a `Failure` value — defeating the
+ * whole point of cancellation propagation. By throwing
+ * `AgencyCancelledError`, `__tryCall` (which re-throws it like
+ * `GuardExceededError`) lets the cancellation reach the runner.
+ */
+async function runHttp<T>(fn: () => Promise<T>, url: string): Promise<T> {
+  try {
+    return await fn();
+  } catch (e) {
+    if (isAbortError(e)) {
+      throw new AgencyCancelledError(`fetch ${url} cancelled`);
+    }
+    throw e;
+  }
+}
+
+export async function __internal_fetch(
+  ctx: RuntimeContext<any>,
+  stack: StateStack,
+  _threads: ThreadStore,
   baseUrl: string,
   urlPath: string,
   headers: Record<string, string>,
   allowedDomains: string[],
 ): Promise<string> {
   const url = validateUrl(baseUrl, urlPath, allowedDomains);
-  const result = await fetch(url, { headers });
-  try {
-    return await readBodyCapped(result, url);
-  } catch (e) {
-    throw new Error(`Failed to get text from ${url}: ${e}`);
-  }
+  const signal = ctx.getAbortSignal(stack);
+  return await runHttp(async () => {
+    const result = await fetch(url, { headers, signal });
+    try {
+      return await readBodyCapped(result, url, signal);
+    } catch (e) {
+      if (isAbortError(e)) throw e;
+      throw new Error(`Failed to get text from ${url}: ${e}`);
+    }
+  }, url);
 }
 
-export async function _fetchJSON(
+export async function __internal_fetchJSON(
+  ctx: RuntimeContext<any>,
+  stack: StateStack,
+  _threads: ThreadStore,
   baseUrl: string,
   urlPath: string,
   headers: Record<string, string>,
   allowedDomains: string[],
 ): Promise<any> {
   const url = validateUrl(baseUrl, urlPath, allowedDomains);
-  const result = await fetch(url, { headers });
-  const text = await readBodyCapped(result, url);
-  try {
-    return JSON.parse(text);
-  } catch (e) {
-    throw new Error(`Failed to parse JSON from ${url}: ${e}`);
-  }
+  const signal = ctx.getAbortSignal(stack);
+  return await runHttp(async () => {
+    const result = await fetch(url, { headers, signal });
+    const text = await readBodyCapped(result, url, signal);
+    try {
+      return JSON.parse(text);
+    } catch (e) {
+      throw new Error(`Failed to parse JSON from ${url}: ${e}`);
+    }
+  }, url);
 }
 
-export async function _webfetch(
+export async function __internal_fetchMarkdown(
+  ctx: RuntimeContext<any>,
+  stack: StateStack,
+  _threads: ThreadStore,
   baseUrl: string,
   urlPath: string,
   headers: Record<string, string>,
   allowedDomains: string[],
 ): Promise<string> {
   const url = validateUrl(baseUrl, urlPath, allowedDomains);
-  const result = await fetch(url, { headers });
-  const contentType = result.headers.get("content-type") ?? "";
-  const body = await readBodyCapped(result, url);
-  if (contentType.includes("text/html")) {
-    return htmlToMarkdown(body);
-  }
-  return body;
+  const signal = ctx.getAbortSignal(stack);
+  return await runHttp(async () => {
+    const result = await fetch(url, { headers, signal });
+    const contentType = result.headers.get("content-type") ?? "";
+    const body = await readBodyCapped(result, url, signal);
+    if (contentType.includes("text/html")) {
+      return htmlToMarkdown(body);
+    }
+    return body;
+  }, url);
 }
 
 function htmlToMarkdown(html: string): string {

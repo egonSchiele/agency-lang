@@ -1,3 +1,5 @@
+import { fetch } from "std::http"
+
 def getWeather(city: string): string {
   return fetch("https://weather.example.com/${city}")
 }

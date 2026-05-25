@@ -1,5 +1,5 @@
 // @ts-nocheck
-import { print, printJSON, parseJSON, input, sleep, round, fetch, fetchJSON, read, write, readImage, notify, range, mostCommon, keys, values, entries, emit, callback } from "agency-lang/stdlib/index.js";
+import { print, printJSON, parseJSON, input, sleep, round, read, write, readImage, notify, range, mostCommon, keys, values, entries, emit, callback } from "agency-lang/stdlib/index.js";
 import { fileURLToPath } from "url";
 import __process from "process";
 import { readFileSync, writeFileSync } from "fs";
@@ -30,6 +30,11 @@ import {
   functionRefReviver as __functionRefReviver,
   DeterministicClient as __DeterministicClient,
 } from "agency-lang/runtime";
+import {
+  __internal_fetch,
+  __internal_fetchJSON,
+  __internal_fetchMarkdown,
+} from "agency-lang/stdlib-lib/http.js";
 import {
   __internal_applyExtractionResult,
   __internal_applyForgetResult,
@@ -157,8 +162,6 @@ __registerTool(parseJSON);
 __registerTool(input);
 __registerTool(sleep);
 __registerTool(round);
-__registerTool(fetch);
-__registerTool(fetchJSON);
 __registerTool(read);
 __registerTool(write);
 __registerTool(readImage);

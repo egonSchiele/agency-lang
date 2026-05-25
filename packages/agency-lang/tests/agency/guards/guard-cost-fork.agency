@@ -1,23 +1,29 @@
 import { guard } from "std::thread"
 
-// Fork inside a guard. Each of 3 branches spends SYNTHETIC_COST
-// = 0.000002. After the fork completes, Runner.propagateBranchCost
-// rolls the deltas back to the parent stack: parent localCost grows
-// by 0.000006. The subsequent LLM call ("after") triggers the cost
-// check in prompt.ts, which sees total guard-scope spend = 0.000008
-// (> 0.000001) and trips.
+// Fork inside a guard. Each branch spends SYNTHETIC_COST = 0.000002.
+// With the shared-guard model (cloneForBranch returns `this`), the
+// OUTER guard is a single in-memory object that every branch charges
+// in real time. The first branch's post-call check ($0.000002 >
+// $0.000001) trips OUTER MID-FORK — well before the fork settles.
+// The trailing llm("after") is unreachable; the trip surfaces
+// immediately as a Failure.
+//
+// Under the prior per-branch-clone model (V1), each branch saw an
+// isolated $0.000001 clone and tripped independently. The deltas
+// rolled up at fork-completion via Runner.propagateBranchCost and
+// the trailing "after" call's post-check is what caught it. With
+// shared guards there's no V1 deferral — the trip fires the moment
+// any branch's charge pushes the shared counter over.
 node main() {
   const result = guard(cost: 0.000001) as {
     fork([1, 2, 3]) as n {
       const r = llm("branch ${n}")
     }
-    // Without this trailing call, cost would propagate but no guard
-    // check would fire (the check is only invoked after LLM calls).
     const after = llm("after")
     return after
   }
   if (isFailure(result)) {
-    return "tripped-after-fork:${result.error.actualCost > 0}"
+    return "tripped-mid-fork:${result.error.actualCost > 0}"
   }
   return "did not trip"
 }

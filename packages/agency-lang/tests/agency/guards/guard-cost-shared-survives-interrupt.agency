@@ -1,0 +1,53 @@
+import { guard } from "std::thread"
+
+// Shared cost guard must survive a serialized checkpoint cycle.
+// All 3 fork branches interrupt BEFORE the shared OUTER's spend
+// tips over the limit. The harness approves; on resume, runBatch's
+// `rehydrateInheritedGuards` re-prepends a live ref to the parent's
+// OUTER onto each child stack. The OUTER's `spent` counter survives
+// via toJSON (each charge before the interrupt is captured on the
+// parent's snapshot). Post-resume charges continue mutating the
+// same JS object — the trip fires once the cumulative cost crosses
+// the budget.
+//
+// SYNTHETIC_COST per call is $0.000002. Budget is $0.000008.
+//   Pre-interrupt:  3 branches × 1 call = $0.000006   (under, OK)
+//   All 3 interrupt. Harness approves all 3.
+//   Resume: branch X's 2nd call charges +$0.000002 → $0.000008 (no
+//   trip — `spent > limit` is false at equality). Next branch's 2nd
+//   call → $0.000010 → TRIP at its post-call check, GuardExceededError
+//   thrown out of the branch. (CostGuard has no AbortController; trips
+//   propagate via post-call check on each branch — remaining branches
+//   that haven't yet completed their 2nd call will trip on their own
+//   post-call check or be refused by the pre-call gate at their next
+//   sync point.)
+//
+// If the inheritedGuardCount machinery or the rehydrate re-link
+// were broken, the resumed branch would not see the parent's
+// OUTER at all — its post-call check would only see locally-pushed
+// guards (none in this test), and the trip would never fire from
+// inside the branch. The fork would settle successfully and the
+// outer's trip would only fire on the post-fork llm (none here).
+//
+// The assertion (no trailing llm) targets exactly that gap: trip
+// MUST come from inside a branch's post-call check after resume,
+// not from any post-fork sync point.
+def confirmBranch(item: number): string {
+  const r = llm("branch ${item}")
+  interrupt("approve ${item}?")
+  const r2 = llm("branch ${item} part 2")
+  return r2
+}
+
+node main() {
+  const result = guard(cost: 0.000008) as {
+    fork([1, 2, 3]) as n {
+      return confirmBranch(n)
+    }
+    return "fork-completed"
+  }
+  if (isFailure(result)) {
+    return "tripped-after-resume:${result.error.actualCost > 0.000008}"
+  }
+  return result.value
+}

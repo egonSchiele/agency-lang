@@ -1,0 +1,17 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "\"tripped-mid-fork:true\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        { "return": "b1" },
+        { "return": "b2" },
+        { "return": "b3" }
+      ],
+      "description": "Outer cost guard wraps a fork. With the shared-guard model, the OUTER's CostGuard is a single in-memory object referenced by every branch (cloneForBranch returns this). Each branch's charge mutates the shared counter; the second branch's post-call check trips it mid-fork. The fork settles with the typed GuardExceededError surfacing as a Failure. Regression coverage for real-time mid-fork enforcement — under the old per-branch isolation, no branch would individually exceed the budget and the trip would only fire post-join (requiring a trailing LLM call as sync point)."
+    }
+  ]
+}

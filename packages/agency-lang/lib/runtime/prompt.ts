@@ -1,5 +1,5 @@
 import * as smoltalk from "smoltalk";
-import { PromptResult, Result, StreamChunk, ToolCallJSON } from "smoltalk";
+import { PromptResult, ToolCallJSON } from "smoltalk";
 import { createLogger } from "../logger.js";
 import { AgencyFunction } from "./agencyFunction.js";
 import { AgencyCancelledError, isAbortError } from "./errors.js";
@@ -34,6 +34,53 @@ export type RunPromptResult = {
   toolCalls: smoltalk.ToolCallJSON[];
 };
 
+/** Dispatch the LLM request and extract `{completion, toolCalls}`,
+ *  branching on the `stream` flag. Streaming uses `handleStreamingResponse`
+ *  to accumulate chunks; non-streaming awaits the single response Promise.
+ *  Throws on transport/protocol errors. */
+async function dispatchLLMRequest({
+  ctx,
+  promptConfig,
+  prompt,
+  stream,
+}: {
+  ctx: RuntimeContext<GraphState>;
+  promptConfig: PromptConfig;
+  prompt: string;
+  stream: boolean;
+}): Promise<{ completion: PromptResult; toolCalls: ToolCallJSON[] }> {
+  if (stream) {
+    const streamGen = ctx.llmClient.textStream(promptConfig);
+    const response = await handleStreamingResponse({
+      ctx,
+      completion: streamGen,
+      prompt,
+    });
+    if (!response) {
+      throw new Error(
+        `No completion returned from streaming LLM call! This shouldn't happen.`,
+      );
+    }
+    if (!response.success) {
+      throw new Error(
+        `Error getting completion from streaming response: ${response.error}`,
+      );
+    }
+    return {
+      completion: response.value.completion,
+      toolCalls: response.value.toolCalls,
+    };
+  }
+  const response = await ctx.llmClient.text(promptConfig);
+  if (!response.success) {
+    throw new Error(`Error getting completion: ${response.error}`);
+  }
+  return {
+    completion: response.value,
+    toolCalls: response.value.toolCalls || [],
+  };
+}
+
 async function _runPrompt({
   ctx,
   messages,
@@ -57,6 +104,16 @@ async function _runPrompt({
   if (ctx.isCancelled(stateStack)) {
     throw new AgencyCancelledError();
   }
+
+  // Pre-call cost-guard gate. If any active guard (including shared
+  // parent guards inherited by this branch) is already over budget —
+  // e.g. because a sibling branch's earlier LLM call pushed the shared
+  // CostGuard over its limit, or because a prior call here did — refuse
+  // to issue this call. Catches "another expensive call would have been
+  // billed but we're already past the cap" before the request hits the
+  // wire.
+  const targetStack = stateStack ?? ctx.stateStack;
+  targetStack.enforceGuards();
 
   // Note: the llmCall span is opened in the outer `runPrompt`, not here,
   // so that any tool executions triggered by this LLM response nest under
@@ -90,42 +147,12 @@ async function _runPrompt({
     metadata: clientConfig,
   } as any;
 
-  let _completion: AsyncGenerator<StreamChunk> | Promise<Result<PromptResult>>;
-  if (stream) {
-    _completion = ctx.llmClient.textStream(promptConfig);
-  } else {
-    _completion = ctx.llmClient.text(promptConfig);
-  }
-
-  let completion: PromptResult;
-  let toolCalls: ToolCallJSON[] = [];
-
-  if (stream) {
-    const response = await handleStreamingResponse({
-      ctx,
-      completion: _completion as AsyncGenerator<StreamChunk>,
-      prompt,
-    });
-    if (!response) {
-      throw new Error(
-        `No completion returned from streaming LLM call! This shouldn't happen.`,
-      );
-    }
-    if (!response.success) {
-      throw new Error(
-        `Error getting completion from streaming response: ${response.error}`,
-      );
-    }
-    completion = response.value.completion;
-    toolCalls = response.value.toolCalls;
-  } else {
-    const response = await (_completion as Promise<Result<PromptResult>>);
-    if (!response.success) {
-      throw new Error(`Error getting completion: ${response.error}`);
-    }
-    completion = response.value;
-    toolCalls = completion.toolCalls || [];
-  }
+  const { completion, toolCalls } = await dispatchLLMRequest({
+    ctx,
+    promptConfig,
+    prompt,
+    stream,
+  });
 
   // Capture endTime AFTER the response has been fully received. The
   // request Promise is created above but only awaited inside the
@@ -164,30 +191,18 @@ async function _runPrompt({
     cost: completion.cost,
   });
 
-  // Per-branch accumulator: in addition to the global __tokenStats above,
-  // add cost/tokens to the active stack so std::thread's getCost()/getTokens()
-  // can report per-branch totals. See docs/superpowers/specs/2026-05-20-
-  // thread-builtins-and-stdlib-design.md for the model.
-  const targetStack = stateStack ?? ctx.stateStack;
-  targetStack.localCost += completion.cost?.totalCost ?? 0;
+  // Per-branch accumulator: adds to the active stack so std::thread's
+  // getCost()/getTokens() can report per-branch totals; complementary
+  // to the global __tokenStats above. Then bill every active guard
+  // for this call's cost and enforce limits. Shared parent guards see
+  // descendants' spend in real time; mid-fork trips fire on the next
+  // enforceGuards() call. See docs/superpowers/specs/2026-05-20-thread-
+  // builtins-and-stdlib-design.md.
+  const callCost = completion.cost?.totalCost ?? 0;
+  targetStack.localCost += callCost;
   targetStack.localTokens += completion.usage?.totalTokens ?? 0;
-
-  // Enforce active guards. Walked innermost-first so the deepest
-  // (most recently pushed) guard reports its trip first. Innermost-
-  // first is not the same as "smallest limit first" — a shallower
-  // outer guard with a tighter budget would still trip on a later LLM
-  // call if the inner guard doesn't fail first. This ordering is a
-  // stable, scope-local rule rather than a global-minimum search.
-  // The thrown GuardExceededError propagates up through _runPrompt /
-  // runPrompt / the user's code; the stdlib `guard` function's `try`
-  // catches it and returns a Failure. The function-body auto-wrap re-
-  // throws GuardExceededError so it cannot be silently converted to a
-  // generic failure value. See lib/runtime/guard.ts and
-  // docs/superpowers/specs/2026-05-20-cost-and-guard-tracking-design.md.
-  for (let i = targetStack.guards.length - 1; i >= 0; i--) {
-    const err = targetStack.guards[i].check(targetStack);
-    if (err) throw err;
-  }
+  targetStack.chargeGuards(callCost);
+  targetStack.enforceGuards();
 
   // Memory layer: auto-extraction and compaction run unconditionally
   // whenever a MemoryManager is attached (resolved decision #6).

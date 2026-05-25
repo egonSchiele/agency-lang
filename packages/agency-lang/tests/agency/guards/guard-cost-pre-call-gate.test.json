@@ -1,0 +1,18 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "\"pre-gate-trip:true\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        { "return": "a1" },
+        { "return": "b1" },
+        { "return": "a2" },
+        { "return": "b2" }
+      ],
+      "description": "Pre-call gate refuses an LLM call when a guard is already over budget. Inside the fork, each branch wraps its calls in an INNER guard ($0.000003); the post-call innermost-first walk lets INNER trip and the stdlib try catches without OUTER itself tripping during the fork. OUTER's spent accumulates ($0.000006-$0.000008 depending on JS microtask timing) and crosses its $0.000005 budget. The pre-call gate then refuses either branch 2's 'b' (timing variant A) or llm('after') (timing variant B). Assertion `actualCost < $0.000010` covers both pre-gate variants; without the pre-call gate, actualCost would be $0.000010 (post-trip after 'after' charged). Second independent signal: llmMocks is EXACTLY 4 — if pre-gate were broken, DeterministicClient throws 'too many calls' on the 5th request."
+    }
+  ]
+}

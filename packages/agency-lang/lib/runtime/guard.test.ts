@@ -49,15 +49,14 @@ describe("isGuardExceededError", () => {
 });
 
 describe("CostGuard", () => {
-  it("captures costAtPush at install time", () => {
+  it("tracks its own spent counter via charge()", () => {
     const stack = new StateStack();
-    stack.localCost = 0.5;
     const g = new CostGuard(2.0);
     g.install(stack);
     expect(g.check(stack)).toBeNull();
-    stack.localCost = 2.4;
-    expect(g.check(stack)).toBeNull(); // 1.9 spent, within limit
-    stack.localCost = 2.6;
+    g.charge(1.9);
+    expect(g.check(stack)).toBeNull(); // 1.9 ≤ 2.0
+    g.charge(0.2);
     const err = g.check(stack)!;
     expect(err).toBeInstanceOf(GuardExceededError);
     expect(err.type).toBe("cost");
@@ -65,34 +64,53 @@ describe("CostGuard", () => {
     expect(err.spent).toBeCloseTo(2.1, 5);
   });
 
-  it("cloneForBranch rebases costAtPush onto the child's localCost", () => {
+  it("check is independent of stack.localCost", () => {
+    // Cost guard no longer derives spent from stack.localCost — the
+    // counter is its own field. This is what lets the same guard
+    // instance be shared across parent + child branches.
+    const stack = new StateStack();
+    stack.localCost = 999;
+    const g = new CostGuard(1.0);
+    g.install(stack);
+    expect(g.check(stack)).toBeNull(); // localCost ignored
+    g.charge(2);
+    expect(g.check(stack)!.spent).toBeCloseTo(2, 5);
+  });
+
+  it("cloneForBranch returns the same instance (shared reference)", () => {
     const parent = new StateStack();
-    parent.localCost = 10;
     const g = new CostGuard(5);
     g.install(parent);
     const child = new StateStack();
-    child.localCost = 10;
-    const cloned = g.cloneForBranch(parent, child) as CostGuard;
-    expect(cloned).toBeInstanceOf(CostGuard);
-    // Child has accumulated 4 more cost — within limit.
-    child.localCost = 14;
-    expect(cloned.check(child)).toBeNull();
-    // Child accumulates 6 more — trips the clone.
-    child.localCost = 16;
-    expect(cloned.check(child)!.spent).toBeCloseTo(6, 5);
+    const cloned = g.cloneForBranch(parent, child);
+    expect(cloned).toBe(g); // same JS object — not a clone
+    // Charging through either reference mutates the same counter.
+    cloned!.charge(3);
+    expect(g.check(parent)).toBeNull();
+    g.charge(3);
+    expect(cloned!.check(child)!.spent).toBeCloseTo(6, 5); // 3 + 3
   });
 
-  it("round-trips through JSON", () => {
-    const stack = new StateStack();
-    stack.localCost = 1.5;
+  it("round-trips through JSON via spent counter", () => {
     const g = new CostGuard(3.0);
-    g.install(stack);
+    g.install(new StateStack());
+    g.charge(1.5);
     const json = g.toJSON();
-    expect(json).toEqual({ kind: "cost", costLimit: 3.0, costAtPush: 1.5 });
+    expect(json).toEqual({ kind: "cost", costLimit: 3.0, spent: 1.5 });
     const restored = guardFromJSON(json) as CostGuard;
     expect(restored).toBeInstanceOf(CostGuard);
-    stack.localCost = 5;
-    expect(restored.check(stack)!.spent).toBeCloseTo(3.5, 5);
+    restored.charge(2);
+    expect(restored.check(new StateStack())!.spent).toBeCloseTo(3.5, 5);
+  });
+
+  it("fromJSON throws on the legacy {costAtPush} shape", () => {
+    // Clean breaking change: pre-shared-cost-guards checkpoints used
+    // {costLimit, costAtPush} (no `spent`). Restoring them silently
+    // would set spent=undefined → check() compares undefined > limit
+    // → false → guard never trips. Fail loudly instead.
+    expect(() =>
+      CostGuard.fromJSON({ costLimit: 2.0, costAtPush: 0.5 } as any),
+    ).toThrow(/spent/);
   });
 });
 
@@ -270,11 +288,10 @@ describe("guardFromJSON", () => {
 describe("CostGuard.isTripped", () => {
   it("always returns false — cost guards don't mutate abortSignal", () => {
     const stack = new StateStack();
-    stack.localCost = 0;
     const g = new CostGuard(1);
     g.install(stack);
     expect(g.isTripped()).toBe(false);
-    stack.localCost = 100; // way over limit
+    g.charge(100); // way over limit
     expect(g.check(stack)).toBeInstanceOf(GuardExceededError);
     // Even with a tripped check, the CostGuard doesn't claim the abort
     // signal — it has none.
@@ -285,15 +302,14 @@ describe("CostGuard.isTripped", () => {
 describe("StateStack guard lifecycle", () => {
   it("pushGuard installs and popGuard uninstalls", () => {
     const stack = new StateStack();
-    stack.localCost = 5;
     const g = new CostGuard(5);
     stack.pushGuard(g);
     expect(stack.guards).toContain(g);
-    // install captured costAtPush=5. spend=10-5=5 is at the limit; check
-    // is strictly > so still null. At 5.01 it trips.
-    stack.localCost = 10;
+    // spend=5 is at the limit; check is strictly > so still null. At
+    // 5.01 it trips.
+    g.charge(5);
     expect(g.check(stack)).toBeNull();
-    stack.localCost = 10.01;
+    g.charge(0.01);
     expect(g.check(stack)!.spent).toBeCloseTo(5.01, 5);
     stack.popGuard();
     expect(stack.guards).not.toContain(g);

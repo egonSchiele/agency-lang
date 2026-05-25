@@ -24,6 +24,14 @@ export type BranchState = {
   // abort losing branches when the winner resolves). NOT serialized — only
   // meaningful within a single execution.
   abortController?: AbortController;
+
+  // Live-only flag: true iff this branch's stack has already had its
+  // inherited (parent-owned) guard references prepended in the current
+  // execution. Reset to undefined automatically on deserialize because
+  // it's never serialized. Used by `rehydrateInheritedGuards` in
+  // runBatch.ts to avoid double-prepending on multiple runBatch
+  // re-entries in the same run.
+  guardsRehydrated?: boolean;
 };
 
 export type BranchStateJSON = {
@@ -253,7 +261,17 @@ export type StateStackJSON = {
   localTokens?: number;
   seedCost?: number;
   seedTokens?: number;
+  /** Branch-owned guards only. Inherited (parent-owned) guards are
+   *  serialized on the parent's snapshot and re-prepended at resume by
+   *  `runBatch`. See StateStack.guards. */
   guards?: GuardJSON[];
+  /** Number of parent-owned guard references that were prepended onto
+   *  this stack's `guards` at branch creation. NOT a count of entries
+   *  in the serialized `guards` array (those are branch-owned only).
+   *  Used by `StateStack.rehydrateInheritedGuardsFrom` on resume to
+   *  validate that the parent's guard stack hasn't drifted. Always 0
+   *  for the root stack. */
+  inheritedGuardCount?: number;
 };
 
 export class StateStack {
@@ -299,7 +317,17 @@ export class StateStack {
   // Serialized so guards survive interrupt/resume cycles. Each guard
   // decides whether it gets cloned into fork/race branches via
   // `cloneForBranch` — see lib/runtime/guard.ts.
+  //
+  // For child branches (fork/race), entries at index < inheritedGuardCount
+  // are SHARED REFERENCES to parent-owned guards (CostGuard.cloneForBranch
+  // returns `this`). Entries at index >= inheritedGuardCount were pushed
+  // by the branch itself (e.g. a `guard(...)` block opened inside the
+  // branch body). Serialization writes only the branch-owned guards; on
+  // resume the runtime re-prepends live references to the parent's guards.
+  // This is what makes real-time mid-fork enforcement work without
+  // double-serializing shared state.
   guards: Guard[] = [];
+  inheritedGuardCount: number = 0;
 
   pushGuard(guard: Guard): void {
     guard.install(this);
@@ -310,6 +338,79 @@ export class StateStack {
     const guard = this.guards.pop();
     if (guard) guard.uninstall(this);
     return guard;
+  }
+
+  /**
+   * Walk active guards innermost-first and throw the first
+   * `GuardExceededError` returned by `guard.check(this)`. Used by
+   * `prompt.ts` as both the pre-call gate (refuse to issue a request
+   * we're already over budget for) and the post-call check (trip after
+   * the response cost has been billed).
+   *
+   * Innermost-first means the most recently pushed guard reports its
+   * trip first. This is a stable, scope-local rule rather than a
+   * global-minimum search; a shallower outer guard with a tighter
+   * budget would still trip on a later LLM call if the inner doesn't
+   * fail first.
+   */
+  enforceGuards(): void {
+    for (let i = this.guards.length - 1; i >= 0; i--) {
+      const err = this.guards[i].check(this);
+      if (err) throw err;
+    }
+  }
+
+  /**
+   * Charge every active guard with this call's cost. Shared parent
+   * guards (CostGuard.cloneForBranch returns `this`) accumulate
+   * descendant spend in real time — this is what makes mid-fork trip
+   * detection work without waiting for the fork to settle. TimeGuard's
+   * charge is a no-op.
+   */
+  chargeGuards(amount: number): void {
+    for (const g of this.guards) g.charge(amount);
+  }
+
+  /**
+   * Prepend the parent stack's inherited guard references onto this
+   * (child) stack's `guards` array, and stamp `inheritedGuardCount` so
+   * future serialization slices them off.
+   *
+   * Handles both fresh and resumed branches:
+   *  - Fresh branch: `inheritedGuardCount` is 0; the recomputed count
+   *    is stamped onto the stack.
+   *  - Resumed branch: `inheritedGuardCount` was restored from JSON;
+   *    the recomputed count is validated against it. A mismatch (e.g.
+   *    parent pushed an extra guard between snapshot and resume) throws
+   *    rather than silently inheriting a different set of guards.
+   *
+   * Always invokes `guard.cloneForBranch(parent, child)` on each parent
+   * guard so per-guard semantics (CostGuard returns `this`; TimeGuard
+   * returns `undefined`) drive what gets prepended. Slicing the parent
+   * by `inheritedGuardCount` would lose this filter information.
+   *
+   * Caller (runBatch) owns the per-execution idempotency check via
+   * `BranchState.guardsRehydrated` — this method itself is NOT idempotent;
+   * calling it twice on the same stack will double-prepend.
+   */
+  rehydrateInheritedGuardsFrom(parentStack: StateStack): void {
+    const inheritedRefs = parentStack.guards
+      .map((g) => g.cloneForBranch(parentStack, this))
+      .filter((g): g is Guard => g !== undefined);
+    if (
+      this.inheritedGuardCount > 0 &&
+      inheritedRefs.length !== this.inheritedGuardCount
+    ) {
+      throw new Error(
+        `Inherited guard count mismatch on resume: snapshot recorded ` +
+          `inheritedGuardCount=${this.inheritedGuardCount} parent-owned ` +
+          `guards, but parent now yields ${inheritedRefs.length} via ` +
+          `cloneForBranch. Parent's guard stack drifted between snapshot ` +
+          `and resume — state corruption.`,
+      );
+    }
+    this.guards = [...inheritedRefs, ...this.guards];
+    this.inheritedGuardCount = inheritedRefs.length;
   }
 
   constructor(
@@ -439,7 +540,34 @@ export class StateStack {
       localTokens: this.localTokens,
       seedCost: this.seedCost,
       seedTokens: this.seedTokens,
-      guards: this.guards.map((g) => g.toJSON()),
+      // Serialize only branch-owned guards. Inherited guards are
+      // parent-owned (shared references like CostGuard) and MUST NOT
+      // be re-serialized on every descendant — doing so would
+      // duplicate the JS object on deserialize, defeating the whole
+      // shared-counter model (sibling A and sibling B would each
+      // charge a different OUTER clone).
+      //
+      // Invariant this relies on: every descendant branch is re-entered
+      // on resume through `runBatch` (the only code path that creates
+      // branches in the first place), which calls
+      // `StateStack.rehydrateInheritedGuardsFrom(parentStack)` to
+      // re-prepend live references to the parent's guards before any
+      // user code on that branch reads `stack.guards`. The parent
+      // itself is restored either:
+      //   - directly from the top-level checkpoint (root stack), or
+      //   - by being rehydrated via the same chain from ITS parent
+      //     (deeper nesting), so a depth-N branch sees the same
+      //     OUTER reference all the way up to root after N successive
+      //     `rehydrateInheritedGuardsFrom` calls.
+      //
+      // Concretely: a checkpoint stamped on a non-root stack (e.g.
+      // nested `runBatch`, or `pr.step` inside a fork branch) will
+      // drop its inherited guards from this snapshot. That is safe
+      // ONLY because the OUTER runBatch chain always re-stamps with
+      // its own parent stack on the way up, and the final resume
+      // root is always a stack whose `inheritedGuardCount === 0`.
+      guards: this.guards.slice(this.inheritedGuardCount).map((g) => g.toJSON()),
+      inheritedGuardCount: this.inheritedGuardCount,
     };
   }
 
@@ -472,7 +600,16 @@ export class StateStack {
     // We do NOT call install() on deserialized guards — install effects
     // (e.g. composing abort signals) are runtime state and will be
     // re-established by resume() at the first runner step.
+    //
+    // For child branch stacks: only branch-owned guards were serialized.
+    // `inheritedGuardCount` is preserved but guards.length will be less
+    // than inheritedGuardCount until `runBatch` re-prepends live
+    // references to the parent's guards (see rehydrateInheritedGuards
+    // in runBatch.ts). This intermediate state is safe because nothing
+    // reads child stack guards between deserialize and the runBatch
+    // re-entry that reactivates the branch.
     stateStack.guards = (json.guards ?? []).map(guardFromJSON);
+    stateStack.inheritedGuardCount = json.inheritedGuardCount ?? 0;
     return stateStack;
   }
 }

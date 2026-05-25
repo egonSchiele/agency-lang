@@ -24,8 +24,11 @@ import type { StateStack } from "./state/stateStack.js";
  *
  * `cloneForBranch` lets each variant decide whether a fork/race
  * branch needs an independent copy:
- *   - `CostGuard` returns a fresh clone (branch independently
- *     accumulates cost; trip must throw from inside the branch).
+ *   - `CostGuard` returns `this` (a shared in-memory reference). The
+ *     parent's guard appears on every descendant branch's `guards`
+ *     array via `StateStack.rehydrateInheritedGuardsFrom`, so a
+ *     `charge()` from any branch mutates the same counter the parent
+ *     and siblings see — real-time mid-fork enforcement.
  *   - `TimeGuard` returns `undefined` — the parent's timer is the
  *     single source of truth; abort cascade via the composed
  *     `stack.abortSignal` propagates the trip to every branch's
@@ -41,6 +44,12 @@ export type Guard = {
   uninstall(stack: StateStack): void;
   pause(): void;
   resume(stack: StateStack): void;
+  /** Record a per-event delta against this guard. Called from
+   *  prompt.ts immediately after each LLM call's cost is known. Most
+   *  guards (e.g. TimeGuard) ignore charges and derive their state
+   *  from other sources; CostGuard mutates its own `spent` counter
+   *  here. */
+  charge(amount: number): void;
   check(stack: StateStack): GuardExceededError | null;
   /** True iff this guard's limit has been exceeded — even if `check`
    *  has already returned the trip once. Lets `Runner.shouldSkip`
@@ -50,6 +59,12 @@ export type Guard = {
    *  loser. Without this distinction, popping a tripped guard would
    *  re-throw on every sync point. */
   isTripped(): boolean;
+  /** Return a guard reference for the given child branch.
+   *  CostGuard returns `this` (shared in-memory object — child charges
+   *  the same counter the parent sees, enabling real-time mid-fork
+   *  enforcement). TimeGuard returns `undefined` (abort cascades via
+   *  stack.abortSignal — no per-branch guard needed). Future guards
+   *  may return a fresh clone if they want per-branch isolation. */
   cloneForBranch(
     parentStack: StateStack,
     childStack: StateStack,
@@ -59,31 +74,60 @@ export type Guard = {
 
 /** Discriminated-union JSON shape. `guardFromJSON` dispatches on `kind`. */
 export type GuardJSON =
-  | { kind: "cost"; costLimit: number; costAtPush: number }
+  | { kind: "cost"; costLimit: number; spent: number }
   | { kind: "time"; timeLimit: number; elapsedMs: number };
 
 /**
- * Cost guard. Trips when `(stack.localCost - costAtPush) > costLimit`.
+ * Cost guard. Trips when its own `spent` counter exceeds `costLimit`.
  *
- * `install` captures the baseline cost so the trip math is independent
- * of any siblings' spend that was already on the stack before the guard
- * opened. `pause` / `resume` are no-ops — cost is checked at sync
- * points (every LLM call), so there's no in-process timer to freeze.
+ * Unlike the previous design (which derived spent from
+ * `stack.localCost - costAtPush`), the guard now owns its accumulator
+ * directly. Every LLM-cost site walks `stack.guards` and calls
+ * `guard.charge(cost)` on each one — including any shared parent guards
+ * that were inherited by a child branch (see `cloneForBranch` below).
  *
- * `cloneForBranch` creates a fresh guard with `costAtPush` rebased onto
- * the child's `localCost` (which `Runner.seedBranchCost` has already
- * seeded with the parent's `localCost`). The branch then independently
- * tracks cost-since-push and trips its own guard from inside its
- * `Runner.shouldSkip`. The trip math matches what the parent would see
- * for the same delta.
+ * `cloneForBranch` returns `this` — the same in-memory JS object. The
+ * child branch's `stack.guards` then holds a *reference* to the parent's
+ * CostGuard. Any charge from inside a child branch updates the same
+ * counter the parent and all sibling branches see. Single-threaded JS
+ * makes the increment race-free. This is what makes real-time mid-fork
+ * trip detection work: when a charge pushes total spend over the limit,
+ * the next `check()` from any descendant returns the trip — no waiting
+ * for the fork to settle.
+ *
+ * CostGuard does NOT install an `AbortController` (unlike `TimeGuard`).
+ * A sibling branch that's mid-LLM-call won't be cancelled the instant
+ * another branch trips the shared guard — its smoltalk request will
+ * run to completion, then its post-call check will see the over-limit
+ * counter and throw. Mid-flight cancellation could be added by mirroring
+ * `TimeGuard`'s abort plumbing, but that breaks the same-stack nested-
+ * guard semantic ("inner trip should not retroactively trip the outer
+ * via a stale abort signal" — see guard-nested-iteration-order.agency).
+ * The pre-call gate in `prompt.ts` already catches "we're already
+ * over budget" before issuing the next request, which is the more
+ * important optimization.
+ *
+ * `check` is intentionally NOT idempotent across calls: every check
+ * returns the trip if `spent > costLimit`. The trip propagates exactly
+ * once per stack because the user's `try block()` catches it and then
+ * the guard is popped (removed from `stack.guards`), so subsequent
+ * stack-walks don't include it. A sibling stack still holding a
+ * reference to the same shared guard WILL see the trip on its next
+ * check — which is exactly what we want.
+ *
+ * `pause` / `resume` / `uninstall` are no-ops because there's no
+ * in-process timer or signal plumbing to manage. The counter is
+ * durable through serialization via `spent` in `toJSON`.
  */
 export class CostGuard implements Guard {
-  private costAtPush: number = 0;
+  /** Cumulative cost charged since install. Serialized; survives
+   *  interrupt/resume cycles. */
+  private spent: number = 0;
 
   constructor(public readonly costLimit: number) {}
 
-  install(stack: StateStack): void {
-    this.costAtPush = stack.localCost;
+  install(_stack: StateStack): void {
+    /* nothing — no abort controller, no signal composition */
   }
 
   uninstall(_stack: StateStack): void {
@@ -98,37 +142,54 @@ export class CostGuard implements Guard {
     /* nothing */
   }
 
-  check(stack: StateStack): GuardExceededError | null {
-    const spent = stack.localCost - this.costAtPush;
-    if (spent > this.costLimit) {
-      return new GuardExceededError("cost", this.costLimit, spent);
-    }
-    return null;
+  charge(amount: number): void {
+    this.spent += amount;
   }
 
-  /** CostGuards never mutate `stack.abortSignal`, so they can't be
-   *  the cause of a stuck abort. Always returns false. */
+  check(_stack: StateStack): GuardExceededError | null {
+    if (this.spent <= this.costLimit) return null;
+    return new GuardExceededError("cost", this.costLimit, this.spent);
+  }
+
+  /** CostGuards don't compose into `stack.abortSignal`, so they can't
+   *  be the cause of a stuck abort. Always returns false — the
+   *  isTripped check in `Runner.shouldSkip` is for guards (like
+   *  TimeGuard) that own their abort controller. */
   isTripped(): boolean {
     return false;
   }
 
-  cloneForBranch(_parentStack: StateStack, childStack: StateStack): Guard {
-    const g = new CostGuard(this.costLimit);
-    g.costAtPush = childStack.localCost;
-    return g;
+  /** Shared reference, not a clone. The child branch's guards array
+   *  holds this same object; any charge from the child mutates the
+   *  counter the parent and siblings see in real time. */
+  cloneForBranch(_parentStack: StateStack, _childStack: StateStack): Guard {
+    return this;
   }
 
   toJSON(): GuardJSON {
     return {
       kind: "cost",
       costLimit: this.costLimit,
-      costAtPush: this.costAtPush,
+      spent: this.spent,
     };
   }
 
-  static fromJSON(j: { costLimit: number; costAtPush: number }): CostGuard {
+  static fromJSON(j: { costLimit: number; spent: number }): CostGuard {
+    // Clean break with the prior `{costAtPush}` JSON shape: refuse to
+    // restore a guard whose `spent` is missing rather than silently
+    // initializing it to NaN/undefined and producing nonsense trips.
+    // Older checkpoints from the per-branch-clone era are not
+    // supported by this binary — re-run from scratch.
+    if (typeof j.spent !== "number") {
+      throw new Error(
+        `CostGuard.fromJSON: missing or invalid 'spent' field ` +
+          `(got ${JSON.stringify(j.spent)}). This checkpoint may have ` +
+          `been written by a pre-shared-cost-guards version of the ` +
+          `runtime; that format is no longer supported.`,
+      );
+    }
     const g = new CostGuard(j.costLimit);
-    g.costAtPush = j.costAtPush;
+    g.spent = j.spent;
     return g;
   }
 }
@@ -228,6 +289,10 @@ export class TimeGuard implements Guard {
     // plumbing. (toJSON only serializes elapsedMs + timeLimit.)
     if (!this.controller) this.installAbortPlumbing(stack);
     this.startWindow();
+  }
+
+  charge(_amount: number): void {
+    /* nothing — TimeGuard accumulates wall-clock time, not LLM cost */
   }
 
   check(_stack: StateStack): GuardExceededError | null {

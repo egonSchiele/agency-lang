@@ -195,6 +195,22 @@ function composeBranchAbortSignal(
   return composed;
 }
 
+/** Thin per-execution idempotency wrapper around
+ *  `StateStack.rehydrateInheritedGuardsFrom`. The inner method handles
+ *  the slice/prepend invariant and the resume validation; this wrapper
+ *  ensures we only do it once per BranchState per execution (the flag
+ *  is live-only — automatically reset on deserialize). Must run before
+ *  any code reads `branch.stack.guards` or before the branch is
+ *  `invoke`d. */
+function rehydrateInheritedGuards(
+  branch: BranchState,
+  parentStack: StateStack,
+): void {
+  if (branch.guardsRehydrated) return;
+  branch.stack.rehydrateInheritedGuardsFrom(parentStack);
+  branch.guardsRehydrated = true;
+}
+
 /** Wire up a branch's AbortController + composed signal, seed cost, and
  * fire `onBranchStart`. Returns the child's `invoke` promise (or a
  * resolved promise for cached branches). Centralized so all three modes
@@ -209,6 +225,14 @@ function startInvoke<T>(
   if (t.cached) {
     return Promise.resolve(t.branch.result!.result);
   }
+  // Rehydrate inherited guards BEFORE composing the abort signal.
+  // For TimeGuard, install runs on the parent only — children don't
+  // need separate installs because the parent's abort signal propagates
+  // through composeBranchAbortSignal. For CostGuard, the child's
+  // stack.guards just holds a shared reference to the parent's instance
+  // — no install plumbing involved. Order is informational only; both
+  // run before invoke.
+  rehydrateInheritedGuards(t.branch, parentStack);
   const signal = composeBranchAbortSignal(t.branch, parentStack);
   hooks?.seedBranchCost?.(t.branch.stack, parentStack);
   hooks?.onBranchStart?.(t.child.key, i);
@@ -537,6 +561,13 @@ async function runRaceResume<T>(
   if (branch.result !== undefined) {
     return { kind: "values", values: [branch.result.result as T] };
   }
+
+  // Rehydrate inherited (parent-owned) guard references onto the
+  // resumed winner's stack before composing the abort signal — same
+  // discipline as startInvoke. Idempotent via branch.guardsRehydrated;
+  // safe to call here even if startInvoke already handled it (e.g.
+  // re-entry without serialize in between).
+  rehydrateInheritedGuards(branch, parentStack);
 
   // Compose the resumed winner's abort signal with the current parent
   // stack's signal so an outer abort (e.g. a surrounding race that

@@ -1,0 +1,55 @@
+import { guard } from "std::thread"
+
+// Inner guards pushed AFTER a fork opens stay branch-local.
+// The OUTER guard is shared across all branches via the
+// inheritedGuardCount/cloneForBranch=this mechanism, but INNER
+// guards a branch pushes onto its own stack are at index >=
+// branch.inheritedGuardCount — never visible to siblings, never
+// visible to the parent.
+//
+// Setup: OUTER limit $0.001 (way above what we'll spend in total).
+//        Each branch pushes its own INNER limit $0.000003.
+// Branch behavior (cost per call = $0.000002):
+//   branch 1: spends 1 call ($0.000002, under inner $0.000003)
+//             — inner does not trip, branch returns "ok-1".
+//   branch 2: spends 2 calls ($0.000004, over inner $0.000003)
+//             — inner trips, branch's inner guard catches the
+//             trip and returns a Failure, branch returns
+//             "tripped-2".
+//   branch 3: same as branch 1, returns "ok-3".
+//
+// Outer never trips (total $0.000008 well under $0.001).
+// Critical invariant: branch 2's inner trip MUST NOT abort
+// branches 1 and 3. If inner guards leaked to the parent's
+// guards array, branch 2's inner trip would compose into the
+// parent's abortSignal and cascade to siblings.
+def branchWork(item: number, callCount: number): string {
+  const inner = guard(cost: 0.000003) as {
+    let i = 0
+    while (i < callCount) {
+      const r = llm("branch ${item} call ${i}")
+      i = i + 1
+    }
+    return "ok-${item}"
+  }
+  if (isFailure(inner)) {
+    return "tripped-${item}"
+  }
+  return inner.value
+}
+
+node main() {
+  const outer = guard(cost: 0.001) as {
+    let results = fork([1, 2, 3]) as n {
+      if (n == 2) {
+        return branchWork(n, 2)
+      }
+      return branchWork(n, 1)
+    }
+    return results
+  }
+  if (isFailure(outer)) {
+    return "outer-tripped-unexpectedly"
+  }
+  return outer.value
+}

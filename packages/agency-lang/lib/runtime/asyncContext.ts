@@ -5,8 +5,22 @@
  * that get the codegen-rewrite treatment to prepend `__ctx, __stateStack,
  * __threads` as the first three args). Stdlib functions that need access
  * to `ctx`/`stack`/`threads` call `getRuntimeContext()` to read them from
- * an ALS store seeded at well-defined entry points: top-level run,
- * runBatch branches, and subprocess bootstrap.
+ * an ALS store seeded at three well-defined points:
+ *
+ *  1. `runNode` (lib/runtime/node.ts) — wraps every fresh agent run in
+ *     the top-level `agencyStore.run(...)` frame.
+ *  2. `Runner.runInScope` (lib/runtime/runner.ts) — every callback-taking
+ *     method (step, hook, pipe, fork) re-enters `agencyStore.run(...)`
+ *     so the scope-local `stack` (and per-fork branch stack) is visible
+ *     to stdlib helpers running inside that step.
+ *  3. `runBatch`'s `runInBranchAlsFrame` (lib/runtime/runBatch.ts) —
+ *     each branch body sees its own branch stack (and thus its own
+ *     abort signal) before invoking the child body.
+ *
+ * Note: subprocess bootstrap deliberately does NOT install its own ALS
+ * frame. Each child process re-enters runNode (which installs the
+ * frame) on its own, so threading a frame across the IPC boundary
+ * would be redundant.
  *
  * See docs/superpowers/plans/2026-05-25-als-migration.md.
  */

@@ -1,0 +1,54 @@
+import { guard } from "std::thread"
+
+// Pre-call gate: when an LLM call is about to be issued, prompt.ts
+// walks the guard stack (innermost first) and refuses the call if
+// any guard is already over budget. This avoids billing for a call
+// whose result we'd just throw away.
+//
+// Setup engineered to put OUTER over its limit WITHOUT tripping
+// OUTER directly, so a subsequent llm call can be observed to be
+// REFUSED by the pre-call gate.
+//
+// Mechanism: each branch wraps its calls in an INNER guard. When a
+// branch's 2nd LLM call charges both INNER and OUTER, the post-call
+// walk goes innermost-first: INNER trips ($0.000004 > $0.000003),
+// the throw is caught by the INNER's stdlib try, and the branch
+// returns "inner-trip". OUTER's check is skipped at that site (loop
+// breaks on first trip). But OUTER was already CHARGED ($0.000002
+// per call × 4 calls = $0.000008). With OUTER limit $0.000005,
+// OUTER's `spent` is now over its budget.
+//
+// After the fork returns, OUTER's body issues llm("after"). The
+// pre-call gate walks the stack — OUTER's check returns
+// GuardExceededError ($0.000008 > $0.000005) — the call is REFUSED
+// before smoltalk.complete() runs. The mock for "after" is never
+// consumed.
+//
+// llmMocks provides EXACTLY 4 mocks (a1, b1, a2, b2). If the
+// pre-call gate is broken, "after" would be sent and the
+// DeterministicClient would throw "too many calls" because a 5th
+// mock is required.
+def doInner(n: number): string {
+  let r = guard(cost: 0.000003) as {
+    const a = llm("a ${n}")
+    return llm("b ${n}")
+  }
+  if (isFailure(r)) {
+    return "inner-trip-${n}"
+  }
+  return r.value
+}
+
+node main() {
+  const outer = guard(cost: 0.000005) as {
+    let results = fork([1, 2]) as n {
+      return doInner(n)
+    }
+    const after = llm("after")
+    return "got: ${after}"
+  }
+  if (isFailure(outer)) {
+    return "outer-tripped-via-pre-gate:${outer.error.actualCost > 0.000005}"
+  }
+  return "unexpected: ${outer.value}"
+}

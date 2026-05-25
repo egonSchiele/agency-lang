@@ -94,7 +94,19 @@ const outer = guard(cost: $10.0) as {
 }
 ```
 
-The inner cost guard sees its own baseline (the parent's `localCost` at the moment the inner scope opened) and trips on its own limit. The outer cost guard sees the *cumulative* spend including the inner's cost — but only against its own (larger) limit. Inner time guards similarly track only the compute time spent inside the inner scope; the outer's timer keeps ticking through the inner regardless of whether the inner tripped.
+The inner cost guard owns its own `spent` counter (initialized to `0` at push) and trips on its own limit. The outer cost guard is also charged for every LLM call in scope (including ones made inside the inner) and trips against its own limit. The `prompt.ts` post-call walk goes innermost-first, so when an inner exceeds its limit the inner's trip fires first and the outer's check at the same call site is skipped — that's how the `if (isFailure(inner))` above works. Inner time guards similarly track only the compute time spent inside the inner scope; the outer's timer keeps ticking through the inner regardless of whether the inner tripped.
+
+Inner guards that a branch pushes *after* a `fork` opens stay branch-local — they sit on the child's stack at indices past `inheritedGuardCount` and are never visible to the parent or other sibling branches. This lets you compose an outer "hard cap across all branches" with per-branch sub-budgets:
+
+```ts
+guard(cost: $5.0) as {              // shared across every branch below
+  fork(jobs) as job {
+    guard(cost: $0.50) as {         // per-branch sub-budget, isolated
+      return processOneJob(job)
+    }
+  }
+}
+```
 
 ## Forks, parallel, and message threads
 
@@ -102,8 +114,10 @@ The inner cost guard sees its own baseline (the parent's `localCost` at the mome
 
 Both kinds of guard work, with different mechanics:
 
-- **Cost guards** are *cloned* into each branch. Each branch independently tracks cost-since-push and trips its own clone from inside the branch. The parent's view of cost is updated only at branch completion (see "Limitations" below).
+- **Cost guards** are *shared* across all branches. `CostGuard.cloneForBranch` returns the same in-memory object the parent holds, so every branch's `stack.guards` array contains a live reference to the same `CostGuard` instance. Any LLM call from any branch charges the same counter; the next post-call check (in any branch — whichever runs next) returns the trip when the cumulative shared spend exceeds the limit. Inner cost guards that a branch pushes *after* the fork opens stay branch-local (see [Nested guards](#nested-guards)).
 - **Time guards** are *not* cloned. The parent's `setTimeout` is the single source of truth. When it fires, the parent's `AbortController` propagates through the branches' composed abort signals; each branch halts at its next runner step boundary and control returns to the parent. The parent's next sync point then sees its own time guard's trip and produces the `timeoutFailure`.
+
+A `prompt.ts` **pre-call gate** also walks the guard stack immediately before issuing an LLM request. If a sibling branch's earlier charge has already pushed the shared cost guard over its limit, the gate refuses the request before it hits the wire — you don't pay for a response you'd just throw away.
 
 If you want per-branch enforcement, put the guard **inside** each branch:
 
@@ -139,19 +153,6 @@ If you want per-thread cost or time limits, wrap each thread in its own `guard(.
 
 **JS-bodied tool calls cannot be aborted mid-execution.** Tool functions whose body is written in JavaScript (rather than Agency code) run to completion in the background once started; only the next runner step after they return will see the trip and abandon their result. Agency-bodied tools, in-flight LLM HTTP requests, and the runner itself all observe the abort signal and stop promptly. Long-term plan: opt-in cancellation by reading `state.stateStack.abortSignal` from inside JS tool bodies (currently only internal tools do this).
 
-**Forks don't trip outer cost guards mid-flight.** Branch costs roll back into the parent stack only at branch completion (via `Runner.propagateBranchCost`). An outer cost guard wrapping a fork cannot pre-empt branches that are still running:
-
-```ts
-// AVOID this pattern if you want mid-fork cost enforcement
-guard(cost: $1.0) as {
-  fork(jobs) as job {
-    expensiveCall(job)  // outer cost guard does NOT see this until the fork completes
-  }
-}
-```
-
-Use per-branch guards (see above) instead. After the fork completes, the next LLM call inside the outer guard will observe the rolled-up spend and trip, so the guard still catches the budget breach — just later than you might expect. Time guards do **not** have this limitation: the parent's timer fires on wall clock and aborts every branch directly.
-
 **Memory layer LLM calls bypass cost guards.** Calls made internally by the memory layer (e.g. `memory.text`, `memory.embed` extraction prompts) currently don't flow through the guard check. The guard only enforces against LLM calls made via the standard `llm()` and `runPrompt` paths. Tracked as a follow-up.
 
 **No dimensional unit checking.** `$2.0` and `2.0` are the same `number` at the type level — the unit literal is a notation aid, not a type-system distinction. You could pass a non-dollar number for `cost:` or a non-millisecond number for `time:`; the typechecker won't notice. This will improve when dimensioned types land.
@@ -162,10 +163,10 @@ Both variants share the same `Guard` interface in `lib/runtime/guard.ts`. `State
 
 **Cost guards** (`CostGuard`):
 
-1. `install` captures `stack.localCost` as the baseline.
-2. Every LLM call's cost is added to `stack.localCost` inside `prompt.ts`.
-3. After each cost addition, `prompt.ts` walks the active guards innermost-first. Each guard's `check()` returns a `GuardExceededError` if `stack.localCost - baseline > limit`.
-4. The error propagates through user code; the stdlib `guard`'s `try block()` catches it via `__tryCall`, which produces the structured `Failure`.
+1. Each `CostGuard` instance owns a `spent` counter (initialized to `0`).
+2. Inside `prompt.ts`, every LLM call's cost is dispatched to `guard.charge(cost)` on every guard in `stack.guards` — including any shared parent guards inherited by a child branch.
+3. `prompt.ts` walks the active guards innermost-first **twice** per call: a pre-call gate (refuses to issue the request if any guard's `spent > limit`) and a post-call check after the charge. Either site returns a `GuardExceededError` which propagates through user code; the stdlib `guard`'s `try block()` catches it via `__tryCall` and produces the structured `Failure`.
+4. **Shared across fork branches.** `CostGuard.cloneForBranch` returns `this` — the same JS object — so every branch's `stack.guards` array holds a reference to the parent's CostGuard. Mutations are race-free thanks to single-threaded JS. On serialize, each child stack's `inheritedGuardCount` records how many of its guards were inherited; `toJSON` only serializes branch-owned guards (the inherited parent guard is serialized once on the parent's snapshot). On resume, `runBatch.rehydrateInheritedGuards` re-prepends the parent's live refs onto each child, restoring real-time sharing.
 
 **Time guards** (`TimeGuard`):
 

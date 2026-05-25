@@ -1,0 +1,50 @@
+import { guard } from "std::thread"
+
+// Nested fork — verifies inheritance walks more than one level deep.
+// OUTER guard is at depth 0. A first fork creates depth-1 branches;
+// each depth-1 branch in turn starts a depth-2 inner fork.
+//
+// The shared-guard model must propagate OUTER through BOTH levels:
+//   - depth-1 branches inherit OUTER from depth-0 (the parent's
+//     guards array, via cloneForBranch returning `this`)
+//   - depth-2 branches inherit OUTER from depth-1 (because depth-1's
+//     guards array contains the OUTER reference, inheritedGuardCount=1,
+//     and seedBranchCost propagates whatever's in the parent's array)
+//
+// Every depth-2 leaf charges OUTER's shared counter. With limit
+// $0.000005 and 2×2=4 leaves × $0.000002 = $0.000008, the trip
+// fires on whichever leaf is 3rd to settle (post-call check sees
+// shared spent > limit). The leaf's throw propagates through its
+// depth-2 fork (which trips), then through its depth-1 fork.
+// OUTER's stdlib try catches the GuardExceededError and returns
+// a Failure.
+//
+// If inheritance walks were broken at the depth-1 → depth-2
+// boundary (e.g. inheritedGuardCount not propagated, or
+// seedBranchCost not invoking cloneForBranch on inherited guards),
+// the depth-2 branches would NOT see OUTER and would all complete
+// independently. The fork would succeed and the trip would never
+// fire.
+
+def innerWork(d1: number, d2: number): string {
+  return llm("d1=${d1} d2=${d2}")
+}
+
+def doInnerFork(d1: number): string[] {
+  return fork([1, 2]) as d2 {
+    return innerWork(d1, d2)
+  }
+}
+
+node main() {
+  const outer = guard(cost: 0.000005) as {
+    let outerResults = fork([1, 2]) as d1 {
+      return doInnerFork(d1)
+    }
+    return "no-trip"
+  }
+  if (isFailure(outer)) {
+    return "nested-trip:${outer.error.actualCost > 0.000005}"
+  }
+  return "unexpected: ${outer.value}"
+}

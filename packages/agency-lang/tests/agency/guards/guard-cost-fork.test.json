@@ -3,7 +3,7 @@
     {
       "nodeName": "main",
       "input": "",
-      "expectedOutput": "\"tripped-after-fork:true\"",
+      "expectedOutput": "\"tripped-mid-fork:true\"",
       "evaluationCriteria": [{ "type": "exact" }],
       "useTestLLMProvider": true,
       "llmMocks": [
@@ -12,7 +12,7 @@
         { "return": "b3" },
         { "return": "after" }
       ],
-      "description": "Outer guard wraps a fork. Branch costs propagate to the parent stack on fork completion; the next LLM call's cost check sees total spend and trips. Documents the V1 limitation that mid-fork branches do NOT eagerly notify the outer guard."
+      "description": "Outer guard wraps a fork. With the shared-guard model (cloneForBranch returns this), the OUTER CostGuard is a single in-memory object shared across all branches. The first branch's post-call check trips OUTER mid-fork before the fork settles — the trailing llm('after') is unreachable. Regression for real-time mid-fork enforcement. Under the prior per-branch-clone model the trip only fired post-join via the trailing 'after' call."
     }
   ]
 }

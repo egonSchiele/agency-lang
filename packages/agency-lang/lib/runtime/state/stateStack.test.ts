@@ -518,14 +518,16 @@ describe("StateStack guards", () => {
 
   it("toJSON / fromJSON preserves guards", () => {
     const stack = new StateStack();
-    stack.localCost = 0.2;
-    stack.pushGuard(new CostGuard(1.5));
-    stack.localCost = 0.4;
-    stack.pushGuard(new CostGuard(0.5));
+    const g1 = new CostGuard(1.5);
+    stack.pushGuard(g1);
+    g1.charge(0.2);
+    const g2 = new CostGuard(0.5);
+    stack.pushGuard(g2);
+    g2.charge(0.4);
     const json = stack.toJSON();
     expect(json.guards).toEqual([
-      { kind: "cost", costLimit: 1.5, costAtPush: 0.2 },
-      { kind: "cost", costLimit: 0.5, costAtPush: 0.4 },
+      { kind: "cost", costLimit: 1.5, spent: 0.2 },
+      { kind: "cost", costLimit: 0.5, spent: 0.4 },
     ]);
     const restored = StateStack.fromJSON(json);
     expect(restored.guards).toHaveLength(2);
@@ -546,16 +548,16 @@ describe("StateStack guards", () => {
     expect(restored.guards).toEqual([]);
   });
 
-  it("pushGuard calls install() (captures costAtPush)", () => {
+  it("pushGuard calls install() and toJSON serializes spent counter", () => {
     const stack = new StateStack();
-    stack.localCost = 1.23;
     const g = new CostGuard(5);
     stack.pushGuard(g);
+    g.charge(1.23);
     const json = stack.toJSON();
     expect(json.guards![0]).toEqual({
       kind: "cost",
       costLimit: 5,
-      costAtPush: 1.23,
+      spent: 1.23,
     });
   });
 });

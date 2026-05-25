@@ -1,0 +1,18 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "\"outer-tripped-via-pre-gate:true\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        { "return": "a1" },
+        { "return": "b1" },
+        { "return": "a2" },
+        { "return": "b2" }
+      ],
+      "description": "Pre-call gate refuses an LLM call when a guard is already over budget. The fork engineers OUTER's spent over its limit ($0.000008 > $0.000005) without OUTER itself tripping during the fork — each branch's INNER guard ($0.000003 limit) trips first (innermost-first walk in prompt.ts post-call check), catches via stdlib `try`, and returns 'inner-trip'. After the fork, OUTER's spent is over budget. The next llm('after') call hits the pre-call gate in prompt.ts which walks the guard stack and refuses to issue the request — proven by providing EXACTLY 4 mocks (a1, b1, a2, b2). If the pre-call gate were broken, smoltalk would be called for 'after' and DeterministicClient would throw 'too many calls' on the 5th request."
+    }
+  ]
+}

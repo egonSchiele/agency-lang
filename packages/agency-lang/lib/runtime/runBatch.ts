@@ -195,6 +195,41 @@ function composeBranchAbortSignal(
   return composed;
 }
 
+/** Populate a child branch's `stack.guards` with the parent's inherited
+ *  guards (via each guard's `cloneForBranch`), and stamp
+ *  `inheritedGuardCount` so future serialization slices them off. This
+ *  must run before any code reads `branch.stack.guards` or before the
+ *  branch is `invoke`d.
+ *
+ *  Handles both fresh and resumed branches:
+ *   - Fresh branch (first run): `branch.stack.guards` is empty;
+ *     prepended refs become the entire array.
+ *   - Resumed branch (post-deserialize): `branch.stack.guards` holds
+ *     only the branch-owned guards (slice from `toJSON`); prepended
+ *     refs go in front of them.
+ *
+ *  Idempotent via `branch.guardsRehydrated` (a live-only flag — reset
+ *  to undefined automatically on deserialize, so a fresh execution
+ *  always re-runs this once per branch).
+ *
+ *  `CostGuard.cloneForBranch` returns `this` (shared reference);
+ *  `TimeGuard.cloneForBranch` returns `undefined` (parent's timer is
+ *  single source of truth via abort cascade). Other future guards
+ *  pick their own semantic. */
+function rehydrateInheritedGuards(
+  branch: BranchState,
+  parentStack: StateStack,
+): void {
+  if (branch.guardsRehydrated) return;
+  const child = branch.stack;
+  const inheritedRefs = parentStack.guards
+    .map((g) => g.cloneForBranch(parentStack, child))
+    .filter((g): g is NonNullable<typeof g> => g !== undefined);
+  child.guards = [...inheritedRefs, ...child.guards];
+  child.inheritedGuardCount = inheritedRefs.length;
+  branch.guardsRehydrated = true;
+}
+
 /** Wire up a branch's AbortController + composed signal, seed cost, and
  * fire `onBranchStart`. Returns the child's `invoke` promise (or a
  * resolved promise for cached branches). Centralized so all three modes
@@ -209,6 +244,13 @@ function startInvoke<T>(
   if (t.cached) {
     return Promise.resolve(t.branch.result!.result);
   }
+  // Rehydrate inherited guards BEFORE composing the abort signal —
+  // CostGuard's shared abort controller (composed into parent's
+  // stack.abortSignal at install) becomes visible to the branch's
+  // composed signal via composeBranchAbortSignal. Order doesn't strictly
+  // matter for correctness (both run before invoke), but rehydrating
+  // first matches the order in which a fresh branch was originally set up.
+  rehydrateInheritedGuards(t.branch, parentStack);
   const signal = composeBranchAbortSignal(t.branch, parentStack);
   hooks?.seedBranchCost?.(t.branch.stack, parentStack);
   hooks?.onBranchStart?.(t.child.key, i);
@@ -537,6 +579,13 @@ async function runRaceResume<T>(
   if (branch.result !== undefined) {
     return { kind: "values", values: [branch.result.result as T] };
   }
+
+  // Rehydrate inherited (parent-owned) guard references onto the
+  // resumed winner's stack before composing the abort signal — same
+  // discipline as startInvoke. Idempotent via branch.guardsRehydrated;
+  // safe to call here even if startInvoke already handled it (e.g.
+  // re-entry without serialize in between).
+  rehydrateInheritedGuards(branch, parentStack);
 
   // Compose the resumed winner's abort signal with the current parent
   // stack's signal so an outer abort (e.g. a surrounding race that

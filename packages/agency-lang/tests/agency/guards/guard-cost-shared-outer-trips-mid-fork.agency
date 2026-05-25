@@ -1,0 +1,41 @@
+import { guard } from "std::thread"
+
+// Motivating example for the shared-guard design: outer guard wraps
+// a fork. Each branch individually stays under the limit, but their
+// combined spend exceeds it.
+//
+// Old behavior (per-branch cloned guards): branches each saw an
+// isolated $0.000008 budget. No branch tripped (each spends only
+// $0.000002 = SYNTHETIC_COST). The outer would only trip after the
+// fork joined and propagateBranchCost folded the deltas back —
+// requiring a trailing LLM call to act as a sync point.
+//
+// New behavior (shared guard reference): every branch charges the
+// SAME in-memory CostGuard object via `cloneForBranch` returning
+// `this`. As soon as any branch's charge pushes the shared counter
+// over the limit, the next check (post-call in that branch's
+// prompt.ts) trips. The fork's overall result is a Failure carrying
+// the outer guard's typed error.
+//
+// 3 branches × $0.000002 = $0.000006 of charges. Limit is set lower
+// so the SECOND branch's post-call check trips. Assert via the
+// trip's `actualCost` being the shared total at trip time, not a
+// per-branch number.
+node main() {
+  const result = guard(cost: 0.000003) as {
+    fork([1, 2, 3]) as n {
+      const r = llm("branch ${n}")
+      return r
+    }
+    return "ok"
+  }
+  if (isFailure(result)) {
+    // Mid-fork trip: actualCost should be > limit (one branch pushed
+    // total past 0.000003). With the OLD per-branch isolation, no
+    // branch would individually exceed its $0.000003 clone, so the
+    // outer wouldn't trip mid-fork at all.
+    const billed = result.error.actualCost > 0.000003
+    return "tripped-mid-fork:${billed}"
+  }
+  return "did not trip"
+}

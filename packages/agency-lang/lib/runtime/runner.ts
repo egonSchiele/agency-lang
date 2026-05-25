@@ -253,40 +253,17 @@ export class Runner {
     // once for the same branch (e.g. a branch interrupts mid-flight
     // and the parent resumes runBatch on the next response cycle).
     // We must not clobber state the branch has already accumulated.
-    // A branch is "fresh" iff it has no cost, no tokens, AND no guard
-    // entries — the last check matters when a branch pushes its own
-    // guard before any LLM call and then interrupts.
+    // A branch is "fresh" iff it has no cost AND no tokens. Guards are
+    // handled separately by `rehydrateInheritedGuards` in runBatch.ts —
+    // they have their own idempotency tracking via BranchState.
     const isFresh =
-      branchStack.localCost === 0 &&
-      branchStack.localTokens === 0 &&
-      branchStack.guards.length === 0;
+      branchStack.localCost === 0 && branchStack.localTokens === 0;
     if (!isFresh) return;
 
     branchStack.localCost = parentStack.localCost;
     branchStack.localTokens = parentStack.localTokens;
     branchStack.seedCost = parentStack.localCost;
     branchStack.seedTokens = parentStack.localTokens;
-
-    // Delegate to each guard's cloneForBranch: CostGuard returns a
-    // fresh clone with costAtPush rebased onto the child's localCost
-    // (just set above), so LLM calls inside the branch are checked
-    // against the same delta the parent would see. TimeGuard returns
-    // undefined — the parent's timer is the single source of truth
-    // and abort cascades through composeBranchAbortSignal. The filter
-    // drops the undefineds so branches see a sparser-than-parent
-    // guards list.
-    //
-    // Direct assignment (not stack.pushGuard) so install() isn't
-    // re-invoked on already-running clones.
-    //
-    // LIMITATION: cost deltas from a child branch only roll back into
-    // the parent at branch completion (propagateBranchCost), so an
-    // outer cost guard cannot trip mid-fork — only after the fork
-    // completes. Time guards do not have this limitation since the
-    // parent's timer trips directly on wall-clock.
-    branchStack.guards = parentStack.guards
-      .map((g) => g.cloneForBranch(parentStack, branchStack))
-      .filter((g): g is NonNullable<typeof g> => g !== undefined);
   }
 
   /** Propagate cost/token deltas from a set of branches back to the

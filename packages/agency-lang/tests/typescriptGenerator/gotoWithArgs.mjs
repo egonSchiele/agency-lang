@@ -209,7 +209,7 @@ const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
 let __forked;
 let __functionCompleted = false;
-  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "gotoWithArgs.agency", scopeName: "greet", stack: __stateStack });
+  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "gotoWithArgs.agency", scopeName: "greet", stack: __stateStack, threads: __threads });
   if (!__state.isResume) {
     __stack.args["name"] = __state.data.name;
   }
@@ -285,7 +285,7 @@ const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
 let __forked;
 let __functionCompleted = false;
-  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "gotoWithArgs.agency", scopeName: "main", stack: __stateStack });
+  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "gotoWithArgs.agency", scopeName: "main", stack: __stateStack, threads: __threads });
   try {
     await runner.hook(0, async () => {
 await callHook({

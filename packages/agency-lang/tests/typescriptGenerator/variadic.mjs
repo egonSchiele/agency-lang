@@ -223,7 +223,7 @@ let __functionCompleted = false;
   __stack.args["prefix"] = prefix;
   __stack.args["messages"] = messages;
   __self.__retryable = __self.__retryable ?? true;
-  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "variadic.agency", scopeName: "log", stack: __stateStack });
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "variadic.agency", scopeName: "log", stack: __stateStack, threads: __threads });
   let __resultCheckpointId = -1;
 if (__ctx.stateStack.currentNodeId()) {
   __resultCheckpointId = __ctx.checkpoints.createPinned(__stateStack, __ctx, { moduleId: "variadic.agency", scopeName: "log", stepPath: "", label: "result-entry" });

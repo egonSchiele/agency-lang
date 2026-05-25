@@ -218,7 +218,7 @@ let __functionCompleted = false;
   let __funcStartTime: number = performance.now();
   __stack.args["id"] = id;
   __self.__retryable = __self.__retryable ?? true;
-  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "safe-function.agency", scopeName: "safeLookup", stack: __stateStack });
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "safe-function.agency", scopeName: "safeLookup", stack: __stateStack, threads: __threads });
   let __resultCheckpointId = -1;
 if (__ctx.stateStack.currentNodeId()) {
   __resultCheckpointId = __ctx.checkpoints.createPinned(__stateStack, __ctx, { moduleId: "safe-function.agency", scopeName: "safeLookup", stepPath: "", label: "result-entry" });
@@ -336,7 +336,7 @@ let __functionCompleted = false;
   let __funcStartTime: number = performance.now();
   __stack.args["id"] = id;
   __self.__retryable = __self.__retryable ?? true;
-  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "safe-function.agency", scopeName: "unsafeSave", stack: __stateStack });
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "safe-function.agency", scopeName: "unsafeSave", stack: __stateStack, threads: __threads });
   let __resultCheckpointId = -1;
 if (__ctx.stateStack.currentNodeId()) {
   __resultCheckpointId = __ctx.checkpoints.createPinned(__stateStack, __ctx, { moduleId: "safe-function.agency", scopeName: "unsafeSave", stepPath: "", label: "result-entry" });
@@ -463,7 +463,7 @@ const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
 let __forked;
 let __functionCompleted = false;
-  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "safe-function.agency", scopeName: "main", stack: __stateStack });
+  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "safe-function.agency", scopeName: "main", stack: __stateStack, threads: __threads });
   try {
     await runner.hook(0, async () => {
 await callHook({

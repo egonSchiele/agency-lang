@@ -217,7 +217,7 @@ let __functionCompleted = false;
   __stack.args["sleepTime"] = sleepTime;
   __stack.args["value"] = value;
   __self.__retryable = __self.__retryable ?? true;
-  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "asyncUnassigned.agency", scopeName: "append", stack: __stateStack });
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "asyncUnassigned.agency", scopeName: "append", stack: __stateStack, threads: __threads });
   let __resultCheckpointId = -1;
 if (__ctx.stateStack.currentNodeId()) {
   __resultCheckpointId = __ctx.checkpoints.createPinned(__stateStack, __ctx, { moduleId: "asyncUnassigned.agency", scopeName: "append", stepPath: "", label: "result-entry" });
@@ -341,7 +341,7 @@ const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
 let __forked;
 let __functionCompleted = false;
-  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "asyncUnassigned.agency", scopeName: "main", stack: __stateStack });
+  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "asyncUnassigned.agency", scopeName: "main", stack: __stateStack, threads: __threads });
   try {
     await runner.hook(0, async () => {
 await callHook({

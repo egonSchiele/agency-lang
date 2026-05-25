@@ -88,7 +88,10 @@ describe("__internal_exec / __internal_bash", () => {
     const stack = new StateStack();
     const threads = new ThreadStore();
     const p = __internal_exec(ctx, stack, threads, "sleep", ["60"], "", 0, "");
-    setTimeout(() => ctx.cancel("test"), 20);
+    // 200ms (not 20ms) so the subprocess has actually started before
+    // cancel fires — on slow CI runners 20ms can race against the
+    // spawn and leave the signal unobserved.
+    setTimeout(() => ctx.cancel("test"), 200);
     await expect(p).rejects.toBeInstanceOf(AgencyCancelledError);
   });
 
@@ -97,7 +100,8 @@ describe("__internal_exec / __internal_bash", () => {
     const stack = new StateStack();
     const threads = new ThreadStore();
     const p = __internal_bash(ctx, stack, threads, "sleep 60", "", 0, "");
-    setTimeout(() => ctx.cancel("test"), 20);
+    // See `__internal_exec` above re: 200ms timer.
+    setTimeout(() => ctx.cancel("test"), 200);
     await expect(p).rejects.toBeInstanceOf(AgencyCancelledError);
   });
 

@@ -398,8 +398,17 @@ export async function respondToInterrupts(args: {
   // After `restoreState`, the stack carries the checkpoint frames and
   // the same registration would instead bind to a caller frame and be
   // popped immediately as the restored frames unwind.
+  //
+  // The wrap in `agencyStore.run` mirrors `runNode` — top-level
+  // callback registration runs Agency code that goes through
+  // `__call`, which reads ctx/threads/stack from ALS after the
+  // drop-per-call-context-plumbing migration. See lib/runtime/node.ts.
+  const bootstrapThreads = ThreadStore.withDefaultActive(execCtx.statelogClient);
   if (args.registerTopLevelCallbacks) {
-    await args.registerTopLevelCallbacks(execCtx);
+    await agencyStore.run(
+      { ctx: execCtx, stack: execCtx.stateStack, threads: bootstrapThreads },
+      () => args.registerTopLevelCallbacks!(execCtx),
+    );
   }
   execCtx.restoreState(checkpoint);
   execCtx.setInterruptResponses(responseMap);

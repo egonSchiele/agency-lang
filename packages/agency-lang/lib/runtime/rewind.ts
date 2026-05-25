@@ -45,9 +45,16 @@ export async function rewindFrom(args: {
   const execCtx = await ctx.createExecutionContext(runId);
   // Must run before restoreState so the empty stack routes the
   // registration to `ctx.topLevelCallbacks`. See the matching comment
-  // in `respondToInterrupts`.
+  // in `respondToInterrupts`. The `agencyStore.run` wrap is also
+  // mirrored from there — top-level callback registration runs
+  // Agency code (the `callback(...)` wrapper) that needs an ALS
+  // frame for `__call` post-migration.
+  const bootstrapThreads = ThreadStore.withDefaultActive(execCtx.statelogClient);
   if (args.registerTopLevelCallbacks) {
-    await args.registerTopLevelCallbacks(execCtx);
+    await agencyStore.run(
+      { ctx: execCtx, stack: execCtx.stateStack, threads: bootstrapThreads },
+      () => args.registerTopLevelCallbacks!(execCtx),
+    );
   }
   execCtx.restoreState(checkpoint);
   execCtx._skipNextCheckpoint = true;

@@ -144,8 +144,20 @@ export async function runNode({
   }
 
   const execCtx = await ctx.createExecutionContext(runId);
+  // initializeGlobals + registerTopLevelCallbacks both invoke Agency
+  // code that goes through `__call` — and `__call` reads `ctx` /
+  // `threads` / `stateStack` from the ALS frame after the
+  // drop-per-call-context-plumbing migration. Without an ALS frame
+  // installed here, calls to user-defined stdlib helpers (e.g. the
+  // `callback(...)` wrapper that the codegen emits inside
+  // `__registerTopLevelCallbacks`) would invoke `_callbackImpl(name,
+  // fn, undefined)` and crash on `__state.ctx`.
+  const bootstrapThreads = ThreadStore.withDefaultActive(execCtx.statelogClient);
   if (initializeGlobals) {
-    await initializeGlobals(execCtx);
+    await agencyStore.run(
+      { ctx: execCtx, stack: execCtx.stateStack, threads: bootstrapThreads },
+      () => initializeGlobals(execCtx),
+    );
   }
   // Top-level callbacks are re-registered every fresh run AFTER global
   // init so any module-level vars they reference (via `__ctx.globals`)
@@ -153,7 +165,10 @@ export async function runNode({
   // `respondToInterrupts` does on resume — keep them in sync if you
   // touch either site.
   if (registerTopLevelCallbacks) {
-    await registerTopLevelCallbacks(execCtx);
+    await agencyStore.run(
+      { ctx: execCtx, stack: execCtx.stateStack, threads: bootstrapThreads },
+      () => registerTopLevelCallbacks(execCtx),
+    );
   }
   // Externally-passed callbacks are stored on ctx; hook execution merges them
   // with scoped/top-level callbacks at call time.

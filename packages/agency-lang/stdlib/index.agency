@@ -35,6 +35,8 @@ import {
   _keys,
   _values,
   _entries,
+  _input,
+  _sleep,
  } from "agency-lang/stdlib-lib/builtins.js"
 import {
   syntaxHighlight as _syntaxHighlight,
@@ -71,7 +73,7 @@ export safe def input(prompt: string): string {
 
   Cancellation: a blocked input prompt is released on Ctrl-C, race-loser, or time-guard abort, surfacing as an AgencyCancelledError.
   """
-  return __internal_input(prompt)
+  return _input(prompt)
 }
 
 export safe def sleep(ms: number) {
@@ -80,7 +82,7 @@ export safe def sleep(ms: number) {
 
   Cancellation: a long sleep wakes up immediately on Ctrl-C, race-loser, or time-guard abort.
   """
-  __internal_sleep(ms)
+  _sleep(ms)
 }
 
 export safe def round(num: number, precision: number): number {

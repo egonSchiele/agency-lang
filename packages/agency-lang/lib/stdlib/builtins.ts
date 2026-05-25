@@ -7,6 +7,7 @@ import { promisify } from "util";
 import { detectPlatform } from "./utils.js";
 import { resolvePath } from "./resolvePath.js";
 import { AgencyCancelledError } from "../runtime/errors.js";
+import { getRuntimeContext } from "../runtime/asyncContext.js";
 import type { RuntimeContext } from "../runtime/state/context.js";
 import type { StateStack } from "../runtime/state/stateStack.js";
 import type { ThreadStore } from "../runtime/state/threadStore.js";
@@ -27,17 +28,20 @@ export function _parseJSON(text: string): any {
 }
 
 /**
- * Context-injected so it can react to abort. Readline holds stdin
- * exclusively, so a blocked `input("?")` after Ctrl-C or a race-loser
- * abort would otherwise sit there forever. On abort we close the
- * readline interface (releasing stdin) and reject with
+ * Shared implementation for both the legacy `__internal_input`
+ * (still called by `CONTEXT_INJECTED_BUILTINS`-rewritten call sites
+ * during the ALS migration) and the new `_input` (ALS-reading). Both
+ * paths must take the same code path so subtle differences cannot
+ * sneak in while the registry is still populated. Cancellation:
+ * Readline holds stdin exclusively, so a blocked `input("?")` after
+ * Ctrl-C or a race-loser abort would otherwise sit there forever; on
+ * abort we close the readline interface and reject with
  * `AgencyCancelledError`, which `__tryCall` re-throws so cancellation
  * actually propagates.
  */
-export function __internal_input(
+function inputImpl(
   ctx: RuntimeContext<any>,
   stack: StateStack,
-  _threads: ThreadStore,
   prompt: string,
 ): Promise<string> {
   const override = (globalThis as any).__agencyInputOverride as
@@ -68,18 +72,44 @@ export function __internal_input(
   });
 }
 
-/**
- * Context-injected so a long sleep wakes up immediately on abort.
- * A plain `setTimeout` sleep would block the whole agent for the
- * full duration even after Ctrl-C.
- */
+/** Deprecated context-injected wrapper kept in place during the ALS
+ *  migration so the registry/codegen path keeps working until the
+ *  follow-up cleanup PR removes it. New stdlib `.agency` files should
+ *  call `_input` instead. */
+export function __internal_input(
+  ctx: RuntimeContext<any>,
+  stack: StateStack,
+  _threads: ThreadStore,
+  prompt: string,
+): Promise<string> {
+  return inputImpl(ctx, stack, prompt);
+}
+
+/** ALS-reading replacement. Same body as `__internal_input`. */
+export function _input(prompt: string): Promise<string> {
+  const { ctx, stack } = getRuntimeContext();
+  return inputImpl(ctx, stack, prompt);
+}
+
+/** Shared impl for `__internal_sleep` and `_sleep`. */
+function sleepImpl(ctx: RuntimeContext<any>, stack: StateStack, ms: number): Promise<void> {
+  return abortableSleep(ms, ctx.getAbortSignal(stack));
+}
+
+/** Deprecated; see comment on `__internal_input`. */
 export function __internal_sleep(
   ctx: RuntimeContext<any>,
   stack: StateStack,
   _threads: ThreadStore,
   ms: number,
 ): Promise<void> {
-  return abortableSleep(ms, ctx.getAbortSignal(stack));
+  return sleepImpl(ctx, stack, ms);
+}
+
+/** ALS-reading replacement for `__internal_sleep`. */
+export function _sleep(ms: number): Promise<void> {
+  const { ctx, stack } = getRuntimeContext();
+  return sleepImpl(ctx, stack, ms);
 }
 
 export function _round(num: number, precision: number): number {

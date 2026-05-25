@@ -123,3 +123,5 @@ class GlobalStore {
 ## Where GlobalStore lives at runtime
 
 The `GlobalStore` instance is held on the `RuntimeContext` as `ctx.globals`. The `RuntimeContext` is created once per execution and threaded through all nodes and functions. In the generated code, the runtime context is accessible as `__ctx`, so all global variable access goes through `__ctx.globals`.
+
+Stdlib TS helpers that need `ctx.globals` (or any other runtime field) read `ctx` from the active `AsyncLocalStorage` frame via `getRuntimeContext()` instead of taking it as a parameter — see [async-context.md](./async-context.md).

@@ -28,58 +28,6 @@ import {
   functionRefReviver as __functionRefReviver,
   DeterministicClient as __DeterministicClient,
 } from "agency-lang/runtime";
-import {
-  __internal_browserUse,
-} from "agency-lang/stdlib-lib/browserUse.js";
-import {
-  __internal_input,
-  __internal_sleep,
-} from "agency-lang/stdlib-lib/builtins.js";
-import {
-  __internal_fetch,
-  __internal_fetchJSON,
-  __internal_fetchMarkdown,
-} from "agency-lang/stdlib-lib/http.js";
-import {
-  __internal_applyExtractionResult,
-  __internal_applyForgetResult,
-  __internal_buildExtractionPrompt,
-  __internal_buildForgetPrompt,
-  __internal_forget,
-  __internal_recall,
-  __internal_remember,
-  __internal_setMemoryId,
-  __internal_shouldRunMemory,
-} from "agency-lang/stdlib-lib/memory.js";
-import {
-  __internal_authorize,
-  __internal_getAccessToken,
-} from "agency-lang/stdlib-lib/oauth.js";
-import {
-  __internal_bash,
-  __internal_exec,
-} from "agency-lang/stdlib-lib/shell.js";
-import {
-  __internal_record,
-  __internal_speak,
-  __internal_transcribe,
-} from "agency-lang/stdlib-lib/speech.js";
-import {
-  __internal_openUrl,
-  __internal_screenshot,
-} from "agency-lang/stdlib-lib/system.js";
-import {
-  __internal_assistantMessage,
-  __internal_getCost,
-  __internal_getTokens,
-  __internal_popGuard,
-  __internal_pushGuard,
-  __internal_systemMessage,
-  __internal_userMessage,
-} from "agency-lang/stdlib-lib/thread.js";
-import {
-  __internal_prompt,
-} from "agency-lang/stdlib-lib/ui.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -217,7 +165,7 @@ let __functionCompleted = false;
   __stack.args["name"] = name;
   __stack.args["age"] = age;
   __self.__retryable = __self.__retryable ?? true;
-  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "interrupt-in-node.agency", scopeName: "greet", stack: __stateStack });
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "interrupt-in-node.agency", scopeName: "greet", stack: __stateStack, threads: __threads });
   let __resultCheckpointId = -1;
 if (__ctx.stateStack.currentNodeId()) {
   __resultCheckpointId = __ctx.checkpoints.createPinned(__stateStack, __ctx, { moduleId: "interrupt-in-node.agency", scopeName: "greet", stepPath: "", label: "result-entry" });
@@ -372,7 +320,7 @@ const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
 let __forked;
 let __functionCompleted = false;
-  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "interrupt-in-node.agency", scopeName: "foo2", stack: __stateStack });
+  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "interrupt-in-node.agency", scopeName: "foo2", stack: __stateStack, threads: __threads });
   if (!__state.isResume) {
     __stack.args["name"] = __state.data.name;
     __stack.args["age"] = __state.data.age;
@@ -488,7 +436,7 @@ const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
 let __forked;
 let __functionCompleted = false;
-  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "interrupt-in-node.agency", scopeName: "sayHi", stack: __stateStack });
+  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "interrupt-in-node.agency", scopeName: "sayHi", stack: __stateStack, threads: __threads });
   if (!__state.isResume) {
     __stack.args["name"] = __state.data.name;
   }

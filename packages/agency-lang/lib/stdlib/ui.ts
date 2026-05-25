@@ -4,6 +4,7 @@ import { color } from "../utils/termcolors.js";
 import { syntaxHighlight } from "./syntax.js";
 import { __internal_input } from "./builtins.js";
 import { AgencyCancelledError } from "../runtime/errors.js";
+import { getRuntimeContext } from "../runtime/asyncContext.js";
 import type { RuntimeContext } from "../runtime/state/context.js";
 import type { StateStack } from "../runtime/state/stateStack.js";
 import type { ThreadStore } from "../runtime/state/threadStore.js";
@@ -413,20 +414,22 @@ export function _stopSpinner(): void {
 }
 
 /**
- * Context-injected so the readline prompt closes on abort.
- * Without it, a blocked `prompt("?")` after Ctrl-C or a race-loser
+ * Show the readline prompt and close it on abort. Without abort
+ * handling, a blocked `prompt("?")` after Ctrl-C or a race-loser
  * abort would hold stdin until the user hits Enter. On abort we
  * close the active readline interface (releasing stdin), reset the
  * input/hint state, and reject with `AgencyCancelledError`.
+ *
+ * In debugger mode delegates to the builtin `_input` (which supports
+ * the `__agencyInputOverride` hook and works inside handler bodies
+ * where interrupts are forbidden).
  */
-export function __internal_prompt(
+function promptImpl(
   ctx: RuntimeContext<any>,
   stack: StateStack,
   threads: ThreadStore,
   question: string,
 ): Promise<string> {
-  // Delegate to the builtin input() which supports the __agencyInputOverride
-  // hook and works inside handler bodies (where interrupts are forbidden).
   if (isDebuggerMode) return __internal_input(ctx, stack, threads, question);
   if (!initialized) {
     return Promise.resolve("");
@@ -475,4 +478,21 @@ export function __internal_prompt(
       resolve(answer);
     });
   });
+}
+
+/** Deprecated context-injected wrapper kept during the ALS migration;
+ *  see `_prompt`. */
+export function __internal_prompt(
+  ctx: RuntimeContext<any>,
+  stack: StateStack,
+  threads: ThreadStore,
+  question: string,
+): Promise<string> {
+  return promptImpl(ctx, stack, threads, question);
+}
+
+/** ALS-reading replacement for `__internal_prompt`. */
+export function _prompt(question: string): Promise<string> {
+  const { ctx, stack, threads } = getRuntimeContext();
+  return promptImpl(ctx, stack, threads, question);
 }

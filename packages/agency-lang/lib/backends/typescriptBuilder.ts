@@ -31,10 +31,6 @@ import { SchemaExpression } from "@/types/schemaExpression.js";
 import { expressionToString } from "@/utils/node.js";
 import { trimDocStringSegments } from "@/utils/docStringText.js";
 import { toCompiledImportPath } from "../importPaths.js";
-import {
-  CONTEXT_INJECTED_BUILTINS,
-  isContextInjectedBuiltin,
-} from "../codegenBuiltins/contextInjected.js";
 import * as renderDebugger from "../templates/backends/typescriptGenerator/debugger.js";
 import * as renderImports from "../templates/backends/typescriptGenerator/imports.js";
 import * as renderInterruptAssignment from "../templates/backends/typescriptGenerator/interruptAssignment.js";
@@ -1507,7 +1503,7 @@ export class TypeScriptBuilder {
     // Create runner for step execution
     setupStmts.push(
       ts.raw(
-        `const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: ${JSON.stringify(this.moduleId)}, scopeName: ${JSON.stringify(functionName)}, stack: __stateStack });`,
+        `const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: ${JSON.stringify(this.moduleId)}, scopeName: ${JSON.stringify(functionName)}, stack: __stateStack, threads: __threads });`,
       ),
     );
 
@@ -1897,21 +1893,6 @@ export class TypeScriptBuilder {
 
     const shouldAwait = !node.async && context !== "valueAccess";
 
-    // Context-injected builtins: codegen rewrites the call to prepend
-    // `__ctx`, `__stateStack`, and `__threads` as the first three
-    // positional arguments. All three are always in scope inside
-    // function/node bodies (bound by classMethod.mustache). The actual
-    // emit is a plain direct call (`f(__ctx, __stateStack, __threads,
-    // ...args)`), like the __-prefixed branch below. See
-    // lib/codegenBuiltins/contextInjected.ts for the contract.
-    if (isContextInjectedBuiltin(node.functionName)) {
-      return this.emitDirectFunctionCall(node, functionName, shouldAwait, [
-        ts.id("__ctx"),
-        ts.id("__stateStack"),
-        ts.id("__threads"),
-      ]);
-    }
-
     // __-prefixed helpers and DIRECT_CALL_FUNCTIONS: emit plain direct call
     if (
       functionName.startsWith("__") ||
@@ -2180,7 +2161,7 @@ export class TypeScriptBuilder {
       }),
 
       ts.raw(
-        `const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: ${JSON.stringify(this.moduleId)}, scopeName: ${JSON.stringify(nodeName)}, stack: __stateStack });`,
+        `const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: ${JSON.stringify(this.moduleId)}, scopeName: ${JSON.stringify(nodeName)}, stack: __stateStack, threads: __threads });`,
       ),
       ...hoistedAliases,
     ];
@@ -3158,31 +3139,7 @@ export class TypeScriptBuilder {
 
     return renderImports.default({
       runtimeContextCode: printTs(runtimeCtx),
-      contextInjectedImports: this.generateContextInjectedImports(),
     });
-  }
-
-  /**
-   * Emit the import statements that bring every context-injected
-   * builtin into scope in the generated TS. The set is fixed by
-   * `CONTEXT_INJECTED_BUILTINS` at codegen time, so we always import
-   * the full list — esbuild tree-shakes anything the call site
-   * didn't use. Imports are grouped by each entry's `from` field, so
-   * adding a builtin sourced from a different module is a registry
-   * change only.
-   */
-  private generateContextInjectedImports(): string {
-    const byFrom: Record<string, string[]> = {};
-    for (const entry of Object.values(CONTEXT_INJECTED_BUILTINS)) {
-      (byFrom[entry.from] ??= []).push(entry.name);
-    }
-    return Object.keys(byFrom)
-      .sort()
-      .map((from) => {
-        const names = byFrom[from].sort();
-        return `import {\n  ${names.join(",\n  ")},\n} from ${JSON.stringify(from)};`;
-      })
-      .join("\n");
   }
 
   private preprocess(): TsNode[] {

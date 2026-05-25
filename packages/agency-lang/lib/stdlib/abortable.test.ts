@@ -88,7 +88,10 @@ describe("__internal_exec / __internal_bash", () => {
     const stack = new StateStack();
     const threads = new ThreadStore();
     const p = __internal_exec(ctx, stack, threads, "sleep", ["60"], "", 0, "");
-    setTimeout(() => ctx.cancel("test"), 20);
+    // 200ms (not 20ms) so the subprocess has actually started before
+    // cancel fires — on slow CI runners 20ms can race against the
+    // spawn and leave the signal unobserved.
+    setTimeout(() => ctx.cancel("test"), 200);
     await expect(p).rejects.toBeInstanceOf(AgencyCancelledError);
   });
 
@@ -96,8 +99,15 @@ describe("__internal_exec / __internal_bash", () => {
     const ctx = makeMockCtx();
     const stack = new StateStack();
     const threads = new ThreadStore();
-    const p = __internal_bash(ctx, stack, threads, "sleep 60", "", 0, "");
-    setTimeout(() => ctx.cancel("test"), 20);
+    // `exec sleep 60` so the shell replaces itself with the sleep
+    // process — without `exec`, dash on Ubuntu CI keeps sh and sleep
+    // as separate processes, and our SIGTERM only kills sh while
+    // sleep (with inherited pipes) keeps the close event from firing
+    // for the full 60s. macOS/bash optimizes this exec away, so the
+    // test passed locally but timed out on Linux runners.
+    const p = __internal_bash(ctx, stack, threads, "exec sleep 60", "", 0, "");
+    // See `__internal_exec` above re: 200ms timer.
+    setTimeout(() => ctx.cancel("test"), 200);
     await expect(p).rejects.toBeInstanceOf(AgencyCancelledError);
   });
 

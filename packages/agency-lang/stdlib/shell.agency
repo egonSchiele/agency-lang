@@ -5,6 +5,8 @@ import {
   _stat,
   _exists,
   _which,
+  _exec,
+  _bash,
  } from "agency-lang/stdlib-lib/shell.js"
 
 type ExecResult = {
@@ -41,7 +43,7 @@ export def exec(
     stdin: stdin
   })
 
-  return __internal_exec(
+  return _exec(
     command,
     args,
     cwd,
@@ -77,7 +79,7 @@ export def bash(
     stdin: stdin
   })
 
-  return __internal_bash(
+  return _bash(
     command,
     cwd,
     timeout,

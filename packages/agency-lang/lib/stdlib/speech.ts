@@ -8,19 +8,19 @@ import { detectPlatform } from "./utils.js";
 import { abortableExec } from "./abortable.js";
 import { runHttp } from "./http.js";
 import { AgencyCancelledError } from "../runtime/errors.js";
+import { getRuntimeContext } from "../runtime/asyncContext.js";
 import type { RuntimeContext } from "../runtime/state/context.js";
 import type { StateStack } from "../runtime/state/stateStack.js";
 import type { ThreadStore } from "../runtime/state/threadStore.js";
 
 /**
- * Context-injected: `say` blocks until the whole utterance has been
- * spoken, which can be many seconds. SIGTERM stops playback
- * immediately on abort.
+ * `say` blocks until the whole utterance has been spoken, which can be
+ * many seconds. SIGTERM stops playback immediately on Ctrl-C /
+ * race-loser / time-guard abort.
  */
-export async function __internal_speak(
+async function speakImpl(
   ctx: RuntimeContext<any>,
   stack: StateStack,
-  _threads: ThreadStore,
   text: string,
   voice: string,
   rate: number,
@@ -55,17 +55,40 @@ export async function __internal_speak(
   }
 }
 
-/**
- * Context-injected: a `record()` call without a `silenceTimeout`
- * runs until the user hits Enter (or the recording detects silence).
- * Abort fires the same teardown as the keypress path — kills `rec`,
- * restores stdin out of raw mode, releases stdin — and rejects with
- * `AgencyCancelledError`.
- */
-export async function __internal_record(
+/** Deprecated context-injected wrapper kept during the ALS migration;
+ *  see `_speak`. */
+export async function __internal_speak(
   ctx: RuntimeContext<any>,
   stack: StateStack,
   _threads: ThreadStore,
+  text: string,
+  voice: string,
+  rate: number,
+  outputFile: string,
+): Promise<void> {
+  return speakImpl(ctx, stack, text, voice, rate, outputFile);
+}
+
+/** ALS-reading replacement for `__internal_speak`. */
+export async function _speak(
+  text: string,
+  voice: string,
+  rate: number,
+  outputFile: string,
+): Promise<void> {
+  const { ctx, stack } = getRuntimeContext();
+  return speakImpl(ctx, stack, text, voice, rate, outputFile);
+}
+
+/**
+ * A `record()` call without a `silenceTimeout` runs until the user
+ * hits Enter (or the recording detects silence). Abort fires the same
+ * teardown as the keypress path — kills `rec`, restores stdin out of
+ * raw mode, releases stdin — and rejects with `AgencyCancelledError`.
+ */
+async function recordImpl(
+  ctx: RuntimeContext<any>,
+  stack: StateStack,
   outputFile: string,
   silenceTimeout: number,
 ): Promise<string> {
@@ -157,16 +180,36 @@ export async function __internal_record(
   return outPath;
 }
 
-/**
- * Context-injected: uploading audio to Whisper can take a long time
- * for large files. Threads `ctx.getAbortSignal(stack)` into `fetch`
- * via `runHttp` (the same helper http.ts uses) so the in-flight upload
- * tears down on cancel.
- */
-export async function __internal_transcribe(
+/** Deprecated context-injected wrapper kept during the ALS migration;
+ *  see `_record`. */
+export async function __internal_record(
   ctx: RuntimeContext<any>,
   stack: StateStack,
   _threads: ThreadStore,
+  outputFile: string,
+  silenceTimeout: number,
+): Promise<string> {
+  return recordImpl(ctx, stack, outputFile, silenceTimeout);
+}
+
+/** ALS-reading replacement for `__internal_record`. */
+export async function _record(
+  outputFile: string,
+  silenceTimeout: number,
+): Promise<string> {
+  const { ctx, stack } = getRuntimeContext();
+  return recordImpl(ctx, stack, outputFile, silenceTimeout);
+}
+
+/**
+ * Uploading audio to Whisper can take a long time for large files.
+ * Threads `ctx.getAbortSignal(stack)` into `fetch` via `runHttp` (the
+ * same helper http.ts uses) so the in-flight upload tears down on
+ * cancel.
+ */
+async function transcribeImpl(
+  ctx: RuntimeContext<any>,
+  stack: StateStack,
   filepath: string,
   language: string,
 ): Promise<string> {
@@ -209,4 +252,25 @@ export async function __internal_transcribe(
     const result = await response.json();
     return result.text;
   }, url);
+}
+
+/** Deprecated context-injected wrapper kept during the ALS migration;
+ *  see `_transcribe`. */
+export async function __internal_transcribe(
+  ctx: RuntimeContext<any>,
+  stack: StateStack,
+  _threads: ThreadStore,
+  filepath: string,
+  language: string,
+): Promise<string> {
+  return transcribeImpl(ctx, stack, filepath, language);
+}
+
+/** ALS-reading replacement for `__internal_transcribe`. */
+export async function _transcribe(
+  filepath: string,
+  language: string,
+): Promise<string> {
+  const { ctx, stack } = getRuntimeContext();
+  return transcribeImpl(ctx, stack, filepath, language);
 }

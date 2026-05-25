@@ -123,6 +123,14 @@ const bootstrapHandler = async (msg: RunInstruction) => {
     const positionalArgs = paramNames.map((p: string) => msg.args[p]);
 
     ipcLog("send", { type: "log", detail: `calling node ${msg.node}` });
+    // No top-level `agencyStore.run(...)` wrap here: the node entry
+    // point (`runNode` in `lib/runtime/node.ts`) installs its own
+    // initial frame once the compiled module's `main(...)`-style
+    // wrapper invokes it, and the per-step `agencyStore.run` inside
+    // generated function/node bodies re-establishes the scope frame.
+    // Wrapping again here would attach the subprocess's parent-process
+    // context (which doesn't even exist as a peer ALS) instead of the
+    // child's own `RuntimeContext`.
     const result = await nodeFn(...positionalArgs);
     ipcLog("send", { type: "log", detail: `node ${msg.node} returned` });
 

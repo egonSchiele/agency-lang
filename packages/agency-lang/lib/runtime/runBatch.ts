@@ -60,6 +60,7 @@
  *    returning — letting runBatch then call `setResultOnBranch(key,
  *    undefined)` would overwrite the meaningful value with undefined.
  */
+import { agencyStore } from "./asyncContext.js";
 import { hasInterrupts, type Interrupt } from "./interrupts.js";
 import type { RuntimeContext } from "./state/context.js";
 import type { BranchState, State, StateStack } from "./state/stateStack.js";
@@ -238,8 +239,45 @@ function startInvoke<T>(
   hooks?.onBranchStart?.(t.child.key, i);
   t.startedAt = performance.now();
   return ctx.statelogClient.runInBranchContext(parentSpanStack, () =>
-    t.child.invoke(t.branch.stack, signal),
+    runInBranchAlsFrame(ctx, t.branch.stack, () =>
+      t.child.invoke(t.branch.stack, signal),
+    ),
   );
+}
+
+/** Wrap `fn` in an `agencyStore.run` frame whose `stack` is the branch's
+ *  stack (so stdlib helpers see the branch-local abort signal and cost
+ *  accumulators) while inheriting `ctx` and `threads` from the
+ *  surrounding parent frame. Called AFTER `composeBranchAbortSignal`
+ *  has installed `branch.stack.abortSignal`, so a stdlib that reads
+ *  `getRuntimeContext().stack.abortSignal` immediately observes the
+ *  branch's signal — including for race losers that get aborted while
+ *  in-flight. If no parent frame exists (e.g. runBatch invoked outside
+ *  a runner-managed scope), we skip seeding and just invoke `fn()` —
+ *  the generated function/node body inside the branch will install
+ *  its own scoped frame via the Runner's per-step wrap. A stdlib
+ *  helper that reads `getRuntimeContext()` directly between the branch
+ *  start and that first Runner step would throw; in practice every
+ *  runBatch call site today runs inside a Runner scope, so the
+ *  fallback path is dead code for the migration's existing call sites
+ *  and exists purely to keep `runBatch` usable from future contexts
+ *  that haven't installed a top-level frame yet. */
+function runInBranchAlsFrame<T>(
+  ctx: RuntimeContext<any>,
+  branchStack: StateStack,
+  fn: () => Promise<T>,
+): Promise<T> {
+  const parent = agencyStore.getStore();
+  if (parent) {
+    return agencyStore.run(
+      { ctx: parent.ctx, stack: branchStack, threads: parent.threads },
+      fn,
+    );
+  }
+  // No outer frame — invoke without seeding (the generated function/node
+  // body inside the branch will install its own scoped frame via the
+  // Runner's per-step wrap).
+  return fn();
 }
 
 /** Stamp the shared batch-level checkpoint and overwrite every interrupt's
@@ -582,7 +620,9 @@ async function runRaceResume<T>(
   let value: T | Interrupt[];
   try {
     value = await ctx.statelogClient.runInBranchContext(parentSpanStack, () =>
-      child.invoke(branch.stack, signal),
+      runInBranchAlsFrame(ctx, branch.stack, () =>
+        child.invoke(branch.stack, signal),
+      ),
     );
   } catch (err) {
     hooks?.onBranchEnd?.(

@@ -105,6 +105,7 @@ Pipeline and architecture:
 - `docs/dev/binop-parser.md` — Binary expression parser using precedence climbing
 - `docs/dev/locations.md` — How `loc.line` / `loc.col` / parse-mode template offset interact
 - `docs/dev/validation-annotations.md` — `@validate(...)` and `@jsonSchema(...)` internals: tag merging, `__agency_descriptor` contract, descriptor tree, runtime walker
+- `docs/dev/async-context.md` — `agencyStore` AsyncLocalStorage frame and `getRuntimeContext()` pattern for stdlib TS helpers
 
 Other references:
 - `docs/misc/TESTING.md` — Full testing guide (unit tests, fixtures, execution tests, agency-js tests)

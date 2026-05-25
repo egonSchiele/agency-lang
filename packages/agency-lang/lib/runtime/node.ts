@@ -1,6 +1,7 @@
 import * as fs from "fs";
 import * as path from "path";
 import { MessageJSON } from "smoltalk";
+import { agencyStore } from "./asyncContext.js";
 import { callHook } from "./hooks.js";
 import type { AgencyCallbacks } from "./hooks.js";
 import type { RuntimeContext } from "./state/context.js";
@@ -186,15 +187,27 @@ export async function runNode({
   try {
     while (true) {
       try {
-        const result = await execCtx.graph.run(
-          nodeName,
-          {
-            messages: threadStore,
-            data,
-            ctx: execCtx,
-            isResume,
-          },
-          { onNodeEnter: (id) => execCtx.stateStack.nodesTraversed.push(id), statelogClient: execCtx.statelogClient },
+        // Install an initial AsyncLocalStorage frame so stdlib helpers
+        // that read `getRuntimeContext()` (the post-migration replacement
+        // for the `__ctx, __stateStack, __threads` codegen-injected
+        // args) see a sensible context even on code paths that run
+        // outside a Runner-managed step. Generated function and node
+        // bodies re-enter `agencyStore.run` inside each Runner step with
+        // the scope-local stack/threads, so this top-level frame is just
+        // the fallback for early code (callHook, validation, etc.).
+        const result = await agencyStore.run(
+          { ctx: execCtx, stack: execCtx.stateStack, threads: threadStore },
+          () =>
+            execCtx.graph.run(
+              nodeName,
+              {
+                messages: threadStore,
+                data,
+                ctx: execCtx,
+                isResume,
+              },
+              { onNodeEnter: (id) => execCtx.stateStack.nodesTraversed.push(id), statelogClient: execCtx.statelogClient },
+            ),
         );
         await execCtx.pendingPromises.awaitAll();
         const returnObject = createReturnObject({

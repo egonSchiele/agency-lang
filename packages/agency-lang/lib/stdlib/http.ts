@@ -1,4 +1,5 @@
 import { AgencyCancelledError, isAbortError } from "../runtime/errors.js";
+import { getRuntimeContext } from "../runtime/asyncContext.js";
 import type { RuntimeContext } from "../runtime/state/context.js";
 import type { StateStack } from "../runtime/state/stateStack.js";
 import type { ThreadStore } from "../runtime/state/threadStore.js";
@@ -89,10 +90,9 @@ export async function runHttp<T>(fn: () => Promise<T>, url: string): Promise<T> 
   }
 }
 
-export async function __internal_fetch(
+async function fetchImpl(
   ctx: RuntimeContext<any>,
   stack: StateStack,
-  _threads: ThreadStore,
   baseUrl: string,
   urlPath: string,
   headers: Record<string, string>,
@@ -111,10 +111,34 @@ export async function __internal_fetch(
   }, url);
 }
 
-export async function __internal_fetchJSON(
+/** Deprecated context-injected wrapper kept during the ALS migration;
+ *  see `_fetch`. */
+export async function __internal_fetch(
   ctx: RuntimeContext<any>,
   stack: StateStack,
   _threads: ThreadStore,
+  baseUrl: string,
+  urlPath: string,
+  headers: Record<string, string>,
+  allowedDomains: string[],
+): Promise<string> {
+  return fetchImpl(ctx, stack, baseUrl, urlPath, headers, allowedDomains);
+}
+
+/** ALS-reading replacement for `__internal_fetch`. */
+export async function _fetch(
+  baseUrl: string,
+  urlPath: string,
+  headers: Record<string, string>,
+  allowedDomains: string[],
+): Promise<string> {
+  const { ctx, stack } = getRuntimeContext();
+  return fetchImpl(ctx, stack, baseUrl, urlPath, headers, allowedDomains);
+}
+
+async function fetchJSONImpl(
+  ctx: RuntimeContext<any>,
+  stack: StateStack,
   baseUrl: string,
   urlPath: string,
   headers: Record<string, string>,
@@ -133,10 +157,33 @@ export async function __internal_fetchJSON(
   }, url);
 }
 
-export async function __internal_fetchMarkdown(
+/** Deprecated; see `_fetchJSON`. */
+export async function __internal_fetchJSON(
   ctx: RuntimeContext<any>,
   stack: StateStack,
   _threads: ThreadStore,
+  baseUrl: string,
+  urlPath: string,
+  headers: Record<string, string>,
+  allowedDomains: string[],
+): Promise<any> {
+  return fetchJSONImpl(ctx, stack, baseUrl, urlPath, headers, allowedDomains);
+}
+
+/** ALS-reading replacement for `__internal_fetchJSON`. */
+export async function _fetchJSON(
+  baseUrl: string,
+  urlPath: string,
+  headers: Record<string, string>,
+  allowedDomains: string[],
+): Promise<any> {
+  const { ctx, stack } = getRuntimeContext();
+  return fetchJSONImpl(ctx, stack, baseUrl, urlPath, headers, allowedDomains);
+}
+
+async function fetchMarkdownImpl(
+  ctx: RuntimeContext<any>,
+  stack: StateStack,
   baseUrl: string,
   urlPath: string,
   headers: Record<string, string>,
@@ -153,6 +200,30 @@ export async function __internal_fetchMarkdown(
     }
     return body;
   }, url);
+}
+
+/** Deprecated; see `_fetchMarkdown`. */
+export async function __internal_fetchMarkdown(
+  ctx: RuntimeContext<any>,
+  stack: StateStack,
+  _threads: ThreadStore,
+  baseUrl: string,
+  urlPath: string,
+  headers: Record<string, string>,
+  allowedDomains: string[],
+): Promise<string> {
+  return fetchMarkdownImpl(ctx, stack, baseUrl, urlPath, headers, allowedDomains);
+}
+
+/** ALS-reading replacement for `__internal_fetchMarkdown`. */
+export async function _fetchMarkdown(
+  baseUrl: string,
+  urlPath: string,
+  headers: Record<string, string>,
+  allowedDomains: string[],
+): Promise<string> {
+  const { ctx, stack } = getRuntimeContext();
+  return fetchMarkdownImpl(ctx, stack, baseUrl, urlPath, headers, allowedDomains);
 }
 
 function htmlToMarkdown(html: string): string {

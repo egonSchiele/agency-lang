@@ -2,6 +2,7 @@ import path from "path";
 import process from "process";
 import { detectPlatform } from "./utils.js";
 import { abortableExec } from "./abortable.js";
+import { getRuntimeContext } from "../runtime/asyncContext.js";
 import type { RuntimeContext } from "../runtime/state/context.js";
 import type { StateStack } from "../runtime/state/stateStack.js";
 import type { ThreadStore } from "../runtime/state/threadStore.js";
@@ -39,16 +40,13 @@ export function _setEnv(name: string, value: string): void {
 }
 
 /**
- * Open a URL in the user's default browser.
- * Currently macOS-only (uses the `open` command). Throws on other platforms.
- *
- * Context-injected so the `open` subprocess gets SIGTERM if the run
- * is cancelled before the browser launch completes.
+ * Open a URL in the user's default browser. macOS-only via the `open`
+ * command; aborts the subprocess on Ctrl-C / race-loser / time-guard
+ * abort.
  */
-export async function __internal_openUrl(
+async function openUrlImpl(
   ctx: RuntimeContext<any>,
   stack: StateStack,
-  _threads: ThreadStore,
   url: string,
 ): Promise<void> {
   const platform = await detectPlatform();
@@ -64,16 +62,32 @@ export async function __internal_openUrl(
   }
 }
 
-/**
- * Context-injected: `screencapture` in interactive-region mode can
- * sit waiting for the user to drag a selection, and a long Linux
- * `import` capture pulls the full window — both deserve to die on
- * abort instead of blocking the agent.
- */
-export async function __internal_screenshot(
+/** Deprecated context-injected wrapper kept during the ALS migration;
+ *  see `_openUrl`. */
+export async function __internal_openUrl(
   ctx: RuntimeContext<any>,
   stack: StateStack,
   _threads: ThreadStore,
+  url: string,
+): Promise<void> {
+  return openUrlImpl(ctx, stack, url);
+}
+
+/** ALS-reading replacement for `__internal_openUrl`. */
+export async function _openUrl(url: string): Promise<void> {
+  const { ctx, stack } = getRuntimeContext();
+  return openUrlImpl(ctx, stack, url);
+}
+
+/**
+ * Take a screenshot. macOS uses `screencapture`, Linux uses `import`.
+ * The subprocess is killed on Ctrl-C / race-loser / time-guard abort so
+ * an interactive-region capture (which can sit waiting for the user)
+ * doesn't outlive the agent.
+ */
+async function screenshotImpl(
+  ctx: RuntimeContext<any>,
+  stack: StateStack,
   filepath: string,
   x: number,
   y: number,
@@ -103,4 +117,30 @@ export async function __internal_screenshot(
       `Supported platforms: macOS, Linux.`
     );
   }
+}
+
+/** Deprecated; see `_screenshot`. */
+export async function __internal_screenshot(
+  ctx: RuntimeContext<any>,
+  stack: StateStack,
+  _threads: ThreadStore,
+  filepath: string,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+): Promise<void> {
+  return screenshotImpl(ctx, stack, filepath, x, y, width, height);
+}
+
+/** ALS-reading replacement for `__internal_screenshot`. */
+export async function _screenshot(
+  filepath: string,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+): Promise<void> {
+  const { ctx, stack } = getRuntimeContext();
+  return screenshotImpl(ctx, stack, filepath, x, y, width, height);
 }

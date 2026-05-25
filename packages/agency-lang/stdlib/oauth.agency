@@ -1,4 +1,4 @@
-import { _isAuthorized, _revokeAuth } from "agency-lang/stdlib-lib/oauth.js"
+import { _isAuthorized, _revokeAuth, _authorize, _getAccessToken } from "agency-lang/stdlib-lib/oauth.js"
 import { fetchJSON } from "std::http"
 
 /** @module
@@ -65,7 +65,7 @@ export def authorize(name: string, authUrl: string, tokenUrl: string, clientId: 
     scopes: scopes
   })
 
-  return try __internal_authorize(name, {
+  return try _authorize(name, {
     authUrl: authUrl,
     tokenUrl: tokenUrl,
     clientId: clientId,
@@ -86,7 +86,7 @@ export def getAccessToken(name: string): Result {
     name: name
   })
 
-  return try __internal_getAccessToken(name)
+  return try _getAccessToken(name)
 }
 
 export safe def isAuthorized(name: string): boolean {

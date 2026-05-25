@@ -179,3 +179,7 @@ The variable receives a **deep clone** of the thread's accumulated messages (`sm
 | `lib/templates/backends/typescriptGenerator/imports.mustache` | Import template (includes thread setup) |
 | `tests/typescriptGenerator/threadsAndSubthreads.agency` | Thread/subthread fixture |
 | `tests/agency/threads/` | End-to-end thread tests |
+
+## Accessing the active ThreadStore from stdlib TS
+
+Stdlib helpers that push messages onto the active thread (e.g. `_systemMessage`, `_userMessage`, `_assistantMessage` in `lib/stdlib/thread.ts`) read the live `ThreadStore` from the AsyncLocalStorage frame via `getRuntimeContext().threads`. That's the same `ThreadStore` `setupNode` installs on the frame — see [async-context.md](./async-context.md) for the seeding points.

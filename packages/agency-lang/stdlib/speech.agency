@@ -1,8 +1,15 @@
-// `__internal_speak`, `__internal_record`, and `__internal_transcribe`
-// are context-injected so each one tears down its in-flight work on
-// abort: the `say` subprocess gets SIGTERM, the `rec` subprocess gets
-// SIGTERM and stdin is restored, and the Whisper upload fetch is
-// cancelled. See lib/codegenBuiltins/contextInjected.ts.
+// `_speak`, `_record`, `_transcribe` read ctx/stack from
+// AsyncLocalStorage (see `lib/runtime/asyncContext.ts`) so each one
+// tears down its in-flight work on abort: the `say` subprocess gets
+// SIGTERM, the `rec` subprocess gets SIGTERM and stdin is restored,
+// and the Whisper upload fetch is cancelled. The corresponding
+// deprecated `__internal_*` exports are still present for the
+// migration window.
+import {
+  _speak,
+  _record,
+  _transcribe,
+} from "agency-lang/stdlib-lib/speech.js"
 
 export def speak(text: string, voice: string = "", rate: number = 0, outputFile: string = "") {
   """
@@ -19,7 +26,7 @@ export def speak(text: string, voice: string = "", rate: number = 0, outputFile:
     textLength: text.length
   })
 
-  __internal_speak(text, voice, rate, outputFile)
+  _speak(text, voice, rate, outputFile)
 }
 
 export def record(outputFile: string = "", silenceTimeout: number = 2000): string {
@@ -39,7 +46,7 @@ export def record(outputFile: string = "", silenceTimeout: number = 2000): strin
   """
   return interrupt std::record("Allow microphone recording?", {})
 
-  return __internal_record(outputFile, silenceTimeout)
+  return _record(outputFile, silenceTimeout)
 }
 
 export def transcribe(filepath: string, language: string = ""): string {
@@ -55,5 +62,5 @@ export def transcribe(filepath: string, language: string = ""): string {
     filepath: filepath
   })
 
-  return __internal_transcribe(filepath, language)
+  return _transcribe(filepath, language)
 }

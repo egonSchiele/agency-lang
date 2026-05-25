@@ -1,10 +1,13 @@
-// `__internal_fetch`, `__internal_fetchJSON`, and `__internal_fetchMarkdown`
-// are context-injected builtins: always in scope (no `import` needed in
-// this file), forbidden as values, and rewritten by the TypeScript
-// builder to receive (`__ctx`, `__stateStack`, `__threads`) as the
-// first three positional arguments. The context is what makes
-// abort-on-cancel work — see lib/codegenBuiltins/contextInjected.ts
-// for the registry and lib/stdlib/http.ts for the implementations.
+// `_fetch`, `_fetchJSON`, `_fetchMarkdown` read ctx/stack from
+// AsyncLocalStorage (see `lib/runtime/asyncContext.ts`) so each
+// fetch's in-flight request and body read tears down on Ctrl-C /
+// race-loser / time-guard abort. The deprecated `__internal_*`
+// exports remain in `lib/stdlib/http.ts` for the migration window.
+import {
+  _fetch,
+  _fetchJSON,
+  _fetchMarkdown,
+} from "agency-lang/stdlib-lib/http.js"
 
 export def fetch(
   baseUrl: string,
@@ -26,7 +29,7 @@ export def fetch(
     baseUrl: baseUrl,
     path: path
   })
-  return try __internal_fetch(baseUrl, path, headers, allowedDomains)
+  return try _fetch(baseUrl, path, headers, allowedDomains)
 }
 
 export def fetchJSON(
@@ -49,7 +52,7 @@ export def fetchJSON(
     baseUrl: baseUrl,
     path: path
   })
-  return try __internal_fetchJSON(baseUrl, path, headers, allowedDomains)
+  return try _fetchJSON(baseUrl, path, headers, allowedDomains)
 }
 
 export def fetchMarkdown(baseUrl: string, path: string = "", headers: Record<string, any> = {}, allowedDomains: string[] = []): Result {
@@ -67,5 +70,5 @@ export def fetchMarkdown(baseUrl: string, path: string = "", headers: Record<str
     baseUrl: baseUrl,
     path: path
   })
-  return try __internal_fetchMarkdown(baseUrl, path, headers, allowedDomains)
+  return try _fetchMarkdown(baseUrl, path, headers, allowedDomains)
 }

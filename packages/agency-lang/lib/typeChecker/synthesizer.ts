@@ -5,7 +5,6 @@ import type {
 } from "../types/dataStructures.js";
 import { formatTypeHint } from "../utils/formatType.js";
 import { BUILTIN_FUNCTION_TYPES } from "./builtins.js";
-import { isContextInjectedBuiltin } from "../codegenBuiltins/contextInjected.js";
 import { isAssignable, safeResolveType } from "./assignability.js";
 import { resultTypeForValidation } from "./validation.js";
 import { TypeCheckerContext } from "./types.js";
@@ -68,20 +67,6 @@ export function synthType(
 ): VariableType | "any" {
   switch (expr.type) {
     case "variableName": {
-      // Context-injected builtins are not first-class values: their
-      // call sites are rewritten by codegen to inject `__ctx`, and a
-      // bare reference (e.g. `let f = __internal_recall`) would not
-      // carry the context, silently producing wrong behaviour at
-      // runtime. Reject value-position references with a clear error.
-      // (Callee position never reaches `synthType` — it goes through
-      // `checkSingleFunctionCall` keyed off `call.functionName`.)
-      if (isContextInjectedBuiltin(expr.value)) {
-        ctx.errors.push({
-          message: `'${expr.value}' is a compiler-internal builtin and cannot be referenced as a value. Call it directly instead.`,
-          loc: expr.loc,
-        });
-        return "any";
-      }
       const scopeType = scope.lookup(expr.value);
       if (scopeType) return scopeType;
       const fnDef = ctx.functionDefs[expr.value];

@@ -18,7 +18,7 @@ const {{{paramName:string}}} = __forkItem;
 Object.assign(__bstack.args, __parentForkArgs);
 {{/isNested}}
 __bstack.args[{{{paramNameQuoted}}}] = __forkItem;
-const runner = new Runner(__ctx, __bstack, { state: __bstack, moduleId: {{{moduleId}}}, scopeName: {{{scopeName}}}, stack: __forkBranchStack });
+const runner = new Runner(__ctx, __bstack, { state: __bstack, moduleId: {{{moduleId}}}, scopeName: {{{scopeName}}}, stack: __forkBranchStack, threads: __threads });
 try {
 {{{body}}}
 return runner.halted ? runner.haltResult : undefined;

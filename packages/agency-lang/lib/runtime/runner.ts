@@ -1,4 +1,5 @@
 import { nanoid } from "nanoid";
+import { agencyStore } from "./asyncContext.js";
 import { debugStep } from "./debugger.js";
 import { hasInterrupts } from "./interrupts.js";
 import { __pipeBind } from "./result.js";
@@ -7,6 +8,7 @@ import type { SourceLocationOpts } from "./state/checkpointStore.js";
 import type { RuntimeContext } from "./state/context.js";
 import type { BranchState, State } from "./state/stateStack.js";
 import { StateStack } from "./state/stateStack.js";
+import type { ThreadStore } from "./state/threadStore.js";
 import type { HandlerFn } from "./types.js";
 
 /**
@@ -36,6 +38,14 @@ export class Runner {
    * `stack.abortSignal` lets us notice if the branch has been cancelled
    * (e.g., a race loser whose winner already resolved). */
   private stack?: StateStack;
+  /** ThreadStore active for this Runner's scope. Captured into the
+   *  per-step AsyncLocalStorage frame so stdlib helpers that read
+   *  `getRuntimeContext().threads` (e.g. the std::thread `*Message`
+   *  builtins migrated off the context-injected pattern) see the same
+   *  ThreadStore the codegen would otherwise have prepended as a
+   *  positional arg. Optional so existing call sites (and the runner
+   *  unit tests) keep working without passing it. */
+  private threads?: ThreadStore;
 
   constructor(
     ctx: RuntimeContext<any>,
@@ -46,6 +56,7 @@ export class Runner {
       moduleId?: string;
       scopeName?: string;
       stack?: StateStack;
+      threads?: ThreadStore;
     },
   ) {
     this.ctx = ctx;
@@ -55,6 +66,25 @@ export class Runner {
     this.moduleId = opts?.moduleId ?? "";
     this.scopeName = opts?.scopeName ?? "";
     this.stack = opts?.stack;
+    this.threads = opts?.threads;
+  }
+
+  /** Run `fn` inside an `agencyStore.run` frame seeded with this
+   *  Runner's `ctx` / `stack` / `threads`. Stdlib helpers invoked from
+   *  inside `fn` will see those values via `getRuntimeContext()` —
+   *  matching what the deprecated `__ctx, __stateStack, __threads`
+   *  positional args would have carried. If `stack` or `threads` is
+   *  missing (older test harnesses that build a Runner without them),
+   *  fall through to whatever frame is already on the ALS stack to
+   *  avoid clobbering an outer frame with `undefined`. */
+  private runInScope<T>(fn: () => Promise<T>): Promise<T> {
+    if (this.stack && this.threads) {
+      return agencyStore.run(
+        { ctx: this.ctx, stack: this.stack, threads: this.threads },
+        fn,
+      );
+    }
+    return fn();
   }
 
   // ── Path and counter management ──
@@ -304,7 +334,7 @@ export class Runner {
 
     this.path.push(id);
     try {
-      await callback(this);
+      await this.runInScope(() => callback(this));
     } finally {
       this.path.pop();
     }
@@ -339,7 +369,7 @@ export class Runner {
 
     this.path.push(id);
     try {
-      await bodyFn();
+      await this.runInScope(() => bodyFn());
     } finally {
       this.path.pop();
     }
@@ -371,7 +401,7 @@ export class Runner {
 
     this.ctx.coverageCollector?.hit(this.moduleId, this.scopeName, this.stepPath(id));
 
-    const result = await __pipeBind(input, fn);
+    const result = await this.runInScope(() => __pipeBind(input, fn));
     this.frame.locals[`__pipe_result_${this.stepPath(id)}`] = result;
 
     if (hasInterrupts(result)) {
@@ -422,7 +452,7 @@ export class Runner {
 
     this.path.push(id);
     try {
-      await callback(this);
+      await this.runInScope(() => callback(this));
     } finally {
       this.path.pop();
       threads.popActive();
@@ -450,7 +480,7 @@ export class Runner {
     this.ctx.pushHandler(handlerFn);
     this.path.push(id);
     try {
-      await callback(this);
+      await this.runInScope(() => callback(this));
     } finally {
       this.path.pop();
       this.ctx.popHandler();
@@ -484,15 +514,19 @@ export class Runner {
         ? `__condbranch_${id}`
         : `__condbranch_${this.key()}.${id}`;
 
-    // Evaluate condition only once (not on resume)
+    // Evaluate condition only once (not on resume). Conditions may call
+    // stdlib helpers that read `getRuntimeContext()`, so evaluate inside
+    // the scope frame.
     if (this.frame.locals[condKey] === undefined) {
       let branchIndex = -1;
-      for (let i = 0; i < branches.length; i++) {
-        if (await branches[i].condition()) {
-          branchIndex = i;
-          break;
+      await this.runInScope(async () => {
+        for (let i = 0; i < branches.length; i++) {
+          if (await branches[i].condition()) {
+            branchIndex = i;
+            break;
+          }
         }
-      }
+      });
       this.frame.locals[condKey] = branchIndex;
     }
 
@@ -500,11 +534,13 @@ export class Runner {
 
     this.path.push(id);
     try {
-      if (branchIndex >= 0 && branchIndex < branches.length) {
-        await branches[branchIndex].body(this);
-      } else if (elseBranch) {
-        await elseBranch(this);
-      }
+      await this.runInScope(async () => {
+        if (branchIndex >= 0 && branchIndex < branches.length) {
+          await branches[branchIndex].body(this);
+        } else if (elseBranch) {
+          await elseBranch(this);
+        }
+      });
     } finally {
       this.path.pop();
     }
@@ -558,7 +594,7 @@ export class Runner {
       this._continue = false;
       this.path.push(id);
       try {
-        await callback(iterable[i], i, this);
+        await this.runInScope(() => callback(iterable[i], i, this));
       } finally {
         this.path.pop();
       }
@@ -610,7 +646,7 @@ export class Runner {
     this.frame.locals[iterKey] = this.frame.locals[iterKey] ?? 0;
     let currentIter = 0;
 
-    while (await condition()) {
+    while (await this.runInScope(async () => condition())) {
       if (this.halted) return;
 
       if (currentIter < this.frame.locals[iterKey]) {
@@ -622,7 +658,7 @@ export class Runner {
       this._continue = false;
       this.path.push(id);
       try {
-        await callback(this);
+        await this.runInScope(() => callback(this));
       } finally {
         this.path.pop();
       }
@@ -668,7 +704,7 @@ export class Runner {
 
     this.path.push(id);
     try {
-      await callback(this);
+      await this.runInScope(() => callback(this));
     } finally {
       this.path.pop();
     }

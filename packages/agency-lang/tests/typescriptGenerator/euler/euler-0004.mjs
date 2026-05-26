@@ -24,7 +24,7 @@ import {
   readSkillTool as __readSkillTool,
   readSkillToolParams as __readSkillToolParams,
   AgencyFunction as __AgencyFunction, UNSET as __UNSET,
-  __call, __callMethod, __threads, getRuntimeContext,
+  __call, __callMethod, __threads, __stateStack, getRuntimeContext, agencyStore,
   functionRefReviver as __functionRefReviver,
   DeterministicClient as __DeterministicClient,
 } from "agency-lang/runtime";
@@ -150,13 +150,10 @@ async function __isPalindrome_impl(n: number, __state: InternalFunctionState | u
     state: __state
   });
   // __state will be undefined if this function is being called as a tool by an llm
-  const __stateStack = __setupData.stateStack;
-const __stack = __setupData.stack;
+  const __stack = __setupData.stack;
 const __step = __setupData.step;
 const __self = __setupData.self;
 const __ctx = __state?.ctx || __globalCtx;
-const statelogClient = __ctx.statelogClient;
-const __graph = __ctx.graph;
 let __forked;
 let __functionCompleted = false;
   if (!__ctx.globals.isInitialized("euler-0004.agency")) {
@@ -168,7 +165,7 @@ let __functionCompleted = false;
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "euler-0004.agency", scopeName: "isPalindrome", threads: __setupData.threads });
   let __resultCheckpointId = -1;
 if (__ctx.stateStack.currentNodeId()) {
-  __resultCheckpointId = __ctx.checkpoints.createPinned(__stateStack, __ctx, { moduleId: "euler-0004.agency", scopeName: "isPalindrome", stepPath: "", label: "result-entry" });
+  __resultCheckpointId = __ctx.checkpoints.createPinned(__stateStack(), __ctx, { moduleId: "euler-0004.agency", scopeName: "isPalindrome", stepPath: "", label: "result-entry" });
 }
 if (__ctx._pendingArgOverrides) {
   const __overrides = __ctx._pendingArgOverrides;
@@ -181,29 +178,34 @@ if (__ctx._pendingArgOverrides) {
 }
 
   try {
-    await runner.hook(0, async () => {
+    await agencyStore.run({
+      ctx: __ctx,
+      stack: __stack,
+      threads: __setupData.threads
+    }, async () => {
+      await runner.hook(0, async () => {
 await callHook({
-        name: "onFunctionStart",
-        data: {
-          functionName: "isPalindrome",
-          args: {
-            n: n
-          },
-          isBuiltin: false,
-          moduleId: "euler-0004.agency"
-        }
-      })
-    });
-    await runner.step(1, async (runner) => {
+          name: "onFunctionStart",
+          data: {
+            functionName: "isPalindrome",
+            args: {
+              n: n
+            },
+            isBuiltin: false,
+            moduleId: "euler-0004.agency"
+          }
+        })
+      });
+      await runner.step(1, async (runner) => {
 __stack.locals.s = `${__stack.args.n}`;
-    });
-    await runner.step(2, async (runner) => {
+      });
+      await runner.step(2, async (runner) => {
 __stack.locals.left = 0;
-    });
-    await runner.step(3, async (runner) => {
+      });
+      await runner.step(3, async (runner) => {
 __stack.locals.right = __stack.locals.s.length - 1;
-    });
-    await runner.whileLoop(4, async () => __stack.locals.left < __stack.locals.right, async (runner) => {
+      });
+      await runner.whileLoop(4, async () => __stack.locals.left < __stack.locals.right, async (runner) => {
 await runner.ifElse(0, [
 
   {
@@ -213,23 +215,24 @@ await runner.step(0, async (runner) => {
 __functionCompleted = true;
 runner.halt(false)
 return;
-            });
+              });
     },
   },
 
 ]);
 await runner.step(1, async (runner) => {
 __stack.locals.left = __stack.locals.left + 1;
-      });
+        });
 await runner.step(2, async (runner) => {
 __stack.locals.right = __stack.locals.right - 1;
+        });
       });
-    });
-    await runner.step(5, async (runner) => {
+      await runner.step(5, async (runner) => {
 __functionCompleted = true;
 runner.halt(true)
 return;
-    });
+      });
+    })
     if (runner.halted) { if (isFailure(runner.haltResult)) { runner.haltResult.retryable = runner.haltResult.retryable && __self.__retryable; } return runner.haltResult; }
   } catch (__error) {
     if (__error instanceof RestoreSignal) {
@@ -254,7 +257,7 @@ return failure(
 );
 
   } finally {
-    __stateStack.pop()
+    __stateStack()?.pop()
     if (__functionCompleted) {
       await callHook({
         name: "onFunctionEnd",
@@ -288,69 +291,72 @@ graph.node("main", async (__state: GraphState) => {
   const __setupData = setupNode({
     state: __state
   });
-  const __stateStack = __state.ctx.stateStack;
-const __stack = __setupData.stack;
+  const __stack = __setupData.stack;
 const __step = __setupData.step;
 const __self = __setupData.self;
 const __ctx = __state.ctx;
-const statelogClient = __ctx.statelogClient;
-const __graph = __ctx.graph;
 let __forked;
 let __functionCompleted = false;
   const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "euler-0004.agency", scopeName: "main", threads: __setupData.threads });
   try {
-    await runner.hook(0, async () => {
+    await agencyStore.run({
+      ctx: __ctx,
+      stack: __stack,
+      threads: __setupData.threads
+    }, async () => {
+      await runner.hook(0, async () => {
 await callHook({
-        name: "onNodeStart",
-        data: {
-          nodeName: "main"
-        }
-      })
-    });
-    await runner.step(1, async (runner) => {
+          name: "onNodeStart",
+          data: {
+            nodeName: "main"
+          }
+        })
+      });
+      await runner.step(1, async (runner) => {
 __stack.locals.largest = 0;
-    });
-    await runner.step(2, async (runner) => {
+      });
+      await runner.step(2, async (runner) => {
 __stack.locals.i = 999;
-    });
-    await runner.whileLoop(3, async () => __stack.locals.i >= 100, async (runner) => {
+      });
+      await runner.whileLoop(3, async () => __stack.locals.i >= 100, async (runner) => {
 await runner.step(0, async (runner) => {
 __stack.locals.j = __stack.locals.i;
-      });
+        });
 await runner.whileLoop(1, async () => __stack.locals.j >= 100, async (runner) => {
 await runner.step(0, async (runner) => {
 __stack.locals.product = __stack.locals.i * __stack.locals.j;
-        });
+          });
 await runner.ifElse(1, [
 
   {
     condition: async () => __stack.locals.product > __stack.locals.largest && await __call(isPalindrome, {
-              type: "positional",
-              args: [__stack.locals.product]
-            }),
+                type: "positional",
+                args: [__stack.locals.product]
+              }),
     body: async (runner) => {
 await runner.step(0, async (runner) => {
 __stack.locals.largest = __stack.locals.product;
-              });
+                });
     },
   },
 
 ]);
 await runner.step(2, async (runner) => {
 __stack.locals.j = __stack.locals.j - 1;
+          });
         });
-      });
 await runner.step(2, async (runner) => {
 __stack.locals.i = __stack.locals.i - 1;
+        });
       });
-    });
-    await runner.step(4, async (runner) => {
+      await runner.step(4, async (runner) => {
 runner.halt({
-        messages: __threads(),
-        data: __stack.locals.largest
-      })
+          messages: __threads(),
+          data: __stack.locals.largest
+        })
 return;
-    });
+      });
+    })
     if (runner.halted) return runner.haltResult;
     await runner.hook(5, async () => {
 await callHook({

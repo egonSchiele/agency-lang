@@ -24,7 +24,7 @@ import {
   readSkillTool as __readSkillTool,
   readSkillToolParams as __readSkillToolParams,
   AgencyFunction as __AgencyFunction, UNSET as __UNSET,
-  __call, __callMethod, __threads, getRuntimeContext,
+  __call, __callMethod, __threads, __stateStack, getRuntimeContext, agencyStore,
   functionRefReviver as __functionRefReviver,
   DeterministicClient as __DeterministicClient,
 } from "agency-lang/runtime";
@@ -148,13 +148,10 @@ async function __double_impl(x: number, __state: InternalFunctionState | undefin
     state: __state
   });
   // __state will be undefined if this function is being called as a tool by an llm
-  const __stateStack = __setupData.stateStack;
-const __stack = __setupData.stack;
+  const __stack = __setupData.stack;
 const __step = __setupData.step;
 const __self = __setupData.self;
 const __ctx = __state?.ctx || __globalCtx;
-const statelogClient = __ctx.statelogClient;
-const __graph = __ctx.graph;
 let __forked;
 let __functionCompleted = false;
   if (!__ctx.globals.isInitialized("pipe-operator.agency")) {
@@ -166,7 +163,7 @@ let __functionCompleted = false;
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "pipe-operator.agency", scopeName: "double", threads: __setupData.threads });
   let __resultCheckpointId = -1;
 if (__ctx.stateStack.currentNodeId()) {
-  __resultCheckpointId = __ctx.checkpoints.createPinned(__stateStack, __ctx, { moduleId: "pipe-operator.agency", scopeName: "double", stepPath: "", label: "result-entry" });
+  __resultCheckpointId = __ctx.checkpoints.createPinned(__stateStack(), __ctx, { moduleId: "pipe-operator.agency", scopeName: "double", stepPath: "", label: "result-entry" });
 }
 if (__ctx._pendingArgOverrides) {
   const __overrides = __ctx._pendingArgOverrides;
@@ -179,24 +176,30 @@ if (__ctx._pendingArgOverrides) {
 }
 
   try {
-    await runner.hook(0, async () => {
+    await agencyStore.run({
+      ctx: __ctx,
+      stack: __stack,
+      threads: __setupData.threads
+    }, async () => {
+      await runner.hook(0, async () => {
 await callHook({
-        name: "onFunctionStart",
-        data: {
-          functionName: "double",
-          args: {
-            x: x
-          },
-          isBuiltin: false,
-          moduleId: "pipe-operator.agency"
-        }
-      })
-    });
-    await runner.step(1, async (runner) => {
+          name: "onFunctionStart",
+          data: {
+            functionName: "double",
+            args: {
+              x: x
+            },
+            isBuiltin: false,
+            moduleId: "pipe-operator.agency"
+          }
+        })
+      });
+      await runner.step(1, async (runner) => {
 __functionCompleted = true;
 runner.halt(__stack.args.x * 2)
 return;
-    });
+      });
+    })
     if (runner.halted) { if (isFailure(runner.haltResult)) { runner.haltResult.retryable = runner.haltResult.retryable && __self.__retryable; } return runner.haltResult; }
   } catch (__error) {
     if (__error instanceof RestoreSignal) {
@@ -221,7 +224,7 @@ return failure(
 );
 
   } finally {
-    __stateStack.pop()
+    __stateStack()?.pop()
     if (__functionCompleted) {
       await callHook({
         name: "onFunctionEnd",
@@ -256,13 +259,10 @@ async function __multiply_impl(a: number, b: number, __state: InternalFunctionSt
     state: __state
   });
   // __state will be undefined if this function is being called as a tool by an llm
-  const __stateStack = __setupData.stateStack;
-const __stack = __setupData.stack;
+  const __stack = __setupData.stack;
 const __step = __setupData.step;
 const __self = __setupData.self;
 const __ctx = __state?.ctx || __globalCtx;
-const statelogClient = __ctx.statelogClient;
-const __graph = __ctx.graph;
 let __forked;
 let __functionCompleted = false;
   if (!__ctx.globals.isInitialized("pipe-operator.agency")) {
@@ -275,7 +275,7 @@ let __functionCompleted = false;
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "pipe-operator.agency", scopeName: "multiply", threads: __setupData.threads });
   let __resultCheckpointId = -1;
 if (__ctx.stateStack.currentNodeId()) {
-  __resultCheckpointId = __ctx.checkpoints.createPinned(__stateStack, __ctx, { moduleId: "pipe-operator.agency", scopeName: "multiply", stepPath: "", label: "result-entry" });
+  __resultCheckpointId = __ctx.checkpoints.createPinned(__stateStack(), __ctx, { moduleId: "pipe-operator.agency", scopeName: "multiply", stepPath: "", label: "result-entry" });
 }
 if (__ctx._pendingArgOverrides) {
   const __overrides = __ctx._pendingArgOverrides;
@@ -292,25 +292,31 @@ if (__ctx._pendingArgOverrides) {
 }
 
   try {
-    await runner.hook(0, async () => {
+    await agencyStore.run({
+      ctx: __ctx,
+      stack: __stack,
+      threads: __setupData.threads
+    }, async () => {
+      await runner.hook(0, async () => {
 await callHook({
-        name: "onFunctionStart",
-        data: {
-          functionName: "multiply",
-          args: {
-            a: a,
-            b: b
-          },
-          isBuiltin: false,
-          moduleId: "pipe-operator.agency"
-        }
-      })
-    });
-    await runner.step(1, async (runner) => {
+          name: "onFunctionStart",
+          data: {
+            functionName: "multiply",
+            args: {
+              a: a,
+              b: b
+            },
+            isBuiltin: false,
+            moduleId: "pipe-operator.agency"
+          }
+        })
+      });
+      await runner.step(1, async (runner) => {
 __functionCompleted = true;
 runner.halt(__stack.args.a * __stack.args.b)
 return;
-    });
+      });
+    })
     if (runner.halted) { if (isFailure(runner.haltResult)) { runner.haltResult.retryable = runner.haltResult.retryable && __self.__retryable; } return runner.haltResult; }
   } catch (__error) {
     if (__error instanceof RestoreSignal) {
@@ -335,7 +341,7 @@ return failure(
 );
 
   } finally {
-    __stateStack.pop()
+    __stateStack()?.pop()
     if (__functionCompleted) {
       await callHook({
         name: "onFunctionEnd",
@@ -375,13 +381,10 @@ async function __safeDivide_impl(a: number, b: number, __state: InternalFunction
     state: __state
   });
   // __state will be undefined if this function is being called as a tool by an llm
-  const __stateStack = __setupData.stateStack;
-const __stack = __setupData.stack;
+  const __stack = __setupData.stack;
 const __step = __setupData.step;
 const __self = __setupData.self;
 const __ctx = __state?.ctx || __globalCtx;
-const statelogClient = __ctx.statelogClient;
-const __graph = __ctx.graph;
 let __forked;
 let __functionCompleted = false;
   if (!__ctx.globals.isInitialized("pipe-operator.agency")) {
@@ -394,7 +397,7 @@ let __functionCompleted = false;
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "pipe-operator.agency", scopeName: "safeDivide", threads: __setupData.threads });
   let __resultCheckpointId = -1;
 if (__ctx.stateStack.currentNodeId()) {
-  __resultCheckpointId = __ctx.checkpoints.createPinned(__stateStack, __ctx, { moduleId: "pipe-operator.agency", scopeName: "safeDivide", stepPath: "", label: "result-entry" });
+  __resultCheckpointId = __ctx.checkpoints.createPinned(__stateStack(), __ctx, { moduleId: "pipe-operator.agency", scopeName: "safeDivide", stepPath: "", label: "result-entry" });
 }
 if (__ctx._pendingArgOverrides) {
   const __overrides = __ctx._pendingArgOverrides;
@@ -411,21 +414,26 @@ if (__ctx._pendingArgOverrides) {
 }
 
   try {
-    await runner.hook(0, async () => {
+    await agencyStore.run({
+      ctx: __ctx,
+      stack: __stack,
+      threads: __setupData.threads
+    }, async () => {
+      await runner.hook(0, async () => {
 await callHook({
-        name: "onFunctionStart",
-        data: {
-          functionName: "safeDivide",
-          args: {
-            a: a,
-            b: b
-          },
-          isBuiltin: false,
-          moduleId: "pipe-operator.agency"
-        }
-      })
-    });
-    await runner.ifElse(1, [
+          name: "onFunctionStart",
+          data: {
+            functionName: "safeDivide",
+            args: {
+              a: a,
+              b: b
+            },
+            isBuiltin: false,
+            moduleId: "pipe-operator.agency"
+          }
+        })
+      });
+      await runner.ifElse(1, [
 
   {
     condition: async () => __stack.args.b === 0,
@@ -434,16 +442,17 @@ await runner.step(0, async (runner) => {
 __functionCompleted = true;
 runner.halt(failure(`division by zero`, { checkpoint: __ctx.getResultCheckpoint(), functionName: "safeDivide", args: __stack.args }))
 return;
-          });
+            });
     },
   },
 
 ]);
-    await runner.step(2, async (runner) => {
+      await runner.step(2, async (runner) => {
 __functionCompleted = true;
 runner.halt(await success(__stack.args.a / __stack.args.b))
 return;
-    });
+      });
+    })
     if (runner.halted) { if (isFailure(runner.haltResult)) { runner.haltResult.retryable = runner.haltResult.retryable && __self.__retryable; } return runner.haltResult; }
   } catch (__error) {
     if (__error instanceof RestoreSignal) {
@@ -468,7 +477,7 @@ return failure(
 );
 
   } finally {
-    __stateStack.pop()
+    __stateStack()?.pop()
     if (__functionCompleted) {
       await callHook({
         name: "onFunctionEnd",
@@ -507,82 +516,85 @@ graph.node("main", async (__state: GraphState) => {
   const __setupData = setupNode({
     state: __state
   });
-  const __stateStack = __state.ctx.stateStack;
-const __stack = __setupData.stack;
+  const __stack = __setupData.stack;
 const __step = __setupData.step;
 const __self = __setupData.self;
 const __ctx = __state.ctx;
-const statelogClient = __ctx.statelogClient;
-const __graph = __ctx.graph;
 let __forked;
 let __functionCompleted = false;
   const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "pipe-operator.agency", scopeName: "main", threads: __setupData.threads });
   try {
-    await runner.hook(0, async () => {
+    await agencyStore.run({
+      ctx: __ctx,
+      stack: __stack,
+      threads: __setupData.threads
+    }, async () => {
+      await runner.hook(0, async () => {
 await callHook({
-        name: "onNodeStart",
-        data: {
-          nodeName: "main"
-        }
-      })
-    });
-    await runner.step(1, async (runner) => {
+          name: "onNodeStart",
+          data: {
+            nodeName: "main"
+          }
+        })
+      });
+      await runner.step(1, async (runner) => {
 __stack.locals.__pipe_0 = await success(5);
-    });
-    __stack.locals.r1 = await runner.pipe(2, __stack.locals.__pipe_0, async (__pipeArg) => await __call(double, {
-      type: "positional",
-      args: [__pipeArg]
-    }));
-    await runner.step(3, async (runner) => {
+      });
+      __stack.locals.r1 = await runner.pipe(2, __stack.locals.__pipe_0, async (__pipeArg) => await __call(double, {
+        type: "positional",
+        args: [__pipeArg]
+      }));
+      await runner.step(3, async (runner) => {
 __stack.locals.__pipe_1 = await success(5);
-    });
-    __stack.locals.r2 = await runner.pipe(4, __stack.locals.__pipe_1, async (__pipeArg) => await __call(await __callMethod(multiply, "partial", {
-      type: "named",
-      positionalArgs: [],
-      namedArgs: {
-        a: 10
-      }
-    }), {
-      type: "positional",
-      args: [__pipeArg]
-    }));
-    await runner.step(5, async (runner) => {
+      });
+      __stack.locals.r2 = await runner.pipe(4, __stack.locals.__pipe_1, async (__pipeArg) => await __call(await __callMethod(multiply, "partial", {
+        type: "named",
+        positionalArgs: [],
+        namedArgs: {
+          a: 10
+        }
+      }), {
+        type: "positional",
+        args: [__pipeArg]
+      }));
+      await runner.step(5, async (runner) => {
 __stack.locals.__pipe_2 = await success(10);
-    });
-    __stack.locals.__pipe_2 = await runner.pipe(6, __stack.locals.__pipe_2, async (__pipeArg) => await __call(double, {
-      type: "positional",
-      args: [__pipeArg]
-    }));
-    __stack.locals.r3 = await runner.pipe(7, __stack.locals.__pipe_2, async (__pipeArg) => await __call(await __callMethod(multiply, "partial", {
-      type: "named",
-      positionalArgs: [],
-      namedArgs: {
-        a: 3
-      }
-    }), {
-      type: "positional",
-      args: [__pipeArg]
-    }));
-    await runner.step(8, async (runner) => {
+      });
+      __stack.locals.__pipe_2 = await runner.pipe(6, __stack.locals.__pipe_2, async (__pipeArg) => await __call(double, {
+        type: "positional",
+        args: [__pipeArg]
+      }));
+      __stack.locals.r3 = await runner.pipe(7, __stack.locals.__pipe_2, async (__pipeArg) => await __call(await __callMethod(multiply, "partial", {
+        type: "named",
+        positionalArgs: [],
+        namedArgs: {
+          a: 3
+        }
+      }), {
+        type: "positional",
+        args: [__pipeArg]
+      }));
+      await runner.step(8, async (runner) => {
 __stack.locals.__pipe_3 = await failure(`nope`);
-    });
-    __stack.locals.r4 = await runner.pipe(9, __stack.locals.__pipe_3, async (__pipeArg) => await __call(double, {
-      type: "positional",
-      args: [__pipeArg]
-    }));
-    await runner.step(10, async (runner) => {
+      });
+      __stack.locals.r4 = await runner.pipe(9, __stack.locals.__pipe_3, async (__pipeArg) => await __call(double, {
+        type: "positional",
+        args: [__pipeArg]
+      }));
+      await runner.step(10, async (runner) => {
 __stack.locals.__pipe_4 = await success(10);
-    });
-    __stack.locals.r5 = await runner.pipe(11, __stack.locals.__pipe_4, async (__pipeArg) => await __call(await __callMethod(safeDivide, "partial", {
-      type: "named",
-      positionalArgs: [],
-      namedArgs: {
-        b: 2
-      }
-    }), {
-      type: "positional",
-      args: [__pipeArg]
-    }));
+      });
+      __stack.locals.r5 = await runner.pipe(11, __stack.locals.__pipe_4, async (__pipeArg) => await __call(await __callMethod(safeDivide, "partial", {
+        type: "named",
+        positionalArgs: [],
+        namedArgs: {
+          b: 2
+        }
+      }), {
+        type: "positional",
+        args: [__pipeArg]
+      }));
+    })
     if (runner.halted) return runner.haltResult;
     await runner.hook(12, async () => {
 await callHook({

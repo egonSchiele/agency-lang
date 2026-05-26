@@ -24,7 +24,7 @@ import {
   readSkillTool as __readSkillTool,
   readSkillToolParams as __readSkillToolParams,
   AgencyFunction as __AgencyFunction, UNSET as __UNSET,
-  __call, __callMethod, __threads, getRuntimeContext,
+  __call, __callMethod, __threads, __stateStack, getRuntimeContext, agencyStore,
   functionRefReviver as __functionRefReviver,
   DeterministicClient as __DeterministicClient,
 } from "agency-lang/runtime";
@@ -150,13 +150,10 @@ async function __isPrime_impl(n: number, __state: InternalFunctionState | undefi
     state: __state
   });
   // __state will be undefined if this function is being called as a tool by an llm
-  const __stateStack = __setupData.stateStack;
-const __stack = __setupData.stack;
+  const __stack = __setupData.stack;
 const __step = __setupData.step;
 const __self = __setupData.self;
 const __ctx = __state?.ctx || __globalCtx;
-const statelogClient = __ctx.statelogClient;
-const __graph = __ctx.graph;
 let __forked;
 let __functionCompleted = false;
   if (!__ctx.globals.isInitialized("euler-0007.agency")) {
@@ -168,7 +165,7 @@ let __functionCompleted = false;
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "euler-0007.agency", scopeName: "isPrime", threads: __setupData.threads });
   let __resultCheckpointId = -1;
 if (__ctx.stateStack.currentNodeId()) {
-  __resultCheckpointId = __ctx.checkpoints.createPinned(__stateStack, __ctx, { moduleId: "euler-0007.agency", scopeName: "isPrime", stepPath: "", label: "result-entry" });
+  __resultCheckpointId = __ctx.checkpoints.createPinned(__stateStack(), __ctx, { moduleId: "euler-0007.agency", scopeName: "isPrime", stepPath: "", label: "result-entry" });
 }
 if (__ctx._pendingArgOverrides) {
   const __overrides = __ctx._pendingArgOverrides;
@@ -181,69 +178,28 @@ if (__ctx._pendingArgOverrides) {
 }
 
   try {
-    await runner.hook(0, async () => {
+    await agencyStore.run({
+      ctx: __ctx,
+      stack: __stack,
+      threads: __setupData.threads
+    }, async () => {
+      await runner.hook(0, async () => {
 await callHook({
-        name: "onFunctionStart",
-        data: {
-          functionName: "isPrime",
-          args: {
-            n: n
-          },
-          isBuiltin: false,
-          moduleId: "euler-0007.agency"
-        }
-      })
-    });
-    await runner.ifElse(1, [
+          name: "onFunctionStart",
+          data: {
+            functionName: "isPrime",
+            args: {
+              n: n
+            },
+            isBuiltin: false,
+            moduleId: "euler-0007.agency"
+          }
+        })
+      });
+      await runner.ifElse(1, [
 
   {
     condition: async () => __stack.args.n < 2,
-    body: async (runner) => {
-await runner.step(0, async (runner) => {
-__functionCompleted = true;
-runner.halt(false)
-return;
-          });
-    },
-  },
-
-]);
-    await runner.ifElse(2, [
-
-  {
-    condition: async () => __stack.args.n < 4,
-    body: async (runner) => {
-await runner.step(0, async (runner) => {
-__functionCompleted = true;
-runner.halt(true)
-return;
-          });
-    },
-  },
-
-]);
-    await runner.ifElse(3, [
-
-  {
-    condition: async () => __stack.args.n % 2 === 0 || __stack.args.n % 3 === 0,
-    body: async (runner) => {
-await runner.step(0, async (runner) => {
-__functionCompleted = true;
-runner.halt(false)
-return;
-          });
-    },
-  },
-
-]);
-    await runner.step(4, async (runner) => {
-__stack.locals.i = 5;
-    });
-    await runner.whileLoop(5, async () => __stack.locals.i * __stack.locals.i <= __stack.args.n, async (runner) => {
-await runner.ifElse(0, [
-
-  {
-    condition: async () => __stack.args.n % __stack.locals.i === 0 || __stack.args.n % (__stack.locals.i + 2) === 0,
     body: async (runner) => {
 await runner.step(0, async (runner) => {
 __functionCompleted = true;
@@ -254,15 +210,62 @@ return;
   },
 
 ]);
-await runner.step(1, async (runner) => {
-__stack.locals.i = __stack.locals.i + 6;
-      });
-    });
-    await runner.step(6, async (runner) => {
+      await runner.ifElse(2, [
+
+  {
+    condition: async () => __stack.args.n < 4,
+    body: async (runner) => {
+await runner.step(0, async (runner) => {
 __functionCompleted = true;
 runner.halt(true)
 return;
-    });
+            });
+    },
+  },
+
+]);
+      await runner.ifElse(3, [
+
+  {
+    condition: async () => __stack.args.n % 2 === 0 || __stack.args.n % 3 === 0,
+    body: async (runner) => {
+await runner.step(0, async (runner) => {
+__functionCompleted = true;
+runner.halt(false)
+return;
+            });
+    },
+  },
+
+]);
+      await runner.step(4, async (runner) => {
+__stack.locals.i = 5;
+      });
+      await runner.whileLoop(5, async () => __stack.locals.i * __stack.locals.i <= __stack.args.n, async (runner) => {
+await runner.ifElse(0, [
+
+  {
+    condition: async () => __stack.args.n % __stack.locals.i === 0 || __stack.args.n % (__stack.locals.i + 2) === 0,
+    body: async (runner) => {
+await runner.step(0, async (runner) => {
+__functionCompleted = true;
+runner.halt(false)
+return;
+              });
+    },
+  },
+
+]);
+await runner.step(1, async (runner) => {
+__stack.locals.i = __stack.locals.i + 6;
+        });
+      });
+      await runner.step(6, async (runner) => {
+__functionCompleted = true;
+runner.halt(true)
+return;
+      });
+    })
     if (runner.halted) { if (isFailure(runner.haltResult)) { runner.haltResult.retryable = runner.haltResult.retryable && __self.__retryable; } return runner.haltResult; }
   } catch (__error) {
     if (__error instanceof RestoreSignal) {
@@ -287,7 +290,7 @@ return failure(
 );
 
   } finally {
-    __stateStack.pop()
+    __stateStack()?.pop()
     if (__functionCompleted) {
       await callHook({
         name: "onFunctionEnd",
@@ -321,58 +324,61 @@ graph.node("main", async (__state: GraphState) => {
   const __setupData = setupNode({
     state: __state
   });
-  const __stateStack = __state.ctx.stateStack;
-const __stack = __setupData.stack;
+  const __stack = __setupData.stack;
 const __step = __setupData.step;
 const __self = __setupData.self;
 const __ctx = __state.ctx;
-const statelogClient = __ctx.statelogClient;
-const __graph = __ctx.graph;
 let __forked;
 let __functionCompleted = false;
   const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "euler-0007.agency", scopeName: "main", threads: __setupData.threads });
   try {
-    await runner.hook(0, async () => {
+    await agencyStore.run({
+      ctx: __ctx,
+      stack: __stack,
+      threads: __setupData.threads
+    }, async () => {
+      await runner.hook(0, async () => {
 await callHook({
-        name: "onNodeStart",
-        data: {
-          nodeName: "main"
-        }
-      })
-    });
-    await runner.step(1, async (runner) => {
+          name: "onNodeStart",
+          data: {
+            nodeName: "main"
+          }
+        })
+      });
+      await runner.step(1, async (runner) => {
 __stack.locals.count = 0;
-    });
-    await runner.step(2, async (runner) => {
+      });
+      await runner.step(2, async (runner) => {
 __stack.locals.num = 1;
-    });
-    await runner.whileLoop(3, async () => __stack.locals.count < 10001, async (runner) => {
+      });
+      await runner.whileLoop(3, async () => __stack.locals.count < 10001, async (runner) => {
 await runner.step(0, async (runner) => {
 __stack.locals.num = __stack.locals.num + 1;
-      });
+        });
 await runner.ifElse(1, [
 
   {
     condition: async () => await __call(isPrime, {
-            type: "positional",
-            args: [__stack.locals.num]
-          }),
+              type: "positional",
+              args: [__stack.locals.num]
+            }),
     body: async (runner) => {
 await runner.step(0, async (runner) => {
 __stack.locals.count = __stack.locals.count + 1;
-            });
+              });
     },
   },
 
 ]);
-    });
-    await runner.step(4, async (runner) => {
+      });
+      await runner.step(4, async (runner) => {
 runner.halt({
-        messages: __threads(),
-        data: __stack.locals.num
-      })
+          messages: __threads(),
+          data: __stack.locals.num
+        })
 return;
-    });
+      });
+    })
     if (runner.halted) return runner.haltResult;
     await runner.hook(5, async () => {
 await callHook({

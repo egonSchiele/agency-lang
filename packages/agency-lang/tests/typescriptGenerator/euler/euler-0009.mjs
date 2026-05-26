@@ -24,7 +24,7 @@ import {
   readSkillTool as __readSkillTool,
   readSkillToolParams as __readSkillToolParams,
   AgencyFunction as __AgencyFunction, UNSET as __UNSET,
-  __call, __callMethod, __threads, getRuntimeContext,
+  __call, __callMethod, __threads, __stateStack, getRuntimeContext, agencyStore,
   functionRefReviver as __functionRefReviver,
   DeterministicClient as __DeterministicClient,
 } from "agency-lang/runtime";
@@ -149,36 +149,38 @@ graph.node("main", async (__state: GraphState) => {
   const __setupData = setupNode({
     state: __state
   });
-  const __stateStack = __state.ctx.stateStack;
-const __stack = __setupData.stack;
+  const __stack = __setupData.stack;
 const __step = __setupData.step;
 const __self = __setupData.self;
 const __ctx = __state.ctx;
-const statelogClient = __ctx.statelogClient;
-const __graph = __ctx.graph;
 let __forked;
 let __functionCompleted = false;
   const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "euler-0009.agency", scopeName: "main", threads: __setupData.threads });
   try {
-    await runner.hook(0, async () => {
+    await agencyStore.run({
+      ctx: __ctx,
+      stack: __stack,
+      threads: __setupData.threads
+    }, async () => {
+      await runner.hook(0, async () => {
 await callHook({
-        name: "onNodeStart",
-        data: {
-          nodeName: "main"
-        }
-      })
-    });
-    await runner.step(1, async (runner) => {
+          name: "onNodeStart",
+          data: {
+            nodeName: "main"
+          }
+        })
+      });
+      await runner.step(1, async (runner) => {
 __stack.locals.a = 1;
-    });
-    await runner.whileLoop(2, async () => __stack.locals.a < 1000, async (runner) => {
+      });
+      await runner.whileLoop(2, async () => __stack.locals.a < 1000, async (runner) => {
 await runner.step(0, async (runner) => {
 __stack.locals.b = __stack.locals.a + 1;
-      });
+        });
 await runner.whileLoop(1, async () => __stack.locals.b < 1000 - __stack.locals.a, async (runner) => {
 await runner.step(0, async (runner) => {
 __stack.locals.c = 1000 - __stack.locals.a - __stack.locals.b;
-        });
+          });
 await runner.ifElse(1, [
 
   {
@@ -186,30 +188,31 @@ await runner.ifElse(1, [
     body: async (runner) => {
 await runner.step(0, async (runner) => {
 runner.halt({
-                  messages: __threads(),
-                  data: __stack.locals.a * __stack.locals.b * __stack.locals.c
-                })
+                    messages: __threads(),
+                    data: __stack.locals.a * __stack.locals.b * __stack.locals.c
+                  })
 return;
-              });
+                });
     },
   },
 
 ]);
 await runner.step(2, async (runner) => {
 __stack.locals.b = __stack.locals.b + 1;
+          });
         });
-      });
 await runner.step(2, async (runner) => {
 __stack.locals.a = __stack.locals.a + 1;
+        });
       });
-    });
-    await runner.step(3, async (runner) => {
+      await runner.step(3, async (runner) => {
 runner.halt({
-        messages: __threads(),
-        data: 0
-      })
+          messages: __threads(),
+          data: 0
+        })
 return;
-    });
+      });
+    })
     if (runner.halted) return runner.haltResult;
     await runner.hook(4, async () => {
 await callHook({

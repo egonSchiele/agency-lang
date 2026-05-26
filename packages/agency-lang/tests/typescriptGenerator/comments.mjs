@@ -24,7 +24,7 @@ import {
   readSkillTool as __readSkillTool,
   readSkillToolParams as __readSkillToolParams,
   AgencyFunction as __AgencyFunction, UNSET as __UNSET,
-  __call, __callMethod, __threads, getRuntimeContext,
+  __call, __callMethod, __threads, __stateStack, getRuntimeContext, agencyStore,
   functionRefReviver as __functionRefReviver,
   DeterministicClient as __DeterministicClient,
 } from "agency-lang/runtime";
@@ -156,13 +156,10 @@ async function __greet_impl(__state: InternalFunctionState | undefined = undefin
     state: __state
   });
   // __state will be undefined if this function is being called as a tool by an llm
-  const __stateStack = __setupData.stateStack;
-const __stack = __setupData.stack;
+  const __stack = __setupData.stack;
 const __step = __setupData.step;
 const __self = __setupData.self;
 const __ctx = __state?.ctx || __globalCtx;
-const statelogClient = __ctx.statelogClient;
-const __graph = __ctx.graph;
 let __forked;
 let __functionCompleted = false;
   if (!__ctx.globals.isInitialized("comments.agency")) {
@@ -173,7 +170,7 @@ let __functionCompleted = false;
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "comments.agency", scopeName: "greet", threads: __setupData.threads });
   let __resultCheckpointId = -1;
 if (__ctx.stateStack.currentNodeId()) {
-  __resultCheckpointId = __ctx.checkpoints.createPinned(__stateStack, __ctx, { moduleId: "comments.agency", scopeName: "greet", stepPath: "", label: "result-entry" });
+  __resultCheckpointId = __ctx.checkpoints.createPinned(__stateStack(), __ctx, { moduleId: "comments.agency", scopeName: "greet", stepPath: "", label: "result-entry" });
 }
 if (__ctx._pendingArgOverrides) {
   const __overrides = __ctx._pendingArgOverrides;
@@ -182,29 +179,35 @@ if (__ctx._pendingArgOverrides) {
 }
 
   try {
-    await runner.hook(0, async () => {
+    await agencyStore.run({
+      ctx: __ctx,
+      stack: __stack,
+      threads: __setupData.threads
+    }, async () => {
+      await runner.hook(0, async () => {
 await callHook({
-        name: "onFunctionStart",
-        data: {
-          functionName: "greet",
-          args: {},
-          isBuiltin: false,
-          moduleId: "comments.agency"
-        }
-      })
-    });
-    await runner.step(1, async (runner) => {
+          name: "onFunctionStart",
+          data: {
+            functionName: "greet",
+            args: {},
+            isBuiltin: false,
+            moduleId: "comments.agency"
+          }
+        })
+      });
+      await runner.step(1, async (runner) => {
 //  Comment inside function
-    });
-    await runner.step(2, async (runner) => {
+      });
+      await runner.step(2, async (runner) => {
 __stack.locals.message = `Hello, World!`;
 //  Another comment
-    });
-    await runner.step(3, async (runner) => {
+      });
+      await runner.step(3, async (runner) => {
 __functionCompleted = true;
 runner.halt(__stack.locals.message)
 return;
-    });
+      });
+    })
     if (runner.halted) { if (isFailure(runner.haltResult)) { runner.haltResult.retryable = runner.haltResult.retryable && __self.__retryable; } return runner.haltResult; }
   } catch (__error) {
     if (__error instanceof RestoreSignal) {
@@ -229,7 +232,7 @@ return failure(
 );
 
   } finally {
-    __stateStack.pop()
+    __stateStack()?.pop()
     if (__functionCompleted) {
       await callHook({
         name: "onFunctionEnd",
@@ -258,80 +261,83 @@ graph.node("main", async (__state: GraphState) => {
   const __setupData = setupNode({
     state: __state
   });
-  const __stateStack = __state.ctx.stateStack;
-const __stack = __setupData.stack;
+  const __stack = __setupData.stack;
 const __step = __setupData.step;
 const __self = __setupData.self;
 const __ctx = __state.ctx;
-const statelogClient = __ctx.statelogClient;
-const __graph = __ctx.graph;
 let __forked;
 let __functionCompleted = false;
   const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "comments.agency", scopeName: "main", threads: __setupData.threads });
   try {
-    await runner.hook(0, async () => {
+    await agencyStore.run({
+      ctx: __ctx,
+      stack: __stack,
+      threads: __setupData.threads
+    }, async () => {
+      await runner.hook(0, async () => {
 await callHook({
-        name: "onNodeStart",
-        data: {
-          nodeName: "main"
-        }
-      })
-    });
-    await runner.step(1, async (runner) => {
+          name: "onNodeStart",
+          data: {
+            nodeName: "main"
+          }
+        })
+      });
+      await runner.step(1, async (runner) => {
 //  Comment before function call
-    });
-    await runner.step(2, async (runner) => {
+      });
+      await runner.step(2, async (runner) => {
 __stack.locals.result = await __call(greet, {
-        type: "positional",
-        args: []
-      });
+          type: "positional",
+          args: []
+        });
 if (hasInterrupts(__stack.locals.result)) {
-        await __ctx.pendingPromises.awaitAll()
-        runner.halt({
-          ...__state,
-          data: __stack.locals.result
-        })
-        return;
-      }
-    });
-    await runner.step(3, async (runner) => {
-const __funcResult = await __call(print, {
-        type: "positional",
-        args: [__stack.locals.result]
+          await __ctx.pendingPromises.awaitAll()
+          runner.halt({
+            ...__state,
+            data: __stack.locals.result
+          })
+          return;
+        }
       });
+      await runner.step(3, async (runner) => {
+const __funcResult = await __call(print, {
+          type: "positional",
+          args: [__stack.locals.result]
+        });
 if (hasInterrupts(__funcResult)) {
-        await __ctx.pendingPromises.awaitAll()
-        runner.halt({
-          ...__state,
-          data: __funcResult
-        })
-        return;
-      }
+          await __ctx.pendingPromises.awaitAll()
+          runner.halt({
+            ...__state,
+            data: __funcResult
+          })
+          return;
+        }
 //  Testing comments in different contexts
-    });
-    await runner.step(4, async (runner) => {
+      });
+      await runner.step(4, async (runner) => {
 __stack.locals.age = 25;
 //  2. Before conditionals
-    });
-    await runner.step(5, async (runner) => {
+      });
+      await runner.step(5, async (runner) => {
 __stack.locals.status = `active`;
-    });
-    await runner.ifElse(6, [
+      });
+      await runner.ifElse(6, [
 
   {
     condition: async () => __stack.locals.status === `inactive`,
     body: async (runner) => {
 await __call(print, {
-            type: "positional",
-            args: [`Stopped`]
-          })
+              type: "positional",
+              args: [`Stopped`]
+            })
     },
   },
 
 ]);
-    await runner.step(7, async (runner) => {
+      await runner.step(7, async (runner) => {
 //  Final comment at end of file
-    });
+      });
+    })
     if (runner.halted) return runner.haltResult;
     await runner.hook(8, async () => {
 await callHook({

@@ -24,7 +24,7 @@ import {
   readSkillTool as __readSkillTool,
   readSkillToolParams as __readSkillToolParams,
   AgencyFunction as __AgencyFunction, UNSET as __UNSET,
-  __call, __callMethod, __threads, getRuntimeContext,
+  __call, __callMethod, __threads, __stateStack, getRuntimeContext, agencyStore,
   functionRefReviver as __functionRefReviver,
   DeterministicClient as __DeterministicClient,
 } from "agency-lang/runtime";
@@ -147,53 +147,56 @@ graph.node("main", async (__state: GraphState) => {
   const __setupData = setupNode({
     state: __state
   });
-  const __stateStack = __state.ctx.stateStack;
-const __stack = __setupData.stack;
+  const __stack = __setupData.stack;
 const __step = __setupData.step;
 const __self = __setupData.self;
 const __ctx = __state.ctx;
-const statelogClient = __ctx.statelogClient;
-const __graph = __ctx.graph;
 let __forked;
 let __functionCompleted = false;
   const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "unitLiterals.agency", scopeName: "main", threads: __setupData.threads });
   try {
-    await runner.hook(0, async () => {
+    await agencyStore.run({
+      ctx: __ctx,
+      stack: __stack,
+      threads: __setupData.threads
+    }, async () => {
+      await runner.hook(0, async () => {
 await callHook({
-        name: "onNodeStart",
-        data: {
-          nodeName: "main"
-        }
-      })
-    });
-    await runner.step(1, async (runner) => {
+          name: "onNodeStart",
+          data: {
+            nodeName: "main"
+          }
+        })
+      });
+      await runner.step(1, async (runner) => {
 __stack.locals.a = 30000;
-    });
-    await runner.step(2, async (runner) => {
+      });
+      await runner.step(2, async (runner) => {
 __stack.locals.b = 500;
-    });
-    await runner.step(3, async (runner) => {
+      });
+      await runner.step(3, async (runner) => {
 __stack.locals.c = 5;
-    });
-    await runner.step(4, async (runner) => {
+      });
+      await runner.step(4, async (runner) => {
 __stack.locals.d = 7200000;
-    });
-    await runner.step(5, async (runner) => {
+      });
+      await runner.step(5, async (runner) => {
 __stack.locals.e = 604800000;
-    });
-    await runner.step(6, async (runner) => {
+      });
+      await runner.step(6, async (runner) => {
 __stack.locals.f = 604800000;
-    });
-    await runner.step(7, async (runner) => {
+      });
+      await runner.step(7, async (runner) => {
 __stack.locals.g = 500;
-    });
-    await runner.step(8, async (runner) => {
+      });
+      await runner.step(8, async (runner) => {
 runner.halt({
-        messages: __threads(),
-        data: __stack.locals.a
-      })
+          messages: __threads(),
+          data: __stack.locals.a
+        })
 return;
-    });
+      });
+    })
     if (runner.halted) return runner.haltResult;
     await runner.hook(9, async () => {
 await callHook({

@@ -24,7 +24,7 @@ import {
   readSkillTool as __readSkillTool,
   readSkillToolParams as __readSkillToolParams,
   AgencyFunction as __AgencyFunction, UNSET as __UNSET,
-  __call, __callMethod, __threads, getRuntimeContext,
+  __call, __callMethod, __threads, __stateStack, getRuntimeContext, agencyStore,
   functionRefReviver as __functionRefReviver,
   DeterministicClient as __DeterministicClient,
 } from "agency-lang/runtime";
@@ -147,96 +147,99 @@ graph.node("main", async (__state: GraphState) => {
   const __setupData = setupNode({
     state: __state
   });
-  const __stateStack = __state.ctx.stateStack;
-const __stack = __setupData.stack;
+  const __stack = __setupData.stack;
 const __step = __setupData.step;
 const __self = __setupData.self;
 const __ctx = __state.ctx;
-const statelogClient = __ctx.statelogClient;
-const __graph = __ctx.graph;
 let __forked;
 let __functionCompleted = false;
   const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "typeHints.agency", scopeName: "main", threads: __setupData.threads });
   try {
-    await runner.hook(0, async () => {
+    await agencyStore.run({
+      ctx: __ctx,
+      stack: __stack,
+      threads: __setupData.threads
+    }, async () => {
+      await runner.hook(0, async () => {
 await callHook({
-        name: "onNodeStart",
-        data: {
-          nodeName: "main"
-        }
-      })
-    });
-    await runner.step(1, async (runner) => {
+          name: "onNodeStart",
+          data: {
+            nodeName: "main"
+          }
+        })
+      });
+      await runner.step(1, async (runner) => {
 __self.__removedTools = __self.__removedTools || [];
 __stack.locals.count = await runPrompt({
-        prompt: `the number 42`,
-        messages: __threads().getOrCreateActive(),
-        responseFormat: z.object({
-          response: z.number()
-        }),
-        clientConfig: {},
-        maxToolCallRounds: 10,
-        removedTools: __self.__removedTools,
-        checkpointInfo: runner.getCheckpointInfo()
-      });
+          prompt: `the number 42`,
+          messages: __threads().getOrCreateActive(),
+          responseFormat: z.object({
+            response: z.number()
+          }),
+          clientConfig: {},
+          maxToolCallRounds: 10,
+          removedTools: __self.__removedTools,
+          checkpointInfo: runner.getCheckpointInfo()
+        });
 // halt if this is an interrupt
 if (hasInterrupts(__stack.locals.count)) {
-        await __ctx.pendingPromises.awaitAll()
-        runner.halt({
-          messages: __threads(),
-          data: __stack.locals.count
-        })
-        return;
-      }
-    });
-    await runner.step(2, async (runner) => {
+          await __ctx.pendingPromises.awaitAll()
+          runner.halt({
+            messages: __threads(),
+            data: __stack.locals.count
+          })
+          return;
+        }
+      });
+      await runner.step(2, async (runner) => {
 __self.__removedTools = __self.__removedTools || [];
 __stack.locals.message = await runPrompt({
-        prompt: `a greeting message`,
-        messages: __threads().getOrCreateActive(),
-        clientConfig: {},
-        maxToolCallRounds: 10,
-        removedTools: __self.__removedTools,
-        checkpointInfo: runner.getCheckpointInfo()
-      });
+          prompt: `a greeting message`,
+          messages: __threads().getOrCreateActive(),
+          clientConfig: {},
+          maxToolCallRounds: 10,
+          removedTools: __self.__removedTools,
+          checkpointInfo: runner.getCheckpointInfo()
+        });
 // halt if this is an interrupt
 if (hasInterrupts(__stack.locals.message)) {
-        await __ctx.pendingPromises.awaitAll()
-        runner.halt({
-          messages: __threads(),
-          data: __stack.locals.message
-        })
-        return;
-      }
-    });
-    await runner.step(3, async (runner) => {
-const __funcResult = await __call(print, {
-        type: "positional",
-        args: [__stack.locals.count]
+          await __ctx.pendingPromises.awaitAll()
+          runner.halt({
+            messages: __threads(),
+            data: __stack.locals.message
+          })
+          return;
+        }
       });
-if (hasInterrupts(__funcResult)) {
-        await __ctx.pendingPromises.awaitAll()
-        runner.halt({
-          ...__state,
-          data: __funcResult
-        })
-        return;
-      }
-    });
-    await runner.step(4, async (runner) => {
+      await runner.step(3, async (runner) => {
 const __funcResult = await __call(print, {
-        type: "positional",
-        args: [__stack.locals.message]
-      });
+          type: "positional",
+          args: [__stack.locals.count]
+        });
 if (hasInterrupts(__funcResult)) {
-        await __ctx.pendingPromises.awaitAll()
-        runner.halt({
-          ...__state,
-          data: __funcResult
-        })
-        return;
-      }
-    });
+          await __ctx.pendingPromises.awaitAll()
+          runner.halt({
+            ...__state,
+            data: __funcResult
+          })
+          return;
+        }
+      });
+      await runner.step(4, async (runner) => {
+const __funcResult = await __call(print, {
+          type: "positional",
+          args: [__stack.locals.message]
+        });
+if (hasInterrupts(__funcResult)) {
+          await __ctx.pendingPromises.awaitAll()
+          runner.halt({
+            ...__state,
+            data: __funcResult
+          })
+          return;
+        }
+      });
+    })
     if (runner.halted) return runner.haltResult;
     await runner.hook(5, async () => {
 await callHook({

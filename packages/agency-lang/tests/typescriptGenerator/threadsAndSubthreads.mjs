@@ -24,7 +24,7 @@ import {
   readSkillTool as __readSkillTool,
   readSkillToolParams as __readSkillToolParams,
   AgencyFunction as __AgencyFunction, UNSET as __UNSET,
-  __call, __callMethod,
+  __call, __callMethod, __threads, getRuntimeContext,
   functionRefReviver as __functionRefReviver,
   DeterministicClient as __DeterministicClient,
 } from "agency-lang/runtime";
@@ -152,7 +152,6 @@ async function __foo_impl(__state: InternalFunctionState | undefined = undefined
 const __stack = __setupData.stack;
 const __step = __setupData.step;
 const __self = __setupData.self;
-const __threads = __setupData.threads;
 const __ctx = __state?.ctx || __globalCtx;
 const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
@@ -163,7 +162,7 @@ let __functionCompleted = false;
   }
   let __funcStartTime: number = performance.now();
   __self.__retryable = __self.__retryable ?? true;
-  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "threadsAndSubthreads.agency", scopeName: "foo", threads: __threads });
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "threadsAndSubthreads.agency", scopeName: "foo", threads: __setupData.threads });
   let __resultCheckpointId = -1;
 if (__ctx.stateStack.currentNodeId()) {
   __resultCheckpointId = __ctx.checkpoints.createPinned(__stateStack, __ctx, { moduleId: "threadsAndSubthreads.agency", scopeName: "foo", stepPath: "", label: "result-entry" });
@@ -186,12 +185,12 @@ await callHook({
         }
       })
     });
-    await runner.thread(1, __threads, "create", async (runner) => {
+    await runner.thread(1, "create", async (runner) => {
 await runner.step(0, async (runner) => {
 __self.__removedTools = __self.__removedTools || [];
 __stack.locals.res1 = await runPrompt({
           prompt: `What are the first 5 prime numbers?`,
-          messages: __threads.getOrCreateActive(),
+          messages: __threads().getOrCreateActive(),
           responseFormat: z.object({
             response: z.array(z.number())
           }),
@@ -207,12 +206,12 @@ if (hasInterrupts(__stack.locals.res1)) {
           return;
         }
       });
-await runner.thread(1, __threads, "createSubthread", async (runner) => {
+await runner.thread(1, "createSubthread", async (runner) => {
 await runner.step(0, async (runner) => {
 __self.__removedTools = __self.__removedTools || [];
 __stack.locals.res2 = await runPrompt({
             prompt: `What are the next 2 prime numbers after those?`,
-            messages: __threads.getOrCreateActive(),
+            messages: __threads().getOrCreateActive(),
             responseFormat: z.object({
               response: z.array(z.number())
             }),
@@ -228,12 +227,12 @@ if (hasInterrupts(__stack.locals.res2)) {
             return;
           }
         });
-await runner.thread(1, __threads, "createSubthread", async (runner) => {
+await runner.thread(1, "createSubthread", async (runner) => {
 await runner.step(0, async (runner) => {
 __self.__removedTools = __self.__removedTools || [];
 __stack.locals.res3 = await runPrompt({
               prompt: `And what is the sum of all those numbers combined?`,
-              messages: __threads.getOrCreateActive(),
+              messages: __threads().getOrCreateActive(),
               responseFormat: z.object({
                 response: z.number()
               }),
@@ -250,12 +249,12 @@ if (hasInterrupts(__stack.locals.res3)) {
             }
           });
         });
-await runner.thread(2, __threads, "create", async (runner) => {
+await runner.thread(2, "create", async (runner) => {
 await runner.step(0, async (runner) => {
 __self.__removedTools = __self.__removedTools || [];
 __stack.locals.res5 = await runPrompt({
               prompt: `And what is the sum of all those numbers combined?`,
-              messages: __threads.getOrCreateActive(),
+              messages: __threads().getOrCreateActive(),
               responseFormat: z.object({
                 response: z.number()
               }),
@@ -273,12 +272,12 @@ if (hasInterrupts(__stack.locals.res5)) {
           });
         });
       });
-await runner.thread(2, __threads, "createSubthread", async (runner) => {
+await runner.thread(2, "createSubthread", async (runner) => {
 await runner.step(0, async (runner) => {
 __self.__removedTools = __self.__removedTools || [];
 __stack.locals.res4 = await runPrompt({
             prompt: `And what is the sum of all those numbers combined?`,
-            messages: __threads.getOrCreateActive(),
+            messages: __threads().getOrCreateActive(),
             responseFormat: z.object({
               response: z.number()
             }),
@@ -408,13 +407,12 @@ graph.node("main", async (__state: GraphState) => {
 const __stack = __setupData.stack;
 const __step = __setupData.step;
 const __self = __setupData.self;
-const __threads = __setupData.threads;
 const __ctx = __state.ctx;
 const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
 let __forked;
 let __functionCompleted = false;
-  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "threadsAndSubthreads.agency", scopeName: "main", threads: __threads });
+  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "threadsAndSubthreads.agency", scopeName: "main", threads: __setupData.threads });
   try {
     await runner.hook(0, async () => {
 await callHook({
@@ -424,12 +422,12 @@ await callHook({
         }
       })
     });
-    await runner.thread(1, __threads, "create", async (runner) => {
+    await runner.thread(1, "create", async (runner) => {
 await runner.step(0, async (runner) => {
 __self.__removedTools = __self.__removedTools || [];
 __stack.locals.res1 = await runPrompt({
           prompt: `What are the first 5 prime numbers?`,
-          messages: __threads.getOrCreateActive(),
+          messages: __threads().getOrCreateActive(),
           responseFormat: z.object({
             response: z.array(z.number())
           }),
@@ -442,18 +440,18 @@ __stack.locals.res1 = await runPrompt({
 if (hasInterrupts(__stack.locals.res1)) {
           await __ctx.pendingPromises.awaitAll()
           runner.halt({
-            messages: __threads,
+            messages: __threads(),
             data: __stack.locals.res1
           })
           return;
         }
       });
-await runner.thread(1, __threads, "createSubthread", async (runner) => {
+await runner.thread(1, "createSubthread", async (runner) => {
 await runner.step(0, async (runner) => {
 __self.__removedTools = __self.__removedTools || [];
 __stack.locals.res2 = await runPrompt({
             prompt: `What are the next 2 prime numbers after those?`,
-            messages: __threads.getOrCreateActive(),
+            messages: __threads().getOrCreateActive(),
             responseFormat: z.object({
               response: z.array(z.number())
             }),
@@ -466,18 +464,18 @@ __stack.locals.res2 = await runPrompt({
 if (hasInterrupts(__stack.locals.res2)) {
             await __ctx.pendingPromises.awaitAll()
             runner.halt({
-              messages: __threads,
+              messages: __threads(),
               data: __stack.locals.res2
             })
             return;
           }
         });
-await runner.thread(1, __threads, "createSubthread", async (runner) => {
+await runner.thread(1, "createSubthread", async (runner) => {
 await runner.step(0, async (runner) => {
 __self.__removedTools = __self.__removedTools || [];
 __stack.locals.res3 = await runPrompt({
               prompt: `And what is the sum of all those numbers combined?`,
-              messages: __threads.getOrCreateActive(),
+              messages: __threads().getOrCreateActive(),
               responseFormat: z.object({
                 response: z.number()
               }),
@@ -490,19 +488,19 @@ __stack.locals.res3 = await runPrompt({
 if (hasInterrupts(__stack.locals.res3)) {
               await __ctx.pendingPromises.awaitAll()
               runner.halt({
-                messages: __threads,
+                messages: __threads(),
                 data: __stack.locals.res3
               })
               return;
             }
           });
         });
-await runner.thread(2, __threads, "create", async (runner) => {
+await runner.thread(2, "create", async (runner) => {
 await runner.step(0, async (runner) => {
 __self.__removedTools = __self.__removedTools || [];
 __stack.locals.res5 = await runPrompt({
               prompt: `And what is the sum of all those numbers combined?`,
-              messages: __threads.getOrCreateActive(),
+              messages: __threads().getOrCreateActive(),
               responseFormat: z.object({
                 response: z.number()
               }),
@@ -515,7 +513,7 @@ __stack.locals.res5 = await runPrompt({
 if (hasInterrupts(__stack.locals.res5)) {
               await __ctx.pendingPromises.awaitAll()
               runner.halt({
-                messages: __threads,
+                messages: __threads(),
                 data: __stack.locals.res5
               })
               return;
@@ -523,12 +521,12 @@ if (hasInterrupts(__stack.locals.res5)) {
           });
         });
       });
-await runner.thread(2, __threads, "createSubthread", async (runner) => {
+await runner.thread(2, "createSubthread", async (runner) => {
 await runner.step(0, async (runner) => {
 __self.__removedTools = __self.__removedTools || [];
 __stack.locals.res4 = await runPrompt({
             prompt: `And what is the sum of all those numbers combined?`,
-            messages: __threads.getOrCreateActive(),
+            messages: __threads().getOrCreateActive(),
             responseFormat: z.object({
               response: z.number()
             }),
@@ -541,7 +539,7 @@ __stack.locals.res4 = await runPrompt({
 if (hasInterrupts(__stack.locals.res4)) {
             await __ctx.pendingPromises.awaitAll()
             runner.halt({
-              messages: __threads,
+              messages: __threads(),
               data: __stack.locals.res4
             })
             return;
@@ -630,7 +628,7 @@ await callHook({
       })
     });
     return {
-      messages: __threads,
+      messages: __threads(),
       data: undefined
     };
   } catch (__error) {
@@ -643,7 +641,7 @@ await callHook({
     console.error(`\nAgent crashed: ${__error.message}`)
     console.error(__error.stack)
     return {
-      messages: __threads,
+      messages: __threads(),
       data: failure(__error instanceof Error ? __error.message : String(__error), { functionName: "main" })
     };
   }

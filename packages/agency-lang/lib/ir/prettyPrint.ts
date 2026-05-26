@@ -289,7 +289,7 @@ export function printTs(node: TsNode, indent = 0): string {
 
     case "runnerThread": {
       const body = node.body.map((n) => printTs(n, indent + 1)).join("\n");
-      return `await runner.thread(${node.id}, __threads, "${node.method}", async (runner) => {\n${body}\n${ind(indent)}});`;
+      return `await runner.thread(${node.id}, "${node.method}", async (runner) => {\n${body}\n${ind(indent)}});`;
     }
 
     case "runnerHandle": {

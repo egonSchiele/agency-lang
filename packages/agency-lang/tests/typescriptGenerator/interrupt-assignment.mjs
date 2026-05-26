@@ -24,7 +24,7 @@ import {
   readSkillTool as __readSkillTool,
   readSkillToolParams as __readSkillToolParams,
   AgencyFunction as __AgencyFunction, UNSET as __UNSET,
-  __call, __callMethod,
+  __call, __callMethod, __threads, getRuntimeContext,
   functionRefReviver as __functionRefReviver,
   DeterministicClient as __DeterministicClient,
 } from "agency-lang/runtime";
@@ -151,13 +151,12 @@ graph.node("main", async (__state: GraphState) => {
 const __stack = __setupData.stack;
 const __step = __setupData.step;
 const __self = __setupData.self;
-const __threads = __setupData.threads;
 const __ctx = __state.ctx;
 const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
 let __forked;
 let __functionCompleted = false;
-  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "interrupt-assignment.agency", scopeName: "main", threads: __threads });
+  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "interrupt-assignment.agency", scopeName: "main", threads: __setupData.threads });
   try {
     await runner.hook(0, async () => {
 await callHook({
@@ -180,7 +179,7 @@ if (__response) {
   } else if (__response.type === "reject") {
     // reject for tool calls handled separately
     
-    runner.halt({ messages: __threads, data: failure("interrupt rejected", { retryable: false }) });
+    runner.halt({ messages: __threads(), data: failure("interrupt rejected", { retryable: false }) });
     
     
     return;
@@ -190,7 +189,7 @@ if (__response) {
   const __handlerResult = await interruptWithHandlers("unknown", `What is your name?`, {}, "./interrupt-assignment.agency", __ctx, __stateStack);
   if (isRejected(__handlerResult)) {
     
-    runner.halt({ messages: __threads, data: failure(__handlerResult.value ?? "interrupt rejected", { retryable: false }) });
+    runner.halt({ messages: __threads(), data: failure(__handlerResult.value ?? "interrupt rejected", { retryable: false }) });
     
     
     return;
@@ -205,7 +204,7 @@ if (__response) {
     __handlerResult[0].checkpointId = __checkpointId;
     __handlerResult[0].checkpoint = __ctx.checkpoints.get(__checkpointId);
     
-    runner.halt({ messages: __threads, data: __handlerResult });
+    runner.halt({ messages: __threads(), data: __handlerResult });
     
     
     return;
@@ -217,7 +216,7 @@ if (__response) {
 __self.__removedTools = __self.__removedTools || [];
 __stack.locals.greeting = await runPrompt({
         prompt: `Say hello to {name}`,
-        messages: __threads.getOrCreateActive(),
+        messages: __threads().getOrCreateActive(),
         clientConfig: {},
         maxToolCallRounds: 10,
         removedTools: __self.__removedTools,
@@ -227,7 +226,7 @@ __stack.locals.greeting = await runPrompt({
 if (hasInterrupts(__stack.locals.greeting)) {
         await __ctx.pendingPromises.awaitAll()
         runner.halt({
-          messages: __threads,
+          messages: __threads(),
           data: __stack.locals.greeting
         })
         return;
@@ -235,7 +234,7 @@ if (hasInterrupts(__stack.locals.greeting)) {
     });
     await runner.step(3, async (runner) => {
 runner.halt({
-        messages: __threads,
+        messages: __threads(),
         data: __stack.locals.greeting
       })
 return;
@@ -251,7 +250,7 @@ await callHook({
       })
     });
     return {
-      messages: __threads,
+      messages: __threads(),
       data: undefined
     };
   } catch (__error) {
@@ -264,7 +263,7 @@ await callHook({
     console.error(`\nAgent crashed: ${__error.message}`)
     console.error(__error.stack)
     return {
-      messages: __threads,
+      messages: __threads(),
       data: failure(__error instanceof Error ? __error.message : String(__error), { functionName: "main" })
     };
   }

@@ -24,7 +24,7 @@ import {
   readSkillTool as __readSkillTool,
   readSkillToolParams as __readSkillToolParams,
   AgencyFunction as __AgencyFunction, UNSET as __UNSET,
-  __call, __callMethod,
+  __call, __callMethod, __threads, getRuntimeContext,
   functionRefReviver as __functionRefReviver,
   DeterministicClient as __DeterministicClient,
 } from "agency-lang/runtime";
@@ -152,7 +152,6 @@ async function __process_impl(data: number, __state: InternalFunctionState | und
 const __stack = __setupData.stack;
 const __step = __setupData.step;
 const __self = __setupData.self;
-const __threads = __setupData.threads;
 const __ctx = __state?.ctx || __globalCtx;
 const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
@@ -164,7 +163,7 @@ let __functionCompleted = false;
   let __funcStartTime: number = performance.now();
   __stack.args["data"] = data;
   __self.__retryable = __self.__retryable ?? true;
-  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "bangParams.agency", scopeName: "process", threads: __threads });
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "bangParams.agency", scopeName: "process", threads: __setupData.threads });
   let __resultCheckpointId = -1;
 if (__ctx.stateStack.currentNodeId()) {
   __resultCheckpointId = __ctx.checkpoints.createPinned(__stateStack, __ctx, { moduleId: "bangParams.agency", scopeName: "process", stepPath: "", label: "result-entry" });
@@ -276,13 +275,12 @@ graph.node("main", async (__state: GraphState) => {
 const __stack = __setupData.stack;
 const __step = __setupData.step;
 const __self = __setupData.self;
-const __threads = __setupData.threads;
 const __ctx = __state.ctx;
 const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
 let __forked;
 let __functionCompleted = false;
-  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "bangParams.agency", scopeName: "main", threads: __threads });
+  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "bangParams.agency", scopeName: "main", threads: __setupData.threads });
   try {
     await runner.hook(0, async () => {
 await callHook({
@@ -331,7 +329,7 @@ await callHook({
       })
     });
     return {
-      messages: __threads,
+      messages: __threads(),
       data: undefined
     };
   } catch (__error) {
@@ -344,7 +342,7 @@ await callHook({
     console.error(`\nAgent crashed: ${__error.message}`)
     console.error(__error.stack)
     return {
-      messages: __threads,
+      messages: __threads(),
       data: failure(__error instanceof Error ? __error.message : String(__error), { functionName: "main" })
     };
   }

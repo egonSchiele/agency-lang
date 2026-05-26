@@ -3,8 +3,10 @@
 // Any manual changes will be lost.
 import { apply } from "typestache";
 
-export const template = `// crashes if no active thread
-__threads.active().push(smoltalk.systemMessage({{{systemMessage:string}}}));
+export const template = `// crashes if no active thread; uses getRuntimeContext() so calls outside
+// an Agency execution frame fail with a clear, actionable error instead
+// of a generic "Cannot read properties of undefined".
+getRuntimeContext().threads.active().push(smoltalk.systemMessage({{{systemMessage:string}}}));
 `;
 
 export type TemplateType = {

@@ -11,6 +11,7 @@ export {
   agencyStore,
   getRuntimeContext,
   runInTestContext,
+  __threads,
   type AgencyStore,
 } from "./asyncContext.js";
 export { StateStack, State } from "./state/stateStack.js";

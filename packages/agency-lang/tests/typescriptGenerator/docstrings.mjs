@@ -24,7 +24,7 @@ import {
   readSkillTool as __readSkillTool,
   readSkillToolParams as __readSkillToolParams,
   AgencyFunction as __AgencyFunction, UNSET as __UNSET,
-  __call, __callMethod,
+  __call, __callMethod, __threads, getRuntimeContext,
   functionRefReviver as __functionRefReviver,
   DeterministicClient as __DeterministicClient,
 } from "agency-lang/runtime";
@@ -156,7 +156,6 @@ async function __add_impl(a: any, b: any, __state: InternalFunctionState | undef
 const __stack = __setupData.stack;
 const __step = __setupData.step;
 const __self = __setupData.self;
-const __threads = __setupData.threads;
 const __ctx = __state?.ctx || __globalCtx;
 const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
@@ -169,7 +168,7 @@ let __functionCompleted = false;
   __stack.args["a"] = a;
   __stack.args["b"] = b;
   __self.__retryable = __self.__retryable ?? true;
-  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "docstrings.agency", scopeName: "add", threads: __threads });
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "docstrings.agency", scopeName: "add", threads: __setupData.threads });
   let __resultCheckpointId = -1;
 if (__ctx.stateStack.currentNodeId()) {
   __resultCheckpointId = __ctx.checkpoints.createPinned(__stateStack, __ctx, { moduleId: "docstrings.agency", scopeName: "add", stepPath: "", label: "result-entry" });
@@ -272,7 +271,6 @@ async function __greet_impl(name: any, __state: InternalFunctionState | undefine
 const __stack = __setupData.stack;
 const __step = __setupData.step;
 const __self = __setupData.self;
-const __threads = __setupData.threads;
 const __ctx = __state?.ctx || __globalCtx;
 const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
@@ -284,7 +282,7 @@ let __functionCompleted = false;
   let __funcStartTime: number = performance.now();
   __stack.args["name"] = name;
   __self.__retryable = __self.__retryable ?? true;
-  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "docstrings.agency", scopeName: "greet", threads: __threads });
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "docstrings.agency", scopeName: "greet", threads: __setupData.threads });
   let __resultCheckpointId = -1;
 if (__ctx.stateStack.currentNodeId()) {
   __resultCheckpointId = __ctx.checkpoints.createPinned(__stateStack, __ctx, { moduleId: "docstrings.agency", scopeName: "greet", stepPath: "", label: "result-entry" });
@@ -376,7 +374,6 @@ async function __calculateArea_impl(width: any, height: any, __state: InternalFu
 const __stack = __setupData.stack;
 const __step = __setupData.step;
 const __self = __setupData.self;
-const __threads = __setupData.threads;
 const __ctx = __state?.ctx || __globalCtx;
 const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
@@ -389,7 +386,7 @@ let __functionCompleted = false;
   __stack.args["width"] = width;
   __stack.args["height"] = height;
   __self.__retryable = __self.__retryable ?? true;
-  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "docstrings.agency", scopeName: "calculateArea", threads: __threads });
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "docstrings.agency", scopeName: "calculateArea", threads: __setupData.threads });
   let __resultCheckpointId = -1;
 if (__ctx.stateStack.currentNodeId()) {
   __resultCheckpointId = __ctx.checkpoints.createPinned(__stateStack, __ctx, { moduleId: "docstrings.agency", scopeName: "calculateArea", stepPath: "", label: "result-entry" });
@@ -497,7 +494,6 @@ async function __processData_impl(__state: InternalFunctionState | undefined = u
 const __stack = __setupData.stack;
 const __step = __setupData.step;
 const __self = __setupData.self;
-const __threads = __setupData.threads;
 const __ctx = __state?.ctx || __globalCtx;
 const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
@@ -508,7 +504,7 @@ let __functionCompleted = false;
   }
   let __funcStartTime: number = performance.now();
   __self.__retryable = __self.__retryable ?? true;
-  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "docstrings.agency", scopeName: "processData", threads: __threads });
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "docstrings.agency", scopeName: "processData", threads: __setupData.threads });
   let __resultCheckpointId = -1;
 if (__ctx.stateStack.currentNodeId()) {
   __resultCheckpointId = __ctx.checkpoints.createPinned(__stateStack, __ctx, { moduleId: "docstrings.agency", scopeName: "processData", stepPath: "", label: "result-entry" });
@@ -589,7 +585,6 @@ async function __versionedTool_impl(__state: InternalFunctionState | undefined =
 const __stack = __setupData.stack;
 const __step = __setupData.step;
 const __self = __setupData.self;
-const __threads = __setupData.threads;
 const __ctx = __state?.ctx || __globalCtx;
 const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
@@ -600,7 +595,7 @@ let __functionCompleted = false;
   }
   let __funcStartTime: number = performance.now();
   __self.__retryable = __self.__retryable ?? true;
-  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "docstrings.agency", scopeName: "versionedTool", threads: __threads });
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "docstrings.agency", scopeName: "versionedTool", threads: __setupData.threads });
   let __resultCheckpointId = -1;
 if (__ctx.stateStack.currentNodeId()) {
   __resultCheckpointId = __ctx.checkpoints.createPinned(__stateStack, __ctx, { moduleId: "docstrings.agency", scopeName: "versionedTool", stepPath: "", label: "result-entry" });

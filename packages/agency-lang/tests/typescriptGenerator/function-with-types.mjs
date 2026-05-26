@@ -24,7 +24,7 @@ import {
   readSkillTool as __readSkillTool,
   readSkillToolParams as __readSkillToolParams,
   AgencyFunction as __AgencyFunction, UNSET as __UNSET,
-  __call, __callMethod,
+  __call, __callMethod, __threads, getRuntimeContext,
   functionRefReviver as __functionRefReviver,
   DeterministicClient as __DeterministicClient,
 } from "agency-lang/runtime";
@@ -152,7 +152,6 @@ async function __add_impl(x: number, y: number, __state: InternalFunctionState |
 const __stack = __setupData.stack;
 const __step = __setupData.step;
 const __self = __setupData.self;
-const __threads = __setupData.threads;
 const __ctx = __state?.ctx || __globalCtx;
 const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
@@ -165,7 +164,7 @@ let __functionCompleted = false;
   __stack.args["x"] = x;
   __stack.args["y"] = y;
   __self.__retryable = __self.__retryable ?? true;
-  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "function-with-types.agency", scopeName: "add", threads: __threads });
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "function-with-types.agency", scopeName: "add", threads: __setupData.threads });
   let __resultCheckpointId = -1;
 if (__ctx.stateStack.currentNodeId()) {
   __resultCheckpointId = __ctx.checkpoints.createPinned(__stateStack, __ctx, { moduleId: "function-with-types.agency", scopeName: "add", stepPath: "", label: "result-entry" });
@@ -203,7 +202,7 @@ await callHook({
 __self.__removedTools = __self.__removedTools || [];
 __stack.locals.result = await runPrompt({
         prompt: `add ${__stack.args.x} and ${__stack.args.y}`,
-        messages: __threads.getOrCreateActive(),
+        messages: __threads().getOrCreateActive(),
         responseFormat: z.object({
           response: z.number()
         }),
@@ -292,7 +291,6 @@ async function __greet_impl(name: string, __state: InternalFunctionState | undef
 const __stack = __setupData.stack;
 const __step = __setupData.step;
 const __self = __setupData.self;
-const __threads = __setupData.threads;
 const __ctx = __state?.ctx || __globalCtx;
 const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
@@ -304,7 +302,7 @@ let __functionCompleted = false;
   let __funcStartTime: number = performance.now();
   __stack.args["name"] = name;
   __self.__retryable = __self.__retryable ?? true;
-  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "function-with-types.agency", scopeName: "greet", threads: __threads });
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "function-with-types.agency", scopeName: "greet", threads: __setupData.threads });
   let __resultCheckpointId = -1;
 if (__ctx.stateStack.currentNodeId()) {
   __resultCheckpointId = __ctx.checkpoints.createPinned(__stateStack, __ctx, { moduleId: "function-with-types.agency", scopeName: "greet", stepPath: "", label: "result-entry" });
@@ -337,7 +335,7 @@ await callHook({
 __self.__removedTools = __self.__removedTools || [];
 __stack.locals.message = await runPrompt({
         prompt: `Hello ${__stack.args.name}!`,
-        messages: __threads.getOrCreateActive(),
+        messages: __threads().getOrCreateActive(),
         clientConfig: {},
         maxToolCallRounds: 10,
         removedTools: __self.__removedTools,
@@ -418,7 +416,6 @@ async function __mixed_impl(count: number, label: any, __state: InternalFunction
 const __stack = __setupData.stack;
 const __step = __setupData.step;
 const __self = __setupData.self;
-const __threads = __setupData.threads;
 const __ctx = __state?.ctx || __globalCtx;
 const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
@@ -431,7 +428,7 @@ let __functionCompleted = false;
   __stack.args["count"] = count;
   __stack.args["label"] = label;
   __self.__retryable = __self.__retryable ?? true;
-  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "function-with-types.agency", scopeName: "mixed", threads: __threads });
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "function-with-types.agency", scopeName: "mixed", threads: __setupData.threads });
   let __resultCheckpointId = -1;
 if (__ctx.stateStack.currentNodeId()) {
   __resultCheckpointId = __ctx.checkpoints.createPinned(__stateStack, __ctx, { moduleId: "function-with-types.agency", scopeName: "mixed", stepPath: "", label: "result-entry" });
@@ -469,7 +466,7 @@ await callHook({
 __self.__removedTools = __self.__removedTools || [];
 __stack.locals.output = await runPrompt({
         prompt: `${__stack.args.label}: ${__stack.args.count}`,
-        messages: __threads.getOrCreateActive(),
+        messages: __threads().getOrCreateActive(),
         clientConfig: {},
         maxToolCallRounds: 10,
         removedTools: __self.__removedTools,
@@ -555,7 +552,6 @@ async function __processArray_impl(items: number[], __state: InternalFunctionSta
 const __stack = __setupData.stack;
 const __step = __setupData.step;
 const __self = __setupData.self;
-const __threads = __setupData.threads;
 const __ctx = __state?.ctx || __globalCtx;
 const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
@@ -567,7 +563,7 @@ let __functionCompleted = false;
   let __funcStartTime: number = performance.now();
   __stack.args["items"] = items;
   __self.__retryable = __self.__retryable ?? true;
-  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "function-with-types.agency", scopeName: "processArray", threads: __threads });
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "function-with-types.agency", scopeName: "processArray", threads: __setupData.threads });
   let __resultCheckpointId = -1;
 if (__ctx.stateStack.currentNodeId()) {
   __resultCheckpointId = __ctx.checkpoints.createPinned(__stateStack, __ctx, { moduleId: "function-with-types.agency", scopeName: "processArray", stepPath: "", label: "result-entry" });
@@ -600,7 +596,7 @@ await callHook({
 __self.__removedTools = __self.__removedTools || [];
 __stack.locals.result = await runPrompt({
         prompt: `Processing array with ${__stack.args.items} items`,
-        messages: __threads.getOrCreateActive(),
+        messages: __threads().getOrCreateActive(),
         clientConfig: {},
         maxToolCallRounds: 10,
         removedTools: __self.__removedTools,
@@ -681,7 +677,6 @@ async function __flexible_impl(value: string | number, __state: InternalFunction
 const __stack = __setupData.stack;
 const __step = __setupData.step;
 const __self = __setupData.self;
-const __threads = __setupData.threads;
 const __ctx = __state?.ctx || __globalCtx;
 const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
@@ -693,7 +688,7 @@ let __functionCompleted = false;
   let __funcStartTime: number = performance.now();
   __stack.args["value"] = value;
   __self.__retryable = __self.__retryable ?? true;
-  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "function-with-types.agency", scopeName: "flexible", threads: __threads });
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "function-with-types.agency", scopeName: "flexible", threads: __setupData.threads });
   let __resultCheckpointId = -1;
 if (__ctx.stateStack.currentNodeId()) {
   __resultCheckpointId = __ctx.checkpoints.createPinned(__stateStack, __ctx, { moduleId: "function-with-types.agency", scopeName: "flexible", stepPath: "", label: "result-entry" });
@@ -726,7 +721,7 @@ await callHook({
 __self.__removedTools = __self.__removedTools || [];
 __stack.locals.result = await runPrompt({
         prompt: `Received value: ${__stack.args.value}`,
-        messages: __threads.getOrCreateActive(),
+        messages: __threads().getOrCreateActive(),
         clientConfig: {},
         maxToolCallRounds: 10,
         removedTools: __self.__removedTools,
@@ -806,13 +801,12 @@ graph.node("foo", async (__state: GraphState) => {
 const __stack = __setupData.stack;
 const __step = __setupData.step;
 const __self = __setupData.self;
-const __threads = __setupData.threads;
 const __ctx = __state.ctx;
 const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
 let __forked;
 let __functionCompleted = false;
-  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "function-with-types.agency", scopeName: "foo", threads: __threads });
+  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "function-with-types.agency", scopeName: "foo", threads: __setupData.threads });
   try {
     await runner.hook(0, async () => {
 await callHook({
@@ -838,7 +832,7 @@ if (hasInterrupts(__funcResult)) {
     });
     await runner.step(2, async (runner) => {
 runner.halt({
-        messages: __threads,
+        messages: __threads(),
         data: `Node completed`
       })
 return;
@@ -854,7 +848,7 @@ await callHook({
       })
     });
     return {
-      messages: __threads,
+      messages: __threads(),
       data: undefined
     };
   } catch (__error) {
@@ -867,7 +861,7 @@ await callHook({
     console.error(`\nAgent crashed: ${__error.message}`)
     console.error(__error.stack)
     return {
-      messages: __threads,
+      messages: __threads(),
       data: failure(__error instanceof Error ? __error.message : String(__error), { functionName: "foo" })
     };
   }
@@ -880,13 +874,12 @@ graph.node("main", async (__state: GraphState) => {
 const __stack = __setupData.stack;
 const __step = __setupData.step;
 const __self = __setupData.self;
-const __threads = __setupData.threads;
 const __ctx = __state.ctx;
 const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
 let __forked;
 let __functionCompleted = false;
-  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "function-with-types.agency", scopeName: "main", threads: __threads });
+  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "function-with-types.agency", scopeName: "main", threads: __setupData.threads });
   try {
     await runner.hook(0, async () => {
 await callHook({
@@ -980,7 +973,7 @@ await callHook({
       })
     });
     return {
-      messages: __threads,
+      messages: __threads(),
       data: undefined
     };
   } catch (__error) {
@@ -993,7 +986,7 @@ await callHook({
     console.error(`\nAgent crashed: ${__error.message}`)
     console.error(__error.stack)
     return {
-      messages: __threads,
+      messages: __threads(),
       data: failure(__error instanceof Error ? __error.message : String(__error), { functionName: "main" })
     };
   }

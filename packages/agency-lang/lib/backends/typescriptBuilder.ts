@@ -1475,7 +1475,6 @@ export class TypeScriptBuilder {
         stack: $(ts.id("__setupData")).prop("stack").done(),
         step: $(ts.id("__setupData")).prop("step").done(),
         self: $(ts.id("__setupData")).prop("self").done(),
-        threads: $(ts.id("__setupData")).prop("threads").done(),
         ctx: ts.raw("__state?.ctx || __globalCtx"),
         statelogClient: ts.ctx("statelogClient"),
         graph: ts.ctx("graph"),
@@ -1520,10 +1519,12 @@ export class TypeScriptBuilder {
       ),
     );
 
-    // Create runner for step execution
+    // Create runner for step execution. `threads` is read directly from
+    // the setup-function result (a fresh ThreadStore when called outside
+    // any node, or the per-node store threaded in via the InternalFunctionState).
     setupStmts.push(
       ts.raw(
-        `const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: ${JSON.stringify(this.moduleId)}, scopeName: ${JSON.stringify(functionName)}, threads: __threads });`,
+        `const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: ${JSON.stringify(this.moduleId)}, scopeName: ${JSON.stringify(functionName)}, threads: __setupData.threads });`,
       ),
     );
 
@@ -2181,14 +2182,18 @@ export class TypeScriptBuilder {
         stack: $(ts.id("__setupData")).prop("stack").done(),
         step: $(ts.id("__setupData")).prop("step").done(),
         self: $(ts.id("__setupData")).prop("self").done(),
-        threads: $(ts.id("__setupData")).prop("threads").done(),
         ctx: $(ts.runtime.state).prop("ctx").done(),
         statelogClient: ts.ctx("statelogClient"),
         graph: ts.ctx("graph"),
       }),
 
+      // Pass `threads` explicitly so the Runner's ALS frame is seeded
+      // with the per-node ThreadStore that `setupNode` reconstituted
+      // from `stack.threads` JSON (or created fresh). `__threads()`
+      // accessors emitted inside step bodies will then resolve to this
+      // same store via `Runner.runInScope`.
       ts.raw(
-        `const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: ${JSON.stringify(this.moduleId)}, scopeName: ${JSON.stringify(nodeName)}, threads: __threads });`,
+        `const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: ${JSON.stringify(this.moduleId)}, scopeName: ${JSON.stringify(nodeName)}, threads: __setupData.threads });`,
       ),
       ...hoistedAliases,
     ];

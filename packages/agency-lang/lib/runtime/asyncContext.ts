@@ -80,6 +80,31 @@ export function getRuntimeContext(): AgencyStore {
 }
 
 /**
+ * Generated-code accessor for the current per-scope ThreadStore. Replaces
+ * the codegen-emitted `__threads` local that the pre-ALS pipeline used to
+ * declare in every function/node body's setup block. Every call site that
+ * used to reference the `__threads` local now invokes this helper, which
+ * reads through `agencyStore` — the same path that stdlib helpers take.
+ *
+ * Returns the store from the active ALS frame when one is present:
+ * Runner step bodies (set up by `Runner.runInScope`), node/function setup
+ * code that runs inside `runNode` (top-level frame), and bootstrap scopes
+ * (where the store is a `BootstrapThreadStore` sentinel that loudly
+ * throws on user-facing operations).
+ *
+ * Returns `undefined` when no frame is installed. This matches the
+ * lenient pre-migration behavior at sites like `blockSetup`, which
+ * checked `typeof __threads !== "undefined"` so a block invoked outside
+ * any node body (e.g. as a tool by an LLM) still bootstrapped a fresh
+ * `ThreadStore` via `setupFunction`'s fallback. Code that needs the
+ * stricter throw-on-missing behavior should call `getRuntimeContext()`
+ * directly.
+ */
+export function __threads(): ThreadStore | undefined {
+  return agencyStore.getStore()?.threads;
+}
+
+/**
  * Convenience wrapper for tests that construct a RuntimeContext manually
  * and need to invoke stdlib helpers that read from ALS. Mirrors
  * `agencyStore.run(...)` but with explicit named parameters so test

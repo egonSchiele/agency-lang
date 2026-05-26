@@ -8,7 +8,6 @@ export const template = `  async {{{methodName}}}({{{params}}}__state: any = und
     const __stack = __setupData.stack;
     const __step = __setupData.step;
     const __self = __setupData.self;
-    const __threads = __setupData.threads;
     const __ctx = __state?.ctx || __globalCtx;
     const statelogClient = __ctx.statelogClient;
     const __graph = __ctx.graph;
@@ -17,7 +16,7 @@ export const template = `  async {{{methodName}}}({{{params}}}__state: any = und
     if (!__ctx.globals.isInitialized({{{moduleId}}})) {
       await __initializeGlobals(__ctx);
     }
-    const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: {{{moduleId}}}, scopeName: {{{scopeName}}}, threads: __threads });
+    const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: {{{moduleId}}}, scopeName: {{{scopeName}}}, threads: __setupData.threads });
 {{#paramAssignments}}
     __stack.args[{{{this.nameQuoted}}}] = {{{this.name}}};
 {{/paramAssignments}}

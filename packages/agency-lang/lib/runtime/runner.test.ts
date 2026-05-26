@@ -473,9 +473,9 @@ describe("Runner", () => {
         calls.push("pop");
       };
 
-      const runner = new Runner(ctx, frame);
+      const runner = new Runner(ctx, frame, { threads: ctx.threads });
 
-      await runner.thread(0, ctx.threads, "create", async () => {
+      await runner.thread(0, "create", async () => {
         calls.push("body");
       });
 
@@ -490,9 +490,9 @@ describe("Runner", () => {
         popped = true;
       };
 
-      const runner = new Runner(ctx, frame);
+      const runner = new Runner(ctx, frame, { threads: ctx.threads });
 
-      await runner.thread(0, ctx.threads, "create", async (runner) => {
+      await runner.thread(0, "create", async (runner) => {
         runner.halt("interrupt");
       });
 

@@ -292,6 +292,14 @@ export interface TsScopedVar {
   | "blockArgs"
   | "functionRef";
   moduleId?: string;
+  /** True when this scopedVar is being emitted at module top level
+   *  (eager-evaluated tool description docstring interpolation).
+   *  When set, the pretty-printer reads through `__globalCtx` instead
+   *  of `getRuntimeContext().ctx` — at module load no ALS frame is
+   *  installed yet, and the eager tool-registration object literal
+   *  runs synchronously before any node body. See the
+   *  `markTopLevelScopedVars` helper in typescriptBuilder.ts. */
+  topLevel?: boolean;
 }
 
 /** Return from a function scope — pops the state stack, then returns the value */

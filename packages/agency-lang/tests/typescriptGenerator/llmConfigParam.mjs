@@ -24,7 +24,7 @@ import {
   readSkillTool as __readSkillTool,
   readSkillToolParams as __readSkillToolParams,
   AgencyFunction as __AgencyFunction, UNSET as __UNSET,
-  __call, __callMethod, __threads, __stateStack, getRuntimeContext, agencyStore,
+  __call, __callMethod, __threads, __stateStack, __ctx, getRuntimeContext, agencyStore,
   functionRefReviver as __functionRefReviver,
   DeterministicClient as __DeterministicClient,
 } from "agency-lang/runtime";
@@ -179,14 +179,14 @@ __stack.locals.foo = await runPrompt({
           responseFormat: z.object({
             response: z.array(z.number())
           }),
-          clientConfig: __ctx.globals.get("llmConfigParam.agency", "config"),
+          clientConfig: getRuntimeContext().ctx.globals.get("llmConfigParam.agency", "config"),
           maxToolCallRounds: 10,
           removedTools: __self.__removedTools,
           checkpointInfo: runner.getCheckpointInfo()
         });
 // halt if this is an interrupt
 if (hasInterrupts(__stack.locals.foo)) {
-          await __ctx.pendingPromises.awaitAll()
+          await getRuntimeContext().ctx.pendingPromises.awaitAll()
           runner.halt({
             messages: __threads(),
             data: __stack.locals.foo
@@ -211,7 +211,7 @@ __stack.locals.foo2 = await runPrompt({
         });
 // halt if this is an interrupt
 if (hasInterrupts(__stack.locals.foo2)) {
-          await __ctx.pendingPromises.awaitAll()
+          await getRuntimeContext().ctx.pendingPromises.awaitAll()
           runner.halt({
             messages: __threads(),
             data: __stack.locals.foo2
@@ -225,7 +225,7 @@ const __funcResult = await __call(print, {
           args: [__stack.locals.foo, __stack.locals.foo2]
         });
 if (hasInterrupts(__funcResult)) {
-          await __ctx.pendingPromises.awaitAll()
+          await getRuntimeContext().ctx.pendingPromises.awaitAll()
           runner.halt({
             ...__state,
             data: __funcResult

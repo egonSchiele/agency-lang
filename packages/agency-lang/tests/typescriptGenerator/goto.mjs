@@ -24,7 +24,7 @@ import {
   readSkillTool as __readSkillTool,
   readSkillToolParams as __readSkillToolParams,
   AgencyFunction as __AgencyFunction, UNSET as __UNSET,
-  __call, __callMethod, __threads, __stateStack, getRuntimeContext, agencyStore,
+  __call, __callMethod, __threads, __stateStack, __ctx, getRuntimeContext, agencyStore,
   functionRefReviver as __functionRefReviver,
   DeterministicClient as __DeterministicClient,
 } from "agency-lang/runtime";
@@ -174,7 +174,7 @@ const __funcResult = await __call(print, {
           args: [`in foo`]
         });
 if (hasInterrupts(__funcResult)) {
-          await __ctx.pendingPromises.awaitAll()
+          await getRuntimeContext().ctx.pendingPromises.awaitAll()
           runner.halt({
             ...__state,
             data: __funcResult
@@ -242,7 +242,7 @@ __stateStack()?.pop()
 __functionCompleted = true;
 runner.halt(goToNode("foo", {
           messages: __threads(),
-          ctx: __ctx,
+          ctx: __ctx(),
           data: {}
         }))
 return;

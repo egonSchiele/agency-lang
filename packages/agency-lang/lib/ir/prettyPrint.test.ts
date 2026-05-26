@@ -394,8 +394,14 @@ describe("prettyPrint", () => {
 
   it("TsScopedVar global with moduleId", () => {
     expect(printTs(ts.scopedVar("x", "global", "test.agency"))).toBe(
-      '__ctx.globals.get("test.agency", "x")',
+      'getRuntimeContext().ctx.globals.get("test.agency", "x")',
     );
+  });
+
+  it("TsScopedVar global with topLevel flag uses __globalCtx", () => {
+    expect(
+      printTs({ ...ts.scopedVar("x", "global", "test.agency"), topLevel: true }),
+    ).toBe('__globalCtx.globals.get("test.agency", "x")');
   });
 
   it("TsScopedVar global without moduleId throws", () => {

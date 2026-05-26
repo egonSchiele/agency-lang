@@ -24,7 +24,7 @@ import {
   readSkillTool as __readSkillTool,
   readSkillToolParams as __readSkillToolParams,
   AgencyFunction as __AgencyFunction, UNSET as __UNSET,
-  __call, __callMethod, __threads, __stateStack, getRuntimeContext, agencyStore,
+  __call, __callMethod, __threads, __stateStack, __ctx, getRuntimeContext, agencyStore,
   functionRefReviver as __functionRefReviver,
   DeterministicClient as __DeterministicClient,
 } from "agency-lang/runtime";
@@ -180,7 +180,7 @@ __stack.locals.greeting = await runPrompt({
         });
 // halt if this is an interrupt
 if (hasInterrupts(__stack.locals.greeting)) {
-          await __ctx.pendingPromises.awaitAll()
+          await getRuntimeContext().ctx.pendingPromises.awaitAll()
           runner.halt({
             messages: __threads(),
             data: __stack.locals.greeting
@@ -193,7 +193,7 @@ __stateStack()?.pop()
 __functionCompleted = true;
 runner.halt(goToNode("processGreeting", {
           messages: __threads(),
-          ctx: __ctx,
+          ctx: __ctx(),
           data: {
             msg: __stack.locals.greeting
           }
@@ -270,7 +270,7 @@ __stack.locals.result = await runPrompt({
         });
 // halt if this is an interrupt
 if (hasInterrupts(__stack.locals.result)) {
-          await __ctx.pendingPromises.awaitAll()
+          await getRuntimeContext().ctx.pendingPromises.awaitAll()
           runner.halt({
             messages: __threads(),
             data: __stack.locals.result
@@ -284,7 +284,7 @@ const __funcResult = await __call(print, {
           args: [__stack.locals.result]
         });
 if (hasInterrupts(__funcResult)) {
-          await __ctx.pendingPromises.awaitAll()
+          await getRuntimeContext().ctx.pendingPromises.awaitAll()
           runner.halt({
             ...__state,
             data: __funcResult
@@ -352,7 +352,7 @@ __stateStack()?.pop()
 __functionCompleted = true;
 runner.halt(goToNode("greet", {
           messages: __threads(),
-          ctx: __ctx,
+          ctx: __ctx(),
           data: {}
         }))
 return;

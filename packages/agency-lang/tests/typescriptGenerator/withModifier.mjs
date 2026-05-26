@@ -24,7 +24,7 @@ import {
   readSkillTool as __readSkillTool,
   readSkillToolParams as __readSkillToolParams,
   AgencyFunction as __AgencyFunction, UNSET as __UNSET,
-  __call, __callMethod, __threads, __stateStack, getRuntimeContext, agencyStore,
+  __call, __callMethod, __threads, __stateStack, __ctx, getRuntimeContext, agencyStore,
   functionRefReviver as __functionRefReviver,
   DeterministicClient as __DeterministicClient,
 } from "agency-lang/runtime";
@@ -189,7 +189,7 @@ await callHook({
       });
       await runner.step(1, async (runner) => {
 // Resume path: check for a response by interruptId
-const __response = __ctx.getInterruptResponse(__self.__interruptId_1);
+const __response = getRuntimeContext().ctx.getInterruptResponse(__self.__interruptId_1);
 if (__response) {
   if (__response.type === "approve") {
     // approved, continue execution
@@ -197,7 +197,7 @@ if (__response) {
     // rejected, halt
     
     
-    runner.halt(failure("interrupt rejected", { retryable: false, checkpoint: __ctx.getResultCheckpoint() }));
+    runner.halt(failure("interrupt rejected", { retryable: false, checkpoint: getRuntimeContext().ctx.getResultCheckpoint() }));
     
     return;
   }
@@ -207,7 +207,7 @@ if (__response) {
   if (isRejected(__handlerResult)) {
     
     
-    runner.halt(failure(__handlerResult.value ?? "interrupt rejected", { retryable: false, checkpoint: __ctx.checkpoints.get(__resultCheckpointId) }));
+    runner.halt(failure(__handlerResult.value ?? "interrupt rejected", { retryable: false, checkpoint: getRuntimeContext().ctx.checkpoints.get(__resultCheckpointId) }));
     
     return;
   }
@@ -215,9 +215,9 @@ if (__response) {
     // No handler — propagate interrupt array to TypeScript caller
     // Store interruptId on frame BEFORE checkpoint so it's captured in the snapshot
     __self.__interruptId_1 = __handlerResult[0].interruptId;
-    const __checkpointId = __ctx.checkpoints.create(__stateStack(), __ctx, { moduleId: "withModifier.agency", scopeName: "foo", stepPath: "1" });
+    const __checkpointId = getRuntimeContext().ctx.checkpoints.create(__stateStack(), __ctx, { moduleId: "withModifier.agency", scopeName: "foo", stepPath: "1" });
     __handlerResult[0].checkpointId = __checkpointId;
-    __handlerResult[0].checkpoint = __ctx.checkpoints.get(__checkpointId);
+    __handlerResult[0].checkpoint = getRuntimeContext().ctx.checkpoints.get(__checkpointId);
     
     
     runner.halt(__handlerResult);
@@ -245,7 +245,7 @@ if (__error instanceof GuardExceededError) {
 return failure(
   __error instanceof Error ? __error.message : String(__error),
   {
-    checkpoint: __ctx.getResultCheckpoint(),
+    checkpoint: getRuntimeContext().ctx.getResultCheckpoint(),
     retryable: __self.__retryable,
     functionName: "foo",
     args: __stack.args,
@@ -310,7 +310,7 @@ __stack.locals.result = await __call(foo, {
             args: []
           });
 if (hasInterrupts(__stack.locals.result)) {
-            await __ctx.pendingPromises.awaitAll()
+            await getRuntimeContext().ctx.pendingPromises.awaitAll()
             runner.halt({
               ...__state,
               data: __stack.locals.result

@@ -115,7 +115,17 @@ export function partitionProgram(
     if (globalAssign) {
       const { stmt, handlerName } = globalAssign;
       const valueNode = deps.processNodeInGlobalInit(stmt.value);
-      const setNode = ts.globalSet(deps.moduleId, stmt.variableName, valueNode);
+      // These statements are emitted inside `__initializeGlobals(__ctx)`
+      // (see buildInitializeGlobalsFn below). `__ctx` is the parameter
+      // there — no ALS frame is installed by the caller — so pass the
+      // lexical `__ctx` identifier as the receiver instead of letting
+      // globalSet default to `getRuntimeContext().ctx`.
+      const setNode = ts.globalSet(
+        deps.moduleId,
+        stmt.variableName,
+        valueNode,
+        ts.id("__ctx"),
+      );
       globalInitStatements.push(
         handlerName
           ? ts.withHandler(deps.buildHandlerArrow(handlerName), setNode)
@@ -353,13 +363,18 @@ function buildStaticVarSetup(opts: AssembleSectionsOpts): TsNode[] {
  *   }
  */
 function buildInitializeGlobalsFn(opts: AssembleSectionsOpts): TsNode {
+  // Inside this function body `__ctx` is the parameter (no ALS frame
+  // installed by the caller), so every receiver must be `ts.id("__ctx")`
+  // — NOT `ts.runtime.ctx` (which is now the `__ctx()` accessor and
+  // would read from ALS instead of the parameter).
+  const ctxParam = ts.id("__ctx");
   const body: TsNode[] = [
     // Mark this module as initialized BEFORE running init statements.
     // This prevents infinite recursion when a global init expression
     // calls a function defined in the same module (which would trigger
     // __initializeGlobals again via the isInitialized check).
     ts.methodCall(
-      ts.prop(ts.runtime.ctx, "globals"),
+      ts.prop(ctxParam, "globals"),
       "markInitialized",
       [ts.str(opts.moduleId)],
     ),
@@ -367,8 +382,8 @@ function buildInitializeGlobalsFn(opts: AssembleSectionsOpts): TsNode {
 
   if (opts.staticVarNames.size > 0) {
     body.push(
-      ts.awaitCall(ts.id("__initializeStatic"), [ts.runtime.ctx]),
-      ts.awaitMethodCall(ts.runtime.ctx, "writeStaticStateToTrace", [
+      ts.awaitCall(ts.id("__initializeStatic"), [ctxParam]),
+      ts.awaitMethodCall(ctxParam, "writeStaticStateToTrace", [
         ts.methodCall(ts.runtime.globalCtx, "getStaticVars"),
       ]),
     );
@@ -399,9 +414,11 @@ function buildInitializeGlobalsFn(opts: AssembleSectionsOpts): TsNode {
  * case.
  */
 function buildRegisterTopLevelCallbacksFn(opts: AssembleSectionsOpts): TsNode {
+  // Same parameter-context rule as buildInitializeGlobalsFn — `__ctx`
+  // here is the function parameter, not an ALS-installed value.
   const body: TsNode[] = [
     ts.assign(
-      ts.prop(ts.runtime.ctx, "topLevelCallbacks"),
+      ts.prop(ts.id("__ctx"), "topLevelCallbacks"),
       ts.arr([]),
     ),
     ...opts.topLevelCallbackStatements,

@@ -24,7 +24,7 @@ import {
   readSkillTool as __readSkillTool,
   readSkillToolParams as __readSkillToolParams,
   AgencyFunction as __AgencyFunction, UNSET as __UNSET,
-  __call, __callMethod, __threads, __stateStack, getRuntimeContext, agencyStore,
+  __call, __callMethod, __threads, __stateStack, __ctx, getRuntimeContext, agencyStore,
   functionRefReviver as __functionRefReviver,
   DeterministicClient as __DeterministicClient,
 } from "agency-lang/runtime";
@@ -170,7 +170,7 @@ await callHook({
       });
       await runner.step(1, async (runner) => {
 // Resume path: check for a response by interruptId
-const __response = __ctx.getInterruptResponse(__self.__interruptId_1);
+const __response = getRuntimeContext().ctx.getInterruptResponse(__self.__interruptId_1);
 if (__response) {
   if (__response.type === "approve") {
     if (__response.value !== undefined) {
@@ -202,9 +202,9 @@ if (__response) {
     // No handler — propagate interrupt array to TypeScript caller
     // Store interruptId on frame BEFORE checkpoint so it's captured in the snapshot
     __self.__interruptId_1 = __handlerResult[0].interruptId;
-    const __checkpointId = __ctx.checkpoints.create(__stateStack(), __ctx, { moduleId: "interrupt-assignment.agency", scopeName: "main", stepPath: "1" });
+    const __checkpointId = getRuntimeContext().ctx.checkpoints.create(__stateStack(), __ctx, { moduleId: "interrupt-assignment.agency", scopeName: "main", stepPath: "1" });
     __handlerResult[0].checkpointId = __checkpointId;
-    __handlerResult[0].checkpoint = __ctx.checkpoints.get(__checkpointId);
+    __handlerResult[0].checkpoint = getRuntimeContext().ctx.checkpoints.get(__checkpointId);
     
     runner.halt({ messages: __threads(), data: __handlerResult });
     
@@ -226,7 +226,7 @@ __stack.locals.greeting = await runPrompt({
         });
 // halt if this is an interrupt
 if (hasInterrupts(__stack.locals.greeting)) {
-          await __ctx.pendingPromises.awaitAll()
+          await getRuntimeContext().ctx.pendingPromises.awaitAll()
           runner.halt({
             messages: __threads(),
             data: __stack.locals.greeting

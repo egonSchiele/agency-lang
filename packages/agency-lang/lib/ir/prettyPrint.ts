@@ -270,7 +270,17 @@ export function printTs(node: TsNode, indent = 0): string {
 
     case "scopedVar": {
       if (node.scope === "global" && node.moduleId) {
-        return `__ctx.globals.get(${JSON.stringify(node.moduleId)}, ${JSON.stringify(node.name)})`;
+        // Two receivers depending on emission site:
+        //   - `topLevel` true (set on subtrees emitted as part of
+        //     eager-evaluated tool description docstrings): use
+        //     `__globalCtx`. The eager tool-registration object
+        //     literal runs at module load, before any ALS frame is
+        //     installed, so the strict accessor would throw.
+        //   - default (inside any function/node body, under the
+        //     `withAlsFrame` wrap): use the strict accessor — a
+        //     missing frame indicates a real bug.
+        const ctxRef = node.topLevel ? "__globalCtx" : "getRuntimeContext().ctx";
+        return `${ctxRef}.globals.get(${JSON.stringify(node.moduleId)}, ${JSON.stringify(node.name)})`;
       }
       const prefix = scopeToPrefix(node.scope);
       if (prefix === "") return node.name;
@@ -306,7 +316,15 @@ export function printTs(node: TsNode, indent = 0): string {
     case "withHandler": {
       const handler = printTs(node.handler, indent);
       const body = `${ind(indent + 1)}${printTs(node.body, indent + 1)}`;
-      return `__ctx.pushHandler(${handler});\n${ind(indent)}try {\n${body}\n${ind(indent)}} finally {\n${ind(indent + 1)}__ctx.popHandler();\n${ind(indent)}}`;
+      // Strict accessor — `withHandler` is emitted from
+      // `sectionAssembler.ts` only for top-level static / global init
+      // wrappers, which always execute under `runInBootstrapFrame(...)`
+      // (see runtime/node.ts, runtime/interrupts.ts, runtime/rewind.ts).
+      // A missing frame is a genuine bug, so let it throw clearly
+      // instead of producing a cryptic "Cannot read 'pushHandler' of
+      // undefined". Handlers are safety infrastructure — failing loud
+      // here is preferable to silently skipping registration.
+      return `getRuntimeContext().ctx.pushHandler(${handler});\n${ind(indent)}try {\n${body}\n${ind(indent)}} finally {\n${ind(indent + 1)}getRuntimeContext().ctx.popHandler();\n${ind(indent)}}`;
     }
 
     case "runnerDebugger": {

@@ -24,7 +24,7 @@ import {
   readSkillTool as __readSkillTool,
   readSkillToolParams as __readSkillToolParams,
   AgencyFunction as __AgencyFunction, UNSET as __UNSET,
-  __call, __callMethod, __threads, __stateStack, getRuntimeContext, agencyStore,
+  __call, __callMethod, __threads, __stateStack, __ctx, getRuntimeContext, agencyStore,
   functionRefReviver as __functionRefReviver,
   DeterministicClient as __DeterministicClient,
 } from "agency-lang/runtime";
@@ -62,7 +62,6 @@ const __globalCtx = new RuntimeContext({
   }
 });
 const graph = __globalCtx.graph;
-const __ctx = __globalCtx;
 __initializeGlobals(__globalCtx);
 
 // Path-dependent builtin wrappers
@@ -221,7 +220,7 @@ if (__error instanceof GuardExceededError) {
 return failure(
   __error instanceof Error ? __error.message : String(__error),
   {
-    checkpoint: __ctx.getResultCheckpoint(),
+    checkpoint: getRuntimeContext().ctx.getResultCheckpoint(),
     retryable: __self.__retryable,
     functionName: "add",
     args: __stack.args,
@@ -333,7 +332,7 @@ if (__error instanceof GuardExceededError) {
 return failure(
   __error instanceof Error ? __error.message : String(__error),
   {
-    checkpoint: __ctx.getResultCheckpoint(),
+    checkpoint: getRuntimeContext().ctx.getResultCheckpoint(),
     retryable: __self.__retryable,
     functionName: "greet",
     args: __stack.args,
@@ -445,7 +444,7 @@ if (__error instanceof GuardExceededError) {
 return failure(
   __error instanceof Error ? __error.message : String(__error),
   {
-    checkpoint: __ctx.getResultCheckpoint(),
+    checkpoint: getRuntimeContext().ctx.getResultCheckpoint(),
     retryable: __self.__retryable,
     functionName: "calculateArea",
     args: __stack.args,
@@ -555,7 +554,7 @@ if (__error instanceof GuardExceededError) {
 return failure(
   __error instanceof Error ? __error.message : String(__error),
   {
-    checkpoint: __ctx.getResultCheckpoint(),
+    checkpoint: getRuntimeContext().ctx.getResultCheckpoint(),
     retryable: __self.__retryable,
     functionName: "processData",
     args: __stack.args,
@@ -649,7 +648,7 @@ if (__error instanceof GuardExceededError) {
 return failure(
   __error instanceof Error ? __error.message : String(__error),
   {
-    checkpoint: __ctx.getResultCheckpoint(),
+    checkpoint: getRuntimeContext().ctx.getResultCheckpoint(),
     retryable: __self.__retryable,
     functionName: "versionedTool",
     args: __stack.args,
@@ -676,7 +675,7 @@ const versionedTool = __AgencyFunction.create({
   params: [],
   toolDefinition: {
     name: "versionedTool",
-    description: `This tool is version ${__ctx.globals.get("docstrings.agency", "toolVersion")}.`,
+    description: `This tool is version ${__globalCtx.globals.get("docstrings.agency", "toolVersion")}.`,
     schema: z.object({})
   },
   safe: false,

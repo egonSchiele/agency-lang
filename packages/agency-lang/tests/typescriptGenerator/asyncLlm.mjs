@@ -24,7 +24,7 @@ import {
   readSkillTool as __readSkillTool,
   readSkillToolParams as __readSkillToolParams,
   AgencyFunction as __AgencyFunction, UNSET as __UNSET,
-  __call, __callMethod, __threads, __stateStack, getRuntimeContext, agencyStore,
+  __call, __callMethod, __threads, __stateStack, __ctx, getRuntimeContext, agencyStore,
   functionRefReviver as __functionRefReviver,
   DeterministicClient as __DeterministicClient,
 } from "agency-lang/runtime";
@@ -178,7 +178,7 @@ __stack.locals.x = runPrompt({
           removedTools: __self.__removedTools,
           checkpointInfo: runner.getCheckpointInfo()
         });
-__self.__pendingKey_x = __ctx.pendingPromises.add(__stack.locals.x, (val) => { __stack.locals.x = val; });
+__self.__pendingKey_x = getRuntimeContext().ctx.pendingPromises.add(__stack.locals.x, (val) => { __stack.locals.x = val; });
       });
       await runner.step(2, async (runner) => {
 __self.__removedTools = __self.__removedTools || [];
@@ -190,10 +190,10 @@ __stack.locals.y = runPrompt({
           removedTools: __self.__removedTools,
           checkpointInfo: runner.getCheckpointInfo()
         });
-__self.__pendingKey_y = __ctx.pendingPromises.add(__stack.locals.y, (val) => { __stack.locals.y = val; });
+__self.__pendingKey_y = getRuntimeContext().ctx.pendingPromises.add(__stack.locals.y, (val) => { __stack.locals.y = val; });
       });
       await runner.step(3, async (runner) => {
-await __ctx.pendingPromises.awaitPending([__self.__pendingKey_x, __self.__pendingKey_y]);
+await getRuntimeContext().ctx.pendingPromises.awaitPending([__self.__pendingKey_x, __self.__pendingKey_y]);
       });
       await runner.step(4, async (runner) => {
 runner.halt({

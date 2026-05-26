@@ -187,7 +187,7 @@ if (__ctx._pendingArgOverrides) {
   try {
     await agencyStore.run({
       ctx: __ctx,
-      stack: __stack,
+      stack: __setupData.stateStack,
       threads: __setupData.threads
     }, async () => {
       await runner.hook(0, async () => {
@@ -300,7 +300,7 @@ if (__ctx._pendingArgOverrides) {
   try {
     await agencyStore.run({
       ctx: __ctx,
-      stack: __stack,
+      stack: __setupData.stateStack,
       threads: __setupData.threads
     }, async () => {
       await runner.hook(0, async () => {
@@ -411,7 +411,7 @@ if (__ctx._pendingArgOverrides) {
   try {
     await agencyStore.run({
       ctx: __ctx,
-      stack: __stack,
+      stack: __setupData.stateStack,
       threads: __setupData.threads
     }, async () => {
       await runner.hook(0, async () => {
@@ -524,7 +524,7 @@ if (__ctx._pendingArgOverrides) {
   try {
     await agencyStore.run({
       ctx: __ctx,
-      stack: __stack,
+      stack: __setupData.stateStack,
       threads: __setupData.threads
     }, async () => {
       await runner.hook(0, async () => {
@@ -618,7 +618,7 @@ if (__ctx._pendingArgOverrides) {
   try {
     await agencyStore.run({
       ctx: __ctx,
-      stack: __stack,
+      stack: __setupData.stateStack,
       threads: __setupData.threads
     }, async () => {
       await runner.hook(0, async () => {

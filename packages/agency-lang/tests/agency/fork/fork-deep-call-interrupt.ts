@@ -1,3 +1,5 @@
+// @ts-nocheck
+import { print, printJSON, parseJSON, input, sleep, round, read, write, readImage, notify, range, mostCommon, keys, values, entries, emit, callback } from "agency-lang/stdlib/index.js";
 import { fileURLToPath } from "url";
 import __process from "process";
 import { readFileSync, writeFileSync } from "fs";
@@ -24,7 +26,7 @@ import {
   readSkillTool as __readSkillTool,
   readSkillToolParams as __readSkillToolParams,
   AgencyFunction as __AgencyFunction, UNSET as __UNSET,
-  __call, __callMethod, __threads, __stateStack, getRuntimeContext, agencyStore,
+  __call, __callMethod, __threads, __stateStack, __ctx, getRuntimeContext, agencyStore,
   functionRefReviver as __functionRefReviver,
   DeterministicClient as __DeterministicClient,
 } from "agency-lang/runtime";
@@ -39,9 +41,10 @@ const __globalCtx = new RuntimeContext({
   statelogConfig: {
     host: "https://statelog.adit.io",
     apiKey: __process.env["STATELOG_API_KEY"] || "",
-    projectId: "",
+    projectId: "agency-lang",
     debugMode: false,
-    observability: false
+    observability: true,
+    logFile: "statelog.log"
   },
   smoltalkDefaults: {
     openAiApiKey: __process.env["OPENAI_API_KEY"] || "",
@@ -58,7 +61,8 @@ const __globalCtx = new RuntimeContext({
   dirname: __dirname,
   logLevel: "info",
   traceConfig: {
-    program: "genericAliasValidation.agency"
+    program: "tests/agency/fork/fork-deep-call-interrupt.agency",
+    traceDir: "traces"
   }
 });
 const graph = __globalCtx.graph;
@@ -129,22 +133,39 @@ function registerTools(tools: any[]) {
   }
 }
 
+__registerTool(print);
+__registerTool(printJSON);
+__registerTool(parseJSON);
+__registerTool(input);
+__registerTool(sleep);
+__registerTool(round);
+__registerTool(read);
+__registerTool(write);
+__registerTool(readImage);
+__registerTool(notify);
+__registerTool(range);
+__registerTool(mostCommon);
+__registerTool(keys);
+__registerTool(values);
+__registerTool(entries);
+__registerTool(emit);
+__registerTool(callback);
 async function __initializeGlobals(__ctx) {
-  __ctx.globals.markInitialized("genericAliasValidation.agency")
+  __ctx.globals.markInitialized("tests/agency/fork/fork-deep-call-interrupt.agency")
 }
 async function __registerTopLevelCallbacks(__ctx) {
   __ctx.topLevelCallbacks = [];
 }
 __toolRegistry["readSkill"] = __AgencyFunction.create({
   name: "readSkill",
-  module: "genericAliasValidation.agency",
+  module: "tests/agency/fork/fork-deep-call-interrupt.agency",
   fn: readSkill,
   params: __readSkillToolParams.map(p => ({ name: p, hasDefault: false, defaultValue: undefined, variadic: false })),
   toolDefinition: __readSkillTool,
 }, __toolRegistry);
 __functionRefReviver.registry = __toolRegistry;
 
-async function __process_impl(c: Container<number>, __state: InternalFunctionState | undefined = undefined) {
+async function __inner_impl(item: string, __state: InternalFunctionState | undefined = undefined) {
   const __setupData = setupFunction({
     state: __state
   });
@@ -155,33 +176,28 @@ const __self = __setupData.self;
 const __ctx = __state?.ctx || __globalCtx;
 let __forked;
 let __functionCompleted = false;
-  if (!__ctx.globals.isInitialized("genericAliasValidation.agency")) {
+  if (!__ctx.globals.isInitialized("tests/agency/fork/fork-deep-call-interrupt.agency")) {
     await __initializeGlobals(__ctx)
   }
   let __funcStartTime: number = performance.now();
-  __stack.args["c"] = c;
+  __stack.args["item"] = item;
   __self.__retryable = __self.__retryable ?? true;
-  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "genericAliasValidation.agency", scopeName: "process", threads: __setupData.threads });
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "tests/agency/fork/fork-deep-call-interrupt.agency", scopeName: "inner", threads: __setupData.threads });
   let __resultCheckpointId = -1;
 if (__ctx.stateStack.currentNodeId()) {
-  __resultCheckpointId = __ctx.checkpoints.createPinned(__stateStack(), __ctx, { moduleId: "genericAliasValidation.agency", scopeName: "process", stepPath: "", label: "result-entry" });
+  __resultCheckpointId = __ctx.checkpoints.createPinned(__stateStack(), __ctx, { moduleId: "tests/agency/fork/fork-deep-call-interrupt.agency", scopeName: "inner", stepPath: "", label: "result-entry" });
 }
 if (__ctx._pendingArgOverrides) {
   const __overrides = __ctx._pendingArgOverrides;
   __ctx._pendingArgOverrides = undefined;
-  if ("c" in __overrides) {
-    c = __overrides["c"];
-    __stack.args["c"] = c;
+  if ("item" in __overrides) {
+    item = __overrides["item"];
+    __stack.args["item"] = item;
   }
 
 }
 
   try {
-    const __vr_c = __validateType(__stack.args["c"], z.object({ "value": z.number() }));
-    if (!__vr_c.success) {
-      return __vr_c;
-    }
-    __stack.args["c"] = __vr_c.value;
     await agencyStore.run({
       ctx: __ctx,
       stack: __setupData.stateStack,
@@ -191,29 +207,59 @@ if (__ctx._pendingArgOverrides) {
 await callHook({
           name: "onFunctionStart",
           data: {
-            functionName: "process",
+            functionName: "inner",
             args: {
-              c: c
+              item: item
             },
             isBuiltin: false,
-            moduleId: "genericAliasValidation.agency"
+            moduleId: "tests/agency/fork/fork-deep-call-interrupt.agency"
           }
         })
       });
       await runner.step(1, async (runner) => {
-const __funcResult = await __call(print, {
-          type: "positional",
-          args: [__stack.args.c.value]
-        });
-if (hasInterrupts(__funcResult)) {
-          await getRuntimeContext().ctx.pendingPromises.awaitAll()
-          runner.halt(__funcResult)
-          return;
-        }
+// Resume path: check for a response by interruptId
+const __response = getRuntimeContext().ctx.getInterruptResponse(__self.__interruptId_1);
+if (__response) {
+  if (__response.type === "approve") {
+    // approved, continue execution
+  } else if (__response.type === "reject") {
+    // rejected, halt
+    
+    
+    runner.halt(failure("interrupt rejected", { retryable: false, checkpoint: getRuntimeContext().ctx.getResultCheckpoint() }));
+    
+    return;
+  }
+} else {
+  // First run: call handlers, then propagate if unhandled
+  const __handlerResult = await interruptWithHandlers("unknown", `approve ${__stack.args.item}?`, {}, "./tests/agency/fork/fork-deep-call-interrupt.agency", __ctx, __stateStack());
+  if (isRejected(__handlerResult)) {
+    
+    
+    runner.halt(failure(__handlerResult.value ?? "interrupt rejected", { retryable: false, checkpoint: getRuntimeContext().ctx.checkpoints.get(__resultCheckpointId) }));
+    
+    return;
+  }
+  if (!isApproved(__handlerResult)) {
+    // No handler — propagate interrupt array to TypeScript caller
+    // Store interruptId on frame BEFORE checkpoint so it's captured in the snapshot
+    __self.__interruptId_1 = __handlerResult[0].interruptId;
+    const __checkpointId = getRuntimeContext().ctx.checkpoints.create(__stateStack(), __ctx, { moduleId: "tests/agency/fork/fork-deep-call-interrupt.agency", scopeName: "inner", stepPath: "1" });
+    __handlerResult[0].checkpointId = __checkpointId;
+    __handlerResult[0].checkpoint = getRuntimeContext().ctx.checkpoints.get(__checkpointId);
+    
+    
+    runner.halt(__handlerResult);
+    
+    return;
+  }
+  // Approved — continue execution past interrupt
+}
+
       });
       await runner.step(2, async (runner) => {
 __functionCompleted = true;
-runner.halt(__stack.args.c)
+runner.halt(`inner: ${__stack.args.item}`)
 return;
       });
     })
@@ -235,7 +281,7 @@ return failure(
   {
     checkpoint: getRuntimeContext().ctx.getResultCheckpoint(),
     retryable: __self.__retryable,
-    functionName: "process",
+    functionName: "inner",
     args: __stack.args,
   }
 );
@@ -246,27 +292,141 @@ return failure(
       await callHook({
         name: "onFunctionEnd",
         data: {
-          functionName: "process",
+          functionName: "inner",
           timeTaken: performance.now() - __funcStartTime
         }
       })
     }
   }
 }
-const process = __AgencyFunction.create({
-  name: "process",
-  module: "genericAliasValidation.agency",
-  fn: __process_impl,
+const inner = __AgencyFunction.create({
+  name: "inner",
+  module: "tests/agency/fork/fork-deep-call-interrupt.agency",
+  fn: __inner_impl,
   params: [{
-    name: "c",
+    name: "item",
     hasDefault: false,
     defaultValue: undefined,
     variadic: false
   }],
   toolDefinition: {
-    name: "process",
+    name: "inner",
     description: "No description provided.",
-    schema: z.object({"c": z.object({ "value": z.number() }), })
+    schema: z.object({"item": z.string(), })
+  },
+  safe: false,
+  exported: false
+}, __toolRegistry);
+async function __outer_impl(item: string, __state: InternalFunctionState | undefined = undefined) {
+  const __setupData = setupFunction({
+    state: __state
+  });
+  // __state will be undefined if this function is being called as a tool by an llm
+  const __stack = __setupData.stack;
+const __step = __setupData.step;
+const __self = __setupData.self;
+const __ctx = __state?.ctx || __globalCtx;
+let __forked;
+let __functionCompleted = false;
+  if (!__ctx.globals.isInitialized("tests/agency/fork/fork-deep-call-interrupt.agency")) {
+    await __initializeGlobals(__ctx)
+  }
+  let __funcStartTime: number = performance.now();
+  __stack.args["item"] = item;
+  __self.__retryable = __self.__retryable ?? true;
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "tests/agency/fork/fork-deep-call-interrupt.agency", scopeName: "outer", threads: __setupData.threads });
+  let __resultCheckpointId = -1;
+if (__ctx.stateStack.currentNodeId()) {
+  __resultCheckpointId = __ctx.checkpoints.createPinned(__stateStack(), __ctx, { moduleId: "tests/agency/fork/fork-deep-call-interrupt.agency", scopeName: "outer", stepPath: "", label: "result-entry" });
+}
+if (__ctx._pendingArgOverrides) {
+  const __overrides = __ctx._pendingArgOverrides;
+  __ctx._pendingArgOverrides = undefined;
+  if ("item" in __overrides) {
+    item = __overrides["item"];
+    __stack.args["item"] = item;
+  }
+
+}
+
+  try {
+    await agencyStore.run({
+      ctx: __ctx,
+      stack: __setupData.stateStack,
+      threads: __setupData.threads
+    }, async () => {
+      await runner.hook(0, async () => {
+await callHook({
+          name: "onFunctionStart",
+          data: {
+            functionName: "outer",
+            args: {
+              item: item
+            },
+            isBuiltin: false,
+            moduleId: "tests/agency/fork/fork-deep-call-interrupt.agency"
+          }
+        })
+      });
+      await runner.step(1, async (runner) => {
+__functionCompleted = true;
+runner.halt(await __call(inner, {
+          type: "positional",
+          args: [__stack.args.item]
+        }))
+return;
+      });
+    })
+    if (runner.halted) { if (isFailure(runner.haltResult)) { runner.haltResult.retryable = runner.haltResult.retryable && __self.__retryable; } return runner.haltResult; }
+  } catch (__error) {
+    if (__error instanceof RestoreSignal) {
+  throw __error;
+}
+// GuardExceededError must propagate up to the stdlib `guard`
+// function's try/catch (in lib/runtime/result.ts via `try block()`).
+// If we converted it to a Failure here, the guard would never see
+// the trip and every guarded block would appear to succeed even
+// over budget. See lib/runtime/guard.ts.
+if (__error instanceof GuardExceededError) {
+  throw __error;
+}
+return failure(
+  __error instanceof Error ? __error.message : String(__error),
+  {
+    checkpoint: getRuntimeContext().ctx.getResultCheckpoint(),
+    retryable: __self.__retryable,
+    functionName: "outer",
+    args: __stack.args,
+  }
+);
+
+  } finally {
+    __stateStack()?.pop()
+    if (__functionCompleted) {
+      await callHook({
+        name: "onFunctionEnd",
+        data: {
+          functionName: "outer",
+          timeTaken: performance.now() - __funcStartTime
+        }
+      })
+    }
+  }
+}
+const outer = __AgencyFunction.create({
+  name: "outer",
+  module: "tests/agency/fork/fork-deep-call-interrupt.agency",
+  fn: __outer_impl,
+  params: [{
+    name: "item",
+    hasDefault: false,
+    defaultValue: undefined,
+    variadic: false
+  }],
+  toolDefinition: {
+    name: "outer",
+    description: "No description provided.",
+    schema: z.object({"item": z.string(), })
   },
   safe: false,
   exported: false
@@ -281,7 +441,7 @@ const __self = __setupData.self;
 const __ctx = __state.ctx;
 let __forked;
 let __functionCompleted = false;
-  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "genericAliasValidation.agency", scopeName: "main", threads: __setupData.threads });
+  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "tests/agency/fork/fork-deep-call-interrupt.agency", scopeName: "main", threads: __setupData.threads });
   try {
     await agencyStore.run({
       ctx: __ctx,
@@ -297,34 +457,53 @@ await callHook({
         })
       });
       await runner.step(1, async (runner) => {
-__stack.locals.c = await __call(process, {
-          type: "positional",
-          args: [{
-            "value": 42
-          }]
-        });
-if (hasInterrupts(__stack.locals.c)) {
+__stack.locals.results = await runner.fork(1, [`a`, `b`], async (__forkItem, __forkIndex, __forkBranchStack) => {
+          
+const __bstack = __forkBranchStack.getNewState();
+const __self = __bstack.locals;
+// `__stateStack` is read from ALS via the `__stateStack()` accessor.
+// The branch ALS frame seeded by `runBatch.runInBranchAlsFrame`
+// (lib/runtime/runBatch.ts) already carries `stack: __forkBranchStack`,
+// so accessor calls inside the branch body resolve to the branch
+// stack automatically — no local rebind needed. The earlier
+// `const __stateStack = __forkBranchStack` line was removed because
+// it shadowed the runtime import and made `__stateStack()` calls
+// (emitted by interrupt/checkpoint templates) crash with
+// "__stateStack2 is not a function".
+const item = __forkItem;
+
+__bstack.args["item"] = __forkItem;
+const runner = new Runner(__ctx, __bstack, { state: __bstack, moduleId: "tests/agency/fork/fork-deep-call-interrupt.agency", scopeName: "__block_0" });
+try {
+await runner.step(0, async (runner) => {
+runner.halt(await __call(outer, {
+      type: "positional",
+      args: [__bstack.args.item]
+    }))
+return;
+  });
+return runner.halted ? runner.haltResult : undefined;
+} finally {
+__forkBranchStack.pop();
+}
+
+
+        }, "all", getRuntimeContext().stack);
+if (hasInterrupts(__stack.locals.results)) {
           await getRuntimeContext().ctx.pendingPromises.awaitAll()
           runner.halt({
             ...__state,
-            data: __stack.locals.c
+            data: __stack.locals.results
           })
           return;
         }
       });
       await runner.step(2, async (runner) => {
-const __funcResult = await __call(print, {
-          type: "positional",
-          args: [__stack.locals.c.value]
-        });
-if (hasInterrupts(__funcResult)) {
-          await getRuntimeContext().ctx.pendingPromises.awaitAll()
-          runner.halt({
-            ...__state,
-            data: __funcResult
-          })
-          return;
-        }
+runner.halt({
+          messages: __threads(),
+          data: __stack.locals.results
+        })
+return;
       });
     })
     if (runner.halted) return runner.haltResult;
@@ -381,4 +560,4 @@ if (__process.argv[1] === fileURLToPath(import.meta.url)) {
   }
 }
 export default graph
-export const __sourceMap = {"genericAliasValidation.agency:process":{"1":{"line":3,"col":2},"2":{"line":4,"col":2}},"genericAliasValidation.agency:main":{"1":{"line":8,"col":2},"2":{"line":9,"col":2}}};
+export const __sourceMap = {"tests/agency/fork/fork-deep-call-interrupt.agency:inner":{"1":{"line":1,"col":2},"2":{"line":2,"col":2}},"tests/agency/fork/fork-deep-call-interrupt.agency:outer":{"1":{"line":6,"col":2}},"tests/agency/fork/fork-deep-call-interrupt.agency:main":{"1":{"line":10,"col":2},"2":{"line":13,"col":2}},"tests/agency/fork/fork-deep-call-interrupt.agency:__block_0":{"1.0":{"line":11,"col":4}}};

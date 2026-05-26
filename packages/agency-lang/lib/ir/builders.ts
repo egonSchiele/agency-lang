@@ -789,24 +789,28 @@ export const ts = {
   },
 
   /** Predefined runtime identifiers. `threads` and `stateStack` are
-   *  `__threads()` / `__stateStack()` / `__ctx()` accessor calls (not
-   *  bare identifiers) because post-ALS migration the per-scope
-   *  `ThreadStore`, `StateStack`, and `RuntimeContext` live on the
-   *  active `agencyStore` frame instead of in codegen-emitted `const
-   *  __threads` / `const __stateStack` / `const __ctx` locals. Every
-   *  site that referenced the old locals now emits the accessor call,
-   *  which reads from ALS and returns the live store (or `undefined`
-   *  outside any frame — see `runtime/asyncContext.ts`).
+   *  `__threads()` / `__stateStack()` accessor calls (not bare
+   *  identifiers) because post-ALS migration the per-scope
+   *  `ThreadStore` and `StateStack` live on the active `agencyStore`
+   *  frame instead of in codegen-emitted `const __threads` / `const
+   *  __stateStack` locals. Every site that referenced the old locals
+   *  now emits the accessor call, which reads from ALS and returns
+   *  the live store (or `undefined` outside any frame — see
+   *  `runtime/asyncContext.ts`).
    *
-   *  `__ctx` exception: the per-scope `const __ctx = __state?.ctx ||
-   *  __globalCtx;` local is still emitted by `setupEnv` because a few
-   *  pre-wrap sites need a lexical identifier (the `withAlsFrame`
-   *  seed, the `Runner` constructor arg, the `__initializeGlobals`
-   *  call). Those sites use `ts.id("__ctx")` directly; every other
-   *  reference goes through this accessor alias. */
+   *  `ctx` is `getRuntimeContext().ctx` rather than a bare `__ctx()`
+   *  accessor call: the per-scope `const __ctx = __state?.ctx ||
+   *  __globalCtx;` local emitted by `setupEnv` would shadow a bare
+   *  `__ctx` accessor identifier — and the esbuild TS transform
+   *  rewrites *every* `__ctx` reference in a scope (import-bound
+   *  ones included) to match the renamed local, so `__ctx()` would
+   *  become `__ctx2()` and crash with `__ctx2 is not a function`.
+   *  Routing through `getRuntimeContext().ctx` avoids the shadow
+   *  entirely. Pre-wrap, parameter-context, and seed sites still use
+   *  `ts.id("__ctx")` directly to reach the setupEnv local. */
   runtime: {
     self: { kind: "identifier", name: "__self" } as TsIdentifier,
-    ctx: { kind: "raw", code: "__ctx()" } as TsRaw,
+    ctx: { kind: "raw", code: "getRuntimeContext().ctx" } as TsRaw,
     threads: { kind: "raw", code: "__threads()" } as TsRaw,
     stateStack: { kind: "raw", code: "__stateStack()" } as TsRaw,
     stack: { kind: "identifier", name: "__stack" } as TsIdentifier,

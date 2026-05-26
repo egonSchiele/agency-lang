@@ -1581,9 +1581,15 @@ export class TypeScriptBuilder {
           // callback site re-seeds ALS via Runner.runInScope, but the
           // wrap closes the gap for code that runs between steps and
           // makes the per-scope frame contract explicit.
+          //
+          // `stack:` carries the StateStack (not the current State
+          // frame) — matches what the now-pruned `const __stateStack =
+          // __setupData.stateStack;` line used to bind, so
+          // `__stateStack()` reads inside the wrap return a real
+          // StateStack rather than a per-frame State.
           ts.withAlsFrame({
             ctx: ts.id("__ctx"),
-            stack: ts.id("__stack"),
+            stack: $(ts.id("__setupData")).prop("stateStack").done(),
             threads: $(ts.id("__setupData")).prop("threads").done(),
             body: [
               ...onFunctionStartHook,
@@ -2248,9 +2254,15 @@ export class TypeScriptBuilder {
           // inner callback may bare-`return` from `runner.halt(...)`
           // emissions, and we want the outer node arrow to keep
           // running into the halted check / onNodeEnd / final return.
+          //
+          // `stack:` carries the StateStack (not the current State
+          // frame) — matches what the now-pruned `const __stateStack =
+          // __state.ctx.stateStack;` line used to bind, so
+          // `__stateStack()` reads inside the wrap return a real
+          // StateStack rather than a per-frame State.
           ts.withAlsFrame({
             ctx: ts.id("__ctx"),
-            stack: ts.id("__stack"),
+            stack: ts.raw("__ctx.stateStack"),
             threads: $(ts.id("__setupData")).prop("threads").done(),
             body: [
               ts.runnerHookStep({

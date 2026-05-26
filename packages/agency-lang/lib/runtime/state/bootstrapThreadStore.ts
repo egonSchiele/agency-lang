@@ -39,7 +39,7 @@ export class BootstrapThreadStore extends ThreadStore {
         `\n` +
         `Fix: move the code inside a \`node\` or \`def\` body.\n` +
         `\n` +
-        `See docs/dev/async-context.md ("Frame kinds") for details.`,
+        `See https://agency-lang.com/guide/message-history-and-threads.html for details.`,
     );
   }
 

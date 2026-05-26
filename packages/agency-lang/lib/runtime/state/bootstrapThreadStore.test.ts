@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { BootstrapThreadStore } from "./bootstrapThreadStore.js";
+import { ThreadStore } from "./threadStore.js";
 
 describe("BootstrapThreadStore", () => {
   it("throws on every user-facing operation with an actionable message", () => {
@@ -26,7 +27,9 @@ describe("BootstrapThreadStore", () => {
 
   it("instanceof ThreadStore so it satisfies the ALS store contract", () => {
     const store = new BootstrapThreadStore();
-    expect(store).toBeInstanceOf(BootstrapThreadStore);
+    // ALS frames type their `threads` slot as ThreadStore — the sentinel
+    // must pass that nominal check.
+    expect(store).toBeInstanceOf(ThreadStore);
     // Constructor does not auto-create a default thread, so no throws fire
     // during ALS frame setup. The throw only happens when user code tries
     // to actually use the store.

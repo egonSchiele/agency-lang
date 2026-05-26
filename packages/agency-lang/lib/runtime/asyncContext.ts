@@ -43,8 +43,7 @@
  *    user reaches for them there, they get a loud error instead of a
  *    silent write into a discarded store.
  *
- * See docs/superpowers/plans/2026-05-25-als-migration.md and
- * docs/dev/async-context.md.
+ * See docs/dev/async-context.md for the full picture.
  */
 import { AsyncLocalStorage } from "node:async_hooks";
 import { BootstrapThreadStore } from "./state/bootstrapThreadStore.js";
@@ -104,19 +103,26 @@ export function runInTestContext<T>(
  * silently writing into a placeholder that the runtime is about to
  * discard.
  *
- * The `stack` slot is `ctx.stateStack` — the bare execution-context
- * stack with no node/function frames pushed. This matches what
- * pre-migration `__initializeGlobals` saw via its explicit `{ ctx }`
- * arg, and is correct because globals must not push node frames.
+ * The `stack` slot is the caller's current `ctx.stateStack`. At the
+ * `runNode` / `respondToInterrupts` / `rewindFrom` `*registerTopLevel
+ * Callbacks` and `onAgentStart` call sites that's the bare pre-restore
+ * stack (no node frames pushed) — which is the contract
+ * `__initializeGlobals` always expected. At the resume / rewind
+ * `graph.run` call sites it's the restored stack carrying the
+ * checkpoint frames; that's also fine because `Runner.runInScope` on
+ * the first step re-enters ALS with the per-node ThreadStore.
+ *
+ * Declared `async` so synchronous throws inside `fn` (including the
+ * very common case of the `BootstrapThreadStore` sentinel throwing)
+ * surface as rejected promises for `.catch(...)` callers, not as
+ * uncaught sync exceptions.
  */
-export function runInBootstrapFrame<T>(
+export async function runInBootstrapFrame<T>(
   ctx: RuntimeContext<any>,
   fn: () => T | Promise<T>,
 ): Promise<T> {
-  return Promise.resolve(
-    agencyStore.run(
-      { ctx, stack: ctx.stateStack, threads: new BootstrapThreadStore() },
-      fn,
-    ),
+  return agencyStore.run(
+    { ctx, stack: ctx.stateStack, threads: new BootstrapThreadStore() },
+    fn,
   );
 }

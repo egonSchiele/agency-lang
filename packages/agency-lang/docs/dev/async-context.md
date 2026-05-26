@@ -84,6 +84,6 @@ The two external entry points called from host TS code — `respondToInterrupts`
 
 ## See also
 
-- [docs/superpowers/plans/2026-05-25-als-migration.md](../superpowers/plans/2026-05-25-als-migration.md) — the initial ALS migration plan.
-- [docs/superpowers/plans/2026-05-25-drop-per-call-context-plumbing.md](../superpowers/plans/2026-05-25-drop-per-call-context-plumbing.md) — the follow-up that dropped per-call-site bag emission.
+- The initial ALS migration that introduced `agencyStore` / `getRuntimeContext()` (commit `d39103cc` on `main`).
+- The follow-up PR [#198](https://github.com/egonSchiele/agency-lang/pull/198) that dropped per-call-site `{ctx, threads, stateStack}` bag emission from generated code.
 - [docs/dev/adding-a-module-to-the-agency-stdlib.md](./adding-a-module-to-the-agency-stdlib.md) — step-by-step recipe for adding a new module.

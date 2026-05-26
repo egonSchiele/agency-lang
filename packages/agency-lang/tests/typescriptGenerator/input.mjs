@@ -24,7 +24,7 @@ import {
   readSkillTool as __readSkillTool,
   readSkillToolParams as __readSkillToolParams,
   AgencyFunction as __AgencyFunction, UNSET as __UNSET,
-  __call, __callMethod, __threads, getRuntimeContext,
+  __call, __callMethod, __threads, __stateStack, getRuntimeContext, agencyStore,
   functionRefReviver as __functionRefReviver,
   DeterministicClient as __DeterministicClient,
 } from "agency-lang/runtime";
@@ -147,76 +147,79 @@ graph.node("main", async (__state: GraphState) => {
   const __setupData = setupNode({
     state: __state
   });
-  const __stateStack = __state.ctx.stateStack;
-const __stack = __setupData.stack;
+  const __stack = __setupData.stack;
 const __step = __setupData.step;
 const __self = __setupData.self;
 const __ctx = __state.ctx;
-const statelogClient = __ctx.statelogClient;
-const __graph = __ctx.graph;
 let __forked;
 let __functionCompleted = false;
   const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "input.agency", scopeName: "main", threads: __setupData.threads });
   try {
-    await runner.hook(0, async () => {
+    await agencyStore.run({
+      ctx: __ctx,
+      stack: __ctx.stateStack,
+      threads: __setupData.threads
+    }, async () => {
+      await runner.hook(0, async () => {
 await callHook({
-        name: "onNodeStart",
-        data: {
-          nodeName: "main"
-        }
-      })
-    });
-    await runner.step(1, async (runner) => {
-__stack.locals.message = await __call(input, {
-        type: "positional",
-        args: [`Please enter a message: `]
-      });
-if (hasInterrupts(__stack.locals.message)) {
-        await __ctx.pendingPromises.awaitAll()
-        runner.halt({
-          ...__state,
-          data: __stack.locals.message
+          name: "onNodeStart",
+          data: {
+            nodeName: "main"
+          }
         })
-        return;
-      }
-    });
-    await runner.step(2, async (runner) => {
+      });
+      await runner.step(1, async (runner) => {
+__stack.locals.message = await __call(input, {
+          type: "positional",
+          args: [`Please enter a message: `]
+        });
+if (hasInterrupts(__stack.locals.message)) {
+          await __ctx.pendingPromises.awaitAll()
+          runner.halt({
+            ...__state,
+            data: __stack.locals.message
+          })
+          return;
+        }
+      });
+      await runner.step(2, async (runner) => {
 __self.__removedTools = __self.__removedTools || [];
 __stack.locals.sentiment = await runPrompt({
-        prompt: `Categorize the sentiment in this message: ${__stack.locals.message}`,
-        messages: __threads().getOrCreateActive(),
-        responseFormat: z.object({
-          response: z.union([z.literal("happy"), z.literal("sad"), z.literal("neutral")])
-        }),
-        clientConfig: {},
-        maxToolCallRounds: 10,
-        removedTools: __self.__removedTools,
-        checkpointInfo: runner.getCheckpointInfo()
-      });
+          prompt: `Categorize the sentiment in this message: ${__stack.locals.message}`,
+          messages: __threads().getOrCreateActive(),
+          responseFormat: z.object({
+            response: z.union([z.literal("happy"), z.literal("sad"), z.literal("neutral")])
+          }),
+          clientConfig: {},
+          maxToolCallRounds: 10,
+          removedTools: __self.__removedTools,
+          checkpointInfo: runner.getCheckpointInfo()
+        });
 // halt if this is an interrupt
 if (hasInterrupts(__stack.locals.sentiment)) {
-        await __ctx.pendingPromises.awaitAll()
-        runner.halt({
-          messages: __threads(),
-          data: __stack.locals.sentiment
-        })
-        return;
-      }
-    });
-    await runner.step(3, async (runner) => {
-const __funcResult = await __call(print, {
-        type: "positional",
-        args: [__stack.locals.sentiment]
+          await __ctx.pendingPromises.awaitAll()
+          runner.halt({
+            messages: __threads(),
+            data: __stack.locals.sentiment
+          })
+          return;
+        }
       });
+      await runner.step(3, async (runner) => {
+const __funcResult = await __call(print, {
+          type: "positional",
+          args: [__stack.locals.sentiment]
+        });
 if (hasInterrupts(__funcResult)) {
-        await __ctx.pendingPromises.awaitAll()
-        runner.halt({
-          ...__state,
-          data: __funcResult
-        })
-        return;
-      }
-    });
+          await __ctx.pendingPromises.awaitAll()
+          runner.halt({
+            ...__state,
+            data: __funcResult
+          })
+          return;
+        }
+      });
+    })
     if (runner.halted) return runner.haltResult;
     await runner.hook(4, async () => {
 await callHook({

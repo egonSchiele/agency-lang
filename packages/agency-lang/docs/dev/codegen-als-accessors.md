@@ -24,12 +24,24 @@ The cost is one ALS read per access (negligible — `AsyncLocalStorage.getStore(
 | Local | Status | Accessor | PR |
 | --- | --- | --- | --- |
 | `__threads` | ✅ pruned | `__threads()` | [#201](https://github.com/egonSchiele/agency-lang/pull/201) |
-| `__graph` | ❌ still a const | (dead code — no accessor needed, just delete) | TBD |
-| `statelogClient` | ❌ still a const | (dead code — no accessor needed, just delete) | TBD |
-| `__stateStack` | ❌ still a const | `__stateStack()` (planned) | TBD |
-| `__ctx` | ❌ still a const | `__ctx()` (planned) | TBD |
+| `__graph` | ✅ pruned (dead code) | — | this PR |
+| `statelogClient` | ✅ pruned (dead code) | — | this PR |
+| `__stateStack` | ✅ pruned | `__stateStack()` | this PR |
+| `__ctx` | ❌ still a const | `__ctx()` (defined in runtime, codegen migration deferred — see "Why `__ctx` is deferred" below) | TBD |
+
+Alongside the accessor migrations, function and node body try blocks now wrap in `await agencyStore.run({ctx, stack, threads}, async () => { ... })` (defense-in-depth — closes the gap between Runner-managed steps where the outer ALS frame could be lost by a future refactor).
 
 Migration roadmap: [docs/superpowers/plans/2026-05-26-als-migration-phase-4-cleanup.md](../superpowers/plans/2026-05-26-als-migration-phase-4-cleanup.md).
+
+### Why `__ctx` is deferred
+
+Migrating `__ctx` is structurally identical to `__threads` and `__stateStack`, but three complications make it a meaningfully larger change than the rest of Phase 4:
+
+1. **Top-level rebind for docstring interpolation.** When a module has a function or graph node with an interpolation segment in its doc string (`"version ${toolVersion}"`), the codegen emits `const __ctx = __globalCtx;` at the module top scope so the *eager* tool-registration object literal can read `__ctx.globals.get(...)`. This rebind lives at module scope alongside the runtime import — making `__ctx` a `function` import would clash with the rebind, and turning the rebind into a `__ctx()` call would return `undefined` because the eager evaluation happens before any ALS frame is installed.
+2. **`classMethod.mustache` has its own `__ctx` setup.** `const __ctx = __state?.ctx || __globalCtx;` is method-scoped and inherits the same "no ALS frame yet at the call boundary" problem.
+3. **~17 deref sites in `lib/backends/typescriptBuilder.ts`.** Each needs the lenient (`__ctx()`) vs strict (`getRuntimeContext().ctx`) decision (per the rule in the next section), and several of them sit inside top-level emission paths where ALS is genuinely not available.
+
+This PR ships the `__ctx()` accessor (in `lib/runtime/asyncContext.ts`, exported from `lib/runtime/index.ts`) so the runtime piece is ready, but defers the codegen migration to a follow-up that can handle the docstring-interpolation rewrite in isolation.
 
 ## Why two flavors: `__X()` vs `getRuntimeContext().X`
 
@@ -257,9 +269,13 @@ You're outside an `agencyStore.run(...)` frame. Three cases:
 - **Bootstrap scope** (module top-level `const x = ...`, `callback(...)` registration, `onAgentStart` hook). The frame is a `BootstrapThreadStore` if you're reading `threads`; for other fields the frame is real, but reads must not assume node-body semantics. See [docs/dev/async-context.md](./async-context.md) "Frame kinds".
 - **A nested `await` after the frame was torn down.** Rare — frames propagate through normal `await` chains. If you see this, the frame was probably popped between scheduling and execution.
 
-### "Don't change `__stateStack` inside `forkBlockSetup.mustache`"
+### "Adding a local that shadows an accessor import"
 
-[`forkBlockSetup.mustache`](../../lib/templates/backends/typescriptGenerator/forkBlockSetup.mustache) line 10 has `const __stateStack = __forkBranchStack;`. This is **not** a normal setup-block local — it's an intentional rebind to the branch-specific stack inside a fork branch body. The branch stack must not be sourced from the parent ALS frame (which has the parent's stack); the entry point for the fork branch already installs an inner ALS frame with the branch stack via `runBatch.runInBranchAlsFrame`. Leave the rebind alone when migrating `__stateStack` to `__stateStack()` elsewhere.
+If you find yourself tempted to write `const __stateStack = somethingElse;` (or any other rebind that shares a name with the runtime import) inside a `.mustache` template, **don't**. The runtime import is a function; the local would shadow it; TypeScript renames the local to `__stateStack2` (or similar); any other template that emits `__stateStack()` then resolves to `__stateStack2` — a `StateStack` value, not a function — and crashes with `__stateStack2 is not a function`.
+
+This bit us specifically in `forkBlockSetup.mustache`: an earlier `const __stateStack = __forkBranchStack;` rebind was kept "to make the branch stack visible inside the body". It turned out to be unnecessary: `runBatch.runInBranchAlsFrame` (lib/runtime/runBatch.ts) already seeds the branch ALS frame with `stack: branchStack`, so `__stateStack()` inside the branch body resolves to the branch stack automatically. The rebind was removed; the gotcha here is "don't reintroduce it".
+
+If you genuinely need a *different* StateStack visible inside a sub-scope, install a new ALS frame for that scope (`agencyStore.run({...}, ...)`) rather than rebinding the name.
 
 ### Runner constructor needs explicit `threads`
 
@@ -295,7 +311,7 @@ Use this as a checklist when migrating one of the remaining locals (`__ctx`, `__
 - Backend: `lib/backends/typescriptBuilder.ts` → search for the bare name; both function-body emission (around line 1473) and node-body emission (around line 2179) call `setupEnv`. Other raw-string emissions of `__X.method(...)` need updating individually.
 - Templates: `lib/templates/backends/typescriptGenerator/`:
   - `blockSetup.mustache`
-  - `forkBlockSetup.mustache` (caveat: `__stateStack` rebind, see Gotchas)
+  - `forkBlockSetup.mustache` (note: no `__stateStack` rebind — the branch ALS frame from `runBatch.runInBranchAlsFrame` carries the branch stack)
   - `classMethod.mustache`
   - `debugger.mustache`
   - `interruptAssignment.mustache`

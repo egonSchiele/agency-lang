@@ -24,7 +24,7 @@ import {
   readSkillTool as __readSkillTool,
   readSkillToolParams as __readSkillToolParams,
   AgencyFunction as __AgencyFunction, UNSET as __UNSET,
-  __call, __callMethod, __threads, getRuntimeContext,
+  __call, __callMethod, __threads, __stateStack, getRuntimeContext, agencyStore,
   functionRefReviver as __functionRefReviver,
   DeterministicClient as __DeterministicClient,
 } from "agency-lang/runtime";
@@ -160,13 +160,10 @@ async function __greet_impl(name: string, greeting: string | typeof __UNSET = __
     state: __state
   });
   // __state will be undefined if this function is being called as a tool by an llm
-  const __stateStack = __setupData.stateStack;
-const __stack = __setupData.stack;
+  const __stack = __setupData.stack;
 const __step = __setupData.step;
 const __self = __setupData.self;
 const __ctx = __state?.ctx || __globalCtx;
-const statelogClient = __ctx.statelogClient;
-const __graph = __ctx.graph;
 let __forked;
 let __functionCompleted = false;
   if (!__ctx.globals.isInitialized("defaultValues.agency")) {
@@ -179,7 +176,7 @@ let __functionCompleted = false;
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "defaultValues.agency", scopeName: "greet", threads: __setupData.threads });
   let __resultCheckpointId = -1;
 if (__ctx.stateStack.currentNodeId()) {
-  __resultCheckpointId = __ctx.checkpoints.createPinned(__stateStack, __ctx, { moduleId: "defaultValues.agency", scopeName: "greet", stepPath: "", label: "result-entry" });
+  __resultCheckpointId = __ctx.checkpoints.createPinned(__stateStack(), __ctx, { moduleId: "defaultValues.agency", scopeName: "greet", stepPath: "", label: "result-entry" });
 }
 if (__ctx._pendingArgOverrides) {
   const __overrides = __ctx._pendingArgOverrides;
@@ -196,31 +193,37 @@ if (__ctx._pendingArgOverrides) {
 }
 
   try {
-    await runner.hook(0, async () => {
+    await agencyStore.run({
+      ctx: __ctx,
+      stack: __setupData.stateStack,
+      threads: __setupData.threads
+    }, async () => {
+      await runner.hook(0, async () => {
 await callHook({
-        name: "onFunctionStart",
-        data: {
-          functionName: "greet",
-          args: {
-            name: name,
-            greeting: greeting
-          },
-          isBuiltin: false,
-          moduleId: "defaultValues.agency"
-        }
-      })
-    });
-    await runner.step(1, async (runner) => {
-const __funcResult = await __call(print, {
-        type: "positional",
-        args: [__stack.args.greeting, __stack.args.name]
+          name: "onFunctionStart",
+          data: {
+            functionName: "greet",
+            args: {
+              name: name,
+              greeting: greeting
+            },
+            isBuiltin: false,
+            moduleId: "defaultValues.agency"
+          }
+        })
       });
+      await runner.step(1, async (runner) => {
+const __funcResult = await __call(print, {
+          type: "positional",
+          args: [__stack.args.greeting, __stack.args.name]
+        });
 if (hasInterrupts(__funcResult)) {
-        await __ctx.pendingPromises.awaitAll()
-        runner.halt(__funcResult)
-        return;
-      }
-    });
+          await __ctx.pendingPromises.awaitAll()
+          runner.halt(__funcResult)
+          return;
+        }
+      });
+    })
     if (runner.halted) { if (isFailure(runner.haltResult)) { runner.haltResult.retryable = runner.haltResult.retryable && __self.__retryable; } return runner.haltResult; }
   } catch (__error) {
     if (__error instanceof RestoreSignal) {
@@ -245,7 +248,7 @@ return failure(
 );
 
   } finally {
-    __stateStack.pop()
+    __stateStack()?.pop()
     if (__functionCompleted) {
       await callHook({
         name: "onFunctionEnd",

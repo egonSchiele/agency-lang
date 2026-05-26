@@ -26,7 +26,7 @@ import {
   readSkillTool as __readSkillTool,
   readSkillToolParams as __readSkillToolParams,
   AgencyFunction as __AgencyFunction, UNSET as __UNSET,
-  __call, __callMethod, __threads, getRuntimeContext,
+  __call, __callMethod, __threads, __stateStack, getRuntimeContext, agencyStore,
   functionRefReviver as __functionRefReviver,
   DeterministicClient as __DeterministicClient,
 } from "agency-lang/runtime";
@@ -167,29 +167,31 @@ graph.node("main", async (__state: GraphState) => {
   const __setupData = setupNode({
     state: __state
   });
-  const __stateStack = __state.ctx.stateStack;
-const __stack = __setupData.stack;
+  const __stack = __setupData.stack;
 const __step = __setupData.step;
 const __self = __setupData.self;
 const __ctx = __state.ctx;
-const statelogClient = __ctx.statelogClient;
-const __graph = __ctx.graph;
 let __forked;
 let __functionCompleted = false;
   const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "tests/debugger/interrupt-test.agency", scopeName: "main", threads: __setupData.threads });
   try {
-    await runner.hook(0, async () => {
+    await agencyStore.run({
+      ctx: __ctx,
+      stack: __ctx.stateStack,
+      threads: __setupData.threads
+    }, async () => {
+      await runner.hook(0, async () => {
 await callHook({
-        name: "onNodeStart",
-        data: {
-          nodeName: "main"
-        }
-      })
-    });
-    await runner.step(1, async (runner) => {
+          name: "onNodeStart",
+          data: {
+            nodeName: "main"
+          }
+        })
+      });
+      await runner.step(1, async (runner) => {
 __stack.locals.x = 1;
-    });
-    await runner.step(2, async (runner) => {
+      });
+      await runner.step(2, async (runner) => {
 // Resume path: check for a response by interruptId
 const __response = __ctx.getInterruptResponse(__self.__interruptId_2);
 if (__response) {
@@ -209,7 +211,7 @@ if (__response) {
   }
 } else {
   // First run: call handlers, then propagate if unhandled
-  const __handlerResult = await interruptWithHandlers("unknown", `check value`, {}, "./tests/debugger/interrupt-test.agency", __ctx, __stateStack);
+  const __handlerResult = await interruptWithHandlers("unknown", `check value`, {}, "./tests/debugger/interrupt-test.agency", __ctx, __stateStack());
   if (isRejected(__handlerResult)) {
     
     runner.halt({ messages: __threads(), data: failure(__handlerResult.value ?? "interrupt rejected", { retryable: false }) });
@@ -223,7 +225,7 @@ if (__response) {
     // No handler — propagate interrupt array to TypeScript caller
     // Store interruptId on frame BEFORE checkpoint so it's captured in the snapshot
     __self.__interruptId_2 = __handlerResult[0].interruptId;
-    const __checkpointId = __ctx.checkpoints.create(__stateStack, __ctx, { moduleId: "tests/debugger/interrupt-test.agency", scopeName: "main", stepPath: "2" });
+    const __checkpointId = __ctx.checkpoints.create(__stateStack(), __ctx, { moduleId: "tests/debugger/interrupt-test.agency", scopeName: "main", stepPath: "2" });
     __handlerResult[0].checkpointId = __checkpointId;
     __handlerResult[0].checkpoint = __ctx.checkpoints.get(__checkpointId);
     
@@ -234,17 +236,18 @@ if (__response) {
   }
 }
 
-    });
-    await runner.step(3, async (runner) => {
+      });
+      await runner.step(3, async (runner) => {
 __stack.locals.z = __stack.locals.x + __stack.locals.y;
-    });
-    await runner.step(4, async (runner) => {
+      });
+      await runner.step(4, async (runner) => {
 runner.halt({
-        messages: __threads(),
-        data: __stack.locals.z
-      })
+          messages: __threads(),
+          data: __stack.locals.z
+        })
 return;
-    });
+      });
+    })
     if (runner.halted) return runner.haltResult;
     await runner.hook(5, async () => {
 await callHook({

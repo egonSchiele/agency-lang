@@ -24,7 +24,7 @@ import {
   readSkillTool as __readSkillTool,
   readSkillToolParams as __readSkillToolParams,
   AgencyFunction as __AgencyFunction, UNSET as __UNSET,
-  __call, __callMethod, __threads, getRuntimeContext,
+  __call, __callMethod, __threads, __stateStack, getRuntimeContext, agencyStore,
   functionRefReviver as __functionRefReviver,
   DeterministicClient as __DeterministicClient,
 } from "agency-lang/runtime";
@@ -148,13 +148,10 @@ async function __add_impl(x: number, y: number, __state: InternalFunctionState |
     state: __state
   });
   // __state will be undefined if this function is being called as a tool by an llm
-  const __stateStack = __setupData.stateStack;
-const __stack = __setupData.stack;
+  const __stack = __setupData.stack;
 const __step = __setupData.step;
 const __self = __setupData.self;
 const __ctx = __state?.ctx || __globalCtx;
-const statelogClient = __ctx.statelogClient;
-const __graph = __ctx.graph;
 let __forked;
 let __functionCompleted = false;
   if (!__ctx.globals.isInitialized("function-with-types.agency")) {
@@ -167,7 +164,7 @@ let __functionCompleted = false;
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "function-with-types.agency", scopeName: "add", threads: __setupData.threads });
   let __resultCheckpointId = -1;
 if (__ctx.stateStack.currentNodeId()) {
-  __resultCheckpointId = __ctx.checkpoints.createPinned(__stateStack, __ctx, { moduleId: "function-with-types.agency", scopeName: "add", stepPath: "", label: "result-entry" });
+  __resultCheckpointId = __ctx.checkpoints.createPinned(__stateStack(), __ctx, { moduleId: "function-with-types.agency", scopeName: "add", stepPath: "", label: "result-entry" });
 }
 if (__ctx._pendingArgOverrides) {
   const __overrides = __ctx._pendingArgOverrides;
@@ -184,45 +181,51 @@ if (__ctx._pendingArgOverrides) {
 }
 
   try {
-    await runner.hook(0, async () => {
+    await agencyStore.run({
+      ctx: __ctx,
+      stack: __setupData.stateStack,
+      threads: __setupData.threads
+    }, async () => {
+      await runner.hook(0, async () => {
 await callHook({
-        name: "onFunctionStart",
-        data: {
-          functionName: "add",
-          args: {
-            x: x,
-            y: y
-          },
-          isBuiltin: false,
-          moduleId: "function-with-types.agency"
-        }
-      })
-    });
-    await runner.step(1, async (runner) => {
+          name: "onFunctionStart",
+          data: {
+            functionName: "add",
+            args: {
+              x: x,
+              y: y
+            },
+            isBuiltin: false,
+            moduleId: "function-with-types.agency"
+          }
+        })
+      });
+      await runner.step(1, async (runner) => {
 __self.__removedTools = __self.__removedTools || [];
 __stack.locals.result = await runPrompt({
-        prompt: `add ${__stack.args.x} and ${__stack.args.y}`,
-        messages: __threads().getOrCreateActive(),
-        responseFormat: z.object({
-          response: z.number()
-        }),
-        clientConfig: {},
-        maxToolCallRounds: 10,
-        removedTools: __self.__removedTools,
-        checkpointInfo: runner.getCheckpointInfo()
-      });
+          prompt: `add ${__stack.args.x} and ${__stack.args.y}`,
+          messages: __threads().getOrCreateActive(),
+          responseFormat: z.object({
+            response: z.number()
+          }),
+          clientConfig: {},
+          maxToolCallRounds: 10,
+          removedTools: __self.__removedTools,
+          checkpointInfo: runner.getCheckpointInfo()
+        });
 // halt if this is an interrupt
 if (hasInterrupts(__stack.locals.result)) {
-        await __ctx.pendingPromises.awaitAll()
-        runner.halt(__stack.locals.result)
-        return;
-      }
-    });
-    await runner.step(2, async (runner) => {
+          await __ctx.pendingPromises.awaitAll()
+          runner.halt(__stack.locals.result)
+          return;
+        }
+      });
+      await runner.step(2, async (runner) => {
 __functionCompleted = true;
 runner.halt(__stack.locals.result)
 return;
-    });
+      });
+    })
     if (runner.halted) { if (isFailure(runner.haltResult)) { runner.haltResult.retryable = runner.haltResult.retryable && __self.__retryable; } return runner.haltResult; }
   } catch (__error) {
     if (__error instanceof RestoreSignal) {
@@ -247,7 +250,7 @@ return failure(
 );
 
   } finally {
-    __stateStack.pop()
+    __stateStack()?.pop()
     if (__functionCompleted) {
       await callHook({
         name: "onFunctionEnd",
@@ -287,13 +290,10 @@ async function __greet_impl(name: string, __state: InternalFunctionState | undef
     state: __state
   });
   // __state will be undefined if this function is being called as a tool by an llm
-  const __stateStack = __setupData.stateStack;
-const __stack = __setupData.stack;
+  const __stack = __setupData.stack;
 const __step = __setupData.step;
 const __self = __setupData.self;
 const __ctx = __state?.ctx || __globalCtx;
-const statelogClient = __ctx.statelogClient;
-const __graph = __ctx.graph;
 let __forked;
 let __functionCompleted = false;
   if (!__ctx.globals.isInitialized("function-with-types.agency")) {
@@ -305,7 +305,7 @@ let __functionCompleted = false;
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "function-with-types.agency", scopeName: "greet", threads: __setupData.threads });
   let __resultCheckpointId = -1;
 if (__ctx.stateStack.currentNodeId()) {
-  __resultCheckpointId = __ctx.checkpoints.createPinned(__stateStack, __ctx, { moduleId: "function-with-types.agency", scopeName: "greet", stepPath: "", label: "result-entry" });
+  __resultCheckpointId = __ctx.checkpoints.createPinned(__stateStack(), __ctx, { moduleId: "function-with-types.agency", scopeName: "greet", stepPath: "", label: "result-entry" });
 }
 if (__ctx._pendingArgOverrides) {
   const __overrides = __ctx._pendingArgOverrides;
@@ -318,41 +318,47 @@ if (__ctx._pendingArgOverrides) {
 }
 
   try {
-    await runner.hook(0, async () => {
+    await agencyStore.run({
+      ctx: __ctx,
+      stack: __setupData.stateStack,
+      threads: __setupData.threads
+    }, async () => {
+      await runner.hook(0, async () => {
 await callHook({
-        name: "onFunctionStart",
-        data: {
-          functionName: "greet",
-          args: {
-            name: name
-          },
-          isBuiltin: false,
-          moduleId: "function-with-types.agency"
-        }
-      })
-    });
-    await runner.step(1, async (runner) => {
+          name: "onFunctionStart",
+          data: {
+            functionName: "greet",
+            args: {
+              name: name
+            },
+            isBuiltin: false,
+            moduleId: "function-with-types.agency"
+          }
+        })
+      });
+      await runner.step(1, async (runner) => {
 __self.__removedTools = __self.__removedTools || [];
 __stack.locals.message = await runPrompt({
-        prompt: `Hello ${__stack.args.name}!`,
-        messages: __threads().getOrCreateActive(),
-        clientConfig: {},
-        maxToolCallRounds: 10,
-        removedTools: __self.__removedTools,
-        checkpointInfo: runner.getCheckpointInfo()
-      });
+          prompt: `Hello ${__stack.args.name}!`,
+          messages: __threads().getOrCreateActive(),
+          clientConfig: {},
+          maxToolCallRounds: 10,
+          removedTools: __self.__removedTools,
+          checkpointInfo: runner.getCheckpointInfo()
+        });
 // halt if this is an interrupt
 if (hasInterrupts(__stack.locals.message)) {
-        await __ctx.pendingPromises.awaitAll()
-        runner.halt(__stack.locals.message)
-        return;
-      }
-    });
-    await runner.step(2, async (runner) => {
+          await __ctx.pendingPromises.awaitAll()
+          runner.halt(__stack.locals.message)
+          return;
+        }
+      });
+      await runner.step(2, async (runner) => {
 __functionCompleted = true;
 runner.halt(__stack.locals.message)
 return;
-    });
+      });
+    })
     if (runner.halted) { if (isFailure(runner.haltResult)) { runner.haltResult.retryable = runner.haltResult.retryable && __self.__retryable; } return runner.haltResult; }
   } catch (__error) {
     if (__error instanceof RestoreSignal) {
@@ -377,7 +383,7 @@ return failure(
 );
 
   } finally {
-    __stateStack.pop()
+    __stateStack()?.pop()
     if (__functionCompleted) {
       await callHook({
         name: "onFunctionEnd",
@@ -412,13 +418,10 @@ async function __mixed_impl(count: number, label: any, __state: InternalFunction
     state: __state
   });
   // __state will be undefined if this function is being called as a tool by an llm
-  const __stateStack = __setupData.stateStack;
-const __stack = __setupData.stack;
+  const __stack = __setupData.stack;
 const __step = __setupData.step;
 const __self = __setupData.self;
 const __ctx = __state?.ctx || __globalCtx;
-const statelogClient = __ctx.statelogClient;
-const __graph = __ctx.graph;
 let __forked;
 let __functionCompleted = false;
   if (!__ctx.globals.isInitialized("function-with-types.agency")) {
@@ -431,7 +434,7 @@ let __functionCompleted = false;
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "function-with-types.agency", scopeName: "mixed", threads: __setupData.threads });
   let __resultCheckpointId = -1;
 if (__ctx.stateStack.currentNodeId()) {
-  __resultCheckpointId = __ctx.checkpoints.createPinned(__stateStack, __ctx, { moduleId: "function-with-types.agency", scopeName: "mixed", stepPath: "", label: "result-entry" });
+  __resultCheckpointId = __ctx.checkpoints.createPinned(__stateStack(), __ctx, { moduleId: "function-with-types.agency", scopeName: "mixed", stepPath: "", label: "result-entry" });
 }
 if (__ctx._pendingArgOverrides) {
   const __overrides = __ctx._pendingArgOverrides;
@@ -448,42 +451,48 @@ if (__ctx._pendingArgOverrides) {
 }
 
   try {
-    await runner.hook(0, async () => {
+    await agencyStore.run({
+      ctx: __ctx,
+      stack: __setupData.stateStack,
+      threads: __setupData.threads
+    }, async () => {
+      await runner.hook(0, async () => {
 await callHook({
-        name: "onFunctionStart",
-        data: {
-          functionName: "mixed",
-          args: {
-            count: count,
-            label: label
-          },
-          isBuiltin: false,
-          moduleId: "function-with-types.agency"
-        }
-      })
-    });
-    await runner.step(1, async (runner) => {
+          name: "onFunctionStart",
+          data: {
+            functionName: "mixed",
+            args: {
+              count: count,
+              label: label
+            },
+            isBuiltin: false,
+            moduleId: "function-with-types.agency"
+          }
+        })
+      });
+      await runner.step(1, async (runner) => {
 __self.__removedTools = __self.__removedTools || [];
 __stack.locals.output = await runPrompt({
-        prompt: `${__stack.args.label}: ${__stack.args.count}`,
-        messages: __threads().getOrCreateActive(),
-        clientConfig: {},
-        maxToolCallRounds: 10,
-        removedTools: __self.__removedTools,
-        checkpointInfo: runner.getCheckpointInfo()
-      });
+          prompt: `${__stack.args.label}: ${__stack.args.count}`,
+          messages: __threads().getOrCreateActive(),
+          clientConfig: {},
+          maxToolCallRounds: 10,
+          removedTools: __self.__removedTools,
+          checkpointInfo: runner.getCheckpointInfo()
+        });
 // halt if this is an interrupt
 if (hasInterrupts(__stack.locals.output)) {
-        await __ctx.pendingPromises.awaitAll()
-        runner.halt(__stack.locals.output)
-        return;
-      }
-    });
-    await runner.step(2, async (runner) => {
+          await __ctx.pendingPromises.awaitAll()
+          runner.halt(__stack.locals.output)
+          return;
+        }
+      });
+      await runner.step(2, async (runner) => {
 __functionCompleted = true;
 runner.halt(__stack.locals.output)
 return;
-    });
+      });
+    })
     if (runner.halted) { if (isFailure(runner.haltResult)) { runner.haltResult.retryable = runner.haltResult.retryable && __self.__retryable; } return runner.haltResult; }
   } catch (__error) {
     if (__error instanceof RestoreSignal) {
@@ -508,7 +517,7 @@ return failure(
 );
 
   } finally {
-    __stateStack.pop()
+    __stateStack()?.pop()
     if (__functionCompleted) {
       await callHook({
         name: "onFunctionEnd",
@@ -548,13 +557,10 @@ async function __processArray_impl(items: number[], __state: InternalFunctionSta
     state: __state
   });
   // __state will be undefined if this function is being called as a tool by an llm
-  const __stateStack = __setupData.stateStack;
-const __stack = __setupData.stack;
+  const __stack = __setupData.stack;
 const __step = __setupData.step;
 const __self = __setupData.self;
 const __ctx = __state?.ctx || __globalCtx;
-const statelogClient = __ctx.statelogClient;
-const __graph = __ctx.graph;
 let __forked;
 let __functionCompleted = false;
   if (!__ctx.globals.isInitialized("function-with-types.agency")) {
@@ -566,7 +572,7 @@ let __functionCompleted = false;
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "function-with-types.agency", scopeName: "processArray", threads: __setupData.threads });
   let __resultCheckpointId = -1;
 if (__ctx.stateStack.currentNodeId()) {
-  __resultCheckpointId = __ctx.checkpoints.createPinned(__stateStack, __ctx, { moduleId: "function-with-types.agency", scopeName: "processArray", stepPath: "", label: "result-entry" });
+  __resultCheckpointId = __ctx.checkpoints.createPinned(__stateStack(), __ctx, { moduleId: "function-with-types.agency", scopeName: "processArray", stepPath: "", label: "result-entry" });
 }
 if (__ctx._pendingArgOverrides) {
   const __overrides = __ctx._pendingArgOverrides;
@@ -579,41 +585,47 @@ if (__ctx._pendingArgOverrides) {
 }
 
   try {
-    await runner.hook(0, async () => {
+    await agencyStore.run({
+      ctx: __ctx,
+      stack: __setupData.stateStack,
+      threads: __setupData.threads
+    }, async () => {
+      await runner.hook(0, async () => {
 await callHook({
-        name: "onFunctionStart",
-        data: {
-          functionName: "processArray",
-          args: {
-            items: items
-          },
-          isBuiltin: false,
-          moduleId: "function-with-types.agency"
-        }
-      })
-    });
-    await runner.step(1, async (runner) => {
+          name: "onFunctionStart",
+          data: {
+            functionName: "processArray",
+            args: {
+              items: items
+            },
+            isBuiltin: false,
+            moduleId: "function-with-types.agency"
+          }
+        })
+      });
+      await runner.step(1, async (runner) => {
 __self.__removedTools = __self.__removedTools || [];
 __stack.locals.result = await runPrompt({
-        prompt: `Processing array with ${__stack.args.items} items`,
-        messages: __threads().getOrCreateActive(),
-        clientConfig: {},
-        maxToolCallRounds: 10,
-        removedTools: __self.__removedTools,
-        checkpointInfo: runner.getCheckpointInfo()
-      });
+          prompt: `Processing array with ${__stack.args.items} items`,
+          messages: __threads().getOrCreateActive(),
+          clientConfig: {},
+          maxToolCallRounds: 10,
+          removedTools: __self.__removedTools,
+          checkpointInfo: runner.getCheckpointInfo()
+        });
 // halt if this is an interrupt
 if (hasInterrupts(__stack.locals.result)) {
-        await __ctx.pendingPromises.awaitAll()
-        runner.halt(__stack.locals.result)
-        return;
-      }
-    });
-    await runner.step(2, async (runner) => {
+          await __ctx.pendingPromises.awaitAll()
+          runner.halt(__stack.locals.result)
+          return;
+        }
+      });
+      await runner.step(2, async (runner) => {
 __functionCompleted = true;
 runner.halt(__stack.locals.result)
 return;
-    });
+      });
+    })
     if (runner.halted) { if (isFailure(runner.haltResult)) { runner.haltResult.retryable = runner.haltResult.retryable && __self.__retryable; } return runner.haltResult; }
   } catch (__error) {
     if (__error instanceof RestoreSignal) {
@@ -638,7 +650,7 @@ return failure(
 );
 
   } finally {
-    __stateStack.pop()
+    __stateStack()?.pop()
     if (__functionCompleted) {
       await callHook({
         name: "onFunctionEnd",
@@ -673,13 +685,10 @@ async function __flexible_impl(value: string | number, __state: InternalFunction
     state: __state
   });
   // __state will be undefined if this function is being called as a tool by an llm
-  const __stateStack = __setupData.stateStack;
-const __stack = __setupData.stack;
+  const __stack = __setupData.stack;
 const __step = __setupData.step;
 const __self = __setupData.self;
 const __ctx = __state?.ctx || __globalCtx;
-const statelogClient = __ctx.statelogClient;
-const __graph = __ctx.graph;
 let __forked;
 let __functionCompleted = false;
   if (!__ctx.globals.isInitialized("function-with-types.agency")) {
@@ -691,7 +700,7 @@ let __functionCompleted = false;
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "function-with-types.agency", scopeName: "flexible", threads: __setupData.threads });
   let __resultCheckpointId = -1;
 if (__ctx.stateStack.currentNodeId()) {
-  __resultCheckpointId = __ctx.checkpoints.createPinned(__stateStack, __ctx, { moduleId: "function-with-types.agency", scopeName: "flexible", stepPath: "", label: "result-entry" });
+  __resultCheckpointId = __ctx.checkpoints.createPinned(__stateStack(), __ctx, { moduleId: "function-with-types.agency", scopeName: "flexible", stepPath: "", label: "result-entry" });
 }
 if (__ctx._pendingArgOverrides) {
   const __overrides = __ctx._pendingArgOverrides;
@@ -704,41 +713,47 @@ if (__ctx._pendingArgOverrides) {
 }
 
   try {
-    await runner.hook(0, async () => {
+    await agencyStore.run({
+      ctx: __ctx,
+      stack: __setupData.stateStack,
+      threads: __setupData.threads
+    }, async () => {
+      await runner.hook(0, async () => {
 await callHook({
-        name: "onFunctionStart",
-        data: {
-          functionName: "flexible",
-          args: {
-            value: value
-          },
-          isBuiltin: false,
-          moduleId: "function-with-types.agency"
-        }
-      })
-    });
-    await runner.step(1, async (runner) => {
+          name: "onFunctionStart",
+          data: {
+            functionName: "flexible",
+            args: {
+              value: value
+            },
+            isBuiltin: false,
+            moduleId: "function-with-types.agency"
+          }
+        })
+      });
+      await runner.step(1, async (runner) => {
 __self.__removedTools = __self.__removedTools || [];
 __stack.locals.result = await runPrompt({
-        prompt: `Received value: ${__stack.args.value}`,
-        messages: __threads().getOrCreateActive(),
-        clientConfig: {},
-        maxToolCallRounds: 10,
-        removedTools: __self.__removedTools,
-        checkpointInfo: runner.getCheckpointInfo()
-      });
+          prompt: `Received value: ${__stack.args.value}`,
+          messages: __threads().getOrCreateActive(),
+          clientConfig: {},
+          maxToolCallRounds: 10,
+          removedTools: __self.__removedTools,
+          checkpointInfo: runner.getCheckpointInfo()
+        });
 // halt if this is an interrupt
 if (hasInterrupts(__stack.locals.result)) {
-        await __ctx.pendingPromises.awaitAll()
-        runner.halt(__stack.locals.result)
-        return;
-      }
-    });
-    await runner.step(2, async (runner) => {
+          await __ctx.pendingPromises.awaitAll()
+          runner.halt(__stack.locals.result)
+          return;
+        }
+      });
+      await runner.step(2, async (runner) => {
 __functionCompleted = true;
 runner.halt(__stack.locals.result)
 return;
-    });
+      });
+    })
     if (runner.halted) { if (isFailure(runner.haltResult)) { runner.haltResult.retryable = runner.haltResult.retryable && __self.__retryable; } return runner.haltResult; }
   } catch (__error) {
     if (__error instanceof RestoreSignal) {
@@ -763,7 +778,7 @@ return failure(
 );
 
   } finally {
-    __stateStack.pop()
+    __stateStack()?.pop()
     if (__functionCompleted) {
       await callHook({
         name: "onFunctionEnd",
@@ -797,46 +812,49 @@ graph.node("foo", async (__state: GraphState) => {
   const __setupData = setupNode({
     state: __state
   });
-  const __stateStack = __state.ctx.stateStack;
-const __stack = __setupData.stack;
+  const __stack = __setupData.stack;
 const __step = __setupData.step;
 const __self = __setupData.self;
 const __ctx = __state.ctx;
-const statelogClient = __ctx.statelogClient;
-const __graph = __ctx.graph;
 let __forked;
 let __functionCompleted = false;
   const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "function-with-types.agency", scopeName: "foo", threads: __setupData.threads });
   try {
-    await runner.hook(0, async () => {
+    await agencyStore.run({
+      ctx: __ctx,
+      stack: __ctx.stateStack,
+      threads: __setupData.threads
+    }, async () => {
+      await runner.hook(0, async () => {
 await callHook({
-        name: "onNodeStart",
-        data: {
-          nodeName: "foo"
-        }
-      })
-    });
-    await runner.step(1, async (runner) => {
-const __funcResult = await __call(print, {
-        type: "positional",
-        args: [`This is a node with a return type`]
-      });
-if (hasInterrupts(__funcResult)) {
-        await __ctx.pendingPromises.awaitAll()
-        runner.halt({
-          ...__state,
-          data: __funcResult
+          name: "onNodeStart",
+          data: {
+            nodeName: "foo"
+          }
         })
-        return;
-      }
-    });
-    await runner.step(2, async (runner) => {
+      });
+      await runner.step(1, async (runner) => {
+const __funcResult = await __call(print, {
+          type: "positional",
+          args: [`This is a node with a return type`]
+        });
+if (hasInterrupts(__funcResult)) {
+          await __ctx.pendingPromises.awaitAll()
+          runner.halt({
+            ...__state,
+            data: __funcResult
+          })
+          return;
+        }
+      });
+      await runner.step(2, async (runner) => {
 runner.halt({
-        messages: __threads(),
-        data: `Node completed`
-      })
+          messages: __threads(),
+          data: `Node completed`
+        })
 return;
-    });
+      });
+    })
     if (runner.halted) return runner.haltResult;
     await runner.hook(3, async () => {
 await callHook({
@@ -870,98 +888,101 @@ graph.node("main", async (__state: GraphState) => {
   const __setupData = setupNode({
     state: __state
   });
-  const __stateStack = __state.ctx.stateStack;
-const __stack = __setupData.stack;
+  const __stack = __setupData.stack;
 const __step = __setupData.step;
 const __self = __setupData.self;
 const __ctx = __state.ctx;
-const statelogClient = __ctx.statelogClient;
-const __graph = __ctx.graph;
 let __forked;
 let __functionCompleted = false;
   const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "function-with-types.agency", scopeName: "main", threads: __setupData.threads });
   try {
-    await runner.hook(0, async () => {
+    await agencyStore.run({
+      ctx: __ctx,
+      stack: __ctx.stateStack,
+      threads: __setupData.threads
+    }, async () => {
+      await runner.hook(0, async () => {
 await callHook({
-        name: "onNodeStart",
-        data: {
-          nodeName: "main"
-        }
-      })
-    });
-    await runner.step(1, async (runner) => {
+          name: "onNodeStart",
+          data: {
+            nodeName: "main"
+          }
+        })
+      });
+      await runner.step(1, async (runner) => {
 //  Call the functions
-    });
-    await runner.step(2, async (runner) => {
+      });
+      await runner.step(2, async (runner) => {
 __stack.locals.sum = await __call(add, {
-        type: "positional",
-        args: [5, 10]
-      });
+          type: "positional",
+          args: [5, 10]
+        });
 if (hasInterrupts(__stack.locals.sum)) {
-        await __ctx.pendingPromises.awaitAll()
-        runner.halt({
-          ...__state,
-          data: __stack.locals.sum
-        })
-        return;
-      }
-    });
-    await runner.step(3, async (runner) => {
+          await __ctx.pendingPromises.awaitAll()
+          runner.halt({
+            ...__state,
+            data: __stack.locals.sum
+          })
+          return;
+        }
+      });
+      await runner.step(3, async (runner) => {
 __stack.locals.greeting = await __call(greet, {
-        type: "positional",
-        args: [`Alice`]
-      });
+          type: "positional",
+          args: [`Alice`]
+        });
 if (hasInterrupts(__stack.locals.greeting)) {
-        await __ctx.pendingPromises.awaitAll()
-        runner.halt({
-          ...__state,
-          data: __stack.locals.greeting
-        })
-        return;
-      }
-    });
-    await runner.step(4, async (runner) => {
+          await __ctx.pendingPromises.awaitAll()
+          runner.halt({
+            ...__state,
+            data: __stack.locals.greeting
+          })
+          return;
+        }
+      });
+      await runner.step(4, async (runner) => {
 __stack.locals.labeled = await __call(mixed, {
-        type: "positional",
-        args: [42, `Answer`]
-      });
+          type: "positional",
+          args: [42, `Answer`]
+        });
 if (hasInterrupts(__stack.locals.labeled)) {
-        await __ctx.pendingPromises.awaitAll()
-        runner.halt({
-          ...__state,
-          data: __stack.locals.labeled
-        })
-        return;
-      }
-    });
-    await runner.step(5, async (runner) => {
+          await __ctx.pendingPromises.awaitAll()
+          runner.halt({
+            ...__state,
+            data: __stack.locals.labeled
+          })
+          return;
+        }
+      });
+      await runner.step(5, async (runner) => {
 __stack.locals.processed = await __call(processArray, {
-        type: "positional",
-        args: [[1, 2, 3, 4, 5]]
-      });
+          type: "positional",
+          args: [[1, 2, 3, 4, 5]]
+        });
 if (hasInterrupts(__stack.locals.processed)) {
-        await __ctx.pendingPromises.awaitAll()
-        runner.halt({
-          ...__state,
-          data: __stack.locals.processed
-        })
-        return;
-      }
-    });
-    await runner.step(6, async (runner) => {
-__stack.locals.flexResult = await __call(flexible, {
-        type: "positional",
-        args: [`test`]
+          await __ctx.pendingPromises.awaitAll()
+          runner.halt({
+            ...__state,
+            data: __stack.locals.processed
+          })
+          return;
+        }
       });
+      await runner.step(6, async (runner) => {
+__stack.locals.flexResult = await __call(flexible, {
+          type: "positional",
+          args: [`test`]
+        });
 if (hasInterrupts(__stack.locals.flexResult)) {
-        await __ctx.pendingPromises.awaitAll()
-        runner.halt({
-          ...__state,
-          data: __stack.locals.flexResult
-        })
-        return;
-      }
-    });
+          await __ctx.pendingPromises.awaitAll()
+          runner.halt({
+            ...__state,
+            data: __stack.locals.flexResult
+          })
+          return;
+        }
+      });
+    })
     if (runner.halted) return runner.haltResult;
     await runner.hook(7, async () => {
 await callHook({

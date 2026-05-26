@@ -9,8 +9,6 @@ export const template = `  async {{{methodName}}}({{{params}}}__state: any = und
     const __step = __setupData.step;
     const __self = __setupData.self;
     const __ctx = __state?.ctx || __globalCtx;
-    const statelogClient = __ctx.statelogClient;
-    const __graph = __ctx.graph;
     let __forked;
     let __functionCompleted = false;
     if (!__ctx.globals.isInitialized({{{moduleId}}})) {
@@ -21,15 +19,18 @@ export const template = `  async {{{methodName}}}({{{params}}}__state: any = und
     __stack.args[{{{this.nameQuoted}}}] = {{{this.name}}};
 {{/paramAssignments}}
     try {
+      await agencyStore.run({ ctx: __ctx, stack: __setupData.stateStack, threads: __setupData.threads }, async () => {
 {{{body}}}
+        if (runner.halted) { return; }
+        __functionCompleted = true;
+      });
       if (runner.halted) { return runner.haltResult; }
-      __functionCompleted = true;
     } catch (__error) {
       if (__error instanceof RestoreSignal) { throw __error; }
       if (__error instanceof GuardExceededError) { throw __error; }
       throw __error;
     } finally {
-      __stateStack.pop()
+      __stateStack()?.pop()
     }
   }`;
 

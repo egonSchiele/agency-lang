@@ -26,7 +26,7 @@ import {
   readSkillTool as __readSkillTool,
   readSkillToolParams as __readSkillToolParams,
   AgencyFunction as __AgencyFunction, UNSET as __UNSET,
-  __call, __callMethod, __threads, getRuntimeContext,
+  __call, __callMethod, __threads, __stateStack, getRuntimeContext, agencyStore,
   functionRefReviver as __functionRefReviver,
   DeterministicClient as __DeterministicClient,
 } from "agency-lang/runtime";
@@ -168,13 +168,10 @@ async function __add_impl(a: any, b: number, __state: InternalFunctionState | un
     state: __state
   });
   // __state will be undefined if this function is being called as a tool by an llm
-  const __stateStack = __setupData.stateStack;
-const __stack = __setupData.stack;
+  const __stack = __setupData.stack;
 const __step = __setupData.step;
 const __self = __setupData.self;
 const __ctx = __state?.ctx || __globalCtx;
-const statelogClient = __ctx.statelogClient;
-const __graph = __ctx.graph;
 let __forked;
 let __functionCompleted = false;
   if (!__ctx.globals.isInitialized("tests/debugger/function-call-test.agency")) {
@@ -187,7 +184,7 @@ let __functionCompleted = false;
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "tests/debugger/function-call-test.agency", scopeName: "add", threads: __setupData.threads });
   let __resultCheckpointId = -1;
 if (__ctx.stateStack.currentNodeId()) {
-  __resultCheckpointId = __ctx.checkpoints.createPinned(__stateStack, __ctx, { moduleId: "tests/debugger/function-call-test.agency", scopeName: "add", stepPath: "", label: "result-entry" });
+  __resultCheckpointId = __ctx.checkpoints.createPinned(__stateStack(), __ctx, { moduleId: "tests/debugger/function-call-test.agency", scopeName: "add", stepPath: "", label: "result-entry" });
 }
 if (__ctx._pendingArgOverrides) {
   const __overrides = __ctx._pendingArgOverrides;
@@ -204,31 +201,37 @@ if (__ctx._pendingArgOverrides) {
 }
 
   try {
-    await runner.hook(0, async () => {
+    await agencyStore.run({
+      ctx: __ctx,
+      stack: __setupData.stateStack,
+      threads: __setupData.threads
+    }, async () => {
+      await runner.hook(0, async () => {
 await callHook({
-        name: "onFunctionStart",
-        data: {
-          functionName: "add",
-          args: {
-            a: a,
-            b: b
-          },
-          isBuiltin: false,
-          moduleId: "tests/debugger/function-call-test.agency"
-        }
-      })
-    });
-    await runner.step(1, async (runner) => {
+          name: "onFunctionStart",
+          data: {
+            functionName: "add",
+            args: {
+              a: a,
+              b: b
+            },
+            isBuiltin: false,
+            moduleId: "tests/debugger/function-call-test.agency"
+          }
+        })
+      });
+      await runner.step(1, async (runner) => {
 __stack.locals.result = __stack.args.a + __stack.args.b;
-    });
-    await runner.step(2, async (runner) => {
+      });
+      await runner.step(2, async (runner) => {
 __stack.locals.doubled = __stack.locals.result * 2;
-    });
-    await runner.step(3, async (runner) => {
+      });
+      await runner.step(3, async (runner) => {
 __functionCompleted = true;
 runner.halt(__stack.locals.doubled)
 return;
-    });
+      });
+    })
     if (runner.halted) { if (isFailure(runner.haltResult)) { runner.haltResult.retryable = runner.haltResult.retryable && __self.__retryable; } return runner.haltResult; }
   } catch (__error) {
     if (__error instanceof RestoreSignal) {
@@ -253,7 +256,7 @@ return failure(
 );
 
   } finally {
-    __stateStack.pop()
+    __stateStack()?.pop()
     if (__functionCompleted) {
       await callHook({
         name: "onFunctionEnd",
@@ -292,55 +295,58 @@ graph.node("main", async (__state: GraphState) => {
   const __setupData = setupNode({
     state: __state
   });
-  const __stateStack = __state.ctx.stateStack;
-const __stack = __setupData.stack;
+  const __stack = __setupData.stack;
 const __step = __setupData.step;
 const __self = __setupData.self;
 const __ctx = __state.ctx;
-const statelogClient = __ctx.statelogClient;
-const __graph = __ctx.graph;
 let __forked;
 let __functionCompleted = false;
   const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "tests/debugger/function-call-test.agency", scopeName: "main", threads: __setupData.threads });
   try {
-    await runner.hook(0, async () => {
+    await agencyStore.run({
+      ctx: __ctx,
+      stack: __ctx.stateStack,
+      threads: __setupData.threads
+    }, async () => {
+      await runner.hook(0, async () => {
 await callHook({
-        name: "onNodeStart",
-        data: {
-          nodeName: "main"
-        }
-      })
-    });
-    await runner.step(1, async (runner) => {
-__stack.locals.x = 1;
-    });
-    await runner.step(2, async (runner) => {
-__stack.locals.y = await __call(add, {
-        type: "positional",
-        args: [__stack.locals.x, 2]
-      });
-if (hasInterrupts(__stack.locals.y)) {
-        await __ctx.pendingPromises.awaitAll()
-        runner.halt({
-          ...__state,
-          data: __stack.locals.y
+          name: "onNodeStart",
+          data: {
+            nodeName: "main"
+          }
         })
-        return;
-      }
-    });
-    await runner.step(3, async (runner) => {
+      });
+      await runner.step(1, async (runner) => {
+__stack.locals.x = 1;
+      });
+      await runner.step(2, async (runner) => {
+__stack.locals.y = await __call(add, {
+          type: "positional",
+          args: [__stack.locals.x, 2]
+        });
+if (hasInterrupts(__stack.locals.y)) {
+          await __ctx.pendingPromises.awaitAll()
+          runner.halt({
+            ...__state,
+            data: __stack.locals.y
+          })
+          return;
+        }
+      });
+      await runner.step(3, async (runner) => {
 __stack.locals.z = __stack.locals.y + 10;
-    });
-    await runner.step(4, async (runner) => {
+      });
+      await runner.step(4, async (runner) => {
 __stack.locals.w = __stack.locals.z + 1;
-    });
-    await runner.step(5, async (runner) => {
+      });
+      await runner.step(5, async (runner) => {
 runner.halt({
-        messages: __threads(),
-        data: __stack.locals.w
-      })
+          messages: __threads(),
+          data: __stack.locals.w
+        })
 return;
-    });
+      });
+    })
     if (runner.halted) return runner.haltResult;
     await runner.hook(6, async () => {
 await callHook({

@@ -24,7 +24,7 @@ import {
   readSkillTool as __readSkillTool,
   readSkillToolParams as __readSkillToolParams,
   AgencyFunction as __AgencyFunction, UNSET as __UNSET,
-  __call, __callMethod, __threads, getRuntimeContext,
+  __call, __callMethod, __threads, __stateStack, getRuntimeContext, agencyStore,
   functionRefReviver as __functionRefReviver,
   DeterministicClient as __DeterministicClient,
 } from "agency-lang/runtime";
@@ -151,13 +151,10 @@ async function __toDigit_impl(c: string, __state: InternalFunctionState | undefi
     state: __state
   });
   // __state will be undefined if this function is being called as a tool by an llm
-  const __stateStack = __setupData.stateStack;
-const __stack = __setupData.stack;
+  const __stack = __setupData.stack;
 const __step = __setupData.step;
 const __self = __setupData.self;
 const __ctx = __state?.ctx || __globalCtx;
-const statelogClient = __ctx.statelogClient;
-const __graph = __ctx.graph;
 let __forked;
 let __functionCompleted = false;
   if (!__ctx.globals.isInitialized("euler-0008.agency")) {
@@ -169,7 +166,7 @@ let __functionCompleted = false;
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "euler-0008.agency", scopeName: "toDigit", threads: __setupData.threads });
   let __resultCheckpointId = -1;
 if (__ctx.stateStack.currentNodeId()) {
-  __resultCheckpointId = __ctx.checkpoints.createPinned(__stateStack, __ctx, { moduleId: "euler-0008.agency", scopeName: "toDigit", stepPath: "", label: "result-entry" });
+  __resultCheckpointId = __ctx.checkpoints.createPinned(__stateStack(), __ctx, { moduleId: "euler-0008.agency", scopeName: "toDigit", stepPath: "", label: "result-entry" });
 }
 if (__ctx._pendingArgOverrides) {
   const __overrides = __ctx._pendingArgOverrides;
@@ -182,20 +179,25 @@ if (__ctx._pendingArgOverrides) {
 }
 
   try {
-    await runner.hook(0, async () => {
+    await agencyStore.run({
+      ctx: __ctx,
+      stack: __setupData.stateStack,
+      threads: __setupData.threads
+    }, async () => {
+      await runner.hook(0, async () => {
 await callHook({
-        name: "onFunctionStart",
-        data: {
-          functionName: "toDigit",
-          args: {
-            c: c
-          },
-          isBuiltin: false,
-          moduleId: "euler-0008.agency"
-        }
-      })
-    });
-    await runner.ifElse(1, [
+          name: "onFunctionStart",
+          data: {
+            functionName: "toDigit",
+            args: {
+              c: c
+            },
+            isBuiltin: false,
+            moduleId: "euler-0008.agency"
+          }
+        })
+      });
+      await runner.ifElse(1, [
 
   {
     condition: async () => __stack.args.c === `1`,
@@ -204,12 +206,12 @@ await runner.step(0, async (runner) => {
 __functionCompleted = true;
 runner.halt(1)
 return;
-          });
+            });
     },
   },
 
 ]);
-    await runner.ifElse(2, [
+      await runner.ifElse(2, [
 
   {
     condition: async () => __stack.args.c === `2`,
@@ -218,12 +220,12 @@ await runner.step(0, async (runner) => {
 __functionCompleted = true;
 runner.halt(2)
 return;
-          });
+            });
     },
   },
 
 ]);
-    await runner.ifElse(3, [
+      await runner.ifElse(3, [
 
   {
     condition: async () => __stack.args.c === `3`,
@@ -232,12 +234,12 @@ await runner.step(0, async (runner) => {
 __functionCompleted = true;
 runner.halt(3)
 return;
-          });
+            });
     },
   },
 
 ]);
-    await runner.ifElse(4, [
+      await runner.ifElse(4, [
 
   {
     condition: async () => __stack.args.c === `4`,
@@ -246,12 +248,12 @@ await runner.step(0, async (runner) => {
 __functionCompleted = true;
 runner.halt(4)
 return;
-          });
+            });
     },
   },
 
 ]);
-    await runner.ifElse(5, [
+      await runner.ifElse(5, [
 
   {
     condition: async () => __stack.args.c === `5`,
@@ -260,12 +262,12 @@ await runner.step(0, async (runner) => {
 __functionCompleted = true;
 runner.halt(5)
 return;
-          });
+            });
     },
   },
 
 ]);
-    await runner.ifElse(6, [
+      await runner.ifElse(6, [
 
   {
     condition: async () => __stack.args.c === `6`,
@@ -274,12 +276,12 @@ await runner.step(0, async (runner) => {
 __functionCompleted = true;
 runner.halt(6)
 return;
-          });
+            });
     },
   },
 
 ]);
-    await runner.ifElse(7, [
+      await runner.ifElse(7, [
 
   {
     condition: async () => __stack.args.c === `7`,
@@ -288,12 +290,12 @@ await runner.step(0, async (runner) => {
 __functionCompleted = true;
 runner.halt(7)
 return;
-          });
+            });
     },
   },
 
 ]);
-    await runner.ifElse(8, [
+      await runner.ifElse(8, [
 
   {
     condition: async () => __stack.args.c === `8`,
@@ -302,12 +304,12 @@ await runner.step(0, async (runner) => {
 __functionCompleted = true;
 runner.halt(8)
 return;
-          });
+            });
     },
   },
 
 ]);
-    await runner.ifElse(9, [
+      await runner.ifElse(9, [
 
   {
     condition: async () => __stack.args.c === `9`,
@@ -316,16 +318,17 @@ await runner.step(0, async (runner) => {
 __functionCompleted = true;
 runner.halt(9)
 return;
-          });
+            });
     },
   },
 
 ]);
-    await runner.step(10, async (runner) => {
+      await runner.step(10, async (runner) => {
 __functionCompleted = true;
 runner.halt(0)
 return;
-    });
+      });
+    })
     if (runner.halted) { if (isFailure(runner.haltResult)) { runner.haltResult.retryable = runner.haltResult.retryable && __self.__retryable; } return runner.haltResult; }
   } catch (__error) {
     if (__error instanceof RestoreSignal) {
@@ -350,7 +353,7 @@ return failure(
 );
 
   } finally {
-    __stateStack.pop()
+    __stateStack()?.pop()
     if (__functionCompleted) {
       await callHook({
         name: "onFunctionEnd",
@@ -384,52 +387,54 @@ graph.node("main", async (__state: GraphState) => {
   const __setupData = setupNode({
     state: __state
   });
-  const __stateStack = __state.ctx.stateStack;
-const __stack = __setupData.stack;
+  const __stack = __setupData.stack;
 const __step = __setupData.step;
 const __self = __setupData.self;
 const __ctx = __state.ctx;
-const statelogClient = __ctx.statelogClient;
-const __graph = __ctx.graph;
 let __forked;
 let __functionCompleted = false;
   const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "euler-0008.agency", scopeName: "main", threads: __setupData.threads });
   try {
-    await runner.hook(0, async () => {
+    await agencyStore.run({
+      ctx: __ctx,
+      stack: __ctx.stateStack,
+      threads: __setupData.threads
+    }, async () => {
+      await runner.hook(0, async () => {
 await callHook({
-        name: "onNodeStart",
-        data: {
-          nodeName: "main"
-        }
-      })
-    });
-    await runner.step(1, async (runner) => {
+          name: "onNodeStart",
+          data: {
+            nodeName: "main"
+          }
+        })
+      });
+      await runner.step(1, async (runner) => {
 __stack.locals.digits = `7316717653133062491922511967442657474235534919493496983520312774506326239578318016984801869478851843858615607891129494954595017379583319528532088055111254069874715852386305071569329096329522744304355766896648950445244523161731856403098711121722383113622298934233803081353362766142828064444866452387493035890729629049156044077239071381051585930796086670172427121883998797908792274921901699720888093776657273330010533678812202354218097512545405947522435258490771167055601360483958644670632441572215539753697817977846174064955149290862569321978468622482839722413756570560574902614079729686524145351004748216637048440319989000889524345065854122758866688116427171479924442928230863465674813919123162824586178664583591245665294765456828489128831426076900422421902267105562632111110937054421750694165896040807198403850962455444362981230987879927244284909188845801561660979191338754992005240636899125607176060588611646710940507754100225698315520005593572972571636269561882670428252483600823257530420752963450`;
-    });
-    await runner.step(2, async (runner) => {
+      });
+      await runner.step(2, async (runner) => {
 __stack.locals.maxProduct = 0;
-    });
-    await runner.step(3, async (runner) => {
+      });
+      await runner.step(3, async (runner) => {
 __stack.locals.i = 0;
-    });
-    await runner.whileLoop(4, async () => __stack.locals.i <= __stack.locals.digits.length - 13, async (runner) => {
+      });
+      await runner.whileLoop(4, async () => __stack.locals.i <= __stack.locals.digits.length - 13, async (runner) => {
 await runner.step(0, async (runner) => {
 __stack.locals.product = 1;
-      });
+        });
 await runner.step(1, async (runner) => {
 __stack.locals.j = 0;
-      });
+        });
 await runner.whileLoop(2, async () => __stack.locals.j < 13, async (runner) => {
 await runner.step(0, async (runner) => {
 __stack.locals.product = __stack.locals.product * await __call(toDigit, {
-            type: "positional",
-            args: [__stack.locals.digits[__stack.locals.i + __stack.locals.j]]
+              type: "positional",
+              args: [__stack.locals.digits[__stack.locals.i + __stack.locals.j]]
+            });
           });
-        });
 await runner.step(1, async (runner) => {
 __stack.locals.j = __stack.locals.j + 1;
+          });
         });
-      });
 await runner.ifElse(3, [
 
   {
@@ -437,22 +442,23 @@ await runner.ifElse(3, [
     body: async (runner) => {
 await runner.step(0, async (runner) => {
 __stack.locals.maxProduct = __stack.locals.product;
-            });
+              });
     },
   },
 
 ]);
 await runner.step(4, async (runner) => {
 __stack.locals.i = __stack.locals.i + 1;
+        });
       });
-    });
-    await runner.step(5, async (runner) => {
+      await runner.step(5, async (runner) => {
 runner.halt({
-        messages: __threads(),
-        data: __stack.locals.maxProduct
-      })
+          messages: __threads(),
+          data: __stack.locals.maxProduct
+        })
 return;
-    });
+      });
+    })
     if (runner.halted) return runner.haltResult;
     await runner.hook(6, async () => {
 await callHook({

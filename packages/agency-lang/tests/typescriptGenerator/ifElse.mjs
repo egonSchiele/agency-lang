@@ -24,7 +24,7 @@ import {
   readSkillTool as __readSkillTool,
   readSkillToolParams as __readSkillToolParams,
   AgencyFunction as __AgencyFunction, UNSET as __UNSET,
-  __call, __callMethod, __threads, getRuntimeContext,
+  __call, __callMethod, __threads, __stateStack, getRuntimeContext, agencyStore,
   functionRefReviver as __functionRefReviver,
   DeterministicClient as __DeterministicClient,
 } from "agency-lang/runtime";
@@ -147,92 +147,94 @@ graph.node("main", async (__state: GraphState) => {
   const __setupData = setupNode({
     state: __state
   });
-  const __stateStack = __state.ctx.stateStack;
-const __stack = __setupData.stack;
+  const __stack = __setupData.stack;
 const __step = __setupData.step;
 const __self = __setupData.self;
 const __ctx = __state.ctx;
-const statelogClient = __ctx.statelogClient;
-const __graph = __ctx.graph;
 let __forked;
 let __functionCompleted = false;
   const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "ifElse.agency", scopeName: "main", threads: __setupData.threads });
   try {
-    await runner.hook(0, async () => {
+    await agencyStore.run({
+      ctx: __ctx,
+      stack: __ctx.stateStack,
+      threads: __setupData.threads
+    }, async () => {
+      await runner.hook(0, async () => {
 await callHook({
-        name: "onNodeStart",
-        data: {
-          nodeName: "main"
-        }
-      })
-    });
-    await runner.step(1, async (runner) => {
+          name: "onNodeStart",
+          data: {
+            nodeName: "main"
+          }
+        })
+      });
+      await runner.step(1, async (runner) => {
 //  Basic if statement with boolean variable
-    });
-    await runner.step(2, async (runner) => {
+      });
+      await runner.step(2, async (runner) => {
 __stack.locals.flag = true;
-    });
-    await runner.ifElse(3, [
+      });
+      await runner.ifElse(3, [
 
   {
     condition: async () => __stack.locals.flag,
     body: async (runner) => {
 await runner.step(0, async (runner) => {
 __stack.locals.result = `condition was true`;
-          });
+            });
     },
   },
 
 ]);
-    await runner.ifElse(4, [
+      await runner.ifElse(4, [
 
   {
     condition: async () => await __call(isReady, {
-          type: "positional",
-          args: []
-        }),
+            type: "positional",
+            args: []
+          }),
     body: async (runner) => {
 await runner.step(0, async (runner) => {
 __stack.locals.status = `ready`;
-          });
+            });
     },
   },
 
 ]);
-    await runner.step(5, async (runner) => {
+      await runner.step(5, async (runner) => {
 //  If statement with property access
-    });
-    await runner.step(6, async (runner) => {
+      });
+      await runner.step(6, async (runner) => {
 __stack.locals.obj = {
-        "active": true
-      };
-    });
-    await runner.ifElse(7, [
+          "active": true
+        };
+      });
+      await runner.ifElse(7, [
 
   {
     condition: async () => __stack.locals.obj.active,
     body: async (runner) => {
 await runner.step(0, async (runner) => {
 __stack.locals.message = `object is active`;
-          });
+            });
     },
   },
 
 ]);
-    await runner.step(8, async (runner) => {
+      await runner.step(8, async (runner) => {
 //  Nested if statements
-    });
-    await runner.step(9, async (runner) => {
+      });
+      await runner.step(9, async (runner) => {
 __stack.locals.outer = true;
-    });
-    await runner.ifElse(10, [
+      });
+      await runner.ifElse(10, [
 
   {
     condition: async () => __stack.locals.outer,
     body: async (runner) => {
 await runner.step(0, async (runner) => {
 __stack.locals.inner = false;
-          });
+            });
 await runner.ifElse(1, [
 
   {
@@ -240,7 +242,7 @@ await runner.ifElse(1, [
     body: async (runner) => {
 await runner.step(0, async (runner) => {
 __stack.locals.nested = `both true`;
-                });
+                  });
     },
   },
 
@@ -249,7 +251,7 @@ __stack.locals.nested = `both true`;
   },
 
 ]);
-    await runner.step(11, async (runner) => {
+      await runner.step(11, async (runner) => {
 //  TODO fix
 //  If with index access
 //  arr = [1, 2, 3]
@@ -257,79 +259,79 @@ __stack.locals.nested = `both true`;
 //    firstElement = "exists"
 //  }
 //  Multiple statements in then body
-    });
-    await runner.step(12, async (runner) => {
+      });
+      await runner.step(12, async (runner) => {
 __stack.locals.condition = true;
-    });
-    await runner.ifElse(13, [
+      });
+      await runner.ifElse(13, [
 
   {
     condition: async () => __stack.locals.condition,
     body: async (runner) => {
 await runner.step(0, async (runner) => {
 __stack.locals.a = 1;
-          });
+            });
 await runner.step(1, async (runner) => {
 __stack.locals.b = 2;
-          });
+            });
 await runner.step(2, async (runner) => {
 __stack.locals.c = 3;
-          });
+            });
     },
   },
 
 ]);
-    await runner.step(14, async (runner) => {
+      await runner.step(14, async (runner) => {
 //  Multiple statements in both then and else bodies
-    });
-    await runner.step(15, async (runner) => {
+      });
+      await runner.step(15, async (runner) => {
 __stack.locals.value = false;
-    });
-    await runner.ifElse(16, [
+      });
+      await runner.ifElse(16, [
 
   {
     condition: async () => __stack.locals.value,
     body: async (runner) => {
 await runner.step(0, async (runner) => {
 __stack.locals.x = 10;
-          });
+            });
 await runner.step(1, async (runner) => {
 __stack.locals.y = 20;
-          });
+            });
     },
   },
 
 ]);
-    await runner.step(17, async (runner) => {
+      await runner.step(17, async (runner) => {
 //  Basic else
-    });
-    await runner.ifElse(18, [
+      });
+      await runner.ifElse(18, [
 
   {
     condition: async () => __stack.locals.flag,
     body: async (runner) => {
 await runner.step(0, async (runner) => {
 __stack.locals.result = `yes`;
-          });
+            });
     },
   },
 
 ], async (runner) => {
 await runner.step(1, async (runner) => {
 __stack.locals.result = `no`;
-        });
+          });
 });
-    await runner.step(19, async (runner) => {
+      await runner.step(19, async (runner) => {
 //  else if chain
-    });
-    await runner.ifElse(20, [
+      });
+      await runner.ifElse(20, [
 
   {
     condition: async () => __stack.locals.a === 1,
     body: async (runner) => {
 await runner.step(0, async (runner) => {
 __stack.locals.result = `one`;
-          });
+            });
     },
   },
 
@@ -338,15 +340,16 @@ __stack.locals.result = `one`;
     body: async (runner) => {
 await runner.step(1, async (runner) => {
 __stack.locals.result = `two`;
-          });
+            });
     },
   },
 
 ], async (runner) => {
 await runner.step(2, async (runner) => {
 __stack.locals.result = `other`;
-        });
+          });
 });
+    })
     if (runner.halted) return runner.haltResult;
     await runner.hook(21, async () => {
 await callHook({

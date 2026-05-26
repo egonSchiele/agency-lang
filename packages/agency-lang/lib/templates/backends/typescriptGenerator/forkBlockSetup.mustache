@@ -7,7 +7,15 @@ const __parentForkArgs = __bstack.args;
 {{/isNested}}
 const __bstack = __forkBranchStack.getNewState();
 const __self = __bstack.locals;
-const __stateStack = __forkBranchStack;
+// `__stateStack` is read from ALS via the `__stateStack()` accessor.
+// The branch ALS frame seeded by `runBatch.runInBranchAlsFrame`
+// (lib/runtime/runBatch.ts) already carries `stack: __forkBranchStack`,
+// so accessor calls inside the branch body resolve to the branch
+// stack automatically — no local rebind needed. The earlier
+// `const __stateStack = __forkBranchStack` line was removed because
+// it shadowed the runtime import and made `__stateStack()` calls
+// (emitted by interrupt/checkpoint templates) crash with
+// "__stateStack2 is not a function".
 const {{{paramName:string}}} = __forkItem;
 {{#isNested}}
 Object.assign(__bstack.args, __parentForkArgs);

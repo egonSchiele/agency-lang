@@ -24,7 +24,7 @@ import {
   readSkillTool as __readSkillTool,
   readSkillToolParams as __readSkillToolParams,
   AgencyFunction as __AgencyFunction, UNSET as __UNSET,
-  __call, __callMethod, __threads, getRuntimeContext,
+  __call, __callMethod, __threads, __stateStack, getRuntimeContext, agencyStore,
   functionRefReviver as __functionRefReviver,
   DeterministicClient as __DeterministicClient,
 } from "agency-lang/runtime";
@@ -149,35 +149,37 @@ graph.node("main", async (__state: GraphState) => {
   const __setupData = setupNode({
     state: __state
   });
-  const __stateStack = __state.ctx.stateStack;
-const __stack = __setupData.stack;
+  const __stack = __setupData.stack;
 const __step = __setupData.step;
 const __self = __setupData.self;
 const __ctx = __state.ctx;
-const statelogClient = __ctx.statelogClient;
-const __graph = __ctx.graph;
 let __forked;
 let __functionCompleted = false;
   const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "euler-0002.agency", scopeName: "main", threads: __setupData.threads });
   try {
-    await runner.hook(0, async () => {
+    await agencyStore.run({
+      ctx: __ctx,
+      stack: __ctx.stateStack,
+      threads: __setupData.threads
+    }, async () => {
+      await runner.hook(0, async () => {
 await callHook({
-        name: "onNodeStart",
-        data: {
-          nodeName: "main"
-        }
-      })
-    });
-    await runner.step(1, async (runner) => {
+          name: "onNodeStart",
+          data: {
+            nodeName: "main"
+          }
+        })
+      });
+      await runner.step(1, async (runner) => {
 __stack.locals.a = 1;
-    });
-    await runner.step(2, async (runner) => {
+      });
+      await runner.step(2, async (runner) => {
 __stack.locals.b = 2;
-    });
-    await runner.step(3, async (runner) => {
+      });
+      await runner.step(3, async (runner) => {
 __stack.locals.sum = 0;
-    });
-    await runner.whileLoop(4, async () => __stack.locals.a <= 4000000, async (runner) => {
+      });
+      await runner.whileLoop(4, async () => __stack.locals.a <= 4000000, async (runner) => {
 await runner.ifElse(0, [
 
   {
@@ -185,28 +187,29 @@ await runner.ifElse(0, [
     body: async (runner) => {
 await runner.step(0, async (runner) => {
 __stack.locals.sum = __stack.locals.sum + __stack.locals.a;
-            });
+              });
     },
   },
 
 ]);
 await runner.step(1, async (runner) => {
 __stack.locals.c = __stack.locals.a + __stack.locals.b;
-      });
+        });
 await runner.step(2, async (runner) => {
 __stack.locals.a = __stack.locals.b;
-      });
+        });
 await runner.step(3, async (runner) => {
 __stack.locals.b = __stack.locals.c;
+        });
       });
-    });
-    await runner.step(5, async (runner) => {
+      await runner.step(5, async (runner) => {
 runner.halt({
-        messages: __threads(),
-        data: __stack.locals.sum
-      })
+          messages: __threads(),
+          data: __stack.locals.sum
+        })
 return;
-    });
+      });
+    })
     if (runner.halted) return runner.haltResult;
     await runner.hook(6, async () => {
 await callHook({

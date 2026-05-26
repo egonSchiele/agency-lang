@@ -269,9 +269,13 @@ You're outside an `agencyStore.run(...)` frame. Three cases:
 - **Bootstrap scope** (module top-level `const x = ...`, `callback(...)` registration, `onAgentStart` hook). The frame is a `BootstrapThreadStore` if you're reading `threads`; for other fields the frame is real, but reads must not assume node-body semantics. See [docs/dev/async-context.md](./async-context.md) "Frame kinds".
 - **A nested `await` after the frame was torn down.** Rare — frames propagate through normal `await` chains. If you see this, the frame was probably popped between scheduling and execution.
 
-### "Don't change `__stateStack` inside `forkBlockSetup.mustache`"
+### "Adding a local that shadows an accessor import"
 
-[`forkBlockSetup.mustache`](../../lib/templates/backends/typescriptGenerator/forkBlockSetup.mustache) line 10 has `const __stateStack = __forkBranchStack;`. This is **not** a normal setup-block local — it's an intentional rebind to the branch-specific stack inside a fork branch body. The branch stack must not be sourced from the parent ALS frame (which has the parent's stack); the entry point for the fork branch already installs an inner ALS frame with the branch stack via `runBatch.runInBranchAlsFrame`. Leave the rebind alone when migrating `__stateStack` to `__stateStack()` elsewhere.
+If you find yourself tempted to write `const __stateStack = somethingElse;` (or any other rebind that shares a name with the runtime import) inside a `.mustache` template, **don't**. The runtime import is a function; the local would shadow it; TypeScript renames the local to `__stateStack2` (or similar); any other template that emits `__stateStack()` then resolves to `__stateStack2` — a `StateStack` value, not a function — and crashes with `__stateStack2 is not a function`.
+
+This bit us specifically in `forkBlockSetup.mustache`: an earlier `const __stateStack = __forkBranchStack;` rebind was kept "to make the branch stack visible inside the body". It turned out to be unnecessary: `runBatch.runInBranchAlsFrame` (lib/runtime/runBatch.ts) already seeds the branch ALS frame with `stack: branchStack`, so `__stateStack()` inside the branch body resolves to the branch stack automatically. The rebind was removed; the gotcha here is "don't reintroduce it".
+
+If you genuinely need a *different* StateStack visible inside a sub-scope, install a new ALS frame for that scope (`agencyStore.run({...}, ...)`) rather than rebinding the name.
 
 ### Runner constructor needs explicit `threads`
 
@@ -307,7 +311,7 @@ Use this as a checklist when migrating one of the remaining locals (`__ctx`, `__
 - Backend: `lib/backends/typescriptBuilder.ts` → search for the bare name; both function-body emission (around line 1473) and node-body emission (around line 2179) call `setupEnv`. Other raw-string emissions of `__X.method(...)` need updating individually.
 - Templates: `lib/templates/backends/typescriptGenerator/`:
   - `blockSetup.mustache`
-  - `forkBlockSetup.mustache` (caveat: `__stateStack` rebind, see Gotchas)
+  - `forkBlockSetup.mustache` (note: no `__stateStack` rebind — the branch ALS frame from `runBatch.runInBranchAlsFrame` carries the branch stack)
   - `classMethod.mustache`
   - `debugger.mustache`
   - `interruptAssignment.mustache`

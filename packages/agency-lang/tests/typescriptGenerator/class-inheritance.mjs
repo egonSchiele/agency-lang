@@ -176,7 +176,7 @@ if (!__ctx.globals.isInitialized("class-inheritance.agency")) {
     }
 let __funcStartTime: number = performance.now();
 __self.__retryable = __self.__retryable ?? true;
-const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "class-inheritance.agency", scopeName: "Animal.speak", stack: __stateStack, threads: __threads });
+const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "class-inheritance.agency", scopeName: "Animal.speak" });
 let __resultCheckpointId = -1;
 if (__ctx.stateStack.currentNodeId()) {
   __resultCheckpointId = __ctx.checkpoints.createPinned(__stateStack, __ctx, { moduleId: "class-inheritance.agency", scopeName: "Animal.speak", stepPath: "", label: "result-entry" });
@@ -190,7 +190,6 @@ if (__ctx._pendingArgOverrides) {
 try {
       await runner.hook(0, async () => {
 await callHook({
-          ctx: __ctx,
           name: "onFunctionStart",
           data: {
             functionName: "Animal.speak",
@@ -235,7 +234,6 @@ return failure(
       __stateStack.pop()
       if (__functionCompleted) {
         await callHook({
-          ctx: __ctx,
           name: "onFunctionEnd",
           data: {
             functionName: "Animal.speak",
@@ -302,7 +300,7 @@ if (!__ctx.globals.isInitialized("class-inheritance.agency")) {
     }
 let __funcStartTime: number = performance.now();
 __self.__retryable = __self.__retryable ?? true;
-const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "class-inheritance.agency", scopeName: "Dog.speak", stack: __stateStack, threads: __threads });
+const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "class-inheritance.agency", scopeName: "Dog.speak" });
 let __resultCheckpointId = -1;
 if (__ctx.stateStack.currentNodeId()) {
   __resultCheckpointId = __ctx.checkpoints.createPinned(__stateStack, __ctx, { moduleId: "class-inheritance.agency", scopeName: "Dog.speak", stepPath: "", label: "result-entry" });
@@ -316,7 +314,6 @@ if (__ctx._pendingArgOverrides) {
 try {
       await runner.hook(0, async () => {
 await callHook({
-          ctx: __ctx,
           name: "onFunctionStart",
           data: {
             functionName: "Dog.speak",
@@ -361,7 +358,6 @@ return failure(
       __stateStack.pop()
       if (__functionCompleted) {
         await callHook({
-          ctx: __ctx,
           name: "onFunctionEnd",
           data: {
             functionName: "Dog.speak",
@@ -411,11 +407,10 @@ const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
 let __forked;
 let __functionCompleted = false;
-  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "class-inheritance.agency", scopeName: "main", stack: __stateStack, threads: __threads });
+  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "class-inheritance.agency", scopeName: "main" });
   try {
     await runner.hook(0, async () => {
 await callHook({
-        ctx: __ctx,
         name: "onNodeStart",
         data: {
           nodeName: "main"
@@ -429,10 +424,6 @@ __stack.locals.dog = new Dog(`Rex`, `Labrador`);
 __stack.locals.result = await __callMethod(__stack.locals.dog, "speak", {
         type: "positional",
         args: []
-      }, {
-        ctx: __ctx,
-        threads: __threads,
-        stateStack: __stateStack
       });
     });
     await runner.step(3, async (runner) => {
@@ -445,7 +436,6 @@ return;
     if (runner.halted) return runner.haltResult;
     await runner.hook(4, async () => {
 await callHook({
-        ctx: __ctx,
         name: "onNodeEnd",
         data: {
           nodeName: "main",

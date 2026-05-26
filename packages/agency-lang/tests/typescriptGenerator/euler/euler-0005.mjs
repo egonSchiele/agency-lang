@@ -167,7 +167,7 @@ let __functionCompleted = false;
   __stack.args["a"] = a;
   __stack.args["b"] = b;
   __self.__retryable = __self.__retryable ?? true;
-  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "euler-0005.agency", scopeName: "gcd", stack: __stateStack, threads: __threads });
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "euler-0005.agency", scopeName: "gcd" });
   let __resultCheckpointId = -1;
 if (__ctx.stateStack.currentNodeId()) {
   __resultCheckpointId = __ctx.checkpoints.createPinned(__stateStack, __ctx, { moduleId: "euler-0005.agency", scopeName: "gcd", stepPath: "", label: "result-entry" });
@@ -189,7 +189,6 @@ if (__ctx._pendingArgOverrides) {
   try {
     await runner.hook(0, async () => {
 await callHook({
-        ctx: __ctx,
         name: "onFunctionStart",
         data: {
           functionName: "gcd",
@@ -251,7 +250,6 @@ return failure(
     __stateStack.pop()
     if (__functionCompleted) {
       await callHook({
-        ctx: __ctx,
         name: "onFunctionEnd",
         data: {
           functionName: "gcd",
@@ -306,7 +304,7 @@ let __functionCompleted = false;
   __stack.args["a"] = a;
   __stack.args["b"] = b;
   __self.__retryable = __self.__retryable ?? true;
-  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "euler-0005.agency", scopeName: "lcm", stack: __stateStack, threads: __threads });
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "euler-0005.agency", scopeName: "lcm" });
   let __resultCheckpointId = -1;
 if (__ctx.stateStack.currentNodeId()) {
   __resultCheckpointId = __ctx.checkpoints.createPinned(__stateStack, __ctx, { moduleId: "euler-0005.agency", scopeName: "lcm", stepPath: "", label: "result-entry" });
@@ -328,7 +326,6 @@ if (__ctx._pendingArgOverrides) {
   try {
     await runner.hook(0, async () => {
 await callHook({
-        ctx: __ctx,
         name: "onFunctionStart",
         data: {
           functionName: "lcm",
@@ -346,10 +343,6 @@ __functionCompleted = true;
 runner.halt(__stack.args.a / await __call(gcd, {
         type: "positional",
         args: [__stack.args.a, __stack.args.b]
-      }, {
-        ctx: __ctx,
-        threads: __threads,
-        stateStack: __stateStack
       }) * __stack.args.b)
 return;
     });
@@ -380,7 +373,6 @@ return failure(
     __stateStack.pop()
     if (__functionCompleted) {
       await callHook({
-        ctx: __ctx,
         name: "onFunctionEnd",
         data: {
           functionName: "lcm",
@@ -427,11 +419,10 @@ const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
 let __forked;
 let __functionCompleted = false;
-  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "euler-0005.agency", scopeName: "main", stack: __stateStack, threads: __threads });
+  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "euler-0005.agency", scopeName: "main" });
   try {
     await runner.hook(0, async () => {
 await callHook({
-        ctx: __ctx,
         name: "onNodeStart",
         data: {
           nodeName: "main"
@@ -446,10 +437,6 @@ await runner.step(0, async (runner) => {
 __stack.locals.result = await __call(lcm, {
           type: "positional",
           args: [__stack.locals.result, i]
-        }, {
-          ctx: __ctx,
-          threads: __threads,
-          stateStack: __stateStack
         });
 if (hasInterrupts(__stack.locals.result)) {
           await __ctx.pendingPromises.awaitAll()
@@ -471,7 +458,6 @@ return;
     if (runner.halted) return runner.haltResult;
     await runner.hook(4, async () => {
 await callHook({
-        ctx: __ctx,
         name: "onNodeEnd",
         data: {
           nodeName: "main",

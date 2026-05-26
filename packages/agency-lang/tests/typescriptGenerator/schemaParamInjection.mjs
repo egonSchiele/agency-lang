@@ -170,7 +170,7 @@ let __functionCompleted = false;
   __stack.args["input"] = input;
   __stack.args["s"] = s;
   __self.__retryable = __self.__retryable ?? true;
-  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "schemaParamInjection.agency", scopeName: "parseValue", stack: __stateStack, threads: __threads });
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "schemaParamInjection.agency", scopeName: "parseValue" });
   let __resultCheckpointId = -1;
 if (__ctx.stateStack.currentNodeId()) {
   __resultCheckpointId = __ctx.checkpoints.createPinned(__stateStack, __ctx, { moduleId: "schemaParamInjection.agency", scopeName: "parseValue", stepPath: "", label: "result-entry" });
@@ -192,7 +192,6 @@ if (__ctx._pendingArgOverrides) {
   try {
     await runner.hook(0, async () => {
 await callHook({
-        ctx: __ctx,
         name: "onFunctionStart",
         data: {
           functionName: "parseValue",
@@ -210,10 +209,6 @@ __functionCompleted = true;
 runner.halt(await __callMethod(__stack.args.s, "parseJSON", {
         type: "positional",
         args: [__stack.args.input]
-      }, {
-        ctx: __ctx,
-        threads: __threads,
-        stateStack: __stateStack
       }))
 return;
     });
@@ -244,7 +239,6 @@ return failure(
     __stateStack.pop()
     if (__functionCompleted) {
       await callHook({
-        ctx: __ctx,
         name: "onFunctionEnd",
         data: {
           functionName: "parseValue",
@@ -297,7 +291,7 @@ let __functionCompleted = false;
   }
   let __funcStartTime: number = performance.now();
   __self.__retryable = __self.__retryable ?? true;
-  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "schemaParamInjection.agency", scopeName: "wrapper", stack: __stateStack, threads: __threads });
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "schemaParamInjection.agency", scopeName: "wrapper" });
   let __resultCheckpointId = -1;
 if (__ctx.stateStack.currentNodeId()) {
   __resultCheckpointId = __ctx.checkpoints.createPinned(__stateStack, __ctx, { moduleId: "schemaParamInjection.agency", scopeName: "wrapper", stepPath: "", label: "result-entry" });
@@ -311,7 +305,6 @@ if (__ctx._pendingArgOverrides) {
   try {
     await runner.hook(0, async () => {
 await callHook({
-        ctx: __ctx,
         name: "onFunctionStart",
         data: {
           functionName: "wrapper",
@@ -332,10 +325,6 @@ runner.halt(await __call(parseValue, {
         namedArgs: {
           s: new Schema(z.array(z.number()))
         }
-      }, {
-        ctx: __ctx,
-        threads: __threads,
-        stateStack: __stateStack
       }))
 return;
     });
@@ -366,7 +355,6 @@ return failure(
     __stateStack.pop()
     if (__functionCompleted) {
       await callHook({
-        ctx: __ctx,
         name: "onFunctionEnd",
         data: {
           functionName: "wrapper",
@@ -403,11 +391,10 @@ const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
 let __forked;
 let __functionCompleted = false;
-  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "schemaParamInjection.agency", scopeName: "main", stack: __stateStack, threads: __threads });
+  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "schemaParamInjection.agency", scopeName: "main" });
   try {
     await runner.hook(0, async () => {
 await callHook({
-        ctx: __ctx,
         name: "onNodeStart",
         data: {
           nodeName: "main"
@@ -425,10 +412,6 @@ __stack.locals.nums = await __call(parseValue, {
         namedArgs: {
           s: new Schema(z.array(z.number()))
         }
-      }, {
-        ctx: __ctx,
-        threads: __threads,
-        stateStack: __stateStack
       });
 if (hasInterrupts(__stack.locals.nums)) {
         await __ctx.pendingPromises.awaitAll()
@@ -443,10 +426,6 @@ if (hasInterrupts(__stack.locals.nums)) {
 const __funcResult = await __call(print, {
         type: "positional",
         args: [__stack.locals.nums]
-      }, {
-        ctx: __ctx,
-        threads: __threads,
-        stateStack: __stateStack
       });
 if (hasInterrupts(__funcResult)) {
         await __ctx.pendingPromises.awaitAll()
@@ -466,10 +445,6 @@ __stack.locals.anything = await __call(parseValue, {
         namedArgs: {
           s: new Schema(z.any())
         }
-      }, {
-        ctx: __ctx,
-        threads: __threads,
-        stateStack: __stateStack
       });
 if (hasInterrupts(__stack.locals.anything)) {
         await __ctx.pendingPromises.awaitAll()
@@ -484,10 +459,6 @@ if (hasInterrupts(__stack.locals.anything)) {
 const __funcResult = await __call(print, {
         type: "positional",
         args: [__stack.locals.anything]
-      }, {
-        ctx: __ctx,
-        threads: __threads,
-        stateStack: __stateStack
       });
 if (hasInterrupts(__funcResult)) {
         await __ctx.pendingPromises.awaitAll()
@@ -509,10 +480,6 @@ __stack.locals.validated = await __call(parseValue, {
         namedArgs: {
           s: new Schema(z.array(z.number()))
         }
-      }, {
-        ctx: __ctx,
-        threads: __threads,
-        stateStack: __stateStack
       });
 if (hasInterrupts(__stack.locals.validated)) {
         await __ctx.pendingPromises.awaitAll()
@@ -528,10 +495,6 @@ __stack.locals.validated = __validateType(__stack.locals.validated, z.array(z.nu
 const __funcResult = await __call(print, {
         type: "positional",
         args: [__stack.locals.validated]
-      }, {
-        ctx: __ctx,
-        threads: __threads,
-        stateStack: __stateStack
       });
 if (hasInterrupts(__funcResult)) {
         await __ctx.pendingPromises.awaitAll()
@@ -547,10 +510,6 @@ if (hasInterrupts(__funcResult)) {
 __stack.locals.explicit = await __call(parseValue, {
         type: "positional",
         args: [`[1,2,3]`, new Schema(z.any())]
-      }, {
-        ctx: __ctx,
-        threads: __threads,
-        stateStack: __stateStack
       });
 if (hasInterrupts(__stack.locals.explicit)) {
         await __ctx.pendingPromises.awaitAll()
@@ -565,10 +524,6 @@ if (hasInterrupts(__stack.locals.explicit)) {
 const __funcResult = await __call(print, {
         type: "positional",
         args: [__stack.locals.explicit]
-      }, {
-        ctx: __ctx,
-        threads: __threads,
-        stateStack: __stateStack
       });
 if (hasInterrupts(__funcResult)) {
         await __ctx.pendingPromises.awaitAll()
@@ -587,10 +542,6 @@ if (hasInterrupts(__funcResult)) {
 const __funcResult = await __call(parseValue, {
         type: "positional",
         args: [`[1,2,3]`]
-      }, {
-        ctx: __ctx,
-        threads: __threads,
-        stateStack: __stateStack
       });
 if (hasInterrupts(__funcResult)) {
         await __ctx.pendingPromises.awaitAll()
@@ -604,7 +555,6 @@ if (hasInterrupts(__funcResult)) {
     if (runner.halted) return runner.haltResult;
     await runner.hook(11, async () => {
 await callHook({
-        ctx: __ctx,
         name: "onNodeEnd",
         data: {
           nodeName: "main",

@@ -157,11 +157,10 @@ const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
 let __forked;
 let __functionCompleted = false;
-  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "literal.agency", scopeName: "main", stack: __stateStack, threads: __threads });
+  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "literal.agency", scopeName: "main" });
   try {
     await runner.hook(0, async () => {
 await callHook({
-        ctx: __ctx,
         name: "onNodeStart",
         data: {
           nodeName: "main"
@@ -171,7 +170,6 @@ await callHook({
     await runner.step(1, async (runner) => {
 __self.__removedTools = __self.__removedTools || [];
 __stack.locals.foo = await runPrompt({
-        ctx: __ctx,
         prompt: `the string hi`,
         messages: __threads.getOrCreateActive(),
         responseFormat: z.object({
@@ -179,7 +177,6 @@ __stack.locals.foo = await runPrompt({
         }),
         clientConfig: {},
         maxToolCallRounds: 10,
-        stateStack: __stateStack,
         removedTools: __self.__removedTools,
         checkpointInfo: runner.getCheckpointInfo()
       });
@@ -196,7 +193,6 @@ if (hasInterrupts(__stack.locals.foo)) {
     await runner.step(2, async (runner) => {
 __self.__removedTools = __self.__removedTools || [];
 __stack.locals.bar = await runPrompt({
-        ctx: __ctx,
         prompt: `the number 42`,
         messages: __threads.getOrCreateActive(),
         responseFormat: z.object({
@@ -204,7 +200,6 @@ __stack.locals.bar = await runPrompt({
         }),
         clientConfig: {},
         maxToolCallRounds: 10,
-        stateStack: __stateStack,
         removedTools: __self.__removedTools,
         checkpointInfo: runner.getCheckpointInfo()
       });
@@ -221,7 +216,6 @@ if (hasInterrupts(__stack.locals.bar)) {
     await runner.step(3, async (runner) => {
 __self.__removedTools = __self.__removedTools || [];
 __stack.locals.baz = await runPrompt({
-        ctx: __ctx,
         prompt: `the boolean true`,
         messages: __threads.getOrCreateActive(),
         responseFormat: z.object({
@@ -229,7 +223,6 @@ __stack.locals.baz = await runPrompt({
         }),
         clientConfig: {},
         maxToolCallRounds: 10,
-        stateStack: __stateStack,
         removedTools: __self.__removedTools,
         checkpointInfo: runner.getCheckpointInfo()
       });
@@ -246,7 +239,6 @@ if (hasInterrupts(__stack.locals.baz)) {
     if (runner.halted) return runner.haltResult;
     await runner.hook(4, async () => {
 await callHook({
-        ctx: __ctx,
         name: "onNodeEnd",
         data: {
           nodeName: "main",

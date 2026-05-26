@@ -166,7 +166,7 @@ let __functionCompleted = false;
   let __funcStartTime: number = performance.now();
   __stack.args["id"] = id;
   __self.__retryable = __self.__retryable ?? true;
-  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "safe-function.agency", scopeName: "safeLookup", stack: __stateStack, threads: __threads });
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "safe-function.agency", scopeName: "safeLookup" });
   let __resultCheckpointId = -1;
 if (__ctx.stateStack.currentNodeId()) {
   __resultCheckpointId = __ctx.checkpoints.createPinned(__stateStack, __ctx, { moduleId: "safe-function.agency", scopeName: "safeLookup", stepPath: "", label: "result-entry" });
@@ -184,7 +184,6 @@ if (__ctx._pendingArgOverrides) {
   try {
     await runner.hook(0, async () => {
 await callHook({
-        ctx: __ctx,
         name: "onFunctionStart",
         data: {
           functionName: "safeLookup",
@@ -201,10 +200,6 @@ __functionCompleted = true;
 runner.halt(await __call(lookupItem, {
         type: "positional",
         args: [__stack.args.id]
-      }, {
-        ctx: __ctx,
-        threads: __threads,
-        stateStack: __stateStack
       }))
 return;
     });
@@ -235,7 +230,6 @@ return failure(
     __stateStack.pop()
     if (__functionCompleted) {
       await callHook({
-        ctx: __ctx,
         name: "onFunctionEnd",
         data: {
           functionName: "safeLookup",
@@ -284,7 +278,7 @@ let __functionCompleted = false;
   let __funcStartTime: number = performance.now();
   __stack.args["id"] = id;
   __self.__retryable = __self.__retryable ?? true;
-  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "safe-function.agency", scopeName: "unsafeSave", stack: __stateStack, threads: __threads });
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "safe-function.agency", scopeName: "unsafeSave" });
   let __resultCheckpointId = -1;
 if (__ctx.stateStack.currentNodeId()) {
   __resultCheckpointId = __ctx.checkpoints.createPinned(__stateStack, __ctx, { moduleId: "safe-function.agency", scopeName: "unsafeSave", stepPath: "", label: "result-entry" });
@@ -302,7 +296,6 @@ if (__ctx._pendingArgOverrides) {
   try {
     await runner.hook(0, async () => {
 await callHook({
-        ctx: __ctx,
         name: "onFunctionStart",
         data: {
           functionName: "unsafeSave",
@@ -319,10 +312,6 @@ __self.__retryable = false;
 const __funcResult = await __call(saveItem, {
         type: "positional",
         args: [__stack.args.id]
-      }, {
-        ctx: __ctx,
-        threads: __threads,
-        stateStack: __stateStack
       });
 if (hasInterrupts(__funcResult)) {
         await __ctx.pendingPromises.awaitAll()
@@ -335,10 +324,6 @@ __functionCompleted = true;
 runner.halt(await __call(lookupItem, {
         type: "positional",
         args: [__stack.args.id]
-      }, {
-        ctx: __ctx,
-        threads: __threads,
-        stateStack: __stateStack
       }))
 return;
     });
@@ -369,7 +354,6 @@ return failure(
     __stateStack.pop()
     if (__functionCompleted) {
       await callHook({
-        ctx: __ctx,
         name: "onFunctionEnd",
         data: {
           functionName: "unsafeSave",
@@ -411,11 +395,10 @@ const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
 let __forked;
 let __functionCompleted = false;
-  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "safe-function.agency", scopeName: "main", stack: __stateStack, threads: __threads });
+  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "safe-function.agency", scopeName: "main" });
   try {
     await runner.hook(0, async () => {
 await callHook({
-        ctx: __ctx,
         name: "onNodeStart",
         data: {
           nodeName: "main"
@@ -425,14 +408,12 @@ await callHook({
     await runner.step(1, async (runner) => {
 __self.__removedTools = __self.__removedTools || [];
 __stack.locals.result = await runPrompt({
-        ctx: __ctx,
         prompt: `Use the tools`,
         messages: __threads.getOrCreateActive(),
         clientConfig: {
           "tools": [safeLookup, unsafeSave]
         },
         maxToolCallRounds: 10,
-        stateStack: __stateStack,
         removedTools: __self.__removedTools,
         checkpointInfo: runner.getCheckpointInfo()
       });
@@ -456,7 +437,6 @@ return;
     if (runner.halted) return runner.haltResult;
     await runner.hook(3, async () => {
 await callHook({
-        ctx: __ctx,
         name: "onNodeEnd",
         data: {
           nodeName: "main",

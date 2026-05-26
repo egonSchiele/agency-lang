@@ -163,7 +163,7 @@ let __functionCompleted = false;
   }
   let __funcStartTime: number = performance.now();
   __self.__retryable = __self.__retryable ?? true;
-  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "threadsAndSubthreads.agency", scopeName: "foo", stack: __stateStack, threads: __threads });
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "threadsAndSubthreads.agency", scopeName: "foo" });
   let __resultCheckpointId = -1;
 if (__ctx.stateStack.currentNodeId()) {
   __resultCheckpointId = __ctx.checkpoints.createPinned(__stateStack, __ctx, { moduleId: "threadsAndSubthreads.agency", scopeName: "foo", stepPath: "", label: "result-entry" });
@@ -177,7 +177,6 @@ if (__ctx._pendingArgOverrides) {
   try {
     await runner.hook(0, async () => {
 await callHook({
-        ctx: __ctx,
         name: "onFunctionStart",
         data: {
           functionName: "foo",
@@ -191,7 +190,6 @@ await callHook({
 await runner.step(0, async (runner) => {
 __self.__removedTools = __self.__removedTools || [];
 __stack.locals.res1 = await runPrompt({
-          ctx: __ctx,
           prompt: `What are the first 5 prime numbers?`,
           messages: __threads.getOrCreateActive(),
           responseFormat: z.object({
@@ -199,7 +197,6 @@ __stack.locals.res1 = await runPrompt({
           }),
           clientConfig: {},
           maxToolCallRounds: 10,
-          stateStack: __stateStack,
           removedTools: __self.__removedTools,
           checkpointInfo: runner.getCheckpointInfo()
         });
@@ -214,7 +211,6 @@ await runner.thread(1, __threads, "createSubthread", async (runner) => {
 await runner.step(0, async (runner) => {
 __self.__removedTools = __self.__removedTools || [];
 __stack.locals.res2 = await runPrompt({
-            ctx: __ctx,
             prompt: `What are the next 2 prime numbers after those?`,
             messages: __threads.getOrCreateActive(),
             responseFormat: z.object({
@@ -222,7 +218,6 @@ __stack.locals.res2 = await runPrompt({
             }),
             clientConfig: {},
             maxToolCallRounds: 10,
-            stateStack: __stateStack,
             removedTools: __self.__removedTools,
             checkpointInfo: runner.getCheckpointInfo()
           });
@@ -237,7 +232,6 @@ await runner.thread(1, __threads, "createSubthread", async (runner) => {
 await runner.step(0, async (runner) => {
 __self.__removedTools = __self.__removedTools || [];
 __stack.locals.res3 = await runPrompt({
-              ctx: __ctx,
               prompt: `And what is the sum of all those numbers combined?`,
               messages: __threads.getOrCreateActive(),
               responseFormat: z.object({
@@ -245,7 +239,6 @@ __stack.locals.res3 = await runPrompt({
               }),
               clientConfig: {},
               maxToolCallRounds: 10,
-              stateStack: __stateStack,
               removedTools: __self.__removedTools,
               checkpointInfo: runner.getCheckpointInfo()
             });
@@ -261,7 +254,6 @@ await runner.thread(2, __threads, "create", async (runner) => {
 await runner.step(0, async (runner) => {
 __self.__removedTools = __self.__removedTools || [];
 __stack.locals.res5 = await runPrompt({
-              ctx: __ctx,
               prompt: `And what is the sum of all those numbers combined?`,
               messages: __threads.getOrCreateActive(),
               responseFormat: z.object({
@@ -269,7 +261,6 @@ __stack.locals.res5 = await runPrompt({
               }),
               clientConfig: {},
               maxToolCallRounds: 10,
-              stateStack: __stateStack,
               removedTools: __self.__removedTools,
               checkpointInfo: runner.getCheckpointInfo()
             });
@@ -286,7 +277,6 @@ await runner.thread(2, __threads, "createSubthread", async (runner) => {
 await runner.step(0, async (runner) => {
 __self.__removedTools = __self.__removedTools || [];
 __stack.locals.res4 = await runPrompt({
-            ctx: __ctx,
             prompt: `And what is the sum of all those numbers combined?`,
             messages: __threads.getOrCreateActive(),
             responseFormat: z.object({
@@ -294,7 +284,6 @@ __stack.locals.res4 = await runPrompt({
             }),
             clientConfig: {},
             maxToolCallRounds: 10,
-            stateStack: __stateStack,
             removedTools: __self.__removedTools,
             checkpointInfo: runner.getCheckpointInfo()
           });
@@ -311,10 +300,6 @@ if (hasInterrupts(__stack.locals.res4)) {
 const __funcResult = await __call(print, {
         type: "positional",
         args: [`res1`, __stack.locals.res1]
-      }, {
-        ctx: __ctx,
-        threads: __threads,
-        stateStack: __stateStack
       });
 if (hasInterrupts(__funcResult)) {
         await __ctx.pendingPromises.awaitAll()
@@ -326,10 +311,6 @@ if (hasInterrupts(__funcResult)) {
 const __funcResult = await __call(print, {
         type: "positional",
         args: [`res2`, __stack.locals.res2]
-      }, {
-        ctx: __ctx,
-        threads: __threads,
-        stateStack: __stateStack
       });
 if (hasInterrupts(__funcResult)) {
         await __ctx.pendingPromises.awaitAll()
@@ -341,10 +322,6 @@ if (hasInterrupts(__funcResult)) {
 const __funcResult = await __call(print, {
         type: "positional",
         args: [`res3`, __stack.locals.res3]
-      }, {
-        ctx: __ctx,
-        threads: __threads,
-        stateStack: __stateStack
       });
 if (hasInterrupts(__funcResult)) {
         await __ctx.pendingPromises.awaitAll()
@@ -356,10 +333,6 @@ if (hasInterrupts(__funcResult)) {
 const __funcResult = await __call(print, {
         type: "positional",
         args: [`res4`, __stack.locals.res4]
-      }, {
-        ctx: __ctx,
-        threads: __threads,
-        stateStack: __stateStack
       });
 if (hasInterrupts(__funcResult)) {
         await __ctx.pendingPromises.awaitAll()
@@ -371,10 +344,6 @@ if (hasInterrupts(__funcResult)) {
 const __funcResult = await __call(print, {
         type: "positional",
         args: [`res5`, __stack.locals.res5]
-      }, {
-        ctx: __ctx,
-        threads: __threads,
-        stateStack: __stateStack
       });
 if (hasInterrupts(__funcResult)) {
         await __ctx.pendingPromises.awaitAll()
@@ -409,7 +378,6 @@ return failure(
     __stateStack.pop()
     if (__functionCompleted) {
       await callHook({
-        ctx: __ctx,
         name: "onFunctionEnd",
         data: {
           functionName: "foo",
@@ -446,11 +414,10 @@ const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
 let __forked;
 let __functionCompleted = false;
-  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "threadsAndSubthreads.agency", scopeName: "main", stack: __stateStack, threads: __threads });
+  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "threadsAndSubthreads.agency", scopeName: "main" });
   try {
     await runner.hook(0, async () => {
 await callHook({
-        ctx: __ctx,
         name: "onNodeStart",
         data: {
           nodeName: "main"
@@ -461,7 +428,6 @@ await callHook({
 await runner.step(0, async (runner) => {
 __self.__removedTools = __self.__removedTools || [];
 __stack.locals.res1 = await runPrompt({
-          ctx: __ctx,
           prompt: `What are the first 5 prime numbers?`,
           messages: __threads.getOrCreateActive(),
           responseFormat: z.object({
@@ -469,7 +435,6 @@ __stack.locals.res1 = await runPrompt({
           }),
           clientConfig: {},
           maxToolCallRounds: 10,
-          stateStack: __stateStack,
           removedTools: __self.__removedTools,
           checkpointInfo: runner.getCheckpointInfo()
         });
@@ -487,7 +452,6 @@ await runner.thread(1, __threads, "createSubthread", async (runner) => {
 await runner.step(0, async (runner) => {
 __self.__removedTools = __self.__removedTools || [];
 __stack.locals.res2 = await runPrompt({
-            ctx: __ctx,
             prompt: `What are the next 2 prime numbers after those?`,
             messages: __threads.getOrCreateActive(),
             responseFormat: z.object({
@@ -495,7 +459,6 @@ __stack.locals.res2 = await runPrompt({
             }),
             clientConfig: {},
             maxToolCallRounds: 10,
-            stateStack: __stateStack,
             removedTools: __self.__removedTools,
             checkpointInfo: runner.getCheckpointInfo()
           });
@@ -513,7 +476,6 @@ await runner.thread(1, __threads, "createSubthread", async (runner) => {
 await runner.step(0, async (runner) => {
 __self.__removedTools = __self.__removedTools || [];
 __stack.locals.res3 = await runPrompt({
-              ctx: __ctx,
               prompt: `And what is the sum of all those numbers combined?`,
               messages: __threads.getOrCreateActive(),
               responseFormat: z.object({
@@ -521,7 +483,6 @@ __stack.locals.res3 = await runPrompt({
               }),
               clientConfig: {},
               maxToolCallRounds: 10,
-              stateStack: __stateStack,
               removedTools: __self.__removedTools,
               checkpointInfo: runner.getCheckpointInfo()
             });
@@ -540,7 +501,6 @@ await runner.thread(2, __threads, "create", async (runner) => {
 await runner.step(0, async (runner) => {
 __self.__removedTools = __self.__removedTools || [];
 __stack.locals.res5 = await runPrompt({
-              ctx: __ctx,
               prompt: `And what is the sum of all those numbers combined?`,
               messages: __threads.getOrCreateActive(),
               responseFormat: z.object({
@@ -548,7 +508,6 @@ __stack.locals.res5 = await runPrompt({
               }),
               clientConfig: {},
               maxToolCallRounds: 10,
-              stateStack: __stateStack,
               removedTools: __self.__removedTools,
               checkpointInfo: runner.getCheckpointInfo()
             });
@@ -568,7 +527,6 @@ await runner.thread(2, __threads, "createSubthread", async (runner) => {
 await runner.step(0, async (runner) => {
 __self.__removedTools = __self.__removedTools || [];
 __stack.locals.res4 = await runPrompt({
-            ctx: __ctx,
             prompt: `And what is the sum of all those numbers combined?`,
             messages: __threads.getOrCreateActive(),
             responseFormat: z.object({
@@ -576,7 +534,6 @@ __stack.locals.res4 = await runPrompt({
             }),
             clientConfig: {},
             maxToolCallRounds: 10,
-            stateStack: __stateStack,
             removedTools: __self.__removedTools,
             checkpointInfo: runner.getCheckpointInfo()
           });
@@ -596,10 +553,6 @@ if (hasInterrupts(__stack.locals.res4)) {
 const __funcResult = await __call(print, {
         type: "positional",
         args: [`res1`, __stack.locals.res1]
-      }, {
-        ctx: __ctx,
-        threads: __threads,
-        stateStack: __stateStack
       });
 if (hasInterrupts(__funcResult)) {
         await __ctx.pendingPromises.awaitAll()
@@ -614,10 +567,6 @@ if (hasInterrupts(__funcResult)) {
 const __funcResult = await __call(print, {
         type: "positional",
         args: [`res2`, __stack.locals.res2]
-      }, {
-        ctx: __ctx,
-        threads: __threads,
-        stateStack: __stateStack
       });
 if (hasInterrupts(__funcResult)) {
         await __ctx.pendingPromises.awaitAll()
@@ -632,10 +581,6 @@ if (hasInterrupts(__funcResult)) {
 const __funcResult = await __call(print, {
         type: "positional",
         args: [`res3`, __stack.locals.res3]
-      }, {
-        ctx: __ctx,
-        threads: __threads,
-        stateStack: __stateStack
       });
 if (hasInterrupts(__funcResult)) {
         await __ctx.pendingPromises.awaitAll()
@@ -650,10 +595,6 @@ if (hasInterrupts(__funcResult)) {
 const __funcResult = await __call(print, {
         type: "positional",
         args: [`res4`, __stack.locals.res4]
-      }, {
-        ctx: __ctx,
-        threads: __threads,
-        stateStack: __stateStack
       });
 if (hasInterrupts(__funcResult)) {
         await __ctx.pendingPromises.awaitAll()
@@ -668,10 +609,6 @@ if (hasInterrupts(__funcResult)) {
 const __funcResult = await __call(print, {
         type: "positional",
         args: [`res5`, __stack.locals.res5]
-      }, {
-        ctx: __ctx,
-        threads: __threads,
-        stateStack: __stateStack
       });
 if (hasInterrupts(__funcResult)) {
         await __ctx.pendingPromises.awaitAll()
@@ -685,7 +622,6 @@ if (hasInterrupts(__funcResult)) {
     if (runner.halted) return runner.haltResult;
     await runner.hook(7, async () => {
 await callHook({
-        ctx: __ctx,
         name: "onNodeEnd",
         data: {
           nodeName: "main",

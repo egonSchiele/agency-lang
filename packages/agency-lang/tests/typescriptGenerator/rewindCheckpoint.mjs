@@ -157,14 +157,13 @@ const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
 let __forked;
 let __functionCompleted = false;
-  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "rewindCheckpoint.agency", scopeName: "main", stack: __stateStack, threads: __threads });
+  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "rewindCheckpoint.agency", scopeName: "main" });
   if (!__state.isResume) {
     __stack.args["message"] = __state.data.message;
   }
   try {
     await runner.hook(0, async () => {
 await callHook({
-        ctx: __ctx,
         name: "onNodeStart",
         data: {
           nodeName: "main"
@@ -174,7 +173,6 @@ await callHook({
     await runner.step(1, async (runner) => {
 __self.__removedTools = __self.__removedTools || [];
 __stack.locals.mood = await runPrompt({
-        ctx: __ctx,
         prompt: `Categorize: ${__stack.args.message}`,
         messages: __threads.getOrCreateActive(),
         responseFormat: z.object({
@@ -182,7 +180,6 @@ __stack.locals.mood = await runPrompt({
         }),
         clientConfig: {},
         maxToolCallRounds: 10,
-        stateStack: __stateStack,
         removedTools: __self.__removedTools,
         checkpointInfo: runner.getCheckpointInfo()
       });
@@ -206,7 +203,6 @@ return;
     if (runner.halted) return runner.haltResult;
     await runner.hook(3, async () => {
 await callHook({
-        ctx: __ctx,
         name: "onNodeEnd",
         data: {
           nodeName: "main",

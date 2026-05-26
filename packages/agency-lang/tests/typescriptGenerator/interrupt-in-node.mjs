@@ -165,7 +165,7 @@ let __functionCompleted = false;
   __stack.args["name"] = name;
   __stack.args["age"] = age;
   __self.__retryable = __self.__retryable ?? true;
-  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "interrupt-in-node.agency", scopeName: "greet", stack: __stateStack, threads: __threads });
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "interrupt-in-node.agency", scopeName: "greet" });
   let __resultCheckpointId = -1;
 if (__ctx.stateStack.currentNodeId()) {
   __resultCheckpointId = __ctx.checkpoints.createPinned(__stateStack, __ctx, { moduleId: "interrupt-in-node.agency", scopeName: "greet", stepPath: "", label: "result-entry" });
@@ -187,7 +187,6 @@ if (__ctx._pendingArgOverrides) {
   try {
     await runner.hook(0, async () => {
 await callHook({
-        ctx: __ctx,
         name: "onFunctionStart",
         data: {
           functionName: "greet",
@@ -273,7 +272,6 @@ return failure(
     __stateStack.pop()
     if (__functionCompleted) {
       await callHook({
-        ctx: __ctx,
         name: "onFunctionEnd",
         data: {
           functionName: "greet",
@@ -320,7 +318,7 @@ const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
 let __forked;
 let __functionCompleted = false;
-  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "interrupt-in-node.agency", scopeName: "foo2", stack: __stateStack, threads: __threads });
+  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "interrupt-in-node.agency", scopeName: "foo2" });
   if (!__state.isResume) {
     __stack.args["name"] = __state.data.name;
     __stack.args["age"] = __state.data.age;
@@ -328,7 +326,6 @@ let __functionCompleted = false;
   try {
     await runner.hook(0, async () => {
 await callHook({
-        ctx: __ctx,
         name: "onNodeStart",
         data: {
           nodeName: "foo2"
@@ -339,21 +336,15 @@ await callHook({
 await __call(print, {
         type: "positional",
         args: [`In foo2, name is ${__stack.args.name} and age is ${__stack.args.age}, this message should only print once...`]
-      }, {
-        ctx: __ctx,
-        threads: __threads,
-        stateStack: __stateStack
       }) + greet
     });
     await runner.step(2, async (runner) => {
 __self.__removedTools = __self.__removedTools || [];
 __stack.locals.response = await runPrompt({
-        ctx: __ctx,
         prompt: `Greet the user with their name: ${__stack.args.name} and age ${__stack.args.age} using the greet function.`,
         messages: __threads.getOrCreateActive(),
         clientConfig: {},
         maxToolCallRounds: 10,
-        stateStack: __stateStack,
         removedTools: __self.__removedTools,
         checkpointInfo: runner.getCheckpointInfo()
       });
@@ -371,10 +362,6 @@ if (hasInterrupts(__stack.locals.response)) {
 const __funcResult = await __call(print, {
         type: "positional",
         args: [`Greeted, age is still ${__stack.args.age}...`]
-      }, {
-        ctx: __ctx,
-        threads: __threads,
-        stateStack: __stateStack
       });
 if (hasInterrupts(__funcResult)) {
         await __ctx.pendingPromises.awaitAll()
@@ -395,7 +382,6 @@ return;
     if (runner.halted) return runner.haltResult;
     await runner.hook(5, async () => {
 await callHook({
-        ctx: __ctx,
         name: "onNodeEnd",
         data: {
           nodeName: "foo2",
@@ -436,14 +422,13 @@ const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
 let __forked;
 let __functionCompleted = false;
-  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "interrupt-in-node.agency", scopeName: "sayHi", stack: __stateStack, threads: __threads });
+  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "interrupt-in-node.agency", scopeName: "sayHi" });
   if (!__state.isResume) {
     __stack.args["name"] = __state.data.name;
   }
   try {
     await runner.hook(0, async () => {
 await callHook({
-        ctx: __ctx,
         name: "onNodeStart",
         data: {
           nodeName: "sayHi"
@@ -454,10 +439,6 @@ await callHook({
 const __funcResult = await __call(print, {
         type: "positional",
         args: [`Saying hi to ${__stack.args.name}...`]
-      }, {
-        ctx: __ctx,
-        threads: __threads,
-        stateStack: __stateStack
       });
 if (hasInterrupts(__funcResult)) {
         await __ctx.pendingPromises.awaitAll()
@@ -487,7 +468,6 @@ return;
     if (runner.halted) return runner.haltResult;
     await runner.hook(4, async () => {
 await callHook({
-        ctx: __ctx,
         name: "onNodeEnd",
         data: {
           nodeName: "sayHi",

@@ -157,11 +157,10 @@ const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
 let __forked;
 let __functionCompleted = false;
-  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "asyncLlm.agency", scopeName: "main", stack: __stateStack, threads: __threads });
+  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "asyncLlm.agency", scopeName: "main" });
   try {
     await runner.hook(0, async () => {
 await callHook({
-        ctx: __ctx,
         name: "onNodeStart",
         data: {
           nodeName: "main"
@@ -171,12 +170,10 @@ await callHook({
     await runner.step(1, async (runner) => {
 __self.__removedTools = __self.__removedTools || [];
 __stack.locals.x = runPrompt({
-        ctx: __ctx,
         prompt: `What is 2+2?`,
         messages: __threads.createAndReturnSubthread(),
         clientConfig: {},
         maxToolCallRounds: 10,
-        stateStack: __stateStack,
         removedTools: __self.__removedTools,
         checkpointInfo: runner.getCheckpointInfo()
       });
@@ -185,12 +182,10 @@ __self.__pendingKey_x = __ctx.pendingPromises.add(__stack.locals.x, (val) => { _
     await runner.step(2, async (runner) => {
 __self.__removedTools = __self.__removedTools || [];
 __stack.locals.y = runPrompt({
-        ctx: __ctx,
         prompt: `What is 3+3?`,
         messages: __threads.createAndReturnSubthread(),
         clientConfig: {},
         maxToolCallRounds: 10,
-        stateStack: __stateStack,
         removedTools: __self.__removedTools,
         checkpointInfo: runner.getCheckpointInfo()
       });
@@ -209,7 +204,6 @@ return;
     if (runner.halted) return runner.haltResult;
     await runner.hook(5, async () => {
 await callHook({
-        ctx: __ctx,
         name: "onNodeEnd",
         data: {
           nodeName: "main",

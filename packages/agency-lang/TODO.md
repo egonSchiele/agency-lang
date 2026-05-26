@@ -163,8 +163,5 @@ tests/integration/stdlib-sandbox/credential/browser.test.json skipped, need to g
 
 ---
 
-docstrings don't allow string interpolation yet
-
----
-
-pattern matching for result types
+1. it would be great if callbacks could access any local functions inside the function its in.
+2. After that, we should create an onAbort callback that gets called when a function gets aborted, maybe because a guard fires, or some other reason. Then it'd be great if onAbort had some way to abort any TypeScript functions it had called as well, which means that users would need some way to pass an abort signal into those functions. I think they could just create an abort signal object in agency and pass it through. Then when the agency function gets aborted, onAbort aborts the js calls as well. That is why you need those callbacks to be able to access local variables.

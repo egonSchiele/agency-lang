@@ -55,7 +55,19 @@ With ALS, none of these are concerns. A stdlib export is just an ordinary functi
 - Tests that exercise a `_foo` helper directly (without going through compiled Agency code) MUST wrap the call in `runInTestContext`.
 - A stdlib helper that calls another `_foo` helper does NOT need to re-establish a frame — frames propagate through `await` automatically.
 
+## Codegen contract: call sites do not pass `ctx`/`stack`/`threads`
+
+After the "drop per-call-site context plumbing" pass (see plan), runtime helpers invoked from generated code read `ctx`/`stack`/`threads` from the active ALS frame instead of accepting them as positional arguments or config-bag keys:
+
+- `__call(target, descriptor)` / `__callMethod(obj, prop, descriptor)` build the `__state` bag from ALS internally — call sites only pass the location-info bag (`{moduleId, scopeName, stepPath}`) when invoking `checkpoint`/`getCheckpoint`/`restore`, and pass `{ctx}` when invoked from inside `__initializeGlobals` (which runs before any ALS frame exists).
+- `runPrompt({prompt, messages, clientConfig, ...})` no longer accepts `ctx` / `stateStack` — both come from ALS.
+- `callHook({name, data})` no longer requires `ctx`; it falls back to `getRuntimeContext().ctx` when omitted. Generated code stops emitting `ctx: __ctx`.
+- `new Runner(__ctx, __stack, {moduleId, scopeName})` — the `stack` and `threads` opts are gone. The Runner constructor reads them from ALS as a fallback so `runner.step/hook/fork` etc. still re-seed the per-scope frame correctly.
+
+The two external entry points called from host TS code — `respondToInterrupts` and `rewindFrom` — install their own outer `agencyStore.run(...)` frame around the resume/replay loop so that callbacks and stdlib helpers triggered during resume see the right context.
+
 ## See also
 
-- [docs/superpowers/plans/2026-05-25-als-migration.md](../superpowers/plans/2026-05-25-als-migration.md) — the migration plan.
+- [docs/superpowers/plans/2026-05-25-als-migration.md](../superpowers/plans/2026-05-25-als-migration.md) — the initial ALS migration plan.
+- [docs/superpowers/plans/2026-05-25-drop-per-call-context-plumbing.md](../superpowers/plans/2026-05-25-drop-per-call-context-plumbing.md) — the follow-up that dropped per-call-site bag emission.
 - [docs/dev/adding-a-module-to-the-agency-stdlib.md](./adding-a-module-to-the-agency-stdlib.md) — step-by-step recipe for adding a new module.

@@ -171,7 +171,7 @@ let __functionCompleted = false;
   }
   let __funcStartTime: number = performance.now();
   __self.__retryable = __self.__retryable ?? true;
-  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "comments.agency", scopeName: "greet", stack: __stateStack, threads: __threads });
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "comments.agency", scopeName: "greet" });
   let __resultCheckpointId = -1;
 if (__ctx.stateStack.currentNodeId()) {
   __resultCheckpointId = __ctx.checkpoints.createPinned(__stateStack, __ctx, { moduleId: "comments.agency", scopeName: "greet", stepPath: "", label: "result-entry" });
@@ -185,7 +185,6 @@ if (__ctx._pendingArgOverrides) {
   try {
     await runner.hook(0, async () => {
 await callHook({
-        ctx: __ctx,
         name: "onFunctionStart",
         data: {
           functionName: "greet",
@@ -234,7 +233,6 @@ return failure(
     __stateStack.pop()
     if (__functionCompleted) {
       await callHook({
-        ctx: __ctx,
         name: "onFunctionEnd",
         data: {
           functionName: "greet",
@@ -271,11 +269,10 @@ const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
 let __forked;
 let __functionCompleted = false;
-  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "comments.agency", scopeName: "main", stack: __stateStack, threads: __threads });
+  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "comments.agency", scopeName: "main" });
   try {
     await runner.hook(0, async () => {
 await callHook({
-        ctx: __ctx,
         name: "onNodeStart",
         data: {
           nodeName: "main"
@@ -289,10 +286,6 @@ await callHook({
 __stack.locals.result = await __call(greet, {
         type: "positional",
         args: []
-      }, {
-        ctx: __ctx,
-        threads: __threads,
-        stateStack: __stateStack
       });
 if (hasInterrupts(__stack.locals.result)) {
         await __ctx.pendingPromises.awaitAll()
@@ -307,10 +300,6 @@ if (hasInterrupts(__stack.locals.result)) {
 const __funcResult = await __call(print, {
         type: "positional",
         args: [__stack.locals.result]
-      }, {
-        ctx: __ctx,
-        threads: __threads,
-        stateStack: __stateStack
       });
 if (hasInterrupts(__funcResult)) {
         await __ctx.pendingPromises.awaitAll()
@@ -337,10 +326,6 @@ __stack.locals.status = `active`;
 await __call(print, {
             type: "positional",
             args: [`Stopped`]
-          }, {
-            ctx: __ctx,
-            threads: __threads,
-            stateStack: __stateStack
           })
     },
   },
@@ -352,7 +337,6 @@ await __call(print, {
     if (runner.halted) return runner.haltResult;
     await runner.hook(8, async () => {
 await callHook({
-        ctx: __ctx,
         name: "onNodeEnd",
         data: {
           nodeName: "main",

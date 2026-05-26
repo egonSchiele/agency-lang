@@ -157,11 +157,10 @@ const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
 let __forked;
 let __functionCompleted = false;
-  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "checkpoint-restore.agency", scopeName: "main", stack: __stateStack, threads: __threads });
+  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "checkpoint-restore.agency", scopeName: "main" });
   try {
     await runner.hook(0, async () => {
 await callHook({
-        ctx: __ctx,
         name: "onNodeStart",
         data: {
           nodeName: "main"
@@ -173,9 +172,6 @@ __stack.locals.cp = await __call(checkpoint, {
         type: "positional",
         args: []
       }, {
-        ctx: __ctx,
-        threads: __threads,
-        stateStack: __stateStack,
         moduleId: "checkpoint-restore.agency",
         scopeName: "main",
         stepPath: "1"
@@ -196,10 +192,6 @@ __stack.locals.x = 1;
 const __funcResult = await __call(restore, {
         type: "positional",
         args: [__stack.locals.cp, {}]
-      }, {
-        ctx: __ctx,
-        threads: __threads,
-        stateStack: __stateStack
       });
 if (hasInterrupts(__funcResult)) {
         await __ctx.pendingPromises.awaitAll()
@@ -220,7 +212,6 @@ return;
     if (runner.halted) return runner.haltResult;
     await runner.hook(5, async () => {
 await callHook({
-        ctx: __ctx,
         name: "onNodeEnd",
         data: {
           nodeName: "main",

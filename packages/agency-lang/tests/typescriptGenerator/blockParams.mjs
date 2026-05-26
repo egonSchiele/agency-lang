@@ -165,7 +165,7 @@ let __functionCompleted = false;
   __stack.args["items"] = items;
   __stack.args["block"] = block;
   __self.__retryable = __self.__retryable ?? true;
-  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "blockParams.agency", scopeName: "mapItems", stack: __stateStack, threads: __threads });
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "blockParams.agency", scopeName: "mapItems" });
   let __resultCheckpointId = -1;
 if (__ctx.stateStack.currentNodeId()) {
   __resultCheckpointId = __ctx.checkpoints.createPinned(__stateStack, __ctx, { moduleId: "blockParams.agency", scopeName: "mapItems", stepPath: "", label: "result-entry" });
@@ -187,7 +187,6 @@ if (__ctx._pendingArgOverrides) {
   try {
     await runner.hook(0, async () => {
 await callHook({
-        ctx: __ctx,
         name: "onFunctionStart",
         data: {
           functionName: "mapItems",
@@ -208,10 +207,6 @@ await runner.step(0, async (runner) => {
 __stack.locals.result = await __call(__stack.args.block, {
           type: "positional",
           args: [item]
-        }, {
-          ctx: __ctx,
-          threads: __threads,
-          stateStack: __stateStack
         });
 if (hasInterrupts(__stack.locals.result)) {
           await __ctx.pendingPromises.awaitAll()
@@ -223,10 +218,6 @@ await runner.step(1, async (runner) => {
 __stack.locals.results = await __call(append, {
           type: "positional",
           args: [__stack.locals.results, __stack.locals.result]
-        }, {
-          ctx: __ctx,
-          threads: __threads,
-          stateStack: __stateStack
         });
 if (hasInterrupts(__stack.locals.results)) {
           await __ctx.pendingPromises.awaitAll()
@@ -267,7 +258,6 @@ return failure(
     __stateStack.pop()
     if (__functionCompleted) {
       await callHook({
-        ctx: __ctx,
         name: "onFunctionEnd",
         data: {
           functionName: "mapItems",
@@ -314,11 +304,10 @@ const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
 let __forked;
 let __functionCompleted = false;
-  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "blockParams.agency", scopeName: "main", stack: __stateStack, threads: __threads });
+  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "blockParams.agency", scopeName: "main" });
   try {
     await runner.hook(0, async () => {
 await callHook({
-        ctx: __ctx,
         name: "onNodeStart",
         data: {
           nodeName: "main"
@@ -338,7 +327,7 @@ const __self = __bstack.locals;
 
 __bstack.args["x"] = x;
 
-const runner = new Runner(__ctx, __bstack, { state: __bstack, moduleId: "blockParams.agency", scopeName: "__block_0", stack: __ctx.stateStack });
+const runner = new Runner(__ctx, __bstack, { state: __bstack, moduleId: "blockParams.agency", scopeName: "__block_0" });
 try {
 await runner.step(0, async (runner) => {
 runner.halt(__bstack.args.x * 2)
@@ -349,10 +338,6 @@ return runner.halted ? runner.haltResult : undefined;
 __ctx.stateStack.pop();
 }
         }, params: [{ name: "x", hasDefault: false, defaultValue: undefined, variadic: false }], toolDefinition: null }, __toolRegistry)]
-      }, {
-        ctx: __ctx,
-        threads: __threads,
-        stateStack: __stateStack
       });
 if (hasInterrupts(__stack.locals.doubled)) {
         await __ctx.pendingPromises.awaitAll()
@@ -367,10 +352,6 @@ if (hasInterrupts(__stack.locals.doubled)) {
 const __funcResult = await __call(print, {
         type: "positional",
         args: [__stack.locals.doubled]
-      }, {
-        ctx: __ctx,
-        threads: __threads,
-        stateStack: __stateStack
       });
 if (hasInterrupts(__funcResult)) {
         await __ctx.pendingPromises.awaitAll()
@@ -384,7 +365,6 @@ if (hasInterrupts(__funcResult)) {
     if (runner.halted) return runner.haltResult;
     await runner.hook(4, async () => {
 await callHook({
-        ctx: __ctx,
         name: "onNodeEnd",
         data: {
           nodeName: "main",

@@ -157,11 +157,10 @@ const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
 let __forked;
 let __functionCompleted = false;
-  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "streaming.agency", scopeName: "foo", stack: __stateStack, threads: __threads });
+  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "streaming.agency", scopeName: "foo" });
   try {
     await runner.hook(0, async () => {
 await callHook({
-        ctx: __ctx,
         name: "onNodeStart",
         data: {
           nodeName: "foo"
@@ -171,14 +170,12 @@ await callHook({
     await runner.step(1, async (runner) => {
 __self.__removedTools = __self.__removedTools || [];
 __stack.locals.response = await runPrompt({
-        ctx: __ctx,
         prompt: `Generate a response word by word`,
         messages: __threads.getOrCreateActive(),
         clientConfig: {
           "stream": true
         },
         maxToolCallRounds: 10,
-        stateStack: __stateStack,
         removedTools: __self.__removedTools,
         checkpointInfo: runner.getCheckpointInfo()
       });
@@ -196,10 +193,6 @@ if (hasInterrupts(__stack.locals.response)) {
 const __funcResult = await __call(print, {
         type: "positional",
         args: [__stack.locals.response]
-      }, {
-        ctx: __ctx,
-        threads: __threads,
-        stateStack: __stateStack
       });
 if (hasInterrupts(__funcResult)) {
         await __ctx.pendingPromises.awaitAll()
@@ -213,7 +206,6 @@ if (hasInterrupts(__funcResult)) {
     await runner.step(3, async (runner) => {
 __self.__removedTools = __self.__removedTools || [];
 __stack.locals.response2 = await runPrompt({
-        ctx: __ctx,
         prompt: `Generate a response word by word, but with a different model`,
         messages: __threads.getOrCreateActive(),
         clientConfig: {
@@ -221,7 +213,6 @@ __stack.locals.response2 = await runPrompt({
           "stream": true
         },
         maxToolCallRounds: 10,
-        stateStack: __stateStack,
         removedTools: __self.__removedTools,
         checkpointInfo: runner.getCheckpointInfo()
       });
@@ -239,10 +230,6 @@ if (hasInterrupts(__stack.locals.response2)) {
 const __funcResult = await __call(print, {
         type: "positional",
         args: [__stack.locals.response2]
-      }, {
-        ctx: __ctx,
-        threads: __threads,
-        stateStack: __stateStack
       });
 if (hasInterrupts(__funcResult)) {
         await __ctx.pendingPromises.awaitAll()
@@ -256,7 +243,6 @@ if (hasInterrupts(__funcResult)) {
     if (runner.halted) return runner.haltResult;
     await runner.hook(5, async () => {
 await callHook({
-        ctx: __ctx,
         name: "onNodeEnd",
         data: {
           nodeName: "foo",

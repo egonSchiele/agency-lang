@@ -157,11 +157,10 @@ const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
 let __forked;
 let __functionCompleted = false;
-  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "stringConcat.agency", scopeName: "foo", stack: __stateStack, threads: __threads });
+  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "stringConcat.agency", scopeName: "foo" });
   try {
     await runner.hook(0, async () => {
 await callHook({
-        ctx: __ctx,
         name: "onNodeStart",
         data: {
           nodeName: "foo"
@@ -172,10 +171,6 @@ await callHook({
 const __funcResult = await __call(print, {
         type: "positional",
         args: [`What is your name?`]
-      }, {
-        ctx: __ctx,
-        threads: __threads,
-        stateStack: __stateStack
       });
 if (hasInterrupts(__funcResult)) {
         await __ctx.pendingPromises.awaitAll()
@@ -190,10 +185,6 @@ if (hasInterrupts(__funcResult)) {
 __stack.locals.name = await __call(input, {
         type: "positional",
         args: [`> `]
-      }, {
-        ctx: __ctx,
-        threads: __threads,
-        stateStack: __stateStack
       });
 if (hasInterrupts(__stack.locals.name)) {
         await __ctx.pendingPromises.awaitAll()
@@ -208,10 +199,6 @@ if (hasInterrupts(__stack.locals.name)) {
 const __funcResult = await __call(print, {
         type: "positional",
         args: [`Hello, ${__stack.locals.name}!`]
-      }, {
-        ctx: __ctx,
-        threads: __threads,
-        stateStack: __stateStack
       });
 if (hasInterrupts(__funcResult)) {
         await __ctx.pendingPromises.awaitAll()
@@ -225,7 +212,6 @@ if (hasInterrupts(__funcResult)) {
     if (runner.halted) return runner.haltResult;
     await runner.hook(4, async () => {
 await callHook({
-        ctx: __ctx,
         name: "onNodeEnd",
         data: {
           nodeName: "foo",

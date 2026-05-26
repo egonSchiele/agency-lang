@@ -157,11 +157,10 @@ const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
 let __forked;
 let __functionCompleted = false;
-  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "matchBlock.agency", scopeName: "main", stack: __stateStack, threads: __threads });
+  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "matchBlock.agency", scopeName: "main" });
   try {
     await runner.hook(0, async () => {
 await callHook({
-        ctx: __ctx,
         name: "onNodeStart",
         data: {
           nodeName: "main"
@@ -183,10 +182,6 @@ __stack.locals.action = `start`;
 await __call(print, {
             type: "positional",
             args: [`Starting...`]
-          }, {
-            ctx: __ctx,
-            threads: __threads,
-            stateStack: __stateStack
           })
     },
   },
@@ -197,10 +192,6 @@ await __call(print, {
 await __call(print, {
             type: "positional",
             args: [`Stopping...`]
-          }, {
-            ctx: __ctx,
-            threads: __threads,
-            stateStack: __stateStack
           })
     },
   },
@@ -211,10 +202,6 @@ await __call(print, {
 await __call(print, {
             type: "positional",
             args: [`Restarting...`]
-          }, {
-            ctx: __ctx,
-            threads: __threads,
-            stateStack: __stateStack
           })
     },
   },
@@ -223,10 +210,6 @@ await __call(print, {
 await __call(print, {
           type: "positional",
           args: [`Unknown action`]
-        }, {
-          ctx: __ctx,
-          threads: __threads,
-          stateStack: __stateStack
         })
 });
     await runner.step(4, async (runner) => {
@@ -243,10 +226,6 @@ __stack.locals.statusCode = 200;
 await __call(print, {
             type: "positional",
             args: [`OK`]
-          }, {
-            ctx: __ctx,
-            threads: __threads,
-            stateStack: __stateStack
           })
     },
   },
@@ -257,10 +236,6 @@ await __call(print, {
 await __call(print, {
             type: "positional",
             args: [`Not Found`]
-          }, {
-            ctx: __ctx,
-            threads: __threads,
-            stateStack: __stateStack
           })
     },
   },
@@ -271,10 +246,6 @@ await __call(print, {
 await __call(print, {
             type: "positional",
             args: [`Internal Server Error`]
-          }, {
-            ctx: __ctx,
-            threads: __threads,
-            stateStack: __stateStack
           })
     },
   },
@@ -283,10 +254,6 @@ await __call(print, {
 await __call(print, {
           type: "positional",
           args: [`Unknown status`]
-        }, {
-          ctx: __ctx,
-          threads: __threads,
-          stateStack: __stateStack
         })
 });
     await runner.step(7, async (runner) => {
@@ -345,10 +312,6 @@ __stack.locals.level = `debug`;
 await __call(print, {
             type: "positional",
             args: [`Debug mode enabled`]
-          }, {
-            ctx: __ctx,
-            threads: __threads,
-            stateStack: __stateStack
           })
     },
   },
@@ -359,10 +322,6 @@ await __call(print, {
 await __call(print, {
             type: "positional",
             args: [`Info level logging`]
-          }, {
-            ctx: __ctx,
-            threads: __threads,
-            stateStack: __stateStack
           })
     },
   },
@@ -373,10 +332,6 @@ await __call(print, {
 await __call(print, {
             type: "positional",
             args: [`Warning level`]
-          }, {
-            ctx: __ctx,
-            threads: __threads,
-            stateStack: __stateStack
           })
     },
   },
@@ -387,10 +342,6 @@ await __call(print, {
 await __call(print, {
             type: "positional",
             args: [`Error level`]
-          }, {
-            ctx: __ctx,
-            threads: __threads,
-            stateStack: __stateStack
           })
     },
   },
@@ -471,7 +422,6 @@ __stack.locals.output4 = {
     if (runner.halted) return runner.haltResult;
     await runner.hook(20, async () => {
 await callHook({
-        ctx: __ctx,
         name: "onNodeEnd",
         data: {
           nodeName: "main",

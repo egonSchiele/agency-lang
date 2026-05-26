@@ -165,7 +165,7 @@ let __functionCompleted = false;
   __stack.args["sleepTime"] = sleepTime;
   __stack.args["value"] = value;
   __self.__retryable = __self.__retryable ?? true;
-  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "asyncUnassigned.agency", scopeName: "append", stack: __stateStack, threads: __threads });
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "asyncUnassigned.agency", scopeName: "append" });
   let __resultCheckpointId = -1;
 if (__ctx.stateStack.currentNodeId()) {
   __resultCheckpointId = __ctx.checkpoints.createPinned(__stateStack, __ctx, { moduleId: "asyncUnassigned.agency", scopeName: "append", stepPath: "", label: "result-entry" });
@@ -187,7 +187,6 @@ if (__ctx._pendingArgOverrides) {
   try {
     await runner.hook(0, async () => {
 await callHook({
-        ctx: __ctx,
         name: "onFunctionStart",
         data: {
           functionName: "append",
@@ -204,10 +203,6 @@ await callHook({
 const __funcResult = await __call(sleep, {
         type: "positional",
         args: [__stack.args.sleepTime]
-      }, {
-        ctx: __ctx,
-        threads: __threads,
-        stateStack: __stateStack
       });
 if (hasInterrupts(__funcResult)) {
         await __ctx.pendingPromises.awaitAll()
@@ -242,7 +237,6 @@ return failure(
     __stateStack.pop()
     if (__functionCompleted) {
       await callHook({
-        ctx: __ctx,
         name: "onFunctionEnd",
         data: {
           functionName: "append",
@@ -289,11 +283,10 @@ const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
 let __forked;
 let __functionCompleted = false;
-  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "asyncUnassigned.agency", scopeName: "main", stack: __stateStack, threads: __threads });
+  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "asyncUnassigned.agency", scopeName: "main" });
   try {
     await runner.hook(0, async () => {
 await callHook({
-        ctx: __ctx,
         name: "onNodeStart",
         data: {
           nodeName: "main"
@@ -315,8 +308,6 @@ __ctx.pendingPromises.add(__call(append, {
   type: "positional",
   args: [1, `hello`]
 }, {
-  ctx: __ctx,
-  threads: __threads,
   stateStack: __forked
 }))
     });
@@ -335,8 +326,6 @@ __ctx.pendingPromises.add(__call(append, {
   type: "positional",
   args: [0.5, `world`]
 }, {
-  ctx: __ctx,
-  threads: __threads,
   stateStack: __forked
 }))
     });
@@ -350,7 +339,6 @@ return;
     if (runner.halted) return runner.haltResult;
     await runner.hook(4, async () => {
 await callHook({
-        ctx: __ctx,
         name: "onNodeEnd",
         data: {
           nodeName: "main",

@@ -9,6 +9,7 @@ import type {
 } from "smoltalk";
 import type { CallbackName } from "../types/function.js";
 import { AgencyFunction } from "./agencyFunction.js";
+import { getRuntimeContext } from "./asyncContext.js";
 import { AgencyCancelledError, RestoreSignal } from "./errors.js";
 import type { RuntimeContext } from "./state/context.js";
 import type { StateStack } from "./state/stateStack.js";
@@ -218,14 +219,19 @@ export function gatherCallbacks<K extends keyof CallbackMap>(
  *
  *  Used directly by sites that fire inside a fork/tool branch (e.g. the
  *  per-tool `onToolCallStart` / `onToolCallEnd` in `prompt.ts`). The
- *  public `callHook` is now a thin wrapper that omits `stateStack`. */
+ *  public `callHook` is now a thin wrapper that omits `stateStack`.
+ *
+ *  `ctx` is optional — when omitted (which is now the case for every
+ *  codegen-emitted `callHook(...)` site), it's resolved from the active
+ *  ALS frame via `getRuntimeContext()`. */
 export async function invokeCallbacks<K extends keyof CallbackMap>(args: {
-  ctx: RuntimeContext<any>;
+  ctx?: RuntimeContext<any>;
   name: K;
   data: CallbackMap[K];
   stateStack?: StateStack;
 }): Promise<void> {
-  const { ctx, name, data, stateStack } = args;
+  const { name, data, stateStack } = args;
+  const ctx = args.ctx ?? getRuntimeContext().ctx;
   const walkStack = stateStack ?? ctx.stateStack;
 
   // Fire global hooks (from external packages) first. Order matches the
@@ -242,7 +248,7 @@ export async function invokeCallbacks<K extends keyof CallbackMap>(args: {
 /** Today's call sites that fire on the top-level stack. Thin wrapper over
  *  `invokeCallbacks` with no `stateStack` override. */
 export async function callHook<K extends keyof CallbackMap>(args: {
-  ctx: RuntimeContext<any>;
+  ctx?: RuntimeContext<any>;
   name: K;
   data: CallbackMap[K];
 }): Promise<void> {

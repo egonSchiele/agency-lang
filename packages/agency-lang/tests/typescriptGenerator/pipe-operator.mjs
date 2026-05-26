@@ -164,7 +164,7 @@ let __functionCompleted = false;
   let __funcStartTime: number = performance.now();
   __stack.args["x"] = x;
   __self.__retryable = __self.__retryable ?? true;
-  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "pipe-operator.agency", scopeName: "double", stack: __stateStack, threads: __threads });
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "pipe-operator.agency", scopeName: "double" });
   let __resultCheckpointId = -1;
 if (__ctx.stateStack.currentNodeId()) {
   __resultCheckpointId = __ctx.checkpoints.createPinned(__stateStack, __ctx, { moduleId: "pipe-operator.agency", scopeName: "double", stepPath: "", label: "result-entry" });
@@ -182,7 +182,6 @@ if (__ctx._pendingArgOverrides) {
   try {
     await runner.hook(0, async () => {
 await callHook({
-        ctx: __ctx,
         name: "onFunctionStart",
         data: {
           functionName: "double",
@@ -226,7 +225,6 @@ return failure(
     __stateStack.pop()
     if (__functionCompleted) {
       await callHook({
-        ctx: __ctx,
         name: "onFunctionEnd",
         data: {
           functionName: "double",
@@ -276,7 +274,7 @@ let __functionCompleted = false;
   __stack.args["a"] = a;
   __stack.args["b"] = b;
   __self.__retryable = __self.__retryable ?? true;
-  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "pipe-operator.agency", scopeName: "multiply", stack: __stateStack, threads: __threads });
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "pipe-operator.agency", scopeName: "multiply" });
   let __resultCheckpointId = -1;
 if (__ctx.stateStack.currentNodeId()) {
   __resultCheckpointId = __ctx.checkpoints.createPinned(__stateStack, __ctx, { moduleId: "pipe-operator.agency", scopeName: "multiply", stepPath: "", label: "result-entry" });
@@ -298,7 +296,6 @@ if (__ctx._pendingArgOverrides) {
   try {
     await runner.hook(0, async () => {
 await callHook({
-        ctx: __ctx,
         name: "onFunctionStart",
         data: {
           functionName: "multiply",
@@ -343,7 +340,6 @@ return failure(
     __stateStack.pop()
     if (__functionCompleted) {
       await callHook({
-        ctx: __ctx,
         name: "onFunctionEnd",
         data: {
           functionName: "multiply",
@@ -398,7 +394,7 @@ let __functionCompleted = false;
   __stack.args["a"] = a;
   __stack.args["b"] = b;
   __self.__retryable = __self.__retryable ?? true;
-  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "pipe-operator.agency", scopeName: "safeDivide", stack: __stateStack, threads: __threads });
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "pipe-operator.agency", scopeName: "safeDivide" });
   let __resultCheckpointId = -1;
 if (__ctx.stateStack.currentNodeId()) {
   __resultCheckpointId = __ctx.checkpoints.createPinned(__stateStack, __ctx, { moduleId: "pipe-operator.agency", scopeName: "safeDivide", stepPath: "", label: "result-entry" });
@@ -420,7 +416,6 @@ if (__ctx._pendingArgOverrides) {
   try {
     await runner.hook(0, async () => {
 await callHook({
-        ctx: __ctx,
         name: "onFunctionStart",
         data: {
           functionName: "safeDivide",
@@ -479,7 +474,6 @@ return failure(
     __stateStack.pop()
     if (__functionCompleted) {
       await callHook({
-        ctx: __ctx,
         name: "onFunctionEnd",
         data: {
           functionName: "safeDivide",
@@ -526,11 +520,10 @@ const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
 let __forked;
 let __functionCompleted = false;
-  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "pipe-operator.agency", scopeName: "main", stack: __stateStack, threads: __threads });
+  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "pipe-operator.agency", scopeName: "main" });
   try {
     await runner.hook(0, async () => {
 await callHook({
-        ctx: __ctx,
         name: "onNodeStart",
         data: {
           nodeName: "main"
@@ -543,10 +536,6 @@ __stack.locals.__pipe_0 = await success(5);
     __stack.locals.r1 = await runner.pipe(2, __stack.locals.__pipe_0, async (__pipeArg) => await __call(double, {
       type: "positional",
       args: [__pipeArg]
-    }, {
-      ctx: __ctx,
-      threads: __threads,
-      stateStack: __stateStack
     }));
     await runner.step(3, async (runner) => {
 __stack.locals.__pipe_1 = await success(5);
@@ -557,17 +546,9 @@ __stack.locals.__pipe_1 = await success(5);
       namedArgs: {
         a: 10
       }
-    }, {
-      ctx: __ctx,
-      threads: __threads,
-      stateStack: __stateStack
     }), {
       type: "positional",
       args: [__pipeArg]
-    }, {
-      ctx: __ctx,
-      threads: __threads,
-      stateStack: __stateStack
     }));
     await runner.step(5, async (runner) => {
 __stack.locals.__pipe_2 = await success(10);
@@ -575,10 +556,6 @@ __stack.locals.__pipe_2 = await success(10);
     __stack.locals.__pipe_2 = await runner.pipe(6, __stack.locals.__pipe_2, async (__pipeArg) => await __call(double, {
       type: "positional",
       args: [__pipeArg]
-    }, {
-      ctx: __ctx,
-      threads: __threads,
-      stateStack: __stateStack
     }));
     __stack.locals.r3 = await runner.pipe(7, __stack.locals.__pipe_2, async (__pipeArg) => await __call(await __callMethod(multiply, "partial", {
       type: "named",
@@ -586,17 +563,9 @@ __stack.locals.__pipe_2 = await success(10);
       namedArgs: {
         a: 3
       }
-    }, {
-      ctx: __ctx,
-      threads: __threads,
-      stateStack: __stateStack
     }), {
       type: "positional",
       args: [__pipeArg]
-    }, {
-      ctx: __ctx,
-      threads: __threads,
-      stateStack: __stateStack
     }));
     await runner.step(8, async (runner) => {
 __stack.locals.__pipe_3 = await failure(`nope`);
@@ -604,10 +573,6 @@ __stack.locals.__pipe_3 = await failure(`nope`);
     __stack.locals.r4 = await runner.pipe(9, __stack.locals.__pipe_3, async (__pipeArg) => await __call(double, {
       type: "positional",
       args: [__pipeArg]
-    }, {
-      ctx: __ctx,
-      threads: __threads,
-      stateStack: __stateStack
     }));
     await runner.step(10, async (runner) => {
 __stack.locals.__pipe_4 = await success(10);
@@ -618,22 +583,13 @@ __stack.locals.__pipe_4 = await success(10);
       namedArgs: {
         b: 2
       }
-    }, {
-      ctx: __ctx,
-      threads: __threads,
-      stateStack: __stateStack
     }), {
       type: "positional",
       args: [__pipeArg]
-    }, {
-      ctx: __ctx,
-      threads: __threads,
-      stateStack: __stateStack
     }));
     if (runner.halted) return runner.haltResult;
     await runner.hook(12, async () => {
 await callHook({
-        ctx: __ctx,
         name: "onNodeEnd",
         data: {
           nodeName: "main",

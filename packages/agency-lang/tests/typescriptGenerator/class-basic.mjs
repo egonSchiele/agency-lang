@@ -176,7 +176,7 @@ if (!__ctx.globals.isInitialized("class-basic.agency")) {
     }
 let __funcStartTime: number = performance.now();
 __self.__retryable = __self.__retryable ?? true;
-const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "class-basic.agency", scopeName: "Counter.increment", stack: __stateStack, threads: __threads });
+const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "class-basic.agency", scopeName: "Counter.increment" });
 let __resultCheckpointId = -1;
 if (__ctx.stateStack.currentNodeId()) {
   __resultCheckpointId = __ctx.checkpoints.createPinned(__stateStack, __ctx, { moduleId: "class-basic.agency", scopeName: "Counter.increment", stepPath: "", label: "result-entry" });
@@ -190,7 +190,6 @@ if (__ctx._pendingArgOverrides) {
 try {
       await runner.hook(0, async () => {
 await callHook({
-          ctx: __ctx,
           name: "onFunctionStart",
           data: {
             functionName: "Counter.increment",
@@ -235,7 +234,6 @@ return failure(
       __stateStack.pop()
       if (__functionCompleted) {
         await callHook({
-          ctx: __ctx,
           name: "onFunctionEnd",
           data: {
             functionName: "Counter.increment",
@@ -281,11 +279,10 @@ const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
 let __forked;
 let __functionCompleted = false;
-  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "class-basic.agency", scopeName: "main", stack: __stateStack, threads: __threads });
+  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "class-basic.agency", scopeName: "main" });
   try {
     await runner.hook(0, async () => {
 await callHook({
-        ctx: __ctx,
         name: "onNodeStart",
         data: {
           nodeName: "main"
@@ -299,10 +296,6 @@ __stack.locals.c = new Counter(0);
 await __callMethod(__stack.locals.c, "increment", {
         type: "positional",
         args: []
-      }, {
-        ctx: __ctx,
-        threads: __threads,
-        stateStack: __stateStack
       })
     });
     await runner.step(3, async (runner) => {
@@ -311,10 +304,6 @@ runner.halt({
         data: await __callMethod(__stack.locals.c, "increment", {
           type: "positional",
           args: []
-        }, {
-          ctx: __ctx,
-          threads: __threads,
-          stateStack: __stateStack
         })
       })
 return;
@@ -322,7 +311,6 @@ return;
     if (runner.halted) return runner.haltResult;
     await runner.hook(4, async () => {
 await callHook({
-        ctx: __ctx,
         name: "onNodeEnd",
         data: {
           nodeName: "main",

@@ -1,11 +1,13 @@
 import * as smoltalk from "smoltalk";
 import { nanoid } from "nanoid";
+import { agencyStore } from "./asyncContext.js";
 import { AgencyCancelledError, RestoreSignal } from "./errors.js";
 import { applyOverrides } from "./rewind.js";
 import { Checkpoint } from "./state/checkpointStore.js";
 import { RuntimeContext } from "./state/context.js";
 import { GlobalStore, GlobalStoreJSON } from "./state/globalStore.js";
 import { StateStack, StateStackJSON } from "./state/stateStack.js";
+import { ThreadStore } from "./state/threadStore.js";
 import { Approved, GraphState, Rejected } from "./types.js";
 import { createReturnObject, deepClone } from "./utils.js";
 import { reviveWithClasses } from "./classReviver.js";
@@ -286,15 +288,26 @@ async function runResumeLoop(
   agentStartTime: number,
 ): Promise<any> {
   let nodeName = startNodeName;
+  // Seed an ALS frame so stdlib helpers and `callHook` reads (which
+  // post-ALS-migration look up `ctx` / `stack` / `threads` via
+  // `getRuntimeContext()`) see the resumed run's context. The threads
+  // slot is a placeholder — generated node bodies install their own
+  // per-step frames inside `Runner.runInScope` with the actual
+  // ThreadStore reconstituted by `setupNode`.
+  const threadStore = ThreadStore.withDefaultActive(execCtx.statelogClient);
   while (true) {
     try {
-      const result = await execCtx.graph.run(
-        nodeName,
-        { data: {}, ctx: execCtx, isResume: true },
-        {
-          onNodeEnter: (id) => execCtx.stateStack.nodesTraversed.push(id),
-          statelogClient: execCtx.statelogClient,
-        },
+      const result = await agencyStore.run(
+        { ctx: execCtx, stack: execCtx.stateStack, threads: threadStore },
+        () =>
+          execCtx.graph.run(
+            nodeName,
+            { data: {}, ctx: execCtx, isResume: true },
+            {
+              onNodeEnter: (id) => execCtx.stateStack.nodesTraversed.push(id),
+              statelogClient: execCtx.statelogClient,
+            },
+          ),
       );
       await execCtx.pendingPromises.awaitAll();
       const returnObject = createReturnObject({ result, globals: execCtx.globals });
@@ -385,8 +398,17 @@ export async function respondToInterrupts(args: {
   // After `restoreState`, the stack carries the checkpoint frames and
   // the same registration would instead bind to a caller frame and be
   // popped immediately as the restored frames unwind.
+  //
+  // The wrap in `agencyStore.run` mirrors `runNode` — top-level
+  // callback registration runs Agency code that goes through
+  // `__call`, which reads ctx/threads/stack from ALS after the
+  // drop-per-call-context-plumbing migration. See lib/runtime/node.ts.
+  const bootstrapThreads = ThreadStore.withDefaultActive(execCtx.statelogClient);
   if (args.registerTopLevelCallbacks) {
-    await args.registerTopLevelCallbacks(execCtx);
+    await agencyStore.run(
+      { ctx: execCtx, stack: execCtx.stateStack, threads: bootstrapThreads },
+      () => args.registerTopLevelCallbacks!(execCtx),
+    );
   }
   execCtx.restoreState(checkpoint);
   execCtx.setInterruptResponses(responseMap);

@@ -25,7 +25,7 @@ import {
   readSkillTool as __readSkillTool,
   readSkillToolParams as __readSkillToolParams,
   AgencyFunction as __AgencyFunction, UNSET as __UNSET,
-  __call, __callMethod,
+  __call, __callMethod, __threads,
   functionRefReviver as __functionRefReviver,
   DeterministicClient as __DeterministicClient,
 } from "agency-lang/runtime";
@@ -160,13 +160,12 @@ graph.node("main", async (__state: GraphState) => {
 const __stack = __setupData.stack;
 const __step = __setupData.step;
 const __self = __setupData.self;
-const __threads = __setupData.threads;
 const __ctx = __state.ctx;
 const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
 let __forked;
 let __functionCompleted = false;
-  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "setLLMClient.agency", scopeName: "main", threads: __threads });
+  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "setLLMClient.agency", scopeName: "main", threads: __setupData.threads });
   try {
     await runner.hook(0, async () => {
 await callHook({
@@ -180,7 +179,7 @@ await callHook({
 __self.__removedTools = __self.__removedTools || [];
 __stack.locals.result = await runPrompt({
         prompt: `Hello`,
-        messages: __threads.getOrCreateActive(),
+        messages: __threads().getOrCreateActive(),
         clientConfig: {},
         maxToolCallRounds: 10,
         removedTools: __self.__removedTools,
@@ -190,7 +189,7 @@ __stack.locals.result = await runPrompt({
 if (hasInterrupts(__stack.locals.result)) {
         await __ctx.pendingPromises.awaitAll()
         runner.halt({
-          messages: __threads,
+          messages: __threads(),
           data: __stack.locals.result
         })
         return;
@@ -221,7 +220,7 @@ await callHook({
       })
     });
     return {
-      messages: __threads,
+      messages: __threads(),
       data: undefined
     };
   } catch (__error) {
@@ -234,7 +233,7 @@ await callHook({
     console.error(`\nAgent crashed: ${__error.message}`)
     console.error(__error.stack)
     return {
-      messages: __threads,
+      messages: __threads(),
       data: failure(__error instanceof Error ? __error.message : String(__error), { functionName: "main" })
     };
   }

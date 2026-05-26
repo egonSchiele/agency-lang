@@ -25,7 +25,7 @@ import {
   readSkillTool as __readSkillTool,
   readSkillToolParams as __readSkillToolParams,
   AgencyFunction as __AgencyFunction, UNSET as __UNSET,
-  __call, __callMethod,
+  __call, __callMethod, __threads,
   functionRefReviver as __functionRefReviver,
   DeterministicClient as __DeterministicClient,
 } from "agency-lang/runtime";
@@ -154,7 +154,6 @@ async function __safeLookup_impl(id: string, __state: InternalFunctionState | un
 const __stack = __setupData.stack;
 const __step = __setupData.step;
 const __self = __setupData.self;
-const __threads = __setupData.threads;
 const __ctx = __state?.ctx || __globalCtx;
 const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
@@ -166,7 +165,7 @@ let __functionCompleted = false;
   let __funcStartTime: number = performance.now();
   __stack.args["id"] = id;
   __self.__retryable = __self.__retryable ?? true;
-  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "safe-function.agency", scopeName: "safeLookup", threads: __threads });
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "safe-function.agency", scopeName: "safeLookup", threads: __setupData.threads });
   let __resultCheckpointId = -1;
 if (__ctx.stateStack.currentNodeId()) {
   __resultCheckpointId = __ctx.checkpoints.createPinned(__stateStack, __ctx, { moduleId: "safe-function.agency", scopeName: "safeLookup", stepPath: "", label: "result-entry" });
@@ -266,7 +265,6 @@ async function __unsafeSave_impl(id: string, __state: InternalFunctionState | un
 const __stack = __setupData.stack;
 const __step = __setupData.step;
 const __self = __setupData.self;
-const __threads = __setupData.threads;
 const __ctx = __state?.ctx || __globalCtx;
 const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
@@ -278,7 +276,7 @@ let __functionCompleted = false;
   let __funcStartTime: number = performance.now();
   __stack.args["id"] = id;
   __self.__retryable = __self.__retryable ?? true;
-  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "safe-function.agency", scopeName: "unsafeSave", threads: __threads });
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "safe-function.agency", scopeName: "unsafeSave", threads: __setupData.threads });
   let __resultCheckpointId = -1;
 if (__ctx.stateStack.currentNodeId()) {
   __resultCheckpointId = __ctx.checkpoints.createPinned(__stateStack, __ctx, { moduleId: "safe-function.agency", scopeName: "unsafeSave", stepPath: "", label: "result-entry" });
@@ -389,13 +387,12 @@ graph.node("main", async (__state: GraphState) => {
 const __stack = __setupData.stack;
 const __step = __setupData.step;
 const __self = __setupData.self;
-const __threads = __setupData.threads;
 const __ctx = __state.ctx;
 const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
 let __forked;
 let __functionCompleted = false;
-  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "safe-function.agency", scopeName: "main", threads: __threads });
+  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "safe-function.agency", scopeName: "main", threads: __setupData.threads });
   try {
     await runner.hook(0, async () => {
 await callHook({
@@ -409,7 +406,7 @@ await callHook({
 __self.__removedTools = __self.__removedTools || [];
 __stack.locals.result = await runPrompt({
         prompt: `Use the tools`,
-        messages: __threads.getOrCreateActive(),
+        messages: __threads().getOrCreateActive(),
         clientConfig: {
           "tools": [safeLookup, unsafeSave]
         },
@@ -421,7 +418,7 @@ __stack.locals.result = await runPrompt({
 if (hasInterrupts(__stack.locals.result)) {
         await __ctx.pendingPromises.awaitAll()
         runner.halt({
-          messages: __threads,
+          messages: __threads(),
           data: __stack.locals.result
         })
         return;
@@ -429,7 +426,7 @@ if (hasInterrupts(__stack.locals.result)) {
     });
     await runner.step(2, async (runner) => {
 runner.halt({
-        messages: __threads,
+        messages: __threads(),
         data: __stack.locals.result
       })
 return;
@@ -445,7 +442,7 @@ await callHook({
       })
     });
     return {
-      messages: __threads,
+      messages: __threads(),
       data: undefined
     };
   } catch (__error) {
@@ -458,7 +455,7 @@ await callHook({
     console.error(`\nAgent crashed: ${__error.message}`)
     console.error(__error.stack)
     return {
-      messages: __threads,
+      messages: __threads(),
       data: failure(__error instanceof Error ? __error.message : String(__error), { functionName: "main" })
     };
   }

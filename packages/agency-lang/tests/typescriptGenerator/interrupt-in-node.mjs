@@ -24,7 +24,7 @@ import {
   readSkillTool as __readSkillTool,
   readSkillToolParams as __readSkillToolParams,
   AgencyFunction as __AgencyFunction, UNSET as __UNSET,
-  __call, __callMethod,
+  __call, __callMethod, __threads,
   functionRefReviver as __functionRefReviver,
   DeterministicClient as __DeterministicClient,
 } from "agency-lang/runtime";
@@ -152,7 +152,6 @@ async function __greet_impl(name: string, age: number, __state: InternalFunction
 const __stack = __setupData.stack;
 const __step = __setupData.step;
 const __self = __setupData.self;
-const __threads = __setupData.threads;
 const __ctx = __state?.ctx || __globalCtx;
 const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
@@ -165,7 +164,7 @@ let __functionCompleted = false;
   __stack.args["name"] = name;
   __stack.args["age"] = age;
   __self.__retryable = __self.__retryable ?? true;
-  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "interrupt-in-node.agency", scopeName: "greet", threads: __threads });
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "interrupt-in-node.agency", scopeName: "greet", threads: __setupData.threads });
   let __resultCheckpointId = -1;
 if (__ctx.stateStack.currentNodeId()) {
   __resultCheckpointId = __ctx.checkpoints.createPinned(__stateStack, __ctx, { moduleId: "interrupt-in-node.agency", scopeName: "greet", stepPath: "", label: "result-entry" });
@@ -312,13 +311,12 @@ graph.node("foo2", async (__state: GraphState) => {
 const __stack = __setupData.stack;
 const __step = __setupData.step;
 const __self = __setupData.self;
-const __threads = __setupData.threads;
 const __ctx = __state.ctx;
 const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
 let __forked;
 let __functionCompleted = false;
-  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "interrupt-in-node.agency", scopeName: "foo2", threads: __threads });
+  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "interrupt-in-node.agency", scopeName: "foo2", threads: __setupData.threads });
   if (!__state.isResume) {
     __stack.args["name"] = __state.data.name;
     __stack.args["age"] = __state.data.age;
@@ -342,7 +340,7 @@ await __call(print, {
 __self.__removedTools = __self.__removedTools || [];
 __stack.locals.response = await runPrompt({
         prompt: `Greet the user with their name: ${__stack.args.name} and age ${__stack.args.age} using the greet function.`,
-        messages: __threads.getOrCreateActive(),
+        messages: __threads().getOrCreateActive(),
         clientConfig: {},
         maxToolCallRounds: 10,
         removedTools: __self.__removedTools,
@@ -352,7 +350,7 @@ __stack.locals.response = await runPrompt({
 if (hasInterrupts(__stack.locals.response)) {
         await __ctx.pendingPromises.awaitAll()
         runner.halt({
-          messages: __threads,
+          messages: __threads(),
           data: __stack.locals.response
         })
         return;
@@ -374,7 +372,7 @@ if (hasInterrupts(__funcResult)) {
     });
     await runner.step(4, async (runner) => {
 runner.halt({
-        messages: __threads,
+        messages: __threads(),
         data: __stack.locals.response
       })
 return;
@@ -390,7 +388,7 @@ await callHook({
       })
     });
     return {
-      messages: __threads,
+      messages: __threads(),
       data: undefined
     };
   } catch (__error) {
@@ -403,7 +401,7 @@ await callHook({
     console.error(`\nAgent crashed: ${__error.message}`)
     console.error(__error.stack)
     return {
-      messages: __threads,
+      messages: __threads(),
       data: failure(__error instanceof Error ? __error.message : String(__error), { functionName: "foo2" })
     };
   }
@@ -416,13 +414,12 @@ graph.node("sayHi", async (__state: GraphState) => {
 const __stack = __setupData.stack;
 const __step = __setupData.step;
 const __self = __setupData.self;
-const __threads = __setupData.threads;
 const __ctx = __state.ctx;
 const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
 let __forked;
 let __functionCompleted = false;
-  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "interrupt-in-node.agency", scopeName: "sayHi", threads: __threads });
+  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "interrupt-in-node.agency", scopeName: "sayHi", threads: __setupData.threads });
   if (!__state.isResume) {
     __stack.args["name"] = __state.data.name;
   }
@@ -456,7 +453,7 @@ __stack.locals.age = 30;
 __stateStack.pop()
 __functionCompleted = true;
 runner.halt(goToNode("foo2", {
-        messages: __threads,
+        messages: __threads(),
         ctx: __ctx,
         data: {
           name: __stack.args.name,
@@ -476,7 +473,7 @@ await callHook({
       })
     });
     return {
-      messages: __threads,
+      messages: __threads(),
       data: undefined
     };
   } catch (__error) {
@@ -489,7 +486,7 @@ await callHook({
     console.error(`\nAgent crashed: ${__error.message}`)
     console.error(__error.stack)
     return {
-      messages: __threads,
+      messages: __threads(),
       data: failure(__error instanceof Error ? __error.message : String(__error), { functionName: "sayHi" })
     };
   }

@@ -1,9 +1,8 @@
 import type { Checkpoint } from "./state/checkpointStore.js";
-import { agencyStore } from "./asyncContext.js";
+import { runInBootstrapFrame } from "./asyncContext.js";
 import { RestoreSignal } from "./errors.js";
 import { RuntimeContext } from "./state/context.js";
 import { StateStack } from "./state/stateStack.js";
-import { ThreadStore } from "./state/threadStore.js";
 import type { GraphState } from "./types.js";
 import { createReturnObject, deepClone } from "./utils.js";
 import { color } from "@/utils/termcolors.js";
@@ -45,15 +44,14 @@ export async function rewindFrom(args: {
   const execCtx = await ctx.createExecutionContext(runId);
   // Must run before restoreState so the empty stack routes the
   // registration to `ctx.topLevelCallbacks`. See the matching comment
-  // in `respondToInterrupts`. The `agencyStore.run` wrap is also
-  // mirrored from there — top-level callback registration runs
-  // Agency code (the `callback(...)` wrapper) that needs an ALS
-  // frame for `__call` post-migration.
-  const bootstrapThreads = ThreadStore.withDefaultActive(execCtx.statelogClient);
+  // in `respondToInterrupts`. The bootstrap frame is also mirrored
+  // from there — top-level callback registration runs Agency code
+  // (the `callback(...)` wrapper) that needs an ALS frame for
+  // `__call` post-migration. See `runInBootstrapFrame` in
+  // lib/runtime/asyncContext.ts.
   if (args.registerTopLevelCallbacks) {
-    await agencyStore.run(
-      { ctx: execCtx, stack: execCtx.stateStack, threads: bootstrapThreads },
-      () => args.registerTopLevelCallbacks!(execCtx),
+    await runInBootstrapFrame(execCtx, () =>
+      args.registerTopLevelCallbacks!(execCtx),
     );
   }
   execCtx.restoreState(checkpoint);
@@ -68,31 +66,31 @@ export async function rewindFrom(args: {
   }
 
   let nodeName = checkpoint.nodeId;
-  // See `runResumeLoop` in lib/runtime/interrupts.ts — stdlib helpers
-  // and `callHook` lookups go through `getRuntimeContext()` now, so the
-  // rewind path needs to seed its own ALS frame too. The threads slot is
-  // a placeholder; generated node bodies re-enter ALS inside each
-  // `Runner.runInScope` with the per-scope ThreadStore.
-  const threadStore = ThreadStore.withDefaultActive(execCtx.statelogClient);
 
   try {
     while (true) {
       try {
-        const result = await agencyStore.run(
-          { ctx: execCtx, stack: execCtx.stateStack, threads: threadStore },
-          () =>
-            execCtx.graph.run(
-              nodeName,
-              {
-                data: {},
-                ctx: execCtx,
-                isResume: true,
-              },
-              {
-                onNodeEnter: (id) => execCtx.stateStack.nodesTraversed.push(id),
-                statelogClient: execCtx.statelogClient,
-              },
-            ),
+        // See `runResumeLoop` in lib/runtime/interrupts.ts — stdlib
+        // helpers and `callHook` lookups go through
+        // `getRuntimeContext()` now, so the rewind path needs to
+        // seed its own ALS frame too. This is a bootstrap frame:
+        // generated node bodies re-enter ALS inside each
+        // `Runner.runInScope` with the per-scope ThreadStore
+        // reconstituted by `setupNode` — nothing user-facing should
+        // reach for `threads` in the slice covered by this wrap.
+        const result = await runInBootstrapFrame(execCtx, () =>
+          execCtx.graph.run(
+            nodeName,
+            {
+              data: {},
+              ctx: execCtx,
+              isResume: true,
+            },
+            {
+              onNodeEnter: (id) => execCtx.stateStack.nodesTraversed.push(id),
+              statelogClient: execCtx.statelogClient,
+            },
+          ),
         );
         await execCtx.pendingPromises.awaitAll();
         return createReturnObject({ result, globals: execCtx.globals });

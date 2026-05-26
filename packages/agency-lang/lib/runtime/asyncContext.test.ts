@@ -2,8 +2,10 @@ import { describe, it, expect } from "vitest";
 import {
   agencyStore,
   getRuntimeContext,
+  runInBootstrapFrame,
   runInTestContext,
 } from "./asyncContext.js";
+import { BootstrapThreadStore } from "./state/bootstrapThreadStore.js";
 import { RuntimeContext } from "./state/context.js";
 import { StateStack } from "./state/stateStack.js";
 import { ThreadStore } from "./state/threadStore.js";
@@ -112,5 +114,33 @@ describe("agencyStore", () => {
     ]);
     expect(sawA[0]).toBe(a.ctx);
     expect(sawB[0]).toBe(b.ctx);
+  });
+});
+
+describe("runInBootstrapFrame", () => {
+  it("seeds ctx + a BootstrapThreadStore on the frame", async () => {
+    const seed = makeStore();
+    await runInBootstrapFrame(seed.ctx, async () => {
+      const s = getRuntimeContext();
+      expect(s.ctx).toBe(seed.ctx);
+      expect(s.stack).toBe(seed.ctx.stateStack);
+      expect(s.threads).toBeInstanceOf(BootstrapThreadStore);
+    });
+  });
+
+  it("threads slot throws on user-facing ops", async () => {
+    const seed = makeStore();
+    await runInBootstrapFrame(seed.ctx, async () => {
+      const { threads } = getRuntimeContext();
+      expect(() => threads.getOrCreateActive()).toThrow(
+        /Message threads are not available/,
+      );
+    });
+  });
+
+  it("returns the wrapped fn's resolved value", async () => {
+    const seed = makeStore();
+    const out = await runInBootstrapFrame(seed.ctx, async () => 42);
+    expect(out).toBe(42);
   });
 });

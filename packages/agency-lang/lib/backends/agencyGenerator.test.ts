@@ -208,7 +208,30 @@ describe("AgencyGenerator - new expressions", () => {
 }`;
     const parseResult = parseAgency(input, {}, false);
     expect(parseResult.success).toBe(false);
+    // Lock in the migration hint so a future regression that drops back to
+    // a generic "expected ... 'class' ..." error fails this test.
+    if (!parseResult.success) {
+      expect(parseResult.message).toMatch(/no longer supported/i);
+      expect(parseResult.message).toMatch(/new Foo/);
+    }
   });
+
+  // Whitespace tolerance — the reservedClassParser probe must fire on
+  // common formatting variants so migrators always see the actionable
+  // error, not a downstream "unexpected token" surprise.
+  for (const sep of ["  ", "\t", " \t "]) {
+    it(`rejects \`class${JSON.stringify(sep)}Foo\` (whitespace variant)`, () => {
+      const parseResult = parseAgency(
+        `class${sep}User {\n  name: string\n}`,
+        {},
+        false,
+      );
+      expect(parseResult.success).toBe(false);
+      if (!parseResult.success) {
+        expect(parseResult.message).toMatch(/no longer supported/i);
+      }
+    });
+  }
 });
 
 describe("AgencyGenerator - Doc Comments", () => {

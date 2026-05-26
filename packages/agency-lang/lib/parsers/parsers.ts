@@ -3647,20 +3647,45 @@ export const graphNodeParser: Parser<GraphNodeDefinition> = label("a node defini
 // Agency's `class Foo { ... }` definition syntax was removed. `new Foo()`
 // expressions remain valid for instantiating JS classes imported from
 // TypeScript. This parser detects a top-level `class Name` token sequence
-// and emits an actionable error pointing users at the new pattern, so
-// migrators don't see a generic "unexpected token" message.
+// and commits to a fatal error pointing migrators at the new pattern.
+//
+// Why throw instead of returning `failure(...)`:
+//   `nodeParser` is an `or(...)` of statement-level parsers. A plain
+//   `failure(...)` from this parser would be shadowed by any sibling that
+//   manages to consume more of the input (e.g. `valueAccessParser` will
+//   happily parse `class` as an identifier and the user sees a confusing
+//   downstream error). Once we see `class <whitespace+>`, the input is
+//   unambiguously a class definition attempt — wrap with `parseError`
+//   over an always-failing inner parser to throw a `TarsecError` that
+//   bypasses `or()` backtracking entirely. `parseAgency` already catches
+//   `TarsecError` and surfaces it as a normal parse diagnostic.
+const RESERVED_CLASS_MESSAGE =
+  "`class` definitions are no longer supported in Agency. " +
+  "Use functions and plain objects instead, or instantiate an imported " +
+  "JS class with `new Foo(...)`.";
+
 export const reservedClassParser: Parser<never> = (input: string) => {
-  const probe = seqC(str("class"), space, many1WithJoin(varNameChar));
-  const result = probe(input);
-  if (!result.success) {
+  // Probe: `class` followed by one-or-more space/tab and an identifier.
+  // many1 of " \t" (not `space`, which is single, and not `spaces`, which
+  // permits newlines) tolerates `class Foo`, `class  Foo`, `class\tFoo`
+  // without firing on `class\nFoo` or treating `classify` as a hit.
+  const probe = seqC(
+    str("class"),
+    many1(oneOf(" \t")),
+    many1WithJoin(varNameChar),
+  );
+  if (!probe(input).success) {
     return failure("", input);
   }
-  return failure(
-    "`class` definitions are no longer supported in Agency. " +
-      "Use functions and plain objects instead, or instantiate an imported " +
-      "JS class with `new Foo(...)`.",
-    input,
-  );
+  // Probe matched — commit to a fatal error. `fail(...)` always returns
+  // a failed ParserResult, which makes `parseError` throw a `TarsecError`
+  // carrying our actionable message. The cast is needed because
+  // `parseError` is typed as `Parser<{}>` (it doesn't know its inner
+  // parser always fails); the call never returns normally.
+  return parseError(
+    RESERVED_CLASS_MESSAGE,
+    fail("class definition"),
+  )(input) as ParserResult<never>;
 };
 
 // =============================================================================

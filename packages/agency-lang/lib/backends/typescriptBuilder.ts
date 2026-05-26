@@ -1523,7 +1523,7 @@ export class TypeScriptBuilder {
     // Create runner for step execution
     setupStmts.push(
       ts.raw(
-        `const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: ${JSON.stringify(this.moduleId)}, scopeName: ${JSON.stringify(functionName)} });`,
+        `const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: ${JSON.stringify(this.moduleId)}, scopeName: ${JSON.stringify(functionName)}, threads: __threads });`,
       ),
     );
 
@@ -2188,7 +2188,7 @@ export class TypeScriptBuilder {
       }),
 
       ts.raw(
-        `const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: ${JSON.stringify(this.moduleId)}, scopeName: ${JSON.stringify(nodeName)} });`,
+        `const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: ${JSON.stringify(this.moduleId)}, scopeName: ${JSON.stringify(nodeName)}, threads: __threads });`,
       ),
       ...hoistedAliases,
     ];

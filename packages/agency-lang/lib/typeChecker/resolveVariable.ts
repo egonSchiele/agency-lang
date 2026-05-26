@@ -5,12 +5,8 @@ import { JS_GLOBALS } from "./resolveCall.js";
 
 /**
  * Inputs for variable name resolution. Mirrors `ResolveCallInput` in
- * `resolveCall.ts` but adds class names and uses `scopeHas` to cover
- * let/const/params/for-vars/lambda-params/handler-params.
- *
- * `classNames` only holds presence info — value type is `true`. We don't
- * import the full `ClassDefinition` here because the resolver doesn't
- * need anything beyond name existence.
+ * `resolveCall.ts` but uses `scopeHas` to cover let/const/params/for-vars/
+ * lambda-params/handler-params.
  */
 type ResolveVariableInput = {
   functionDefs: Record<string, FunctionDefinition>;
@@ -19,7 +15,6 @@ type ResolveVariableInput = {
   importedNodeNames: readonly string[];
   /** Names imported via `import { foo } from "./helpers.js"` (non-Agency). */
   jsImportedNames?: Record<string, true>;
-  classNames: Record<string, true>;
   scopeHas: (name: string) => boolean;
 };
 
@@ -34,7 +29,6 @@ type ResolveVariableInput = {
  *   def           — references a locally-defined `def`/`node` as a
  *                   first-class function reference (e.g. `map(xs, foo)`).
  *   imported      — references an imported function or node.
- *   class         — references a class defined in this file.
  *   builtin       — references a builtin (success, failure, llm, …) as
  *                   a function reference.
  *   jsGlobal      — references a JS global (parseInt, JSON, Math, …)
@@ -51,7 +45,6 @@ export type VariableResolution =
   | { kind: "def" }
   | { kind: "imported" }
   | { kind: "jsImported" }
-  | { kind: "class" }
   | { kind: "builtin" }
   | { kind: "jsGlobal" }
   | { kind: "unresolved" };
@@ -66,12 +59,10 @@ const has = (obj: object, name: string): boolean =>
  *   1. Local scope binding              — let/const, params, for-vars, …
  *   2. Local `def`/`node`               — function reference.
  *   3. Imported function/node           — cross-file function reference.
- *   4. Class definition                 — `new MyClass()` and `MyClass`
- *                                         as a value (instanceof, etc.).
- *   5. `BUILTIN_FUNCTION_TYPES`         — Agency primitive as function ref.
- *   6. JS global (callable or namespace) — covers both bare `parseInt` and
+ *   4. `BUILTIN_FUNCTION_TYPES`         — Agency primitive as function ref.
+ *   5. JS global (callable or namespace) — covers both bare `parseInt` and
  *                                          namespace bases like `JSON`.
- *   7. Otherwise: unresolved.
+ *   6. Otherwise: unresolved.
  */
 export function resolveVariable(
   name: string,
@@ -85,7 +76,6 @@ export function resolveVariable(
   if (input.importedNodeNames.includes(name)) return { kind: "imported" };
   if (input.jsImportedNames && has(input.jsImportedNames, name))
     return { kind: "jsImported" };
-  if (has(input.classNames, name)) return { kind: "class" };
   if (has(BUILTIN_FUNCTION_TYPES, name)) return { kind: "builtin" };
   if (has(JS_GLOBALS, name)) return { kind: "jsGlobal" };
   return { kind: "unresolved" };

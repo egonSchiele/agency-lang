@@ -31,7 +31,7 @@ import { DebuggerStatement } from "./types/debuggerStatement.js";
 import { WithModifier } from "./types/withModifier.js";
 import { Tag } from "./types/tag.js";
 import { TryExpression } from "./types/tryExpression.js";
-import { ClassDefinition, ClassField, ClassMethod, NewExpression } from "./types/classDefinition.js";
+import { NewExpression } from "./types/newExpression.js";
 import { InterruptStatement } from "./types/interruptStatement.js";
 import { SchemaExpression } from "./types/schemaExpression.js";
 import { BlockArgument } from "./types/blockArgument.js";
@@ -69,7 +69,7 @@ export * from "./types/withModifier.js";
 export * from "./types/base.js";
 export * from "./types/tag.js";
 export type { TryExpression } from "./types/tryExpression.js";
-export * from "./types/classDefinition.js";
+export * from "./types/newExpression.js";
 export * from "./types/interruptStatement.js";
 export * from "./types/schemaExpression.js";
 
@@ -245,9 +245,6 @@ export type AgencyNode =
   | DebuggerStatement
   | Tag
   | TryExpression
-  | ClassDefinition
-  | ClassMethod
-  | ClassField
   | NewExpression
   | RegexLiteral
   | SchemaExpression

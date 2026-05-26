@@ -1,6 +1,5 @@
 import type {
   AgencyProgram,
-  ClassDefinition,
   FunctionDefinition,
   FunctionParameter,
   GraphNodeDefinition,
@@ -113,7 +112,6 @@ export type CompilationUnit = {
    * variable diagnostics quiet without pretending we know their types.
    */
   jsImportedNames: Record<string, true>;
-  classDefinitions: Record<string, ClassDefinition>;
   /** Original source text. Used by the typechecker to locate
    * `// @tc-nocheck` / `// @tc-ignore` directives. Optional because
    * many callers (including most tests) construct the AST directly. */
@@ -155,7 +153,6 @@ export function buildCompilationUnit(
     importStatements: [],
     importedFunctions: {},
     jsImportedNames: {},
-    classDefinitions: {},
     safeFunctions: {},
     sourceText,
   };
@@ -172,14 +169,6 @@ export function buildCompilationUnit(
         break;
       case "importNodeStatement":
         unit.importedNodes.push(node);
-        break;
-      case "classDefinition":
-        unit.classDefinitions[node.className] = node;
-        for (const method of node.methods) {
-          if (method.safe) {
-            unit.safeFunctions[`${node.className}.${method.name}`] = true;
-          }
-        }
         break;
       case "importStatement":
         unit.importStatements.push(node);

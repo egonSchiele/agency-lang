@@ -9,13 +9,7 @@ import { GlobalStore, GlobalStoreJSON } from "./state/globalStore.js";
 import { StateStack, StateStackJSON } from "./state/stateStack.js";
 import { Approved, GraphState, Rejected } from "./types.js";
 import { createReturnObject, deepClone } from "./utils.js";
-import { reviveWithClasses } from "./classReviver.js";
 import { isIpcMode, sendInterruptToParent } from "./ipc.js";
-export {
-  type ClassRegistry,
-  createClassReviver,
-  reviveWithClasses,
-} from "./classReviver.js";
 
 export type InterruptApprove = {
   type: "approve";

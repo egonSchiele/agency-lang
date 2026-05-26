@@ -34,13 +34,6 @@ export function getDocumentSymbols(program: AgencyProgram): DocumentSymbol[] {
         range: locToRange(node.loc),
         selectionRange: locToRange(node.loc),
       });
-    } else if (node.type === "classDefinition" && node.loc) {
-      symbols.push({
-        name: node.className,
-        kind: SymbolKind.Class,
-        range: locToRange(node.loc),
-        selectionRange: locToRange(node.loc),
-      });
     }
   }
 

@@ -61,7 +61,7 @@ import { expressionToString } from "@/utils/node.js";
 import { Keyword } from "@/types/keyword.js";
 import { HandleBlock } from "@/types/handleBlock.js";
 import { Tag } from "@/types/tag.js";
-import { ClassDefinition, NewExpression } from "@/types/classDefinition.js";
+import { NewExpression } from "@/types/newExpression.js";
 import {
   ArrayPattern,
   BindingPattern,
@@ -428,8 +428,6 @@ export class AgencyGenerator {
       case "tryExpression":
         // remove extra indentation
         return `try ${this.processNode(node.call).trim()}`;
-      case "classDefinition":
-        return this.processClassDefinition(node);
       case "newExpression":
         return this.processNewExpression(node);
       case "schemaExpression":
@@ -1299,43 +1297,6 @@ export class AgencyGenerator {
 
     result += this.indentStr(`}`);
     return this.formatDocComment(node) + tags + result;
-  }
-
-  protected processClassDefinition(node: ClassDefinition): string {
-    const extendsStr = node.parentClass ? ` extends ${node.parentClass}` : "";
-    let result = this.indentStr(`class ${node.className}${extendsStr} {\n`);
-    this.increaseIndent();
-
-    // Fields
-    for (const field of node.fields) {
-      result += this.indentStr(
-        `${field.name}: ${variableTypeToString(field.typeHint, this.typeAliases, true)}\n`,
-      );
-    }
-
-    // Methods (constructor is auto-generated, not formatted)
-    for (const method of node.methods) {
-      const params = method.parameters
-        .map((p) => {
-          if (p.typeHint) {
-            const bang = p.validated ? "!" : "";
-            return `${p.name}: ${variableTypeToString(p.typeHint, this.typeAliases, true)}${bang}`;
-          }
-          return p.name;
-        })
-        .join(", ");
-      const returnTypeStr = `: ${variableTypeToString(method.returnType, this.typeAliases, true)}`;
-      result +=
-        "\n" + this.indentStr(`${method.name}(${params})${returnTypeStr} {\n`);
-      this.increaseIndent();
-      result += this.renderBody(method.body);
-      this.decreaseIndent();
-      result += this.indentStr(`}\n`);
-    }
-
-    this.decreaseIndent();
-    result += this.indentStr(`}`);
-    return result;
   }
 
   protected processNewExpression(node: NewExpression): string {

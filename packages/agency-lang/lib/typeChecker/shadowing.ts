@@ -8,16 +8,12 @@ import type { AgencyNode } from "../types.js";
  */
 export function collectProgramShadowing(programNodes: readonly AgencyNode[]): {
   importedNodeNames: string[];
-  classNames: Record<string, true>;
 } {
   const importedNodeNames: string[] = [];
-  const classNames: Record<string, true> = {};
   for (const node of programNodes) {
     if (node.type === "importNodeStatement") {
       importedNodeNames.push(...node.importedNodes);
-    } else if (node.type === "classDefinition") {
-      classNames[node.className] = true;
     }
   }
-  return { importedNodeNames, classNames };
+  return { importedNodeNames };
 }

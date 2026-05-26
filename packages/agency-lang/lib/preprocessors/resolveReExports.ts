@@ -97,11 +97,7 @@ export function resolveReExports(
 function hasReExportedFrom(
   sym: SymbolInfo,
 ): sym is FunctionSymbol | NodeSymbol | TypeSymbol | ConstantSymbol {
-  return (
-    sym.kind !== "class" &&
-    "reExportedFrom" in sym &&
-    sym.reExportedFrom !== undefined
-  );
+  return "reExportedFrom" in sym && sym.reExportedFrom !== undefined;
 }
 
 function buildCoalescedImport(

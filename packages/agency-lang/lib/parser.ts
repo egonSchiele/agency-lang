@@ -54,7 +54,7 @@ import {
   valueAccessParser,
   whileLoopParser,
   withModifierParser,
-  classParser,
+  reservedClassParser,
   AGENCY_TEMPLATE_OFFSET,
   setTemplateOffset,
 } from "./parsers/parsers.js";
@@ -66,7 +66,7 @@ const nodeParser = or(
   importStatmentParser,
   exportFromStatementParser,
   graphNodeParser,
-  classParser,
+  reservedClassParser,
   typeAliasParser,
   ifParser,
   forLoopParser,

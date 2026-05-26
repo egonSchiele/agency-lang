@@ -126,16 +126,6 @@ describe("undefined variable diagnostic", () => {
     expect(undef[0].severity).toBe("error");
   });
 
-  it("does not warn on a class definition reference (`new MyClass()`)", () => {
-    const errors = errorsFrom(
-      `class MyClass {\n  x: number\n}\nnode main() {\n  let m = new MyClass(1)\n  print(m)\n}\n`,
-      WARN,
-    );
-    expect(
-      errors.filter((e) => e.message.includes("MyClass") && e.message.includes("not defined")),
-    ).toHaveLength(0);
-  });
-
   it("warns on a callback argument that doesn't resolve (`xs.map(doesNotExist)`)", () => {
     const errors = errorsFrom(
       `node main() {\n let xs = [1, 2, 3]\n let ys = xs.map(doesNotExist)\n print(ys)\n }\n`,

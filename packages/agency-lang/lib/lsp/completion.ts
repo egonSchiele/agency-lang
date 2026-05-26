@@ -78,10 +78,6 @@ export function getCompletions(info: CompilationUnit, context?: CompletionContex
     }
   }
 
-  for (const name of Object.keys(info.classDefinitions)) {
-    add(name, CompletionItemKind.Class);
-  }
-
   for (const [name, sig] of Object.entries(info.importedFunctions)) {
     const detail = formatDetail(sig.parameters, sig.returnType);
     add(name, CompletionItemKind.Function, detail);

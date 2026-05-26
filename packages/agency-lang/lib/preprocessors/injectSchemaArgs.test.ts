@@ -489,49 +489,4 @@ describe("injectSchemaArgsInProgram", () => {
     ).toThrowError(/more than one Schema parameter/);
   });
 
-  it("injects inside a class method body using the method's return type", () => {
-    // class Foo { parse(): number[] { return parseValue("[1,2,3]") } }
-    const call = buildCall("parseValue", [buildStringLiteral("[1,2,3]")]);
-    const program: AgencyProgram = {
-      type: "agencyProgram",
-      nodes: [
-        {
-          type: "classDefinition",
-          className: "Foo",
-          fields: [],
-          methods: [
-            {
-              type: "classMethod",
-              name: "parse",
-              parameters: [],
-              returnType: {
-                type: "arrayType",
-                elementType: { type: "primitiveType", value: "number" },
-              },
-              body: [
-                {
-                  type: "returnStatement",
-                  value: call,
-                },
-              ],
-            },
-          ],
-        },
-      ],
-    };
-
-    injectSchemaArgsInProgram(
-      program,
-      { parseValue: buildParseValueDef() },
-      {},
-    );
-
-    expect(call.arguments).toHaveLength(2);
-    if (call.arguments[1].type !== "namedArgument") return;
-    if (call.arguments[1].value.type !== "schemaExpression") return;
-    expect(call.arguments[1].value.typeArg).toEqual({
-      type: "arrayType",
-      elementType: { type: "primitiveType", value: "number" },
-    });
-  });
 });

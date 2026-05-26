@@ -4,7 +4,7 @@ import type { DebuggerState } from "../../debugger/debuggerState.js";
 import type { LogLevel } from "../../logger.js";
 import { SimpleMachine } from "../../simplemachine/index.js";
 import { StatelogClient, StatelogConfig } from "../../statelogClient.js";
-import { reviveWithClasses, type ClassRegistry } from "../classReviver.js";
+import { nativeTypeReplacer, nativeTypeReviver } from "../revivers/index.js";
 import { CoverageCollector } from "../coverageCollector.js";
 import { AgencyCancelledError } from "../errors.js";
 import type { AgencyCallbacks } from "../hooks.js";
@@ -51,6 +51,18 @@ function getProcessCoverageCollector(): CoverageCollector {
     }
   });
   return collector;
+}
+
+/**
+ * Round-trip `data` through JSON using the native-type replacer/reviver pair
+ * so Sets/Maps/Dates/etc. inside a checkpoint payload come back as their
+ * real classes instead of plain `{}` / `[]`.
+ */
+function reviveNative<T>(data: T): T {
+  return JSON.parse(
+    JSON.stringify(data, nativeTypeReplacer),
+    nativeTypeReviver,
+  );
 }
 
 /* bunch of stuff that every node/function in the runtime needs access to,
@@ -109,9 +121,6 @@ export class RuntimeContext<T> {
    *  `__initializeGlobals`, when no real caller frame exists yet). Persist for
    *  the whole run. */
   topLevelCallbacks: Array<{ name: string; fn: any }> = [];
-
-  // class registry for serialization/deserialization of Agency class instances
-  classRegistry: ClassRegistry = {};
 
   abortController: AbortController;
 
@@ -196,7 +205,6 @@ export class RuntimeContext<T> {
 
     this.smoltalkDefaults = args.smoltalkDefaults;
     this._llmClient = new SmoltalkClient();
-    this.classRegistry = {};
     this.abortController = new AbortController();
 
     if (process.env.AGENCY_COVERAGE) {
@@ -250,7 +258,6 @@ export class RuntimeContext<T> {
     execCtx.verbose = this.verbose;
     execCtx.logLevel = this.logLevel;
     execCtx.pendingPromises = new PendingPromiseStore();
-    execCtx.classRegistry = this.classRegistry;
     execCtx.abortController = new AbortController();
     execCtx.statelogClient = new StatelogClient({
       ...this.statelogConfig,
@@ -385,10 +392,6 @@ export class RuntimeContext<T> {
     }
   }
 
-  registerClass(name: string, cls: ClassRegistry[string]): void {
-    this.classRegistry[name] = cls;
-  }
-
   forkStack(): StateStack {
     return new StateStack();
   }
@@ -422,8 +425,8 @@ export class RuntimeContext<T> {
   restoreState(checkpoint: Checkpoint): void {
     const currentTokenStats = this.globals.getTokenStats();
 
-    const stack = reviveWithClasses(checkpoint.stack, this.classRegistry);
-    const globals = reviveWithClasses(checkpoint.globals, this.classRegistry);
+    const stack = reviveNative(checkpoint.stack);
+    const globals = reviveNative(checkpoint.globals);
 
     this.stateStack = StateStack.fromJSON(stack);
     this.stateStack.deserializeMode();

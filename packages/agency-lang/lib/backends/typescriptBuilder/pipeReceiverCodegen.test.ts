@@ -26,12 +26,8 @@ function compile(src: string): string {
 describe("pipe receiver codegen", () => {
   it("preserves optional chaining (`?.`) on the receiver", () => {
     const out = compile(`
-      class M {
-        f: number
-        m(x: number): Result { return success(x * this.f) }
-      }
-      class C { inner: M }
-      def makeC(): C { return new C(new M(3)) }
+      def triple(x: number): Result { return success(x * 3) }
+      def makeC(): any { return { inner: { m: triple } } }
       node main() {
         let c = makeC()
         let r = success(5) |> c?.inner.m
@@ -45,12 +41,8 @@ describe("pipe receiver codegen", () => {
 
   it("paren-wraps an awaited functionCall base before applying intermediate chain", () => {
     const out = compile(`
-      class M {
-        f: number
-        m(x: number): Result { return success(x * this.f) }
-      }
-      class C { inner: M }
-      def makeC(): C { return new C(new M(3)) }
+      def triple(x: number): Result { return success(x * 3) }
+      def makeC(): any { return { inner: { m: triple } } }
       node main() {
         let r = success(5) |> makeC().inner.m
         return r.value

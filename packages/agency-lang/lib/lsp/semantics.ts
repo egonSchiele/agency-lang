@@ -3,7 +3,6 @@ import { formatTypeHint } from "../utils/formatType.js";
 import type { FileSymbols, InterruptKind, SymbolInfo, SymbolKind, SymbolTable } from "../symbolTable.js";
 import type {
   AgencyProgram,
-  ClassDefinition,
   FunctionDefinition,
   FunctionParameter,
   GraphNodeDefinition,
@@ -40,7 +39,7 @@ function interruptKindsFor(fileSymbols: FileSymbols | undefined, name: string): 
 function addLocalDefinition(
   index: SemanticIndex,
   fsPath: string,
-  node: FunctionDefinition | GraphNodeDefinition | TypeAlias | ClassDefinition,
+  node: FunctionDefinition | GraphNodeDefinition | TypeAlias,
   fileSymbols: FileSymbols | undefined,
 ): void {
   switch (node.type) {
@@ -79,16 +78,6 @@ function addLocalDefinition(
         filePath: fsPath,
         loc: node.loc,
         aliasedType: node.aliasedType,
-      });
-      break;
-    case "classDefinition":
-      addSymbol(index, {
-        name: node.className,
-        originalName: node.className,
-        kind: "class",
-        source: "local",
-        filePath: fsPath,
-        loc: node.loc,
       });
       break;
   }
@@ -180,8 +169,7 @@ export function buildSemanticIndex(
     if (
       node.type === "function" ||
       node.type === "graphNode" ||
-      node.type === "typeAlias" ||
-      node.type === "classDefinition"
+      node.type === "typeAlias"
     ) {
       addLocalDefinition(index, fsPath, node, fileSymbols);
     }
@@ -265,8 +253,6 @@ function formatSignature(symbol: SemanticSymbol): string {
       return symbol.aliasedType
         ? `type ${symbol.name} = ${prettyPrintType(symbol.aliasedType)}`
         : `type ${symbol.name}`;
-    case "class":
-      return `class ${symbol.name}`;
     case "constant":
       return `static const ${symbol.name}${symbol.returnType ? `: ${formatTypeHint(symbol.returnType)}` : ""}`;
   }

@@ -76,7 +76,7 @@ import { MatchBlock, MatchBlockCase } from "../types/matchBlock.js";
 import { ReturnStatement } from "../types/returnStatement.js";
 import { GotoStatement } from "../types/gotoStatement.js";
 import { WhileLoop } from "../types/whileLoop.js";
-import { NewExpression, isClassKeyword } from "../types/classDefinition.js";
+import { NewExpression } from "../types/newExpression.js";
 import { InterruptStatement } from "../types/interruptStatement.js";
 import { moduleIdToOrigin } from "../runtime/origin.js";
 import { escape, mergeDeep } from "../utils.js";
@@ -108,7 +108,6 @@ import { ScopeManager } from "./typescriptBuilder/scopeManager.js";
 import { StepPathTracker } from "./typescriptBuilder/stepPathTracker.js";
 import { NameClassifier } from "./typescriptBuilder/nameClassifier.js";
 import { PipeChainEmitter } from "./typescriptBuilder/pipeChainEmitter.js";
-import { ClassEmitter } from "./typescriptBuilder/classEmitter.js";
 import { AssignmentEmitter } from "./typescriptBuilder/assignmentEmitter.js";
 import {
   assembleSections,
@@ -168,7 +167,6 @@ export class TypeScriptBuilder {
   private steps: StepPathTracker = new StepPathTracker();
   private names: NameClassifier;
   private pipes: PipeChainEmitter;
-  private classes: ClassEmitter;
   private assigns: AssignmentEmitter;
 
   // Config
@@ -237,16 +235,6 @@ export class TypeScriptBuilder {
       processNode: (n) => this.processNode(n),
       buildCallDescriptor: (call) => this.buildCallDescriptor(call),
       buildStateConfig: () => this.buildStateConfig(),
-    });
-    this.classes = new ClassEmitter({
-      scopes: this.scopes,
-      classDefinitions: info.classDefinitions,
-      moduleId,
-      enterScope: (scopeName) =>
-        this._sourceMapBuilder.enterScope(this.moduleId, scopeName),
-      hoistBodyTypeAliases: (body) => this.hoistBodyTypeAliases(body),
-      processBodyAsParts: (body, startId) => this.processBodyAsParts(body, startId),
-      buildFunctionBody: (opts) => this.buildFunctionBody(opts),
     });
     this.moduleId = moduleId;
     this.outputFile = outputFile;
@@ -495,8 +483,6 @@ export class TypeScriptBuilder {
         return this.processDebuggerStatement(node);
       case "tryExpression":
         return this.processTryExpression(node);
-      case "classDefinition":
-        return this.classes.emit(node);
       case "newExpression":
         return this.processNewExpression(node);
       case "schemaExpression":
@@ -550,8 +536,7 @@ export class TypeScriptBuilder {
       const inNestedDef = ancestors.some(
         (a) =>
           a.type === "function" ||
-          a.type === "graphNode" ||
-          a.type === "classDefinition",
+          a.type === "graphNode",
       );
       if (inNestedDef) continue;
       collected.push(node);
@@ -726,12 +711,11 @@ export class TypeScriptBuilder {
       case "multiLineString":
         return this.generateStringLiteralNode(literal.segments);
       case "variableName": {
-        const classKeyword = isClassKeyword(literal.value);
         const importedOrUnknownScope =
           literal.scope === "imported" || !literal.scope;
         const isBuiltinVar = BUILTIN_VARIABLES.includes(literal.value);
         const isLoopVar = this.loopVars.includes(literal.value);
-        if (classKeyword || importedOrUnknownScope || isBuiltinVar || isLoopVar) {
+        if (importedOrUnknownScope || isBuiltinVar || isLoopVar) {
           return ts.id(literal.value);
         }
         return ts.scopedVar(literal.value, literal.scope!, this.moduleId);
@@ -2478,12 +2462,6 @@ export class TypeScriptBuilder {
 
   private _processAssignmentInner(node: Assignment): TsNode {
     const { variableName, typeHint, value } = node;
-
-    // `this.field = value` and `super.field = value` — emit as direct property assignment
-    if (isClassKeyword(variableName)) {
-      const lhs = this.assigns.accessChain(ts.id(variableName), node.accessChain);
-      return ts.assign(lhs, this.processNode(value));
-    }
 
     if (value.type === "functionCall" && value.functionName === "llm") {
       return this.processLlmCall(variableName, typeHint, value, node.scope!);

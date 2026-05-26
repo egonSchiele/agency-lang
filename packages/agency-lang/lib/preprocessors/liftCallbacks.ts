@@ -146,12 +146,6 @@ function transformTopLevel(
     node.body = transformBody(node.body, node.nodeName, lifted, nextName);
     return node;
   }
-  if (node.type === "classDefinition") {
-    for (const m of node.methods) {
-      m.body = transformBody(m.body, `${node.className}_${m.name}`, lifted, nextName);
-    }
-    return node;
-  }
   // Statements at module top level (assignments, top-level callback calls).
   return transformStatement(node, "top", lifted, nextName);
 }

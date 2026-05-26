@@ -7,7 +7,6 @@ function symbolKindToLsp(kind: SymbolInfo["kind"]): SymbolKind {
     case "function": return SymbolKind.Function;
     case "node": return SymbolKind.Module;
     case "type": return SymbolKind.TypeParameter;
-    case "class": return SymbolKind.Class;
     default: return SymbolKind.Variable;
   }
 }

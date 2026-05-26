@@ -40,7 +40,7 @@ export function checkUndefinedVariables(
   const mode = ctx.config.typechecker?.undefinedVariables ?? "silent";
   if (mode === "silent") return;
 
-  const { importedNodeNames, classNames: classDefs } = collectProgramShadowing(
+  const { importedNodeNames } = collectProgramShadowing(
     ctx.programNodes,
   );
 
@@ -54,7 +54,7 @@ export function checkUndefinedVariables(
         if (isTopLevel && hasFunctionOrNodeAncestor(ancestors)) continue;
         if (node.type !== "variableName") continue;
         if (isReferencePosition(node, ancestors)) {
-          checkVariableRef(node, ancestors, info.scope, ctx, mode, importedNodeNames, classDefs);
+          checkVariableRef(node, ancestors, info.scope, ctx, mode, importedNodeNames);
         }
       }
     });
@@ -111,7 +111,6 @@ function checkVariableRef(
   ctx: TypeCheckerContext,
   mode: "warn" | "error",
   importedNodeNames: readonly string[],
-  classNames: Record<string, true>,
 ): void {
   // Don't check the LHS of `for (item in items)` — itemVar/indexVar are
   // declarations, not references. (walkNodes shouldn't yield them, but
@@ -136,7 +135,6 @@ function checkVariableRef(
     importedFunctions: ctx.importedFunctions,
     importedNodeNames,
     jsImportedNames: ctx.jsImportedNames,
-    classNames,
     scopeHas: (name) => scope.has(name),
   });
   if (resolution.kind !== "unresolved") return;

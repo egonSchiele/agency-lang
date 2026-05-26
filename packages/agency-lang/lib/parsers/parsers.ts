@@ -109,7 +109,7 @@ import { ValueAccess } from "../types/access.js";
 import { BlockArgument } from "../types/blockArgument.js";
 import { BinOpExpression, Operator } from "../types/binop.js";
 import { TryExpression } from "../types/tryExpression.js";
-import { ClassDefinition, ClassField, ClassMethod, NewExpression } from "../types/classDefinition.js";
+import { NewExpression } from "../types/newExpression.js";
 import { SchemaExpression } from "../types/schemaExpression.js";
 import { InterruptStatement } from "../types/interruptStatement.js";
 import { ReturnStatement } from "../types/returnStatement.js";
@@ -3641,133 +3641,52 @@ export const graphNodeParser: Parser<GraphNodeDefinition> = label("a node defini
 )));
 
 // =============================================================================
-// classDefinition parser
+// reserved `class` keyword detector
 // =============================================================================
+//
+// Agency's `class Foo { ... }` definition syntax was removed. `new Foo()`
+// expressions remain valid for instantiating JS classes imported from
+// TypeScript. This parser detects a top-level `class Name` token sequence
+// and commits to a fatal error pointing migrators at the new pattern.
+//
+// Why throw instead of returning `failure(...)`:
+//   `nodeParser` is an `or(...)` of statement-level parsers. A plain
+//   `failure(...)` from this parser would be shadowed by any sibling that
+//   manages to consume more of the input (e.g. `valueAccessParser` will
+//   happily parse `class` as an identifier and the user sees a confusing
+//   downstream error). Once we see `class <whitespace+>`, the input is
+//   unambiguously a class definition attempt — wrap with `parseError`
+//   over an always-failing inner parser to throw a `TarsecError` that
+//   bypasses `or()` backtracking entirely. `parseAgency` already catches
+//   `TarsecError` and surfaces it as a normal parse diagnostic.
+const RESERVED_CLASS_MESSAGE =
+  "`class` definitions are no longer supported in Agency. " +
+  "Use functions and plain objects instead, or instantiate an imported " +
+  "JS class with `new Foo(...)`.";
 
-// Parses: name: type
-const classFieldParser: Parser<ClassField> = (input: string) => {
-  const parser = seqC(
-    set("type", "classField"),
-    capture(many1WithJoin(varNameChar), "name"),
-    optionalSpaces,
-    char(":"),
-    optionalSpaces,
-    capture(variableTypeParser, "typeHint"),
-    optionalSemicolon,
-    optionalSpacesOrNewline,
-  );
-  return parser(input);
-};
-
-// Detects constructor keyword and returns an error — constructors are auto-generated
-const rejectConstructorParser: Parser<never> = (input: string) => {
-  const result = str("constructor")(input);
-  if (result.success) {
-    return failure("custom constructors are not supported — constructors are auto-generated from field declarations", input);
-  }
-  return failure("", input);
-};
-
-// Parses: name(params): returnType { body }
-const classMethodParser: Parser<ClassMethod> = map(
-  seqC(
-    set("type", "classMethod"),
-    capture(safeKeywordParser, "safe"),
-    capture(many1WithJoin(varNameChar), "name"),
-    char("("),
-    optionalSpaces,
-    capture(
-      sepBy(comma, or(variadicParameterParser, functionParameterParser)),
-      "parameters",
-    ),
-    optional(comma),
-    optionalSpaces,
-    char(")"),
-    optionalSpaces,
-    char(":"),
-    optionalSpaces,
-    capture(variableTypeParser, "returnType"),
-    optionalSpacesOrNewline,
-    char("{"),
-    optionalSpacesOrNewline,
-    capture(bodyParser, "body"),
-    optionalSpacesOrNewline,
-    char("}"),
-    optionalSpacesOrNewline,
-  ),
-  (result) => {
-    const method = result as ClassMethod;
-    if (!method.safe) delete method.safe;
-    return method;
-  },
-);
-
-// Class body member: field, constructor, or method.
-// Fields are tried first (name: type), then constructor, then methods (name(...): type { ... }).
-// To distinguish fields from methods, we use a lookahead: if we see `name(`, it's a method.
-const classBodyMemberParser = or(
-  rejectConstructorParser,
-  classMethodParser,
-  classFieldParser,
-  blankLineParser,
-);
-
-const _classParserInner: Parser<ClassDefinition> = (input: string) => {
-  const parser = seqC(
+export const reservedClassParser: Parser<never> = (input: string) => {
+  // Probe: `class` followed by one-or-more space/tab and an identifier.
+  // many1 of " \t" (not `space`, which is single, and not `spaces`, which
+  // permits newlines) tolerates `class Foo`, `class  Foo`, `class\tFoo`
+  // without firing on `class\nFoo` or treating `classify` as a hit.
+  const probe = seqC(
     str("class"),
-    spaces,
-    capture(many1WithJoin(varNameChar), "className"),
-    optionalSpaces,
-    capture(
-      optional(
-        seqC(
-          str("extends"),
-          spaces,
-          captureCaptures(
-            seqC(capture(many1WithJoin(varNameChar), "parentClass")),
-          ),
-          optionalSpaces,
-        ),
-      ),
-      "_extends",
-    ),
-    char("{"),
-    optionalSpacesOrNewline,
-    capture(many(classBodyMemberParser), "members"),
-    optionalSpacesOrNewline,
-    char("}"),
-    optionalSpacesOrNewline,
+    many1(oneOf(" \t")),
+    many1WithJoin(varNameChar),
   );
-
-  const result = parser(input);
-  if (!result.success) return failure("expected class definition", input);
-
-  // Separate fields and methods
-  const fields: ClassField[] = [];
-  const methods: ClassMethod[] = [];
-
-  for (const member of result.result.members) {
-    if (member.type === "classField") {
-      fields.push(member);
-    } else if (member.type === "classMethod") {
-      methods.push(member);
-    }
-    // Skip newLine nodes from blank lines
+  if (!probe(input).success) {
+    return failure("", input);
   }
-
-  const parentClass = result.result._extends?.parentClass;
-  const def: ClassDefinition = {
-    type: "classDefinition",
-    className: result.result.className,
-    fields,
-    methods,
-    ...(parentClass ? { parentClass } : {}),
-  };
-
-  return success(def, result.rest);
+  // Probe matched — commit to a fatal error. `fail(...)` always returns
+  // a failed ParserResult, which makes `parseError` throw a `TarsecError`
+  // carrying our actionable message. The cast is needed because
+  // `parseError` is typed as `Parser<{}>` (it doesn't know its inner
+  // parser always fails); the call never returns normally.
+  return parseError(
+    RESERVED_CLASS_MESSAGE,
+    fail("class definition"),
+  )(input) as ParserResult<never>;
 };
-
-export const classParser: Parser<ClassDefinition> = label("a class definition", withLoc(_classParserInner));
 
 // =============================================================================
 // pattern.ts — destructuring + match patterns

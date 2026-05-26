@@ -16,7 +16,6 @@ import {
   Tag,
   TypeAlias,
   WhileLoop,
-  isClassKeyword,
 } from "@/types.js";
 import { BlockArgument } from "@/types/blockArgument.js";
 import { BlockType } from "@/types/typeHints.js";
@@ -62,10 +61,6 @@ function walkBody(
       node.body = walkBody(node.body, fn);
       if (node.handler.kind === "inline") {
         node.handler.body = walkBody(node.handler.body, fn);
-      }
-    } else if (node.type === "classDefinition") {
-      for (const method of node.methods) {
-        method.body = walkBody(method.body, fn);
       }
     } else if (node.type === "withModifier") {
       node.statement = walkBody([node.statement], fn)[0];
@@ -350,10 +345,6 @@ export class TypescriptPreprocessor {
     for (const node of this.program.nodes) {
       if (node.type === "function" || node.type === "graphNode") {
         node.body = desugarParallelInBody(node.body);
-      } else if (node.type === "classDefinition") {
-        for (const m of node.methods) {
-          m.body = desugarParallelInBody(m.body);
-        }
       }
     }
   }
@@ -1237,14 +1228,11 @@ export class TypescriptPreprocessor {
   }
 
   /**
-   * Get the scope name for a function-like node (function, graphNode, classMethod, classConstructor).
+   * Get the scope name for a function-like node (function or graphNode).
    */
-  private getScopeName(node: AgencyNode, scopes: Scope[]): string {
+  private getScopeName(node: AgencyNode): string {
     if (node.type === "function") return node.functionName;
     if (node.type === "graphNode") return node.nodeName;
-    // For class methods/constructors, the scope was set by walkNodes
-    const lastScope = scopes.at(-1);
-    if (lastScope?.type === "function") return lastScope.functionName;
     return "unknown";
   }
 
@@ -1326,10 +1314,9 @@ export class TypescriptPreprocessor {
           `Top-level nodes should have at least the global scope in their scopes array. Node: ${JSON.stringify({ node })}, scopes: ${JSON.stringify({ scopes })}`,
         );
       }
-      const isFunctionLike = node.type === "function" || node.type === "graphNode"
-        || node.type === "classMethod";
+      const isFunctionLike = node.type === "function" || node.type === "graphNode";
       if (isFunctionLike) {
-        const nodeName = this.getScopeName(node, scopes);
+        const nodeName = this.getScopeName(node);
         // Parameters are in the function's scope
         funcArgs[nodeName] = [...node.parameters.map((p) => p.name)];
         localVarsInFunction[nodeName] = new Set();
@@ -1344,8 +1331,7 @@ export class TypescriptPreprocessor {
           if (
             declNode.type === "assignment" &&
             declNode.declKind &&
-            !isInsideBlock(ancestors) &&
-            !isClassKeyword(declNode.variableName)
+            !isInsideBlock(ancestors)
           ) {
             localVarsInFunction[nodeName].add(declNode.variableName);
           }
@@ -1405,7 +1391,6 @@ export class TypescriptPreprocessor {
         for (const { node: varNode } of varsDefinedInFunction) {
           if (varNode.type === "assignment") {
             if (varNode.scope) continue; // already resolved in block Phase 1
-            if (isClassKeyword(varNode.variableName)) continue;
             let scope: ScopeType;
             if (varNode.declKind) {
               // `let` or `const` declarations always create a new local variable,
@@ -1426,7 +1411,6 @@ export class TypescriptPreprocessor {
             varNode.scope = scope;
           } else if (varNode.type === "variableName") {
             if (varNode.scope) continue; // already resolved in block Phase 1
-            if (isClassKeyword(varNode.value)) continue;
             const resolved = lookupScope(nodeName, varNode.value);
             if (resolved) {
               varNode.scope = resolved;
@@ -1463,7 +1447,6 @@ export class TypescriptPreprocessor {
         if (!node.scope) {
           const name =
             node.type === "variableName" ? node.value : node.variableName;
-          if (isClassKeyword(name)) continue;
           const scope = lookupScope("", name);
           if (scope) {
             node.scope = scope;
@@ -1504,7 +1487,6 @@ export class TypescriptPreprocessor {
         if (seg.type !== "interpolation") continue;
         for (const { node: inner } of walkNodesArray([seg.expression])) {
           if (inner.type === "variableName" && !inner.scope) {
-            if (isClassKeyword(inner.value)) continue;
             const resolved = lookupScope("", inner.value);
             if (resolved) {
               inner.scope = resolved;

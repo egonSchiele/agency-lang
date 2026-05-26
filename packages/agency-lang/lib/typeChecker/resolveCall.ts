@@ -354,9 +354,9 @@ const has = (obj: object, name: string): boolean =>
  */
 /**
  * Inputs for {@link isJsGlobalBase}. The shape mirrors {@link ResolveCallInput}
- * but adds class and import-node bookkeeping so user definitions of
- * `JSON` / `Math` / etc. (via `node`, `import node`, or `class`) cleanly
- * opt out of JS_GLOBALS validation.
+ * but adds import-node bookkeeping so user definitions of `JSON` / `Math` /
+ * etc. (via `node`, `import node`, or a `let`) cleanly opt out of
+ * JS_GLOBALS validation.
  */
 export type ShadowingInput = {
   scope: { has(name: string): boolean };
@@ -365,14 +365,13 @@ export type ShadowingInput = {
   importedFunctions: object;
   importedNodeNames: readonly string[];
   jsImportedNames?: object;
-  classNames: object;
 };
 
 /**
  * `true` only when `name` resolves to a JS global *and* nothing user-defined
  * shadows it. Use this to gate JS-namespace member validation (e.g.
  * `JSON.parse(...)`) and avoid checking against `JS_GLOBALS` when the user
- * has their own `node JSON()` / `class JSON` / `let JSON = …`.
+ * has their own `node JSON()` / `let JSON = …`.
  */
 export function isJsGlobalBase(name: string, input: ShadowingInput): boolean {
   if (!has(JS_GLOBALS, name)) return false;
@@ -382,7 +381,6 @@ export function isJsGlobalBase(name: string, input: ShadowingInput): boolean {
   if (has(input.importedFunctions, name)) return false;
   if (input.importedNodeNames.includes(name)) return false;
   if (input.jsImportedNames && has(input.jsImportedNames, name)) return false;
-  if (has(input.classNames, name)) return false;
   return true;
 }
 

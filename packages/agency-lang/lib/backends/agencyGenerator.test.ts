@@ -185,7 +185,7 @@ describe("AgencyGenerator - Function Parameter Type Hints", () => {
   });
 });
 
-describe("AgencyGenerator - Class Definitions", () => {
+describe("AgencyGenerator - new expressions", () => {
   function formatAgency(input: string): string {
     const parseResult = parseAgency(input, {}, false);
     expect(parseResult.success).toBe(true);
@@ -194,80 +194,7 @@ describe("AgencyGenerator - Class Definitions", () => {
     return generator.generate(parseResult.result).output.trim();
   }
 
-  it("should format a class with fields and a method", () => {
-    const input = `class Counter {
-  value: number
-
-  get(): number {
-    return this.value
-  }
-}`;
-    const output = formatAgency(input);
-    expect(output).toContain("class Counter {");
-    expect(output).toContain("  value: number");
-    expect(output).toContain("  get(): number {");
-    expect(output).toContain("    return this.value");
-    expect(output).toContain("  }");
-    expect(output).toContain("}");
-  });
-
-  it("should format method bodies with proper line breaks", () => {
-    const input = `class Foo {
-  x: number
-
-  doStuff(): number {
-    let a = this.x
-    let b = a + 1
-    return b
-  }
-}`;
-    const output = formatAgency(input);
-    // Each statement in the method body should be on its own line
-    expect(output).toContain("    let a = this.x\n");
-    expect(output).toContain("    let b = a + 1\n");
-    expect(output).toContain("    return b\n");
-  });
-
-  it("should reject user-defined constructors", () => {
-    const input = `class User {
-  name: string
-  constructor(name: string) {
-    this.name = name
-  }
-}`;
-    const parseResult = parseAgency(input, {}, false);
-    expect(parseResult.success).toBe(false);
-  });
-
-  it("should format a class with inheritance", () => {
-    const input = `class Dog extends Animal {
-  breed: string
-
-  speak(): string {
-    return this.name
-  }
-}`;
-    const output = formatAgency(input);
-    expect(output).toContain("class Dog extends Animal {");
-    expect(output).toContain("  breed: string");
-  });
-
-  it("should format a method with parameters", () => {
-    const input = `class Calc {
-  value: number
-
-  add(n: number): number {
-    this.value = this.value + n
-    return this.value
-  }
-}`;
-    const output = formatAgency(input);
-    expect(output).toContain("  add(n: number): number {");
-    expect(output).toContain("    this.value = this.value + n\n");
-    expect(output).toContain("    return this.value\n");
-  });
-
-  it("should format new expressions", () => {
+  it("should format `new Foo(args)` expressions", () => {
     const input = `node main() {
   let c = new Counter(0)
 }`;
@@ -275,6 +202,36 @@ describe("AgencyGenerator - Class Definitions", () => {
     expect(output).toContain("new Counter(0)");
   });
 
+  it("rejects `class` definitions with an actionable error", () => {
+    const input = `class User {
+  name: string
+}`;
+    const parseResult = parseAgency(input, {}, false);
+    expect(parseResult.success).toBe(false);
+    // Lock in the migration hint so a future regression that drops back to
+    // a generic "expected ... 'class' ..." error fails this test.
+    if (!parseResult.success) {
+      expect(parseResult.message).toMatch(/no longer supported/i);
+      expect(parseResult.message).toMatch(/new Foo/);
+    }
+  });
+
+  // Whitespace tolerance — the reservedClassParser probe must fire on
+  // common formatting variants so migrators always see the actionable
+  // error, not a downstream "unexpected token" surprise.
+  for (const sep of ["  ", "\t", " \t "]) {
+    it(`rejects \`class${JSON.stringify(sep)}Foo\` (whitespace variant)`, () => {
+      const parseResult = parseAgency(
+        `class${sep}User {\n  name: string\n}`,
+        {},
+        false,
+      );
+      expect(parseResult.success).toBe(false);
+      if (!parseResult.success) {
+        expect(parseResult.message).toMatch(/no longer supported/i);
+      }
+    });
+  }
 });
 
 describe("AgencyGenerator - Doc Comments", () => {

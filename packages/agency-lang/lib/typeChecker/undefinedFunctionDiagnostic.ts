@@ -43,9 +43,7 @@ export function checkUndefinedFunctions(
       for (const { node, ancestors } of walkNodes(info.body)) {
         // When walking the top-level scope, skip anything inside a
         // function or graphNode body — those have their own ScopeInfo
-        // and would double-fire. Class methods are NOT skipped: they
-        // currently lack their own scope, so the top-level pass is
-        // their only coverage.
+        // and would double-fire.
         if (isTopLevel && hasFunctionOrNodeAncestor(ancestors)) continue;
 
         if (node.type === "functionCall") {
@@ -102,7 +100,7 @@ function checkAccessChain(
   scope: Scope,
   ctx: TypeCheckerContext,
   mode: "warn" | "error",
-  shadowing: { importedNodeNames: readonly string[]; classNames: object },
+  shadowing: { importedNodeNames: readonly string[] },
 ): void {
   // Only handle <variableName>.<member>... chains where the base is a JS
   // namespace global. Everything else (objects in scope, computed lookups,
@@ -117,7 +115,6 @@ function checkAccessChain(
       importedFunctions: ctx.importedFunctions,
       importedNodeNames: shadowing.importedNodeNames,
       jsImportedNames: ctx.jsImportedNames,
-      classNames: shadowing.classNames,
     })
   )
     return;

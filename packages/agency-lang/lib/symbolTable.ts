@@ -80,12 +80,6 @@ export type TypeSymbol = {
   reExportedFrom?: ReExportedFrom;
 };
 
-export type ClassSymbol = {
-  kind: "class";
-  name: string;
-  loc?: SourceLocation;
-};
-
 export type ConstantSymbol = {
   kind: "constant";
   name: string;
@@ -94,7 +88,7 @@ export type ConstantSymbol = {
   reExportedFrom?: ReExportedFrom;
 };
 
-export type SymbolInfo = FunctionSymbol | NodeSymbol | TypeSymbol | ClassSymbol | ConstantSymbol;
+export type SymbolInfo = FunctionSymbol | NodeSymbol | TypeSymbol | ConstantSymbol;
 export type SymbolKind = SymbolInfo["kind"];
 
 /** Maps symbol name → info for a single file. */
@@ -368,13 +362,6 @@ export function classifySymbols(program: AgencyProgram): FileSymbols {
             : {}),
         };
         break;
-      case "classDefinition":
-        symbols[node.className] = {
-          kind: "class",
-          name: node.className,
-          loc: node.loc,
-        };
-        break;
       case "assignment":
         if (node.exported && node.static && node.declKind === "const") {
           symbols[node.variableName] = {
@@ -402,7 +389,6 @@ function collectDirectInterruptKinds(body: AgencyNode[]): InterruptKind[] {
 }
 
 function isExportedSymbol(sym: SymbolInfo): boolean {
-  if (sym.kind === "class") return false;
   // Nodes are importable without an explicit `export` keyword (see importResolver
   // — node imports skip the assertExported check). Treat them as exported for
   // re-export purposes so `export { main } from "..."` and `export * from "..."`
@@ -419,21 +405,18 @@ function symbolKindLabel(sym: SymbolInfo): string {
       return "Node";
     case "type":
       return "Type";
-    // The "constant" and "class" branches below are defensive — the only
-    // current caller (the namedExport "not exported" error path) cannot reach
-    // them: ConstantSymbol is only ever added when `exported && static && const`,
-    // and class re-exports are rejected earlier with their own error message.
+    // The "constant" branch below is defensive — the only current caller
+    // (the namedExport "not exported" error path) cannot reach it:
+    // ConstantSymbol is only ever added when `exported && static && const`.
     case "constant":
       return "Constant";
-    case "class":
-      return "Class";
   }
 }
 
 /**
  * Merge symbols flowing through one `exportFromStatement` from `sourcePath`
  * into the re-exporter's `FileSymbols`. Hard errors on missing symbols,
- * class re-exports, non-exported sources, and collisions.
+ * non-exported sources, and collisions.
  */
 export function mergeExportsFrom(
   files: Record<string, FileSymbols>,
@@ -452,7 +435,6 @@ export function mergeExportsFrom(
 
   if (stmt.body.kind === "starExport") {
     for (const [name, sym] of Object.entries(sourceSymbols)) {
-      if (sym.kind === "class") continue; // silently skip classes in star
       if (!isExportedSymbol(sym)) continue;
       mergeOne(targetSymbols, name, name, sym, false, sourcePath, stmt);
     }
@@ -465,11 +447,6 @@ export function mergeExportsFrom(
     if (!sym) {
       throw new Error(
         `Symbol '${originalName}' is not defined in '${stmt.modulePath}'`,
-      );
-    }
-    if (sym.kind === "class") {
-      throw new Error(
-        `Classes cannot be re-exported (symbol '${originalName}' in '${stmt.modulePath}')`,
       );
     }
     if (!isExportedSymbol(sym)) {
@@ -525,11 +502,6 @@ function mergeOne(
 
   // Build the merged entry. We copy the source's SymbolInfo fields and
   // override name, loc, exported, and (for functions) safe.
-  if (sourceSym.kind === "class") {
-    // Defensive: callers must filter classes out before this point.
-    throw new Error(`Cannot re-export class '${originalName}'`);
-  }
-
   const base = {
     name: localName,
     loc: stmt.loc,

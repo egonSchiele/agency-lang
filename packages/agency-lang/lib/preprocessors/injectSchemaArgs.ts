@@ -148,10 +148,6 @@ function walkNode(
     walkBody(node.block.body, enclosingReturnType, lookup);
   } else if (node.type === "parallelBlock" || node.type === "seqBlock") {
     walkBody(node.body, enclosingReturnType, lookup);
-  } else if (node.type === "classDefinition") {
-    for (const method of node.methods) {
-      walkBody(method.body, method.returnType, lookup);
-    }
   }
 }
 

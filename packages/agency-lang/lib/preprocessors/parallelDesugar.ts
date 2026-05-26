@@ -462,9 +462,6 @@ function descendIntoSubstructures(node: AgencyNode): void {
         node.block.body = desugarParallelInBody(node.block.body);
       }
       return;
-    case "classDefinition":
-      for (const m of node.methods) m.body = desugarParallelInBody(m.body);
-      return;
     default:
       return;
   }

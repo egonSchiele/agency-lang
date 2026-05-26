@@ -2,14 +2,27 @@
 // an access chain (`.field`, `[i]`, `.method()`). Previously the parser
 // did not recognize chain elements after `)`, so `(s).length` silently
 // became `let n = (s)` followed by a stray `length` statement.
+//
+// The original fixture exercised `(new Counter(5)).bump()` and
+// `(makeCounter(10)).bump()` against a `class Counter`. Classes were
+// removed; we now use a plain-object Counter whose `bump` is a closure
+// over the start value. The parens-as-head-of-chain coverage is the
+// same — only the receiver flavor changed.
 
-class Counter {
-  n: number
-  bump(): number { return this.n + 1 }
+type Counter = {
+  n: number,
+  bump: () => number
+}
+
+def bumpFrom(start: number): number {
+  return start + 1
 }
 
 def makeCounter(start: number): Counter {
-  return new Counter(start)
+  return {
+    n: start,
+    bump: bumpFrom.partial(start: start)
+  }
 }
 
 node main(): number[] {
@@ -28,9 +41,9 @@ node main(): number[] {
   let second = (arr)[0 + 1]
   // (binop)[i] — index into the result of a string concatenation
   let charCode = ("ab" + "cd")[2].charCodeAt(0)
-  // (new Foo()).method()
-  let bumped = (new Counter(5)).bump()
-  // (call()).method()
+  // (objectLiteral-via-call).method()
+  let bumped = (makeCounter(5)).bump()
+  // (call()).method() — separate variable to exercise the call-then-method shape twice
   let bumped2 = (makeCounter(10)).bump()
 
   return [len1, len2, first, second, charCode, bumped, bumped2]

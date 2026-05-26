@@ -119,10 +119,4 @@ describe("JS_GLOBALS — namespace member sigs", () => {
     expect(errors.filter(arityErr)).toHaveLength(0);
   });
 
-  it("does not validate when shadowed by a class definition", () => {
-    const errors = errorsFrom(
-      `class JSON {\n  parse: number\n}\nnode main() {\n let j = new JSON(1)\n let x = j.parse\n print(x)\n}\n`,
-    );
-    expect(errors.filter(arityErr)).toHaveLength(0);
-  });
 });

@@ -15,7 +15,6 @@ export function getFoldingRanges(
     switch (node.type) {
       case "function":
       case "graphNode":
-      case "classDefinition":
       case "handleBlock":
       case "messageThread":
       case "ifElse":

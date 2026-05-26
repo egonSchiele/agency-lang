@@ -143,20 +143,7 @@ function isInScope(scopes: WalkScope[], info: ScopeInfo): boolean {
   const innermostKey = getScopeKey(scopes[scopes.length - 1]);
   if (innermostKey === info.scopeKey) return true;
   if (info.scopeKey !== "global" && innermostKey === "global") return true;
-  // Class-method bodies have their own scope chain in walkNodes but no
-  // dedicated ScopeInfo — fall through to the global pass to ensure
-  // they still get type-checked.
-  if (info.scopeKey === "global" && isClassMethodScope(innermostKey)) {
-    return true;
-  }
   return false;
-}
-
-function isClassMethodScope(key: string): boolean {
-  // walkNodes tags method bodies with `function:Class.method` (note the
-  // `.` between class and method names). Function defs use plain
-  // `function:foo`, so the dot is the discriminator.
-  return key.startsWith("function:") && key.includes(".");
 }
 
 function checkFunctionCallsInScope(
@@ -299,7 +286,7 @@ function checkJsNamespaceMemberCall(
   expr: ValueAccess,
   scope: Scope,
   ctx: TypeCheckerContext,
-  shadowing: { importedNodeNames: readonly string[]; classNames: object },
+  shadowing: { importedNodeNames: readonly string[] },
 ): void {
   if (expr.base.type !== "variableName") return;
   const baseName = expr.base.value;
@@ -311,7 +298,6 @@ function checkJsNamespaceMemberCall(
       importedFunctions: ctx.importedFunctions,
       importedNodeNames: shadowing.importedNodeNames,
       jsImportedNames: ctx.jsImportedNames,
-      classNames: shadowing.classNames,
     })
   )
     return;

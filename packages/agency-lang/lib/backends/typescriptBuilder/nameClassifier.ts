@@ -23,7 +23,7 @@ const DIRECT_CALL_FUNCTIONS: ReadonlySet<string> = new Set([
  * access to `__ctx`.
  */
 const TOP_LEVEL_DECLARATION_TYPES: ReadonlySet<string> = new Set([
-  "graphNode", "function", "typeAlias", "classDefinition",
+  "graphNode", "function", "typeAlias",
   "importStatement", "importNodeStatement",
   "comment", "multiLineComment", "newLine",
 ]);

@@ -52,37 +52,36 @@ def resetCountersTool() {
   return resetCounters()
 }
 
-// --- Class with safe and non-safe methods ---
+// --- Helpers that mirror the prefix-bearing service the original
+//     fixture exercised via class methods. Now plain def functions
+//     that take the prefix as an explicit parameter (classes were
+//     removed). The safe-vs-unsafe coverage is unchanged — the safe
+//     keyword propagates through def calls the same way it did through
+//     class methods. ---
 
-class ItemService {
-  prefix: string
-
-  safe safeLookup(id: string): any {
-    return lookupItem("${this.prefix}-${id}")
-  }
-
-  unsafeSaveAndLookup(id: string): any {
-    saveItem(id)
-    return lookupItem("${this.prefix}-${id}")
-  }
-
-  safe nestedFlakyWrite(id: string): any {
-    if (id != "") {
-      return flakyWrite("${this.prefix}-${id}")
-    }
-    return id
-  }
+safe def serviceSafeLookup(prefix: string, id: string): any {
+  return lookupItem("${prefix}-${id}")
 }
 
-// Tool wrappers for class methods
+def serviceUnsafeSaveAndLookup(prefix: string, id: string): any {
+  saveItem(id)
+  return lookupItem("${prefix}-${id}")
+}
+
+safe def serviceNestedFlakyWrite(prefix: string, id: string): any {
+  if (id != "") {
+    return flakyWrite("${prefix}-${id}")
+  }
+  return id
+}
+
+// Tool wrappers for the prefix-bearing service functions
 def safeMethodTool(id: string) {
-  let svc = new ItemService("svc")
-  return svc.safeLookup(id)
+  return serviceSafeLookup("svc", id)
 }
 
 def unsafeMethodTool(id: string) {
-  let svc = new ItemService("svc")
-  return svc.unsafeSaveAndLookup(id)
+  return serviceUnsafeSaveAndLookup("svc", id)
 }
 
 // --- Nested impure calls inside safe functions/methods ---
@@ -104,8 +103,7 @@ def safeNestedTool(id: string) {
 }
 
 def safeNestedMethodTool(id: string) {
-  let svc = new ItemService("nsvc")
-  return svc.nestedFlakyWrite(id)
+  return serviceNestedFlakyWrite("nsvc", id)
 }
 
 // --- Nested impure calls inside for/while loops ---

@@ -1,16 +1,18 @@
-class Math {
-  factor: number
+// Pipe-into-method-ref through an object value.
+//
+// Previously this fixture exercised the same pipe shape against a class
+// method. Classes were removed, so we get the same coverage by storing
+// a partially-applied function on a plain-object "receiver" — the codegen
+// for `obj.method` as a pipe stage is the field/method-ref path either
+// way.
 
-  multiply(x: number): Result {
-    return success(x * this.factor)
-  }
+type Math = {
+  factor: number,
+  multiply: (number) => Result
+}
 
-  divide(x: number, divisor: number): Result {
-    if (divisor == 0) {
-      return failure("division by zero")
-    }
-    return success(x / divisor)
-  }
+def multiplyBy(factor: number, x: number): Result {
+  return success(x * factor)
 }
 
 def divideBy(x: number, divisor: number): Result {
@@ -20,10 +22,17 @@ def divideBy(x: number, divisor: number): Result {
   return success(x / divisor)
 }
 
-node main() {
-  let math = new Math(2)
+def makeMath(factor: number): Math {
+  return {
+    factor: factor,
+    multiply: multiplyBy.partial(factor: factor)
+  }
+}
 
-  // pipe into method without placeholder
+node main() {
+  let math = makeMath(2)
+
+  // pipe into a method-ref (object field whose value is a function)
   let r1 = success(5) |> math.multiply
 
   // pipe into function with partial application

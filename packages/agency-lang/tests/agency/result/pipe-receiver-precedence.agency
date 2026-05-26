@@ -7,22 +7,35 @@
   computation must paren-wrap the awaited base before applying the
   intermediate chain elements. Otherwise the `.chain` access binds to
   the unresolved Promise and we end up calling `.method` on undefined.
+
+  Originally written against a class receiver; rewritten to use plain
+  objects with function-valued fields after class syntax was removed.
+  The pipe-stage lowering is the same — base function call, property
+  access, method-ref — so the precedence regression is still covered.
 */
 
-class Multiplier {
-  factor: number
-
-  multiply(x: number): Result {
-    return success(x * this.factor)
-  }
+type Multiplier = {
+  factor: number,
+  multiply: (number) => Result
 }
 
-class Container {
+type Container = {
   inner: Multiplier
 }
 
+def multiplyBy(factor: number, x: number): Result {
+  return success(x * factor)
+}
+
+def makeMultiplier(f: number): Multiplier {
+  return {
+    factor: f,
+    multiply: multiplyBy.partial(factor: f)
+  }
+}
+
 def makeContainer(f: number): Container {
-  return new Container(new Multiplier(f))
+  return { inner: makeMultiplier(f) }
 }
 
 node main() {

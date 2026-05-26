@@ -511,7 +511,7 @@ export const ts = {
     ]);
   },
 
-  /** Halt with { messages: __threads, data: value } and return from a graph node callback */
+  /** Halt with { messages: __threads(), data: value } and return from a graph node callback */
   nodeResult(value: TsNode): TsStatements {
     return ts.runnerHalt(ts.obj({ messages: ts.runtime.threads, data: value }));
   },
@@ -544,7 +544,6 @@ export const ts = {
     stack,
     step,
     self,
-    threads,
     ctx,
     statelogClient,
     graph,
@@ -553,17 +552,19 @@ export const ts = {
     stack: TsNode;
     step: TsNode;
     self: TsNode;
-    threads: TsNode;
     ctx: TsNode;
     statelogClient: TsNode;
     graph: TsNode;
   }): TsStatements {
+    // No `__threads` const declaration here: the per-scope ThreadStore
+    // is now read on demand via the `__threads()` accessor (which
+    // resolves the value through the active `agencyStore` ALS frame).
+    // See `ts.runtime.threads` and `lib/runtime/asyncContext.ts`.
     return ts.statements([
       ...(stateStack ? [ts.constDecl("__stateStack", stateStack)] : []),
       ts.constDeclId(ts.runtime.stack, stack),
       ts.constDeclId(ts.runtime.step, step),
       ts.constDeclId(ts.runtime.self, self),
-      ts.constDeclId(ts.runtime.threads, threads),
       ts.constDeclId(ts.runtime.ctx, ctx),
       ts.constDeclId(ts.runtime.statelogClient, statelogClient),
       ts.constDeclId(ts.runtime.graph, graph),
@@ -728,11 +729,17 @@ export const ts = {
     return { kind: "agencyFunctionWrap", name, module, fn, params };
   },
 
-  /** Predefined runtime identifiers */
+  /** Predefined runtime identifiers. `threads` is a `__threads()` call
+   *  (not a bare identifier) because post-ALS migration the per-scope
+   *  ThreadStore lives on the active `agencyStore` frame instead of in a
+   *  codegen-emitted `const __threads` local. Every site that referenced
+   *  the old local now emits an `__threads()` accessor call, which reads
+   *  from ALS and returns the live store (or `undefined` outside any
+   *  frame — see `runtime/asyncContext.ts`). */
   runtime: {
     self: { kind: "identifier", name: "__self" } as TsIdentifier,
     ctx: { kind: "identifier", name: "__ctx" } as TsIdentifier,
-    threads: { kind: "identifier", name: "__threads" } as TsIdentifier,
+    threads: { kind: "raw", code: "__threads()" } as TsRaw,
     stack: { kind: "identifier", name: "__stack" } as TsIdentifier,
     step: { kind: "identifier", name: "__step" } as TsIdentifier,
     state: { kind: "identifier", name: "__state" } as TsIdentifier,

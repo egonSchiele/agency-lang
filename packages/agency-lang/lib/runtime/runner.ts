@@ -430,7 +430,6 @@ export class Runner {
 
   async thread(
     id: number,
-    threads: any,
     method: "create" | "createSubthread",
     callback: (runner: Runner) => Promise<void>,
   ): Promise<void> {
@@ -441,6 +440,21 @@ export class Runner {
     if (await this.maybeDebugHook(id)) return;
 
     this.ctx.coverageCollector?.hit(this.moduleId, this.scopeName, this.stepPath(id));
+
+    // Post-ALS migration the ThreadStore is captured on `this.threads`
+    // (seeded by the constructor from explicit opts or the active
+    // ALS frame). Generated `runner.thread(...)` call sites no longer
+    // need to pass it explicitly. Throw a clear error if absent — that
+    // only happens when a Runner is constructed in a test harness
+    // without `threads:` and outside any ALS frame.
+    const threads = this.threads;
+    if (!threads) {
+      throw new Error(
+        "Runner.thread() called without a ThreadStore available. " +
+          "Construct the Runner with { threads } or wrap the call in " +
+          "agencyStore.run({ ctx, stack, threads }, fn).",
+      );
+    }
 
     // Guard thread creation so it only happens once. On resume from a
     // debug pause inside the callback, the entire thread() method

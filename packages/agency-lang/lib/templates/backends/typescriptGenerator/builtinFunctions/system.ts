@@ -4,7 +4,7 @@
 import { apply } from "typestache";
 
 export const template = `// crashes if no active thread
-__threads.active().push(smoltalk.systemMessage({{{systemMessage:string}}}));
+__threads().active().push(smoltalk.systemMessage({{{systemMessage:string}}}));
 `;
 
 export type TemplateType = {

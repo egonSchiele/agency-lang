@@ -8,7 +8,7 @@ const __dbg = await debugStep(__ctx, __state, {
 });
 if (__dbg) {
   {{#nodeContext}}
-  return { messages: __threads, data: __dbg };
+  return { messages: __threads(), data: __dbg };
   {{/nodeContext}}
   {{^nodeContext}}
   return __dbg;

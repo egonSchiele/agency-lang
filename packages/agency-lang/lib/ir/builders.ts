@@ -516,6 +516,48 @@ export const ts = {
     return ts.runnerHalt(ts.obj({ messages: ts.runtime.threads, data: value }));
   },
 
+  /**
+   * Wrap a list of statements in
+   * `await agencyStore.run({ ctx, stack, threads }, async () => { ... })`.
+   *
+   * Defense-in-depth: every function/node body's try block carries an
+   * ALS frame so stdlib helpers and `__threads()` / `__stateStack()`
+   * reads resolve correctly even for code that runs between Runner
+   * steps. Today the gap is empty (every callback emission uses
+   * `runner.step`/`runner.hook`/etc. which re-seed the frame
+   * themselves), but the wrap makes the contract explicit and
+   * removes the risk that a future refactor silently loses the
+   * per-scope frame.
+   *
+   * NOTE: `return` statements inside the wrapped body escape only the
+   * inner async callback, not the outer function. Validation guards
+   * that return a non-`undefined` value (e.g. `return __vr_x` for a
+   * validation failure) must stay outside the wrap so the outer
+   * function actually returns the value to its caller. The bare
+   * `return;` emitted by `runnerHalt` is fine: after the callback
+   * returns, the outer `if (runner.halted) return runner.haltResult;`
+   * check picks up the halted result.
+   */
+  withAlsFrame({
+    ctx,
+    stack,
+    threads,
+    body,
+  }: {
+    ctx: TsNode;
+    stack: TsNode;
+    threads: TsNode;
+    body: TsNode[];
+  }): TsNode {
+    return ts.awaitCall(
+      ts.prop(ts.id("agencyStore"), "run"),
+      [
+        ts.obj({ ctx, stack, threads }),
+        ts.arrowFn([], ts.statements(body), { async: true }),
+      ],
+    );
+  },
+
   env(varName: string): TsRaw {
     return ts.raw(`__process.env[${JSON.stringify(varName)}]`);
   },
@@ -540,34 +582,29 @@ export const ts = {
   },
 
   setupEnv({
-    stateStack,
     stack,
     step,
     self,
     ctx,
-    statelogClient,
-    graph,
   }: {
-    stateStack?: TsNode;
     stack: TsNode;
     step: TsNode;
     self: TsNode;
     ctx: TsNode;
-    statelogClient: TsNode;
-    graph: TsNode;
   }): TsStatements {
-    // No `__threads` const declaration here: the per-scope ThreadStore
-    // is now read on demand via the `__threads()` accessor (which
-    // resolves the value through the active `agencyStore` ALS frame).
-    // See `ts.runtime.threads` and `lib/runtime/asyncContext.ts`.
+    // No `__threads` or `__stateStack` const declaration here: those
+    // per-scope values are now read on demand via the `__threads()`
+    // and `__stateStack()` accessors (which resolve through the active
+    // `agencyStore` ALS frame). The `__graph` and `statelogClient`
+    // locals that used to be declared here were dead code — no
+    // template or codegen path referenced them — so they were dropped
+    // entirely. See `ts.runtime.threads` / `ts.runtime.stateStack` and
+    // `lib/runtime/asyncContext.ts`.
     return ts.statements([
-      ...(stateStack ? [ts.constDecl("__stateStack", stateStack)] : []),
       ts.constDeclId(ts.runtime.stack, stack),
       ts.constDeclId(ts.runtime.step, step),
       ts.constDeclId(ts.runtime.self, self),
       ts.constDeclId(ts.runtime.ctx, ctx),
-      ts.constDeclId(ts.runtime.statelogClient, statelogClient),
-      ts.constDeclId(ts.runtime.graph, graph),
       ts.letDecl("__forked"),
 
       // Track whether the function completed normally (vs pausing for a debug interrupt).
@@ -729,27 +766,25 @@ export const ts = {
     return { kind: "agencyFunctionWrap", name, module, fn, params };
   },
 
-  /** Predefined runtime identifiers. `threads` is a `__threads()` call
-   *  (not a bare identifier) because post-ALS migration the per-scope
-   *  ThreadStore lives on the active `agencyStore` frame instead of in a
-   *  codegen-emitted `const __threads` local. Every site that referenced
-   *  the old local now emits an `__threads()` accessor call, which reads
-   *  from ALS and returns the live store (or `undefined` outside any
-   *  frame — see `runtime/asyncContext.ts`). */
+  /** Predefined runtime identifiers. `threads` and `stateStack` are
+   *  `__threads()` / `__stateStack()` accessor calls (not bare
+   *  identifiers) because post-ALS migration the per-scope
+   *  `ThreadStore` and `StateStack` live on the active `agencyStore`
+   *  frame instead of in codegen-emitted `const __threads` /
+   *  `const __stateStack` locals. Every site that referenced the old
+   *  locals now emits the accessor call, which reads from ALS and
+   *  returns the live store (or `undefined` outside any frame — see
+   *  `runtime/asyncContext.ts`). */
   runtime: {
     self: { kind: "identifier", name: "__self" } as TsIdentifier,
     ctx: { kind: "identifier", name: "__ctx" } as TsIdentifier,
     threads: { kind: "raw", code: "__threads()" } as TsRaw,
+    stateStack: { kind: "raw", code: "__stateStack()" } as TsRaw,
     stack: { kind: "identifier", name: "__stack" } as TsIdentifier,
     step: { kind: "identifier", name: "__step" } as TsIdentifier,
     state: { kind: "identifier", name: "__state" } as TsIdentifier,
     globalCtx: { kind: "identifier", name: "__globalCtx" } as TsIdentifier,
     client: { kind: "identifier", name: "__client" } as TsIdentifier,
-    statelogClient: {
-      kind: "identifier",
-      name: "statelogClient",
-    } as TsIdentifier,
-    graph: { kind: "identifier", name: "__graph" } as TsIdentifier,
   },
 
   /** Thread operations */

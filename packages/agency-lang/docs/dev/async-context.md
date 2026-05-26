@@ -78,12 +78,16 @@ After the "drop per-call-site context plumbing" pass (see plan), runtime helpers
 - `__call(target, descriptor)` / `__callMethod(obj, prop, descriptor)` build the `__state` bag from ALS internally — call sites only pass the location-info bag (`{moduleId, scopeName, stepPath}`) when invoking `checkpoint`/`getCheckpoint`/`restore`, and pass `{ctx}` when invoked from inside `__initializeGlobals` (which runs before any ALS frame exists).
 - `runPrompt({prompt, messages, clientConfig, ...})` no longer accepts `ctx` / `stateStack` — both come from ALS.
 - `callHook({name, data})` no longer requires `ctx`; it falls back to `getRuntimeContext().ctx` when omitted. Generated code stops emitting `ctx: __ctx`.
-- `new Runner(__ctx, __stack, {moduleId, scopeName})` — the `stack` and `threads` opts are gone. The Runner constructor reads them from ALS as a fallback so `runner.step/hook/fork` etc. still re-seed the per-scope frame correctly.
+- `new Runner(__ctx, __stack, {moduleId, scopeName, threads})` — `stack` defaults from ALS when omitted. `threads` is passed explicitly because every Runner needs to install its own per-scope ALS frame inside `Runner.runInScope`, and that frame must carry the per-node/per-function `ThreadStore` (which the outer ALS frame doesn't have, especially when a function is called as a tool). See PR [#200](https://github.com/egonSchiele/agency-lang/pull/200).
 
 The two external entry points called from host TS code — `respondToInterrupts` and `rewindFrom` — install their own outer `agencyStore.run(...)` frame around the resume/replay loop so that callbacks and stdlib helpers triggered during resume see the right context.
 
 ## See also
 
+- [docs/dev/codegen-als-accessors.md](./codegen-als-accessors.md) — how generated code reads from the ALS frame via `__threads()` / `__ctx()` / `__stateStack()` accessors, plus the recipe for adding a new accessor or pruning an existing setup-block local.
 - The initial ALS migration that introduced `agencyStore` / `getRuntimeContext()` (commit `d39103cc` on `main`).
 - The follow-up PR [#198](https://github.com/egonSchiele/agency-lang/pull/198) that dropped per-call-site `{ctx, threads, stateStack}` bag emission from generated code.
+- PR [#199](https://github.com/egonSchiele/agency-lang/pull/199) — BootstrapThreadStore sentinel + onAgentEnd real ThreadStore wrap.
+- PR [#200](https://github.com/egonSchiele/agency-lang/pull/200) — explicit `threads:` on the Runner constructor so per-scope ALS frames carry the right `ThreadStore`.
+- PR [#201](https://github.com/egonSchiele/agency-lang/pull/201) — first accessor migration (`__threads()`), template for the rest of Phase 4 cleanup.
 - [docs/dev/adding-a-module-to-the-agency-stdlib.md](./adding-a-module-to-the-agency-stdlib.md) — step-by-step recipe for adding a new module.

@@ -1471,13 +1471,10 @@ export class TypeScriptBuilder {
         "__state will be undefined if this function is being called as a tool by an llm",
       ),
       ts.setupEnv({
-        stateStack: $(ts.id("__setupData")).prop("stateStack").done(),
         stack: $(ts.id("__setupData")).prop("stack").done(),
         step: $(ts.id("__setupData")).prop("step").done(),
         self: $(ts.id("__setupData")).prop("self").done(),
         ctx: ts.raw("__state?.ctx || __globalCtx"),
-        statelogClient: ts.ctx("statelogClient"),
-        graph: ts.ctx("graph"),
       }),
 
       // Ensure this module's globals are initialized on the current ctx.
@@ -1574,10 +1571,25 @@ export class TypeScriptBuilder {
     setupStmts.push(
       ts.tryCatch(
         ts.statements([
+          // Validation guards stay OUTSIDE the agencyStore.run wrap:
+          // they emit `return __vr_x` for failures, and we need that
+          // value to escape the outer function, not just the inner
+          // async callback.
           ...validationGuards,
           ...hoistedAliases,
-          ...onFunctionStartHook,
-          ...bodyCode,
+          // Body-level ALS frame (defense-in-depth). Today every
+          // callback site re-seeds ALS via Runner.runInScope, but the
+          // wrap closes the gap for code that runs between steps and
+          // makes the per-scope frame contract explicit.
+          ts.withAlsFrame({
+            ctx: ts.id("__ctx"),
+            stack: ts.id("__stack"),
+            threads: $(ts.id("__setupData")).prop("threads").done(),
+            body: [
+              ...onFunctionStartHook,
+              ...bodyCode,
+            ],
+          }),
           ts.raw(
             "if (runner.halted) { if (isFailure(runner.haltResult)) { runner.haltResult.retryable = runner.haltResult.retryable && __self.__retryable; } return runner.haltResult; }",
           ),
@@ -1589,8 +1601,11 @@ export class TypeScriptBuilder {
         ),
         "__error",
         // finally block: pop state stack and conditionally fire onFunctionEnd.
+        // The optional chain handles the rare case where the finally
+        // runs outside any ALS frame (e.g. a function invoked as a tool
+        // without an outer agencyStore.run wrap).
         ts.statements([
-          ts.raw("__stateStack.pop()"),
+          ts.raw("__stateStack()?.pop()"),
           ...(skipHooks ? [] : [
             ts.if(
               ts.id("__functionCompleted"),
@@ -2092,7 +2107,17 @@ export class TypeScriptBuilder {
 
     return $(ts.id("runner"))
       .prop("fork")
-      .call([ts.num(id), itemsNode, blockFn, ts.str(mode), ts.id("__stateStack")])
+      .call([
+        ts.num(id),
+        itemsNode,
+        blockFn,
+        ts.str(mode),
+        // `runner.fork` requires the current StateStack to push branch
+        // frames onto. Use the strict accessor so a missing ALS frame
+        // throws the actionable error instead of producing a generic
+        // TypeError deep inside the fork machinery.
+        ts.raw("getRuntimeContext().stack"),
+      ])
       .await()
       .done();
   }
@@ -2132,8 +2157,9 @@ export class TypeScriptBuilder {
     });
 
     return ts.statements([
-      // Pop the current node's frame before transitioning — it won't be re-entered on resume
-      ts.raw("__stateStack.pop()"),
+      // Pop the current node's frame before transitioning — it won't be re-entered on resume.
+      // Optional chain defends against the rare goto reached outside any ALS frame.
+      ts.raw("__stateStack()?.pop()"),
       ts.functionReturn(ts.goToNode(functionName, goToArgs)),
     ]);
   }
@@ -2178,13 +2204,10 @@ export class TypeScriptBuilder {
       ),
 
       ts.setupEnv({
-        stateStack: ts.raw("__state.ctx.stateStack"),
         stack: $(ts.id("__setupData")).prop("stack").done(),
         step: $(ts.id("__setupData")).prop("step").done(),
         self: $(ts.id("__setupData")).prop("self").done(),
         ctx: $(ts.runtime.state).prop("ctx").done(),
-        statelogClient: ts.ctx("statelogClient"),
-        graph: ts.ctx("graph"),
       }),
 
       // Pass `threads` explicitly so the Runner's ALS frame is seeded
@@ -2219,13 +2242,26 @@ export class TypeScriptBuilder {
     stmts.push(
       ts.tryCatch(
         ts.statements([
-          ts.runnerHookStep({
-            id: onNodeStartId,
+          // Body-level ALS frame (defense-in-depth). The onNodeStart
+          // hook and user body go inside the wrap. The post-body
+          // halted check and onNodeEnd hook stay outside: the wrap's
+          // inner callback may bare-`return` from `runner.halt(...)`
+          // emissions, and we want the outer node arrow to keep
+          // running into the halted check / onNodeEnd / final return.
+          ts.withAlsFrame({
+            ctx: ts.id("__ctx"),
+            stack: ts.id("__stack"),
+            threads: $(ts.id("__setupData")).prop("threads").done(),
             body: [
-              ts.callHook("onNodeStart", { nodeName: ts.str(nodeName) }),
+              ts.runnerHookStep({
+                id: onNodeStartId,
+                body: [
+                  ts.callHook("onNodeStart", { nodeName: ts.str(nodeName) }),
+                ],
+              }),
+              ...bodyCode,
             ],
           }),
-          ...bodyCode,
           ts.raw("if (runner.halted) return runner.haltResult;"),
           ts.runnerHookStep({
             id: onNodeEndId,

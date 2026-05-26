@@ -105,6 +105,32 @@ export function __threads(): ThreadStore | undefined {
 }
 
 /**
+ * Generated-code accessor for the current StateStack. Mirrors
+ * `__threads()` — reads from the active `agencyStore` frame. Returns
+ * `undefined` when no frame is installed; the call sites that may run
+ * without one (notably the `finally` block in `classMethod.mustache`
+ * that pops the per-scope frame when a function is called as a tool
+ * outside any Agency execution frame) defend with `?.pop()` /
+ * `?.method(...)`. Code that needs the strict-throw behavior should
+ * call `getRuntimeContext().stack` directly.
+ */
+export function __stateStack(): StateStack | undefined {
+  return agencyStore.getStore()?.stack;
+}
+
+/**
+ * Generated-code accessor for the current RuntimeContext. Mirrors
+ * `__threads()` — reads from the active `agencyStore` frame. Returns
+ * `undefined` when no frame is installed. Sites where dereferencing
+ * `undefined` would produce an opaque `TypeError` should use
+ * `getRuntimeContext().ctx` instead so the missing-frame case throws
+ * the dedicated error with a pointer to `runInTestContext`.
+ */
+export function __ctx(): RuntimeContext<any> | undefined {
+  return agencyStore.getStore()?.ctx;
+}
+
+/**
  * Convenience wrapper for tests that construct a RuntimeContext manually
  * and need to invoke stdlib helpers that read from ALS. Mirrors
  * `agencyStore.run(...)` but with explicit named parameters so test

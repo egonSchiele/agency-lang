@@ -164,7 +164,7 @@ let __functionCompleted = false;
   let __funcStartTime: number = performance.now();
   __stack.args["name"] = name;
   __self.__retryable = __self.__retryable ?? true;
-  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "functionRef.agency", scopeName: "greet" });
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "functionRef.agency", scopeName: "greet", threads: __threads });
   let __resultCheckpointId = -1;
 if (__ctx.stateStack.currentNodeId()) {
   __resultCheckpointId = __ctx.checkpoints.createPinned(__stateStack, __ctx, { moduleId: "functionRef.agency", scopeName: "greet", stepPath: "", label: "result-entry" });
@@ -273,7 +273,7 @@ let __functionCompleted = false;
   let __funcStartTime: number = performance.now();
   __stack.args["x"] = x;
   __self.__retryable = __self.__retryable ?? true;
-  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "functionRef.agency", scopeName: "double" });
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "functionRef.agency", scopeName: "double", threads: __threads });
   let __resultCheckpointId = -1;
 if (__ctx.stateStack.currentNodeId()) {
   __resultCheckpointId = __ctx.checkpoints.createPinned(__stateStack, __ctx, { moduleId: "functionRef.agency", scopeName: "double", stepPath: "", label: "result-entry" });
@@ -383,7 +383,7 @@ let __functionCompleted = false;
   __stack.args["items"] = items;
   __stack.args["transform"] = transform;
   __self.__retryable = __self.__retryable ?? true;
-  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "functionRef.agency", scopeName: "applyToAll" });
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "functionRef.agency", scopeName: "applyToAll", threads: __threads });
   let __resultCheckpointId = -1;
 if (__ctx.stateStack.currentNodeId()) {
   __resultCheckpointId = __ctx.checkpoints.createPinned(__stateStack, __ctx, { moduleId: "functionRef.agency", scopeName: "applyToAll", stepPath: "", label: "result-entry" });
@@ -509,7 +509,7 @@ const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
 let __forked;
 let __functionCompleted = false;
-  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "functionRef.agency", scopeName: "main" });
+  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "functionRef.agency", scopeName: "main", threads: __threads });
   try {
     await runner.hook(0, async () => {
 await callHook({

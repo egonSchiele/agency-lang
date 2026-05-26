@@ -164,7 +164,7 @@ let __functionCompleted = false;
   let __funcStartTime: number = performance.now();
   __stack.args["r"] = r;
   __self.__retryable = __self.__retryable ?? true;
-  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "result-guards.agency", scopeName: "checkValue" });
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "result-guards.agency", scopeName: "checkValue", threads: __threads });
   let __resultCheckpointId = -1;
 if (__ctx.stateStack.currentNodeId()) {
   __resultCheckpointId = __ctx.checkpoints.createPinned(__stateStack, __ctx, { moduleId: "result-guards.agency", scopeName: "checkValue", stepPath: "", label: "result-entry" });

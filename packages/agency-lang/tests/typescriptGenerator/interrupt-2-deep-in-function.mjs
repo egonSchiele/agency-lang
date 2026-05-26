@@ -165,7 +165,7 @@ let __functionCompleted = false;
   __stack.args["name"] = name;
   __stack.args["age"] = age;
   __self.__retryable = __self.__retryable ?? true;
-  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "interrupt-2-deep-in-function.agency", scopeName: "greet" });
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "interrupt-2-deep-in-function.agency", scopeName: "greet", threads: __threads });
   let __resultCheckpointId = -1;
 if (__ctx.stateStack.currentNodeId()) {
   __resultCheckpointId = __ctx.checkpoints.createPinned(__stateStack, __ctx, { moduleId: "interrupt-2-deep-in-function.agency", scopeName: "greet", stepPath: "", label: "result-entry" });
@@ -326,7 +326,7 @@ let __functionCompleted = false;
   __stack.args["name"] = name;
   __stack.args["age"] = age;
   __self.__retryable = __self.__retryable ?? true;
-  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "interrupt-2-deep-in-function.agency", scopeName: "foo2" });
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "interrupt-2-deep-in-function.agency", scopeName: "foo2", threads: __threads });
   let __resultCheckpointId = -1;
 if (__ctx.stateStack.currentNodeId()) {
   __resultCheckpointId = __ctx.checkpoints.createPinned(__stateStack, __ctx, { moduleId: "interrupt-2-deep-in-function.agency", scopeName: "foo2", stepPath: "", label: "result-entry" });
@@ -472,7 +472,7 @@ const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
 let __forked;
 let __functionCompleted = false;
-  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "interrupt-2-deep-in-function.agency", scopeName: "sayHi" });
+  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "interrupt-2-deep-in-function.agency", scopeName: "sayHi", threads: __threads });
   if (!__state.isResume) {
     __stack.args["name"] = __state.data.name;
   }

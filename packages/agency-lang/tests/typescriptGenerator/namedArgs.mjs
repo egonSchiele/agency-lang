@@ -184,7 +184,7 @@ let __functionCompleted = false;
   __stack.args["name"] = name;
   __stack.args["greeting"] = (greeting === __UNSET ? (`Hello`) : (greeting));
   __self.__retryable = __self.__retryable ?? true;
-  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "namedArgs.agency", scopeName: "greet" });
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "namedArgs.agency", scopeName: "greet", threads: __threads });
   let __resultCheckpointId = -1;
 if (__ctx.stateStack.currentNodeId()) {
   __resultCheckpointId = __ctx.checkpoints.createPinned(__stateStack, __ctx, { moduleId: "namedArgs.agency", scopeName: "greet", stepPath: "", label: "result-entry" });

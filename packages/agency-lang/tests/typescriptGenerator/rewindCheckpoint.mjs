@@ -157,7 +157,7 @@ const statelogClient = __ctx.statelogClient;
 const __graph = __ctx.graph;
 let __forked;
 let __functionCompleted = false;
-  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "rewindCheckpoint.agency", scopeName: "main" });
+  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "rewindCheckpoint.agency", scopeName: "main", threads: __threads });
   if (!__state.isResume) {
     __stack.args["message"] = __state.data.message;
   }

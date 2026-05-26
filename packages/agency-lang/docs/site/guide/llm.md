@@ -166,3 +166,11 @@ def myTool() {
   print("Done!")
 }
 ```
+
+## Where you can call `llm`
+
+`llm(...)` participates in the same message history as the rest of your agent, so it can only be called from places where a message thread exists. That means anywhere inside a `node` or `def` body, and inside callback bodies that fire while a node is running.
+
+It does **not** work at module top level, inside a `callback(...)` registration block, or inside the `onAgentStart` lifecycle hook — those scopes run before any agent has started and have no conversation to append to. If you call `llm` from one of them you'll get a runtime error like *"Message threads are not available in this scope."* Move the call inside a `node` or `def` body to fix it.
+
+See [Message history and threads](./message-history-and-threads.md) for the full picture.

@@ -30,6 +30,22 @@ There are three seeding points. Everything else inherits them through normal `aw
 
 Subprocess bootstrap deliberately does NOT install its own frame. Each child re-enters `runNode` (which installs the frame) on its own, so threading a frame across the IPC boundary would be redundant.
 
+## Frame kinds: node frames vs bootstrap frames
+
+Not every frame the runtime installs has a real `ThreadStore`. There are two kinds:
+
+- **Node frames** are seeded inside a Runner step, a runBatch branch, or the outer wrap around `graph.run` in `runNode`. The `threads` slot is the actual per-run `ThreadStore` (or, for fork branches, the branch's own store). User code running inside a node frame can freely use `systemMessage`/`userMessage`/`thread { ... }`/etc.
+
+- **Bootstrap frames** are seeded by `runInBootstrapFrame(ctx, fn)` for code that runs *outside* any agent node. The runtime uses them in four places:
+  1. `runNode` — around `initializeGlobals` and `registerTopLevelCallbacks`.
+  2. `runNode` — around the `onAgentStart` callback (no node has executed yet).
+  3. `respondToInterrupts` and `rewindFrom` — around the corresponding `registerTopLevelCallbacks` re-run.
+  4. `respondToInterrupts` and `rewindFrom` — around the resume/replay `graph.run` loop. Generated node bodies re-enter ALS with a real per-node ThreadStore on every step via `Runner.runInScope`, so the bootstrap frame only covers the slice between entering `graph.run` and the first step.
+
+The `threads` slot in a bootstrap frame is a `BootstrapThreadStore` (lib/runtime/state/bootstrapThreadStore.ts). Every user-facing method on it throws with an actionable error. The contract: **message threads do not work in bootstrap scope**. If you reach for them there — at module top-level, inside `callback(...)` registration, or inside `onAgentStart` — you get a loud error instead of a silent write into a placeholder that the runtime is about to discard.
+
+`onAgentEnd` is different: it fires after the run finished, so it runs inside an `agencyStore.run(...)` frame seeded with the *real* per-run ThreadStore. User callbacks can inspect the final conversation through stdlib helpers there.
+
 ## What was wrong with the previous mechanism
 
 Before this, stdlib helpers that needed `ctx`/`stack`/`threads` were named with an `__internal_` prefix and registered in a `CONTEXT_INJECTED_BUILTINS` table. The TypeScript codegen rewrote every call site to prepend the three locals as positional arguments:

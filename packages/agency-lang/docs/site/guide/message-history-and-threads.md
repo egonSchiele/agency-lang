@@ -63,3 +63,17 @@ I don't have access to personal data, so I can't know your favorite ice cream fl
 ```
 
 You can also nest threads and subthreads to create side conversations branching off other side conversations.
+
+## Where threads work
+
+Message threads are scoped to a running agent. They work anywhere inside a `node` or `def` body, and inside callback bodies (`handle`, `pipe`, etc.) that fire while a node is running.
+
+They do **not** work in these "bootstrap" scopes:
+
+- Module top-level code (e.g. a `const x = ...` declaration outside any node/function). This runs once at module load — there is no agent yet, so there is no message thread to attach to.
+- The body of a `callback(...)` registration at the top of a module.
+- The `onAgentStart` lifecycle hook. This fires before the agent runs.
+
+If you call a thread builtin from one of these scopes — `systemMessage`, `userMessage`, `llm`, `thread { ... }`, `subthread { ... }` — you'll get a runtime error like *"Message threads are not available in this scope."* with a pointer to this guide. Move the code inside a `node` or `def` body to fix it.
+
+`onAgentEnd` is the exception: it fires *after* the run completes, so it has access to the final conversation. You can inspect or log the thread state from there.

@@ -1,7 +1,7 @@
 import * as fs from "fs";
 import * as path from "path";
 import { MessageJSON } from "smoltalk";
-import { agencyStore } from "./asyncContext.js";
+import { agencyStore, runInBootstrapFrame } from "./asyncContext.js";
 import { callHook } from "./hooks.js";
 import type { AgencyCallbacks } from "./hooks.js";
 import type { RuntimeContext } from "./state/context.js";
@@ -152,12 +152,24 @@ export async function runNode({
   // `callback(...)` wrapper that the codegen emits inside
   // `__registerTopLevelCallbacks`) would invoke `_callbackImpl(name,
   // fn, undefined)` and crash on `__state.ctx`.
-  const bootstrapThreads = ThreadStore.withDefaultActive(execCtx.statelogClient);
+  //
+  // Consequences worth knowing:
+  //  - `stack` here is `execCtx.stateStack` — the bare global stack
+  //    with no node/function frames pushed. Globals must not push node
+  //    frames, so this is correct.
+  //  - `threads` is a `BootstrapThreadStore` sentinel. Any agency code
+  //    in global-init scope that reaches for a thread/message builtin
+  //    (e.g. `systemMessage("…")` at module top-level) now throws with
+  //    a clear error instead of silently writing into a placeholder
+  //    that this function discards on return.
+  //  - The `insideGlobalInit` codegen branch still emits an explicit
+  //    `{ ctx }` bag on `__call`, and `__call`'s merge prefers extras
+  //    over the ALS-read fields — so `ctx` resolution inside generated
+  //    global-init code does not depend on this frame's `ctx` either.
+  //    The frame is mostly here to satisfy the "every helper must see
+  //    *some* frame" contract.
   if (initializeGlobals) {
-    await agencyStore.run(
-      { ctx: execCtx, stack: execCtx.stateStack, threads: bootstrapThreads },
-      () => initializeGlobals(execCtx),
-    );
+    await runInBootstrapFrame(execCtx, () => initializeGlobals(execCtx));
   }
   // Top-level callbacks are re-registered every fresh run AFTER global
   // init so any module-level vars they reference (via `__ctx.globals`)
@@ -165,10 +177,7 @@ export async function runNode({
   // `respondToInterrupts` does on resume — keep them in sync if you
   // touch either site.
   if (registerTopLevelCallbacks) {
-    await agencyStore.run(
-      { ctx: execCtx, stack: execCtx.stateStack, threads: bootstrapThreads },
-      () => registerTopLevelCallbacks(execCtx),
-    );
+    await runInBootstrapFrame(execCtx, () => registerTopLevelCallbacks(execCtx));
   }
   // Externally-passed callbacks are stored on ctx; hook execution merges them
   // with scoped/top-level callbacks at call time.
@@ -187,11 +196,18 @@ export async function runNode({
     });
   }
 
-  await callHook({
-    ctx: execCtx,
-    name: "onAgentStart",
-    data: { nodeName, args: data, messages: messages || [], cancel },
-  });
+  // onAgentStart fires BEFORE any agent node has executed, so there is
+  // no real per-run ThreadStore yet — use a bootstrap frame so user
+  // callbacks that reach for thread/message builtins get a clear error
+  // instead of writing into a placeholder. `messages` is still
+  // available to the callback via `data.messages`.
+  await runInBootstrapFrame(execCtx, () =>
+    callHook({
+      ctx: execCtx,
+      name: "onAgentStart",
+      data: { nodeName, args: data, messages: messages || [], cancel },
+    }),
+  );
 
   const agentRunSpanId = execCtx.statelogClient.startSpan("agentRun");
   execCtx.statelogClient.agentStart({ entryNode: nodeName, args: data });
@@ -247,11 +263,19 @@ export async function runNode({
             timeTaken: performance.now() - agentStartTime,
             tokenStats: returnObject.tokens,
           });
-          await callHook({
-            ctx: execCtx,
-            name: "onAgentEnd",
-            data: { nodeName, result: returnObject },
-          });
+          // onAgentEnd fires AFTER the run finished, so seed ALS with
+          // the real per-run ThreadStore: user callbacks that inspect
+          // the final conversation through stdlib helpers see the
+          // actual messages, not a sentinel.
+          await agencyStore.run(
+            { ctx: execCtx, stack: execCtx.stateStack, threads: threadStore },
+            () =>
+              callHook({
+                ctx: execCtx,
+                name: "onAgentEnd",
+                data: { nodeName, result: returnObject },
+              }),
+          );
           await execCtx.closeTraceWriter();
         }
         return returnObject;

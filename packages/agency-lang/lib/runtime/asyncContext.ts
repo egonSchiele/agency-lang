@@ -22,9 +22,32 @@
  * frame) on its own, so threading a frame across the IPC boundary
  * would be redundant.
  *
- * See docs/superpowers/plans/2026-05-25-als-migration.md.
+ * # Frame kinds
+ *
+ * Frames installed by the runtime fall into two categories:
+ *
+ *  - **Node frames** — installed by `Runner.runInScope` and the wraps
+ *    around `graph.run` inside `runNode`. The `threads` slot is the
+ *    real per-run `ThreadStore` (or the per-fork branch's store) that
+ *    survives across pushes/pops, gets serialized into checkpoints, and
+ *    is what user code sees when it uses `systemMessage`/`userMessage`/
+ *    `thread { ... }`.
+ *
+ *  - **Bootstrap frames** — installed by `runInBootstrapFrame(...)` for
+ *    code that runs *outside* any agent node: module-level global init,
+ *    top-level callback registration, and the small slice of resume/
+ *    rewind logic that runs before `setupNode` reconstitutes the real
+ *    ThreadStore. Bootstrap frames have a `BootstrapThreadStore` in the
+ *    `threads` slot, which throws on every user-facing operation. The
+ *    contract is: thread builtins do not work in bootstrap scope; if a
+ *    user reaches for them there, they get a loud error instead of a
+ *    silent write into a discarded store.
+ *
+ * See docs/superpowers/plans/2026-05-25-als-migration.md and
+ * docs/dev/async-context.md.
  */
 import { AsyncLocalStorage } from "node:async_hooks";
+import { BootstrapThreadStore } from "./state/bootstrapThreadStore.js";
 import type { RuntimeContext } from "./state/context.js";
 import type { StateStack } from "./state/stateStack.js";
 import type { ThreadStore } from "./state/threadStore.js";
@@ -70,4 +93,30 @@ export function runInTestContext<T>(
   fn: () => T,
 ): T {
   return agencyStore.run({ ctx, stack, threads }, fn);
+}
+
+/**
+ * Wrap `fn` in an ALS frame suitable for code that runs *outside* any
+ * agent node body — module-level global-init, top-level callback
+ * registration, and the resume/rewind prelude. The `threads` slot is a
+ * `BootstrapThreadStore` sentinel: any attempt to use a message-thread
+ * builtin from inside `fn` throws with an actionable error rather than
+ * silently writing into a placeholder that the runtime is about to
+ * discard.
+ *
+ * The `stack` slot is `ctx.stateStack` — the bare execution-context
+ * stack with no node/function frames pushed. This matches what
+ * pre-migration `__initializeGlobals` saw via its explicit `{ ctx }`
+ * arg, and is correct because globals must not push node frames.
+ */
+export function runInBootstrapFrame<T>(
+  ctx: RuntimeContext<any>,
+  fn: () => T | Promise<T>,
+): Promise<T> {
+  return Promise.resolve(
+    agencyStore.run(
+      { ctx, stack: ctx.stateStack, threads: new BootstrapThreadStore() },
+      fn,
+    ),
+  );
 }

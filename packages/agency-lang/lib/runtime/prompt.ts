@@ -272,13 +272,13 @@ export async function runPrompt(args: {
   // pass them explicitly as `ctx` / `stateStack` keys on `args`, but
   // post-ALS migration every Agency execution path runs inside an
   // `agencyStore.run(...)` frame seeded with the same values.
-  const { ctx: alsCtx, stack: alsStack } = getRuntimeContext();
-  const ctx = alsCtx as RuntimeContext<GraphState>;
+  const runtime = getRuntimeContext();
+  const ctx = runtime.ctx as RuntimeContext<GraphState>;
 
   // Push a frame onto the state stack — runPrompt participates like any other function
   const { stateStack, stack } = setupFunction({
     state: {
-      stateStack: alsStack,
+      stateStack: runtime.stack,
       ctx,
       threads: new ThreadStore(),
     },

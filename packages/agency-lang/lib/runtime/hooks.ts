@@ -221,9 +221,20 @@ export function gatherCallbacks<K extends keyof CallbackMap>(
  *  per-tool `onToolCallStart` / `onToolCallEnd` in `prompt.ts`). The
  *  public `callHook` is now a thin wrapper that omits `stateStack`.
  *
- *  `ctx` is optional — when omitted (which is now the case for every
- *  codegen-emitted `callHook(...)` site), it's resolved from the active
- *  ALS frame via `getRuntimeContext()`. */
+ *  `ctx` is optional — when omitted, it's resolved from the active ALS
+ *  frame via `getRuntimeContext()`. Every codegen-emitted `callHook(...)`
+ *  site omits it. Within this repo, the remaining explicit-ctx callers
+ *  are all in runtime code where an ALS frame *is* installed and the
+ *  param is redundant:
+ *    - `node.ts` — `onAgentStart` (inside `runInBootstrapFrame`) and
+ *      `onAgentEnd` (inside `agencyStore.run` with the real threads).
+ *    - `prompt.ts` — `onLLMCallStart`/`End` and the per-tool
+ *      `onToolCallStart`/`End`, all called from inside a
+ *      `Runner.runInScope` frame seeded by the generated node body.
+ *  Those sites pass `ctx` defensively (predating the ALS migration)
+ *  and could be tightened in a follow-up by dropping the param and
+ *  making it required-via-ALS again. The slot stays optional so
+ *  external callers that have a ctx but no ALS frame still work. */
 export async function invokeCallbacks<K extends keyof CallbackMap>(args: {
   ctx?: RuntimeContext<any>;
   name: K;

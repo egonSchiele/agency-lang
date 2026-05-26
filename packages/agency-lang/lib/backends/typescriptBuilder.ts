@@ -1929,7 +1929,7 @@ export class TypeScriptBuilder {
     node: FunctionCall,
     functionName: string,
     shouldAwait: boolean,
-    _options?: { stateStack?: TsNode },
+    options?: { stateStack?: TsNode },
   ): TsNode {
     const descriptor = this.buildCallDescriptor(node);
 
@@ -1938,8 +1938,14 @@ export class TypeScriptBuilder {
       scopeName: ts.str(this.scopes.currentName()),
       stepPath: ts.str(this.steps.joined()),
     } : undefined;
+    // Async fork sites pass `stateStack: __forked` so the branch's
+    // isolated stack — not the parent's ALS-frame stack — is used
+    // inside `__call`. Without this, concurrent async Agency calls
+    // would push/pop on the parent stack and break branch isolation.
+    const extra: Record<string, TsNode> = { ...(locationOpts ?? {}) };
+    if (options?.stateStack) extra.stateStack = options.stateStack;
     const configObj = this.buildStateConfig({
-      extra: locationOpts,
+      extra: Object.keys(extra).length > 0 ? extra : undefined,
     });
 
     const callee = node.scope

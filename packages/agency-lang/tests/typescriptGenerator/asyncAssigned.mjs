@@ -301,6 +301,8 @@ __stack.branches["1"] = {
 __stack.locals.x = __call(compute, {
         type: "positional",
         args: [5]
+      }, {
+        stateStack: __forked
       });
 __self.__pendingKey_x = __ctx.pendingPromises.add(__stack.locals.x, (val) => { __stack.locals.x = val; });
     });
@@ -318,6 +320,8 @@ __stack.branches["2"] = {
 __stack.locals.y = __call(compute, {
         type: "positional",
         args: [10]
+      }, {
+        stateStack: __forked
       });
 __self.__pendingKey_y = __ctx.pendingPromises.add(__stack.locals.y, (val) => { __stack.locals.y = val; });
     });

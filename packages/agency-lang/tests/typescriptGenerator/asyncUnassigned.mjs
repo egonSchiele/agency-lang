@@ -307,6 +307,8 @@ __stack.branches["1"] = {
 __ctx.pendingPromises.add(__call(append, {
   type: "positional",
   args: [1, `hello`]
+}, {
+  stateStack: __forked
 }))
     });
     await runner.branchStep(2, "2", async (runner) => {
@@ -323,6 +325,8 @@ __stack.branches["2"] = {
 __ctx.pendingPromises.add(__call(append, {
   type: "positional",
   args: [0.5, `world`]
+}, {
+  stateStack: __forked
 }))
     });
     await runner.step(3, async (runner) => {

@@ -17,7 +17,7 @@ export const template = `  async {{{methodName}}}({{{params}}}__state: any = und
     if (!__ctx.globals.isInitialized({{{moduleId}}})) {
       await __initializeGlobals(__ctx);
     }
-    const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: {{{moduleId}}}, scopeName: {{{scopeName}}} });
+    const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: {{{moduleId}}}, scopeName: {{{scopeName}}}, threads: __threads });
 {{#paramAssignments}}
     __stack.args[{{{this.nameQuoted}}}] = {{{this.name}}};
 {{/paramAssignments}}

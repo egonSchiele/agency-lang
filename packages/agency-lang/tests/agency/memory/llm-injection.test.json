@@ -5,6 +5,7 @@
       "input": "",
       "expectedOutput": "true",
       "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
       "llmMocks": [
         {
           "return": {

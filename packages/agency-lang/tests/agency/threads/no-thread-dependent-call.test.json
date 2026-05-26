@@ -9,6 +9,7 @@
           "type": "exact"
         }
       ],
+      "useTestLLMProvider": true,
       "llmMocks": [
         { "return": [101] },
         { "return": [103, 107] }

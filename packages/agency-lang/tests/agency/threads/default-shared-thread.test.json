@@ -6,6 +6,7 @@
       "expectedOutput": "{\"res1\":[2,3,5,7,11],\"res2\":28}",
       "evaluationCriteria": [{ "type": "exact" }],
       "description": "LLM calls share history by default — res2 should know about res1",
+      "useTestLLMProvider": true,
       "llmMocks": [
         { "return": [2, 3, 5, 7, 11] },
         { "return": 28 }

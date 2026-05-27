@@ -34,6 +34,7 @@ import {
   withPushedHandler,
   type CallsiteLocation,
 } from "./asyncContext.js";
+import { llm as _llm } from "./agencyLlm.js";
 import {
   checkpoint as _checkpoint,
   getCheckpoint as _getCheckpoint,
@@ -267,6 +268,8 @@ export const agency = {
   addCost,
 
   withResumableScope: _withResumableScope,
+
+  llm: _llm,
 
   withTestContext,
 };

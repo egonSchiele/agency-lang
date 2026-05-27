@@ -8,6 +8,7 @@ export type { Interrupt, InterruptResponse } from "./interrupts.js";
 export { RuntimeContext } from "./state/context.js";
 export { agency } from "./agency.js";
 export type { ResumableScope, ResumableScopeOpts } from "./agency.js";
+export type { LlmOpts } from "./agencyLlm.js";
 export type { CallsiteLocation } from "./asyncContext.js";
 /**
  * The exports below are the codegen-internal surface that generated

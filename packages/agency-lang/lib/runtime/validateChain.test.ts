@@ -19,12 +19,12 @@ const doubleIt: AgencyValidator = async (v) =>
 
 describe("__validateChain", () => {
   it("Zod parse passes then validators run in order", async () => {
-    const r = await __validateChain(4, z.number(), [isPos, isEven], ctx);
+    const r = await __validateChain(4, z.number(), [isPos, isEven]);
     expect(isSuccess(r)).toBe(true);
   });
 
   it("returns Zod failure on structural mismatch", async () => {
-    const r = await __validateChain("nope", z.number(), [], ctx);
+    const r = await __validateChain("nope", z.number(), []);
     expect(isFailure(r)).toBe(true);
   });
 
@@ -32,26 +32,26 @@ describe("__validateChain", () => {
     const later = vi.fn(
       async (v: unknown) => success(v),
     ) as unknown as AgencyValidator;
-    const r = await __validateChain(-1, z.number(), [isPos, later], ctx);
+    const r = await __validateChain(-1, z.number(), [isPos, later]);
     expect(isFailure(r)).toBe(true);
     expect(later).not.toHaveBeenCalled();
   });
 
   it("threads transformed value through the chain", async () => {
     // 2 -> double -> 4 -> isEven
-    const r = await __validateChain(2, z.number(), [doubleIt, isEven], ctx);
+    const r = await __validateChain(2, z.number(), [doubleIt, isEven]);
     expect(isSuccess(r)).toBe(true);
     expect((r as { value: number }).value).toBe(4);
   });
 
   it("forwards an incoming failure unchanged", async () => {
     const f = failure("upstream");
-    const r = await __validateChain(f, z.number(), [isPos], ctx);
+    const r = await __validateChain(f, z.number(), [isPos]);
     expect(r).toBe(f);
   });
 
   it("empty validator list still runs Zod parse", async () => {
-    const r = await __validateChain(3, z.number(), [], ctx);
+    const r = await __validateChain(3, z.number(), []);
     expect(isSuccess(r)).toBe(true);
     expect((r as { value: number }).value).toBe(3);
   });
@@ -65,9 +65,9 @@ describe("__validateChainRecursive", () => {
       validators: [],
       element: { kind: "leaf", schema: z.number(), validators: [isPos] },
     };
-    const ok = await __validateChainRecursive([1, 2, 3], desc, ctx);
+    const ok = await __validateChainRecursive([1, 2, 3], desc);
     expect(isSuccess(ok)).toBe(true);
-    const bad = await __validateChainRecursive([1, -2, 3], desc, ctx);
+    const bad = await __validateChainRecursive([1, -2, 3], desc);
     expect(isFailure(bad)).toBe(true);
   });
 
@@ -80,10 +80,10 @@ describe("__validateChainRecursive", () => {
         x: { kind: "leaf", schema: z.number(), validators: [isEven] },
       },
     };
-    expect(isSuccess(await __validateChainRecursive({ x: 4 }, desc, ctx))).toBe(
+    expect(isSuccess(await __validateChainRecursive({ x: 4 }, desc))).toBe(
       true,
     );
-    expect(isFailure(await __validateChainRecursive({ x: 5 }, desc, ctx))).toBe(
+    expect(isFailure(await __validateChainRecursive({ x: 5 }, desc))).toBe(
       true,
     );
   });
@@ -114,7 +114,7 @@ describe("__validateChainRecursive", () => {
         },
       ],
     };
-    await __validateChainRecursive(7, desc, ctx);
+    await __validateChainRecursive(7, desc);
     expect(numCalled).toHaveBeenCalledTimes(1);
     expect(strCalled).not.toHaveBeenCalled();
   });
@@ -132,7 +132,7 @@ describe("__validateChainRecursive", () => {
       },
     };
     expect(
-      isSuccess(await __validateChainRecursive(null, desc, ctx)),
+      isSuccess(await __validateChainRecursive(null, desc)),
     ).toBe(true);
     expect(inner).not.toHaveBeenCalled();
   });
@@ -152,7 +152,7 @@ describe("__validateChainRecursive", () => {
     let v: unknown = 1;
     for (let i = 0; i < 5; i++) v = [v];
 
-    const r = await __validateChainRecursive(v, desc, ctx, { maxDepth: 3 });
+    const r = await __validateChainRecursive(v, desc, { maxDepth: 3 });
     expect(isFailure(r)).toBe(true);
     const err = (r as { error: { reason: string; limit: number; kind: string; valuePreview: unknown } }).error;
     expect(err.reason).toMatch(/recursion depth/);

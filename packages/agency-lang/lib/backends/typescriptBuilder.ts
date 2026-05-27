@@ -1993,9 +1993,14 @@ export class TypeScriptBuilder {
     // inline at the call site that overrides `stack`; the callee picks
     // it up via `getRuntimeContext()`.
     if (options?.stateStack) {
-      const wrapped = ts.raw(
-        `agencyStore.run({ ...getRuntimeContext(), stack: ${this.str(options.stateStack)} }, () => ${this.str(callExpr)})`,
-      );
+      const frame = ts.obj([
+        ts.setSpread(ts.call(ts.id("getRuntimeContext"))),
+        ts.set("stack", options.stateStack),
+      ]);
+      const wrapped = ts.call(ts.prop(ts.id("agencyStore"), "run"), [
+        frame,
+        ts.arrowFn([], callExpr),
+      ]);
       return shouldAwait ? ts.await(wrapped) : wrapped;
     }
 

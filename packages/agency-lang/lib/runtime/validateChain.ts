@@ -9,12 +9,12 @@ import { AgencyFunction } from "./agencyFunction.js";
  *    users can import `success` / `failure` from the agency-lang runtime
  *    and return whichever applies);
  *  - an `AgencyFunction` (an Agency `def` referenced by name), which is
- *    invoked via `.invoke({ type: "positional", args: [value] }, { ctx })`
- *    so we go through the same call infrastructure as `__call(...)`.
+ *    invoked via `.invoke({ type: "positional", args: [value] })` so we
+ *    go through the same call infrastructure as `__call(...)`.
  *
- * Plain JS validators do not receive `ctx`. If you need access to the
- * execution context, write the validator as an Agency `def` and let the
- * normal invocation machinery thread `ctx` through for you.
+ * Validators that need access to the execution context read it from the
+ * active `agencyStore` ALS frame via `getRuntimeContext()`. There is no
+ * `ctx` arg to thread through.
  */
 export type AgencyValidator =
   | ((value: unknown) => Promise<ResultValue> | ResultValue)
@@ -22,7 +22,6 @@ export type AgencyValidator =
 
 async function callValidator(
   v: AgencyValidator,
-  _ctx: unknown,
   value: unknown,
 ): Promise<ResultValue> {
   if (AgencyFunction.isAgencyFunction(v)) {
@@ -47,7 +46,6 @@ export async function __validateChain(
   value: unknown,
   schema: z.ZodType,
   validators: AgencyValidator[],
-  ctx: unknown,
 ): Promise<ResultValue> {
   // Don't validate failures — surface the original error unchanged.
   if (isFailure(value)) return value as ResultValue;
@@ -66,11 +64,7 @@ export async function __validateChain(
   let current: ResultValue = success(raw);
   for (const v of validators) {
     if (!isSuccess(current)) return current;
-    current = await callValidator(
-      v,
-      ctx,
-      (current as { value: unknown }).value,
-    );
+    current = await callValidator(v, (current as { value: unknown }).value);
   }
   return current;
 }
@@ -128,17 +122,15 @@ export type RecursiveValidationOpts = {
 export async function __validateChainRecursive(
   value: unknown,
   descriptor: TypeValidationDescriptor,
-  ctx: unknown,
   opts?: RecursiveValidationOpts,
 ): Promise<ResultValue> {
   const maxDepth = opts?.maxDepth ?? 64;
-  return walk(value, descriptor, ctx, 0, maxDepth);
+  return walk(value, descriptor, 0, maxDepth);
 }
 
 async function walk(
   value: unknown,
   descriptor: TypeValidationDescriptor,
-  ctx: unknown,
   depth: number,
   maxDepth: number,
 ): Promise<ResultValue> {
@@ -157,7 +149,6 @@ async function walk(
     value,
     descriptor.schema,
     descriptor.validators,
-    ctx,
   );
   if (!isSuccess(own)) return own;
   const parsed = (own as { value: unknown }).value;
@@ -171,7 +162,7 @@ async function walk(
       if (parsed === null || parsed === undefined) {
         return success(parsed);
       }
-      const inner = await walk(parsed, descriptor.inner, ctx, depth + 1, maxDepth);
+      const inner = await walk(parsed, descriptor.inner, depth + 1, maxDepth);
       return inner;
     }
 
@@ -179,7 +170,7 @@ async function walk(
       if (!Array.isArray(parsed)) return success(parsed);
       const out: unknown[] = [];
       for (const el of parsed) {
-        const r = await walk(el, descriptor.element, ctx, depth + 1, maxDepth);
+        const r = await walk(el, descriptor.element, depth + 1, maxDepth);
         if (!isSuccess(r)) return r;
         out.push((r as { value: unknown }).value);
       }
@@ -195,7 +186,6 @@ async function walk(
         const r = await walk(
           (parsed as Record<string, unknown>)[key],
           childDesc,
-          ctx,
           depth + 1,
           maxDepth,
         );
@@ -208,7 +198,7 @@ async function walk(
     case "union": {
       const branch = descriptor.branches.find((b) => b.test(parsed));
       if (!branch) return success(parsed);
-      return walk(parsed, branch.descriptor, ctx, depth + 1, maxDepth);
+      return walk(parsed, branch.descriptor, depth + 1, maxDepth);
     }
   }
 }

@@ -121,24 +121,6 @@ export class AgencyFunction {
   }
 
   async invoke(descriptor: CallType): Promise<unknown> {
-    // Preapprove tools install a handler that auto-approves any
-    // `request_approval` interrupt raised while the tool body runs.
-    // The handler must be pushed onto the same `ctx.handlers` chain
-    // the invocation consults, so we read `ctx` from the live ALS
-    // frame (seeded by the caller's `runner.step` body — or by the
-    // bootstrap frame for module-init paths). When no frame is
-    // installed (the function was called from a non-Agency context),
-    // skip the push/pop dance — no preapprove machinery to wire up.
-    const ctx = this._isPreapproved ? agencyStore.getStore()?.ctx : undefined;
-    if (!ctx) return this._invokeInner(descriptor);
-    return withPushedHandler(
-      ctx,
-      async () => approve(),
-      () => this._invokeInner(descriptor),
-    );
-  }
-
-  private async _invokeInner(descriptor: CallType): Promise<unknown> {
     const args = this._isBound
       ? this.mergeWithBound(this.resolveArgs(descriptor))
       : this.resolveArgs(descriptor);
@@ -196,10 +178,24 @@ export class AgencyFunction {
 
   preapprove(): AgencyFunction {
     if (this._isPreapproved) return this;
+    // Wrap `_fn` in a `withPushedHandler` that installs an
+    // auto-approve handler for the duration of every call. The handler
+    // intercepts any `request_approval` interrupt the body raises so
+    // preapproved tools never bubble approval prompts up to the user.
+    // Doing the wrap here — rather than branching inside `invoke()` —
+    // keeps the per-call hot path branch-free.
+    const original = this._fn;
+    const wrapped = (...args: any[]) => {
+      const ctx = agencyStore.getStore()?.ctx;
+      if (!ctx) return original(...args);
+      return withPushedHandler(ctx, async () => approve(), () =>
+        Promise.resolve(original(...args)),
+      );
+    };
     return new AgencyFunction({
       name: this.name,
       module: this.module,
-      fn: this._fn,
+      fn: wrapped,
       params: this.params,
       toolDefinition: this.toolDefinition,
       exported: this.exported,

@@ -1,5 +1,13 @@
 # Async context: `agencyStore` and `getRuntimeContext()`
 
+> **User docs.** If you're writing a TS helper and want to read context,
+> push thread messages, install handlers, take checkpoints, or call the
+> LLM, read [docs/site/guide/ts-helpers.md](../site/guide/ts-helpers.md)
+> instead. The `agency.*` namespace is the supported public surface;
+> `getRuntimeContext()` is no longer exported from the package entry
+> point. This page documents the underlying ALS mechanism for codegen
+> and runtime maintainers.
+
 Stdlib TS helpers that need `RuntimeContext`, `StateStack`, or `ThreadStore` read them from a Node `AsyncLocalStorage` frame that the runtime installs at well-defined points. This replaces an older "context-injected builtin" mechanism that prepended three magic params to specific function calls at codegen time.
 
 ## API

@@ -58,6 +58,76 @@ run();
 
 Other things like functions can't be imported and run, because Agency functions have a lot of extra functionality to make things like interrupts work.
 
+## Writing TS helpers that participate in the run
+
+TypeScript helpers called from Agency code can do more than return plain values: they can read the active runtime context, push thread messages, install interrupt handlers, take checkpoints, issue LLM calls, and wrap their bodies in resumable scopes. The full surface is exposed through one namespace:
+
+```ts
+import { agency } from "agency-lang/runtime";
+
+export function summarize(text: string): Promise<string> {
+  return agency.llm("Summarize in one sentence: " + text);
+}
+```
+
+Every method on `agency.*` reads its dependencies from an AsyncLocalStorage frame the runtime installs around each step. When you call a TS helper from Agency code, the frame is already in place — your helper sees the same context the surrounding Agency function saw. (Most methods throw with a clear error if called outside an Agency frame; the `*Maybe` variants return `undefined` instead.)
+
+Common patterns:
+
+```ts
+// Read context
+const cost = agency.ctx().stateStack.localCost;
+const apiKey = agency.global<string>("API_KEY", "config");
+
+// Push thread messages
+agency.thread.system("You are a careful editor.");
+agency.thread.user("Please proofread the following.");
+
+// Install a scoped handler
+await agency.withHandler(
+  (intr) => intr.kind === "std::read" ? approve("auto-y") : undefined,
+  () => doWork(),
+);
+
+// Take a checkpoint
+const cpId = await agency.checkpoint();
+
+// Issue an LLM call with structured output
+const { name, age } = await agency.llm("Extract", { schema: PersonSchema });
+```
+
+### Resumability boundary
+
+```diagram
+╭──────────────╮   call    ╭───────────────────╮   call   ╭──────────────╮
+│  Agent run   │──────────▶│  Agency function  │─────────▶│  TS helper   │
+│   (Node)     │           │     body          │          │              │
+╰──────────────╯           ╰───────────────────╯          ╰──────────────╯
+                            resumable                      NOT automatically
+                            automatically                  resumable
+
+                                                          ╭──────────────────────╮
+                            wrap with                     │ withResumableScope   │
+                            ─────────────────────────────▶│ inside the helper to │
+                                                          │  get resumability    │
+                                                          ╰──────────────────────╯
+```
+
+Agency function bodies are resumable automatically: an interrupt in the middle of one re-enters at the same statement on resume. A plain TS helper called from Agency code is **not** resumable — on resume after an interrupt, the entire helper re-runs from the top. To get per-step resumability inside a TS helper, wrap the body in `agency.withResumableScope`:
+
+```ts
+return agency.withResumableScope({ name: "processOrder" }, async (s) => {
+  const order     = await s.step(() => loadOrder(orderId));
+  const validated = await s.step(() => validate(order));
+  const stored    = await s.step(() => persist(validated));
+  return stored;
+});
+```
+
+Each `s.step(...)` is journaled against a serialized frame; on resume completed steps are skipped, the in-flight step re-runs from scratch. **Read the [determinism contract](./ts-helpers#determinism-contract) before using this** — step bodies must be pure, and step ordering must be stable across resumes.
+
+For the full reference of every `agency.*` method, the `LlmOpts` shape, the `ResumableScope` API, testing patterns, and anti-patterns, see [TypeScript helpers — the `agency.*` namespace](./ts-helpers).
+
 ## Cancelling an in-progress agent
 
 When you run an Agency agent from TypeScript, you can cancel it mid-execution. This tears down any in-flight LLM requests and throws an `AgencyCancelledError`. Here's how to abort an agent run.

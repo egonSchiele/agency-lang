@@ -6,6 +6,15 @@ export type {
 } from "./types.js";
 export type { Interrupt, InterruptResponse } from "./interrupts.js";
 export { RuntimeContext } from "./state/context.js";
+export { agency } from "./agency.js";
+export type { CallsiteLocation } from "./asyncContext.js";
+/**
+ * The exports below are the codegen-internal surface that generated
+ * Agency code imports directly. They are NOT recommended for TS
+ * helper authors — use the `agency.*` namespace above instead. Kept
+ * here because every generated `prog.ts` references them via
+ * `agency-lang/runtime`.
+ */
 export {
   agencyStore,
   getRuntimeContext,

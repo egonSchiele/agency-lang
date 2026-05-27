@@ -5,7 +5,7 @@ import { RuntimeContext } from "./state/context.js";
 import { StateStack } from "./state/stateStack.js";
 import { ThreadStore } from "./state/threadStore.js";
 import { RestoreSignal } from "./errors.js";
-import { CostGuard } from "./guard.js";
+import { CostGuard, TimeGuard } from "./guard.js";
 import { makeMockCtx } from "./__tests__/testHelpers.js";
 
 function setup() {
@@ -223,32 +223,105 @@ describe("agency.withHandler", () => {
 });
 
 describe("agency.withCostGuard", () => {
-  it("pushes a CostGuard for the duration of fn and pops on return", async () => {
+  it("pushes a CostGuard onto the ALS stack for the duration of fn", async () => {
     const env = setup();
     await agency.withTestContext(env, async () => {
-      const before = env.ctx.stateStack.guards.length;
+      const before = env.stack.guards.length;
       let lenDuring = -1;
       let kindDuring: unknown;
       await agency.withCostGuard(0.5, async () => {
-        lenDuring = env.ctx.stateStack.guards.length;
-        kindDuring = env.ctx.stateStack.guards[lenDuring - 1];
+        lenDuring = env.stack.guards.length;
+        kindDuring = env.stack.guards[lenDuring - 1];
       });
       expect(lenDuring).toBe(before + 1);
       expect(kindDuring).toBeInstanceOf(CostGuard);
-      expect(env.ctx.stateStack.guards.length).toBe(before);
+      expect(env.stack.guards.length).toBe(before);
+    });
+  });
+
+  it("targets the ALS stack, not ctx.stateStack (per-branch isolation)", async () => {
+    // Simulates a fork branch: pass a fresh stack as the ALS stack,
+    // distinct from ctx.stateStack. The guard must land on the ALS
+    // stack so it stays branch-local.
+    const env = setup();
+    const branchStack = new StateStack();
+    await agency.withTestContext(
+      { ctx: env.ctx, stack: branchStack, threads: env.threads },
+      async () => {
+        await agency.withCostGuard(0.5, async () => {
+          expect(branchStack.guards.length).toBe(1);
+          expect(env.ctx.stateStack.guards.length).toBe(0);
+        });
+      },
+    );
+    expect(branchStack.guards.length).toBe(0);
+    expect(env.ctx.stateStack.guards.length).toBe(0);
+  });
+
+  it("pops guard on throw", async () => {
+    const env = setup();
+    await agency.withTestContext(env, async () => {
+      const before = env.stack.guards.length;
+      await expect(
+        agency.withCostGuard(0.5, async () => {
+          throw new Error("x");
+        }),
+      ).rejects.toThrow("x");
+      expect(env.stack.guards.length).toBe(before);
+    });
+  });
+});
+
+describe("agency.withTimeGuard", () => {
+  it("pushes a TimeGuard onto the ALS stack and pops on return", async () => {
+    const env = setup();
+    await agency.withTestContext(env, async () => {
+      const before = env.stack.guards.length;
+      let lenDuring = -1;
+      let kindDuring: unknown;
+      await agency.withTimeGuard(60_000, async () => {
+        lenDuring = env.stack.guards.length;
+        kindDuring = env.stack.guards[lenDuring - 1];
+      });
+      expect(lenDuring).toBe(before + 1);
+      expect(kindDuring).toBeInstanceOf(TimeGuard);
+      expect(env.stack.guards.length).toBe(before);
     });
   });
 
   it("pops guard on throw", async () => {
     const env = setup();
     await agency.withTestContext(env, async () => {
-      const before = env.ctx.stateStack.guards.length;
+      const before = env.stack.guards.length;
       await expect(
-        agency.withCostGuard(0.5, async () => {
+        agency.withTimeGuard(60_000, async () => {
           throw new Error("x");
         }),
       ).rejects.toThrow("x");
-      expect(env.ctx.stateStack.guards.length).toBe(before);
+      expect(env.stack.guards.length).toBe(before);
+    });
+  });
+});
+
+describe("agency.addCost", () => {
+  it("adds to the ALS stack's localCost", () => {
+    const env = setup();
+    agency.withTestContext(env, () => {
+      const before = env.stack.localCost;
+      agency.addCost(0.25);
+      expect(env.stack.localCost).toBe(before + 0.25);
+    });
+  });
+
+  it("charges every installed guard and trips when over budget", async () => {
+    const env = setup();
+    await agency.withTestContext(env, async () => {
+      await expect(
+        agency.withCostGuard(0.1, async () => {
+          agency.addCost(0.05); // under
+          agency.addCost(0.10); // total 0.15 > 0.1 — trips
+        }),
+      ).rejects.toThrow();
     });
   });
 });

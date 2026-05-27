@@ -200,7 +200,7 @@ const __funcResult = await __call(sleep, {
           args: [100]
         });
 if (hasInterrupts(__funcResult)) {
-          await __ctx.pendingPromises.awaitAll()
+          await getRuntimeContext().ctx.pendingPromises.awaitAll()
           runner.halt(__funcResult)
           return;
         }
@@ -227,7 +227,7 @@ if (__error instanceof GuardExceededError) {
 return failure(
   __error instanceof Error ? __error.message : String(__error),
   {
-    checkpoint: __ctx.getResultCheckpoint(),
+    checkpoint: getRuntimeContext().ctx.getResultCheckpoint(),
     retryable: __self.__retryable,
     functionName: "compute",
     args: __stack.args,
@@ -295,7 +295,7 @@ if ((__stack.branches && __stack.branches["1"])) {
           __forked = __stack.branches["1"].stack;
           __forked.deserializeMode()
         } else {
-          __forked = __ctx.forkStack();
+          __forked = getRuntimeContext().ctx.forkStack();
         }
 __stack.branches = (__stack.branches || {});
 __stack.branches["1"] = {
@@ -307,14 +307,14 @@ __stack.locals.x = __call(compute, {
         }, {
           stateStack: __forked
         });
-__self.__pendingKey_x = __ctx.pendingPromises.add(__stack.locals.x, (val) => { __stack.locals.x = val; });
+__self.__pendingKey_x = getRuntimeContext().ctx.pendingPromises.add(__stack.locals.x, (val) => { __stack.locals.x = val; });
       });
       await runner.branchStep(2, "2", async (runner) => {
 if ((__stack.branches && __stack.branches["2"])) {
           __forked = __stack.branches["2"].stack;
           __forked.deserializeMode()
         } else {
-          __forked = __ctx.forkStack();
+          __forked = getRuntimeContext().ctx.forkStack();
         }
 __stack.branches = (__stack.branches || {});
 __stack.branches["2"] = {
@@ -326,10 +326,10 @@ __stack.locals.y = __call(compute, {
         }, {
           stateStack: __forked
         });
-__self.__pendingKey_y = __ctx.pendingPromises.add(__stack.locals.y, (val) => { __stack.locals.y = val; });
+__self.__pendingKey_y = getRuntimeContext().ctx.pendingPromises.add(__stack.locals.y, (val) => { __stack.locals.y = val; });
       });
       await runner.step(3, async (runner) => {
-await __ctx.pendingPromises.awaitPending([__self.__pendingKey_x, __self.__pendingKey_y]);
+await getRuntimeContext().ctx.pendingPromises.awaitPending([__self.__pendingKey_x, __self.__pendingKey_y]);
       });
       await runner.step(4, async (runner) => {
 runner.halt({

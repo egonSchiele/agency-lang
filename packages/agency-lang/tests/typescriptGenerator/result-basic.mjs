@@ -210,7 +210,7 @@ return;
 ]);
       await runner.step(2, async (runner) => {
 __functionCompleted = true;
-runner.halt(failure(`too young`, { checkpoint: __ctx.getResultCheckpoint(), functionName: "checkAge", args: __stack.args }))
+runner.halt(failure(`too young`, { checkpoint: getRuntimeContext().ctx.getResultCheckpoint(), functionName: "checkAge", args: __stack.args }))
 return;
       });
     })
@@ -230,7 +230,7 @@ if (__error instanceof GuardExceededError) {
 return failure(
   __error instanceof Error ? __error.message : String(__error),
   {
-    checkpoint: __ctx.getResultCheckpoint(),
+    checkpoint: getRuntimeContext().ctx.getResultCheckpoint(),
     retryable: __self.__retryable,
     functionName: "checkAge",
     args: __stack.args,

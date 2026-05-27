@@ -824,9 +824,15 @@ export class TypescriptPreprocessor {
       if (locationToVars[locationKey]) {
         const vars = locationToVars[locationKey];
         const keyArray = vars.map((v) => `__self.__pendingKey_${v}`).join(", ");
+        // Strict accessor — emitted inside function/node bodies that
+        // run under the withAlsFrame wrap. Bare `__ctx` would still
+        // work today (the setupEnv local is in scope), but using the
+        // accessor keeps this consistent with the rest of the codegen
+        // post-ALS migration and makes the no-frame failure mode
+        // actionable.
         const awaitPendingCode: RawCode = {
           type: "rawCode",
-          value: `await __ctx.pendingPromises.awaitPending([${keyArray}]);`,
+          value: `await getRuntimeContext().ctx.pendingPromises.awaitPending([${keyArray}]);`,
         };
         newBody.push(awaitPendingCode);
       }

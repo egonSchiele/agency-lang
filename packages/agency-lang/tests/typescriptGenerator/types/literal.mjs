@@ -183,7 +183,7 @@ __stack.locals.foo = await runPrompt({
         });
 // halt if this is an interrupt
 if (hasInterrupts(__stack.locals.foo)) {
-          await __ctx.pendingPromises.awaitAll()
+          await getRuntimeContext().ctx.pendingPromises.awaitAll()
           runner.halt({
             messages: __threads(),
             data: __stack.locals.foo
@@ -206,7 +206,7 @@ __stack.locals.bar = await runPrompt({
         });
 // halt if this is an interrupt
 if (hasInterrupts(__stack.locals.bar)) {
-          await __ctx.pendingPromises.awaitAll()
+          await getRuntimeContext().ctx.pendingPromises.awaitAll()
           runner.halt({
             messages: __threads(),
             data: __stack.locals.bar
@@ -229,7 +229,7 @@ __stack.locals.baz = await runPrompt({
         });
 // halt if this is an interrupt
 if (hasInterrupts(__stack.locals.baz)) {
-          await __ctx.pendingPromises.awaitAll()
+          await getRuntimeContext().ctx.pendingPromises.awaitAll()
           runner.halt({
             messages: __threads(),
             data: __stack.locals.baz

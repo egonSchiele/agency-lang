@@ -4,7 +4,7 @@
 import { apply } from "typestache";
 
 export const template = `// Resume path: check for a response by interruptId
-const __response = __ctx.getInterruptResponse(__self.{{{interruptIdKey:string}}});
+const __response = getRuntimeContext().ctx.getInterruptResponse(__self.{{{interruptIdKey:string}}});
 if (__response) {
   if (__response.type === "approve") {
     if (__response.value !== undefined) {
@@ -18,7 +18,7 @@ if (__response) {
     runner.halt({ messages: __threads(), data: failure("interrupt rejected", { retryable: false }) });
     {{/nodeContext}}
     {{^nodeContext}}
-    runner.halt(failure("interrupt rejected", { retryable: false, checkpoint: __ctx.getResultCheckpoint() }));
+    runner.halt(failure("interrupt rejected", { retryable: false, checkpoint: getRuntimeContext().ctx.getResultCheckpoint() }));
     {{/nodeContext}}
     return;
   }
@@ -30,7 +30,7 @@ if (__response) {
     runner.halt({ messages: __threads(), data: failure(__handlerResult.value ?? "interrupt rejected", { retryable: false }) });
     {{/nodeContext}}
     {{^nodeContext}}
-    runner.halt(failure(__handlerResult.value ?? "interrupt rejected", { retryable: false, checkpoint: __ctx.checkpoints.get(__resultCheckpointId) }));
+    runner.halt(failure(__handlerResult.value ?? "interrupt rejected", { retryable: false, checkpoint: getRuntimeContext().ctx.checkpoints.get(__resultCheckpointId) }));
     {{/nodeContext}}
     return;
   }
@@ -40,9 +40,9 @@ if (__response) {
     // No handler — propagate interrupt array to TypeScript caller
     // Store interruptId on frame BEFORE checkpoint so it's captured in the snapshot
     __self.{{{interruptIdKey:string}}} = __handlerResult[0].interruptId;
-    const __checkpointId = __ctx.checkpoints.create(__stateStack(), __ctx, { moduleId: {{{moduleId}}}, scopeName: {{{scopeName}}}, stepPath: {{{stepPath}}} });
+    const __checkpointId = getRuntimeContext().ctx.checkpoints.create(__stateStack(), __ctx, { moduleId: {{{moduleId}}}, scopeName: {{{scopeName}}}, stepPath: {{{stepPath}}} });
     __handlerResult[0].checkpointId = __checkpointId;
-    __handlerResult[0].checkpoint = __ctx.checkpoints.get(__checkpointId);
+    __handlerResult[0].checkpoint = getRuntimeContext().ctx.checkpoints.get(__checkpointId);
     {{#nodeContext}}
     runner.halt({ messages: __threads(), data: __handlerResult });
     {{/nodeContext}}

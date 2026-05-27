@@ -142,6 +142,48 @@ const COMPOUND_RUNNER_KINDS: ReadonlySet<TsNode["kind"]> = new Set([
   "runnerThread",
 ]);
 
+/**
+ * Recursively walk a TsNode tree and flip `topLevel: true` on every
+ * `scopedVar` node. Used by the tool-description docstring emission
+ * path: a `description: "version ${toolVersion}"` interpolation is
+ * eagerly evaluated as part of the module-load tool registration
+ * object literal, BEFORE any function or node body runs and BEFORE
+ * any `agencyStore.run(...)` wrap installs an ALS frame. The pretty
+ * printer reads `topLevel` to emit `__globalCtx.globals.get(...)`
+ * instead of `getRuntimeContext().ctx.globals.get(...)` — the strict
+ * accessor would throw at module load.
+ *
+ * Generic walker: visits every object-valued field whose value carries
+ * a `kind` discriminator, plus arrays of such values. Returns a
+ * structurally cloned tree (does NOT mutate the input).
+ */
+function markTopLevelScopedVars<T extends TsNode>(node: T): T {
+  return walkMarkTopLevel(node) as T;
+}
+
+/**
+ * Recursive helper for `markTopLevelScopedVars`. Walks any plain
+ * object (not just TsNode kinds), since some IR carriers like
+ * `TsTemplatePart` and `TsObjectEntry` are plain object literals
+ * without a `kind` discriminator but still hold nested TsNode
+ * children (e.g. `parts[i].expr` for templateLit).
+ */
+function walkMarkTopLevel(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map(walkMarkTopLevel);
+  }
+  if (!value || typeof value !== "object") return value;
+  const obj = value as Record<string, unknown>;
+  if (obj.kind === "scopedVar") {
+    return { ...obj, topLevel: true };
+  }
+  const out: Record<string, unknown> = { ...obj };
+  for (const [key, v] of Object.entries(obj)) {
+    out[key] = walkMarkTopLevel(v);
+  }
+  return out;
+}
+
 export class TypeScriptBuilder {
   // Output assembly
   private generatedStatements: TsNode[] = [];
@@ -295,7 +337,10 @@ export class TypeScriptBuilder {
         {
           elseBody: ts.assign(
             forked,
-            ts.call(ts.prop(ts.runtime.ctx, "forkStack")),
+            // Immediate deref inside a step body — use the strict
+            // accessor so a missing ALS frame throws the dedicated
+            // error instead of `Cannot read 'forkStack' of undefined`.
+            ts.call(ts.prop(ts.raw("getRuntimeContext().ctx"), "forkStack")),
           ),
         },
       ),
@@ -934,7 +979,10 @@ export class TypeScriptBuilder {
     if (scope.type === "function") {
       args.push(
         ts.obj({
-          checkpoint: ts.raw("__ctx.getResultCheckpoint()"),
+          // Inside the function body's withAlsFrame wrap — strict
+          // accessor so a missing frame throws cleanly instead of a
+          // generic "Cannot read 'getResultCheckpoint' of undefined".
+          checkpoint: ts.raw("getRuntimeContext().ctx.getResultCheckpoint()"),
           functionName: ts.str((scope as FunctionScope).functionName),
           args: ts.raw("__stack.args"),
         }),
@@ -977,7 +1025,11 @@ export class TypeScriptBuilder {
     extra?: Record<string, TsNode>;
   }): TsNode | undefined {
     if (this.insideGlobalInit) {
-      return ts.functionCallConfig({ ctx: ts.runtime.ctx });
+      // `insideGlobalInit` means the call is emitted as part of the
+      // `__initializeGlobals(__ctx)` body, where `__ctx` is a function
+      // parameter (no ALS frame yet). Pass the lexical identifier
+      // instead of the `__ctx()` accessor alias.
+      return ts.functionCallConfig({ ctx: ts.id("__ctx") });
     }
     if (opts?.extra && Object.keys(opts.extra).length > 0) {
       return ts.obj(opts.extra);
@@ -1336,7 +1388,13 @@ export class TypeScriptBuilder {
       name: ts.str(functionName),
       description:
         trimmedDocSegments.length > 0
-          ? this.generateStringLiteralNode(trimmedDocSegments)
+          // Flip `topLevel` on every TsScopedVar so the pretty-printer
+          // reads through `__globalCtx` instead of the strict ALS
+          // accessor — this subtree is eagerly evaluated at module
+          // load when no ALS frame is installed.
+          ? markTopLevelScopedVars(
+              this.generateStringLiteralNode(trimmedDocSegments),
+            )
           : ts.str("No description provided."),
       schema: $.z()
         .prop("object")
@@ -1462,11 +1520,14 @@ export class TypeScriptBuilder {
       }),
 
       // Ensure this module's globals are initialized on the current ctx.
+      // Runs BEFORE the `withAlsFrame` wrap installs the per-scope ALS
+      // frame, so `__ctx` here is the setupEnv-emitted local — not the
+      // `__ctx()` accessor (which would return undefined).
       ts.if(
         ts.raw(
           `!__ctx.globals.isInitialized(${JSON.stringify(this.moduleId)})`,
         ),
-        ts.await(ts.call(ts.id("__initializeGlobals"), [ts.runtime.ctx])),
+        ts.await(ts.call(ts.id("__initializeGlobals"), [ts.id("__ctx")])),
       ),
 
       ...(skipHooks ? [] : [ts.time("__funcStartTime")]),
@@ -1773,11 +1834,18 @@ export class TypeScriptBuilder {
 
           statements = ts.statementsPush(
             statements,
-            ts.raw(`__ctx.pendingPromises.add(${this.str(callWithStack)})`),
+            // Strict accessor inside a step body (under the
+            // withAlsFrame wrap) — keeps missing-frame failures
+            // actionable instead of "Cannot read 'add' of undefined".
+            ts.raw(
+              `getRuntimeContext().ctx.pendingPromises.add(${this.str(callWithStack)})`,
+            ),
           );
           return statements;
         }
-        return ts.raw(`__ctx.pendingPromises.add(${this.str(callNode)})`);
+        return ts.raw(
+          `getRuntimeContext().ctx.pendingPromises.add(${this.str(callNode)})`,
+        );
       }
 
       // Sync calls: check for interrupt result
@@ -1807,7 +1875,9 @@ export class TypeScriptBuilder {
           this.interruptCheck(ts.id(tempVar)),
           ts.statements([
             ts.awaitMethodCall(
-              ts.prop(ts.runtime.ctx, "pendingPromises"),
+              // Strict accessor — immediate deref of `pendingPromises`
+              // inside a step body under the withAlsFrame wrap.
+              ts.prop(ts.raw("getRuntimeContext().ctx"), "pendingPromises"),
               "awaitAll",
             ),
             ts.methodCall(ts.id("runner"), "halt", [haltValue]),
@@ -1840,7 +1910,10 @@ export class TypeScriptBuilder {
       return ts.call(ts.id("failure"), [
         ...argNodes,
         ts.raw(
-          `{ checkpoint: __ctx.getResultCheckpoint(), functionName: ${JSON.stringify(scope.functionName)}, args: __stack.args }`,
+          // Strict accessor — emitted inside the function body's
+          // withAlsFrame wrap. See processTryExpression above for the
+          // sibling shape.
+          `{ checkpoint: getRuntimeContext().ctx.getResultCheckpoint(), functionName: ${JSON.stringify(scope.functionName)}, args: __stack.args }`,
         ),
       ]);
     }
@@ -2526,7 +2599,8 @@ export class TypeScriptBuilder {
           ts.assign(
             ts.self(pendingKeyVar),
             ts.raw(
-              `__ctx.pendingPromises.add(${this.str(varRef)}, (val) => { ${this.str(varRef)} = val; })`,
+              // Strict accessor — inside step body under the wrap.
+              `getRuntimeContext().ctx.pendingPromises.add(${this.str(varRef)}, (val) => { ${this.str(varRef)} = val; })`,
             ),
           ),
         );
@@ -2551,7 +2625,8 @@ export class TypeScriptBuilder {
               this.interruptCheck(varRef),
               ts.statements([
                 ts.awaitMethodCall(
-                  ts.prop(ts.runtime.ctx, "pendingPromises"),
+                  // Strict accessor — immediate deref inside step body.
+                  ts.prop(ts.raw("getRuntimeContext().ctx"), "pendingPromises"),
                   "awaitAll",
                 ),
                 ts.methodCall(ts.id("runner"), "halt", [haltValue]),
@@ -2658,7 +2733,8 @@ export class TypeScriptBuilder {
         ts.assign(
           ts.self(pendingKeyVar),
           ts.raw(
-            `__ctx.pendingPromises.add(${this.str(varRef)}, (val) => { ${this.str(varRef)} = val; })`,
+            // Strict accessor — inside step body under the wrap.
+            `getRuntimeContext().ctx.pendingPromises.add(${this.str(varRef)}, (val) => { ${this.str(varRef)} = val; })`,
           ),
         ),
       );
@@ -2683,7 +2759,8 @@ export class TypeScriptBuilder {
             this.interruptCheck(varRef),
             ts.statements([
               ts.awaitMethodCall(
-                ts.prop(ts.runtime.ctx, "pendingPromises"),
+                // Strict accessor — immediate deref inside step body.
+                ts.prop(ts.raw("getRuntimeContext().ctx"), "pendingPromises"),
                 "awaitAll",
               ),
               ts.methodCall(ts.id("runner"), "halt", [haltValue]),
@@ -3178,12 +3255,19 @@ export class TypeScriptBuilder {
 
     // If any function has a doc string with interpolation, the tool
     // description is evaluated at module load time and may need to
-    // reference module globals via `__ctx.globals.get(...)`. Alias
-    // `__ctx` to `__globalCtx` at module top level (function bodies
-    // shadow this with their own `__ctx2` binding), and trigger global
-    // initialization eagerly so any interpolated reads resolve. This is
-    // gated to modules that actually use the feature, so other modules
-    // see no preamble change.
+    // reference module globals. The codegen flips `topLevel: true` on
+    // every `TsScopedVar` in the description subtree (via
+    // `markTopLevelScopedVars`); the pretty-printer then emits
+    // `__globalCtx.globals.get(...)` for those reads. Triggering
+    // `__initializeGlobals(__globalCtx)` eagerly populates the values
+    // before the descriptions evaluate.
+    //
+    // Previously this block also emitted `const __ctx = __globalCtx;`
+    // as a module-top-level rebind so descriptions could read
+    // `__ctx.globals.get(...)`. That rebind is gone: it would now
+    // shadow the `__ctx` runtime import (which is a function in the
+    // post-ALS migration) and break every accessor call. The
+    // topLevel-flagged scopedVars handle the description case directly.
     //
     // Caveat: `__initializeGlobals` is async; for modules with
     // `static` declarations or async global initializers, top-level
@@ -3191,7 +3275,6 @@ export class TypeScriptBuilder {
     // literal globals are populated before the function returns.
     if (this.hasDocStringInterpolation()) {
       runtimeCtxStatements.push(
-        ts.constDecl("__ctx", ts.id("__globalCtx")),
         ts.raw(`__initializeGlobals(__globalCtx);`),
       );
     }

@@ -206,7 +206,7 @@ const __funcResult = await __call(sleep, {
           args: [__stack.args.sleepTime]
         });
 if (hasInterrupts(__funcResult)) {
-          await __ctx.pendingPromises.awaitAll()
+          await getRuntimeContext().ctx.pendingPromises.awaitAll()
           runner.halt(__funcResult)
           return;
         }
@@ -228,7 +228,7 @@ if (__error instanceof GuardExceededError) {
 return failure(
   __error instanceof Error ? __error.message : String(__error),
   {
-    checkpoint: __ctx.getResultCheckpoint(),
+    checkpoint: getRuntimeContext().ctx.getResultCheckpoint(),
     retryable: __self.__retryable,
     functionName: "append",
     args: __stack.args,
@@ -301,13 +301,13 @@ if ((__stack.branches && __stack.branches["1"])) {
           __forked = __stack.branches["1"].stack;
           __forked.deserializeMode()
         } else {
-          __forked = __ctx.forkStack();
+          __forked = getRuntimeContext().ctx.forkStack();
         }
 __stack.branches = (__stack.branches || {});
 __stack.branches["1"] = {
           stack: __forked
         };
-__ctx.pendingPromises.add(__call(append, {
+getRuntimeContext().ctx.pendingPromises.add(__call(append, {
   type: "positional",
   args: [1, `hello`]
 }, {
@@ -319,13 +319,13 @@ if ((__stack.branches && __stack.branches["2"])) {
           __forked = __stack.branches["2"].stack;
           __forked.deserializeMode()
         } else {
-          __forked = __ctx.forkStack();
+          __forked = getRuntimeContext().ctx.forkStack();
         }
 __stack.branches = (__stack.branches || {});
 __stack.branches["2"] = {
           stack: __forked
         };
-__ctx.pendingPromises.add(__call(append, {
+getRuntimeContext().ctx.pendingPromises.add(__call(append, {
   type: "positional",
   args: [0.5, `world`]
 }, {

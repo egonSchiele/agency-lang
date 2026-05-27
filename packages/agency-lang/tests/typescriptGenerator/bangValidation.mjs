@@ -180,7 +180,7 @@ const __funcResult = await __call(print, {
           args: [__stack.locals.result]
         });
 if (hasInterrupts(__funcResult)) {
-          await __ctx.pendingPromises.awaitAll()
+          await getRuntimeContext().ctx.pendingPromises.awaitAll()
           runner.halt({
             ...__state,
             data: __funcResult

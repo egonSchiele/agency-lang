@@ -138,7 +138,7 @@ async function __initializeGlobals(__ctx) {
   }, {
     ctx: __ctx
   }))
-  await setLLMClient(__ctx.globals.get("setLLMClient.agency", "client"))
+  await setLLMClient(getRuntimeContext().ctx.globals.get("setLLMClient.agency", "client"))
 }
 async function __registerTopLevelCallbacks(__ctx) {
   __ctx.topLevelCallbacks = [];
@@ -189,7 +189,7 @@ __stack.locals.result = await runPrompt({
         });
 // halt if this is an interrupt
 if (hasInterrupts(__stack.locals.result)) {
-          await __ctx.pendingPromises.awaitAll()
+          await getRuntimeContext().ctx.pendingPromises.awaitAll()
           runner.halt({
             messages: __threads(),
             data: __stack.locals.result
@@ -203,7 +203,7 @@ const __funcResult = await __call(print, {
           args: [__stack.locals.result]
         });
 if (hasInterrupts(__funcResult)) {
-          await __ctx.pendingPromises.awaitAll()
+          await getRuntimeContext().ctx.pendingPromises.awaitAll()
           runner.halt({
             ...__state,
             data: __funcResult

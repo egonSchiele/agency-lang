@@ -202,7 +202,7 @@ await callHook({
       });
       await runner.step(1, async (runner) => {
 // Resume path: check for a response by interruptId
-const __response = __ctx.getInterruptResponse(__self.__interruptId_1);
+const __response = getRuntimeContext().ctx.getInterruptResponse(__self.__interruptId_1);
 if (__response) {
   if (__response.type === "approve") {
     // approved, continue execution
@@ -210,7 +210,7 @@ if (__response) {
     // rejected, halt
     
     
-    runner.halt(failure("interrupt rejected", { retryable: false, checkpoint: __ctx.getResultCheckpoint() }));
+    runner.halt(failure("interrupt rejected", { retryable: false, checkpoint: getRuntimeContext().ctx.getResultCheckpoint() }));
     
     return;
   }
@@ -220,7 +220,7 @@ if (__response) {
   if (isRejected(__handlerResult)) {
     
     
-    runner.halt(failure(__handlerResult.value ?? "interrupt rejected", { retryable: false, checkpoint: __ctx.checkpoints.get(__resultCheckpointId) }));
+    runner.halt(failure(__handlerResult.value ?? "interrupt rejected", { retryable: false, checkpoint: getRuntimeContext().ctx.checkpoints.get(__resultCheckpointId) }));
     
     return;
   }
@@ -228,9 +228,9 @@ if (__response) {
     // No handler — propagate interrupt array to TypeScript caller
     // Store interruptId on frame BEFORE checkpoint so it's captured in the snapshot
     __self.__interruptId_1 = __handlerResult[0].interruptId;
-    const __checkpointId = __ctx.checkpoints.create(__stateStack(), __ctx, { moduleId: "interrupt-2-deep-in-function.agency", scopeName: "greet", stepPath: "1" });
+    const __checkpointId = getRuntimeContext().ctx.checkpoints.create(__stateStack(), __ctx, { moduleId: "interrupt-2-deep-in-function.agency", scopeName: "greet", stepPath: "1" });
     __handlerResult[0].checkpointId = __checkpointId;
-    __handlerResult[0].checkpoint = __ctx.checkpoints.get(__checkpointId);
+    __handlerResult[0].checkpoint = getRuntimeContext().ctx.checkpoints.get(__checkpointId);
     
     
     runner.halt(__handlerResult);
@@ -263,7 +263,7 @@ if (__error instanceof GuardExceededError) {
 return failure(
   __error instanceof Error ? __error.message : String(__error),
   {
-    checkpoint: __ctx.getResultCheckpoint(),
+    checkpoint: getRuntimeContext().ctx.getResultCheckpoint(),
     retryable: __self.__retryable,
     functionName: "greet",
     args: __stack.args,
@@ -381,7 +381,7 @@ __stack.locals.response = await runPrompt({
         });
 // halt if this is an interrupt
 if (hasInterrupts(__stack.locals.response)) {
-          await __ctx.pendingPromises.awaitAll()
+          await getRuntimeContext().ctx.pendingPromises.awaitAll()
           runner.halt(__stack.locals.response)
           return;
         }
@@ -392,7 +392,7 @@ const __funcResult = await __call(print, {
           args: [`Greeted, age is still ${__stack.args.age}...`]
         });
 if (hasInterrupts(__funcResult)) {
-          await __ctx.pendingPromises.awaitAll()
+          await getRuntimeContext().ctx.pendingPromises.awaitAll()
           runner.halt(__funcResult)
           return;
         }
@@ -419,7 +419,7 @@ if (__error instanceof GuardExceededError) {
 return failure(
   __error instanceof Error ? __error.message : String(__error),
   {
-    checkpoint: __ctx.getResultCheckpoint(),
+    checkpoint: getRuntimeContext().ctx.getResultCheckpoint(),
     retryable: __self.__retryable,
     functionName: "foo2",
     args: __stack.args,
@@ -496,7 +496,7 @@ const __funcResult = await __call(print, {
           args: [`Saying hi to ${__stack.args.name}...`]
         });
 if (hasInterrupts(__funcResult)) {
-          await __ctx.pendingPromises.awaitAll()
+          await getRuntimeContext().ctx.pendingPromises.awaitAll()
           runner.halt({
             ...__state,
             data: __funcResult
@@ -513,7 +513,7 @@ __stack.locals.response = await __call(foo2, {
           args: [__stack.args.name, __stack.locals.age]
         });
 if (hasInterrupts(__stack.locals.response)) {
-          await __ctx.pendingPromises.awaitAll()
+          await getRuntimeContext().ctx.pendingPromises.awaitAll()
           runner.halt({
             ...__state,
             data: __stack.locals.response
@@ -527,7 +527,7 @@ const __funcResult = await __call(print, {
           args: [__stack.locals.response]
         });
 if (hasInterrupts(__funcResult)) {
-          await __ctx.pendingPromises.awaitAll()
+          await getRuntimeContext().ctx.pendingPromises.awaitAll()
           runner.halt({
             ...__state,
             data: __funcResult
@@ -541,7 +541,7 @@ const __funcResult = await __call(print, {
           args: [`Greeting sent.`]
         });
 if (hasInterrupts(__funcResult)) {
-          await __ctx.pendingPromises.awaitAll()
+          await getRuntimeContext().ctx.pendingPromises.awaitAll()
           runner.halt({
             ...__state,
             data: __funcResult

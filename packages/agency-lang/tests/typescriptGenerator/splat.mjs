@@ -133,8 +133,8 @@ async function __initializeGlobals(__ctx) {
   __ctx.globals.markInitialized("splat.agency")
   __ctx.globals.set("splat.agency", "arr1", [1, 2])
   __ctx.globals.set("splat.agency", "arr2", [3, 4])
-  __ctx.globals.set("splat.agency", "combined", [...__ctx.globals.get("splat.agency", "arr1"), ...__ctx.globals.get("splat.agency", "arr2")])
-  __ctx.globals.set("splat.agency", "withExtra", [...__ctx.globals.get("splat.agency", "arr1"), 5, 6])
+  __ctx.globals.set("splat.agency", "combined", [...getRuntimeContext().ctx.globals.get("splat.agency", "arr1"), ...getRuntimeContext().ctx.globals.get("splat.agency", "arr2")])
+  __ctx.globals.set("splat.agency", "withExtra", [...getRuntimeContext().ctx.globals.get("splat.agency", "arr1"), 5, 6])
   __ctx.globals.set("splat.agency", "obj1", {
     "a": 1
   })
@@ -142,11 +142,11 @@ async function __initializeGlobals(__ctx) {
     "b": 2
   })
   __ctx.globals.set("splat.agency", "merged", {
-    ...__ctx.globals.get("splat.agency", "obj1"),
-    ...__ctx.globals.get("splat.agency", "obj2")
+    ...getRuntimeContext().ctx.globals.get("splat.agency", "obj1"),
+    ...getRuntimeContext().ctx.globals.get("splat.agency", "obj2")
   })
   __ctx.globals.set("splat.agency", "withKey", {
-    ...__ctx.globals.get("splat.agency", "obj1"),
+    ...getRuntimeContext().ctx.globals.get("splat.agency", "obj1"),
     "c": 3
   })
 }

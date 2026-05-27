@@ -212,7 +212,7 @@ const __funcResult = await __call(print, {
           args: [__stack.args.prefix, ...__stack.args.messages]
         });
 if (hasInterrupts(__funcResult)) {
-          await __ctx.pendingPromises.awaitAll()
+          await getRuntimeContext().ctx.pendingPromises.awaitAll()
           runner.halt(__funcResult)
           return;
         }
@@ -234,7 +234,7 @@ if (__error instanceof GuardExceededError) {
 return failure(
   __error instanceof Error ? __error.message : String(__error),
   {
-    checkpoint: __ctx.getResultCheckpoint(),
+    checkpoint: getRuntimeContext().ctx.getResultCheckpoint(),
     retryable: __self.__retryable,
     functionName: "log",
     args: __stack.args,

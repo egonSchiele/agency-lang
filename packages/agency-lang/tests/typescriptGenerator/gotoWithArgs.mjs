@@ -177,7 +177,7 @@ const __funcResult = await __call(print, {
           args: [`hello ${__stack.args.name}`]
         });
 if (hasInterrupts(__funcResult)) {
-          await __ctx.pendingPromises.awaitAll()
+          await getRuntimeContext().ctx.pendingPromises.awaitAll()
           runner.halt({
             ...__state,
             data: __funcResult
@@ -245,7 +245,7 @@ __stateStack()?.pop()
 __functionCompleted = true;
 runner.halt(goToNode("greet", {
           messages: __threads(),
-          ctx: __ctx,
+          ctx: getRuntimeContext().ctx,
           data: {
             name: `world`
           }

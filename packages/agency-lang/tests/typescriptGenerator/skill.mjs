@@ -183,7 +183,7 @@ __stack.locals.result = await runPrompt({
         });
 // halt if this is an interrupt
 if (hasInterrupts(__stack.locals.result)) {
-          await __ctx.pendingPromises.awaitAll()
+          await getRuntimeContext().ctx.pendingPromises.awaitAll()
           runner.halt({
             messages: __threads(),
             data: __stack.locals.result

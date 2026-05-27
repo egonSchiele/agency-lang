@@ -174,7 +174,7 @@ const __funcResult = await __call(print, {
           args: [`in foo`]
         });
 if (hasInterrupts(__funcResult)) {
-          await __ctx.pendingPromises.awaitAll()
+          await getRuntimeContext().ctx.pendingPromises.awaitAll()
           runner.halt({
             ...__state,
             data: __funcResult
@@ -242,7 +242,7 @@ __stateStack()?.pop()
 __functionCompleted = true;
 runner.halt(goToNode("foo", {
           messages: __threads(),
-          ctx: __ctx,
+          ctx: getRuntimeContext().ctx,
           data: {}
         }))
 return;

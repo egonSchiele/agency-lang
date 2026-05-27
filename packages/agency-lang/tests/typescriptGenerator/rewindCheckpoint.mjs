@@ -186,7 +186,7 @@ __stack.locals.mood = await runPrompt({
         });
 // halt if this is an interrupt
 if (hasInterrupts(__stack.locals.mood)) {
-          await __ctx.pendingPromises.awaitAll()
+          await getRuntimeContext().ctx.pendingPromises.awaitAll()
           runner.halt({
             messages: __threads(),
             data: __stack.locals.mood

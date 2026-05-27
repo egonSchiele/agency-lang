@@ -241,7 +241,7 @@ if (__error instanceof GuardExceededError) {
 return failure(
   __error instanceof Error ? __error.message : String(__error),
   {
-    checkpoint: __ctx.getResultCheckpoint(),
+    checkpoint: getRuntimeContext().ctx.getResultCheckpoint(),
     retryable: __self.__retryable,
     functionName: "gcd",
     args: __stack.args,
@@ -366,7 +366,7 @@ if (__error instanceof GuardExceededError) {
 return failure(
   __error instanceof Error ? __error.message : String(__error),
   {
-    checkpoint: __ctx.getResultCheckpoint(),
+    checkpoint: getRuntimeContext().ctx.getResultCheckpoint(),
     retryable: __self.__retryable,
     functionName: "lcm",
     args: __stack.args,
@@ -444,7 +444,7 @@ __stack.locals.result = await __call(lcm, {
             args: [__stack.locals.result, i]
           });
 if (hasInterrupts(__stack.locals.result)) {
-            await __ctx.pendingPromises.awaitAll()
+            await getRuntimeContext().ctx.pendingPromises.awaitAll()
             runner.halt({
               ...__state,
               data: __stack.locals.result

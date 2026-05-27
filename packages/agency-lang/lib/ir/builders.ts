@@ -604,7 +604,11 @@ export const ts = {
       ts.constDeclId(ts.runtime.stack, stack),
       ts.constDeclId(ts.runtime.step, step),
       ts.constDeclId(ts.runtime.self, self),
-      ts.constDeclId(ts.runtime.ctx, ctx),
+      // `ts.runtime.ctx` is now the `__ctx()` accessor; the const-decl
+      // target must be the literal identifier `__ctx`. The local stays
+      // because pre-wrap code (Runner ctor, withAlsFrame seed,
+      // __initializeGlobals call) needs a lexical handle to seed ALS.
+      ts.constDeclId(ts.id("__ctx"), ctx),
       ts.letDecl("__forked"),
 
       // Track whether the function completed normally (vs pausing for a debug interrupt).
@@ -741,18 +745,36 @@ export const ts = {
     return ts.return(ts.obj({ data: value }));
   }, */
 
-  /** GlobalStore operations */
-  globalGet(moduleId: string, varName: string): TsCall {
+  /** GlobalStore operations.
+   *
+   *  Receiver defaults to `getRuntimeContext().ctx` (strict accessor —
+   *  throws clearly if no ALS frame). Pass `ctxRef` explicitly when the
+   *  emission site has a different lexical context — most notably the
+   *  `__initializeGlobals(__ctx)` helper body in sectionAssembler.ts,
+   *  where `__ctx` is a parameter and ALS isn't yet installed; pass
+   *  `ts.id("__ctx")` there. Routing through the strict accessor by
+   *  default keeps the no-frame failure mode loud and aligns with the
+   *  two-flavor rule in docs/dev/codegen-als-accessors.md. */
+  globalGet(
+    moduleId: string,
+    varName: string,
+    ctxRef: TsNode = ts.raw("getRuntimeContext().ctx"),
+  ): TsCall {
     return ts.methodCall(
-      ts.prop(ts.runtime.ctx, "globals"),
+      ts.prop(ctxRef, "globals"),
       "get",
       [ts.str(moduleId), ts.str(varName)],
     );
   },
 
-  globalSet(moduleId: string, varName: string, value: TsNode): TsCall {
+  globalSet(
+    moduleId: string,
+    varName: string,
+    value: TsNode,
+    ctxRef: TsNode = ts.raw("getRuntimeContext().ctx"),
+  ): TsCall {
     return ts.methodCall(
-      ts.prop(ts.runtime.ctx, "globals"),
+      ts.prop(ctxRef, "globals"),
       "set",
       [ts.str(moduleId), ts.str(varName), value],
     );
@@ -770,14 +792,25 @@ export const ts = {
    *  `__threads()` / `__stateStack()` accessor calls (not bare
    *  identifiers) because post-ALS migration the per-scope
    *  `ThreadStore` and `StateStack` live on the active `agencyStore`
-   *  frame instead of in codegen-emitted `const __threads` /
-   *  `const __stateStack` locals. Every site that referenced the old
-   *  locals now emits the accessor call, which reads from ALS and
-   *  returns the live store (or `undefined` outside any frame — see
-   *  `runtime/asyncContext.ts`). */
+   *  frame instead of in codegen-emitted `const __threads` / `const
+   *  __stateStack` locals. Every site that referenced the old locals
+   *  now emits the accessor call, which reads from ALS and returns
+   *  the live store (or `undefined` outside any frame — see
+   *  `runtime/asyncContext.ts`).
+   *
+   *  `ctx` is `getRuntimeContext().ctx` rather than a bare `__ctx()`
+   *  accessor call: the per-scope `const __ctx = __state?.ctx ||
+   *  __globalCtx;` local emitted by `setupEnv` would shadow a bare
+   *  `__ctx` accessor identifier — and the esbuild TS transform
+   *  rewrites *every* `__ctx` reference in a scope (import-bound
+   *  ones included) to match the renamed local, so `__ctx()` would
+   *  become `__ctx2()` and crash with `__ctx2 is not a function`.
+   *  Routing through `getRuntimeContext().ctx` avoids the shadow
+   *  entirely. Pre-wrap, parameter-context, and seed sites still use
+   *  `ts.id("__ctx")` directly to reach the setupEnv local. */
   runtime: {
     self: { kind: "identifier", name: "__self" } as TsIdentifier,
-    ctx: { kind: "identifier", name: "__ctx" } as TsIdentifier,
+    ctx: { kind: "raw", code: "getRuntimeContext().ctx" } as TsRaw,
     threads: { kind: "raw", code: "__threads()" } as TsRaw,
     stateStack: { kind: "raw", code: "__stateStack()" } as TsRaw,
     stack: { kind: "identifier", name: "__stack" } as TsIdentifier,

@@ -174,7 +174,7 @@ __stack.locals.message = await __call(input, {
           args: [`Please enter a message: `]
         });
 if (hasInterrupts(__stack.locals.message)) {
-          await __ctx.pendingPromises.awaitAll()
+          await getRuntimeContext().ctx.pendingPromises.awaitAll()
           runner.halt({
             ...__state,
             data: __stack.locals.message
@@ -197,7 +197,7 @@ __stack.locals.sentiment = await runPrompt({
         });
 // halt if this is an interrupt
 if (hasInterrupts(__stack.locals.sentiment)) {
-          await __ctx.pendingPromises.awaitAll()
+          await getRuntimeContext().ctx.pendingPromises.awaitAll()
           runner.halt({
             messages: __threads(),
             data: __stack.locals.sentiment
@@ -211,7 +211,7 @@ const __funcResult = await __call(print, {
           args: [__stack.locals.sentiment]
         });
 if (hasInterrupts(__funcResult)) {
-          await __ctx.pendingPromises.awaitAll()
+          await getRuntimeContext().ctx.pendingPromises.awaitAll()
           runner.halt({
             ...__state,
             data: __funcResult

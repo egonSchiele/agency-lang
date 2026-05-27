@@ -178,7 +178,7 @@ __stack.locals.cp = await __call(checkpoint, {
           stepPath: "1"
         });
 if (hasInterrupts(__stack.locals.cp)) {
-          await __ctx.pendingPromises.awaitAll()
+          await getRuntimeContext().ctx.pendingPromises.awaitAll()
           runner.halt({
             ...__state,
             data: __stack.locals.cp
@@ -195,7 +195,7 @@ const __funcResult = await __call(restore, {
           args: [__stack.locals.cp, {}]
         });
 if (hasInterrupts(__funcResult)) {
-          await __ctx.pendingPromises.awaitAll()
+          await getRuntimeContext().ctx.pendingPromises.awaitAll()
           runner.halt({
             ...__state,
             data: __funcResult

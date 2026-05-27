@@ -215,7 +215,7 @@ __stack.locals.result = await runPrompt({
         });
 // halt if this is an interrupt
 if (hasInterrupts(__stack.locals.result)) {
-          await __ctx.pendingPromises.awaitAll()
+          await getRuntimeContext().ctx.pendingPromises.awaitAll()
           runner.halt(__stack.locals.result)
           return;
         }
@@ -242,7 +242,7 @@ if (__error instanceof GuardExceededError) {
 return failure(
   __error instanceof Error ? __error.message : String(__error),
   {
-    checkpoint: __ctx.getResultCheckpoint(),
+    checkpoint: getRuntimeContext().ctx.getResultCheckpoint(),
     retryable: __self.__retryable,
     functionName: "add",
     args: __stack.args,
@@ -348,7 +348,7 @@ __stack.locals.message = await runPrompt({
         });
 // halt if this is an interrupt
 if (hasInterrupts(__stack.locals.message)) {
-          await __ctx.pendingPromises.awaitAll()
+          await getRuntimeContext().ctx.pendingPromises.awaitAll()
           runner.halt(__stack.locals.message)
           return;
         }
@@ -375,7 +375,7 @@ if (__error instanceof GuardExceededError) {
 return failure(
   __error instanceof Error ? __error.message : String(__error),
   {
-    checkpoint: __ctx.getResultCheckpoint(),
+    checkpoint: getRuntimeContext().ctx.getResultCheckpoint(),
     retryable: __self.__retryable,
     functionName: "greet",
     args: __stack.args,
@@ -482,7 +482,7 @@ __stack.locals.output = await runPrompt({
         });
 // halt if this is an interrupt
 if (hasInterrupts(__stack.locals.output)) {
-          await __ctx.pendingPromises.awaitAll()
+          await getRuntimeContext().ctx.pendingPromises.awaitAll()
           runner.halt(__stack.locals.output)
           return;
         }
@@ -509,7 +509,7 @@ if (__error instanceof GuardExceededError) {
 return failure(
   __error instanceof Error ? __error.message : String(__error),
   {
-    checkpoint: __ctx.getResultCheckpoint(),
+    checkpoint: getRuntimeContext().ctx.getResultCheckpoint(),
     retryable: __self.__retryable,
     functionName: "mixed",
     args: __stack.args,
@@ -615,7 +615,7 @@ __stack.locals.result = await runPrompt({
         });
 // halt if this is an interrupt
 if (hasInterrupts(__stack.locals.result)) {
-          await __ctx.pendingPromises.awaitAll()
+          await getRuntimeContext().ctx.pendingPromises.awaitAll()
           runner.halt(__stack.locals.result)
           return;
         }
@@ -642,7 +642,7 @@ if (__error instanceof GuardExceededError) {
 return failure(
   __error instanceof Error ? __error.message : String(__error),
   {
-    checkpoint: __ctx.getResultCheckpoint(),
+    checkpoint: getRuntimeContext().ctx.getResultCheckpoint(),
     retryable: __self.__retryable,
     functionName: "processArray",
     args: __stack.args,
@@ -743,7 +743,7 @@ __stack.locals.result = await runPrompt({
         });
 // halt if this is an interrupt
 if (hasInterrupts(__stack.locals.result)) {
-          await __ctx.pendingPromises.awaitAll()
+          await getRuntimeContext().ctx.pendingPromises.awaitAll()
           runner.halt(__stack.locals.result)
           return;
         }
@@ -770,7 +770,7 @@ if (__error instanceof GuardExceededError) {
 return failure(
   __error instanceof Error ? __error.message : String(__error),
   {
-    checkpoint: __ctx.getResultCheckpoint(),
+    checkpoint: getRuntimeContext().ctx.getResultCheckpoint(),
     retryable: __self.__retryable,
     functionName: "flexible",
     args: __stack.args,
@@ -839,7 +839,7 @@ const __funcResult = await __call(print, {
           args: [`This is a node with a return type`]
         });
 if (hasInterrupts(__funcResult)) {
-          await __ctx.pendingPromises.awaitAll()
+          await getRuntimeContext().ctx.pendingPromises.awaitAll()
           runner.halt({
             ...__state,
             data: __funcResult
@@ -918,7 +918,7 @@ __stack.locals.sum = await __call(add, {
           args: [5, 10]
         });
 if (hasInterrupts(__stack.locals.sum)) {
-          await __ctx.pendingPromises.awaitAll()
+          await getRuntimeContext().ctx.pendingPromises.awaitAll()
           runner.halt({
             ...__state,
             data: __stack.locals.sum
@@ -932,7 +932,7 @@ __stack.locals.greeting = await __call(greet, {
           args: [`Alice`]
         });
 if (hasInterrupts(__stack.locals.greeting)) {
-          await __ctx.pendingPromises.awaitAll()
+          await getRuntimeContext().ctx.pendingPromises.awaitAll()
           runner.halt({
             ...__state,
             data: __stack.locals.greeting
@@ -946,7 +946,7 @@ __stack.locals.labeled = await __call(mixed, {
           args: [42, `Answer`]
         });
 if (hasInterrupts(__stack.locals.labeled)) {
-          await __ctx.pendingPromises.awaitAll()
+          await getRuntimeContext().ctx.pendingPromises.awaitAll()
           runner.halt({
             ...__state,
             data: __stack.locals.labeled
@@ -960,7 +960,7 @@ __stack.locals.processed = await __call(processArray, {
           args: [[1, 2, 3, 4, 5]]
         });
 if (hasInterrupts(__stack.locals.processed)) {
-          await __ctx.pendingPromises.awaitAll()
+          await getRuntimeContext().ctx.pendingPromises.awaitAll()
           runner.halt({
             ...__state,
             data: __stack.locals.processed
@@ -974,7 +974,7 @@ __stack.locals.flexResult = await __call(flexible, {
           args: [`test`]
         });
 if (hasInterrupts(__stack.locals.flexResult)) {
-          await __ctx.pendingPromises.awaitAll()
+          await getRuntimeContext().ctx.pendingPromises.awaitAll()
           runner.halt({
             ...__state,
             data: __stack.locals.flexResult

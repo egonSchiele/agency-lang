@@ -32,18 +32,27 @@ describe("doc string interpolation — runtime resolution", () => {
     fs.rmSync(jsFile, { force: true });
   });
 
-  it("compiles to a module whose generated tool description references __ctx.globals.get", () => {
+  it("compiles to a module whose generated tool description references __globalCtx.globals.get", () => {
     const compiled = fs.readFileSync(jsFile, "utf-8");
 
     // Description in the tool definition uses the template literal with
-    // the global interpolation expression.
+    // the global interpolation expression. Reads through `__globalCtx`
+    // (not the strict ALS accessor) because the description object
+    // literal is eagerly evaluated at module load time, before any
+    // `agencyStore.run(...)` frame is installed. The `topLevel: true`
+    // flag on the TsScopedVar in the description subtree is what
+    // selects this code path — see `markTopLevelScopedVars` in
+    // `lib/backends/typescriptBuilder.ts`.
     expect(compiled).toMatch(
-      /description: `Greets someone\. Tool version: \$\{__ctx\.globals\.get\([^)]*"toolVersion"\)\}\.`/,
+      /description: `Greets someone\. Tool version: \$\{__globalCtx\.globals\.get\([^)]*"toolVersion"\)\}\.`/,
     );
 
-    // Top-level alias and eager init are emitted so the description
-    // evaluates correctly at module-load time.
-    expect(compiled).toContain("const __ctx = __globalCtx;");
+    // Eager init is still emitted so the global is populated before
+    // the description template literal evaluates. The previously
+    // emitted `const __ctx = __globalCtx;` top-level rebind was
+    // removed — it would now shadow the `__ctx` runtime import (which
+    // is a function in the post-ALS migration) and break every
+    // accessor call.
     expect(compiled).toContain("__initializeGlobals(__globalCtx);");
   });
 

@@ -206,7 +206,7 @@ __stack.locals.result = await runPrompt({
         });
 // halt if this is an interrupt
 if (hasInterrupts(__stack.locals.result)) {
-          await __ctx.pendingPromises.awaitAll()
+          await getRuntimeContext().ctx.pendingPromises.awaitAll()
           runner.halt(__stack.locals.result)
           return;
         }
@@ -233,7 +233,7 @@ if (__error instanceof GuardExceededError) {
 return failure(
   __error instanceof Error ? __error.message : String(__error),
   {
-    checkpoint: __ctx.getResultCheckpoint(),
+    checkpoint: getRuntimeContext().ctx.getResultCheckpoint(),
     retryable: __self.__retryable,
     functionName: "greet",
     args: __stack.args,

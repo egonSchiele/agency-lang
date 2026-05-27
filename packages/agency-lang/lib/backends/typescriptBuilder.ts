@@ -849,27 +849,15 @@ export class TypeScriptBuilder {
         case "methodCall": {
           const fnCall = element.functionCall;
           const descriptor = this.buildCallDescriptor(fnCall);
-          const configObj = this.buildStateConfig();
           const callArgs: TsNode[] = [result, ts.str(fnCall.functionName), descriptor];
-          if (element.optional) {
-            callArgs.push(configObj ?? ts.id("undefined"));
-            callArgs.push(ts.bool(true));
-          } else if (configObj) {
-            callArgs.push(configObj);
-          }
+          if (element.optional) callArgs.push(ts.bool(true));
           result = this.awaitChainCall(ts.call(ts.id("__callMethod"), callArgs), element === node.chain[node.chain.length - 1]);
           break;
         }
         case "call": {
           const descriptor = this.buildCallDescriptor(element);
-          const configObj = this.buildStateConfig();
           const callArgs: TsNode[] = [result, descriptor];
-          if (element.optional) {
-            callArgs.push(configObj ?? ts.id("undefined"));
-            callArgs.push(ts.bool(true));
-          } else if (configObj) {
-            callArgs.push(configObj);
-          }
+          if (element.optional) callArgs.push(ts.bool(true));
           result = this.awaitChainCall(ts.call(ts.id("__call"), callArgs), element === node.chain[node.chain.length - 1]);
           break;
         }

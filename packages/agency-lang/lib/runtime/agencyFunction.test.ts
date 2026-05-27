@@ -1,5 +1,8 @@
 import { describe, it, expect } from "vitest";
 import { AgencyFunction, UNSET } from "./agencyFunction.js";
+import { runInTestContext } from "./asyncContext.js";
+import { makeMockCtx } from "./__tests__/testHelpers.js";
+import { ThreadStore } from "./state/threadStore.js";
 
 function makeFunction(
   params: { name: string; hasDefault?: boolean; defaultValue?: unknown; variadic?: boolean }[],
@@ -24,7 +27,7 @@ describe("AgencyFunction", () => {
     it("passes exact args through", async () => {
       const fn = makeFunction([{ name: "a" }, { name: "b" }]);
       const result = await fn.invoke({ type: "positional", args: [1, 2] });
-      expect(result).toEqual([1, 2, undefined]); // args + state
+      expect(result).toEqual([1, 2]);
     });
 
     it("pads missing args with UNSET when defaults exist", async () => {
@@ -33,7 +36,7 @@ describe("AgencyFunction", () => {
         { name: "b", hasDefault: true, defaultValue: 10 },
       ]);
       const result = await fn.invoke({ type: "positional", args: [1] });
-      expect(result).toEqual([1, UNSET, undefined]);
+      expect(result).toEqual([1, UNSET]);
     });
 
     it("wraps trailing args into array for variadic param", async () => {
@@ -42,20 +45,31 @@ describe("AgencyFunction", () => {
         { name: "items", variadic: true },
       ]);
       const result = await fn.invoke({ type: "positional", args: [1, 2, 3, 4] });
-      expect(result).toEqual([1, [2, 3, 4], undefined]);
+      expect(result).toEqual([1, [2, 3, 4]]);
     });
 
-    it("passes state through as last argument", async () => {
+    it("does not forward a trailing state arg to _fn", async () => {
+      const seen: unknown[][] = [];
+      const fn = makeFunction([{ name: "a" }], (...args: unknown[]) => {
+        seen.push(args);
+        return "ok";
+      });
+      await fn.invoke({ type: "positional", args: [42] });
+      // Pre-drop, _fn was called as `_fn(42, undefined)` (length 2).
+      // Post-drop, only the resolved args make it through.
+      expect(seen[0]).toEqual([42]);
+    });
+
+    it("rejects unknown second positional via the type system", async () => {
       const fn = makeFunction([{ name: "a" }]);
-      const mockState = { ctx: "mock" } as any;
-      const result = await fn.invoke({ type: "positional", args: [1] }, mockState);
-      expect(result).toEqual([1, mockState]);
+      // @ts-expect-error — invoke no longer accepts a second positional.
+      await fn.invoke({ type: "positional", args: [1] }, { somethingCustom: true });
     });
 
     it("handles zero params", async () => {
       const fn = makeFunction([]);
       const result = await fn.invoke({ type: "positional", args: [] });
-      expect(result).toEqual([undefined]); // just state
+      expect(result).toEqual([]);
     });
   });
 
@@ -67,7 +81,7 @@ describe("AgencyFunction", () => {
         positionalArgs: [],
         namedArgs: { c: 3, a: 1, b: 2 },
       });
-      expect(result).toEqual([1, 2, 3, undefined]);
+      expect(result).toEqual([1, 2, 3]);
     });
 
     it("mixes positional and named args", async () => {
@@ -77,7 +91,7 @@ describe("AgencyFunction", () => {
         positionalArgs: [1],
         namedArgs: { c: 3, b: 2 },
       });
-      expect(result).toEqual([1, 2, 3, undefined]);
+      expect(result).toEqual([1, 2, 3]);
     });
 
     it("fills skipped optional params with UNSET", async () => {
@@ -91,7 +105,7 @@ describe("AgencyFunction", () => {
         positionalArgs: [],
         namedArgs: { a: 1, c: 3 },
       });
-      expect(result).toEqual([1, UNSET, 3, undefined]);
+      expect(result).toEqual([1, UNSET, 3]);
     });
 
     it("pads trailing defaults when named args stop early", async () => {
@@ -105,7 +119,7 @@ describe("AgencyFunction", () => {
         positionalArgs: [],
         namedArgs: { a: 1 },
       });
-      expect(result).toEqual([1, UNSET, UNSET, undefined]);
+      expect(result).toEqual([1, UNSET, UNSET]);
     });
 
     it("throws on unknown named arg", async () => {
@@ -408,5 +422,70 @@ describe("describe()", () => {
     expect(described.params[0].isBound).toBe(true);
     expect(described.getUnboundParams()).toHaveLength(1);
     expect(described.toolDefinition!.description).toBe("Adds 5 to a number");
+  });
+});
+
+describe("preapprove handler wiring", () => {
+  it("invokes via withPushedHandler: handler pushed during call, popped after", async () => {
+    const ctx = makeMockCtx();
+    let lenDuring = -1;
+    const fn = AgencyFunction.create({
+      name: "tool",
+      module: "test",
+      fn: async () => {
+        lenDuring = ctx.handlers.length;
+        return "x";
+      },
+      params: [],
+      toolDefinition: null,
+    }, {}).preapprove();
+
+    const before = ctx.handlers.length;
+    await runInTestContext(ctx, ctx.stateStack, new ThreadStore(), () =>
+      fn.invoke({ type: "positional", args: [] }),
+    );
+    expect(lenDuring).toBe(before + 1);
+    expect(ctx.handlers.length).toBe(before);
+  });
+
+  it("pops the preapprove handler even when the body throws", async () => {
+    const ctx = makeMockCtx();
+    const fn = AgencyFunction.create({
+      name: "tool",
+      module: "test",
+      fn: async () => {
+        throw new Error("boom");
+      },
+      params: [],
+      toolDefinition: null,
+    }, {}).preapprove();
+
+    const before = ctx.handlers.length;
+    await expect(
+      runInTestContext(ctx, ctx.stateStack, new ThreadStore(), () =>
+        fn.invoke({ type: "positional", args: [] }),
+      ),
+    ).rejects.toThrow("boom");
+    expect(ctx.handlers.length).toBe(before);
+  });
+
+  it("does not push a handler for non-preapproved functions", async () => {
+    const ctx = makeMockCtx();
+    let lenDuring = -1;
+    const fn = AgencyFunction.create({
+      name: "tool",
+      module: "test",
+      fn: async () => {
+        lenDuring = ctx.handlers.length;
+      },
+      params: [],
+      toolDefinition: null,
+    }, {});
+
+    const before = ctx.handlers.length;
+    await runInTestContext(ctx, ctx.stateStack, new ThreadStore(), () =>
+      fn.invoke({ type: "positional", args: [] }),
+    );
+    expect(lenDuring).toBe(before);
   });
 });

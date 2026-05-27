@@ -135,22 +135,16 @@ async function __initializeGlobals(__ctx) {
   await __call(print, {
     type: "positional",
     args: [getRuntimeContext().ctx.globals.get("arrayAndObject.agency", "nums")]
-  }, {
-    ctx: __ctx
   })
   __ctx.globals.set("arrayAndObject.agency", "names", [`Alice`, `Bob`, `Charlie`])
   await __call(print, {
     type: "positional",
     args: [getRuntimeContext().ctx.globals.get("arrayAndObject.agency", "names")]
-  }, {
-    ctx: __ctx
   })
   __ctx.globals.set("arrayAndObject.agency", "matrix", [[1, 2], [3, 4], [5, 6]])
   await __call(print, {
     type: "positional",
     args: [getRuntimeContext().ctx.globals.get("arrayAndObject.agency", "matrix")]
-  }, {
-    ctx: __ctx
   })
   __ctx.globals.set("arrayAndObject.agency", "person", {
     "name": `Alice`,
@@ -159,8 +153,6 @@ async function __initializeGlobals(__ctx) {
   await __call(print, {
     type: "positional",
     args: [getRuntimeContext().ctx.globals.get("arrayAndObject.agency", "person")]
-  }, {
-    ctx: __ctx
   })
   __ctx.globals.set("arrayAndObject.agency", "address", {
     "street": `123 Main St`,
@@ -170,8 +162,6 @@ async function __initializeGlobals(__ctx) {
   await __call(print, {
     type: "positional",
     args: [getRuntimeContext().ctx.globals.get("arrayAndObject.agency", "address")]
-  }, {
-    ctx: __ctx
   })
   __ctx.globals.set("arrayAndObject.agency", "user", {
     "name": `Bob`,
@@ -180,8 +170,6 @@ async function __initializeGlobals(__ctx) {
   await __call(print, {
     type: "positional",
     args: [getRuntimeContext().ctx.globals.get("arrayAndObject.agency", "user")]
-  }, {
-    ctx: __ctx
   })
   __ctx.globals.set("arrayAndObject.agency", "users", [{
     "name": `Alice`,
@@ -193,8 +181,6 @@ async function __initializeGlobals(__ctx) {
   await __call(print, {
     type: "positional",
     args: [getRuntimeContext().ctx.globals.get("arrayAndObject.agency", "users")]
-  }, {
-    ctx: __ctx
   })
   __ctx.globals.set("arrayAndObject.agency", "config", {
     "server": {
@@ -206,22 +192,16 @@ async function __initializeGlobals(__ctx) {
   await __call(print, {
     type: "positional",
     args: [getRuntimeContext().ctx.globals.get("arrayAndObject.agency", "config")]
-  }, {
-    ctx: __ctx
   })
   __ctx.globals.set("arrayAndObject.agency", "firstNum", getRuntimeContext().ctx.globals.get("arrayAndObject.agency", "nums")[0])
   await __call(print, {
     type: "positional",
     args: [getRuntimeContext().ctx.globals.get("arrayAndObject.agency", "firstNum")]
-  }, {
-    ctx: __ctx
   })
   __ctx.globals.set("arrayAndObject.agency", "personName", getRuntimeContext().ctx.globals.get("arrayAndObject.agency", "person").name)
   await __call(print, {
     type: "positional",
     args: [getRuntimeContext().ctx.globals.get("arrayAndObject.agency", "personName")]
-  }, {
-    ctx: __ctx
   })
 }
 async function __registerTopLevelCallbacks(__ctx) {

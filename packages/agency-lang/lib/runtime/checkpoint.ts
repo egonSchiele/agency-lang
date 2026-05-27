@@ -4,25 +4,20 @@ import { getRuntimeContext } from "./asyncContext.js";
 import type { Checkpoint } from "./state/checkpointStore.js";
 
 /**
- * Per-call-site location info passed by codegen as the `state` extras
- * to `checkpoint()`. Post-ALS the trailing positional carries ONLY the
- * location fields (`moduleId` / `scopeName` / `stepPath`) — `ctx` and
- * `stateStack` are read from the active `agencyStore` frame, not from
- * this bag.
+ * Capture a checkpoint of the current execution state. The source
+ * location attached to the checkpoint (`moduleId` / `scopeName` /
+ * `stepPath`) is read from the active `agencyStore` frame's
+ * `callsite` slot, which `Runner.runInScope` seeds for every step
+ * body. Calls made outside a runner step (e.g. from bootstrap scope)
+ * fall back to the empty `""::""::""` location.
  */
-type CheckpointLocation = {
-  moduleId?: string;
-  scopeName?: string;
-  stepPath?: string;
-};
-
-export async function checkpoint(__state?: CheckpointLocation): Promise<number> {
-  const { ctx } = getRuntimeContext();
+export async function checkpoint(): Promise<number> {
+  const { ctx, callsite } = getRuntimeContext();
   await ctx.pendingPromises.awaitAll();
   return ctx.checkpoints.create(ctx.stateStack, ctx, {
-    moduleId: __state?.moduleId ?? "",
-    scopeName: __state?.scopeName ?? "",
-    stepPath: __state?.stepPath ?? "",
+    moduleId: callsite?.moduleId ?? "",
+    scopeName: callsite?.scopeName ?? "",
+    stepPath: callsite?.stepPath ?? "",
   });
 }
 

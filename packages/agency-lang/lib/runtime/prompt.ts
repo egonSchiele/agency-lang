@@ -15,7 +15,6 @@ import type { SourceLocationOpts } from "./state/checkpointStore.js";
 import type { RuntimeContext } from "./state/context.js";
 import { MessageThread } from "./state/messageThread.js";
 import { StateStack } from "./state/stateStack.js";
-import { ThreadStore } from "./state/threadStore.js";
 import { handleStreamingResponse } from "./streaming.js";
 import { GraphState } from "./types.js";
 import { extractResponse, updateTokenStats } from "./utils.js";
@@ -473,12 +472,16 @@ export async function runPrompt(args: {
       let toolResult: any;
       ctx.enterToolCall();
       try {
-        const toolThreads = new ThreadStore();
-        toolThreads.setStatelogClient(ctx.statelogClient);
-        toolResult = await handler.invoke(
-          { type: "named", positionalArgs: [], namedArgs },
-          { ctx, threads: toolThreads, stateStack: branchStack },
-        );
+        // The tool body runs inside whichever ALS frame the prompt
+        // loop is already in — that frame's `ctx` / `stack` / `threads`
+        // are the correct ones for this tool invocation (the prompt
+        // loop is entered from a `Runner.runInScope` body inside the
+        // branch). No extra wrap needed.
+        toolResult = await handler.invoke({
+          type: "named",
+          positionalArgs: [],
+          namedArgs,
+        });
       } catch (error: unknown) {
         const errorMessage =
           error instanceof Error ? error.message : String(error);

@@ -849,27 +849,15 @@ export class TypeScriptBuilder {
         case "methodCall": {
           const fnCall = element.functionCall;
           const descriptor = this.buildCallDescriptor(fnCall);
-          const configObj = this.buildStateConfig();
           const callArgs: TsNode[] = [result, ts.str(fnCall.functionName), descriptor];
-          if (element.optional) {
-            callArgs.push(configObj ?? ts.id("undefined"));
-            callArgs.push(ts.bool(true));
-          } else if (configObj) {
-            callArgs.push(configObj);
-          }
+          if (element.optional) callArgs.push(ts.bool(true));
           result = this.awaitChainCall(ts.call(ts.id("__callMethod"), callArgs), element === node.chain[node.chain.length - 1]);
           break;
         }
         case "call": {
           const descriptor = this.buildCallDescriptor(element);
-          const configObj = this.buildStateConfig();
           const callArgs: TsNode[] = [result, descriptor];
-          if (element.optional) {
-            callArgs.push(configObj ?? ts.id("undefined"));
-            callArgs.push(ts.bool(true));
-          } else if (configObj) {
-            callArgs.push(configObj);
-          }
+          if (element.optional) callArgs.push(ts.bool(true));
           result = this.awaitChainCall(ts.call(ts.id("__call"), callArgs), element === node.chain[node.chain.length - 1]);
           break;
         }
@@ -1004,36 +992,20 @@ export class TypeScriptBuilder {
   }
 
   /**
-   * Build the state config passed as the third argument to `__call` /
-   * `__callMethod`.
+   * After the ALS migration AND the trailing-`state`-arg drop, every
+   * Agency call site reads `ctx` / `stack` / `threads` / `callsite`
+   * from the active `agencyStore` frame. `__call` / `__callMethod` no
+   * longer accept a state-extras object, and the codegen never emits
+   * one. This helper is kept as a stable seam in case future codegen
+   * needs to attach per-call metadata, but for now it always returns
+   * `undefined` — callers should simply omit the third positional.
    *
-   * After the ALS migration, the runtime helpers read `ctx`/`threads`/
-   * `stateStack` from `agencyStore` (see lib/runtime/call.ts), so call
-   * sites no longer need to thread those locals. This helper returns
-   * `undefined` for the common case — the caller MUST omit the arg
-   * entirely so the emitted code stays minimal.
-   *
-   * It still returns a real object in two situations:
-   *  - `insideGlobalInit`: globals run before the ALS frame is
-   *    installed, so the bag must carry `{ ctx }` explicitly.
-   *  - When `opts.extra` is provided (currently the `checkpoint` /
-   *    `getCheckpoint` / `restore` location info — `moduleId`,
-   *    `scopeName`, `stepPath`): these extras are merged into the
-   *    runtime-built bag by `__call`.
+   * Async-fork sites that need to override the active branch stack
+   * wrap their `__call(...)` invocation in an `agencyStore.run`
+   * frame in codegen (see `emitRuntimeDispatchCall`) — not via this
+   * helper.
    */
-  private buildStateConfig(opts?: {
-    extra?: Record<string, TsNode>;
-  }): TsNode | undefined {
-    if (this.insideGlobalInit) {
-      // `insideGlobalInit` means the call is emitted as part of the
-      // `__initializeGlobals(__ctx)` body, where `__ctx` is a function
-      // parameter (no ALS frame yet). Pass the lexical identifier
-      // instead of the `__ctx()` accessor alias.
-      return ts.functionCallConfig({ ctx: ts.id("__ctx") });
-    }
-    if (opts?.extra && Object.keys(opts.extra).length > 0) {
-      return ts.obj(opts.extra);
-    }
+  private buildStateConfig(): TsNode | undefined {
     return undefined;
   }
 
@@ -2009,28 +1981,29 @@ export class TypeScriptBuilder {
   ): TsNode {
     const descriptor = this.buildCallDescriptor(node);
 
-    const locationOpts = node.functionName === "checkpoint" ? {
-      moduleId: ts.str(this.moduleId),
-      scopeName: ts.str(this.scopes.currentName()),
-      stepPath: ts.str(this.steps.joined()),
-    } : undefined;
-    // Async fork sites pass `stateStack: __forked` so the branch's
-    // isolated stack — not the parent's ALS-frame stack — is used
-    // inside `__call`. Without this, concurrent async Agency calls
-    // would push/pop on the parent stack and break branch isolation.
-    const extra: Record<string, TsNode> = { ...(locationOpts ?? {}) };
-    if (options?.stateStack) extra.stateStack = options.stateStack;
-    const configObj = this.buildStateConfig({
-      extra: Object.keys(extra).length > 0 ? extra : undefined,
-    });
-
     const callee = node.scope
       ? ts.scopedVar(functionName, node.scope, this.moduleId)
       : ts.id(functionName);
 
-    const callArgs: TsNode[] = [callee, descriptor];
-    if (configObj) callArgs.push(configObj);
-    const callExpr = ts.call(ts.id("__call"), callArgs);
+    const callExpr = ts.call(ts.id("__call"), [callee, descriptor]);
+
+    // Async-fork sites need the branch's isolated stack visible to the
+    // callee (so its checkpoints/handlers/etc. push/pop on the branch
+    // stack rather than the parent's). Install a fresh ALS frame
+    // inline at the call site that overrides `stack`; the callee picks
+    // it up via `getRuntimeContext()`.
+    if (options?.stateStack) {
+      const frame = ts.obj([
+        ts.setSpread(ts.call(ts.id("getRuntimeContext"))),
+        ts.set("stack", options.stateStack),
+      ]);
+      const wrapped = ts.call(ts.prop(ts.id("agencyStore"), "run"), [
+        frame,
+        ts.arrowFn([], callExpr),
+      ]);
+      return shouldAwait ? ts.await(wrapped) : wrapped;
+    }
+
     return shouldAwait ? ts.await(callExpr) : callExpr;
   }
 

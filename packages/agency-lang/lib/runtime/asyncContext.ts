@@ -50,14 +50,70 @@ import { BootstrapThreadStore } from "./state/bootstrapThreadStore.js";
 import type { RuntimeContext } from "./state/context.js";
 import type { StateStack } from "./state/stateStack.js";
 import type { ThreadStore } from "./state/threadStore.js";
+import type { HandlerFn } from "./types.js";
+
+export type CallsiteLocation = {
+  moduleId: string;
+  scopeName: string;
+  stepPath: string;
+};
 
 export type AgencyStore = {
   ctx: RuntimeContext<any>;
   stack: StateStack;
   threads: ThreadStore;
+  /**
+   * Per-call-site source location for the currently-executing step.
+   * Seeded by `Runner.runInScope` for every step body. Stdlib helpers
+   * that need to attribute a checkpoint to its originating step
+   * (`checkpoint()`) read this slot instead of receiving the location
+   * as a trailing positional arg from generated code.
+   *
+   * Optional because not every ALS frame has one: the top-level
+   * `runNode` frame and `runInBootstrapFrame` deliberately omit it
+   * (any checkpoint created in bootstrap scope gets the empty
+   * `""::""::""` fallback, matching pre-ALS behaviour).
+   */
+  callsite?: CallsiteLocation;
 };
 
 export const agencyStore = new AsyncLocalStorage<AgencyStore>();
+
+/**
+ * Push a new ALS frame copying the current ctx/stack/threads but
+ * overriding `callsite`. For TS helpers that want to attach a
+ * per-internal-substep checkpoint location to nested `checkpoint()`
+ * calls. Throws if called outside any agency frame (no inheritable
+ * base).
+ */
+export function withCallsite<T>(loc: CallsiteLocation, fn: () => T): T {
+  const store = agencyStore.getStore();
+  if (!store) {
+    throw new Error("withCallsite() called outside an Agency execution frame.");
+  }
+  return agencyStore.run({ ...store, callsite: loc }, fn);
+}
+
+/**
+ * Run `fn` with `handler` pushed onto `ctx.handlers`; pop in finally.
+ * Two call sites consume this: `AgencyFunction.invoke()`'s preapprove
+ * branch and (in a future PR) `agency.withHandler`. Co-locating the
+ * combinator here means neither call site repeats the push/try/finally
+ * dance and there is no circular import between agencyFunction.ts and
+ * the agency namespace module.
+ */
+export async function withPushedHandler<T>(
+  ctx: RuntimeContext<any>,
+  handler: HandlerFn,
+  fn: () => Promise<T>,
+): Promise<T> {
+  ctx.pushHandler(handler);
+  try {
+    return await fn();
+  } finally {
+    ctx.popHandler();
+  }
+}
 
 /**
  * Read the current Agency runtime context from ALS. Throws if called

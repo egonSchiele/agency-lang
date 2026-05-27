@@ -4,6 +4,8 @@ import {
   getRuntimeContext,
   runInBootstrapFrame,
   runInTestContext,
+  withCallsite,
+  withPushedHandler,
 } from "./asyncContext.js";
 import { BootstrapThreadStore } from "./state/bootstrapThreadStore.js";
 import { RuntimeContext } from "./state/context.js";
@@ -142,5 +144,108 @@ describe("runInBootstrapFrame", () => {
     const seed = makeStore();
     const out = await runInBootstrapFrame(seed.ctx, async () => 42);
     expect(out).toBe(42);
+  });
+});
+
+describe("withCallsite", () => {
+  it("installs callsite on the active frame", () => {
+    const seed = makeStore();
+    runInTestContext(seed.ctx, seed.stack, seed.threads, () => {
+      expect(agencyStore.getStore()?.callsite).toBeUndefined();
+      withCallsite(
+        { moduleId: "m", scopeName: "s", stepPath: "1.2" },
+        () => {
+          expect(getRuntimeContext().callsite).toEqual({
+            moduleId: "m",
+            scopeName: "s",
+            stepPath: "1.2",
+          });
+        },
+      );
+      expect(agencyStore.getStore()?.callsite).toBeUndefined();
+    });
+  });
+
+  it("nests; inner overrides, outer restored on return", () => {
+    const seed = makeStore();
+    runInTestContext(seed.ctx, seed.stack, seed.threads, () => {
+      withCallsite(
+        { moduleId: "m", scopeName: "outer", stepPath: "" },
+        () => {
+          withCallsite(
+            { moduleId: "m", scopeName: "inner", stepPath: "1" },
+            () => {
+              expect(getRuntimeContext().callsite?.scopeName).toBe("inner");
+            },
+          );
+          expect(getRuntimeContext().callsite?.scopeName).toBe("outer");
+        },
+      );
+    });
+  });
+
+  it("throws outside an agency frame", () => {
+    expect(() =>
+      withCallsite({ moduleId: "", scopeName: "", stepPath: "" }, () => 1),
+    ).toThrow(/outside an Agency execution frame/);
+  });
+
+  it("preserves ctx/stack/threads from the parent frame", () => {
+    const seed = makeStore();
+    runInTestContext(seed.ctx, seed.stack, seed.threads, () => {
+      withCallsite(
+        { moduleId: "m", scopeName: "s", stepPath: "1" },
+        () => {
+          const s = getRuntimeContext();
+          expect(s.ctx).toBe(seed.ctx);
+          expect(s.stack).toBe(seed.stack);
+          expect(s.threads).toBe(seed.threads);
+        },
+      );
+    });
+  });
+});
+
+describe("withPushedHandler", () => {
+  const noopHandler = async () => ({ type: "propagate" as const });
+
+  it("pops on normal return", async () => {
+    const seed = makeStore();
+    await runInTestContext(seed.ctx, seed.stack, seed.threads, async () => {
+      const before = seed.ctx.handlers.length;
+      const result = await withPushedHandler(
+        seed.ctx,
+        noopHandler,
+        async () => "result",
+      );
+      expect(result).toBe("result");
+      expect(seed.ctx.handlers.length).toBe(before);
+    });
+  });
+
+  it("pops on throw", async () => {
+    const seed = makeStore();
+    await runInTestContext(seed.ctx, seed.stack, seed.threads, async () => {
+      const before = seed.ctx.handlers.length;
+      await expect(
+        withPushedHandler(seed.ctx, noopHandler, async () => {
+          throw new Error("boom");
+        }),
+      ).rejects.toThrow("boom");
+      expect(seed.ctx.handlers.length).toBe(before);
+    });
+  });
+
+  it("installs the handler for the duration of fn", async () => {
+    const seed = makeStore();
+    await runInTestContext(seed.ctx, seed.stack, seed.threads, async () => {
+      const before = seed.ctx.handlers.length;
+      let lenDuring = -1;
+      await withPushedHandler(seed.ctx, noopHandler, async () => {
+        lenDuring = seed.ctx.handlers.length;
+      });
+      expect(lenDuring).toBe(before + 1);
+      expect(seed.ctx.handlers.length).toBe(before);
+    });
   });
 });

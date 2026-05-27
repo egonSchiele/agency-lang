@@ -9,7 +9,7 @@ import type {
 } from "smoltalk";
 import type { CallbackName } from "../types/function.js";
 import { AgencyFunction } from "./agencyFunction.js";
-import { getRuntimeContext } from "./asyncContext.js";
+import { agencyStore, getRuntimeContext } from "./asyncContext.js";
 import { AgencyCancelledError, RestoreSignal } from "./errors.js";
 import type { RuntimeContext } from "./state/context.js";
 import type { StateStack } from "./state/stateStack.js";
@@ -140,14 +140,21 @@ async function invokeCallback(
   stateStack?: StateStack,
 ): Promise<void> {
   if (AgencyFunction.isAgencyFunction(fn)) {
-    // When `stateStack` is set, the callback frame is pushed onto that
-    // stack rather than `ctx.stateStack`. This matters inside parallel
-    // tool branches: scoped callbacks registered inside a branch's
-    // frame chain must be discovered via the branch's stack.
-    await (fn as AgencyFunction).invoke(
-      { type: "positional", args: [data] },
-      stateStack ? { ctx, stateStack } : { ctx },
-    );
+    // When `stateStack` is set, install an ALS frame overriding the
+    // active stack so the callback body sees the branch's isolated
+    // stack via `getRuntimeContext().stack`. This matters inside
+    // parallel tool branches: scoped callbacks registered inside a
+    // branch's frame chain must be discovered via the branch's stack.
+    const af = fn as AgencyFunction;
+    const desc = { type: "positional" as const, args: [data] };
+    const parent = agencyStore.getStore();
+    if (stateStack && parent) {
+      await agencyStore.run({ ...parent, stack: stateStack }, () =>
+        af.invoke(desc),
+      );
+    } else {
+      await af.invoke(desc);
+    }
     return;
   }
   // Plain JS callbacks (from AgencyCallbacks TS arg) — just async funcs.

@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { stripBoundParams } from "./stripBoundParams.js";
 import { approve } from "./interrupts.js";
-import { agencyStore } from "./asyncContext.js";
+import { agencyStore, withPushedHandler } from "./asyncContext.js";
 
 export const UNSET: unique symbol = Symbol("UNSET");
 
@@ -120,36 +120,11 @@ export class AgencyFunction {
     return this._unboundParams;
   }
 
-  async invoke(descriptor: CallType, state?: unknown): Promise<unknown> {
-    if (this._isPreapproved) {
-      // Post-ALS migration: `ctx` is no longer plumbed in as `state.ctx`
-      // for normal calls — read it from the active `agencyStore` frame
-      // installed by the caller's `runner.step` body (or, for
-      // module-init paths, the bootstrap frame). The preapprove handler
-      // must be pushed onto the same `ctx.handlers` chain that the
-      // invocation will consult, so we MUST read from the live ALS
-      // frame and not from any legacy state-bag fallback.
-      const ctx = agencyStore.getStore()?.ctx;
-      if (ctx) {
-        ctx.pushHandler(async () => approve());
-        try {
-          return await this._invokeInner(descriptor, state);
-        } finally {
-          ctx.popHandler();
-        }
-      }
-    }
-    return this._invokeInner(descriptor, state);
-  }
-
-  private async _invokeInner(descriptor: CallType, state?: unknown): Promise<unknown> {
-    if (this._isBound) {
-      const callArgs = this.resolveArgs(descriptor);
-      const fullArgs = this.mergeWithBound(callArgs);
-      return this._fn(...fullArgs, state);
-    }
-    const resolvedArgs = this.resolveArgs(descriptor);
-    return this._fn(...resolvedArgs, state);
+  async invoke(descriptor: CallType): Promise<unknown> {
+    const args = this._isBound
+      ? this.mergeWithBound(this.resolveArgs(descriptor))
+      : this.resolveArgs(descriptor);
+    return this._fn(...args);
   }
 
   partial(bindings: Record<string, unknown>): AgencyFunction {
@@ -203,10 +178,24 @@ export class AgencyFunction {
 
   preapprove(): AgencyFunction {
     if (this._isPreapproved) return this;
+    // Wrap `_fn` in a `withPushedHandler` that installs an
+    // auto-approve handler for the duration of every call. The handler
+    // intercepts any `request_approval` interrupt the body raises so
+    // preapproved tools never bubble approval prompts up to the user.
+    // Doing the wrap here — rather than branching inside `invoke()` —
+    // keeps the per-call hot path branch-free.
+    const original = this._fn;
+    const wrapped = (...args: any[]) => {
+      const ctx = agencyStore.getStore()?.ctx;
+      if (!ctx) return original(...args);
+      return withPushedHandler(ctx, async () => approve(), () =>
+        Promise.resolve(original(...args)),
+      );
+    };
     return new AgencyFunction({
       name: this.name,
       module: this.module,
-      fn: this._fn,
+      fn: wrapped,
       params: this.params,
       toolDefinition: this.toolDefinition,
       exported: this.exported,

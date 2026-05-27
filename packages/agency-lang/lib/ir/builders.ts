@@ -407,16 +407,16 @@ export const ts = {
   },
 
   /**
-   * `await __validateChainRecursive(value, <descriptor>, __ctx)` — used at
+   * `await __validateChainRecursive(value, <descriptor>)` — used at
    * `!` sites whose resolved type carries at least one `@validate(...)` tag
    * anywhere in the tree. The descriptor is a TS expression built via
-   * `buildValidationDescriptor(...)`.
+   * `buildValidationDescriptor(...)`. Validators read `ctx` from the
+   * active `agencyStore` ALS frame, so no explicit ctx arg is threaded.
    */
   validateChainRecursive(value: TsNode, descriptor: TsNode): TsAwait {
     return ts.awaitCall(ts.id("__validateChainRecursive"), [
       value,
       descriptor,
-      ts.id("__ctx"),
     ]);
   },
 

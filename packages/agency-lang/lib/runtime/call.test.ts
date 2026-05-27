@@ -13,10 +13,25 @@ function makeAgencyFn(fn: (...args: any[]) => any, name = "testFn") {
 }
 
 describe("__call", () => {
-  it("calls AgencyFunction via .invoke() with descriptor and state", async () => {
-    const fn = makeAgencyFn(async (x: number, state: any) => ({ x, state }));
-    const result = await __call(fn, { type: "positional", args: [42] }, "myState");
-    expect(result).toEqual({ x: 42, state: "myState" });
+  it("calls AgencyFunction via .invoke() with descriptor", async () => {
+    const fn = makeAgencyFn(async (x: number) => ({ x }));
+    const result = await __call(fn, { type: "positional", args: [42] });
+    expect(result).toEqual({ x: 42 });
+  });
+
+  it("does not forward any trailing state arg to plain TS callees", async () => {
+    const seen: unknown[][] = [];
+    const target = (...args: unknown[]) => {
+      seen.push(args);
+    };
+    await __call(target, { type: "positional", args: [1, 2] });
+    expect(seen[0]).toEqual([1, 2]);
+  });
+
+  it("rejects unknown third positional via the type system", async () => {
+    const fn = makeAgencyFn(async (x: number) => x);
+    // @ts-expect-error — third positional was stateExtras; removed in this PR.
+    await __call(fn, { type: "positional", args: [1] }, { somethingCustom: true });
   });
 
   it("calls plain TS function by spreading positional args", async () => {
@@ -61,18 +76,18 @@ describe("__callMethod", () => {
   });
 
   it("short-circuits to undefined when optional and obj is null", async () => {
-    const result = await __callMethod(null, "foo", { type: "positional", args: [] }, undefined, true);
+    const result = await __callMethod(null, "foo", { type: "positional", args: [] }, true);
     expect(result).toBeUndefined();
   });
 
   it("short-circuits to undefined when optional and obj is undefined", async () => {
-    const result = await __callMethod(undefined, "foo", { type: "positional", args: [] }, undefined, true);
+    const result = await __callMethod(undefined, "foo", { type: "positional", args: [] }, true);
     expect(result).toBeUndefined();
   });
 
   it("calls normally when optional and obj is non-nullish", async () => {
     const obj = { greet: (name: string) => `hi ${name}` };
-    const result = await __callMethod(obj, "greet", { type: "positional", args: ["Bob"] }, undefined, true);
+    const result = await __callMethod(obj, "greet", { type: "positional", args: ["Bob"] }, true);
     expect(result).toBe("hi Bob");
   });
 

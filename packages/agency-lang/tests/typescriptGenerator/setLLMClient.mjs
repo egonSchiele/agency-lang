@@ -135,8 +135,6 @@ async function __initializeGlobals(__ctx) {
   __ctx.globals.set("setLLMClient.agency", "client", await __call(SimpleOpenAIClient, {
     type: "positional",
     args: []
-  }, {
-    ctx: __ctx
   }))
   await setLLMClient(getRuntimeContext().ctx.globals.get("setLLMClient.agency", "client"))
 }

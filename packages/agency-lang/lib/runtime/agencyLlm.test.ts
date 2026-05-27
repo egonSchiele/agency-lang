@@ -168,6 +168,40 @@ describe("agency.llm — options mapping", () => {
   // that to replace `runPrompt` for the other tests here).
 });
 
+describe("agency.llm — return type", () => {
+  it("returns Promise<string> without a schema (compile-time check)", async () => {
+    const ctx = makeCtx();
+    ctx.setLLMClient(new DeterministicClient([{ return: "hi" }]));
+    const threads = ThreadStore.withDefaultActive(ctx.statelogClient);
+    await inFrame(ctx, threads, async () => {
+      const r = await agency.llm("p");
+      // Type-level assertion: r must be string here. If the overload
+      // ever loses the no-schema branch this becomes a TS error.
+      const _s: string = r;
+      expect(typeof _s).toBe("string");
+    });
+  });
+
+  it("returns Promise<z.infer<S>> when a schema is provided (compile-time check)", async () => {
+    const ctx = makeCtx();
+    const schema = z.object({ first: z.string(), last: z.string() });
+    ctx.setLLMClient(
+      new DeterministicClient([{ return: { first: "ada", last: "lovelace" } }]),
+    );
+    const threads = ThreadStore.withDefaultActive(ctx.statelogClient);
+    await inFrame(ctx, threads, async () => {
+      const r = await agency.llm("extract", { schema });
+      // Type-level assertion: r is `{ first: string; last: string }`.
+      const first: string = r.first;
+      const last: string = r.last;
+      // @ts-expect-error — wrong field on the schema-typed result.
+      const _missing: string = r.missing;
+      expect(first).toBe("ada");
+      expect(last).toBe("lovelace");
+    });
+  });
+});
+
 describe("agency.llm — v1 surface lock", () => {
   it("LlmOpts has no tools / removedTools / maxToolCallRounds fields", async () => {
     const ctx = makeCtx();

@@ -37,22 +37,32 @@ import { runPrompt } from "./prompt.js";
 import type { MessageThread } from "./state/messageThread.js";
 import { getRuntimeContext } from "./asyncContext.js";
 
-export type LlmOpts = {
+export type LlmOpts<S extends z.ZodSchema = z.ZodSchema> = {
   /** Override the model for this call only. Does NOT mutate the
    *  active LLM client config; the override applies to this single
    *  prompt. Subsequent `agency.llm` calls without `opts.model` use
    *  the client's default. */
   model?: string;
   /** Structured-output schema. Maps to `runPrompt`'s `responseFormat`.
-   *  When set, the response is parsed and returned as the typed value
-   *  instead of the raw string content. */
-  schema?: z.ZodSchema;
+   *  When set, the response is parsed and the call returns
+   *  `z.infer<S>` instead of the raw string content. */
+  schema?: S;
   /** Override the thread the prompt + response are appended to.
    *  Default: the active thread on the current `ThreadStore`. */
   thread?: MessageThread;
 };
 
-/** Module-private. Re-exposed only via `agency.llm`. */
+/** Module-private. Re-exposed only via `agency.llm`.
+ *
+ *  Overloads: when `opts.schema` is provided the return type is
+ *  `z.infer<S>`; otherwise it's `string`. Order matters — the
+ *  schema-bearing overload must come first so TS picks it over the
+ *  string-returning fallback. */
+export function llm<S extends z.ZodSchema>(
+  prompt: string,
+  opts: LlmOpts<S> & { schema: S },
+): Promise<z.infer<S>>;
+export function llm(prompt: string, opts?: LlmOpts): Promise<string>;
 export async function llm(prompt: string, opts: LlmOpts = {}): Promise<any> {
   const thread = opts.thread ?? getRuntimeContext().threads.getOrCreateActive();
   // Build clientConfig with `model` only when explicitly overridden.

@@ -228,7 +228,7 @@ export class Runner {
     // If debugStep doesn't pause, we clear it below.
     this.frame.locals[this.debugFlagKey(id)] = true;
 
-    const dbg = await debugStep(this.ctx, this.state, {
+    const dbg = await debugStep(this.ctx, {
       moduleId: this.moduleId,
       scopeName: this.scopeName,
       stepPath: this.stepPath(id),

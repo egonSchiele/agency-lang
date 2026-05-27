@@ -1,31 +1,47 @@
 import { AgencyFunction } from "./agencyFunction.js";
 import type { CallType } from "./agencyFunction.js";
 import { agencyStore } from "./asyncContext.js";
+import type { StateStack } from "./state/stateStack.js";
 
 /**
- * Construct the `__state` bag that flows into AgencyFunction.invoke() from
- * the active ALS frame, merged with any caller-provided extras (e.g.
- * `moduleId`/`scopeName`/`stepPath` for checkpoint sites, or `{ ctx }`
- * when called from inside `__initializeGlobals` which runs before the
- * ALS frame is installed).
+ * Post-`__state`-drop migration: generated functions read `ctx` /
+ * `threads` / `stateStack` from the active `agencyStore` frame and no
+ * longer accept a trailing `__state` positional. The runtime call
+ * dispatcher therefore no longer constructs a merged state bag for
+ * every call — it just hands the caller-provided `extras` (when
+ * present) to `AgencyFunction.invoke()` as the optional `state` arg.
  *
- * Returning `undefined` here preserves the pre-ALS semantics where some
- * sites called `target.invoke(descriptor)` with no state.
+ * Two narrow special cases survive:
+ *
+ *  1. **`checkpoint()` / `getCheckpoint()` / `restore()` location info.**
+ *     The codegen emits `{ moduleId, scopeName, stepPath }` as `extras`
+ *     so the checkpoint-creation site records the source location.
+ *     These stdlib helpers still accept a trailing `__state` arg, but
+ *     read `ctx` / `stateStack` from ALS — the bag is consulted only
+ *     for the per-call-site location fields.
+ *
+ *  2. **Async-fork `stateStack` override.** Codegen for `async helper()`
+ *     unassigned calls emits `{ stateStack: __forked }` so the branch
+ *     runs on an isolated stack. We install a new ALS frame with the
+ *     forked stack before invoking, so the callee's
+ *     `getRuntimeContext().ctx.stateStack`-equivalent reads see the
+ *     branch stack instead of the parent's. (The async-unassigned
+ *     operator is slated for removal in favor of `fork` / `parallel`,
+ *     which carry their own per-branch ALS frames via
+ *     `runBatch.runInBranchAlsFrame`.)
  */
-function buildStateFromALS(extras?: unknown): unknown {
+function maybeRunWithForkedStack(
+  extras: unknown,
+  fn: () => Promise<unknown>,
+): Promise<unknown> {
+  const e = extras as Record<string, unknown> | undefined;
+  if (!e || !e.stateStack) return fn();
   const store = agencyStore.getStore();
-  if (!store) {
-    // Outside an ALS frame (e.g., global init): rely entirely on
-    // whatever the caller passed.
-    return extras;
-  }
-  const base = {
-    ctx: store.ctx,
-    threads: store.threads,
-    stateStack: store.stack,
-  };
-  if (!extras) return base;
-  return { ...base, ...(extras as Record<string, unknown>) };
+  if (!store) return fn();
+  return agencyStore.run(
+    { ...store, stack: e.stateStack as StateStack },
+    fn,
+  );
 }
 
 export async function __call(
@@ -38,7 +54,9 @@ export async function __call(
     return undefined;
   }
   if (AgencyFunction.isAgencyFunction(target)) {
-    return target.invoke(descriptor, buildStateFromALS(stateExtras));
+    return maybeRunWithForkedStack(stateExtras, () =>
+      target.invoke(descriptor, stateExtras),
+    );
   }
   if (typeof target !== "function") {
     throw new Error(`Cannot call non-function value: ${String(target)}`);
@@ -91,7 +109,9 @@ export async function __callMethod(
 
   const target = (obj as any)[prop];
   if (AgencyFunction.isAgencyFunction(target)) {
-    return target.invoke(descriptor, buildStateFromALS(stateExtras));
+    return maybeRunWithForkedStack(stateExtras, () =>
+      target.invoke(descriptor, stateExtras),
+    );
   }
   if (typeof target !== "function") {
     throw new Error(`Cannot call non-function value at property '${String(prop)}': ${String(target)}`);

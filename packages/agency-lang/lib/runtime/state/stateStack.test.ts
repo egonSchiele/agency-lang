@@ -2,6 +2,17 @@ import { describe, it, expect } from "vitest";
 import { StateStack, State, BranchState } from "./stateStack.js";
 import { _callbackImpl } from "../../stdlib/agency.js";
 import { CostGuard, GuardExceededError } from "../guard.js";
+import { runInTestContext } from "../asyncContext.js";
+import { ThreadStore } from "./threadStore.js";
+
+// Post-ALS migration: `_callbackImpl` reads `ctx` from
+// `getRuntimeContext()`, so each call must run inside an ALS frame
+// seeded with the fake ctx. Wrap _callbackImpl invocations here.
+function callCallback(ctx: any, name: string, fn: unknown): void {
+  runInTestContext(ctx, ctx.stateStack, new ThreadStore(), () => {
+    _callbackImpl(name, fn);
+  });
+}
 
 type FrameOpts = {
   args?: Record<string, any>;
@@ -429,7 +440,7 @@ describe("_callback", () => {
   it("registers on the caller frame when stack has >= 2 frames", () => {
     const ctx = ctxWithFrames(2); // [caller, callback's own frame]
     const fn = () => {};
-    _callbackImpl("onNodeStart", fn, { ctx } as any);
+    callCallback(ctx, "onNodeStart", fn);
     expect(ctx.stateStack.stack[0].scopedCallbacks).toEqual([
       { name: "onNodeStart", fn },
     ]);
@@ -440,49 +451,49 @@ describe("_callback", () => {
   it("routes to ctx.topLevelCallbacks when stack length <= 1 (module init)", () => {
     const ctx = ctxWithFrames(1); // only callback's own frame — top level
     const fn = () => {};
-    _callbackImpl("onNodeStart", fn, { ctx } as any);
+    callCallback(ctx, "onNodeStart", fn);
     expect(ctx.topLevelCallbacks).toEqual([{ name: "onNodeStart", fn }]);
     expect(ctx.stateStack.stack[0].scopedCallbacks).toBeUndefined();
   });
 
   it("routes to ctx.topLevelCallbacks when stack is empty (defensive)", () => {
     const ctx = ctxWithFrames(0);
-    _callbackImpl("onNodeStart", () => {}, { ctx } as any);
+    callCallback(ctx, "onNodeStart", () => {});
     expect(ctx.topLevelCallbacks).toHaveLength(1);
   });
 
   it("throws on unknown callback name", () => {
     const ctx = ctxWithFrames(2);
     expect(() =>
-      _callbackImpl("notAHook", () => {}, { ctx } as any),
+      callCallback(ctx, "notAHook", () => {}),
     ).toThrow(/Unknown callback/);
   });
 
   it("throws when fn is a string (non-callable)", () => {
     const ctx = ctxWithFrames(2);
     expect(() =>
-      _callbackImpl("onNodeStart", "not a function" as any, { ctx } as any),
+      callCallback(ctx, "onNodeStart", "not a function" as any),
     ).toThrow(/must be a function/i);
   });
 
   it("throws when fn is a number (non-callable)", () => {
     const ctx = ctxWithFrames(2);
     expect(() =>
-      _callbackImpl("onNodeStart", 42 as any, { ctx } as any),
+      callCallback(ctx, "onNodeStart", 42 as any),
     ).toThrow(/must be a function/i);
   });
 
   it("throws when fn is null", () => {
     const ctx = ctxWithFrames(2);
     expect(() =>
-      _callbackImpl("onNodeStart", null as any, { ctx } as any),
+      callCallback(ctx, "onNodeStart", null as any),
     ).toThrow(/must be a function/i);
   });
 
   it("throws when fn is undefined", () => {
     const ctx = ctxWithFrames(2);
     expect(() =>
-      _callbackImpl("onNodeStart", undefined as any, { ctx } as any),
+      callCallback(ctx, "onNodeStart", undefined as any),
     ).toThrow(/must be a function/i);
   });
 
@@ -490,7 +501,7 @@ describe("_callback", () => {
     const ctx = ctxWithFrames(2);
     const fn = (_data: any) => {};
     expect(() =>
-      _callbackImpl("onNodeStart", fn, { ctx } as any),
+      callCallback(ctx, "onNodeStart", fn),
     ).not.toThrow();
   });
 });

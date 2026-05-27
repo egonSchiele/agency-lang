@@ -276,13 +276,7 @@ export async function runPrompt(args: {
   const ctx = runtime.ctx as RuntimeContext<GraphState>;
 
   // Push a frame onto the state stack — runPrompt participates like any other function
-  const { stateStack, stack } = setupFunction({
-    state: {
-      stateStack: runtime.stack,
-      ctx,
-      threads: new ThreadStore(),
-    },
-  });
+  const { stateStack, stack } = setupFunction();
   const self = stack.locals;
 
   // Frame-backed locals (survive checkpoint/restore)

@@ -1500,23 +1500,23 @@ export class TypeScriptBuilder {
       argsObj[arg] = ts.id(arg);
     }
 
-    // Setup block
+    // Setup block. `setupFunction()` reads `ctx` / `threads` from the
+    // active `agencyStore` ALS frame seeded by the caller (a
+    // `runner.step` body, `runNode`'s top-level frame, or
+    // `runBatch.runInBranchAlsFrame`). Tool dispatch by an LLM also runs
+    // inside the issuing `runner.step` frame, so a frame is always
+    // active here.
     const setupStmts: TsNode[] = [
       ts.constDecl(
         "__setupData",
-        $(ts.id("setupFunction"))
-          .call([ts.obj({ state: ts.runtime.state })])
-          .done(),
+        $(ts.id("setupFunction")).call([]).done(),
       ),
 
-      ts.comment(
-        "__state will be undefined if this function is being called as a tool by an llm",
-      ),
       ts.setupEnv({
         stack: $(ts.id("__setupData")).prop("stack").done(),
         step: $(ts.id("__setupData")).prop("step").done(),
         self: $(ts.id("__setupData")).prop("self").done(),
-        ctx: ts.raw("__state?.ctx || __globalCtx"),
+        ctx: ts.raw("getRuntimeContext().ctx"),
       }),
 
       // Ensure this module's globals are initialized on the current ctx.
@@ -1562,8 +1562,8 @@ export class TypeScriptBuilder {
     );
 
     // Create runner for step execution. `threads` is read directly from
-    // the setup-function result (a fresh ThreadStore when called outside
-    // any node, or the per-node store threaded in via the InternalFunctionState).
+    // the setup-function result, which now resolves it from the active
+    // ALS frame instead of an `__state` positional.
     setupStmts.push(
       ts.raw(
         `const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: ${JSON.stringify(this.moduleId)}, scopeName: ${JSON.stringify(functionName)}, threads: __setupData.threads });`,
@@ -1694,7 +1694,9 @@ export class TypeScriptBuilder {
     this.scopes.inSafeFunction = prevSafe;
     this.scopes.pop();
 
-    // Build function params: typed args + __state
+    // Build function params from the source signature. The legacy
+    // trailing `__state: InternalFunctionState | undefined` positional
+    // is gone — `ctx` / `threads` / `stateStack` flow through ALS.
     const fnParams: TsParam[] = parameters.map((p) => {
       const baseType = p.typeHint ? formatTypeHintTs(p.typeHint) : "any";
       if (p.defaultValue) {
@@ -1705,11 +1707,6 @@ export class TypeScriptBuilder {
         };
       }
       return { name: p.name, typeAnnotation: baseType };
-    });
-    fnParams.push({
-      name: "__state",
-      typeAnnotation: "InternalFunctionState | undefined",
-      defaultValue: ts.id("undefined"),
     });
 
     const implName = `__${functionName}_impl`;
@@ -2270,7 +2267,11 @@ export class TypeScriptBuilder {
         stack: $(ts.id("__setupData")).prop("stack").done(),
         step: $(ts.id("__setupData")).prop("step").done(),
         self: $(ts.id("__setupData")).prop("self").done(),
-        ctx: $(ts.runtime.state).prop("ctx").done(),
+        // `runNode` (and the resume / rewind variants) install the
+        // top-level `agencyStore` frame before `graph.run` invokes
+        // this node body. Read `ctx` from ALS so the local matches
+        // the same per-run context that `setupNode` just used.
+        ctx: ts.raw("getRuntimeContext().ctx"),
       }),
 
       // Pass `threads` explicitly so the Runner's ALS frame is seeded

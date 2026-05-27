@@ -1,7 +1,7 @@
 import * as fs from "fs";
 import * as path from "path";
 import { MessageJSON } from "smoltalk";
-import { agencyStore, runInBootstrapFrame } from "./asyncContext.js";
+import { agencyStore, getRuntimeContext, runInBootstrapFrame } from "./asyncContext.js";
 import { callHook } from "./hooks.js";
 import type { AgencyCallbacks } from "./hooks.js";
 import type { RuntimeContext } from "./state/context.js";
@@ -13,7 +13,7 @@ import {
 import { State, StateStack } from "./state/stateStack.js";
 import { ThreadStore } from "./state/threadStore.js";
 import { resolveTraceFilePath } from "./trace/traceWriter.js";
-import { GraphState, InternalFunctionState, RunNodeResult } from "./types.js";
+import { GraphState, RunNodeResult } from "./types.js";
 import { createReturnObject } from "./utils.js";
 import { color } from "@/utils/termcolors.js";
 import { nanoid } from "nanoid";
@@ -26,7 +26,12 @@ export function setupNode(args: { state: GraphState }): {
   threads: ThreadStore;
 } {
   const { state } = args;
-  const ctx = state.ctx;
+  // `ctx` flows through the ALS frame installed by `runNode` (or by
+  // `respondToInterrupts` / `rewindFrom`). The `state.ctx` field is still
+  // populated by graph.run for backwards compat, but we no longer rely on
+  // it here — reading from ALS keeps every per-scope helper consistent
+  // with the same source of truth.
+  const ctx = getRuntimeContext().ctx;
 
   const stack = ctx.stateStack.getNewState();
   const step = stack.step;
@@ -52,37 +57,26 @@ export function setupNode(args: { state: GraphState }): {
   return { stack, step, self, threads };
 }
 
-export function setupFunction(args: { state?: InternalFunctionState }): {
+export function setupFunction(): {
   stateStack: StateStack;
   stack: State;
   step: number;
   self: Record<string, any>;
   threads: ThreadStore;
 } {
-  const { state } = args;
-  if (state === undefined) {
-    // this means the function got called as a tool by the llm
-    const stateStack = new StateStack();
-    const stack = stateStack.getNewState();
-    return {
-      stateStack,
-      stack,
-      step: 0,
-      self: stack.locals,
-      threads: new ThreadStore(),
-    };
-  }
-
-  const stateStack = state.stateStack ?? state.ctx.stateStack;
+  // Post-ALS migration: `ctx` / `threads` come from the active
+  // `agencyStore` frame seeded by the caller (a `runner.step` body,
+  // `runNode`'s top-level frame, or `runBatch.runInBranchAlsFrame`).
+  // Tool-dispatch from the LLM also runs inside the issuing
+  // `runner.step` frame, so the previously-needed "called as tool with
+  // no state" fallback (fresh StateStack + empty ThreadStore) cannot
+  // arise here. Direct JS callers of `__foo_impl` from outside an
+  // Agency execution frame must wrap their call in `runInTestContext`
+  // (see lib/runtime/asyncContext.ts).
+  const { ctx, threads } = getRuntimeContext();
+  const stateStack = ctx.stateStack;
   const stack = stateStack.getNewState();
-  const step = stack.step;
-  const self = stack.locals;
-
-  // if being called from a node, we'll pass in threads.
-  // if being called as a tool, we won't have threads, but we'll create an empty ThreadStore here.
-  const threads = state.threads || new ThreadStore();
-
-  return { stateStack, stack, step, self, threads };
+  return { stateStack, stack, step: stack.step, self: stack.locals, threads };
 }
 
 // eslint-disable-next-line max-lines-per-function -- core node-execution loop; refactor tracked separately

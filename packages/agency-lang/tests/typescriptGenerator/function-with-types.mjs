@@ -5,7 +5,7 @@ import { z } from "agency-lang/zod";
 import { goToNode, color, nanoid } from "agency-lang";
 import { smoltalk } from "agency-lang";
 import path from "path";
-import type { GraphState, InternalFunctionState, Interrupt, InterruptResponse, Checkpoint, LLMClient } from "agency-lang/runtime";
+import type { GraphState, Interrupt, InterruptResponse, Checkpoint, LLMClient } from "agency-lang/runtime";
 import {
   RuntimeContext, MessageThread, ThreadStore, Runner, McpManager,
   setupNode, setupFunction, runNode, runPrompt, callHook,
@@ -143,15 +143,12 @@ __toolRegistry["readSkill"] = __AgencyFunction.create({
   toolDefinition: __readSkillTool,
 }, __toolRegistry);
 __functionRefReviver.registry = __toolRegistry;
-async function __add_impl(x: number, y: number, __state: InternalFunctionState | undefined = undefined) {
-  const __setupData = setupFunction({
-    state: __state
-  });
-  // __state will be undefined if this function is being called as a tool by an llm
+async function __add_impl(x: number, y: number) {
+  const __setupData = setupFunction();
   const __stack = __setupData.stack;
 const __step = __setupData.step;
 const __self = __setupData.self;
-const __ctx = __state?.ctx || __globalCtx;
+const __ctx = getRuntimeContext().ctx;
 let __forked;
 let __functionCompleted = false;
   if (!__ctx.globals.isInitialized("function-with-types.agency")) {
@@ -285,15 +282,12 @@ const add = __AgencyFunction.create({
   safe: false,
   exported: false
 }, __toolRegistry);
-async function __greet_impl(name: string, __state: InternalFunctionState | undefined = undefined) {
-  const __setupData = setupFunction({
-    state: __state
-  });
-  // __state will be undefined if this function is being called as a tool by an llm
+async function __greet_impl(name: string) {
+  const __setupData = setupFunction();
   const __stack = __setupData.stack;
 const __step = __setupData.step;
 const __self = __setupData.self;
-const __ctx = __state?.ctx || __globalCtx;
+const __ctx = getRuntimeContext().ctx;
 let __forked;
 let __functionCompleted = false;
   if (!__ctx.globals.isInitialized("function-with-types.agency")) {
@@ -413,15 +407,12 @@ const greet = __AgencyFunction.create({
   safe: false,
   exported: false
 }, __toolRegistry);
-async function __mixed_impl(count: number, label: any, __state: InternalFunctionState | undefined = undefined) {
-  const __setupData = setupFunction({
-    state: __state
-  });
-  // __state will be undefined if this function is being called as a tool by an llm
+async function __mixed_impl(count: number, label: any) {
+  const __setupData = setupFunction();
   const __stack = __setupData.stack;
 const __step = __setupData.step;
 const __self = __setupData.self;
-const __ctx = __state?.ctx || __globalCtx;
+const __ctx = getRuntimeContext().ctx;
 let __forked;
 let __functionCompleted = false;
   if (!__ctx.globals.isInitialized("function-with-types.agency")) {
@@ -552,15 +543,12 @@ const mixed = __AgencyFunction.create({
   safe: false,
   exported: false
 }, __toolRegistry);
-async function __processArray_impl(items: number[], __state: InternalFunctionState | undefined = undefined) {
-  const __setupData = setupFunction({
-    state: __state
-  });
-  // __state will be undefined if this function is being called as a tool by an llm
+async function __processArray_impl(items: number[]) {
+  const __setupData = setupFunction();
   const __stack = __setupData.stack;
 const __step = __setupData.step;
 const __self = __setupData.self;
-const __ctx = __state?.ctx || __globalCtx;
+const __ctx = getRuntimeContext().ctx;
 let __forked;
 let __functionCompleted = false;
   if (!__ctx.globals.isInitialized("function-with-types.agency")) {
@@ -680,15 +668,12 @@ const processArray = __AgencyFunction.create({
   safe: false,
   exported: false
 }, __toolRegistry);
-async function __flexible_impl(value: string | number, __state: InternalFunctionState | undefined = undefined) {
-  const __setupData = setupFunction({
-    state: __state
-  });
-  // __state will be undefined if this function is being called as a tool by an llm
+async function __flexible_impl(value: string | number) {
+  const __setupData = setupFunction();
   const __stack = __setupData.stack;
 const __step = __setupData.step;
 const __self = __setupData.self;
-const __ctx = __state?.ctx || __globalCtx;
+const __ctx = getRuntimeContext().ctx;
 let __forked;
 let __functionCompleted = false;
   if (!__ctx.globals.isInitialized("function-with-types.agency")) {
@@ -815,7 +800,7 @@ graph.node("foo", async (__state: GraphState) => {
   const __stack = __setupData.stack;
 const __step = __setupData.step;
 const __self = __setupData.self;
-const __ctx = __state.ctx;
+const __ctx = getRuntimeContext().ctx;
 let __forked;
 let __functionCompleted = false;
   const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "function-with-types.agency", scopeName: "foo", threads: __setupData.threads });
@@ -891,7 +876,7 @@ graph.node("main", async (__state: GraphState) => {
   const __stack = __setupData.stack;
 const __step = __setupData.step;
 const __self = __setupData.self;
-const __ctx = __state.ctx;
+const __ctx = getRuntimeContext().ctx;
 let __forked;
 let __functionCompleted = false;
   const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "function-with-types.agency", scopeName: "main", threads: __setupData.threads });

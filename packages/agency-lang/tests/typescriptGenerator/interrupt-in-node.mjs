@@ -5,7 +5,7 @@ import { z } from "agency-lang/zod";
 import { goToNode, color, nanoid } from "agency-lang";
 import { smoltalk } from "agency-lang";
 import path from "path";
-import type { GraphState, InternalFunctionState, Interrupt, InterruptResponse, Checkpoint, LLMClient } from "agency-lang/runtime";
+import type { GraphState, Interrupt, InterruptResponse, Checkpoint, LLMClient } from "agency-lang/runtime";
 import {
   RuntimeContext, MessageThread, ThreadStore, Runner, McpManager,
   setupNode, setupFunction, runNode, runPrompt, callHook,
@@ -143,15 +143,12 @@ __toolRegistry["readSkill"] = __AgencyFunction.create({
   toolDefinition: __readSkillTool,
 }, __toolRegistry);
 __functionRefReviver.registry = __toolRegistry;
-async function __greet_impl(name: string, age: number, __state: InternalFunctionState | undefined = undefined) {
-  const __setupData = setupFunction({
-    state: __state
-  });
-  // __state will be undefined if this function is being called as a tool by an llm
+async function __greet_impl(name: string, age: number) {
+  const __setupData = setupFunction();
   const __stack = __setupData.stack;
 const __step = __setupData.step;
 const __self = __setupData.self;
-const __ctx = __state?.ctx || __globalCtx;
+const __ctx = getRuntimeContext().ctx;
 let __forked;
 let __functionCompleted = false;
   if (!__ctx.globals.isInitialized("interrupt-in-node.agency")) {
@@ -313,7 +310,7 @@ graph.node("foo2", async (__state: GraphState) => {
   const __stack = __setupData.stack;
 const __step = __setupData.step;
 const __self = __setupData.self;
-const __ctx = __state.ctx;
+const __ctx = getRuntimeContext().ctx;
 let __forked;
 let __functionCompleted = false;
   const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "interrupt-in-node.agency", scopeName: "foo2", threads: __setupData.threads });
@@ -419,7 +416,7 @@ graph.node("sayHi", async (__state: GraphState) => {
   const __stack = __setupData.stack;
 const __step = __setupData.step;
 const __self = __setupData.self;
-const __ctx = __state.ctx;
+const __ctx = getRuntimeContext().ctx;
 let __forked;
 let __functionCompleted = false;
   const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "interrupt-in-node.agency", scopeName: "sayHi", threads: __setupData.threads });

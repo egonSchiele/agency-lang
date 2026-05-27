@@ -3,7 +3,7 @@
 // Any manual changes will be lost.
 import { apply } from "typestache";
 
-export const template = `const __dbg = await debugStep(__ctx, __state, {
+export const template = `const __dbg = await debugStep(__ctx, {
   moduleId: {{{moduleId:string}}},
   scopeName: {{{scopeName:string}}},
   stepPath: {{{stepPath:string}}},

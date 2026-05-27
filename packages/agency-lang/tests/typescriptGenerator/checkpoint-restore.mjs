@@ -172,10 +172,6 @@ await callHook({
 __stack.locals.cp = await __call(checkpoint, {
           type: "positional",
           args: []
-        }, {
-          moduleId: "checkpoint-restore.agency",
-          scopeName: "main",
-          stepPath: "1"
         });
 if (hasInterrupts(__stack.locals.cp)) {
           await getRuntimeContext().ctx.pendingPromises.awaitAll()

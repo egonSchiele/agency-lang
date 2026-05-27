@@ -137,8 +137,6 @@ async function __initializeGlobals(__ctx) {
     namedArgs: {
       name: `world`
     }
-  }, {
-    ctx: __ctx
   })
   await __call(greet, {
     type: "named",
@@ -147,8 +145,6 @@ async function __initializeGlobals(__ctx) {
       name: `world`,
       greeting: `Hi`
     }
-  }, {
-    ctx: __ctx
   })
 }
 async function __registerTopLevelCallbacks(__ctx) {

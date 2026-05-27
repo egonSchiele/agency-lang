@@ -134,8 +134,6 @@ async function __initializeGlobals(__ctx) {
   await __call(log, {
     type: "positional",
     args: [`INFO`, `hello`, `world`]
-  }, {
-    ctx: __ctx
   })
 }
 async function __registerTopLevelCallbacks(__ctx) {

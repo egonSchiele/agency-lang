@@ -298,12 +298,10 @@ __stack.branches = (__stack.branches || {});
 __stack.branches["1"] = {
           stack: __forked
         };
-__stack.locals.x = __call(compute, {
-          type: "positional",
-          args: [5]
-        }, {
-          stateStack: __forked
-        });
+__stack.locals.x = agencyStore.run({ ...getRuntimeContext(), stack: __forked }, () => __call(compute, {
+  type: "positional",
+  args: [5]
+}));
 __self.__pendingKey_x = getRuntimeContext().ctx.pendingPromises.add(__stack.locals.x, (val) => { __stack.locals.x = val; });
       });
       await runner.branchStep(2, "2", async (runner) => {
@@ -317,12 +315,10 @@ __stack.branches = (__stack.branches || {});
 __stack.branches["2"] = {
           stack: __forked
         };
-__stack.locals.y = __call(compute, {
-          type: "positional",
-          args: [10]
-        }, {
-          stateStack: __forked
-        });
+__stack.locals.y = agencyStore.run({ ...getRuntimeContext(), stack: __forked }, () => __call(compute, {
+  type: "positional",
+  args: [10]
+}));
 __self.__pendingKey_y = getRuntimeContext().ctx.pendingPromises.add(__stack.locals.y, (val) => { __stack.locals.y = val; });
       });
       await runner.step(3, async (runner) => {

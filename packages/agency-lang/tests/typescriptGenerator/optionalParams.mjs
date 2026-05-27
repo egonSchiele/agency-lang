@@ -134,14 +134,10 @@ async function __initializeGlobals(__ctx) {
   await __call(greet, {
     type: "positional",
     args: [`world`]
-  }, {
-    ctx: __ctx
   })
   await __call(greet, {
     type: "positional",
     args: [`world`, `Hi`]
-  }, {
-    ctx: __ctx
   })
 }
 async function __registerTopLevelCallbacks(__ctx) {

@@ -304,7 +304,10 @@ __stack.branches = (__stack.branches || {});
 __stack.branches["1"] = {
           stack: __forked
         };
-getRuntimeContext().ctx.pendingPromises.add(agencyStore.run({ ...getRuntimeContext(), stack: __forked }, () => __call(append, {
+getRuntimeContext().ctx.pendingPromises.add(agencyStore.run({
+  ...getRuntimeContext(),
+  stack: __forked
+}, () => __call(append, {
   type: "positional",
   args: [1, `hello`]
 })))
@@ -320,7 +323,10 @@ __stack.branches = (__stack.branches || {});
 __stack.branches["2"] = {
           stack: __forked
         };
-getRuntimeContext().ctx.pendingPromises.add(agencyStore.run({ ...getRuntimeContext(), stack: __forked }, () => __call(append, {
+getRuntimeContext().ctx.pendingPromises.add(agencyStore.run({
+  ...getRuntimeContext(),
+  stack: __forked
+}, () => __call(append, {
   type: "positional",
   args: [0.5, `world`]
 })))

@@ -41,6 +41,11 @@ import {
 } from "./checkpoint.js";
 import type { RestoreOptions } from "./errors.js";
 import { CostGuard, TimeGuard } from "./guard.js";
+import {
+  withResumableScope as _withResumableScope,
+  type ResumableScope,
+  type ResumableScopeOpts,
+} from "./resumableScope.js";
 import type { Checkpoint } from "./state/checkpointStore.js";
 import type { RuntimeContext } from "./state/context.js";
 import type { StateStack } from "./state/stateStack.js";
@@ -261,5 +266,9 @@ export const agency = {
   withTimeGuard,
   addCost,
 
+  withResumableScope: _withResumableScope,
+
   withTestContext,
 };
+
+export type { ResumableScope, ResumableScopeOpts };

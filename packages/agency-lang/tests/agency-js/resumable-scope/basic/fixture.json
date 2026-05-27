@@ -1,0 +1,13 @@
+{
+  "result": {
+    "id": "order-42",
+    "amount": 100,
+    "validated": true,
+    "stored": true
+  },
+  "calls": {
+    "s1": 1,
+    "s2": 1,
+    "s3": 1
+  }
+}

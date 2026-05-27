@@ -1,0 +1,6 @@
+import { processWithHalt } from "./helpers.js"
+
+node main(seed: string) {
+  const result = processWithHalt(seed)
+  return result
+}

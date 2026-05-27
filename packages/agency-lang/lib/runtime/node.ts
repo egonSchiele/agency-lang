@@ -64,7 +64,7 @@ export function setupFunction(): {
   self: Record<string, any>;
   threads: ThreadStore;
 } {
-  // Post-ALS migration: `ctx` / `threads` come from the active
+  // Post-ALS migration: `ctx` / `stack` / `threads` come from the active
   // `agencyStore` frame seeded by the caller (a `runner.step` body,
   // `runNode`'s top-level frame, or `runBatch.runInBranchAlsFrame`).
   // Tool-dispatch from the LLM also runs inside the issuing
@@ -73,8 +73,15 @@ export function setupFunction(): {
   // arise here. Direct JS callers of `__foo_impl` from outside an
   // Agency execution frame must wrap their call in `runInTestContext`
   // (see lib/runtime/asyncContext.ts).
-  const { ctx, threads } = getRuntimeContext();
-  const stateStack = ctx.stateStack;
+  //
+  // CRITICAL: read `stack` from ALS, not from `ctx.stateStack`. Inside
+  // a fork/parallel/race branch, `runBatch.runInBranchAlsFrame` installs
+  // an ALS frame whose `stack` is the per-branch StateStack — distinct
+  // from `ctx.stateStack`. Pushing a new frame onto `ctx.stateStack`
+  // would corrupt the parent's stack and break per-branch isolation
+  // (interrupts, abort signals, restore on resume). The pre-migration
+  // code preserved this with `state.stateStack ?? state.ctx.stateStack`.
+  const { stack: stateStack, threads } = getRuntimeContext();
   const stack = stateStack.getNewState();
   return { stateStack, stack, step: stack.step, self: stack.locals, threads };
 }

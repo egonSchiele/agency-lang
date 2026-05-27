@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { stripBoundParams } from "./stripBoundParams.js";
 import { approve } from "./interrupts.js";
+import { agencyStore } from "./asyncContext.js";
 
 export const UNSET: unique symbol = Symbol("UNSET");
 
@@ -120,13 +121,22 @@ export class AgencyFunction {
   }
 
   async invoke(descriptor: CallType, state?: unknown): Promise<unknown> {
-    const ctx = (state as any)?.ctx;
-    if (this._isPreapproved && ctx) {
-      ctx.pushHandler(async () => approve());
-      try {
-        return await this._invokeInner(descriptor, state);
-      } finally {
-        ctx.popHandler();
+    if (this._isPreapproved) {
+      // Post-ALS migration: `ctx` is no longer plumbed in as `state.ctx`
+      // for normal calls — read it from the active `agencyStore` frame
+      // installed by the caller's `runner.step` body (or, for
+      // module-init paths, the bootstrap frame). The preapprove handler
+      // must be pushed onto the same `ctx.handlers` chain that the
+      // invocation will consult, so we MUST read from the live ALS
+      // frame and not from any legacy state-bag fallback.
+      const ctx = agencyStore.getStore()?.ctx;
+      if (ctx) {
+        ctx.pushHandler(async () => approve());
+        try {
+          return await this._invokeInner(descriptor, state);
+        } finally {
+          ctx.popHandler();
+        }
       }
     }
     return this._invokeInner(descriptor, state);

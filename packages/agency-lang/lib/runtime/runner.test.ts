@@ -1,6 +1,8 @@
 import { describe, it, expect } from "vitest";
 import { Runner } from "./runner.js";
-import { State } from "./state/stateStack.js";
+import { State, StateStack } from "./state/stateStack.js";
+import { ThreadStore } from "./state/threadStore.js";
+import { getRuntimeContext } from "./asyncContext.js";
 import { makeMockCtx } from "./__tests__/testHelpers.js";
 
 function makeFrame(): State {
@@ -635,6 +637,55 @@ describe("Runner", () => {
       expect(frame.locals.__condbranch_1).toBe(0); // ifElse at step 1, branch 0
       expect(frame.locals.__substep_1).toBe(2); // 2 substeps in ifElse
       expect(frame.locals.__iteration_2).toBe(2); // 2 loop iterations
+    });
+  });
+
+  describe("runInScope seeds the ALS callsite slot", () => {
+    it("populates moduleId / scopeName / stepPath for a single step", async () => {
+      const frame = makeFrame();
+      const runner = new Runner(makeMockCtx(), frame, {
+        moduleId: "modX",
+        scopeName: "fooScope",
+        stack: new StateStack(),
+        threads: new ThreadStore(),
+      });
+      let seen: any = null;
+      await runner.step(1, async () => {
+        seen = getRuntimeContext().callsite;
+      });
+      expect(seen).toEqual({
+        moduleId: "modX",
+        scopeName: "fooScope",
+        stepPath: "1",
+      });
+    });
+
+    it("updates stepPath for nested step IDs", async () => {
+      const frame = makeFrame();
+      const runner = new Runner(makeMockCtx(), frame, {
+        moduleId: "modX",
+        scopeName: "fooScope",
+        stack: new StateStack(),
+        threads: new ThreadStore(),
+      });
+      const paths: string[] = [];
+      await runner.step(0, async () => {
+        paths.push(getRuntimeContext().callsite!.stepPath);
+        await runner.ifElse(0, [
+          {
+            condition: () => true,
+            body: async (r) => {
+              await r.step(0, async () => {
+                paths.push(getRuntimeContext().callsite!.stepPath);
+              });
+            },
+          },
+        ]);
+      });
+      // Top-level step 0 (path = ["0"]) and nested step 0.0.0 inside
+      // the ifElse branch (path = ["0", "0", "0", "0"]).
+      expect(paths[0]).toBe("0");
+      expect(paths[paths.length - 1]).toContain("0.0");
     });
   });
 });

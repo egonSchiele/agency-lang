@@ -87,7 +87,16 @@ export class Runner {
   private runInScope<T>(fn: () => Promise<T>): Promise<T> {
     if (this.stack && this.threads) {
       return agencyStore.run(
-        { ctx: this.ctx, stack: this.stack, threads: this.threads },
+        {
+          ctx: this.ctx,
+          stack: this.stack,
+          threads: this.threads,
+          callsite: {
+            moduleId: this.moduleId,
+            scopeName: this.scopeName,
+            stepPath: this.path.join("."),
+          },
+        },
         fn,
       );
     }

@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { stripBoundParams } from "./stripBoundParams.js";
 import { approve } from "./interrupts.js";
-import { agencyStore } from "./asyncContext.js";
+import { agencyStore, withPushedHandler } from "./asyncContext.js";
 
 export const UNSET: unique symbol = Symbol("UNSET");
 
@@ -120,36 +120,29 @@ export class AgencyFunction {
     return this._unboundParams;
   }
 
-  async invoke(descriptor: CallType, state?: unknown): Promise<unknown> {
-    if (this._isPreapproved) {
-      // Post-ALS migration: `ctx` is no longer plumbed in as `state.ctx`
-      // for normal calls — read it from the active `agencyStore` frame
-      // installed by the caller's `runner.step` body (or, for
-      // module-init paths, the bootstrap frame). The preapprove handler
-      // must be pushed onto the same `ctx.handlers` chain that the
-      // invocation will consult, so we MUST read from the live ALS
-      // frame and not from any legacy state-bag fallback.
-      const ctx = agencyStore.getStore()?.ctx;
-      if (ctx) {
-        ctx.pushHandler(async () => approve());
-        try {
-          return await this._invokeInner(descriptor, state);
-        } finally {
-          ctx.popHandler();
-        }
-      }
-    }
-    return this._invokeInner(descriptor, state);
+  async invoke(descriptor: CallType): Promise<unknown> {
+    // Preapprove tools install a handler that auto-approves any
+    // `request_approval` interrupt raised while the tool body runs.
+    // The handler must be pushed onto the same `ctx.handlers` chain
+    // the invocation consults, so we read `ctx` from the live ALS
+    // frame (seeded by the caller's `runner.step` body — or by the
+    // bootstrap frame for module-init paths). When no frame is
+    // installed (the function was called from a non-Agency context),
+    // skip the push/pop dance — no preapprove machinery to wire up.
+    const ctx = this._isPreapproved ? agencyStore.getStore()?.ctx : undefined;
+    if (!ctx) return this._invokeInner(descriptor);
+    return withPushedHandler(
+      ctx,
+      async () => approve(),
+      () => this._invokeInner(descriptor),
+    );
   }
 
-  private async _invokeInner(descriptor: CallType, state?: unknown): Promise<unknown> {
-    if (this._isBound) {
-      const callArgs = this.resolveArgs(descriptor);
-      const fullArgs = this.mergeWithBound(callArgs);
-      return this._fn(...fullArgs, state);
-    }
-    const resolvedArgs = this.resolveArgs(descriptor);
-    return this._fn(...resolvedArgs, state);
+  private async _invokeInner(descriptor: CallType): Promise<unknown> {
+    const args = this._isBound
+      ? this.mergeWithBound(this.resolveArgs(descriptor))
+      : this.resolveArgs(descriptor);
+    return this._fn(...args);
   }
 
   partial(bindings: Record<string, unknown>): AgencyFunction {

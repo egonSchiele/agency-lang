@@ -2,7 +2,7 @@ import * as smoltalk from "smoltalk";
 import { PromptResult, ToolCallJSON } from "smoltalk";
 import { createLogger } from "../logger.js";
 import { AgencyFunction } from "./agencyFunction.js";
-import { getRuntimeContext } from "./asyncContext.js";
+import { agencyStore, getRuntimeContext } from "./asyncContext.js";
 import { AgencyCancelledError, isAbortError } from "./errors.js";
 import { callHook, invokeCallbacks } from "./hooks.js";
 import { hasInterrupts, isRejected } from "./interrupts.js";
@@ -475,9 +475,18 @@ export async function runPrompt(args: {
       try {
         const toolThreads = new ThreadStore();
         toolThreads.setStatelogClient(ctx.statelogClient);
-        toolResult = await handler.invoke(
-          { type: "named", positionalArgs: [], namedArgs },
-          { ctx, threads: toolThreads, stateStack: branchStack },
+        // Install a per-tool ALS frame with the tool's isolated
+        // ThreadStore and the branch's StateStack. The handler body
+        // reads these via `getRuntimeContext()`; without the wrap, it
+        // would see whatever frame the prompt loop is running in.
+        toolResult = await agencyStore.run(
+          { ctx, stack: branchStack, threads: toolThreads },
+          () =>
+            handler.invoke({
+              type: "named",
+              positionalArgs: [],
+              namedArgs,
+            }),
         );
       } catch (error: unknown) {
         const errorMessage =

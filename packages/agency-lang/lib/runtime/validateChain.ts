@@ -22,14 +22,14 @@ export type AgencyValidator =
 
 async function callValidator(
   v: AgencyValidator,
-  ctx: unknown,
+  _ctx: unknown,
   value: unknown,
 ): Promise<ResultValue> {
   if (AgencyFunction.isAgencyFunction(v)) {
-    return (await (v as AgencyFunction).invoke(
-      { type: "positional", args: [value] },
-      { ctx },
-    )) as ResultValue;
+    return (await (v as AgencyFunction).invoke({
+      type: "positional",
+      args: [value],
+    })) as ResultValue;
   }
   return (v as (x: unknown) => Promise<ResultValue> | ResultValue)(value);
 }

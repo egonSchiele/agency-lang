@@ -3,7 +3,7 @@ import { checkpoint, getCheckpoint, restore } from "./checkpoint.js";
 import { CheckpointError, RestoreSignal } from "./errors.js";
 import { makeMockCtx } from "./__tests__/testHelpers.js";
 import { CheckpointStore } from "./index.js";
-import { runInTestContext } from "./asyncContext.js";
+import { runInTestContext, withCallsite } from "./asyncContext.js";
 import { ThreadStore } from "./state/threadStore.js";
 
 // Post-ALS migration: the checkpoint stdlib helpers read `ctx` and
@@ -63,6 +63,33 @@ describe("checkpoint()", () => {
     expect(cp!.stepPath).toBe("");
     expect(cp!.label).toBeNull();
     expect(cp!.pinned).toBe(false);
+  });
+
+  it("records location from the active callsite slot", async () => {
+    const ctx = makeMockCtx();
+    const id = await runInTestContext(
+      ctx,
+      ctx.stateStack,
+      new ThreadStore(),
+      () =>
+        withCallsite(
+          { moduleId: "modA", scopeName: "scopeB", stepPath: "1.2" },
+          () => checkpoint(),
+        ),
+    );
+    const cp = ctx.checkpoints.get(id)!;
+    expect(cp.moduleId).toBe("modA");
+    expect(cp.scopeName).toBe("scopeB");
+    expect(cp.stepPath).toBe("1.2");
+  });
+
+  it("falls back to empty location when no callsite set", async () => {
+    const ctx = makeMockCtx();
+    const id = await wrap(ctx, () => checkpoint());
+    const cp = ctx.checkpoints.get(id)!;
+    expect(cp.moduleId).toBe("");
+    expect(cp.scopeName).toBe("");
+    expect(cp.stepPath).toBe("");
   });
 });
 

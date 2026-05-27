@@ -28,6 +28,7 @@ export default defineConfig({
               link: "/guide/imports-and-packages",
             },
             { text: "TypeScript Interoperability", link: "/guide/ts-interop" },
+            { text: "TypeScript Helpers (agency.*)", link: "/guide/ts-helpers" },
             { text: "Odds and Ends", link: "/guide/odds-and-ends" },
             { text: "Troubleshooting", link: "/guide/troubleshooting" },
           ],
@@ -109,6 +110,7 @@ export default defineConfig({
             { text: "Handlers", link: "/guide/handlers" },
             { text: "Testing", link: "/guide/testing" },
             { text: "TypeScript Interoperability", link: "/guide/ts-interop" },
+            { text: "TypeScript Helpers (agency.*)", link: "/guide/ts-helpers" },
             {
               text: "Message History and Threads",
               link: "/guide/message-history-and-threads",

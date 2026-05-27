@@ -1,3 +1,65 @@
+## [unreleased]
+
+### Added — TypeScript helpers are first-class
+
+This release closes the gap between Agency function calls and plain
+TypeScript function calls. A TS helper called from Agency code can now
+read context, push thread messages, install handlers / guards, take
+checkpoints, issue LLM calls, and write resumable workflows — all
+through one discoverable namespace.
+
+- **`agency.*` public namespace** (#208). One surface for reading
+  context (`agency.ctx`, `agency.callsite`, `agency.global`), pushing
+  thread messages (`agency.thread.*`), installing handlers and guards
+  (`agency.withHandler`, `agency.withCostGuard`, `agency.withTimeGuard`,
+  `agency.addCost`), and taking checkpoints (`agency.checkpoint`,
+  `agency.getCheckpoint`, `agency.restore`, `agency.withCallsite`).
+  Namespace-only — no individual named exports.
+- **`agency.withResumableScope(opts, body)`** (#209). Temporal-style
+  resumable scope for TS. `s.step(fn)` is journaled against a
+  serialized stack frame; on resume completed steps are skipped, the
+  in-flight step re-runs from scratch. `s.getLocal` / `s.setLocal`
+  give frame-local storage that survives resume; `s.halt(value)`
+  bubbles a value out of the scope.
+- **`agency.llm(prompt, opts)`** (#210). Thin façade over `runPrompt`.
+  TS code can issue LLM calls with full cost tracking, thread
+  integration, and structured output via Zod (`Promise<string>` by
+  default, `Promise<z.infer<S>>` with `opts.schema`). v1 does not
+  expose `tools` from TS — if you need tool dispatch, write the call
+  as an Agency `def` and invoke that `def` from TS.
+- **Documentation**. New reference at
+  [docs/site/guide/ts-helpers.md](docs/site/guide/ts-helpers.md);
+  rewritten [docs/site/guide/ts-interop.md](docs/site/guide/ts-interop.md).
+
+### Removed / breaking
+
+- The trailing `state` positional argument is gone from
+  `AgencyFunction.invoke`, `__call`, `__callMethod`, and every
+  generated `def` body (#206, #207). The "extra positional arg =
+  magic runtime-context plumbing" anti-pattern is no longer reachable.
+  Checkpoint location now flows through the `callsite` slot on the
+  active `agencyStore` ALS frame.
+- `getRuntimeContext` is no longer part of the public
+  `agency-lang/runtime` surface. Use `agency.ctx()` (throws when
+  outside an Agency frame) or `agency.ctxMaybe()` (returns
+  `undefined`) instead. The function remains as an internal helper
+  for stdlib modules but is no longer documented as user-facing.
+
+### Migration
+
+- TS code that called `AgencyFunction.invoke(descr, customState)`:
+  drop the second arg.
+- TS code that imported `getRuntimeContext` from
+  `agency-lang/runtime`: switch to `agency.ctx()` (same semantics) or
+  `agency.ctxMaybe()` for the lax read.
+
+See [ts-helpers.md](docs/site/guide/ts-helpers.md) for the full new
+API. The [resumable-scopes section](docs/site/guide/ts-helpers.md#resumable-scopes)
+includes the load-bearing determinism contract — read it before
+wrapping any TS helper in `withResumableScope`.
+
+---
+
 ## May 18 2026 — v0.2
 
 ### Language

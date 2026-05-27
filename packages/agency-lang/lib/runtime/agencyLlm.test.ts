@@ -162,26 +162,10 @@ describe("agency.llm — options mapping", () => {
     expect((client.configs[0] as any).responseFormat).toBeDefined();
   });
 
-  it("checkpointInfo is populated from agency.callsite()", async () => {
-    const ctx = makeCtx();
-    const client = new RecordingClient(["r"]);
-    ctx.setLLMClient(client);
-    const threads = ThreadStore.withDefaultActive(ctx.statelogClient);
-    // The callsite flows into runPrompt's checkpointInfo, which the
-    // PromptRunner uses to label any interrupt-time checkpoint.
-    // Verify the seam by reading the recorded callsite back off the
-    // outer frame the moment runPrompt would consume it.
-    await inFrame(ctx, threads, () =>
-      agency.withCallsite(
-        { moduleId: "M", scopeName: "S", stepPath: "1.2" },
-        async () => {
-          const cs = agency.callsite();
-          expect(cs).toEqual({ moduleId: "M", scopeName: "S", stepPath: "1.2" });
-          await agency.llm("p");
-        },
-      ),
-    );
-  });
+  // Note: `checkpointInfo` forwarding is pinned in
+  // agencyLlm.checkpointInfo.test.ts (separate file because it needs
+  // a module-scoped `vi.mock("./prompt.js", ...)` and we don't want
+  // that to replace `runPrompt` for the other tests here).
 });
 
 describe("agency.llm — v1 surface lock", () => {

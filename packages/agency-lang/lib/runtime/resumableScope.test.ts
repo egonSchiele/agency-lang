@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { agency } from "./agency.js";
+import { RESULT_ENTRY_LABEL } from "./state/checkpointStore.js";
 import { ThreadStore } from "./state/threadStore.js";
 import { makeMockCtx } from "./__tests__/testHelpers.js";
 
@@ -20,8 +21,8 @@ describe("withResumableScope — basic flow", () => {
   it("runs sequential steps and returns the body's result", async () => {
     const result = await inFrame(() =>
       agency.withResumableScope({ name: "basic" }, async (s) => {
-        const a = await s.step(1, () => 10);
-        const b = await s.step(2, () => a * 2);
+        const a = await s.step(() => 10);
+        const b = await s.step(() => a * 2);
         return b;
       }),
     );
@@ -32,7 +33,7 @@ describe("withResumableScope — basic flow", () => {
     await expect(
       inFrame(() =>
         agency.withResumableScope({ name: "err" }, async (s) => {
-          await s.step(1, () => {
+          await s.step(() => {
             throw new Error("oops");
           });
         }),
@@ -79,12 +80,12 @@ describe("withResumableScope — halt contract", () => {
   it("scope.halt(x) makes withResumableScope return x", async () => {
     const r = await inFrame(() =>
       agency.withResumableScope({ name: "h" }, async (s) => {
-        await s.step(1, () => "a");
-        await s.step(2, () => {
+        await s.step(() => "a");
+        await s.step(() => {
           s.halt("halted-value");
           return "unused";
         });
-        await s.step(3, () => "never");
+        await s.step(() => "never");
         return "body-return-ignored";
       }),
     );
@@ -95,16 +96,16 @@ describe("withResumableScope — halt contract", () => {
     const calls: number[] = [];
     await inFrame(() =>
       agency.withResumableScope({ name: "h2" }, async (s) => {
-        await s.step(1, () => {
+        await s.step(() => {
           calls.push(1);
         });
-        await s.step(2, () => {
+        await s.step(() => {
           s.halt("h");
         });
-        await s.step(3, () => {
+        await s.step(() => {
           calls.push(3);
         });
-        await s.step(4, () => {
+        await s.step(() => {
           calls.push(4);
         });
       }),
@@ -116,10 +117,10 @@ describe("withResumableScope — halt contract", () => {
     let observed: unknown = "unset";
     await inFrame(() =>
       agency.withResumableScope({ name: "h3" }, async (s) => {
-        await s.step(1, () => {
+        await s.step(() => {
           s.halt("h");
         });
-        observed = await s.step(2, () => "would-be-value");
+        observed = await s.step(() => "would-be-value");
       }),
     );
     expect(observed).toBeUndefined();
@@ -127,30 +128,9 @@ describe("withResumableScope — halt contract", () => {
 });
 
 describe("withResumableScope — frame locals", () => {
-  it("local(key, init) returns init's value the first time", async () => {
-    const r = await inFrame(() =>
-      agency.withResumableScope({ name: "loc" }, async (s) =>
-        s.local("counter", () => 7),
-      ),
-    );
-    expect(r).toBe(7);
-  });
-
-  it("local() init runs exactly once per scope (subsequent reads return same value)", async () => {
-    const init = vi.fn(() => 0);
-    await inFrame(() =>
-      agency.withResumableScope({ name: "loc2" }, async (s) => {
-        s.local("counter", init);
-        s.local("counter", init);
-        s.local("counter", init);
-      }),
-    );
-    expect(init).toHaveBeenCalledTimes(1);
-  });
-
   it("setLocal updates; getLocal returns current value; getLocal returns undefined for missing keys", async () => {
     const r = await inFrame(() =>
-      agency.withResumableScope({ name: "loc3" }, async (s) => {
+      agency.withResumableScope({ name: "loc" }, async (s) => {
         s.setLocal("x", 42);
         return {
           x: s.getLocal<number>("x"),
@@ -159,6 +139,18 @@ describe("withResumableScope — frame locals", () => {
       }),
     );
     expect(r).toEqual({ x: 42, missing: undefined });
+  });
+
+  it("setLocal overwrites previous value", async () => {
+    const r = await inFrame(() =>
+      agency.withResumableScope({ name: "loc2" }, async (s) => {
+        s.setLocal("k", 1);
+        s.setLocal("k", 2);
+        s.setLocal("k", 3);
+        return s.getLocal<number>("k");
+      }),
+    );
+    expect(r).toBe(3);
   });
 });
 
@@ -178,11 +170,11 @@ describe("withResumableScope — substep idempotence on re-execution", () => {
         { ctx, stack: ctx.stateStack, threads: new ThreadStore() },
         () =>
           agency.withResumableScope({ name: "rerun" }, async (s) => {
-            const a = await s.step(1, () => {
+            const a = await s.step(() => {
               calls.s1 += 1;
               return "v1";
             });
-            const b = await s.step(2, () => {
+            const b = await s.step(() => {
               calls.s2 += 1;
               return "v2";
             });
@@ -212,7 +204,7 @@ describe("withResumableScope — callsite + options", () => {
     const observed: { moduleId?: string; scopeName?: string } = {};
     await inFrame(() =>
       agency.withResumableScope({ name: "myScope" }, async (s) => {
-        await s.step(1, () => {
+        await s.step(() => {
           const loc = agency.callsite();
           observed.moduleId = loc?.moduleId;
           observed.scopeName = loc?.scopeName;
@@ -228,7 +220,7 @@ describe("withResumableScope — callsite + options", () => {
       agency.withResumableScope(
         { name: "s", moduleId: "my.module" },
         async (s) => {
-          await s.step(1, () => {
+          await s.step(() => {
             moduleId = agency.callsite()?.moduleId;
           });
         },
@@ -237,7 +229,7 @@ describe("withResumableScope — callsite + options", () => {
     expect(moduleId).toBe("my.module");
   });
 
-  it("pinResultCheckpoint: true (default) calls createPinned exactly once", async () => {
+  it("pinResultCheckpoint: true (default) creates a result-entry checkpoint findable via getResultCheckpoint()", async () => {
     const ctx = makeMockCtx();
     const spy = vi.spyOn(ctx.checkpoints, "createPinned");
     await agency.withTestContext(
@@ -249,8 +241,20 @@ describe("withResumableScope — callsite + options", () => {
       moduleId: "<ts-helper>",
       scopeName: "pin",
       stepPath: "",
-      label: null,
+      label: RESULT_ENTRY_LABEL,
     });
+    // The pinned checkpoint must be discoverable by the
+    // `result.retry()` lookup path, which filters pinned checkpoints
+    // by `label === RESULT_ENTRY_LABEL` (see
+    // `RuntimeContext.getResultCheckpoint`). A wrong label here would
+    // silently disable retry-rewind into the scope, so assert
+    // directly against the store.
+    const cps = ctx.checkpoints.getSorted();
+    const resultEntry = cps.find(
+      (cp: { pinned: boolean; label: string | null }) =>
+        cp.pinned && cp.label === RESULT_ENTRY_LABEL,
+    );
+    expect(resultEntry).toBeDefined();
   });
 
   it("pinResultCheckpoint: false skips createPinned", async () => {
@@ -268,32 +272,15 @@ describe("withResumableScope — callsite + options", () => {
   });
 });
 
-describe("withResumableScope — hooks", () => {
-  it("hook fires once per scope", async () => {
-    const fn = vi.fn();
-    await inFrame(() =>
-      agency.withResumableScope({ name: "h" }, async (s) => {
-        await s.hook(1, fn);
-        await s.hook(1, fn); // same id — but substep counter already advanced
-      }),
-    );
-    // First hook call invoked fn; second call's id is no longer
-    // greater than the counter, so it short-circuits. (This mirrors
-    // the once-per-resume contract the codegen relies on for
-    // onFunctionStart-style hooks.)
-    expect(fn).toHaveBeenCalledTimes(1);
-  });
-});
-
 describe("withResumableScope — nested scopes", () => {
   it("inner scope's callsite is independent of outer's", async () => {
     const observed: { outerScope?: string; innerScope?: string } = {};
     await inFrame(() =>
       agency.withResumableScope({ name: "outer" }, async (outerS) => {
-        await outerS.step(1, async () => {
+        await outerS.step(async () => {
           observed.outerScope = agency.callsite()?.scopeName;
           await agency.withResumableScope({ name: "inner" }, async (innerS) => {
-            await innerS.step(1, () => {
+            await innerS.step(() => {
               observed.innerScope = agency.callsite()?.scopeName;
             });
           });
@@ -307,18 +294,18 @@ describe("withResumableScope — nested scopes", () => {
     const calls: string[] = [];
     const r = await inFrame(() =>
       agency.withResumableScope({ name: "outer" }, async (outerS) => {
-        const a = await outerS.step(1, () => {
+        const a = await outerS.step(() => {
           calls.push("o1");
           return "a";
         });
-        const b = await outerS.step(2, async () => {
+        const b = await outerS.step(async () => {
           calls.push("o2");
           return agency.withResumableScope({ name: "inner" }, async (innerS) => {
-            const x = await innerS.step(1, () => {
+            const x = await innerS.step(() => {
               calls.push("i1");
               return "x";
             });
-            const y = await innerS.step(2, () => {
+            const y = await innerS.step(() => {
               calls.push("i2");
               return "y";
             });

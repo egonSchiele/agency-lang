@@ -10,7 +10,7 @@ import { z } from "agency-lang/zod";
 import { goToNode, color, nanoid } from "agency-lang";
 import { smoltalk } from "agency-lang";
 import path from "path";
-import type { GraphState, InternalFunctionState, Interrupt, InterruptResponse, Checkpoint, LLMClient } from "agency-lang/runtime";
+import type { GraphState, Interrupt, InterruptResponse, Checkpoint, LLMClient } from "agency-lang/runtime";
 import {
   RuntimeContext, MessageThread, ThreadStore, Runner, McpManager,
   setupNode, setupFunction, runNode, runPrompt, callHook,

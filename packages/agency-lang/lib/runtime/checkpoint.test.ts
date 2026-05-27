@@ -1,11 +1,16 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect } from "vitest";
 import { checkpoint, getCheckpoint, restore } from "./checkpoint.js";
 import { CheckpointError, RestoreSignal } from "./errors.js";
 import { makeMockCtx } from "./__tests__/testHelpers.js";
 import { CheckpointStore } from "./index.js";
+import { runInTestContext } from "./asyncContext.js";
+import { ThreadStore } from "./state/threadStore.js";
 
-function makeState(ctx: any) {
-  return { ctx } as any;
+// Post-ALS migration: the checkpoint stdlib helpers read `ctx` and
+// `stateStack` from `getRuntimeContext()`. Each test wraps its
+// invocations in an `agencyStore` frame via `runInTestContext`.
+function wrap<T>(ctx: any, fn: () => T): T {
+  return runInTestContext(ctx, ctx.stateStack, new ThreadStore(), fn);
 }
 
 describe("checkpoint()", () => {
@@ -20,7 +25,7 @@ describe("checkpoint()", () => {
     });
     ctx.pendingPromises.add(promise);
 
-    const id = await checkpoint(makeState(ctx));
+    const id = await wrap(ctx, () => checkpoint());
 
     expect(resolved).toBe(true);
     expect(typeof id).toBe("number");
@@ -28,21 +33,20 @@ describe("checkpoint()", () => {
 
   it("should return an id (number)", async () => {
     const ctx = makeMockCtx();
-    const id = await checkpoint(makeState(ctx));
+    const id = await wrap(ctx, () => checkpoint());
     expect(typeof id).toBe("number");
   });
 
   it("should return incrementing ids", async () => {
     const ctx = makeMockCtx();
-    const state = makeState(ctx);
-    const id1 = await checkpoint(state);
-    const id2 = await checkpoint(state);
+    const id1 = await wrap(ctx, () => checkpoint());
+    const id2 = await wrap(ctx, () => checkpoint());
     expect(id2).toBe(id1 + 1);
   });
 
   it("should create a checkpoint that can be retrieved from the store", async () => {
     const ctx = makeMockCtx();
-    const id = await checkpoint(makeState(ctx));
+    const id = await wrap(ctx, () => checkpoint());
     const cp = ctx.checkpoints.get(id);
     expect(cp).toBeDefined();
     expect(cp!.id).toBe(id);
@@ -51,7 +55,7 @@ describe("checkpoint()", () => {
 
   it("should set moduleId, scopeName, stepPath, label, and pinned to default values", async () => {
     const ctx = makeMockCtx();
-    const id = await checkpoint(makeState(ctx));
+    const id = await wrap(ctx, () => checkpoint());
     const cp = ctx.checkpoints.get(id);
     expect(cp).toBeDefined();
     expect(cp!.moduleId).toBe("");
@@ -65,9 +69,8 @@ describe("checkpoint()", () => {
 describe("getCheckpoint()", () => {
   it("should return the checkpoint object", async () => {
     const ctx = makeMockCtx();
-    const state = makeState(ctx);
-    const id = await checkpoint(state);
-    const cp = getCheckpoint(id, state);
+    const id = await wrap(ctx, () => checkpoint());
+    const cp = wrap(ctx, () => getCheckpoint(id));
     expect(cp).toBeDefined();
     expect(cp.id).toBe(id);
     expect(cp.nodeId).toBe("process");
@@ -77,26 +80,25 @@ describe("getCheckpoint()", () => {
 
   it("should throw CheckpointError for missing checkpoint", () => {
     const ctx = makeMockCtx();
-    const state = makeState(ctx);
-    expect(() => getCheckpoint(999, state)).toThrow(CheckpointError);
-    expect(() => getCheckpoint(999, state)).toThrow(/does not exist/);
+    expect(() => wrap(ctx, () => getCheckpoint(999))).toThrow(CheckpointError);
+    expect(() => wrap(ctx, () => getCheckpoint(999))).toThrow(/does not exist/);
   });
 });
 
 describe("restore()", () => {
   it("should throw RestoreSignal", async () => {
     const ctx = makeMockCtx();
-    const id = await checkpoint(makeState(ctx));
+    const id = await wrap(ctx, () => checkpoint());
 
-    expect(() => restore(id, {}, makeState(ctx))).toThrow(RestoreSignal);
+    expect(() => wrap(ctx, () => restore(id, {}))).toThrow(RestoreSignal);
   });
 
   it("should pass checkpoint data in RestoreSignal", async () => {
     const ctx = makeMockCtx();
-    const id = await checkpoint(makeState(ctx));
+    const id = await wrap(ctx, () => checkpoint());
 
     try {
-      restore(id, {}, makeState(ctx));
+      wrap(ctx, () => restore(id, {}));
     } catch (e) {
       expect(e).toBeInstanceOf(RestoreSignal);
       const signal = e as RestoreSignal;
@@ -107,11 +109,11 @@ describe("restore()", () => {
 
   it("should pass options in RestoreSignal", async () => {
     const ctx = makeMockCtx();
-    const id = await checkpoint(makeState(ctx));
+    const id = await wrap(ctx, () => checkpoint());
 
     const options = { messages: [{ role: "user" as const, content: "test" }] };
     try {
-      restore(id, options, makeState(ctx));
+      wrap(ctx, () => restore(id, options));
     } catch (e) {
       expect(e).toBeInstanceOf(RestoreSignal);
       const signal = e as RestoreSignal;
@@ -121,12 +123,11 @@ describe("restore()", () => {
 
   it("should accept a checkpoint object instead of an id", async () => {
     const ctx = makeMockCtx();
-    const state = makeState(ctx);
-    const id = await checkpoint(state);
-    const cp = getCheckpoint(id, state);
+    const id = await wrap(ctx, () => checkpoint());
+    const cp = wrap(ctx, () => getCheckpoint(id));
 
     try {
-      restore(cp, {}, state);
+      wrap(ctx, () => restore(cp, {}));
     } catch (e) {
       expect(e).toBeInstanceOf(RestoreSignal);
       const signal = e as RestoreSignal;
@@ -138,19 +139,19 @@ describe("restore()", () => {
   it("should throw CheckpointError for missing checkpoint", () => {
     const ctx = makeMockCtx();
 
-    expect(() => restore(999, {}, makeState(ctx))).toThrow(CheckpointError);
-    expect(() => restore(999, {}, makeState(ctx))).toThrow(/does not exist/);
+    expect(() => wrap(ctx, () => restore(999, {}))).toThrow(CheckpointError);
+    expect(() => wrap(ctx, () => restore(999, {}))).toThrow(/does not exist/);
   });
 
   it("should clear pending promises", async () => {
     const ctx = makeMockCtx();
-    const id = await checkpoint(makeState(ctx));
+    const id = await wrap(ctx, () => checkpoint());
 
     // Add a pending promise after checkpoint
     ctx.pendingPromises.add(new Promise(() => { })); // never resolves
 
     try {
-      restore(id, {}, makeState(ctx));
+      wrap(ctx, () => restore(id, {}));
     } catch {
       // expected
     }
@@ -162,13 +163,12 @@ describe("restore()", () => {
 
   it("should invalidate later checkpoints", async () => {
     const ctx = makeMockCtx();
-    const state = makeState(ctx);
-    const id0 = await checkpoint(state);
-    const id1 = await checkpoint(state);
-    const id2 = await checkpoint(state);
+    const id0 = await wrap(ctx, () => checkpoint());
+    const id1 = await wrap(ctx, () => checkpoint());
+    const id2 = await wrap(ctx, () => checkpoint());
 
     try {
-      restore(id0, {}, state);
+      wrap(ctx, () => restore(id0, {}));
     } catch {
       // expected
     }
@@ -183,21 +183,20 @@ describe("restore()", () => {
     const ctx = makeMockCtx();
     ctx.checkpoints = new CheckpointStore(2); // max 2 restores
     const id = ctx.checkpoints.create(ctx.stateStack, ctx, { moduleId: "", scopeName: "", stepPath: "" });
-    const state = makeState(ctx);
 
     try {
-      restore(id, {}, state);
+      wrap(ctx, () => restore(id, {}));
     } catch {
       // expected RestoreSignal
     }
     try {
-      restore(id, {}, state);
+      wrap(ctx, () => restore(id, {}));
     } catch {
       // expected RestoreSignal
     }
 
     // Third restore should throw CheckpointError due to max restores exceeded
-    expect(() => restore(id, {}, state)).toThrow(CheckpointError);
-    expect(() => restore(id, {}, state)).toThrow(/Possible infinite loop/);
+    expect(() => wrap(ctx, () => restore(id, {}))).toThrow(CheckpointError);
+    expect(() => wrap(ctx, () => restore(id, {}))).toThrow(/Possible infinite loop/);
   });
 });

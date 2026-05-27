@@ -1,6 +1,5 @@
 export type {
   GraphState,
-  InternalFunctionState,
   Rejected,
   Approved,
   HandlerFn,

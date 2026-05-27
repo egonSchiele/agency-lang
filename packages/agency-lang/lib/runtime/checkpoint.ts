@@ -1,26 +1,33 @@
 import { CheckpointError, RestoreSignal } from "./errors.js";
 import type { RestoreOptions } from "./errors.js";
-import type { InternalFunctionState } from "./types.js";
+import { getRuntimeContext } from "./asyncContext.js";
 import type { Checkpoint } from "./state/checkpointStore.js";
 
-export async function checkpoint(
-  __state: InternalFunctionState,
-): Promise<number> {
-  const ctx = __state.ctx;
+/**
+ * Per-call-site location info passed by codegen as the `state` extras
+ * to `checkpoint()`. Post-ALS the trailing positional carries ONLY the
+ * location fields (`moduleId` / `scopeName` / `stepPath`) — `ctx` and
+ * `stateStack` are read from the active `agencyStore` frame, not from
+ * this bag.
+ */
+type CheckpointLocation = {
+  moduleId?: string;
+  scopeName?: string;
+  stepPath?: string;
+};
+
+export async function checkpoint(__state?: CheckpointLocation): Promise<number> {
+  const { ctx } = getRuntimeContext();
   await ctx.pendingPromises.awaitAll();
-  const stateStack = __state.stateStack ?? ctx.stateStack;
-  return ctx.checkpoints.create(stateStack, ctx, {
-    moduleId: __state.moduleId ?? "",
-    scopeName: __state.scopeName ?? "",
-    stepPath: __state.stepPath ?? "",
+  return ctx.checkpoints.create(ctx.stateStack, ctx, {
+    moduleId: __state?.moduleId ?? "",
+    scopeName: __state?.scopeName ?? "",
+    stepPath: __state?.stepPath ?? "",
   });
 }
 
-export function getCheckpoint(
-  checkpointId: number,
-  __state?: InternalFunctionState,
-): Checkpoint {
-  const ctx = __state!.ctx;
+export function getCheckpoint(checkpointId: number): Checkpoint {
+  const { ctx } = getRuntimeContext();
   const cp = ctx.checkpoints.get(checkpointId);
   if (!cp)
     throw new CheckpointError(
@@ -32,9 +39,8 @@ export function getCheckpoint(
 export function restore(
   checkpointIdOrCheckpoint: number | Checkpoint,
   options: RestoreOptions,
-  __state?: InternalFunctionState,
 ): void {
-  const ctx = __state!.ctx;
+  const { ctx } = getRuntimeContext();
   let cp: Checkpoint;
   if (typeof checkpointIdOrCheckpoint === "number") {
     const found = ctx.checkpoints.get(checkpointIdOrCheckpoint);

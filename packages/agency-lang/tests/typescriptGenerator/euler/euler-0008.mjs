@@ -5,7 +5,7 @@ import { z } from "agency-lang/zod";
 import { goToNode, color, nanoid } from "agency-lang";
 import { smoltalk } from "agency-lang";
 import path from "path";
-import type { GraphState, InternalFunctionState, Interrupt, InterruptResponse, Checkpoint, LLMClient } from "agency-lang/runtime";
+import type { GraphState, Interrupt, InterruptResponse, Checkpoint, LLMClient } from "agency-lang/runtime";
 import {
   RuntimeContext, MessageThread, ThreadStore, Runner, McpManager,
   setupNode, setupFunction, runNode, runPrompt, callHook,
@@ -146,15 +146,12 @@ __functionRefReviver.registry = __toolRegistry;
 //  Project Euler Problem 8: Largest Product in a Series
 //  Find the thirteen adjacent digits in the 1000-digit number that have
 //  the greatest product.
-async function __toDigit_impl(c: string, __state: InternalFunctionState | undefined = undefined) {
-  const __setupData = setupFunction({
-    state: __state
-  });
-  // __state will be undefined if this function is being called as a tool by an llm
+async function __toDigit_impl(c: string) {
+  const __setupData = setupFunction();
   const __stack = __setupData.stack;
 const __step = __setupData.step;
 const __self = __setupData.self;
-const __ctx = __state?.ctx || __globalCtx;
+const __ctx = getRuntimeContext().ctx;
 let __forked;
 let __functionCompleted = false;
   if (!__ctx.globals.isInitialized("euler-0008.agency")) {
@@ -390,7 +387,7 @@ graph.node("main", async (__state: GraphState) => {
   const __stack = __setupData.stack;
 const __step = __setupData.step;
 const __self = __setupData.self;
-const __ctx = __state.ctx;
+const __ctx = getRuntimeContext().ctx;
 let __forked;
 let __functionCompleted = false;
   const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "euler-0008.agency", scopeName: "main", threads: __setupData.threads });

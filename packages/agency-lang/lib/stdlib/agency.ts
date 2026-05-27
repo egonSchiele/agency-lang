@@ -18,7 +18,7 @@ import {
   VALID_CALLBACK_NAMES,
   type CallbackName,
 } from "../types/function.js";
-import type { InternalFunctionState } from "../runtime/types.js";
+import { getRuntimeContext } from "../runtime/asyncContext.js";
 import { AgencyFunction } from "../runtime/agencyFunction.js";
 
 const VALID_CALLBACK_NAME_SET: ReadonlySet<string> = new Set(VALID_CALLBACK_NAMES);
@@ -45,11 +45,9 @@ const VALID_CALLBACK_NAME_SET: ReadonlySet<string> = new Set(VALID_CALLBACK_NAME
  */
 // Exported as `_callbackImpl` so unit tests can call it directly without
 // going through the AgencyFunction wrapper / `invoke()` indirection.
-export function _callbackImpl(
-  name: string,
-  fn: unknown,
-  __state: InternalFunctionState,
-): void {
+// Direct JS callers must wrap their invocation in `runInTestContext` so
+// `getRuntimeContext()` finds an active ALS frame.
+export function _callbackImpl(name: string, fn: unknown): void {
   if (!VALID_CALLBACK_NAME_SET.has(name)) {
     throw new Error(
       `Unknown callback '${name}'. Valid: ${VALID_CALLBACK_NAMES.join(", ")}`,
@@ -60,7 +58,7 @@ export function _callbackImpl(
       `callback('${name}', fn): fn must be a function, got ${fn === null ? "null" : typeof fn}`,
     );
   }
-  const ctx = __state.ctx;
+  const { ctx } = getRuntimeContext();
   // Top-level: we're inside __initializeGlobals. The only frame on the stack
   // is `callback`'s own (or none, defensively). There is no caller frame
   // that survives past init, so route to ctx.topLevelCallbacks.

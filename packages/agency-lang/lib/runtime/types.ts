@@ -1,8 +1,6 @@
 import { CostEstimate, TokenUsage } from "smoltalk";
-import { RuntimeContext, StateStack, ThreadStore } from "./index.js";
+import { RuntimeContext, ThreadStore } from "./index.js";
 import { ThreadStoreJSON } from "./state/threadStore.js";
-import { SimpleMachine } from "@/simplemachine/graph.js";
-import { StatelogClient } from "@/statelogClient.js";
 
 
 export type GraphState = {
@@ -16,15 +14,6 @@ export type GraphState = {
 
   // if true, restore the state from the state stack in ctx.
   isResume?: boolean;
-};
-
-export type InternalFunctionState = {
-  threads: ThreadStore;
-  ctx: RuntimeContext<GraphState>;
-  stateStack?: StateStack;  // per-thread stack for async calls
-  moduleId?: string;
-  scopeName?: string;
-  stepPath?: string;
 };
 
 export type NodeReturnValue<T> = {

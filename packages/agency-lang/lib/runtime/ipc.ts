@@ -9,7 +9,7 @@ import { dirname } from "path";
 import { fileURLToPath } from "url";
 import { fork } from "child_process";
 import { rmSync } from "fs";
-import type { InternalFunctionState } from "./types.js";
+import { getRuntimeContext } from "./asyncContext.js";
 import { interruptWithHandlers, isApproved, hasInterrupts } from "./interrupts.js";
 import { failure, type ResultFailure } from "./result.js";
 
@@ -433,13 +433,14 @@ export async function _run(
   memory: number,
   ipcPayload: number,
   stdout: number,
-  __state: InternalFunctionState,
 ): Promise<any> {
   if (isIpcMode()) {
     throw new Error("Nested subprocess execution is not supported.");
   }
-  const ctx = __state.ctx;
-  const stateStack = __state.stateStack ?? ctx.stateStack;
+  // Post-ALS: read `ctx` and the per-scope `stateStack` from the active
+  // `agencyStore` frame. The trailing `__state` positional that AgencyFunction
+  // .invoke() still passes is now harmlessly ignored.
+  const { ctx, stack: stateStack } = getRuntimeContext();
   const limits = clampLimits({ wallClock, memory, ipcPayload, stdout });
 
   const memoryMb = Math.max(1, Math.floor(limits.memory / (1024 * 1024)));

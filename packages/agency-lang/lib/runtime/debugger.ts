@@ -3,11 +3,9 @@ import { createDebugInterrupt } from "./interrupts.js";
 import { Checkpoint } from "./state/checkpointStore.js";
 import type { RuntimeContext } from "./state/context.js";
 import type { SourceLocation } from "./state/sourceLocation.js";
-import type { InternalFunctionState } from "./types.js";
 
 export async function debugStep(
   ctx: RuntimeContext<any>,
-  state: InternalFunctionState,
   info: Omit<SourceLocation, "nodeId"> & {
     label: string | null;
     nodeContext: boolean;

@@ -1,0 +1,12 @@
+{
+  "result": {
+    "origin": "halt",
+    "seed": "alpha"
+  },
+  "calls": {
+    "s1": 1,
+    "s2": 1,
+    "s3": 0,
+    "s4": 0
+  }
+}

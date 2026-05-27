@@ -1,0 +1,6 @@
+import { outerProcess } from "./helpers.js"
+
+node main(seed: string) {
+  const result = outerProcess(seed)
+  return result
+}

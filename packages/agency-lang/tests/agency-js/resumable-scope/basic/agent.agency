@@ -1,0 +1,6 @@
+import { processOrder } from "./helpers.js"
+
+node main(orderId: string) {
+  const result = processOrder(orderId)
+  return result
+}

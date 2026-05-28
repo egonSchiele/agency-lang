@@ -89,17 +89,11 @@ export type AgencyStore = {
   /**
    * Absolute path of the directory containing the *compiled* JS module
    * that initiated this Agency run. Seeded by generated code at every
-   * entry point (`runNode`, `runInBootstrapFrame`, plus the resume /
-   * rewind wrappers in `imports.mustache`). Inherited by every inner
-   * ALS frame — frames that spread `{ ...store }` get it for free
-   * (e.g. `hooks.ts`, `prompt.ts`, `withCallsite`), and frames that
-   * build a fresh `{ ctx, stack, threads, ... }` object inherit
-   * moduleDir explicitly from `agencyStore.getStore()?.moduleDir`
-   * (`Runner.runInScope`, `runBatch.runInBranchAlsFrame`,
-   * `resumableScope`, and the per-body wrap emitted by
-   * `ir.builders.withAlsFrame`). Read by stdlib helpers that need to
-   * resolve paths relative to the module (e.g. `resolvePath`,
-   * `_readSkill`, `_dirname`).
+   * runtime entry point and inherited by every inner ALS frame —
+   * either implicitly via a `{ ...store }` spread or explicitly by
+   * carrying `agencyStore.getStore()?.moduleDir` into a freshly-built
+   * frame. Read by stdlib helpers that resolve paths relative to the
+   * module (`resolvePath`, `_readSkill`, `_dirname`).
    *
    * Optional because there is no sensible default when no frame is
    * active (tests that call helpers directly, or bootstrap paths that

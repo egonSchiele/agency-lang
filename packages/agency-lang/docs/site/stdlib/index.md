@@ -119,7 +119,7 @@ read(filename: string, dir: string): Result
 A tool for reading the contents of a file and returning it as a string. The filename is resolved relative to dir.
 
   @param filename - The file to read
-  @param dir - The directory to resolve the filename against. Relative paths resolve against the directory of the compiled .js (i.e. next to the source .agency file by default), not the current working directory. Defaults to ".". Pass an absolute path or cwd() from std::system for the old behavior.
+  @param dir - The directory to resolve the filename against (defaults to ".")
 
 **Parameters:**
 
@@ -149,7 +149,7 @@ A tool for writing content to a file. The filename is resolved relative to dir.
 
   @param filename - The file to write
   @param content - The content to write
-  @param dir - The directory to resolve the filename against. Relative paths resolve against the directory of the compiled .js (i.e. next to the source .agency file by default), not the current working directory. Defaults to ".". Pass an absolute path or cwd() from std::system for the old behavior.
+  @param dir - The directory to resolve the filename against (defaults to ".")
   @param mode - How to handle an existing file: "overwrite" | "append" | "create-only"
 
 **Parameters:**
@@ -176,7 +176,7 @@ readImage(filename: string, dir: string): Result
 A tool for reading an image file and returning its contents as a Base64-encoded string. The filename is resolved relative to dir.
 
   @param filename - The image file to read
-  @param dir - The directory to resolve the filename against. Relative paths resolve against the directory of the compiled .js (i.e. next to the source .agency file by default), not the current working directory. Defaults to ".". Pass an absolute path or cwd() from std::system for the old behavior.
+  @param dir - The directory to resolve the filename against (defaults to ".")
 
 **Parameters:**
 

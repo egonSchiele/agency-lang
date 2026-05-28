@@ -87,11 +87,28 @@ describe("assertContained", () => {
     );
   });
 
-  it("ignores empty strings inside allowedRoots", async () => {
+  it("ignores empty strings inside allowedRoots when other roots remain", async () => {
     // An empty string in `allowedRoots` would otherwise resolve to cwd,
     // accidentally allowing way too much. We skip empties instead.
     await expect(
       assertContained(path.join(outside, "secret.txt"), ["", allowed]),
     ).rejects.toThrow(/is not under any of the allowed paths/);
+  });
+
+  it("rejects when every entry in allowedRoots is empty or whitespace", async () => {
+    // Caller asked for a restriction but every entry was unusable.
+    // Falling through to unrestricted would be a silent capability leak.
+    await expect(
+      assertContained(path.join(outside, "secret.txt"), ["", "  "]),
+    ).rejects.toThrow(/no usable entries/);
+  });
+
+  it("accepts descendants of the filesystem root when root is the allow-list", async () => {
+    // Regression: a naive `realRoot + path.sep` startsWith check makes
+    // `/` produce the prefix `//`, which matches no real path.
+    const fsRoot = path.parse(allowed).root;
+    await expect(
+      assertContained(path.join(allowed, "ok.txt"), [fsRoot]),
+    ).resolves.toBeUndefined();
   });
 });

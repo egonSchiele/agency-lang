@@ -35,7 +35,7 @@ import {
   type CallsiteLocation,
 } from "./asyncContext.js";
 import {
-  interrupt as _interrupt,
+  interrupt,
   type InterruptOpts,
 } from "./agencyInterrupt.js";
 import { llm as _llm } from "./agencyLlm.js";
@@ -275,7 +275,7 @@ export const agency = {
 
   llm: _llm,
 
-  interrupt: _interrupt,
+  interrupt,
 
   withTestContext,
 };

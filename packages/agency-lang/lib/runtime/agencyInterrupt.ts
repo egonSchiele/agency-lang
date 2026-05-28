@@ -21,7 +21,14 @@
  *     handlers or creating a duplicate checkpoint.
  *  2. Otherwise, consult `interruptWithHandlers` (the same routine the
  *     codegen path uses). Approved / rejected outcomes flow straight
- *     back to the caller.
+ *     back to the caller. This routes through `ctx.handlers`, which is
+ *     a single stack shared with generated Agency code — so a TS
+ *     function called from Agency code can have its
+ *     `agency.interrupt(...)` caught by a `handle` block defined in the
+ *     calling Agency code, and conversely an Agency `interrupt`
+ *     statement nested inside a TS-installed `agency.withHandler(...)`
+ *     can be caught by that TS handler. The two surfaces are equal
+ *     participants in the same handler stack.
  *  3. If no handler intercepts, this is a brand-new propagation:
  *     - Persist the new interrupt id on `frame.locals` BEFORE
  *       creating the checkpoint so the id is captured in the
@@ -55,6 +62,17 @@
  * call site. Code that needs multiple sequential interrupts should
  * split them across multiple `s.step(...)` calls.
  *
+ * What happens if you violate this: two `agency.interrupt(...)` calls
+ * sharing the same `stepPath` write to the same `frame.locals` key.
+ * The second call overwrites the first's persisted id, so the resume
+ * path will only ever look up a response for the second interrupt. The
+ * first interrupt's response (if any) is silently dropped, and the
+ * resume re-runs the first interrupt's handlers from scratch instead of
+ * short-circuiting. There is no thrown error today; the symptom is
+ * "handlers fire twice on resume / first interrupt never resolves".
+ * Splitting interrupts across `s.step(...)` calls is the only safe
+ * pattern.
+ *
  * # Halting and HaltSignal
  *
  * After `runner.halt(...)`, this function throws `HaltSignal` rather
@@ -87,14 +105,18 @@ import {
 export type InterruptOpts<T = unknown> = {
   /** Stable identifier for the interrupt kind. Mirrors the kind a
    *  generated `interrupt foo` statement would emit. Used by handlers
-   *  to decide whether to intercept. */
-  kind: string;
+   *  to decide whether to intercept. Optional — defaults to
+   *  `"unknown"` so quick TS scripts can call `agency.interrupt({message:...})`
+   *  without inventing a kind name. */
+  kind?: string;
   /** Human-readable description shown to the user / dashboards when
    *  the interrupt propagates. */
   message: string;
   /** Arbitrary structured data attached to the interrupt. Forwarded
-   *  to handlers and persisted on the propagated `Interrupt`. */
-  data: T;
+   *  to handlers and persisted on the propagated `Interrupt`.
+   *  Optional — interrupts that carry no payload (e.g. a bare
+   *  "needs user attention") can omit it. */
+  data?: T;
 };
 
 export async function interrupt<T = unknown>(
@@ -129,18 +151,20 @@ export async function interrupt<T = unknown>(
   // location AND the user has responded, return the response without
   // re-running the handler chain or creating another checkpoint. The
   // codegen template does exactly this with `__self.__interruptId_N`.
-  const persistedId = frame.locals[key] as string | undefined;
+  const persistedId = frame.locals[key];
   if (persistedId !== undefined) {
     const resp = ctx.getInterruptResponse(persistedId);
     if (resp) return resp;
   }
 
   // First-time propagation: consult handlers.
+  const kind = opts.kind ?? "unknown";
+  const data = opts.data;
   const origin = callsite.moduleId;
   const handlerResult = await interruptWithHandlers(
-    opts.kind,
+    kind,
     opts.message,
-    opts.data,
+    data,
     origin,
     ctx,
     stack,

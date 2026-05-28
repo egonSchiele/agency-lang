@@ -235,6 +235,42 @@ describe("agency.interrupt — resume idempotency", () => {
   });
 });
 
+describe("agency.interrupt — option defaults", () => {
+  it("defaults kind to \"unknown\" when omitted", async () => {
+    const ctx = makeMockCtx();
+    let observedKind: string | undefined;
+    await inFrame(ctx, () =>
+      agency.withResumableScope({ name: "defaults" }, async (s) => {
+        await s.step(async () => {
+          await agency.withHandler(
+            // eslint-disable-next-line @typescript-eslint/require-await
+            async (i) => {
+              observedKind = i.kind;
+              return approve("ok");
+            },
+            async () => {
+              await agency.interrupt({ message: "no kind specified" });
+            },
+          );
+        });
+      }),
+    );
+    expect(observedKind).toBe("unknown");
+  });
+
+  it("propagates with undefined data when data is omitted", async () => {
+    const ctx = makeMockCtx();
+    const ret = (await inFrame(ctx, () =>
+      agency.withResumableScope({ name: "no-data" }, async (s) => {
+        await s.step(async () => {
+          await agency.interrupt({ kind: "x", message: "no data" });
+        });
+      }),
+    )) as unknown as Interrupt[];
+    expect(ret[0].data).toBeUndefined();
+  });
+});
+
 describe("agency.interrupt — frame requirements", () => {
   it("throws when called without a Runner in the ALS frame", async () => {
     const ctx = makeMockCtx();

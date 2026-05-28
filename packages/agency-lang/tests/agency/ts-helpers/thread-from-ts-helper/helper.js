@@ -1,18 +1,16 @@
 import { agency } from "agency-lang/runtime";
 
-// Pins that TS helpers writing via agency.thread.{system,user,assistant}
-// hit the same ThreadStore the surrounding node body sees. The
-// `writeMessages` function pushes three messages; `readThread` reads
-// them back through the same accessor (`agency.thread.current()`).
-// If the writes targeted a separate thread, `readThread` would
-// return an empty array.
-export async function writeMessages() {
-  agency.thread.system("you are a tester");
-  agency.thread.user("hi");
-  agency.thread.assistant("hello");
+// Pins cross-language thread sharing: TS-side `agency.thread.user`
+// writes and agency-side `std::thread.systemMessage` writes hit the
+// SAME active `MessageThread`. The agent.agency entry interleaves
+// the two — if `agency.thread.*` targeted a separate store, the
+// `readThread()` readback would either miss the agency-side
+// "middle-from-agency" message or miss the JS-side ones.
+export function writeFromJs(content) {
+  agency.thread.user(content);
 }
 
-export async function readThread() {
+export function readThread() {
   return agency.thread.current().messages.map((m) => ({
     role: m.role,
     content: m.content,

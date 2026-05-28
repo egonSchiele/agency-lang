@@ -1,6 +1,13 @@
-import { writeMessages, readThread } from "./helper.js"
+import { writeFromJs, readThread } from "./helper.js"
+import { systemMessage } from "std::thread"
 
 node main() {
-  writeMessages()
+  // Interleave JS and agency writes to the same active thread so the
+  // assertion pins cross-language sharing — if `agency.thread.user`
+  // and the agency stdlib `systemMessage` targeted different stores,
+  // the readback would be missing one side's messages.
+  writeFromJs("first-from-js")
+  systemMessage("middle-from-agency")
+  writeFromJs("last-from-js")
   return readThread()
 }

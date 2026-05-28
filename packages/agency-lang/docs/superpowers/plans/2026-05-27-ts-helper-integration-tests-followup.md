@@ -48,7 +48,7 @@ No production code is touched.
 
 ---
 
-## Test inventory (6 tests)
+## Test inventory (7 tests)
 
 Listed in landing order — earliest tests are the simplest mirrors of PR #213 patterns; the `agency.llm` test lands last because it introduces LLM mocks.
 
@@ -65,14 +65,12 @@ Listed in landing order — earliest tests are the simplest mirrors of PR #213 p
 
 ### Test 2: `thread-from-ts-helper`
 
-**Pins:** TS helpers using `agency.thread.user(...)`, `agency.thread.system(...)`, `agency.thread.assistant(...)` write to the same `ThreadStore` the surrounding node's `thread { ... }` block sees. The messages are visible after the helper returns.
+**Pins:** cross-language thread sharing — TS-side `agency.thread.user(...)` and agency-side `std::thread.systemMessage(...)` write to the SAME active `MessageThread`. Updated after PR #214 review feedback to actually exercise both sides (the initial JS→JS round-trip would have passed even if `agency.thread.*` targeted a separate store).
 
 **Shape:**
-- `agent.agency`: `import { writeMessages, readThread } from "./helper.js"`. `node main() { thread { writeMessages(); return readThread() } }`. (Reading the thread from inside the `thread` block returns the messages just written.)
-- `helper.js`: `writeMessages()` calls `agency.thread.system("you are a tester")`, `agency.thread.user("hi")`, `agency.thread.assistant("hello")`. `readThread()` returns `agency.thread.current().messages.map(m => ({role: m.role, content: m.content}))`.
-- `.test.json`: `expectedOutput` is the JSON of those three messages in insertion order.
-
-**Edge:** verify by manual inspection that `agency.thread.current()` reads the active `MessageThread` (the one inside the agency `thread { ... }` block), not a stale one. If the assertion is flaky or empty, file a precursor PR.
+- `agent.agency`: imports `writeFromJs, readThread` from `./helper.js` and `systemMessage` from `"std::thread"`. `node main()` interleaves three writes — `writeFromJs("first-from-js")`, `systemMessage("middle-from-agency")`, `writeFromJs("last-from-js")` — then returns `readThread()`.
+- `helper.js`: `writeFromJs(content)` calls `agency.thread.user(content)`; `readThread()` returns `agency.thread.current().messages.map(m => ({role: m.role, content: m.content}))`.
+- `.test.json`: `expectedOutput` is the JSON of all three messages in insertion order. If the two sides targeted different stores, either the agency-side "middle" or the JS-side bookends would be missing.
 
 ### Test 3: `with-callsite-override`
 
@@ -80,10 +78,10 @@ Listed in landing order — earliest tests are the simplest mirrors of PR #213 p
 
 **Shape:**
 - `agent.agency`: `import { run } from "./helper.js"`, `node main() { return run() }`.
-- `helper.js`: inside `run()`, calls `agency.withCallsite({moduleId: "my.helper", scopeName: "phase-a", stepPath: "9.9"}, async () => { const cpId = await agency.checkpoint("phase-a complete"); return agency.getCheckpoint(cpId) })`. Returns `{moduleId, scopeName, stepPath}` extracted from the checkpoint.
+- `helper.js`: inside `run()`, calls `agency.withCallsite({moduleId: "my.helper", scopeName: "phase-a", stepPath: "9.9"}, async () => { const cpId = await agency.checkpoint(); return agency.getCheckpoint(cpId) })`. Returns `{moduleId, scopeName, stepPath}` extracted from the checkpoint.
 - `.test.json`: `expectedOutput` is `{"moduleId":"my.helper","scopeName":"phase-a","stepPath":"9.9"}`.
 
-**Note:** `agency.checkpoint`'s exact signature lives in `lib/runtime/agency.ts` — read it before writing the helper to confirm the call shape (positional label vs. opts object).
+**Note:** `agency.checkpoint()` takes no args (returns `Promise<number>`); the source location is read from the active ALS callsite, not a label arg. See `lib/runtime/agency.ts`.
 
 ### Test 4: `ts-checkpoint-restore`
 
@@ -91,8 +89,8 @@ Listed in landing order — earliest tests are the simplest mirrors of PR #213 p
 
 **Shape:**
 - `agent.agency`: `import { run } from "./helper.js"`, `node main() { return run() }`.
-- `helper.js`: inside `agency.withResumableScope`, sets `s.setLocal("count", 1)`, takes `cpId = await agency.checkpoint("before-mutate")`, sets `s.setLocal("count", 999)`, calls `await agency.restore(cpId)`. The post-restore continuation sees `count === 1`. Returns `{post: s.getLocal("count")}`.
-- `.test.json`: `expectedOutput` `{"post":1}`.
+- `helper.js`: inside `agency.withResumableScope`, sets `s.setLocal("count", 1)`, takes `cpId = await agency.checkpoint()`, sets `s.setLocal("count", 999)`, calls `agency.restore(cpId)` (sync — throws `RestoreSignal`, no `await`). The post-restore continuation sees `count === 1`. Returns `s.getLocal("count")`. A JS-module-level counter prevents the would-be infinite "restore → re-enter → mutate → restore" loop (the marker survives node restart because module state is NOT serialized).
+- `.test.json`: `expectedOutput` `1`.
 
 **Risk:** `agency.restore` semantics inside `withResumableScope` are not documented at the integration level — the unit tests in `checkpointStore.test.ts` and `agency.test.ts` cover individual contracts but not this composition. If `restore` from TS aborts the surrounding step instead of resuming with restored locals, this test will fail; file a precursor PR rather than papering over.
 
@@ -113,10 +111,19 @@ Listed in landing order — earliest tests are the simplest mirrors of PR #213 p
 
 **Shape:**
 - `agent.agency`: `import { run, getCost } from "./helper.js"`, `node main() { const result = run(); return { result: result, cost: getCost() } }`.
-- `helper.js`: `run()` calls `await agency.llm("say hi", {responseSchema: {type: "string"}})`; after the call, reads `getRuntimeContext().stack.localCost` into a module variable. `getCost()` returns that variable.
-- `.test.json`: `useTestLLMProvider: true`, `llmMocks: [{ "return": { "value": "hi" } }]`, `expectedOutput` includes `"result":"hi"` and `"cost"` matches the deterministic provider's fixed-per-call cost (look up the exact value in `lib/runtime/state/deterministicLlmClient.ts` or wherever it lives — do NOT hard-code a guess).
+- `helper.js`: `run()` calls `await agency.llm("say hi")` (plain string overload — no schema needed for this test); after the call, reads `getRuntimeContext().stack.localCost` into a module variable. `getCost()` returns that variable.
+- `.test.json`: `useTestLLMProvider: true`, `llmMocks: [{ "return": "hi" }]`, `expectedOutput` is `{"result":"hi","cost":0.000002}` (the deterministic provider's `SYNTHETIC_COST.totalCost` from `lib/runtime/deterministicClient.ts`).
 
 **Risk:** `agency.llm`'s public signature is recent (PR #210); verify in `lib/runtime/agency.ts` and `lib/runtime/agencyLlm.ts` whether it takes a positional response-schema or an opts object before writing the helper. If the deterministic provider doesn't auto-activate inside the JS helper, file a precursor PR.
+
+### Test 7: `ts-llm-call-schema`
+
+**Pins:** the structured-output overload of `agency.llm` — when called with `{ schema: z.object(...) }`, the runtime JSON-parses the LLM content, runs the schema's `safeParse` via `extractResponse`, and returns the typed object to the caller (not the raw string). Added in response to PR #214 review feedback; mirrors Test 6 for the schema-bearing path.
+
+**Shape:**
+- `agent.agency`: `import { run } from "./helper.js"`, `node main() { return run() }`.
+- `helper.js`: `run()` declares `const schema = z.object({ value: z.number() })` and returns `agency.llm("compute the answer", { schema })`. Imports `z` from `"zod"`.
+- `.test.json`: `useTestLLMProvider: true`, `llmMocks: [{ "return": { "value": 42 } }]` (the object value — deterministic client `JSON.stringify`s it to `'{"value":42}'`), `expectedOutput` is `{"value":42}`.
 
 ---
 
@@ -179,7 +186,7 @@ pnpm run lint:structure
 pnpm run agency test tests/agency/ts-helpers/ 2>&1 | tee /tmp/all.log | tail -30
 ```
 
-Expected: all 13 tests (7 from PR #213 + 6 new) pass.
+Expected: all 16 tests (9 from PR #213 + 7 new) pass.
 
 - [ ] **Step 4: Push + PR**
 
@@ -200,7 +207,7 @@ PR body covers:
 
 - [ ] `pnpm tsc --noEmit` clean
 - [ ] `pnpm run lint:structure` clean
-- [ ] All 13 tests pass under `pnpm run agency test tests/agency/ts-helpers/`
+- [ ] All 16 tests pass under `pnpm run agency test tests/agency/ts-helpers/`
 - [ ] Each test is a self-contained triplet; no shared mutable state across tests
 - [ ] No JS-side `expect` / `assert` calls
 - [ ] No production code changes (any runtime bugs were fixed in precursor PRs first)

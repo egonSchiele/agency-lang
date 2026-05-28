@@ -3,7 +3,7 @@
     {
       "nodeName": "main",
       "input": "",
-      "expectedOutput": "[{\"role\":\"system\",\"content\":\"you are a tester\"},{\"role\":\"user\",\"content\":\"hi\"},{\"role\":\"assistant\",\"content\":\"hello\"}]",
+      "expectedOutput": "[{\"role\":\"user\",\"content\":\"first-from-js\"},{\"role\":\"system\",\"content\":\"middle-from-agency\"},{\"role\":\"user\",\"content\":\"last-from-js\"}]",
       "evaluationCriteria": [
         {
           "type": "exact"

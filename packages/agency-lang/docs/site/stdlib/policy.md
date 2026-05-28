@@ -83,10 +83,14 @@ Validate that a policy object is well-formed. Returns { success: true } if valid
 ### writePolicyFile
 
 ```ts
-writePolicyFile(path: string, policy: Policy)
+writePolicyFile(path: string, policy: Policy, allowedPaths: string[])
 ```
 
-Validate and write a policy to a JSON file. Throws if the policy is invalid.
+Validate and write a policy to a JSON file. Throws if the policy is invalid. Set allowedPaths to restrict where the policy file may be written.
+
+  @param path - The destination file path
+  @param policy - The policy to write
+  @param allowedPaths - Only allow writing under these path prefixes
 
 **Parameters:**
 
@@ -94,5 +98,6 @@ Validate and write a policy to a JSON file. Throws if the policy is invalid.
 |---|---|---|
 | path | `string` |  |
 | policy | [Policy](#policy) |  |
+| allowedPaths | `string[]` | [] |
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/policy.agency#L37))

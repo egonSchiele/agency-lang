@@ -9,6 +9,7 @@ import { abortableExec } from "./abortable.js";
 import { runHttp } from "./http.js";
 import { AgencyCancelledError } from "../runtime/errors.js";
 import { getRuntimeContext } from "../runtime/asyncContext.js";
+import { assertContained } from "./assertContained.js";
 import type { RuntimeContext } from "../runtime/state/context.js";
 import type { StateStack } from "../runtime/state/stateStack.js";
 import type { ThreadStore } from "../runtime/state/threadStore.js";
@@ -25,6 +26,7 @@ async function speakImpl(
   voice: string,
   rate: number,
   outputFile: string,
+  allowedPaths?: string[],
 ): Promise<void> {
   if (text === "") return;
 
@@ -41,7 +43,9 @@ async function speakImpl(
         args.push("-r", String(rate));
       }
       if (outputFile !== "") {
-        args.push("-o", path.resolve(process.cwd(), outputFile));
+        const outPath = path.resolve(process.cwd(), outputFile);
+        await assertContained(outPath, allowedPaths ?? []);
+        args.push("-o", outPath);
       }
       await abortableExec("say", args, ctx.getAbortSignal(stack));
     } finally {
@@ -75,9 +79,10 @@ export async function _speak(
   voice: string,
   rate: number,
   outputFile: string,
+  allowedPaths?: string[],
 ): Promise<void> {
   const { ctx, stack } = getRuntimeContext();
-  return speakImpl(ctx, stack, text, voice, rate, outputFile);
+  return speakImpl(ctx, stack, text, voice, rate, outputFile, allowedPaths);
 }
 
 /**
@@ -91,6 +96,7 @@ async function recordImpl(
   stack: StateStack,
   outputFile: string,
   silenceTimeout: number,
+  allowedPaths?: string[],
 ): Promise<string> {
   const isTTY = process.stdin.isTTY;
 
@@ -104,6 +110,9 @@ async function recordImpl(
   const outPath = outputFile
     ? path.resolve(process.cwd(), outputFile)
     : path.join(os.tmpdir(), `agency-rec-${nanoid()}.wav`);
+  if (outputFile) {
+    await assertContained(outPath, allowedPaths ?? []);
+  }
 
   const args = [outPath];
   if (silenceTimeout > 0) {
@@ -196,9 +205,10 @@ export async function __internal_record(
 export async function _record(
   outputFile: string,
   silenceTimeout: number,
+  allowedPaths?: string[],
 ): Promise<string> {
   const { ctx, stack } = getRuntimeContext();
-  return recordImpl(ctx, stack, outputFile, silenceTimeout);
+  return recordImpl(ctx, stack, outputFile, silenceTimeout, allowedPaths);
 }
 
 /**
@@ -212,6 +222,7 @@ async function transcribeImpl(
   stack: StateStack,
   filepath: string,
   language: string,
+  allowedPaths?: string[],
 ): Promise<string> {
   const apiKey = process.env["OPENAI_API_KEY"];
   if (!apiKey) {
@@ -221,6 +232,7 @@ async function transcribeImpl(
   }
 
   const resolvedPath = path.resolve(process.cwd(), filepath);
+  await assertContained(resolvedPath, allowedPaths ?? []);
   const fileData = await readFile(resolvedPath);
   const filename = path.basename(resolvedPath);
 
@@ -270,7 +282,8 @@ export async function __internal_transcribe(
 export async function _transcribe(
   filepath: string,
   language: string,
+  allowedPaths?: string[],
 ): Promise<string> {
   const { ctx, stack } = getRuntimeContext();
-  return transcribeImpl(ctx, stack, filepath, language);
+  return transcribeImpl(ctx, stack, filepath, language, allowedPaths);
 }

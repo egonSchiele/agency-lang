@@ -3,6 +3,7 @@ import process from "process";
 import { detectPlatform } from "./utils.js";
 import { abortableExec } from "./abortable.js";
 import { getModuleDir, getRuntimeContext } from "../runtime/asyncContext.js";
+import { assertContained } from "./assertContained.js";
 import type { RuntimeContext } from "../runtime/state/context.js";
 import type { StateStack } from "../runtime/state/stateStack.js";
 import type { ThreadStore } from "../runtime/state/threadStore.js";
@@ -104,9 +105,11 @@ async function screenshotImpl(
   y: number,
   width: number,
   height: number,
+  allowedPaths?: string[],
 ): Promise<void> {
   const platform = await detectPlatform();
   const resolvedPath = path.resolve(process.cwd(), filepath);
+  await assertContained(resolvedPath, allowedPaths ?? []);
   const hasRegion = x >= 0 && y >= 0 && width >= 0 && height >= 0;
   const signal = ctx.getAbortSignal(stack);
 
@@ -151,7 +154,8 @@ export async function _screenshot(
   y: number,
   width: number,
   height: number,
+  allowedPaths?: string[],
 ): Promise<void> {
   const { ctx, stack } = getRuntimeContext();
-  return screenshotImpl(ctx, stack, filepath, x, y, width, height);
+  return screenshotImpl(ctx, stack, filepath, x, y, width, height, allowedPaths);
 }

@@ -1,8 +1,8 @@
 import { _args, _cwd, _dirname, _env, _setEnv, _exit, _openUrl, _screenshot } from "agency-lang/stdlib-lib/system.js"
 
-export def screenshot(filepath: string, x: number = -1, y: number = -1, width: number = -1, height: number = -1) {
+export def screenshot(filepath: string, x: number = -1, y: number = -1, width: number = -1, height: number = -1, allowedPaths: string[] = []) {
   """
-  A tool for taking a screenshot and saving it to a file. Optionally specify x, y, width, and height to capture a specific region.
+  A tool for taking a screenshot and saving it to a file. Optionally specify x, y, width, and height to capture a specific region. Set allowedPaths to restrict where the screenshot file may be written.
 
   Cancellation: an in-progress screencapture is interrupted on Ctrl-C, race-loser, or time-guard abort.
 
@@ -11,12 +11,13 @@ export def screenshot(filepath: string, x: number = -1, y: number = -1, width: n
   @param y - Y coordinate of capture region
   @param width - Width of capture region
   @param height - Height of capture region
+  @param allowedPaths - Only allow saving under these path prefixes
   """
   return interrupt std::screenshot("Are you sure you want to take a screenshot? This will capture the screen contents, which may include sensitive information.", {
     filepath: filepath
   })
 
-  _screenshot(filepath, x, y, width, height)
+  _screenshot(filepath, x, y, width, height, allowedPaths)
 }
 
 export def exit(code: number = 0) {

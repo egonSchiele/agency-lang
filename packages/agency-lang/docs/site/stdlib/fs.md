@@ -109,16 +109,20 @@ Apply a sequence of edits to a single file atomically. Each edit has oldText, ne
 ### applyPatch
 
 ```ts
-applyPatch(patch: string): Result
+applyPatch(patch: string, allowedPaths: string[]): Result
 ```
 
-Apply a unified diff to the working tree. Supports file creation (--- /dev/null), line additions, deletions, and context. Fails on a malformed diff or on a context-line mismatch against the current file contents.
+Apply a unified diff to the working tree. Supports file creation (--- /dev/null), line additions, deletions, and context. Fails on a malformed diff or on a context-line mismatch against the current file contents. Set allowedPaths to restrict which path prefixes can be touched by the patch.
+
+  @param patch - The unified diff to apply
+  @param allowedPaths - Only allow patches that touch files under these prefixes
 
 **Parameters:**
 
 | Name | Type | Default |
 |---|---|---|
 | patch | `string` |  |
+| allowedPaths | `string[]` | [] |
 
 **Returns:** `Result`
 
@@ -129,22 +133,26 @@ Apply a unified diff to the working tree. Supports file creation (--- /dev/null)
 ### mkdir
 
 ```ts
-mkdir(dir: string): Result
+mkdir(dir: string, allowedPaths: string[]): Result
 ```
 
-Create a directory, including any missing parent directories. Idempotent: succeeds if the directory already exists. Fails if a non-directory entry already occupies the path, or on permission errors.
+Create a directory, including any missing parent directories. Idempotent: succeeds if the directory already exists. Fails if a non-directory entry already occupies the path, or on permission errors. Set allowedPaths to restrict which path prefixes are permitted.
+
+  @param dir - The directory to create
+  @param allowedPaths - Only allow paths starting with these prefixes
 
 **Parameters:**
 
 | Name | Type | Default |
 |---|---|---|
 | dir | `string` |  |
+| allowedPaths | `string[]` | [] |
 
 **Returns:** `Result`
 
 **Throws:** `std::mkdir`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L74))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L77))
 
 ### copy
 
@@ -170,7 +178,7 @@ Copy a file or directory. Directories are copied recursively. Fails if src does 
 
 **Throws:** `std::copy`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L85))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L91))
 
 ### move
 
@@ -196,7 +204,7 @@ Move or rename a file or directory. Falls back to copy+remove if src and dest ar
 
 **Throws:** `std::move`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L101))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L107))
 
 ### remove
 
@@ -220,4 +228,4 @@ Delete a file or directory. Directories are removed recursively. Does not fail i
 
 **Throws:** `std::remove`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L117))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L123))

@@ -31,6 +31,38 @@ import type { StatelogClient } from "../../statelogClient.js";
 import forgetTemplate from "../../templates/prompts/memory/forget.js";
 import retrievalTemplate from "../../templates/prompts/memory/retrieval.js";
 import type { LLMClient } from "../llmClient.js";
+import { agency } from "../agency.js";
+import { agencyStore } from "../asyncContext.js";
+import { isGuardExceededError } from "../guard.js";
+
+/**
+ * Charge `amount` against the active branch's `withCostGuard` budget
+ * if (and only if) we're inside an Agency execution frame. Memory's
+ * text + embed calls run from inside `runPrompt`'s post-completion
+ * hook or from stdlib agency calls — both reach this code with an
+ * `agencyStore` frame already installed, so production paths always
+ * charge correctly. The frame check is for direct-construction unit
+ * tests that exercise `MemoryManager` without going through the
+ * runner.
+ */
+function chargeCostIfInFrame(amount: number): void {
+  if (!agencyStore.getStore()) return;
+  agency.addCost(amount);
+}
+
+/**
+ * Re-throw `err` if it is a `GuardExceededError` so cost / time
+ * guards trip the surrounding `withCostGuard` / `withTimeGuard`
+ * scope even when raised from inside one of memory's "best effort"
+ * catches (tier-2 embed, tier-3 LLM filter, per-observation embed).
+ * Without this, `chargeCostIfInFrame` could push the stack over the
+ * limit, throw, and have its throw silently absorbed — defeating
+ * the budget the user set. Provider / parse errors are not guard
+ * errors and continue to fall through to the catch body as before.
+ */
+function rethrowIfGuard(err: unknown): void {
+  if (isGuardExceededError(err)) throw err;
+}
 
 // Cap on the `inputPreview` slice we put on every embedCompletion
 // event. Short enough that a transcript fragment in stderr or in a
@@ -247,6 +279,12 @@ export class MemoryManager {
           `[memory] statelog promptCompletion failed: ${(err as Error).message}`,
         );
       }
+      // Charge this call's spend against the surrounding branch's
+      // cost budget. Mirrors the post-completion charge that
+      // `prompt.ts` performs for agency-side `llm()` calls, so a
+      // `withCostGuard($X)` wrapping the agent now sees memory's
+      // extraction / compaction / tier-3 spend too.
+      chargeCostIfInFrame(result.value.cost?.totalCost ?? 0);
       return result.value.output ?? "";
     } finally {
       this.statelogClient?.endSpan(spanId);
@@ -315,6 +353,11 @@ export class MemoryManager {
           `[memory] statelog embedCompletion failed: ${(err as Error).message}`,
         );
       }
+      // Same rationale as `_text` above — embed calls contribute to
+      // the surrounding branch's cost budget too. `EmbedResult.costEstimate`
+      // (smoltalk's name) is optional; absent / zero means "free or
+      // unknown" and the charge is skipped.
+      chargeCostIfInFrame(result.value.costEstimate?.totalCost ?? 0);
       return vector;
     } finally {
       this.statelogClient?.endSpan(spanId);
@@ -639,6 +682,10 @@ export class MemoryManager {
         // the precision filter. Returning the cheap-tier order anyway
         // would defeat the filter's purpose.
       } catch (err) {
+        // Guard trips must bubble out of recall — they signal the
+        // surrounding `withCostGuard` / `withTimeGuard` has been
+        // exceeded and the agent should stop, not silently fall back.
+        rethrowIfGuard(err);
         this.logger.warn(
           `[memory] tier 3 (LLM filter) failed for query="${truncatePreview(query, QUERY_PREVIEW_CHARS)}": ${(err as Error).message}`,
         );
@@ -1048,6 +1095,8 @@ export class MemoryManager {
         });
         entry.setEmbedding(id, vector);
       } catch (err) {
+        // Guard trips bubble — see rethrowIfGuard comment.
+        rethrowIfGuard(err);
         // Embedding failed — Tier 2 will silently no-op for this
         // observation (resolved decision #8). Logged at debug here so
         // a wave of failures shows up in `logLevel: "debug"` runs.
@@ -1103,6 +1152,8 @@ export class MemoryManager {
         phase: "recall-query",
       });
     } catch (err) {
+      // Guard trips bubble — see rethrowIfGuard comment.
+      rethrowIfGuard(err);
       // Tier 2 degrades to zero hits when embedding the query fails;
       // surfaced at debug so the caller can correlate the empty tier2
       // line above with the underlying provider error.

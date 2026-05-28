@@ -2,6 +2,10 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { MemoryManager } from "./manager.js";
 import { FileMemoryStore } from "./store.js";
 import { StatelogClient } from "../../statelogClient.js";
+import { agency } from "../agency.js";
+import { RuntimeContext } from "../state/context.js";
+import { StateStack } from "../state/stateStack.js";
+import { ThreadStore } from "../state/threadStore.js";
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
@@ -504,4 +508,195 @@ describe("MemoryManager", () => {
       }
     });
   });
+
+  // Memory's `_text` and `_embed` charge the surrounding branch's
+  // `withCostGuard` budget via `agency.addCost(...)`. Production
+  // paths always reach the manager from inside an Agency execution
+  // frame (post-completion hook in prompt.ts, or stdlib agency code
+  // calling remember/recall/forget); these tests install a frame by
+  // hand to exercise the same charge path without spinning up a
+  // full Runner.
+  describe("cost attribution", () => {
+    function makeFrame() {
+      const ctx = new RuntimeContext({
+        statelogConfig: {
+          host: "",
+          apiKey: "",
+          projectId: "",
+          debugMode: false,
+          observability: false,
+        },
+        smoltalkDefaults: {},
+        dirname: process.cwd(),
+      });
+      return { ctx, stack: new StateStack(), threads: new ThreadStore() };
+    }
+
+    function mockLlmClientWithCost(textCost: number, embedCost: number) {
+      const client = mockLlmClient();
+      client.text.mockResolvedValue({
+        success: true,
+        value: {
+          output: JSON.stringify({ entities: [], relations: [], expirations: [] }),
+          toolCalls: [],
+          model: "mock",
+          usage: { inputTokens: 0, outputTokens: 0, cachedInputTokens: 0, totalTokens: 0 },
+          cost: {
+            inputCost: 0,
+            outputCost: textCost,
+            totalCost: textCost,
+            currency: "USD",
+          },
+        },
+      });
+      client.embed.mockResolvedValue({
+        success: true,
+        value: {
+          embeddings: [[0.1, 0.2, 0.3]],
+          model: "mock-embed",
+          costEstimate: {
+            inputCost: embedCost,
+            outputCost: 0,
+            totalCost: embedCost,
+            currency: "USD",
+          },
+        },
+      });
+      return client;
+    }
+
+    it("charges _text spend to the active branch's localCost", async () => {
+      const env = makeFrame();
+      const client = mockLlmClientWithCost(0.05, 0);
+      const manager = new MemoryManager({
+        store: new FileMemoryStore(tmpDir),
+        config: { dir: tmpDir },
+        llmClient: client,
+      });
+      const before = env.stack.localCost;
+      await agency.withTestContext(env, async () => {
+        // `remember` calls `_text` once for the extraction prompt and
+        // returns early when the parse yields no entities — no embed
+        // call follows, so this isolates the text-cost charge.
+        await manager.remember("nothing notable");
+      });
+      expect(env.stack.localCost).toBeCloseTo(before + 0.05, 10);
+    });
+
+    it("charges _embed spend in addition to _text spend", async () => {
+      const env = makeFrame();
+      const client = mockLlmClientWithCost(0.05, 0.01);
+      // Extraction yields one entity with one observation → one
+      // _text call ($0.05) + one _embed call ($0.01).
+      client.text.mockResolvedValueOnce(
+        wrapTextResultWithCost(
+          JSON.stringify({
+            entities: [
+              { name: "Maggie", type: "person", observations: ["weaves baskets"] },
+            ],
+            relations: [],
+            expirations: [],
+          }),
+          0.05,
+        ),
+      );
+      const manager = new MemoryManager({
+        store: new FileMemoryStore(tmpDir),
+        config: { dir: tmpDir },
+        llmClient: client,
+      });
+      const before = env.stack.localCost;
+      await agency.withTestContext(env, async () => {
+        await manager.remember("Maggie weaves baskets");
+      });
+      expect(env.stack.localCost).toBeCloseTo(before + 0.05 + 0.01, 10);
+    });
+
+    it("no-ops cleanly when called outside any Agency frame", async () => {
+      // Direct-construction unit tests (the rest of this file) call
+      // the manager without ever installing a frame. The charge path
+      // must silently skip in that case rather than throwing.
+      const client = mockLlmClientWithCost(0.05, 0);
+      const manager = new MemoryManager({
+        store: new FileMemoryStore(tmpDir),
+        config: { dir: tmpDir },
+        llmClient: client,
+      });
+      await expect(manager.remember("anything")).resolves.toBeUndefined();
+    });
+
+    it("trips a withCostGuard when memory's spend exceeds the budget", async () => {
+      const env = makeFrame();
+      const client = mockLlmClientWithCost(1.0, 0);
+      const manager = new MemoryManager({
+        store: new FileMemoryStore(tmpDir),
+        config: { dir: tmpDir },
+        llmClient: client,
+      });
+      await agency.withTestContext(env, async () => {
+        // $0.50 budget, memory's _text call charges $1.00 →
+        // `enforceGuards()` inside `agency.addCost` throws.
+        await expect(
+          agency.withCostGuard(0.5, async () => {
+            await manager.remember("anything");
+          }),
+        ).rejects.toThrow(/cost/i);
+      });
+    });
+
+    it("propagates a GuardExceededError from inside generateEmbeddings's swallow site", async () => {
+      // Regression for the original Proposal A PR review: memory has
+      // several "best effort" catches around _text / _embed (per-obs
+      // embed in generateEmbeddings, tier-2 query embed, tier-3 LLM
+      // filter). If those catches absorbed a GuardExceededError, the
+      // surrounding withCostGuard would silently fail to trip. This
+      // test pins the propagation by making the embed-side cost
+      // (not the text cost) blow the budget — the throw happens
+      // inside the catch block of `generateEmbeddings`.
+      const env = makeFrame();
+      const client = mockLlmClientWithCost(0, 1.0);
+      // Extraction returns one entity with one observation so
+      // generateEmbeddings runs at all.
+      client.text.mockResolvedValueOnce(
+        wrapTextResultWithCost(
+          JSON.stringify({
+            entities: [
+              { name: "Maggie", type: "person", observations: ["weaves baskets"] },
+            ],
+            relations: [],
+            expirations: [],
+          }),
+          0,
+        ),
+      );
+      const manager = new MemoryManager({
+        store: new FileMemoryStore(tmpDir),
+        config: { dir: tmpDir },
+        llmClient: client,
+      });
+      await agency.withTestContext(env, async () => {
+        await expect(
+          agency.withCostGuard(0.5, async () => {
+            await manager.remember("Maggie weaves baskets");
+          }),
+        ).rejects.toThrow(/cost/i);
+      });
+    });
+  });
 });
+
+// Build a PromptResult with a specific `totalCost` for the test-cost
+// suite. Same shape as `wrapTextResult` but lets the caller pin the
+// cost so assertions can mix calls with different prices.
+function wrapTextResultWithCost(output: string, totalCost: number) {
+  return {
+    success: true,
+    value: {
+      output,
+      toolCalls: [],
+      model: "mock",
+      usage: { inputTokens: 0, outputTokens: 0, cachedInputTokens: 0, totalTokens: 0 },
+      cost: { inputCost: 0, outputCost: totalCost, totalCost, currency: "USD" },
+    },
+  };
+}

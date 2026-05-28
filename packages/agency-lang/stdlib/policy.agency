@@ -34,9 +34,13 @@ export def validatePolicy(policy: Record<string, any>) {
   return _validatePolicy(policy)
 }
 
-export def writePolicyFile(path: string, policy: Policy) {
+export def writePolicyFile(path: string, policy: Policy, allowedPaths: string[] = []) {
   """
-  Validate and write a policy to a JSON file. Throws if the policy is invalid.
+  Validate and write a policy to a JSON file. Throws if the policy is invalid. Set allowedPaths to restrict where the policy file may be written.
+
+  @param path - The destination file path
+  @param policy - The policy to write
+  @param allowedPaths - Only allow writing under these path prefixes
   """
-  return try _writePolicyFile(path, policy)
+  return try _writePolicyFile(path, policy, allowedPaths)
 }

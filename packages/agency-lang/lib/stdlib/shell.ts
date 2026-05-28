@@ -25,6 +25,7 @@ import {
   SpawnResult,
 } from "./abortable.js";
 import { checkAllowBlockList } from "./allowBlockList.js";
+import { assertContained } from "./assertContained.js";
 
 function buildSpawnOptions(
   cwd: string,
@@ -40,8 +41,24 @@ function buildSpawnOptions(
 }
 
 export type ExecOptions = {
-  allowedCommands?: string[];
+  /**
+   * Allow-list of executable names. When set, only commands whose
+   * `command` matches one of these strings (case-insensitive,
+   * whitespace-trimmed) will run. Empty / unset = no restriction.
+   * Pair with `allowedPaths` to also pin the working directory.
+   */
+  allowedExecutables?: string[];
+  /**
+   * Block-list of executable names. When set, any command whose
+   * `command` matches one of these strings is rejected.
+   */
   blockedCommands?: string[];
+  /**
+   * Directory-allow-list for `cwd`. When set, `cwd` must resolve
+   * inside one of these roots (symlink-aware). Empty / unset = no
+   * restriction.
+   */
+  allowedPaths?: string[];
 };
 
 /**
@@ -62,10 +79,13 @@ async function execImpl(
 ): Promise<SpawnResult> {
   const cmdError = checkAllowBlockList(
     [command],
-    options?.allowedCommands ?? [],
+    options?.allowedExecutables ?? [],
     options?.blockedCommands ?? [],
   );
   if (cmdError) throw new Error(cmdError);
+  if (cwd && options?.allowedPaths && options.allowedPaths.length > 0) {
+    await assertContained(cwd, options.allowedPaths);
+  }
   const signal = ctx.getAbortSignal(stack);
   return abortableSpawn(command, args, buildSpawnOptions(cwd, timeout, stdin, signal));
 }
@@ -100,7 +120,18 @@ export async function _exec(
 }
 
 export type BashOptions = {
+  /**
+   * Reject any bash string whose first non-whitespace token matches
+   * one of these entries (prefix match). Useful to block `rm`,
+   * `sudo`, etc.
+   */
   blockedCommands?: string[];
+  /**
+   * Directory-allow-list for `cwd`. When set, `cwd` must resolve
+   * inside one of these roots (symlink-aware). Empty / unset = no
+   * restriction.
+   */
+  allowedPaths?: string[];
 };
 
 /**
@@ -124,6 +155,9 @@ async function bashImpl(
         throw new Error(`Command "${blocked}" is in the blockedCommands list.`);
       }
     }
+  }
+  if (cwd && options?.allowedPaths && options.allowedPaths.length > 0) {
+    await assertContained(cwd, options.allowedPaths);
   }
   const signal = ctx.getAbortSignal(stack);
   return abortableSpawn("sh", ["-c", command], buildSpawnOptions(cwd, timeout, stdin, signal));
@@ -163,8 +197,13 @@ export type LsEntry = {
   size: number;
 };
 
-export async function _ls(dir: string, recursive: boolean): Promise<LsEntry[]> {
+export async function _ls(
+  dir: string,
+  recursive: boolean,
+  allowedPaths?: string[],
+): Promise<LsEntry[]> {
   const root = path.resolve(process.cwd(), dir);
+  await assertContained(root, allowedPaths ?? []);
   const out: LsEntry[] = [];
 
   async function walk(current: string): Promise<void> {
@@ -248,8 +287,10 @@ export async function _grep(
   dir: string,
   flags: string,
   maxResults: number,
+  allowedPaths?: string[],
 ): Promise<GrepMatch[]> {
   const root = path.resolve(process.cwd(), dir);
+  await assertContained(root, allowedPaths ?? []);
   const re = new RegExp(pattern, flags || undefined);
   const results: GrepMatch[] = [];
 
@@ -284,8 +325,10 @@ export async function _glob(
   pattern: string,
   dir: string,
   maxResults: number,
+  allowedPaths?: string[],
 ): Promise<string[]> {
   const root = path.resolve(process.cwd(), dir);
+  await assertContained(root, allowedPaths ?? []);
   const re = globToRegExp(pattern);
   const results: string[] = [];
 
@@ -371,8 +414,12 @@ export type StatInfo = {
   modifiedMs: number;
 };
 
-export async function _stat(filename: string): Promise<StatInfo> {
+export async function _stat(
+  filename: string,
+  allowedPaths?: string[],
+): Promise<StatInfo> {
   const full = path.resolve(process.cwd(), filename);
+  await assertContained(full, allowedPaths ?? []);
   try {
     const st = await fs.lstat(full);
     let type: StatInfo["type"] = "other";
@@ -390,8 +437,14 @@ export async function _stat(filename: string): Promise<StatInfo> {
   }
 }
 
-export async function _exists(filename: string): Promise<boolean> {
+export async function _exists(
+  filename: string,
+  allowedPaths?: string[],
+): Promise<boolean> {
   const full = path.resolve(process.cwd(), filename);
+  // Probing for a path outside the allow-list is itself a containment
+  // violation — throw rather than silently return false.
+  await assertContained(full, allowedPaths ?? []);
   try {
     await fs.access(full);
     return true;

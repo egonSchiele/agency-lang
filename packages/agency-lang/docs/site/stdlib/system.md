@@ -5,10 +5,10 @@
 ### screenshot
 
 ```ts
-screenshot(filepath: string, x: number, y: number, width: number, height: number)
+screenshot(filepath: string, x: number, y: number, width: number, height: number, allowedPaths: string[])
 ```
 
-A tool for taking a screenshot and saving it to a file. Optionally specify x, y, width, and height to capture a specific region.
+A tool for taking a screenshot and saving it to a file. Optionally specify x, y, width, and height to capture a specific region. Set allowedPaths to restrict where the screenshot file may be written.
 
   Cancellation: an in-progress screencapture is interrupted on Ctrl-C, race-loser, or time-guard abort.
 
@@ -17,6 +17,7 @@ A tool for taking a screenshot and saving it to a file. Optionally specify x, y,
   @param y - Y coordinate of capture region
   @param width - Width of capture region
   @param height - Height of capture region
+  @param allowedPaths - Only allow saving under these path prefixes
 
 **Parameters:**
 
@@ -27,6 +28,7 @@ A tool for taking a screenshot and saving it to a file. Optionally specify x, y,
 | y | `number` | -1 |
 | width | `number` | -1 |
 | height | `number` | -1 |
+| allowedPaths | `string[]` | [] |
 
 **Throws:** `std::screenshot`
 
@@ -49,7 +51,7 @@ Terminate the process immediately with the given exit code. Use with caution —
 
 **Throws:** `std::exit`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/system.agency#L22))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/system.agency#L23))
 
 ### args
 
@@ -61,7 +63,7 @@ Return the command-line arguments passed to the Agency program (excluding the no
 
 **Returns:** `string[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/system.agency#L33))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/system.agency#L34))
 
 ### cwd
 
@@ -73,7 +75,7 @@ Return the absolute path of the current working directory of the Agency process.
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/system.agency#L40))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/system.agency#L41))
 
 ### dirname
 
@@ -96,7 +98,7 @@ Return the absolute path of the directory containing the *compiled
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/system.agency#L47))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/system.agency#L48))
 
 ### env
 
@@ -114,7 +116,7 @@ Read an environment variable. Returns null if the variable is not set.
 
 **Returns:** `string | null`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/system.agency#L65))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/system.agency#L66))
 
 ### setEnv
 
@@ -138,7 +140,7 @@ Set an environment variable in the current process. Fails if the name is empty o
 
 **Throws:** `std::setEnv`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/system.agency#L72))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/system.agency#L73))
 
 ### openUrl
 
@@ -160,4 +162,4 @@ Open a URL in the user's default browser. Currently macOS-only.
 
 **Throws:** `std::openUrl`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/system.agency#L86))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/system.agency#L87))

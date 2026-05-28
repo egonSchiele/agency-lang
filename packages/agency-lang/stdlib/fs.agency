@@ -60,26 +60,32 @@ type PatchResult = {
   files: string[]
 }
 
-export def applyPatch(patch: string): Result {
+export def applyPatch(patch: string, allowedPaths: string[] = []): Result {
   """
-  Apply a unified diff to the working tree. Supports file creation (--- /dev/null), line additions, deletions, and context. Fails on a malformed diff or on a context-line mismatch against the current file contents.
+  Apply a unified diff to the working tree. Supports file creation (--- /dev/null), line additions, deletions, and context. Fails on a malformed diff or on a context-line mismatch against the current file contents. Set allowedPaths to restrict which path prefixes can be touched by the patch.
+
+  @param patch - The unified diff to apply
+  @param allowedPaths - Only allow patches that touch files under these prefixes
   """
   return interrupt std::applyPatch("Are you sure you want to apply this patch?", {
     patch: patch
   })
 
-  return try _applyPatch(patch)
+  return try _applyPatch(patch, allowedPaths)
 }
 
-export def mkdir(dir: string): Result {
+export def mkdir(dir: string, allowedPaths: string[] = []): Result {
   """
-  Create a directory, including any missing parent directories. Idempotent: succeeds if the directory already exists. Fails if a non-directory entry already occupies the path, or on permission errors.
+  Create a directory, including any missing parent directories. Idempotent: succeeds if the directory already exists. Fails if a non-directory entry already occupies the path, or on permission errors. Set allowedPaths to restrict which path prefixes are permitted.
+
+  @param dir - The directory to create
+  @param allowedPaths - Only allow paths starting with these prefixes
   """
   return interrupt std::mkdir("Are you sure you want to create this directory?", {
     dir: dir
   })
 
-  return try _mkdir(dir)
+  return try _mkdir(dir, allowedPaths)
 }
 
 export def copy(src: string, dest: string, allowedPaths: string[] = []): Result {

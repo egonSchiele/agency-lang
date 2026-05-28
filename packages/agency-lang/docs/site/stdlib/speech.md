@@ -5,10 +5,10 @@
 ### speak
 
 ```ts
-speak(text: string, voice: string, rate: number, outputFile: string)
+speak(text: string, voice: string, rate: number, outputFile: string, allowedPaths: string[])
 ```
 
-A tool for speaking text aloud using text-to-speech. Optionally specify a voice name, rate in words per minute, and an output file to save the audio to instead of playing it.
+A tool for speaking text aloud using text-to-speech. Optionally specify a voice name, rate in words per minute, and an output file to save the audio to instead of playing it. Set allowedPaths to restrict where the output file may be written.
 
   Cancellation: in-progress speech playback is stopped on Ctrl-C, race-loser, or time-guard abort.
 
@@ -16,6 +16,7 @@ A tool for speaking text aloud using text-to-speech. Optionally specify a voice 
   @param voice - Voice name
   @param rate - Words per minute
   @param outputFile - File path to save audio to
+  @param allowedPaths - Only allow saving under these path prefixes
 
 **Parameters:**
 
@@ -25,6 +26,7 @@ A tool for speaking text aloud using text-to-speech. Optionally specify a voice 
 | voice | `string` | "" |
 | rate | `number` | 0 |
 | outputFile | `string` | "" |
+| allowedPaths | `string[]` | [] |
 
 **Throws:** `std::speak`
 
@@ -33,7 +35,7 @@ A tool for speaking text aloud using text-to-speech. Optionally specify a voice 
 ### record
 
 ```ts
-record(outputFile: string, silenceTimeout: number): string
+record(outputFile: string, silenceTimeout: number, allowedPaths: string[]): string
 ```
 
 Record audio from the microphone. Stops when the user presses Enter,
@@ -46,8 +48,11 @@ Record audio from the microphone. Stops when the user presses Enter,
 
   Cancellation: an in-progress recording is stopped on Ctrl-C, race-loser, or time-guard abort, surfacing as an AgencyCancelledError.
 
+  Set allowedPaths to restrict where a non-empty outputFile may be written; an empty outputFile is auto-generated under the system temp directory and is not subject to the allow-list.
+
   @param outputFile - File path to save audio to (auto-generated if empty)
   @param silenceTimeout - Silence before auto-stopping in ms (0 to disable)
+  @param allowedPaths - Only allow saving under these path prefixes
 
 **Parameters:**
 
@@ -55,25 +60,27 @@ Record audio from the microphone. Stops when the user presses Enter,
 |---|---|---|
 | outputFile | `string` | "" |
 | silenceTimeout | `number` | 2000 |
+| allowedPaths | `string[]` | [] |
 
 **Returns:** `string`
 
 **Throws:** `std::record`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/speech.agency#L32))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/speech.agency#L33))
 
 ### transcribe
 
 ```ts
-transcribe(filepath: string, language: string): string
+transcribe(filepath: string, language: string, allowedPaths: string[]): string
 ```
 
-A tool for transcribing an audio file to text using OpenAI's Whisper API. Optionally specify a language code (e.g. "en") for better accuracy.
+A tool for transcribing an audio file to text using OpenAI's Whisper API. Optionally specify a language code (e.g. "en") for better accuracy. Set allowedPaths to restrict which audio files may be uploaded.
 
   Cancellation: an in-flight Whisper upload tears down on Ctrl-C, race-loser, or time-guard abort.
 
   @param filepath - Path to the audio file
   @param language - Language code for better accuracy
+  @param allowedPaths - Only allow reading audio files under these path prefixes
 
 **Parameters:**
 
@@ -81,9 +88,10 @@ A tool for transcribing an audio file to text using OpenAI's Whisper API. Option
 |---|---|---|
 | filepath | `string` |  |
 | language | `string` | "" |
+| allowedPaths | `string[]` | [] |
 
 **Returns:** `string`
 
 **Throws:** `std::transcribe`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/speech.agency#L52))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/speech.agency#L56))

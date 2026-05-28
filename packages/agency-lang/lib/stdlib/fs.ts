@@ -4,7 +4,7 @@ import path from "path";
 import process from "process";
 import diff_match_patch from "diff-match-patch";
 import { resolvePath } from "./resolvePath.js";
-import { checkAllowedPaths } from "./allowBlockList.js";
+import { assertContained } from "./assertContained.js";
 
 export { resolvePath } from "./resolvePath.js";
 
@@ -125,12 +125,18 @@ export type PatchResult = {
   files: string[];
 };
 
-export async function _applyPatch(patch: string): Promise<PatchResult> {
+export async function _applyPatch(
+  patch: string,
+  allowedPaths?: string[],
+): Promise<PatchResult> {
   const files = parseUnifiedDiff(patch);
   const touched: string[] = [];
 
   for (const f of files) {
     const full = path.resolve(process.cwd(), f.path);
+    // Every file the diff touches is gated by `allowedPaths`. No-op
+    // when the caller passes nothing (status quo).
+    await assertContained(full, allowedPaths ?? []);
     let original = "";
     if (f.isNew) {
       original = "";
@@ -248,8 +254,12 @@ function applyHunks(original: string, hunks: Hunk[], filePath: string): string {
   return updated;
 }
 
-export async function _mkdir(dir: string): Promise<void> {
+export async function _mkdir(
+  dir: string,
+  allowedPaths?: string[],
+): Promise<void> {
   const full = path.resolve(process.cwd(), dir);
+  await assertContained(full, allowedPaths ?? []);
   await fs.mkdir(full, { recursive: true });
 }
 
@@ -258,14 +268,10 @@ export async function _copy(
   dest: string,
   allowedPaths?: string[],
 ): Promise<void> {
-  if (allowedPaths && allowedPaths.length > 0) {
-    const srcError = checkAllowedPaths(src, allowedPaths);
-    if (srcError) throw new Error(srcError);
-    const destError = checkAllowedPaths(dest, allowedPaths);
-    if (destError) throw new Error(destError);
-  }
   const srcFull = path.resolve(process.cwd(), src);
   const destFull = path.resolve(process.cwd(), dest);
+  await assertContained(srcFull, allowedPaths ?? []);
+  await assertContained(destFull, allowedPaths ?? []);
   await fs.cp(srcFull, destFull, { recursive: true });
 }
 
@@ -274,15 +280,11 @@ export async function _move(
   dest: string,
   allowedPaths?: string[],
 ): Promise<void> {
-  if (allowedPaths && allowedPaths.length > 0) {
-    const srcError = checkAllowedPaths(src, allowedPaths);
-    if (srcError) throw new Error(srcError);
-    const destError = checkAllowedPaths(dest, allowedPaths);
-    if (destError) throw new Error(destError);
-  }
-  await rejectDangerousPath(src, "move", "source");
   const srcFull = path.resolve(process.cwd(), src);
   const destFull = path.resolve(process.cwd(), dest);
+  await assertContained(srcFull, allowedPaths ?? []);
+  await assertContained(destFull, allowedPaths ?? []);
+  await rejectDangerousPath(src, "move", "source");
   try {
     await fs.rename(srcFull, destFull);
   } catch (e: any) {
@@ -299,12 +301,9 @@ export async function _remove(
   target: string,
   allowedPaths?: string[],
 ): Promise<void> {
-  if (allowedPaths && allowedPaths.length > 0) {
-    const error = checkAllowedPaths(target, allowedPaths);
-    if (error) throw new Error(error);
-  }
-  await rejectDangerousPath(target, "remove", "target");
   const full = path.resolve(process.cwd(), target);
+  await assertContained(full, allowedPaths ?? []);
+  await rejectDangerousPath(target, "remove", "target");
   await fs.rm(full, { recursive: true, force: true });
 }
 

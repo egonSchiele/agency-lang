@@ -1,0 +1,6 @@
+import { run, getHandlerCalls } from "./helper.js"
+
+node main() {
+  const result = run()
+  return { result: result, handlerCalls: getHandlerCalls() }
+}

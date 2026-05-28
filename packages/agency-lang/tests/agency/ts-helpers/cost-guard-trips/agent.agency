@@ -1,0 +1,5 @@
+import { run } from "./helper.js"
+
+node main() {
+  return run()
+}

@@ -1,0 +1,8 @@
+import { addAndReport } from "./helper.js"
+
+node main() {
+  let results = fork([1, 2, 3]) as i {
+    return addAndReport(i)
+  }
+  return results
+}

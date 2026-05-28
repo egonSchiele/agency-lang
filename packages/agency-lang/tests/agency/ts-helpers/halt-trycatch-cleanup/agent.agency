@@ -1,0 +1,6 @@
+import { run, getCleanup } from "./helper.js"
+
+node main() {
+  const result = run()
+  return { result: result, cleanup: getCleanup() }
+}

@@ -1,115 +1,55 @@
-## [unreleased]
+## May 28 2026 — v0.3
 
-### Added — Module-directory access for Agency code
+### Language
+- Generics in Agency (`def foo<T>(x: T): T`, generic types)
+- Value-parameterized type aliases (`type Age(low) = number`)
+- Validation annotations: `@validate(...)` and `@jsonSchema(...)` on types, fields, and params
+- `Success<T>` / `Failure<E>` type aliases for `Result`, with pattern-matching support for success/failure variants
+- String interpolation inside docstrings
+- `return llm(...)` works in any block body (no schema required for plain string output)
+- Pipe operator fixes for method calls in chains
+- `callback` keyword replaced by a scoped `callback()` stdlib function; callback bodies are lifted to the top level so they survive interrupt/resume
+- `class` syntax removed
+- Schema parameter injection for typed structured-output flows
 
-- **`std::system::dirname()`**. New stdlib accessor that returns the
-  absolute path of the directory containing the compiled `.js` module
-  initiating the current run. By convention this is the same directory
-  as the source `.agency` file, so users can build paths to co-located
-  resources (prompts, fixtures, etc.) regardless of `cwd`:
+### Stdlib
+- `std::system::dirname()` — absolute path of the directory containing the calling compiled `.js` module; relative `read`/`write`/`readImage`/`edit`/`multiedit` now resolve against this directory rather than `cwd` (BREAKING — pass `dir: cwd()` to restore the old behavior)
+- `std::skills::readSkill(filepath)` — `readSkill` moved out of the codegen magic into a regular stdlib module; import it explicitly
+- `std::thread` with per-branch cost/token tracking and cost guards (`guard(cost: $X) as { ... }`)
+- `std::validators`, `std::schemas`, `std::types` — runtime backing for the new annotation system
+- AST functions for parsing, writing, formatting Agency code, and filtering imports
+- Path containment on every fs/process helper: optional `allowedPaths: string[]` on `fs.{applyPatch,mkdir,copy,move,remove}`, `shell.{exec,bash,ls,grep,glob,stat,exists}`, `system.screenshot`, `speech.{speak,record,transcribe}`, `policy.writePolicyFile`. `shell::exec` also accepts `allowedExecutables: string[]` (renamed from `allowedCommands`, BREAKING for keyword callers)
+- `sleep`, `input`, `prompt`, `exec`, `bash`, `oauth`, `browserUse`, `speech`, `system`, `fetch`, `fetchJSON` are now abortable: SIGTERM / `fetch` cancellation fires on Ctrl-C, race-loser, or time-guard abort
+- `webfetch` renamed to `fetchMarkdown`
 
-  ```agency
-  import { dirname } from "std::system"
-  import { join } from "std::path"
-  const promptDir = join(dirname(), "prompts")
-  const prompt = read("system.md", promptDir)
-  ```
-- **`std::skills::readSkill(filepath)`**. The implicit `readSkill`
-  wrapper that used to be baked into every compiled module now lives
-  in the new `std::skills` module. Import it explicitly:
+### TypeScript helpers (`agency.*` namespace)
+- `agency.ctx`, `agency.callsite`, `agency.global`, `agency.thread.*` — read context and push thread messages from TS
+- `agency.withHandler`, `agency.withCostGuard`, `agency.withTimeGuard`, `agency.addCost` — install handlers and guards from TS
+- `agency.checkpoint`, `agency.getCheckpoint`, `agency.restore`, `agency.withCallsite` — checkpoint primitives
+- `agency.llm(prompt, opts)` — façade over `runPrompt` with Zod-typed structured output
+- `agency.withResumableScope(opts, body)` — Temporal-style journaled steps (`s.step`, `s.getLocal`/`s.setLocal`, `s.halt`)
+- `agency.interrupt()` — raise interrupts from TS callers
+- Memory layer now charges its internal LLM / embedding spend against the active `withCostGuard` via `agency.addCost`
+- Docs: new [ts-helpers.md](docs/site/guide/ts-helpers.md), rewritten [ts-interop.md](docs/site/guide/ts-interop.md)
 
-  ```agency
-  import { readSkill } from "std::skills"
-  ```
+### Runtime / codegen
+- AsyncLocalStorage migration: `__ctx`, `__state`, `__threads` all flow through the `agencyStore` ALS frame; matching dead-local prune in codegen
+- The trailing `state` positional argument is gone from `AgencyFunction.invoke`, `__call`, `__callMethod`, and every generated `def` body (BREAKING; `getRuntimeContext` is no longer part of the public `agency-lang/runtime` surface — use `agency.ctx()` / `agency.ctxMaybe()`)
+- `runBatch` concurrent-interrupt primitive; `fork`, `race`, `runPrompt` migrated onto it (parallel-tool dispatch + per-branch isolation)
+- Callback-interrupt propagation through every codegen-emitted hook site (`onFunctionStart`, `onEmit`, `onNodeStart`, `onNodeEnd`); batch-interrupt collection across callbacks
+- Timeout guards (`withTimeGuard`) and shared cost guards with real-time mid-fork enforcement
+- `BootstrapThreadStore` + real threads delivered on `onAgentEnd`; fresh `ThreadStore` per tool call
+- TypeScript Builder split into focused emitters (`AssignmentEmitter`, `ClassEmitter`, `PipeChainEmitter`, `NameClassifier`, `ScopeManager`, `StepPathTracker`, `partitionProgram`/`assembleSections`); high-frequency TS IR builders (`methodCall`, `awaitCall`, `iife`)
 
-  This is part of the general "module-dir aware stdlib" mechanism
-  (see `dirname()` above) — `readSkill` no longer needs a special
-  codegen path.
+### Breaking changes summary
+- Relative `dir` in `read`/`write`/`readImage`/`edit`/`multiedit` resolves against the module dir, not `cwd`
+- Trailing `state` arg removed from `invoke`/`__call`/generated `def` bodies; `getRuntimeContext` not public
+- `class` keyword removed
+- `callback` keyword replaced by `callback()` stdlib function
+- `shell::exec` parameter `allowedCommands` renamed to `allowedExecutables`
+- `webfetch` renamed to `fetchMarkdown`
 
-### Changed — BREAKING: `read` / `write` / `readImage` / `edit` / `multiedit` resolve relative `dir` against module dir
-
-Relative `dir` arguments to `read`, `write`, `readImage`, `edit`, and
-`multiedit` now resolve against the directory of the **compiled module**
-(by convention the source `.agency` file's directory) instead of
-`process.cwd()`. Absolute `dir` arguments are unaffected.
-
-Migration: to restore the previous behaviour, pass `dir: cwd()` and
-import `cwd` from `std::system`:
-
-```agency
-import { cwd } from "std::system"
-const txt = read("config.json", cwd())
-```
-
-### Added — TypeScript helpers are first-class
-
-This release closes the gap between Agency function calls and plain
-TypeScript function calls. A TS helper called from Agency code can now
-read context, push thread messages, install handlers / guards, take
-checkpoints, issue LLM calls, and write resumable workflows — all
-through one discoverable namespace.
-
-- **`agency.*` public namespace** (#208). One surface for reading
-  context (`agency.ctx`, `agency.callsite`, `agency.global`), pushing
-  thread messages (`agency.thread.*`), installing handlers and guards
-  (`agency.withHandler`, `agency.withCostGuard`, `agency.withTimeGuard`,
-  `agency.addCost`), and taking checkpoints (`agency.checkpoint`,
-  `agency.getCheckpoint`, `agency.restore`, `agency.withCallsite`).
-  Namespace-only — no individual named exports.
-- **`agency.withResumableScope(opts, body)`** (#209). Temporal-style
-  resumable scope for TS. `s.step(fn)` is journaled against a
-  serialized stack frame; on resume completed steps are skipped, the
-  in-flight step re-runs from scratch. `s.getLocal` / `s.setLocal`
-  give frame-local storage that survives resume; `s.halt(value)`
-  bubbles a value out of the scope.
-- **`agency.llm(prompt, opts)`** (#210). Thin façade over `runPrompt`.
-  TS code can issue LLM calls with full cost tracking, thread
-  integration, and structured output via Zod (`Promise<string>` by
-  default, `Promise<z.infer<S>>` with `opts.schema`). v1 does not
-  expose `tools` from TS — if you need tool dispatch, write the call
-  as an Agency `def` and invoke that `def` from TS.
-- **Documentation**. New reference at
-  [docs/site/guide/ts-helpers.md](docs/site/guide/ts-helpers.md);
-  rewritten [docs/site/guide/ts-interop.md](docs/site/guide/ts-interop.md).
-
-### Removed / breaking
-
-- The trailing `state` positional argument is gone from
-  `AgencyFunction.invoke`, `__call`, `__callMethod`, and every
-  generated `def` body (#206, #207). The "extra positional arg =
-  magic runtime-context plumbing" anti-pattern is no longer reachable.
-  Checkpoint location now flows through the `callsite` slot on the
-  active `agencyStore` ALS frame.
-- `getRuntimeContext` is no longer part of the public
-  `agency-lang/runtime` surface. Use `agency.ctx()` (throws when
-  outside an Agency frame) or `agency.ctxMaybe()` (returns
-  `undefined`) instead. The function remains as an internal helper
-  for stdlib modules but is no longer documented as user-facing.
-
-### Changed — memory layer participates in cost guards
-
-- Memory's internal LLM and embedding calls (extraction, compaction,
-  tier-3 recall filter, observation embeddings, query embeddings) now
-  charge their spend against the surrounding branch's
-  `withCostGuard` budget via `agency.addCost(...)`. Previously these
-  calls bypassed cost tracking entirely, so a user wrapping an agent
-  in `withCostGuard($X)` could under-count actual spend whenever the
-  memory layer ran. The charge fires from inside `MemoryManager`'s
-  `_text` / `_embed` after a successful call. Outside an Agency
-  frame (direct-construction unit tests) the charge silently no-ops.
-
-### Migration
-
-- TS code that called `AgencyFunction.invoke(descr, customState)`:
-  drop the second arg.
-- TS code that imported `getRuntimeContext` from
-  `agency-lang/runtime`: switch to `agency.ctx()` (same semantics) or
-  `agency.ctxMaybe()` for the lax read.
-
-See [ts-helpers.md](docs/site/guide/ts-helpers.md) for the full new
-API. The [resumable-scopes section](docs/site/guide/ts-helpers.md#resumable-scopes)
-includes the load-bearing determinism contract — read it before
-wrapping any TS helper in `withResumableScope`.
+See [ts-helpers.md](docs/site/guide/ts-helpers.md) for the new TS API, including the determinism contract for `withResumableScope`.
 
 ---
 

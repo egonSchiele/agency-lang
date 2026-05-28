@@ -1,0 +1,6 @@
+import { writeMessages, readThread } from "./helper.js"
+
+node main() {
+  writeMessages()
+  return readThread()
+}

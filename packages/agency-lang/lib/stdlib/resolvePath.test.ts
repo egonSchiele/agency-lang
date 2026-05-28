@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { resolvePath } from "./resolvePath.js";
+import { agencyStore } from "../runtime/asyncContext.js";
 import path from "path";
 
 describe("resolvePath", () => {
@@ -44,5 +45,33 @@ describe("resolvePath", () => {
   it("allows traversal with '.' since it resolves to cwd", async () => {
     // "../foo.txt" relative to "." escapes cwd, so this should throw
     await expect(resolvePath(".", "../foo.txt")).rejects.toThrow("escapes");
+  });
+});
+
+describe("resolvePath with ALS moduleDir", () => {
+  it("resolves relative dir against moduleDir from ALS frame", async () => {
+    const result = await agencyStore.run(
+      {
+        ctx: {} as any,
+        stack: {} as any,
+        threads: {} as any,
+        moduleDir: "/some/module/dir",
+      },
+      () => resolvePath("./prompts", "system.md"),
+    );
+    expect(result).toBe(path.resolve("/some/module/dir", "prompts", "system.md"));
+  });
+
+  it("absolute dir ignores moduleDir", async () => {
+    const result = await agencyStore.run(
+      {
+        ctx: {} as any,
+        stack: {} as any,
+        threads: {} as any,
+        moduleDir: "/some/module/dir",
+      },
+      () => resolvePath("/tmp", "foo.txt"),
+    );
+    expect(result).toBe(path.resolve("/tmp", "foo.txt"));
   });
 });

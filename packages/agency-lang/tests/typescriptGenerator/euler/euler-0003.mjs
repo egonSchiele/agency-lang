@@ -20,9 +20,6 @@ import {
   head, tail, empty,
   success, failure, isSuccess, isFailure, __pipeBind, __tryCall, __catchResult,
   Schema, __validateType, __validateChain, __validateChainRecursive,
-  readSkill as _readSkillRaw,
-  readSkillTool as __readSkillTool,
-  readSkillToolParams as __readSkillToolParams,
   AgencyFunction as __AgencyFunction, UNSET as __UNSET,
   __call, __callMethod, __threads, __stateStack, getRuntimeContext, agencyStore,
   functionRefReviver as __functionRefReviver,
@@ -63,11 +60,6 @@ const __globalCtx = new RuntimeContext({
 });
 const graph = __globalCtx.graph;
 
-// Path-dependent builtin wrappers
-export function readSkill({filepath}: {filepath: string}): string {
-  return _readSkillRaw({ filepath, dirname: __dirname });
-}
-
 // Handler result builtins and interrupt response constructors (unified types)
 export function approve(value?: any) { return { type: "approve" as const, value }; }
 export function reject(value?: any) { return { type: "reject" as const, value }; }
@@ -75,8 +67,8 @@ function propagate() { return { type: "propagate" as const }; }
 
 // Interrupt and rewind re-exports bound to this module's context
 export { interrupt, isInterrupt, hasInterrupts, isDebugger };
-export const respondToInterrupts = (interrupts: Interrupt[], responses: InterruptResponse[], opts?: { overrides?: Record<string, unknown>; metadata?: Record<string, any> }) => _respondToInterrupts({ ctx: __globalCtx, interrupts, responses, overrides: opts?.overrides, metadata: opts?.metadata, registerTopLevelCallbacks: __registerTopLevelCallbacks });
-export const rewindFrom = (checkpoint: Checkpoint, overrides: Record<string, unknown>, opts?: { metadata?: Record<string, any> }) => _rewindFrom({ ctx: __globalCtx, checkpoint, overrides, metadata: opts?.metadata, registerTopLevelCallbacks: __registerTopLevelCallbacks });
+export const respondToInterrupts = (interrupts: Interrupt[], responses: InterruptResponse[], opts?: { overrides?: Record<string, unknown>; metadata?: Record<string, any> }) => _respondToInterrupts({ ctx: __globalCtx, interrupts, responses, overrides: opts?.overrides, metadata: opts?.metadata, registerTopLevelCallbacks: __registerTopLevelCallbacks, moduleDir: __dirname });
+export const rewindFrom = (checkpoint: Checkpoint, overrides: Record<string, unknown>, opts?: { metadata?: Record<string, any> }) => _rewindFrom({ ctx: __globalCtx, checkpoint, overrides, metadata: opts?.metadata, registerTopLevelCallbacks: __registerTopLevelCallbacks, moduleDir: __dirname });
 
 export const __setDebugger = (dbg: any) => { __globalCtx.debuggerState = dbg; };
 // Reconfigure the trace file path at runtime. Mutates the module-level
@@ -135,13 +127,6 @@ async function __initializeGlobals(__ctx) {
 async function __registerTopLevelCallbacks(__ctx) {
   __ctx.topLevelCallbacks = [];
 }
-__toolRegistry["readSkill"] = __AgencyFunction.create({
-  name: "readSkill",
-  module: "euler-0003.agency",
-  fn: readSkill,
-  params: __readSkillToolParams.map(p => ({ name: p, hasDefault: false, defaultValue: undefined, variadic: false })),
-  toolDefinition: __readSkillTool,
-}, __toolRegistry);
 __functionRefReviver.registry = __toolRegistry;
 //  Project Euler Problem 3: Largest Prime Factor
 //  Find the largest prime factor of 600851475143.
@@ -158,6 +143,7 @@ let __functionCompleted = false;
   const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "euler-0003.agency", scopeName: "main", threads: __setupData.threads });
   try {
     await agencyStore.run({
+      ...getRuntimeContext(),
       ctx: __ctx,
       stack: __ctx.stateStack,
       threads: __setupData.threads
@@ -231,7 +217,8 @@ export async function main({ messages, callbacks }: { messages?: any; callbacks?
     messages: messages,
     callbacks: callbacks,
     initializeGlobals: __initializeGlobals,
-    registerTopLevelCallbacks: __registerTopLevelCallbacks
+    registerTopLevelCallbacks: __registerTopLevelCallbacks,
+    moduleDir: __dirname
   });
 }
 export const __mainNodeParams = [];

@@ -175,6 +175,10 @@ export async function withResumableScope<T>(
         stack: stateStack,
         threads,
         callsite: { moduleId, scopeName: opts.name, stepPath: "" },
+        // Inherit moduleDir from any outer ALS frame so stdlib helpers
+        // inside the resumable scope body resolve paths against the
+        // same compiled module that started the run.
+        moduleDir: agencyStore.getStore()?.moduleDir,
       },
       () => body(scope),
     );

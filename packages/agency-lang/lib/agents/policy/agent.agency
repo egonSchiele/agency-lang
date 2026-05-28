@@ -18,10 +18,7 @@ callback("onToolCallEnd") as data {
   print("Finished calling ${data.toolName}.")
 }
 
-systemPrompt = read(
-  dir: "/Users/adit/agency-lang/packages/agency-lang/lib/agents/policy/prompts/",
-  filename: "system.md",
-) with approve
+systemPrompt = read("system.md", "./prompts") with approve
 
 type Question = {
   type: "askQuestion";

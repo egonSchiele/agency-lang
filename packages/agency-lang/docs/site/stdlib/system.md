@@ -75,6 +75,29 @@ Return the absolute path of the current working directory of the Agency process.
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/system.agency#L40))
 
+### dirname
+
+```ts
+dirname(): string
+```
+
+Return the absolute path of the directory containing the *compiled
+  JavaScript* of this Agency module. By convention this is the same
+  directory as the source `.agency` file. Use this to build paths to
+  resources shipped alongside your Agency file (prompts, fixtures, etc.):
+
+      import { dirname } from "std::system"
+      import { join } from "std::path"
+      const promptDir = join(dirname(), "prompts")
+      const prompt = read("system.md", promptDir)
+
+  Falls back to the current working directory when called outside any
+  Agency execution frame (e.g. from non-Agency host code).
+
+**Returns:** `string`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/system.agency#L47))
+
 ### env
 
 ```ts
@@ -91,7 +114,7 @@ Read an environment variable. Returns null if the variable is not set.
 
 **Returns:** `string | null`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/system.agency#L47))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/system.agency#L65))
 
 ### setEnv
 
@@ -115,7 +138,7 @@ Set an environment variable in the current process. Fails if the name is empty o
 
 **Throws:** `std::setEnv`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/system.agency#L54))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/system.agency#L72))
 
 ### openUrl
 
@@ -137,4 +160,4 @@ Open a URL in the user's default browser. Currently macOS-only.
 
 **Throws:** `std::openUrl`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/system.agency#L68))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/system.agency#L86))

@@ -270,7 +270,16 @@ function runInBranchAlsFrame<T>(
   const parent = agencyStore.getStore();
   if (parent) {
     return agencyStore.run(
-      { ctx: parent.ctx, stack: branchStack, threads: parent.threads },
+      {
+        ctx: parent.ctx,
+        stack: branchStack,
+        threads: parent.threads,
+        // Inherit `moduleDir` from the parent so stdlib helpers inside
+        // the branch resolve paths relative to the same compiled
+        // module that started the run. This frame doesn't spread
+        // `{ ...parent }`, so the inheritance has to be explicit.
+        moduleDir: parent.moduleDir,
+      },
       fn,
     );
   }

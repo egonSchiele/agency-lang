@@ -549,10 +549,23 @@ export const ts = {
     threads: TsNode;
     body: TsNode[];
   }): TsNode {
+    // Spread the outer ALS frame first so non-overridden slots —
+    // notably `moduleDir`, which is seeded once by generated code in
+    // `runNode` / `runInBootstrapFrame` — are inherited here. Without
+    // the spread, stdlib helpers invoked from inside this body frame
+    // would see `moduleDir = undefined` and fall back to
+    // `process.cwd()`, breaking the "resolve relative paths against
+    // the compiled module dir" contract for `read` / `dirname()` /
+    // `_readSkill` / etc.
     return ts.awaitCall(
       ts.prop(ts.id("agencyStore"), "run"),
       [
-        ts.obj({ ctx, stack, threads }),
+        ts.obj([
+          ts.setSpread(ts.call(ts.id("getRuntimeContext"))),
+          ts.set("ctx", ctx),
+          ts.set("stack", stack),
+          ts.set("threads", threads),
+        ]),
         ts.arrowFn([], ts.statements(body), { async: true }),
       ],
     );

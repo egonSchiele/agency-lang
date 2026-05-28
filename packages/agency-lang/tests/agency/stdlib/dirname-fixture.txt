@@ -1,0 +1,1 @@
+co-located fixture for dirname-basic

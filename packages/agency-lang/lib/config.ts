@@ -18,7 +18,7 @@ export const TYPES_THAT_DONT_TRIGGER_NEW_PART: AgencyNode["type"][] = [
  */
 export const BUILTIN_FUNCTIONS: Record<string, string> = {};
 
-export const BUILTIN_TOOLS = ["readSkill"];
+export const BUILTIN_TOOLS: string[] = [];
 
 export const BUILTIN_VARIABLES = ["color"];
 

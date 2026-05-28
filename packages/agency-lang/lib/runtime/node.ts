@@ -96,6 +96,7 @@ export async function runNode({
   initializeGlobals,
   registerTopLevelCallbacks,
   abortSignal,
+  moduleDir,
 }: {
   // global execution context
   ctx: RuntimeContext<GraphState>;
@@ -111,6 +112,13 @@ export async function runNode({
   messages?: MessageJSON[];
 
   callbacks?: AgencyCallbacks;
+
+  // Absolute path of the directory of the compiled JS module that is
+  // initiating this run. Seeded by generated code from `imports.mustache`
+  // (passing `__dirname`). Stashed in the ALS frame as `moduleDir` so
+  // stdlib helpers (e.g. `resolvePath`, `_dirname`) can resolve paths
+  // relative to the module instead of `process.cwd()`.
+  moduleDir?: string;
 
   // initializes global variables on the execution context
   initializeGlobals?: (ctx: RuntimeContext<GraphState>) => void | Promise<void>;
@@ -170,7 +178,7 @@ export async function runNode({
   //    The frame is mostly here to satisfy the "every helper must see
   //    *some* frame" contract.
   if (initializeGlobals) {
-    await runInBootstrapFrame(execCtx, () => initializeGlobals(execCtx));
+    await runInBootstrapFrame(execCtx, () => initializeGlobals(execCtx), { moduleDir });
   }
   // Top-level callbacks are re-registered every fresh run AFTER global
   // init so any module-level vars they reference (via `__ctx.globals`)
@@ -178,7 +186,7 @@ export async function runNode({
   // `respondToInterrupts` does on resume — keep them in sync if you
   // touch either site.
   if (registerTopLevelCallbacks) {
-    await runInBootstrapFrame(execCtx, () => registerTopLevelCallbacks(execCtx));
+    await runInBootstrapFrame(execCtx, () => registerTopLevelCallbacks(execCtx), { moduleDir });
   }
   // Externally-passed callbacks are stored on ctx; hook execution merges them
   // with scoped/top-level callbacks at call time.
@@ -202,12 +210,15 @@ export async function runNode({
   // callbacks that reach for thread/message builtins get a clear error
   // instead of writing into a placeholder. `messages` is still
   // available to the callback via `data.messages`.
-  await runInBootstrapFrame(execCtx, () =>
-    callHook({
-      ctx: execCtx,
-      name: "onAgentStart",
-      data: { nodeName, args: data, messages: messages || [], cancel },
-    }),
+  await runInBootstrapFrame(
+    execCtx,
+    () =>
+      callHook({
+        ctx: execCtx,
+        name: "onAgentStart",
+        data: { nodeName, args: data, messages: messages || [], cancel },
+      }),
+    { moduleDir },
   );
 
   const agentRunSpanId = execCtx.statelogClient.startSpan("agentRun");
@@ -228,7 +239,7 @@ export async function runNode({
         // the scope-local stack/threads, so this top-level frame is just
         // the fallback for early code (callHook, validation, etc.).
         const result = await agencyStore.run(
-          { ctx: execCtx, stack: execCtx.stateStack, threads: threadStore },
+          { ctx: execCtx, stack: execCtx.stateStack, threads: threadStore, moduleDir },
           () =>
             execCtx.graph.run(
               nodeName,
@@ -269,7 +280,7 @@ export async function runNode({
           // the final conversation through stdlib helpers see the
           // actual messages, not a sentinel.
           await agencyStore.run(
-            { ctx: execCtx, stack: execCtx.stateStack, threads: threadStore },
+            { ctx: execCtx, stack: execCtx.stateStack, threads: threadStore, moduleDir },
             () =>
               callHook({
                 ctx: execCtx,

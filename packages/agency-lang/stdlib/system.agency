@@ -1,4 +1,4 @@
-import { _args, _cwd, _env, _setEnv, _exit, _openUrl, _screenshot } from "agency-lang/stdlib-lib/system.js"
+import { _args, _cwd, _dirname, _env, _setEnv, _exit, _openUrl, _screenshot } from "agency-lang/stdlib-lib/system.js"
 
 export def screenshot(filepath: string, x: number = -1, y: number = -1, width: number = -1, height: number = -1) {
   """
@@ -42,6 +42,24 @@ export safe def cwd(): string {
   Return the absolute path of the current working directory of the Agency process.
   """
   return _cwd()
+}
+
+export safe def dirname(): string {
+  """
+  Return the absolute path of the directory containing the *compiled
+  JavaScript* of this Agency module. By convention this is the same
+  directory as the source `.agency` file. Use this to build paths to
+  resources shipped alongside your Agency file (prompts, fixtures, etc.):
+
+      import { dirname } from "std::system"
+      import { join } from "std::path"
+      const promptDir = join(dirname(), "prompts")
+      const prompt = read("system.md", promptDir)
+
+  Falls back to the current working directory when called outside any
+  Agency execution frame (e.g. from non-Agency host code).
+  """
+  return _dirname()
 }
 
 export safe def env(name: string): string | null {

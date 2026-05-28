@@ -2,7 +2,7 @@ import path from "path";
 import process from "process";
 import { detectPlatform } from "./utils.js";
 import { abortableExec } from "./abortable.js";
-import { getRuntimeContext } from "../runtime/asyncContext.js";
+import { getModuleDir, getRuntimeContext } from "../runtime/asyncContext.js";
 import type { RuntimeContext } from "../runtime/state/context.js";
 import type { StateStack } from "../runtime/state/stateStack.js";
 import type { ThreadStore } from "../runtime/state/threadStore.js";
@@ -13,6 +13,17 @@ export function _args(): string[] {
 
 export function _cwd(): string {
   return process.cwd();
+}
+
+/**
+ * Return the absolute path of the directory containing the *compiled
+ * JavaScript* of the Agency module that initiated the current run.
+ * Reads through the ALS frame seeded by `runNode` / `runInBootstrapFrame`.
+ * Falls back to `process.cwd()` when no Agency frame is active (e.g.
+ * the helper is called from non-Agency code).
+ */
+export function _dirname(): string {
+  return getModuleDir();
 }
 
 export function _env(name: string): string | null {

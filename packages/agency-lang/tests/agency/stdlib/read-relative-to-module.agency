@@ -1,0 +1,11 @@
+node main() {
+  // The relative `dir` argument is resolved against the compiled
+  // module's directory (i.e. this .agency file's directory), not
+  // process.cwd(). The fixture file lives beside this .agency. `with
+  // approve` auto-approves the interrupt that `read()` raises.
+  let result = read("read-relative-to-module-fixture.txt", "./") with approve
+  if (result is success(content)) {
+    return { ok: true, content: content }
+  }
+  return { ok: false }
+}

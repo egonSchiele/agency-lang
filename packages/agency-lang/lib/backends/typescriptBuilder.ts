@@ -3365,6 +3365,7 @@ export class TypeScriptBuilder {
                   registerTopLevelCallbacks: ts.id(
                     "__registerTopLevelCallbacks",
                   ),
+                  moduleDir: ts.id("__dirname"),
                 }),
               ])
               .done(),

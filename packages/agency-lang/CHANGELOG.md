@@ -1,5 +1,46 @@
 ## [unreleased]
 
+### Added — Module-directory access for Agency code
+
+- **`std::system::dirname()`**. New stdlib accessor that returns the
+  absolute path of the directory containing the compiled `.js` module
+  initiating the current run. By convention this is the same directory
+  as the source `.agency` file, so users can build paths to co-located
+  resources (prompts, fixtures, etc.) regardless of `cwd`:
+
+  ```agency
+  import { dirname } from "std::system"
+  import { join } from "std::path"
+  const promptDir = join(dirname(), "prompts")
+  const prompt = read("system.md", promptDir)
+  ```
+- **`std::skills::readSkill(filepath)`**. The implicit `readSkill`
+  wrapper that used to be baked into every compiled module now lives
+  in the new `std::skills` module. Import it explicitly:
+
+  ```agency
+  import { readSkill } from "std::skills"
+  ```
+
+  This is part of the general "module-dir aware stdlib" mechanism
+  (see `dirname()` above) — `readSkill` no longer needs a special
+  codegen path.
+
+### Changed — BREAKING: `read` / `write` / `readImage` / `edit` / `multiedit` resolve relative `dir` against module dir
+
+Relative `dir` arguments to `read`, `write`, `readImage`, `edit`, and
+`multiedit` now resolve against the directory of the **compiled module**
+(by convention the source `.agency` file's directory) instead of
+`process.cwd()`. Absolute `dir` arguments are unaffected.
+
+Migration: to restore the previous behaviour, pass `dir: cwd()` and
+import `cwd` from `std::system`:
+
+```agency
+import { cwd } from "std::system"
+const txt = read("config.json", cwd())
+```
+
 ### Added — TypeScript helpers are first-class
 
 This release closes the gap between Agency function calls and plain

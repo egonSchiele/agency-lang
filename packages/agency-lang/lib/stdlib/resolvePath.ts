@@ -1,10 +1,21 @@
 import fs from "fs/promises";
 import path from "path";
-import process from "process";
+import { getModuleDir } from "../runtime/asyncContext.js";
 
 /**
  * Resolve a filename relative to a directory with security checks.
  * Rejects empty dir, absolute filenames, path traversal, and symlink escapes.
+ *
+ * Relative `dir` arguments are resolved against the *module directory*
+ * (the directory of the compiled JS of the Agency module that initiated
+ * this run), not `process.cwd()`. This matches what users want when
+ * they ship a co-located resource bundle (`prompts/`, `fixtures/`, etc.)
+ * next to their `.agency` file. Absolute `dir` arguments are unaffected
+ * because `path.resolve` returns them unchanged.
+ *
+ * Outside an Agency execution frame, `getModuleDir()` falls back to
+ * `process.cwd()`, preserving the previous behaviour for standalone
+ * test invocations.
  */
 export async function resolvePath(dir: string, filename: string): Promise<string> {
   if (!dir) {
@@ -13,7 +24,7 @@ export async function resolvePath(dir: string, filename: string): Promise<string
   if (path.isAbsolute(filename)) {
     throw new Error(`Filename must not be absolute when dir is specified (got "${filename}").`);
   }
-  const baseDir = path.resolve(process.cwd(), dir);
+  const baseDir = path.resolve(getModuleDir(), dir);
   const full = path.resolve(baseDir, filename);
 
   // Lexical check against the unresolved baseDir (catches .. early)

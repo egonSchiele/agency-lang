@@ -13,7 +13,7 @@ export def edit(filename: string, oldText: string, newText: string, replaceAll: 
   @param oldText - The text to find
   @param newText - The replacement text
   @param replaceAll - Replace all occurrences instead of just the first
-  @param dir - The directory to resolve the filename against (defaults to ".")
+  @param dir - The directory to resolve the filename against. Relative paths resolve against the directory of the compiled .js (i.e. next to the source .agency file by default), not the current working directory. Defaults to ".". Pass an absolute path or cwd() from std::system for the old behavior.
   """
   return interrupt std::edit("Are you sure you want to edit this file?", {
     dir: dir,
@@ -44,7 +44,7 @@ export def multiedit(filename: string, edits: Edit[], dir: string = "."): Result
 
   @param filename - The file to edit
   @param edits - Array of edit objects with oldText, newText, and replaceAll
-  @param dir - The directory to resolve the filename against (defaults to ".")
+  @param dir - The directory to resolve the filename against. Relative paths resolve against the directory of the compiled .js (i.e. next to the source .agency file by default), not the current working directory. Defaults to ".". Pass an absolute path or cwd() from std::system for the old behavior.
   """
   return interrupt std::multiedit("Are you sure you want to apply these edits?", {
     dir: dir,

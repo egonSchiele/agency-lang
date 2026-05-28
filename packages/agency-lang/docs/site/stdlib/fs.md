@@ -62,7 +62,7 @@ Edit a file by replacing oldText with newText. By default oldText must match exa
   @param oldText - The text to find
   @param newText - The replacement text
   @param replaceAll - Replace all occurrences instead of just the first
-  @param dir - The directory to resolve the filename against (defaults to ".")
+  @param dir - The directory to resolve the filename against. Relative paths resolve against the directory of the compiled .js (i.e. next to the source .agency file by default), not the current working directory. Defaults to ".". Pass an absolute path or cwd() from std::system for the old behavior.
 
 **Parameters:**
 
@@ -90,7 +90,7 @@ Apply a sequence of edits to a single file atomically. Each edit has oldText, ne
 
   @param filename - The file to edit
   @param edits - Array of edit objects with oldText, newText, and replaceAll
-  @param dir - The directory to resolve the filename against (defaults to ".")
+  @param dir - The directory to resolve the filename against. Relative paths resolve against the directory of the compiled .js (i.e. next to the source .agency file by default), not the current working directory. Defaults to ".". Pass an absolute path or cwd() from std::system for the old behavior.
 
 **Parameters:**
 

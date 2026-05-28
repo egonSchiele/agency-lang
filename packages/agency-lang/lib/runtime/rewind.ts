@@ -29,6 +29,10 @@ export async function rewindFrom(args: {
   registerTopLevelCallbacks?: (
     ctx: RuntimeContext<GraphState>,
   ) => void | Promise<void>;
+  // See runNode's docstring on the same field — seeded by generated
+  // code so the rewound graph's stdlib helpers resolve paths against
+  // the compiled module dir.
+  moduleDir?: string;
 }): Promise<any> {
   const { ctx, overrides, metadata = {} } = args;
   const checkpoint = deepClone(args.checkpoint);
@@ -50,8 +54,10 @@ export async function rewindFrom(args: {
   // `__call` post-migration. See `runInBootstrapFrame` in
   // lib/runtime/asyncContext.ts.
   if (args.registerTopLevelCallbacks) {
-    await runInBootstrapFrame(execCtx, () =>
-      args.registerTopLevelCallbacks!(execCtx),
+    await runInBootstrapFrame(
+      execCtx,
+      () => args.registerTopLevelCallbacks!(execCtx),
+      { moduleDir: args.moduleDir },
     );
   }
   execCtx.restoreState(checkpoint);
@@ -78,19 +84,22 @@ export async function rewindFrom(args: {
         // `Runner.runInScope` with the per-scope ThreadStore
         // reconstituted by `setupNode` — nothing user-facing should
         // reach for `threads` in the slice covered by this wrap.
-        const result = await runInBootstrapFrame(execCtx, () =>
-          execCtx.graph.run(
-            nodeName,
-            {
-              data: {},
-              ctx: execCtx,
-              isResume: true,
-            },
-            {
-              onNodeEnter: (id) => execCtx.stateStack.nodesTraversed.push(id),
-              statelogClient: execCtx.statelogClient,
-            },
-          ),
+        const result = await runInBootstrapFrame(
+          execCtx,
+          () =>
+            execCtx.graph.run(
+              nodeName,
+              {
+                data: {},
+                ctx: execCtx,
+                isResume: true,
+              },
+              {
+                onNodeEnter: (id) => execCtx.stateStack.nodesTraversed.push(id),
+                statelogClient: execCtx.statelogClient,
+              },
+            ),
+          { moduleDir: args.moduleDir },
         );
         await execCtx.pendingPromises.awaitAll();
         return createReturnObject({ result, globals: execCtx.globals });

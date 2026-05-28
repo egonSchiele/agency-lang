@@ -1,0 +1,15 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "{\"ok\":true,\"content\":\"hello from the module dir\\n\"}",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "description": "read('foo','./') resolves the relative dir against the compiled module's directory, not process.cwd()"
+    }
+  ]
+}

@@ -1,0 +1,21 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "{\"result\":{\"v1\":\"first\",\"v2\":\"resumed\",\"v3\":\"third\"},\"calls\":{\"s1\":1,\"s2\":2,\"s3\":1}}",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "interruptHandlers": [
+        {
+          "action": "approve",
+          "value": "resumed",
+          "expectedMessage": "wait"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,6 @@
+import { run } from "./helper.js"
+
+node main() {
+  const result = run()
+  return result
+}

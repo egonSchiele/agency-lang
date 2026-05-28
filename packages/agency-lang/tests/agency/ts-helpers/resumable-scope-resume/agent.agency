@@ -1,0 +1,6 @@
+import { runScope, getCalls } from "./helper.js"
+
+node main() {
+  const result = runScope()
+  return { result: result, calls: getCalls() }
+}

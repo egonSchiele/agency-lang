@@ -1,0 +1,9 @@
+import { raise } from "./helper.js"
+
+node main() {
+  handle {
+    return raise()
+  } with (i) {
+    return approve("from-agency")
+  }
+}

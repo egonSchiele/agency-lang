@@ -50,6 +50,7 @@ import { BootstrapThreadStore } from "./state/bootstrapThreadStore.js";
 import type { RuntimeContext } from "./state/context.js";
 import type { StateStack } from "./state/stateStack.js";
 import type { ThreadStore } from "./state/threadStore.js";
+import type { Runner } from "./runner.js";
 import type { HandlerFn } from "./types.js";
 
 export type CallsiteLocation = {
@@ -75,6 +76,15 @@ export type AgencyStore = {
    * `""::""::""` fallback, matching pre-ALS behaviour).
    */
   callsite?: CallsiteLocation;
+  /**
+   * The `Runner` driving the currently-executing step, if any.
+   * Seeded by `Runner.runInScope` so TS helpers like `agency.interrupt`
+   * can call `runner.halt(...)` without having to receive the runner
+   * as an argument. Absent in bootstrap frames and in the outer
+   * `withResumableScope` body frame (only inside `s.step(...)` does
+   * a Runner come into scope).
+   */
+  runner?: Runner;
 };
 
 export const agencyStore = new AsyncLocalStorage<AgencyStore>();

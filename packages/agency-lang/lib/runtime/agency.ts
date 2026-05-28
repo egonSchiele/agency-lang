@@ -34,6 +34,10 @@ import {
   withPushedHandler,
   type CallsiteLocation,
 } from "./asyncContext.js";
+import {
+  interrupt,
+  type InterruptOpts,
+} from "./agencyInterrupt.js";
 import { llm as _llm } from "./agencyLlm.js";
 import {
   checkpoint as _checkpoint,
@@ -271,7 +275,9 @@ export const agency = {
 
   llm: _llm,
 
+  interrupt,
+
   withTestContext,
 };
 
-export type { ResumableScope, ResumableScopeOpts };
+export type { InterruptOpts, ResumableScope, ResumableScopeOpts };

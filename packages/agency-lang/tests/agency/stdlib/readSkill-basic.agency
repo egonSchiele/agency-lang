@@ -1,0 +1,9 @@
+import { readSkill } from "std::skills"
+
+node main() {
+  // readSkill resolves its filepath against the compiled module's
+  // directory, just like dirname() and resolvePath(). The fixture file
+  // co-located with this .agency should be readable from any cwd.
+  let content = readSkill("dirname-fixture.txt")
+  return { content: content }
+}

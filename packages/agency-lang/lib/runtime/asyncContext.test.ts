@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   agencyStore,
+  getModuleDir,
   getRuntimeContext,
   runInBootstrapFrame,
   runInTestContext,
@@ -247,5 +248,46 @@ describe("withPushedHandler", () => {
       expect(lenDuring).toBe(before + 1);
       expect(seed.ctx.handlers.length).toBe(before);
     });
+  });
+});
+
+describe("getModuleDir", () => {
+  it("returns moduleDir when set", () => {
+    const seed = makeStore();
+    agencyStore.run(
+      { ctx: seed.ctx, stack: seed.stack, threads: seed.threads, moduleDir: "/x" },
+      () => expect(getModuleDir()).toBe("/x"),
+    );
+  });
+  it("falls back to process.cwd when not in a frame", () => {
+    expect(getModuleDir()).toBe(process.cwd());
+  });
+  it("falls back to process.cwd when a frame is active but no moduleDir is set", () => {
+    const seed = makeStore();
+    agencyStore.run(
+      { ctx: seed.ctx, stack: seed.stack, threads: seed.threads },
+      () => expect(getModuleDir()).toBe(process.cwd()),
+    );
+  });
+  it("inherits moduleDir into nested {...store} frames", () => {
+    const seed = makeStore();
+    agencyStore.run(
+      { ctx: seed.ctx, stack: seed.stack, threads: seed.threads, moduleDir: "/outer" },
+      () => {
+        const s = agencyStore.getStore()!;
+        agencyStore.run(
+          { ...s, callsite: { moduleId: "", scopeName: "", stepPath: "" } },
+          () => expect(getModuleDir()).toBe("/outer"),
+        );
+      },
+    );
+  });
+  it("runInBootstrapFrame seeds moduleDir from opts", async () => {
+    const seed = makeStore();
+    await runInBootstrapFrame(
+      seed.ctx,
+      () => expect(getModuleDir()).toBe("/seeded"),
+      { moduleDir: "/seeded" },
+    );
   });
 });

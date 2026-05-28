@@ -1,0 +1,15 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "{\"content\":\"co-located fixture for dirname-basic\\n\"}",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "description": "std::skills::readSkill resolves its filepath against the compiled module's directory"
+    }
+  ]
+}

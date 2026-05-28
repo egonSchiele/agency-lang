@@ -1,0 +1,15 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "{\"nonEmpty\":true,\"fixtureExists\":true}",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "description": "dirname() returns the module directory, and a co-located fixture file is reachable from it"
+    }
+  ]
+}

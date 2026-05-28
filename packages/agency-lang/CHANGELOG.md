@@ -45,6 +45,18 @@ through one discoverable namespace.
   `undefined`) instead. The function remains as an internal helper
   for stdlib modules but is no longer documented as user-facing.
 
+### Changed — memory layer participates in cost guards
+
+- Memory's internal LLM and embedding calls (extraction, compaction,
+  tier-3 recall filter, observation embeddings, query embeddings) now
+  charge their spend against the surrounding branch's
+  `withCostGuard` budget via `agency.addCost(...)`. Previously these
+  calls bypassed cost tracking entirely, so a user wrapping an agent
+  in `withCostGuard($X)` could under-count actual spend whenever the
+  memory layer ran. The charge fires from inside `MemoryManager`'s
+  `_text` / `_embed` after a successful call. Outside an Agency
+  frame (direct-construction unit tests) the charge silently no-ops.
+
 ### Migration
 
 - TS code that called `AgencyFunction.invoke(descr, customState)`:

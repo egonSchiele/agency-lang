@@ -31,6 +31,24 @@ import type { StatelogClient } from "../../statelogClient.js";
 import forgetTemplate from "../../templates/prompts/memory/forget.js";
 import retrievalTemplate from "../../templates/prompts/memory/retrieval.js";
 import type { LLMClient } from "../llmClient.js";
+import { agency } from "../agency.js";
+import { agencyStore } from "../asyncContext.js";
+
+/**
+ * Charge `amount` against the active branch's `withCostGuard` budget
+ * if (and only if) we're inside an Agency execution frame. Memory's
+ * text + embed calls run from inside `runPrompt`'s post-completion
+ * hook or from stdlib agency calls — both reach this code with an
+ * `agencyStore` frame already installed, so production paths always
+ * charge correctly. The frame check is for direct-construction unit
+ * tests that exercise `MemoryManager` without going through the
+ * runner.
+ */
+function chargeCostIfInFrame(amount: number): void {
+  if (amount <= 0) return;
+  if (!agencyStore.getStore()) return;
+  agency.addCost(amount);
+}
 
 // Cap on the `inputPreview` slice we put on every embedCompletion
 // event. Short enough that a transcript fragment in stderr or in a
@@ -247,6 +265,12 @@ export class MemoryManager {
           `[memory] statelog promptCompletion failed: ${(err as Error).message}`,
         );
       }
+      // Charge this call's spend against the surrounding branch's
+      // cost budget. Mirrors the post-completion charge that
+      // `prompt.ts` performs for agency-side `llm()` calls, so a
+      // `withCostGuard($X)` wrapping the agent now sees memory's
+      // extraction / compaction / tier-3 spend too.
+      chargeCostIfInFrame(result.value.cost?.totalCost ?? 0);
       return result.value.output ?? "";
     } finally {
       this.statelogClient?.endSpan(spanId);
@@ -315,6 +339,11 @@ export class MemoryManager {
           `[memory] statelog embedCompletion failed: ${(err as Error).message}`,
         );
       }
+      // Same rationale as `_text` above — embed calls contribute to
+      // the surrounding branch's cost budget too. `EmbedResult.costEstimate`
+      // (smoltalk's name) is optional; absent / zero means "free or
+      // unknown" and the charge is skipped.
+      chargeCostIfInFrame(result.value.costEstimate?.totalCost ?? 0);
       return vector;
     } finally {
       this.statelogClient?.endSpan(spanId);

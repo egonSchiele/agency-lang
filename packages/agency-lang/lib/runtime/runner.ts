@@ -1,6 +1,7 @@
 import { nanoid } from "nanoid";
 import { agencyStore } from "./asyncContext.js";
 import { debugStep } from "./debugger.js";
+import { HaltSignal } from "./haltSignal.js";
 import { hasInterrupts } from "./interrupts.js";
 import { __pipeBind } from "./result.js";
 import { runBatch } from "./runBatch.js";
@@ -96,11 +97,22 @@ export class Runner {
             scopeName: this.scopeName,
             stepPath: this.path.join("."),
           },
+          runner: this,
         },
         fn,
       );
     }
     return fn();
+  }
+
+  /** Whether this runner is driving a graph-node body (vs. a function or
+   *  resumable-scope body). TS helpers that need to produce the same halt
+   *  payload shape as the codegen `interrupt` templates (`{messages, data}`
+   *  in a node body, raw `data` in a function body) read this. Public to
+   *  let `agency.interrupt` mirror the codegen branch without exposing
+   *  the rest of Runner internals. */
+  get isNodeContext(): boolean {
+    return this.nodeContext;
   }
 
   // ── Path and counter management ──
@@ -351,6 +363,14 @@ export class Runner {
     this.path.push(id);
     try {
       await this.runInScope(() => callback(this));
+    } catch (e) {
+      // `agency.interrupt()` (and any future TS-helper that mirrors the
+      // codegen "halt + return" pattern) signals a halt by throwing
+      // `HaltSignal` so the surrounding step body unwinds without
+      // executing post-interrupt code. Absorb the signal here once the
+      // runner is in the halted state; everything else (real errors,
+      // RestoreSignal, etc.) propagates as usual.
+      if (!(e instanceof HaltSignal && this.halted)) throw e;
     } finally {
       this.path.pop();
     }

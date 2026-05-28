@@ -35,6 +35,16 @@ export function makeMockCtx(opts: {
     traceConfig: {},
     pushHandler(fn: any) { this.handlers.push(fn); },
     popHandler() { this.handlers.pop(); },
+    isCancelled() { return false; },
+    enterToolCall() { this._toolCallDepth++; },
+    exitToolCall() { this._toolCallDepth--; },
+    interruptResponses: {} as Record<string, { response: any }>,
+    setInterruptResponses(responses: Record<string, { response: any }>) {
+      this.interruptResponses = responses;
+    },
+    getInterruptResponse(id: string) {
+      return this.interruptResponses[id]?.response;
+    },
     threads: {
       create: () => "tid-1",
       createSubthread: () => "tid-sub-1",
@@ -53,8 +63,14 @@ export function makeMockCtx(opts: {
       forkEnd: () => {},
       forkBranchEnd: () => {},
       checkpointCreated: () => {},
+      checkpointRestored: () => {},
       error: () => {},
       toolCall: () => {},
+      interruptThrown: () => {},
+      interruptResolved: () => {},
+      handlerDecision: () => {},
+      agentStart: () => {},
+      agentEnd: () => {},
     },
     hasDebugger() { return this.debuggerState !== null; },
     hasTraceWriter() { return false; },

@@ -643,6 +643,45 @@ describe("MemoryManager", () => {
         ).rejects.toThrow(/cost/i);
       });
     });
+
+    it("propagates a GuardExceededError from inside generateEmbeddings's swallow site", async () => {
+      // Regression for the original Proposal A PR review: memory has
+      // several "best effort" catches around _text / _embed (per-obs
+      // embed in generateEmbeddings, tier-2 query embed, tier-3 LLM
+      // filter). If those catches absorbed a GuardExceededError, the
+      // surrounding withCostGuard would silently fail to trip. This
+      // test pins the propagation by making the embed-side cost
+      // (not the text cost) blow the budget — the throw happens
+      // inside the catch block of `generateEmbeddings`.
+      const env = makeFrame();
+      const client = mockLlmClientWithCost(0, 1.0);
+      // Extraction returns one entity with one observation so
+      // generateEmbeddings runs at all.
+      client.text.mockResolvedValueOnce(
+        wrapTextResultWithCost(
+          JSON.stringify({
+            entities: [
+              { name: "Maggie", type: "person", observations: ["weaves baskets"] },
+            ],
+            relations: [],
+            expirations: [],
+          }),
+          0,
+        ),
+      );
+      const manager = new MemoryManager({
+        store: new FileMemoryStore(tmpDir),
+        config: { dir: tmpDir },
+        llmClient: client,
+      });
+      await agency.withTestContext(env, async () => {
+        await expect(
+          agency.withCostGuard(0.5, async () => {
+            await manager.remember("Maggie weaves baskets");
+          }),
+        ).rejects.toThrow(/cost/i);
+      });
+    });
   });
 });
 

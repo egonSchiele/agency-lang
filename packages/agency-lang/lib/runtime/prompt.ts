@@ -4,6 +4,7 @@ import { createLogger } from "../logger.js";
 import { AgencyFunction } from "./agencyFunction.js";
 import { getRuntimeContext } from "./asyncContext.js";
 import { AgencyCancelledError, isAbortError } from "./errors.js";
+import { isGuardExceededError } from "./guard.js";
 import { callHook, invokeCallbacks } from "./hooks.js";
 import { hasInterrupts, isRejected } from "./interrupts.js";
 import type { PromptConfig } from "./llmClient.js";
@@ -224,6 +225,12 @@ async function _runPrompt({
         messages.setMessages([...head, summary, ...tail]);
       }
     } catch (err) {
+      // Cost / time guard trips are NOT best-effort failures — they
+      // signal the surrounding `withCostGuard` / `withTimeGuard` has
+      // been exceeded and the agent should stop. Re-throw so the
+      // signal reaches the user's scope instead of being silently
+      // logged here.
+      if (isGuardExceededError(err)) throw err;
       // The memory hook is best-effort: a failure here must never
       // break the LLM call. Logged at `warn` so users see the failure
       // by default; the manager already emitted finer-grained debug
@@ -398,6 +405,9 @@ export async function runPrompt(args: {
           messages.push(smoltalk.systemMessage(injectedFactsContent));
         }
       } catch (err) {
+        // Guard trips are signals, not best-effort failures — let
+        // them bubble to the surrounding `withCostGuard` scope.
+        if (isGuardExceededError(err)) throw err;
         createLogger(ctx.logLevel).warn(
           `[memory] recall injection failed: ${(err as Error).message}`,
         );

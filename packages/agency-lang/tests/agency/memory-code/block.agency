@@ -1,0 +1,22 @@
+import { memory, recall, isMemoryActive } from "std::memory"
+
+// Block form: `memory({...}) as { ... }` pushes a frame on entry
+// and pops on exit. We verify push/pop semantics directly via
+// `isMemoryActive()` (introspects the active frame) rather than
+// indirectly via recall — the recall-returns-"" trick from the old
+// version of this test would pass even if push and pop both no-op'd,
+// which defeats the purpose.
+node main(): boolean {
+  // Before the block: no frame active.
+  const before: boolean = isMemoryActive()
+  let inside: boolean = false
+  let recallInside: string = "unset"
+  memory({ dir: ".agency-tmp/memory-code-block-test" }) as {
+    inside = isMemoryActive()
+    // recall on a fresh, empty graph returns "" without an LLM call.
+    recallInside = recall("anything")
+  }
+  // After the block: frame popped, memory off again.
+  const after: boolean = isMemoryActive()
+  return before == false && inside == true && after == false && recallInside == ""
+}

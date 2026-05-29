@@ -139,3 +139,4 @@ export type {
   RecursiveValidationOpts,
 } from "./validateChain.js";
 export { CoverageCollector } from "./coverageCollector.js";
+export type { MemoryConfig } from "./memory/types.js";

@@ -246,6 +246,43 @@ agency.addCost(cost);
 
 ---
 
+## Memory
+
+TS helpers reach Agency's memory layer through `agency.memory.*`. Every method mirrors a function in `std::memory`, so a TS helper can do the same push/configure/recall/forget operations Agency code can.
+
+```ts
+import { agency, type MemoryConfig } from "agency-lang/runtime";
+
+export async function withUserMemory<T>(
+  userId: string,
+  fn: () => Promise<T>,
+): Promise<T> {
+  await agency.memory.enable({ dir: `./mem/${userId}` });
+  await agency.memory.setId(userId);
+  try {
+    return await fn();
+  } finally {
+    agency.memory.disable();
+  }
+}
+```
+
+### Methods
+
+| Method | What it does |
+| --- | --- |
+| `agency.memory.enable(config)` | Push a memory frame; `config.dir` resolves against `process.cwd()`. Same dir as top is a no-op. |
+| `agency.memory.disable()` | Pop the top frame. Includes the JSON-seeded bottom frame — use the block form in Agency for lexical scoping. |
+| `agency.memory.setId(id)` | Update the scope id. Orthogonal to frames — persists across push/pop. |
+| `agency.memory.enabled()` | `true` iff a frame is currently active. |
+| `agency.memory.remember(content)` | Extract + store facts. No-op when no frame is active. |
+| `agency.memory.recall(query)` | Retrieve facts as a formatted string. Empty when no frame or no match. |
+| `agency.memory.forget(query)` | Soft-delete matching facts. |
+
+The `MemoryConfig` type is re-exported from `agency-lang/runtime` so TS helpers can accept it as a parameter without reaching into the internals.
+
+---
+
 ## Resumable scopes
 
 A resumable scope wraps a TS body in the same substep-counter + serialized-frame machinery generated Agency function bodies use. Interrupts that happen inside a step body re-enter exactly where they left off on resume: already-completed steps are skipped, and the deepest in-flight step re-runs from scratch.

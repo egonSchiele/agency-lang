@@ -1,0 +1,20 @@
+import { enableMemory, disableMemory, recall, setMemoryId, isMemoryActive } from "std::memory"
+
+// Exercises the code-side memory configuration end-to-end:
+//   - `enableMemory` flips memory on (isMemoryActive becomes true)
+//   - `recall` on a fresh, empty graph returns "" without any LLM
+//     call (the manager short-circuits on graph.entities=0), proving
+//     the manager actually got wired up.
+//   - `disableMemory` pops the frame, flipping isMemoryActive back
+//     off — verifying the push and pop are balanced rather than
+//     trusting that both silently no-op'd.
+node main(): boolean {
+  const before: boolean = isMemoryActive()
+  enableMemory({ dir: ".agency-tmp/memory-code-enable-test" })
+  setMemoryId("enable-test")
+  const active: boolean = isMemoryActive()
+  const r: string = recall("anything")
+  disableMemory()
+  const after: boolean = isMemoryActive()
+  return before == false && active == true && r == "" && after == false
+}

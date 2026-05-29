@@ -211,11 +211,12 @@ async function _runPrompt({
   // Tool-call results have not been pushed yet, so we operate on the
   // current message slice. Compaction is a best-effort hint — failures
   // never break the LLM call.
-  if (ctx.memoryManager) {
+  const memoryManager = ctx.getActiveMemoryManager();
+  if (memoryManager) {
     try {
       const original = messages.getMessages();
-      await ctx.memoryManager.onTurn(original);
-      const plan = await ctx.memoryManager.compactIfNeeded(original);
+      await memoryManager.onTurn(original);
+      const plan = await memoryManager.compactIfNeeded(original);
       if (plan) {
         // Reassemble the thread from the ORIGINAL smoltalk Message
         // instances so tool_call metadata, ids, and other class-level
@@ -398,9 +399,10 @@ export async function runPrompt(args: {
   // (re-entries after a later tool-batch bailout skip this step).
   await pr.step("initialLlmCall", async () => {
     let injectedFactsContent: string | null = null;
-    if (memoryOption && ctx.memoryManager) {
+    const recallManager = ctx.getActiveMemoryManager();
+    if (memoryOption && recallManager) {
       try {
-        const facts = await ctx.memoryManager.recallForInjection(prompt);
+        const facts = await recallManager.recallForInjection(prompt);
         if (facts) {
           injectedFactsContent = `Relevant context from memory:\n${facts}`;
           messages.push(smoltalk.systemMessage(injectedFactsContent));

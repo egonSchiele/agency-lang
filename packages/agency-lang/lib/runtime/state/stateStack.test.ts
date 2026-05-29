@@ -703,3 +703,73 @@ describe("StateStack.rehydrateInheritedGuardsFrom", () => {
     expect(child.inheritedGuardCount).toBe(0);
   });
 });
+
+describe("StateStack memory frames", () => {
+  const frameA = { configKey: "/abs/dirA", config: { dir: "/abs/dirA" } };
+  const frameAOther = { configKey: "/abs/dirA", config: { dir: "/abs/dirA", model: "different" } };
+  const frameB = { configKey: "/abs/dirB", config: { dir: "/abs/dirB" } };
+
+  it("activeMemoryFrame returns undefined on a fresh stack", () => {
+    const s = new StateStack();
+    expect(s.activeMemoryFrame()).toBeUndefined();
+  });
+
+  it("hasMemoryFrameStack is false on a fresh stack, true after first push (even on dedup)", () => {
+    const s = new StateStack();
+    expect(s.hasMemoryFrameStack()).toBe(false);
+    s.pushMemoryFrame(frameA);
+    expect(s.hasMemoryFrameStack()).toBe(true);
+    // pop to empty — flag stays true (distinguishes "user emptied" from "never set")
+    s.popMemoryFrame();
+    expect(s.hasMemoryFrameStack()).toBe(true);
+  });
+
+  it("pushMemoryFrame then activeMemoryFrame returns the frame", () => {
+    const s = new StateStack();
+    expect(s.pushMemoryFrame(frameA)).toBe(true);
+    expect(s.activeMemoryFrame()).toEqual(frameA);
+  });
+
+  it("same-dir push is a no-op (returns false, does not stack)", () => {
+    const s = new StateStack();
+    expect(s.pushMemoryFrame(frameA)).toBe(true);
+    expect(s.pushMemoryFrame(frameAOther)).toBe(false);
+    expect(s.activeMemoryFrame()).toEqual(frameA);
+    // pop once should leave the stack empty
+    s.popMemoryFrame();
+    expect(s.activeMemoryFrame()).toBeUndefined();
+  });
+
+  it("different-dir push stacks on top, pop returns to previous", () => {
+    const s = new StateStack();
+    s.pushMemoryFrame(frameA);
+    s.pushMemoryFrame(frameB);
+    expect(s.activeMemoryFrame()).toEqual(frameB);
+    s.popMemoryFrame();
+    expect(s.activeMemoryFrame()).toEqual(frameA);
+  });
+
+  it("popMemoryFrame on empty returns undefined and leaves stack empty", () => {
+    const s = new StateStack();
+    expect(s.popMemoryFrame()).toBeUndefined();
+    expect(s.activeMemoryFrame()).toBeUndefined();
+  });
+
+  it("frames survive a serialize/deserialize roundtrip with nested config", () => {
+    const richFrame = {
+      configKey: "/abs/rich",
+      config: {
+        dir: "/abs/rich",
+        model: "gpt-4o",
+        autoExtract: { interval: 7 },
+        compaction: { trigger: "messages" as const, threshold: 100 },
+        embeddings: { model: "text-embedding-3-small" },
+      },
+    };
+    const s = new StateStack();
+    s.pushMemoryFrame(richFrame);
+    const json = s.toJSON();
+    const restored = StateStack.fromJSON(json);
+    expect(restored.activeMemoryFrame()).toEqual(richFrame);
+  });
+});

@@ -57,6 +57,16 @@ import type { StateStack } from "./state/stateStack.js";
 import type { MessageThread } from "./state/messageThread.js";
 import type { ThreadStore } from "./state/threadStore.js";
 import type { HandlerFn } from "./types.js";
+import type { MemoryConfig } from "./memory/types.js";
+import {
+  _enableMemory,
+  _disableMemory,
+  _setMemoryId,
+  _shouldRunMemory,
+  _remember,
+  _recall,
+  _forget,
+} from "../stdlib/memory.js";
 
 // ---- Context reads -----------------------------------------------------
 
@@ -221,6 +231,36 @@ const addCost = (amount: number): void => {
   stack.enforceGuards();
 };
 
+// ---- Memory subnamespace ---------------------------------------------
+
+/** Push a memory frame onto the active branch's stateStack. See
+ *  `stdlib/memory.agency`'s `enableMemory` for the user-facing
+ *  contract — same dir as top is a no-op, different dir stacks. */
+const memoryEnable = (config: MemoryConfig): Promise<void> =>
+  _enableMemory(config);
+
+/** Pop the top memory frame on the active branch's stateStack.
+ *  Pops the JSON-seeded bottom frame too — library authors should
+ *  not call this casually. */
+const memoryDisable = (): void => _disableMemory();
+
+/** Set the memory scope id (orthogonal to which frame is active —
+ *  persists across pushes/pops). */
+const memorySetId = (id: string): Promise<void> => _setMemoryId(id);
+
+/** `true` iff a memory frame is currently active on the branch. */
+const memoryEnabled = (): boolean => _shouldRunMemory();
+
+/** Extract + store facts from `content`. No-op when no frame is active. */
+const memoryRemember = (content: string): Promise<void> => _remember(content);
+
+/** Retrieve facts as a formatted string. Empty string when no frame
+ *  is active or nothing matches. */
+const memoryRecall = (query: string): Promise<string> => _recall(query);
+
+/** Soft-delete facts matching `query`. No-op when no frame is active. */
+const memoryForget = (query: string): Promise<void> => _forget(query);
+
 // ---- Test helpers ------------------------------------------------------
 
 /**
@@ -277,7 +317,18 @@ export const agency = {
 
   interrupt,
 
+  memory: {
+    enable: memoryEnable,
+    disable: memoryDisable,
+    setId: memorySetId,
+    enabled: memoryEnabled,
+    remember: memoryRemember,
+    recall: memoryRecall,
+    forget: memoryForget,
+  },
+
   withTestContext,
 };
 
 export type { InterruptOpts, ResumableScope, ResumableScopeOpts };
+export type { MemoryConfig };

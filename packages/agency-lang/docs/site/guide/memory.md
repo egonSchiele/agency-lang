@@ -84,6 +84,103 @@ All other fields are optional with sensible defaults:
 | `compaction.threshold` | Threshold above which compaction runs. |
 | `embeddings.model` | Embedding model name (forwarded to smoltalk's `embed`). |
 
+## Configuring memory in code
+
+You can also enable, reconfigure, or disable memory directly from
+Agency code. This is useful for multi-tenant agents that want a
+different store per user, library helpers that want a side store
+without affecting the caller, and fork branches that each want their
+own memory.
+
+Three functions live in `std::memory`:
+
+```ts
+import { enableMemory, disableMemory, memory } from "std::memory"
+```
+
+### `enableMemory(config)`
+
+Push a memory frame onto the active branch. Subsequent
+`remember`/`recall`/`forget` calls in this branch use the new
+config.
+
+```ts
+enableMemory({ dir: "./mem-user-alice" })
+remember("alice's favourite colour is blue")
+```
+
+- `dir` is resolved against the **current working directory** (the
+  same as `agency.json`'s `memory.dir`, deliberately NOT the module
+  dir like `read`/`write`).
+- The directory is auto-created.
+- Storage is shared process-wide by absolute dir, so multiple calls
+  (or multiple runs) using the same `dir` share one underlying
+  store.
+- Pushing the same `dir` as the current top is a no-op (safe to call
+  in `main()` even when a `static const _ = enableMemory({...})`
+  already ran).
+- Pushing a different `dir` stacks the new frame on top.
+
+### `disableMemory()`
+
+Pop the top memory frame from the active branch. Frame-scoped: a
+`disableMemory()` inside a fork branch only affects that branch.
+
+> **Warning:** `disableMemory()` pops whatever is on top, including
+> the JSON-seeded bottom frame from `agency.json`. Library authors
+> should not call this casually — they will shadow the caller's
+> configured memory. Prefer the block form below for lexical scoping.
+
+### `memory(config) as { ... }`
+
+The block form. Pushes a frame on entry, pops it on exit (including
+on throw / interrupt).
+
+```ts
+memory({ dir: "./mem-user-alice" }) as {
+  remember("alice's favourite colour is blue")
+  print(recall("alice"))
+}
+// Frame is popped here — the next remember/recall sees whatever was
+// active before this block.
+```
+
+### Precedence
+
+Code wins over `agency.json`. The JSON config is seeded as the
+bottom-of-stack frame on every run; any `enableMemory(...)` or
+`memory({...}) as { ... }` pushes on top. The active frame is always
+the top of the stack.
+
+### Per-fork memory
+
+Because each fork branch has its own state stack, frames pushed in
+one branch never bleed into siblings:
+
+```ts
+const dirs = ["./mem-a", "./mem-b"]
+fork(dirs) as dir {
+  memory({ dir: dir }) as {
+    remember("a fact scoped to this branch")
+  }
+}
+```
+
+Both branches share the process-wide *store* cache, so two branches
+that resolve to the same physical `dir` share one `FileMemoryStore`
+instance. Each execCtx still wraps that store in its own
+`MemoryManager` (with its own statelog client and log level), so the
+sharing is at the on-disk layer only.
+
+### `setMemoryId` is orthogonal
+
+`setMemoryId(...)` updates the active scope id (lives on the
+state stack's `other.memoryId`) and is *independent* of which frame
+is on top. A library helper that opens a side store does not
+clobber the caller's `setMemoryId`. If you want a fresh scope when
+switching stores, call `setMemoryId(...)` explicitly inside the
+block.
+
 ## The `std::memory` module
 
 Import the functions you need from `std::memory`:

@@ -1,6 +1,7 @@
 import type { Guard, GuardJSON } from "../guard.js";
 import { guardFromJSON } from "../guard.js";
 import { Checkpoint } from "../index.js";
+import { MemoryFrame } from "../memory/frame.js";
 import { deepClone } from "../utils.js";
 import { ThreadStoreJSON } from "./threadStore.js";
 
@@ -328,6 +329,76 @@ export class StateStack {
   // double-serializing shared state.
   guards: Guard[] = [];
   inheritedGuardCount: number = 0;
+
+  /** Lazy accessor for the frame array, creating it on first push.
+   *  Created with sentinel-marking semantics: once the array exists
+   *  (even if popped to empty), `hasMemoryFrameStack()` returns true,
+   *  which distinguishes "user explicitly disabled memory" from
+   *  "stack restored from a pre-memoryFrames checkpoint". */
+  private memoryFramesArr(): MemoryFrame[] | undefined {
+    return this.other.memoryFrames as MemoryFrame[] | undefined;
+  }
+
+  /** True iff the memory-frame stack has been touched on this
+   *  StateStack (push or pop has run at least once). Returns false
+   *  for stacks restored from pre-memoryFrames checkpoints, which is
+   *  the only legitimate trigger for the JSON-config re-seed back
+   *  in `getActiveMemoryManager`. */
+  hasMemoryFrameStack(): boolean {
+    return this.memoryFramesArr() !== undefined;
+  }
+
+  /**
+   * Push a memory frame onto this stack. Frames live in `other.memoryFrames`
+   * so they serialize and fork-clone for free via the existing
+   * `other` deepClone path. Callers MUST NOT touch the underlying
+   * array directly — go through these methods.
+   *
+   * Same-`configKey` as the active frame is a no-op so the common
+   * pattern `static const _ = enableMemory(...)` + an
+   * `enableMemory(...)` in `main()` doesn't double-stack the same
+   * frame. Different-dir pushes stack on top; pop with
+   * `popMemoryFrame()` or use the `memory(){}` block for lexical
+   * scoping.
+   *
+   * Returns `true` if the frame was actually pushed, `false` if
+   * deduped. The block form (`memory(){}` in stdlib/memory.agency)
+   * pairs this with `popMemoryFrame()` so a no-op push doesn't
+   * unbalance the pop. ALWAYS materializes `other.memoryFrames` (even
+   * on dedup) so `hasMemoryFrameStack()` flips true on first push —
+   * checkpoints from this point on are recognised as "memory-aware".
+   */
+  pushMemoryFrame(frame: MemoryFrame): boolean {
+    const existing = this.memoryFramesArr() ?? [];
+    if (this.memoryFramesArr() === undefined) {
+      // Materialize so hasMemoryFrameStack() flips true; protects
+      // against the dedup-no-push case looking identical to a fresh
+      // stack on a future resume.
+      this.other.memoryFrames = existing;
+    }
+    const top = this.activeMemoryFrame();
+    if (top && MemoryFrame.equals(top, frame)) return false;
+    existing.push(frame);
+    return true;
+  }
+
+  /** Pop the top memory frame, including the JSON-seeded bottom frame.
+   *  Returns the popped frame or `undefined` if the stack is already
+   *  empty.
+   *
+   *  When the last frame is popped the array stays present (but
+   *  empty) so `activeMemoryFrame()` returns `undefined` and the
+   *  old-checkpoint re-seed in `getActiveMemoryManager()` knows the
+   *  user explicitly disabled memory rather than restored an
+   *  ancient snapshot. */
+  popMemoryFrame(): MemoryFrame | undefined {
+    return this.memoryFramesArr()?.pop();
+  }
+
+  /** The active memory frame, or `undefined` if memory is currently off. */
+  activeMemoryFrame(): MemoryFrame | undefined {
+    return this.memoryFramesArr()?.at(-1);
+  }
 
   pushGuard(guard: Guard): void {
     guard.install(this);

@@ -352,10 +352,11 @@ export async function runNode({
     execCtx.statelogClient.endSpan(agentRunSpanId); // end agentRun span
     // Persist any in-memory MemoryManager state. Writes are best-effort —
     // we never fail the run because of a save error, but we do log it so
-    // disk problems are visible.
-    if (execCtx.memoryManager) {
+    // disk problems are visible. Iterate every cached manager so a fork
+    // branch that opened a side store doesn't lose its writes.
+    for (const manager of execCtx.getAllCachedMemoryManagers()) {
       try {
-        await execCtx.memoryManager.save();
+        await manager.save();
       } catch (err) {
         console.warn(
           `[memory] save failed: ${(err as Error).message}`,

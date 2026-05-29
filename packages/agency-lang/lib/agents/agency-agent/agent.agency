@@ -249,12 +249,20 @@ node main() {
     let userMsg = input("What would you like to do? ")
     while (userMsg != "exit" && userMsg != "quit") {
       handle {
-        // Spread `workspace.tools` so a `setCwd` from the previous
-        // turn picks up here (the binding is refreshed each iteration).
+        // List workspace tools explicitly so we can PFA `printDiff: true`
+        // onto `edit` — every edit the LLM runs prints a colored diff
+        // to the console before / after the change, so the user can
+        // eyeball what actually got written.
         const reply = llm(userMsg, {
           tools: [
             setCwd,
-            ...workspace.tools,
+            workspace.read,
+            workspace.write,
+            workspace.edit.partial(printDiff: true),
+            workspace.ls,
+            workspace.glob,
+            workspace.grep,
+            workspace.bash,
             typecheck,
             docSkill,
             highlight.partial(language: "ts"),

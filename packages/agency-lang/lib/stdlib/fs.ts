@@ -5,8 +5,19 @@ import process from "process";
 import diff_match_patch from "diff-match-patch";
 import { resolvePath } from "./resolvePath.js";
 import { assertContained } from "./assertContained.js";
+import { formatDiff } from "../utils/diff.js";
 
 export { resolvePath } from "./resolvePath.js";
+
+/**
+ * Print a colored, line-based diff of `oldText` vs `newText` to
+ * stdout. Deletions are red, insertions are green, unchanged context
+ * is dimmed. Used both as a standalone Agency tool (`std::fs::printDiff`)
+ * and as the side effect of `edit(..., printDiff: true)`.
+ */
+export function _printDiff(oldText: string, newText: string): void {
+  console.log(formatDiff(oldText, newText));
+}
 
 export type MultiEdit = {
   oldText: string;
@@ -24,9 +35,11 @@ export async function _multiedit(
   dir: string,
   filename: string,
   edits: MultiEdit[],
+  printDiff: boolean = false,
 ): Promise<MultiEditResult> {
   const full = await resolvePath(dir, filename);
   let contents = await fs.readFile(full, "utf8");
+  const original = contents;
   let total = 0;
 
   for (let i = 0; i < edits.length; i++) {
@@ -68,6 +81,9 @@ export async function _multiedit(
   }
 
   await fs.writeFile(full, contents, "utf8");
+  if (printDiff && original !== contents) {
+    _printDiff(original, contents);
+  }
   return { replacements: total, path: filename, edits: edits.length };
 }
 

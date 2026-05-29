@@ -35,7 +35,7 @@ type PatchResult = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L35))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L50))
 
 ### Workspace
 
@@ -71,14 +71,14 @@ export type Workspace = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L124))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L139))
 
 ## Functions
 
 ### edit
 
 ```ts
-edit(filename: string, edits: Edit[], dir: string): Result
+edit(filename: string, edits: Edit[], dir: string, printDiff: boolean): Result
 ```
 
 Edit a single file by applying one or more text replacements atomically. Each edit has `oldText`, `newText`, and `replaceAll`. Every edit's `oldText` must match a unique, non-overlapping region of the original file (matches are looked up against the file as it stands when the edit runs, after earlier edits). Set `replaceAll: true` on an edit to replace every occurrence. When any edit fails, nothing is written.
@@ -88,6 +88,7 @@ Edit a single file by applying one or more text replacements atomically. Each ed
   @param filename - The file to edit
   @param edits - Array of edit objects with oldText, newText, replaceAll
   @param dir - The directory to resolve the filename against (defaults to ".")
+  @param printDiff - When true, print a colored diff to stdout after the edit applies
 
 **Parameters:**
 
@@ -96,12 +97,36 @@ Edit a single file by applying one or more text replacements atomically. Each ed
 | filename | `string` |  |
 | edits | `Edit[]` |  |
 | dir | `string` | "." |
+| printDiff | `boolean` | false |
 
 **Returns:** `Result`
 
 **Throws:** `std::edit`
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L16))
+
+### printDiff
+
+```ts
+printDiff(oldText: string, newText: string)
+```
+
+Print a colored, line-based diff of `oldText` vs `newText` to stdout.
+  Deletions are shown in red with a `-` prefix, insertions in green
+  with a `+` prefix, unchanged context is dimmed. Useful for showing
+  what an edit actually changed before / after committing it.
+
+  @param oldText - The original text
+  @param newText - The replacement text
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| oldText | `string` |  |
+| newText | `string` |  |
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L37))
 
 ### applyPatch
 
@@ -125,7 +150,7 @@ Apply a unified diff to the working tree. Supports file creation (--- /dev/null)
 
 **Throws:** `std::applyPatch`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L40))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L55))
 
 ### mkdir
 
@@ -149,7 +174,7 @@ Create a directory, including any missing parent directories. Idempotent: succee
 
 **Throws:** `std::mkdir`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L54))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L69))
 
 ### copy
 
@@ -175,7 +200,7 @@ Copy a file or directory. Directories are copied recursively. Fails if src does 
 
 **Throws:** `std::copy`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L68))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L83))
 
 ### move
 
@@ -201,7 +226,7 @@ Move or rename a file or directory. Falls back to copy+remove if src and dest ar
 
 **Throws:** `std::move`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L84))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L99))
 
 ### remove
 
@@ -225,7 +250,7 @@ Delete a file or directory. Directories are removed recursively. Does not fail i
 
 **Throws:** `std::remove`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L100))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L115))
 
 ### openDir
 
@@ -277,4 +302,4 @@ Build a Workspace anchored at `dir` — a bundle of file-system tools
 
 **Returns:** [Workspace](#workspace)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L140))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L155))

@@ -158,18 +158,19 @@ Because each fork branch has its own state stack, frames pushed in
 one branch never bleed into siblings:
 
 ```ts
-fork {
-  branch {
-    memory({ dir: "./mem-a" }) as { remember("alice fact") }
-  }
-  branch {
-    memory({ dir: "./mem-b" }) as { remember("bob fact") }
+const dirs = ["./mem-a", "./mem-b"]
+fork(dirs) as dir {
+  memory({ dir: dir }) as {
+    remember("a fact scoped to this branch")
   }
 }
 ```
 
-Both branches share the process-wide store cache, so two branches
-pushing the same `dir` share one `MemoryManager` instance.
+Both branches share the process-wide *store* cache, so two branches
+that resolve to the same physical `dir` share one `FileMemoryStore`
+instance. Each execCtx still wraps that store in its own
+`MemoryManager` (with its own statelog client and log level), so the
+sharing is at the on-disk layer only.
 
 ### `setMemoryId` is orthogonal
 

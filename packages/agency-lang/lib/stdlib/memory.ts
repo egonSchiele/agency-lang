@@ -1,11 +1,10 @@
 import { getRuntimeContext } from "../runtime/asyncContext.js";
-import { AgencyFunction } from "../runtime/agencyFunction.js";
 import type { RuntimeContext } from "../runtime/state/context.js";
 import type {
   ExtractionResult,
   ForgetResult,
 } from "../runtime/memory/index.js";
-import { normalizeMemoryFrame } from "../runtime/memory/frame.js";
+import { MemoryFrame } from "../runtime/memory/frame.js";
 import type { MemoryConfig } from "../runtime/memory/types.js";
 import type { StateStack } from "../runtime/state/stateStack.js";
 import type { ThreadStore } from "../runtime/state/threadStore.js";
@@ -192,8 +191,8 @@ export async function _forget(query: string): Promise<void> {
 
 // ── New: enable / disable / block ──
 //
-// "What" lives here. "How" lives in normalizeMemoryFrame +
-// StateStack.{push,pop,top}MemoryFrame.
+// "What" lives here. "How" lives in MemoryFrame's constructor +
+// StateStack.{push,pop,active}MemoryFrame.
 
 /**
  * Push a memory frame onto the current branch's stateStack.
@@ -212,7 +211,7 @@ export async function _forget(query: string): Promise<void> {
 export async function _enableMemory(config: MemoryConfig): Promise<void> {
   const { stack } = getRuntimeContext();
   if (!stack) return;
-  stack.pushMemoryFrame(normalizeMemoryFrame(config));
+  stack.pushMemoryFrame(new MemoryFrame(config));
 }
 
 /** Pop the top memory frame from the current branch's stateStack.
@@ -225,35 +224,27 @@ export function _disableMemory(): void {
 }
 
 /**
- * Run `block` with `config` pushed as the active memory frame; pop
- * on exit (including on throw). The block-form sibling of
- * `enableMemory` / `disableMemory` for lexical scoping.
+ * Push a memory frame, returning whether the push actually happened
+ * (false on same-dir dedup). The Agency-side `memory({...}) as { ... }`
+ * block pairs this with `_popMemoryFrame()` so a no-op push doesn't
+ * unbalance the pop — mirrors the `_pushGuard`/`_popGuard` count
+ * pattern in std::thread. Returns `false` and is a no-op outside any
+ * runtime frame (consistent with `_enableMemory`).
  *
- * The push/pop is implemented in TS rather than Agency `try/finally`
- * because Agency has no `finally`; an explicit TS wrapper is the
- * smallest correct construct. `block` is the AgencyFunction the
- * compiler synthesises for `memory({...}) as { ... }` — invoke it
- * through `AgencyFunction.invoke` so its frame, callsite, and
- * interrupt machinery hook up correctly.
+ * Lives in TS rather than as a thin wrapper around `_enableMemory`
+ * because Agency callers need the boolean to decide whether to pop.
  */
-export async function _memoryBlock(
-  config: MemoryConfig,
-  block: AgencyFunction | (() => unknown),
-): Promise<unknown> {
-  const callBlock = (): Promise<unknown> => {
-    if (AgencyFunction.isAgencyFunction(block)) {
-      return Promise.resolve(
-        (block as AgencyFunction).invoke({ type: "positional", args: [] }),
-      );
-    }
-    return Promise.resolve((block as () => unknown)());
-  };
+export function _pushMemoryFrame(config: MemoryConfig): boolean {
   const { stack } = getRuntimeContext();
-  if (!stack) return await callBlock();
-  stack.pushMemoryFrame(normalizeMemoryFrame(config));
-  try {
-    return await callBlock();
-  } finally {
-    stack.popMemoryFrame();
-  }
+  if (!stack) return false;
+  return stack.pushMemoryFrame(new MemoryFrame(config));
+}
+
+/** Pop the top memory frame. Counterpart to `_pushMemoryFrame`; the
+ *  Agency-side `memory(){}` block calls this only when `_pushMemoryFrame`
+ *  returned true so dedup-no-op pushes don't accidentally pop the
+ *  caller's frame. */
+export function _popMemoryFrame(): void {
+  const { stack } = getRuntimeContext();
+  stack?.popMemoryFrame();
 }

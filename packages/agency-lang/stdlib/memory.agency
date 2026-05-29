@@ -16,13 +16,15 @@ type ForgetResult = {
 
 // User-facing memory config shape. Mirrors the `memory:` block in
 // `agency.json` so the same fields work whether you configure memory
-// declaratively or in code.
+// declaratively or in code. Every nested field is optional because
+// the runtime provides defaults for each one (matching the shape of
+// `MemoryConfig` in `lib/runtime/memory/types.ts`).
 export type MemoryConfig = {
   dir: string,
   model?: string,
-  autoExtract?: { interval: number },
-  compaction?: { trigger: string, threshold: number },
-  embeddings?: { model: string }
+  autoExtract?: { interval?: number },
+  compaction?: { trigger?: "token" | "messages", threshold?: number },
+  embeddings?: { model?: string }
 }
 
 // `_*` exports read ctx from AsyncLocalStorage (see
@@ -39,8 +41,24 @@ import {
   _recall,
   _enableMemory,
   _disableMemory,
-  _memoryBlock,
+  _pushMemoryFrame,
+  _popMemoryFrame,
 } from "agency-lang/stdlib-lib/memory.js"
+
+export def isMemoryActive(): boolean {
+  """
+  Return `true` iff there is an active memory frame on the current
+  branch's stateStack — i.e. memory is on and `remember`/`recall` will
+  reach a real store. Returns `false` when memory was never enabled,
+  was explicitly turned off via `disableMemory()`, or the call is
+  outside any runtime frame.
+
+  Useful for branching in user code (`if (isMemoryActive()) { ... }`)
+  and for integration tests that want to verify push/pop semantics
+  without poking at the stateStack directly.
+  """
+  return _shouldRunMemory()
+}
 
 export def setMemoryId(id: string) {
   """
@@ -105,23 +123,37 @@ export def disableMemory() {
   _disableMemory()
 }
 
-export def memory(config: MemoryConfig, block: () => any): any {
+export def memory(config: MemoryConfig, block: () => any = null): Result {
   """
   Run `block` with `config` pushed as the active memory frame; pop
-  the frame when the block returns (or throws).
+  the frame when the block returns (or fails). Mirrors the `guard()`
+  pattern in `std::thread` so push/pop balancing flows through the
+  same `try` expression — Agency has no `finally`, so the agency-side
+  body uses `try block()` to capture the result and runs `pop` after.
 
-  The block form of `enableMemory` / `disableMemory`. Prefer this
-  whenever the memory frame should be lexically scoped.
+  The pop only fires when the push actually happened: `_pushMemoryFrame`
+  returns `false` if the new frame's dir matches the current top
+  (dedup), and the matching no-pop preserves the caller's frame
+  instead of unbalancing it. This fixes the prior `_memoryBlock`
+  unbalanced-pop bug.
+
+  Returns a `Result` (success holds the block's return value, failure
+  holds an error from inside the block). Same convention as `guard()`.
 
   Example:
-    memory({ dir: "./mem-user-a" }) as {
+    const r = memory({ dir: "./mem-user-a" }) as {
       remember("alice's favorite color is blue")
     }
 
   @param config - Memory configuration with `dir` required
   @param block - The code to run with the frame active
   """
-  return _memoryBlock(config, block)
+  const pushed = _pushMemoryFrame(config)
+  const result = try block()
+  if (pushed) {
+    _popMemoryFrame()
+  }
+  return result
 }
 
 export def remember(content: string) {

@@ -1,18 +1,22 @@
-import { memory, recall } from "std::memory"
+import { memory, recall, isMemoryActive } from "std::memory"
 
 // Block form: `memory({...}) as { ... }` pushes a frame on entry
-// and pops on exit. Inside the block, `recall` reaches the active
-// store (empty graph -> "") so the call returns "". Outside the
-// block, no frame is active so `recall` short-circuits and also
-// returns "". The point of this test is that the block body
-// executes and returns without throwing, and that the pop happens
-// on normal exit (so a follow-up recall outside still works).
+// and pops on exit. We verify push/pop semantics directly via
+// `isMemoryActive()` (introspects the active frame) rather than
+// indirectly via recall — the recall-returns-"" trick from the old
+// version of this test would pass even if push and pop both no-op'd,
+// which defeats the purpose.
 node main(): boolean {
-  let inside: string = "unset"
+  // Before the block: no frame active.
+  const before: boolean = isMemoryActive()
+  let inside: boolean = false
+  let recallInside: string = "unset"
   memory({ dir: ".agency-tmp/memory-code-block-test" }) as {
-    inside = recall("anything")
+    inside = isMemoryActive()
+    // recall on a fresh, empty graph returns "" without an LLM call.
+    recallInside = recall("anything")
   }
-  // After block exit, memory frame is popped — recall is a no-op.
-  const outside: string = recall("anything")
-  return inside == "" && outside == ""
+  // After the block: frame popped, memory off again.
+  const after: boolean = isMemoryActive()
+  return before == false && inside == true && after == false && recallInside == ""
 }

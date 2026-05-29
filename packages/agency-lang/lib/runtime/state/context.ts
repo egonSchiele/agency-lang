@@ -11,7 +11,7 @@ import type { AgencyCallbacks } from "../hooks.js";
 import type { InterruptResponse } from "../interrupts.js";
 import { LLMClient, SmoltalkClient } from "../llmClient.js";
 import { MemoryManager } from "../memory/manager.js";
-import { normalizeMemoryFrame, type MemoryFrame } from "../memory/frame.js";
+import { MemoryFrame } from "../memory/frame.js";
 import { getOrCreateStore } from "../memory/registry.js";
 import type { MemoryConfig } from "../memory/types.js";
 import { GlobalStore } from "../state/globalStore.js";
@@ -286,9 +286,7 @@ export class RuntimeContext<T> {
     execCtx.jsonMemoryConfig = this.jsonMemoryConfig;
     execCtx.memoryManagerCache = {};
     if (this.jsonMemoryConfig) {
-      execCtx.stateStack.pushMemoryFrame(
-        normalizeMemoryFrame(this.jsonMemoryConfig),
-      );
+      execCtx.stateStack.pushMemoryFrame(new MemoryFrame(this.jsonMemoryConfig));
     }
 
     return execCtx;
@@ -298,7 +296,7 @@ export class RuntimeContext<T> {
    * Resolve the active `MemoryManager` for the current stateStack.
    *
    * Single rule: top of `stateStack.other.memoryFrames` (accessed via
-   * `topMemoryFrame()`) wins. No fallback to a "default" manager —
+   * `activeMemoryFrame()`) wins. No fallback to a "default" manager —
    * the JSON config gets seeded as the bottom frame at execCtx
    * creation, so if JSON was set there will always be a frame and
    * this never returns `undefined` for JSON-only setups.
@@ -316,20 +314,16 @@ export class RuntimeContext<T> {
    */
   getActiveMemoryManager(): MemoryManager | undefined {
     if (!this.stateStack) return undefined;
-    let frame = this.stateStack.topMemoryFrame();
-    if (!frame && this.jsonMemoryConfig) {
-      // Old-checkpoint back-compat: stateStack restored without any
-      // memoryFrames at all. Re-seed the JSON bottom frame so
-      // resume behaves like a fresh run.
-      const memoryFramesArr = this.stateStack.other.memoryFrames as
-        | MemoryFrame[]
-        | undefined;
-      if (!memoryFramesArr) {
-        this.stateStack.pushMemoryFrame(
-          normalizeMemoryFrame(this.jsonMemoryConfig),
-        );
-        frame = this.stateStack.topMemoryFrame();
-      }
+    let frame = this.stateStack.activeMemoryFrame();
+    if (!frame && this.jsonMemoryConfig && !this.stateStack.hasMemoryFrameStack()) {
+      // Old-checkpoint back-compat: stateStack restored from a
+      // pre-memoryFrames snapshot (the array key isn't present at
+      // all). Re-seed the JSON bottom frame so resume behaves like
+      // a fresh run. An empty-array stack (user explicitly called
+      // `disableMemory()`) is NOT re-seeded — that would silently
+      // resurrect what the user asked to turn off.
+      this.stateStack.pushMemoryFrame(new MemoryFrame(this.jsonMemoryConfig));
+      frame = this.stateStack.activeMemoryFrame();
     }
     if (!frame) return undefined;
 

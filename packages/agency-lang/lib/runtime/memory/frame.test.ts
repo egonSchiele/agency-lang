@@ -2,9 +2,9 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { normalizeMemoryFrame } from "./frame.js";
+import { MemoryFrame } from "./frame.js";
 
-describe("normalizeMemoryFrame", () => {
+describe("MemoryFrame", () => {
   let tmpRoot: string;
   let originalCwd: string;
 
@@ -20,7 +20,7 @@ describe("normalizeMemoryFrame", () => {
   });
 
   it("resolves a relative dir against process.cwd() and mkdir-p's it", () => {
-    const frame = normalizeMemoryFrame({ dir: "./relmem" });
+    const frame = new MemoryFrame({ dir: "./relmem" });
     // realpath canonicalizes the tmp root too (on macOS /tmp -> /private/tmp).
     expect(frame.configKey).toBe(
       fs.realpathSync(path.resolve(tmpRoot, "relmem")),
@@ -30,13 +30,13 @@ describe("normalizeMemoryFrame", () => {
 
   it("does not re-resolve an already-absolute dir against cwd", () => {
     const absoluteDir = path.join(tmpRoot, "absmem");
-    const frame = normalizeMemoryFrame({ dir: absoluteDir });
+    const frame = new MemoryFrame({ dir: absoluteDir });
     expect(frame.configKey).toBe(fs.realpathSync(absoluteDir));
   });
 
   it("auto-creates a nested directory tree if missing", () => {
     const nested = "./deep/nested/mem";
-    const frame = normalizeMemoryFrame({ dir: nested });
+    const frame = new MemoryFrame({ dir: nested });
     expect(fs.existsSync(frame.configKey)).toBe(true);
     expect(frame.configKey).toContain("deep");
   });
@@ -49,12 +49,33 @@ describe("normalizeMemoryFrame", () => {
       compaction: { trigger: "messages" as const, threshold: 50 },
       embeddings: { model: "text-embedding-3-small" },
     };
-    const frame = normalizeMemoryFrame(config);
+    const frame = new MemoryFrame(config);
     expect(frame.config).toEqual(config);
   });
 
   it("throws on empty dir", () => {
-    expect(() => normalizeMemoryFrame({ dir: "" })).toThrow(/required/);
-    expect(() => normalizeMemoryFrame({ dir: "   " })).toThrow(/required/);
+    expect(() => new MemoryFrame({ dir: "" })).toThrow(/required/);
+    expect(() => new MemoryFrame({ dir: "   " })).toThrow(/required/);
+  });
+
+  describe("equals (static)", () => {
+    it("returns true for frames with same configKey, regardless of other config fields", () => {
+      const a = new MemoryFrame({ dir: "./eqmem", model: "gpt-4o" });
+      const b = new MemoryFrame({ dir: "./eqmem", model: "gpt-5" });
+      expect(MemoryFrame.equals(a, b)).toBe(true);
+    });
+
+    it("returns false for frames with different configKey", () => {
+      const a = new MemoryFrame({ dir: "./eq-a" });
+      const b = new MemoryFrame({ dir: "./eq-b" });
+      expect(MemoryFrame.equals(a, b)).toBe(false);
+    });
+
+    it("works on JSON-restored plain-object frames (no class prototype)", () => {
+      const a = new MemoryFrame({ dir: "./jsonmem" });
+      // Simulate the post-serialization shape: plain object, no prototype.
+      const restored = JSON.parse(JSON.stringify(a)) as MemoryFrame;
+      expect(MemoryFrame.equals(a, restored)).toBe(true);
+    });
   });
 });

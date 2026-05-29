@@ -5,10 +5,7 @@ import path from "node:path";
 import { RuntimeContext } from "./context.js";
 import { StateStack } from "./stateStack.js";
 import { AgencyCancelledError } from "../errors.js";
-import {
-  _resetStoreRegistry,
-  normalizeMemoryFrame,
-} from "../memory/index.js";
+import { _resetStoreRegistry, MemoryFrame } from "../memory/index.js";
 
 function makeMockCtx() {
   return new RuntimeContext({
@@ -131,7 +128,7 @@ describe("RuntimeContext memory frames", () => {
     const jsonManager = execCtx.getActiveMemoryManager();
     expect(jsonManager).toBeDefined();
 
-    execCtx.stateStack.pushMemoryFrame(normalizeMemoryFrame({ dir: dirA }));
+    execCtx.stateStack.pushMemoryFrame(new MemoryFrame({ dir: dirA }));
     const aManager = execCtx.getActiveMemoryManager();
     expect(aManager).toBeDefined();
     expect(aManager).not.toBe(jsonManager);
@@ -143,10 +140,10 @@ describe("RuntimeContext memory frames", () => {
   it("manager cache survives push/pop/push (pop back returns the cached A)", async () => {
     const ctx = makeCtx();
     const execCtx = await ctx.createExecutionContext("r1");
-    execCtx.stateStack.pushMemoryFrame(normalizeMemoryFrame({ dir: dirA }));
+    execCtx.stateStack.pushMemoryFrame(new MemoryFrame({ dir: dirA }));
     const a1 = execCtx.getActiveMemoryManager();
 
-    execCtx.stateStack.pushMemoryFrame(normalizeMemoryFrame({ dir: dirB }));
+    execCtx.stateStack.pushMemoryFrame(new MemoryFrame({ dir: dirB }));
     const b = execCtx.getActiveMemoryManager();
     expect(b).not.toBe(a1);
 
@@ -167,7 +164,7 @@ describe("RuntimeContext memory frames", () => {
 
     const m = execCtx.getActiveMemoryManager();
     expect(m).toBeDefined();
-    expect(execCtx.stateStack.topMemoryFrame()?.configKey).toBe(
+    expect(execCtx.stateStack.activeMemoryFrame()?.configKey).toBe(
       fs.realpathSync(dirJson),
     );
   });

@@ -31,13 +31,13 @@ type ForgetResult = {
 export type MemoryConfig = {
   dir: string;
   model?: string;
-  autoExtract?: { interval: number };
-  compaction?: { trigger: string; threshold: number };
-  embeddings?: { model: string }
+  autoExtract?: { interval: number | undefined };
+  compaction?: { trigger: "token" | "messages" | undefined; threshold: number | undefined };
+  embeddings?: { model: string | undefined }
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/memory.agency#L20))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/memory.agency#L22))
 
 ## Functions
 
@@ -67,7 +67,7 @@ Set the memory scope for this agent run. Call this before other
 |---|---|---|
 | id | `string` |  |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/memory.agency#L45))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/memory.agency#L48))
 
 ### enableMemory
 
@@ -104,7 +104,7 @@ Turn memory on for the current execution branch using `config`.
 |---|---|---|
 | config | [MemoryConfig](#memoryconfig) |  |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/memory.agency#L64))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/memory.agency#L67))
 
 ### disableMemory
 
@@ -123,22 +123,31 @@ Pop the top memory frame from the current branch's stateStack.
   Prefer the block form `memory({...}) as { ... }` for lexical
   scoping, which restores the previous frame on exit.
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/memory.agency#L92))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/memory.agency#L95))
 
 ### memory
 
 ```ts
-memory(config: MemoryConfig, block: () => any): any
+memory(config: MemoryConfig, block: () => any): Result
 ```
 
 Run `block` with `config` pushed as the active memory frame; pop
-  the frame when the block returns (or throws).
+  the frame when the block returns (or fails). Mirrors the `guard()`
+  pattern in `std::thread` so push/pop balancing flows through the
+  same `try` expression — Agency has no `finally`, so the agency-side
+  body uses `try block()` to capture the result and runs `pop` after.
 
-  The block form of `enableMemory` / `disableMemory`. Prefer this
-  whenever the memory frame should be lexically scoped.
+  The pop only fires when the push actually happened: `_pushMemoryFrame`
+  returns `false` if the new frame's dir matches the current top
+  (dedup), and the matching no-pop preserves the caller's frame
+  instead of unbalancing it. This fixes the prior `_memoryBlock`
+  unbalanced-pop bug.
+
+  Returns a `Result` (success holds the block's return value, failure
+  holds an error from inside the block). Same convention as `guard()`.
 
   Example:
-    memory({ dir: "./mem-user-a" }) as {
+    const r = memory({ dir: "./mem-user-a" }) as {
       remember("alice's favorite color is blue")
     }
 
@@ -150,11 +159,11 @@ Run `block` with `config` pushed as the active memory frame; pop
 | Name | Type | Default |
 |---|---|---|
 | config | [MemoryConfig](#memoryconfig) |  |
-| block | `() => any` |  |
+| block | `() => any` | null |
 
-**Returns:** `any`
+**Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/memory.agency#L108))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/memory.agency#L111))
 
 ### remember
 
@@ -179,7 +188,7 @@ Extract and store structured facts from the given text into the
 |---|---|---|
 | content | `string` |  |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/memory.agency#L127))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/memory.agency#L144))
 
 ### recall
 
@@ -204,7 +213,7 @@ Retrieve relevant facts from the knowledge graph as a formatted
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/memory.agency#L149))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/memory.agency#L166))
 
 ### forget
 
@@ -228,4 +237,4 @@ Soft-delete facts matching the query from the knowledge graph.
 |---|---|---|
 | query | `string` |  |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/memory.agency#L163))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/memory.agency#L180))

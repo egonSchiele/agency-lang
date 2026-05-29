@@ -709,40 +709,50 @@ describe("StateStack memory frames", () => {
   const frameAOther = { configKey: "/abs/dirA", config: { dir: "/abs/dirA", model: "different" } };
   const frameB = { configKey: "/abs/dirB", config: { dir: "/abs/dirB" } };
 
-  it("topMemoryFrame returns undefined on a fresh stack", () => {
+  it("activeMemoryFrame returns undefined on a fresh stack", () => {
     const s = new StateStack();
-    expect(s.topMemoryFrame()).toBeUndefined();
+    expect(s.activeMemoryFrame()).toBeUndefined();
   });
 
-  it("pushMemoryFrame then topMemoryFrame returns the frame", () => {
+  it("hasMemoryFrameStack is false on a fresh stack, true after first push (even on dedup)", () => {
     const s = new StateStack();
+    expect(s.hasMemoryFrameStack()).toBe(false);
     s.pushMemoryFrame(frameA);
-    expect(s.topMemoryFrame()).toEqual(frameA);
+    expect(s.hasMemoryFrameStack()).toBe(true);
+    // pop to empty — flag stays true (distinguishes "user emptied" from "never set")
+    s.popMemoryFrame();
+    expect(s.hasMemoryFrameStack()).toBe(true);
   });
 
-  it("same-dir push is a no-op (does not stack)", () => {
+  it("pushMemoryFrame then activeMemoryFrame returns the frame", () => {
     const s = new StateStack();
-    s.pushMemoryFrame(frameA);
-    s.pushMemoryFrame(frameAOther);
-    expect(s.topMemoryFrame()).toEqual(frameA);
+    expect(s.pushMemoryFrame(frameA)).toBe(true);
+    expect(s.activeMemoryFrame()).toEqual(frameA);
+  });
+
+  it("same-dir push is a no-op (returns false, does not stack)", () => {
+    const s = new StateStack();
+    expect(s.pushMemoryFrame(frameA)).toBe(true);
+    expect(s.pushMemoryFrame(frameAOther)).toBe(false);
+    expect(s.activeMemoryFrame()).toEqual(frameA);
     // pop once should leave the stack empty
     s.popMemoryFrame();
-    expect(s.topMemoryFrame()).toBeUndefined();
+    expect(s.activeMemoryFrame()).toBeUndefined();
   });
 
   it("different-dir push stacks on top, pop returns to previous", () => {
     const s = new StateStack();
     s.pushMemoryFrame(frameA);
     s.pushMemoryFrame(frameB);
-    expect(s.topMemoryFrame()).toEqual(frameB);
+    expect(s.activeMemoryFrame()).toEqual(frameB);
     s.popMemoryFrame();
-    expect(s.topMemoryFrame()).toEqual(frameA);
+    expect(s.activeMemoryFrame()).toEqual(frameA);
   });
 
   it("popMemoryFrame on empty returns undefined and leaves stack empty", () => {
     const s = new StateStack();
     expect(s.popMemoryFrame()).toBeUndefined();
-    expect(s.topMemoryFrame()).toBeUndefined();
+    expect(s.activeMemoryFrame()).toBeUndefined();
   });
 
   it("frames survive a serialize/deserialize roundtrip with nested config", () => {
@@ -760,6 +770,6 @@ describe("StateStack memory frames", () => {
     s.pushMemoryFrame(richFrame);
     const json = s.toJSON();
     const restored = StateStack.fromJSON(json);
-    expect(restored.topMemoryFrame()).toEqual(richFrame);
+    expect(restored.activeMemoryFrame()).toEqual(richFrame);
   });
 });

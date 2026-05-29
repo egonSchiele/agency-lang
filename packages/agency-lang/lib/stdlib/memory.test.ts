@@ -193,7 +193,7 @@ describe("std::memory enable/disable/block", () => {
     });
     const json = execCtx.stateStack.toJSON();
     const restored = StateStack.fromJSON(json);
-    const top = restored.topMemoryFrame();
+    const top = restored.activeMemoryFrame();
     expect(top?.configKey).toBe(fs.realpathSync(dirA));
     expect(top?.config).toEqual(richConfig);
   });

@@ -156,7 +156,18 @@ function addUnique(arr: string[], value: string): void {
   if (!arr.includes(value)) arr.push(value);
 }
 
-/** Emit warnings for function calls that may throw interrupts but aren't inside a handler. */
+/**
+ * Emit warnings for function calls that may throw interrupts but aren't
+ * inside a handler.
+ *
+ * Scoped to graph-node bodies only. `def` functions are designed to
+ * propagate interrupts to the nearest enclosing handler in the caller —
+ * that's the whole point of the interrupt model. Warning on `def`
+ * bodies floods every library function that calls `read`/`glob`/etc.
+ * with noise and trains users to ignore the diagnostic, defeating its
+ * purpose at the `node` boundary where the prompt actually surfaces to
+ * a human operator.
+ */
 export function checkUnhandledInterruptWarnings(
   scopes: ScopeInfo[],
   interruptKindsByFunction: Record<string, InterruptKind[]>,
@@ -164,6 +175,10 @@ export function checkUnhandledInterruptWarnings(
 ): void {
   for (const info of scopes) {
     if (!info.name || info.name === "top-level") continue;
+    // Skip `def` scopes — only warn for `node` (graph-node) bodies,
+    // which are entry points where unhandled interrupts actually
+    // bubble out to the runtime caller.
+    if (!ctx.nodeDefs[info.name]) continue;
     for (const { node, ancestors } of walkNodes(info.body)) {
       if (node.type !== "functionCall") continue;
       const kinds = interruptKindsByFunction[node.functionName];

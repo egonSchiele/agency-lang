@@ -39,7 +39,12 @@ describe("interrupt kind warnings", () => {
     expect(warnings[0].message).toContain("myapp::deploy");
   });
 
-  it("warns with transitive interrupt kinds", () => {
+  it("warns at the node boundary with transitive interrupt kinds", () => {
+    // Warnings only fire inside `node` bodies — `def` bodies are
+    // expected to propagate, so the unhandled call inside
+    // `orchestrate` is intentionally silent. The warning at the
+    // `node main` call site still mentions the full transitive set
+    // of kinds, so the user sees what they need to handle.
     const warnings = warningsFrom(`
       def deploy() {
         interrupt myapp::deploy("Deploy?")
@@ -51,13 +56,25 @@ describe("interrupt kind warnings", () => {
         orchestrate()
       }
     `);
-    expect(warnings).toHaveLength(2);
-    const deployWarning = warnings.find((w) => w.message.includes("'deploy'"));
-    const orchestrateWarning = warnings.find((w) => w.message.includes("'orchestrate'"));
-    expect(deployWarning).toBeDefined();
-    expect(deployWarning!.message).toContain("myapp::deploy");
-    expect(orchestrateWarning).toBeDefined();
-    expect(orchestrateWarning!.message).toContain("myapp::deploy");
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0].message).toContain("'orchestrate'");
+    expect(warnings[0].message).toContain("myapp::deploy");
+  });
+
+  it("does not warn for unhandled interrupt calls inside a def body", () => {
+    // `def` is composable, not an entry point — propagating
+    // interrupts to the caller's handler is the intended pattern.
+    // The warning would otherwise flood every stdlib-style helper
+    // that calls `read`/`glob`/etc. and train users to ignore it.
+    const warnings = warningsFrom(`
+      def deploy() {
+        interrupt myapp::deploy("Deploy?")
+      }
+      def orchestrate() {
+        deploy()
+      }
+    `);
+    expect(warnings).toHaveLength(0);
   });
 
   it("does not warn when call is inside a handleBlock", () => {

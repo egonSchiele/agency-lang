@@ -1,8 +1,10 @@
-import { _readSkill } from "agency-lang/stdlib-lib/skills.js"
-import { frontmatter } from "std::markdown"
-import { glob } from "std::shell"
-import { basename } from "std::path"
 import { map } from "std::array"
+import { frontmatter } from "std::markdown"
+import { basename } from "std::path"
+import { glob } from "std::shell"
+
+import { _readSkill } from "agency-lang/stdlib-lib/skills.js"
+
 
 export safe def readSkills(dir: string) {
   const description = "todo"
@@ -54,16 +56,14 @@ export def skillsDir(dir: string) {
   @param dir - Directory containing skill Markdown files
   """
   let lines: string[] = []
-  handle {
-    const paths = glob("*.{md,markdown}", dir)
-    if (isSuccess(paths)) {
-      lines = map(paths.value) as fullPath {
-        const filename = basename(fullPath)
-        const fm = read(filename, dir) |> frontmatter
-        return describeSkill(filename, fm)
-      }
+  const pathsResult = glob("*.{md,markdown}", dir)
+  if (pathsResult is success(paths)) {
+    lines = map(paths) as fullPath {
+      const filename = basename(fullPath)
+      const fm = read(filename, dir) |> frontmatter
+      return describeSkill(filename, fm)
     }
-  } with approve
+  }
 
   const header = "Read a skill file from the skills directory '${dir}'. Pass `filename` to read a specific skill. Available skills:\n"
   const description = header + lines.join("\n")

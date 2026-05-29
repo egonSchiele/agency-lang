@@ -25,7 +25,7 @@ type LsEntry = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/shell.agency#L99))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/shell.agency#L109))
 
 ### GrepMatch
 
@@ -37,7 +37,7 @@ type GrepMatch = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/shell.agency#L126))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/shell.agency#L136))
 
 ### StatInfo
 
@@ -50,7 +50,7 @@ type StatInfo = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/shell.agency#L189))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/shell.agency#L199))
 
 ## Functions
 
@@ -120,7 +120,7 @@ Run a shell command string via sh -c and return its stdout, stderr, and exit cod
 
 **Throws:** `std::bash`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/shell.agency#L62))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/shell.agency#L72))
 
 ### ls
 
@@ -150,7 +150,7 @@ List entries in a directory. Each entry includes name, path, type ("file", "dir"
 
 **Throws:** `std::ls`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/shell.agency#L106))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/shell.agency#L116))
 
 ### grep
 
@@ -184,7 +184,7 @@ Search for a regex pattern in files under a directory. Returns matches with file
 
 **Throws:** `std::grep`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/shell.agency#L132))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/shell.agency#L142))
 
 ### glob
 
@@ -216,7 +216,7 @@ Find files whose paths match a glob pattern (e.g. "src/**/*.ts"). Stops at maxRe
 
 **Throws:** `std::glob`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/shell.agency#L162))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/shell.agency#L172))
 
 ### stat
 
@@ -242,7 +242,7 @@ Return metadata about a filesystem entry: whether it exists, its type ("file", "
 
 **Returns:** [StatInfo](#statinfo)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/shell.agency#L196))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/shell.agency#L206))
 
 ### exists
 
@@ -268,7 +268,7 @@ Return true if a file or directory exists at the given path. Set allowedPaths to
 
 **Returns:** `boolean`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/shell.agency#L209))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/shell.agency#L219))
 
 ### which
 
@@ -286,4 +286,4 @@ Locate an executable in PATH and return its absolute path. Returns an empty stri
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/shell.agency#L222))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/shell.agency#L232))

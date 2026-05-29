@@ -37,9 +37,19 @@ export def exec(
   @param blockedCommands - Block running these executables
   @param allowedPaths - Only allow cwd values under these path prefixes
   """
+  // `subcommand` is a synthetic, agent-facing summary of the first
+  // positional argument. It lets policy files pin a rule to (command,
+  // subcommand) — e.g. auto-approve `git log` but not `git push` —
+  // without teaching the policy matcher to walk into `args[0]`.
+  // Empty when no args, so handlers can detect bare invocations.
+  let subcommand = ""
+  if (args.length > 0) {
+    subcommand = args[0]
+  }
   return interrupt std::exec("Are you sure you want to run this command?", {
     command: command,
     args: args,
+    subcommand: subcommand,
     cwd: cwd,
     timeout: timeout,
     stdin: stdin

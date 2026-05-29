@@ -1,12 +1,22 @@
 import { typecheck } from "std::agency"
+import { browserUse } from "std::browser"
 import { today } from "std::date"
 import { Workspace, openDir } from "std::fs"
-import { Policy, checkPolicy } from "std::policy"
+import { setMemoryId, remember, recall } from "std::memory"
+import { fetch, fetchJSON, fetchMarkdown } from "std::http"
+import { Policy, PolicyRule, checkPolicy } from "std::policy"
 import { exists } from "std::shell"
 import { skillsDir } from "std::skills"
 import { highlight } from "std::syntax"
 import { cwd } from "std::system"
 import { systemMessage } from "std::thread"
+// Wikipedia exports a bare `search`; alias it so the LLM sees a
+// self-describing tool name in its tool list.
+import {
+  search as wikipediaSearch,
+  summary as wikipediaSummary,
+  article as wikipediaArticle,
+} from "std::wikipedia"
 /*
  * Agency Agent — helps users create and modify Agency code.
  *
@@ -48,6 +58,13 @@ callback("onToolCallEnd") as data {
 // auto-approves the init-time `glob` and `read` interrupts (the binding
 // itself is the user opt-in).
 static const docSkill = skillsDir("../docs/guide") with approve
+
+// Same pattern for the CLI reference (`agency run`, `agency test`,
+// `agency compile`, ...) and the appendix (built-ins, callbacks,
+// advanced types). Each becomes its own tool so the LLM can pick the
+// right corpus instead of grepping a giant blob of docs.
+static const cliSkill = skillsDir("../docs/cli") with approve
+static const appendixSkill = skillsDir("../docs/appendix") with approve
 
 // Per-run policy: starts empty, grows as the user opts into
 // always-approve / always-reject for each interrupt kind. Lives at
@@ -106,12 +123,109 @@ type Decision =
   | "approve"
   | "reject"
   | "approve-always"
+  | "approve-always-here"
   | "reject-always"
+
+// Per-kind config driving the "approve-always-here" option. For each
+// kind we list the data fields the scoped rule should pin, plus a
+// flag that turns a directory value into a brace-expanded glob so the
+// rule matches `dir` AND `dir/**`. Kinds not present in this map
+// don't offer the option — the user falls back to (a)/(r)/(aa)/(rr).
+type FieldSpec = {
+  field: string;
+  wildcardSubpaths: boolean
+}
+
+const ALWAYS_FIELDS: Record<string, FieldSpec[]> = {
+  "std::read":  [{ field: "dir", wildcardSubpaths: true }],
+  "std::write": [{ field: "dir", wildcardSubpaths: true }],
+  "std::edit":  [{ field: "dir", wildcardSubpaths: true }],
+  "std::ls":    [{ field: "dir", wildcardSubpaths: true }],
+  "std::glob":  [{ field: "dir", wildcardSubpaths: true }],
+  "std::grep":  [{ field: "dir", wildcardSubpaths: true }],
+  "std::copy":  [{ field: "src",  wildcardSubpaths: true },
+                 { field: "dest", wildcardSubpaths: true }],
+  "std::move":  [{ field: "src",  wildcardSubpaths: true },
+                 { field: "dest", wildcardSubpaths: true }],
+  "std::exec":  [{ field: "command",    wildcardSubpaths: false },
+                 { field: "subcommand", wildcardSubpaths: false }]
+}
+
+def buildScopedMatch(intr): Record<string, string> {
+  """
+  Build the `match` map for an "approve-always-here" rule by reading
+  the field spec for `intr.kind` and pulling the corresponding values
+  out of `intr.data`. Returns `{}` when no spec applies — callers
+  should treat that as "scoped option not available" and skip writing.
+  """
+  const specs = ALWAYS_FIELDS[intr.kind]
+  if (specs == null) {
+    return {}
+  }
+  // Special case: a bare exec (no args, so `subcommand` is empty)
+  // means the user wants the catch-all for this command. Pinning
+  // `subcommand: ""` would only match other bare invocations, which
+  // is rarely useful — so collapse to just the command field.
+  let effective = specs
+  if (intr.kind == "std::exec" && intr.data.subcommand == "") {
+    effective = [{ field: "command", wildcardSubpaths: false }]
+  }
+  let match: Record<string, string> = {}
+  for (spec in effective) {
+    const raw = intr.data[spec.field]
+    let pattern = raw
+    if (spec.wildcardSubpaths) {
+      // picomatch brace-expands "${raw}{,/**}" into "${raw}" OR
+      // "${raw}/**" — matches the exact dir and any subdir.
+      pattern = "${raw}{,/**}"
+    }
+    match = { ...match, [spec.field]: pattern }
+  }
+  return match
+}
+
+def describeScopedMatch(intr): string {
+  """
+  Human-readable summary of what `buildScopedMatch(intr)` would pin —
+  used in the prompt so the user sees the exact rule they're about to
+  agree to. Returns an empty string when the kind isn't scoped.
+  """
+  const match = buildScopedMatch(intr)
+  const ks = keys(match)
+  if (ks.length == 0) {
+    return ""
+  }
+  // Dir-keyed kinds get a friendlier phrasing than the raw pattern.
+  // Backticks are used so we can embed literal `"` characters around
+  // values without fighting the parser's string-escape rules.
+  const dirKinds = ["std::read", "std::write", "std::edit", "std::ls", "std::glob", "std::grep"]
+  if (dirKinds.includes(intr.kind)) {
+    return `dir="${intr.data.dir}" or any subdir`
+  }
+  if (intr.kind == "std::copy" || intr.kind == "std::move") {
+    return `src="${intr.data.src}" or any subdir, dest="${intr.data.dest}" or any subdir`
+  }
+  // std::exec — render command and (if non-empty) subcommand.
+  if (intr.kind == "std::exec") {
+    if (intr.data.subcommand == "") {
+      return `command="${intr.data.command}"`
+    }
+    return `command="${intr.data.command}", subcommand="${intr.data.subcommand}"`
+  }
+  // Generic fallback for any future kind added to ALWAYS_FIELDS.
+  let parts: string[] = []
+  for (k in ks) {
+    parts = [...parts, `${k}="${match[k]}"`]
+  }
+  return parts.join(", ")
+}
 
 def askUser(intr: any): Decision {
   """
   Pretty-print an interrupt and ask the user how to respond. Returns
-  one of the four Decision strings.
+  one of the Decision strings. The "(ap)" option is only shown when
+  the kind has an entry in ALWAYS_FIELDS, and the prompt echoes the
+  exact match rule the user would commit to.
   """
   print(color.yellow("───────────────────────────────────────────"))
   print(color.yellow("Tool wants to run: ${intr.kind}"))
@@ -119,9 +233,30 @@ def askUser(intr: any): Decision {
   print("Data:")
   printJSON(intr.data)
   print(color.yellow("───────────────────────────────────────────"))
+
+  const scopedHint = describeScopedMatch(intr)
+  const scopedAvailable = scopedHint != ""
+
+  print("What would you like to do?")
+  print("  (a)  approve once")
+  print("  (r)  reject once")
+  print("  (aa) approve always (every ${intr.kind})")
+  if (scopedAvailable) {
+    print("  (ap) approve always here (${scopedHint})")
+  }
+  print("  (rr) reject always")
+
   let answer = ""
-  while (answer != "a" && answer != "r" && answer != "aa" && answer != "rr") {
-    answer = input("(a)pprove / (r)eject / (aa) approve-always / (rr) reject-always: ")
+  let valid = false
+  while (!valid) {
+    answer = input("> ")
+    if (answer == "a" || answer == "r" || answer == "aa" || answer == "rr") {
+      valid = true
+    } else if (answer == "ap" && scopedAvailable) {
+      valid = true
+    } else if (answer == "ap") {
+      print(color.yellow("(ap) isn't available for ${intr.kind} — pick one of (a)/(r)/(aa)/(rr)."))
+    }
   }
   if (answer == "a") {
     return "approve"
@@ -132,15 +267,18 @@ def askUser(intr: any): Decision {
   if (answer == "aa") {
     return "approve-always"
   }
+  if (answer == "ap") {
+    return "approve-always-here"
+  }
   return "reject-always"
 }
 
 def recordAlways(kind: string, action: string) {
   """
-  Add an unconditional rule for `kind` to the running policy. First-match-
-  wins inside `checkPolicy`, so prepending a new entry would also work,
-  but a single bare rule covers every future interrupt of this kind
-  cleanly.
+  Add an unconditional rule for `kind` to the running policy. First-
+  match-wins inside `checkPolicy`, so prepending a new entry would
+  also work, but a single bare rule covers every future interrupt of
+  this kind cleanly.
   """
   const next: Policy = {
     ...policy,
@@ -151,6 +289,29 @@ def recordAlways(kind: string, action: string) {
   policy = next
   print(
     color.cyan("→ Recorded policy: ${kind} = ${action} (won't ask again this session)"),
+  )
+}
+
+def recordAlwaysScoped(intr) {
+  """
+  Add a scoped approve rule pinned to whichever fields ALWAYS_FIELDS
+  says are meaningful for this kind. Prepended to any existing rules
+  so the new (more specific) decision takes precedence in the
+  first-match-wins evaluation order.
+  """
+  const match = buildScopedMatch(intr)
+  const existing = policy[intr.kind]
+  let rules: PolicyRule[] = []
+  if (existing != null) {
+    rules = existing
+  }
+  const next: Policy = {
+    ...policy,
+    [intr.kind]: [{ match: match, action: "approve" }, ...rules]
+  }
+  policy = next
+  print(
+    color.cyan("→ Recorded policy: ${intr.kind} = approve where ${describeScopedMatch(intr)}"),
   )
 }
 
@@ -171,6 +332,10 @@ def defaultHandler(intr) {
   const answer = askUser(intr)
   if (answer == "approve-always") {
     recordAlways(intr.kind, "approve")
+    return approve()
+  }
+  if (answer == "approve-always-here") {
+    recordAlwaysScoped(intr)
     return approve()
   }
   if (answer == "reject-always") {
@@ -199,13 +364,23 @@ node main() {
   print(color.cyan("╰───────────────────────────────────────────╯"))
   print("Type 'exit' to quit.\n")
 
+  // Scope the knowledge graph to the project directory so notes the
+  // agent learns in one project don't leak into another. No-op unless
+  // the user enables memory in their `agency.json` — see the
+  // `std::memory` docs for the config block.
+  setMemoryId(cwd())
+
   const sysPrompt = """
   You are an Agency-language coding assistant. Help the user create or
   modify `.agency` files.
 
   Agency is a domain-specific language for AI agents. When you need to
-  recall syntax, semantics, or a particular feature, call the
-  bundled docs tool first — it gives you access to the full guide.
+  recall syntax, semantics, or a particular feature, call the bundled
+  docs tools first — they give you access to the language guide
+  (`docSkill`), the CLI reference (`cliSkill`: `agency run`, `agency
+  test`, `agency compile`, ...), and the appendix (`appendixSkill`:
+  built-ins, callbacks, advanced types). Pick whichever matches the
+  question rather than guessing.
 
   Workflow:
   1. First, call `setCwd` with the user's project directory. After
@@ -230,12 +405,38 @@ node main() {
      package managers). Prefer the dedicated file tools above for file
      operations; use `bash` for everything else. The user is asked to
      approve each command.
-  7. Whenever you show the user a code snippet in your reply, first
-     call `highlight(code)` and emit the returned string verbatim
-     instead of the raw source. The tool renders the snippet with
-     terminal colors so the user can read it more easily. Skip
-     highlighting for inline identifiers or one-token excerpts; use
-     it for any multi-line block.
+  6a. When you need information from the internet, prefer the lighter
+      tools first:
+      - `wikipediaSearch` / `wikipediaSummary` / `wikipediaArticle` for
+        background knowledge — fast, no API key required, no user
+        approval needed.
+      - `fetchMarkdown(baseUrl, path)` to grab a known docs page or
+        README and get it as readable Markdown.
+      - `fetchJSON(url)` / `fetch(url)` for any specific URL where you
+        already know the endpoint.
+      - `browserUse(task)` only when you actually need an open-ended
+        web search or a page that requires JavaScript / a login flow.
+        It is the heaviest option and costs money per call.
+      Cite the source URL in your reply whenever you used one of these.
+  6b. You have a persistent knowledge graph scoped to this project.
+      Call `recall(query)` whenever you need to remember something the
+      user told you in a previous session (their preferences, the
+      project's conventions, decisions made earlier). Call
+      `remember(content)` to persist a fact worth keeping across
+      sessions — user preferences ("prefers tabs", "wants short
+      replies"), project conventions ("uses `def` not `node` for
+      utilities"), or important decisions. Don't `remember` transient
+      details or things already in AGENTS.md. Relevant facts are also
+      auto-injected before each turn, so often you don't need to call
+      `recall` explicitly.
+  7. Whenever you want to show the user a multi-line code snippet,
+     call `print(highlight(code))` instead of including the raw
+     source in your reply. `highlight` returns a terminal-colored
+     string and `print` writes it directly to the user's console, so
+     the snippet appears with proper syntax highlighting. Skip this
+     for inline identifiers or one-token excerpts; use it for any
+     multi-line block. Your reply can then refer to the printed
+     snippet without repeating the source.
 
   Keep replies brief. Show code, not commentary.
   """
@@ -258,8 +459,11 @@ node main() {
         // List workspace tools explicitly so we can PFA `printDiff: true`
         // onto `edit` — every edit the LLM runs prints a colored diff
         // to the console before / after the change, so the user can
-        // eyeball what actually got written.
+        // eyeball what actually got written. Internet tools (wikipedia,
+        // fetch, browserUse) are listed after the project tools so the
+        // LLM defaults to local context first.
         const reply = llm(userMsg, {
+          memory: true,
           tools: [
             setCwd,
             workspace.read,
@@ -271,7 +475,19 @@ node main() {
             workspace.bash,
             typecheck,
             docSkill,
+            cliSkill,
+            appendixSkill,
             highlight.partial(language: "ts"),
+            print,
+            remember,
+            recall,
+            wikipediaSearch,
+            wikipediaSummary,
+            wikipediaArticle,
+            fetch,
+            fetchJSON,
+            fetchMarkdown,
+            browserUse,
           ]
         })
         print(color.green("\n${reply}\n"))

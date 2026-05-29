@@ -552,3 +552,30 @@ describe("AgencyGenerator - Result Patterns", () => {
   });
 });
 
+describe("AgencyGenerator - preserveOrder mode", () => {
+  function formatPreserveOrder(input: string): string {
+    const parseResult = parseAgency(input, {}, false);
+    expect(parseResult.success).toBe(true);
+    if (!parseResult.success) return "";
+    const generator = new AgencyGenerator({ preserveOrder: true });
+    return generator.generate(parseResult.result).output.trim();
+  }
+
+  it("does not sort imports alphabetically", () => {
+    const input = `import { zebra } from "z"\nimport { apple } from "a"\n`;
+    const output = formatPreserveOrder(input);
+    expect(output.indexOf("zebra")).toBeLessThan(output.indexOf("apple"));
+  });
+
+  it("does not hoist mid-file imports to the top", () => {
+    const input = `def first(): number { return 1 }\n\nimport { later } from "wherever"\n\ndef second(): number { return 2 }\n`;
+    const output = formatPreserveOrder(input);
+    const firstIdx = output.indexOf("def first");
+    const importIdx = output.indexOf('import { later }');
+    const secondIdx = output.indexOf("def second");
+    expect(firstIdx).toBeGreaterThanOrEqual(0);
+    expect(importIdx).toBeGreaterThan(firstIdx);
+    expect(secondIdx).toBeGreaterThan(importIdx);
+  });
+});
+

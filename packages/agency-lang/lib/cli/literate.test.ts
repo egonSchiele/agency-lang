@@ -269,6 +269,47 @@ def foo(): number { return 1 }
     expect(md).toContain("a * b");
   });
 
+  it("preserves source order of imports (no hoisting, no alphabetical sort)", () => {
+    const md = weaveAndRead(
+      "test.agency",
+      `import { zebra } from "z"
+import { apple } from "a"
+
+def hello(): string {
+  return "world"
+}
+`,
+    );
+
+    // Without preserveOrder, AgencyGenerator would alphabetize these
+    // imports — "apple" would come before "zebra". Pin source order.
+    const zebraIdx = md.indexOf("zebra");
+    const appleIdx = md.indexOf("apple");
+    expect(zebraIdx).toBeGreaterThan(0);
+    expect(appleIdx).toBeGreaterThan(0);
+    expect(zebraIdx).toBeLessThan(appleIdx);
+  });
+
+  it("preserves imports placed mid-file (no hoisting)", () => {
+    const md = weaveAndRead(
+      "test.agency",
+      `def first(): number { return 1 }
+
+import { later } from "wherever"
+
+def second(): number { return 2 }
+`,
+    );
+
+    // The mid-file import must appear AFTER first() and BEFORE second().
+    const firstIdx = md.indexOf("def first");
+    const importIdx = md.indexOf("import { later }");
+    const secondIdx = md.indexOf("def second");
+    expect(firstIdx).toBeGreaterThanOrEqual(0);
+    expect(importIdx).toBeGreaterThan(firstIdx);
+    expect(secondIdx).toBeGreaterThan(importIdx);
+  });
+
   it("smoke-tests against stdlib/markdown.agency (real-world AST)", () => {
     const repoRoot = path.resolve(__dirname, "..", "..");
     const input = path.join(repoRoot, "stdlib", "markdown.agency");

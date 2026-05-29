@@ -113,7 +113,14 @@ function classify(program: AgencyProgram): Segment[] {
 
 function renderSegment(seg: Segment, lang: string): string {
   if (seg.kind === "prose") return seg.text;
-  const code = generateAgency({ type: "agencyProgram", nodes: seg.nodes });
+  // `preserveOrder: true` keeps imports in their source position rather
+  // than hoisting them to the top of the segment and sorting them. We
+  // need this for literate output to faithfully reproduce the file in
+  // source order.
+  const code = generateAgency(
+    { type: "agencyProgram", nodes: seg.nodes },
+    { preserveOrder: true },
+  );
   return codeFence(code, lang); // codeFence handles trimEnd + fence escalation
 }
 

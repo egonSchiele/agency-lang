@@ -4,7 +4,8 @@ import path from "path";
 import process from "process";
 import diff_match_patch from "diff-match-patch";
 import { resolvePath } from "./resolvePath.js";
-import { assertContained } from "./assertContained.js";
+import { resolveDir } from "./resolveDir.js";
+import { expandPath } from "./expandPath.js";
 import { formatDiff } from "../utils/diff.js";
 
 export { resolvePath } from "./resolvePath.js";
@@ -100,10 +101,10 @@ export async function _applyPatch(
   const touched: string[] = [];
 
   for (const f of files) {
-    const full = path.resolve(process.cwd(), f.path);
-    // Every file the diff touches is gated by `allowedPaths`. No-op
-    // when the caller passes nothing (status quo).
-    await assertContained(full, allowedPaths ?? []);
+    // Resolve via `resolveDir` (cwd-anchored — fs ops are
+    // process-cwd-relative, not module-dir-relative). This expands
+    // `~` and runs the allow-list check in one place.
+    const full = await resolveDir(f.path, allowedPaths ?? [], "cwd");
     let original = "";
     if (f.isNew) {
       original = "";
@@ -225,8 +226,7 @@ export async function _mkdir(
   dir: string,
   allowedPaths?: string[],
 ): Promise<void> {
-  const full = path.resolve(process.cwd(), dir);
-  await assertContained(full, allowedPaths ?? []);
+  const full = await resolveDir(dir, allowedPaths ?? [], "cwd");
   await fs.mkdir(full, { recursive: true });
 }
 
@@ -235,10 +235,8 @@ export async function _copy(
   dest: string,
   allowedPaths?: string[],
 ): Promise<void> {
-  const srcFull = path.resolve(process.cwd(), src);
-  const destFull = path.resolve(process.cwd(), dest);
-  await assertContained(srcFull, allowedPaths ?? []);
-  await assertContained(destFull, allowedPaths ?? []);
+  const srcFull = await resolveDir(src, allowedPaths ?? [], "cwd");
+  const destFull = await resolveDir(dest, allowedPaths ?? [], "cwd");
   await fs.cp(srcFull, destFull, { recursive: true });
 }
 
@@ -247,10 +245,8 @@ export async function _move(
   dest: string,
   allowedPaths?: string[],
 ): Promise<void> {
-  const srcFull = path.resolve(process.cwd(), src);
-  const destFull = path.resolve(process.cwd(), dest);
-  await assertContained(srcFull, allowedPaths ?? []);
-  await assertContained(destFull, allowedPaths ?? []);
+  const srcFull = await resolveDir(src, allowedPaths ?? [], "cwd");
+  const destFull = await resolveDir(dest, allowedPaths ?? [], "cwd");
   await rejectDangerousPath(src, "move", "source");
   try {
     await fs.rename(srcFull, destFull);
@@ -268,8 +264,7 @@ export async function _remove(
   target: string,
   allowedPaths?: string[],
 ): Promise<void> {
-  const full = path.resolve(process.cwd(), target);
-  await assertContained(full, allowedPaths ?? []);
+  const full = await resolveDir(target, allowedPaths ?? [], "cwd");
   await rejectDangerousPath(target, "remove", "target");
   await fs.rm(full, { recursive: true, force: true });
 }
@@ -283,7 +278,9 @@ export async function rejectDangerousPath(
   if (trimmed === "") {
     throw new Error(`${op}: ${role} must not be empty`);
   }
-  const lexical = path.resolve(process.cwd(), trimmed);
+  // Expand `~` first so the home / top-level checks below are
+  // performed against the actual target, not the literal `~/foo`.
+  const lexical = path.resolve(process.cwd(), expandPath(trimmed));
   const [real, homeReal, cwdReal] = await Promise.all([
     realpathOrResolve(lexical),
     realpathOrResolve(os.homedir()),

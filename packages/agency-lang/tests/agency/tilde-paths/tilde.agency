@@ -1,0 +1,29 @@
+import { stat, exists } from "std::shell"
+
+// Probes home-directory-relative paths through `stat`/`exists`. We
+// use `~` (which is guaranteed to exist for any user) so the test is
+// side-effect-free and never writes under the user's home.
+//
+// `exec`/`bash` cwd-expansion are covered in unit tests
+// (lib/stdlib/shell.test.ts) instead of here — the std::exec
+// interrupt fires before the spawn, so they can't run unattended
+// from a fixture without a handler block.
+node main(): boolean {
+  const homeStat = stat(`~`, ``)
+  if (!homeStat.exists) {
+    return false
+  }
+  // _stat uses lstat, so if $HOME itself is a symlink the type will
+  // be "symlink" rather than "dir". Accept either — this test cares
+  // about ~ expansion, not the user's filesystem layout.
+  if (homeStat.type != `dir` && homeStat.type != `symlink`) {
+    return false
+  }
+  // exists() with a `~`-prefixed filename and dir="" should expand
+  // the same way.
+  const homeExists = exists(`~`, ``)
+  if (!homeExists) {
+    return false
+  }
+  return true
+}

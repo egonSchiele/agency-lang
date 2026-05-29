@@ -26,6 +26,7 @@ import {
 } from "./abortable.js";
 import { checkAllowBlockList } from "./allowBlockList.js";
 import { assertContained } from "./assertContained.js";
+import { resolveDir } from "./resolveDir.js";
 import { resolvePath } from "./resolvePath.js";
 
 function buildSpawnOptions(
@@ -84,11 +85,17 @@ async function execImpl(
     options?.blockedCommands ?? [],
   );
   if (cmdError) throw new Error(cmdError);
-  if (cwd && options?.allowedPaths && options.allowedPaths.length > 0) {
-    await assertContained(cwd, options.allowedPaths);
-  }
+  // Route through `resolveDir` (cwd-anchored) so `~` expansion +
+  // allow-list enforcement land in one place. Relative `cwd: "./sub"`
+  // stays anchored to `process.cwd()` (the existing semantics) because
+  // we pass `base: "cwd"`. Empty `cwd` is the "no override" sentinel —
+  // pass undefined to the spawn options so the child inherits the
+  // parent's cwd, matching the pre-migration behavior.
+  const cwdResolved = cwd
+    ? await resolveDir(cwd, options?.allowedPaths ?? [], "cwd")
+    : "";
   const signal = ctx.getAbortSignal(stack);
-  return abortableSpawn(command, args, buildSpawnOptions(cwd, timeout, stdin, signal));
+  return abortableSpawn(command, args, buildSpawnOptions(cwdResolved, timeout, stdin, signal));
 }
 
 /** Deprecated context-injected wrapper kept during the ALS migration;
@@ -157,11 +164,12 @@ async function bashImpl(
       }
     }
   }
-  if (cwd && options?.allowedPaths && options.allowedPaths.length > 0) {
-    await assertContained(cwd, options.allowedPaths);
-  }
+  // See `execImpl` for the cwd-resolution rationale.
+  const cwdResolved = cwd
+    ? await resolveDir(cwd, options?.allowedPaths ?? [], "cwd")
+    : "";
   const signal = ctx.getAbortSignal(stack);
-  return abortableSpawn("sh", ["-c", command], buildSpawnOptions(cwd, timeout, stdin, signal));
+  return abortableSpawn("sh", ["-c", command], buildSpawnOptions(cwdResolved, timeout, stdin, signal));
 }
 
 /** Deprecated context-injected wrapper kept during the ALS migration;
@@ -206,11 +214,11 @@ export async function _ls(
   // Resolve relative `dir` against the calling module's directory (same
   // policy as `read`/`write`), so co-located resource folders work no
   // matter where the process was launched from. Absolute paths pass
-  // through unchanged. `allowedPaths` is resolved against the same
-  // base — relative roots like `"."` mean "the same dir as `dir`".
-  const moduleDir = getModuleDir();
-  const root = path.resolve(moduleDir, dir);
-  await assertContained(root, allowedPaths ?? [], moduleDir);
+  // through unchanged. `~` is expanded; `allowedPaths` is resolved
+  // against the same base — relative roots like `"."` mean "the same
+  // dir as `dir`". All policy lives in `resolveDir` so future rules
+  // (env vars, normalization, etc.) propagate automatically.
+  const root = await resolveDir(dir, allowedPaths ?? []);
   const out: LsEntry[] = [];
 
   async function walk(current: string): Promise<void> {
@@ -301,9 +309,7 @@ export async function _grep(
   // See `_ls` for the resolution policy. `dir` is module-relative;
   // returned `file` paths are relative to `dir` so callers can hand
   // them to `read(file, dir)` directly.
-  const moduleDir = getModuleDir();
-  const root = path.resolve(moduleDir, dir);
-  await assertContained(root, allowedPaths ?? [], moduleDir);
+  const root = await resolveDir(dir, allowedPaths ?? []);
   const re = new RegExp(pattern, flags || undefined);
   const results: GrepMatch[] = [];
 
@@ -342,9 +348,7 @@ export async function _glob(
   // See `_ls` for the resolution policy. `dir` is module-relative;
   // returned paths are relative to `dir` so callers can hand them to
   // `read(path, dir)` directly without `basename(...)` gymnastics.
-  const moduleDir = getModuleDir();
-  const root = path.resolve(moduleDir, dir);
-  await assertContained(root, allowedPaths ?? [], moduleDir);
+  const root = await resolveDir(dir, allowedPaths ?? []);
   const re = globToRegExp(pattern);
   const results: string[] = [];
 
@@ -431,21 +435,35 @@ export type StatInfo = {
 };
 
 /**
- * Resolve `filename` for stat/exists.
+ * Resolve a probe path for `stat`/`exists`, applying the same path
+ * policy (shorthand expansion + allow-list containment) every other
+ * stdlib path-taking entry point uses.
  *
- * - If `dir` is the empty string (the legacy / unset sentinel), fall
- *   back to the original `process.cwd()`-anchored behavior. Absolute
- *   filenames are passed through unchanged.
- * - Otherwise resolve via `resolvePath(dir, filename)` so the call
- *   shares the same sandbox semantics as `read`/`write`/`edit`:
- *   filename must be relative, must not escape `dir`, and `dir` itself
- *   is resolved against the calling module's directory.
+ * - If `dir` is the empty string (the legacy / unset sentinel),
+ *   `filename` is treated as a stand-alone probe path anchored to
+ *   `process.cwd()`. Routed through `resolveDir` so `_stat("~", "")`
+ *   and `_exists("~/foo", "")` expand the shorthand.
+ * - Otherwise resolve via `resolvePath(dir, filename)` (which delegates
+ *   dir-expansion + module-dir anchoring to `resolveDir` and runs the
+ *   traversal / symlink-escape checks), then layer the allow-list
+ *   check on top — `resolvePath` doesn't take `allowedPaths` because
+ *   it's the lower-level helper.
+ *
+ * Probing for a path outside the allow-list is itself a containment
+ * violation — both `_stat` and `_exists` throw rather than silently
+ * report missing.
  */
-async function resolveProbePath(dir: string, filename: string): Promise<string> {
+async function resolveProbePath(
+  dir: string,
+  filename: string,
+  allowedPaths: string[],
+): Promise<string> {
   if (dir === "") {
-    return path.resolve(process.cwd(), filename);
+    return resolveDir(filename, allowedPaths, "cwd");
   }
-  return resolvePath(dir, filename);
+  const full = await resolvePath(dir, filename);
+  await assertContained(full, allowedPaths, getModuleDir());
+  return full;
 }
 
 export async function _stat(
@@ -453,9 +471,7 @@ export async function _stat(
   dir: string = "",
   allowedPaths?: string[],
 ): Promise<StatInfo> {
-  const full = await resolveProbePath(dir, filename);
-  const baseDir = dir === "" ? process.cwd() : getModuleDir();
-  await assertContained(full, allowedPaths ?? [], baseDir);
+  const full = await resolveProbePath(dir, filename, allowedPaths ?? []);
   try {
     const st = await fs.lstat(full);
     let type: StatInfo["type"] = "other";
@@ -478,11 +494,7 @@ export async function _exists(
   dir: string = "",
   allowedPaths?: string[],
 ): Promise<boolean> {
-  const full = await resolveProbePath(dir, filename);
-  // Probing for a path outside the allow-list is itself a containment
-  // violation — throw rather than silently return false.
-  const baseDir = dir === "" ? process.cwd() : getModuleDir();
-  await assertContained(full, allowedPaths ?? [], baseDir);
+  const full = await resolveProbePath(dir, filename, allowedPaths ?? []);
   try {
     await fs.access(full);
     return true;

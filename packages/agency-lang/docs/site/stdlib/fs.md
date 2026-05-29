@@ -229,7 +229,7 @@ Delete a file or directory. Directories are removed recursively. Does not fail i
 ### openDir
 
 ```ts
-openDir(dir: string): Workspace
+openDir(dir: string, allowedPaths: string[]): Workspace
 ```
 
 Build a Workspace anchored at `dir` — a bundle of file-system
@@ -244,13 +244,24 @@ Build a Workspace anchored at `dir` — a bundle of file-system
   is captured at `openDir` time. To re-anchor an agent to a new
   directory, call `openDir(newDir)` again and use the new bundle.
 
+  Defense-in-depth sandboxing: `allowedPaths` is bound on every
+  bundled tool that accepts it (`ls`, `glob`, `grep`, `bash`).
+  Defaults to `[dir]`, so the bundle refuses to operate outside its
+  anchor directory unless you explicitly broaden the allowed roots.
+  Note: `read`/`write`/`edit` do not currently accept `allowedPaths`,
+  but they are already sandboxed by `dir` via `resolvePath`, which
+  rejects absolute filenames and `..` escapes.
+
   @param dir - The directory to anchor every bundled tool against
+  @param allowedPaths - Additional sandbox roots passed to ls/glob/grep/bash.
+    Defaults to `[dir]` when empty.
 
 **Parameters:**
 
 | Name | Type | Default |
 |---|---|---|
 | dir | `string` |  |
+| allowedPaths | `string[]` | [] |
 
 **Returns:** [Workspace](#workspace)
 

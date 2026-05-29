@@ -131,7 +131,7 @@ export type Workspace = {
   bash: any
 }
 
-export def openDir(dir: string): Workspace {
+export def openDir(dir: string, allowedPaths: string[] = []): Workspace {
   """
   Build a Workspace anchored at `dir` — a bundle of file-system
   tools (`read`, `write`, `edit`, `ls`, `glob`, `grep`, `bash`) that
@@ -145,15 +145,29 @@ export def openDir(dir: string): Workspace {
   is captured at `openDir` time. To re-anchor an agent to a new
   directory, call `openDir(newDir)` again and use the new bundle.
 
+  Defense-in-depth sandboxing: `allowedPaths` is bound on every
+  bundled tool that accepts it (`ls`, `glob`, `grep`, `bash`).
+  Defaults to `[dir]`, so the bundle refuses to operate outside its
+  anchor directory unless you explicitly broaden the allowed roots.
+  Note: `read`/`write`/`edit` do not currently accept `allowedPaths`,
+  but they are already sandboxed by `dir` via `resolvePath`, which
+  rejects absolute filenames and `..` escapes.
+
   @param dir - The directory to anchor every bundled tool against
+  @param allowedPaths - Additional sandbox roots passed to ls/glob/grep/bash.
+    Defaults to `[dir]` when empty.
   """
+  let ap: string[] = [dir]
+  if (allowedPaths.length > 0) {
+    ap = allowedPaths
+  }
   return {
     read: read.partial(dir: dir),
     write: write.partial(dir: dir),
     edit: edit.partial(dir: dir),
-    ls: ls.partial(dir: dir),
-    glob: glob.partial(dir: dir),
-    grep: grep.partial(dir: dir),
-    bash: bash.partial(cwd: dir),
+    ls: ls.partial(dir: dir, allowedPaths: ap),
+    glob: glob.partial(dir: dir, allowedPaths: ap),
+    grep: grep.partial(dir: dir, allowedPaths: ap),
+    bash: bash.partial(cwd: dir, allowedPaths: ap),
   }
 }

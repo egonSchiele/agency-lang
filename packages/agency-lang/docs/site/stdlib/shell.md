@@ -162,7 +162,7 @@ Search for a regex pattern in files under a directory. Returns matches with file
 
   Relative `dir` is resolved against the calling Agency module's directory (same policy as `read`/`write`/`glob`/`ls`), and returned `file` values are relative to `dir` — so results compose with `read(file, dir)` directly.
 
-  Returns at most `maxResults` matches (default 200). Files larger than 5 MB are skipped silently. If you suspect matches were truncated, narrow `dir` or refine `pattern`.
+  Returns at most `maxResults` matches (default 200). If you suspect matches were truncated, narrow `dir` or refine `pattern`.
 
   @param pattern - The regex pattern to search for
   @param dir - The directory to search in (relative paths resolve against the module directory)
@@ -221,12 +221,15 @@ Find files whose paths match a glob pattern (e.g. "src/**/*.ts"). Stops at maxRe
 ### stat
 
 ```ts
-stat(filename: string, allowedPaths: string[]): StatInfo
+stat(filename: string, dir: string, allowedPaths: string[]): StatInfo
 ```
 
 Return metadata about a filesystem entry: whether it exists, its type ("file", "dir", "symlink", "other", or "missing" if absent), size in bytes, and mtime in ms. Set allowedPaths to restrict which paths may be stat-ed.
 
+  Pass `dir` to resolve `filename` against a directory the same way `read`/`write`/`edit` do (filename must be relative, cannot escape `dir`, and `dir` itself resolves against the calling module's directory). When `dir` is left empty, filename is resolved against the process cwd and absolute paths are accepted — the legacy behavior.
+
   @param filename - The path to stat
+  @param dir - Optional directory to resolve `filename` against (default: process cwd, absolute paths allowed)
   @param allowedPaths - Only allow paths under these prefixes
 
 **Parameters:**
@@ -234,6 +237,7 @@ Return metadata about a filesystem entry: whether it exists, its type ("file", "
 | Name | Type | Default |
 |---|---|---|
 | filename | `string` |  |
+| dir | `string` | "" |
 | allowedPaths | `string[]` | [] |
 
 **Returns:** [StatInfo](#statinfo)
@@ -243,12 +247,15 @@ Return metadata about a filesystem entry: whether it exists, its type ("file", "
 ### exists
 
 ```ts
-exists(filename: string, allowedPaths: string[]): boolean
+exists(filename: string, dir: string, allowedPaths: string[]): boolean
 ```
 
 Return true if a file or directory exists at the given path. Set allowedPaths to restrict which paths may be probed; probing outside the allow-list raises an error rather than silently returning false.
 
+  Pass `dir` to resolve `filename` against a directory the same way `read`/`write`/`edit` do (filename must be relative, cannot escape `dir`, and `dir` itself resolves against the calling module's directory). When `dir` is left empty, filename is resolved against the process cwd and absolute paths are accepted — the legacy behavior.
+
   @param filename - The path to check
+  @param dir - Optional directory to resolve `filename` against (default: process cwd, absolute paths allowed)
   @param allowedPaths - Only allow paths under these prefixes
 
 **Parameters:**
@@ -256,11 +263,12 @@ Return true if a file or directory exists at the given path. Set allowedPaths to
 | Name | Type | Default |
 |---|---|---|
 | filename | `string` |  |
+| dir | `string` | "" |
 | allowedPaths | `string[]` | [] |
 
 **Returns:** `boolean`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/shell.agency#L206))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/shell.agency#L209))
 
 ### which
 
@@ -278,4 +286,4 @@ Locate an executable in PATH and return its absolute path. Returns an empty stri
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/shell.agency#L216))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/shell.agency#L222))

@@ -118,16 +118,16 @@ read(filename: string, dir: string, offset: number, limit: number): Result
 
 A tool for reading the contents of a file and returning it as a string. The filename is resolved relative to dir.
 
-  When called with no offset/limit, returns the full file if it has at
-  most 2000 lines; otherwise returns the first 2000 lines and appends a
-  truncation note showing the total line count. Pass `offset` (1-indexed)
-  and/or `limit` to paginate larger files. `0` for either argument means
-  "unset" — Agency does not have undefined arguments.
+  By default the full file is returned. Pass `offset` (1-indexed) and/or
+  `limit` to paginate a large file — when either is set, a truncation
+  note is appended naming the line range and total line count. `0` for
+  either argument means "unset" (Agency does not have undefined
+  arguments).
 
   @param filename - The file to read
   @param dir - The directory to resolve the filename against (defaults to ".")
   @param offset - 1-indexed line to start at (0 means start of file)
-  @param limit - Maximum number of lines to return (0 means default 2000)
+  @param limit - Maximum number of lines to return (0 means read to end of file)
 
 **Parameters:**
 

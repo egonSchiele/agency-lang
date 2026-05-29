@@ -1,4 +1,4 @@
-import { typecheck, toolGuidelines } from "std::agency"
+import { typecheck } from "std::agency"
 import { today } from "std::date"
 import { Workspace, openDir } from "std::fs"
 import { Policy, checkPolicy } from "std::policy"
@@ -75,7 +75,7 @@ def loadAgentsMd(dir: string): string {
   read is auto-approved — the user implicitly opted in to scanning the
   project directory by running the agent there.
   """
-  if (!exists("${dir}/AGENTS.md")) {
+  if (!exists("AGENTS.md", dir)) {
     return ""
   }
   const result = read("AGENTS.md", dir) with approve
@@ -244,58 +244,22 @@ node main() {
   // automatically follows the project's conventions.
   const projectContext = loadAgentsMd(cwd()) with approve
 
-  // Per-tool guidelines: small bits of advice that ride with each
-  // tool's metadata (via `.withGuidelines(...)`) and are surfaced to
-  // the LLM as a single block by `toolGuidelines(...)`. Apply them at
-  // the agent level so they can reference workflow we control rather
-  // than baking opinions into the stdlib defs. The tools array is
-  // rebuilt each turn (so `setCwd` can re-anchor the bundle), but the
-  // guidelines block is computed once against the initial bundle —
-  // the strings are identical for every workspace, so we only need to
-  // surface them in the system prompt once.
-  const guidelinesBlock = toolGuidelines([
-    workspace.read.withGuidelines([
-      "Prefer `read` to shelling out to `cat` / `sed` for file inspection.",
-      "Large files are auto-truncated at 2000 lines; pass `offset`/`limit` to paginate when the note appears."
-    ]),
-    workspace.write.withGuidelines([
-      "Use `write` for new files or full rewrites only — prefer `edit` for in-place changes so untouched content stays byte-identical."
-    ]),
-    workspace.edit.withGuidelines([
-      "Prefer one `edit` call with multiple entries over several `edit` calls when changing the same file in more than one place.",
-      "Each `oldText` must match a unique non-overlapping region; keep it as small as possible while still being unique."
-    ]),
-    workspace.bash.withGuidelines([
-      "Use `bash` for project commands (tests, git, formatters, package managers). Use the dedicated file tools for file ops."
-    ]),
-    typecheck.withGuidelines([
-      "Always typecheck any Agency source you produce before showing it to the user; fix every reported error and re-check."
-    ]),
-  ])
-
   thread {
-    systemMessage(sysPrompt + env + projectContext + guidelinesBlock)
+    systemMessage(sysPrompt + env + projectContext)
     let userMsg = input("What would you like to do? ")
     while (userMsg != "exit" && userMsg != "quit") {
       handle {
-        const reply = llm(
-          userMsg,
-          {
+        // Spread `workspace.tools` so a `setCwd` from the previous
+        // turn picks up here (the binding is refreshed each iteration).
+        const reply = llm(userMsg, {
           tools: [
             setCwd,
-            workspace.ls,
-            workspace.glob,
-            workspace.grep,
-            workspace.read,
-            workspace.write,
-            workspace.edit,
-            workspace.bash,
+            ...workspace.tools,
             typecheck,
             docSkill,
             highlight.partial(language: "ts"),
           ]
-        },
-        )
+        })
         print(color.green("\n${reply}\n"))
       } with defaultHandler
       userMsg = input("\nNext request (or 'exit'): ")

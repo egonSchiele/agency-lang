@@ -39,11 +39,6 @@ export type ToolDefinition = {
   name: string;
   description: string;
   schema: unknown;
-  /** Per-tool advice that callers can collect into a system prompt
-   *  (e.g. "edit: merge nearby changes into one call"). Populated by
-   *  `.withGuidelines(...)`; round-tripped through FunctionRefReviver
-   *  alongside `.describe()` metadata. */
-  promptGuidelines?: string[];
 };
 
 export type AgencyFunctionOpts = {
@@ -213,21 +208,6 @@ export class AgencyFunction {
     const newToolDef = this.toolDefinition
       ? { ...this.toolDefinition, description }
       : { name: this.name, description, schema: null };
-    return this.withToolDefinition(newToolDef);
-  }
-
-  withGuidelines(guidelines: string[]): AgencyFunction {
-    // Mirrors `describe()`: synthesize a stub tool definition if one
-    // doesn't exist yet so guidelines aren't silently dropped on
-    // functions that gained tool metadata solely through this method.
-    const newToolDef: ToolDefinition = this.toolDefinition
-      ? { ...this.toolDefinition, promptGuidelines: guidelines }
-      : {
-          name: this.name,
-          description: "",
-          schema: null,
-          promptGuidelines: guidelines,
-        };
     return this.withToolDefinition(newToolDef);
   }
 

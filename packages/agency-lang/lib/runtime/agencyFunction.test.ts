@@ -489,27 +489,3 @@ describe("preapprove handler wiring", () => {
     expect(lenDuring).toBe(before);
   });
 });
-
-describe("withGuidelines", () => {
-  it("attaches prompt guidelines to a function without an existing tool def", () => {
-    const fn = makeFunction([{ name: "x" }]);
-    const out = fn.withGuidelines(["be concise", "cite sources"]);
-    expect(out.toolDefinition).not.toBeNull();
-    expect(out.toolDefinition?.promptGuidelines).toEqual(["be concise", "cite sources"]);
-    // Original unchanged
-    expect(fn.toolDefinition).toBeNull();
-  });
-
-  it("preserves guidelines through partial() because the spread carries them over", () => {
-    const fn = makeFunction([{ name: "x" }, { name: "y", hasDefault: true, defaultValue: 1 }]);
-    const guided = fn.withGuidelines(["foo"]);
-    const bound = guided.partial({ y: 7 });
-    expect(bound.toolDefinition?.promptGuidelines).toEqual(["foo"]);
-  });
-
-  it("can be reapplied to replace earlier guidelines", () => {
-    const fn = makeFunction([{ name: "x" }]).withGuidelines(["v1"]);
-    const updated = fn.withGuidelines(["v2", "v3"]);
-    expect(updated.toolDefinition?.promptGuidelines).toEqual(["v2", "v3"]);
-  });
-});

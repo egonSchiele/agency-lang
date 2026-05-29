@@ -19,9 +19,7 @@ import {
   _walkAST,
   _getNodesOfType,
   _filterImports,
-  _toolGuidelines,
 } from "./agency.js";
-import { AgencyFunction } from "../runtime/agencyFunction.js";
 import type { AgencyNode } from "../types.js";
 import type { ImportStatement } from "../types/importStatement.js";
 
@@ -565,49 +563,5 @@ node main() { return 1 }`;
     const result = _filterImports(src, [], [], ["stdlib"], []);
     expect(result.filtered).toBe(false);
     expect(result.source).toBe(_format(src));
-  });
-});
-
-describe("_toolGuidelines", () => {
-  function makeTool(name: string, guidelines?: string[]): AgencyFunction {
-    return new AgencyFunction({
-      name,
-      module: "test",
-      fn: async () => null,
-      params: [],
-      toolDefinition: guidelines
-        ? { name, description: "", schema: null, promptGuidelines: guidelines }
-        : null,
-    });
-  }
-
-  it("returns an empty string when no tool has guidelines", () => {
-    const tools = [makeTool("a"), makeTool("b")];
-    expect(_toolGuidelines(tools)).toBe("");
-  });
-
-  it("formats guidelines as a prompt-ready block keyed by tool name", () => {
-    const tools = [
-      makeTool("edit", ["batch nearby changes", "keep oldText unique"]),
-      makeTool("write", ["only for new files"]),
-    ];
-    expect(_toolGuidelines(tools)).toBe(
-      "\n\nTool guidelines:\n" +
-        "- edit: batch nearby changes\n" +
-        "- edit: keep oldText unique\n" +
-        "- write: only for new files",
-    );
-  });
-
-  it("silently skips non-AgencyFunction entries and tools without guidelines", () => {
-    const tools: unknown[] = [
-      makeTool("a"),
-      "not a function",
-      42,
-      makeTool("edit", ["batch nearby changes"]),
-    ];
-    expect(_toolGuidelines(tools)).toBe(
-      "\n\nTool guidelines:\n- edit: batch nearby changes",
-    );
   });
 });

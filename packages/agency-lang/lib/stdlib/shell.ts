@@ -26,6 +26,7 @@ import {
 } from "./abortable.js";
 import { checkAllowBlockList } from "./allowBlockList.js";
 import { assertContained } from "./assertContained.js";
+import { resolvePath } from "./resolvePath.js";
 
 function buildSpawnOptions(
   cwd: string,
@@ -205,9 +206,11 @@ export async function _ls(
   // Resolve relative `dir` against the calling module's directory (same
   // policy as `read`/`write`), so co-located resource folders work no
   // matter where the process was launched from. Absolute paths pass
-  // through unchanged.
-  const root = path.resolve(getModuleDir(), dir);
-  await assertContained(root, allowedPaths ?? []);
+  // through unchanged. `allowedPaths` is resolved against the same
+  // base — relative roots like `"."` mean "the same dir as `dir`".
+  const moduleDir = getModuleDir();
+  const root = path.resolve(moduleDir, dir);
+  await assertContained(root, allowedPaths ?? [], moduleDir);
   const out: LsEntry[] = [];
 
   async function walk(current: string): Promise<void> {
@@ -298,14 +301,14 @@ export async function _grep(
   // See `_ls` for the resolution policy. `dir` is module-relative;
   // returned `file` paths are relative to `dir` so callers can hand
   // them to `read(file, dir)` directly.
-  const root = path.resolve(getModuleDir(), dir);
-  await assertContained(root, allowedPaths ?? []);
+  const moduleDir = getModuleDir();
+  const root = path.resolve(moduleDir, dir);
+  await assertContained(root, allowedPaths ?? [], moduleDir);
   const re = new RegExp(pattern, flags || undefined);
   const results: GrepMatch[] = [];
 
   await walkDir(root, async (full, st) => {
     if (!st.isFile()) return true;
-    if (st.size > 5_000_000) return true;
     let text: string;
     try {
       text = await fs.readFile(full, "utf8");
@@ -339,8 +342,9 @@ export async function _glob(
   // See `_ls` for the resolution policy. `dir` is module-relative;
   // returned paths are relative to `dir` so callers can hand them to
   // `read(path, dir)` directly without `basename(...)` gymnastics.
-  const root = path.resolve(getModuleDir(), dir);
-  await assertContained(root, allowedPaths ?? []);
+  const moduleDir = getModuleDir();
+  const root = path.resolve(moduleDir, dir);
+  await assertContained(root, allowedPaths ?? [], moduleDir);
   const re = globToRegExp(pattern);
   const results: string[] = [];
 
@@ -426,12 +430,32 @@ export type StatInfo = {
   modifiedMs: number;
 };
 
+/**
+ * Resolve `filename` for stat/exists.
+ *
+ * - If `dir` is the empty string (the legacy / unset sentinel), fall
+ *   back to the original `process.cwd()`-anchored behavior. Absolute
+ *   filenames are passed through unchanged.
+ * - Otherwise resolve via `resolvePath(dir, filename)` so the call
+ *   shares the same sandbox semantics as `read`/`write`/`edit`:
+ *   filename must be relative, must not escape `dir`, and `dir` itself
+ *   is resolved against the calling module's directory.
+ */
+async function resolveProbePath(dir: string, filename: string): Promise<string> {
+  if (dir === "") {
+    return path.resolve(process.cwd(), filename);
+  }
+  return resolvePath(dir, filename);
+}
+
 export async function _stat(
   filename: string,
+  dir: string = "",
   allowedPaths?: string[],
 ): Promise<StatInfo> {
-  const full = path.resolve(process.cwd(), filename);
-  await assertContained(full, allowedPaths ?? []);
+  const full = await resolveProbePath(dir, filename);
+  const baseDir = dir === "" ? process.cwd() : getModuleDir();
+  await assertContained(full, allowedPaths ?? [], baseDir);
   try {
     const st = await fs.lstat(full);
     let type: StatInfo["type"] = "other";
@@ -451,12 +475,14 @@ export async function _stat(
 
 export async function _exists(
   filename: string,
+  dir: string = "",
   allowedPaths?: string[],
 ): Promise<boolean> {
-  const full = path.resolve(process.cwd(), filename);
+  const full = await resolveProbePath(dir, filename);
   // Probing for a path outside the allow-list is itself a containment
   // violation — throw rather than silently return false.
-  await assertContained(full, allowedPaths ?? []);
+  const baseDir = dir === "" ? process.cwd() : getModuleDir();
+  await assertContained(full, allowedPaths ?? [], baseDir);
   try {
     await fs.access(full);
     return true;

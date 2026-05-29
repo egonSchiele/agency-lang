@@ -66,7 +66,8 @@ export type Workspace = {
   ls: any;
   glob: any;
   grep: any;
-  bash: any
+  bash: any;
+  tools: any[]
 }
 ```
 
@@ -232,29 +233,40 @@ Delete a file or directory. Directories are removed recursively. Does not fail i
 openDir(dir: string, allowedPaths: string[]): Workspace
 ```
 
-Build a Workspace anchored at `dir` — a bundle of file-system
-  tools (`read`, `write`, `edit`, `ls`, `glob`, `grep`, `bash`) that
-  all resolve filenames (or `cwd` for `bash`) against `dir` and its
+Build a Workspace anchored at `dir` — a bundle of file-system tools
+  (`read`, `write`, `edit`, `ls`, `glob`, `grep`, `bash`) that all
+  resolve filenames (or `cwd` for `bash`) against `dir` and its
   subtree. Designed to be handed to an LLM as a coherent surface:
   instead of giving the model a dozen tools that each take a `dir`
   arg, give it the bundle's members so they only have to think about
-  the filename.
+  the filename. The bundle also exposes a `tools` array containing
+  every member in order, so you can splat it into a tools list:
+  `tools: [...workspace.tools, otherTool]`.
 
   Each bundle member is constructed via `.partial(dir: dir)`, so `dir`
   is captured at `openDir` time. To re-anchor an agent to a new
   directory, call `openDir(newDir)` again and use the new bundle.
 
-  Defense-in-depth sandboxing: `allowedPaths` is bound on every
-  bundled tool that accepts it (`ls`, `glob`, `grep`, `bash`).
-  Defaults to `[dir]`, so the bundle refuses to operate outside its
-  anchor directory unless you explicitly broaden the allowed roots.
-  Note: `read`/`write`/`edit` do not currently accept `allowedPaths`,
-  but they are already sandboxed by `dir` via `resolvePath`, which
-  rejects absolute filenames and `..` escapes.
+  Defense-in-depth sandboxing: `allowedPaths` is bound on `ls`,
+  `glob`, and `grep`. It defaults to `[dir]` so those tools refuse to
+  operate outside the anchor directory unless you explicitly pass a
+  broader allow-list. Relative entries in `allowedPaths` resolve
+  against the same directory as `dir` (the calling module's
+  directory), matching how `ls`/`glob`/`grep` already resolve `dir`.
+
+  `bash` is NOT sandboxed by `allowedPaths`: that argument only
+  validates `cwd`, while the shell command itself can read or write
+  anywhere the process can reach. `bash` is included in the bundle
+  for convenience (its `cwd` is pinned to `dir`), but treat it as
+  unsandboxed — gate it with user approval or `blockedCommands` if
+  you care about confinement. `read`/`write`/`edit` do not accept
+  `allowedPaths` but are already confined to `dir` by `resolvePath`,
+  which rejects absolute filenames and `..` escapes.
 
   @param dir - The directory to anchor every bundled tool against
-  @param allowedPaths - Additional sandbox roots passed to ls/glob/grep/bash.
-    Defaults to `[dir]` when empty.
+  @param allowedPaths - Sandbox roots bound on ls/glob/grep.
+    Defaults to `[dir]` when empty. Relative entries resolve against
+    the same base as `dir`.
 
 **Parameters:**
 
@@ -265,4 +277,4 @@ Build a Workspace anchored at `dir` — a bundle of file-system
 
 **Returns:** [Workspace](#workspace)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L134))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L140))

@@ -122,8 +122,6 @@ export function _round(num: number, precision: number): number {
 // — they're imported directly from `./http.js` by the generated code, no
 // re-export needed here.
 
-const DEFAULT_READ_LINE_LIMIT = 2000;
-
 export async function _read(
   dir: string,
   filename: string,
@@ -135,20 +133,14 @@ export async function _read(
   const text = data.toString("utf8");
   const off = offset && offset > 0 ? offset : undefined;
   const lim = limit && limit > 0 ? limit : undefined;
-  if (off === undefined && lim === undefined) {
-    // Backward-compatible default: return the whole file if it fits
-    // under the soft cap; otherwise return the first
-    // DEFAULT_READ_LINE_LIMIT lines and append a truncation note.
-    const lines = text.split("\n");
-    if (lines.length <= DEFAULT_READ_LINE_LIMIT) return text;
-    return (
-      lines.slice(0, DEFAULT_READ_LINE_LIMIT).join("\n") +
-      `\n... [truncated: showing 1-${DEFAULT_READ_LINE_LIMIT} of ${lines.length} lines; pass offset/limit to read more]`
-    );
-  }
+  // Default: return the whole file. Only paginate (and emit a
+  // truncation note) when the caller explicitly asks for it. A 0 (or
+  // unset) for both arguments means "no pagination".
+  if (off === undefined && lim === undefined) return text;
   const start = off ?? 1;
-  const count = lim ?? DEFAULT_READ_LINE_LIMIT;
   const lines = text.split("\n");
+  const remaining = lines.length - (start - 1);
+  const count = lim ?? remaining;
   const slice = lines.slice(start - 1, start - 1 + count);
   const trailing =
     start - 1 + count < lines.length

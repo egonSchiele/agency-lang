@@ -469,23 +469,3 @@ Type-check an Agency file on disk. The file is read from dir/filename, and relat
 **Throws:** `std::read`
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/agency.agency#L284))
-
-### toolGuidelines
-
-```ts
-toolGuidelines(tools: any[]): string
-```
-
-Collect every tool's `promptGuidelines` (set via `.withGuidelines(...)`) into a single prompt-ready block. Use this when assembling a system prompt to surface per-tool advice (e.g. "edit: prefer one call with multiple entries") to the LLM. Returns an empty string when no tool has guidelines, so it composes cleanly with `sysPrompt + toolGuidelines(tools)`.
-
-  @param tools - Array of tools (AgencyFunctions) to harvest guidelines from
-
-**Parameters:**
-
-| Name | Type | Default |
-|---|---|---|
-| tools | `any[]` |  |
-
-**Returns:** `string`
-
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/agency.agency#L304))

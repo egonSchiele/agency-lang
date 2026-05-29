@@ -3,7 +3,7 @@
     {
       "nodeName": "main",
       "input": "",
-      "expectedOutput": "[{\"file\":\"tests/agency/stdlib/grep-fixtures/one.txt\",\"line\":1},{\"file\":\"tests/agency/stdlib/grep-fixtures/one.txt\",\"line\":3},{\"file\":\"tests/agency/stdlib/grep-fixtures/two.txt\",\"line\":2}]",
+      "expectedOutput": "[{\"file\":\"one.txt\",\"line\":1},{\"file\":\"one.txt\",\"line\":3},{\"file\":\"two.txt\",\"line\":2}]",
       "evaluationCriteria": [
         {
           "type": "exact"

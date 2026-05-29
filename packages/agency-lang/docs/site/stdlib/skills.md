@@ -14,7 +14,7 @@ readSkills(dir: string)
 |---|---|---|
 | dir | `string` |  |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/skills.agency#L6))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/skills.agency#L8))
 
 ### describeSkill
 
@@ -36,7 +36,7 @@ Render a single line for the skills tool description given a filename
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/skills.agency#L11))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/skills.agency#L13))
 
 ### skillsDir
 
@@ -68,4 +68,4 @@ Build a skills tool for an LLM. Scans `dir` for Markdown files
 |---|---|---|
 | dir | `string` |  |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/skills.agency#L45))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/skills.agency#L47))

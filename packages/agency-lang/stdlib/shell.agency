@@ -107,7 +107,9 @@ export def ls(dir: string = ".", recursive: boolean = false, allowedPaths: strin
   """
   List entries in a directory. Each entry includes name, path, type ("file", "dir", "symlink", "other"), and size. Set recursive to true to walk subdirectories. Fails if the directory cannot be read (missing, not a directory, permission denied). Set allowedPaths to restrict which directories may be listed.
 
-  @param dir - The directory to list
+  Relative `dir` is resolved against the calling Agency module's directory (same policy as `read`/`write`/`glob`/`grep`), and returned `path` values are relative to `dir` — so results compose with `read(path, dir)` directly.
+
+  @param dir - The directory to list (relative paths resolve against the module directory)
   @param recursive - Whether to walk subdirectories
   @param allowedPaths - Only allow listing directories under these prefixes
   """
@@ -135,8 +137,10 @@ export def grep(
   """
   Search for a regex pattern in files under a directory. Returns matches with file path, line number, and matched line. Skips node_modules, .git, dist, build. Stops at maxResults. Fails if the pattern is not a valid regex or the directory cannot be read. Set allowedPaths to restrict which directories may be searched.
 
+  Relative `dir` is resolved against the calling Agency module's directory (same policy as `read`/`write`/`glob`/`ls`), and returned `file` values are relative to `dir` — so results compose with `read(file, dir)` directly.
+
   @param pattern - The regex pattern to search for
-  @param dir - The directory to search in
+  @param dir - The directory to search in (relative paths resolve against the module directory)
   @param flags - Regex flags
   @param maxResults - Maximum number of results to return
   @param allowedPaths - Only allow searching under these path prefixes
@@ -158,10 +162,12 @@ export def glob(
   allowedPaths: string[] = [],
 ): Result {
   """
-  Find files whose paths match a glob pattern (e.g. "src/**/*.ts"). Returns paths relative to the current working directory. Stops at maxResults. Fails if the pattern is not valid glob syntax or the directory cannot be read. Set allowedPaths to restrict which directories may be searched.
+  Find files whose paths match a glob pattern (e.g. "src/**/*.ts"). Stops at maxResults. Fails if the pattern is not valid glob syntax or the directory cannot be read. Set allowedPaths to restrict which directories may be searched.
+
+  Relative `dir` is resolved against the calling Agency module's directory (same policy as `read`/`write`/`ls`/`grep`), and returned paths are relative to `dir` — so results compose with `read(path, dir)` directly.
 
   @param pattern - The glob pattern to match
-  @param dir - The directory to search in
+  @param dir - The directory to search in (relative paths resolve against the module directory)
   @param maxResults - Maximum number of results to return
   @param allowedPaths - Only allow searching under these path prefixes
   """

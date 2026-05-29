@@ -1,6 +1,5 @@
 import { map } from "std::array"
 import { frontmatter } from "std::markdown"
-import { basename } from "std::path"
 import { glob } from "std::shell"
 
 import { _readSkill } from "agency-lang/stdlib-lib/skills.js"
@@ -58,8 +57,10 @@ export def skillsDir(dir: string) {
   let lines: string[] = []
   const pathsResult = glob("*.{md,markdown}", dir)
   if (pathsResult is success(paths)) {
-    lines = map(paths) as fullPath {
-      const filename = basename(fullPath)
+    lines = map(paths) as filename {
+      // `glob` now returns paths relative to `dir`, so `filename` is
+      // ready to hand straight to `read(filename, dir)` — no basename
+      // step needed.
       const fm = read(filename, dir) |> frontmatter
       return describeSkill(filename, fm)
     }

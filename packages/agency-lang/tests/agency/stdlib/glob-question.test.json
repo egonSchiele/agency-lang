@@ -3,7 +3,7 @@
     {
       "nodeName": "main",
       "input": "",
-      "expectedOutput": "[\"tests/agency/stdlib/glob-fixtures/a.md\"]",
+      "expectedOutput": "[\"a.md\"]",
       "evaluationCriteria": [
         {
           "type": "exact"

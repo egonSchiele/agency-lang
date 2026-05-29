@@ -5,7 +5,7 @@ def greet(name: string): string {
   Returns a greeting message for the given name ${prompt}.
   """
 
-  return interrupt foo::greet("Are you sure you want to greet ${name}?")
+  return "Hello, ${name}! Welcome to ${prompt}."
 }
 
 node main() {

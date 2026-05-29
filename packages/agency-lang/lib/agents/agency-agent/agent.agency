@@ -230,6 +230,12 @@ node main() {
      package managers). Prefer the dedicated file tools above for file
      operations; use `bash` for everything else. The user is asked to
      approve each command.
+  7. Whenever you show the user a code snippet in your reply, first
+     call `highlight(code)` and emit the returned string verbatim
+     instead of the raw source. The tool renders the snippet with
+     terminal colors so the user can read it more easily. Skip
+     highlighting for inline identifiers or one-token excerpts; use
+     it for any multi-line block.
 
   Keep replies brief. Show code, not commentary.
   """
@@ -249,12 +255,20 @@ node main() {
     let userMsg = input("What would you like to do? ")
     while (userMsg != "exit" && userMsg != "quit") {
       handle {
-        // Spread `workspace.tools` so a `setCwd` from the previous
-        // turn picks up here (the binding is refreshed each iteration).
+        // List workspace tools explicitly so we can PFA `printDiff: true`
+        // onto `edit` — every edit the LLM runs prints a colored diff
+        // to the console before / after the change, so the user can
+        // eyeball what actually got written.
         const reply = llm(userMsg, {
           tools: [
             setCwd,
-            ...workspace.tools,
+            workspace.read,
+            workspace.write,
+            workspace.edit.partial(printDiff: true),
+            workspace.ls,
+            workspace.glob,
+            workspace.grep,
+            workspace.bash,
             typecheck,
             docSkill,
             highlight.partial(language: "ts"),

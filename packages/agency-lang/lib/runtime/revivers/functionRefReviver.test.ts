@@ -377,3 +377,70 @@ describe("FunctionRefReviver with bound functions", () => {
     functionRefReviver.registry = null;
   });
 });
+
+describe("FunctionRefReviver with withGuidelines", () => {
+  it("round-trips prompt guidelines on a function with no original toolDefinition", () => {
+    const registry: Record<string, AgencyFunction> = {};
+    const fn = AgencyFunction.create({
+      name: "noTool",
+      module: "test",
+      fn: (a: number) => a,
+      params: [
+        { name: "a", hasDefault: false, defaultValue: undefined, variadic: false },
+      ],
+      toolDefinition: null,
+    }, registry);
+    const guided = fn.withGuidelines(["use carefully", "cite sources"]);
+    functionRefReviver.registry = registry;
+
+    const json = JSON.stringify({ tool: guided }, nativeTypeReplacer);
+    const restored = JSON.parse(json, nativeTypeReviver);
+
+    expect(restored.tool.toolDefinition).not.toBeNull();
+    expect(restored.tool.toolDefinition.promptGuidelines).toEqual([
+      "use carefully",
+      "cite sources",
+    ]);
+
+    functionRefReviver.registry = null;
+  });
+
+  it("round-trips guidelines together with .describe()", () => {
+    const registry: Record<string, AgencyFunction> = {};
+    const fn = AgencyFunction.create({
+      name: "edit",
+      module: "test",
+      fn: (a: string) => a,
+      params: [
+        { name: "a", hasDefault: false, defaultValue: undefined, variadic: false },
+      ],
+      toolDefinition: null,
+    }, registry);
+    const composed = fn.describe("Edit a thing").withGuidelines(["prefer batching"]);
+    functionRefReviver.registry = registry;
+
+    const json = JSON.stringify({ tool: composed }, nativeTypeReplacer);
+    const restored = JSON.parse(json, nativeTypeReviver);
+
+    expect(restored.tool.toolDefinition.description).toBe("Edit a thing");
+    expect(restored.tool.toolDefinition.promptGuidelines).toEqual(["prefer batching"]);
+
+    functionRefReviver.registry = null;
+  });
+
+  it("does not store an empty promptGuidelines array on the wire", () => {
+    const registry: Record<string, AgencyFunction> = {};
+    const fn = AgencyFunction.create({
+      name: "bare",
+      module: "test",
+      fn: (a: number) => a,
+      params: [
+        { name: "a", hasDefault: false, defaultValue: undefined, variadic: false },
+      ],
+      toolDefinition: { name: "bare", description: "desc", schema: {}, promptGuidelines: [] },
+    }, registry);
+
+    const serialized = new FunctionRefReviver().serialize(fn);
+    expect(serialized.promptGuidelines).toBeUndefined();
+  });
+});

@@ -326,3 +326,30 @@ export function _filterImports(
   const filtered = ast.nodes.length !== originalCount;
   return { source: generateAgency(ast), filtered };
 }
+
+
+/**
+ * Walk a tools array, harvest each tool's `promptGuidelines`, and
+ * format them as a prompt-ready block keyed by tool name. Non-Agency
+ * values and tools without guidelines are skipped silently so callers
+ * can pass a mixed `tools` array straight in.
+ *
+ * The output mirrors Pi's per-tool guideline block, e.g.:
+ *
+ *   Tool guidelines:
+ *   - edit: prefer one call with multiple entries over several calls
+ *   - write: only use for new files; otherwise edit
+ */
+export function _toolGuidelines(tools: unknown[]): string {
+  const lines: string[] = [];
+  for (const t of tools) {
+    if (!AgencyFunction.isAgencyFunction(t)) continue;
+    const g = t.toolDefinition?.promptGuidelines;
+    if (!g || g.length === 0) continue;
+    for (const line of g) {
+      lines.push(`- ${t.name}: ${line}`);
+    }
+  }
+  if (lines.length === 0) return "";
+  return "\n\nTool guidelines:\n" + lines.join("\n");
+}

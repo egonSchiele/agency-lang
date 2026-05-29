@@ -1,4 +1,4 @@
-import { _compile, _compileFile, _typecheck, _typecheckFile, _parseAST, _writeAST, _format, _formatFile, _walkAST, _getNodesOfType, _filterImports } from "agency-lang/stdlib-lib/agency.js"
+import { _compile, _compileFile, _typecheck, _typecheckFile, _parseAST, _writeAST, _format, _formatFile, _walkAST, _getNodesOfType, _filterImports, _toolGuidelines } from "agency-lang/stdlib-lib/agency.js"
 
 type CompiledProgram = {
   moduleId: string
@@ -299,4 +299,13 @@ export def typecheckFile(dir: string, filename: string): Result {
     filename: filename
   })
   return try _typecheckFile(dir, filename)
+}
+
+export safe def toolGuidelines(tools: any[]): string {
+  """
+  Collect every tool's `promptGuidelines` (set via `.withGuidelines(...)`) into a single prompt-ready block. Use this when assembling a system prompt to surface per-tool advice (e.g. "edit: prefer one call with multiple entries") to the LLM. Returns an empty string when no tool has guidelines, so it composes cleanly with `sysPrompt + toolGuidelines(tools)`.
+
+  @param tools - Array of tools (AgencyFunctions) to harvest guidelines from
+  """
+  return _toolGuidelines(tools)
 }

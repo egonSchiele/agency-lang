@@ -4,6 +4,14 @@ import type { FuncParam, ToolDefinition } from "../agencyFunction.js";
 
 type FunctionRefRegistry = Record<string, AgencyFunction>;
 
+function arraysEqual(a: string[], b: string[]): boolean {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    if (a[i] !== b[i]) return false;
+  }
+  return true;
+}
+
 export class FunctionRefReviver implements BaseReviver<AgencyFunction> {
   registry: FunctionRefRegistry | null = null;
 
@@ -28,6 +36,10 @@ export class FunctionRefReviver implements BaseReviver<AgencyFunction> {
     // Serialize full tool definition (may have reduced schema/description)
     if (value.toolDefinition) {
       result.toolDescription = value.toolDefinition.description;
+      if (value.toolDefinition.promptGuidelines &&
+          value.toolDefinition.promptGuidelines.length > 0) {
+        result.promptGuidelines = value.toolDefinition.promptGuidelines;
+      }
     }
     if (value.isPreapproved) {
       result.isPreapproved = true;
@@ -86,6 +98,18 @@ export class FunctionRefReviver implements BaseReviver<AgencyFunction> {
     // Restore preapproved state
     if (value.isPreapproved) {
       result = result.preapprove();
+    }
+
+    // Restore prompt guidelines if they were customized via
+    // `.withGuidelines(...)`. Compare against the revived target's
+    // current guidelines so we don't redundantly rebuild the tool
+    // definition when nothing changed.
+    if (Array.isArray(value.promptGuidelines)) {
+      const current = result.toolDefinition?.promptGuidelines;
+      const incoming = value.promptGuidelines as string[];
+      if (!current || !arraysEqual(current, incoming)) {
+        result = result.withGuidelines(incoming);
+      }
     }
 
     return result;

@@ -50,10 +50,31 @@ describe("expandPath", () => {
     expect(expandPath("")).toBe("");
   });
 
-  it("throws a clear error when os.homedir returns falsy", () => {
+  it("returns undefined/null unchanged (sentinel passthrough)", () => {
+    // Some call sites guard before invoking; these passthroughs exist
+    // so a sentinel value reaches the next layer rather than crashing
+    // inside expandPath itself.
+    expect(expandPath(undefined as unknown as string)).toBe(undefined);
+    expect(expandPath(null as unknown as string)).toBe(null);
+  });
+
+  it("throws a clear error when os.homedir returns falsy (~/foo form)", () => {
     const spy = vi.spyOn(os, "homedir").mockReturnValue("");
     try {
       expect(() => expandPath("~/foo")).toThrow(/HOME/i);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it("throws the same error for `~` alone when homedir is missing", () => {
+    // Guards against a regression where someone reorders the function
+    // and the `if (p === "~") return home;` branch runs before the
+    // empty-home check — in which case `expandPath("~")` would
+    // silently return `""` instead of throwing.
+    const spy = vi.spyOn(os, "homedir").mockReturnValue("");
+    try {
+      expect(() => expandPath("~")).toThrow(/HOME/i);
     } finally {
       spy.mockRestore();
     }

@@ -1,10 +1,13 @@
 import { stat, exists } from "std::shell"
 
-// Probes home-directory-relative paths through every migrated entry
-// point. The test asserts that each call *runs* against the expected
-// expanded path; we use `stat`/`exists` on `~` (which is guaranteed
-// to exist for any user) so the test is side-effect-free and never
-// writes under the user's home.
+// Probes home-directory-relative paths through `stat`/`exists`. We
+// use `~` (which is guaranteed to exist for any user) so the test is
+// side-effect-free and never writes under the user's home.
+//
+// `exec`/`bash` cwd-expansion are covered in unit tests
+// (lib/stdlib/shell.test.ts) instead of here — the std::exec
+// interrupt fires before the spawn, so they can't run unattended
+// from a fixture without a handler block.
 node main(): boolean {
   const homeStat = stat(`~`, ``)
   if (!homeStat.exists) {

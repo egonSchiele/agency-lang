@@ -127,4 +127,13 @@ describe("assertContained ~ expansion", () => {
       assertContained("/tmp/some-other-thing", ["~/proj"]),
     ).rejects.toThrow(/not under/);
   });
+
+  it("accepts a ~-prefixed target against an absolute allowlist (target gets expanded too)", async () => {
+    // Mirror image of the test above — exercises that expansion is
+    // applied to the *target* path, not only to allowlist entries.
+    const allowedAbs = path.join(os.homedir(), "proj");
+    await expect(
+      assertContained("~/proj/file.txt", [allowedAbs]),
+    ).resolves.toBeUndefined();
+  });
 });

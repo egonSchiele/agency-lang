@@ -3,6 +3,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { resolveDir } from "./resolveDir.js";
+import { agencyStore } from "../runtime/asyncContext.js";
 
 describe("resolveDir", () => {
   let tmpRoot: string;
@@ -62,5 +63,30 @@ describe("resolveDir", () => {
     await expect(
       resolveDir(path.join(tmpRoot, "outside"), [allowed]),
     ).rejects.toThrow(/not under/);
+  });
+
+  it("anchors relative paths to moduleDir from an active ALS frame", async () => {
+    // The default base ("moduleDir") branch is normally exercised via
+    // the ALS-seeded moduleDir, not the process.cwd() fallback. This
+    // test installs an explicit ALS frame to prove `resolveDir` reads
+    // from there.
+    const fakeModuleDir = fs.realpathSync(tmpRoot);
+    const result = await agencyStore.run(
+      {
+        ctx: {} as any,
+        stack: {} as any,
+        threads: {} as any,
+        moduleDir: fakeModuleDir,
+      },
+      () => resolveDir("./prompts"),
+    );
+    expect(result).toBe(path.join(fakeModuleDir, "prompts"));
+  });
+
+  it("validates tilde-in-target against a tilde-in-allowlist (cross product)", async () => {
+    // Exercises that expansion is applied symmetrically: both target
+    // and allowlist entries reach `assertContained` already expanded.
+    const result = await resolveDir("~/sandbox/work", ["~/sandbox"]);
+    expect(result).toBe(path.join(os.homedir(), "sandbox", "work"));
   });
 });

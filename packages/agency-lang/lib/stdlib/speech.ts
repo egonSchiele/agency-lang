@@ -9,7 +9,7 @@ import { abortableExec } from "./abortable.js";
 import { runHttp } from "./http.js";
 import { AgencyCancelledError } from "../runtime/errors.js";
 import { getRuntimeContext } from "../runtime/asyncContext.js";
-import { assertContained } from "./assertContained.js";
+import { resolveDir } from "./resolveDir.js";
 import type { RuntimeContext } from "../runtime/state/context.js";
 import type { StateStack } from "../runtime/state/stateStack.js";
 import type { ThreadStore } from "../runtime/state/threadStore.js";
@@ -43,8 +43,9 @@ async function speakImpl(
         args.push("-r", String(rate));
       }
       if (outputFile !== "") {
-        const outPath = path.resolve(process.cwd(), outputFile);
-        await assertContained(outPath, allowedPaths ?? []);
+        // `resolveDir` (cwd-anchored) handles `~` expansion + allow-list
+        // enforcement uniformly with the fs.ts call sites.
+        const outPath = await resolveDir(outputFile, allowedPaths ?? [], "cwd");
         args.push("-o", outPath);
       }
       await abortableExec("say", args, ctx.getAbortSignal(stack));
@@ -108,11 +109,8 @@ async function recordImpl(
   }
 
   const outPath = outputFile
-    ? path.resolve(process.cwd(), outputFile)
+    ? await resolveDir(outputFile, allowedPaths ?? [], "cwd")
     : path.join(os.tmpdir(), `agency-rec-${nanoid()}.wav`);
-  if (outputFile) {
-    await assertContained(outPath, allowedPaths ?? []);
-  }
 
   const args = [outPath];
   if (silenceTimeout > 0) {
@@ -231,8 +229,7 @@ async function transcribeImpl(
     );
   }
 
-  const resolvedPath = path.resolve(process.cwd(), filepath);
-  await assertContained(resolvedPath, allowedPaths ?? []);
+  const resolvedPath = await resolveDir(filepath, allowedPaths ?? [], "cwd");
   const fileData = await readFile(resolvedPath);
   const filename = path.basename(resolvedPath);
 

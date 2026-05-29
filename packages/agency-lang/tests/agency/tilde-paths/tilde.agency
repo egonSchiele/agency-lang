@@ -10,7 +10,10 @@ node main(): boolean {
   if (!homeStat.exists) {
     return false
   }
-  if (homeStat.type != `dir`) {
+  // _stat uses lstat, so if $HOME itself is a symlink the type will
+  // be "symlink" rather than "dir". Accept either — this test cares
+  // about ~ expansion, not the user's filesystem layout.
+  if (homeStat.type != `dir` && homeStat.type != `symlink`) {
     return false
   }
   // exists() with a `~`-prefixed filename and dir="" should expand

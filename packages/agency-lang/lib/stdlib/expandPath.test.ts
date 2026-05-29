@@ -8,8 +8,20 @@ describe("expandPath", () => {
     expect(expandPath("~")).toBe(os.homedir());
   });
 
+  it("expands ~/ (trailing slash only) to os.homedir()", () => {
+    // Falls through to path.join(home, "") which normalizes to home.
+    expect(expandPath("~/")).toBe(os.homedir());
+  });
+
   it("expands ~/foo to homedir/foo", () => {
     expect(expandPath("~/foo")).toBe(path.join(os.homedir(), "foo"));
+  });
+
+  it("normalizes ~//foo (double separator) to homedir/foo", () => {
+    // Guards against a regression if anyone swaps path.join for
+    // path.resolve — path.resolve would treat /foo as absolute and
+    // drop the home prefix entirely.
+    expect(expandPath("~//foo")).toBe(path.join(os.homedir(), "foo"));
   });
 
   it("expands ~/nested/path", () => {

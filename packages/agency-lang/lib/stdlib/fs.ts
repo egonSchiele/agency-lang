@@ -5,7 +5,6 @@ import process from "process";
 import diff_match_patch from "diff-match-patch";
 import { resolvePath } from "./resolvePath.js";
 import { resolveDir } from "./resolveDir.js";
-import { assertContained } from "./assertContained.js";
 import { expandPath } from "./expandPath.js";
 import { formatDiff } from "../utils/diff.js";
 

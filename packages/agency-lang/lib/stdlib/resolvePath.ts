@@ -1,7 +1,6 @@
 import fs from "fs/promises";
 import path from "path";
 import { resolveDir } from "./resolveDir.js";
-import { expandPath } from "./expandPath.js";
 
 /**
  * Resolve a filename relative to a directory with security checks.
@@ -27,7 +26,7 @@ export async function resolvePath(dir: string, filename: string): Promise<string
     throw new Error(`dir must not be empty. Use "." for the current directory.`);
   }
   if (path.isAbsolute(filename) || filename.startsWith("~")) {
-    throw new Error(`Filename must not be absolute when dir is specified (got "${filename}").`);
+    throw new Error(`Filename must not be absolute or start with "~" when dir is specified (got "${filename}").`);
   }
   // Delegate the dir step to the shared `resolveDir` so `~` expansion
   // and any future path-policy rules apply uniformly. We pass `[]` for

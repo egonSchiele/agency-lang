@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { mkdtempSync, rmSync, writeFileSync, readFileSync, existsSync } from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
-import { _write } from "./builtins.js";
+import { _write, _read } from "./builtins.js";
 
 describe("_write mode parameter", () => {
   let dir: string;
@@ -59,5 +59,48 @@ describe("_write mode parameter", () => {
     await expect(
       _write(dir, target, "x", "bogus" as "overwrite"),
     ).rejects.toThrow(/Invalid mode 'bogus'/);
+  });
+});
+
+describe("_read offset/limit", () => {
+  let dir: string;
+
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), "agency-read-"));
+  });
+
+  afterEach(() => {
+    try { rmSync(dir, { recursive: true }); } catch (_) { /* best effort */ }
+  });
+
+  it("returns the whole file when no offset/limit and under cap", async () => {
+    const lines = Array.from({ length: 50 }, (_, i) => `line ${i + 1}`).join("\n");
+    writeFileSync(join(dir, "small.txt"), lines, "utf-8");
+    const out = await _read(dir, "small.txt");
+    expect(out).toBe(lines);
+  });
+
+  it("paginates with offset and limit (1-indexed)", async () => {
+    const lines = Array.from({ length: 50 }, (_, i) => `line ${i + 1}`);
+    writeFileSync(join(dir, "small.txt"), lines.join("\n"), "utf-8");
+    const out = await _read(dir, "small.txt", 10, 20);
+    // Lines 10..29 (1-indexed inclusive)
+    const expectedSlice = lines.slice(9, 29).join("\n");
+    expect(out.startsWith(expectedSlice)).toBe(true);
+    expect(out).toContain("[truncated: showing 10-29 of 50 lines]");
+  });
+
+  it("appends a truncation note when file exceeds the soft cap", async () => {
+    const big = Array.from({ length: 3000 }, (_, i) => `L${i + 1}`).join("\n");
+    writeFileSync(join(dir, "big.txt"), big, "utf-8");
+    const out = await _read(dir, "big.txt");
+    expect(out).toContain("[truncated: showing 1-2000 of 3000 lines");
+  });
+
+  it("treats 0 offset/limit as unset", async () => {
+    const lines = Array.from({ length: 10 }, (_, i) => `x${i}`).join("\n");
+    writeFileSync(join(dir, "tiny.txt"), lines, "utf-8");
+    const out = await _read(dir, "tiny.txt", 0, 0);
+    expect(out).toBe(lines);
   });
 });

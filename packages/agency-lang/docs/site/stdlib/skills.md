@@ -2,30 +2,48 @@
 
 ## Functions
 
-### readSkill
+### readSkills
 
 ```ts
-readSkill(filepath: string): string
+readSkills(dir: string)
 ```
-
-Read a skill file colocated with this Agency module. `filepath` is
-  resolved relative to the directory of the compiled `.js` (by
-  convention, the same directory as the source `.agency` file). Use
-  this to ship reusable prompt-shaped "skills" alongside an agent:
-
-      import { readSkill } from "std::skills"
-
-      systemPrompt = readSkill("skills/debug-loop.md") with approve
-
-  Falls back to the current working directory when called from outside
-  an Agency execution frame.
 
 **Parameters:**
 
 | Name | Type | Default |
 |---|---|---|
-| filepath | `string` |  |
+| dir | `string` |  |
 
-**Returns:** `string`
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/skills.agency#L4))
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/skills.agency#L3))
+### skillsDir
+
+```ts
+skillsDir(dir: string)
+```
+
+Build a skills tool for an LLM. Scans `dir` for Markdown files
+  (`.md` and `.markdown`), reads each one's frontmatter title and
+  description, and returns the `read` function partially applied with
+  `dir: dir`. The returned tool's description lists every available
+  skill so the LLM knows which filename to pass.
+
+  @param dir - Directory containing skill Markdown files
+
+* Build a tool that lets an LLM read any Markdown skill file in `dir`.
+ *
+ * `skillsDir` scans `dir` for `.md` / `.markdown` files, parses each
+ * file's frontmatter (looking for `title` and `description`), and
+ * returns `read` partially applied with `dir: dir` and a tool
+ * description that lists each skill's filename, title, and description.
+ *
+ * The LLM only needs to supply a `filename` argument; the description
+ * tells it which filenames are available and what each one contains.
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| dir | `string` |  |
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/skills.agency#L20))

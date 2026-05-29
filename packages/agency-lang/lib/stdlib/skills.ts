@@ -15,3 +15,35 @@ export function _readSkill(filepath: string): string {
   const fullPath = path.resolve(dirname, filepath);
   return fs.readFileSync(fullPath, "utf8");
 }
+
+export type SkillFile = {
+  filename: string;
+  content: string;
+};
+
+/**
+ * List every Markdown file (`*.md` / `*.markdown`) in `dir` (non-recursive)
+ * and read it into memory. Used by `skillsDir` to build a tool description
+ * out of each file's frontmatter without going through the interrupt-
+ * throwing `glob` / `read` wrappers, since `skillsDir` is setup code that
+ * runs before any handlers are in scope.
+ */
+export function _listMarkdownFiles(dir: string): SkillFile[] {
+  const root = path.resolve(process.cwd(), dir);
+  const entries = fs.readdirSync(root);
+  const out: SkillFile[] = [];
+  for (const name of entries) {
+    if (!name.endsWith(".md") && !name.endsWith(".markdown")) continue;
+    const full = path.join(root, name);
+    let st: fs.Stats;
+    try {
+      st = fs.statSync(full);
+    } catch {
+      continue;
+    }
+    if (!st.isFile()) continue;
+    out.push({ filename: name, content: fs.readFileSync(full, "utf8") });
+  }
+  out.sort((a, b) => a.filename.localeCompare(b.filename));
+  return out;
+}

@@ -1,18 +1,63 @@
-import { _readSkill } from "agency-lang/stdlib-lib/skills.js"
+import { _readSkill, _listMarkdownFiles } from "agency-lang/stdlib-lib/skills.js"
+import { parse } from "std::markdown"
 
-export safe def readSkill(filepath: string): string {
+export safe def readSkills(dir: string) {
+  const description = "todo"
+  return read.partial(dir: dir).describe(description)
+}
+
+/**
+ * Build a tool that lets an LLM read any Markdown skill file in `dir`.
+ *
+ * `skillsDir` scans `dir` for `.md` / `.markdown` files, parses each
+ * file's frontmatter (looking for `title` and `description`), and
+ * returns `read` partially applied with `dir: dir` and a tool
+ * description that lists each skill's filename, title, and description.
+ *
+ * The LLM only needs to supply a `filename` argument; the description
+ * tells it which filenames are available and what each one contains.
+ */
+export safe def skillsDir(dir: string) {
   """
-  Read a skill file colocated with this Agency module. `filepath` is
-  resolved relative to the directory of the compiled `.js` (by
-  convention, the same directory as the source `.agency` file). Use
-  this to ship reusable prompt-shaped "skills" alongside an agent:
+  Build a skills tool for an LLM. Scans `dir` for Markdown files
+  (`.md` and `.markdown`), reads each one's frontmatter title and
+  description, and returns the `read` function partially applied with
+  `dir: dir`. The returned tool's description lists every available
+  skill so the LLM knows which filename to pass.
 
-      import { readSkill } from "std::skills"
-
-      systemPrompt = readSkill("skills/debug-loop.md") with approve
-
-  Falls back to the current working directory when called from outside
-  an Agency execution frame.
+  @param dir - Directory containing skill Markdown files
   """
-  return _readSkill(filepath)
+  const files = _listMarkdownFiles(dir)
+
+  let description = "Read a skill file from the skills directory '${dir}'. Pass `filename` to read a specific skill. Available skills:\n"
+
+  for (file in files) {
+    const result = parse(file.content)
+    let title = ""
+    let desc = ""
+    if (result.success) {
+      for (block in result.blocks) {
+        if (block.type == "frontmatter") {
+          const data = block.data
+          if (data.title != null) {
+            title = data.title
+          }
+          if (data.description != null) {
+            desc = data.description
+          }
+        }
+      }
+    }
+    if (title == "" && desc == "") {
+      description = description + "\n- ${file.filename}"
+    } else if (desc == "") {
+      description = description + "\n- ${file.filename}: ${title}"
+    } else if (title == "") {
+      description = description + "\n- ${file.filename}: ${desc}"
+    } else {
+      description = description + "\n- ${file.filename}: ${title} — ${desc}"
+    }
+  }
+
+  return read.partial(dir: dir).describe(description)
 }

@@ -2,6 +2,7 @@ import { typecheck } from "std::agency"
 import { today } from "std::date"
 import { Workspace, openDir } from "std::fs"
 import { Policy, checkPolicy } from "std::policy"
+import { exists } from "std::shell"
 import { skillsDir } from "std::skills"
 import { highlight } from "std::syntax"
 import { cwd } from "std::system"
@@ -65,6 +66,24 @@ let policy: Policy = {}
 // turn — `setCwd` is meant as an opening move, not as a mid-turn
 // switch.
 let workspace: Workspace = openDir(cwd())
+
+def loadAgentsMd(dir: string): string {
+  """
+  Read `AGENTS.md` from `dir` if it exists and return it wrapped in a
+  <project_context> block ready to splice into a system prompt. Returns
+  an empty string if there is no AGENTS.md or it cannot be read. The
+  read is auto-approved — the user implicitly opted in to scanning the
+  project directory by running the agent there.
+  """
+  if (!exists("${dir}/AGENTS.md")) {
+    return ""
+  }
+  const result = read("AGENTS.md", dir) with approve
+  if (isFailure(result)) {
+    return ""
+  }
+  return "\n\n<project_context>\n${result.value}\n</project_context>"
+}
 
 def setCwd(dir: string): string {
   """
@@ -216,8 +235,13 @@ node main() {
   // with the first system message.
   const env = "\n\nCurrent date: ${today()}\nCurrent working directory: ${cwd()}"
 
+  // Project context: if the user keeps an AGENTS.md at the workspace
+  // root (Anthropic / Pi / Aider all read it), inline it so the LLM
+  // automatically follows the project's conventions.
+  const projectContext = loadAgentsMd(cwd()) with approve
+
   thread {
-    systemMessage(sysPrompt + env)
+    systemMessage(sysPrompt + env + projectContext)
     let userMsg = input("What would you like to do? ")
     while (userMsg != "exit" && userMsg != "quit") {
       handle {

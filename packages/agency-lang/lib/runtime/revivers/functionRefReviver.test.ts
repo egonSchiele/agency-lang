@@ -304,6 +304,56 @@ describe("FunctionRefReviver with bound functions", () => {
     functionRefReviver.registry = null;
   });
 
+  it("round-trips .describe() on a function with no original toolDefinition", () => {
+    const registry: Record<string, AgencyFunction> = {};
+    const fn = AgencyFunction.create({
+      name: "noTool",
+      module: "test",
+      fn: (a: number) => a,
+      params: [
+        { name: "a", hasDefault: false, defaultValue: undefined, variadic: false },
+      ],
+      toolDefinition: null,
+    }, registry);
+    const described = fn.describe("Synthesized description");
+    functionRefReviver.registry = registry;
+
+    const json = JSON.stringify({ tool: described }, nativeTypeReplacer);
+    const restored = JSON.parse(json, nativeTypeReviver);
+
+    expect(restored.tool.toolDefinition).not.toBeNull();
+    expect(restored.tool.toolDefinition.description).toBe("Synthesized description");
+    expect(restored.tool.toolDefinition.name).toBe("noTool");
+
+    functionRefReviver.registry = null;
+  });
+
+  it("round-trips .partial().describe() on a function with no original toolDefinition", () => {
+    const registry: Record<string, AgencyFunction> = {};
+    const fn = AgencyFunction.create({
+      name: "noTool",
+      module: "test",
+      fn: (a: number, b: number) => a + b,
+      params: [
+        { name: "a", hasDefault: false, defaultValue: undefined, variadic: false },
+        { name: "b", hasDefault: false, defaultValue: undefined, variadic: false },
+      ],
+      toolDefinition: null,
+    }, registry);
+    const composed = fn.partial({ a: 5 }).describe("Partial + describe");
+    functionRefReviver.registry = registry;
+
+    const json = JSON.stringify({ tool: composed }, nativeTypeReplacer);
+    const restored = JSON.parse(json, nativeTypeReviver);
+
+    expect(restored.tool.toolDefinition).not.toBeNull();
+    expect(restored.tool.toolDefinition.description).toBe("Partial + describe");
+    expect(restored.tool.getUnboundParams()).toHaveLength(1);
+    expect(restored.tool.getUnboundParams()[0].name).toBe("b");
+
+    functionRefReviver.registry = null;
+  });
+
   it("revived bound function invokes correctly", async () => {
     const registry: Record<string, AgencyFunction> = {};
     const fn = AgencyFunction.create({

@@ -110,11 +110,22 @@ if (__process.env.AGENCY_LLM_MOCKS) {
   );
 }
 
-export const __toolRegistry: Record<string, any> = {};
+// Share a single registry object across every compiled module. With
+// composite "module:name" keys, all modules' helpers — plus
+// runtime-created blocks registered by `AgencyFunction.create` while
+// a function is executing — stay reachable from `FunctionRefReviver`
+// no matter which module touched the registry last.
+export const __toolRegistry: Record<string, any> = (__functionRefReviver.registry ??= {} as any);
 
-function __registerTool(value: unknown, name?: string) {
+function __registerTool(value: unknown, _aliasName?: string) {
+  // Composite "module:name" key keyed off the function's *own*
+  // identity, not the importing module's local alias — so different
+  // modules that import the same function don't shadow each other in
+  // the shared global registry that `FunctionRefReviver` reads from.
+  // `_aliasName` is kept in the signature for backwards compatibility
+  // with already-compiled callers that pass it.
   if (__AgencyFunction.isAgencyFunction(value)) {
-    __toolRegistry[name ?? value.name] = value;
+    __toolRegistry[`${value.module}:${value.name}`] = value;
   }
 }
 
@@ -131,7 +142,7 @@ function setLLMClient(client: LLMClient) {
 function registerTools(tools: any[]) {
   for (const tool of tools) {
     if (__AgencyFunction.isAgencyFunction(tool)) {
-      __toolRegistry[tool.name] = tool;
+      __toolRegistry[`${tool.module}:${tool.name}`] = tool;
     }
   }
 }

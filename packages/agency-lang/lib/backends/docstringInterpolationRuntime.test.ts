@@ -64,7 +64,9 @@ describe("doc string interpolation — runtime resolution", () => {
     const mod = await import(pathToFileURL(jsFile).href);
     const toolRegistry = mod.__toolRegistry;
     expect(toolRegistry).toBeDefined();
-    const tool = toolRegistry["versionedGreet"];
+    const tool = Object.values(toolRegistry as Record<string, any>).find(
+      (t) => t?.name === "versionedGreet",
+    );
     expect(tool).toBeDefined();
     expect(tool.toolDefinition.description).toBe(
       "Greets someone. Tool version: 2.0.",

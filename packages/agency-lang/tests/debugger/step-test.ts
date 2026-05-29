@@ -22,9 +22,6 @@ import {
   head, tail, empty,
   success, failure, isSuccess, isFailure, __pipeBind, __tryCall, __catchResult,
   Schema, __validateType, __validateChain, __validateChainRecursive,
-  readSkill as _readSkillRaw,
-  readSkillTool as __readSkillTool,
-  readSkillToolParams as __readSkillToolParams,
   AgencyFunction as __AgencyFunction, UNSET as __UNSET,
   __call, __callMethod, __threads, __stateStack, getRuntimeContext, agencyStore,
   functionRefReviver as __functionRefReviver,
@@ -65,11 +62,6 @@ const __globalCtx = new RuntimeContext({
 });
 const graph = __globalCtx.graph;
 
-// Path-dependent builtin wrappers
-export function readSkill({filepath}: {filepath: string}): string {
-  return _readSkillRaw({ filepath, dirname: __dirname });
-}
-
 // Handler result builtins and interrupt response constructors (unified types)
 export function approve(value?: any) { return { type: "approve" as const, value }; }
 export function reject(value?: any) { return { type: "reject" as const, value }; }
@@ -77,8 +69,8 @@ function propagate() { return { type: "propagate" as const }; }
 
 // Interrupt and rewind re-exports bound to this module's context
 export { interrupt, isInterrupt, hasInterrupts, isDebugger };
-export const respondToInterrupts = (interrupts: Interrupt[], responses: InterruptResponse[], opts?: { overrides?: Record<string, unknown>; metadata?: Record<string, any> }) => _respondToInterrupts({ ctx: __globalCtx, interrupts, responses, overrides: opts?.overrides, metadata: opts?.metadata, registerTopLevelCallbacks: __registerTopLevelCallbacks });
-export const rewindFrom = (checkpoint: Checkpoint, overrides: Record<string, unknown>, opts?: { metadata?: Record<string, any> }) => _rewindFrom({ ctx: __globalCtx, checkpoint, overrides, metadata: opts?.metadata, registerTopLevelCallbacks: __registerTopLevelCallbacks });
+export const respondToInterrupts = (interrupts: Interrupt[], responses: InterruptResponse[], opts?: { overrides?: Record<string, unknown>; metadata?: Record<string, any> }) => _respondToInterrupts({ ctx: __globalCtx, interrupts, responses, overrides: opts?.overrides, metadata: opts?.metadata, registerTopLevelCallbacks: __registerTopLevelCallbacks, moduleDir: __dirname });
+export const rewindFrom = (checkpoint: Checkpoint, overrides: Record<string, unknown>, opts?: { metadata?: Record<string, any> }) => _rewindFrom({ ctx: __globalCtx, checkpoint, overrides, metadata: opts?.metadata, registerTopLevelCallbacks: __registerTopLevelCallbacks, moduleDir: __dirname });
 
 export const __setDebugger = (dbg: any) => { __globalCtx.debuggerState = dbg; };
 // Reconfigure the trace file path at runtime. Mutates the module-level
@@ -105,11 +97,22 @@ if (__process.env.AGENCY_LLM_MOCKS) {
   );
 }
 
-export const __toolRegistry: Record<string, any> = {};
+// Share a single registry object across every compiled module. With
+// composite "module:name" keys, all modules' helpers — plus
+// runtime-created blocks registered by `AgencyFunction.create` while
+// a function is executing — stay reachable from `FunctionRefReviver`
+// no matter which module touched the registry last.
+export const __toolRegistry: Record<string, any> = (__functionRefReviver.registry ??= {} as any);
 
-function __registerTool(value: unknown, name?: string) {
+function __registerTool(value: unknown, _aliasName?: string) {
+  // Composite "module:name" key keyed off the function's *own*
+  // identity, not the importing module's local alias — so different
+  // modules that import the same function don't shadow each other in
+  // the shared global registry that `FunctionRefReviver` reads from.
+  // `_aliasName` is kept in the signature for backwards compatibility
+  // with already-compiled callers that pass it.
   if (__AgencyFunction.isAgencyFunction(value)) {
-    __toolRegistry[name ?? value.name] = value;
+    __toolRegistry[`${value.module}:${value.name}`] = value;
   }
 }
 
@@ -126,7 +129,7 @@ function setLLMClient(client: LLMClient) {
 function registerTools(tools: any[]) {
   for (const tool of tools) {
     if (__AgencyFunction.isAgencyFunction(tool)) {
-      __toolRegistry[tool.name] = tool;
+      __toolRegistry[`${tool.module}:${tool.name}`] = tool;
     }
   }
 }
@@ -154,13 +157,6 @@ async function __initializeGlobals(__ctx) {
 async function __registerTopLevelCallbacks(__ctx) {
   __ctx.topLevelCallbacks = [];
 }
-__toolRegistry["readSkill"] = __AgencyFunction.create({
-  name: "readSkill",
-  module: "tests/debugger/step-test.agency",
-  fn: readSkill,
-  params: __readSkillToolParams.map(p => ({ name: p, hasDefault: false, defaultValue: undefined, variadic: false })),
-  toolDefinition: __readSkillTool,
-}, __toolRegistry);
 __functionRefReviver.registry = __toolRegistry;
 
 graph.node("main", async (__state: GraphState) => {
@@ -176,6 +172,7 @@ let __functionCompleted = false;
   const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "tests/debugger/step-test.agency", scopeName: "main", threads: __setupData.threads });
   try {
     await agencyStore.run({
+      ...getRuntimeContext(),
       ctx: __ctx,
       stack: __ctx.stateStack,
       threads: __setupData.threads
@@ -242,7 +239,8 @@ export async function main({ messages, callbacks }: { messages?: any; callbacks?
     messages: messages,
     callbacks: callbacks,
     initializeGlobals: __initializeGlobals,
-    registerTopLevelCallbacks: __registerTopLevelCallbacks
+    registerTopLevelCallbacks: __registerTopLevelCallbacks,
+    moduleDir: __dirname
   });
 }
 export const __mainNodeParams = [];

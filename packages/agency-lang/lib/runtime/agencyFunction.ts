@@ -342,7 +342,10 @@ export class AgencyFunction {
     registry: Record<string, AgencyFunction>,
   ): AgencyFunction {
     const fn = new AgencyFunction(opts);
-    registry[opts.name] = fn;
+    // Composite `${module}:${name}` key so two helpers with the same
+    // name in different modules can coexist in the shared global
+    // registry that `FunctionRefReviver` reads from.
+    registry[`${opts.module}:${opts.name}`] = fn;
     return fn;
   }
 }

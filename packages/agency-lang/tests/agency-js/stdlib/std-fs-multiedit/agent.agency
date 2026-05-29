@@ -1,4 +1,4 @@
-import { multiedit } from "std::fs"
+import { edit } from "std::fs"
 node writeFixture(filename: string, content: string) {
   const result = write(filename, content) with approve
   return isSuccess(result)
@@ -16,6 +16,6 @@ type Edit = {
 }
 
 node runMultiedit(filename: string, edits: Edit[]) {
-  const result = multiedit(filename, edits) with approve
+  const result = edit(filename, edits) with approve
   return result
 }

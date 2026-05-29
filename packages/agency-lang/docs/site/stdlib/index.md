@@ -113,13 +113,21 @@ A tool for rounding a number to a specified number of decimal places.
 ### read
 
 ```ts
-read(filename: string, dir: string): Result
+read(filename: string, dir: string, offset: number, limit: number): Result
 ```
 
 A tool for reading the contents of a file and returning it as a string. The filename is resolved relative to dir.
 
+  When called with no offset/limit, returns the full file if it has at
+  most 2000 lines; otherwise returns the first 2000 lines and appends a
+  truncation note showing the total line count. Pass `offset` (1-indexed)
+  and/or `limit` to paginate larger files. `0` for either argument means
+  "unset" — Agency does not have undefined arguments.
+
   @param filename - The file to read
   @param dir - The directory to resolve the filename against (defaults to ".")
+  @param offset - 1-indexed line to start at (0 means start of file)
+  @param limit - Maximum number of lines to return (0 means default 2000)
 
 **Parameters:**
 
@@ -127,6 +135,8 @@ A tool for reading the contents of a file and returning it as a string. The file
 |---|---|---|
 | filename | `string` |  |
 | dir | `string` | "." |
+| offset | `number` | 0 |
+| limit | `number` | 0 |
 
 **Returns:** `Result`
 
@@ -165,7 +175,7 @@ A tool for writing content to a file. The filename is resolved relative to dir.
 
 **Throws:** `std::write`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L109))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L119))
 
 ### readImage
 
@@ -189,7 +199,7 @@ A tool for reading an image file and returning its contents as a Base64-encoded 
 
 **Throws:** `std::readImage`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L137))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L147))
 
 ### notify
 
@@ -210,7 +220,7 @@ A tool for showing a native OS notification with a title and message. Returns tr
 
 **Throws:** `std::notify`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L151))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L161))
 
 ### range
 
@@ -229,7 +239,7 @@ Generate an array of numbers. With one argument, generates from 0 to start-1. Wi
 
 **Returns:** `number[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L162))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L172))
 
 ### mostCommon
 
@@ -247,7 +257,7 @@ Return the most common element in an array. Uses JSON serialization for comparis
 
 **Returns:** `any`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L172))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L182))
 
 ### keys
 
@@ -265,7 +275,7 @@ Return an array of an object's own enumerable property names.
 
 **Returns:** `string[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L179))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L189))
 
 ### values
 
@@ -283,7 +293,7 @@ Return an array of an object's own enumerable property values.
 
 **Returns:** `any[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L186))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L196))
 
 ### entries
 
@@ -301,7 +311,7 @@ Return an array of an object's own enumerable entries, each as { key, value }.
 
 **Returns:** `any[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L193))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L203))
 
 ### emit
 
@@ -317,7 +327,7 @@ Emit a custom event to the calling TypeScript code via the onEmit callback.
 |---|---|---|
 | data |  |  |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L200))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L210))
 
 ### callback
 
@@ -339,4 +349,4 @@ Register a scoped callback for the dynamic extent of the calling function or nod
 | name | `string` |  |
 | fn | `any` |  |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L207))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/index.agency#L217))

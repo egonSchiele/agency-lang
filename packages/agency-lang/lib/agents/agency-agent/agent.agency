@@ -56,22 +56,22 @@ let policy: Policy = {}
 
 // File-system tools handed to the LLM as a single bundle anchored to
 // one directory. `openDir(dir)` returns a Workspace whose `read` /
-// `write` / `edit` / `multiedit` / `ls` / `glob` / `grep` all resolve
-// their `filename` (or `pattern`) argument against `dir` and its
-// subtree. `setCwd` rebuilds the bundle to re-anchor. The bundle is
-// rebuilt fresh each iteration of the main loop so a `setCwd` from
-// one turn is visible on the next; the binding is static within a
-// single LLM turn — `setCwd` is meant as an opening move, not as a
-// mid-turn switch.
+// `write` / `edit` / `ls` / `glob` / `grep` all resolve their
+// `filename` (or `pattern`) argument against `dir` and its subtree.
+// `setCwd` rebuilds the bundle to re-anchor. The bundle is rebuilt
+// fresh each iteration of the main loop so a `setCwd` from one turn
+// is visible on the next; the binding is static within a single LLM
+// turn — `setCwd` is meant as an opening move, not as a mid-turn
+// switch.
 let workspace: Workspace = openDir(cwd())
 
 def setCwd(dir: string): string {
   """
   Use this when the user tells you to change your current working
   directory. After you call this, every file-system tool (read,
-  write, edit, multiedit, ls, glob, grep) will resolve filenames
-  against the given directory and its subtree. Pass "cwd" to anchor
-  to the user's current working directory.
+  write, edit, ls, glob, grep) will resolve filenames against the
+  given directory and its subtree. Pass "cwd" to anchor to the user's
+  current working directory.
 
   @param dir - The directory to anchor file operations against
   """
@@ -201,8 +201,11 @@ node main() {
   4. Always call `typecheck` on any source you produce before showing
      it to the user. If the typecheck reports errors, fix them and
      check again. Don't show broken code.
-  5. Use `write` / `edit` / `multiedit` to persist changes. The user
-     will be prompted to approve every write.
+  5. Use `write` / `edit` to persist changes. `edit` takes an array
+     of `{oldText, newText, replaceAll}` entries — prefer one call
+     with multiple entries over several `edit` calls when you have
+     more than one change to make to the same file. The user will be
+     prompted to approve every write.
 
   Keep replies brief. Show code, not commentary.
   """
@@ -223,7 +226,6 @@ node main() {
             workspace.read,
             workspace.write,
             workspace.edit,
-            workspace.multiedit,
             typecheck,
             docSkill,
             highlight.partial(language: "ts"),

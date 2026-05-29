@@ -22,10 +22,10 @@ readSkills(dir: string)
 describeSkill(filename: string, fm: Result): string
 ```
 
-Render a single line for the skills tool description given a filename
-  and the frontmatter Result returned from `frontmatter(...)`. Falls
-  back gracefully when the file has no frontmatter or only one of
-  title/description.
+Render one `<skill>` XML block for the skills tool description given
+  a filename and the frontmatter Result returned from `frontmatter(...)`.
+  Falls back gracefully when the file has no frontmatter or is missing
+  one of title/description.
 
 **Parameters:**
 
@@ -68,4 +68,4 @@ Build a skills tool for an LLM. Scans `dir` for Markdown files
 |---|---|---|
 | dir | `string` |  |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/skills.agency#L47))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/skills.agency#L46))

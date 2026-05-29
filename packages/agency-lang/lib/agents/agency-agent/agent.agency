@@ -230,6 +230,12 @@ node main() {
      package managers). Prefer the dedicated file tools above for file
      operations; use `bash` for everything else. The user is asked to
      approve each command.
+  7. Whenever you show the user a code snippet in your reply, first
+     call `highlight(code)` and emit the returned string verbatim
+     instead of the raw source. The tool renders the snippet with
+     terminal colors so the user can read it more easily. Skip
+     highlighting for inline identifiers or one-token excerpts; use
+     it for any multi-line block.
 
   Keep replies brief. Show code, not commentary.
   """

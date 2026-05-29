@@ -1,4 +1,5 @@
 import { typecheck } from "std::agency"
+import { today } from "std::date"
 import { Workspace, openDir } from "std::fs"
 import { Policy, checkPolicy } from "std::policy"
 import { skillsDir } from "std::skills"
@@ -210,8 +211,13 @@ node main() {
   Keep replies brief. Show code, not commentary.
   """
 
+  // Grounding: the LLM should not have to ask the user where it is
+  // or what day it is. Both are appended once per run so they ride
+  // with the first system message.
+  const env = "\n\nCurrent date: ${today()}\nCurrent working directory: ${cwd()}"
+
   thread {
-    systemMessage(sysPrompt)
+    systemMessage(sysPrompt + env)
     let userMsg = input("What would you like to do? ")
     while (userMsg != "exit" && userMsg != "quit") {
       handle {

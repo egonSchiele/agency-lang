@@ -1,23 +1,50 @@
-import { _readSkill, _listMarkdownFiles } from "agency-lang/stdlib-lib/skills.js"
-import { parse } from "std::markdown"
+import { map } from "std::array"
+import { frontmatter } from "std::markdown"
+import { glob } from "std::shell"
+
+import { _readSkill } from "agency-lang/stdlib-lib/skills.js"
+
 
 export safe def readSkills(dir: string) {
   const description = "todo"
   return read.partial(dir: dir).describe(description)
 }
 
+def describeSkill(filename: string, fm: Result): string {
+  """
+  Render a single line for the skills tool description given a filename
+  and the frontmatter Result returned from `frontmatter(...)`. Falls
+  back gracefully when the file has no frontmatter or only one of
+  title/description.
+  """
+  if (isFailure(fm)) {
+    return "- ${filename}"
+  }
+  const data = fm.value
+  if (data.title != null && data.description != null) {
+    return "- ${filename}: ${data.title} — ${data.description}"
+  }
+  if (data.title != null) {
+    return "- ${filename}: ${data.title}"
+  }
+  if (data.description != null) {
+    return "- ${filename}: ${data.description}"
+  }
+  return "- ${filename}"
+}
+
 /**
  * Build a tool that lets an LLM read any Markdown skill file in `dir`.
  *
- * `skillsDir` scans `dir` for `.md` / `.markdown` files, parses each
- * file's frontmatter (looking for `title` and `description`), and
- * returns `read` partially applied with `dir: dir` and a tool
- * description that lists each skill's filename, title, and description.
+ * `skillsDir` globs `dir` for `.md` / `.markdown` files, reads each
+ * one's frontmatter, and returns `read` partially applied with
+ * `dir: dir` and a tool description that lists each skill's filename,
+ * title, and description.
  *
  * The LLM only needs to supply a `filename` argument; the description
  * tells it which filenames are available and what each one contains.
  */
-export safe def skillsDir(dir: string) {
+export def skillsDir(dir: string) {
   """
   Build a skills tool for an LLM. Scans `dir` for Markdown files
   (`.md` and `.markdown`), reads each one's frontmatter title and
@@ -27,37 +54,19 @@ export safe def skillsDir(dir: string) {
 
   @param dir - Directory containing skill Markdown files
   """
-  const files = _listMarkdownFiles(dir)
-
-  let description = "Read a skill file from the skills directory '${dir}'. Pass `filename` to read a specific skill. Available skills:\n"
-
-  for (file in files) {
-    const result = parse(file.content)
-    let title = ""
-    let desc = ""
-    if (result.success) {
-      for (block in result.blocks) {
-        if (block.type == "frontmatter") {
-          const data = block.data
-          if (data.title != null) {
-            title = data.title
-          }
-          if (data.description != null) {
-            desc = data.description
-          }
-        }
-      }
-    }
-    if (title == "" && desc == "") {
-      description = description + "\n- ${file.filename}"
-    } else if (desc == "") {
-      description = description + "\n- ${file.filename}: ${title}"
-    } else if (title == "") {
-      description = description + "\n- ${file.filename}: ${desc}"
-    } else {
-      description = description + "\n- ${file.filename}: ${title} — ${desc}"
+  let lines: string[] = []
+  const pathsResult = glob("*.{md,markdown}", dir)
+  if (pathsResult is success(paths)) {
+    lines = map(paths) as filename {
+      // `glob` now returns paths relative to `dir`, so `filename` is
+      // ready to hand straight to `read(filename, dir)` — no basename
+      // step needed.
+      const fm = read(filename, dir) |> frontmatter
+      return describeSkill(filename, fm)
     }
   }
 
+  const header = "Read a skill file from the skills directory '${dir}'. Pass `filename` to read a specific skill. Available skills:\n"
+  const description = header + lines.join("\n")
   return read.partial(dir: dir).describe(description)
 }

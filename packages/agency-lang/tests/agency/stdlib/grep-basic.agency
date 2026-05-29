@@ -2,7 +2,7 @@ import { grep } from "std::shell"
 import { sortBy, map } from "std::array"
 
 node main() {
-  const hits = grep("hello", "tests/agency/stdlib/grep-fixtures", "i", 100) catch [] with approve
+  const hits = grep("hello", "grep-fixtures", "i", 100) catch [] with approve
   let sorted = sortBy(hits) as h {
     return "${h.file}:${h.line}"
   }

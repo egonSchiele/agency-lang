@@ -491,3 +491,29 @@ Parse a Markdown string into a structured AST. Returns an object with
 **Returns:** [ParseResult](#parseresult)
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/markdown.agency#L231))
+
+### frontmatter
+
+```ts
+frontmatter(input: string): Result
+```
+
+Extract just the YAML-style frontmatter block from a Markdown string.
+  Returns `success(data)` where `data` is a `Record<string, any>` of the
+  parsed frontmatter fields, or `failure(...)` if the document has no
+  frontmatter or the parse failed.
+
+  Useful for chaining with the pipe operator, e.g.
+  `read(filename, dir) |> frontmatter`.
+
+  @param input - The Markdown source text to parse
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| input | `string` |  |
+
+**Returns:** `Result`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/markdown.agency#L248))

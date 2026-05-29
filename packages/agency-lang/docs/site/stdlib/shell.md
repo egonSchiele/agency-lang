@@ -37,7 +37,7 @@ type GrepMatch = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/shell.agency#L122))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/shell.agency#L124))
 
 ### StatInfo
 
@@ -50,7 +50,7 @@ type StatInfo = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/shell.agency#L177))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/shell.agency#L183))
 
 ## Functions
 
@@ -130,7 +130,9 @@ ls(dir: string, recursive: boolean, allowedPaths: string[]): Result
 
 List entries in a directory. Each entry includes name, path, type ("file", "dir", "symlink", "other"), and size. Set recursive to true to walk subdirectories. Fails if the directory cannot be read (missing, not a directory, permission denied). Set allowedPaths to restrict which directories may be listed.
 
-  @param dir - The directory to list
+  Relative `dir` is resolved against the calling Agency module's directory (same policy as `read`/`write`/`glob`/`grep`), and returned `path` values are relative to `dir` — so results compose with `read(path, dir)` directly.
+
+  @param dir - The directory to list (relative paths resolve against the module directory)
   @param recursive - Whether to walk subdirectories
   @param allowedPaths - Only allow listing directories under these prefixes
 
@@ -156,8 +158,10 @@ grep(pattern: string, dir: string, flags: string, maxResults: number, allowedPat
 
 Search for a regex pattern in files under a directory. Returns matches with file path, line number, and matched line. Skips node_modules, .git, dist, build. Stops at maxResults. Fails if the pattern is not a valid regex or the directory cannot be read. Set allowedPaths to restrict which directories may be searched.
 
+  Relative `dir` is resolved against the calling Agency module's directory (same policy as `read`/`write`/`glob`/`ls`), and returned `file` values are relative to `dir` — so results compose with `read(file, dir)` directly.
+
   @param pattern - The regex pattern to search for
-  @param dir - The directory to search in
+  @param dir - The directory to search in (relative paths resolve against the module directory)
   @param flags - Regex flags
   @param maxResults - Maximum number of results to return
   @param allowedPaths - Only allow searching under these path prefixes
@@ -176,7 +180,7 @@ Search for a regex pattern in files under a directory. Returns matches with file
 
 **Throws:** `std::grep`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/shell.agency#L128))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/shell.agency#L130))
 
 ### glob
 
@@ -184,10 +188,12 @@ Search for a regex pattern in files under a directory. Returns matches with file
 glob(pattern: string, dir: string, maxResults: number, allowedPaths: string[]): Result
 ```
 
-Find files whose paths match a glob pattern (e.g. "src/**/*.ts"). Returns paths relative to the current working directory. Stops at maxResults. Fails if the pattern is not valid glob syntax or the directory cannot be read. Set allowedPaths to restrict which directories may be searched.
+Find files whose paths match a glob pattern (e.g. "src/**/*.ts"). Stops at maxResults. Fails if the pattern is not valid glob syntax or the directory cannot be read. Set allowedPaths to restrict which directories may be searched.
+
+  Relative `dir` is resolved against the calling Agency module's directory (same policy as `read`/`write`/`ls`/`grep`), and returned paths are relative to `dir` — so results compose with `read(path, dir)` directly.
 
   @param pattern - The glob pattern to match
-  @param dir - The directory to search in
+  @param dir - The directory to search in (relative paths resolve against the module directory)
   @param maxResults - Maximum number of results to return
   @param allowedPaths - Only allow searching under these path prefixes
 
@@ -204,7 +210,7 @@ Find files whose paths match a glob pattern (e.g. "src/**/*.ts"). Returns paths 
 
 **Throws:** `std::glob`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/shell.agency#L154))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/shell.agency#L158))
 
 ### stat
 
@@ -226,7 +232,7 @@ Return metadata about a filesystem entry: whether it exists, its type ("file", "
 
 **Returns:** [StatInfo](#statinfo)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/shell.agency#L184))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/shell.agency#L190))
 
 ### exists
 
@@ -248,7 +254,7 @@ Return true if a file or directory exists at the given path. Set allowedPaths to
 
 **Returns:** `boolean`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/shell.agency#L194))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/shell.agency#L200))
 
 ### which
 
@@ -266,4 +272,4 @@ Locate an executable in PATH and return its absolute path. Returns an empty stri
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/shell.agency#L204))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/shell.agency#L210))

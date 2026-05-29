@@ -64,20 +64,21 @@ export class FunctionRefReviver implements BaseReviver<AgencyFunction> {
       }
       result = original.partial(bindings);
 
-      // Restore tool description if it was customized via .describe()
-      if (typeof value.toolDescription === "string" && result.toolDefinition) {
-        result = result.withToolDefinition({
-          ...result.toolDefinition,
-          description: value.toolDescription,
-        });
+      // Restore tool description if it was customized via .describe(). Use
+      // `.describe()` instead of `.withToolDefinition()` because the bound
+      // result may have `toolDefinition === null` (when the original had
+      // no tool def), and `.describe()` synthesizes a stub tool def in
+      // that case so the description isn't silently dropped.
+      if (typeof value.toolDescription === "string"
+          && value.toolDescription !== result.toolDefinition?.description) {
+        result = result.describe(value.toolDescription);
       }
-    } else if (typeof value.toolDescription === "string" && original.toolDefinition &&
-        value.toolDescription !== original.toolDefinition.description) {
-      // Restore tool description for non-bound functions that used .describe()
-      result = original.withToolDefinition({
-        ...original.toolDefinition,
-        description: value.toolDescription,
-      });
+    } else if (typeof value.toolDescription === "string"
+        && value.toolDescription !== original.toolDefinition?.description) {
+      // Restore tool description for non-bound functions that used .describe().
+      // Covers the case where `original.toolDefinition` is null too (a function
+      // that gained its tool def solely through `.describe()`).
+      result = original.describe(value.toolDescription);
     } else {
       result = original;
     }
@@ -91,13 +92,15 @@ export class FunctionRefReviver implements BaseReviver<AgencyFunction> {
   }
 
   private findInRegistry(name: string, module: string): AgencyFunction {
-    // Fast path: direct lookup by name
-    const direct = this.registry![name];
+    // Fast path: direct lookup by composite `${module}:${name}` key.
+    const direct = this.registry![`${module}:${name}`];
     if (direct && direct.name === name && direct.module === module) {
       return direct;
     }
 
-    // Slow path: linear scan for aliased imports
+    // Slow path: linear scan covers two legacy cases — older `.js`
+    // output that keyed by bare name, and any future keying scheme
+    // collisions. Either way the function identity check is authoritative.
     for (const entry of Object.values(this.registry!)) {
       if (entry.name === name && entry.module === module) {
         return entry;

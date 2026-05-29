@@ -6,7 +6,7 @@ import { apply } from "typestache";
 export const template = `function registerTools(tools: any[]) {
   for (const tool of tools) {
     if (__AgencyFunction.isAgencyFunction(tool)) {
-      __toolRegistry[tool.name] = tool;
+      __toolRegistry[\`\${tool.module}:\${tool.name}\`] = tool;
     }
   }
 }

@@ -180,7 +180,7 @@ describe("AgencyFunction", () => {
         params: [],
         toolDefinition: null,
       }, registry);
-      expect(registry["add"]).toBe(fn);
+      expect(registry["math.agency:add"]).toBe(fn);
       expect(fn.name).toBe("add");
     });
   });

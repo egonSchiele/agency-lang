@@ -2,7 +2,7 @@ import { ls } from "std::shell"
 import { sortBy, map } from "std::array"
 
 node main() {
-  const entries = ls("tests/agency/stdlib/glob-fixtures", false) catch [] with approve
+  const entries = ls("glob-fixtures", false) catch [] with approve
   let sortedNames = sortBy(entries) as e {
     return e.name
   }

@@ -1418,7 +1418,11 @@ export class TypeScriptBuilder {
       })));
     }
 
-    // Bind reviver
+    // No-op assignment for historical clarity. `__toolRegistry` is
+    // already aliased to `__functionRefReviver.registry` in the imports
+    // template, so every module's helpers — and any blocks registered
+    // by `AgencyFunction.create` at runtime — live in the same shared
+    // object the reviver reads from.
     stmts.push(ts.raw("__functionRefReviver.registry = __toolRegistry;"));
 
     return ts.statements(stmts);

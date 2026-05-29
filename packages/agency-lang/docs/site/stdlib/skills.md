@@ -14,7 +14,29 @@ readSkills(dir: string)
 |---|---|---|
 | dir | `string` |  |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/skills.agency#L4))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/skills.agency#L8))
+
+### describeSkill
+
+```ts
+describeSkill(filename: string, fm: Result): string
+```
+
+Render a single line for the skills tool description given a filename
+  and the frontmatter Result returned from `frontmatter(...)`. Falls
+  back gracefully when the file has no frontmatter or only one of
+  title/description.
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| filename | `string` |  |
+| fm | `Result` |  |
+
+**Returns:** `string`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/skills.agency#L13))
 
 ### skillsDir
 
@@ -32,10 +54,10 @@ Build a skills tool for an LLM. Scans `dir` for Markdown files
 
 * Build a tool that lets an LLM read any Markdown skill file in `dir`.
  *
- * `skillsDir` scans `dir` for `.md` / `.markdown` files, parses each
- * file's frontmatter (looking for `title` and `description`), and
- * returns `read` partially applied with `dir: dir` and a tool
- * description that lists each skill's filename, title, and description.
+ * `skillsDir` globs `dir` for `.md` / `.markdown` files, reads each
+ * one's frontmatter, and returns `read` partially applied with
+ * `dir: dir` and a tool description that lists each skill's filename,
+ * title, and description.
  *
  * The LLM only needs to supply a `filename` argument; the description
  * tells it which filenames are available and what each one contains.
@@ -46,4 +68,4 @@ Build a skills tool for an LLM. Scans `dir` for Markdown files
 |---|---|---|
 | dir | `string` |  |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/skills.agency#L20))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/skills.agency#L47))

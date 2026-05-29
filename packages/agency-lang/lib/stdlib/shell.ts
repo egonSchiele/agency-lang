@@ -15,7 +15,7 @@ import {
   seqC,
   str,
 } from "tarsec";
-import { getRuntimeContext } from "../runtime/asyncContext.js";
+import { getModuleDir, getRuntimeContext } from "../runtime/asyncContext.js";
 import type { RuntimeContext } from "../runtime/state/context.js";
 import type { StateStack } from "../runtime/state/stateStack.js";
 import type { ThreadStore } from "../runtime/state/threadStore.js";
@@ -202,7 +202,11 @@ export async function _ls(
   recursive: boolean,
   allowedPaths?: string[],
 ): Promise<LsEntry[]> {
-  const root = path.resolve(process.cwd(), dir);
+  // Resolve relative `dir` against the calling module's directory (same
+  // policy as `read`/`write`), so co-located resource folders work no
+  // matter where the process was launched from. Absolute paths pass
+  // through unchanged.
+  const root = path.resolve(getModuleDir(), dir);
   await assertContained(root, allowedPaths ?? []);
   const out: LsEntry[] = [];
 
@@ -222,7 +226,9 @@ export async function _ls(
       else if (st.isFile()) type = "file";
       out.push({
         name,
-        path: toPosix(path.relative(process.cwd(), full)),
+        // Return paths relative to the scanned `dir` so the result
+        // composes naturally with `read(path, dir)` / `glob`.
+        path: toPosix(path.relative(root, full)),
         type,
         size: st.size,
       });
@@ -289,7 +295,10 @@ export async function _grep(
   maxResults: number,
   allowedPaths?: string[],
 ): Promise<GrepMatch[]> {
-  const root = path.resolve(process.cwd(), dir);
+  // See `_ls` for the resolution policy. `dir` is module-relative;
+  // returned `file` paths are relative to `dir` so callers can hand
+  // them to `read(file, dir)` directly.
+  const root = path.resolve(getModuleDir(), dir);
   await assertContained(root, allowedPaths ?? []);
   const re = new RegExp(pattern, flags || undefined);
   const results: GrepMatch[] = [];
@@ -307,7 +316,7 @@ export async function _grep(
     for (let i = 0; i < lines.length; i++) {
       if (re.test(lines[i])) {
         results.push({
-          file: toPosix(path.relative(process.cwd(), full)),
+          file: toPosix(path.relative(root, full)),
           line: i + 1,
           text: lines[i],
         });
@@ -327,7 +336,10 @@ export async function _glob(
   maxResults: number,
   allowedPaths?: string[],
 ): Promise<string[]> {
-  const root = path.resolve(process.cwd(), dir);
+  // See `_ls` for the resolution policy. `dir` is module-relative;
+  // returned paths are relative to `dir` so callers can hand them to
+  // `read(path, dir)` directly without `basename(...)` gymnastics.
+  const root = path.resolve(getModuleDir(), dir);
   await assertContained(root, allowedPaths ?? []);
   const re = globToRegExp(pattern);
   const results: string[] = [];
@@ -335,7 +347,7 @@ export async function _glob(
   await walkDir(root, async (full) => {
     const rel = toPosix(path.relative(root, full));
     if (re.test(rel)) {
-      results.push(toPosix(path.relative(process.cwd(), full)));
+      results.push(rel);
       if (results.length >= maxResults) return false;
     }
     return true;

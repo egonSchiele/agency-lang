@@ -1,6 +1,7 @@
 import fs from "fs";
 import path from "path";
 import { getModuleDir } from "../runtime/asyncContext.js";
+import { expandPath } from "./expandPath.js";
 
 /**
  * Read a skill file colocated with the calling Agency module. The
@@ -9,9 +10,18 @@ import { getModuleDir } from "../runtime/asyncContext.js";
  * source `.agency` file) via the ALS frame seeded by `runNode` /
  * `runInBootstrapFrame`. Falls back to `process.cwd()` when called
  * outside any Agency execution frame (e.g. from non-Agency host code).
+ *
+ * `filepath` is passed through `expandPath` first so a user-typed
+ * `~/.agency/skills/foo.md` resolves to `$HOME/.agency/skills/foo.md`
+ * — same shorthand policy every other stdlib path-taking entry point
+ * follows (see docs/dev/coding-standards.md). We don't go through
+ * `resolvePath`/`resolveDir` because (a) the function is sync by
+ * design and `resolveDir` is async, and (b) skills are trusted
+ * colocated resources, so the allow-list / symlink-escape checks
+ * those helpers run aren't applicable here.
  */
 export function _readSkill(filepath: string): string {
   const dirname = getModuleDir();
-  const fullPath = path.resolve(dirname, filepath);
+  const fullPath = path.resolve(dirname, expandPath(filepath));
   return fs.readFileSync(fullPath, "utf8");
 }

@@ -26,7 +26,6 @@ import {
 } from "./abortable.js";
 import { checkAllowBlockList } from "./allowBlockList.js";
 import { assertContained } from "./assertContained.js";
-import { expandPath } from "./expandPath.js";
 import { resolveDir } from "./resolveDir.js";
 import { resolvePath } from "./resolvePath.js";
 
@@ -86,17 +85,17 @@ async function execImpl(
     options?.blockedCommands ?? [],
   );
   if (cmdError) throw new Error(cmdError);
-  // Expand `~` in the user-supplied cwd before either containment-check
-  // or spawn, so `exec(..., cwd: "~/proj")` works as expected. We
-  // intentionally DO NOT route this through `resolveDir` because that
-  // would change a relative `cwd: "./sub"` from "subdir of process.cwd()
-  // (which is the existing default)" to "subdir of moduleDir."
-  const cwdExpanded = expandPath(cwd);
-  if (cwdExpanded && options?.allowedPaths && options.allowedPaths.length > 0) {
-    await assertContained(cwdExpanded, options.allowedPaths);
-  }
+  // Route through `resolveDir` (cwd-anchored) so `~` expansion +
+  // allow-list enforcement land in one place. Relative `cwd: "./sub"`
+  // stays anchored to `process.cwd()` (the existing semantics) because
+  // we pass `base: "cwd"`. Empty `cwd` is the "no override" sentinel —
+  // pass undefined to the spawn options so the child inherits the
+  // parent's cwd, matching the pre-migration behavior.
+  const cwdResolved = cwd
+    ? await resolveDir(cwd, options?.allowedPaths ?? [], "cwd")
+    : "";
   const signal = ctx.getAbortSignal(stack);
-  return abortableSpawn(command, args, buildSpawnOptions(cwdExpanded, timeout, stdin, signal));
+  return abortableSpawn(command, args, buildSpawnOptions(cwdResolved, timeout, stdin, signal));
 }
 
 /** Deprecated context-injected wrapper kept during the ALS migration;
@@ -165,13 +164,12 @@ async function bashImpl(
       }
     }
   }
-  // See `execImpl` for why we expandPath but don't resolveDir.
-  const cwdExpanded = expandPath(cwd);
-  if (cwdExpanded && options?.allowedPaths && options.allowedPaths.length > 0) {
-    await assertContained(cwdExpanded, options.allowedPaths);
-  }
+  // See `execImpl` for the cwd-resolution rationale.
+  const cwdResolved = cwd
+    ? await resolveDir(cwd, options?.allowedPaths ?? [], "cwd")
+    : "";
   const signal = ctx.getAbortSignal(stack);
-  return abortableSpawn("sh", ["-c", command], buildSpawnOptions(cwdExpanded, timeout, stdin, signal));
+  return abortableSpawn("sh", ["-c", command], buildSpawnOptions(cwdResolved, timeout, stdin, signal));
 }
 
 /** Deprecated context-injected wrapper kept during the ALS migration;
@@ -437,24 +435,35 @@ export type StatInfo = {
 };
 
 /**
- * Resolve `filename` for stat/exists.
+ * Resolve a probe path for `stat`/`exists`, applying the same path
+ * policy (shorthand expansion + allow-list containment) every other
+ * stdlib path-taking entry point uses.
  *
- * - If `dir` is the empty string (the legacy / unset sentinel), fall
- *   back to the original `process.cwd()`-anchored behavior. Absolute
- *   filenames are passed through unchanged.
- * - Otherwise resolve via `resolvePath(dir, filename)` so the call
- *   shares the same sandbox semantics as `read`/`write`/`edit`:
- *   filename must be relative, must not escape `dir`, and `dir` itself
- *   is resolved against the calling module's directory.
+ * - If `dir` is the empty string (the legacy / unset sentinel),
+ *   `filename` is treated as a stand-alone probe path anchored to
+ *   `process.cwd()`. Routed through `resolveDir` so `_stat("~", "")`
+ *   and `_exists("~/foo", "")` expand the shorthand.
+ * - Otherwise resolve via `resolvePath(dir, filename)` (which delegates
+ *   dir-expansion + module-dir anchoring to `resolveDir` and runs the
+ *   traversal / symlink-escape checks), then layer the allow-list
+ *   check on top — `resolvePath` doesn't take `allowedPaths` because
+ *   it's the lower-level helper.
+ *
+ * Probing for a path outside the allow-list is itself a containment
+ * violation — both `_stat` and `_exists` throw rather than silently
+ * report missing.
  */
-async function resolveProbePath(dir: string, filename: string): Promise<string> {
+async function resolveProbePath(
+  dir: string,
+  filename: string,
+  allowedPaths: string[],
+): Promise<string> {
   if (dir === "") {
-    // No dir provided — treat `filename` as a probe path that may
-    // include `~` shorthand. Expand first so `_stat("~", "")` /
-    // `_exists("~/foo", "")` work as users expect.
-    return path.resolve(process.cwd(), expandPath(filename));
+    return resolveDir(filename, allowedPaths, "cwd");
   }
-  return resolvePath(dir, filename);
+  const full = await resolvePath(dir, filename);
+  await assertContained(full, allowedPaths, getModuleDir());
+  return full;
 }
 
 export async function _stat(
@@ -462,9 +471,7 @@ export async function _stat(
   dir: string = "",
   allowedPaths?: string[],
 ): Promise<StatInfo> {
-  const full = await resolveProbePath(dir, filename);
-  const baseDir = dir === "" ? process.cwd() : getModuleDir();
-  await assertContained(full, allowedPaths ?? [], baseDir);
+  const full = await resolveProbePath(dir, filename, allowedPaths ?? []);
   try {
     const st = await fs.lstat(full);
     let type: StatInfo["type"] = "other";
@@ -487,11 +494,7 @@ export async function _exists(
   dir: string = "",
   allowedPaths?: string[],
 ): Promise<boolean> {
-  const full = await resolveProbePath(dir, filename);
-  // Probing for a path outside the allow-list is itself a containment
-  // violation — throw rather than silently return false.
-  const baseDir = dir === "" ? process.cwd() : getModuleDir();
-  await assertContained(full, allowedPaths ?? [], baseDir);
+  const full = await resolveProbePath(dir, filename, allowedPaths ?? []);
   try {
     await fs.access(full);
     return true;

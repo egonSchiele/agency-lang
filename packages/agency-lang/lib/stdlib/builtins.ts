@@ -122,10 +122,31 @@ export function _round(num: number, precision: number): number {
 // — they're imported directly from `./http.js` by the generated code, no
 // re-export needed here.
 
-export async function _read(dir: string, filename: string): Promise<string> {
+export async function _read(
+  dir: string,
+  filename: string,
+  offset?: number,
+  limit?: number,
+): Promise<string> {
   const filePath = await resolvePath(dir, filename);
   const data = await readFile(filePath);
-  return data.toString("utf8");
+  const text = data.toString("utf8");
+  const off = offset && offset > 0 ? offset : undefined;
+  const lim = limit && limit > 0 ? limit : undefined;
+  // Default: return the whole file. Only paginate (and emit a
+  // truncation note) when the caller explicitly asks for it. A 0 (or
+  // unset) for both arguments means "no pagination".
+  if (off === undefined && lim === undefined) return text;
+  const start = off ?? 1;
+  const lines = text.split("\n");
+  const remaining = lines.length - (start - 1);
+  const count = lim ?? remaining;
+  const slice = lines.slice(start - 1, start - 1 + count);
+  const trailing =
+    start - 1 + count < lines.length
+      ? `\n... [truncated: showing ${start}-${start + slice.length - 1} of ${lines.length} lines]`
+      : "";
+  return slice.join("\n") + trailing;
 }
 
 const VALID_WRITE_MODES = ["overwrite", "append", "create-only"] as const;

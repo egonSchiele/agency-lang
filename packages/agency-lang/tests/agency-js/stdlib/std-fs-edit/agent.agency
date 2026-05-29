@@ -20,7 +20,7 @@ node readBack(filename: string) {
 
 node runEdit(filename: string, oldText: string, newText: string, replaceAll: boolean) {
   handle {
-    const result = edit(filename, oldText, newText, replaceAll)
+    const result = edit(filename, [{ oldText: oldText, newText: newText, replaceAll: replaceAll }])
   } with (data) {
     return approve()
   }

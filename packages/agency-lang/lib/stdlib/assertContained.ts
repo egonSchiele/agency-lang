@@ -28,19 +28,28 @@ import process from "process";
 export async function assertContained(
   target: string,
   allowedRoots: string[],
+  baseDir: string = process.cwd(),
 ): Promise<void> {
   if (allowedRoots.length === 0) return;
   if (target.trim() === "") {
     throw new Error("assertContained: target must not be empty");
   }
 
-  const lexicalTarget = path.resolve(process.cwd(), target);
+  // Both target and roots are resolved against the same `baseDir`. For
+  // absolute paths `path.resolve` returns them unchanged, so callers
+  // that already pre-resolve their target only need to pick `baseDir`
+  // so relative entries in `allowedRoots` match. Tools resolving paths
+  // against the Agency module directory (see `_ls`/`_grep`/`_glob` and
+  // `resolvePath`) should pass `getModuleDir()` so a relative entry in
+  // `allowedPaths` sits in the same root as the data the tool is
+  // operating on.
+  const lexicalTarget = path.resolve(baseDir, target);
   const realTarget = await realpathOrLexicalAncestor(lexicalTarget);
 
   const realRoots: string[] = [];
   for (const root of allowedRoots) {
     if (root.trim() === "") continue;
-    const lexicalRoot = path.resolve(process.cwd(), root);
+    const lexicalRoot = path.resolve(baseDir, root);
     realRoots.push(await realpathOrSelf(lexicalRoot));
   }
 

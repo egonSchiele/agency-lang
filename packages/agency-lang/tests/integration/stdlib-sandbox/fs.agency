@@ -28,7 +28,7 @@ node main() {
 
     // Edit the file. `edit` validates that filename is not absolute when
     // `dir` is specified (defaults to "."), so pass `dir` explicitly.
-    const editResult = edit("hello.txt", "hello", "goodbye", false, base)
+    const editResult = edit("hello.txt", [{ oldText: "hello", newText: "goodbye", replaceAll: false }], base)
     if (isFailure(editResult)) {
       return "edit failed"
     }

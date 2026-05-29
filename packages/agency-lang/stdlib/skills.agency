@@ -10,27 +10,48 @@ export safe def readSkills(dir: string) {
   return read.partial(dir: dir).describe(description)
 }
 
+def xmlEscape(s: string): string {
+  """
+  Escape `&`, `<`, `>`, `"`, `'` so the result is safe to embed inside
+  XML text or attribute values. Used before splicing frontmatter or
+  filenames into the `<available_skills>` block — without this, a
+  description containing `&` or a closing tag would produce malformed
+  markup and could inject extra tags into the prompt.
+  """
+  let out = s
+  out = out.replaceAll("&", "&amp;")
+  out = out.replaceAll("<", "&lt;")
+  out = out.replaceAll(">", "&gt;")
+  out = out.replaceAll(`"`, "&quot;")
+  out = out.replaceAll("'", "&apos;")
+  return out
+}
+
 def describeSkill(filename: string, fm: Result): string {
   """
-  Render a single line for the skills tool description given a filename
-  and the frontmatter Result returned from `frontmatter(...)`. Falls
-  back gracefully when the file has no frontmatter or only one of
-  title/description.
+  Render one `<skill>` XML block for the skills tool description given
+  a filename and the frontmatter Result returned from `frontmatter(...)`.
+  Falls back gracefully when the file has no frontmatter or is missing
+  one of title/description. All interpolated values are XML-escaped so
+  metacharacters in user-authored titles / descriptions / filenames
+  cannot break the surrounding markup.
   """
+  const fileX = xmlEscape(filename)
   if (isFailure(fm)) {
-    return "- ${filename}"
+    return "  <skill>\n    <name>${fileX}</name>\n    <description>(no frontmatter)</description>\n    <location>${fileX}</location>\n  </skill>"
   }
   const data = fm.value
-  if (data.title != null && data.description != null) {
-    return "- ${filename}: ${data.title} — ${data.description}"
-  }
+  let title = filename
   if (data.title != null) {
-    return "- ${filename}: ${data.title}"
+    title = data.title
   }
+  let description = ""
   if (data.description != null) {
-    return "- ${filename}: ${data.description}"
+    description = data.description
   }
-  return "- ${filename}"
+  const titleX = xmlEscape(title)
+  const descX = xmlEscape(description)
+  return "  <skill>\n    <name>${titleX}</name>\n    <description>${descX}</description>\n    <location>${fileX}</location>\n  </skill>"
 }
 
 /**
@@ -66,7 +87,8 @@ export def skillsDir(dir: string) {
     }
   }
 
-  const header = "Read a skill file from the skills directory '${dir}'. Pass `filename` to read a specific skill. Available skills:\n"
-  const description = header + lines.join("\n")
+  const header = "Read a skill file from the skills directory '${dir}' by passing its <location> as `filename` to the tool. Available skills:\n<available_skills>\n"
+  const footer = "\n</available_skills>"
+  const description = header + lines.join("\n") + footer
   return read.partial(dir: dir).describe(description)
 }

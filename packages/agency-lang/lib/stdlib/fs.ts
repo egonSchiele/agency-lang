@@ -8,55 +8,6 @@ import { assertContained } from "./assertContained.js";
 
 export { resolvePath } from "./resolvePath.js";
 
-export type EditResult = {
-  replacements: number;
-  path: string;
-};
-
-export async function _edit(
-  dir: string,
-  filename: string,
-  oldText: string,
-  newText: string,
-  replaceAll: boolean,
-): Promise<EditResult> {
-  if (oldText.length === 0) {
-    throw new Error("edit: oldText must not be empty");
-  }
-  const full = await resolvePath(dir, filename);
-  const before = await fs.readFile(full, "utf8");
-
-  if (replaceAll) {
-    if (before.indexOf(oldText) === -1) {
-      throw new Error(`edit: oldText not found in ${filename}.`);
-    }
-    let count = 0;
-    const after = before.replaceAll(oldText, () => {
-      count++;
-      return newText;
-    });
-    await fs.writeFile(full, after, "utf8");
-    return { replacements: count, path: filename };
-  }
-
-  const first = before.indexOf(oldText);
-  if (first === -1) {
-    throw new Error(
-      `edit: oldText not found in ${filename}. The text to replace must appear exactly once (or use replaceAll=true).`,
-    );
-  }
-  const second = before.indexOf(oldText, first + oldText.length);
-  if (second !== -1) {
-    throw new Error(
-      `edit: oldText appears multiple times in ${filename}. Provide more surrounding context to make it unique, or set replaceAll=true.`,
-    );
-  }
-  const after =
-    before.slice(0, first) + newText + before.slice(first + oldText.length);
-  await fs.writeFile(full, after, "utf8");
-  return { replacements: 1, path: filename };
-}
-
 export type MultiEdit = {
   oldText: string;
   newText: string;

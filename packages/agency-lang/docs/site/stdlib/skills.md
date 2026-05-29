@@ -16,16 +16,40 @@ readSkills(dir: string)
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/skills.agency#L8))
 
+### xmlEscape
+
+```ts
+xmlEscape(s: string): string
+```
+
+Escape `&`, `<`, `>`, `"`, `'` so the result is safe to embed inside
+  XML text or attribute values. Used before splicing frontmatter or
+  filenames into the `<available_skills>` block — without this, a
+  description containing `&` or a closing tag would produce malformed
+  markup and could inject extra tags into the prompt.
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| s | `string` |  |
+
+**Returns:** `string`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/skills.agency#L13))
+
 ### describeSkill
 
 ```ts
 describeSkill(filename: string, fm: Result): string
 ```
 
-Render a single line for the skills tool description given a filename
-  and the frontmatter Result returned from `frontmatter(...)`. Falls
-  back gracefully when the file has no frontmatter or only one of
-  title/description.
+Render one `<skill>` XML block for the skills tool description given
+  a filename and the frontmatter Result returned from `frontmatter(...)`.
+  Falls back gracefully when the file has no frontmatter or is missing
+  one of title/description. All interpolated values are XML-escaped so
+  metacharacters in user-authored titles / descriptions / filenames
+  cannot break the surrounding markup.
 
 **Parameters:**
 
@@ -36,7 +60,7 @@ Render a single line for the skills tool description given a filename
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/skills.agency#L13))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/skills.agency#L30))
 
 ### skillsDir
 
@@ -68,4 +92,4 @@ Build a skills tool for an LLM. Scans `dir` for Markdown files
 |---|---|---|
 | dir | `string` |  |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/skills.agency#L47))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/skills.agency#L68))

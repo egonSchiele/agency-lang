@@ -2,17 +2,6 @@
 
 ## Types
 
-### EditResult
-
-```ts
-type EditResult = {
-  replacements: number;
-  path: string
-}
-```
-
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L4))
-
 ### Edit
 
 ```ts
@@ -23,19 +12,19 @@ type Edit = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L30))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L4))
 
-### MultiEditResult
+### EditResult
 
 ```ts
-type MultiEditResult = {
+type EditResult = {
   replacements: number;
   path: string;
   edits: number
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L36))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L10))
 
 ### PatchResult
 
@@ -46,7 +35,7 @@ type PatchResult = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L59))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L35))
 
 ### Workspace
 
@@ -74,57 +63,30 @@ export type Workspace = {
   read: any;
   write: any;
   edit: any;
-  multiedit: any;
   ls: any;
   glob: any;
-  grep: any
+  grep: any;
+  bash: any;
+  tools: any[]
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L148))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L124))
 
 ## Functions
 
 ### edit
 
 ```ts
-edit(filename: string, oldText: string, newText: string, replaceAll: boolean, dir: string): Result
+edit(filename: string, edits: Edit[], dir: string): Result
 ```
 
-Edit a file by replacing oldText with newText. By default oldText must match exactly once in the file; pass replaceAll=true to replace every occurrence. Fails if oldText is not found or appears multiple times (unless replaceAll is set).
+Edit a single file by applying one or more text replacements atomically. Each edit has `oldText`, `newText`, and `replaceAll`. Every edit's `oldText` must match a unique, non-overlapping region of the original file (matches are looked up against the file as it stands when the edit runs, after earlier edits). Set `replaceAll: true` on an edit to replace every occurrence. When any edit fails, nothing is written.
+
+  Prefer one `edit` call with multiple entries over many `edit` calls. Keep each `oldText` as small as possible while still being unique — do not pad with unchanged context just to connect distant changes; instead, split them into separate entries in the same `edits` array.
 
   @param filename - The file to edit
-  @param oldText - The text to find
-  @param newText - The replacement text
-  @param replaceAll - Replace all occurrences instead of just the first
-  @param dir - The directory to resolve the filename against (defaults to ".")
-
-**Parameters:**
-
-| Name | Type | Default |
-|---|---|---|
-| filename | `string` |  |
-| oldText | `string` |  |
-| newText | `string` |  |
-| replaceAll | `boolean` | false |
-| dir | `string` | "." |
-
-**Returns:** `Result`
-
-**Throws:** `std::edit`
-
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L9))
-
-### multiedit
-
-```ts
-multiedit(filename: string, edits: Edit[], dir: string): Result
-```
-
-Apply a sequence of edits to a single file atomically. Each edit has oldText, newText, and replaceAll. Fails if any edit's oldText is not found or is ambiguous; when any edit fails, nothing is written.
-
-  @param filename - The file to edit
-  @param edits - Array of edit objects with oldText, newText, and replaceAll
+  @param edits - Array of edit objects with oldText, newText, replaceAll
   @param dir - The directory to resolve the filename against (defaults to ".")
 
 **Parameters:**
@@ -137,9 +99,9 @@ Apply a sequence of edits to a single file atomically. Each edit has oldText, ne
 
 **Returns:** `Result`
 
-**Throws:** `std::multiedit`
+**Throws:** `std::edit`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L42))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L16))
 
 ### applyPatch
 
@@ -163,7 +125,7 @@ Apply a unified diff to the working tree. Supports file creation (--- /dev/null)
 
 **Throws:** `std::applyPatch`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L64))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L40))
 
 ### mkdir
 
@@ -187,7 +149,7 @@ Create a directory, including any missing parent directories. Idempotent: succee
 
 **Throws:** `std::mkdir`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L78))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L54))
 
 ### copy
 
@@ -213,7 +175,7 @@ Copy a file or directory. Directories are copied recursively. Fails if src does 
 
 **Throws:** `std::copy`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L92))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L68))
 
 ### move
 
@@ -239,7 +201,7 @@ Move or rename a file or directory. Falls back to copy+remove if src and dest ar
 
 **Throws:** `std::move`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L108))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L84))
 
 ### remove
 
@@ -263,33 +225,56 @@ Delete a file or directory. Directories are removed recursively. Does not fail i
 
 **Throws:** `std::remove`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L124))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L100))
 
 ### openDir
 
 ```ts
-openDir(dir: string): Workspace
+openDir(dir: string, allowedPaths: string[]): Workspace
 ```
 
-Build a Workspace anchored at `dir` — a bundle of file-system
-  tools (`read`, `write`, `edit`, `multiedit`, `ls`, `glob`, `grep`)
-  that all resolve filenames against `dir` and its subtree. Designed
-  to be handed to an LLM as a coherent surface: instead of giving
-  the model a dozen tools that each take a `dir` arg, give it the
-  bundle's members so they only have to think about the filename.
+Build a Workspace anchored at `dir` — a bundle of file-system tools
+  (`read`, `write`, `edit`, `ls`, `glob`, `grep`, `bash`) that all
+  resolve filenames (or `cwd` for `bash`) against `dir` and its
+  subtree. Designed to be handed to an LLM as a coherent surface:
+  instead of giving the model a dozen tools that each take a `dir`
+  arg, give it the bundle's members so they only have to think about
+  the filename. The bundle also exposes a `tools` array containing
+  every member in order, so you can splat it into a tools list:
+  `tools: [...workspace.tools, otherTool]`.
 
   Each bundle member is constructed via `.partial(dir: dir)`, so `dir`
   is captured at `openDir` time. To re-anchor an agent to a new
   directory, call `openDir(newDir)` again and use the new bundle.
 
+  Defense-in-depth sandboxing: `allowedPaths` is bound on `ls`,
+  `glob`, and `grep`. It defaults to `[dir]` so those tools refuse to
+  operate outside the anchor directory unless you explicitly pass a
+  broader allow-list. Relative entries in `allowedPaths` resolve
+  against the same directory as `dir` (the calling module's
+  directory), matching how `ls`/`glob`/`grep` already resolve `dir`.
+
+  `bash` is NOT sandboxed by `allowedPaths`: that argument only
+  validates `cwd`, while the shell command itself can read or write
+  anywhere the process can reach. `bash` is included in the bundle
+  for convenience (its `cwd` is pinned to `dir`), but treat it as
+  unsandboxed — gate it with user approval or `blockedCommands` if
+  you care about confinement. `read`/`write`/`edit` do not accept
+  `allowedPaths` but are already confined to `dir` by `resolvePath`,
+  which rejects absolute filenames and `..` escapes.
+
   @param dir - The directory to anchor every bundled tool against
+  @param allowedPaths - Sandbox roots bound on ls/glob/grep.
+    Defaults to `[dir]` when empty. Relative entries resolve against
+    the same base as `dir`.
 
 **Parameters:**
 
 | Name | Type | Default |
 |---|---|---|
 | dir | `string` |  |
+| allowedPaths | `string[]` | [] |
 
 **Returns:** [Workspace](#workspace)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L158))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L140))

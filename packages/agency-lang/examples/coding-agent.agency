@@ -1,6 +1,6 @@
 import * as ui from "std::ui"
 import { bash } from "std::shell"
-import { edit, multiedit, applyPatch, mkdir, copy, move, remove } from "std::fs"
+import { edit, applyPatch, mkdir, copy, move, remove } from "std::fs"
 import { cwd } from "std::system"
 import { systemMessage } from "std::thread"
 callback onLLMCallStart(data) {
@@ -40,7 +40,7 @@ node main() {
       while (nextAction.type != "done") {
         ui.chat("user", userMessage)
         nextAction: NextAction = llm(userMessage, { 
-          tools: [bash, edit, cwd, read, write, multiedit, applyPatch, mkdir, copy, move, remove]
+          tools: [bash, edit, cwd, read, write, applyPatch, mkdir, copy, move, remove]
         })
         if (nextAction.type == "respond") {
           ui.chat("agent", nextAction.message)

@@ -1,31 +1,5 @@
-import { _edit, _multiedit, _applyPatch, _mkdir, _copy, _move, _remove } from "agency-lang/stdlib-lib/fs.js"
-import { glob, ls, grep } from "std::shell"
-
-type EditResult = {
-  replacements: number;
-  path: string
-}
-
-export def edit(filename: string, oldText: string, newText: string, replaceAll: boolean = false, dir: string = "."): Result {
-  """
-  Edit a file by replacing oldText with newText. By default oldText must match exactly once in the file; pass replaceAll=true to replace every occurrence. Fails if oldText is not found or appears multiple times (unless replaceAll is set).
-
-  @param filename - The file to edit
-  @param oldText - The text to find
-  @param newText - The replacement text
-  @param replaceAll - Replace all occurrences instead of just the first
-  @param dir - The directory to resolve the filename against (defaults to ".")
-  """
-  return interrupt std::edit("Are you sure you want to edit this file?", {
-    dir: dir,
-    filename: filename,
-    oldText: oldText,
-    newText: newText,
-    replaceAll: replaceAll
-  })
-
-  return try _edit(dir, filename, oldText, newText, replaceAll)
-}
+import { _multiedit, _applyPatch, _mkdir, _copy, _move, _remove } from "agency-lang/stdlib-lib/fs.js"
+import { bash, glob, ls, grep } from "std::shell"
 
 type Edit = {
   oldText: string;
@@ -33,21 +7,23 @@ type Edit = {
   replaceAll: boolean
 }
 
-type MultiEditResult = {
+type EditResult = {
   replacements: number;
   path: string;
   edits: number
 }
 
-export def multiedit(filename: string, edits: Edit[], dir: string = "."): Result {
+export def edit(filename: string, edits: Edit[], dir: string = "."): Result {
   """
-  Apply a sequence of edits to a single file atomically. Each edit has oldText, newText, and replaceAll. Fails if any edit's oldText is not found or is ambiguous; when any edit fails, nothing is written.
+  Edit a single file by applying one or more text replacements atomically. Each edit has `oldText`, `newText`, and `replaceAll`. Every edit's `oldText` must match a unique, non-overlapping region of the original file (matches are looked up against the file as it stands when the edit runs, after earlier edits). Set `replaceAll: true` on an edit to replace every occurrence. When any edit fails, nothing is written.
+
+  Prefer one `edit` call with multiple entries over many `edit` calls. Keep each `oldText` as small as possible while still being unique — do not pad with unchanged context just to connect distant changes; instead, split them into separate entries in the same `edits` array.
 
   @param filename - The file to edit
-  @param edits - Array of edit objects with oldText, newText, and replaceAll
+  @param edits - Array of edit objects with oldText, newText, replaceAll
   @param dir - The directory to resolve the filename against (defaults to ".")
   """
-  return interrupt std::multiedit("Are you sure you want to apply these edits?", {
+  return interrupt std::edit("Are you sure you want to apply these edits?", {
     dir: dir,
     filename: filename,
     edits: edits
@@ -149,34 +125,74 @@ export type Workspace = {
   read: any;
   write: any;
   edit: any;
-  multiedit: any;
   ls: any;
   glob: any;
-  grep: any
+  grep: any;
+  bash: any;
+  /**
+   * Every bundled tool as a flat array, in the same order they are
+   * documented above. Designed for splatting straight into a call:
+   * `llm(msg, { tools: [...workspace.tools, otherTool] })`.
+   */
+  tools: any[]
 }
 
-export def openDir(dir: string): Workspace {
+export def openDir(dir: string, allowedPaths: string[] = []): Workspace {
   """
-  Build a Workspace anchored at `dir` — a bundle of file-system
-  tools (`read`, `write`, `edit`, `multiedit`, `ls`, `glob`, `grep`)
-  that all resolve filenames against `dir` and its subtree. Designed
-  to be handed to an LLM as a coherent surface: instead of giving
-  the model a dozen tools that each take a `dir` arg, give it the
-  bundle's members so they only have to think about the filename.
+  Build a Workspace anchored at `dir` — a bundle of file-system tools
+  (`read`, `write`, `edit`, `ls`, `glob`, `grep`, `bash`) that all
+  resolve filenames (or `cwd` for `bash`) against `dir` and its
+  subtree. Designed to be handed to an LLM as a coherent surface:
+  instead of giving the model a dozen tools that each take a `dir`
+  arg, give it the bundle's members so they only have to think about
+  the filename. The bundle also exposes a `tools` array containing
+  every member in order, so you can splat it into a tools list:
+  `tools: [...workspace.tools, otherTool]`.
 
   Each bundle member is constructed via `.partial(dir: dir)`, so `dir`
   is captured at `openDir` time. To re-anchor an agent to a new
   directory, call `openDir(newDir)` again and use the new bundle.
 
+  Defense-in-depth sandboxing: `allowedPaths` is bound on `ls`,
+  `glob`, and `grep`. It defaults to `[dir]` so those tools refuse to
+  operate outside the anchor directory unless you explicitly pass a
+  broader allow-list. Relative entries in `allowedPaths` resolve
+  against the same directory as `dir` (the calling module's
+  directory), matching how `ls`/`glob`/`grep` already resolve `dir`.
+
+  `bash` is NOT sandboxed by `allowedPaths`: that argument only
+  validates `cwd`, while the shell command itself can read or write
+  anywhere the process can reach. `bash` is included in the bundle
+  for convenience (its `cwd` is pinned to `dir`), but treat it as
+  unsandboxed — gate it with user approval or `blockedCommands` if
+  you care about confinement. `read`/`write`/`edit` do not accept
+  `allowedPaths` but are already confined to `dir` by `resolvePath`,
+  which rejects absolute filenames and `..` escapes.
+
   @param dir - The directory to anchor every bundled tool against
+  @param allowedPaths - Sandbox roots bound on ls/glob/grep.
+    Defaults to `[dir]` when empty. Relative entries resolve against
+    the same base as `dir`.
   """
+  let ap: string[] = [dir]
+  if (allowedPaths.length > 0) {
+    ap = allowedPaths
+  }
+  const read_ = read.partial(dir: dir)
+  const write_ = write.partial(dir: dir)
+  const edit_ = edit.partial(dir: dir)
+  const ls_ = ls.partial(dir: dir, allowedPaths: ap)
+  const glob_ = glob.partial(dir: dir, allowedPaths: ap)
+  const grep_ = grep.partial(dir: dir, allowedPaths: ap)
+  const bash_ = bash.partial(cwd: dir)
   return {
-    read: read.partial(dir: dir),
-    write: write.partial(dir: dir),
-    edit: edit.partial(dir: dir),
-    multiedit: multiedit.partial(dir: dir),
-    ls: ls.partial(dir: dir),
-    glob: glob.partial(dir: dir),
-    grep: grep.partial(dir: dir),
+    read: read_,
+    write: write_,
+    edit: edit_,
+    ls: ls_,
+    glob: glob_,
+    grep: grep_,
+    bash: bash_,
+    tools: [read_, write_, edit_, ls_, glob_, grep_, bash_],
   }
 }

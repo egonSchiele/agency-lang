@@ -65,7 +65,8 @@ export type Workspace = {
   edit: any;
   ls: any;
   glob: any;
-  grep: any
+  grep: any;
+  bash: any
 }
 ```
 
@@ -232,11 +233,12 @@ openDir(dir: string): Workspace
 ```
 
 Build a Workspace anchored at `dir` — a bundle of file-system
-  tools (`read`, `write`, `edit`, `ls`, `glob`, `grep`) that all
-  resolve filenames against `dir` and its subtree. Designed to be
-  handed to an LLM as a coherent surface: instead of giving the model
-  a dozen tools that each take a `dir` arg, give it the bundle's
-  members so they only have to think about the filename.
+  tools (`read`, `write`, `edit`, `ls`, `glob`, `grep`, `bash`) that
+  all resolve filenames (or `cwd` for `bash`) against `dir` and its
+  subtree. Designed to be handed to an LLM as a coherent surface:
+  instead of giving the model a dozen tools that each take a `dir`
+  arg, give it the bundle's members so they only have to think about
+  the filename.
 
   Each bundle member is constructed via `.partial(dir: dir)`, so `dir`
   is captured at `openDir` time. To re-anchor an agent to a new
@@ -252,4 +254,4 @@ Build a Workspace anchored at `dir` — a bundle of file-system
 
 **Returns:** [Workspace](#workspace)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L133))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L134))

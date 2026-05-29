@@ -226,6 +226,10 @@ node main() {
      with multiple entries over several `edit` calls when you have
      more than one change to make to the same file. The user will be
      prompted to approve every write.
+  6. Use `bash` to run project-level commands (tests, git, formatters,
+     package managers). Prefer the dedicated file tools above for file
+     operations; use `bash` for everything else. The user is asked to
+     approve each command.
 
   Keep replies brief. Show code, not commentary.
   """
@@ -256,6 +260,7 @@ node main() {
             workspace.read,
             workspace.write,
             workspace.edit,
+            workspace.bash,
             typecheck,
             docSkill,
             highlight.partial(language: "ts"),

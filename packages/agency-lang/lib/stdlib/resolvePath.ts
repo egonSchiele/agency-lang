@@ -1,6 +1,7 @@
 import fs from "fs/promises";
 import path from "path";
-import { getModuleDir } from "../runtime/asyncContext.js";
+import { resolveDir } from "./resolveDir.js";
+import { expandPath } from "./expandPath.js";
 
 /**
  * Resolve a filename relative to a directory with security checks.
@@ -11,9 +12,13 @@ import { getModuleDir } from "../runtime/asyncContext.js";
  * this run), not `process.cwd()`. This matches what users want when
  * they ship a co-located resource bundle (`prompts/`, `fixtures/`, etc.)
  * next to their `.agency` file. Absolute `dir` arguments are unaffected
- * because `path.resolve` returns them unchanged.
+ * because `path.resolve` returns them unchanged. `~` and other
+ * shorthand prefixes are expanded at the dir level via `resolveDir`
+ * (which itself delegates to `expandPath`) — the `filename` argument
+ * is NOT expanded because absolute / `~`-prefixed filenames are
+ * rejected anyway.
  *
- * Outside an Agency execution frame, `getModuleDir()` falls back to
+ * Outside an Agency execution frame, `resolveDir` falls back to
  * `process.cwd()`, preserving the previous behaviour for standalone
  * test invocations.
  */
@@ -21,10 +26,15 @@ export async function resolvePath(dir: string, filename: string): Promise<string
   if (!dir) {
     throw new Error(`dir must not be empty. Use "." for the current directory.`);
   }
-  if (path.isAbsolute(filename)) {
+  if (path.isAbsolute(filename) || filename.startsWith("~")) {
     throw new Error(`Filename must not be absolute when dir is specified (got "${filename}").`);
   }
-  const baseDir = path.resolve(getModuleDir(), dir);
+  // Delegate the dir step to the shared `resolveDir` so `~` expansion
+  // and any future path-policy rules apply uniformly. We pass `[]` for
+  // `allowedPaths` here because `resolvePath` is the lower-level
+  // helper — callers that need allow-list enforcement layer it on
+  // separately (see e.g. the `_ls`/`_grep`/`_glob` call sites).
+  const baseDir = await resolveDir(dir);
   const full = path.resolve(baseDir, filename);
 
   // Lexical check against the unresolved baseDir (catches .. early)

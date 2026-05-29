@@ -26,6 +26,8 @@ import {
 } from "./abortable.js";
 import { checkAllowBlockList } from "./allowBlockList.js";
 import { assertContained } from "./assertContained.js";
+import { expandPath } from "./expandPath.js";
+import { resolveDir } from "./resolveDir.js";
 import { resolvePath } from "./resolvePath.js";
 
 function buildSpawnOptions(
@@ -84,11 +86,17 @@ async function execImpl(
     options?.blockedCommands ?? [],
   );
   if (cmdError) throw new Error(cmdError);
-  if (cwd && options?.allowedPaths && options.allowedPaths.length > 0) {
-    await assertContained(cwd, options.allowedPaths);
+  // Expand `~` in the user-supplied cwd before either containment-check
+  // or spawn, so `exec(..., cwd: "~/proj")` works as expected. We
+  // intentionally DO NOT route this through `resolveDir` because that
+  // would change a relative `cwd: "./sub"` from "subdir of process.cwd()
+  // (which is the existing default)" to "subdir of moduleDir."
+  const cwdExpanded = expandPath(cwd);
+  if (cwdExpanded && options?.allowedPaths && options.allowedPaths.length > 0) {
+    await assertContained(cwdExpanded, options.allowedPaths);
   }
   const signal = ctx.getAbortSignal(stack);
-  return abortableSpawn(command, args, buildSpawnOptions(cwd, timeout, stdin, signal));
+  return abortableSpawn(command, args, buildSpawnOptions(cwdExpanded, timeout, stdin, signal));
 }
 
 /** Deprecated context-injected wrapper kept during the ALS migration;
@@ -157,11 +165,13 @@ async function bashImpl(
       }
     }
   }
-  if (cwd && options?.allowedPaths && options.allowedPaths.length > 0) {
-    await assertContained(cwd, options.allowedPaths);
+  // See `execImpl` for why we expandPath but don't resolveDir.
+  const cwdExpanded = expandPath(cwd);
+  if (cwdExpanded && options?.allowedPaths && options.allowedPaths.length > 0) {
+    await assertContained(cwdExpanded, options.allowedPaths);
   }
   const signal = ctx.getAbortSignal(stack);
-  return abortableSpawn("sh", ["-c", command], buildSpawnOptions(cwd, timeout, stdin, signal));
+  return abortableSpawn("sh", ["-c", command], buildSpawnOptions(cwdExpanded, timeout, stdin, signal));
 }
 
 /** Deprecated context-injected wrapper kept during the ALS migration;
@@ -206,11 +216,11 @@ export async function _ls(
   // Resolve relative `dir` against the calling module's directory (same
   // policy as `read`/`write`), so co-located resource folders work no
   // matter where the process was launched from. Absolute paths pass
-  // through unchanged. `allowedPaths` is resolved against the same
-  // base — relative roots like `"."` mean "the same dir as `dir`".
-  const moduleDir = getModuleDir();
-  const root = path.resolve(moduleDir, dir);
-  await assertContained(root, allowedPaths ?? [], moduleDir);
+  // through unchanged. `~` is expanded; `allowedPaths` is resolved
+  // against the same base — relative roots like `"."` mean "the same
+  // dir as `dir`". All policy lives in `resolveDir` so future rules
+  // (env vars, normalization, etc.) propagate automatically.
+  const root = await resolveDir(dir, allowedPaths ?? []);
   const out: LsEntry[] = [];
 
   async function walk(current: string): Promise<void> {
@@ -301,9 +311,7 @@ export async function _grep(
   // See `_ls` for the resolution policy. `dir` is module-relative;
   // returned `file` paths are relative to `dir` so callers can hand
   // them to `read(file, dir)` directly.
-  const moduleDir = getModuleDir();
-  const root = path.resolve(moduleDir, dir);
-  await assertContained(root, allowedPaths ?? [], moduleDir);
+  const root = await resolveDir(dir, allowedPaths ?? []);
   const re = new RegExp(pattern, flags || undefined);
   const results: GrepMatch[] = [];
 
@@ -342,9 +350,7 @@ export async function _glob(
   // See `_ls` for the resolution policy. `dir` is module-relative;
   // returned paths are relative to `dir` so callers can hand them to
   // `read(path, dir)` directly without `basename(...)` gymnastics.
-  const moduleDir = getModuleDir();
-  const root = path.resolve(moduleDir, dir);
-  await assertContained(root, allowedPaths ?? [], moduleDir);
+  const root = await resolveDir(dir, allowedPaths ?? []);
   const re = globToRegExp(pattern);
   const results: string[] = [];
 
@@ -443,7 +449,10 @@ export type StatInfo = {
  */
 async function resolveProbePath(dir: string, filename: string): Promise<string> {
   if (dir === "") {
-    return path.resolve(process.cwd(), filename);
+    // No dir provided — treat `filename` as a probe path that may
+    // include `~` shorthand. Expand first so `_stat("~", "")` /
+    // `_exists("~/foo", "")` work as users expect.
+    return path.resolve(process.cwd(), expandPath(filename));
   }
   return resolvePath(dir, filename);
 }

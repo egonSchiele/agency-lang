@@ -1,6 +1,7 @@
 import fs from "fs/promises";
 import path from "path";
 import process from "process";
+import { expandPath } from "./expandPath.js";
 
 /**
  * Assert that `target` resolves inside at least one of `allowedRoots`.
@@ -43,13 +44,17 @@ export async function assertContained(
   // `resolvePath`) should pass `getModuleDir()` so a relative entry in
   // `allowedPaths` sits in the same root as the data the tool is
   // operating on.
-  const lexicalTarget = path.resolve(baseDir, target);
+  //
+  // Each entry is run through `expandPath` first so a policy that
+  // says `allowedPaths: ["~/proj"]` matches paths resolved under
+  // `os.homedir() + "/proj"`.
+  const lexicalTarget = path.resolve(baseDir, expandPath(target));
   const realTarget = await realpathOrLexicalAncestor(lexicalTarget);
 
   const realRoots: string[] = [];
   for (const root of allowedRoots) {
     if (root.trim() === "") continue;
-    const lexicalRoot = path.resolve(baseDir, root);
+    const lexicalRoot = path.resolve(baseDir, expandPath(root));
     realRoots.push(await realpathOrSelf(lexicalRoot));
   }
 

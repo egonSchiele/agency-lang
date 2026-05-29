@@ -1,0 +1,23 @@
+import { stat, exists } from "std::shell"
+
+// Probes home-directory-relative paths through every migrated entry
+// point. The test asserts that each call *runs* against the expected
+// expanded path; we use `stat`/`exists` on `~` (which is guaranteed
+// to exist for any user) so the test is side-effect-free and never
+// writes under the user's home.
+node main(): boolean {
+  const homeStat = stat(`~`, ``)
+  if (!homeStat.exists) {
+    return false
+  }
+  if (homeStat.type != `dir`) {
+    return false
+  }
+  // exists() with a `~`-prefixed filename and dir="" should expand
+  // the same way.
+  const homeExists = exists(`~`, ``)
+  if (!homeExists) {
+    return false
+  }
+  return true
+}

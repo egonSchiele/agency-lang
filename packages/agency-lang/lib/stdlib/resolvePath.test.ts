@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { resolvePath } from "./resolvePath.js";
 import { agencyStore } from "../runtime/asyncContext.js";
 import path from "path";
+import os from "node:os";
 
 describe("resolvePath", () => {
   it("rejects empty dir", async () => {
@@ -73,5 +74,35 @@ describe("resolvePath with ALS moduleDir", () => {
       () => resolvePath("/tmp", "foo.txt"),
     );
     expect(result).toBe(path.resolve("/tmp", "foo.txt"));
+  });
+});
+
+describe("resolvePath ~ expansion", () => {
+  it("expands ~ in dir", async () => {
+    const result = await resolvePath("~", "x.md");
+    expect(result).toBe(path.join(os.homedir(), "x.md"));
+  });
+
+  it("expands ~/foo in dir", async () => {
+    const result = await resolvePath("~/notes", "x.md");
+    expect(result).toBe(path.join(os.homedir(), "notes", "x.md"));
+  });
+
+  it("still rejects absolute filename when dir starts with ~", async () => {
+    await expect(resolvePath("~/notes", "/etc/passwd")).rejects.toThrow(
+      "must not be absolute",
+    );
+  });
+
+  it("rejects ~-prefixed filename", async () => {
+    await expect(resolvePath(".", "~/foo")).rejects.toThrow(
+      "must not be absolute",
+    );
+  });
+
+  it("rejects .. traversal under ~/...", async () => {
+    await expect(resolvePath("~/notes", "../escape")).rejects.toThrow(
+      "escapes directory",
+    );
   });
 });

@@ -112,3 +112,19 @@ describe("assertContained", () => {
     ).resolves.toBeUndefined();
   });
 });
+
+describe("assertContained ~ expansion", () => {
+  it("accepts a path resolved under ~/proj when allowlist includes ~/proj", async () => {
+    const target = path.join(os.homedir(), "proj", "sub");
+    await expect(
+      assertContained(target, ["~/proj"]),
+    ).resolves.toBeUndefined();
+  });
+
+  it("rejects a path outside ~/proj when allowlist is ~/proj", async () => {
+    // Use a deliberately-outside-home absolute target.
+    await expect(
+      assertContained("/tmp/some-other-thing", ["~/proj"]),
+    ).rejects.toThrow(/not under/);
+  });
+});

@@ -1,4 +1,5 @@
 import { _edit, _multiedit, _applyPatch, _mkdir, _copy, _move, _remove } from "agency-lang/stdlib-lib/fs.js"
+import { glob, ls, grep } from "std::shell"
 
 type EditResult = {
   replacements: number;
@@ -132,4 +133,50 @@ export def remove(target: string, allowedPaths: string[] = []): Result {
   })
 
   return try _remove(target, allowedPaths)
+}
+
+/**
+ * A bundle of file-system tools anchored to a single directory. Every
+ * function inside resolves its `filename` / `pattern` argument relative
+ * to `dir` (including subdirectories). Construct with `openDir(dir)`.
+ *
+ * The bundle is built via partial application — each function is a
+ * fresh AgencyFunction with `dir` bound at construction time. Re-call
+ * `openDir(newDir)` to re-anchor (the previous bundle keeps pointing
+ * at the old dir).
+ */
+export type Workspace = {
+  read: any;
+  write: any;
+  edit: any;
+  multiedit: any;
+  ls: any;
+  glob: any;
+  grep: any
+}
+
+export def openDir(dir: string): Workspace {
+  """
+  Build a Workspace anchored at `dir` — a bundle of file-system
+  tools (`read`, `write`, `edit`, `multiedit`, `ls`, `glob`, `grep`)
+  that all resolve filenames against `dir` and its subtree. Designed
+  to be handed to an LLM as a coherent surface: instead of giving
+  the model a dozen tools that each take a `dir` arg, give it the
+  bundle's members so they only have to think about the filename.
+
+  Each bundle member is constructed via `.partial(dir: dir)`, so `dir`
+  is captured at `openDir` time. To re-anchor an agent to a new
+  directory, call `openDir(newDir)` again and use the new bundle.
+
+  @param dir - The directory to anchor every bundled tool against
+  """
+  return {
+    read: read.partial(dir: dir),
+    write: write.partial(dir: dir),
+    edit: edit.partial(dir: dir),
+    multiedit: multiedit.partial(dir: dir),
+    ls: ls.partial(dir: dir),
+    glob: glob.partial(dir: dir),
+    grep: grep.partial(dir: dir),
+  }
 }

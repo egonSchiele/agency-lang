@@ -1,5 +1,5 @@
 import { typecheck } from "std::agency"
-import { edit, multiedit } from "std::fs"
+import { Workspace, openDir } from "std::fs"
 import { Policy, checkPolicy } from "std::policy"
 import { skillsDir } from "std::skills"
 import { highlight } from "std::syntax"
@@ -54,80 +54,32 @@ static const docSkill = skillsDir("../docs/guide") with approve
 // stored in the GlobalStore, which Agency reinitializes per run.
 let policy: Policy = {}
 
-// Working directory the LLM's file-system tools resolve against.
-// Defaults to "." (the agent's own module dir, per Agency's stdlib
-// module-relative path policy). `setCwd` mutates this; the
-// `agentRead` / `agentWrite` / `agentEdit` wrappers read from it on
-// every call, so a `setCwd` inside one LLM turn takes effect for
-// subsequent tool calls within the same turn.
-let currentDir: string = cwd()
+// File-system tools handed to the LLM as a single bundle anchored to
+// one directory. `openDir(dir)` returns a Workspace whose `read` /
+// `write` / `edit` / `multiedit` / `ls` / `glob` / `grep` all resolve
+// their `filename` (or `pattern`) argument against `dir` and its
+// subtree. `setCwd` rebuilds the bundle to re-anchor. The bundle is
+// rebuilt fresh each iteration of the main loop so a `setCwd` from
+// one turn is visible on the next; the binding is static within a
+// single LLM turn — `setCwd` is meant as an opening move, not as a
+// mid-turn switch.
+let workspace: Workspace = openDir(cwd())
 
 def setCwd(dir: string): string {
   """
-  Use this when the user tells you to change your current working directory. After you call this, all `agentRead` / `agentWrite` / `agentEdit` / `agentMultiEdit` calls will resolve filenames against the given directory. Use `cwd` to set to the user's cwd.
+  Use this when the user tells you to change your current working
+  directory. After you call this, every file-system tool (read,
+  write, edit, multiedit, ls, glob, grep) will resolve filenames
+  against the given directory and its subtree. Pass "cwd" to anchor
+  to the user's current working directory.
 
   @param dir - The directory to anchor file operations against
   """
   if (dir == "cwd") {
     dir = cwd()
   }
-  currentDir = dir
+  workspace = openDir(dir)
   return "Working directory set to: ${dir}"
-}
-
-def agentRead(filename: string): Result {
-  """
-  Read a file from the agent's current working directory (see `setCwd`).
-
-  @param filename - Path relative to the current working directory
-  """
-  return read(filename, currentDir)
-}
-
-def agentWrite(filename: string, content: string): Result {
-  """
-  Write a file inside the agent's current working directory (see `setCwd`).
-  Overwrites the existing file if any.
-
-  @param filename - Path relative to the current working directory
-  @param content - File contents
-  """
-  return write(filename, content, currentDir)
-}
-
-def agentEdit(
-  filename: string,
-  oldText: string,
-  newText: string,
-  replaceAll: boolean = false,
-): Result {
-  """
-  Edit a file in the agent's current working directory (see `setCwd`)
-  by replacing `oldText` with `newText`.
-
-  @param filename - Path relative to the current working directory
-  @param oldText - Text to find
-  @param newText - Replacement text
-  @param replaceAll - If true, replace every occurrence; otherwise oldText must match exactly once
-  """
-  return edit(filename, oldText, newText, replaceAll, currentDir)
-}
-
-type AgentEdit = {
-  oldText: string;
-  newText: string;
-  replaceAll: boolean
-}
-
-def agentMultiEdit(filename: string, edits: AgentEdit[]): Result {
-  """
-  Apply a sequence of edits to a single file atomically, relative to
-  the agent's current working directory (see `setCwd`).
-
-  @param filename - Path relative to the current working directory
-  @param edits - Array of edits, each with oldText, newText, and replaceAll
-  """
-  return multiedit(filename, edits, currentDir)
 }
 
 type Decision =
@@ -237,15 +189,20 @@ node main() {
 
   Workflow:
   1. First, call `setCwd` with the user's project directory. After
-     that, every `agentRead` / `agentWrite` / `agentEdit` /
-     `agentMultiEdit` resolves filenames against that directory —
-     you don't have to pass a directory each time.
-  2. Use `agentRead` to inspect existing code.
-  3. Always call `typecheck` on any source you produce before showing
+     that, every file-system tool resolves filenames against that
+     directory and its subtree — you don't have to pass a directory.
+  2. Use `ls` or `glob` to discover what files exist before guessing
+     filenames. `glob("**/*.agency")` is a good first move on a new
+     project. The returned paths (which may include subdirectories
+     like `"sub/foo.agency"`) are exactly what `read` / `edit` expect
+     as their `filename` argument.
+  3. Use `read` to inspect existing code before modifying it.
+     NEVER `write` or `edit` a file you haven't read.
+  4. Always call `typecheck` on any source you produce before showing
      it to the user. If the typecheck reports errors, fix them and
      check again. Don't show broken code.
-  4. Use `agentWrite` / `agentEdit` / `agentMultiEdit` to persist
-     changes. The user will be prompted to approve every write.
+  5. Use `write` / `edit` / `multiedit` to persist changes. The user
+     will be prompted to approve every write.
 
   Keep replies brief. Show code, not commentary.
   """
@@ -260,10 +217,13 @@ node main() {
           {
           tools: [
             setCwd,
-            agentRead,
-            agentWrite,
-            agentEdit,
-            agentMultiEdit,
+            workspace.ls,
+            workspace.glob,
+            workspace.grep,
+            workspace.read,
+            workspace.write,
+            workspace.edit,
+            workspace.multiedit,
             typecheck,
             docSkill,
             highlight.partial(language: "ts"),

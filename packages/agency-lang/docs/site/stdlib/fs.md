@@ -11,7 +11,7 @@ type EditResult = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L3))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L4))
 
 ### Edit
 
@@ -23,7 +23,7 @@ type Edit = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L29))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L30))
 
 ### MultiEditResult
 
@@ -35,7 +35,7 @@ type MultiEditResult = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L35))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L36))
 
 ### PatchResult
 
@@ -46,7 +46,42 @@ type PatchResult = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L58))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L59))
+
+### Workspace
+
+* A bundle of file-system tools anchored to a single directory. Every
+ * function inside resolves its `filename` / `pattern` argument relative
+ * to `dir` (including subdirectories). Construct with `openDir(dir)`.
+ *
+ * The bundle is built via partial application — each function is a
+ * fresh AgencyFunction with `dir` bound at construction time. Re-call
+ * `openDir(newDir)` to re-anchor (the previous bundle keeps pointing
+ * at the old dir).
+
+```ts
+/**
+ * A bundle of file-system tools anchored to a single directory. Every
+ * function inside resolves its `filename` / `pattern` argument relative
+ * to `dir` (including subdirectories). Construct with `openDir(dir)`.
+ *
+ * The bundle is built via partial application — each function is a
+ * fresh AgencyFunction with `dir` bound at construction time. Re-call
+ * `openDir(newDir)` to re-anchor (the previous bundle keeps pointing
+ * at the old dir).
+ */
+export type Workspace = {
+  read: any;
+  write: any;
+  edit: any;
+  multiedit: any;
+  ls: any;
+  glob: any;
+  grep: any
+}
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L148))
 
 ## Functions
 
@@ -78,7 +113,7 @@ Edit a file by replacing oldText with newText. By default oldText must match exa
 
 **Throws:** `std::edit`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L8))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L9))
 
 ### multiedit
 
@@ -104,7 +139,7 @@ Apply a sequence of edits to a single file atomically. Each edit has oldText, ne
 
 **Throws:** `std::multiedit`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L41))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L42))
 
 ### applyPatch
 
@@ -128,7 +163,7 @@ Apply a unified diff to the working tree. Supports file creation (--- /dev/null)
 
 **Throws:** `std::applyPatch`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L63))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L64))
 
 ### mkdir
 
@@ -152,7 +187,7 @@ Create a directory, including any missing parent directories. Idempotent: succee
 
 **Throws:** `std::mkdir`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L77))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L78))
 
 ### copy
 
@@ -178,7 +213,7 @@ Copy a file or directory. Directories are copied recursively. Fails if src does 
 
 **Throws:** `std::copy`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L91))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L92))
 
 ### move
 
@@ -204,7 +239,7 @@ Move or rename a file or directory. Falls back to copy+remove if src and dest ar
 
 **Throws:** `std::move`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L107))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L108))
 
 ### remove
 
@@ -228,4 +263,33 @@ Delete a file or directory. Directories are removed recursively. Does not fail i
 
 **Throws:** `std::remove`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L123))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L124))
+
+### openDir
+
+```ts
+openDir(dir: string): Workspace
+```
+
+Build a Workspace anchored at `dir` — a bundle of file-system
+  tools (`read`, `write`, `edit`, `multiedit`, `ls`, `glob`, `grep`)
+  that all resolve filenames against `dir` and its subtree. Designed
+  to be handed to an LLM as a coherent surface: instead of giving
+  the model a dozen tools that each take a `dir` arg, give it the
+  bundle's members so they only have to think about the filename.
+
+  Each bundle member is constructed via `.partial(dir: dir)`, so `dir`
+  is captured at `openDir` time. To re-anchor an agent to a new
+  directory, call `openDir(newDir)` again and use the new bundle.
+
+  @param dir - The directory to anchor every bundled tool against
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| dir | `string` |  |
+
+**Returns:** [Workspace](#workspace)
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/fs.agency#L158))

@@ -3,7 +3,10 @@ export function heading(level: number, text: string): string {
 }
 
 export function codeFence(code: string, lang: string = "ts"): string {
-  return `\`\`\`${lang}\n${code.trimEnd()}\n\`\`\``;
+  const matches = code.match(/`+/g) ?? [];
+  const longest = matches.reduce((m, s) => Math.max(m, s.length), 0);
+  const fence = "`".repeat(Math.max(3, longest + 1));
+  return `${fence}${lang}\n${code.trimEnd()}\n${fence}`;
 }
 
 export function bold(text: string): string {

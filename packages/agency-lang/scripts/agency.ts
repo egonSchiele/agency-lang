@@ -49,6 +49,7 @@ import { scheduleTest } from "@/cli/schedule/test.js";
 import { loadEnv } from "@/utils/envfile.js";
 import { debug } from "@/cli/debug.js";
 import { generateDoc } from "@/cli/doc.js";
+import { generateLiterate } from "@/cli/literate.js";
 import { optimize } from "@/cli/optimize.js";
 import { watchAndCompile } from "@/cli/watch.js";
 import {
@@ -678,6 +679,36 @@ export function createProgram(deps: CliDependencies = {}): Command {
       const outputDir = opts.output || config.doc?.outDir || "docs";
       generateDoc(config, input, outputDir, opts.ignore || [], opts.baseUrl);
     });
+
+  const literate = program
+    .command("literate")
+    .description("Render Agency code as literate-programming markdown");
+
+  literate
+    .command("weave")
+    .description("Render .agency file(s) as markdown")
+    .argument("<input>", "Path to .agency file or directory")
+    .option("-o, --output <dir>", "Output directory", "literate")
+    .option(
+      "--ignore <dirs...>",
+      "Directory names to ignore when scanning recursively",
+    )
+    .option("--lang <name>", "Code-fence language tag", "agency")
+    .action(
+      (
+        input: string,
+        opts: { output: string; ignore?: string[]; lang: string },
+      ) => {
+        const config = getConfig();
+        generateLiterate(
+          config,
+          input,
+          opts.output,
+          opts.ignore || [],
+          opts.lang,
+        );
+      },
+    );
 
   program
     .command("optimize")

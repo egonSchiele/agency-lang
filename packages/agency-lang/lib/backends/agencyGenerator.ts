@@ -102,8 +102,19 @@ export class AgencyGenerator {
   private indentSize: number = 2;
   private debug: boolean = !!process.env.AGENCY_DEBUG;
 
-  constructor(args: { config?: AgencyConfig } = {}) {
+  /**
+   * When true, imports render in-place (in their original source position)
+   * rather than being hoisted to the top of the file and sorted. Used by
+   * `agency literate weave`, which needs to render the file in source
+   * order so the prose / code alternation matches what the author wrote.
+   */
+  protected preserveOrder: boolean = false;
+
+  constructor(
+    args: { config?: AgencyConfig; preserveOrder?: boolean } = {},
+  ) {
     this.agencyConfig = mergeDeep(this.configDefaults(), args.config || {});
+    this.preserveOrder = args.preserveOrder ?? false;
     if (this.agencyConfig.verbose) {
       console.log("Generator config:", this.agencyConfig);
     }
@@ -140,7 +151,11 @@ export class AgencyGenerator {
     // comments/blanks) and each import statement (with any comments
     // directly attached to it). This lets the imports block be sorted
     // while preserving `// @tc-ignore` / `// @tc-nocheck` placement.
-    program.nodes = this.partitionImports(program.nodes);
+    // Skipped in preserveOrder mode (literate weave) because the whole
+    // point there is to leave nodes exactly where the author put them.
+    if (!this.preserveOrder) {
+      program.nodes = this.partitionImports(program.nodes);
+    }
 
     // Pass 3: Collect all node imports
     for (const node of program.nodes) {
@@ -195,8 +210,13 @@ export class AgencyGenerator {
 
     const output: string[] = [];
 
-    this.addIfNonEmpty(this.renderImportHeader(), output);
-    this.addIfNonEmpty(this.sortAndRenderImports(), output);
+    // In preserveOrder mode, imports already rendered in-place via
+    // processNodeInner, so we skip both the top-of-file header reflow
+    // and the sorted import block.
+    if (!this.preserveOrder) {
+      this.addIfNonEmpty(this.renderImportHeader(), output);
+      this.addIfNonEmpty(this.sortAndRenderImports(), output);
+    }
     this.addIfNonEmpty(this.generatedTypeAliases.join("\n"), output);
     this.addIfNonEmpty(stmtLines.join("\n"), output);
 
@@ -394,9 +414,11 @@ export class AgencyGenerator {
       case "graphNode":
         return this.processGraphNode(node);
       case "importStatement":
+        if (this.preserveOrder) return this.processImportStatement(node);
         this.importNodes.push(node);
         return "";
       case "importNodeStatement":
+        if (this.preserveOrder) return this.processImportNodeStatement(node);
         this.importedNodes.push(node);
         return "";
       case "exportFromStatement":
@@ -1471,8 +1493,11 @@ export class AgencyGenerator {
   }
 }
 
-export function generateAgency(program: AgencyProgram): string {
-  const generator = new AgencyGenerator();
+export function generateAgency(
+  program: AgencyProgram,
+  opts: { preserveOrder?: boolean } = {},
+): string {
+  const generator = new AgencyGenerator({ preserveOrder: opts.preserveOrder });
   return (
     generator
       .generate(program)

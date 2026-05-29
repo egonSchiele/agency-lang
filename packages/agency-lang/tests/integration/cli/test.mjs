@@ -1,7 +1,8 @@
 // CLI end-to-end tests: compile+run, stdlib imports, interrupts/handlers, test runner.
 // All tests avoid LLM calls.
 
-import { resolve } from "node:path";
+import { resolve, join } from "node:path";
+import { readFileSync } from "node:fs";
 import {
   createTempProject, initProject, installTarball,
   writeFile, run, assertIncludes, cleanup, getTarballPath,
@@ -105,6 +106,27 @@ node main() {
   }, null, 2));
   run(dir, "npx agency test testable.agency");
   console.log("Test 4 passed");
+
+  // --- Test 5: Literate weave ---
+  console.log("--- Test 5: Literate weave ---");
+  writeFile(dir, "literate-input.agency", `/* hello literate world */
+
+def add(a: number, b: number): number {
+  // sum
+  return a + b
+}
+`);
+  run(dir, "npx agency literate weave literate-input.agency -o literate-out");
+  const literateOutput = readFileSync(
+    join(dir, "literate-out", "literate-input.md"),
+    "utf-8",
+  );
+  assertIncludes(literateOutput, "hello literate world");
+  assertIncludes(literateOutput, "```agency");
+  assertIncludes(literateOutput, "def add");
+  // line comment stays inside the fence (i.e. not lost)
+  assertIncludes(literateOutput, "// sum");
+  console.log("Test 5 passed");
 
   console.log("=== All CLI tests passed ===");
   cleanup(dir);

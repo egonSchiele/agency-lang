@@ -27,9 +27,15 @@ export type SkillFile = {
  * out of each file's frontmatter without going through the interrupt-
  * throwing `glob` / `read` wrappers, since `skillsDir` is setup code that
  * runs before any handlers are in scope.
+ *
+ * Relative `dir` is resolved against the *calling Agency module's*
+ * directory (matching the behaviour of `read` / `resolvePath`), not
+ * `process.cwd()`, so a directory shipped alongside the user's `.agency`
+ * file resolves correctly regardless of where the agent is invoked from.
+ * Absolute `dir` is used as-is.
  */
 export function _listMarkdownFiles(dir: string): SkillFile[] {
-  const root = path.resolve(process.cwd(), dir);
+  const root = path.resolve(getModuleDir(), dir);
   const entries = fs.readdirSync(root);
   const out: SkillFile[] = [];
   for (const name of entries) {

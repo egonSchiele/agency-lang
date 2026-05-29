@@ -110,7 +110,6 @@ export default defineConfig({
             { text: "Handlers", link: "/guide/handlers" },
             { text: "Testing", link: "/guide/testing" },
             { text: "TypeScript Interoperability", link: "/guide/ts-interop" },
-            { text: "TypeScript Helpers (agency.*)", link: "/guide/ts-helpers" },
             {
               text: "Message History and Threads",
               link: "/guide/message-history-and-threads",
@@ -151,6 +150,7 @@ export default defineConfig({
               text: "Built-in Functions",
               link: "/appendix/builtins",
             },
+            { text: "TypeScript Helpers (agency.*)", link: "/guide/ts-helpers" },
             {
               text: "Schema Parameter Injection",
               link: "/appendix/schema-parameter-injection",

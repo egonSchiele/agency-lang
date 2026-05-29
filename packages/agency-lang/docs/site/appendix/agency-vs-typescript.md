@@ -1,3 +1,8 @@
+---
+title: Agency vs TypeScript
+description: Summarizes the syntactic and semantic differences between Agency and TypeScript, highlighting TypeScript features (like classes, destructuring, and ternaries) that Agency intentionally omits.
+---
+
 # Agency vs TypeScript
 Because Agency compiles to TypeScript, it has many similarities, but some things are different.
 

@@ -1,3 +1,8 @@
+---
+title: Imports and packages
+description: Describes how Agency's JavaScript-style import syntax works for relative paths, npm packages, the `std::` standard library, and the `pkg::` prefix for npm-distributed Agency packages.
+---
+
 # Imports and packages
 
 Agency imports work just like JavaScript imports. You can import from a relative path, or from `node_modules` if it's a package.

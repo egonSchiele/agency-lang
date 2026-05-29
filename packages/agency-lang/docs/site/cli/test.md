@@ -1,3 +1,8 @@
+---
+title: Testing
+description: Documents the `agency test` command for running Agency test fixtures, generating new fixtures, and running JS integration tests, with coverage and parallelism options.
+---
+
 # Testing
 
 Agency has a built-in test runner. See the [testing guide](../guide/testing.html) for an overview of how Agency tests work; this page focuses on the CLI.

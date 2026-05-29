@@ -1,3 +1,8 @@
+---
+title: Basic syntax
+description: Overview of Agency's TypeScript-derived syntax, covering primitive types, variables, arrays, objects, functions, and other core language constructs.
+---
+
 # Basic syntax
 
 Hello and welcome! Agency is a language for building agents, or any other type of system that is complex, hard to debug, and involves non-deterministic outputs. But before you read about that, let's take two minutes to quickly cover installation and syntax.

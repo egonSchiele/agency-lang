@@ -1,3 +1,8 @@
+---
+title: Scheduling agents
+description: Documents the `agency schedule` commands for running an Agency file on a recurring basis using cron expressions or presets, including listing, editing, and removing schedules.
+---
+
 # Scheduling agents
 
 You can schedule an Agency file to run on a recurring basis using `agency schedule`. This is useful for running an agent every morning, every hour, on weekdays only, and so on.

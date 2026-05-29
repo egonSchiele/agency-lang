@@ -1,3 +1,8 @@
+---
+title: Formatting Agency code
+description: Documents the `agency format` (alias `fmt`) command for formatting `.agency` files, directories, or stdin input, with an optional in-place mode.
+---
+
 # Formatting Agency code
 
 Agency ships with a formatter that you can run on a single file, a list of files, or whole directories. You can use `format` or its alias `fmt`:

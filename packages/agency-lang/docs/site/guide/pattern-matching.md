@@ -1,3 +1,8 @@
+---
+title: Destructuring and Pattern Matching
+description: Reference for Agency's pattern language used in declarations, the `is` operator, `match` arms, and `for` loops, including array and object destructuring.
+---
+
 # Destructuring and Pattern Matching
 
 Agency supports a small but expressive pattern language used in four

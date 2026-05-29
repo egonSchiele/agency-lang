@@ -1,3 +1,8 @@
+---
+title: Callbacks
+description: Documents Agency's callback hooks (e.g. `onNodeStart`) that can be registered from Agency files via `callback(...)` or passed in from TypeScript when invoking a node, including scoping rules and the no-interrupts-in-callbacks restriction.
+---
+
 # Callbacks
 
 Agency exposes a number of hooks. It's possible to write callbacks for these hooks in Agency files or pass them in when you run the node through TypeScript. Here are both options.

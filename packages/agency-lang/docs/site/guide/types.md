@@ -1,3 +1,8 @@
+---
+title: Types
+description: Reference for Agency's TypeScript-like type system — including primitives, unions, arrays, objects, and built-in generics — and how types automatically generate Zod schemas for structured LLM outputs.
+---
+
 # Types
 
 Agency's type system is similar to TypeScript's. It includes user-defined generic type aliases and the built-in `Record<K, V>` / `Array<T>` / `Schema<T>` generics, but not all of TypeScript's more advanced features (conditional types, mapped types, etc.).

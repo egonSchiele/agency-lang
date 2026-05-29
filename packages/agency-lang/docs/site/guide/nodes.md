@@ -1,3 +1,8 @@
+---
+title: Nodes
+description: Describes nodes — Agency's entry points into agents — and how they differ from functions, including the permanent transition behavior and the special role of the `main` node.
+---
+
 # Nodes
 A node defines an entry point into your agent. Here is an agent with two nodes. This means that if you use this agent from TypeScript code, you can import either of these nodes and use it as a function.
 

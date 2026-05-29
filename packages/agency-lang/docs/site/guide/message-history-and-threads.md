@@ -1,3 +1,8 @@
+---
+title: Message history and threads
+description: Explains how Agency's default shared message history works across LLM calls, and how `thread` and subthread blocks let you create isolated conversations that don't pollute the main history.
+---
+
 # Message history and threads
 
 A critical part of an agent is the message history. You want the agent to remember everything that's been said so far. Let's see how message history works in Agency.

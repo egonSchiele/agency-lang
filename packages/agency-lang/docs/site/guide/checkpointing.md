@@ -1,3 +1,8 @@
+---
+title: Checkpointing
+description: Explains Agency's ability to snapshot and restore execution state via `checkpoint`, `getCheckpoint`, and `restore`, which underpins interrupts, error recovery, forks, and the time-travel debugger.
+---
+
 # Checkpointing
 
 One of Agency's standout features is its ability to pause and serialize execution state at any point. This ability is used for:

@@ -1,3 +1,8 @@
+---
+title: Partial Application
+description: Explains Agency's `.partial()` method for creating new functions with some parameters pre-filled, comparing the behavior to JavaScript and TypeScript.
+---
+
 # Partial Application
 
 ## What is it?

@@ -1,3 +1,8 @@
+---
+title: Agents 101
+description: A beginner-friendly introduction to what agents are, walking through their three core ingredients — an LLM call, tools, and a loop — using Agency examples.
+---
+
 # Agents 101
 If you are new to building agents, read this first. 
 

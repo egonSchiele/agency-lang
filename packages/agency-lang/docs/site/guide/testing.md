@@ -1,3 +1,8 @@
+---
+title: Testing
+description: Introduces Agency's built-in testing framework, covering fixture generation, exact-match versus LLM-as-judge fixtures, and running tests with the `test` command.
+---
+
 # Testing
 
 Agency comes with a built-in testing framework that makes it easy to test your agents. To start, generate fixtures for your agent by running

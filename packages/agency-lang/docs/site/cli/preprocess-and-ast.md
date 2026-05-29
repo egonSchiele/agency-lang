@@ -1,3 +1,7 @@
+---
+title: Preprocessing and AST inspection
+description: Documents the `agency ast` (alias `parse`) and `agency preprocess` debugging commands for printing the parsed and preprocessed AST of an Agency source file.
+---
 
 # Preprocessing and AST inspection
 

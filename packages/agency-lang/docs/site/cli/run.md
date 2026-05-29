@@ -1,3 +1,8 @@
+---
+title: Running Agency code
+description: Documents the `agency run` command for compiling and executing an Agency file in one step, including the `--resume` and `--trace` options.
+---
+
 # Running Agency code
 
 To compile and run an Agency file in one step:

@@ -1,3 +1,8 @@
+---
+title: Troubleshooting
+description: Solutions to common issues when using Agency, such as module-not-found errors from global installs and other gotchas.
+---
+
 # Troubleshooting
 
 Here are some common issues you might run into when using agency, and how to solve them.

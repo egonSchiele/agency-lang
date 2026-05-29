@@ -1,3 +1,8 @@
+---
+title: pack
+description: Documents the `agency pack` command, which bundles an Agency file plus its runtime and dependencies into a single portable ESM executable that runs anywhere Node is available.
+---
+
 # pack
 
 Use this when you want a portable, self-contained file, that runs anywhere without needing agency-lang installed.

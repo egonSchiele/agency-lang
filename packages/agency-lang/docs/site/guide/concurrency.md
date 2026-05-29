@@ -1,3 +1,8 @@
+---
+title: Concurrency
+description: Covers Agency's concurrency primitives including `parallel`, `seq`, `fork`, and `race` for running multiple branches of work simultaneously.
+---
+
 # Concurrency
 
 Agency offers a few concurrency primitives.

@@ -1,3 +1,8 @@
+---
+title: Editor and coding-agent integration
+description: Documents the `agency lsp` and `agency mcp` commands that expose Agency-aware tooling to editors and coding agents over the Language Server Protocol and Model Context Protocol.
+---
+
 # Editor and coding-agent integration
 
 Agency ships with two small servers — one over the Language Server Protocol, one over MCP — that you can wire into editors and coding agents.

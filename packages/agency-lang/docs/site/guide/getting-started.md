@@ -1,3 +1,8 @@
+---
+title: The Agency Programming Language
+description: Introduction to the Agency language guide, covering installation, a quick "hello world" example, and how to navigate the rest of the documentation.
+---
+
 # The Agency Programming Language
 
 Welcome! This guide will teach you all the major features of the Agency language, starting with the basics like syntax and how to execute an Agency program, and building up to more powerful features.

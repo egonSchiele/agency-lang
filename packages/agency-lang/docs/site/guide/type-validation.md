@@ -1,3 +1,8 @@
+---
+title: Type Validation
+description: Describes the `@validate` and related annotations that let you attach arbitrary validation logic to types, used by the bang (`!`) operator and other runtime validators.
+---
+
 # Type Validation
 
 Agency allows users to add an arbitrary validation logic on types. Remember that with [schemas](/guide/schemas), you could validate a type with the bang operator: `Person!`. You can also write custom validation that runs for any type. This validation also gets triggered when you validate using the bang operator.

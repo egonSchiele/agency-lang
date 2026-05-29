@@ -1,3 +1,8 @@
+---
+title: Memory
+description: Documents Agency's built-in memory layer — a JSON-backed knowledge graph of entities, observations, and relations — that lets agents recall facts across runs and auto-inject context into LLM calls.
+---
+
 # Memory
 
 Agency ships with a built-in memory layer that lets agents remember facts

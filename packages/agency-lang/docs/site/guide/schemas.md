@@ -1,3 +1,8 @@
+---
+title: Schemas
+description: Shows how Agency converts types into runtime Zod schemas via the `schema()` function and the bang (`!`) shorthand for validating values and function parameters.
+---
+
 # Schemas
 
 Types help with compile-time safety. In Agency, you can also use the same types for runtime validation.

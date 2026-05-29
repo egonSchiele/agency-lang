@@ -1,3 +1,8 @@
+---
+title: Observability
+description: How to enable Agency's structured logging for events like node entry, LLM calls, tool calls, and interrupts, and how to view the resulting JSONL logs.
+---
+
 # Observability
 
 If you would like agency to emit structured logs, set `observability: true` in your `agency.json`. Agency will now emit logs for different events such as entering a node, making an LLM call, making a tool call, throwing an interrupt, etc.

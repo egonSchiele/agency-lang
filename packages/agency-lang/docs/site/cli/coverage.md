@@ -1,3 +1,8 @@
+---
+title: Coverage
+description: Documents Agency's step-coverage system for tracking which lines of `.agency` source were executed by tests, including the `--coverage` test flag and the `coverage report` command.
+---
+
 # Coverage
 
 Agency includes a step-coverage system that tracks which lines of your `.agency` source files were exercised by tests. Coverage records every step the runtime executes (function bodies, `if`/`else` arms, loop iterations, handlers, etc.) and produces summary, detail, or HTML reports.

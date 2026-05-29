@@ -1,3 +1,8 @@
+---
+title: Handlers
+description: Explains how `handle ... with` blocks let agents respond to interrupts — approving, rejecting, or propagating them — using a running example of restricting destructive actions.
+---
+
 # Handlers
 ## The OpenClaw problem
 In case you haven't heard of it, [OpenClaw](https://github.com/openclaw/openclaw) is an open-source, personal AI assistant app:

@@ -1,3 +1,8 @@
+---
+title: Odds and Ends
+description: A grab bag of useful Agency features to help you get going quickly, including the standard library, interrupts, and serving agents over HTTP or MCP.
+---
+
 # Odds and Ends
 Here is a variety of stuff you might find useful. It's covered in more detail in later sections, but until you get there, this will help you get going quickly.
 

@@ -1,3 +1,8 @@
+---
+title: Agency's Standard Library
+description: Overview of Agency's standard library — how to import from it with the `std::` prefix and a list of the language-level builtins like `interrupt`, `schema`, `llm`, and `checkpoint`.
+---
+
 # Agency's Standard Library
 
 Agency has a growing standard library. You can check out all the different functions in the library in the sidebar. To import from the library, use the `std::` prefix:

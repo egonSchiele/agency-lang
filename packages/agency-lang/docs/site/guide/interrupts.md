@@ -1,3 +1,8 @@
+---
+title: Interrupts
+description: Introduces Agency's interrupt feature for pausing execution at any step to ask the user for input, with resumption from the exact point of pause — inside loops, conditionals, and tool calls.
+---
+
 # Interrupts
 
 Interrupts are a core feature in Agency. They allow you to pause execution at any step and ask the user for input. I think it's fair to say that Agency does interrupts better than any other library. Most libraries, if they offer interrupts, can only resume execution from the start of the function where the interrupt was defined, but Agency can resume execution from the exact point that we left off. Interrupts work inside if statements, inside loops, inside tool calls. They are a very powerful feature and they're also very easy to use.

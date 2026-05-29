@@ -1,3 +1,8 @@
+---
+title: Agency's execution model
+description: Explains how every Agency node call gets isolated state when invoked from TypeScript, and how `static` variables let you share expensive one-time initialization across runs.
+---
+
 # Agency's execution model
 
 While Agency can be used anywhere, it's written to be especially useful for websites, thanks to its special execution model.

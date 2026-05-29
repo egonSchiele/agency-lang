@@ -1,3 +1,8 @@
+---
+title: Compiling Agency code
+description: Documents the `agency compile` (alias `build`) command for compiling `.agency` files or directories to JavaScript or TypeScript, with watch-mode support.
+---
+
 # Compiling Agency code
 
 Agency code compiles down to plain JavaScript. To compile a file or directory, use the `compile` command (also aliased as `build`):

@@ -1,3 +1,8 @@
+---
+title: Reviewing a file
+description: Documents the `agency review` command, which combines the type checker with an LLM-driven review pass to catch common mistakes and anti-patterns in an Agency file.
+---
+
 # Reviewing a file
 
 *work in progress*

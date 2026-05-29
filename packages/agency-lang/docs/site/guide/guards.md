@@ -1,3 +1,8 @@
+---
+title: Guards
+description: Documents the `guard` function for capping the cost and/or compute time of a block of work, returning a `Result` that lets you handle budget overruns.
+---
+
 # Guards
 
 LLM-driven agents are easy to write, easy to deploy, and easy to set on fire — a runaway loop or a chatty tool can turn a planned $0.20 task into a $20 surprise, or a 200ms response into a five-minute hang. Agency's `guard` function caps the **cost** and/or **compute time** of a block of work and lets your code decide what to do when the budget is blown.

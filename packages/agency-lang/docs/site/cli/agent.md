@@ -1,3 +1,8 @@
+---
+title: The Agency assistant agent
+description: Documents the `agency agent` command, which launches an interactive LLM agent that knows Agency's syntax, standard library, and idioms to help you write or debug Agency code.
+---
+
 # The Agency assistant agent
 
 *Work in progress*

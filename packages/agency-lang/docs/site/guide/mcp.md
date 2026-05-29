@@ -1,3 +1,8 @@
+---
+title: MCP Servers
+description: How to connect your Agency agents to external Model Context Protocol (MCP) servers via the `@agency-lang/mcp` package to use their tools.
+---
+
 # MCP Servers
 
 Agency supports the [Model Context Protocol (MCP)](https://modelcontextprotocol.io/), a standard protocol for connecting to external tool servers. This lets your agents use tools provided by MCP servers — filesystem access, databases, GitHub, and more — without reimplementing them as Agency functions.

@@ -1,3 +1,8 @@
+---
+title: Traces and bundles
+description: Documents how to generate and inspect execution traces and source bundles using `agency trace run`, `agency run --trace`, and the debugger's trace-loading mode.
+---
+
 # Traces and bundles
 
 Just like you can step through a program in the agency debugger and time travel back and forth, exploring different parts of the state, you can do the same with every run of the program. This makes it easy to debug user issues. For example, if a user reports strange behavior from the agent, you don't need to rely on logs to piece together what happened. You can step through every single step of the program execution, see what the state looked like at the time, and what happened next. This feature is called traces.

@@ -1,3 +1,8 @@
+---
+title: VSCode Extension
+description: Brief install instructions for the Agency VS Code extension, which provides syntax highlighting and editor integration via the Agency language server.
+---
+
 # VSCode Extension
 
 To install the VS Code extension, first clone this repo:

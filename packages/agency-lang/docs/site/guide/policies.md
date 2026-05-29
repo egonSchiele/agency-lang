@@ -1,3 +1,8 @@
+---
+title: Policies
+description: Explains how to define structured policies — rules matching on interrupt kind and data — to auto-approve or reject interrupts inside handler blocks.
+---
+
 # Policies
 
 Claude Code has an interesting feature. When it asks you for approval for a tool, you can also say "don't ask me about this tool again". You auto-approve that tool for the future. How do you add a feature like that to your agent? By using policies.

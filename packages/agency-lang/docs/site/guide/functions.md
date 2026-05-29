@@ -1,3 +1,8 @@
+---
+title: Functions
+description: Covers function declarations in Agency, including docstrings (used as LLM tool descriptions), default and variadic arguments, named parameters, and block syntax.
+---
+
 # Functions
 All functions can be used as tools. More on this in the [chapter on LLMs](./llm). Functions can take a docstring, and this will be sent to the LLM as a description of the tool. You can have default arguments...
 

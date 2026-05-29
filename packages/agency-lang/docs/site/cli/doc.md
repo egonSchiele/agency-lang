@@ -1,3 +1,8 @@
+---
+title: Generating documentation
+description: Documents the `agency doc` command for auto-generating reference documentation from `.agency` source files, including docstring and doc-comment conventions.
+---
+
 # Generating documentation
 Agency provides a command for auto-generating documentation:
 

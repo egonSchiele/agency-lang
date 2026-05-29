@@ -1,3 +1,8 @@
+---
+title: Blocks
+description: Explains Agency's block syntax, used in place of lambdas for higher-order functions like `map`, including custom block-taking functions and inline block syntax.
+---
+
 # Blocks
 Although Agency doesn't have lambdas the way JavaScript does, it has a similar feature called blocks. You can use this to define functions that take another function. For example, let's use Agency's built-in `map` function, which takes a block:
 

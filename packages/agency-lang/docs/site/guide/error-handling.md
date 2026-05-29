@@ -1,3 +1,8 @@
+---
+title: Error handling
+description: Describes Agency's exception-free approach to errors using the `Result` type, with `success`/`failure` constructors and patterns for unwrapping results.
+---
+
 # Error handling
 Agency does not have exceptions. If an exception is thrown and not caught, it crashes your entire program, which is rarely what you want (unless you're Erlang). An exception can't be represented in the type system – the types won't tell you whether some function down the chain is going to throw an exception. Who wants a system full of hard-to-detect code that can crash the whole program?
 

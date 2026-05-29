@@ -1,3 +1,8 @@
+---
+title: Optimizing prompts
+description: Documents the `agency optimize` command, which iteratively improves a node's prompts and parameters using LLM feedback.
+---
+
 # Optimizing prompts
 
 *work in progress*

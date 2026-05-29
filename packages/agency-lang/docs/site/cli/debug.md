@@ -1,3 +1,8 @@
+---
+title: The Agency debugger
+description: Documents the `agency debug` command, an interactive terminal debugger that supports stepping forward and backward through execution, viewing checkpoints, and overriding variable values.
+---
+
 # The Agency debugger
 
 *Still a work in progress*

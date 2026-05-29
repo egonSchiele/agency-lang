@@ -1,3 +1,8 @@
+---
+title: Serving Agency code
+description: Documents the `agency serve mcp` and `agency serve http` commands for exposing exported functions and nodes as an MCP server or a JSON HTTP REST API, including auth and standalone bundling options.
+---
+
 # Serving Agency code
 
 You can expose the functions and nodes in an Agency file as either an MCP server or an HTTP REST API using `agency serve`. Only `export`-ed items are served.

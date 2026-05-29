@@ -1,3 +1,8 @@
+---
+title: Type checking
+description: Documents the `agency typecheck` (alias `tc`) command for type-checking one or more Agency files without compiling, including the `--strict` mode.
+---
+
 # Type checking
 
 To type check one or more Agency files without compiling them:

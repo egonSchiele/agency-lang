@@ -1,3 +1,8 @@
+---
+title: Serving Agency Code
+description: How to expose exported Agency functions and nodes over MCP (stdio) or HTTP REST so external tools and services can invoke your agents.
+---
+
 # Serving Agency Code
 
 Agency can serve your functions and nodes over MCP (stdio) or HTTP REST, letting external tools and services call into your agents.

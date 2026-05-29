@@ -1,3 +1,8 @@
+---
+title: Built-in Functions
+description: Reference table of every user-facing built-in function and language construct available in any `.agency` file without an import, covering LLM calls, checkpointing, interrupts, concurrency, and more.
+---
+
 # Built-in Functions
 
 This page lists every user-facing built-in function and built-in language construct in Agency. These are available in every `.agency` file without an `import` statement.

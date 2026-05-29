@@ -12,25 +12,24 @@ export safe def readSkills(dir: string) {
 
 def describeSkill(filename: string, fm: Result): string {
   """
-  Render a single line for the skills tool description given a filename
-  and the frontmatter Result returned from `frontmatter(...)`. Falls
-  back gracefully when the file has no frontmatter or only one of
-  title/description.
+  Render one `<skill>` XML block for the skills tool description given
+  a filename and the frontmatter Result returned from `frontmatter(...)`.
+  Falls back gracefully when the file has no frontmatter or is missing
+  one of title/description.
   """
   if (isFailure(fm)) {
-    return "- ${filename}"
+    return "  <skill>\n    <name>${filename}</name>\n    <description>(no frontmatter)</description>\n    <location>${filename}</location>\n  </skill>"
   }
   const data = fm.value
-  if (data.title != null && data.description != null) {
-    return "- ${filename}: ${data.title} — ${data.description}"
-  }
+  let title = filename
   if (data.title != null) {
-    return "- ${filename}: ${data.title}"
+    title = data.title
   }
+  let description = ""
   if (data.description != null) {
-    return "- ${filename}: ${data.description}"
+    description = data.description
   }
-  return "- ${filename}"
+  return "  <skill>\n    <name>${title}</name>\n    <description>${description}</description>\n    <location>${filename}</location>\n  </skill>"
 }
 
 /**
@@ -66,7 +65,8 @@ export def skillsDir(dir: string) {
     }
   }
 
-  const header = "Read a skill file from the skills directory '${dir}'. Pass `filename` to read a specific skill. Available skills:\n"
-  const description = header + lines.join("\n")
+  const header = "Read a skill file from the skills directory '${dir}' by passing its <location> as `filename` to the tool. Available skills:\n<available_skills>\n"
+  const footer = "\n</available_skills>"
+  const description = header + lines.join("\n") + footer
   return read.partial(dir: dir).describe(description)
 }

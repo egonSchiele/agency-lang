@@ -109,6 +109,8 @@ export def ls(dir: string = ".", recursive: boolean = false, allowedPaths: strin
 
   Relative `dir` is resolved against the calling Agency module's directory (same policy as `read`/`write`/`glob`/`grep`), and returned `path` values are relative to `dir` — so results compose with `read(path, dir)` directly.
 
+  Returns every entry under `dir` — large recursive listings can balloon. Narrow `dir`, set `recursive: false`, or use `glob` with a more specific pattern when you only need a subset.
+
   @param dir - The directory to list (relative paths resolve against the module directory)
   @param recursive - Whether to walk subdirectories
   @param allowedPaths - Only allow listing directories under these prefixes
@@ -139,6 +141,8 @@ export def grep(
 
   Relative `dir` is resolved against the calling Agency module's directory (same policy as `read`/`write`/`glob`/`ls`), and returned `file` values are relative to `dir` — so results compose with `read(file, dir)` directly.
 
+  Returns at most `maxResults` matches (default 200). Files larger than 5 MB are skipped silently. If you suspect matches were truncated, narrow `dir` or refine `pattern`.
+
   @param pattern - The regex pattern to search for
   @param dir - The directory to search in (relative paths resolve against the module directory)
   @param flags - Regex flags
@@ -165,6 +169,8 @@ export def glob(
   Find files whose paths match a glob pattern (e.g. "src/**/*.ts"). Stops at maxResults. Fails if the pattern is not valid glob syntax or the directory cannot be read. Set allowedPaths to restrict which directories may be searched.
 
   Relative `dir` is resolved against the calling Agency module's directory (same policy as `read`/`write`/`ls`/`grep`), and returned paths are relative to `dir` — so results compose with `read(path, dir)` directly.
+
+  Returns at most `maxResults` paths (default 500). If you suspect matches were truncated, narrow `dir` or tighten the glob.
 
   @param pattern - The glob pattern to match
   @param dir - The directory to search in (relative paths resolve against the module directory)

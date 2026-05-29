@@ -703,3 +703,63 @@ describe("StateStack.rehydrateInheritedGuardsFrom", () => {
     expect(child.inheritedGuardCount).toBe(0);
   });
 });
+
+describe("StateStack memory frames", () => {
+  const frameA = { configKey: "/abs/dirA", config: { dir: "/abs/dirA" } };
+  const frameAOther = { configKey: "/abs/dirA", config: { dir: "/abs/dirA", model: "different" } };
+  const frameB = { configKey: "/abs/dirB", config: { dir: "/abs/dirB" } };
+
+  it("topMemoryFrame returns undefined on a fresh stack", () => {
+    const s = new StateStack();
+    expect(s.topMemoryFrame()).toBeUndefined();
+  });
+
+  it("pushMemoryFrame then topMemoryFrame returns the frame", () => {
+    const s = new StateStack();
+    s.pushMemoryFrame(frameA);
+    expect(s.topMemoryFrame()).toEqual(frameA);
+  });
+
+  it("same-dir push is a no-op (does not stack)", () => {
+    const s = new StateStack();
+    s.pushMemoryFrame(frameA);
+    s.pushMemoryFrame(frameAOther);
+    expect(s.topMemoryFrame()).toEqual(frameA);
+    // pop once should leave the stack empty
+    s.popMemoryFrame();
+    expect(s.topMemoryFrame()).toBeUndefined();
+  });
+
+  it("different-dir push stacks on top, pop returns to previous", () => {
+    const s = new StateStack();
+    s.pushMemoryFrame(frameA);
+    s.pushMemoryFrame(frameB);
+    expect(s.topMemoryFrame()).toEqual(frameB);
+    s.popMemoryFrame();
+    expect(s.topMemoryFrame()).toEqual(frameA);
+  });
+
+  it("popMemoryFrame on empty returns undefined and leaves stack empty", () => {
+    const s = new StateStack();
+    expect(s.popMemoryFrame()).toBeUndefined();
+    expect(s.topMemoryFrame()).toBeUndefined();
+  });
+
+  it("frames survive a serialize/deserialize roundtrip with nested config", () => {
+    const richFrame = {
+      configKey: "/abs/rich",
+      config: {
+        dir: "/abs/rich",
+        model: "gpt-4o",
+        autoExtract: { interval: 7 },
+        compaction: { trigger: "messages" as const, threshold: 100 },
+        embeddings: { model: "text-embedding-3-small" },
+      },
+    };
+    const s = new StateStack();
+    s.pushMemoryFrame(richFrame);
+    const json = s.toJSON();
+    const restored = StateStack.fromJSON(json);
+    expect(restored.topMemoryFrame()).toEqual(richFrame);
+  });
+});

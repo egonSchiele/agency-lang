@@ -36,7 +36,10 @@ function makeFakeCtx(): { ctx: any; manager: FakeManager } {
       this.setMemoryIdCalls.push(id);
     },
   };
-  return { ctx: { memoryManager: manager }, manager };
+  return {
+    ctx: { getActiveMemoryManager: () => manager },
+    manager,
+  };
 }
 
 describe("std::memory ctx-passing concurrency", () => {
@@ -76,5 +79,134 @@ describe("std::memory ctx-passing concurrency", () => {
     expect(__internal_shouldRunMemory(a.ctx, null as any, null as any)).toBe(true);
     expect(__internal_shouldRunMemory({} as any, null as any, null as any)).toBe(false);
     expect(__internal_shouldRunMemory(null as any, null as any, null as any)).toBe(false);
+  });
+});
+
+import {
+  _enableMemory,
+  _disableMemory,
+} from "./memory.js";
+import {
+  _resetStoreRegistry,
+} from "../runtime/memory/index.js";
+import { runInTestContext } from "../runtime/asyncContext.js";
+import { RuntimeContext } from "../runtime/state/context.js";
+import { StateStack } from "../runtime/state/stateStack.js";
+import { ThreadStore } from "../runtime/state/threadStore.js";
+import { beforeEach, afterEach } from "vitest";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+
+describe("std::memory enable/disable/block", () => {
+  let tmpRoot: string;
+  let dirA: string;
+  let dirB: string;
+
+  function makeCtx(memory?: { dir: string }) {
+    return new RuntimeContext({
+      statelogConfig: {
+        host: "https://example.com",
+        apiKey: "test-api-key",
+        projectId: "test-project",
+        debugMode: false,
+      },
+      smoltalkDefaults: {},
+      dirname: tmpRoot,
+      memory,
+    });
+  }
+
+  async function withCtx(ctx: RuntimeContext<any>, fn: () => Promise<void>): Promise<void> {
+    const execCtx = await ctx.createExecutionContext("r1");
+    await runInTestContext(execCtx, execCtx.stateStack, new ThreadStore(), fn);
+  }
+
+  beforeEach(() => {
+    _resetStoreRegistry();
+    tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), "stdmem-"));
+    dirA = path.join(tmpRoot, "a");
+    dirB = path.join(tmpRoot, "b");
+  });
+
+  afterEach(() => {
+    fs.rmSync(tmpRoot, { recursive: true, force: true });
+    _resetStoreRegistry();
+  });
+
+  it("_enableMemory pushes a frame on top of nothing", async () => {
+    const ctx = makeCtx();
+    await withCtx(ctx, async () => {
+      await _enableMemory({ dir: dirA });
+    });
+  });
+
+  it("_enableMemory is a no-op when pushing the same dir as the top frame", async () => {
+    const ctx = makeCtx();
+    const execCtx = await ctx.createExecutionContext("r1");
+    await runInTestContext(execCtx, execCtx.stateStack, new ThreadStore(), async () => {
+      await _enableMemory({ dir: dirA });
+      const beforeFrames = (execCtx.stateStack.other.memoryFrames as any[]).length;
+      await _enableMemory({ dir: dirA });
+      const afterFrames = (execCtx.stateStack.other.memoryFrames as any[]).length;
+      expect(afterFrames).toBe(beforeFrames);
+    });
+  });
+
+  it("_enableMemory with a different dir stacks on top", async () => {
+    const ctx = makeCtx();
+    const execCtx = await ctx.createExecutionContext("r1");
+    await runInTestContext(execCtx, execCtx.stateStack, new ThreadStore(), async () => {
+      await _enableMemory({ dir: dirA });
+      await _enableMemory({ dir: dirB });
+      const frames = execCtx.stateStack.other.memoryFrames as any[];
+      expect(frames.length).toBe(2);
+      expect(frames[1].configKey).toBe(fs.realpathSync(dirB));
+    });
+  });
+
+  it("_disableMemory pops one frame", async () => {
+    const ctx = makeCtx();
+    const execCtx = await ctx.createExecutionContext("r1");
+    await runInTestContext(execCtx, execCtx.stateStack, new ThreadStore(), async () => {
+      await _enableMemory({ dir: dirA });
+      await _enableMemory({ dir: dirB });
+      _disableMemory();
+      const frames = execCtx.stateStack.other.memoryFrames as any[];
+      expect(frames.length).toBe(1);
+      expect(frames[0].configKey).toBe(fs.realpathSync(dirA));
+    });
+  });
+
+  it("frames survive serialize/deserialize with nested config intact", async () => {
+    const ctx = makeCtx();
+    const execCtx = await ctx.createExecutionContext("r1");
+    const richConfig = {
+      dir: dirA,
+      model: "gpt-4o",
+      autoExtract: { interval: 3 },
+      compaction: { trigger: "messages" as const, threshold: 12 },
+      embeddings: { model: "emb-1" },
+    };
+    await runInTestContext(execCtx, execCtx.stateStack, new ThreadStore(), async () => {
+      await _enableMemory(richConfig);
+    });
+    const json = execCtx.stateStack.toJSON();
+    const restored = StateStack.fromJSON(json);
+    const top = restored.topMemoryFrame();
+    expect(top?.configKey).toBe(fs.realpathSync(dirA));
+    expect(top?.config).toEqual(richConfig);
+  });
+
+  it("_disableMemory against the JSON-seeded bottom frame turns memory off", async () => {
+    const dirJson = path.join(tmpRoot, "json");
+    fs.mkdirSync(dirJson);
+    const ctx = makeCtx({ dir: dirJson });
+    const execCtx = await ctx.createExecutionContext("r1");
+    expect(execCtx.getActiveMemoryManager()).toBeDefined();
+    await runInTestContext(execCtx, execCtx.stateStack, new ThreadStore(), async () => {
+      _disableMemory();
+    });
+    expect(execCtx.getActiveMemoryManager()).toBeUndefined();
   });
 });

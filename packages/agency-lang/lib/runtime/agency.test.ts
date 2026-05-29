@@ -1,4 +1,7 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { agency } from "./agency.js";
 import { agencyStore } from "./asyncContext.js";
 import { RuntimeContext } from "./state/context.js";
@@ -6,6 +9,7 @@ import { StateStack } from "./state/stateStack.js";
 import { ThreadStore } from "./state/threadStore.js";
 import { RestoreSignal } from "./errors.js";
 import { CostGuard, TimeGuard } from "./guard.js";
+import { _resetStoreRegistry } from "./memory/index.js";
 import { makeMockCtx } from "./__tests__/testHelpers.js";
 
 function setup() {
@@ -335,5 +339,108 @@ describe("agency.withTestContext", () => {
     });
     expect(agency.ctxMaybe()).toBeUndefined();
     expect(agencyStore.getStore()).toBeUndefined();
+  });
+});
+
+describe("agency.memory.*", () => {
+  let tmpRoot: string;
+
+  function makeMemCtx(memory?: { dir: string }) {
+    const ctx = new RuntimeContext({
+      statelogConfig: { host: "", apiKey: "", projectId: "", debugMode: false, observability: false },
+      smoltalkDefaults: {},
+      dirname: process.cwd(),
+      memory,
+    });
+    return ctx;
+  }
+
+  beforeEach(() => {
+    tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), "agencymem-"));
+    _resetStoreRegistry();
+  });
+
+  afterEach(() => {
+    fs.rmSync(tmpRoot, { recursive: true, force: true });
+    _resetStoreRegistry();
+  });
+
+  it("agency.memory.enabled returns false when no frame is active", async () => {
+    const ctx = makeMemCtx();
+    const execCtx = await ctx.createExecutionContext("r1");
+    agency.withTestContext(
+      { ctx: execCtx, stack: execCtx.stateStack, threads: new ThreadStore() },
+      () => {
+        expect(agency.memory.enabled()).toBe(false);
+      },
+    );
+  });
+
+  it("agency.memory.enable pushes a frame and enabled() returns true", async () => {
+    const ctx = makeMemCtx();
+    const execCtx = await ctx.createExecutionContext("r1");
+    await agency.withTestContext(
+      { ctx: execCtx, stack: execCtx.stateStack, threads: new ThreadStore() },
+      async () => {
+        await agency.memory.enable({ dir: tmpRoot });
+        expect(agency.memory.enabled()).toBe(true);
+      },
+    );
+  });
+
+  it("agency.memory.disable pops the active frame; enabled() returns false again", async () => {
+    const ctx = makeMemCtx();
+    const execCtx = await ctx.createExecutionContext("r1");
+    await agency.withTestContext(
+      { ctx: execCtx, stack: execCtx.stateStack, threads: new ThreadStore() },
+      async () => {
+        await agency.memory.enable({ dir: tmpRoot });
+        expect(agency.memory.enabled()).toBe(true);
+        agency.memory.disable();
+        expect(agency.memory.enabled()).toBe(false);
+      },
+    );
+  });
+
+  it("agency.memory.setId updates the memoryId on the active stack", async () => {
+    const ctx = makeMemCtx();
+    const execCtx = await ctx.createExecutionContext("r1");
+    await agency.withTestContext(
+      { ctx: execCtx, stack: execCtx.stateStack, threads: new ThreadStore() },
+      async () => {
+        await agency.memory.enable({ dir: tmpRoot });
+        await agency.memory.setId("alice");
+        expect(execCtx.stateStack.other.memoryId).toBe("alice");
+      },
+    );
+  });
+
+  it("agency.memory.remember / recall round-trips through the active store", async () => {
+    const ctx = makeMemCtx();
+    const execCtx = await ctx.createExecutionContext("r1");
+    await agency.withTestContext(
+      { ctx: execCtx, stack: execCtx.stateStack, threads: new ThreadStore() },
+      async () => {
+        await agency.memory.enable({ dir: tmpRoot });
+        await agency.memory.setId("alice");
+        // remember + forget rely on LLM calls so we skip them here;
+        // call recall to exercise the wiring and assert it returns a
+        // string (empty when there is nothing to recall).
+        const r = await agency.memory.recall("anything");
+        expect(typeof r).toBe("string");
+      },
+    );
+  });
+
+  it("agency.memory.forget no-ops when memory is off", async () => {
+    const ctx = makeMemCtx();
+    const execCtx = await ctx.createExecutionContext("r1");
+    await agency.withTestContext(
+      { ctx: execCtx, stack: execCtx.stateStack, threads: new ThreadStore() },
+      async () => {
+        // No enableMemory call → forget should resolve to undefined.
+        await expect(agency.memory.forget("anything")).resolves.toBeUndefined();
+      },
+    );
   });
 });

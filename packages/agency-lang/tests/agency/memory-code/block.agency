@@ -1,0 +1,18 @@
+import { memory, recall } from "std::memory"
+
+// Block form: `memory({...}) as { ... }` pushes a frame on entry
+// and pops on exit. Inside the block, `recall` reaches the active
+// store (empty graph -> "") so the call returns "". Outside the
+// block, no frame is active so `recall` short-circuits and also
+// returns "". The point of this test is that the block body
+// executes and returns without throwing, and that the pop happens
+// on normal exit (so a follow-up recall outside still works).
+node main(): boolean {
+  let inside: string = "unset"
+  memory({ dir: ".agency-tmp/memory-code-block-test" }) as {
+    inside = recall("anything")
+  }
+  // After block exit, memory frame is popped — recall is a no-op.
+  const outside: string = recall("anything")
+  return inside == "" && outside == ""
+}

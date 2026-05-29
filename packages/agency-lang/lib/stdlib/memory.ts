@@ -1,9 +1,12 @@
 import { getRuntimeContext } from "../runtime/asyncContext.js";
+import { AgencyFunction } from "../runtime/agencyFunction.js";
 import type { RuntimeContext } from "../runtime/state/context.js";
 import type {
   ExtractionResult,
   ForgetResult,
 } from "../runtime/memory/index.js";
+import { normalizeMemoryFrame } from "../runtime/memory/frame.js";
+import type { MemoryConfig } from "../runtime/memory/types.js";
 import type { StateStack } from "../runtime/state/stateStack.js";
 import type { ThreadStore } from "../runtime/state/threadStore.js";
 
@@ -18,11 +21,14 @@ import type { ThreadStore } from "../runtime/state/threadStore.js";
  * the TypeScript builder prepends `__ctx`, `__stateStack`, and
  * `__threads` at every context-injected call site.
  *
- * If memory isn't configured in `agency.json`, every function is a
- * no-op: side-effecting helpers resolve to `undefined`,
+ * If no memory frame is active (neither `agency.json` nor a code-side
+ * `enableMemory(...)` has set one), every function is a no-op:
+ * side-effecting helpers resolve to `undefined`,
  * `__internal_recall` to `""`, and the prompt-build helpers return
  * `""` so the agency-side guard short-circuits.
  */
+
+// ---- ctx-passing variants (kept for the context-injected builtin migration) ----
 
 export async function __internal_setMemoryId(
   ctx: RuntimeContext<any>,
@@ -30,8 +36,9 @@ export async function __internal_setMemoryId(
   _threads: ThreadStore,
   id: string,
 ): Promise<void> {
-  if (!ctx?.memoryManager) return;
-  ctx.memoryManager.setMemoryId(id);
+  const manager = ctx?.getActiveMemoryManager?.();
+  if (!manager) return;
+  manager.setMemoryId(id);
 }
 
 export function __internal_shouldRunMemory(
@@ -39,7 +46,7 @@ export function __internal_shouldRunMemory(
   _stack: StateStack,
   _threads: ThreadStore,
 ): boolean {
-  return ctx?.memoryManager !== undefined;
+  return ctx?.getActiveMemoryManager?.() !== undefined;
 }
 
 export async function __internal_buildExtractionPrompt(
@@ -48,8 +55,9 @@ export async function __internal_buildExtractionPrompt(
   _threads: ThreadStore,
   content: string,
 ): Promise<string> {
-  if (!ctx?.memoryManager) return "";
-  return ctx.memoryManager.buildExtractionPromptFor(content);
+  const manager = ctx?.getActiveMemoryManager?.();
+  if (!manager) return "";
+  return manager.buildExtractionPromptFor(content);
 }
 
 export async function __internal_applyExtractionResult(
@@ -58,8 +66,9 @@ export async function __internal_applyExtractionResult(
   _threads: ThreadStore,
   result: ExtractionResult,
 ): Promise<void> {
-  if (!ctx?.memoryManager) return;
-  await ctx.memoryManager.applyExtractionFromLLM(result);
+  const manager = ctx?.getActiveMemoryManager?.();
+  if (!manager) return;
+  await manager.applyExtractionFromLLM(result);
 }
 
 export async function __internal_buildForgetPrompt(
@@ -68,8 +77,9 @@ export async function __internal_buildForgetPrompt(
   _threads: ThreadStore,
   query: string,
 ): Promise<string> {
-  if (!ctx?.memoryManager) return "";
-  return ctx.memoryManager.buildForgetPromptFor(query);
+  const manager = ctx?.getActiveMemoryManager?.();
+  if (!manager) return "";
+  return manager.buildForgetPromptFor(query);
 }
 
 export async function __internal_applyForgetResult(
@@ -78,8 +88,9 @@ export async function __internal_applyForgetResult(
   _threads: ThreadStore,
   result: ForgetResult,
 ): Promise<void> {
-  if (!ctx?.memoryManager) return;
-  await ctx.memoryManager.applyForgetFromLLM(result);
+  const manager = ctx?.getActiveMemoryManager?.();
+  if (!manager) return;
+  await manager.applyForgetFromLLM(result);
 }
 
 export async function __internal_remember(
@@ -88,8 +99,9 @@ export async function __internal_remember(
   _threads: ThreadStore,
   content: string,
 ): Promise<void> {
-  if (!ctx?.memoryManager) return;
-  await ctx.memoryManager.remember(content);
+  const manager = ctx?.getActiveMemoryManager?.();
+  if (!manager) return;
+  await manager.remember(content);
 }
 
 export async function __internal_recall(
@@ -98,8 +110,9 @@ export async function __internal_recall(
   _threads: ThreadStore,
   query: string,
 ): Promise<string> {
-  if (!ctx?.memoryManager) return "";
-  return ctx.memoryManager.recall(query);
+  const manager = ctx?.getActiveMemoryManager?.();
+  if (!manager) return "";
+  return manager.recall(query);
 }
 
 export async function __internal_forget(
@@ -108,8 +121,9 @@ export async function __internal_forget(
   _threads: ThreadStore,
   query: string,
 ): Promise<void> {
-  if (!ctx?.memoryManager) return;
-  await ctx.memoryManager.forget(query);
+  const manager = ctx?.getActiveMemoryManager?.();
+  if (!manager) return;
+  await manager.forget(query);
 }
 
 // ── ALS-reading replacements for the `__internal_*` exports above ──
@@ -117,53 +131,129 @@ export async function __internal_forget(
 
 export async function _setMemoryId(id: string): Promise<void> {
   const { ctx } = getRuntimeContext();
-  if (!ctx?.memoryManager) return;
-  ctx.memoryManager.setMemoryId(id);
+  const manager = ctx?.getActiveMemoryManager?.();
+  if (!manager) return;
+  manager.setMemoryId(id);
 }
 
 export function _shouldRunMemory(): boolean {
   const { ctx } = getRuntimeContext();
-  return ctx?.memoryManager !== undefined;
+  return ctx?.getActiveMemoryManager?.() !== undefined;
 }
 
 export async function _buildExtractionPrompt(content: string): Promise<string> {
   const { ctx } = getRuntimeContext();
-  if (!ctx?.memoryManager) return "";
-  return ctx.memoryManager.buildExtractionPromptFor(content);
+  const manager = ctx?.getActiveMemoryManager?.();
+  if (!manager) return "";
+  return manager.buildExtractionPromptFor(content);
 }
 
 export async function _applyExtractionResult(result: ExtractionResult): Promise<void> {
   const { ctx } = getRuntimeContext();
-  if (!ctx?.memoryManager) return;
-  await ctx.memoryManager.applyExtractionFromLLM(result);
+  const manager = ctx?.getActiveMemoryManager?.();
+  if (!manager) return;
+  await manager.applyExtractionFromLLM(result);
 }
 
 export async function _buildForgetPrompt(query: string): Promise<string> {
   const { ctx } = getRuntimeContext();
-  if (!ctx?.memoryManager) return "";
-  return ctx.memoryManager.buildForgetPromptFor(query);
+  const manager = ctx?.getActiveMemoryManager?.();
+  if (!manager) return "";
+  return manager.buildForgetPromptFor(query);
 }
 
 export async function _applyForgetResult(result: ForgetResult): Promise<void> {
   const { ctx } = getRuntimeContext();
-  if (!ctx?.memoryManager) return;
-  await ctx.memoryManager.applyForgetFromLLM(result);
+  const manager = ctx?.getActiveMemoryManager?.();
+  if (!manager) return;
+  await manager.applyForgetFromLLM(result);
 }
 
 export async function _remember(content: string): Promise<void> {
   const { ctx } = getRuntimeContext();
-  if (!ctx?.memoryManager) return;
-  await ctx.memoryManager.remember(content);
+  const manager = ctx?.getActiveMemoryManager?.();
+  if (!manager) return;
+  await manager.remember(content);
 }
 
 export async function _recall(query: string): Promise<string> {
   const { ctx } = getRuntimeContext();
-  if (!ctx?.memoryManager) return "";
-  return ctx.memoryManager.recall(query);
+  const manager = ctx?.getActiveMemoryManager?.();
+  if (!manager) return "";
+  return manager.recall(query);
 }
 
 export async function _forget(query: string): Promise<void> {
   const { ctx } = getRuntimeContext();
-  if (!ctx?.memoryManager) return;
-  await ctx.memoryManager.forget(query);
+  const manager = ctx?.getActiveMemoryManager?.();
+  if (!manager) return;
+  await manager.forget(query);
+}
+
+// ── New: enable / disable / block ──
+//
+// "What" lives here. "How" lives in normalizeMemoryFrame +
+// StateStack.{push,pop,top}MemoryFrame.
+
+/**
+ * Push a memory frame onto the current branch's stateStack.
+ *
+ * Process-wide stores are cached by absolute realpath'd dir, so
+ * multiple calls with the same dir share one underlying store.
+ * Repeating the same dir as the current top frame is a no-op (so the
+ * common `static const _ = enableMemory(...)` plus an
+ * `enableMemory(...)` in `main()` is safe). Pushing a different dir
+ * stacks the new frame on top — pop it with `disableMemory()`.
+ *
+ * Auto-creates the dir if missing. Resolves `dir` against
+ * `process.cwd()` (deliberately the same as `agency.json`'s
+ * `memory.dir`, NOT the module dir like `read`/`write`).
+ */
+export async function _enableMemory(config: MemoryConfig): Promise<void> {
+  const { stack } = getRuntimeContext();
+  if (!stack) return;
+  stack.pushMemoryFrame(normalizeMemoryFrame(config));
+}
+
+/** Pop the top memory frame from the current branch's stateStack.
+ *  Frame-scoped: a `disableMemory()` inside a fork branch only
+ *  affects that branch. Pops the JSON-seeded bottom frame too —
+ *  library authors should avoid calling this casually. */
+export function _disableMemory(): void {
+  const { stack } = getRuntimeContext();
+  stack?.popMemoryFrame();
+}
+
+/**
+ * Run `block` with `config` pushed as the active memory frame; pop
+ * on exit (including on throw). The block-form sibling of
+ * `enableMemory` / `disableMemory` for lexical scoping.
+ *
+ * The push/pop is implemented in TS rather than Agency `try/finally`
+ * because Agency has no `finally`; an explicit TS wrapper is the
+ * smallest correct construct. `block` is the AgencyFunction the
+ * compiler synthesises for `memory({...}) as { ... }` — invoke it
+ * through `AgencyFunction.invoke` so its frame, callsite, and
+ * interrupt machinery hook up correctly.
+ */
+export async function _memoryBlock(
+  config: MemoryConfig,
+  block: AgencyFunction | (() => unknown),
+): Promise<unknown> {
+  const callBlock = (): Promise<unknown> => {
+    if (AgencyFunction.isAgencyFunction(block)) {
+      return Promise.resolve(
+        (block as AgencyFunction).invoke({ type: "positional", args: [] }),
+      );
+    }
+    return Promise.resolve((block as () => unknown)());
+  };
+  const { stack } = getRuntimeContext();
+  if (!stack) return await callBlock();
+  stack.pushMemoryFrame(normalizeMemoryFrame(config));
+  try {
+    return await callBlock();
+  } finally {
+    stack.popMemoryFrame();
+  }
 }

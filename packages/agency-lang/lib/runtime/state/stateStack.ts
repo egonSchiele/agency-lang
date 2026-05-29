@@ -1,6 +1,7 @@
 import type { Guard, GuardJSON } from "../guard.js";
 import { guardFromJSON } from "../guard.js";
 import { Checkpoint } from "../index.js";
+import type { MemoryFrame } from "../memory/frame.js";
 import { deepClone } from "../utils.js";
 import { ThreadStoreJSON } from "./threadStore.js";
 
@@ -328,6 +329,49 @@ export class StateStack {
   // double-serializing shared state.
   guards: Guard[] = [];
   inheritedGuardCount: number = 0;
+
+  /**
+   * Push a memory frame onto this stack. Frames live in `other.memoryFrames`
+   * so they serialize and fork-clone for free via the existing
+   * `other` deepClone path. Callers MUST NOT touch the underlying
+   * array directly — go through these three methods.
+   *
+   * Same-`configKey` as top is a no-op so the common pattern
+   * `static const _ = enableMemory(...)` + an `enableMemory(...)`
+   * in `main()` doesn't double-stack the same frame. Different-dir
+   * pushes stack on top; pop with `popMemoryFrame()` or use the
+   * `memory(){}` block for lexical scoping.
+   */
+  pushMemoryFrame(frame: MemoryFrame): void {
+    const top = this.topMemoryFrame();
+    if (top?.configKey === frame.configKey) return;
+    const existing = (this.other.memoryFrames as MemoryFrame[] | undefined) ?? [];
+    this.other.memoryFrames = [...existing, frame];
+  }
+
+  /** Pop the top memory frame, including the JSON-seeded bottom frame.
+   *  Returns the popped frame or `undefined` if the stack is already
+   *  empty.
+   *
+   *  When the last frame is popped the array stays present (but
+   *  empty) so `topMemoryFrame()` returns `undefined` and the
+   *  old-checkpoint re-seed in `getActiveMemoryManager()` knows the
+   *  user explicitly disabled memory rather than restored an
+   *  ancient snapshot. */
+  popMemoryFrame(): MemoryFrame | undefined {
+    const existing = this.other.memoryFrames as MemoryFrame[] | undefined;
+    if (!existing || existing.length === 0) return undefined;
+    const popped = existing[existing.length - 1];
+    this.other.memoryFrames = existing.slice(0, -1);
+    return popped;
+  }
+
+  /** The active memory frame, or `undefined` if memory is currently off. */
+  topMemoryFrame(): MemoryFrame | undefined {
+    const frames = this.other.memoryFrames as MemoryFrame[] | undefined;
+    if (!frames || frames.length === 0) return undefined;
+    return frames[frames.length - 1];
+  }
 
   pushGuard(guard: Guard): void {
     guard.install(this);

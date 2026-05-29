@@ -11,11 +11,9 @@ import type { AgencyCallbacks } from "../hooks.js";
 import type { InterruptResponse } from "../interrupts.js";
 import { LLMClient, SmoltalkClient } from "../llmClient.js";
 import { MemoryManager } from "../memory/manager.js";
-import { FileMemoryStore } from "../memory/store.js";
-import type {
-  MemoryConfig,
-  MemoryStore as MemoryStoreType,
-} from "../memory/types.js";
+import { normalizeMemoryFrame, type MemoryFrame } from "../memory/frame.js";
+import { getOrCreateStore } from "../memory/registry.js";
+import type { MemoryConfig } from "../memory/types.js";
 import { GlobalStore } from "../state/globalStore.js";
 import { StateStack } from "../state/stateStack.js";
 import { TraceWriter } from "../trace/traceWriter.js";
@@ -145,12 +143,23 @@ export class RuntimeContext<T> {
   maxRestores: number;
 
   // Memory layer (resolved decisions in
-  // docs/superpowers/plans/2026-05-12-memory-layer.md). The store is
-  // process-wide and shared across runs; each execCtx gets its own
-  // MemoryManager instance bound to its stateStack.
-  private memoryConfig?: MemoryConfig;
-  private memoryStore?: MemoryStoreType;
-  memoryManager?: MemoryManager;
+  // docs/superpowers/plans/2026-05-12-memory-layer.md and
+  // docs/superpowers/plans/2026-05-29-memory-config-in-code.md).
+  //
+  // `jsonMemoryConfig` is the immutable seed from `agency.json`'s
+  // `memory:` block. Each execCtx pushes it as the bottom frame on
+  // its stateStack at construction so the active config is always
+  // "top of stack or nothing." Code calls to `enableMemory(...)`
+  // push additional frames on top. The "code wins over JSON" rule
+  // is structural, not coded.
+  //
+  // Per-execCtx managers are cached by `configKey` so we don't
+  // rebuild a heavy MemoryManager every time stdlib code looks up
+  // the active manager. Cache lives on each execCtx (not on this
+  // parent context) because manager construction takes the
+  // execCtx's own statelog client / log level / llm client.
+  jsonMemoryConfig?: MemoryConfig;
+  private memoryManagerCache: Record<string, MemoryManager> = {};
 
   constructor(args: {
     statelogConfig: StatelogConfig;
@@ -211,12 +220,12 @@ export class RuntimeContext<T> {
       this.coverageCollector = getProcessCoverageCollector();
     }
 
+    // JSON-derived memory config is kept as an immutable seed; the
+    // actual store + manager are looked up lazily through
+    // `getActiveMemoryManager()` on each execCtx so there's a single
+    // source of truth (the active stateStack's frame stack).
     if (args.memory) {
-      this.memoryConfig = args.memory;
-      // Pass logLevel so the file store can chatter at debug about
-      // every read/write — handy for spotting "why isn't anything
-      // persisting?" without a debugger.
-      this.memoryStore = new FileMemoryStore(args.memory.dir, this.logLevel);
+      this.jsonMemoryConfig = args.memory;
     }
   }
 
@@ -265,42 +274,105 @@ export class RuntimeContext<T> {
     });
     execCtx.coverageCollector = this.coverageCollector;
 
-    // Memory layer: per-execCtx MemoryManager backed by the shared store.
-    // The memoryIdRef reads/writes stateStack.other.memoryId so the active
-    // id survives interrupt/resume (resolved decision #1). We capture
-    // execCtx in the closure rather than reading `this`, because the ref
-    // must always see execCtx's current stateStack (which can be replaced
-    // by restoreState).
-    if (this.memoryConfig && this.memoryStore) {
-      execCtx.memoryConfig = this.memoryConfig;
-      execCtx.memoryStore = this.memoryStore;
-      execCtx.memoryManager = new MemoryManager({
-        store: this.memoryStore,
-        config: this.memoryConfig,
-        llmClient: execCtx._llmClient,
-        smoltalkDefaults: execCtx.smoltalkDefaults,
-        source: this.traceConfig?.program ?? "agent",
-        // Reuse the per-execCtx StatelogClient so memory's own LLM/embed
-        // spans nest under the same trace as the agent's calls.
-        statelogClient: execCtx.statelogClient,
-        // Threshold for memory's internal logger; promoting this to
-        // "debug" in agency.json surfaces every tier/extract/compact
-        // step on stderr.
-        logLevel: execCtx.logLevel,
-        memoryIdRef: {
-          get: () => {
-            const id = execCtx.stateStack?.other?.memoryId;
-            return typeof id === "string" ? id : "default";
-          },
-          set: (id: string) => {
-            if (!execCtx.stateStack) return;
-            execCtx.stateStack.other.memoryId = id;
-          },
-        },
-      });
+    // Memory layer: per-execCtx state.
+    //   - jsonMemoryConfig is forwarded so `getActiveMemoryManager()`
+    //     can re-seed the bottom frame on resumes from old
+    //     checkpoints that pre-date frames-on-stateStack.
+    //   - memoryManagerCache is per-execCtx (statelog client, llm
+    //     client, log level are all per-execCtx).
+    //   - JSON config seeds the BOTTOM frame on the new stateStack;
+    //     after this point the active stack is the only source of
+    //     truth. Code-level `enableMemory(...)` pushes on top.
+    execCtx.jsonMemoryConfig = this.jsonMemoryConfig;
+    execCtx.memoryManagerCache = {};
+    if (this.jsonMemoryConfig) {
+      execCtx.stateStack.pushMemoryFrame(
+        normalizeMemoryFrame(this.jsonMemoryConfig),
+      );
     }
 
     return execCtx;
+  }
+
+  /**
+   * Resolve the active `MemoryManager` for the current stateStack.
+   *
+   * Single rule: top of `stateStack.other.memoryFrames` (accessed via
+   * `topMemoryFrame()`) wins. No fallback to a "default" manager —
+   * the JSON config gets seeded as the bottom frame at execCtx
+   * creation, so if JSON was set there will always be a frame and
+   * this never returns `undefined` for JSON-only setups.
+   *
+   * The one back-compat seam: a checkpoint written before
+   * `memoryFrames` existed (or one taken right after a user called
+   * `disableMemory()` on the JSON-seeded bottom frame) has no frames.
+   * If `jsonMemoryConfig` is set we re-seed it as a courtesy so old
+   * traces resume as before. If the user explicitly popped, they
+   * call `enableMemory(...)` again to turn it back on.
+   *
+   * Managers are cached per execCtx keyed by `configKey` so
+   * push/pop/push of the same dir reuses one instance — important
+   * for the "pop back to A returns A's manager" semantics.
+   */
+  getActiveMemoryManager(): MemoryManager | undefined {
+    if (!this.stateStack) return undefined;
+    let frame = this.stateStack.topMemoryFrame();
+    if (!frame && this.jsonMemoryConfig) {
+      // Old-checkpoint back-compat: stateStack restored without any
+      // memoryFrames at all. Re-seed the JSON bottom frame so
+      // resume behaves like a fresh run.
+      const memoryFramesArr = this.stateStack.other.memoryFrames as
+        | MemoryFrame[]
+        | undefined;
+      if (!memoryFramesArr) {
+        this.stateStack.pushMemoryFrame(
+          normalizeMemoryFrame(this.jsonMemoryConfig),
+        );
+        frame = this.stateStack.topMemoryFrame();
+      }
+    }
+    if (!frame) return undefined;
+
+    const cached = this.memoryManagerCache[frame.configKey];
+    if (cached) return cached;
+
+    const manager = new MemoryManager({
+      store: getOrCreateStore(frame.configKey, this.logLevel),
+      config: frame.config,
+      llmClient: this._llmClient,
+      smoltalkDefaults: this.smoltalkDefaults,
+      source: this.traceConfig?.program ?? "agent",
+      // Reuse the per-execCtx StatelogClient so memory's own LLM/embed
+      // spans nest under the same trace as the agent's calls.
+      statelogClient: this.statelogClient,
+      // Threshold for memory's internal logger; promoting this to
+      // "debug" in agency.json surfaces every tier/extract/compact
+      // step on stderr.
+      logLevel: this.logLevel,
+      memoryIdRef: {
+        // memoryId is orthogonal to which frame is active — it lives
+        // on `stateStack.other.memoryId` and persists across frame
+        // pushes/pops. We capture `this` (the execCtx) so the ref
+        // always sees the current stateStack (which can be replaced
+        // by `restoreState`).
+        get: () => {
+          const id = this.stateStack?.other?.memoryId;
+          return typeof id === "string" ? id : "default";
+        },
+        set: (id: string) => {
+          if (!this.stateStack) return;
+          this.stateStack.other.memoryId = id;
+        },
+      },
+    });
+    this.memoryManagerCache[frame.configKey] = manager;
+    return manager;
+  }
+
+  /** Iterate every cached memory manager. Used at shutdown so a
+   *  branch that opened a side store doesn't lose its writes. */
+  getAllCachedMemoryManagers(): MemoryManager[] {
+    return Object.values(this.memoryManagerCache);
   }
 
   /* Let's chat through what's going on here. Because since this function
@@ -409,6 +481,7 @@ export class RuntimeContext<T> {
     this.callbacks = null as any;
     this.handlers = null as any;
     this.traceWriter = null;
+    this.memoryManagerCache = {};
   }
 
   /** Get the most recent result-entry checkpoint for the current function. */

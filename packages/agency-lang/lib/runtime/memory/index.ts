@@ -9,5 +9,8 @@ export type {
   MemoryIdRef,
   ForgetResult,
 } from "./manager.js";
+export { getOrCreateStore, _resetStoreRegistry } from "./registry.js";
+export { normalizeMemoryFrame } from "./frame.js";
+export type { MemoryFrame } from "./frame.js";
 export { ExtractionResultSchema } from "./extraction.js";
 export type { ExtractionResult } from "./extraction.js";

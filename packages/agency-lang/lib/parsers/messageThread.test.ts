@@ -14,6 +14,38 @@ describe("messageThreadParser", () => {
       expect(r.result.summarize).toBeNull();
       expect(r.result.continueExpr).toBeNull();
       expect(r.result.sessionExpr).toBeNull();
+      expect(r.result.hidden).toBeNull();
+    }
+  });
+
+  it("parses thread(hidden: true) { ... }", () => {
+    const input = "thread(hidden: true) {\n  foo()\n}";
+    const r = messageThreadParser(normalizeCode(input));
+    expect(r.success).toBe(true);
+    if (r.success) {
+      expect(r.result.hidden).not.toBeNull();
+      expect(r.result.label).toBeNull();
+      expect(r.result.summarize).toBeNull();
+    }
+  });
+
+  it("parses thread(label, hidden) combined", () => {
+    const input = 'thread(label: "shh", hidden: true) {\n  foo()\n}';
+    const r = messageThreadParser(normalizeCode(input));
+    expect(r.success).toBe(true);
+    if (r.success) {
+      expect(r.result.label).not.toBeNull();
+      expect(r.result.hidden).not.toBeNull();
+    }
+  });
+
+  it("parses subthread(hidden: true) { ... }", () => {
+    const input = "subthread(hidden: true) {\n  foo()\n}";
+    const r = messageThreadParser(normalizeCode(input));
+    expect(r.success).toBe(true);
+    if (r.success) {
+      expect(r.result.threadType).toBe("subthread");
+      expect(r.result.hidden).not.toBeNull();
     }
   });
 

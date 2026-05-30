@@ -70,7 +70,7 @@ def summarize(messages: ThreadMessage[]): string {
     transcript = transcript + "[" + m.role + "] " + m.content + "\n"
   }
   let summary = ""
-  thread {
+  thread(hidden: true) {
     const r: SummaryResult = llm("Summarize this conversation in 1-2 sentences:\n" + transcript)
     summary = r.summary
   }

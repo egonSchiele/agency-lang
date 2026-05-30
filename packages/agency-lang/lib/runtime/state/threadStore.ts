@@ -18,15 +18,18 @@ export class ThreadStore {
   threads: Record<MessageThreadID, MessageThread> = {};
   counter: number = 0;
   activeStack: MessageThreadID[] = [];
-  /** session-name → thread-id. See ThreadStoreJSON.sessions for docs. */
-  sessions: Record<string, MessageThreadID> = {};
+  /** session-name → thread-id. See ThreadStoreJSON.sessions for docs.
+   *  Backed by `Object.create(null)` so user-supplied session names
+   *  like `"__proto__"` or `"constructor"` cannot mutate the
+   *  Object prototype (prototype pollution). */
+  sessions: Record<string, MessageThreadID> = Object.create(null);
   private statelogClient?: StatelogClient;
 
   constructor() {
     this.threads = {};
     this.counter = 0;
     this.activeStack = [];
-    this.sessions = {};
+    this.sessions = Object.create(null);
   }
 
   // Set after construction. Most callers should pass the client to
@@ -187,7 +190,16 @@ export class ThreadStore {
     }
     store.counter = json.counter || 0;
     store.activeStack = json.activeStack || [];
-    store.sessions = json.sessions ?? {};
+    // Rebuild sessions on a null-prototype object so deserialized
+    // snapshots with reserved keys (e.g. `__proto__`) cannot
+    // pollute the Object prototype.
+    const sessions: Record<string, MessageThreadID> = Object.create(null);
+    if (json.sessions) {
+      for (const [k, v] of Object.entries(json.sessions)) {
+        sessions[k] = v;
+      }
+    }
+    store.sessions = sessions;
     return store;
   }
 }

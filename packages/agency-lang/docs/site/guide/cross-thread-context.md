@@ -18,10 +18,11 @@ The `std::threads` module gives you both:
 import { listThreads, getThread, currentThreadId } from "std::threads"
 ```
 
-And the `thread {}` block grows four optional named arguments:
+And the `thread {}` block grows five optional named arguments:
 
 ```ts
 thread(label: "coding") { /* ... */ }                        // tag it
+thread(summarize: true) { /* ... */ }                         // pre-mark for eager summary
 thread(continue: priorId) { /* ... */ }                       // resume by id
 thread(session: "coding") { /* ... */ }                       // resume by name (sugar)
 thread(label: "coding", hidden: true) { /* ... */ }           // exclude from listThreads()

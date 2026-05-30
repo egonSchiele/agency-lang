@@ -321,10 +321,10 @@ export interface TsRunnerStep {
 }
 
 /** runner.thread(id, method, opts, async (runner) => { body }).
- *  `label`, `summarize`, `continueExpr`, `sessionExpr` are optional
- *  expressions plumbed in by Tasks 3 / 6 / 7. When all are absent the
- *  emitter elides the opts arg and falls back to the legacy
- *  `runner.thread(id, method, async ...)` shape. */
+ *  `label`, `summarize`, `continueExpr`, `sessionExpr`, `hidden` are
+ *  optional expressions; the emitter always emits an opts object
+ *  (`{}` when every field is absent) so `Runner.thread` can rely on
+ *  the uniform 4-arg signature. */
 export interface TsRunnerThread {
   kind: "runnerThread";
   id: number;

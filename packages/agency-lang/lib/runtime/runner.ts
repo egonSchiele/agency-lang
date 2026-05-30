@@ -582,7 +582,13 @@ export class Runner {
     const slug = `t${tid}`;
     const threadType: "thread" | "subthread" =
       method === "createSubthread" ? "subthread" : "thread";
-    const parentRaw = threads.get(tid)?.parentId ?? undefined;
+    // Prefer the persisted label on the MessageThread so resumed
+    // threads (continue/session) emit the original label even when
+    // the resumption call site omits it. Fall back to opts.label
+    // for fresh threads where MessageThread.label is still null.
+    const startedThread = threads.get(tid);
+    const parentRaw = startedThread?.parentId ?? undefined;
+    const startedLabel = startedThread?.label ?? opts.label;
     await invokeCallbacks({
       ctx: this.ctx,
       name: "onThreadStart",
@@ -590,7 +596,7 @@ export class Runner {
         threadId: slug,
         threadType: parentRaw ? "subthread" : threadType,
         parentThreadId: parentRaw ? `t${parentRaw}` : undefined,
-        label: opts.label,
+        label: startedLabel ?? undefined,
         isResumption,
       },
     });
@@ -622,7 +628,10 @@ export class Runner {
           name: "onThreadEnd",
           data: {
             threadId: slug,
-            label: opts.label,
+            // Prefer persisted label so resumed threads emit the
+            // original label even when the resumption call site
+            // omits it (mirrors onThreadStart above).
+            label: closingThread?.label ?? opts.label ?? undefined,
             eagerSummarize: opts.summarize === true,
             messages: messagesSnapshot,
           },

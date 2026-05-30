@@ -10,15 +10,15 @@
 
 ## Problem
 
-The current `thread {}` block is parsed by a hand-rolled parser ([`_threadNamedArgsParser` in `lib/parsers/parsers.ts:3103`](file:///Users/adityabhargava/agency-lang/packages/agency-lang/lib/parsers/parsers.ts#L3103)) and lowered through a bespoke pipeline. As a result:
+The current `thread {}` block is parsed by a hand-rolled parser ([`_threadNamedArgsParser` in `lib/parsers/parsers.ts`](../../../lib/parsers/parsers.ts)) and lowered through a bespoke pipeline. As a result:
 
 - Bad argument names produce a parse-time error message that lives inside the parser ("Unknown thread argument: foo. Allowed: label, summarize, ..."). That string is awkward to maintain and drifts every time the allowed-arg list changes.
-- The AST node ([`MessageThread` in `lib/types/messageThread.ts`](file:///Users/adityabhargava/agency-lang/packages/agency-lang/lib/types/messageThread.ts)) carries five+ optional `Expression` fields (`label`, `summarize`, `continueExpr`, `sessionExpr`, and — as of PR #225 — `hidden`) that have to be plumbed through:
+- The AST node ([`MessageThread` in `lib/types/messageThread.ts`](../../../lib/types/messageThread.ts)) carries five+ optional `Expression` fields (`label`, `summarize`, `continueExpr`, `sessionExpr`, and — as of PR #225 — `hidden`) that have to be plumbed through:
   1. the parser (`_threadNamedArgsParser`),
   2. the AST type (`MessageThread`),
   3. the IR (`TsRunnerThread`),
-  4. the codegen emitter ([`processMessageThread` in `lib/backends/typescriptBuilder.ts:2767`](file:///Users/adityabhargava/agency-lang/packages/agency-lang/lib/backends/typescriptBuilder.ts#L2767)),
-  5. the IR pretty-printer ([`prettyPrint.ts:300`](file:///Users/adityabhargava/agency-lang/packages/agency-lang/lib/backends/prettyPrint.ts#L300)), and
+  4. the codegen emitter ([`processMessageThread` in `lib/backends/typescriptBuilder.ts`](../../../lib/backends/typescriptBuilder.ts)),
+  5. the IR pretty-printer ([`lib/ir/prettyPrint.ts`](../../../lib/ir/prettyPrint.ts)), and
   6. the `Runner.thread` runtime entry.
 
 So every new named argument is a five-file edit. **Concrete example: the `hidden` arg added in PR #225** required touching exactly that fan-out — the most recent demonstration of the cost.
@@ -27,10 +27,10 @@ So every new named argument is a five-file edit. **Concrete example: the `hidden
 
 ## Proposal
 
-`thread {}` becomes pure syntactic sugar for a stdlib function call. The source:
+`thread {}` becomes pure syntactic sugar for a stdlib function call. The source (current syntax — unchanged):
 
 ```agency
-thread label="x", hidden=true {
+thread(label: "x", hidden: true) {
   // body
 }
 ```
@@ -62,7 +62,7 @@ __internal_thread({ label: "x", hidden: true }, () => {
 
 - The `_threadNamedArgsParser` parser and its "unknown thread argument" error (becomes a normal "no such field on `ThreadOpts`" type error).
 - The `MessageThread` AST node's optional argument fields. The AST node itself may remain for the source-to-source rewriter to attach a marker, but the named-arg slots become dead weight.
-- The codegen branch in [`processMessageThread` in `lib/backends/typescriptBuilder.ts`](file:///Users/adityabhargava/agency-lang/packages/agency-lang/lib/backends/typescriptBuilder.ts#L2767) that processes `label` / `summarize` / `hidden` / etc. into `TsNode`s.
+- The codegen branch in [`processMessageThread` in `lib/backends/typescriptBuilder.ts`](../../../lib/backends/typescriptBuilder.ts#L2767) that processes `label` / `summarize` / `hidden` / etc. into `TsNode`s.
 - The IR `TsRunnerThread`'s optional fields (`label`, `summarize`, `continueExpr`, `sessionExpr`, `hidden`) — they become regular function-call arguments handled by the existing call pipeline.
 - The codegen-time mutual-exclusion check between `continue` / `session`, and the codegen-time rejection of `subthread(continue/session)` — both become **type errors** on the `ThreadOpts` / `SubthreadOpts` types (e.g. discriminated unions or distinct opts types per construct).
 

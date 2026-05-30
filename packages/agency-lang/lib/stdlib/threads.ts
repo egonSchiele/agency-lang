@@ -37,10 +37,16 @@ export function _getThread(
   const raw = agency.threads.get(id, offset, limit);
   return raw.map((m) => ({
     role: String(m.role),
+    // Coerce non-string content to a flat string for the Agency
+    // surface. Nullish content (common on tool-call assistant
+    // messages where the LLM emitted tool calls but no text) maps
+    // to "" instead of the literal JSON-encoded `'""'`.
     content:
       typeof m.content === "string"
         ? m.content
-        : JSON.stringify(m.content ?? ""),
+        : m.content == null
+          ? ""
+          : JSON.stringify(m.content),
   }));
 }
 
@@ -57,7 +63,10 @@ export function _currentThreadId(): string {
 export function _setThreadSummary(id: string, summary: string): void {
   const store = agency.thread.storeMaybe();
   if (!store) return;
-  const rawId = id.startsWith("t") ? id.slice(1) : id;
+  // Only strip canonical `t<digits>` slugs — non-slug ids pass
+  // through unchanged (matches stripSlug in runner.ts and fromSlug
+  // in agency.ts).
+  const rawId = /^t\d+$/.test(id) ? id.slice(1) : id;
   const thread = store.threads[rawId];
   if (!thread) return;
   thread.summary = summary;

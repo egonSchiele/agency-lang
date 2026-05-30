@@ -164,11 +164,13 @@ export type ThreadInfoTS = {
 const toSlug = (rawId: string): string => `t${rawId}`;
 
 /** Strip the leading `t` from a public slug to get the internal
- *  counter string id. Returns the input unchanged if it does not
- *  start with `t` — defensive only; codegen always emits the slug
- *  form. */
+ *  counter string id. Only strips when the input matches the
+ *  canonical `t<digits>` shape — non-numeric ids (test mocks, ids
+ *  that happen to start with `t`) pass through unchanged. Mirrors
+ *  `stripSlug` in runner.ts so both call sites treat slugs the
+ *  same way. */
 const fromSlug = (slug: string): string =>
-  slug.startsWith("t") ? slug.slice(1) : slug;
+  /^t\d+$/.test(slug) ? slug.slice(1) : slug;
 
 /** Return every thread in the run's registry as plain records.
  *  Threads created with `thread(hidden: true) { ... }` are filtered

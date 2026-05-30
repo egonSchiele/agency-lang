@@ -3,11 +3,19 @@ import { nanoid } from "nanoid";
 
 export type MessageThreadJSON = {
   messages: smoltalk.MessageJSON[];
+  parentId?: string | null;
 };
 
 export class MessageThread {
   messages: smoltalk.Message[] = [];
   id: string;
+  /** ID of the parent thread when this thread was created via
+   *  `ThreadStore.createSubthread()`. `null` for top-level threads
+   *  (the default `MessageThread` constructor leaves it null). Used by
+   *  `agency.threads.list()` to surface the parent linkage in
+   *  ThreadInfo, and by `ThreadStore.resumeExisting()` to reject
+   *  resuming a subthread outside its parent's context. */
+  parentId: string | null = null;
 
   constructor(messages: smoltalk.Message[] = []) {
     this.messages = messages;
@@ -49,6 +57,7 @@ export class MessageThread {
   toJSON(): MessageThreadJSON {
     return {
       messages: this.messages.map((m) => m.toJSON()),
+      parentId: this.parentId,
     };
   }
 
@@ -63,10 +72,14 @@ export class MessageThread {
     const thread = new MessageThread();
 
     let _messages: any[] = [];
+    let _parentId: string | null = null;
     if (Array.isArray(json)) {
       _messages = json;
     } else if ("messages" in json) {
       _messages = json.messages;
+      if ("parentId" in json && json.parentId !== undefined) {
+        _parentId = json.parentId;
+      }
     } else {
       throw new Error("Invalid input for MessageThread.fromJSON");
     }
@@ -81,6 +94,7 @@ export class MessageThread {
     );
 
     thread.setMessages(smoltalkMessages);
+    thread.parentId = _parentId;
 
     return thread;
   }

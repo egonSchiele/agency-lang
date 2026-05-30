@@ -58,7 +58,9 @@ export class ThreadStore {
   createSubthread(): MessageThreadID {
     const parentId = this.activeId();
     const id = (this.counter++).toString();
-    this.threads[id] = this.threads[parentId!].newSubthreadChild();
+    const child = this.threads[parentId!].newSubthreadChild();
+    child.parentId = parentId ?? null;
+    this.threads[id] = child;
     this.statelogClient?.threadCreated({
       threadId: id,
       threadType: "subthread",

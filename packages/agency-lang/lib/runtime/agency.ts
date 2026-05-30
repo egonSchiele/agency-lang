@@ -132,6 +132,97 @@ const threadWith = async <T>(
   }
 };
 
+// ---- Threads (registry) subnamespace ----------------------------------
+
+/** Plain record describing a thread in the run's registry. Slug-ified
+ *  ids (`t0`, `t1`, ...) wrap the internal counter strings so LLMs see
+ *  short, easy-to-quote identifiers. */
+export type ThreadInfoTS = {
+  id: string;
+  parentId: string | null;
+  threadType: "thread" | "subthread";
+  messageCount: number;
+  isActive: boolean;
+  messages: ThreadMessageTS[];
+};
+
+/** Plain record describing a single message inside a thread. */
+export type ThreadMessageTS = {
+  role: "system" | "user" | "assistant" | "tool";
+  content: string;
+};
+
+/** Convert an internal counter string id (`"0"`, `"1"`, ...) to the
+ *  public slug form (`"t0"`, `"t1"`, ...). */
+const toSlug = (rawId: string): string => `t${rawId}`;
+
+/** Strip the leading `t` from a public slug to get the internal
+ *  counter string id. Returns the input unchanged if it does not
+ *  start with `t` — defensive only; codegen always emits the slug
+ *  form. */
+const fromSlug = (slug: string): string =>
+  slug.startsWith("t") ? slug.slice(1) : slug;
+
+const messageToThreadMessage = (m: smoltalk.Message): ThreadMessageTS => {
+  const json = m.toJSON();
+  // smoltalk.MessageJSON has a `role` field of the union we care about
+  // and a `content` field that may be string | structured. Coerce
+  // non-string content to a JSON string so the LLM-facing API stays
+  // flat. (Tool messages keep their stringified content; assistant
+  // tool-call messages serialize their tool calls.)
+  const content =
+    typeof json.content === "string"
+      ? json.content
+      : JSON.stringify(json.content ?? "");
+  return { role: json.role as ThreadMessageTS["role"], content };
+};
+
+/** Return every thread in the run's registry as plain records. The
+ *  currently active thread is included with `isActive: true`. */
+const threadsList = (): ThreadInfoTS[] => {
+  const store = threadStoreMaybe();
+  if (!store) return [];
+  const activeId = store.activeId();
+  const out: ThreadInfoTS[] = [];
+  for (const [rawId, thread] of Object.entries(store.threads)) {
+    out.push({
+      id: toSlug(rawId),
+      parentId: thread.parentId ? toSlug(thread.parentId) : null,
+      threadType: thread.parentId ? "subthread" : "thread",
+      messageCount: thread.messages.length,
+      isActive: rawId === activeId,
+      messages: thread.messages.map(messageToThreadMessage),
+    });
+  }
+  return out;
+};
+
+/** Read a slice of a thread's messages. Returns `[]` for unknown ids
+ *  (silent — callers can probe). `offset` and `limit` default to 0 and
+ *  50, matching the Agency-side `getThread` signature. */
+const threadsGet = (
+  id: string,
+  offset = 0,
+  limit = 50,
+): ThreadMessageTS[] => {
+  const store = threadStoreMaybe();
+  if (!store) return [];
+  const rawId = fromSlug(id);
+  const thread = store.threads[rawId];
+  if (!thread) return [];
+  return thread.messages
+    .slice(offset, offset + limit)
+    .map(messageToThreadMessage);
+};
+
+/** Slug form of the currently active thread id, or `undefined` outside
+ *  any runtime frame / when no thread is active. */
+const threadsCurrent = (): string | undefined => {
+  const store = threadStoreMaybe();
+  const id = store?.activeId();
+  return id !== undefined ? toSlug(id) : undefined;
+};
+
 // ---- Checkpoints -------------------------------------------------------
 
 /** Capture a checkpoint of the current execution state. The recorded
@@ -325,6 +416,12 @@ export const agency = {
     remember: memoryRemember,
     recall: memoryRecall,
     forget: memoryForget,
+  },
+
+  threads: {
+    list: threadsList,
+    get: threadsGet,
+    current: threadsCurrent,
   },
 
   withTestContext,

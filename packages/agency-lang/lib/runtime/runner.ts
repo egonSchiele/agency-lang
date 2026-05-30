@@ -491,21 +491,13 @@ export class Runner {
   async thread(
     id: number,
     method: "create" | "createSubthread",
-    optsOrCallback:
-      | ThreadStepOpts
-      | ((runner: Runner) => Promise<void>),
-    maybeCallback?: (runner: Runner) => Promise<void>,
+    opts: ThreadStepOpts,
+    callback: (runner: Runner) => Promise<void>,
   ): Promise<void> {
-    // Two-form signature so legacy call sites
-    // (`runner.thread(id, method, async (runner) => ...)`, used by
-    // `lib/runtime/runner.test.ts` and any old fixtures) keep working
-    // alongside the new opts-bearing form
-    // (`runner.thread(id, method, opts, async (runner) => ...)`).
-    const opts: ThreadStepOpts =
-      typeof optsOrCallback === "function" ? {} : optsOrCallback;
-    const callback =
-      typeof optsOrCallback === "function" ? optsOrCallback : maybeCallback!;
-
+    // Single canonical signature; `prettyPrint.ts` always emits an
+    // opts object (possibly empty) so there is no dual-form path to
+    // support. Test harnesses pass `{}` explicitly when they don't
+    // need named-args behaviour.
     this.beforeStep();
     if (this.shouldSkip()) return;
     if (this.getCounter() > id) return;
@@ -564,14 +556,17 @@ export class Runner {
       } else {
         tid = threads[method]();
       }
-      // `hidden` is set only on the brand-new code paths
+      // `hidden` and `label` are set only on the brand-new code paths
       // (`create` / `createSubthread` / first-time `openSession`).
       // For `resumeExisting` and existing sessions we leave whatever
-      // value is already on the MessageThread — hidden is decided at
+      // value is already on the MessageThread — both are decided at
       // first-create time, not on every re-entry.
-      if (opts.hidden === true && !isResumption) {
+      if (!isResumption) {
         const created = threads.get(tid);
-        if (created) created.hidden = true;
+        if (created) {
+          if (opts.hidden === true) created.hidden = true;
+          if (opts.label !== undefined) created.label = opts.label;
+        }
       }
       this.frame.locals[threadKey] = tid;
       this.frame.locals[resumptionKey] = isResumption;
@@ -638,8 +633,14 @@ export class Runner {
         // already logs JS errors; this catch is belt-and-braces for
         // unexpected throws from the dispatcher itself.
         if (e instanceof RestoreSignal) throw e;
-        // eslint-disable-next-line no-console
-        console.error("[agency] onThreadEnd dispatcher error:", e);
+        // Surface the failure as a structured statelog event so it
+        // shows up in traces (replaces the prior bare console.error).
+        // Optional chaining: older test contexts may construct a
+        // statelogClient without the threadEndHookError method.
+        this.ctx.statelogClient?.threadEndHookError?.({
+          threadId: slug,
+          error: e instanceof Error ? e.message : String(e),
+        });
       }
     }
 

@@ -7,8 +7,8 @@
       "evaluationCriteria": [{ "type": "exact" }],
       "description": "thread(session: name) resumes the same thread on re-entry: coding history persists across the weather hop.",
       "llmMocks": [
-        { "return": "coding-summary" },
-        { "return": "weather-summary" }
+        { "return": { "summary": "coding-summary" } },
+        { "return": { "summary": "weather-summary" } }
       ]
     }
   ]

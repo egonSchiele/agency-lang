@@ -477,7 +477,7 @@ describe("Runner", () => {
 
       const runner = new Runner(ctx, frame, { threads: ctx.threads });
 
-      await runner.thread(0, "create", async () => {
+      await runner.thread(0, "create", {}, async () => {
         calls.push("body");
       });
 
@@ -494,7 +494,7 @@ describe("Runner", () => {
 
       const runner = new Runner(ctx, frame, { threads: ctx.threads });
 
-      await runner.thread(0, "create", async (runner) => {
+      await runner.thread(0, "create", {}, async (runner) => {
         runner.halt("interrupt");
       });
 

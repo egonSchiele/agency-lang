@@ -1,10 +1,9 @@
-/**
-Cross-thread context sharing: `listThreads()` enumerates every thread
-in the current run (active + closed), `getThread(id, offset, limit)`
-reads a slice of a thread's messages. The registry is built on the
-public `agency.threads.*` primitives plus the `onThreadEnd` lifecycle
-hook — the same surface you'd reach for to build your own variants
-(tag-threads, thread-diff, etc.) in user space.
+/** @module Cross-thread context sharing: `listThreads()` enumerates
+every thread in the current run (active + closed), `getThread(id,
+offset, limit)` reads a slice of a thread's messages. The registry is
+built on the public `agency.threads.*` primitives — the same surface
+you'd reach for to build your own variants (tag-threads, thread-diff,
+etc.) in user space.
 
   ```ts
   import { listThreads, getThread } from "std::threads"
@@ -16,16 +15,24 @@ hook — the same surface you'd reach for to build your own variants
   const lines = getThread("t1", 0, 20)
   ```
 
-`label` is template-level (set via `thread(label: "...") { ... }`);
-`summary` is per-instance and generated lazily on first `listThreads()`
-call unless the user opts into `thread(summarize: true) { ... }`.
+`label` is set at `thread {}` create time (template-level intent set
+via `thread(label: "...") { ... }`); `summary` is per-instance and
+generated lazily on first `listThreads()` call against a closed
+thread. Both fields live directly on the underlying `MessageThread`
+so the registry is per-run and survives interrupt-resume via the
+existing checkpoint serialization.
+
+The eager-summarize flag (`thread(summarize: true) { ... }`) is
+parsed and forwarded to the `onThreadEnd` hook payload as
+`eagerSummarize: true`, but the v1 stdlib does not yet act on it —
+summaries are computed lazily on the next `listThreads()` call. See
+the TODO in `lib/runtime/runner.ts::thread` for the deferral.
 */
 
 import {
   _listThreadsRaw,
   _getThread,
-  _remember,
-  _getCached,
+  _setThreadSummary,
   _currentThreadId,
 } from "agency-lang/stdlib-lib/threads.js"
 
@@ -44,30 +51,38 @@ export type ThreadInfo = {
   isActive: boolean,
 }
 
-// One-shot LLM summarization used by the lazy + eager paths. Wrapped
-// in a `thread {}` block so the summarizer prompt runs on an isolated
-// message history and doesn't pollute the agent's main conversation.
+type SummaryResult = {
+  summary: string,
+}
+
 def summarize(messages: ThreadMessage[]): string {
+  """
+  One-shot LLM summarization used by the lazy summarize path.
+  Wrapped in a `thread {}` block so the summarizer prompt runs on
+  an isolated message history and doesn't pollute the agent's main
+  conversation. Uses structured output so the returned text comes
+  back on a known field instead of free-form completion text.
+
+  @param messages - The thread's messages to summarize
+  """
   let transcript = ""
   for (m in messages) {
     transcript = transcript + "[" + m.role + "] " + m.content + "\n"
   }
-  let result = ""
+  let summary = ""
   thread {
-    result = llm("Summarize this conversation in 1-2 sentences:\n" + transcript)
+    const r: SummaryResult = llm("Summarize this conversation in 1-2 sentences:\n" + transcript)
+    summary = r.summary
   }
-  return result
+  return summary
 }
 
 // Single owner of the "return cached summary, else LLM-summarize and
 // cache" rule. Active threads pass `null` so the LLM call is skipped
 // while the conversation is still in flight.
-def summaryFor(id: string, messages: (ThreadMessage[] | null) = null): (string | null) {
-  const c = _getCached(id)
-  if (c != null) {
-    if (c.summary != null) {
-      return c.summary
-    }
+def summaryFor(id: string, existing: (string | null), messages: (ThreadMessage[] | null) = null): (string | null) {
+  if (existing != null) {
+    return existing
   }
   if (messages == null) {
     return null
@@ -77,47 +92,39 @@ def summaryFor(id: string, messages: (ThreadMessage[] | null) = null): (string |
   // analysis sees a `ThreadMessage[]` for the summarize() call.
   const concrete: ThreadMessage[] = messages
   const s = summarize(concrete)
-  _remember(id, { summary: s })
+  _setThreadSummary(id, s)
   return s
 }
 
-// Lifecycle hook is registered TS-side in lib/stdlib/threads.ts via
-// `registerGlobalHook("onThreadEnd", ...)`. A top-level Agency-side
-// `callback(...)` only fires when its module is the entry point of
-// the run (verified by tests/agency-js/threads-fix-callback-propagation);
-// it does not fire from imported modules. The TS-side hook snapshots
-// `label` to the shared cache; summary generation stays lazy
-// (see `summaryFor`).
-
-export def listThreads(): ThreadInfo[] {
+export def listThreads(): Result {
   """
   Return every thread in the current run, including the active one.
 
   Lazy summary generation: a thread that doesn't yet have a cached
   summary triggers exactly one LLM round-trip the first time
   `listThreads()` is called on it. Active threads are skipped so the
-  in-flight conversation is not summarized mid-stream.
+  in-flight conversation is not summarized mid-stream. The computed
+  summary is stashed on the underlying `MessageThread` so subsequent
+  calls read it back without re-prompting.
 
-  Eager summarization (one summary call per `thread {}` close instead
-  of all-at-once on first `listThreads()`) is opt-in:
-  `thread(summarize: true) { ... }`.
+  Returns a `Result` — success holds `ThreadInfo[]`, failure holds
+  the error (e.g. called outside an Agency frame). See
+  [error handling](https://agency-lang.com/guide/error-handling).
   """
-  const raw = _listThreadsRaw()
+  const raw = try _listThreadsRaw()
+  if (isFailure(raw)) {
+    return raw
+  }
   const out: ThreadInfo[] = []
-  for (t in raw) {
-    const c = _getCached(t.id)
-    let label: (string | null) = null
-    if (c != null) {
-      if (c.label != null) { label = c.label }
-    }
+  for (t in raw.value) {
     let messages: (ThreadMessage[] | null) = null
     if (t.isActive == false) {
       messages = t.messages
     }
-    const summary = summaryFor(t.id, messages)
+    const summary = summaryFor(t.id, t.summary, messages)
     out.push({
       id: t.id,
-      label: label,
+      label: t.label,
       summary: summary,
       parentId: t.parentId,
       threadType: t.threadType,
@@ -125,7 +132,7 @@ export def listThreads(): ThreadInfo[] {
       isActive: t.isActive
     })
   }
-  return out
+  return success(out)
 }
 
 export safe def currentThreadId(): string {
@@ -138,16 +145,21 @@ export safe def currentThreadId(): string {
   return _currentThreadId()
 }
 
-export safe def getThread(id: string, offset: number = 0, limit: number = 50): ThreadMessage[] {
+export def getThread(id: string, offset: number = 0, limit: number = 50): Result {
   """
-  Read a slice of a thread's messages. Returns `[]` for an unknown id.
+  Read a slice of a thread's messages. Returns success holding `[]`
+  for an unknown id; returns failure when called outside an Agency
+  frame.
 
   Pagination: `offset` is 0-indexed; `limit` defaults to 50. Pass
   larger explicit values for full-thread reads.
+
+  Returns a `Result` — success holds `ThreadMessage[]`. See
+  [error handling](https://agency-lang.com/guide/error-handling).
 
   @param id - Thread slug (e.g. "t1") from `listThreads()`
   @param offset - 0-indexed start of the message slice
   @param limit - Maximum number of messages to return
   """
-  return _getThread(id, offset, limit)
+  return try _getThread(id, offset, limit)
 }

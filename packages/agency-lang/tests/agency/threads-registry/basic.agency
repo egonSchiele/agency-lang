@@ -2,10 +2,8 @@ import { listThreads, getThread } from "std::threads"
 import { userMessage } from "std::thread"
 
 // Verifies the registry observes threads created via `thread {}`
-// blocks. Uses `thread(label, summarize)` to opt into eager
-// summarization so each closed thread's summary is cached at close
-// time (one LLM call per thread), and listThreads() then reads from
-// cache without triggering additional LLM round-trips.
+// blocks. Lazy summaries are cached on the underlying MessageThread
+// at the first listThreads() call after a thread closes.
 node main() {
   thread(label: "first") {
     userMessage("hello from first")
@@ -14,13 +12,13 @@ node main() {
     userMessage("hello from second")
   }
   const all = listThreads()
-  // Return the labels for closed threads only; the active root
-  // thread (t0) has no label. Labels are populated by the
-  // onThreadEnd callback registered in stdlib/threads.agency.
+  // listThreads() now returns Result — unwrap before iterating.
   const labels: string[] = []
-  for (t in all) {
-    if (t.label != null) {
-      labels.push(t.label)
+  if (isSuccess(all)) {
+    for (t in all.value) {
+      if (t.label != null) {
+        labels.push(t.label)
+      }
     }
   }
   return labels

@@ -13,9 +13,11 @@ node main() {
   }
   const all = listThreads()
   const labels: string[] = []
-  for (t in all) {
-    if (t.label != null) {
-      labels.push(t.label)
+  if (isSuccess(all)) {
+    for (t in all.value) {
+      if (t.label != null) {
+        labels.push(t.label)
+      }
     }
   }
   return labels

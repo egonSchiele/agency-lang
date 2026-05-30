@@ -85,4 +85,4 @@ If you call a thread builtin from one of these scopes — `systemMessage`, `user
 
 ## See also
 
-- [Cross-Thread Context Sharing](./cross-thread-context.md) — `listThreads()`, `getThread()`, and the `thread(label, summarize, continue, session)` named arguments for inspecting and resuming sibling threads. The marquee use case is the categorize-and-route pattern (one router, many specialized agents, per-category thread continuity).
+- [Cross-Thread Context Sharing](./cross-thread-context) — `listThreads()`, `getThread()`, and the `thread(label, summarize, continue, session)` named arguments for inspecting and resuming sibling threads. The marquee use case is the categorize-and-route pattern (one router, many specialized agents, per-category thread continuity).

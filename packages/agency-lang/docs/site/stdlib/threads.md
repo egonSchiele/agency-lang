@@ -1,5 +1,35 @@
 # threads
 
+Cross-thread context sharing: `listThreads()` enumerates
+every thread in the current run (active + closed), `getThread(id,
+offset, limit)` reads a slice of a thread's messages. The registry is
+built on the public `agency.threads.*` primitives — the same surface
+you'd reach for to build your own variants (tag-threads, thread-diff,
+etc.) in user space.
+
+  ```ts
+  import { listThreads, getThread } from "std::threads"
+
+  // Inspect the run's other threads:
+  const info = listThreads()
+
+  // Read a slice of a prior thread's messages:
+  const lines = getThread("t1", 0, 20)
+  ```
+
+`label` is set at `thread {}` create time (template-level intent set
+via `thread(label: "...") { ... }`); `summary` is per-instance and
+generated lazily on first `listThreads()` call against a closed
+thread. Both fields live directly on the underlying `MessageThread`
+so the registry is per-run and survives interrupt-resume via the
+existing checkpoint serialization.
+
+The eager-summarize flag (`thread(summarize: true) { ... }`) is
+parsed and forwarded to the `onThreadEnd` hook payload as
+`eagerSummarize: true`, but the v1 stdlib does not yet act on it —
+summaries are computed lazily on the next `listThreads()` call. See
+the TODO in `lib/runtime/runner.ts::thread` for the deferral.
+
 ## Types
 
 ### ThreadMessage
@@ -11,7 +41,7 @@ export type ThreadMessage = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/threads.agency#L32))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/threads.agency#L39))
 
 ### ThreadInfo
 
@@ -27,7 +57,17 @@ export type ThreadInfo = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/threads.agency#L37))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/threads.agency#L44))
+
+### SummaryResult
+
+```ts
+type SummaryResult = {
+  summary: string
+}
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/threads.agency#L54))
 
 ## Functions
 
@@ -37,6 +77,14 @@ export type ThreadInfo = {
 summarize(messages: ThreadMessage[]): string
 ```
 
+One-shot LLM summarization used by the lazy summarize path.
+  Wrapped in a `thread {}` block so the summarizer prompt runs on
+  an isolated message history and doesn't pollute the agent's main
+  conversation. Uses structured output so the returned text comes
+  back on a known field instead of free-form completion text.
+
+  @param messages - The thread's messages to summarize
+
 **Parameters:**
 
 | Name | Type | Default |
@@ -45,12 +93,12 @@ summarize(messages: ThreadMessage[]): string
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/threads.agency#L50))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/threads.agency#L58))
 
 ### summaryFor
 
 ```ts
-summaryFor(id: string, messages: ThreadMessage[] | null): string | null
+summaryFor(id: string, existing: string | null, messages: ThreadMessage[] | null): string | null
 ```
 
 **Parameters:**
@@ -58,16 +106,17 @@ summaryFor(id: string, messages: ThreadMessage[] | null): string | null
 | Name | Type | Default |
 |---|---|---|
 | id | `string` |  |
+| existing | `string \| null` |  |
 | messages | `ThreadMessage[] \| null` | null |
 
 **Returns:** `string | null`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/threads.agency#L65))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/threads.agency#L82))
 
 ### listThreads
 
 ```ts
-listThreads(): ThreadInfo[]
+listThreads(): Result
 ```
 
 Return every thread in the current run, including the active one.
@@ -75,15 +124,17 @@ Return every thread in the current run, including the active one.
   Lazy summary generation: a thread that doesn't yet have a cached
   summary triggers exactly one LLM round-trip the first time
   `listThreads()` is called on it. Active threads are skipped so the
-  in-flight conversation is not summarized mid-stream.
+  in-flight conversation is not summarized mid-stream. The computed
+  summary is stashed on the underlying `MessageThread` so subsequent
+  calls read it back without re-prompting.
 
-  Eager summarization (one summary call per `thread {}` close instead
-  of all-at-once on first `listThreads()`) is opt-in:
-  `thread(summarize: true) { ... }`.
+  Returns a `Result` — success holds `ThreadInfo[]`, failure holds
+  the error (e.g. called outside an Agency frame). See
+  [error handling](https://agency-lang.com/guide/error-handling).
 
-**Returns:** `ThreadInfo[]`
+**Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/threads.agency#L91))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/threads.agency#L98))
 
 ### currentThreadId
 
@@ -98,18 +149,23 @@ Slug-form id of the active thread (e.g. "t3"), or `""` outside any
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/threads.agency#L130))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/threads.agency#L137))
 
 ### getThread
 
 ```ts
-getThread(id: string, offset: number, limit: number): ThreadMessage[]
+getThread(id: string, offset: number, limit: number): Result
 ```
 
-Read a slice of a thread's messages. Returns `[]` for an unknown id.
+Read a slice of a thread's messages. Returns success holding `[]`
+  for an unknown id; returns failure when called outside an Agency
+  frame.
 
   Pagination: `offset` is 0-indexed; `limit` defaults to 50. Pass
   larger explicit values for full-thread reads.
+
+  Returns a `Result` — success holds `ThreadMessage[]`. See
+  [error handling](https://agency-lang.com/guide/error-handling).
 
   @param id - Thread slug (e.g. "t1") from `listThreads()`
   @param offset - 0-indexed start of the message slice
@@ -123,6 +179,6 @@ Read a slice of a thread's messages. Returns `[]` for an unknown id.
 | offset | `number` | 0 |
 | limit | `number` | 50 |
 
-**Returns:** `ThreadMessage[]`
+**Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/threads.agency#L140))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/threads.agency#L147))

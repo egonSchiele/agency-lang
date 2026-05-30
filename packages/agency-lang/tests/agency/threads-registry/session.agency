@@ -18,12 +18,15 @@ node main() {
     userMessage("back to coding")
   }
   const all = listThreads()
+  // listThreads() now returns Result; unwrap before iterating.
   // Build a name → message-count map for the labelled (non-active)
   // threads so the assertion is order-independent.
   const result: any = {}
-  for (t in all) {
-    if (t.label != null) {
-      result[t.label] = t.messageCount
+  if (isSuccess(all)) {
+    for (t in all.value) {
+      if (t.label != null) {
+        result[t.label] = t.messageCount
+      }
     }
   }
   return result

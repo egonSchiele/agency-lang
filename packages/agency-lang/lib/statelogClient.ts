@@ -866,6 +866,27 @@ export class StatelogClient {
     });
   }
 
+  /** Fired when the `onThreadEnd` callback dispatcher itself throws
+   *  inside the `Runner.thread` finally block. Individual callback
+   *  errors are caught and logged by `fireWithGuard`; this event
+   *  covers the rarer case where the dispatcher loop itself blew up
+   *  (e.g. a malformed registration). Emitted in lieu of the
+   *  previous `console.error` so the failure is observable in
+   *  traces. */
+  async threadEndHookError({
+    threadId,
+    error,
+  }: {
+    threadId: string;
+    error: string;
+  }): Promise<void> {
+    await this.post({
+      type: "threadEndHookError",
+      threadId,
+      error,
+    });
+  }
+
   // --- Structured errors ---
 
   async error({

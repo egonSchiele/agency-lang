@@ -136,20 +136,27 @@ const threadWith = async <T>(
 
 /** Plain record describing a thread in the run's registry. Slug-ified
  *  ids (`t0`, `t1`, ...) wrap the internal counter strings so LLMs see
- *  short, easy-to-quote identifiers. */
+ *  short, easy-to-quote identifiers. `label` and `summary` are
+ *  surfaced directly from the underlying `MessageThread` (post-Commit-B:
+ *  no more module-level TS cache). */
 export type ThreadInfoTS = {
   id: string;
   parentId: string | null;
   threadType: "thread" | "subthread";
   messageCount: number;
   isActive: boolean;
-  messages: ThreadMessageTS[];
-};
-
-/** Plain record describing a single message inside a thread. */
-export type ThreadMessageTS = {
-  role: "system" | "user" | "assistant" | "tool";
-  content: string;
+  /** Snapshot of the thread's messages in smoltalk's wire format.
+   *  Consumers that need flat `{role, content}` records can call
+   *  `m.role` / `m.content` directly; tool-call / structured-content
+   *  variants land here untouched (no lossy coercion). */
+  messages: smoltalk.MessageJSON[];
+  /** Optional user-supplied label from `thread(label: "...") { ... }`.
+   *  `null` when no label was given. */
+  label: string | null;
+  /** Cached summary written by the stdlib's `summaryFor()` helper.
+   *  `null` until the summary is computed (lazy on first
+   *  `listThreads()`). */
+  summary: string | null;
 };
 
 /** Convert an internal counter string id (`"0"`, `"1"`, ...) to the
@@ -162,20 +169,6 @@ const toSlug = (rawId: string): string => `t${rawId}`;
  *  form. */
 const fromSlug = (slug: string): string =>
   slug.startsWith("t") ? slug.slice(1) : slug;
-
-const messageToThreadMessage = (m: smoltalk.Message): ThreadMessageTS => {
-  const json = m.toJSON();
-  // smoltalk.MessageJSON has a `role` field of the union we care about
-  // and a `content` field that may be string | structured. Coerce
-  // non-string content to a JSON string so the LLM-facing API stays
-  // flat. (Tool messages keep their stringified content; assistant
-  // tool-call messages serialize their tool calls.)
-  const content =
-    typeof json.content === "string"
-      ? json.content
-      : JSON.stringify(json.content ?? "");
-  return { role: json.role as ThreadMessageTS["role"], content };
-};
 
 /** Return every thread in the run's registry as plain records.
  *  Threads created with `thread(hidden: true) { ... }` are filtered
@@ -204,7 +197,9 @@ const threadsList = (): ThreadInfoTS[] => {
       threadType: thread.parentId ? "subthread" : "thread",
       messageCount: thread.messages.length,
       isActive: rawId === activeId,
-      messages: thread.messages.map(messageToThreadMessage),
+      messages: thread.messages.map((m) => m.toJSON()),
+      label: thread.label,
+      summary: thread.summary,
     });
   }
   return out;
@@ -219,7 +214,7 @@ const threadsGet = (
   id: string,
   offset = 0,
   limit = 50,
-): ThreadMessageTS[] => {
+): smoltalk.MessageJSON[] => {
   const store = threadStoreMaybe();
   if (!store) {
     throw new Error(
@@ -233,7 +228,7 @@ const threadsGet = (
   if (!thread) return [];
   return thread.messages
     .slice(offset, offset + limit)
-    .map(messageToThreadMessage);
+    .map((m) => m.toJSON());
 };
 
 /** Slug form of the currently active thread id, or `undefined` outside

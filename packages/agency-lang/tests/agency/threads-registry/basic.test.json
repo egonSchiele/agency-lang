@@ -5,10 +5,10 @@
       "input": "",
       "expectedOutput": "[\"first\",\"second\"]",
       "evaluationCriteria": [{ "type": "exact" }],
-      "description": "stdlib/threads listThreads() surfaces labels from thread(label) blocks; eager summaries are cached at close.",
+      "description": "stdlib/threads listThreads() surfaces labels from thread(label) blocks; summaries are computed lazily on the first listThreads() call after each thread closes.",
       "llmMocks": [
-        { "return": "summary-of-first" },
-        { "return": "summary-of-second" }
+        { "return": { "summary": "summary-of-first" } },
+        { "return": { "summary": "summary-of-second" } }
       ]
     }
   ]

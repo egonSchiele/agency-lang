@@ -16,8 +16,10 @@ node main() {
   }
   const messages = getThread(firstId, 0, 50)
   const contents: string[] = []
-  for (m in messages) {
-    contents.push(m.content)
+  if (isSuccess(messages)) {
+    for (m in messages.value) {
+      contents.push(m.content)
+    }
   }
   return contents
 }

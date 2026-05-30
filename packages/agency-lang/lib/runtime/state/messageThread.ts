@@ -5,6 +5,8 @@ export type MessageThreadJSON = {
   messages: smoltalk.MessageJSON[];
   parentId?: string | null;
   hidden?: boolean;
+  label?: string | null;
+  summary?: string | null;
 };
 
 export class MessageThread {
@@ -23,6 +25,20 @@ export class MessageThread {
    *  in via `thread(hidden: true) { ... }`. Round-tripped through
    *  `toJSON`/`fromJSON` so the flag survives interrupt resume. */
   hidden: boolean = false;
+  /** Optional user-supplied label from `thread(label: "...") { ... }`.
+   *  Set by `Runner.thread` at first-create time. `null` for threads
+   *  created without a label or via `subthread {}` without one.
+   *  Surfaces on `agency.threads.list()` so the stdlib `listThreads()`
+   *  can attach it to `ThreadInfo`. Round-tripped through
+   *  `toJSON`/`fromJSON` so the value survives interrupt resume. */
+  label: string | null = null;
+  /** Cached summary produced by the stdlib `summaryFor()` helper on
+   *  first `listThreads()` call after the thread closes. Written via
+   *  the TS-side `_setThreadSummary` shim so the cache lives on the
+   *  per-run `MessageThread` and gets GC'd with the run — no
+   *  module-level state in TS. `null` until the summary is computed.
+   *  Round-tripped through `toJSON`/`fromJSON`. */
+  summary: string | null = null;
 
   constructor(messages: smoltalk.Message[] = []) {
     this.messages = messages;
@@ -66,6 +82,8 @@ export class MessageThread {
       messages: this.messages.map((m) => m.toJSON()),
       parentId: this.parentId,
       hidden: this.hidden,
+      label: this.label,
+      summary: this.summary,
     };
   }
 
@@ -82,6 +100,8 @@ export class MessageThread {
     let _messages: any[] = [];
     let _parentId: string | null = null;
     let _hidden = false;
+    let _label: string | null = null;
+    let _summary: string | null = null;
     if (Array.isArray(json)) {
       _messages = json;
     } else if ("messages" in json) {
@@ -91,6 +111,12 @@ export class MessageThread {
       }
       if ("hidden" in json && json.hidden === true) {
         _hidden = true;
+      }
+      if ("label" in json && json.label !== undefined) {
+        _label = json.label;
+      }
+      if ("summary" in json && json.summary !== undefined) {
+        _summary = json.summary;
       }
     } else {
       throw new Error("Invalid input for MessageThread.fromJSON");
@@ -108,6 +134,8 @@ export class MessageThread {
     thread.setMessages(smoltalkMessages);
     thread.parentId = _parentId;
     thread.hidden = _hidden;
+    thread.label = _label;
+    thread.summary = _summary;
 
     return thread;
   }

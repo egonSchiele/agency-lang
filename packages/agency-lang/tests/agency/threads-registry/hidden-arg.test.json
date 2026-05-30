@@ -5,7 +5,10 @@
       "input": "",
       "expectedOutput": "[\"visible\"]",
       "evaluationCriteria": [{ "type": "exact" }],
-      "description": "thread(hidden: true) excludes the thread from listThreads()."
+      "description": "thread(hidden: true) excludes the thread from listThreads().",
+      "llmMocks": [
+        { "return": { "summary": "visible-summary" } }
+      ]
     }
   ]
 }

@@ -1,92 +1,64 @@
 /**
  * TS-side helpers for `stdlib/threads.agency` — the user-facing
  * cross-thread registry module. Wraps the `agency.threads.*` primitives
- * from Task 1 and owns a per-run cache of labels and summaries keyed
- * by thread id.
+ * from Task 1.
  *
- * Cache placement rationale: Agency-side `static const` maps are
- * immutable after initialization, so the registry cache has to live in
- * TS. Keeping it here also keeps the Agency module tiny and lets the
- * cache survive interrupt-resume cleanly (it is rebuilt the same way
- * the rest of the registry is — from the run's onThreadEnd events).
+ * Post-Commit-B cleanup: there is no module-level cache here anymore.
+ * `label` and `summary` live directly on the per-run `MessageThread`
+ * (see `lib/runtime/state/messageThread.ts`), so per-run isolation
+ * comes for free and the cache survives interrupt-resume via the
+ * existing `toJSON`/`fromJSON` round-trip. `_setThreadSummary` is the
+ * single TS-side writer Agency uses to record a freshly-computed
+ * summary; the rest is read-through from `agency.threads.list()`.
  *
  * Naming follows stdlib conventions: every export is `_`-prefixed and
  * reads its runtime context from AsyncLocalStorage via `agency.*`.
  */
-import { agency, type ThreadInfoTS, type ThreadMessageTS } from "../runtime/agency.js";
-import { registerGlobalHook } from "../runtime/hooks.js";
-
-export type _Cached = { label?: string; summary?: string };
-
-/** Per-run cache of thread metadata keyed by slug id. Single owner:
- *  `_remember()`. Single reader: the Agency `listThreads()` and
- *  `summaryFor()` helpers. */
-const _cache: Record<string, _Cached> = {};
-
-// Module-load: register a global hook that snapshots a thread's
-// `label` on close. Mirrors what an Agency-side
-// `callback("onThreadEnd") as evt { ... }` at the top level of
-// `stdlib/threads.agency` would do — but verified empirically
-// (tests/agency-js/threads-fix-callback-propagation): a top-level
-// Agency callback only fires when its OWNING module is imported
-// AS THE ENTRY POINT of the run. Imported modules' top-level
-// callbacks are compiled in but never wired to `ctx.topLevelCallbacks`
-// because `__registerTopLevelCallbacks` is per-entry. A global
-// JS-side hook here side-steps that limitation so the registry
-// works transparently for any program that imports `std::threads`,
-// with no boilerplate at the call site.
-//
-// Eager summarization (`thread(summarize: true)`) is intentionally
-// NOT handled here: summarize() needs to make an LLM call, and
-// firing an LLM call from a TS-side hook on every thread close
-// would surprise users who only wanted to register the registry.
-// Eager summarize remains an opt-in agency hook that users can add
-// themselves; the v1 stdlib does lazy summarization at
-// `listThreads()` call time instead (one call per thread that
-// doesn't have a cached summary yet).
-registerGlobalHook("onThreadEnd", (evt: any) => {
-  if (evt && typeof evt.label === "string") {
-    _remember(evt.threadId, { label: evt.label });
-  }
-});
-
-/** Single owner of the cache-write rule. Shallow-merges `patch` into
- *  the entry for `id`. Agency-side callers go through this so the
- *  "label set → object updated, summary set → object updated"
- *  composition lives in one place. */
-export function _remember(id: string, patch: _Cached): void {
-  const existing = _cache[id];
-  _cache[id] = existing ? { ...existing, ...patch } : patch;
-}
-
-/** Read the cached entry for `id`, or `null` if absent. Used by the
- *  Agency listThreads() implementation to attach label + summary to
- *  each raw ThreadInfo. */
-export function _getCached(id: string): _Cached | null {
-  return _cache[id] ?? null;
-}
-
-/** Test/cleanup hook: empties the cache. Exposed for unit tests that
- *  reuse the module across cases. Not used at runtime. */
-export function _resetCache(): void {
-  for (const k of Object.keys(_cache)) delete _cache[k];
-}
+import { agency, type ThreadInfoTS } from "../runtime/agency.js";
 
 /** Pass-through to `agency.threads.list()`. */
 export function _listThreadsRaw(): ThreadInfoTS[] {
   return agency.threads.list();
 }
 
-/** Pass-through to `agency.threads.get(id, offset, limit)`. */
+/** Read a slice of a thread's messages, coerced to the
+ *  `{ role: string, content: string }` shape Agency's
+ *  `ThreadMessage` declares. Non-string `content` values
+ *  (tool-call / structured) are JSON-stringified at the boundary so
+ *  the Agency caller's `m.content` field is always a string — the
+ *  TS-internal `agency.threads.get` returns the raw
+ *  `smoltalk.MessageJSON` shape for callers that need full structure.
+ */
 export function _getThread(
   id: string,
   offset: number = 0,
   limit: number = 50,
-): ThreadMessageTS[] {
-  return agency.threads.get(id, offset, limit);
+): Array<{ role: string; content: string }> {
+  const raw = agency.threads.get(id, offset, limit);
+  return raw.map((m) => ({
+    role: String(m.role),
+    content:
+      typeof m.content === "string"
+        ? m.content
+        : JSON.stringify(m.content ?? ""),
+  }));
 }
 
 /** Slug form of the active thread, or `""` (Agency has no undefined). */
 export function _currentThreadId(): string {
   return agency.threads.current() ?? "";
+}
+
+/** Stash a freshly-computed summary on the underlying `MessageThread`
+ *  so subsequent `listThreads()` calls read it back without
+ *  re-prompting. Called by the Agency-side `summaryFor()` helper after
+ *  the lazy summarize round-trip. No-op when the id is unknown or
+ *  there is no active store (e.g. called from non-Agency code). */
+export function _setThreadSummary(id: string, summary: string): void {
+  const store = agency.thread.storeMaybe();
+  if (!store) return;
+  const rawId = id.startsWith("t") ? id.slice(1) : id;
+  const thread = store.threads[rawId];
+  if (!thread) return;
+  thread.summary = summary;
 }

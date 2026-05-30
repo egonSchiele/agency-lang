@@ -116,6 +116,14 @@ Workflow:
    snippet without repeating the source.
 
 Keep replies brief. Show code, not commentary.
+
+Respond in Markdown — use `#`/`##` headings, `-` bullets, **bold**,
+_italic_, and fenced code blocks (```ts, ```bash, ```json, ```diff)
+for any code or command output. The REPL renders your reply through a
+Markdown syntax highlighter, so well-marked-up replies appear with
+colored headings, bold/italic styling, and properly highlighted code
+fences. Code fences are especially important — they're how code in
+your reply gets per-language coloring.
 """
 
 export def runCode(

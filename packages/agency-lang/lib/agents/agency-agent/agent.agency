@@ -1,6 +1,13 @@
 import { today } from "std::date"
-import { Policy, PolicyRule, checkPolicy } from "std::policy"
+import {
+  Policy,
+  PolicyRule,
+  checkPolicy,
+  validatePolicy,
+  writePolicyFile,
+} from "std::policy"
 import { exists } from "std::shell"
+import { highlight } from "std::syntax"
 import { cwd } from "std::system"
 
 import { runCode } from "./code.agency"
@@ -55,12 +62,73 @@ callback("onToolCallEnd") as data {
   )
 }
 
-// Per-run policy: starts empty, grows as the user opts into
-// always-approve / always-reject for each interrupt kind. Lives at
-// module scope so the handler in `node main` and any helpers
+// Persistent on-disk policy. Saved here as JSON; loaded once at
+// module init and rewritten every time the user makes a new
+// "always" decision. Sibling to the memory store directory used
+// by `shared.agency`.
+const POLICY_FILE = "policy.json"
+const POLICY_DIR = "~/.agency-agent"
+const POLICY_PATH = "${POLICY_DIR}/${POLICY_FILE}"
+
+def loadPolicy(): Policy {
+  """
+  Read and validate the on-disk policy. Returns the parsed policy
+  if it exists and is well-formed; returns `{}` (empty policy)
+  when the file is absent, unreadable, malformed JSON, or fails
+  validation. A warning is printed for the malformed cases so the
+  user knows a previous decision didn't carry over.
+  """
+  if (!exists(POLICY_FILE, POLICY_DIR)) {
+    return {}
+  }
+  const readResult = read(POLICY_FILE, POLICY_DIR) with approve
+  if (isFailure(readResult)) {
+    print(color.yellow("Could not read ${POLICY_PATH}: ${readResult.error}"))
+    return {}
+  }
+  const parsed = try parseJSON(readResult.value)
+  if (isFailure(parsed)) {
+    print(
+      color.yellow(
+      "Malformed JSON in ${POLICY_PATH}; ignoring and starting fresh.",
+    ),
+    )
+    return {}
+  }
+  const valid = validatePolicy(parsed.value)
+  if (!valid.success) {
+    print(
+      color.yellow(
+      "Invalid policy in ${POLICY_PATH} (${valid.error}); ignoring and starting fresh.",
+    ),
+    )
+    return {}
+  }
+  return parsed.value
+}
+
+def savePolicy() {
+  """
+  Persist the current in-memory policy to disk. Called from
+  `recordAlways` / `recordAlwaysScoped` so every "always" decision
+  immediately survives a restart. Failures are warnings, not
+  errors — losing one decision is better than crashing the REPL.
+  """
+  const result = try writePolicyFile(POLICY_PATH, policy) with approve
+  if (isFailure(result)) {
+    print(color.yellow("Could not save policy to ${POLICY_PATH}: ${result.error}"))
+  }
+}
+
+// Persistent policy: starts from the on-disk file (or `{}` if none
+// exists yet), grows as the user opts into always-approve /
+// always-reject for each interrupt kind, and is written back to
+// disk on every change so decisions stick across sessions. Lives
+// at module scope so the handler in `node main` and any helpers
 // can read AND mutate it during a run. Module-level `let` is
-// stored in the GlobalStore, which Agency reinitializes per run.
-let policy: Policy = {}
+// stored in the GlobalStore, which Agency reinitializes per run —
+// hence the explicit load.
+let policy: Policy = loadPolicy() with approve
 
 def loadAgentsMd(dir: string): string {
   """
@@ -297,8 +365,9 @@ def recordAlways(kind: string, action: string) {
     }]
   }
   policy = next
+  savePolicy()
   print(
-    color.cyan("→ Recorded policy: ${kind} = ${action} (won't ask again this session)"),
+    color.cyan("→ Recorded policy: ${kind} = ${action} (won't ask again)"),
   )
 }
 
@@ -323,6 +392,7 @@ def recordAlwaysScoped(intr) {
     }, ...rules]
   }
   policy = next
+  savePolicy()
   print(
     color.cyan(
     "→ Recorded policy: ${intr.kind} = approve where ${describeScopedMatch(intr)}",
@@ -467,7 +537,11 @@ node main() {
         const reply = runForCategory(category, userMsg, ctx)
         const target = consumeHandoff()
         if (target == "") {
-          print(color.green("\n${reply}\n"))
+          // Subagents are prompted to reply in Markdown. Render
+          // headings/bullets/bold/code-fences instead of dumping the
+          // raw source — see `code.agency` / `research.agency` for
+          // the prompt and the system-prompt instruction.
+          print(highlight("\n${reply}\n", language: "markdown"))
           done = true
         } else {
           print(color.cyan("→ handing off to ${target}"))
@@ -483,7 +557,7 @@ node main() {
         // yet again — `allowHandoff: false` strips `handoff` from the
         // tool set, so the LLM has no escape hatch this turn.
         const finalReply = runForCategory(category, userMsg, ctx, false)
-        print(color.green("\n${finalReply}\n"))
+        print(highlight("\n${finalReply}\n", language: "markdown"))
       }
     } with defaultHandler
     userMsg = input("\nNext request (or 'exit'): ")

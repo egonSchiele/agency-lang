@@ -105,6 +105,13 @@ user's console. Skip this for inline identifiers or one-token
 excerpts.
 
 Keep replies brief. Cite sources. Show, don't lecture.
+
+Respond in Markdown — use `#`/`##` headings, `-` bullets, **bold**,
+_italic_, [links](url), and fenced code blocks (```ts, ```bash,
+```json) for any code or structured output. The REPL renders your
+reply through a Markdown syntax highlighter, so well-marked-up
+replies appear with colored headings, bold/italic styling, link
+underlining, and properly highlighted code fences.
 """
 
 export def runResearch(

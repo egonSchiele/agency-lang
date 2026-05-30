@@ -24,6 +24,7 @@ import {
   __call, __callMethod, __threads, __stateStack, getRuntimeContext, agencyStore,
   functionRefReviver as __functionRefReviver,
   DeterministicClient as __DeterministicClient,
+  createLogger as __createLogger,
 } from "agency-lang/runtime";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -233,6 +234,25 @@ if (hasInterrupts(__funcResult)) {
 // over budget. See lib/runtime/guard.ts.
 if (__error instanceof GuardExceededError) {
   throw __error;
+}
+// Surface the underlying exception via logger + statelog before
+// converting to a Failure. Without this, a caller that doesn't
+// inspect the result (the common case for void side-effect calls)
+// silently loses the error — a debugging nightmare. See the
+// recordAlwaysScoped bug debugged in
+// https://ampcode.com/threads/T-019e7a3a-edfa-74d6-917a-255c31bf8491.
+{
+  const __errMsg = __error instanceof Error ? __error.message : String(__error);
+  const __errStack = __error instanceof Error && __error.stack ? __error.stack : "";
+  const __log = __createLogger(__ctx.logLevel);
+  __log.error("Function " + "greet" + " threw an exception (converted to Failure): " + __errMsg);
+  if (__errStack) __log.error(__errStack);
+  __ctx.statelogClient?.error?.({
+    errorType: "runtimeError",
+    message: __errMsg,
+    functionName: "greet",
+    retryable: __self.__retryable,
+  });
 }
 return failure(
   __error instanceof Error ? __error.message : String(__error),

@@ -24,6 +24,7 @@ import {
   __call, __callMethod, __threads, __stateStack, getRuntimeContext, agencyStore,
   functionRefReviver as __functionRefReviver,
   DeterministicClient as __DeterministicClient,
+  createLogger as __createLogger,
 } from "agency-lang/runtime";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -213,8 +214,18 @@ await callHook({
     if (__error instanceof GuardExceededError) {
       throw __error
     }
-    console.error(`\nAgent crashed: ${__error.message}`)
-    console.error(__error.stack)
+    {
+              const __errMsg = __error instanceof Error ? __error.message : String(__error);
+              const __errStack = __error instanceof Error && __error.stack ? __error.stack : "";
+              const __log = __createLogger(__ctx.logLevel);
+              __log.error(`Node main crashed: ${__errMsg}`);
+              if (__errStack) __log.error(__errStack);
+              __ctx.statelogClient?.error?.({
+                errorType: "runtimeError",
+                message: __errMsg,
+                functionName: "main",
+              });
+            }
     return {
       messages: __threads(),
       data: failure(__error instanceof Error ? __error.message : String(__error), { functionName: "main" })

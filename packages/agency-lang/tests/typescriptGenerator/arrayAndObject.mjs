@@ -24,6 +24,7 @@ import {
   __call, __callMethod, __threads, __stateStack, getRuntimeContext, agencyStore,
   functionRefReviver as __functionRefReviver,
   DeterministicClient as __DeterministicClient,
+  createLogger as __createLogger,
 } from "agency-lang/runtime";
 
 const __filename = fileURLToPath(import.meta.url);

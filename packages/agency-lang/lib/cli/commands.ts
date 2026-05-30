@@ -198,7 +198,11 @@ export function compile(
 
   const absoluteInputFile = path.resolve(inputFile);
   const ext = options?.ts ? ".ts" : ".js";
-  let outputFile = _outputFile || inputFile.replace(".agency", ext);
+  // Anchor the replacement to the extension so that an absolute path
+  // containing ".agency" as a substring in a parent directory (e.g.
+  // "/Users/me/dev/worksy.agency-init/src/agent.agency") does not get
+  // the first match clobbered. See issue #48.
+  let outputFile = _outputFile || inputFile.replace(/\.agency$/, ext);
   if (config.outDir && !_outputFile) {
     const outputDir = path.resolve(config.outDir);
 

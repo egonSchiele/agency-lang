@@ -52,6 +52,7 @@ export function liftCallbackBlocks(program: AgencyProgram): AgencyProgram {
   const newNodes: AgencyNode[] = [];
 
   assertNoWrappedTopLevelCallbacks(program);
+  assertNoBareTopLevelWith(program);
 
   for (const node of program.nodes) {
     newNodes.push(transformTopLevel(node, lifted, nextName));
@@ -93,6 +94,56 @@ function assertNoWrappedTopLevelCallbacks(program: AgencyProgram): void {
           `Remove the \`with ${node.handlerName}\` modifier, or move the registration into a node body.`,
       );
     }
+  }
+}
+
+/**
+ * Top-level `<expr> with handler` is only supported when `<expr>` is a
+ * `static` or `global` assignment (e.g. `static const _ = foo() with approve`).
+ * Those forms get unwrapped by `partitionProgram`'s
+ * `unwrapStaticAssignment` / `unwrapGlobalAssignment` and the handler is
+ * attached to the assignment's step. Any other top-level `with` form
+ * (bare `foo() with approve`, `let x = ... with handler`, etc.) falls
+ * through to `processNodeInGlobalInit` → `processWithModifier` and
+ * crashes inside the typescriptBuilder with the cryptic internal
+ * invariant `StepPathTracker: currentId() called with empty path`,
+ * because there is no enclosing step path at module scope. Rather than
+ * crashing the compiler with that internal-only message, fail at
+ * preprocess time with a clear diagnostic pointing the user at the
+ * `static const _ = ...` workaround. See issue #229.
+ */
+function assertNoBareTopLevelWith(program: AgencyProgram): void {
+  for (const node of program.nodes) {
+    if (node.type !== "withModifier") continue;
+    // Any `let`/`const`/`static const` assignment at top level produces
+    // an unwrappable shape later (sectionAssembler's
+    // `unwrapStaticAssignment` for `static`, `unwrapGlobalAssignment`
+    // for the typescript-preprocessor-promoted `global` scope on bare
+    // top-level `let`/`const`). The wrapped declaration's RHS becomes
+    // the step the handler attaches to. Only reject `with` over a
+    // non-assignment statement, which is the form that crashes the
+    // builder. `scope === "global"` isn't set until the typescript
+    // preprocessor runs (which is after this preprocessor), so we
+    // detect "assignment that will become global" via the presence of
+    // `declKind`.
+    if (node.statement.type === "assignment") continue;
+    // Skip wrapped top-level callbacks — those have a more specific
+    // diagnostic from `assertNoWrappedTopLevelCallbacks` above.
+    if (
+      node.statement.type === "functionCall" &&
+      node.statement.functionName === "callback"
+    ) {
+      continue;
+    }
+    const loc = node.statement.loc
+      ? ` at line ${node.statement.loc.line}, col ${node.statement.loc.col}`
+      : "";
+    throw new Error(
+      `Top-level \`with ${node.handlerName}\` is only supported when wrapping a \`static\` or \`global\` assignment${loc}. ` +
+        `Wrap the call in a \`static const _ = ...\` so the handler has a step path to attach to:\n` +
+        `    static const _ = <call> with ${node.handlerName}\n` +
+        `(See issue #229.)`,
+    );
   }
 }
 

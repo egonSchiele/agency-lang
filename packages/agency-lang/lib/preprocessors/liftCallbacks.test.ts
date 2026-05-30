@@ -179,6 +179,45 @@ describe("liftCallbackBlocks", () => {
     ).toThrow(/cannot be wrapped in `with approve`/);
   });
 
+  it("rejects bare top-level function call wrapped in `with` (issue #229)", () => {
+    // Bare `foo() with approve` at module scope crashes the
+    // typescriptBuilder with `StepPathTracker: currentId() called with
+    // empty path` because there is no enclosing step path. Catch it
+    // earlier with a clear diagnostic.
+    expect(() =>
+      lift(
+        `def myFn(): number { return 42 }\n` +
+          `myFn() with approve\n` +
+          `node main() { print("hi") }\n`,
+      ),
+    ).toThrow(/Top-level `with approve` is only supported when wrapping/);
+  });
+
+  it("accepts top-level call wrapped in `with` when bound via `static const _ = ...`", () => {
+    // The documented workaround for issue #229 must still compile.
+    expect(() =>
+      lift(
+        `def myFn(): number { return 42 }\n` +
+          `static const _ = myFn() with approve\n` +
+          `node main() { print("hi") }\n`,
+      ),
+    ).not.toThrow();
+  });
+
+  it("accepts top-level call wrapped in `with` when bound via `let x = ...`", () => {
+    // Bare top-level `let`/`const` assignments become globals at
+    // typescript-preprocessor time, and `unwrapGlobalAssignment` in
+    // sectionAssembler routes the handler through globalInit. The
+    // preprocessor pre-check must not reject this shape.
+    expect(() =>
+      lift(
+        `def myFn(): number { return 42 }\n` +
+          `let result = myFn() with approve\n` +
+          `node main() { print("hi") }\n`,
+      ),
+    ).not.toThrow();
+  });
+
   it("issues distinct names across separate liftCallbackBlocks invocations", () => {
     // The counter must be per-invocation, not module-level. Two
     // independent lift() calls each get a fresh counter; both should

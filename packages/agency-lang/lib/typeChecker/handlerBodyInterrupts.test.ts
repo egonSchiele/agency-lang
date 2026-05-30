@@ -107,6 +107,30 @@ describe("checkHandlerBodyInterrupts", () => {
     expect(errors[0].message).toContain("myapp::deep");
   });
 
+  it("catches interrupts via function refs passed as arguments (e.g. tools)", () => {
+    // Mirrors the analyzeInterruptsFromScopes treatment of
+    // `functionRefsInArgs`: handing an interrupt-raising function as a
+    // value (tool, callback, strategy, etc.) to another call inside the
+    // handler still risks re-entering the chain when that callee invokes
+    // it. Catches the gap Copilot flagged on the original PR.
+    const errors = errorsFrom(`
+      def deploy() {
+        interrupt myapp::deploy("nope")
+      }
+      node main() {
+        handle {
+          let _x: number = 1
+        } with (_data) {
+          llm("do it", { tools: [deploy] })
+        }
+        return 1
+      }
+    `);
+    expect(errors).toHaveLength(1);
+    expect(errors[0].message).toContain("(inline)");
+    expect(errors[0].message).toContain("myapp::deploy");
+  });
+
   it("does NOT error when the handler is interrupt-free", () => {
     const errors = errorsFrom(`
       def myHandler(_intr) {

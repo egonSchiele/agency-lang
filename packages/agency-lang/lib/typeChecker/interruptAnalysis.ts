@@ -216,57 +216,83 @@ export function checkHandlerBodyInterrupts(
   ctx: TypeCheckerContext,
 ): void {
   for (const info of scopes) {
-    for (const { node } of walkNodes(info.body)) {
-      if (node.type !== "handleBlock") continue;
-      const offenders = collectHandlerOffenders(node, interruptKindsByFunction);
-      if (offenders.kinds.length === 0) continue;
-      const kindList = offenders.kinds.join(", ");
-      const handlerLabel =
-        node.handler.kind === "functionRef"
-          ? `'${node.handler.functionName}'`
-          : "(inline)";
-      ctx.errors.push({
-        message:
-          `Handler ${handlerLabel} may raise interrupts [${kindList}]. ` +
-          `That would re-enter the handler chain (the dispatcher visits ` +
-          `every handler, even the one currently running) and recurse ` +
-          `until \`HandlerRecursionError\` fires at runtime. ` +
-          `Restructure so the handler doesn't call interrupt-raising ` +
-          `code (e.g. hoist file I/O out of the handler), or suppress ` +
-          `this error with \`// @tc-ignore\` on the line above the ` +
-          `\`handle\` block.`,
-        severity: "error",
-        loc: node.loc,
-      });
-    }
+    ctx.withScope(info.scopeKey, () => {
+      for (const { node } of walkNodes(info.body)) {
+        if (node.type !== "handleBlock") continue;
+        const kinds = collectHandlerOffenderKinds(
+          node,
+          info,
+          interruptKindsByFunction,
+          ctx,
+        );
+        if (kinds.length === 0) continue;
+        const handlerLabel =
+          node.handler.kind === "functionRef"
+            ? `'${node.handler.functionName}'`
+            : "(inline)";
+        ctx.errors.push({
+          message:
+            `Handler ${handlerLabel} may raise interrupts [${kinds.join(", ")}]. ` +
+            `That would re-enter the handler chain (the dispatcher visits ` +
+            `every handler, even the one currently running) and recurse ` +
+            `until \`HandlerRecursionError\` fires at runtime. ` +
+            `Restructure so the handler doesn't call interrupt-raising ` +
+            `code (e.g. hoist file I/O out of the handler), or suppress ` +
+            `this error with \`// @tc-ignore\` on the line above the ` +
+            `\`handle\` block.`,
+          severity: "error",
+          loc: node.loc,
+        });
+      }
+    });
   }
 }
 
-/** Collect every interrupt kind that this handle block's handler may raise,
- *  transitively. For a functionRef handler we read the propagated kinds
- *  directly; for an inline handler we walk its body for direct
- *  `interruptStatement`s and for `functionCall`s whose target was already
- *  flagged in `interruptKindsByFunction`. */
-function collectHandlerOffenders(
+/** Collect every interrupt kind a handle block's handler may raise,
+ *  transitively. For a `functionRef` handler we read the already-propagated
+ *  kinds directly. For an inline handler we mirror `collectFromScope`:
+ *  direct `interruptStatement`s contribute their kind, and every callee —
+ *  including function references passed as arguments (e.g. tools handed to
+ *  `llm(..., tools: [deploy])`) — is resolved through
+ *  `interruptKindsByFunction` so transitive interrupts via tool calls or
+ *  callback handoffs are caught. */
+function collectHandlerOffenderKinds(
   node: { handler: { kind: string; functionName?: string; body?: any[] } },
+  info: ScopeInfo,
   interruptKindsByFunction: Record<string, InterruptKind[]>,
-): { kinds: string[] } {
+  ctx: TypeCheckerContext,
+): string[] {
   const kinds: string[] = [];
   if (node.handler.kind === "functionRef") {
     const ks = interruptKindsByFunction[node.handler.functionName!] ?? [];
     for (const k of ks) addUnique(kinds, k.kind);
-    return { kinds };
+    return kinds;
   }
-  // inline handler
+  // inline handler — mirror collectFromScope's callee discovery
   for (const { node: inner } of walkNodes(node.handler.body ?? [])) {
     if (inner.type === "interruptStatement") {
       addUnique(kinds, inner.kind);
-    } else if (inner.type === "functionCall") {
-      const ks = interruptKindsByFunction[inner.functionName] ?? [];
-      for (const k of ks) addUnique(kinds, k.kind);
+      continue;
+    }
+    if (inner.type === "functionCall") {
+      addKindsFor(inner.functionName, interruptKindsByFunction, kinds);
+      for (const refName of functionRefsInArgs(inner.arguments, info.scope, ctx)) {
+        addKindsFor(refName, interruptKindsByFunction, kinds);
+      }
+    } else if (inner.type === "gotoStatement") {
+      addKindsFor(inner.nodeCall.functionName, interruptKindsByFunction, kinds);
     }
   }
-  return { kinds };
+  return kinds;
+}
+
+function addKindsFor(
+  name: string,
+  interruptKindsByFunction: Record<string, InterruptKind[]>,
+  out: string[],
+): void {
+  const ks = interruptKindsByFunction[name] ?? [];
+  for (const k of ks) addUnique(out, k.kind);
 }
 
 /** Narrow a call-argument slot (which may be a positional Expression,

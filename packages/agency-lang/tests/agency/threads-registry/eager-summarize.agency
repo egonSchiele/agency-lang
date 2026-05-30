@@ -1,0 +1,42 @@
+import { listThreads } from "std::threads"
+import { userMessage } from "std::thread"
+
+// Verifies that `thread(summarize: true) { ... }` populates
+// MessageThread.summary at close time via the TS-side onThreadEnd
+// hook in lib/stdlib/threads.ts.
+//
+// `lazySummarize: false` is the key: it disables the on-demand
+// summarize fallback inside listThreads(), so the ONLY way a thread
+// ends up with a cached LLM-generated summary is via the eager hook
+// firing at close. Threads without a cached summary fall back to
+// their label (or "") and consume no LLM mocks. We provide exactly
+// one LLM mock — the eager hook is the only consumer.
+//
+// Test outcomes:
+//   - working eager hook: "eager" thread.summary = "eager-summary"
+//                         "lazy"  thread.summary = "lazy"      (label fallback)
+//   - broken eager hook: "eager" thread.summary = "eager"      (label fallback)
+//                        "lazy"  thread.summary = "lazy"       (label fallback)
+//                        the single LLM mock is never consumed.
+node main() {
+  thread(label: "eager", summarize: true) {
+    userMessage("eager body")
+  }
+  thread(label: "lazy") {
+    userMessage("lazy body")
+  }
+  const all = listThreads(lazySummarize: false)
+  // Build "<label>=<summary>" pairs for every labeled thread. The
+  // active main thread is unlabeled and gets skipped. Sorted so
+  // mock-mode iteration order doesn't make the test brittle.
+  const pairs: string[] = []
+  if (isSuccess(all)) {
+    for (t in all.value) {
+      if (t.label != null && t.summary != null) {
+        pairs.push(t.label + "=" + t.summary)
+      }
+    }
+  }
+  pairs.sort()
+  return pairs
+}

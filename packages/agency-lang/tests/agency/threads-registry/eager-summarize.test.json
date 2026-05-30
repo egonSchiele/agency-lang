@@ -1,0 +1,15 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "[\"eager=eager-summary\",\"lazy=lazy\"]",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "thread(summarize: true) populates MessageThread.summary at close via the TS-side onThreadEnd hook. listThreads(lazySummarize: false) disables the on-demand summarizer so the only LLM mock can only be consumed by the eager hook — a broken hook would leave the eager thread falling back to its label and produce [\"eager=eager\",\"lazy=lazy\"] instead.",
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        { "return": { "summary": "eager-summary" } }
+      ]
+    }
+  ]
+}

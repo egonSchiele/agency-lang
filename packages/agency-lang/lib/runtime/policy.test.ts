@@ -122,6 +122,120 @@ describe("checkPolicy", () => {
     const result = checkPolicy(policy, { kind: "test::x", message: "", data: {}, origin: "" });
     expect(result).toEqual({ type: "reject" });
   });
+
+  describe("./ prefix normalization (picomatch workaround)", () => {
+    // picomatch.isMatch returns false for patterns starting with `./`
+    // when combined with `**` or brace expansions — e.g.
+    //   isMatch("./docs/guide",      "./docs/guide{,/**}") === false
+    //   isMatch("./docs/guide/x.md", "./docs/guide{,/**}") === false
+    // Stripping a leading `./` from both value and pattern normalizes
+    // the path so the match succeeds. These tests pin the desired
+    // behavior so we notice if picomatch ever changes (and the
+    // workaround can be removed).
+    it("matches ./path against ./path{,/**} pattern (scoped approve)", () => {
+      const policy = {
+        "std::read": [
+          { match: { dir: "./docs/guide{,/**}" }, action: "approve" as const },
+          { action: "reject" as const },
+        ],
+      };
+      expect(
+        checkPolicy(policy, {
+          kind: "std::read",
+          message: "",
+          data: { dir: "./docs/guide" },
+          origin: "",
+        }),
+      ).toEqual({ type: "approve" });
+    });
+
+    it("matches ./path/sub against ./path{,/**} pattern", () => {
+      const policy = {
+        "std::read": [
+          { match: { dir: "./docs/guide{,/**}" }, action: "approve" as const },
+          { action: "reject" as const },
+        ],
+      };
+      expect(
+        checkPolicy(policy, {
+          kind: "std::read",
+          message: "",
+          data: { dir: "./docs/guide/sub" },
+          origin: "",
+        }),
+      ).toEqual({ type: "approve" });
+    });
+
+    it("matches bare path against ./path pattern (asymmetric ./)", () => {
+      const policy = {
+        "std::read": [
+          { match: { dir: "./docs" }, action: "approve" as const },
+          { action: "reject" as const },
+        ],
+      };
+      expect(
+        checkPolicy(policy, {
+          kind: "std::read",
+          message: "",
+          data: { dir: "docs" },
+          origin: "",
+        }),
+      ).toEqual({ type: "approve" });
+    });
+
+    it("does NOT match sibling dirs with shared prefix", () => {
+      // Regression guard: stripping `./` should NOT make `./docs/guide`
+      // match `./docs/guidance{,/**}` or vice versa.
+      const policy = {
+        "std::read": [
+          { match: { dir: "./docs/guide{,/**}" }, action: "approve" as const },
+          { action: "reject" as const },
+        ],
+      };
+      expect(
+        checkPolicy(policy, {
+          kind: "std::read",
+          message: "",
+          data: { dir: "./docs/guidance" },
+          origin: "",
+        }),
+      ).toEqual({ type: "reject" });
+    });
+
+    it("does NOT match unrelated paths", () => {
+      const policy = {
+        "std::read": [
+          { match: { dir: "./docs/guide{,/**}" }, action: "approve" as const },
+          { action: "reject" as const },
+        ],
+      };
+      expect(
+        checkPolicy(policy, {
+          kind: "std::read",
+          message: "",
+          data: { dir: "./src" },
+          origin: "",
+        }),
+      ).toEqual({ type: "reject" });
+    });
+
+    it("absolute paths still work (no ./ to strip)", () => {
+      const policy = {
+        "std::read": [
+          { match: { dir: "/abs/path{,/**}" }, action: "approve" as const },
+          { action: "reject" as const },
+        ],
+      };
+      expect(
+        checkPolicy(policy, {
+          kind: "std::read",
+          message: "",
+          data: { dir: "/abs/path/x" },
+          origin: "",
+        }),
+      ).toEqual({ type: "approve" });
+    });
+  });
 });
 
 describe("validatePolicy", () => {

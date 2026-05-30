@@ -1,7 +1,11 @@
 import * as smoltalk from "smoltalk";
 import { nanoid } from "nanoid";
 import { runInBootstrapFrame } from "./asyncContext.js";
-import { AgencyCancelledError, RestoreSignal } from "./errors.js";
+import {
+  AgencyCancelledError,
+  HandlerRecursionError,
+  RestoreSignal,
+} from "./errors.js";
 import { applyOverrides } from "./rewind.js";
 import { Checkpoint } from "./state/checkpointStore.js";
 import { RuntimeContext } from "./state/context.js";
@@ -126,6 +130,16 @@ type HandlerChainOutcome =
   | { kind: "propagated" }
   | { kind: "noResponse" };
 
+/** Maximum nested-dispatch depth for `runHandlerChain`. Each entry increments
+ *  `ctx._handlerChainDepth`; exceeding this limit throws `HandlerRecursionError`.
+ *  Picked to be well above any plausible legitimate nesting (a handler that calls
+ *  one nested handler-aware operation, that itself calls another, etc.) but
+ *  small enough that a runaway recursion is caught immediately rather than after
+ *  hundreds of leaked handlers. See the case study in
+ *  https://ampcode.com/threads/T-019e7a80-0a51-75ce-840e-89b5f595da5c where the
+ *  unguarded recursion grew to ~500 handlers before the user noticed the freeze. */
+const MAX_HANDLER_CHAIN_DEPTH = 10;
+
 /** Run all registered handlers for an interrupt (top of the stack first).
  * Emits handlerDecision/interruptResolved events along the way and returns
  * a summary outcome the caller uses to decide whether to propagate. */
@@ -138,6 +152,17 @@ async function runHandlerChain(
   let approvedValue: any = undefined;
   let hasApproval = false;
   let hasPropagation = false;
+  // Increment BEFORE the limit check so a handler that calls into another
+  // dispatch sees one extra level on entry; decrement in finally so even an
+  // early throw (e.g. cancellation) leaves the counter clean.
+  ctx._handlerChainDepth = (ctx._handlerChainDepth ?? 0) + 1;
+  if (ctx._handlerChainDepth > MAX_HANDLER_CHAIN_DEPTH) {
+    // Decrement before throwing so the counter reflects what's actually on
+    // the stack — otherwise a caller that catches this error would see a
+    // stale +1 and trip the limit on the next legitimate dispatch.
+    ctx._handlerChainDepth -= 1;
+    throw new HandlerRecursionError(interruptObj.kind, MAX_HANDLER_CHAIN_DEPTH);
+  }
   const chainSpanId = ctx.statelogClient.startSpan("handlerChain");
   try {
     for (let i = (ctx.handlers ?? []).length - 1; i >= 0; i--) {
@@ -176,6 +201,9 @@ async function runHandlerChain(
     }
   } finally {
     ctx.statelogClient.endSpan(chainSpanId); // end handlerChain span
+    // Always decrement, even on throw/cancel, so the counter mirrors the
+    // actual nesting on the stack. Paired with the increment above.
+    ctx._handlerChainDepth -= 1;
   }
   if (hasPropagation) return { kind: "propagated" };
   if (hasApproval) return { kind: "approved", value: approvedValue };

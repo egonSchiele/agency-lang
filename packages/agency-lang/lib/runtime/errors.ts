@@ -48,6 +48,31 @@ export class AgencyCancelledError extends Error {
   }
 }
 
+/** Thrown by `runHandlerChain` (lib/runtime/interrupts.ts) when nested
+ *  handler-chain dispatch depth exceeds `MAX_HANDLER_CHAIN_DEPTH`. Almost
+ *  always indicates a handler raised an interrupt that re-enters the same
+ *  handler (directly or via the chain dispatcher visiting every handler).
+ *  Carries the interrupt kind that tripped the limit so the diagnostic
+ *  points at the right place. */
+export class HandlerRecursionError extends Error {
+  readonly kind: string;
+  readonly depth: number;
+  constructor(kind: string, depth: number) {
+    super(
+      `Handler chain dispatch nested ${depth} levels deep while handling ` +
+        `interrupt of kind "${kind}". This usually means a handler raised an ` +
+        `interrupt that re-entered itself (the chain dispatcher visits every ` +
+        `handler, even after one approves). Check whether the handler's body ` +
+        `calls anything that raises an interrupt (\`with approve\`, file I/O, ` +
+        `\`input()\`, etc.) and guard against re-entry — e.g. flip a sentinel ` +
+        `flag BEFORE the call, not after.`,
+    );
+    this.name = "HandlerRecursionError";
+    this.kind = kind;
+    this.depth = depth;
+  }
+}
+
 export function isAbortError(error: unknown): boolean {
   if (error instanceof AgencyCancelledError) return true;
   if (error instanceof DOMException && error.name === "AbortError") return true;

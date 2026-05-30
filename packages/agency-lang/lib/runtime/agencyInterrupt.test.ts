@@ -281,3 +281,105 @@ describe("agency.interrupt — frame requirements", () => {
     ).rejects.toThrow(/without an active Runner/);
   });
 });
+
+// Regression test for the recursive handler bug debugged in
+// https://ampcode.com/threads/T-019e7a80-0a51-75ce-840e-89b5f595da5c.
+// A handler whose body raises an interrupt triggers a nested
+// runHandlerChain dispatch that visits the same handler again
+// (the chain visits every handler, even after one approves), leading
+// to unbounded recursion. The runtime now bounds nested-dispatch depth
+// at MAX_HANDLER_CHAIN_DEPTH and throws HandlerRecursionError when
+// exceeded, naming the offending interrupt kind in the message.
+describe("agency.interrupt — recursive-handler guard", () => {
+  it("throws HandlerRecursionError when a handler keeps re-entering itself", async () => {
+    const ctx = makeMockCtx();
+    // The handler ALWAYS calls interrupt(...) before returning. Its inner
+    // interrupt re-dispatches the chain, which visits this same handler
+    // again — infinite recursion without the depth guard.
+    const selfRecursingHandler = async () => {
+      await agency.interrupt({
+        kind: "inner",
+        message: "raised from inside handler",
+        data: {},
+      });
+      return approve();
+    };
+    await expect(
+      inFrame(ctx, () =>
+        agency.withResumableScope({ name: "recursive" }, async (s) => {
+          await s.step(async () => {
+            await agency.withHandler(selfRecursingHandler, async () => {
+              await agency.interrupt({
+                kind: "outer",
+                message: "trips the chain the first time",
+                data: {},
+              });
+            });
+          });
+          return "unreachable";
+        }),
+      ),
+    ).rejects.toThrow(/Handler chain dispatch nested .* levels deep/);
+  });
+
+  it("names the offending interrupt kind in the error message", async () => {
+    const ctx = makeMockCtx();
+    const selfRecursingHandler = async () => {
+      await agency.interrupt({
+        kind: "deep-recursion-kind",
+        message: "raised from inside handler",
+        data: {},
+      });
+      return approve();
+    };
+    try {
+      await inFrame(ctx, () =>
+        agency.withResumableScope({ name: "named" }, async (s) => {
+          await s.step(async () => {
+            await agency.withHandler(selfRecursingHandler, async () => {
+              await agency.interrupt({
+                kind: "outer",
+                message: "trips first",
+                data: {},
+              });
+            });
+          });
+          return "unreachable";
+        }),
+      );
+      throw new Error("expected HandlerRecursionError to be thrown");
+    } catch (e) {
+      expect((e as Error).name).toBe("HandlerRecursionError");
+      expect((e as Error).message).toContain("deep-recursion-kind");
+    }
+  });
+
+  it("leaves _handlerChainDepth back at 0 after the throw", async () => {
+    const ctx = makeMockCtx();
+    const selfRecursingHandler = async () => {
+      await agency.interrupt({
+        kind: "inner",
+        message: "x",
+        data: {},
+      });
+      return approve();
+    };
+    await expect(
+      inFrame(ctx, () =>
+        agency.withResumableScope({ name: "cleanup" }, async (s) => {
+          await s.step(async () => {
+            await agency.withHandler(selfRecursingHandler, async () => {
+              await agency.interrupt({ kind: "outer", message: "x", data: {} });
+            });
+          });
+          return "unreachable";
+        }),
+      ),
+    ).rejects.toThrow(/Handler chain dispatch nested/);
+    // The finally in runHandlerChain decrements on every exit (normal OR
+    // throw). The throw site itself decrements before throwing. So the
+    // counter must be back at 0 — otherwise the next legitimate dispatch
+    // would trip the limit prematurely.
+    expect(ctx._handlerChainDepth).toBe(0);
+  });
+});

@@ -82,9 +82,26 @@ callback("onToolCallEnd") as data {
 // "always" decision. Sibling to the memory store under the same
 // per-user agent dir (see `shared.agency` for the `~` expansion
 // rationale).
+//
+// NOTE: `policyDir()` recomputes the agent dir locally instead of
+// reading `AGENCY_AGENT_DIR` from `shared.agency`. Agency does NOT
+// guarantee that an imported module's `static const` has been
+// initialized before importer code reads it — at module-init time
+// AND for a stretch of runtime until something in shared.js is
+// invoked, the binding holds `undefined`. We can't tell from
+// here when shared.js's lazy init will fire, so we just duplicate
+// the trivial home-dir computation (see `computeAgentDir` in
+// shared.agency). Cheap, deterministic, no cross-module ordering
+// hazard.
 const POLICY_FILE = "policy.json"
-const POLICY_DIR = AGENCY_AGENT_DIR
-const POLICY_PATH = "${POLICY_DIR}/${POLICY_FILE}"
+def policyDir(): string {
+  const home = env("HOME")
+  if (home == null) {
+    return "./.agency-agent"
+  }
+  return "${home}/.agency-agent"
+}
+def policyPath(): string { return "${policyDir()}/${POLICY_FILE}" }
 
 def loadPolicy(): Policy {
   """
@@ -94,19 +111,21 @@ def loadPolicy(): Policy {
   validation. A warning is printed for the malformed cases so the
   user knows a previous decision didn't carry over.
   """
-  if (!exists(POLICY_FILE, POLICY_DIR)) {
+  const dir = policyDir()
+  const path = policyPath()
+  if (!exists(POLICY_FILE, dir)) {
     return {}
   }
-  const readResult = read(POLICY_FILE, POLICY_DIR) with approve
+  const readResult = read(POLICY_FILE, dir) with approve
   if (isFailure(readResult)) {
-    print(color.yellow("Could not read ${POLICY_PATH}: ${readResult.error}"))
+    print(color.yellow("Could not read ${path}: ${readResult.error}"))
     return {}
   }
   const parsed = try parseJSON(readResult.value)
   if (isFailure(parsed)) {
     print(
       color.yellow(
-      "Malformed JSON in ${POLICY_PATH}; ignoring and starting fresh.",
+      "Malformed JSON in ${path}; ignoring and starting fresh.",
     ),
     )
     return {}
@@ -115,7 +134,7 @@ def loadPolicy(): Policy {
   if (!valid.success) {
     print(
       color.yellow(
-      "Invalid policy in ${POLICY_PATH} (${valid.error}); ignoring and starting fresh.",
+      "Invalid policy in ${path} (${valid.error}); ignoring and starting fresh.",
     ),
     )
     return {}
@@ -130,21 +149,61 @@ def savePolicy() {
   immediately survives a restart. Failures are warnings, not
   errors — losing one decision is better than crashing the REPL.
   """
-  const result = try writePolicyFile(POLICY_PATH, policy) with approve
+  const path = policyPath()
+  const result = try writePolicyFile(path, policy) with approve
   if (isFailure(result)) {
-    print(color.yellow("Could not save policy to ${POLICY_PATH}: ${result.error}"))
+    print(color.yellow("Could not save policy to ${path}: ${result.error}"))
   }
 }
 
-// Persistent policy: starts from the on-disk file (or `{}` if none
-// exists yet), grows as the user opts into always-approve /
-// always-reject for each interrupt kind, and is written back to
-// disk on every change so decisions stick across sessions. Lives
-// at module scope so the handler in `node main` and any helpers
-// can read AND mutate it during a run. Module-level `let` is
-// stored in the GlobalStore, which Agency reinitializes per run —
-// hence the explicit load.
-let policy: Policy = loadPolicy() with approve
+// Persistent policy: starts empty and is hydrated lazily on first
+// access (see `ensurePolicyLoaded`). Grows as the user opts into
+// always-approve / always-reject for each interrupt kind, and is
+// written back to disk on every change so decisions stick across
+// sessions. Lives at module scope so the handler in `node main` and
+// any helpers can read AND mutate it during a run. Module-level
+// `let` is stored in the GlobalStore, which Agency reinitializes
+// per run — hence the lazy load.
+//
+// Why lazy and not `= loadPolicy()` at module init?
+// `loadPolicy()` reads `AGENCY_AGENT_DIR`, a `static const` exported
+// from `shared.agency`. Agency does NOT guarantee that an imported
+// module's static init has run before THIS module's
+// `__initializeGlobals` reads its exports, so an eager load captures
+// `undefined` and writes to `undefined/policy.json`. Deferring to
+// first use ensures `defaultHandler` (which triggers the first read)
+// runs after the main loop has touched shared.js (via
+// `consumeHandoff`), at which point `AGENCY_AGENT_DIR` is populated.
+let policy: Policy = {}
+let policyLoaded: boolean = false
+
+def ensurePolicyLoaded() {
+  """
+  Idempotently hydrate `policy` from disk on first call. Must be
+  called at the top of every code path that READS or writes `policy`
+  — see the comment on the `let policy` declaration above for the
+  init-ordering rationale.
+
+  CRITICAL: `policyLoaded` MUST be flipped to `true` BEFORE calling
+  `loadPolicy()`. `loadPolicy()` reads a file `with approve`, which
+  raises a `std::read` interrupt. The interrupt's handler chain
+  (lib/runtime/interrupts.ts:runHandlerChain) visits EVERY handler
+  on the stack, even after one approves. That means our own
+  `defaultHandler` (registered by `handle { ... } with defaultHandler`
+  in `node main`) gets called recursively while `loadPolicy()` is
+  still in-flight. `defaultHandler` then calls `ensurePolicyLoaded()`
+  again — and if the guard is checked against the OLD value of
+  `policyLoaded`, we recurse infinitely, leaking 2 handlers per
+  level (one from `ensurePolicyLoaded`'s `with approve`, one from
+  `loadPolicy`'s). Flipping the flag first short-circuits the
+  recursion the moment the inner read interrupt's chain re-enters
+  `defaultHandler`.
+  """
+  if (!policyLoaded) {
+    policyLoaded = true
+    policy = loadPolicy() with approve
+  }
+}
 
 def loadAgentsMd(dir: string): string {
   """
@@ -395,17 +454,17 @@ def recordAlwaysScoped(intr) {
   first-match-wins evaluation order.
   """
   const match = buildScopedMatch(intr)
-  const existing = policy[intr.kind]
-  let rules: PolicyRule[] = []
-  if (existing != null) {
-    rules = existing
-  }
+  // NOTE: Agency compiles `!=` to `!==`, so an UNDEFINED `existing`
+  // would slip past `!= null` and assign `undefined` to `rules`,
+  // which would then crash the spread below. Default-via-`||` to a
+  // fresh array so the spread always works.
+  const existing = policy[intr.kind] || []
   const next: Policy = {
     ...policy,
     [intr.kind]: [{
       match: match,
       action: "approve"
-    }, ...rules]
+    }, ...existing]
   }
   policy = next
   savePolicy()
@@ -417,6 +476,9 @@ def recordAlwaysScoped(intr) {
 }
 
 def defaultHandler(intr) {
+  // Hydrate the persistent policy on first invocation. See the
+  // `let policy` declaration for the init-ordering rationale.
+  ensurePolicyLoaded()
   // Consult the running policy first. If a previous "always"
   // decision covers this kind, use it without bothering the user.
   const decision = checkPolicy(policy, intr)

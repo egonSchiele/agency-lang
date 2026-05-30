@@ -91,6 +91,18 @@ export class RuntimeContext<T> {
   so that if we're inside a tool call, we don't halt execution and we don't
   emit a checkpoint.*/
   _toolCallDepth: number;
+  /** Nested-dispatch depth counter for `runHandlerChain` (lib/runtime/interrupts.ts).
+   *  Incremented on entry to each handler-chain dispatch, decremented in its
+   *  `finally`. The dispatcher throws a `HandlerRecursionError` when this counter
+   *  exceeds `MAX_HANDLER_CHAIN_DEPTH` — that means a handler raised an interrupt
+   *  whose dispatch re-entered the same chain too many times, almost always a
+   *  handler accidentally re-invoking itself (see the recursion case debugged in
+   *  https://ampcode.com/threads/T-019e7a80-0a51-75ce-840e-89b5f595da5c).
+   *
+   *  This is NOT the length of `ctx.handlers`. It only grows when a handler's body
+   *  triggers another interrupt while the outer dispatch is still in flight. Normal
+   *  push/pop of handlers via `with approve` does not increment it. */
+  _handlerChainDepth: number;
   debuggerState: DebuggerState | null;
   private traceWriter: TraceWriter | null;
 
@@ -194,6 +206,7 @@ export class RuntimeContext<T> {
     this._skipNextCheckpoint = false;
     this._restoreCount = 0;
     this._toolCallDepth = 0;
+    this._handlerChainDepth = 0;
     this.pendingPromises = new PendingPromiseStore();
     this.debuggerState = null;
     this.traceWriter = null;
@@ -256,6 +269,7 @@ export class RuntimeContext<T> {
     execCtx._skipNextCheckpoint = false;
     execCtx._restoreCount = 0;
     execCtx._toolCallDepth = 0;
+    execCtx._handlerChainDepth = 0;
     execCtx._interruptResponses = {};
     execCtx.debuggerState = this.debuggerState;
     execCtx.traceWriter = await TraceWriter.create({

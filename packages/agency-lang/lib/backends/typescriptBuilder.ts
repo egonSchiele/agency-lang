@@ -2335,15 +2335,24 @@ export class TypeScriptBuilder {
             ts.raw("__error instanceof GuardExceededError"),
             ts.statements([ts.throw("__error")]),
           ),
-          ts.consoleError(
-            ts.template([
-              {
-                text: "\\nAgent crashed: ",
-                expr: $(ts.id("__error")).prop("message").done(),
-              },
-            ]),
+          // Surface the underlying exception via logger + statelog
+          // before converting to a Failure. Mirrors the function catch
+          // template; see the recordAlwaysScoped bug in
+          // https://ampcode.com/threads/T-019e7a3a-edfa-74d6-917a-255c31bf8491.
+          ts.raw(
+            `{
+              const __errMsg = __error instanceof Error ? __error.message : String(__error);
+              const __errStack = __error instanceof Error && __error.stack ? __error.stack : "";
+              const __log = __createLogger(__ctx.logLevel);
+              __log.error(\`Node ${nodeName} crashed: \${__errMsg}\`);
+              if (__errStack) __log.error(__errStack);
+              __ctx.statelogClient?.error?.({
+                errorType: "runtimeError",
+                message: __errMsg,
+                functionName: ${JSON.stringify(nodeName)},
+              });
+            }`,
           ),
-          ts.consoleError($(ts.id("__error")).prop("stack").done()),
           ts.return(
             ts.obj({
               messages: ts.runtime.threads,

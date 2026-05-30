@@ -35,6 +35,14 @@ export function checkPolicy(
   return { type: "propagate" };
 }
 
+// picomatch fails to match patterns starting with `./` when combined
+// with `**` or brace expansions (e.g. `./docs/guide{,/**}` vs
+// `./docs/guide` returns false). Strip a leading `./` from both
+// pattern and value so paths normalize before matching.
+function stripDotSlash(s: string): string {
+  return s.startsWith("./") ? s.slice(2) : s;
+}
+
 function matchesRule(
   rule: PolicyRule,
   interrupt: { kind: string; message: string; data: any; origin: string },
@@ -54,7 +62,9 @@ function matchesRule(
     if (value === undefined) return false;
     if (typeof value !== "string") value = String(value);
 
-    if (!picomatch.isMatch(value, pattern)) return false;
+    if (!picomatch.isMatch(stripDotSlash(value), stripDotSlash(pattern))) {
+      return false;
+    }
   }
 
   return true;

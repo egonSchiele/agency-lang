@@ -140,3 +140,5 @@ export type {
 } from "./validateChain.js";
 export { CoverageCollector } from "./coverageCollector.js";
 export type { MemoryConfig } from "./memory/types.js";
+export { createLogger } from "../logger.js";
+export type { LogLevel, Logger } from "../logger.js";

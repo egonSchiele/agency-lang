@@ -28,7 +28,6 @@ export default defineConfig({
               link: "/guide/imports-and-packages",
             },
             { text: "TypeScript Interoperability", link: "/guide/ts-interop" },
-            { text: "TypeScript Helpers (agency.*)", link: "/guide/ts-helpers" },
             { text: "Odds and Ends", link: "/guide/odds-and-ends" },
             { text: "Troubleshooting", link: "/guide/troubleshooting" },
           ],
@@ -150,7 +149,7 @@ export default defineConfig({
               text: "Built-in Functions",
               link: "/appendix/builtins",
             },
-            { text: "TypeScript Helpers (agency.*)", link: "/guide/ts-helpers" },
+            { text: "TypeScript Helpers (agency.*)", link: "/appendix/ts-helpers" },
             {
               text: "Schema Parameter Injection",
               link: "/appendix/schema-parameter-injection",

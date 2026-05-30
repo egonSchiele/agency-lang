@@ -1226,10 +1226,15 @@ export class MemoryManager {
 }
 
 // Schema for the JSON returned by the Tier-3 (LLM) filter pass — a
-// list of entity ids picked from the candidate set. The manager
-// additionally filters the result to ids that were actually offered
-// so a hallucinated id is silently dropped.
-const StringArraySchema = z.array(z.string());
+// list of entity ids picked from the candidate set, wrapped in an
+// object so OpenAI's structured-output API accepts it (the API
+// requires the root schema to be `type: "object"` — a top-level
+// array is rejected with HTTP 400). The manager additionally filters
+// the result to ids that were actually offered so a hallucinated id
+// is silently dropped. The retrieval prompt template (`retrieval.
+// mustache`) is matched to this shape and asks the LLM to emit
+// `{"ids": [...]}` rather than a bare array.
+const StringArraySchema = z.object({ ids: z.array(z.string()) });
 
 function parseStringArray(text: string): string[] | null {
   let raw: unknown;
@@ -1239,7 +1244,7 @@ function parseStringArray(text: string): string[] | null {
     return null;
   }
   const result = StringArraySchema.safeParse(raw);
-  return result.success ? result.data : null;
+  return result.success ? result.data.ids : null;
 }
 
 // Schema for the JSON returned by the `forget()` LLM call. Wrapped

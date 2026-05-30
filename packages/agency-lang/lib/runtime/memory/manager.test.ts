@@ -211,7 +211,9 @@ describe("MemoryManager", () => {
     // Tier 3 (filter) returns Mom's id from the candidate set Tier 1
     // surfaced. We assert end-to-end that the formatted recall text
     // includes the entity and its observation.
-    client.text.mockResolvedValue(wrapTextResult(JSON.stringify([mom.id])));
+    client.text.mockResolvedValue(
+      wrapTextResult(JSON.stringify({ ids: [mom.id] })),
+    );
     const text = await manager.recall("mom");
     expect(text).toContain("Mom");
     expect(text).toContain("Likes pottery");
@@ -239,7 +241,7 @@ describe("MemoryManager", () => {
     // hallucination guard this collapses to an empty filter result,
     // and recall should return "" rather than a corrupted entity ref.
     client.text.mockResolvedValue(
-      wrapTextResult(JSON.stringify(["entity-totally-fake"])),
+      wrapTextResult(JSON.stringify({ ids: ["entity-totally-fake"] })),
     );
     const text = await manager.recall("mom");
     expect(text).toBe("");
@@ -415,7 +417,9 @@ describe("MemoryManager", () => {
 
       // Tier-3 LLM returns the seeded entity id.
       const mom = manager.getGraph().findEntityByName("Mom")!;
-      client.text.mockResolvedValueOnce(wrapTextResult(JSON.stringify([mom.id])));
+      client.text.mockResolvedValueOnce(
+        wrapTextResult(JSON.stringify({ ids: [mom.id] })),
+      );
 
       // Spy on spans + reset the events file so we only see recall.
       const openedSpans = spyOnSpans(statelogClient);

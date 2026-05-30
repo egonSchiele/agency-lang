@@ -56,6 +56,16 @@ describe("ThreadStore.resumeExisting", () => {
     expect(() => store.resumeExisting("999")).toThrow(/unknown thread/);
   });
 
+  it("formats numeric ids with a t-prefix in the error message", () => {
+    const store = new ThreadStore();
+    expect(() => store.resumeExisting("42")).toThrow(/t42/);
+  });
+
+  it("leaves non-numeric ids unchanged in the error message (no `tt1` double-prefix)", () => {
+    const store = new ThreadStore();
+    expect(() => store.resumeExisting("t1")).toThrow(/Cannot resume unknown thread id: t1$/m);
+  });
+
   it("rejects subthreads", () => {
     const store = new ThreadStore();
     const parentId = store.create();

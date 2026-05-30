@@ -328,16 +328,17 @@ export function* walkNodes(
       node.type === "seqBlock"
     ) {
       // messageThread carries optional named-arg expressions
-      // (`label`, `summarize`, `continue`, `session`) from
-      // Task 3 / 6 / 7. They must be walked so the symbol-table
-      // resolver populates the `scope` field on any variable
-      // references inside them — otherwise codegen emits bare
-      // identifiers instead of `__stack.locals.foo`.
+      // (`label`, `summarize`, `continue`, `session`, `hidden`).
+      // They must be walked so the symbol-table resolver populates
+      // the `scope` field on any variable references inside them —
+      // otherwise codegen emits bare identifiers instead of
+      // `__stack.locals.foo`.
       if (node.type === "messageThread") {
         if (node.label) yield* walkNodes([node.label as AgencyNode], [...ancestors, node], scopes);
         if (node.summarize) yield* walkNodes([node.summarize as AgencyNode], [...ancestors, node], scopes);
         if (node.continueExpr) yield* walkNodes([node.continueExpr as AgencyNode], [...ancestors, node], scopes);
         if (node.sessionExpr) yield* walkNodes([node.sessionExpr as AgencyNode], [...ancestors, node], scopes);
+        if (node.hidden) yield* walkNodes([node.hidden as AgencyNode], [...ancestors, node], scopes);
       }
       yield* walkNodes(node.body, [...ancestors, node], scopes);
     } else if (node.type === "handleBlock") {

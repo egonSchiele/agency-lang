@@ -1,0 +1,29 @@
+import { listThreads } from "std::threads"
+import { userMessage } from "std::thread"
+
+// Regression: `thread(hidden: <varRef>) { ... }` must walk the
+// `hidden` expression during symbol-table resolution so codegen
+// emits `__stack.locals.shouldHide` instead of a bare identifier.
+// Before the walker fix, this test would crash at runtime with
+// "shouldHide is not defined".
+node main() {
+  const shouldHide: boolean = true
+  const shouldShow: boolean = false
+
+  thread(label: "kept-visible", hidden: shouldShow) {
+    userMessage("kept body")
+  }
+  thread(label: "filtered-out", hidden: shouldHide) {
+    userMessage("hidden body")
+  }
+  const all = listThreads()
+  const labels: string[] = []
+  if (isSuccess(all)) {
+    for (t in all.value) {
+      if (t.label != null) {
+        labels.push(t.label)
+      }
+    }
+  }
+  return labels
+}

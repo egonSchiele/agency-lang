@@ -1,0 +1,14 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "[\"kept-visible\"]",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "thread(hidden: <varRef>) resolves the variable reference and filters by its value (regression for the walker fix that previously skipped the hidden expression).",
+      "llmMocks": [
+        { "return": { "summary": "kept-summary" } }
+      ]
+    }
+  ]
+}

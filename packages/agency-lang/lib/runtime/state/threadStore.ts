@@ -135,12 +135,17 @@ export class ThreadStore {
    */
   resumeExisting(id: MessageThreadID): void {
     const thread = this.threads[id];
+    // Display id: only prepend `t` when `id` is a numeric counter
+    // string. Callers that accidentally pass a slug (`"t1"`) or a
+    // non-numeric id (test mocks, ids that already look slug-shaped)
+    // would otherwise show up as `tt1` in the error message.
+    const displayId = /^\d+$/.test(id) ? `t${id}` : id;
     if (!thread) {
-      throw new Error(`Cannot resume unknown thread id: t${id}`);
+      throw new Error(`Cannot resume unknown thread id: ${displayId}`);
     }
     if (thread.parentId !== null) {
       throw new Error(
-        `Cannot resume subthread t${id}. Resume the parent thread and open ` +
+        `Cannot resume subthread ${displayId}. Resume the parent thread and open ` +
           `a fresh subthread block instead.`,
       );
     }

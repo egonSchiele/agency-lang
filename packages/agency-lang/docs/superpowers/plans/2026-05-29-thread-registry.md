@@ -104,7 +104,9 @@ Internal storage keeps the existing counter-string ID; the slug is a pure presen
 │  1. agency.threads.{list, get, current}            │
 │  2. thread(label?, summarize?) named args          │
 │  3. onThreadStart / onThreadEnd lifecycle hooks    │
-│  4. ThreadStore persists across node transitions   │
+│  4. (No new code — ThreadStore already persists    │
+│     across nodes via state.messages; verify +      │
+│     document.)                                     │
 │  5. thread(continue: id) — resume a closed thread  │
 │  6. thread(session: "name") — runtime-owned        │
 │     session→id map, sugar over (5)                 │
@@ -152,9 +154,25 @@ Build strategy: each primitive lands in its own task, the stdlib module is the l
 
 ## Task 1 — `agency.threads.*` TS-helper namespace
 
-**Goal:** Expose `ThreadStore` read methods via the canonical `agency` namespace, parallel to `agency.memory.*`. Pure read-side; no behavior change yet.
+**Goal:** Expose `ThreadStore` read methods via the canonical `agency` namespace, parallel to `agency.memory.*`. Pure read-side; one small data-model change (`parentId` on `MessageThread`) that downstream tasks depend on.
 
-- [ ] **Step 1: Add `agency.threads` to `lib/runtime/agency.ts`**
+- [ ] **Step 1: Track parent-id on `MessageThread`**
+
+  `MessageThread` (in `lib/runtime/state/messageThread.ts`) doesn't know whether it was created as a subthread today — only the `StatelogClient.threadCreated` event carries `parentThreadId`. Add an explicit field so `listThreads()` can return `parentId` and Task 6 can reject subthread continuation:
+
+  ```ts
+  export class MessageThread {
+    messages: smoltalk.Message[] = [];
+    id: string;
+    parentId: string | null = null;  // set by ThreadStore.createSubthread
+  }
+  ```
+
+  Update `MessageThreadJSON` (`parentId?: string | null`), `toJSON`, `fromJSON` to round-trip. Set it in `ThreadStore.createSubthread()` after `newSubthreadChild()`. `newChild()` and the plain `new MessageThread()` path leave it `null` (top-level).
+
+  Add a unit test: `createSubthread()` returns a thread whose `parentId === parentActiveId`; `create()` returns one whose `parentId === null`; both survive a JSON round-trip.
+
+- [ ] **Step 2: Add `agency.threads` to `lib/runtime/agency.ts`**
 
   Add a `threads` sub-namespace alongside `agency.memory`:
 
@@ -177,11 +195,11 @@ Build strategy: each primitive lands in its own task, the stdlib module is the l
 
   Both `ThreadInfoTS` and `ThreadMessageTS` are pure-TS types; the Agency-side analogs live in `stdlib/threads.agency` and structurally match.
 
-- [ ] **Step 2: Add `agency.threads` unit tests**
+- [ ] **Step 3: Add `agency.threads` unit tests**
 
   In `lib/runtime/agency.test.ts`, mirror the `agency.memory.*` test pattern: construct a `RuntimeContext`, run something that creates two threads, assert `agency.threads.list()` returns both with stable order and `isActive` set correctly on the right one, assert `agency.threads.get("t0", 0, 1)` returns just the first message.
 
-- [ ] **Step 3: Verify**
+- [ ] **Step 4: Verify**
 
   ```bash
   pnpm vitest run lib/runtime/agency.test.ts 2>&1 | tee /tmp/task1.log
@@ -264,69 +282,58 @@ Build strategy: each primitive lands in its own task, the stdlib module is the l
 
 ---
 
-## Task 4 — `ThreadStore` persists across node transitions
+## Task 4 — Verify cross-node persistence (no code change)
 
-**Goal:** Today, every fresh node calls `ThreadStore.withDefaultActive(...)` (see `setupNode` in `lib/runtime/node.ts`), which throws away the registry. Make the registry survive node boundaries while still resetting the *active* thread.
+**Goal:** Confirm the registry already persists across node transitions today, then write an integration test that pins the behavior so future refactors of `setupNode` can't silently break it. **No production code changes** — this task exists to lock in the contract Tasks 1, 5, 6, 7 depend on.
 
-- [ ] **Step 1: Decide the persistence vehicle**
+**Background — why this is doc-and-test instead of refactor:**
 
-  Options:
-  - **A.** Stash the `ThreadStore` on `RuntimeContext` as a run-scoped field; `setupNode` looks there first before falling back to `withDefaultActive`.
-  - **B.** Move the `threads` field off `StateStack` (per-branch) and onto the run-level context (cross-node).
+Initial draft of this plan called for adding `RuntimeContext.runThreadStore` and a `ThreadStore.beginNode()` reset method, under the assumption that each node started with a fresh `ThreadStore` and discarded prior threads. That's wrong. The actual flow:
 
-  Go with **A**. `StateStack` per-branch isolation is correct for the *active* thread; the cross-node *registry* is the new concept. Adding a `RuntimeContext.runThreadStore?: ThreadStore` field is the smallest correct change.
+- [`runNode` line 229](../../../lib/runtime/node.ts) creates **one** `ThreadStore` per agent run (`ThreadStore.withDefaultActive(...)`).
+- That same store is passed as `state.messages` to `graph.run` on every node transition (line 247).
+- [`setupNode` lines 42–54](../../../lib/runtime/node.ts) reuses it via the `state.messages instanceof ThreadStore` branch.
+- Across interrupts, the store is serialized to `stack.threads` and rebuilt via `ThreadStore.fromJSON`.
 
-- [ ] **Step 2: Add `ThreadStore.beginNode()` so `setupNode` doesn't have to know how**
+So both the `threads` registry *and* the `activeStack` carry across nodes today. The implicit root thread persisting across nodes is the desired behavior (it's where the running agent's conversation lives). `thread {}` blocks push/pop within a single node and don't leak. We have exactly the semantics we want — we just need to make it explicit and tested.
 
-  In `lib/runtime/state/threadStore.ts`, add:
+- [ ] **Step 1: Read the existing flow and confirm the contract**
 
-  ```ts
-  /** Reset the active-thread stack for a new node boundary while
-   *  keeping the registry of all prior threads. The single owner of
-   *  "what 'enter a fresh node' means for a thread store." */
-  beginNode(): void {
-    this.activeStack = [];
-    this.getOrCreateActive();
-  }
-  ```
+  Skim `lib/runtime/node.ts::runNode` (the outer loop) and `setupNode`. Confirm: one `ThreadStore` per `runNode` call, threaded through `state.messages` to every `graph.run` step. Note the three setup branches (checkpoint restore / reuse `state.messages` / `withDefaultActive` fallback) and which one fires in normal cross-node transitions (it's the middle one).
 
-- [ ] **Step 3: Wire `setupNode`**
+- [ ] **Step 2: Add an integration test pinning the behavior**
 
-  In `lib/runtime/node.ts::setupNode`, the new branch is a one-line idempotent assignment plus a call to `beginNode()`. No mutation of `activeStack`, no manual `getOrCreateActive`, no order-sensitive "set, then store on ctx" pair:
+  Add `tests/agency/threads-registry/persists-across-nodes.test.json` + `.agency`:
 
-  ```ts
-  let threads: ThreadStore;
-  if (stack?.threads) {
-    threads = ThreadStore.fromJSON(stack.threads);
-  } else if (state.messages instanceof ThreadStore) {
-    threads = state.messages;
-  } else {
-    // Idempotent: first node creates it, every subsequent node reuses it.
-    ctx.runThreadStore ??= ThreadStore.withDefaultActive(ctx.statelogClient);
-    threads = ctx.runThreadStore;
-    threads.beginNode();
-  }
-  ```
-
-  `setupNode` now says *what* it wants ("a thread store, starting a new node"); `beginNode` owns *how*.
-
-- [ ] **Step 4: Make sure `beginNode` doesn't lose the registry**
-
-  Add a `ThreadStore` test: create two threads, call `beginNode()`, assert the two pre-existing threads are still in `threads.threads` and `counter` advanced past them (so the new active thread doesn't collide with their IDs).
-
-- [ ] **Step 5: Integration test**
-
-  Add a new agency test under `tests/agency/threads-registry/`:
   ```agency
   import { listThreads } from "std::threads"
-  node a() { thread { /* something */ } -> b }
-  node b(): number { return listThreads().length }   // expect 2 (a's thread + b's active)
+
+  node a() {
+    thread { /* anything that opens and closes a thread */ }
+    return ""
+  }
+
+  node b(): number {
+    // Expected: prior thread from `a` + the active thread for `b`.
+    return listThreads().length
+  }
   ```
-  (Requires Task 5 to compile; commit this test alongside.)
 
-- [ ] **Step 6: Checkpoint compatibility**
+  Wire it into the chain so `a -> b` runs end-to-end. Assert the message count survives the node hop. Requires Task 5 to compile; commit this test alongside Task 5.
 
-  Old checkpoints don't have `runThreadStore` serialized. Confirm the back-compat path is just the existing `withDefaultActive` fallback — i.e. on resume, the registry restarts empty. Document this in the new module's docstring.
+- [ ] **Step 3: Add a runtime unit test (no Agency layer) that pins the mechanism directly**
+
+  In `lib/runtime/node.test.ts` (create if absent): construct a `ThreadStore`, populate two threads, pass it as `state.messages` to a `setupNode`-driven test, assert the resulting `threads.threads` record still has both ids and `counter` advanced past them. This is the fail-fast guard for anyone who refactors `setupNode` later.
+
+- [ ] **Step 4: Document the existing mechanism**
+
+  Add a short "Cross-node persistence" section to `docs/site/guide/cross-thread-context.md` (created in Task 5/9). Cover:
+  - One `ThreadStore` per run, shared via `state.messages`.
+  - Subthreads are normal entries in the same registry with `parentId` set.
+  - `thread {}` blocks push/pop within a node — no cross-node leakage by design.
+  - On interrupt resume, the store is rebuilt from `stack.threads` (checkpoint serialization). The registry survives the interrupt; in-flight `thread {}` blocks resume mid-flight via the existing substep mechanism.
+
+  Link from this section to `docs/dev/threads.md` for runtime internals.
 
 ---
 
@@ -444,10 +451,23 @@ Build strategy: each primitive lands in its own task, the stdlib module is the l
    *  `activeStack` (same path as `pushActive`) without creating a new
    *  MessageThread. Throws if `id` is unknown — silent fallback to
    *  create-new would mask a real bug (typo, hallucinated id) at the
-   *  call site. */
+   *  call site.
+   *
+   *  v1: rejects subthreads. A subthread's identity is tied to its
+   *  parent's context at the time it was created; resuming one outside
+   *  that context could surface confusing message ordering. If a user
+   *  wants to continue inside a subthread, they should resume the
+   *  parent and open a fresh `subthread {}` block. */
   resumeExisting(id: MessageThreadID): void {
-    if (!this.threads[id]) {
+    const thread = this.threads[id];
+    if (!thread) {
       throw new Error(`Cannot resume unknown thread id: ${id}`);
+    }
+    if (thread.isSubthread) {
+      throw new Error(
+        `Cannot resume subthread ${id}. Resume the parent thread and open ` +
+          `a fresh subthread block instead.`,
+      );
     }
     this.activeStack.push(id);
     this.statelogClient?.threadResumed?.({ threadId: id });
@@ -471,6 +491,7 @@ Build strategy: each primitive lands in its own task, the stdlib module is the l
 - [ ] **Step 5: Tests**
 
   - Unit test in `lib/runtime/state/threadStore.test.ts`: create a thread, close it, `resumeExisting(id)`, assert `activeId()` matches and `threads[id]` is unchanged.
+  - Subthread-rejection unit test: open a thread, create a subthread inside it, close both, attempt `resumeExisting(subthreadId)` — assert it throws the "Cannot resume subthread" error and `activeId()` is unchanged.
   - Agency integration test under `tests/agency/threads-registry/continue.agency`: open a thread, send a user message, close, `thread(continue: id) { ... }`, send another message, assert the active thread's message count is 2 (not 1).
   - Negative test: `thread(continue: "tDoesNotExist") { ... }` raises a clear runtime error mentioning the id.
 
@@ -503,19 +524,21 @@ Build strategy: each primitive lands in its own task, the stdlib module is the l
 
 - [ ] **Step 2: Add `ThreadStore.openSession(name)`**
 
-  Single owner of the "create if absent, resume if present" rule, so codegen stays dumb:
+  Single owner of the "create if absent, resume if present" rule, so codegen stays dumb. Always creates a **top-level** thread (never a subthread) — a session is "step into a named context," not "branch off the current one." If a user writes `thread(session: "x") { subthread { ... } }`, the subthread becomes a child of session "x"'s thread, which is the intuitive shape:
 
   ```ts
   /** Open a named session. Returns the thread id (whether newly
    *  created or resumed). Always leaves the session's thread on top
-   *  of `activeStack`. */
+   *  of `activeStack`. First entry creates a top-level thread; later
+   *  entries resume via `resumeExisting` (which already rejects
+   *  subthreads — sessions can only map to top-level threads). */
   openSession(name: string): MessageThreadID {
     const existing = this.sessions[name];
     if (existing) {
       this.resumeExisting(existing);
       return existing;
     }
-    const id = this.create();
+    const id = this.create();          // top-level, never subthread
     this.sessions[name] = id;
     this.activeStack.push(id);
     return id;

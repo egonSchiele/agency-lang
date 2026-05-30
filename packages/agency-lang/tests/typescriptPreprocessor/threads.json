@@ -88,6 +88,11 @@
               "scope": "local"
             }
           ],
+          "label": null,
+          "summarize": null,
+          "continueExpr": null,
+          "sessionExpr": null,
+          "hidden": null,
           "loc": {
             "line": 1,
             "col": 2,

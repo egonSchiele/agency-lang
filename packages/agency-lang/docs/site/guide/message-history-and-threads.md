@@ -82,3 +82,7 @@ They do **not** work in these "bootstrap" scopes:
 If you call a thread builtin from one of these scopes — `systemMessage`, `userMessage`, `llm`, `thread { ... }`, `subthread { ... }` — you'll get a runtime error like *"Message threads are not available in this scope."* with a pointer to this guide. Move the code inside a `node` or `def` body to fix it.
 
 `onAgentEnd` is the exception: it fires *after* the run completes, so it has access to the final conversation. You can inspect or log the thread state from there.
+
+## See also
+
+- [Cross-Thread Context Sharing](./cross-thread-context) — `listThreads()`, `getThread()`, and the `thread(label, summarize, continue, session)` named arguments for inspecting and resuming sibling threads. The marquee use case is the categorize-and-route pattern (one router, many specialized agents, per-category thread continuity).

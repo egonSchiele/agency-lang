@@ -231,6 +231,37 @@ node main() {
   });
 });
 
+describe("subthread rejects continue/session at codegen", () => {
+  // `subthread` is identity-bound to its parent's context; resuming
+  // via `continue` or `session` would be ambiguous, so the builder
+  // throws. See `lib/backends/typescriptBuilder.ts` (subthread continue/session check).
+  it("throws when subthread() uses `continue`", () => {
+    expect(() =>
+      generateWithBuilder(`
+node main() {
+  thread {
+    subthread(continue: "t1") {
+    }
+  }
+}
+`),
+    ).toThrow(/subthread.*continue.*session/i);
+  });
+
+  it("throws when subthread() uses `session`", () => {
+    expect(() =>
+      generateWithBuilder(`
+node main() {
+  thread {
+    subthread(session: "my-session") {
+    }
+  }
+}
+`),
+    ).toThrow(/subthread.*continue.*session/i);
+  });
+});
+
 import { mapTypeToValidationSchema } from "./typescriptGenerator/typeToZodSchema.js";
 
 describe("mapTypeToValidationSchema", () => {

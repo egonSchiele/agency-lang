@@ -850,6 +850,43 @@ export class StatelogClient {
     });
   }
 
+  /** Fired when a previously-closed thread is re-activated via
+   *  `ThreadStore.resumeExisting()` (i.e. by `thread(continue: id)`
+   *  or `thread(session: name)` on second+ entry). Mirrors
+   *  `threadCreated` so trace consumers can distinguish first-entry
+   *  from resumption. */
+  async threadResumed({
+    threadId,
+  }: {
+    threadId: string;
+  }): Promise<void> {
+    await this.post({
+      type: "threadResumed",
+      threadId,
+    });
+  }
+
+  /** Fired when the `onThreadEnd` callback dispatcher itself throws
+   *  inside the `Runner.thread` finally block. Individual callback
+   *  errors are caught and logged by `fireWithGuard`; this event
+   *  covers the rarer case where the dispatcher loop itself blew up
+   *  (e.g. a malformed registration). Emitted in lieu of the
+   *  previous `console.error` so the failure is observable in
+   *  traces. */
+  async threadEndHookError({
+    threadId,
+    error,
+  }: {
+    threadId: string;
+    error: string;
+  }): Promise<void> {
+    await this.post({
+      type: "threadEndHookError",
+      threadId,
+      error,
+    });
+  }
+
   // --- Structured errors ---
 
   async error({

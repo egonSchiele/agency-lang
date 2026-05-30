@@ -1,0 +1,19 @@
+// Documents PR #225 fix #8 finding: a top-level
+// `callback("onThreadEnd")` defined in an IMPORTED module does NOT
+// fire when the entry-point module opens `thread { }` blocks. This
+// is why `lib/stdlib/threads.ts` registers the registry's
+// onThreadEnd snapshotter via `registerGlobalHook(...)` instead of
+// a top-level Agency-side `callback(...)`. Fixture asserts the
+// negative behaviour so a future change that makes imported
+// modules' callbacks fire will trip this test and prompt the
+// stdlib hook migration described in PR #225.
+import { setMutable } from "../../helpers/mutableVar.js"
+
+callback("onThreadEnd") as evt {
+  setMutable("imported-onThreadEnd-fired", true)
+  setMutable("imported-onThreadEnd-thread-id", evt.threadId)
+}
+
+export def noop(): number {
+  return 1
+}

@@ -1,7 +1,9 @@
 import { nanoid } from "nanoid";
 import { agencyStore } from "./asyncContext.js";
 import { debugStep } from "./debugger.js";
+import { RestoreSignal } from "./errors.js";
 import { HaltSignal } from "./haltSignal.js";
+import { invokeCallbacks } from "./hooks.js";
 import { hasInterrupts } from "./interrupts.js";
 import { __pipeBind } from "./result.js";
 import { runBatch } from "./runBatch.js";
@@ -11,6 +13,29 @@ import type { BranchState, State } from "./state/stateStack.js";
 import { StateStack } from "./state/stateStack.js";
 import type { ThreadStore } from "./state/threadStore.js";
 import type { HandlerFn } from "./types.js";
+
+/** Options bag for the new `Runner.thread(id, method, opts, callback)`
+ *  signature. All fields are optional; emitter passes only the ones
+ *  the user supplied via `thread(label: ..., summarize: ..., continue: ..., session: ...) { ... }`. */
+export type ThreadStepOpts = {
+  label?: string;
+  summarize?: boolean;
+  /** Slug form (e.g. "t3"). Stripped to raw counter id internally. */
+  continueId?: string;
+  /** Session name; runtime maps it to a thread id via openSession. */
+  session?: string;
+  /** When true, the created thread is excluded from `listThreads()`. */
+  hidden?: boolean;
+};
+
+/** Strip the leading `t` from a public thread slug to recover the
+ *  internal counter-string id. Only strips when the slug matches the
+ *  canonical `t<digits>` shape so user-chosen ids that happen to
+ *  begin with `t` (e.g. session names like `"telephone"`) are not
+ *  silently mangled. */
+export function stripSlug(slug: string): string {
+  return /^t\d+$/.test(slug) ? slug.slice(1) : slug;
+}
 
 /**
  * Runner centralizes step execution logic for generated Agency code.
@@ -466,8 +491,13 @@ export class Runner {
   async thread(
     id: number,
     method: "create" | "createSubthread",
+    opts: ThreadStepOpts,
     callback: (runner: Runner) => Promise<void>,
   ): Promise<void> {
+    // Single canonical signature; `prettyPrint.ts` always emits an
+    // opts object (possibly empty) so there is no dual-form path to
+    // support. Test harnesses pass `{}` explicitly when they don't
+    // need named-args behaviour.
     this.beforeStep();
     if (this.shouldSkip()) return;
     if (this.getCounter() > id) return;
@@ -491,27 +521,136 @@ export class Runner {
       );
     }
 
-    // Guard thread creation so it only happens once. On resume from a
-    // debug pause inside the callback, the entire thread() method
-    // re-executes (the step counter only advances after the callback
-    // completes). Without this guard, threads.create() would run again
-    // on every resume, creating duplicate threads.
+    // Guard thread creation/resumption so it only happens once. On
+    // resume from a debug pause inside the callback, the entire
+    // thread() method re-executes (the step counter only advances
+    // after the callback completes). Without this guard, the side
+    // effect (create/resumeExisting/openSession) would run again on
+    // every resume, corrupting the registry.
     const threadKey = `__thread_${this.stepPath(id)}`;
+    const resumptionKey = `__thread_resumed_${this.stepPath(id)}`;
     let tid: string;
+    let isResumption = false;
     if (this.frame.locals[threadKey] !== undefined) {
       tid = this.frame.locals[threadKey];
+      isResumption = this.frame.locals[resumptionKey] === true;
     } else {
-      tid = threads[method]();
+      // Resolve the entry mode: continueId > session > default
+      // create/createSubthread. continue + session are mutually
+      // exclusive (rejected at parse time, but defended again here).
+      if (opts.continueId !== undefined && opts.session !== undefined) {
+        throw new Error(
+          "thread() received both `continue` and `session` options; " +
+            "they are mutually exclusive.",
+        );
+      }
+      if (opts.continueId !== undefined) {
+        const rawId = stripSlug(opts.continueId);
+        threads.resumeExisting(rawId);
+        tid = rawId;
+        isResumption = true;
+      } else if (opts.session !== undefined) {
+        const { id: openedId, existed } = threads.openSession(opts.session);
+        tid = openedId;
+        isResumption = existed;
+      } else {
+        tid = threads[method]();
+      }
+      // `hidden` and `label` are set only on the brand-new code paths
+      // (`create` / `createSubthread` / first-time `openSession`).
+      // For `resumeExisting` and existing sessions we leave whatever
+      // value is already on the MessageThread — both are decided at
+      // first-create time, not on every re-entry.
+      if (!isResumption) {
+        const created = threads.get(tid);
+        if (created) {
+          if (opts.hidden === true) created.hidden = true;
+          if (opts.label !== undefined) created.label = opts.label;
+        }
+      }
       this.frame.locals[threadKey] = tid;
+      this.frame.locals[resumptionKey] = isResumption;
     }
-    threads.pushActive(tid);
+    // For `continueId` / `session`, openSession / resumeExisting
+    // already push the active stack. Avoid a double-push.
+    const alreadyActive = threads.activeId() === tid;
+    if (!alreadyActive) {
+      threads.pushActive(tid);
+    }
+
+    // Fire onThreadStart. Slug the id for the public payload.
+    const slug = `t${tid}`;
+    const threadType: "thread" | "subthread" =
+      method === "createSubthread" ? "subthread" : "thread";
+    // Prefer the persisted label on the MessageThread so resumed
+    // threads (continue/session) emit the original label even when
+    // the resumption call site omits it. Fall back to opts.label
+    // for fresh threads where MessageThread.label is still null.
+    const startedThread = threads.get(tid);
+    const parentRaw = startedThread?.parentId ?? undefined;
+    const startedLabel = startedThread?.label ?? opts.label;
+    await invokeCallbacks({
+      ctx: this.ctx,
+      name: "onThreadStart",
+      data: {
+        threadId: slug,
+        threadType: parentRaw ? "subthread" : threadType,
+        parentThreadId: parentRaw ? `t${parentRaw}` : undefined,
+        label: startedLabel ?? undefined,
+        isResumption,
+      },
+    });
 
     this.path.push(id);
     try {
       await this.runInScope(() => callback(this));
     } finally {
       this.path.pop();
+      // Snapshot messages BEFORE popping the active stack so the
+      // onThreadEnd payload sees the just-closed thread's final
+      // message list. Use the active id (which is `tid`) to look it
+      // up regardless of double-push avoidance.
+      const closingThread = threads.get(tid);
+      const messagesSnapshot = closingThread
+        ? closingThread.messages.map((m) => m.toJSON())
+        : [];
+      // Always pop one entry: when we pushed above, this balances
+      // that push; when openSession/resumeExisting pushed (so we
+      // didn't double-push), this pops the resumed entry the user
+      // is "closing".
       threads.popActive();
+      // Fire onThreadEnd so the registry stdlib hook sees the
+      // close. We fire from `finally` so exceptions thrown inside
+      // the body still record a close event.
+      try {
+        await invokeCallbacks({
+          ctx: this.ctx,
+          name: "onThreadEnd",
+          data: {
+            threadId: slug,
+            // Prefer persisted label so resumed threads emit the
+            // original label even when the resumption call site
+            // omits it (mirrors onThreadStart above).
+            label: closingThread?.label ?? opts.label ?? undefined,
+            eagerSummarize: opts.summarize === true,
+            messages: messagesSnapshot,
+          },
+        });
+      } catch (e) {
+        // Swallow hook errors in finally to avoid masking the
+        // primary exception. `fireWithGuard` inside invokeCallbacks
+        // already logs JS errors; this catch is belt-and-braces for
+        // unexpected throws from the dispatcher itself.
+        if (e instanceof RestoreSignal) throw e;
+        // Surface the failure as a structured statelog event so it
+        // shows up in traces (replaces the prior bare console.error).
+        // Optional chaining: older test contexts may construct a
+        // statelogClient without the threadEndHookError method.
+        this.ctx.statelogClient?.threadEndHookError?.({
+          threadId: slug,
+          error: e instanceof Error ? e.message : String(e),
+        });
+      }
     }
 
     if (this.halted) return;

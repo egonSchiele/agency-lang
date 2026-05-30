@@ -1,0 +1,12 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "[\"first\",\"second\"]",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "thread(continue: id) appends to the resumed thread's history; the resumed thread holds both messages in order.",
+      "llmMocks": []
+    }
+  ]
+}

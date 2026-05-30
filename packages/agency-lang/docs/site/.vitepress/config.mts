@@ -63,6 +63,10 @@ export default defineConfig({
             { text: "Type Validation", link: "/guide/type-validation" },
             { text: "Checkpointing", link: "/guide/checkpointing" },
             { text: "Memory", link: "/guide/memory" },
+            {
+              text: "Cross-Thread Context Sharing",
+              link: "/guide/cross-thread-context",
+            },
             { text: "MCP", link: "/guide/mcp" },
           ],
         },

@@ -181,7 +181,7 @@ await callHook({
           }
         })
       });
-      await runner.thread(1, "create", async (runner) => {
+      await runner.thread(1, "create", {}, async (runner) => {
 await runner.step(0, async (runner) => {
 __self.__removedTools = __self.__removedTools || [];
 __stack.locals.res1 = await runPrompt({
@@ -202,7 +202,7 @@ if (hasInterrupts(__stack.locals.res1)) {
             return;
           }
         });
-await runner.thread(1, "createSubthread", async (runner) => {
+await runner.thread(1, "createSubthread", {}, async (runner) => {
 await runner.step(0, async (runner) => {
 __self.__removedTools = __self.__removedTools || [];
 __stack.locals.res2 = await runPrompt({
@@ -223,7 +223,7 @@ if (hasInterrupts(__stack.locals.res2)) {
               return;
             }
           });
-await runner.thread(1, "createSubthread", async (runner) => {
+await runner.thread(1, "createSubthread", {}, async (runner) => {
 await runner.step(0, async (runner) => {
 __self.__removedTools = __self.__removedTools || [];
 __stack.locals.res3 = await runPrompt({
@@ -245,7 +245,7 @@ if (hasInterrupts(__stack.locals.res3)) {
               }
             });
           });
-await runner.thread(2, "create", async (runner) => {
+await runner.thread(2, "create", {}, async (runner) => {
 await runner.step(0, async (runner) => {
 __self.__removedTools = __self.__removedTools || [];
 __stack.locals.res5 = await runPrompt({
@@ -268,7 +268,7 @@ if (hasInterrupts(__stack.locals.res5)) {
             });
           });
         });
-await runner.thread(2, "createSubthread", async (runner) => {
+await runner.thread(2, "createSubthread", {}, async (runner) => {
 await runner.step(0, async (runner) => {
 __self.__removedTools = __self.__removedTools || [];
 __stack.locals.res4 = await runPrompt({
@@ -422,7 +422,7 @@ await callHook({
           }
         })
       });
-      await runner.thread(1, "create", async (runner) => {
+      await runner.thread(1, "create", {}, async (runner) => {
 await runner.step(0, async (runner) => {
 __self.__removedTools = __self.__removedTools || [];
 __stack.locals.res1 = await runPrompt({
@@ -446,7 +446,7 @@ if (hasInterrupts(__stack.locals.res1)) {
             return;
           }
         });
-await runner.thread(1, "createSubthread", async (runner) => {
+await runner.thread(1, "createSubthread", {}, async (runner) => {
 await runner.step(0, async (runner) => {
 __self.__removedTools = __self.__removedTools || [];
 __stack.locals.res2 = await runPrompt({
@@ -470,7 +470,7 @@ if (hasInterrupts(__stack.locals.res2)) {
               return;
             }
           });
-await runner.thread(1, "createSubthread", async (runner) => {
+await runner.thread(1, "createSubthread", {}, async (runner) => {
 await runner.step(0, async (runner) => {
 __self.__removedTools = __self.__removedTools || [];
 __stack.locals.res3 = await runPrompt({
@@ -495,7 +495,7 @@ if (hasInterrupts(__stack.locals.res3)) {
               }
             });
           });
-await runner.thread(2, "create", async (runner) => {
+await runner.thread(2, "create", {}, async (runner) => {
 await runner.step(0, async (runner) => {
 __self.__removedTools = __self.__removedTools || [];
 __stack.locals.res5 = await runPrompt({
@@ -521,7 +521,7 @@ if (hasInterrupts(__stack.locals.res5)) {
             });
           });
         });
-await runner.thread(2, "createSubthread", async (runner) => {
+await runner.thread(2, "createSubthread", {}, async (runner) => {
 await runner.step(0, async (runner) => {
 __self.__removedTools = __self.__removedTools || [];
 __stack.locals.res4 = await runPrompt({

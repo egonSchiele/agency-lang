@@ -486,4 +486,4 @@ agency.withResumableScope(opts, body)     // Temporal-style resumable scope
 agency.withTestContext({ctx,stack,threads}, fn)  // (test only)
 ```
 
-For the broader interop story (cancelling agents, importing Agency code from TS, gotchas around serializability), see [TypeScript Interoperability](./ts-interop).
+For the broader interop story (cancelling agents, importing Agency code from TS, gotchas around serializability), see [TypeScript Interoperability](/guide/ts-interop).

@@ -56,4 +56,30 @@ describe("setupNode", () => {
     expect(result.threads).toBeInstanceOf(ThreadStore);
     expect(result.threads.activeId()).toBeDefined();
   });
+
+  // Task 4: pin the cross-node persistence contract that the thread
+  // registry depends on. setupNode reuses the ThreadStore passed via
+  // state.messages on every node transition, so any threads created
+  // inside an earlier node remain queryable from a later one. If a
+  // future refactor of setupNode breaks this branch the registry
+  // breaks silently — this test fails fast.
+  it("pins the cross-node ThreadStore registry contract", () => {
+    const threadStore = new ThreadStore();
+    threadStore.getOrCreateActive();           // raw id "0"
+    const extraId = threadStore.create();      // raw id "1" — closed thread
+
+    const ctx = { stateStack: new StateStack() } as any;
+    const state = { messages: threadStore, ctx, data: {} } as any;
+
+    const result = runInTestContext(ctx, ctx.stateStack, threadStore, () =>
+      setupNode({ state }),
+    );
+
+    // setupNode must hand back the SAME store, with both threads
+    // intact and the counter past them — i.e. nothing has been wiped
+    // or rebuilt.
+    expect(result.threads).toBe(threadStore);
+    expect(Object.keys(result.threads.threads).sort()).toEqual(["0", extraId]);
+    expect(result.threads.counter).toBeGreaterThan(Number(extraId));
+  });
 });

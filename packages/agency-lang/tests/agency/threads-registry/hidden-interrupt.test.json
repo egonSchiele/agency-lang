@@ -1,0 +1,21 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "[\"after\"]",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "hidden flag round-trips through interrupt serialize/deserialize.",
+      "interruptHandlers": [
+        {
+          "action": "resolve",
+          "expectedMessage": "checkpoint here",
+          "resolvedValue": "ok"
+        }
+      ],
+      "llmMocks": [
+        { "return": { "summary": "after-summary" } }
+      ]
+    }
+  ]
+}

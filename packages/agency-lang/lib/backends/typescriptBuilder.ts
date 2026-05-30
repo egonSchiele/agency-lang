@@ -2764,6 +2764,10 @@ export class TypeScriptBuilder {
     });
   }
 
+  // TODO(follow-up): `thread {}` should desugar into a call to a stdlib
+  // `__internal_thread(opts, block)` function so future named args don't
+  // require parser+IR+codegen+runtime edits in five files. See
+  // `docs/superpowers/specs/2026-05-30-thread-as-agency-function.md`.
   private processMessageThread(
     node: MessageThread,
     assignTo?: Assignment,
@@ -2791,7 +2795,52 @@ export class TypeScriptBuilder {
       );
     }
 
-    return ts.runnerThread({ id, method, body: bodyNodes });
+    // Optional named args: thread(label, summarize, continue, session, hidden).
+    // Each is an Expression in the AST — process to TsNode so codegen
+    // can splice it into the opts arg. Codegen-time mutual exclusion
+    // check defends parse-time guard.
+    if (node.continueExpr && node.sessionExpr) {
+      throw new Error(
+        "thread() cannot use both `continue` and `session` — they are mutually exclusive",
+      );
+    }
+    // `subthread` is identity-bound to its parent's context at create
+    // time; resuming via `continue` or `session` would either need to
+    // re-derive that parent (ambiguous) or strip the subthread linkage
+    // (silently lossy). Reject at codegen so users see a clear error
+    // instead of confusing runtime behaviour. (Parse-time rejection
+    // would be nicer but the shared parser doesn't know which variant
+    // we're in.)
+    if (
+      node.threadType === "subthread" &&
+      (node.continueExpr || node.sessionExpr)
+    ) {
+      throw new Error(
+        "subthread() does not support `continue` or `session` — those modes " +
+          "resume a top-level thread. Use `thread(continue: ...)` or " +
+          "`thread(session: ...)` instead.",
+      );
+    }
+    const label = node.label ? this.processNode(node.label) : null;
+    const summarize = node.summarize ? this.processNode(node.summarize) : null;
+    const continueExpr = node.continueExpr
+      ? this.processNode(node.continueExpr)
+      : null;
+    const sessionExpr = node.sessionExpr
+      ? this.processNode(node.sessionExpr)
+      : null;
+    const hidden = node.hidden ? this.processNode(node.hidden) : null;
+
+    return ts.runnerThread({
+      id,
+      method,
+      body: bodyNodes,
+      label,
+      summarize,
+      continueExpr,
+      sessionExpr,
+      hidden,
+    });
   }
 
   private processBlockPlain(

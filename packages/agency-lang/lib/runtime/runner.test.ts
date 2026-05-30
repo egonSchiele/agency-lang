@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { Runner } from "./runner.js";
+import { Runner, stripSlug } from "./runner.js";
 import { State, StateStack } from "./state/stateStack.js";
 import { ThreadStore } from "./state/threadStore.js";
 import { getRuntimeContext } from "./asyncContext.js";
@@ -477,7 +477,7 @@ describe("Runner", () => {
 
       const runner = new Runner(ctx, frame, { threads: ctx.threads });
 
-      await runner.thread(0, "create", async () => {
+      await runner.thread(0, "create", {}, async () => {
         calls.push("body");
       });
 
@@ -494,12 +494,51 @@ describe("Runner", () => {
 
       const runner = new Runner(ctx, frame, { threads: ctx.threads });
 
-      await runner.thread(0, "create", async (runner) => {
+      await runner.thread(0, "create", {}, async (runner) => {
         runner.halt("interrupt");
       });
 
       expect(popped).toBe(true);
       expect(runner.halted).toBe(true);
+    });
+
+    it("fires onThreadStart and onThreadEnd with slug ids and label", async () => {
+      const frame = makeFrame();
+      const ctx = makeMockCtx();
+      const events: Array<{ kind: string; data: any }> = [];
+      ctx.callbacks = {
+        onThreadStart: (data: any) => { events.push({ kind: "start", data }); },
+        onThreadEnd: (data: any) => { events.push({ kind: "end", data }); },
+      };
+      // makeMockCtx returns "tid-1" from create(). Override get() to
+      // surface a non-empty message list so we can assert the snapshot.
+      ctx.threads.get = () => ({
+        messages: [{ toJSON: () => ({ role: "user", content: "hi" }) }],
+        parentId: null,
+      });
+
+      const runner = new Runner(ctx, frame, { threads: ctx.threads });
+
+      await runner.thread(
+        0,
+        "create",
+        { label: "coding task", summarize: true },
+        async () => {
+          /* body */
+        },
+      );
+
+      expect(events.length).toBe(2);
+      expect(events[0].kind).toBe("start");
+      expect(events[0].data.threadId).toBe("ttid-1");
+      expect(events[0].data.label).toBe("coding task");
+      expect(events[0].data.threadType).toBe("thread");
+      expect(events[0].data.isResumption).toBe(false);
+      expect(events[1].kind).toBe("end");
+      expect(events[1].data.threadId).toBe("ttid-1");
+      expect(events[1].data.label).toBe("coding task");
+      expect(events[1].data.eagerSummarize).toBe(true);
+      expect(events[1].data.messages).toEqual([{ role: "user", content: "hi" }]);
     });
   });
 
@@ -687,5 +726,21 @@ describe("Runner", () => {
       expect(paths[0]).toBe("0");
       expect(paths[paths.length - 1]).toContain("0.0");
     });
+  });
+});
+
+describe("stripSlug", () => {
+  it("strips the leading t from canonical slugs", () => {
+    expect(stripSlug("t1")).toBe("1");
+    expect(stripSlug("t42")).toBe("42");
+  });
+
+  it("leaves non-slug strings untouched", () => {
+    expect(stripSlug("hello")).toBe("hello");
+    // Regression: prior to the tightened regex this returned "hello".
+    expect(stripSlug("thello")).toBe("thello");
+    expect(stripSlug("t")).toBe("t");
+    expect(stripSlug("t1a")).toBe("t1a");
+    expect(stripSlug("")).toBe("");
   });
 });

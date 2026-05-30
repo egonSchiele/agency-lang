@@ -132,6 +132,115 @@ const threadWith = async <T>(
   }
 };
 
+// ---- Threads (registry) subnamespace ----------------------------------
+
+/** Plain record describing a thread in the run's registry. Slug-ified
+ *  ids (`t0`, `t1`, ...) wrap the internal counter strings so LLMs see
+ *  short, easy-to-quote identifiers. `label` and `summary` are
+ *  surfaced directly from the underlying `MessageThread` (post-Commit-B:
+ *  no more module-level TS cache). */
+export type ThreadInfoTS = {
+  id: string;
+  parentId: string | null;
+  threadType: "thread" | "subthread";
+  messageCount: number;
+  isActive: boolean;
+  /** Snapshot of the thread's messages in smoltalk's wire format.
+   *  Consumers that need flat `{role, content}` records can call
+   *  `m.role` / `m.content` directly; tool-call / structured-content
+   *  variants land here untouched (no lossy coercion). */
+  messages: smoltalk.MessageJSON[];
+  /** Optional user-supplied label from `thread(label: "...") { ... }`.
+   *  `null` when no label was given. */
+  label: string | null;
+  /** Cached summary written by the stdlib's `summaryFor()` helper.
+   *  `null` until the summary is computed (lazy on first
+   *  `listThreads()`). */
+  summary: string | null;
+};
+
+/** Convert an internal counter string id (`"0"`, `"1"`, ...) to the
+ *  public slug form (`"t0"`, `"t1"`, ...). */
+const toSlug = (rawId: string): string => `t${rawId}`;
+
+/** Strip the leading `t` from a public slug to get the internal
+ *  counter string id. Only strips when the input matches the
+ *  canonical `t<digits>` shape — non-numeric ids (test mocks, ids
+ *  that happen to start with `t`) pass through unchanged. Mirrors
+ *  `stripSlug` in runner.ts so both call sites treat slugs the
+ *  same way. */
+const fromSlug = (slug: string): string =>
+  /^t\d+$/.test(slug) ? slug.slice(1) : slug;
+
+/** Return every thread in the run's registry as plain records.
+ *  Threads created with `thread(hidden: true) { ... }` are filtered
+ *  out so library-internal LLM scaffolding (e.g. summarizer prompts)
+ *  doesn't show up in user-facing thread enumerations.
+ *
+ *  Throws when called outside any Agency frame — silently returning
+ *  `[]` would mask a misuse (TS helper called from non-Agency code)
+ *  that the user would otherwise debug as a confusing empty list. */
+const threadsList = (): ThreadInfoTS[] => {
+  const store = threadStoreMaybe();
+  if (!store) {
+    throw new Error(
+      "agency.threads.list() called outside an Agency frame. " +
+        "It must run inside `agencyStore.run(...)` / a node body — " +
+        "wrap test calls with `agency.withTestContext({ctx,stack,threads}, ...)`.",
+    );
+  }
+  const activeId = store.activeId();
+  const out: ThreadInfoTS[] = [];
+  for (const [rawId, thread] of Object.entries(store.threads)) {
+    if (thread.hidden) continue;
+    out.push({
+      id: toSlug(rawId),
+      parentId: thread.parentId ? toSlug(thread.parentId) : null,
+      threadType: thread.parentId ? "subthread" : "thread",
+      messageCount: thread.messages.length,
+      isActive: rawId === activeId,
+      messages: thread.messages.map((m) => m.toJSON()),
+      label: thread.label,
+      summary: thread.summary,
+    });
+  }
+  return out;
+};
+
+/** Read a slice of a thread's messages. Returns `[]` for unknown ids
+ *  (silent — callers can probe). `offset` and `limit` default to 0 and
+ *  50, matching the Agency-side `getThread` signature.
+ *
+ *  Throws when called outside any Agency frame. */
+const threadsGet = (
+  id: string,
+  offset = 0,
+  limit = 50,
+): smoltalk.MessageJSON[] => {
+  const store = threadStoreMaybe();
+  if (!store) {
+    throw new Error(
+      "agency.threads.get() called outside an Agency frame. " +
+        "It must run inside `agencyStore.run(...)` / a node body — " +
+        "wrap test calls with `agency.withTestContext({ctx,stack,threads}, ...)`.",
+    );
+  }
+  const rawId = fromSlug(id);
+  const thread = store.threads[rawId];
+  if (!thread) return [];
+  return thread.messages
+    .slice(offset, offset + limit)
+    .map((m) => m.toJSON());
+};
+
+/** Slug form of the currently active thread id, or `undefined` outside
+ *  any runtime frame / when no thread is active. */
+const threadsCurrent = (): string | undefined => {
+  const store = threadStoreMaybe();
+  const id = store?.activeId();
+  return id !== undefined ? toSlug(id) : undefined;
+};
+
 // ---- Checkpoints -------------------------------------------------------
 
 /** Capture a checkpoint of the current execution state. The recorded
@@ -325,6 +434,12 @@ export const agency = {
     remember: memoryRemember,
     recall: memoryRecall,
     forget: memoryForget,
+  },
+
+  threads: {
+    list: threadsList,
+    get: threadsGet,
+    current: threadsCurrent,
   },
 
   withTestContext,

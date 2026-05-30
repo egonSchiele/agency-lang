@@ -1,0 +1,12 @@
+import { noop } from "./mod.agency"
+
+// Entry: opens a `thread { }` so onThreadEnd has something to fire on.
+// If the imported module's top-level callback propagates, the JS-side
+// `getMutable("imported-onThreadEnd-fired")` in test.js will be true.
+node main() {
+  // Reference imported symbol so the module is loaded.
+  const _ = noop()
+  thread {
+    // Empty body — close immediately.
+  }
+}

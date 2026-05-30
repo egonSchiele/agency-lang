@@ -50,6 +50,10 @@ export function makeMockCtx(opts: {
       createSubthread: () => "tid-sub-1",
       pushActive: () => {},
       popActive: () => {},
+      activeId: () => undefined,
+      get: () => ({ messages: [], parentId: null }),
+      resumeExisting: () => {},
+      openSession: (_name: string) => ({ id: "tid-1", existed: false }),
     },
     // Minimal statelogClient stub. runBatch (used by Runner.hook's
     // per-callback machinery) needs `snapshotStack` and

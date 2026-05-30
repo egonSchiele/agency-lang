@@ -3089,12 +3089,79 @@ export const bodyParser = (input: string): ParserResult<AgencyNode[]> => {
   return parser(input);
 };
 
+/** Parse optional `(label: ..., summarize: ..., continue: ..., session: ...)`
+ *  before the `{` of a `thread` / `subthread` block. Accepts zero args
+ *  via `()` as well as no parens at all. Unknown keys produce a parse
+ *  error; `continue` and `session` are mutually exclusive. */
+type ThreadNamedArgs = {
+  label: Expression | null;
+  summarize: Expression | null;
+  continueExpr: Expression | null;
+  sessionExpr: Expression | null;
+  hidden: Expression | null;
+};
+
+const _threadNamedArgsParser: Parser<ThreadNamedArgs> = (
+  input: string,
+): ParserResult<ThreadNamedArgs> => {
+  // Reuse the canonical NamedArgument parser shape used by function
+  // calls so users get identical syntax / error messages.
+  const inner: Parser<any> = seqC(
+    char("("),
+    optionalSpacesOrNewline,
+    capture(
+      sepBy(commaWithNewline, namedArgumentParser),
+      "arguments",
+    ),
+    optional(comma),
+    optionalSpacesOrNewline,
+    char(")"),
+  );
+  const r = inner(input);
+  if (!r.success) return r as ParserResult<ThreadNamedArgs>;
+  const args: NamedArgument[] = r.result.arguments;
+  const allowed = ["label", "summarize", "continue", "session", "hidden"];
+  const seen: Record<string, Expression> = {};
+  for (const arg of args) {
+    if (!allowed.includes(arg.name)) {
+      return failure(
+        `Unknown thread argument: ${arg.name}. Allowed: label, summarize, continue, session, hidden`,
+        input,
+      );
+    }
+    if (seen[arg.name]) {
+      return failure(`Duplicate thread argument: ${arg.name}`, input);
+    }
+    seen[arg.name] = arg.value as Expression;
+  }
+  if (seen.continue && seen.session) {
+    return failure(
+      "thread() cannot use both `continue` and `session` — they are mutually exclusive",
+      input,
+    );
+  }
+  return success(
+    {
+      label: seen.label ?? null,
+      summarize: seen.summarize ?? null,
+      continueExpr: seen.continue ?? null,
+      sessionExpr: seen.session ?? null,
+      hidden: seen.hidden ?? null,
+    },
+    r.rest,
+  );
+};
+
 export const _messageThreadParser: Parser<MessageThread> = trace(
   "_messageThreadParser",
   seqC(
     set("type", "messageThread"),
     str("thread"),
     set("threadType", "thread"),
+    capture(
+      optional(_threadNamedArgsParser),
+      "_args",
+    ),
     optionalSpaces,
     char("{"),
     captureCaptures(
@@ -3115,6 +3182,10 @@ export const _submessageThreadParser: Parser<MessageThread> = trace(
     set("type", "messageThread"),
     str("subthread"),
     set("threadType", "subthread"),
+    capture(
+      optional(_threadNamedArgsParser),
+      "_args",
+    ),
     optionalSpaces,
     char("{"),
     captureCaptures(
@@ -3129,10 +3200,41 @@ export const _submessageThreadParser: Parser<MessageThread> = trace(
     ),
   ),
 );
-export const messageThreadParser: Parser<MessageThread> = withLoc(or(
-  _messageThreadParser,
-  _submessageThreadParser,
-));
+
+/** Lift `_args` (the optional named-args object) to top-level fields on
+ *  the MessageThread node. */
+const liftThreadArgs = (parsed: any): MessageThread => {
+  const args = parsed._args as
+    | {
+        label: Expression | null;
+        summarize: Expression | null;
+        continueExpr: Expression | null;
+        sessionExpr: Expression | null;
+        hidden: Expression | null;
+      }
+    | null
+    | undefined;
+  const out: any = { ...parsed };
+  delete out._args;
+  if (args) {
+    out.label = args.label;
+    out.summarize = args.summarize;
+    out.continueExpr = args.continueExpr;
+    out.sessionExpr = args.sessionExpr;
+    out.hidden = args.hidden;
+  } else {
+    out.label = null;
+    out.summarize = null;
+    out.continueExpr = null;
+    out.sessionExpr = null;
+    out.hidden = null;
+  }
+  return out as MessageThread;
+};
+
+export const messageThreadParser: Parser<MessageThread> = withLoc(
+  map(or(_messageThreadParser, _submessageThreadParser), liftThreadArgs),
+);
 
 const inlineHandlerParser: Parser<HandleBlock["handler"]> = (input) => {
   const parser = seqC(

@@ -1,0 +1,25 @@
+import { listThreads, getThread } from "std::threads"
+import { userMessage } from "std::thread"
+
+// Verifies the registry observes threads created via `thread {}`
+// blocks. Lazy summaries are cached on the underlying MessageThread
+// at the first listThreads() call after a thread closes.
+node main() {
+  thread(label: "first") {
+    userMessage("hello from first")
+  }
+  thread(label: "second") {
+    userMessage("hello from second")
+  }
+  const all = listThreads()
+  // listThreads() now returns Result — unwrap before iterating.
+  const labels: string[] = []
+  if (isSuccess(all)) {
+    for (t in all.value) {
+      if (t.label != null) {
+        labels.push(t.label)
+      }
+    }
+  }
+  return labels
+}

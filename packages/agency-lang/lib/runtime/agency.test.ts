@@ -159,6 +159,80 @@ describe("agency.thread (subnamespace)", () => {
   });
 });
 
+describe("agency.threads (registry subnamespace)", () => {
+  it("list throws outside a frame (silent [] would mask misuse)", () => {
+    expect(() => agency.threads.list()).toThrow(/outside an Agency frame/);
+  });
+
+  it("get throws outside a frame", () => {
+    expect(() => agency.threads.get("t0")).toThrow(/outside an Agency frame/);
+  });
+
+  it("current returns undefined outside a frame", () => {
+    expect(agency.threads.current()).toBeUndefined();
+  });
+
+  it("get returns [] for an unknown id", () => {
+    const env = setup();
+    agency.withTestContext(env, () => {
+      expect(agency.threads.get("tDoesNotExist")).toEqual([]);
+    });
+  });
+
+  it("list returns every thread with slug ids and correct isActive flag", () => {
+    const env = setup();
+    // Seed an active root thread, then create a second thread.
+    env.threads.getOrCreateActive();           // raw id "0", pushed active
+    env.threads.create();                       // raw id "1", not active
+    agency.withTestContext(env, () => {
+      const list = agency.threads.list();
+      expect(list.map((t) => t.id)).toEqual(["t0", "t1"]);
+      expect(list[0].isActive).toBe(true);
+      expect(list[1].isActive).toBe(false);
+      expect(list[0].threadType).toBe("thread");
+      expect(list[0].parentId).toBeNull();
+    });
+  });
+
+  it("subthreads surface threadType and parentId", () => {
+    const env = setup();
+    const parentId = env.threads.create();
+    env.threads.pushActive(parentId);
+    const childId = env.threads.createSubthread();
+    agency.withTestContext(env, () => {
+      const list = agency.threads.list();
+      const child = list.find((t) => t.id === `t${childId}`);
+      expect(child).toBeDefined();
+      expect(child!.threadType).toBe("subthread");
+      expect(child!.parentId).toBe(`t${parentId}`);
+    });
+  });
+
+  it("get returns a sliced view of messages", async () => {
+    const env = setup();
+    env.threads.getOrCreateActive();
+    await agency.withTestContext(env, async () => {
+      agency.thread.user("hello");
+      agency.thread.assistant("hi there");
+      const all = agency.threads.get("t0", 0, 10);
+      expect(all.length).toBe(2);
+      expect(all[0]).toEqual({ role: "user", content: "hello" });
+      expect(all[1]).toEqual({ role: "assistant", content: "hi there" });
+      const first = agency.threads.get("t0", 0, 1);
+      expect(first.length).toBe(1);
+      expect(first[0].role).toBe("user");
+    });
+  });
+
+  it("current returns the active id in slug form", () => {
+    const env = setup();
+    env.threads.getOrCreateActive();
+    agency.withTestContext(env, () => {
+      expect(agency.threads.current()).toBe("t0");
+    });
+  });
+});
+
 describe("agency.checkpoint / getCheckpoint / restore", () => {
   // Checkpoint creation requires a node id on the state stack;
   // `makeMockCtx()` pre-seeds one ("process"), matching what

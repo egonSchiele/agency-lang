@@ -1,0 +1,26 @@
+import { listThreads } from "std::threads"
+import { userMessage } from "std::thread"
+
+// Verifies the `hidden` flag survives an interrupt/resume cycle.
+// Opens a hidden thread, then a visible thread, then forces a
+// serialize/deserialize boundary via interrupt. After resume,
+// `listThreads()` should still hide the hidden thread.
+node main() {
+  thread(label: "secret", hidden: true) {
+    userMessage("hidden body")
+  }
+  thread(label: "after") {
+    userMessage("after body")
+  }
+  const _ = interrupt("checkpoint here")
+  const all = listThreads()
+  const labels: string[] = []
+  if (isSuccess(all)) {
+    for (t in all.value) {
+      if (t.label != null) {
+        labels.push(t.label)
+      }
+    }
+  }
+  return labels
+}

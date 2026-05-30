@@ -72,6 +72,25 @@ function hasFunctionOrNodeAncestor(ancestors: readonly unknown[]): boolean {
 
 // --- Internal helpers ---
 
+// Reserved block keywords that the parser turns into their own AST node
+// when used correctly (`thread { ... }`, `subthread(args) { ... }`).
+// When a user writes them with syntax the block parser doesn't accept
+// (e.g. `thread(args) as { ... }` — `as` is not supported on thread
+// blocks), the parser falls back to the generic functionCall form and
+// the user sees a confusing "Function 'thread' is not defined" error.
+// This map provides a tailored diagnostic instead, pointing the user at
+// the actual mistake.
+const RESERVED_BLOCK_KEYWORDS: Record<string, string> = {
+  thread:
+    "`thread` is a reserved block keyword. Write `thread { ... }` or " +
+    "`thread(args) { ... }` directly — the `as` keyword is not supported " +
+    "on thread blocks (there's nothing to bind).",
+  subthread:
+    "`subthread` is a reserved block keyword. Write `subthread { ... }` or " +
+    "`subthread(args) { ... }` directly — the `as` keyword is not supported " +
+    "on subthread blocks (there's nothing to bind).",
+};
+
 function checkBareCall(
   call: FunctionCall,
   scope: Scope,
@@ -88,8 +107,19 @@ function checkBareCall(
     scopeHas: (name) => scope.has(name),
   });
   if (resolution.kind !== "unresolved") return;
+  // `in` instead of bracket access — bracket access walks the prototype chain,
+  // so `RESERVED_BLOCK_KEYWORDS["toString"]` would otherwise return
+  // `Object.prototype.toString` (a function), bypass the `??` default, and
+  // push a non-string message.
+  const blockHint = Object.prototype.hasOwnProperty.call(
+    RESERVED_BLOCK_KEYWORDS,
+    call.functionName,
+  )
+    ? RESERVED_BLOCK_KEYWORDS[call.functionName]
+    : undefined;
   ctx.errors.push({
-    message: `Function '${call.functionName}' is not defined.`,
+    message:
+      blockHint ?? `Function '${call.functionName}' is not defined.`,
     severity: mode === "warn" ? "warning" : "error",
     loc: call.loc,
   });

@@ -27,9 +27,11 @@
           }
         },
         {
-          "return": [
-            "entity-1"
-          ]
+          "return": {
+            "ids": [
+              "entity-1"
+            ]
+          }
         }
       ]
     }

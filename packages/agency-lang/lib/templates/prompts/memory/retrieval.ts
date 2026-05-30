@@ -10,15 +10,15 @@ Candidate entities (each line: "id: name (type) — facts"):
 
 Query: {{{query:string}}}
 
-Return only the entity ids that are actually relevant to the query, as a JSON array of strings.
+Return only the entity ids that are actually relevant to the query, as a JSON object with an \`ids\` field holding an array of strings.
 
 Rules:
 - Each id must be one of the candidate ids above. Do not invent ids.
 - Order does not matter.
-- Return [] if no candidates are relevant.
-- Return only the JSON array — no prose, no markdown.
+- Return {"ids": []} if no candidates are relevant.
+- Return only the JSON object — no prose, no markdown.
 
-Example output: ["entity-1", "entity-7"]
+Example output: {"ids": ["entity-1", "entity-7"]}
 `;
 
 export type TemplateType = {

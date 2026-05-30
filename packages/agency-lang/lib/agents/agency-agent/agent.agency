@@ -1,88 +1,150 @@
-import { typecheck } from "std::agency"
-import { browserUse } from "std::browser"
 import { today } from "std::date"
-import { Workspace, openDir } from "std::fs"
-import { setMemoryId, remember, recall } from "std::memory"
-import { fetch, fetchJSON, fetchMarkdown } from "std::http"
-import { Policy, PolicyRule, checkPolicy } from "std::policy"
-import { exists } from "std::shell"
-import { skillsDir } from "std::skills"
-import { highlight } from "std::syntax"
-import { cwd } from "std::system"
-import { systemMessage } from "std::thread"
-// Wikipedia exports a bare `search`; alias it so the LLM sees a
-// self-describing tool name in its tool list.
 import {
-  search as wikipediaSearch,
-  summary as wikipediaSummary,
-  article as wikipediaArticle,
-} from "std::wikipedia"
+  Policy,
+  PolicyRule,
+  checkPolicy,
+  validatePolicy,
+  writePolicyFile,
+} from "std::policy"
+import { exists } from "std::shell"
+import { highlight } from "std::syntax"
+import { cwd, env } from "std::system"
+
+import { runCode } from "./code.agency"
+import { runResearch } from "./research.agency"
+import {
+  AgentContext,
+  AGENCY_AGENT_DIR,
+  consumeHandoff,
+} from "./shared.agency"
+
+
 /*
  * Agency Agent — helps users create and modify Agency code.
  *
- * Features:
- * - Doc-as-skills: bundles `docs/site/guide` (copied to
- *   `dist/lib/agents/docs/guide` at build time, see makefile) and
- *   exposes each Markdown file as a skill the LLM can read on demand.
- * - Typechecking: the LLM can call `typecheck` on any source it
- *   generates to verify the code before showing it to the user.
+ * Multi-thread architecture: the agent splits work across two
+ * specialists, each with its own thread / system prompt / tool set:
+ *   - `code.agency`     — writes, edits, typechecks, runs code
+ *   - `research.agency` — looks up docs, fetches URLs, browses web
+ *
+ * Routing: we don't categorize on every turn. The current
+ * specialist's LLM gets a `handoff(category, reason)` tool. If it
+ * can handle the message, it just answers. If clearly out of scope,
+ * it calls `handoff()` and this loop re-runs the user's message in
+ * the new category. See `shared.agency` for the design rationale and
+ * `docs/superpowers/ideas/2026-05-30-routing-stickiness.md` for the
+ * alternatives we deliberately deferred.
+ *
+ * Other features:
+ * - Doc-as-skills: bundles `docs/site/guide` etc. (copied to
+ *   `dist/lib/agents/docs/` at build time, see makefile) and
+ *   exposes each Markdown file as a skill the research agent can
+ *   read on demand.
+ * - Typechecking: the code agent can call `typecheck` on any
+ *   source it generates to verify the code before showing it.
  * - File I/O tools: `read`, `write`, `edit` for actually creating /
  *   editing `.agency` files.
  * - Interactive policy: every interrupt the LLM raises pops a
  *   prompt with approve / reject / always-approve / always-reject.
- *   "Always" decisions are recorded in a per-run Policy and replayed
- *   automatically for the rest of the session via `checkPolicy`.
+ *   "Always" decisions are recorded in a per-run Policy and
+ *   replayed automatically for the rest of the session via
+ *   `checkPolicy`.
  *
- * Run: `pnpm run agency run dist/lib/agents/agency-agent/agent.agency`
- *      (run from `dist/` so the bundled docs at `../docs/guide` resolve.)
  */
 
+// Tool-call tracing is opt-in via the `AGENT_DEBUG` env var. Set
+// `AGENT_DEBUG=1` to see the yellow `tool call: ...` / `tool
+// return: ...` lines on every LLM tool invocation. Off by default
+// because the verbose output buries the agent's actual replies.
+// `env(...)` returns the literal env value or `null` when unset.
+const AGENT_DEBUG = env("AGENT_DEBUG") == "1"
+
 callback("onToolCallStart") as data {
-  print(
-    color.yellow("tool call: ${data.toolName}(${JSON.stringify(data.args)})"),
-  )
+  if (AGENT_DEBUG) {
+    print(
+      color.yellow("tool call: ${data.toolName}(${JSON.stringify(data.args)})"),
+    )
+  }
 }
 
 callback("onToolCallEnd") as data {
-  print(
-    color.yellow(
-    "tool return: ${data.toolName} -> ${JSON.stringify(data.result)} ${data.timeTaken}ms",
-  ),
-  )
+  if (AGENT_DEBUG) {
+    print(
+      color.yellow(
+      "tool return: ${data.toolName} -> ${JSON.stringify(data.result)} ${data.timeTaken}ms",
+    ),
+    )
+  }
 }
 
-// Bundled docs live one level above the agent's compiled JS. Built once
-// at module load — `skillsDir` reads + parses every `.md` file's
-// frontmatter and bakes a description listing all available skills into
-// the returned tool. `static` caches this across runs; `with approve`
-// auto-approves the init-time `glob` and `read` interrupts (the binding
-// itself is the user opt-in).
-static const docSkill = skillsDir("../docs/guide") with approve
+// Persistent on-disk policy. Saved here as JSON; loaded once at
+// module init and rewritten every time the user makes a new
+// "always" decision. Sibling to the memory store under the same
+// per-user agent dir (see `shared.agency` for the `~` expansion
+// rationale).
+const POLICY_FILE = "policy.json"
+const POLICY_DIR = AGENCY_AGENT_DIR
+const POLICY_PATH = "${POLICY_DIR}/${POLICY_FILE}"
 
-// Same pattern for the CLI reference (`agency run`, `agency test`,
-// `agency compile`, ...) and the appendix (built-ins, callbacks,
-// advanced types). Each becomes its own tool so the LLM can pick the
-// right corpus instead of grepping a giant blob of docs.
-static const cliSkill = skillsDir("../docs/cli") with approve
-static const appendixSkill = skillsDir("../docs/appendix") with approve
+def loadPolicy(): Policy {
+  """
+  Read and validate the on-disk policy. Returns the parsed policy
+  if it exists and is well-formed; returns `{}` (empty policy)
+  when the file is absent, unreadable, malformed JSON, or fails
+  validation. A warning is printed for the malformed cases so the
+  user knows a previous decision didn't carry over.
+  """
+  if (!exists(POLICY_FILE, POLICY_DIR)) {
+    return {}
+  }
+  const readResult = read(POLICY_FILE, POLICY_DIR) with approve
+  if (isFailure(readResult)) {
+    print(color.yellow("Could not read ${POLICY_PATH}: ${readResult.error}"))
+    return {}
+  }
+  const parsed = try parseJSON(readResult.value)
+  if (isFailure(parsed)) {
+    print(
+      color.yellow(
+      "Malformed JSON in ${POLICY_PATH}; ignoring and starting fresh.",
+    ),
+    )
+    return {}
+  }
+  const valid = validatePolicy(parsed.value)
+  if (!valid.success) {
+    print(
+      color.yellow(
+      "Invalid policy in ${POLICY_PATH} (${valid.error}); ignoring and starting fresh.",
+    ),
+    )
+    return {}
+  }
+  return parsed.value
+}
 
-// Per-run policy: starts empty, grows as the user opts into
-// always-approve / always-reject for each interrupt kind. Lives at
-// module scope so the handler in `node main` and any helpers
+def savePolicy() {
+  """
+  Persist the current in-memory policy to disk. Called from
+  `recordAlways` / `recordAlwaysScoped` so every "always" decision
+  immediately survives a restart. Failures are warnings, not
+  errors — losing one decision is better than crashing the REPL.
+  """
+  const result = try writePolicyFile(POLICY_PATH, policy) with approve
+  if (isFailure(result)) {
+    print(color.yellow("Could not save policy to ${POLICY_PATH}: ${result.error}"))
+  }
+}
+
+// Persistent policy: starts from the on-disk file (or `{}` if none
+// exists yet), grows as the user opts into always-approve /
+// always-reject for each interrupt kind, and is written back to
+// disk on every change so decisions stick across sessions. Lives
+// at module scope so the handler in `node main` and any helpers
 // can read AND mutate it during a run. Module-level `let` is
-// stored in the GlobalStore, which Agency reinitializes per run.
-let policy: Policy = {}
-
-// File-system tools handed to the LLM as a single bundle anchored to
-// one directory. `openDir(dir)` returns a Workspace whose `read` /
-// `write` / `edit` / `ls` / `glob` / `grep` all resolve their
-// `filename` (or `pattern`) argument against `dir` and its subtree.
-// `setCwd` rebuilds the bundle to re-anchor. The bundle is rebuilt
-// fresh each iteration of the main loop so a `setCwd` from one turn
-// is visible on the next; the binding is static within a single LLM
-// turn — `setCwd` is meant as an opening move, not as a mid-turn
-// switch.
-let workspace: Workspace = openDir(cwd())
+// stored in the GlobalStore, which Agency reinitializes per run —
+// hence the explicit load.
+let policy: Policy = loadPolicy() with approve
 
 def loadAgentsMd(dir: string): string {
   """
@@ -100,23 +162,6 @@ def loadAgentsMd(dir: string): string {
     return ""
   }
   return "\n\n<project_context>\n${result.value}\n</project_context>"
-}
-
-def setCwd(dir: string): string {
-  """
-  Use this when the user tells you to change your current working
-  directory. After you call this, every file-system tool (read,
-  write, edit, ls, glob, grep) will resolve filenames against the
-  given directory and its subtree. Pass "cwd" to anchor to the user's
-  current working directory.
-
-  @param dir - The directory to anchor file operations against
-  """
-  if (dir == "cwd") {
-    dir = cwd()
-  }
-  workspace = openDir(dir)
-  return "Working directory set to: ${dir}"
 }
 
 type Decision =
@@ -137,18 +182,60 @@ type FieldSpec = {
 }
 
 const ALWAYS_FIELDS: Record<string, FieldSpec[]> = {
-  "std::read":  [{ field: "dir", wildcardSubpaths: true }],
-  "std::write": [{ field: "dir", wildcardSubpaths: true }],
-  "std::edit":  [{ field: "dir", wildcardSubpaths: true }],
-  "std::ls":    [{ field: "dir", wildcardSubpaths: true }],
-  "std::glob":  [{ field: "dir", wildcardSubpaths: true }],
-  "std::grep":  [{ field: "dir", wildcardSubpaths: true }],
-  "std::copy":  [{ field: "src",  wildcardSubpaths: true },
-                 { field: "dest", wildcardSubpaths: true }],
-  "std::move":  [{ field: "src",  wildcardSubpaths: true },
-                 { field: "dest", wildcardSubpaths: true }],
-  "std::exec":  [{ field: "command",    wildcardSubpaths: false },
-                 { field: "subcommand", wildcardSubpaths: false }]
+  "std::read": [{
+    field: "dir",
+    wildcardSubpaths: true
+  }],
+  "std::write": [{
+    field: "dir",
+    wildcardSubpaths: true
+  }],
+  "std::edit": [{
+    field: "dir",
+    wildcardSubpaths: true
+  }],
+  "std::ls": [{
+    field: "dir",
+    wildcardSubpaths: true
+  }],
+  "std::glob": [{
+    field: "dir",
+    wildcardSubpaths: true
+  }],
+  "std::grep": [{
+    field: "dir",
+    wildcardSubpaths: true
+  }],
+  "std::copy": [
+    {
+    field: "src",
+    wildcardSubpaths: true
+  },
+    {
+    field: "dest",
+    wildcardSubpaths: true
+  },
+  ],
+  "std::move": [
+    {
+    field: "src",
+    wildcardSubpaths: true
+  },
+    {
+    field: "dest",
+    wildcardSubpaths: true
+  },
+  ],
+  "std::exec": [
+    {
+    field: "command",
+    wildcardSubpaths: false
+  },
+    {
+    field: "subcommand",
+    wildcardSubpaths: false
+  },
+  ]
 }
 
 def buildScopedMatch(intr): Record<string, string> {
@@ -168,9 +255,12 @@ def buildScopedMatch(intr): Record<string, string> {
   // is rarely useful — so collapse to just the command field.
   let effective = specs
   if (intr.kind == "std::exec" && intr.data.subcommand == "") {
-    effective = [{ field: "command", wildcardSubpaths: false }]
+    effective = [{
+      field: "command",
+      wildcardSubpaths: false
+    }]
   }
-  let match: Record<string, string> = {}
+  let matchObj: Record<string, string> = {}
   for (spec in effective) {
     const raw = intr.data[spec.field]
     let pattern = raw
@@ -179,9 +269,9 @@ def buildScopedMatch(intr): Record<string, string> {
       // "${raw}/**" — matches the exact dir and any subdir.
       pattern = "${raw}{,/**}"
     }
-    match = { ...match, [spec.field]: pattern }
+    matchObj[spec.field] = pattern
   }
-  return match
+  return matchObj
 }
 
 def describeScopedMatch(intr): string {
@@ -190,8 +280,8 @@ def describeScopedMatch(intr): string {
   used in the prompt so the user sees the exact rule they're about to
   agree to. Returns an empty string when the kind isn't scoped.
   """
-  const match = buildScopedMatch(intr)
-  const ks = keys(match)
+  const matchObj = buildScopedMatch(intr)
+  const ks = keys(matchObj)
   if (ks.length == 0) {
     return ""
   }
@@ -200,22 +290,22 @@ def describeScopedMatch(intr): string {
   // values without fighting the parser's string-escape rules.
   const dirKinds = ["std::read", "std::write", "std::edit", "std::ls", "std::glob", "std::grep"]
   if (dirKinds.includes(intr.kind)) {
-    return `dir="${intr.data.dir}" or any subdir`
+    return "dir='${intr.data.dir}' or any subdir"
   }
   if (intr.kind == "std::copy" || intr.kind == "std::move") {
-    return `src="${intr.data.src}" or any subdir, dest="${intr.data.dest}" or any subdir`
+    return "src='${intr.data.src}' or any subdir, dest='${intr.data.dest}' or any subdir"
   }
   // std::exec — render command and (if non-empty) subcommand.
   if (intr.kind == "std::exec") {
     if (intr.data.subcommand == "") {
-      return `command="${intr.data.command}"`
+      return "command='${intr.data.command}'"
     }
-    return `command="${intr.data.command}", subcommand="${intr.data.subcommand}"`
+    return "command='${intr.data.command}', subcommand='${intr.data.subcommand}'"
   }
   // Generic fallback for any future kind added to ALWAYS_FIELDS.
   let parts: string[] = []
   for (k in ks) {
-    parts = [...parts, `${k}="${match[k]}"`]
+    parts.push("${k}='${matchObj[k]}'")
   }
   return parts.join(", ")
 }
@@ -255,7 +345,11 @@ def askUser(intr: any): Decision {
     } else if (answer == "ap" && scopedAvailable) {
       valid = true
     } else if (answer == "ap") {
-      print(color.yellow("(ap) isn't available for ${intr.kind} — pick one of (a)/(r)/(aa)/(rr)."))
+      print(
+        color.yellow(
+        "(ap) isn't available for ${intr.kind} — pick one of (a)/(r)/(aa)/(rr).",
+      ),
+      )
     }
   }
   if (answer == "a") {
@@ -287,8 +381,9 @@ def recordAlways(kind: string, action: string) {
     }]
   }
   policy = next
+  savePolicy()
   print(
-    color.cyan("→ Recorded policy: ${kind} = ${action} (won't ask again this session)"),
+    color.cyan("→ Recorded policy: ${kind} = ${action} (won't ask again)"),
   )
 }
 
@@ -307,11 +402,17 @@ def recordAlwaysScoped(intr) {
   }
   const next: Policy = {
     ...policy,
-    [intr.kind]: [{ match: match, action: "approve" }, ...rules]
+    [intr.kind]: [{
+      match: match,
+      action: "approve"
+    }, ...rules]
   }
   policy = next
+  savePolicy()
   print(
-    color.cyan("→ Recorded policy: ${intr.kind} = approve where ${describeScopedMatch(intr)}"),
+    color.cyan(
+    "→ Recorded policy: ${intr.kind} = approve where ${describeScopedMatch(intr)}",
+  ),
   )
 }
 
@@ -357,143 +458,125 @@ def defaultHandler(intr) {
   return reject(reason)
 }
 
-node main() {
-  print(color.cyan("╭───────────────────────────────────────────╮"))
-  print(color.cyan("│       Welcome to the Agency Agent         │"))
-  print(color.cyan("│  I help you write and edit .agency code.  │"))
-  print(color.cyan("╰───────────────────────────────────────────╯"))
-  print("Type 'exit' to quit.\n")
+// Maximum number of consecutive handoffs allowed inside a single user
+// turn. Each handoff is an LLM round-trip charged to the user, so a
+// runaway chain (A → B → A → B → ...) is bad both for cost and for
+// the user (they're waiting and watching it ping-pong). 3 is a
+// "the LLMs both disagree about scope, just answer with the last one"
+// safety net — in practice every handoff terminates after 1.
+const MAX_HOPS = 3
 
-  // Scope the knowledge graph to the project directory so notes the
-  // agent learns in one project don't leak into another. No-op unless
-  // the user enables memory in their `agency.json` — see the
-  // `std::memory` docs for the config block.
-  setMemoryId(cwd())
-
-  const sysPrompt = """
-  You are an Agency-language coding assistant. Help the user create or
-  modify `.agency` files.
-
-  Agency is a domain-specific language for AI agents. When you need to
-  recall syntax, semantics, or a particular feature, call the bundled
-  docs tools first — they give you access to the language guide
-  (`docSkill`), the CLI reference (`cliSkill`: `agency run`, `agency
-  test`, `agency compile`, ...), and the appendix (`appendixSkill`:
-  built-ins, callbacks, advanced types). Pick whichever matches the
-  question rather than guessing.
-
-  Workflow:
-  1. First, call `setCwd` with the user's project directory. After
-     that, every file-system tool resolves filenames against that
-     directory and its subtree — you don't have to pass a directory.
-  2. Use `ls` or `glob` to discover what files exist before guessing
-     filenames. `glob("**/*.agency")` is a good first move on a new
-     project. The returned paths (which may include subdirectories
-     like `"sub/foo.agency"`) are exactly what `read` / `edit` expect
-     as their `filename` argument.
-  3. Use `read` to inspect existing code before modifying it.
-     NEVER `write` or `edit` a file you haven't read.
-  4. Always call `typecheck` on any source you produce before showing
-     it to the user. If the typecheck reports errors, fix them and
-     check again. Don't show broken code.
-  5. Use `write` / `edit` to persist changes. `edit` takes an array
-     of `{oldText, newText, replaceAll}` entries — prefer one call
-     with multiple entries over several `edit` calls when you have
-     more than one change to make to the same file. The user will be
-     prompted to approve every write.
-  6. Use `bash` to run project-level commands (tests, git, formatters,
-     package managers). Prefer the dedicated file tools above for file
-     operations; use `bash` for everything else. The user is asked to
-     approve each command.
-  6a. When you need information from the internet, prefer the lighter
-      tools first:
-      - `wikipediaSearch` / `wikipediaSummary` / `wikipediaArticle` for
-        background knowledge — fast, no API key required, no user
-        approval needed.
-      - `fetchMarkdown(baseUrl, path)` to grab a known docs page or
-        README and get it as readable Markdown.
-      - `fetchJSON(url)` / `fetch(url)` for any specific URL where you
-        already know the endpoint.
-      - `browserUse(task)` only when you actually need an open-ended
-        web search or a page that requires JavaScript / a login flow.
-        It is the heaviest option and costs money per call.
-      Cite the source URL in your reply whenever you used one of these.
-  6b. You have a persistent knowledge graph scoped to this project.
-      Call `recall(query)` whenever you need to remember something the
-      user told you in a previous session (their preferences, the
-      project's conventions, decisions made earlier). Call
-      `remember(content)` to persist a fact worth keeping across
-      sessions — user preferences ("prefers tabs", "wants short
-      replies"), project conventions ("uses `def` not `node` for
-      utilities"), or important decisions. Don't `remember` transient
-      details or things already in AGENTS.md. Relevant facts are also
-      auto-injected before each turn, so often you don't need to call
-      `recall` explicitly.
-  7. Whenever you want to show the user a multi-line code snippet,
-     call `print(highlight(code))` instead of including the raw
-     source in your reply. `highlight` returns a terminal-colored
-     string and `print` writes it directly to the user's console, so
-     the snippet appears with proper syntax highlighting. Skip this
-     for inline identifiers or one-token excerpts; use it for any
-     multi-line block. Your reply can then refer to the printed
-     snippet without repeating the source.
-
-  Keep replies brief. Show code, not commentary.
+def runForCategory(
+  category: string,
+  userMsg: string,
+  ctx: AgentContext,
+  allowHandoff: boolean = true,
+): string {
   """
+  Dispatch a single turn to the chosen specialist. Wraps the
+  per-category `thread(session: ...) { ... }` block so the caller
+  (the main routing loop) doesn't have to know which thread name
+  goes with which subagent.
+
+  `summarize: true` is set on every routed thread so closed sessions
+  get an LLM-generated summary at close time via the eager summarize
+  hook in `lib/stdlib/threads.ts`. This makes `listThreads()` cheap
+  on future runs (no lazy summarize round-trip).
+
+  @param category - Which specialist's thread to run in
+  @param userMsg - The user's input message for this turn
+  @param ctx - Per-call invariants (env, projectContext)
+  @param allowHandoff - Forwarded to `runCode` / `runResearch`. When
+    false the subagent's `handoff` tool is suppressed and the agent
+    has no choice but to answer. Used by the hop-limit fallback.
+  """
+  let reply = ""
+  if (category == "code") {
+    thread(session: "code", label: "code", summarize: true) {
+      reply = runCode(userMsg, ctx, allowHandoff)
+    }
+  } else {
+    thread(session: "research", label: "research", summarize: true) {
+      reply = runResearch(userMsg, ctx, allowHandoff)
+    }
+  }
+  return reply
+}
+
+node main() {
+  print(color.cyan("╭───────────────────────────────────────────────╮"))
+  print(color.cyan("│         Welcome to the Agency Agent           │"))
+  print(color.cyan("│  I help you write Agency code, look up docs,  │"))
+  print(color.cyan("│       and research things from the web.       │"))
+  print(color.cyan("╰───────────────────────────────────────────────╯"))
+  print("Type 'exit' to quit.\n")
 
   // Grounding: the LLM should not have to ask the user where it is
   // or what day it is. Both are appended once per run so they ride
-  // with the first system message.
+  // with the first system message in each specialist's thread.
   const env = "\n\nCurrent date: ${today()}\nCurrent working directory: ${cwd()}"
 
   // Project context: if the user keeps an AGENTS.md at the workspace
   // root (Anthropic / Pi / Aider all read it), inline it so the LLM
   // automatically follows the project's conventions.
   const projectContext = loadAgentsMd(cwd()) with approve
+  const ctx: AgentContext = {
+    env: env,
+    projectContext: projectContext
+  }
 
-  thread {
-    systemMessage(sysPrompt + env + projectContext)
-    let userMsg = input("What would you like to do? ")
-    while (userMsg != "exit" && userMsg != "quit") {
-      handle {
-        // List workspace tools explicitly so we can PFA `printDiff: true`
-        // onto `edit` — every edit the LLM runs prints a colored diff
-        // to the console before / after the change, so the user can
-        // eyeball what actually got written. Internet tools (wikipedia,
-        // fetch, browserUse) are listed after the project tools so the
-        // LLM defaults to local context first.
-        const reply = llm(userMsg, {
-          memory: true,
-          tools: [
-            setCwd,
-            workspace.read,
-            workspace.write,
-            workspace.edit.partial(printDiff: true),
-            workspace.ls,
-            workspace.glob,
-            workspace.grep,
-            workspace.bash,
-            typecheck,
-            docSkill,
-            cliSkill,
-            appendixSkill,
-            highlight.partial(language: "ts"),
-            print,
-            remember,
-            recall,
-            wikipediaSearch,
-            wikipediaSummary,
-            wikipediaArticle,
-            fetch,
-            fetchJSON,
-            fetchMarkdown,
-            browserUse,
-          ]
-        })
-        print(color.green("\n${reply}\n"))
-      } with defaultHandler
-      userMsg = input("\nNext request (or 'exit'): ")
-    }
+  // Starting category. The code subagent is the better default for
+  // an agent named "Agency Agent" — most users open it to work on
+  // code. The handoff machinery will route to research on the first
+  // research-shaped message.
+  //
+  // Typed as `string` (not `Category`) because the routing loop
+  // re-assigns it from `consumeHandoff()`'s string return value
+  // (see the sentinel-string rationale in `shared.agency`). The
+  // contents are still always a valid Category — `handoff()` is the
+  // only writer of the source state and takes a Category-typed
+  // parameter.
+  let category: string = "code"
+
+  let userMsg = input("What would you like to do? ")
+  while (userMsg != "exit" && userMsg != "quit") {
+    handle {
+      // Chain handoffs (with a hop limit) so a single user turn can
+      // re-route once if the current specialist decides it's the wrong
+      // one. The common case is zero handoffs — the agent answers and
+      // we fall through. One handoff is the cross-specialist case
+      // ("can you look up X in docs?" while in code → handoff to
+      // research). Two+ would be ping-pong, which the limit kills.
+      let hop = 0
+      let done = false
+      while (!done && hop < MAX_HOPS) {
+        const reply = runForCategory(category, userMsg, ctx)
+        const target = consumeHandoff()
+        if (target == "") {
+          // Subagents are prompted to reply in Markdown. Render
+          // headings/bullets/bold/code-fences instead of dumping the
+          // raw source — see `code.agency` / `research.agency` for
+          // the prompt and the system-prompt instruction.
+          print(highlight("\n${reply}\n", language: "markdown"))
+          done = true
+        } else {
+          print(color.cyan("→ handing off to ${target}"))
+          category = target
+          hop = hop + 1
+        }
+      }
+      if (!done) {
+        print(
+          color.yellow("(handoff hop limit reached; answering in ${category})"),
+        )
+        // Force the agent to actually answer instead of handing off
+        // yet again — `allowHandoff: false` strips `handoff` from the
+        // tool set, so the LLM has no escape hatch this turn.
+        const finalReply = runForCategory(category, userMsg, ctx, false)
+        print(highlight("\n${finalReply}\n", language: "markdown"))
+      }
+    } with defaultHandler
+    userMsg = input("\nNext request (or 'exit'): ")
   }
   print(color.cyan("\nGoodbye!"))
   return "done"

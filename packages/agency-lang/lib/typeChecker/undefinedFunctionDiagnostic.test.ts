@@ -361,4 +361,47 @@ describe("undefined function diagnostic — imported nodes", () => {
       rmdirSync(dir);
     }
   });
+
+  // `thread(args) as { ... }` falls through the messageThread block
+  // parser (which requires `{` immediately after the paren list) and
+  // gets parsed as a generic `functionCall` instead. Before this
+  // diagnostic was added the user saw a confusing
+  // "Function 'thread' is not defined" warning; now they get a
+  // pointer at the actual mistake.
+  it("emits a tailored hint when `thread` is mistakenly called as a function", () => {
+    const errors = errorsFrom(
+      `
+      node main() {
+        thread(label: "x") as {
+          let y = 1
+        }
+      }
+    `,
+      WARN,
+    );
+    const hits = errors.filter((e) => e.message.includes("`thread`"));
+    expect(hits).toHaveLength(1);
+    expect(hits[0].message).toContain("reserved block keyword");
+    expect(hits[0].message).toContain("`as` keyword is not supported");
+    // Generic "is not defined" wording must NOT appear for this case.
+    expect(hits[0].message).not.toContain("is not defined");
+  });
+
+  it("emits a tailored hint when `subthread` is mistakenly called as a function", () => {
+    const errors = errorsFrom(
+      `
+      node main() {
+        thread {
+          subthread() as {
+            let y = 1
+          }
+        }
+      }
+    `,
+      WARN,
+    );
+    const hits = errors.filter((e) => e.message.includes("`subthread`"));
+    expect(hits).toHaveLength(1);
+    expect(hits[0].message).toContain("reserved block keyword");
+  });
 });

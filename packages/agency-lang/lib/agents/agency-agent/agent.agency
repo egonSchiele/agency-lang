@@ -2,9 +2,11 @@ import { today } from "std::date"
 import { Policy, PolicyRule, checkPolicy } from "std::policy"
 import { exists } from "std::shell"
 import { cwd } from "std::system"
-import { AgentContext, consumeHandoff } from "./shared.agency"
+
 import { runCode } from "./code.agency"
 import { runResearch } from "./research.agency"
+import { AgentContext, consumeHandoff } from "./shared.agency"
+
 
 /*
  * Agency Agent — helps users create and modify Agency code.
@@ -37,8 +39,6 @@ import { runResearch } from "./research.agency"
  *   replayed automatically for the rest of the session via
  *   `checkPolicy`.
  *
- * Run: `pnpm run agency run dist/lib/agents/agency-agent/agent.agency`
- *      (run from `dist/` so the bundled docs at `../docs/guide` resolve.)
  */
 
 callback("onToolCallStart") as data {
@@ -98,18 +98,60 @@ type FieldSpec = {
 }
 
 const ALWAYS_FIELDS: Record<string, FieldSpec[]> = {
-  "std::read":  [{ field: "dir", wildcardSubpaths: true }],
-  "std::write": [{ field: "dir", wildcardSubpaths: true }],
-  "std::edit":  [{ field: "dir", wildcardSubpaths: true }],
-  "std::ls":    [{ field: "dir", wildcardSubpaths: true }],
-  "std::glob":  [{ field: "dir", wildcardSubpaths: true }],
-  "std::grep":  [{ field: "dir", wildcardSubpaths: true }],
-  "std::copy":  [{ field: "src",  wildcardSubpaths: true },
-                 { field: "dest", wildcardSubpaths: true }],
-  "std::move":  [{ field: "src",  wildcardSubpaths: true },
-                 { field: "dest", wildcardSubpaths: true }],
-  "std::exec":  [{ field: "command",    wildcardSubpaths: false },
-                 { field: "subcommand", wildcardSubpaths: false }]
+  "std::read": [{
+    field: "dir",
+    wildcardSubpaths: true
+  }],
+  "std::write": [{
+    field: "dir",
+    wildcardSubpaths: true
+  }],
+  "std::edit": [{
+    field: "dir",
+    wildcardSubpaths: true
+  }],
+  "std::ls": [{
+    field: "dir",
+    wildcardSubpaths: true
+  }],
+  "std::glob": [{
+    field: "dir",
+    wildcardSubpaths: true
+  }],
+  "std::grep": [{
+    field: "dir",
+    wildcardSubpaths: true
+  }],
+  "std::copy": [
+    {
+    field: "src",
+    wildcardSubpaths: true
+  },
+    {
+    field: "dest",
+    wildcardSubpaths: true
+  },
+  ],
+  "std::move": [
+    {
+    field: "src",
+    wildcardSubpaths: true
+  },
+    {
+    field: "dest",
+    wildcardSubpaths: true
+  },
+  ],
+  "std::exec": [
+    {
+    field: "command",
+    wildcardSubpaths: false
+  },
+    {
+    field: "subcommand",
+    wildcardSubpaths: false
+  },
+  ]
 }
 
 def buildScopedMatch(intr): Record<string, string> {
@@ -129,9 +171,12 @@ def buildScopedMatch(intr): Record<string, string> {
   // is rarely useful — so collapse to just the command field.
   let effective = specs
   if (intr.kind == "std::exec" && intr.data.subcommand == "") {
-    effective = [{ field: "command", wildcardSubpaths: false }]
+    effective = [{
+      field: "command",
+      wildcardSubpaths: false
+    }]
   }
-  let match: Record<string, string> = {}
+  let matchObj: Record<string, string> = {}
   for (spec in effective) {
     const raw = intr.data[spec.field]
     let pattern = raw
@@ -140,9 +185,9 @@ def buildScopedMatch(intr): Record<string, string> {
       // "${raw}/**" — matches the exact dir and any subdir.
       pattern = "${raw}{,/**}"
     }
-    match = { ...match, [spec.field]: pattern }
+    matchObj[spec.field] = pattern
   }
-  return match
+  return matchObj
 }
 
 def describeScopedMatch(intr): string {
@@ -151,8 +196,8 @@ def describeScopedMatch(intr): string {
   used in the prompt so the user sees the exact rule they're about to
   agree to. Returns an empty string when the kind isn't scoped.
   """
-  const match = buildScopedMatch(intr)
-  const ks = keys(match)
+  const matchObj = buildScopedMatch(intr)
+  const ks = keys(matchObj)
   if (ks.length == 0) {
     return ""
   }
@@ -161,22 +206,22 @@ def describeScopedMatch(intr): string {
   // values without fighting the parser's string-escape rules.
   const dirKinds = ["std::read", "std::write", "std::edit", "std::ls", "std::glob", "std::grep"]
   if (dirKinds.includes(intr.kind)) {
-    return `dir="${intr.data.dir}" or any subdir`
+    return "dir='${intr.data.dir}' or any subdir"
   }
   if (intr.kind == "std::copy" || intr.kind == "std::move") {
-    return `src="${intr.data.src}" or any subdir, dest="${intr.data.dest}" or any subdir`
+    return "src='${intr.data.src}' or any subdir, dest='${intr.data.dest}' or any subdir"
   }
   // std::exec — render command and (if non-empty) subcommand.
   if (intr.kind == "std::exec") {
     if (intr.data.subcommand == "") {
-      return `command="${intr.data.command}"`
+      return "command='${intr.data.command}'"
     }
-    return `command="${intr.data.command}", subcommand="${intr.data.subcommand}"`
+    return "command='${intr.data.command}', subcommand='${intr.data.subcommand}'"
   }
   // Generic fallback for any future kind added to ALWAYS_FIELDS.
   let parts: string[] = []
   for (k in ks) {
-    parts = [...parts, `${k}="${match[k]}"`]
+    parts.push("${k}='${matchObj[k]}'")
   }
   return parts.join(", ")
 }
@@ -216,7 +261,11 @@ def askUser(intr: any): Decision {
     } else if (answer == "ap" && scopedAvailable) {
       valid = true
     } else if (answer == "ap") {
-      print(color.yellow("(ap) isn't available for ${intr.kind} — pick one of (a)/(r)/(aa)/(rr)."))
+      print(
+        color.yellow(
+        "(ap) isn't available for ${intr.kind} — pick one of (a)/(r)/(aa)/(rr).",
+      ),
+      )
     }
   }
   if (answer == "a") {
@@ -268,11 +317,16 @@ def recordAlwaysScoped(intr) {
   }
   const next: Policy = {
     ...policy,
-    [intr.kind]: [{ match: match, action: "approve" }, ...rules]
+    [intr.kind]: [{
+      match: match,
+      action: "approve"
+    }, ...rules]
   }
   policy = next
   print(
-    color.cyan("→ Recorded policy: ${intr.kind} = approve where ${describeScopedMatch(intr)}"),
+    color.cyan(
+    "→ Recorded policy: ${intr.kind} = approve where ${describeScopedMatch(intr)}",
+  ),
   )
 }
 
@@ -326,7 +380,11 @@ def defaultHandler(intr) {
 // safety net — in practice every handoff terminates after 1.
 const MAX_HOPS = 3
 
-def runForCategory(category: string, userMsg: string, ctx: AgentContext): string {
+def runForCategory(
+  category: string,
+  userMsg: string,
+  ctx: AgentContext,
+): string {
   """
   Dispatch a single turn to the chosen specialist. Wraps the
   per-category `thread(session: ...) { ... }` block so the caller
@@ -344,11 +402,11 @@ def runForCategory(category: string, userMsg: string, ctx: AgentContext): string
   """
   let reply = ""
   if (category == "code") {
-    thread(session: "code", label: "code", summarize: true) {
+    thread(session: "code", label: "code", summarize: true) as {
       reply = runCode(userMsg, ctx)
     }
   } else {
-    thread(session: "research", label: "research", summarize: true) {
+    thread(session: "research", label: "research", summarize: true) as {
       reply = runResearch(userMsg, ctx)
     }
   }
@@ -372,7 +430,10 @@ node main() {
   // root (Anthropic / Pi / Aider all read it), inline it so the LLM
   // automatically follows the project's conventions.
   const projectContext = loadAgentsMd(cwd()) with approve
-  const ctx: AgentContext = { env: env, projectContext: projectContext }
+  const ctx: AgentContext = {
+    env: env,
+    projectContext: projectContext
+  }
 
   // Starting category. The code subagent is the better default for
   // an agent named "Agency Agent" — most users open it to work on
@@ -411,7 +472,9 @@ node main() {
         }
       }
       if (!done) {
-        print(color.yellow("(handoff hop limit reached; answering in ${category})"))
+        print(
+          color.yellow("(handoff hop limit reached; answering in ${category})"),
+        )
         const finalReply = runForCategory(category, userMsg, ctx)
         print(color.green("\n${finalReply}\n"))
       }

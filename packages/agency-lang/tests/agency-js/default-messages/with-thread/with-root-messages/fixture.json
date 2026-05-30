@@ -19,7 +19,11 @@
             "role": "assistant",
             "content": "{\"response\":6}"
           }
-        ]
+        ],
+        "parentId": null,
+        "hidden": false,
+        "label": null,
+        "summary": null
       },
       "1": {
         "messages": [
@@ -39,12 +43,17 @@
             "role": "assistant",
             "content": "{\"response\":[13,17]}"
           }
-        ]
+        ],
+        "parentId": null,
+        "hidden": false,
+        "label": null,
+        "summary": null
       }
     },
     "counter": 2,
     "activeStack": [
       "0"
-    ]
+    ],
+    "sessions": {}
   }
 }

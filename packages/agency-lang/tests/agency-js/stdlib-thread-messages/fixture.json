@@ -32,12 +32,17 @@
             "role": "assistant",
             "content": "second-answer"
           }
-        ]
+        ],
+        "parentId": null,
+        "hidden": false,
+        "label": null,
+        "summary": null
       }
     },
     "counter": 1,
     "activeStack": [
       "0"
-    ]
+    ],
+    "sessions": {}
   }
 }

@@ -28,6 +28,20 @@ import * as smoltalk from "smoltalk";
 import { agency, type ThreadInfoTS } from "../runtime/agency.js";
 import { registerGlobalHook } from "../runtime/hooks.js";
 import { MessageThread } from "../runtime/state/messageThread.js";
+import { createLogger } from "../logger.js";
+
+/** Coerce a `smoltalk` message's `content` to a flat string. Non-string
+ *  content (tool-call / structured) is JSON-stringified; nullish
+ *  content (common on tool-call assistant messages where the LLM
+ *  emitted tool calls but no text) maps to `""` instead of the literal
+ *  JSON-encoded `'""'`. Shared by `_getThread` (the Agency-facing
+ *  reader) and `_buildSummaryTranscript` (the eager summarizer
+ *  prompt) so both surfaces agree on the same coercion rule. */
+function _contentToString(content: smoltalk.MessageJSON["content"]): string {
+  if (typeof content === "string") return content;
+  if (content == null) return "";
+  return JSON.stringify(content);
+}
 
 /** Pass-through to `agency.threads.list()`. */
 export function _listThreadsRaw(): ThreadInfoTS[] {
@@ -50,16 +64,7 @@ export function _getThread(
   const raw = agency.threads.get(id, offset, limit);
   return raw.map((m) => ({
     role: String(m.role),
-    // Coerce non-string content to a flat string for the Agency
-    // surface. Nullish content (common on tool-call assistant
-    // messages where the LLM emitted tool calls but no text) maps
-    // to "" instead of the literal JSON-encoded `'""'`.
-    content:
-      typeof m.content === "string"
-        ? m.content
-        : m.content == null
-          ? ""
-          : JSON.stringify(m.content),
+    content: _contentToString(m.content),
   }));
 }
 
@@ -106,13 +111,7 @@ const _summarySchema = z.object({ summary: z.string() });
 function _buildSummaryTranscript(messages: smoltalk.MessageJSON[]): string {
   let transcript = "";
   for (const m of messages) {
-    const content =
-      typeof m.content === "string"
-        ? m.content
-        : m.content == null
-          ? ""
-          : JSON.stringify(m.content);
-    transcript += `[${String(m.role)}] ${content}\n`;
+    transcript += `[${String(m.role)}] ${_contentToString(m.content)}\n`;
   }
   return transcript;
 }
@@ -126,11 +125,13 @@ function _buildSummaryTranscript(messages: smoltalk.MessageJSON[]): string {
  *  Mirrors what `thread(hidden: true) { llm(...) }` would do in
  *  Agency-land.
  *
- *  All errors are swallowed — eager summarize is a performance
- *  optimization, not a correctness path. If the call fails (no LLM
- *  client, network error, missing API key), the next
+ *  Errors never propagate to the caller — eager summarize is a
+ *  performance optimization, not a correctness path. If the call
+ *  fails (no LLM client, network error, missing API key), the next
  *  `listThreads()` falls back to the lazy summarize path which
- *  surfaces a clean error path through `try _listThreadsRaw()`. */
+ *  surfaces a clean error path through `try _listThreadsRaw()`.
+ *  Failures are still recorded via `logger.debug` and the
+ *  `threadEndHookError` statelog event so they're observable. */
 export async function _eagerSummarizeIfNeeded(evt: {
   threadId: string;
   eagerSummarize: boolean;
@@ -147,7 +148,11 @@ export async function _eagerSummarizeIfNeeded(evt: {
     : evt.threadId;
   const thread = store.threads[rawId];
   if (!thread) return;
-  if (thread.summary) return;
+  // Idempotency: any non-null cached summary (including an empty
+  // string explicitly set by an earlier path) wins — re-summarizing
+  // wastes an LLM call and would silently overwrite an intentional
+  // empty marker.
+  if (thread.summary != null) return;
 
   try {
     const transcript = _buildSummaryTranscript(evt.messages);
@@ -163,8 +168,23 @@ export async function _eagerSummarizeIfNeeded(evt: {
       },
     );
     _setThreadSummary(evt.threadId, result.summary);
-  } catch {
+  } catch (e) {
     // Best-effort — lazy summarize will retry on next listThreads().
+    // Surface the failure two ways: a `logger.debug` line for local
+    // troubleshooting (gated on the runtime's `logLevel` so the
+    // default `info` level still stays silent) and a structured
+    // `threadEndHookError` statelog event so production traces show
+    // it. Mirrors the belt-and-braces failure-reporting pattern in
+    // `Runner.thread`'s finally block.
+    const message = e instanceof Error ? e.message : String(e);
+    const ctx = agency.ctxMaybe();
+    createLogger(ctx?.logLevel ?? "info").debug(
+      `eager summarize failed for thread ${evt.threadId}: ${message}`,
+    );
+    ctx?.statelogClient?.threadEndHookError?.({
+      threadId: evt.threadId,
+      error: message,
+    });
   }
 }
 

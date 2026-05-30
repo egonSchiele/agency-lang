@@ -153,13 +153,45 @@ describe("_eagerSummarizeIfNeeded", () => {
     expect(threads.get(id).summary).toBe("already-set");
   });
 
-  it("swallows LLM errors silently (best-effort)", async () => {
+  it("respects an explicit empty-string summary as 'already cached'", async () => {
+    // Regression: `if (thread.summary)` would treat `""` as falsy
+    // and re-summarize, silently overwriting an intentional empty
+    // marker (and burning an LLM call). The check is now
+    // `thread.summary != null` so any non-null string wins.
+    const ctx = makeCtx();
+    const threads = ThreadStore.withDefaultActive(ctx.statelogClient);
+    const id = threads.create();
+    threads.get(id).summary = "";
+    const spy = runPrompt as unknown as ReturnType<typeof vi.fn>;
+    spy.mockClear();
+
+    await agency.withTestContext(
+      { ctx, stack: ctx.stateStack, threads },
+      () =>
+        _eagerSummarizeIfNeeded({
+          threadId: `t${id}`,
+          eagerSummarize: true,
+          messages: [{ role: "user", content: "x" } as any],
+        }),
+    );
+
+    expect(spy).not.toHaveBeenCalled();
+    expect(threads.get(id).summary).toBe("");
+  });
+
+  it("swallows LLM errors and reports them via statelog (best-effort)", async () => {
     const ctx = makeCtx();
     const threads = ThreadStore.withDefaultActive(ctx.statelogClient);
     const id = threads.create();
     const spy = runPrompt as unknown as ReturnType<typeof vi.fn>;
     spy.mockClear();
     spy.mockRejectedValueOnce(new Error("boom"));
+    // Spy on the statelog reporter to verify the failure is
+    // surfaced, not silently dropped.
+    const statelogSpy = vi.fn();
+    ctx.statelogClient = {
+      threadEndHookError: statelogSpy,
+    } as any;
 
     await agency.withTestContext(
       { ctx, stack: ctx.stateStack, threads },
@@ -177,6 +209,10 @@ describe("_eagerSummarizeIfNeeded", () => {
     );
 
     expect(threads.get(id).summary).toBe(null);
+    expect(statelogSpy).toHaveBeenCalledWith({
+      threadId: `t${id}`,
+      error: "boom",
+    });
   });
 
   it("tolerates non-canonical (non-slug) thread ids by passing them through", async () => {

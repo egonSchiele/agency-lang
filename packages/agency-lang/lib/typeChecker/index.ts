@@ -36,6 +36,7 @@ import {
   analyzeInterruptsFromScopes,
   checkUnhandledInterruptWarnings,
   checkCallbackBodyInterrupts,
+  checkHandlerBodyInterrupts,
 } from "./interruptAnalysis.js";
 import { checkUndefinedFunctions } from "./undefinedFunctionDiagnostic.js";
 import { checkUndefinedVariables } from "./undefinedVariableDiagnostic.js";
@@ -290,6 +291,10 @@ export class TypeChecker {
     // 6a. Reject `interrupt` inside any callback body. Callbacks fire as
     // side effects; their body cannot pause execution.
     checkCallbackBodyInterrupts(scopes, interruptKindsByFunction, ctx);
+
+    // 6b. Reject handlers whose body may itself raise an interrupt — that
+    // re-enters the handler chain and recurses (see HandlerRecursionError).
+    checkHandlerBodyInterrupts(scopes, interruptKindsByFunction, ctx);
 
     // 7. Check for undefined function calls (config-controlled severity).
     checkUndefinedFunctions(scopes, ctx);

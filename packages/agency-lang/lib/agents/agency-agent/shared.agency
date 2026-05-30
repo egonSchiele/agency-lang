@@ -1,0 +1,97 @@
+/*
+ * Shared state and types for the multi-thread Agency Agent.
+ *
+ * The agent is split across:
+ *   - `agent.agency`     — REPL loop + interrupt handler + policy
+ *   - `shared.agency`    — this file; Category type + handoff plumbing
+ *   - `code.agency`      — code subagent (file ops, shell, typecheck)
+ *   - `research.agency`  — research subagent (docs, web, knowledge)
+ *
+ * Routing: we don't categorize the user's message on every turn.
+ * Instead, the current category's LLM gets a `handoff(category,
+ * reason)` tool. If it can handle the message, it just answers. If it
+ * can't (e.g. the user asks the code agent a wikipedia question), it
+ * calls `handoff()` and the main loop re-routes the same user message
+ * to the chosen specialist.
+ *
+ * Why this design? Most messages in a conversation continue the
+ * current topic. A naïve `categorize()` LLM call on every turn
+ * over-eagerly re-routes ambiguous follow-ups, stranding the new
+ * specialist without conversation context. Letting the current agent
+ * decide biases hard toward "stay" — the agent has the full thread
+ * history and is the most-informed judge of whether the message is
+ * in-scope.
+ *
+ * See docs/superpowers/ideas/2026-05-30-routing-stickiness.md for
+ * the full design rationale and a catalogue of alternative routing
+ * techniques worth trying in follow-ups.
+ */
+
+export type Category = "code" | "research"
+
+// Per-call context handed to each subagent's run function. Holds the
+// invariants computed once per turn in `agent.agency` and read by
+// each subagent on first entry to seed its system message.
+export type AgentContext = {
+  env: string,
+  projectContext: string,
+}
+
+// Module-level handoff signal. Set by the `handoff` tool while the
+// current category's LLM is mid-call; consumed by the main loop
+// immediately after that call returns. A module-level `let` lives in
+// the GlobalStore, which is the right scope — it survives across the
+// LLM tool-call boundary (handoff fires INSIDE the llm() call) and
+// resets cleanly between user turns once `consumeHandoff` reads it.
+//
+// Stored as a string (not `Category | null`) so the consumer can
+// assign it back without tripping Agency's lack of flow-narrowing
+// for nullable union types. Empty string means "no handoff pending"
+// — the `Category` union does not contain `""`, so the sentinel is
+// unambiguous. The `handoff` tool only ever writes a valid Category.
+let _handoffTarget: string = ""
+
+export safe def handoff(category: Category, reason: string): string {
+  """
+  Re-route the user's current message to a different specialist. Use
+  this ONLY when the user's message is clearly outside your scope:
+
+  - Call `handoff("code", reason)` for write/edit/typecheck/run
+    requests when you're the research agent.
+  - Call `handoff("research", reason)` for docs lookup, web
+    search, fetch, or Wikipedia requests when you're the code
+    agent.
+
+  After you call this, the runtime closes your turn and re-routes the
+  user's ORIGINAL message to the chosen specialist. Anything you say
+  after `handoff()` is discarded — return immediately without further
+  commentary.
+
+  Bias toward staying. Most ambiguous follow-up messages
+  ("can you make it faster?", "why?", "more please") are
+  continuations of the current topic, NOT new categories. Only call
+  handoff when you're confident the message needs a different
+  specialist's tools. When in doubt, attempt to answer it yourself —
+  the user has a much smoother experience when the same specialist
+  carries a multi-turn topic through.
+
+  @param category - The specialist to re-route to: `"code"` or `"research"`
+  @param reason - Brief explanation; recorded for debugging, not shown to the user
+  """
+  _handoffTarget = category
+  return "Handoff scheduled — return now without further reply."
+}
+
+export safe def consumeHandoff(): string {
+  """
+  Read and clear the pending handoff target. Called by the main loop
+  in `agent.agency` after each LLM round to decide whether to
+  re-route. Returns `""` when no handoff was requested; otherwise
+  returns the slug of the target category (`"code"` or `"research"`),
+  guaranteed to be a valid Category because `handoff()` is the only
+  writer and takes a `Category`-typed parameter.
+  """
+  const result = _handoffTarget
+  _handoffTarget = ""
+  return result
+}

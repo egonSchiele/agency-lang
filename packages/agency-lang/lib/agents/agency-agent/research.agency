@@ -1,0 +1,148 @@
+/*
+ * Research subagent — handles anything that needs reading: looking
+ * up Agency syntax in the bundled docs, searching Wikipedia,
+ * fetching URLs, browsing the web, or recalling stored facts.
+ *
+ * Tools: docSkill / cliSkill / appendixSkill + wikipedia* + fetch* +
+ * browserUse + remember/recall + highlight + print + handoff. NO
+ * file write / edit / typecheck / bash — the agent must
+ * `handoff("code", ...)` when the user asks for code changes.
+ *
+ * The bundled-docs Skills live here (not in `shared.agency`) because
+ * only the research subagent uses them. `static const` caches the
+ * Skill across runs.
+ *
+ * See `shared.agency` for the multi-agent design rationale.
+ */
+import { fetch, fetchJSON, fetchMarkdown } from "std::http"
+import { browserUse } from "std::browser"
+import { setMemoryId, remember, recall } from "std::memory"
+import { skillsDir } from "std::skills"
+import { highlight } from "std::syntax"
+import { systemMessage } from "std::thread"
+import { currentThreadId, getThread } from "std::threads"
+import {
+  search as wikipediaSearch,
+  summary as wikipediaSummary,
+  article as wikipediaArticle,
+} from "std::wikipedia"
+import { Category, AgentContext, handoff } from "./shared.agency"
+
+// Bundled docs live one level above the agent's compiled JS. Built
+// once at module load — `skillsDir` reads + parses every `.md`
+// file's frontmatter and bakes a description listing all available
+// skills into the returned tool. `static` caches this across runs;
+// `with approve` auto-approves the init-time `glob` and `read`
+// interrupts (the binding itself is the user opt-in).
+static const docSkill = skillsDir("../docs/guide") with approve
+
+// Same pattern for the CLI reference (`agency run`, `agency test`,
+// `agency compile`, ...) and the appendix (built-ins, callbacks,
+// advanced types). Each becomes its own tool so the LLM can pick
+// the right corpus instead of grepping a giant blob of docs.
+static const cliSkill = skillsDir("../docs/cli") with approve
+static const appendixSkill = skillsDir("../docs/appendix") with approve
+
+const researchSysPrompt = """
+You are the **research specialist** of a multi-thread Agency-language
+assistant. You answer questions that need reading: Agency-language
+syntax / semantics / built-ins, CLI usage, external docs, Wikipedia
+background, URL contents, and general conversation backed by recall.
+
+You do NOT have file-system write tools (no write, edit, bash, or
+typecheck). If the user asks you to actually write, edit, or run
+code, call `handoff("code", reason)` — the runtime will re-route
+the user's original message to the code specialist.
+
+**Bias toward staying in the research thread.** Most follow-up
+messages ("can you say more?", "what about X?", "explain that
+again") are continuations of the current research task, NOT new
+categories. Only call `handoff` when the message clearly needs the
+code-specialist's write/edit/run tools.
+
+When you need information:
+
+- For **Agency language** questions, call the bundled docs tools
+  first — they're authoritative:
+    * `docSkill`      — language guide (syntax, control flow,
+                        types, error handling, etc.)
+    * `cliSkill`      — CLI reference (`agency run`, `agency test`,
+                        `agency compile`, ...)
+    * `appendixSkill` — built-ins, callbacks, advanced types
+  Pick whichever matches the question rather than guessing.
+
+- For **general knowledge**, prefer the lighter tools first:
+    * `wikipediaSearch` / `wikipediaSummary` / `wikipediaArticle`
+      for background knowledge — fast, no API key required, no
+      user approval needed.
+    * `fetchMarkdown(baseUrl, path)` to grab a known docs page or
+      README and get it as readable Markdown.
+    * `fetchJSON(url)` / `fetch(url)` for any specific URL where
+      you already know the endpoint.
+    * `browserUse(task)` only when you actually need an open-ended
+      web search or a page that requires JavaScript / a login flow.
+      It is the heaviest option and costs money per call.
+  Cite the source URL in your reply whenever you used one of these.
+
+- You have a persistent knowledge graph scoped to research work.
+  Call `recall(query)` to retrieve anything the user told you in a
+  previous session. Call `remember(content)` to persist a fact
+  worth keeping across sessions — user preferences ("prefers
+  brief replies"), recurring topics, decisions made earlier. Don't
+  `remember` transient details. Relevant facts are also
+  auto-injected before each turn, so often you don't need to call
+  `recall` explicitly.
+
+When showing code snippets in your reply, call
+`print(highlight(code))` for any multi-line block — `highlight`
+returns a terminal-colored string and `print` writes it to the
+user's console. Skip this for inline identifiers or one-token
+excerpts.
+
+Keep replies brief. Cite sources. Show, don't lecture.
+"""
+
+export def runResearch(userMsg: string, ctx: AgentContext): string {
+  """
+  Run a single turn in the research subagent. The caller is
+  responsible for the surrounding `thread(session: "research") { ... }`
+  block; this function just (a) seeds the research system message
+  on first entry, (b) scopes memory to the `"research"` knowledge
+  graph, and (c) runs the LLM call with the research tool set.
+
+  Returns the LLM's text reply. If the LLM called `handoff()` mid-
+  turn, the reply is the LLM's post-handoff filler text and the
+  caller MUST check `consumeHandoff()` to discover whether to
+  re-route.
+
+  @param userMsg - The user's input message for this turn
+  @param ctx - Per-call invariants (env, projectContext) for the system message
+  """
+  setMemoryId("research")
+  // First-entry detection — see the matching comment in `code.agency`
+  // for the rationale.
+  const t = getThread(currentThreadId())
+  if (isSuccess(t) && t.value.length == 0) {
+    systemMessage(researchSysPrompt + ctx.env + ctx.projectContext)
+  }
+  return llm(userMsg, {
+    memory: true,
+    tools: [
+      docSkill,
+      cliSkill,
+      appendixSkill,
+      wikipediaSearch,
+      wikipediaSummary,
+      wikipediaArticle,
+      fetch,
+      fetchJSON,
+      fetchMarkdown,
+      browserUse,
+      remember,
+      recall,
+      highlight.partial(language: "ts"),
+      print,
+      handoff,
+    ],
+  })
+}

@@ -32,6 +32,7 @@
  */
 import fs from "node:fs";
 import path from "node:path";
+import { expandPath } from "../../stdlib/expandPath.js";
 import type { MemoryConfig } from "./types.js";
 
 export class MemoryFrame {
@@ -42,7 +43,13 @@ export class MemoryFrame {
     if (!config.dir || config.dir.trim() === "") {
       throw new Error("enableMemory: `dir` is required and must be non-empty.");
     }
-    const resolved = path.resolve(process.cwd(), config.dir);
+    // Route the user-supplied dir through `expandPath` so `~` resolves
+    // to `$HOME` the same way every other path-taking stdlib function
+    // does (see `resolveDir`). Without this, `path.resolve` treats `~`
+    // as a literal character and silently creates a `~` directory
+    // under cwd (issue #230).
+    const expanded = expandPath(config.dir);
+    const resolved = path.resolve(process.cwd(), expanded);
     fs.mkdirSync(resolved, { recursive: true });
     this.configKey = fs.realpathSync(resolved);
     this.config = config;

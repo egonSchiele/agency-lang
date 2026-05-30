@@ -58,6 +58,34 @@ describe("MemoryFrame", () => {
     expect(() => new MemoryFrame({ dir: "   " })).toThrow(/required/);
   });
 
+  it("expands leading `~` to $HOME (issue #230)", () => {
+    // Without expansion, `path.resolve` treats `~` as a literal and
+    // creates a real `~` directory under cwd. Verify the resolved
+    // `configKey` lives under $HOME instead.
+    const fakeHome = fs.mkdtempSync(path.join(os.tmpdir(), "memframe-home-"));
+    const realFakeHome = fs.realpathSync(fakeHome);
+    const origHome = process.env.HOME;
+    const origUserProfile = process.env.USERPROFILE;
+    process.env.HOME = fakeHome;
+    process.env.USERPROFILE = fakeHome;
+    try {
+      const frame = new MemoryFrame({ dir: "~/agency-mem-test" });
+      // configKey is realpath-resolved, so compare against the
+      // realpath of $HOME.
+      expect(frame.configKey).toBe(
+        path.join(realFakeHome, "agency-mem-test"),
+      );
+      // No literal `~` directory should have been created under cwd.
+      expect(fs.existsSync(path.join(tmpRoot, "~"))).toBe(false);
+    } finally {
+      if (origHome === undefined) delete process.env.HOME;
+      else process.env.HOME = origHome;
+      if (origUserProfile === undefined) delete process.env.USERPROFILE;
+      else process.env.USERPROFILE = origUserProfile;
+      fs.rmSync(fakeHome, { recursive: true, force: true });
+    }
+  });
+
   describe("equals (static)", () => {
     it("returns true for frames with same configKey, regardless of other config fields", () => {
       const a = new MemoryFrame({ dir: "./eqmem", model: "gpt-4o" });

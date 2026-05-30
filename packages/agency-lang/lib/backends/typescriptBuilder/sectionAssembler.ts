@@ -134,6 +134,28 @@ export function partitionProgram(
       continue;
     }
 
+    // Bare top-level `<expr> with handler` (the form not caught by
+    // `unwrapStaticAssignment` / `unwrapGlobalAssignment` because the
+    // wrapped statement isn't an assignment). Without this branch, the
+    // `withModifier` falls through to `processNodeInGlobalInit` →
+    // `processNode` → `processWithModifier`, which calls
+    // `stepPathTracker.currentId()` against an empty stack and throws
+    // the cryptic internal invariant `StepPathTracker: currentId()
+    // called with empty path` (issue #229). Emit the same lightweight
+    // pushHandler/popHandler wrapper that the static/global assignment
+    // cases above use — `withHandler` deliberately doesn't need a step
+    // id, and `__initializeGlobals` already runs under
+    // `runInBootstrapFrame(...)` so the handler stack is live. Resume
+    // semantics match the rest of globalInit: this is a fresh-run
+    // side effect, not re-executed on interrupt resume.
+    if (node.type === "withModifier") {
+      const innerStmt = deps.processNodeInGlobalInit(node.statement);
+      globalInitStatements.push(
+        ts.withHandler(deps.buildHandlerArrow(node.handlerName), innerStmt),
+      );
+      continue;
+    }
+
     if (deps.isTopLevelDeclaration(node)) {
       topLevelStatements.push(deps.processNode(node));
     } else {

@@ -120,7 +120,7 @@ summaryFor(id: string, existing: string | null, messages: ThreadMessage[] | null
 ### listThreads
 
 ```ts
-listThreads(): Result
+listThreads(lazySummarize: boolean): Result
 ```
 
 Return every thread in the current run, including the active one.
@@ -130,15 +130,33 @@ Return every thread in the current run, including the active one.
   hook in `lib/stdlib/threads.ts`), so their summary is already
   cached by the time `listThreads()` runs. Threads that did NOT opt
   in eagerly trigger exactly one LLM round-trip the first time
-  `listThreads()` is called on them. Active threads are skipped on
-  both paths so the in-flight conversation is not summarized
-  mid-stream. The computed summary is stashed on the underlying
-  `MessageThread` so subsequent calls read it back without
-  re-prompting.
+  `listThreads()` is called on them (the "lazy" path). Active
+  threads are skipped on both paths so the in-flight conversation
+  is not summarized mid-stream. The computed summary is stashed on
+  the underlying `MessageThread` so subsequent calls read it back
+  without re-prompting.
+
+  Pass `lazySummarize: false` to skip the on-demand LLM round-trip
+  entirely. Threads without a cached summary fall back to their
+  label (or `""` if no label is set), so the call stays free even
+  when no eager summary is available. Useful in tests and in
+  performance-sensitive surfaces where you'd rather see "no summary
+  yet" than pay for one synchronously.
 
   Returns a `Result` — success holds `ThreadInfo[]`, failure holds
   the error (e.g. called outside an Agency frame). See
   [error handling](https://agency-lang.com/guide/error-handling).
+
+  @param lazySummarize - When true (default), generate summaries
+                         on-demand for any thread that doesn't have
+                         one cached. When false, fall back to the
+                         label (or `""`).
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| lazySummarize | `boolean` | true |
 
 **Returns:** `Result`
 
@@ -157,7 +175,7 @@ Slug-form id of the active thread (e.g. "t3"), or `""` outside any
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/threads.agency#L146))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/threads.agency#L172))
 
 ### getThread
 
@@ -189,4 +207,4 @@ Read a slice of a thread's messages. Returns success holding `[]`
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/threads.agency#L156))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/threads.agency#L182))

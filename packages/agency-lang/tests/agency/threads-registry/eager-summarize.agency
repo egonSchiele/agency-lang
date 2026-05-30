@@ -3,16 +3,21 @@ import { userMessage } from "std::thread"
 
 // Verifies that `thread(summarize: true) { ... }` populates
 // MessageThread.summary at close time via the TS-side onThreadEnd
-// hook in lib/stdlib/threads.ts. Once the hook has run, `listThreads`
-// reads the cached summary without triggering the lazy
-// summarize-on-demand path.
+// hook in lib/stdlib/threads.ts.
 //
-// The first thread opts into eager summarize; the second does not.
-// Both LLM mocks below are consumed (one eager, one lazy at the
-// listThreads call), so the relative ordering of mock entries is
-// the actual contract test:
-//   - mock[0] is consumed at close-time of the eager thread
-//   - mock[1] is consumed inside listThreads() for the lazy thread
+// `lazySummarize: false` is the key: it disables the on-demand
+// summarize fallback inside listThreads(), so the ONLY way a thread
+// ends up with a cached LLM-generated summary is via the eager hook
+// firing at close. Threads without a cached summary fall back to
+// their label (or "") and consume no LLM mocks. We provide exactly
+// one LLM mock — the eager hook is the only consumer.
+//
+// Test outcomes:
+//   - working eager hook: "eager" thread.summary = "eager-summary"
+//                         "lazy"  thread.summary = "lazy"      (label fallback)
+//   - broken eager hook: "eager" thread.summary = "eager"      (label fallback)
+//                        "lazy"  thread.summary = "lazy"       (label fallback)
+//                        the single LLM mock is never consumed.
 node main() {
   thread(label: "eager", summarize: true) {
     userMessage("eager body")
@@ -20,14 +25,18 @@ node main() {
   thread(label: "lazy") {
     userMessage("lazy body")
   }
-  const all = listThreads()
-  const summaries: string[] = []
+  const all = listThreads(lazySummarize: false)
+  // Build "<label>=<summary>" pairs for every labeled thread. The
+  // active main thread is unlabeled and gets skipped. Sorted so
+  // mock-mode iteration order doesn't make the test brittle.
+  const pairs: string[] = []
   if (isSuccess(all)) {
     for (t in all.value) {
-      if (t.summary != null) {
-        summaries.push(t.summary)
+      if (t.label != null && t.summary != null) {
+        pairs.push(t.label + "=" + t.summary)
       }
     }
   }
-  return summaries
+  pairs.sort()
+  return pairs
 }

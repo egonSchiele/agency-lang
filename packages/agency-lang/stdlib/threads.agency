@@ -100,7 +100,7 @@ def summaryFor(id: string, existing: (string | null), messages: (ThreadMessage[]
   return s
 }
 
-export def listThreads(): Result {
+export def listThreads(lazySummarize: boolean = true): Result {
   """
   Return every thread in the current run, including the active one.
 
@@ -109,15 +109,27 @@ export def listThreads(): Result {
   hook in `lib/stdlib/threads.ts`), so their summary is already
   cached by the time `listThreads()` runs. Threads that did NOT opt
   in eagerly trigger exactly one LLM round-trip the first time
-  `listThreads()` is called on them. Active threads are skipped on
-  both paths so the in-flight conversation is not summarized
-  mid-stream. The computed summary is stashed on the underlying
-  `MessageThread` so subsequent calls read it back without
-  re-prompting.
+  `listThreads()` is called on them (the "lazy" path). Active
+  threads are skipped on both paths so the in-flight conversation
+  is not summarized mid-stream. The computed summary is stashed on
+  the underlying `MessageThread` so subsequent calls read it back
+  without re-prompting.
+
+  Pass `lazySummarize: false` to skip the on-demand LLM round-trip
+  entirely. Threads without a cached summary fall back to their
+  label (or `""` if no label is set), so the call stays free even
+  when no eager summary is available. Useful in tests and in
+  performance-sensitive surfaces where you'd rather see "no summary
+  yet" than pay for one synchronously.
 
   Returns a `Result` — success holds `ThreadInfo[]`, failure holds
   the error (e.g. called outside an Agency frame). See
   [error handling](https://agency-lang.com/guide/error-handling).
+
+  @param lazySummarize - When true (default), generate summaries
+                         on-demand for any thread that doesn't have
+                         one cached. When false, fall back to the
+                         label (or `""`).
   """
   const raw = try _listThreadsRaw()
   if (isFailure(raw)) {
@@ -125,11 +137,25 @@ export def listThreads(): Result {
   }
   const out: ThreadInfo[] = []
   for (t in raw.value) {
-    let messages: (ThreadMessage[] | null) = null
-    if (t.isActive == false) {
-      messages = t.messages
+    let summary: (string | null) = null
+    if (lazySummarize) {
+      let messages: (ThreadMessage[] | null) = null
+      if (t.isActive == false) {
+        messages = t.messages
+      }
+      summary = summaryFor(t.id, t.summary, messages)
+    } else {
+      // No LLM round-trip — return whatever is cached, falling
+      // back to the label (or "" if unlabeled) so the field is
+      // always populated.
+      if (t.summary != null) {
+        summary = t.summary
+      } else if (t.label != null) {
+        summary = t.label
+      } else {
+        summary = ""
+      }
     }
-    const summary = summaryFor(t.id, t.summary, messages)
     out.push({
       id: t.id,
       label: t.label,

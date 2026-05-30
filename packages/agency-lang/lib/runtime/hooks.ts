@@ -62,6 +62,19 @@ export type CallbackMap = {
     cancel: () => void;
   };
   onEmit: unknown;
+  onThreadStart: {
+    threadId: string;                          // slug form ("t3")
+    threadType: "thread" | "subthread";
+    parentThreadId?: string;                   // slug form when present
+    label?: string;                            // from thread(label: "...") {}
+    isResumption?: boolean;                    // true when entered via continue/session
+  };
+  onThreadEnd: {
+    threadId: string;                          // slug form
+    label?: string;
+    eagerSummarize: boolean;                   // from thread(summarize: true)
+    messages: MessageJSON[];                   // snapshot at close
+  };
 };
 
 // Compile-time guard: ensures VALID_CALLBACK_NAMES stays in sync with CallbackMap.

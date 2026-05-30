@@ -320,12 +320,20 @@ export interface TsRunnerStep {
   body: TsNode[];
 }
 
-/** runner.thread(id, method, async (runner) => { body }) */
+/** runner.thread(id, method, opts, async (runner) => { body }).
+ *  `label`, `summarize`, `continueExpr`, `sessionExpr` are optional
+ *  expressions plumbed in by Tasks 3 / 6 / 7. When all are absent the
+ *  emitter elides the opts arg and falls back to the legacy
+ *  `runner.thread(id, method, async ...)` shape. */
 export interface TsRunnerThread {
   kind: "runnerThread";
   id: number;
   method: "create" | "createSubthread";
   body: TsNode[];
+  label?: TsNode | null;
+  summarize?: TsNode | null;
+  continueExpr?: TsNode | null;
+  sessionExpr?: TsNode | null;
 }
 
 /** runner.handle(id, handlerFn, async (runner) => { body }) */

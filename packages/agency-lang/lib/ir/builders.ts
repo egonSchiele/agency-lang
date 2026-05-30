@@ -441,7 +441,15 @@ export const ts = {
     return { kind: "runnerStep", ...opts };
   },
 
-  runnerThread(opts: { id: number; method: "create" | "createSubthread"; body: TsNode[] }): TsRunnerThread {
+  runnerThread(opts: {
+    id: number;
+    method: "create" | "createSubthread";
+    body: TsNode[];
+    label?: TsNode | null;
+    summarize?: TsNode | null;
+    continueExpr?: TsNode | null;
+    sessionExpr?: TsNode | null;
+  }): TsRunnerThread {
     const res = { kind: "runnerThread" as const, ...opts };
     return res;
   },

@@ -36,6 +36,8 @@ export const VALID_CALLBACK_NAMES = [
   "onTrace",
   "onOAuthRequired",
   "onEmit",
+  "onThreadStart",
+  "onThreadEnd",
 ] as const;
 
 export type CallbackName = (typeof VALID_CALLBACK_NAMES)[number];

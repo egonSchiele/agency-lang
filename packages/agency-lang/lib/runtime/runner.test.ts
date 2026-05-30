@@ -501,6 +501,45 @@ describe("Runner", () => {
       expect(popped).toBe(true);
       expect(runner.halted).toBe(true);
     });
+
+    it("fires onThreadStart and onThreadEnd with slug ids and label", async () => {
+      const frame = makeFrame();
+      const ctx = makeMockCtx();
+      const events: Array<{ kind: string; data: any }> = [];
+      ctx.callbacks = {
+        onThreadStart: (data: any) => { events.push({ kind: "start", data }); },
+        onThreadEnd: (data: any) => { events.push({ kind: "end", data }); },
+      };
+      // makeMockCtx returns "tid-1" from create(). Override get() to
+      // surface a non-empty message list so we can assert the snapshot.
+      ctx.threads.get = () => ({
+        messages: [{ toJSON: () => ({ role: "user", content: "hi" }) }],
+        parentId: null,
+      });
+
+      const runner = new Runner(ctx, frame, { threads: ctx.threads });
+
+      await runner.thread(
+        0,
+        "create",
+        { label: "coding task", summarize: true },
+        async () => {
+          /* body */
+        },
+      );
+
+      expect(events.length).toBe(2);
+      expect(events[0].kind).toBe("start");
+      expect(events[0].data.threadId).toBe("ttid-1");
+      expect(events[0].data.label).toBe("coding task");
+      expect(events[0].data.threadType).toBe("thread");
+      expect(events[0].data.isResumption).toBe(false);
+      expect(events[1].kind).toBe("end");
+      expect(events[1].data.threadId).toBe("ttid-1");
+      expect(events[1].data.label).toBe("coding task");
+      expect(events[1].data.eagerSummarize).toBe(true);
+      expect(events[1].data.messages).toEqual([{ role: "user", content: "hi" }]);
+    });
   });
 
   describe("handle()", () => {

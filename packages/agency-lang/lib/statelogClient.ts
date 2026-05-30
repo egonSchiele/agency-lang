@@ -850,6 +850,22 @@ export class StatelogClient {
     });
   }
 
+  /** Fired when a previously-closed thread is re-activated via
+   *  `ThreadStore.resumeExisting()` (i.e. by `thread(continue: id)`
+   *  or `thread(session: name)` on second+ entry). Mirrors
+   *  `threadCreated` so trace consumers can distinguish first-entry
+   *  from resumption. */
+  async threadResumed({
+    threadId,
+  }: {
+    threadId: string;
+  }): Promise<void> {
+    await this.post({
+      type: "threadResumed",
+      threadId,
+    });
+  }
+
   // --- Structured errors ---
 
   async error({

@@ -299,7 +299,16 @@ export function printTs(node: TsNode, indent = 0): string {
 
     case "runnerThread": {
       const body = node.body.map((n) => printTs(n, indent + 1)).join("\n");
-      return `await runner.thread(${node.id}, "${node.method}", async (runner) => {\n${body}\n${ind(indent)}});`;
+      const optsParts: string[] = [];
+      if (node.label) optsParts.push(`label: ${printTs(node.label, indent)}`);
+      if (node.summarize) optsParts.push(`summarize: ${printTs(node.summarize, indent)}`);
+      if (node.continueExpr) optsParts.push(`continueId: ${printTs(node.continueExpr, indent)}`);
+      if (node.sessionExpr) optsParts.push(`session: ${printTs(node.sessionExpr, indent)}`);
+      // Always pass an opts object so Runner.thread has a single,
+      // uniform signature: legacy callers see `{}` and the
+      // hook-firing path can treat opts as required.
+      const optsArg = optsParts.length === 0 ? "{}" : `{ ${optsParts.join(", ")} }`;
+      return `await runner.thread(${node.id}, "${node.method}", ${optsArg}, async (runner) => {\n${body}\n${ind(indent)}});`;
     }
 
     case "runnerHandle": {

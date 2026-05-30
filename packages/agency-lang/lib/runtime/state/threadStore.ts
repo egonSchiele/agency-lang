@@ -5,6 +5,11 @@ export type ThreadStoreJSON = {
   threads: Record<string, MessageThreadJSON>;
   counter: number;
   activeStack: string[];
+  /** session-name → thread-id map. Populated by openSession on first
+   *  entry; subsequent entries with the same name resume the recorded
+   *  thread via resumeExisting. Round-tripped so sessions survive
+   *  interrupt resume / cross-node hops. */
+  sessions?: Record<string, string>;
 };
 
 export type MessageThreadID = string;
@@ -13,12 +18,15 @@ export class ThreadStore {
   threads: Record<MessageThreadID, MessageThread> = {};
   counter: number = 0;
   activeStack: MessageThreadID[] = [];
+  /** session-name → thread-id. See ThreadStoreJSON.sessions for docs. */
+  sessions: Record<string, MessageThreadID> = {};
   private statelogClient?: StatelogClient;
 
   constructor() {
     this.threads = {};
     this.counter = 0;
     this.activeStack = [];
+    this.sessions = {};
   }
 
   // Set after construction. Most callers should pass the client to
@@ -110,6 +118,51 @@ export class ThreadStore {
     return this.threads[id];
   }
 
+  /** Re-activate a previously-closed thread. Pushes `id` onto the
+   *  active stack (same path as pushActive) without creating a new
+   *  MessageThread. Throws if `id` is unknown — a silent fallback to
+   *  create-new would mask a real bug (typo, hallucinated id) at the
+   *  call site.
+   *
+   *  v1: rejects subthreads. A subthread's identity is tied to its
+   *  parent's context at the time it was created; resuming one
+   *  outside that context could surface confusing message ordering.
+   *  If a user wants to continue inside a subthread, they should
+   *  resume the parent thread and open a fresh `subthread {}` block.
+   */
+  resumeExisting(id: MessageThreadID): void {
+    const thread = this.threads[id];
+    if (!thread) {
+      throw new Error(`Cannot resume unknown thread id: t${id}`);
+    }
+    if (thread.parentId !== null) {
+      throw new Error(
+        `Cannot resume subthread t${id}. Resume the parent thread and open ` +
+          `a fresh subthread block instead.`,
+      );
+    }
+    this.activeStack.push(id);
+    this.statelogClient?.threadResumed?.({ threadId: id });
+  }
+
+  /** Open a named session. Returns `{id, existed}` — `existed` is
+   *  `true` when this name already mapped to a thread. Always leaves
+   *  the session's thread on top of `activeStack`. First entry
+   *  creates a top-level thread (never a subthread); later entries
+   *  resume via `resumeExisting` (which already rejects subthreads —
+   *  sessions can only map to top-level threads). */
+  openSession(name: string): { id: MessageThreadID; existed: boolean } {
+    const existing = this.sessions[name];
+    if (existing !== undefined) {
+      this.resumeExisting(existing);
+      return { id: existing, existed: true };
+    }
+    const id = this.create();
+    this.sessions[name] = id;
+    this.activeStack.push(id);
+    return { id, existed: false };
+  }
+
   // Serialize all threads for interrupt handling / state return
   toJSON(): ThreadStoreJSON {
     const threadsJson: Record<MessageThreadID, MessageThreadJSON> = {};
@@ -120,6 +173,7 @@ export class ThreadStore {
       threads: threadsJson,
       counter: this.counter,
       activeStack: [...this.activeStack],
+      sessions: { ...this.sessions },
     };
   }
 
@@ -133,6 +187,7 @@ export class ThreadStore {
     }
     store.counter = json.counter || 0;
     store.activeStack = json.activeStack || [];
+    store.sessions = json.sessions ?? {};
     return store;
   }
 }

@@ -41,3 +41,62 @@ describe("ThreadStore parentId tracking", () => {
     expect(restored.parentId).toBeNull();
   });
 });
+
+describe("ThreadStore.resumeExisting", () => {
+  it("re-activates a known top-level thread", () => {
+    const store = new ThreadStore();
+    const id = store.create();
+    // simulate close by leaving activeStack empty
+    store.resumeExisting(id);
+    expect(store.activeId()).toBe(id);
+  });
+
+  it("throws for unknown ids", () => {
+    const store = new ThreadStore();
+    expect(() => store.resumeExisting("999")).toThrow(/unknown thread/);
+  });
+
+  it("rejects subthreads", () => {
+    const store = new ThreadStore();
+    const parentId = store.create();
+    store.pushActive(parentId);
+    const childId = store.createSubthread();
+    store.popActive();
+    store.popActive();
+    expect(() => store.resumeExisting(childId)).toThrow(/Cannot resume subthread/);
+    expect(store.activeId()).toBeUndefined();
+  });
+});
+
+describe("ThreadStore.openSession", () => {
+  it("first entry creates and pushes; second entry resumes the same id", () => {
+    const store = new ThreadStore();
+    const a = store.openSession("coding");
+    expect(a.existed).toBe(false);
+    expect(store.activeId()).toBe(a.id);
+    // simulate block-close
+    store.popActive();
+    const b = store.openSession("coding");
+    expect(b.existed).toBe(true);
+    expect(b.id).toBe(a.id);
+    expect(store.activeId()).toBe(a.id);
+    // only one thread exists
+    expect(Object.keys(store.threads).length).toBe(1);
+  });
+
+  it("different session names create distinct threads", () => {
+    const store = new ThreadStore();
+    const a = store.openSession("coding");
+    store.popActive();
+    const b = store.openSession("weather");
+    expect(b.id).not.toBe(a.id);
+    expect(Object.keys(store.threads).length).toBe(2);
+  });
+
+  it("sessions survive JSON round-trip", () => {
+    const store = new ThreadStore();
+    store.openSession("coding");
+    const restored = ThreadStore.fromJSON(store.toJSON());
+    expect(restored.sessions.coding).toBe(store.sessions.coding);
+  });
+});

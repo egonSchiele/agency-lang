@@ -61,6 +61,8 @@ export const RESERVED_FUNCTION_NAMES = new Set<string>([
   "schema",
   "interrupt",
   "debugger",
+  "thread",
+  "subthread",
 
   // Category 3 — auto-imported from `std::index` (see stdlib/index.agency).
   // Redefinition would shadow the import and break compile-time lifting

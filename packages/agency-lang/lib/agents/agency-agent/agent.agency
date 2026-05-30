@@ -402,11 +402,11 @@ def runForCategory(
   """
   let reply = ""
   if (category == "code") {
-    thread(session: "code", label: "code", summarize: true) as {
+    thread(session: "code", label: "code", summarize: true) {
       reply = runCode(userMsg, ctx)
     }
   } else {
-    thread(session: "research", label: "research", summarize: true) as {
+    thread(session: "research", label: "research", summarize: true) {
       reply = runResearch(userMsg, ctx)
     }
   }

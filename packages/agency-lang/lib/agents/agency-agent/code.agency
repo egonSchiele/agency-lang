@@ -19,7 +19,9 @@ import { highlight } from "std::syntax"
 import { cwd } from "std::system"
 import { systemMessage } from "std::thread"
 import { currentThreadId, getThread } from "std::threads"
+
 import { Category, AgentContext, handoff } from "./shared.agency"
+
 
 // File-system tools handed to the LLM as a single bundle anchored to
 // one directory. `openDir(dir)` returns a Workspace whose `read` /
@@ -137,7 +139,9 @@ export def runCode(userMsg: string, ctx: AgentContext): string {
   if (isSuccess(t) && t.value.length == 0) {
     systemMessage(codeSysPrompt + ctx.env + ctx.projectContext)
   }
-  return llm(userMsg, {
+  return llm(
+    userMsg,
+    {
     memory: true,
     tools: [
       setCwd,
@@ -154,6 +158,7 @@ export def runCode(userMsg: string, ctx: AgentContext): string {
       remember,
       recall,
       handoff,
-    ],
-  })
+    ]
+  },
+  )
 }

@@ -2,10 +2,13 @@ node main() {
   thread {
     capital = llm("What is the capital of France?")
     population: { capital: string; pop: number } = llm("And what is its population?")
+    // Trailing no-op step INSIDE the thread block so the debugger
+    // renders one more checkpoint while the thread is still active
+    // (with 4 messages from both llm calls). Without this, the next
+    // checkpoint after the second llm fires is at `done = true`
+    // outside the thread block, where popActive has already
+    // swapped the active thread back to the outer one — and the
+    // "4 messages" state is never observable from a render call.
+    done = true
   }
-  // Trailing step so the debugger renders one more checkpoint after the
-  // second llm call completes — without it, the thread state with 4
-  // messages is never observable from a render call (debug steps fire
-  // before the callback executes).
-  done = true
 }

@@ -139,6 +139,145 @@ The rules of handlers are thus:
 3. Otherwise, if a handler approves, the interrupt is approved.
 4. Of course, a handler doesn't need to approve, reject, or propagate. It can simply choose to log the interrupt data, print out the lyrics to "A Day in the Life," or whatever. If no handler approves, rejects, or propagates, by default, the interrupt propagates up to the user for a decision.
 
+## Handlers can't raise interrupts
+
+A handler's body — whether inline `with (data) { ... }` or a referenced
+function `with myHandler` — is not allowed to raise an interrupt
+(directly or transitively, through any function it calls). The
+typechecker errors at compile time if it might.
+
+### Why
+
+The previous section explained that every handler up the chain runs on
+every interrupt, even after one approves. That is what makes handlers
+a safety primitive: an outer reject always wins, so wrapping someone
+else's code in a `handle { } with reject` actually rejects.
+
+But it also means a handler whose body raises an interrupt re-enters
+the chain — including itself. Without a guard you get unbounded
+recursion. The runtime caps nested dispatch at
+`MAX_HANDLER_CHAIN_DEPTH` and throws `HandlerRecursionError`, which
+fires *after* a deep stack has already grown. The typechecker catches
+the structural problem at compile time instead.
+
+You might wonder if the runtime could just skip handlers already on
+the stack. It can't — that would silently disable a handler in
+exactly the situation it was written to catch. Suppose a handler
+rejects reads of `/private` and consults a policy file for everything
+else:
+
+```ts
+handle { ... } with (data) {
+  if (data.kind == "std::read" && data.params.dir == "/private") {
+    return reject()
+  }
+  return consultPolicy()
+}
+```
+
+If `consultPolicy()` reads `~/.policy.json` via `with approve`, the
+chain re-enters the handler. If we skipped it, fine. But now an
+attacker edits `consultPolicy()` to also read `/private` under `with
+approve` — and because the handler is on the skip list, the
+rejection never fires. Preventing the recursion at compile time
+keeps the "every handler always runs" guarantee intact.
+
+### The diagnostic
+
+The error names the handler and the interrupt kinds:
+
+```
+Handler 'defaultHandler' may raise interrupts [std::read]. That would
+re-enter the handler chain (the dispatcher visits every handler,
+even the one currently running) and recurse until
+HandlerRecursionError fires at runtime. Restructure so the handler
+doesn't call interrupt-raising code (e.g. hoist file I/O out of the
+handler), or suppress this error with `// @tc-ignore` on the line
+above the `handle` block.
+```
+
+### Fixing it
+
+Two patterns cover almost every real case.
+
+**Pattern 1: hoist the interrupt-raising work out of the handler.** If
+the handler needs a value it can compute once at startup, do the
+compute *before* installing the handler:
+
+```ts
+// Before — handler reads the policy file every time, which itself
+// raises a std::read interrupt the chain wants to dispatch.
+def myHandler(data) {
+  const policy = read("policy.json") with approve   // ← re-enters
+  return checkPolicy(policy, data)
+}
+node main() {
+  handle { ... } with myHandler
+}
+```
+
+```ts
+// After — read once outside the handler, close over the value.
+let policy: Policy = {}
+node main() {
+  policy = read("policy.json") with approve
+  handle { ... } with myHandler   // myHandler now just reads `policy`
+}
+```
+
+**Pattern 2: flip a sentinel flag *before* the interrupting call, not
+after.** If the handler genuinely has to do something once that may
+itself interrupt — say, lazy-load on first use — guard the re-entry
+explicitly:
+
+```ts
+let loaded: boolean = false
+def ensureLoaded() {
+  if (!loaded) {
+    loaded = true                              // ← flip FIRST
+    policy = read("policy.json") with approve  // re-enters, but the
+                                               // guard short-circuits
+  }
+}
+def myHandler(data) {
+  ensureLoaded()
+  return checkPolicy(policy, data)
+}
+```
+
+The order matters: if you flip `loaded` *after* the read, the
+re-entered call sees `loaded == false`, raises another interrupt, and
+recurses. Flipping first makes the re-entry a no-op.
+
+### The escape hatch
+
+If neither pattern fits — e.g. you're forwarding the interrupt to a
+remote process and the network call genuinely has to happen inside
+the handler — add `// @tc-ignore` on the line directly above the
+`handle` block to silence this one error:
+
+```ts
+node main() {
+  // @tc-ignore
+  handle { ... } with myUnavoidableHandler
+}
+```
+
+A few things to know:
+
+- `@tc-ignore` only suppresses errors whose source location is on the
+  *very next line*. It only silences the handler-recursion error at
+  this `handle` site. Errors inside the handle body or the handler
+  function continue to fire normally.
+- The suppression has to live at the `handle` call site, not at the
+  handler function's definition. If `myUnavoidableHandler` is defined
+  in another file, the comment still goes above the `handle` that
+  references it. The error names the handler, so search for the
+  definition from there.
+- The whole-file `// @tc-nocheck` directive also turns this rule off
+  along with everything else, but prefer the per-site `@tc-ignore` so
+  you don't lose unrelated diagnostics.
+
 ## Handler shorthand
 
 Specifically for the keywords `approve`, `reject`, and `propagate`, there is a shorthand syntax you can use:

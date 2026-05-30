@@ -2,7 +2,7 @@ import type { InterruptKind } from "../symbolTable.js";
 import type { TypeCheckerContext, ScopeInfo } from "./types.js";
 import { synthType } from "./synthesizer.js";
 import { walkNodes } from "../utils/node.js";
-import type { Expression, VariableType } from "../types.js";
+import type { AgencyNode, Expression, VariableType } from "../types.js";
 import type { SplatExpression, NamedArgument } from "../types/dataStructures.js";
 import type { Scope } from "./scope.js";
 import { isInsideHandler } from "./checker.js";
@@ -49,26 +49,41 @@ function collectProfiles(
 }
 
 function collectFromScope(info: ScopeInfo, ctx: TypeCheckerContext): FunctionProfile {
-  const kinds: string[] = [];
-  const callees: string[] = [];
-
   // Set the typechecker's current scope so synthType (called via
   // functionRefsInArgs) can resolve scope-local type aliases.
+  let profile: FunctionProfile = { kinds: [], callees: [] };
   ctx.withScope(info.scopeKey, () => {
-    for (const { node } of walkNodes(info.body)) {
-      if (node.type === "interruptStatement") {
-        addUnique(kinds, node.kind);
-      } else if (node.type === "functionCall") {
-        addUnique(callees, node.functionName);
-        for (const name of functionRefsInArgs(node.arguments, info.scope, ctx)) {
-          addUnique(callees, name);
-        }
-      } else if (node.type === "gotoStatement") {
-        addUnique(callees, node.nodeCall.functionName);
-      }
-    }
+    profile = collectFromBody(info.body, info.scope, ctx);
   });
+  return profile;
+}
 
+/** Walk one AST body and produce a `FunctionProfile`: direct interrupt
+ *  kinds plus the names of every callee — including function references
+ *  passed as arguments (e.g. `llm(..., { tools: [deploy] })`) and `goto`
+ *  targets. Shared between Phase 1 scope analysis and the handler-body
+ *  diagnostic so any future analyzer change applies to both. The caller
+ *  is responsible for setting `ctx.withScope` if the body's
+ *  `functionRefsInArgs` resolution needs scope-local type aliases. */
+function collectFromBody(
+  body: AgencyNode[],
+  scope: Scope,
+  ctx: TypeCheckerContext,
+): FunctionProfile {
+  const kinds: string[] = [];
+  const callees: string[] = [];
+  for (const { node } of walkNodes(body)) {
+    if (node.type === "interruptStatement") {
+      addUnique(kinds, node.kind);
+    } else if (node.type === "functionCall") {
+      addUnique(callees, node.functionName);
+      for (const name of functionRefsInArgs(node.arguments, scope, ctx)) {
+        addUnique(callees, name);
+      }
+    } else if (node.type === "gotoStatement") {
+      addUnique(callees, node.nodeCall.functionName);
+    }
+  }
   return { kinds, callees };
 }
 
@@ -192,6 +207,87 @@ export function checkUnhandledInterruptWarnings(
       });
     }
   }
+}
+
+/**
+ * A handler whose body can itself raise an interrupt creates a
+ * dispatch-recursion loop: the inner interrupt re-enters the handler
+ * chain, which visits every handler (including the one currently
+ * running), which raises another interrupt, etc. The runtime now
+ * bounds this at `MAX_HANDLER_CHAIN_DEPTH` and throws
+ * `HandlerRecursionError`, but catching it at compile time is better.
+ *
+ * Restructure the code so the handler doesn't call interrupt-raising
+ * functions — e.g. hoist a `read("policy.json") with approve` out of
+ * the handler and into `node main()` (see `ensurePolicyLoaded` in
+ * `lib/agents/agency-agent/agent.agency` for the canonical fix).
+ *
+ * If the call really is unavoidable, suppress this error with a
+ * `// @tc-ignore` comment on the line above the `handle` block.
+ */
+export function checkHandlerBodyInterrupts(
+  scopes: ScopeInfo[],
+  interruptKindsByFunction: Record<string, InterruptKind[]>,
+  ctx: TypeCheckerContext,
+): void {
+  for (const info of scopes) {
+    ctx.withScope(info.scopeKey, () => {
+      for (const { node } of walkNodes(info.body)) {
+        if (node.type !== "handleBlock") continue;
+        const kinds = collectHandlerOffenderKinds(
+          node,
+          info,
+          interruptKindsByFunction,
+          ctx,
+        );
+        if (kinds.length === 0) continue;
+        const handlerLabel =
+          node.handler.kind === "functionRef"
+            ? `'${node.handler.functionName}'`
+            : "(inline)";
+        ctx.errors.push({
+          message:
+            `Handler ${handlerLabel} may raise interrupts [${kinds.join(", ")}]. ` +
+            `That would re-enter the handler chain (the dispatcher visits ` +
+            `every handler, even the one currently running) and recurse ` +
+            `until \`HandlerRecursionError\` fires at runtime. ` +
+            `Restructure so the handler doesn't call interrupt-raising ` +
+            `code (e.g. hoist file I/O out of the handler), or suppress ` +
+            `this error with \`// @tc-ignore\` on the line above the ` +
+            `\`handle\` block.`,
+          severity: "error",
+          loc: node.loc,
+        });
+      }
+    });
+  }
+}
+
+/** Collect every interrupt kind a handle block's handler may raise,
+ *  transitively. For a `functionRef` handler we read the already-propagated
+ *  kinds directly. For an inline handler we reuse `collectFromBody` (the
+ *  same walker Phase 1 uses for every scope) and then resolve its callees
+ *  through `interruptKindsByFunction`, so transitive interrupts via tool
+ *  calls, function refs in args, or `goto` targets are caught with no
+ *  duplicated walker logic. */
+function collectHandlerOffenderKinds(
+  node: { handler: { kind: string; functionName?: string; body?: any[] } },
+  info: ScopeInfo,
+  interruptKindsByFunction: Record<string, InterruptKind[]>,
+  ctx: TypeCheckerContext,
+): string[] {
+  if (node.handler.kind === "functionRef") {
+    const ks = interruptKindsByFunction[node.handler.functionName!] ?? [];
+    return ks.map((k) => k.kind);
+  }
+  const profile = collectFromBody(node.handler.body ?? [], info.scope, ctx);
+  const kinds = [...profile.kinds];
+  for (const callee of profile.callees) {
+    for (const k of interruptKindsByFunction[callee] ?? []) {
+      addUnique(kinds, k.kind);
+    }
+  }
+  return kinds;
 }
 
 /** Narrow a call-argument slot (which may be a positional Expression,

@@ -12,7 +12,11 @@ import { cwd, env } from "std::system"
 
 import { runCode } from "./code.agency"
 import { runResearch } from "./research.agency"
-import { AgentContext, consumeHandoff } from "./shared.agency"
+import {
+  AgentContext,
+  AGENCY_AGENT_DIR,
+  consumeHandoff,
+} from "./shared.agency"
 
 
 /*
@@ -75,10 +79,11 @@ callback("onToolCallEnd") as data {
 
 // Persistent on-disk policy. Saved here as JSON; loaded once at
 // module init and rewritten every time the user makes a new
-// "always" decision. Sibling to the memory store directory used
-// by `shared.agency`.
+// "always" decision. Sibling to the memory store under the same
+// per-user agent dir (see `shared.agency` for the `~` expansion
+// rationale).
 const POLICY_FILE = "policy.json"
-const POLICY_DIR = "~/.agency-agent"
+const POLICY_DIR = AGENCY_AGENT_DIR
 const POLICY_PATH = "${POLICY_DIR}/${POLICY_FILE}"
 
 def loadPolicy(): Policy {

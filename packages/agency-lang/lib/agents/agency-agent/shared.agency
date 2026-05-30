@@ -29,8 +29,29 @@
  * techniques worth trying in follow-ups.
  */
 import { enableMemory } from "std::memory"
+import { env } from "std::system"
 
 export type Category = "code" | "research"
+
+// Per-user state directory for the agent (persistent memory + saved
+// policy). We expand `~` ourselves via `env("HOME")` because
+// `enableMemory(...)`'s underlying `MemoryFrame` calls
+// `path.resolve(cwd, dir)` directly — Node's `path.resolve` does NOT
+// expand `~`, so passing `"~/.agency-agent/memory"` would silently
+// create a literal `./~/.agency-agent/memory` under cwd instead of
+// the intended `$HOME/.agency-agent/memory`. Tracked upstream as
+// agency-lang#230. Falls back to `.` if `HOME` is unset (rare; mostly
+// a Windows concern — the `.` puts the dir under cwd as a last
+// resort instead of crashing module init).
+def computeAgentDir(): string {
+  const home = env("HOME")
+  if (home == null) {
+    return "./.agency-agent"
+  }
+  return "${home}/.agency-agent"
+}
+
+export static const AGENCY_AGENT_DIR = computeAgentDir()
 
 // Persistent knowledge graph for every subagent. `setMemoryId(...)`
 // in each subagent scopes which graph their `remember`/`recall` calls
@@ -46,7 +67,7 @@ export type Category = "code" | "research"
 // `text-embedding-3-small` is the canonical default cited in the
 // memory guide; cheap and ubiquitous.
 static const _memoryReady = enableMemory({
-  dir: "~/.agency-agent/memory",
+  dir: "${AGENCY_AGENT_DIR}/memory",
   embeddings: {
     model: "text-embedding-3-small"
   }

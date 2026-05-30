@@ -2764,6 +2764,10 @@ export class TypeScriptBuilder {
     });
   }
 
+  // TODO(follow-up): `thread {}` should desugar into a call to a stdlib
+  // `__internal_thread(opts, block)` function so future named args don't
+  // require parser+IR+codegen+runtime edits in five files. See
+  // `docs/superpowers/specs/2026-05-30-thread-as-agency-function.md`.
   private processMessageThread(
     node: MessageThread,
     assignTo?: Assignment,

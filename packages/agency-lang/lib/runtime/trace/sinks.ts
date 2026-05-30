@@ -43,17 +43,42 @@ export class FileSink implements TraceSink {
       const ok = this.stream.write(JSON.stringify(line) + "\n");
       if (ok) {
         resolve();
-      } else {
-        this.stream.once("drain", resolve);
-        this.stream.once("error", reject);
+        return;
       }
+      // Back-pressure path: wait for drain. We register listeners
+      // for BOTH `drain` and `error` and pair them so whichever
+      // fires also removes the other. Without the pairing, the
+      // `once("error", ...)` listener stays attached forever after
+      // a successful drain — and on a long-running agent with many
+      // writes, error listeners accumulate until Node emits
+      // `MaxListenersExceededWarning: 11 error listeners added to
+      // [WriteStream]`.
+      const onDrain = () => {
+        this.stream.removeListener("error", onError);
+        resolve();
+      };
+      const onError = (err: Error) => {
+        this.stream.removeListener("drain", onDrain);
+        reject(err);
+      };
+      this.stream.once("drain", onDrain);
+      this.stream.once("error", onError);
     });
   }
 
   close(): Promise<void> {
     return new Promise((resolve, reject) => {
-      this.stream.end(() => resolve());
-      this.stream.once("error", reject);
+      // Same listener-leak shape as `writeLine` — pair `end`'s
+      // success callback with the `error` listener so the loser is
+      // removed. `close` is normally called once, but pairing keeps
+      // the contract uniform and avoids a stale error listener if
+      // the FileSink is reused.
+      const onError = (err: Error) => reject(err);
+      this.stream.once("error", onError);
+      this.stream.end(() => {
+        this.stream.removeListener("error", onError);
+        resolve();
+      });
     });
   }
 }

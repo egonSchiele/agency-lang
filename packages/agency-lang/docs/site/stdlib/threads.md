@@ -102,7 +102,7 @@ One-shot LLM summarization used by the lazy summarize path.
 ### summaryFor
 
 ```ts
-summaryFor(id: string, existing: string | null, messages: ThreadMessage[] | null): string | null
+summaryFor(id: string, existing: string | null, messages: ThreadMessage[]): string | null
 ```
 
 **Parameters:**
@@ -111,11 +111,11 @@ summaryFor(id: string, existing: string | null, messages: ThreadMessage[] | null
 |---|---|---|
 | id | `string` |  |
 | existing | `string \| null` |  |
-| messages | `ThreadMessage[] \| null` | null |
+| messages | `ThreadMessage[]` |  |
 
 **Returns:** `string | null`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/threads.agency#L87))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/threads.agency#L90))
 
 ### listThreads
 
@@ -160,7 +160,7 @@ Return every thread in the current run, including the active one.
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/threads.agency#L103))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/threads.agency#L99))
 
 ### currentThreadId
 
@@ -175,7 +175,7 @@ Slug-form id of the active thread (e.g. "t3"), or `""` outside any
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/threads.agency#L172))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/threads.agency#L171))
 
 ### getThread
 
@@ -207,4 +207,4 @@ Read a slice of a thread's messages. Returns success holding `[]`
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/threads.agency#L182))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/threads.agency#L181))

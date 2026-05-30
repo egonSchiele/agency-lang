@@ -82,20 +82,16 @@ def summarize(messages: ThreadMessage[]): string {
 }
 
 // Single owner of the "return cached summary, else LLM-summarize and
-// cache" rule. Active threads pass `null` so the LLM call is skipped
-// while the conversation is still in flight.
-def summaryFor(id: string, existing: (string | null), messages: (ThreadMessage[] | null) = null): (string | null) {
+// cache" rule. Callers must skip the call for active threads
+// themselves (the in-flight conversation should not be summarized
+// mid-stream); accepting only a non-nullable `messages` keeps the
+// type signature honest and avoids a flow-narrowing warning Agency's
+// typechecker can't currently prove.
+def summaryFor(id: string, existing: (string | null), messages: ThreadMessage[]): (string | null) {
   if (existing != null) {
     return existing
   }
-  if (messages == null) {
-    return null
-  }
-  // Narrow: messages is non-null at this point. Re-bind via a
-  // `const` of the non-null variant so the typechecker's flow
-  // analysis sees a `ThreadMessage[]` for the summarize() call.
-  const concrete: ThreadMessage[] = messages
-  const s = summarize(concrete)
+  const s = summarize(messages)
   _setThreadSummary(id, s)
   return s
 }
@@ -139,11 +135,14 @@ export def listThreads(lazySummarize: boolean = true): Result {
   for (t in raw.value) {
     let summary: (string | null) = null
     if (lazySummarize) {
-      let messages: (ThreadMessage[] | null) = null
-      if (t.isActive == false) {
-        messages = t.messages
+      // Active threads are skipped — the in-flight conversation
+      // should not be summarized mid-stream. Closed threads with no
+      // cached summary trigger a one-shot summarize via summaryFor().
+      if (t.isActive) {
+        summary = t.summary
+      } else {
+        summary = summaryFor(t.id, t.summary, t.messages)
       }
-      summary = summaryFor(t.id, t.summary, messages)
     } else {
       // No LLM round-trip — return whatever is cached, falling
       // back to the label (or "" if unlabeled) so the field is

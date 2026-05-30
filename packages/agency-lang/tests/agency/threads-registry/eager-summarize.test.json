@@ -1,0 +1,16 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "[\"eager-summary\",\"lazy-summary\"]",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "thread(summarize: true) populates MessageThread.summary at close via the TS-side onThreadEnd hook; the lazy path still fires for non-eager threads.",
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        { "return": { "summary": "eager-summary" } },
+        { "return": { "summary": "lazy-summary" } }
+      ]
+    }
+  ]
+}

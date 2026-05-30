@@ -1,0 +1,33 @@
+import { listThreads } from "std::threads"
+import { userMessage } from "std::thread"
+
+// Verifies that `thread(summarize: true) { ... }` populates
+// MessageThread.summary at close time via the TS-side onThreadEnd
+// hook in lib/stdlib/threads.ts. Once the hook has run, `listThreads`
+// reads the cached summary without triggering the lazy
+// summarize-on-demand path.
+//
+// The first thread opts into eager summarize; the second does not.
+// Both LLM mocks below are consumed (one eager, one lazy at the
+// listThreads call), so the relative ordering of mock entries is
+// the actual contract test:
+//   - mock[0] is consumed at close-time of the eager thread
+//   - mock[1] is consumed inside listThreads() for the lazy thread
+node main() {
+  thread(label: "eager", summarize: true) {
+    userMessage("eager body")
+  }
+  thread(label: "lazy") {
+    userMessage("lazy body")
+  }
+  const all = listThreads()
+  const summaries: string[] = []
+  if (isSuccess(all)) {
+    for (t in all.value) {
+      if (t.summary != null) {
+        summaries.push(t.summary)
+      }
+    }
+  }
+  return summaries
+}

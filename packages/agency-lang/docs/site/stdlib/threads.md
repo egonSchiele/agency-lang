@@ -26,9 +26,13 @@ existing checkpoint serialization.
 
 The eager-summarize flag (`thread(summarize: true) { ... }`) is
 parsed and forwarded to the `onThreadEnd` hook payload as
-`eagerSummarize: true`, but the v1 stdlib does not yet act on it —
-summaries are computed lazily on the next `listThreads()` call. See
-the TODO in `lib/runtime/runner.ts::thread` for the deferral.
+`eagerSummarize: true`. A global TS-side `onThreadEnd` hook
+registered in `lib/stdlib/threads.ts` consumes the payload and
+triggers a one-shot LLM summarize at close time, stashing the
+result on the underlying `MessageThread`. Threads that did NOT opt
+in eagerly fall back to the lazy summarize path in `summaryFor()`
+below, which runs on the first `listThreads()` call against a
+closed thread.
 
 ## Types
 
@@ -41,7 +45,7 @@ export type ThreadMessage = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/threads.agency#L39))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/threads.agency#L43))
 
 ### ThreadInfo
 
@@ -57,7 +61,7 @@ export type ThreadInfo = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/threads.agency#L44))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/threads.agency#L48))
 
 ### SummaryResult
 
@@ -67,7 +71,7 @@ type SummaryResult = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/threads.agency#L54))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/threads.agency#L58))
 
 ## Functions
 
@@ -93,7 +97,7 @@ One-shot LLM summarization used by the lazy summarize path.
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/threads.agency#L58))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/threads.agency#L62))
 
 ### summaryFor
 
@@ -111,7 +115,7 @@ summaryFor(id: string, existing: string | null, messages: ThreadMessage[] | null
 
 **Returns:** `string | null`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/threads.agency#L83))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/threads.agency#L87))
 
 ### listThreads
 
@@ -121,12 +125,16 @@ listThreads(): Result
 
 Return every thread in the current run, including the active one.
 
-  Lazy summary generation: a thread that doesn't yet have a cached
-  summary triggers exactly one LLM round-trip the first time
-  `listThreads()` is called on it. Active threads are skipped so the
-  in-flight conversation is not summarized mid-stream. The computed
-  summary is stashed on the underlying `MessageThread` so subsequent
-  calls read it back without re-prompting.
+  Summary generation: threads opened with `thread(summarize: true)`
+  are summarized eagerly when they close (see the global onThreadEnd
+  hook in `lib/stdlib/threads.ts`), so their summary is already
+  cached by the time `listThreads()` runs. Threads that did NOT opt
+  in eagerly trigger exactly one LLM round-trip the first time
+  `listThreads()` is called on them. Active threads are skipped on
+  both paths so the in-flight conversation is not summarized
+  mid-stream. The computed summary is stashed on the underlying
+  `MessageThread` so subsequent calls read it back without
+  re-prompting.
 
   Returns a `Result` — success holds `ThreadInfo[]`, failure holds
   the error (e.g. called outside an Agency frame). See
@@ -134,7 +142,7 @@ Return every thread in the current run, including the active one.
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/threads.agency#L99))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/threads.agency#L103))
 
 ### currentThreadId
 
@@ -149,7 +157,7 @@ Slug-form id of the active thread (e.g. "t3"), or `""` outside any
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/threads.agency#L138))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/threads.agency#L146))
 
 ### getThread
 
@@ -181,4 +189,4 @@ Read a slice of a thread's messages. Returns success holding `[]`
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/threads.agency#L148))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/threads.agency#L156))

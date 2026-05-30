@@ -24,9 +24,13 @@ existing checkpoint serialization.
 
 The eager-summarize flag (`thread(summarize: true) { ... }`) is
 parsed and forwarded to the `onThreadEnd` hook payload as
-`eagerSummarize: true`, but the v1 stdlib does not yet act on it —
-summaries are computed lazily on the next `listThreads()` call. See
-the TODO in `lib/runtime/runner.ts::thread` for the deferral.
+`eagerSummarize: true`. A global TS-side `onThreadEnd` hook
+registered in `lib/stdlib/threads.ts` consumes the payload and
+triggers a one-shot LLM summarize at close time, stashing the
+result on the underlying `MessageThread`. Threads that did NOT opt
+in eagerly fall back to the lazy summarize path in `summaryFor()`
+below, which runs on the first `listThreads()` call against a
+closed thread.
 */
 
 import {
@@ -100,12 +104,16 @@ export def listThreads(): Result {
   """
   Return every thread in the current run, including the active one.
 
-  Lazy summary generation: a thread that doesn't yet have a cached
-  summary triggers exactly one LLM round-trip the first time
-  `listThreads()` is called on it. Active threads are skipped so the
-  in-flight conversation is not summarized mid-stream. The computed
-  summary is stashed on the underlying `MessageThread` so subsequent
-  calls read it back without re-prompting.
+  Summary generation: threads opened with `thread(summarize: true)`
+  are summarized eagerly when they close (see the global onThreadEnd
+  hook in `lib/stdlib/threads.ts`), so their summary is already
+  cached by the time `listThreads()` runs. Threads that did NOT opt
+  in eagerly trigger exactly one LLM round-trip the first time
+  `listThreads()` is called on them. Active threads are skipped on
+  both paths so the in-flight conversation is not summarized
+  mid-stream. The computed summary is stashed on the underlying
+  `MessageThread` so subsequent calls read it back without
+  re-prompting.
 
   Returns a `Result` — success holds `ThreadInfo[]`, failure holds
   the error (e.g. called outside an Agency frame). See

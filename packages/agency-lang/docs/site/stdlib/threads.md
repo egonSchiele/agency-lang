@@ -83,7 +83,7 @@ Return every thread in the current run, including the active one.
 
 **Returns:** `ThreadInfo[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/threads.agency#L87))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/threads.agency#L91))
 
 ### currentThreadId
 
@@ -98,7 +98,7 @@ Slug-form id of the active thread (e.g. "t3"), or `""` outside any
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/threads.agency#L126))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/threads.agency#L130))
 
 ### getThread
 
@@ -125,4 +125,4 @@ Read a slice of a thread's messages. Returns `[]` for an unknown id.
 
 **Returns:** `ThreadMessage[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/threads.agency#L136))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/threads.agency#L140))

@@ -72,7 +72,11 @@ def summaryFor(id: string, messages: (ThreadMessage[] | null) = null): (string |
   if (messages == null) {
     return null
   }
-  const s = summarize(messages)
+  // Narrow: messages is non-null at this point. Re-bind via a
+  // `const` of the non-null variant so the typechecker's flow
+  // analysis sees a `ThreadMessage[]` for the summarize() call.
+  const concrete: ThreadMessage[] = messages
+  const s = summarize(concrete)
   _remember(id, { summary: s })
   return s
 }

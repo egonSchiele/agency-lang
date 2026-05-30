@@ -1,3 +1,23 @@
+## Unreleased
+
+### Cross-Thread Context Sharing
+
+- New `std::threads` stdlib module: `listThreads()`, `getThread(id, offset, limit)`, `currentThreadId()`. Inspect every thread in the run (active + closed) and paginated-read any thread's messages. The marquee use case is the categorize-and-route pattern (one router, many specialized agent nodes, per-category thread continuity).
+- `agency.threads.{list, get, current}` TS namespace mirrors the stdlib surface for TypeScript helpers and external integrations.
+- New `onThreadStart` / `onThreadEnd` lifecycle hooks, alongside the existing `onNodeStart/End`. Payloads carry slug-form thread ids, `label`, `isResumption`, and the final message snapshot at close.
+- `thread {}` block grows four optional named args: `thread(label, summarize, continue, session) { ... }`.
+  - `label` — template-level intent ("coding task"); surfaces on `ThreadInfo`.
+  - `summarize` — opt-in eager summarization hook payload.
+  - `continue: id` — resume a previously-closed thread; new messages append.
+  - `session: "name"` — runtime-owned name → id map; first entry creates, subsequent entries resume. Sugar over `continue` that erases the "did I save the id?" footgun.
+- `ThreadStore.resumeExisting()` and `ThreadStore.openSession()` runtime primitives; both reject subthreads (a subthread's identity is tied to its parent's context at the time it was created).
+- `MessageThread.parentId` round-trips through JSON, so the registry surfaces parent-child linkage on `ThreadInfo` and the resume guards can recognize subthreads after an interrupt resume.
+- **Cross-node persistence required no production code.** The existing `state.messages` mechanism (`runNode` creates one `ThreadStore` per agent run; `setupNode` reuses it on every node hop) already does the right thing. We added a unit test (`lib/runtime/__tests__/node.test.ts`) pinning the contract so future refactors of `setupNode` can't silently break the registry.
+
+See [`docs/site/guide/cross-thread-context.md`](docs/site/guide/cross-thread-context.md) for the full guide and the categorize-and-route worked example.
+
+---
+
 ## May 28 2026 — v0.3
 
 ### Language

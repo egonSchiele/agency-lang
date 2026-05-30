@@ -3,7 +3,7 @@ import { agencyStore } from "./asyncContext.js";
 import { debugStep } from "./debugger.js";
 import { RestoreSignal } from "./errors.js";
 import { HaltSignal } from "./haltSignal.js";
-import { invokeCallbacks } from "./hooks.js";
+import { hasHook, invokeCallbacks } from "./hooks.js";
 import { hasInterrupts } from "./interrupts.js";
 import { __pipeBind } from "./result.js";
 import { runBatch } from "./runBatch.js";
@@ -569,22 +569,27 @@ export class Runner {
       threads.pushActive(tid);
     }
 
-    // Fire onThreadStart. Slug the id for the public payload.
+    // Fire onThreadStart. Slug the id for the public payload. Skip
+    // the await entirely when no callbacks are registered for this
+    // hook (the common case) so we don't introduce an extra
+    // microtask boundary that perturbs debugger checkpoint timing.
     const slug = `t${tid}`;
     const threadType: "thread" | "subthread" =
       method === "createSubthread" ? "subthread" : "thread";
     const parentRaw = threads.get(tid)?.parentId ?? undefined;
-    await invokeCallbacks({
-      ctx: this.ctx,
-      name: "onThreadStart",
-      data: {
-        threadId: slug,
-        threadType: parentRaw ? "subthread" : threadType,
-        parentThreadId: parentRaw ? `t${parentRaw}` : undefined,
-        label: opts.label,
-        isResumption,
-      },
-    });
+    if (hasHook(this.ctx, "onThreadStart")) {
+      await invokeCallbacks({
+        ctx: this.ctx,
+        name: "onThreadStart",
+        data: {
+          threadId: slug,
+          threadType: parentRaw ? "subthread" : threadType,
+          parentThreadId: parentRaw ? `t${parentRaw}` : undefined,
+          label: opts.label,
+          isResumption,
+        },
+      });
+    }
 
     this.path.push(id);
     try {
@@ -607,20 +612,24 @@ export class Runner {
         // statements see the prior active thread.
         threads.popActive();
       }
-      // Fire onThreadEnd unconditionally so the registry stdlib hook
-      // sees the close. We fire from `finally` so exceptions thrown
-      // inside the body still record a close event.
+      // Fire onThreadEnd so the registry stdlib hook sees the
+      // close. We fire from `finally` so exceptions thrown inside
+      // the body still record a close event. Same as onThreadStart,
+      // skip the await when no callbacks are registered to avoid a
+      // spurious microtask boundary.
       try {
-        await invokeCallbacks({
-          ctx: this.ctx,
-          name: "onThreadEnd",
-          data: {
-            threadId: slug,
-            label: opts.label,
-            eagerSummarize: opts.summarize === true,
-            messages: messagesSnapshot,
-          },
-        });
+        if (hasHook(this.ctx, "onThreadEnd")) {
+          await invokeCallbacks({
+            ctx: this.ctx,
+            name: "onThreadEnd",
+            data: {
+              threadId: slug,
+              label: opts.label,
+              eagerSummarize: opts.summarize === true,
+              messages: messagesSnapshot,
+            },
+          });
+        }
       } catch (e) {
         // Swallow hook errors in finally to avoid masking the
         // primary exception. `fireWithGuard` inside invokeCallbacks

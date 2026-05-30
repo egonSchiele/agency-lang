@@ -47,6 +47,10 @@ export default defineConfig({
               text: "Message History and Threads",
               link: "/guide/message-history-and-threads",
             },
+            {
+              text: "Cross-Thread Context Sharing",
+              link: "/guide/cross-thread-context",
+            },
             { text: "Error Handling", link: "/guide/error-handling" },
             { text: "Blocks", link: "/guide/blocks" },
             { text: "Execution Model", link: "/guide/execution-model" },
@@ -112,6 +116,10 @@ export default defineConfig({
             {
               text: "Message History and Threads",
               link: "/guide/message-history-and-threads",
+            },
+            {
+              text: "Cross-Thread Context Sharing",
+              link: "/guide/cross-thread-context",
             },
             { text: "Error Handling", link: "/guide/error-handling" },
             { text: "Debugger", link: "/guide/debugger" },

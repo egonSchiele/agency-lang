@@ -2,7 +2,7 @@ import type { InterruptKind } from "../symbolTable.js";
 import type { TypeCheckerContext, ScopeInfo } from "./types.js";
 import { synthType } from "./synthesizer.js";
 import { walkNodes } from "../utils/node.js";
-import type { Expression, VariableType } from "../types.js";
+import type { AgencyNode, Expression, VariableType } from "../types.js";
 import type { SplatExpression, NamedArgument } from "../types/dataStructures.js";
 import type { Scope } from "./scope.js";
 import { isInsideHandler } from "./checker.js";
@@ -49,26 +49,41 @@ function collectProfiles(
 }
 
 function collectFromScope(info: ScopeInfo, ctx: TypeCheckerContext): FunctionProfile {
-  const kinds: string[] = [];
-  const callees: string[] = [];
-
   // Set the typechecker's current scope so synthType (called via
   // functionRefsInArgs) can resolve scope-local type aliases.
+  let profile: FunctionProfile = { kinds: [], callees: [] };
   ctx.withScope(info.scopeKey, () => {
-    for (const { node } of walkNodes(info.body)) {
-      if (node.type === "interruptStatement") {
-        addUnique(kinds, node.kind);
-      } else if (node.type === "functionCall") {
-        addUnique(callees, node.functionName);
-        for (const name of functionRefsInArgs(node.arguments, info.scope, ctx)) {
-          addUnique(callees, name);
-        }
-      } else if (node.type === "gotoStatement") {
-        addUnique(callees, node.nodeCall.functionName);
-      }
-    }
+    profile = collectFromBody(info.body, info.scope, ctx);
   });
+  return profile;
+}
 
+/** Walk one AST body and produce a `FunctionProfile`: direct interrupt
+ *  kinds plus the names of every callee — including function references
+ *  passed as arguments (e.g. `llm(..., { tools: [deploy] })`) and `goto`
+ *  targets. Shared between Phase 1 scope analysis and the handler-body
+ *  diagnostic so any future analyzer change applies to both. The caller
+ *  is responsible for setting `ctx.withScope` if the body's
+ *  `functionRefsInArgs` resolution needs scope-local type aliases. */
+function collectFromBody(
+  body: AgencyNode[],
+  scope: Scope,
+  ctx: TypeCheckerContext,
+): FunctionProfile {
+  const kinds: string[] = [];
+  const callees: string[] = [];
+  for (const { node } of walkNodes(body)) {
+    if (node.type === "interruptStatement") {
+      addUnique(kinds, node.kind);
+    } else if (node.type === "functionCall") {
+      addUnique(callees, node.functionName);
+      for (const name of functionRefsInArgs(node.arguments, scope, ctx)) {
+        addUnique(callees, name);
+      }
+    } else if (node.type === "gotoStatement") {
+      addUnique(callees, node.nodeCall.functionName);
+    }
+  }
   return { kinds, callees };
 }
 
@@ -250,49 +265,29 @@ export function checkHandlerBodyInterrupts(
 
 /** Collect every interrupt kind a handle block's handler may raise,
  *  transitively. For a `functionRef` handler we read the already-propagated
- *  kinds directly. For an inline handler we mirror `collectFromScope`:
- *  direct `interruptStatement`s contribute their kind, and every callee —
- *  including function references passed as arguments (e.g. tools handed to
- *  `llm(..., tools: [deploy])`) — is resolved through
- *  `interruptKindsByFunction` so transitive interrupts via tool calls or
- *  callback handoffs are caught. */
+ *  kinds directly. For an inline handler we reuse `collectFromBody` (the
+ *  same walker Phase 1 uses for every scope) and then resolve its callees
+ *  through `interruptKindsByFunction`, so transitive interrupts via tool
+ *  calls, function refs in args, or `goto` targets are caught with no
+ *  duplicated walker logic. */
 function collectHandlerOffenderKinds(
   node: { handler: { kind: string; functionName?: string; body?: any[] } },
   info: ScopeInfo,
   interruptKindsByFunction: Record<string, InterruptKind[]>,
   ctx: TypeCheckerContext,
 ): string[] {
-  const kinds: string[] = [];
   if (node.handler.kind === "functionRef") {
     const ks = interruptKindsByFunction[node.handler.functionName!] ?? [];
-    for (const k of ks) addUnique(kinds, k.kind);
-    return kinds;
+    return ks.map((k) => k.kind);
   }
-  // inline handler — mirror collectFromScope's callee discovery
-  for (const { node: inner } of walkNodes(node.handler.body ?? [])) {
-    if (inner.type === "interruptStatement") {
-      addUnique(kinds, inner.kind);
-      continue;
-    }
-    if (inner.type === "functionCall") {
-      addKindsFor(inner.functionName, interruptKindsByFunction, kinds);
-      for (const refName of functionRefsInArgs(inner.arguments, info.scope, ctx)) {
-        addKindsFor(refName, interruptKindsByFunction, kinds);
-      }
-    } else if (inner.type === "gotoStatement") {
-      addKindsFor(inner.nodeCall.functionName, interruptKindsByFunction, kinds);
+  const profile = collectFromBody(node.handler.body ?? [], info.scope, ctx);
+  const kinds = [...profile.kinds];
+  for (const callee of profile.callees) {
+    for (const k of interruptKindsByFunction[callee] ?? []) {
+      addUnique(kinds, k.kind);
     }
   }
   return kinds;
-}
-
-function addKindsFor(
-  name: string,
-  interruptKindsByFunction: Record<string, InterruptKind[]>,
-  out: string[],
-): void {
-  const ks = interruptKindsByFunction[name] ?? [];
-  for (const k of ks) addUnique(out, k.kind);
 }
 
 /** Narrow a call-argument slot (which may be a positional Expression,

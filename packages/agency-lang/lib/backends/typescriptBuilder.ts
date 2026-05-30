@@ -2791,7 +2791,33 @@ export class TypeScriptBuilder {
       );
     }
 
-    return ts.runnerThread({ id, method, body: bodyNodes });
+    // Optional named args: thread(label, summarize, continue, session).
+    // Each is an Expression in the AST — process to TsNode so codegen
+    // can splice it into the opts arg. Codegen-time mutual exclusion
+    // check defends parse-time guard.
+    if (node.continueExpr && node.sessionExpr) {
+      throw new Error(
+        "thread() cannot use both `continue` and `session` — they are mutually exclusive",
+      );
+    }
+    const label = node.label ? this.processNode(node.label) : null;
+    const summarize = node.summarize ? this.processNode(node.summarize) : null;
+    const continueExpr = node.continueExpr
+      ? this.processNode(node.continueExpr)
+      : null;
+    const sessionExpr = node.sessionExpr
+      ? this.processNode(node.sessionExpr)
+      : null;
+
+    return ts.runnerThread({
+      id,
+      method,
+      body: bodyNodes,
+      label,
+      summarize,
+      continueExpr,
+      sessionExpr,
+    });
   }
 
   private processBlockPlain(

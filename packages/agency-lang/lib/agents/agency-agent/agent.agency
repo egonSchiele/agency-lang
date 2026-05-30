@@ -573,6 +573,34 @@ node main() {
   print(color.cyan("╰───────────────────────────────────────────────╯"))
   print("Type 'exit' to quit.\n")
 
+  // Hydrate the persistent policy NOW, before the main loop installs
+  // `defaultHandler`. The reasoning is critical:
+  //
+  //   - `defaultHandler` consults `policy` via `checkPolicy(...)` on every
+  //     interrupt it handles. If `policy` is empty, every interrupt that
+  //     could otherwise be auto-approved by a rule falls through to
+  //     `askUser` and the user gets a prompt.
+  //   - Doing the load lazily from INSIDE `defaultHandler` doesn't work:
+  //     `loadPolicy()` reads the policy file, which raises a `std::read`
+  //     interrupt, which the runtime's chain dispatcher visits every
+  //     handler for (even after the top auto-approve resolves it). That
+  //     re-enters `defaultHandler`, where `policy` is still `{}` because
+  //     the outer `loadPolicy()` hasn't returned yet — so `checkPolicy`
+  //     returns propagate and the user sees a spurious prompt for the
+  //     policy file read.
+  //   - Loading here, BEFORE `handle { ... } with defaultHandler` runs,
+  //     means the policy file read happens with only the local `with
+  //     approve` handler on the stack — no `defaultHandler` to recurse
+  //     into. By the time the main loop starts, `policy` is populated
+  //     and `checkPolicy` can match rules cleanly.
+  //
+  // The outer `with approve` here is redundant with the `with approve`
+  // inside `loadPolicy`, but it silences the typechecker's
+  // interrupt-warning (it doesn't trace `with approve` through
+  // intermediate function bodies) and makes the auto-approval intent
+  // explicit at the call site.
+  ensurePolicyLoaded() with approve
+
   // Grounding: the LLM should not have to ask the user where it is
   // or what day it is. Both are appended once per run so they ride
   // with the first system message in each specialist's thread.

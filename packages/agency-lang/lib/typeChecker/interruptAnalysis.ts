@@ -194,6 +194,81 @@ export function checkUnhandledInterruptWarnings(
   }
 }
 
+/**
+ * A handler whose body can itself raise an interrupt creates a
+ * dispatch-recursion loop: the inner interrupt re-enters the handler
+ * chain, which visits every handler (including the one currently
+ * running), which raises another interrupt, etc. The runtime now
+ * bounds this at `MAX_HANDLER_CHAIN_DEPTH` and throws
+ * `HandlerRecursionError`, but catching it at compile time is better.
+ *
+ * Restructure the code so the handler doesn't call interrupt-raising
+ * functions — e.g. hoist a `read("policy.json") with approve` out of
+ * the handler and into `node main()` (see `ensurePolicyLoaded` in
+ * `lib/agents/agency-agent/agent.agency` for the canonical fix).
+ *
+ * If the call really is unavoidable, suppress this error with a
+ * `// @tc-ignore` comment on the line above the `handle` block.
+ */
+export function checkHandlerBodyInterrupts(
+  scopes: ScopeInfo[],
+  interruptKindsByFunction: Record<string, InterruptKind[]>,
+  ctx: TypeCheckerContext,
+): void {
+  for (const info of scopes) {
+    for (const { node } of walkNodes(info.body)) {
+      if (node.type !== "handleBlock") continue;
+      const offenders = collectHandlerOffenders(node, interruptKindsByFunction);
+      if (offenders.kinds.length === 0) continue;
+      const kindList = offenders.kinds.join(", ");
+      const handlerLabel =
+        node.handler.kind === "functionRef"
+          ? `'${node.handler.functionName}'`
+          : "(inline)";
+      ctx.errors.push({
+        message:
+          `Handler ${handlerLabel} may raise interrupts [${kindList}]. ` +
+          `That would re-enter the handler chain (the dispatcher visits ` +
+          `every handler, even the one currently running) and recurse ` +
+          `until \`HandlerRecursionError\` fires at runtime. ` +
+          `Restructure so the handler doesn't call interrupt-raising ` +
+          `code (e.g. hoist file I/O out of the handler), or suppress ` +
+          `this error with \`// @tc-ignore\` on the line above the ` +
+          `\`handle\` block.`,
+        severity: "error",
+        loc: node.loc,
+      });
+    }
+  }
+}
+
+/** Collect every interrupt kind that this handle block's handler may raise,
+ *  transitively. For a functionRef handler we read the propagated kinds
+ *  directly; for an inline handler we walk its body for direct
+ *  `interruptStatement`s and for `functionCall`s whose target was already
+ *  flagged in `interruptKindsByFunction`. */
+function collectHandlerOffenders(
+  node: { handler: { kind: string; functionName?: string; body?: any[] } },
+  interruptKindsByFunction: Record<string, InterruptKind[]>,
+): { kinds: string[] } {
+  const kinds: string[] = [];
+  if (node.handler.kind === "functionRef") {
+    const ks = interruptKindsByFunction[node.handler.functionName!] ?? [];
+    for (const k of ks) addUnique(kinds, k.kind);
+    return { kinds };
+  }
+  // inline handler
+  for (const { node: inner } of walkNodes(node.handler.body ?? [])) {
+    if (inner.type === "interruptStatement") {
+      addUnique(kinds, inner.kind);
+    } else if (inner.type === "functionCall") {
+      const ks = interruptKindsByFunction[inner.functionName] ?? [];
+      for (const k of ks) addUnique(kinds, k.kind);
+    }
+  }
+  return { kinds };
+}
+
 /** Narrow a call-argument slot (which may be a positional Expression,
  *  a SplatExpression, or a NamedArgument) to a positional Expression.
  *  Returns null for splat / named arguments — we only act on the

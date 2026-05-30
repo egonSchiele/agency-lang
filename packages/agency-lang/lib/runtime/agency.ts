@@ -177,14 +177,27 @@ const messageToThreadMessage = (m: smoltalk.Message): ThreadMessageTS => {
   return { role: json.role as ThreadMessageTS["role"], content };
 };
 
-/** Return every thread in the run's registry as plain records. The
- *  currently active thread is included with `isActive: true`. */
+/** Return every thread in the run's registry as plain records.
+ *  Threads created with `thread(hidden: true) { ... }` are filtered
+ *  out so library-internal LLM scaffolding (e.g. summarizer prompts)
+ *  doesn't show up in user-facing thread enumerations.
+ *
+ *  Throws when called outside any Agency frame — silently returning
+ *  `[]` would mask a misuse (TS helper called from non-Agency code)
+ *  that the user would otherwise debug as a confusing empty list. */
 const threadsList = (): ThreadInfoTS[] => {
   const store = threadStoreMaybe();
-  if (!store) return [];
+  if (!store) {
+    throw new Error(
+      "agency.threads.list() called outside an Agency frame. " +
+        "It must run inside `agencyStore.run(...)` / a node body — " +
+        "wrap test calls with `agency.withTestContext({ctx,stack,threads}, ...)`.",
+    );
+  }
   const activeId = store.activeId();
   const out: ThreadInfoTS[] = [];
   for (const [rawId, thread] of Object.entries(store.threads)) {
+    if (thread.hidden) continue;
     out.push({
       id: toSlug(rawId),
       parentId: thread.parentId ? toSlug(thread.parentId) : null,
@@ -199,14 +212,22 @@ const threadsList = (): ThreadInfoTS[] => {
 
 /** Read a slice of a thread's messages. Returns `[]` for unknown ids
  *  (silent — callers can probe). `offset` and `limit` default to 0 and
- *  50, matching the Agency-side `getThread` signature. */
+ *  50, matching the Agency-side `getThread` signature.
+ *
+ *  Throws when called outside any Agency frame. */
 const threadsGet = (
   id: string,
   offset = 0,
   limit = 50,
 ): ThreadMessageTS[] => {
   const store = threadStoreMaybe();
-  if (!store) return [];
+  if (!store) {
+    throw new Error(
+      "agency.threads.get() called outside an Agency frame. " +
+        "It must run inside `agencyStore.run(...)` / a node body — " +
+        "wrap test calls with `agency.withTestContext({ctx,stack,threads}, ...)`.",
+    );
+  }
   const rawId = fromSlug(id);
   const thread = store.threads[rawId];
   if (!thread) return [];

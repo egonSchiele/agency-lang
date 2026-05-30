@@ -15,4 +15,6 @@ export type MessageThread = BaseNode & {
   continueExpr?: Expression | null;
   /** Optional `thread(session: "name") { }` — sugar over continue. */
   sessionExpr?: Expression | null;
+  /** Optional `thread(hidden: true) { }` — exclude from `listThreads()`. */
+  hidden?: Expression | null;
 };

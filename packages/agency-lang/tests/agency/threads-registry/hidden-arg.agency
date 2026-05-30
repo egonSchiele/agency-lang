@@ -1,0 +1,22 @@
+import { listThreads } from "std::threads"
+import { userMessage } from "std::thread"
+
+// Verifies `thread(hidden: true) { ... }` excludes the created
+// thread from `listThreads()`. The visible thread should appear;
+// the hidden one should not.
+node main() {
+  thread(label: "visible") {
+    userMessage("visible body")
+  }
+  thread(label: "shh", hidden: true) {
+    userMessage("hidden body")
+  }
+  const all = listThreads()
+  const labels: string[] = []
+  for (t in all) {
+    if (t.label != null) {
+      labels.push(t.label)
+    }
+  }
+  return labels
+}

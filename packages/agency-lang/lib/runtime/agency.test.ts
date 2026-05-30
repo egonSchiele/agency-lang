@@ -160,8 +160,12 @@ describe("agency.thread (subnamespace)", () => {
 });
 
 describe("agency.threads (registry subnamespace)", () => {
-  it("list returns [] outside a frame", () => {
-    expect(agency.threads.list()).toEqual([]);
+  it("list throws outside a frame (silent [] would mask misuse)", () => {
+    expect(() => agency.threads.list()).toThrow(/outside an Agency frame/);
+  });
+
+  it("get throws outside a frame", () => {
+    expect(() => agency.threads.get("t0")).toThrow(/outside an Agency frame/);
   });
 
   it("current returns undefined outside a frame", () => {

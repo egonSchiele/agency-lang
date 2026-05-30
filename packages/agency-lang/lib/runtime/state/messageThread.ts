@@ -4,6 +4,7 @@ import { nanoid } from "nanoid";
 export type MessageThreadJSON = {
   messages: smoltalk.MessageJSON[];
   parentId?: string | null;
+  hidden?: boolean;
 };
 
 export class MessageThread {
@@ -16,6 +17,12 @@ export class MessageThread {
    *  ThreadInfo, and by `ThreadStore.resumeExisting()` to reject
    *  resuming a subthread outside its parent's context. */
   parentId: string | null = null;
+  /** When `true`, this thread is excluded from `agency.threads.list()`
+   *  (and therefore the stdlib `listThreads()` user-facing surface).
+   *  Set by `Runner.thread` at first-create time when the user opts
+   *  in via `thread(hidden: true) { ... }`. Round-tripped through
+   *  `toJSON`/`fromJSON` so the flag survives interrupt resume. */
+  hidden: boolean = false;
 
   constructor(messages: smoltalk.Message[] = []) {
     this.messages = messages;
@@ -58,6 +65,7 @@ export class MessageThread {
     return {
       messages: this.messages.map((m) => m.toJSON()),
       parentId: this.parentId,
+      hidden: this.hidden,
     };
   }
 
@@ -73,12 +81,16 @@ export class MessageThread {
 
     let _messages: any[] = [];
     let _parentId: string | null = null;
+    let _hidden = false;
     if (Array.isArray(json)) {
       _messages = json;
     } else if ("messages" in json) {
       _messages = json.messages;
       if ("parentId" in json && json.parentId !== undefined) {
         _parentId = json.parentId;
+      }
+      if ("hidden" in json && json.hidden === true) {
+        _hidden = true;
       }
     } else {
       throw new Error("Invalid input for MessageThread.fromJSON");
@@ -95,6 +107,7 @@ export class MessageThread {
 
     thread.setMessages(smoltalkMessages);
     thread.parentId = _parentId;
+    thread.hidden = _hidden;
 
     return thread;
   }

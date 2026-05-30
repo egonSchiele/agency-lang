@@ -84,9 +84,10 @@ def summaryFor(id: string, messages: (ThreadMessage[] | null) = null): (string |
 // Lifecycle hook is registered TS-side in lib/stdlib/threads.ts via
 // `registerGlobalHook("onThreadEnd", ...)`. A top-level Agency-side
 // `callback(...)` only fires when its module is the entry point of
-// the run, which would defeat the "import std::threads and it just
-// works" experience. The TS-side hook snapshots `label` to the
-// shared cache; summary generation stays lazy (see `summaryFor`).
+// the run (verified by tests/agency-js/threads-fix-callback-propagation);
+// it does not fire from imported modules. The TS-side hook snapshots
+// `label` to the shared cache; summary generation stays lazy
+// (see `summaryFor`).
 
 export def listThreads(): ThreadInfo[] {
   """

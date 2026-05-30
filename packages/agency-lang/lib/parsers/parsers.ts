@@ -3098,6 +3098,7 @@ type ThreadNamedArgs = {
   summarize: Expression | null;
   continueExpr: Expression | null;
   sessionExpr: Expression | null;
+  hidden: Expression | null;
 };
 
 const _threadNamedArgsParser: Parser<ThreadNamedArgs> = (
@@ -3119,12 +3120,12 @@ const _threadNamedArgsParser: Parser<ThreadNamedArgs> = (
   const r = inner(input);
   if (!r.success) return r as ParserResult<ThreadNamedArgs>;
   const args: NamedArgument[] = r.result.arguments;
-  const allowed = ["label", "summarize", "continue", "session"];
+  const allowed = ["label", "summarize", "continue", "session", "hidden"];
   const seen: Record<string, Expression> = {};
   for (const arg of args) {
     if (!allowed.includes(arg.name)) {
       return failure(
-        `Unknown thread argument: ${arg.name}. Allowed: label, summarize, continue, session`,
+        `Unknown thread argument: ${arg.name}. Allowed: label, summarize, continue, session, hidden`,
         input,
       );
     }
@@ -3145,6 +3146,7 @@ const _threadNamedArgsParser: Parser<ThreadNamedArgs> = (
       summarize: seen.summarize ?? null,
       continueExpr: seen.continue ?? null,
       sessionExpr: seen.session ?? null,
+      hidden: seen.hidden ?? null,
     },
     r.rest,
   );
@@ -3208,6 +3210,7 @@ const liftThreadArgs = (parsed: any): MessageThread => {
         summarize: Expression | null;
         continueExpr: Expression | null;
         sessionExpr: Expression | null;
+        hidden: Expression | null;
       }
     | null
     | undefined;
@@ -3218,11 +3221,13 @@ const liftThreadArgs = (parsed: any): MessageThread => {
     out.summarize = args.summarize;
     out.continueExpr = args.continueExpr;
     out.sessionExpr = args.sessionExpr;
+    out.hidden = args.hidden;
   } else {
     out.label = null;
     out.summarize = null;
     out.continueExpr = null;
     out.sessionExpr = null;
+    out.hidden = null;
   }
   return out as MessageThread;
 };

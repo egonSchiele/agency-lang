@@ -146,24 +146,6 @@ export function registerGlobalHook<K extends keyof CallbackMap>(
   _globalHooks[name]!.push(fn);
 }
 
-/** Cheap pre-check: returns `true` iff at least one callback is
- *  registered for `name` (global, top-level, or TS-passed). Used by
- *  hot-path call sites that want to skip the `await invokeCallbacks(...)`
- *  microtask boundary in the common no-listeners case. Scoped
- *  callbacks (registered via `callback()` inside a function/node body)
- *  are intentionally NOT checked here — a `false` result is a fast-path
- *  optimisation only; callers may still safely call invokeCallbacks. */
-export function hasHook<K extends keyof CallbackMap>(
-  ctx: RuntimeContext<any>,
-  name: K,
-): boolean {
-  if ((_globalHooks[name] ?? []).length > 0) return true;
-  if (ctx.callbacks && ctx.callbacks[name]) return true;
-  const topLevel = ctx.topLevelCallbacks ?? [];
-  for (const cb of topLevel) if (cb.name === name) return true;
-  return false;
-}
-
 async function invokeCallback(
   fn: any,
   data: unknown,

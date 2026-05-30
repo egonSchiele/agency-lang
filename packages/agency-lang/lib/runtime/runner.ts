@@ -3,7 +3,7 @@ import { agencyStore } from "./asyncContext.js";
 import { debugStep } from "./debugger.js";
 import { RestoreSignal } from "./errors.js";
 import { HaltSignal } from "./haltSignal.js";
-import { hasHook, invokeCallbacks } from "./hooks.js";
+import { invokeCallbacks } from "./hooks.js";
 import { hasInterrupts } from "./interrupts.js";
 import { __pipeBind } from "./result.js";
 import { runBatch } from "./runBatch.js";
@@ -24,12 +24,17 @@ export type ThreadStepOpts = {
   continueId?: string;
   /** Session name; runtime maps it to a thread id via openSession. */
   session?: string;
+  /** When true, the created thread is excluded from `listThreads()`. */
+  hidden?: boolean;
 };
 
 /** Strip the leading `t` from a public thread slug to recover the
- *  internal counter-string id. Defensive: accepts a raw id unchanged. */
+ *  internal counter-string id. Only strips when the slug matches the
+ *  canonical `t<digits>` shape so user-chosen ids that happen to
+ *  begin with `t` (e.g. session names like `"telephone"`) are not
+ *  silently mangled. */
 function stripSlug(slug: string): string {
-  return slug.startsWith("t") ? slug.slice(1) : slug;
+  return /^t\d+$/.test(slug) ? slug.slice(1) : slug;
 }
 
 /**
@@ -559,6 +564,15 @@ export class Runner {
       } else {
         tid = threads[method]();
       }
+      // `hidden` is set only on the brand-new code paths
+      // (`create` / `createSubthread` / first-time `openSession`).
+      // For `resumeExisting` and existing sessions we leave whatever
+      // value is already on the MessageThread — hidden is decided at
+      // first-create time, not on every re-entry.
+      if (opts.hidden === true && !isResumption) {
+        const created = threads.get(tid);
+        if (created) created.hidden = true;
+      }
       this.frame.locals[threadKey] = tid;
       this.frame.locals[resumptionKey] = isResumption;
     }
@@ -569,27 +583,22 @@ export class Runner {
       threads.pushActive(tid);
     }
 
-    // Fire onThreadStart. Slug the id for the public payload. Skip
-    // the await entirely when no callbacks are registered for this
-    // hook (the common case) so we don't introduce an extra
-    // microtask boundary that perturbs debugger checkpoint timing.
+    // Fire onThreadStart. Slug the id for the public payload.
     const slug = `t${tid}`;
     const threadType: "thread" | "subthread" =
       method === "createSubthread" ? "subthread" : "thread";
     const parentRaw = threads.get(tid)?.parentId ?? undefined;
-    if (hasHook(this.ctx, "onThreadStart")) {
-      await invokeCallbacks({
-        ctx: this.ctx,
-        name: "onThreadStart",
-        data: {
-          threadId: slug,
-          threadType: parentRaw ? "subthread" : threadType,
-          parentThreadId: parentRaw ? `t${parentRaw}` : undefined,
-          label: opts.label,
-          isResumption,
-        },
-      });
-    }
+    await invokeCallbacks({
+      ctx: this.ctx,
+      name: "onThreadStart",
+      data: {
+        threadId: slug,
+        threadType: parentRaw ? "subthread" : threadType,
+        parentThreadId: parentRaw ? `t${parentRaw}` : undefined,
+        label: opts.label,
+        isResumption,
+      },
+    });
 
     this.path.push(id);
     try {
@@ -604,32 +613,25 @@ export class Runner {
       const messagesSnapshot = closingThread
         ? closingThread.messages.map((m) => m.toJSON())
         : [];
-      if (!alreadyActive) {
-        threads.popActive();
-      } else {
-        // We did not push, but the user's perception is that the
-        // thread is "closing" — pop the resumed entry so subsequent
-        // statements see the prior active thread.
-        threads.popActive();
-      }
+      // Always pop one entry: when we pushed above, this balances
+      // that push; when openSession/resumeExisting pushed (so we
+      // didn't double-push), this pops the resumed entry the user
+      // is "closing".
+      threads.popActive();
       // Fire onThreadEnd so the registry stdlib hook sees the
       // close. We fire from `finally` so exceptions thrown inside
-      // the body still record a close event. Same as onThreadStart,
-      // skip the await when no callbacks are registered to avoid a
-      // spurious microtask boundary.
+      // the body still record a close event.
       try {
-        if (hasHook(this.ctx, "onThreadEnd")) {
-          await invokeCallbacks({
-            ctx: this.ctx,
-            name: "onThreadEnd",
-            data: {
-              threadId: slug,
-              label: opts.label,
-              eagerSummarize: opts.summarize === true,
-              messages: messagesSnapshot,
-            },
-          });
-        }
+        await invokeCallbacks({
+          ctx: this.ctx,
+          name: "onThreadEnd",
+          data: {
+            threadId: slug,
+            label: opts.label,
+            eagerSummarize: opts.summarize === true,
+            messages: messagesSnapshot,
+          },
+        });
       } catch (e) {
         // Swallow hook errors in finally to avoid masking the
         // primary exception. `fireWithGuard` inside invokeCallbacks

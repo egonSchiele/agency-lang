@@ -25,11 +25,16 @@ const _cache: Record<string, _Cached> = {};
 
 // Module-load: register a global hook that snapshots a thread's
 // `label` on close. Mirrors what an Agency-side
-// `callback("onThreadEnd") as evt { ... }` would do, but a top-level
-// Agency callback only fires when the OWNING module is imported as
-// the entry point — it does not propagate cross-module. A global
-// hook here makes the registry work transparently for any program
-// that imports `std::threads`, with no boilerplate at the call site.
+// `callback("onThreadEnd") as evt { ... }` at the top level of
+// `stdlib/threads.agency` would do — but verified empirically
+// (tests/agency-js/threads-fix-callback-propagation): a top-level
+// Agency callback only fires when its OWNING module is imported
+// AS THE ENTRY POINT of the run. Imported modules' top-level
+// callbacks are compiled in but never wired to `ctx.topLevelCallbacks`
+// because `__registerTopLevelCallbacks` is per-entry. A global
+// JS-side hook here side-steps that limitation so the registry
+// works transparently for any program that imports `std::threads`,
+// with no boilerplate at the call site.
 //
 // Eager summarization (`thread(summarize: true)`) is intentionally
 // NOT handled here: summarize() needs to make an LLM call, and

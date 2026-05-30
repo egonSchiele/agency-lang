@@ -334,6 +334,7 @@ export interface TsRunnerThread {
   summarize?: TsNode | null;
   continueExpr?: TsNode | null;
   sessionExpr?: TsNode | null;
+  hidden?: TsNode | null;
 }
 
 /** runner.handle(id, handlerFn, async (runner) => { body }) */

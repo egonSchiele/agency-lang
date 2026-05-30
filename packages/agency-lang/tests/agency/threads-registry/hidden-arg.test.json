@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "[\"visible\"]",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "thread(hidden: true) excludes the thread from listThreads()."
+    }
+  ]
+}

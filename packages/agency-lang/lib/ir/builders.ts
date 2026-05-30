@@ -449,6 +449,7 @@ export const ts = {
     summarize?: TsNode | null;
     continueExpr?: TsNode | null;
     sessionExpr?: TsNode | null;
+    hidden?: TsNode | null;
   }): TsRunnerThread {
     const res = { kind: "runnerThread" as const, ...opts };
     return res;

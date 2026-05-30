@@ -304,6 +304,7 @@ export function printTs(node: TsNode, indent = 0): string {
       if (node.summarize) optsParts.push(`summarize: ${printTs(node.summarize, indent)}`);
       if (node.continueExpr) optsParts.push(`continueId: ${printTs(node.continueExpr, indent)}`);
       if (node.sessionExpr) optsParts.push(`session: ${printTs(node.sessionExpr, indent)}`);
+      if (node.hidden) optsParts.push(`hidden: ${printTs(node.hidden, indent)}`);
       // Always pass an opts object so Runner.thread has a single,
       // uniform signature: legacy callers see `{}` and the
       // hook-firing path can treat opts as required.

@@ -4,7 +4,8 @@
  *
  * Tools: setCwd + the full Workspace bundle + typecheck + highlight +
  * print + remember/recall + handoff. NO docs / web / wikipedia —
- * the agent must `handoff("research", ...)` when it needs those.
+ * the agent must `handoff(reason)` (PFA-bound to research only) when
+ * it needs those.
  *
  * The Workspace state lives here (not in `shared.agency`) because
  * only the code subagent uses file-system tools. `setCwd` re-anchors
@@ -18,7 +19,6 @@ import { setMemoryId, remember, recall } from "std::memory"
 import { highlight } from "std::syntax"
 import { cwd } from "std::system"
 import { systemMessage } from "std::thread"
-import { currentThreadId, getThread } from "std::threads"
 
 import { Category, AgentContext, handoff } from "./shared.agency"
 
@@ -31,6 +31,13 @@ import { Category, AgentContext, handoff } from "./shared.agency"
 // `let` so the rebuilt bundle is visible to the next turn (Agency
 // stores module-level lets in the GlobalStore).
 let workspace: Workspace = openDir(cwd())
+
+// First-entry detection for the code session. Flipped to false the
+// first time `runCode` seeds its system message; subsequent turns
+// (including interrupt resumes) see it as false and skip the seed.
+// Lives in the GlobalStore (module-level `let`) so it survives the
+// `llm()` tool-call boundary and persists across user turns.
+let codeFirstEntry: boolean = true
 
 export def setCwd(dir: string): string {
   """
@@ -57,9 +64,9 @@ writing, editing, running, and typechecking Agency or shell code.
 You do NOT have access to web search, documentation lookup, Wikipedia,
 or URL fetching. If the user asks a question that needs research
 (Agency syntax you're unsure of, an external API, a Wikipedia
-summary, or a URL fetch), call `handoff("research", reason)` —
-the runtime will re-route the user's original message to the
-research specialist.
+summary, or a URL fetch), call `handoff(reason)` — the only valid
+target for you is the research specialist, so just pass a brief
+reason. The runtime will re-route the user's original message there.
 
 **Bias toward staying in the code thread.** Most follow-up messages
 ("can you make it faster?", "fix the error", "what about edge
@@ -111,7 +118,11 @@ Workflow:
 Keep replies brief. Show code, not commentary.
 """
 
-export def runCode(userMsg: string, ctx: AgentContext): string {
+export def runCode(
+  userMsg: string,
+  ctx: AgentContext,
+  allowHandoff: boolean = true,
+): string {
   """
   Run a single turn in the code subagent. The caller is responsible
   for the surrounding `thread(session: "code") { ... }` block; this
@@ -126,39 +137,40 @@ export def runCode(userMsg: string, ctx: AgentContext): string {
 
   @param userMsg - The user's input message for this turn
   @param ctx - Per-call invariants (env, projectContext) for the system message
+  @param allowHandoff - When false, the `handoff` tool is omitted from the
+    tool set so the agent is forced to answer this turn. Used by the
+    REPL's hop-limit fallback to break a re-routing chain.
   """
   setMemoryId("code")
-  // First-entry detection via the active thread's message count.
-  // `currentThreadId()` returns the active thread slug (set by the
-  // surrounding `thread(session: "code") { ... }` block);
-  // `getThread` reads its messages. Length 0 means this is the first
-  // time the code session has been opened in this run, so seed the
-  // system message. On subsequent entries (or interrupt resumes) the
-  // system message is already there and we skip the seed.
-  const t = getThread(currentThreadId())
-  if (isSuccess(t) && t.value.length == 0) {
+  if (codeFirstEntry) {
     systemMessage(codeSysPrompt + ctx.env + ctx.projectContext)
+    codeFirstEntry = false
   }
-  return llm(
-    userMsg,
-    {
+  // Build the tool set conditionally. `handoff` is PFA-bound to
+  // `validCategories: ["research"]` — the runtime check in
+  // `shared.agency` rejects any other target, so the LLM cannot
+  // hand off to itself. When `allowHandoff` is false (hop-limit
+  // fallback), drop `handoff` entirely.
+  let tools = [
+    setCwd,
+    workspace.read,
+    workspace.write,
+    workspace.edit.partial(printDiff: true),
+    workspace.ls,
+    workspace.glob,
+    workspace.grep,
+    workspace.bash,
+    typecheck,
+    highlight.partial(language: "ts"),
+    print,
+    remember,
+    recall,
+  ]
+  if (allowHandoff) {
+    tools.push(handoff.partial(validCategories: ["research"]))
+  }
+  return llm(userMsg, {
     memory: true,
-    tools: [
-      setCwd,
-      workspace.read,
-      workspace.write,
-      workspace.edit.partial(printDiff: true),
-      workspace.ls,
-      workspace.glob,
-      workspace.grep,
-      workspace.bash,
-      typecheck,
-      highlight.partial(language: "ts"),
-      print,
-      remember,
-      recall,
-      handoff,
-    ]
-  },
-  )
+    tools: tools
+  })
 }

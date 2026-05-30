@@ -4,15 +4,17 @@
  * The agent is split across:
  *   - `agent.agency`     — REPL loop + interrupt handler + policy
  *   - `shared.agency`    — this file; Category type + handoff plumbing
+ *                          + persistent-memory bootstrap
  *   - `code.agency`      — code subagent (file ops, shell, typecheck)
  *   - `research.agency`  — research subagent (docs, web, knowledge)
  *
  * Routing: we don't categorize the user's message on every turn.
- * Instead, the current category's LLM gets a `handoff(category,
- * reason)` tool. If it can handle the message, it just answers. If it
- * can't (e.g. the user asks the code agent a wikipedia question), it
- * calls `handoff()` and the main loop re-routes the same user message
- * to the chosen specialist.
+ * Instead, the current category's LLM gets a `handoff(reason)` tool
+ * (the valid targets are bound per-subagent via PFA — see below).
+ * If it can handle the message, it just answers. If it can't (e.g.
+ * the user asks the code agent a wikipedia question), it calls
+ * `handoff()` and the main loop re-routes the same user message to
+ * the chosen specialist.
  *
  * Why this design? Most messages in a conversation continue the
  * current topic. A naïve `categorize()` LLM call on every turn
@@ -26,8 +28,20 @@
  * the full design rationale and a catalogue of alternative routing
  * techniques worth trying in follow-ups.
  */
+import { enableMemory } from "std::memory"
 
 export type Category = "code" | "research"
+
+// Persistent knowledge graph for every subagent. `setMemoryId(...)`
+// in each subagent scopes which graph their `remember`/`recall` calls
+// hit, so a single shared on-disk directory cleanly hosts both. Using
+// `static const _ = ...` is the documented top-level pattern (see
+// `stdlib/memory.agency`): the `with approve` modifier needs an
+// enclosing step path, which a bare top-level call doesn't have. The
+// underscore name signals "we want the side-effect, not the value".
+static const _memoryReady = enableMemory({
+  dir: "~/.agency-agent/memory"
+}) with approve
 
 // Per-call context handed to each subagent's run function. Holds the
 // invariants computed once per turn in `agent.agency` and read by
@@ -51,16 +65,17 @@ export type AgentContext = {
 // unambiguous. The `handoff` tool only ever writes a valid Category.
 let _handoffTarget: string = ""
 
-export safe def handoff(category: Category, reason: string): string {
+export safe def handoff(
+  category: Category,
+  reason: string,
+  validCategories: Category[],
+): string {
   """
   Re-route the user's current message to a different specialist. Use
-  this ONLY when the user's message is clearly outside your scope:
-
-  - Call `handoff("code", reason)` for write/edit/typecheck/run
-    requests when you're the research agent.
-  - Call `handoff("research", reason)` for docs lookup, web
-    search, fetch, or Wikipedia requests when you're the code
-    agent.
+  this ONLY when the user's message is clearly outside your scope —
+  e.g. the user asks the code agent a research-shaped question (docs
+  lookup, Wikipedia, web fetch), or the research agent a code-shaped
+  one (write/edit/typecheck/run).
 
   After you call this, the runtime closes your turn and re-routes the
   user's ORIGINAL message to the chosen specialist. Anything you say
@@ -75,9 +90,19 @@ export safe def handoff(category: Category, reason: string): string {
   the user has a much smoother experience when the same specialist
   carries a multi-turn topic through.
 
-  @param category - The specialist to re-route to: `"code"` or `"research"`
+  @param category - The specialist to re-route to
   @param reason - Brief explanation; recorded for debugging, not shown to the user
+  @param validCategories - Bound per-subagent via PFA — do not set this manually.
   """
+  // `validCategories` is PFA-bound at the call site (e.g. the code
+  // subagent registers `handoff.partial(validCategories: ["research"])`).
+  // If the LLM tries to hand off to itself, the bound list won't
+  // contain that category and we return an error string the model
+  // sees as the tool's result — no state change.
+  const validList = validCategories.join(", ")
+  if (!validCategories.includes(category)) {
+    return "Error: '${category}' is not a valid handoff target from this agent. Valid targets: ${validList}. If the user's request is in scope for you, just answer it directly."
+  }
   _handoffTarget = category
   return "Handoff scheduled — return now without further reply."
 }

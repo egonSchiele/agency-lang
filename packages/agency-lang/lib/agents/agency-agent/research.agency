@@ -6,7 +6,8 @@
  * Tools: docSkill / cliSkill / appendixSkill + wikipedia* + fetch* +
  * browserUse + remember/recall + highlight + print + handoff. NO
  * file write / edit / typecheck / bash — the agent must
- * `handoff("code", ...)` when the user asks for code changes.
+ * `handoff(reason)` (PFA-bound to code only) when the user asks for
+ * code changes.
  *
  * The bundled-docs Skills live here (not in `shared.agency`) because
  * only the research subagent uses them. `static const` caches the
@@ -20,7 +21,6 @@ import { setMemoryId, remember, recall } from "std::memory"
 import { skillsDir } from "std::skills"
 import { highlight } from "std::syntax"
 import { systemMessage } from "std::thread"
-import { currentThreadId, getThread } from "std::threads"
 import {
   search as wikipediaSearch,
   summary as wikipediaSummary,
@@ -43,6 +43,10 @@ static const docSkill = skillsDir("../docs/guide") with approve
 static const cliSkill = skillsDir("../docs/cli") with approve
 static const appendixSkill = skillsDir("../docs/appendix") with approve
 
+// First-entry detection for the research session. See the matching
+// comment in `code.agency` for the rationale.
+let researchFirstEntry: boolean = true
+
 const researchSysPrompt = """
 You are the **research specialist** of a multi-thread Agency-language
 assistant. You answer questions that need reading: Agency-language
@@ -51,8 +55,9 @@ background, URL contents, and general conversation backed by recall.
 
 You do NOT have file-system write tools (no write, edit, bash, or
 typecheck). If the user asks you to actually write, edit, or run
-code, call `handoff("code", reason)` — the runtime will re-route
-the user's original message to the code specialist.
+code, call `handoff(reason)` — the only valid target for you is
+the code specialist, so just pass a brief reason. The runtime will
+re-route the user's original message there.
 
 **Bias toward staying in the research thread.** Most follow-up
 messages ("can you say more?", "what about X?", "explain that
@@ -102,7 +107,11 @@ excerpts.
 Keep replies brief. Cite sources. Show, don't lecture.
 """
 
-export def runResearch(userMsg: string, ctx: AgentContext): string {
+export def runResearch(
+  userMsg: string,
+  ctx: AgentContext,
+  allowHandoff: boolean = true,
+): string {
   """
   Run a single turn in the research subagent. The caller is
   responsible for the surrounding `thread(session: "research") { ... }`
@@ -117,32 +126,39 @@ export def runResearch(userMsg: string, ctx: AgentContext): string {
 
   @param userMsg - The user's input message for this turn
   @param ctx - Per-call invariants (env, projectContext) for the system message
+  @param allowHandoff - When false, the `handoff` tool is omitted from the
+    tool set so the agent is forced to answer this turn. Used by the
+    REPL's hop-limit fallback to break a re-routing chain.
   """
   setMemoryId("research")
-  // First-entry detection — see the matching comment in `code.agency`
-  // for the rationale.
-  const t = getThread(currentThreadId())
-  if (isSuccess(t) && t.value.length == 0) {
+  if (researchFirstEntry) {
     systemMessage(researchSysPrompt + ctx.env + ctx.projectContext)
+    researchFirstEntry = false
+  }
+  // See the comment in `code.agency`: `handoff` is PFA-bound to
+  // `validCategories: ["code"]` so the LLM can't hand off to itself,
+  // and omitted entirely when `allowHandoff` is false.
+  let tools = [
+    docSkill,
+    cliSkill,
+    appendixSkill,
+    wikipediaSearch,
+    wikipediaSummary,
+    wikipediaArticle,
+    fetch,
+    fetchJSON,
+    fetchMarkdown,
+    browserUse,
+    remember,
+    recall,
+    highlight.partial(language: "ts"),
+    print,
+  ]
+  if (allowHandoff) {
+    tools.push(handoff.partial(validCategories: ["code"]))
   }
   return llm(userMsg, {
     memory: true,
-    tools: [
-      docSkill,
-      cliSkill,
-      appendixSkill,
-      wikipediaSearch,
-      wikipediaSummary,
-      wikipediaArticle,
-      fetch,
-      fetchJSON,
-      fetchMarkdown,
-      browserUse,
-      remember,
-      recall,
-      highlight.partial(language: "ts"),
-      print,
-      handoff,
-    ],
+    tools: tools
   })
 }

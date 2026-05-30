@@ -384,6 +384,7 @@ def runForCategory(
   category: string,
   userMsg: string,
   ctx: AgentContext,
+  allowHandoff: boolean = true,
 ): string {
   """
   Dispatch a single turn to the chosen specialist. Wraps the
@@ -399,15 +400,18 @@ def runForCategory(
   @param category - Which specialist's thread to run in
   @param userMsg - The user's input message for this turn
   @param ctx - Per-call invariants (env, projectContext)
+  @param allowHandoff - Forwarded to `runCode` / `runResearch`. When
+    false the subagent's `handoff` tool is suppressed and the agent
+    has no choice but to answer. Used by the hop-limit fallback.
   """
   let reply = ""
   if (category == "code") {
     thread(session: "code", label: "code", summarize: true) {
-      reply = runCode(userMsg, ctx)
+      reply = runCode(userMsg, ctx, allowHandoff)
     }
   } else {
     thread(session: "research", label: "research", summarize: true) {
-      reply = runResearch(userMsg, ctx)
+      reply = runResearch(userMsg, ctx, allowHandoff)
     }
   }
   return reply
@@ -475,7 +479,10 @@ node main() {
         print(
           color.yellow("(handoff hop limit reached; answering in ${category})"),
         )
-        const finalReply = runForCategory(category, userMsg, ctx)
+        // Force the agent to actually answer instead of handing off
+        // yet again — `allowHandoff: false` strips `handoff` from the
+        // tool set, so the LLM has no escape hatch this turn.
+        const finalReply = runForCategory(category, userMsg, ctx, false)
         print(color.green("\n${finalReply}\n"))
       }
     } with defaultHandler

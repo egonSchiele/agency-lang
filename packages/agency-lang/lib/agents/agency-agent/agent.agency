@@ -52,11 +52,7 @@ import {
  *
  */
 
-// Tool-call tracing is opt-in via the `AGENT_DEBUG` env var. Set
-// `AGENT_DEBUG=1` to see the yellow `tool call: ...` / `tool
-// return: ...` lines on every LLM tool invocation. Off by default
-// because the verbose output buries the agent's actual replies.
-// `env(...)` returns the literal env value or `null` when unset.
+// Verbose tool-call tracing, opt-in via `AGENT_DEBUG=1`.
 const AGENT_DEBUG = env("AGENT_DEBUG") == "1"
 
 callback("onToolCallStart") as data {
@@ -77,22 +73,10 @@ callback("onToolCallEnd") as data {
   }
 }
 
-// Persistent on-disk policy. Saved here as JSON; loaded once at
-// module init and rewritten every time the user makes a new
-// "always" decision. Sibling to the memory store under the same
-// per-user agent dir (see `shared.agency` for the `~` expansion
-// rationale).
-//
-// NOTE: `policyDir()` recomputes the agent dir locally instead of
-// reading `AGENCY_AGENT_DIR` from `shared.agency`. Agency does NOT
-// guarantee that an imported module's `static const` has been
-// initialized before importer code reads it — at module-init time
-// AND for a stretch of runtime until something in shared.js is
-// invoked, the binding holds `undefined`. We can't tell from
-// here when shared.js's lazy init will fire, so we just duplicate
-// the trivial home-dir computation (see `computeAgentDir` in
-// shared.agency). Cheap, deterministic, no cross-module ordering
-// hazard.
+// On-disk policy at `$HOME/.agency-agent/policy.json`. We duplicate the
+// home-dir computation here instead of importing `AGENCY_AGENT_DIR` from
+// `shared.agency` because Agency doesn't guarantee imported static-const
+// init runs before the importer reads it (upstream #232).
 const POLICY_FILE = "policy.json"
 def policyDir(): string {
   const home = env("HOME")
@@ -105,11 +89,9 @@ def policyPath(): string { return "${policyDir()}/${POLICY_FILE}" }
 
 def loadPolicy(): Policy {
   """
-  Read and validate the on-disk policy. Returns the parsed policy
-  if it exists and is well-formed; returns `{}` (empty policy)
-  when the file is absent, unreadable, malformed JSON, or fails
-  validation. A warning is printed for the malformed cases so the
-  user knows a previous decision didn't carry over.
+  Read and validate the on-disk policy. Returns `{}` if the file is
+  absent, unreadable, malformed, or fails validation; warns the user
+  for malformed cases so they know a decision didn't carry over.
   """
   const dir = policyDir()
   const path = policyPath()
@@ -156,48 +138,21 @@ def savePolicy() {
   }
 }
 
-// Persistent policy: starts empty and is hydrated lazily on first
-// access (see `ensurePolicyLoaded`). Grows as the user opts into
-// always-approve / always-reject for each interrupt kind, and is
-// written back to disk on every change so decisions stick across
-// sessions. Lives at module scope so the handler in `node main` and
-// any helpers can read AND mutate it during a run. Module-level
-// `let` is stored in the GlobalStore, which Agency reinitializes
-// per run — hence the lazy load.
-//
-// Why lazy and not `= loadPolicy()` at module init?
-// `loadPolicy()` reads `AGENCY_AGENT_DIR`, a `static const` exported
-// from `shared.agency`. Agency does NOT guarantee that an imported
-// module's static init has run before THIS module's
-// `__initializeGlobals` reads its exports, so an eager load captures
-// `undefined` and writes to `undefined/policy.json`. Deferring to
-// first use ensures `defaultHandler` (which triggers the first read)
-// runs after the main loop has touched shared.js (via
-// `consumeHandoff`), at which point `AGENCY_AGENT_DIR` is populated.
+// Persistent policy, hydrated from disk by `ensurePolicyLoaded()` at the
+// top of `node main`. Module-level `let` so handlers and helpers can read
+// and mutate it; `policyLoaded` guards against re-entry while the load is
+// in flight (see `ensurePolicyLoaded`).
 let policy: Policy = {}
 let policyLoaded: boolean = false
 
 def ensurePolicyLoaded() {
   """
-  Idempotently hydrate `policy` from disk on first call. Must be
-  called at the top of every code path that READS or writes `policy`
-  — see the comment on the `let policy` declaration above for the
-  init-ordering rationale.
+  Idempotent hydrate of `policy` from disk.
 
-  CRITICAL: `policyLoaded` MUST be flipped to `true` BEFORE calling
-  `loadPolicy()`. `loadPolicy()` reads a file `with approve`, which
-  raises a `std::read` interrupt. The interrupt's handler chain
-  (lib/runtime/interrupts.ts:runHandlerChain) visits EVERY handler
-  on the stack, even after one approves. That means our own
-  `defaultHandler` (registered by `handle { ... } with defaultHandler`
-  in `node main`) gets called recursively while `loadPolicy()` is
-  still in-flight. `defaultHandler` then calls `ensurePolicyLoaded()`
-  again — and if the guard is checked against the OLD value of
-  `policyLoaded`, we recurse infinitely, leaking 2 handlers per
-  level (one from `ensurePolicyLoaded`'s `with approve`, one from
-  `loadPolicy`'s). Flipping the flag first short-circuits the
-  recursion the moment the inner read interrupt's chain re-enters
-  `defaultHandler`.
+  `policyLoaded` MUST flip to `true` BEFORE `loadPolicy()` runs. The read
+  inside `loadPolicy` raises an interrupt whose chain dispatch visits
+  every handler — including `defaultHandler`, which calls back into here.
+  Without the early flip, that re-entry recurses forever.
   """
   if (!policyLoaded) {
     policyLoaded = true
@@ -520,12 +475,8 @@ def defaultHandler(intr) {
   return reject(reason)
 }
 
-// Maximum number of consecutive handoffs allowed inside a single user
-// turn. Each handoff is an LLM round-trip charged to the user, so a
-// runaway chain (A → B → A → B → ...) is bad both for cost and for
-// the user (they're waiting and watching it ping-pong). 3 is a
-// "the LLMs both disagree about scope, just answer with the last one"
-// safety net — in practice every handoff terminates after 1.
+// Cap on handoffs per user turn. Stops ping-pong (A→B→A→B…) when the two
+// LLMs disagree about scope; in practice every handoff terminates after 1.
 const MAX_HOPS = 3
 
 def runForCategory(
@@ -535,22 +486,15 @@ def runForCategory(
   allowHandoff: boolean = true,
 ): string {
   """
-  Dispatch a single turn to the chosen specialist. Wraps the
-  per-category `thread(session: ...) { ... }` block so the caller
-  (the main routing loop) doesn't have to know which thread name
-  goes with which subagent.
-
-  `summarize: true` is set on every routed thread so closed sessions
-  get an LLM-generated summary at close time via the eager summarize
-  hook in `lib/stdlib/threads.ts`. This makes `listThreads()` cheap
-  on future runs (no lazy summarize round-trip).
+  Dispatch one user turn to the chosen specialist's thread. `summarize:
+  true` triggers the eager close-time summarize hook so `listThreads()`
+  is cheap on future runs.
 
   @param category - Which specialist's thread to run in
   @param userMsg - The user's input message for this turn
   @param ctx - Per-call invariants (env, projectContext)
-  @param allowHandoff - Forwarded to `runCode` / `runResearch`. When
-    false the subagent's `handoff` tool is suppressed and the agent
-    has no choice but to answer. Used by the hop-limit fallback.
+  @param allowHandoff - When false, strips the `handoff` tool so the
+    subagent has to answer. Used by the hop-limit fallback.
   """
   let reply = ""
   if (category == "code") {
@@ -573,32 +517,12 @@ node main() {
   print(color.cyan("╰───────────────────────────────────────────────╯"))
   print("Type 'exit' to quit.\n")
 
-  // Hydrate the persistent policy NOW, before the main loop installs
-  // `defaultHandler`. The reasoning is critical:
-  //
-  //   - `defaultHandler` consults `policy` via `checkPolicy(...)` on every
-  //     interrupt it handles. If `policy` is empty, every interrupt that
-  //     could otherwise be auto-approved by a rule falls through to
-  //     `askUser` and the user gets a prompt.
-  //   - Doing the load lazily from INSIDE `defaultHandler` doesn't work:
-  //     `loadPolicy()` reads the policy file, which raises a `std::read`
-  //     interrupt, which the runtime's chain dispatcher visits every
-  //     handler for (even after the top auto-approve resolves it). That
-  //     re-enters `defaultHandler`, where `policy` is still `{}` because
-  //     the outer `loadPolicy()` hasn't returned yet — so `checkPolicy`
-  //     returns propagate and the user sees a spurious prompt for the
-  //     policy file read.
-  //   - Loading here, BEFORE `handle { ... } with defaultHandler` runs,
-  //     means the policy file read happens with only the local `with
-  //     approve` handler on the stack — no `defaultHandler` to recurse
-  //     into. By the time the main loop starts, `policy` is populated
-  //     and `checkPolicy` can match rules cleanly.
-  //
-  // The outer `with approve` here is redundant with the `with approve`
-  // inside `loadPolicy`, but it silences the typechecker's
-  // interrupt-warning (it doesn't trace `with approve` through
-  // intermediate function bodies) and makes the auto-approval intent
-  // explicit at the call site.
+  // Pre-load the policy BEFORE `defaultHandler` is installed below. If we
+  // loaded lazily from inside `defaultHandler`, the policy file's own read
+  // would re-enter `defaultHandler` (the chain visits every handler) with
+  // `policy` still `{}`, prompting the user for a file we're trying to
+  // auto-approve. The outer `with approve` is redundant with the one
+  // inside `loadPolicy` but silences the typechecker warning.
   ensurePolicyLoaded() with approve
 
   // Grounding: the LLM should not have to ask the user where it is

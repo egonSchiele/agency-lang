@@ -39,8 +39,17 @@ export type Category = "code" | "research"
 // `stdlib/memory.agency`): the `with approve` modifier needs an
 // enclosing step path, which a bare top-level call doesn't have. The
 // underscore name signals "we want the side-effect, not the value".
+// `embeddings.model` MUST be set — without it, the embedder is
+// invoked with `model: undefined` and smoltalk warns
+// `[memory] embed call failed: Model undefined is not recognized`,
+// which silently disables Tier 2 (embedding-similarity) recall.
+// `text-embedding-3-small` is the canonical default cited in the
+// memory guide; cheap and ubiquitous.
 static const _memoryReady = enableMemory({
-  dir: "~/.agency-agent/memory"
+  dir: "~/.agency-agent/memory",
+  embeddings: {
+    model: "text-embedding-3-small"
+  }
 }) with approve
 
 // Per-call context handed to each subagent's run function. Holds the

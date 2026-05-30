@@ -1,0 +1,15 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "[\"first\",\"second\"]",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "stdlib/threads listThreads() surfaces labels from thread(label) blocks; eager summaries are cached at close.",
+      "llmMocks": [
+        { "return": "summary-of-first" },
+        { "return": "summary-of-second" }
+      ]
+    }
+  ]
+}

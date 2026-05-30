@@ -1,0 +1,137 @@
+/**
+Cross-thread context sharing: `listThreads()` enumerates every thread
+in the current run (active + closed), `getThread(id, offset, limit)`
+reads a slice of a thread's messages. The registry is built on the
+public `agency.threads.*` primitives plus the `onThreadEnd` lifecycle
+hook — the same surface you'd reach for to build your own variants
+(tag-threads, thread-diff, etc.) in user space.
+
+  ```ts
+  import { listThreads, getThread } from "std::threads"
+
+  // Inspect the run's other threads:
+  const info = listThreads()
+
+  // Read a slice of a prior thread's messages:
+  const lines = getThread("t1", 0, 20)
+  ```
+
+`label` is template-level (set via `thread(label: "...") { ... }`);
+`summary` is per-instance and generated lazily on first `listThreads()`
+call unless the user opts into `thread(summarize: true) { ... }`.
+*/
+
+import {
+  _listThreadsRaw,
+  _getThread,
+  _remember,
+  _getCached,
+} from "agency-lang/stdlib-lib/threads.js"
+
+export type ThreadMessage = {
+  role: string,
+  content: string,
+}
+
+export type ThreadInfo = {
+  id: string,
+  label?: string,
+  summary?: string,
+  parentId?: string,
+  threadType: string,
+  messageCount: number,
+  isActive: boolean,
+}
+
+// One-shot LLM summarization used by the lazy + eager paths. Wrapped
+// in a `thread {}` block so the summarizer prompt runs on an isolated
+// message history and doesn't pollute the agent's main conversation.
+def summarize(messages: ThreadMessage[]): string {
+  let transcript = ""
+  for (m in messages) {
+    transcript = transcript + "[" + m.role + "] " + m.content + "\n"
+  }
+  let result = ""
+  thread {
+    result = llm("Summarize this conversation in 1-2 sentences:\n" + transcript)
+  }
+  return result
+}
+
+// Single owner of the "return cached summary, else LLM-summarize and
+// cache" rule. Active threads pass `null` so the LLM call is skipped
+// while the conversation is still in flight.
+def summaryFor(id: string, messages: (ThreadMessage[] | null) = null): (string | null) {
+  const c = _getCached(id)
+  if (c != null) {
+    if (c.summary != null) {
+      return c.summary
+    }
+  }
+  if (messages == null) {
+    return null
+  }
+  const s = summarize(messages)
+  _remember(id, { summary: s })
+  return s
+}
+
+// Lifecycle hook is registered TS-side in lib/stdlib/threads.ts via
+// `registerGlobalHook("onThreadEnd", ...)`. A top-level Agency-side
+// `callback(...)` only fires when its module is the entry point of
+// the run, which would defeat the "import std::threads and it just
+// works" experience. The TS-side hook snapshots `label` to the
+// shared cache; summary generation stays lazy (see `summaryFor`).
+
+export def listThreads(): ThreadInfo[] {
+  """
+  Return every thread in the current run, including the active one.
+
+  Lazy summary generation: a thread that doesn't yet have a cached
+  summary triggers exactly one LLM round-trip the first time
+  `listThreads()` is called on it. Active threads are skipped so the
+  in-flight conversation is not summarized mid-stream.
+
+  Eager summarization (one summary call per `thread {}` close instead
+  of all-at-once on first `listThreads()`) is opt-in:
+  `thread(summarize: true) { ... }`.
+  """
+  const raw = _listThreadsRaw()
+  const out: ThreadInfo[] = []
+  for (t in raw) {
+    const c = _getCached(t.id)
+    let label: (string | null) = null
+    if (c != null) {
+      if (c.label != null) { label = c.label }
+    }
+    let messages: (ThreadMessage[] | null) = null
+    if (t.isActive == false) {
+      messages = t.messages
+    }
+    const summary = summaryFor(t.id, messages)
+    out.push({
+      id: t.id,
+      label: label,
+      summary: summary,
+      parentId: t.parentId,
+      threadType: t.threadType,
+      messageCount: t.messageCount,
+      isActive: t.isActive
+    })
+  }
+  return out
+}
+
+export safe def getThread(id: string, offset: number = 0, limit: number = 50): ThreadMessage[] {
+  """
+  Read a slice of a thread's messages. Returns `[]` for an unknown id.
+
+  Pagination: `offset` is 0-indexed; `limit` defaults to 50. Pass
+  larger explicit values for full-thread reads.
+
+  @param id - Thread slug (e.g. "t1") from `listThreads()`
+  @param offset - 0-indexed start of the message slice
+  @param limit - Maximum number of messages to return
+  """
+  return _getThread(id, offset, limit)
+}

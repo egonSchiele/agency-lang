@@ -1,0 +1,23 @@
+import { getThread, currentThreadId } from "std::threads"
+import { userMessage } from "std::thread"
+
+// Verify thread(continue: id) resumes a previously-closed thread:
+// new messages append to its existing history instead of starting a
+// fresh thread. Captures the id of the first thread, then continues
+// it. Expected: the resumed thread holds BOTH messages in order.
+node main() {
+  let firstId: string = ""
+  thread(label: "a") {
+    userMessage("first")
+    firstId = currentThreadId()
+  }
+  thread(continue: firstId) {
+    userMessage("second")
+  }
+  const messages = getThread(firstId, 0, 50)
+  const contents: string[] = []
+  for (m in messages) {
+    contents.push(m.content)
+  }
+  return contents
+}

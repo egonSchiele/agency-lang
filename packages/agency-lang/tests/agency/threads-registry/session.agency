@@ -1,0 +1,30 @@
+import { listThreads } from "std::threads"
+import { userMessage } from "std::thread"
+
+// Three-message router scenario from the plan: coding → weather →
+// back to coding. Sessions are keyed by name; first entry creates,
+// second entry resumes. After the run, the coding thread should
+// contain BOTH "first coding" and "back to coding", and the weather
+// thread should contain only "weather request" — proving that
+// thread(session: "name") preserves history across re-entries.
+node main() {
+  thread(session: "coding", label: "coding") {
+    userMessage("first coding")
+  }
+  thread(session: "weather", label: "weather") {
+    userMessage("weather request")
+  }
+  thread(session: "coding", label: "coding") {
+    userMessage("back to coding")
+  }
+  const all = listThreads()
+  // Build a name → message-count map for the labelled (non-active)
+  // threads so the assertion is order-independent.
+  const result: any = {}
+  for (t in all) {
+    if (t.label != null) {
+      result[t.label] = t.messageCount
+    }
+  }
+  return result
+}

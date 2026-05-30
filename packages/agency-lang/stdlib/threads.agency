@@ -26,6 +26,7 @@ import {
   _getThread,
   _remember,
   _getCached,
+  _currentThreadId,
 } from "agency-lang/stdlib-lib/threads.js"
 
 export type ThreadMessage = {
@@ -120,6 +121,16 @@ export def listThreads(): ThreadInfo[] {
     })
   }
   return out
+}
+
+export safe def currentThreadId(): string {
+  """
+  Slug-form id of the active thread (e.g. "t3"), or `""` outside any
+  runtime frame. Useful with `thread(continue: id)` when you want to
+  capture a thread's id at the moment it was active so you can
+  resume it later.
+  """
+  return _currentThreadId()
 }
 
 export safe def getThread(id: string, offset: number = 0, limit: number = 50): ThreadMessage[] {

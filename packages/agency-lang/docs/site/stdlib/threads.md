@@ -11,7 +11,7 @@ export type ThreadMessage = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/threads.agency#L31))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/threads.agency#L32))
 
 ### ThreadInfo
 
@@ -27,7 +27,7 @@ export type ThreadInfo = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/threads.agency#L36))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/threads.agency#L37))
 
 ## Functions
 
@@ -45,7 +45,7 @@ summarize(messages: ThreadMessage[]): string
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/threads.agency#L49))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/threads.agency#L50))
 
 ### summaryFor
 
@@ -62,7 +62,7 @@ summaryFor(id: string, messages: ThreadMessage[] | null): string | null
 
 **Returns:** `string | null`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/threads.agency#L64))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/threads.agency#L65))
 
 ### listThreads
 
@@ -83,7 +83,22 @@ Return every thread in the current run, including the active one.
 
 **Returns:** `ThreadInfo[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/threads.agency#L86))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/threads.agency#L87))
+
+### currentThreadId
+
+```ts
+currentThreadId(): string
+```
+
+Slug-form id of the active thread (e.g. "t3"), or `""` outside any
+  runtime frame. Useful with `thread(continue: id)` when you want to
+  capture a thread's id at the moment it was active so you can
+  resume it later.
+
+**Returns:** `string`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/threads.agency#L126))
 
 ### getThread
 
@@ -110,4 +125,4 @@ Read a slice of a thread's messages. Returns `[]` for an unknown id.
 
 **Returns:** `ThreadMessage[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/threads.agency#L125))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/threads.agency#L136))

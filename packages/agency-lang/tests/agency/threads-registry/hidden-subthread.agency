@@ -1,0 +1,28 @@
+import { listThreads } from "std::threads"
+import { userMessage } from "std::thread"
+
+// Verifies `subthread(hidden: true) { ... }` excludes the created
+// subthread from `listThreads()`. Mirrors `hidden-arg.agency` but
+// exercises the `subthread` block instead of the top-level `thread`
+// block so the `hidden` named-arg coverage spans both forms.
+node main() {
+  thread(label: "parent") {
+    userMessage("parent body")
+    subthread(label: "sub-visible") {
+      userMessage("visible-sub")
+    }
+    subthread(label: "sub-hidden", hidden: true) {
+      userMessage("hidden-sub")
+    }
+  }
+  const all = listThreads()
+  const labels: string[] = []
+  if (isSuccess(all)) {
+    for (t in all.value) {
+      if (t.label != null) {
+        labels.push(t.label)
+      }
+    }
+  }
+  return labels
+}

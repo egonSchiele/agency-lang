@@ -666,6 +666,19 @@ describe("StatelogClient", () => {
       expect(events[1].parentThreadId).toBe("0");
     });
 
+    it("threadEndHookError emits threadId + error", async () => {
+      const file = newLogFile("thread-end-hook-err");
+      const client = fileClient(file);
+      await client.threadEndHookError({
+        threadId: "t1",
+        error: "boom from onThreadEnd dispatcher",
+      });
+      const [evt] = readEvents(file);
+      expect(evt.data.type).toBe("threadEndHookError");
+      expect(evt.data.threadId).toBe("t1");
+      expect(evt.data.error).toBe("boom from onThreadEnd dispatcher");
+    });
+
     it("error emits errorType + retryable", async () => {
       const file = newLogFile("error");
       const client = fileClient(file);

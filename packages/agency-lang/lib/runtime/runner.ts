@@ -33,7 +33,7 @@ export type ThreadStepOpts = {
  *  canonical `t<digits>` shape so user-chosen ids that happen to
  *  begin with `t` (e.g. session names like `"telephone"`) are not
  *  silently mangled. */
-function stripSlug(slug: string): string {
+export function stripSlug(slug: string): string {
   return /^t\d+$/.test(slug) ? slug.slice(1) : slug;
 }
 

@@ -1,0 +1,15 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "[\"parent\",\"sub-visible\"]",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "subthread(hidden: true) excludes the subthread from listThreads().",
+      "llmMocks": [
+        { "return": { "summary": "parent-summary" } },
+        { "return": { "summary": "sub-visible-summary" } }
+      ]
+    }
+  ]
+}

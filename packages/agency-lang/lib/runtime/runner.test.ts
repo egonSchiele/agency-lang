@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { Runner } from "./runner.js";
+import { Runner, stripSlug } from "./runner.js";
 import { State, StateStack } from "./state/stateStack.js";
 import { ThreadStore } from "./state/threadStore.js";
 import { getRuntimeContext } from "./asyncContext.js";
@@ -726,5 +726,21 @@ describe("Runner", () => {
       expect(paths[0]).toBe("0");
       expect(paths[paths.length - 1]).toContain("0.0");
     });
+  });
+});
+
+describe("stripSlug", () => {
+  it("strips the leading t from canonical slugs", () => {
+    expect(stripSlug("t1")).toBe("1");
+    expect(stripSlug("t42")).toBe("42");
+  });
+
+  it("leaves non-slug strings untouched", () => {
+    expect(stripSlug("hello")).toBe("hello");
+    // Regression: prior to the tightened regex this returned "hello".
+    expect(stripSlug("thello")).toBe("thello");
+    expect(stripSlug("t")).toBe("t");
+    expect(stripSlug("t1a")).toBe("t1a");
+    expect(stripSlug("")).toBe("");
   });
 });

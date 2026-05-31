@@ -49,25 +49,33 @@ export type ModuleInitHandle = {
 const modules: ModuleInitHandle[] = [];
 
 /**
- * Register a compiled module's init handles. Idempotent on
- * `__moduleId`: a module that gets imported by multiple parents only
- * registers once. The FIRST registration wins (it preserves the
- * natural import-order DFS).
+ * Register a compiled module's init handles. Last-write-wins on
+ * `__moduleId` while preserving the original DFS position:
  *
- * Caveat: if the same compiled `.js` file is dynamically imported more
- * than once with cache-busting (query-string differs, hot reload, some
- * test setups), each ES module instance is independent but they share
- * the same `__moduleId`. The first instance's `__initializeStatic` and
- * `__runImperatives` capture the let-bindings from the FIRST module
- * instance, so subsequent instances' top-level statics will never
- * populate even though the orchestrator iterates over the stale
- * handles. Production code does not exercise this path; tests that
- * recompile and reimport must call `__resetModuleRegistry()` between
- * fixtures to keep instances isolated.
+ *   - First-ever registration for a `__moduleId` appends to the
+ *     registry, pinning the import-order DFS slot.
+ *   - Subsequent registrations REPLACE the handles in-place at that
+ *     same slot.
+ *
+ * Two scenarios this matters for (both rare in production):
+ *   - Hot module replacement: the stale module's `__initializeStatic`
+ *     and `__runImperatives` close over let-bindings from the old
+ *     realm; replacing in place lets the orchestrator initialize the
+ *     fresh instance.
+ *   - Cache-busted dynamic re-imports (e.g. `import(url + "?v=" + n)`):
+ *     user intent is "use the latest version"; in-place replacement
+ *     honors that.
+ *
+ * Normal ESM behavior is unaffected — a module body only runs once
+ * per realm, so `__registerModule` is called exactly once per
+ * `__moduleId` and the first branch falls through unchanged.
  */
 export function __registerModule(mod: ModuleInitHandle): void {
-  for (const m of modules) {
-    if (m.__moduleId === mod.__moduleId) return;
+  for (let i = 0; i < modules.length; i++) {
+    if (modules[i].__moduleId === mod.__moduleId) {
+      modules[i] = mod;
+      return;
+    }
   }
   modules.push(mod);
 }

@@ -1,0 +1,23 @@
+import { search } from "std::search"
+import { env } from "std::system"
+
+node main() {
+  // Skip the live API call if no key is configured. The unit tests in
+  // lib/stdlib/search.test.ts cover the URL/header/parsing logic.
+  const key = env("BRAVE_API_KEY")
+  if (key == null || key == "") {
+    return "search ok"
+  }
+
+  const results = search("agency language programming", count: 3)
+  if (length(results) == 0) {
+    return "search failed: no results"
+  }
+
+  const first = results[0]
+  if (first.url == "") {
+    return "search failed: empty url"
+  }
+
+  return "search ok"
+}

@@ -43,7 +43,6 @@ doc:
 
 packages-doc:
 	rm -rf docs/site/packages/
-	pnpm run agency doc ../brave-search -o docs/site/packages/brave-search/ --ignore tests --base-url https://github.com/egonSchiele/agency-lang/blob/main/packages/brave-search/
 	pnpm run agency doc ../web-fetch -o docs/site/packages/web-fetch/ --ignore tests --base-url https://github.com/egonSchiele/agency-lang/blob/main/packages/web-fetch/
 	pnpm run agency doc ../mcp -o docs/site/packages/mcp/ --ignore tests --base-url https://github.com/egonSchiele/agency-lang/blob/main/packages/mcp/
 	pnpm run agency doc ../email -o docs/site/packages/email/ --ignore tests --base-url https://github.com/egonSchiele/agency-lang/blob/main/packages/email/

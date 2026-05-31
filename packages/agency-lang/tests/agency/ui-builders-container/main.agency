@@ -1,0 +1,33 @@
+import { column, row, line, list } from "std::ui"
+
+node main(): string {
+  const tree = column(flex: 1, border: true) as col {
+    col.row(bg: "blue", height: 1) as header {
+      header.line("hi")
+    }
+    col.line("body", fg: "gray")
+    col.list(items: ["a", "b"], selectedIndex: 1)
+  }
+  if (tree.type != "box")                       { return "FAIL: root type" }
+  if (tree.style.flexDirection != "column")     { return "FAIL: root flexDir" }
+  if (tree.style.flex != 1)                     { return "FAIL: root flex" }
+  if (tree.style.border != true)                { return "FAIL: root border" }
+  if (tree.children.length != 3)                { return "FAIL: children len" }
+
+  const head = tree.children[0]
+  if (head.type != "box")                       { return "FAIL: header type" }
+  if (head.style.flexDirection != "row")        { return "FAIL: header flexDir" }
+  if (head.style.bg != "blue")                  { return "FAIL: header bg" }
+  if (head.children.length != 1)                { return "FAIL: header children" }
+  if (head.children[0].content != "hi")         { return "FAIL: header text" }
+
+  const body = tree.children[1]
+  if (body.type != "text")                      { return "FAIL: body type" }
+  if (body.content != "body")                   { return "FAIL: body content" }
+  if (body.style.fg != "gray")                  { return "FAIL: body fg" }
+
+  const lst = tree.children[2]
+  if (lst.type != "list")                       { return "FAIL: list type" }
+  if (lst.selectedIndex != 1)                   { return "FAIL: list selIdx" }
+  return "pass"
+}

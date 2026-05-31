@@ -418,3 +418,299 @@ textInput(value: string, flex: number, width: number, height: number, fg: string
 **Returns:** [Element](#element)
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L249))
+
+### _mkBoxStyle
+
+```ts
+_mkBoxStyle(flexDirection: string, flex: number, width: number, height: number, padding: number, border: boolean, borderColor: string, label: string, bg: string, fg: string, visible: boolean): any
+```
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| flexDirection | `string` |  |
+| flex | `number` | null |
+| width | `number` | null |
+| height | `number` | null |
+| padding | `number` | null |
+| border | `boolean` | false |
+| borderColor | `string` | "" |
+| label | `string` | "" |
+| bg | `string` | "" |
+| fg | `string` | "" |
+| visible | `boolean` | true |
+
+**Returns:** `any`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L276))
+
+### _makeBuilder
+
+```ts
+_makeBuilder(kids: any[]): Builder
+```
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| kids | `any[]` |  |
+
+**Returns:** [Builder](#builder)
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L304))
+
+### column
+
+```ts
+column(flex: number, width: number, height: number, padding: number, border: boolean, borderColor: string, label: string, bg: string, fg: string, visible: boolean, block: (Builder) => void): Element
+```
+
+* A vertical container. Children stack top-to-bottom. The trailing
+ * block receives a fresh `Builder` to populate the column.
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| flex | `number` | null |
+| width | `number` | null |
+| height | `number` | null |
+| padding | `number` | null |
+| border | `boolean` | false |
+| borderColor | `string` | "" |
+| label | `string` | "" |
+| bg | `string` | "" |
+| fg | `string` | "" |
+| visible | `boolean` | true |
+| block | `(Builder) => void` | null |
+
+**Returns:** [Element](#element)
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L320))
+
+### row
+
+```ts
+row(flex: number, width: number, height: number, padding: number, border: boolean, borderColor: string, label: string, bg: string, fg: string, visible: boolean, block: (Builder) => void): Element
+```
+
+* A horizontal container. Children stack left-to-right. The trailing
+ * block receives a fresh `Builder` to populate the row.
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| flex | `number` | null |
+| width | `number` | null |
+| height | `number` | null |
+| padding | `number` | null |
+| border | `boolean` | false |
+| borderColor | `string` | "" |
+| label | `string` | "" |
+| bg | `string` | "" |
+| fg | `string` | "" |
+| visible | `boolean` | true |
+| block | `(Builder) => void` | null |
+
+**Returns:** [Element](#element)
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L349))
+
+### box
+
+```ts
+box(flex: number, width: number, height: number, padding: number, border: boolean, borderColor: string, label: string, bg: string, fg: string, visible: boolean, block: (Builder) => void): Element
+```
+
+* A direction-neutral container. Use when you want to apply styling
+ * (border, padding, background) without setting `flexDirection`.
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| flex | `number` | null |
+| width | `number` | null |
+| height | `number` | null |
+| padding | `number` | null |
+| border | `boolean` | false |
+| borderColor | `string` | "" |
+| label | `string` | "" |
+| bg | `string` | "" |
+| fg | `string` | "" |
+| visible | `boolean` | true |
+| block | `(Builder) => void` | null |
+
+**Returns:** [Element](#element)
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L378))
+
+### _addRow
+
+```ts
+_addRow(kids: any[], flex: number, width: number, height: number, padding: number, border: boolean, borderColor: string, label: string, bg: string, fg: string, visible: boolean, block: (Builder) => void): Element
+```
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| kids | `any[]` |  |
+| flex | `number` | null |
+| width | `number` | null |
+| height | `number` | null |
+| padding | `number` | null |
+| border | `boolean` | false |
+| borderColor | `string` | "" |
+| label | `string` | "" |
+| bg | `string` | "" |
+| fg | `string` | "" |
+| visible | `boolean` | true |
+| block | `(Builder) => void` | null |
+
+**Returns:** [Element](#element)
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L405))
+
+### _addColumn
+
+```ts
+_addColumn(kids: any[], flex: number, width: number, height: number, padding: number, border: boolean, borderColor: string, label: string, bg: string, fg: string, visible: boolean, block: (Builder) => void): Element
+```
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| kids | `any[]` |  |
+| flex | `number` | null |
+| width | `number` | null |
+| height | `number` | null |
+| padding | `number` | null |
+| border | `boolean` | false |
+| borderColor | `string` | "" |
+| label | `string` | "" |
+| bg | `string` | "" |
+| fg | `string` | "" |
+| visible | `boolean` | true |
+| block | `(Builder) => void` | null |
+
+**Returns:** [Element](#element)
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L426))
+
+### _addBox
+
+```ts
+_addBox(kids: any[], flex: number, width: number, height: number, padding: number, border: boolean, borderColor: string, label: string, bg: string, fg: string, visible: boolean, block: (Builder) => void): Element
+```
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| kids | `any[]` |  |
+| flex | `number` | null |
+| width | `number` | null |
+| height | `number` | null |
+| padding | `number` | null |
+| border | `boolean` | false |
+| borderColor | `string` | "" |
+| label | `string` | "" |
+| bg | `string` | "" |
+| fg | `string` | "" |
+| visible | `boolean` | true |
+| block | `(Builder) => void` | null |
+
+**Returns:** [Element](#element)
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L447))
+
+### _addLine
+
+```ts
+_addLine(kids: any[], content: string, flex: number, width: number, height: number, fg: string, bg: string, bold: boolean): Element
+```
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| kids | `any[]` |  |
+| content | `string` |  |
+| flex | `number` | null |
+| width | `number` | null |
+| height | `number` | null |
+| fg | `string` | "" |
+| bg | `string` | "" |
+| bold | `boolean` | false |
+
+**Returns:** [Element](#element)
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L468))
+
+### _addText
+
+```ts
+_addText(kids: any[], content: string): Element
+```
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| kids | `any[]` |  |
+| content | `string` |  |
+
+**Returns:** [Element](#element)
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L484))
+
+### _addList
+
+```ts
+_addList(kids: any[], items: string[], selectedIndex: number, flex: number, width: number, height: number, border: boolean, borderColor: string, visible: boolean): Element
+```
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| kids | `any[]` |  |
+| items | `string[]` |  |
+| selectedIndex | `number` | 0 |
+| flex | `number` | null |
+| width | `number` | null |
+| height | `number` | null |
+| border | `boolean` | false |
+| borderColor | `string` | "" |
+| visible | `boolean` | true |
+
+**Returns:** [Element](#element)
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L490))
+
+### _addTextInput
+
+```ts
+_addTextInput(kids: any[], value: string, flex: number, width: number, height: number, fg: string, bg: string): Element
+```
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| kids | `any[]` |  |
+| value | `string` | "" |
+| flex | `number` | null |
+| width | `number` | null |
+| height | `number` | null |
+| fg | `string` | "" |
+| bg | `string` | "" |
+
+**Returns:** [Element](#element)
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L508))

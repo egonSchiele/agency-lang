@@ -262,3 +262,260 @@ export def textInput(
   if (bg != "")       { style.bg = bg }
   return { type: "textInput", style: style, value: value }
 }
+
+// ---- Container builders ----
+//
+// Each container opens a fresh children array, builds a `Builder`
+// whose method fields are PFAs of internal `_addX` functions with
+// the array pre-bound, runs the block to populate the children, and
+// returns the Element with the populated children. Records are
+// reference types in Agency and `.partial()` binds the reference
+// (not a copy), so mutations to `kids` inside `_addX` are visible to
+// the enclosing container.
+
+def _mkBoxStyle(
+  flexDirection: string,
+  flex?: number,
+  width?: number,
+  height?: number,
+  padding?: number,
+  border: boolean = false,
+  borderColor: string = "",
+  label: string = "",
+  bg: string = "",
+  fg: string = "",
+  visible: boolean = true
+): any {
+  let style: any = {}
+  if (flexDirection != "")  { style.flexDirection = flexDirection }
+  if (flex != null)         { style.flex = flex }
+  if (width != null)        { style.width = width }
+  if (height != null)       { style.height = height }
+  if (padding != null)      { style.padding = padding }
+  if (border)               { style.border = true }
+  if (borderColor != "")    { style.borderColor = borderColor }
+  if (label != "")          { style.label = label }
+  if (bg != "")             { style.bg = bg }
+  if (fg != "")             { style.fg = fg }
+  if (!visible)             { style.visible = false }
+  return style
+}
+
+def _makeBuilder(kids: any[]): Builder {
+  return {
+    row:       _addRow.partial(kids: kids),
+    column:    _addColumn.partial(kids: kids),
+    box:       _addBox.partial(kids: kids),
+    line:      _addLine.partial(kids: kids),
+    text:      _addText.partial(kids: kids),
+    list:      _addList.partial(kids: kids),
+    textInput: _addTextInput.partial(kids: kids)
+  }
+}
+
+/**
+ * A vertical container. Children stack top-to-bottom. The trailing
+ * block receives a fresh `Builder` to populate the column.
+ */
+export def column(
+  flex?: number,
+  width?: number,
+  height?: number,
+  padding?: number,
+  border: boolean = false,
+  borderColor: string = "",
+  label: string = "",
+  bg: string = "",
+  fg: string = "",
+  visible: boolean = true,
+  block: (Builder) => void = null
+): Element {
+  const kids: any[] = []
+  block(_makeBuilder(kids))
+  return {
+    type: "box",
+    style: _mkBoxStyle(flexDirection: "column", flex: flex, width: width,
+                       height: height, padding: padding, border: border,
+                       borderColor: borderColor, label: label, bg: bg,
+                       fg: fg, visible: visible),
+    children: kids
+  }
+}
+
+/**
+ * A horizontal container. Children stack left-to-right. The trailing
+ * block receives a fresh `Builder` to populate the row.
+ */
+export def row(
+  flex?: number,
+  width?: number,
+  height?: number,
+  padding?: number,
+  border: boolean = false,
+  borderColor: string = "",
+  label: string = "",
+  bg: string = "",
+  fg: string = "",
+  visible: boolean = true,
+  block: (Builder) => void = null
+): Element {
+  const kids: any[] = []
+  block(_makeBuilder(kids))
+  return {
+    type: "box",
+    style: _mkBoxStyle(flexDirection: "row", flex: flex, width: width,
+                       height: height, padding: padding, border: border,
+                       borderColor: borderColor, label: label, bg: bg,
+                       fg: fg, visible: visible),
+    children: kids
+  }
+}
+
+/**
+ * A direction-neutral container. Use when you want to apply styling
+ * (border, padding, background) without setting `flexDirection`.
+ */
+export def box(
+  flex?: number,
+  width?: number,
+  height?: number,
+  padding?: number,
+  border: boolean = false,
+  borderColor: string = "",
+  label: string = "",
+  bg: string = "",
+  fg: string = "",
+  visible: boolean = true,
+  block: (Builder) => void = null
+): Element {
+  const kids: any[] = []
+  block(_makeBuilder(kids))
+  return {
+    type: "box",
+    style: _mkBoxStyle(flexDirection: "", flex: flex, width: width,
+                       height: height, padding: padding, border: border,
+                       borderColor: borderColor, label: label, bg: bg,
+                       fg: fg, visible: visible),
+    children: kids
+  }
+}
+
+// ---- Internal: Builder method bodies ----
+
+def _addRow(
+  kids: any[],
+  flex?: number,
+  width?: number,
+  height?: number,
+  padding?: number,
+  border: boolean = false,
+  borderColor: string = "",
+  label: string = "",
+  bg: string = "",
+  fg: string = "",
+  visible: boolean = true,
+  block: (Builder) => void = null
+): Element {
+  const elem = row(flex: flex, width: width, height: height, padding: padding,
+                   border: border, borderColor: borderColor, label: label,
+                   bg: bg, fg: fg, visible: visible, block: block)
+  kids.push(elem)
+  return elem
+}
+
+def _addColumn(
+  kids: any[],
+  flex?: number,
+  width?: number,
+  height?: number,
+  padding?: number,
+  border: boolean = false,
+  borderColor: string = "",
+  label: string = "",
+  bg: string = "",
+  fg: string = "",
+  visible: boolean = true,
+  block: (Builder) => void = null
+): Element {
+  const elem = column(flex: flex, width: width, height: height, padding: padding,
+                      border: border, borderColor: borderColor, label: label,
+                      bg: bg, fg: fg, visible: visible, block: block)
+  kids.push(elem)
+  return elem
+}
+
+def _addBox(
+  kids: any[],
+  flex?: number,
+  width?: number,
+  height?: number,
+  padding?: number,
+  border: boolean = false,
+  borderColor: string = "",
+  label: string = "",
+  bg: string = "",
+  fg: string = "",
+  visible: boolean = true,
+  block: (Builder) => void = null
+): Element {
+  const elem = box(flex: flex, width: width, height: height, padding: padding,
+                   border: border, borderColor: borderColor, label: label,
+                   bg: bg, fg: fg, visible: visible, block: block)
+  kids.push(elem)
+  return elem
+}
+
+def _addLine(
+  kids: any[],
+  content: string,
+  flex?: number,
+  width?: number,
+  height?: number,
+  fg: string = "",
+  bg: string = "",
+  bold: boolean = false
+): Element {
+  const elem = line(content: content, flex: flex, width: width, height: height,
+                    fg: fg, bg: bg, bold: bold)
+  kids.push(elem)
+  return elem
+}
+
+def _addText(kids: any[], content: string): Element {
+  const elem = text(content)
+  kids.push(elem)
+  return elem
+}
+
+def _addList(
+  kids: any[],
+  items: string[],
+  selectedIndex: number = 0,
+  flex?: number,
+  width?: number,
+  height?: number,
+  border: boolean = false,
+  borderColor: string = "",
+  visible: boolean = true
+): Element {
+  const elem = list(items: items, selectedIndex: selectedIndex,
+                    flex: flex, width: width, height: height,
+                    border: border, borderColor: borderColor, visible: visible)
+  kids.push(elem)
+  return elem
+}
+
+def _addTextInput(
+  kids: any[],
+  value: string = "",
+  flex?: number,
+  width?: number,
+  height?: number,
+  fg: string = "",
+  bg: string = ""
+): Element {
+  const elem = textInput(value: value, flex: flex, width: width, height: height,
+                         fg: fg, bg: bg)
+  kids.push(elem)
+  return elem
+}

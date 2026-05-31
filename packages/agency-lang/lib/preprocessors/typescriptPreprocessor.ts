@@ -1444,6 +1444,32 @@ export class TypescriptPreprocessor {
             }
           }
         }
+
+        // Resolve scope on `handle { } with NAME` handler refs in this
+        // function/node body. Without this, codegen emits a bare
+        // `__call(NAME, ...)` that misses local variables stored in
+        // `__stack.locals.NAME`.
+        for (const { node: handleNode } of walkNodesArray(node.body)) {
+          if (
+            handleNode.type === "handleBlock" &&
+            handleNode.handler.kind === "functionRef" &&
+            !handleNode.handler.scope
+          ) {
+            const name = handleNode.handler.functionName;
+            const resolved = lookupScope(nodeName, name);
+            if (resolved) {
+              handleNode.handler.scope = resolved;
+            } else if (this.graphNodeDefinitions[name]) {
+              throw new Error(
+                `Cannot use node "${name}" as a handler. Nodes are graph transitions, not functions.`,
+              );
+            } else if (this.functionDefinitions[name]) {
+              handleNode.handler.scope = "functionRef";
+            } else {
+              handleNode.handler.scope = "imported";
+            }
+          }
+        }
       }
     }
 

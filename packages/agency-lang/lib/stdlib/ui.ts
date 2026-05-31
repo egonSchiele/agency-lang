@@ -20,7 +20,7 @@ import {
   type OutputTarget,
 } from "@/tui/index.js";
 import type { Frame } from "@/tui/frame.js";
-import { withBottomCursor } from "./ui-region.js";
+import { withBottomCursor, installRegion, resetRegion } from "./ui-region.js";
 import { __call } from "../runtime/call.js";
 
 // Evaluated once at load time — the env var is set by the debugger CLI
@@ -544,7 +544,12 @@ export function _setQuitAfterMs(ms: number): void {
   pendingQuitAfterMs = ms;
 }
 
-function makeBridgeScreen(): Screen {
+/** Consume any pending test-mode injection and fall back to real
+ *  terminal I/O when production. Sets `bridgeInputSource`,
+ *  `bridgeOutputTarget`, `bridgeWidth`, `bridgeHeight`. Shared by
+ *  `makeBridgeScreen` and `_runLoopHybrid` so both paths see the
+ *  same scripted-input behavior. */
+function ensureBridgeState(): void {
   if (pendingScriptedKeys) {
     const scriptedInput = new ScriptedInput(pendingScriptedKeys);
     bridgeInputSource = scriptedInput;
@@ -569,9 +574,13 @@ function makeBridgeScreen(): Screen {
     bridgeWidth = process.stdout.columns || bridgeWidth;
     bridgeHeight = process.stdout.rows || bridgeHeight;
   }
+}
+
+function makeBridgeScreen(): Screen {
+  ensureBridgeState();
   return new Screen({
-    input: bridgeInputSource,
-    output: bridgeOutputTarget,
+    input: bridgeInputSource!,
+    output: bridgeOutputTarget!,
     width: bridgeWidth,
     height: bridgeHeight,
   });
@@ -688,4 +697,75 @@ export class BottomRegionOutputTarget implements OutputTarget {
  */
 export function _writeScrollLine(text: string): void {
   process.stdout.write(text + "\n");
+}
+
+// ---------------------------------------------------------------------------
+// Hybrid mode — bridge primitives for `repl()`.
+//
+// `repl()` installs a terminal scroll region so the top of the screen
+// keeps native scrollback + mouse-select + copy/paste, and only the
+// bottom N rows are owned by the bounded TUI. The Agency-side widget
+// composes these primitives into a lifecycle that survives exceptions.
+// ---------------------------------------------------------------------------
+
+/** Install a `bottomRows`-row reserved region at the bottom of the
+ *  terminal. The top `H - bottomRows` rows scroll natively. No-op on
+ *  non-TTY. Idempotent — call again to resize the region. */
+export function _installScrollRegion(bottomRows: number): void {
+  installRegion(bottomRows);
+}
+
+/** Tear down the reserved region. Restores the default scroll region
+ *  (the whole terminal) and prints a trailing newline so the next
+ *  shell prompt lands below the bottom region. */
+export function _resetScrollRegion(): void {
+  resetRegion();
+}
+
+/** Hybrid-mode variant of `_runLoop`. Wraps the active output target
+ *  in `BottomRegionOutputTarget` so TUI frames land in the bottom
+ *  region of the real terminal, and bounds the `Screen` to a
+ *  `bottomRows`-row viewport. The scroll region itself is installed
+ *  by `repl()` via `_installScrollRegion` before this call and torn
+ *  down via `_resetScrollRegion` afterwards (including on exception
+ *  paths via the Agency `handle` block). */
+export async function _runLoopHybrid(
+  initialState: any,
+  renderFn: unknown,
+  handleKeyFn: unknown,
+  isDoneFn: unknown,
+  tickMs: number,
+  bottomRows: number,
+): Promise<any> {
+  // Resolve the underlying input + output (consuming test-mode
+  // injection), then build a Screen bounded to `bottomRows` whose
+  // OutputTarget is wrapped in `BottomRegionOutputTarget`. The wrap
+  // positions every frame at the bottom of the real terminal so
+  // ordinary stdout writes still scroll inside the top region.
+  ensureBridgeState();
+  const wrappedOutput = new BottomRegionOutputTarget(bridgeOutputTarget!);
+  const hybridScreen = new Screen({
+    input: bridgeInputSource!,
+    output: wrappedOutput,
+    width: bridgeWidth,
+    height: bottomRows,
+  });
+  bridgeActiveScreen = hybridScreen;
+  try {
+    return await hybridScreen.runLoop({
+      initialState,
+      render: async (s) => await callBridgeFn<TuiElement>(renderFn, s),
+      handleKey: async (s, ev) => await callBridgeFn(handleKeyFn, s, ev),
+      isDone: async (s) => await callBridgeFn<boolean>(isDoneFn, s),
+      tickMs,
+    });
+  } finally {
+    bridgeActiveScreen = null;
+    // `Screen.destroy` would also destroy the input source; we want
+    // the bridge's input/output to survive in case the same process
+    // later calls back into `_runLoop` (e.g. agency-agent test
+    // harnesses that run multiple REPL turns). Just clear the
+    // wrapper's own listeners.
+    if (wrappedOutput.destroy) wrappedOutput.destroy();
+  }
 }

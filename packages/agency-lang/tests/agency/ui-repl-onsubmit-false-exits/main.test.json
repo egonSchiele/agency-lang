@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "\"pass\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "repl exits cleanly when onSubmit returns false"
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+import { recordScopedRule, checkPolicy, AlwaysFields } from "std::policy"
+
+node main() {
+  const fields: AlwaysFields = {
+    "std::read": [{ field: "dir", wildcardSubpaths: true }],
+  }
+  const intr = {
+    kind: "std::read",
+    data: { dir: "/Users/x/project", filename: "foo.ts" }
+  }
+  const policy = recordScopedRule({}, intr, fields)
+
+  // Should auto-approve a matching read.
+  const d1 = checkPolicy(policy, intr)
+  if (d1.type != "approve") { return "FAIL: matching read should auto-approve" }
+
+  // Should NOT auto-approve a non-matching read.
+  const otherIntr = {
+    kind: "std::read",
+    data: { dir: "/Users/x/secrets", filename: "passwd" }
+  }
+  const d2 = checkPolicy(policy, otherIntr)
+  if (d2.type == "approve") { return "FAIL: non-matching read should not auto-approve" }
+
+  // Subpath of the original dir should still match (brace-expansion).
+  const subIntr = {
+    kind: "std::read",
+    data: { dir: "/Users/x/project/sub", filename: "a.ts" }
+  }
+  const d3 = checkPolicy(policy, subIntr)
+  if (d3.type != "approve") { return "FAIL: subpath should match" }
+
+  return "pass"
+}

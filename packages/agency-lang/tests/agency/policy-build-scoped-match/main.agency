@@ -1,0 +1,35 @@
+import { buildScopedMatch, FieldSpec, AlwaysFields } from "std::policy"
+
+node main() {
+  const fields: AlwaysFields = {
+    "std::read": [{ field: "dir", wildcardSubpaths: true }],
+    "std::exec": [
+      { field: "command", wildcardSubpaths: false },
+      { field: "subcommand", wildcardSubpaths: false },
+    ],
+  }
+  const readIntr = {
+    kind: "std::read",
+    data: { dir: "/Users/x/project", filename: "foo.ts" }
+  }
+  const m1 = buildScopedMatch(readIntr, fields)
+  // wildcardSubpaths brace-expands the value
+  if (m1.dir != "{/Users/x/project,/Users/x/project/**}") {
+    return "FAIL: brace-expansion wrong, got ${m1.dir}"
+  }
+
+  const execIntr = {
+    kind: "std::exec",
+    data: { command: "git", subcommand: "log", args: ["log"] }
+  }
+  const m2 = buildScopedMatch(execIntr, fields)
+  if (m2.command != "git") { return "FAIL: command not pinned" }
+  if (m2.subcommand != "log") { return "FAIL: subcommand not pinned" }
+
+  // Kind not in the fields map → empty match
+  const otherIntr = { kind: "myapp::deploy", data: { env: "prod" } }
+  const m3 = buildScopedMatch(otherIntr, fields)
+  if (keys(m3).length != 0) { return "FAIL: should be empty for unknown kind" }
+
+  return "pass"
+}

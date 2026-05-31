@@ -8,6 +8,15 @@ import { getRuntimeContext } from "../runtime/asyncContext.js";
 import type { RuntimeContext } from "../runtime/state/context.js";
 import type { StateStack } from "../runtime/state/stateStack.js";
 import type { ThreadStore } from "../runtime/state/threadStore.js";
+import {
+  Screen,
+  TerminalInput,
+  TerminalOutput,
+  type Element as TuiElement,
+  type KeyEvent as TuiKeyEvent,
+  type InputSource,
+  type OutputTarget,
+} from "@/tui/index.js";
 
 // Evaluated once at load time — the env var is set by the debugger CLI
 // before any compiled agency code runs and never changes.
@@ -495,4 +504,108 @@ export function __internal_prompt(
 export function _prompt(question: string): Promise<string> {
   const { ctx, stack, threads } = getRuntimeContext();
   return promptImpl(ctx, stack, threads, question);
+}
+
+// ---------------------------------------------------------------------------
+// New declarative bridge — exposes lib/tui/ to the rewritten std::ui in
+// Agency. The old imperative API above is kept in place during the
+// migration (PR #3 removes it).
+//
+// The bridge holds module-level handles for the input source, output
+// target, and viewport size. Tests inject scripted variants via
+// `_setInputSource` / `_setOutputTarget` / `_setSize`; production code
+// defaults to `TerminalInput` / `TerminalOutput` at the actual TTY size.
+// ---------------------------------------------------------------------------
+
+let bridgeInputSource: InputSource | null = null;
+let bridgeOutputTarget: OutputTarget | null = null;
+let bridgeWidth = 80;
+let bridgeHeight = 24;
+let bridgeActiveScreen: Screen | null = null;
+
+function makeBridgeScreen(): Screen {
+  if (!bridgeInputSource) bridgeInputSource = new TerminalInput();
+  if (!bridgeOutputTarget) bridgeOutputTarget = new TerminalOutput();
+  if (process.stdout.isTTY) {
+    bridgeWidth = process.stdout.columns || bridgeWidth;
+    bridgeHeight = process.stdout.rows || bridgeHeight;
+  }
+  return new Screen({
+    input: bridgeInputSource,
+    output: bridgeOutputTarget,
+    width: bridgeWidth,
+    height: bridgeHeight,
+  });
+}
+
+/** Test/runtime injection point for the input source used by the
+ *  declarative bridge. */
+export function _setInputSource(src: InputSource | null): void {
+  bridgeInputSource = src;
+}
+
+/** Test/runtime injection point for the output target. */
+export function _setOutputTarget(out: OutputTarget | null): void {
+  bridgeOutputTarget = out;
+}
+
+/** Test/runtime injection point for the viewport size. */
+export function _setSize(w: number, h: number): void {
+  bridgeWidth = w;
+  bridgeHeight = h;
+}
+
+/** Returns true while a `_runLoop` (or future `_runLoopHybrid`) call
+ *  is in flight. Used by `std::policy.cliPolicyHandler` to probe
+ *  whether a REPL owns the screen and route prompts accordingly. */
+export function _hasActiveScreen(): boolean {
+  return bridgeActiveScreen !== null;
+}
+
+/** Drives a state-machine loop with the declarative TUI engine.
+ *  Renders the initial state, awaits each key, runs `handleKey`,
+ *  re-renders, exits when `isDone` returns true. Returns the final
+ *  state.
+ *
+ *  When `tickMs` is set, the loop also re-renders on a timer so
+ *  external state (e.g. an LLM call's elapsed time) keeps updating
+ *  even with no key input.
+ */
+export async function _runLoop(
+  initialState: any,
+  renderFn: (state: any) => any,
+  handleKeyFn: (state: any, ev: TuiKeyEvent) => any,
+  isDoneFn: (state: any) => boolean,
+  tickMs?: number,
+): Promise<any> {
+  const screen = makeBridgeScreen();
+  bridgeActiveScreen = screen;
+  try {
+    return await screen.runLoop({
+      initialState,
+      render: (s) => renderFn(s) as TuiElement,
+      handleKey: (s, ev) => handleKeyFn(s, ev),
+      isDone: (s) => isDoneFn(s),
+      tickMs,
+    });
+  } finally {
+    bridgeActiveScreen = null;
+    screen.destroy();
+  }
+}
+
+/** Single-shot render of an element tree. Useful for non-interactive
+ *  output or for tests that want to inspect a rendered frame
+ *  without entering a loop. */
+export function _renderOnce(element: any): void {
+  const screen = makeBridgeScreen();
+  screen.render(element as TuiElement);
+}
+
+/** Read one key from the active screen's input source if a loop is
+ *  running, else construct a one-off screen for the read. Blocks
+ *  until a key arrives. */
+export async function _readKey(): Promise<TuiKeyEvent> {
+  const screen = bridgeActiveScreen ?? makeBridgeScreen();
+  return screen.nextKey();
 }

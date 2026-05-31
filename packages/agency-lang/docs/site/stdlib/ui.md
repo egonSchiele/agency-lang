@@ -312,3 +312,109 @@ emptyLine()
 Print an empty line. Useful for adding spacing in the output.
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L105))
+
+### text
+
+```ts
+text(content: string): Element
+```
+
+* A plain text element. No layout sizing — embed inside a `box` or
+ * `column` for layout. Prefer `line` when you want a single-row
+ * height-1 element.
+ *
+ * @param content - The text to render
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| content | `string` |  |
+
+**Returns:** [Element](#element)
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L184))
+
+### line
+
+```ts
+line(content: string, flex: number, width: number, height: number, fg: string, bg: string, bold: boolean): Element
+```
+
+* A single-line text element with `height: 1`. The default keeps it
+ * from stretching via flex when placed inside a `column`. Caller-
+ * provided style is merged on top.
+ *
+ * @param content - The text to render
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| content | `string` |  |
+| flex | `number` | null |
+| width | `number` | null |
+| height | `number` | null |
+| fg | `string` | "" |
+| bg | `string` | "" |
+| bold | `boolean` | false |
+
+**Returns:** [Element](#element)
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L195))
+
+### list
+
+```ts
+list(items: string[], selectedIndex: number, flex: number, width: number, height: number, border: boolean, borderColor: string, visible: boolean): Element
+```
+
+* A scrollable selectable list. `selectedIndex` highlights one row;
+ * out-of-range values are clamped by the renderer.
+ *
+ * @param items - The strings to display, one per row
+ * @param selectedIndex - 0-based row to highlight (default 0)
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| items | `string[]` |  |
+| selectedIndex | `number` | 0 |
+| flex | `number` | null |
+| width | `number` | null |
+| height | `number` | null |
+| border | `boolean` | false |
+| borderColor | `string` | "" |
+| visible | `boolean` | true |
+
+**Returns:** [Element](#element)
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L222))
+
+### textInput
+
+```ts
+textInput(value: string, flex: number, width: number, height: number, fg: string, bg: string): Element
+```
+
+* A single-line text input. The renderer displays `value` with a
+ * cursor; key handling is the caller's responsibility (use `runLoop`'s
+ * `handleKey` to append characters / handle backspace).
+ *
+ * @param value - Current contents of the buffer
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| value | `string` | "" |
+| flex | `number` | null |
+| width | `number` | null |
+| height | `number` | null |
+| fg | `string` | "" |
+| bg | `string` | "" |
+
+**Returns:** [Element](#element)
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L249))

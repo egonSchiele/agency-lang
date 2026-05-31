@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "\"pass\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "leaf builders (text, line) produce expected Element records"
+    }
+  ]
+}

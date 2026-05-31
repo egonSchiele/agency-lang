@@ -118,6 +118,14 @@ private probe (see "Policy handler integration" below).
    `route()` is mid-turn. Pure event-driven (option B) would freeze
    the status until the next keypress, which feels broken on long
    LLM calls.
+8. **Hybrid rendering for `repl()`.** Rather than a full-screen
+   TUI takeover, `repl()` installs a terminal scroll region (`CSI
+   1;scrollBottom r`) so the scroll area uses the terminal's
+   native scrollback (preserves mouse-select, copy-paste, and the
+   user's transcript after exit) while the fixed bottom region
+   (palette + status + input) renders declaratively via a bounded
+   `lib/tui/` `Screen`. Pure Layer 1 callers (`runLoop` directly)
+   still get the full screen — hybrid mode is opt-in via `repl()`.
 
 ## Architecture
 
@@ -150,6 +158,60 @@ private probe (see "Policy handler integration" below).
          │   Screen + Elements + InputSource   │
          ╰─────────────────────────────────────╯
 ```
+
+### Hybrid rendering for `repl()`
+
+`repl()` divides the terminal into two regions and uses a different
+mechanism for each:
+
+```diagram
+╭─────────────────────────────────────────────────╮  rows 1..scrollBottom
+│  ↑ native terminal scrollback                   │  Terminal-managed
+│  user: hello                                    │  scroll region set
+│  agent: hi                                      │  via CSI 1;N r.
+│  ...                                            │  Writes are plain
+│                                                 │  process.stdout —
+│                                                 │  copy/paste, mouse
+│                                                 │  select, scrollback
+│                                                 │  all work natively.
+├─────────────────────────────────────────────────┤  ← rows scrollBottom+1..H
+│  /exit  Exit                  (palette, hidden) │  lib/tui/ `Screen`
+│  agency-agent       $0.0234 · 1820ms  (status)  │  with height=N renders
+│  > hello world█                       (input)   │  declaratively here.
+╰─────────────────────────────────────────────────╯
+```
+
+- **Top region** (`rows 1..scrollBottom`): the terminal's own scroll
+  region, set once at REPL init via `CSI 1;scrollBottom r` and reset
+  on teardown. The new TS bridge writes scroll-area content with plain
+  `process.stdout.write`; the terminal scrolls it natively. No layout,
+  no diffing, no escape codes per line. After REPL exit the full
+  transcript remains in the user's terminal scrollback.
+- **Bottom region** (`rows scrollBottom+1..H`): rendered through the
+  existing `lib/tui/` `Screen` configured with `height: N` (where N
+  is the bottom-region row count). A custom `OutputTarget` translates
+  the engine's frame coordinates from (0,0) to (scrollBottom, 0) via
+  `saveCursor` → `moveTo(scrollBottom+1, 1)` → `<frame>` →
+  `restoreCursor`, so the engine itself is unaware it doesn't own the
+  whole screen.
+- **Coordinator**: a small ~30-line helper module
+  ([`lib/stdlib/ui-region.ts`](../../packages/agency-lang/lib/stdlib/ui-region.ts))
+  owns every ANSI escape — `installRegion(bottomRows)`,
+  `resetRegion()`, `withBottomCursor(write)`, and a SIGWINCH hook
+  that reissues the region on resize. Nothing else in the codebase
+  emits raw escapes.
+- **Layer 1 callers** (`runLoop` directly, not via `repl()`) get the
+  full-screen TUI behavior unchanged. Hybrid mode is opt-in via
+  `repl()`'s lifecycle.
+- **Non-TTY fallback**: `installRegion` is a no-op when
+  `!process.stdout.isTTY`; scroll content is line-buffered to stdout,
+  the bottom region is skipped or printed once per tick.
+
+This recovers the property of the old `std::ui` (native scrollback +
+transcript-after-exit) while keeping the declarative composition gains
+in the fixed bottom region. Cost: one extra TS file (~30 lines) and
+one custom `OutputTarget` wrapper. Multi-instance `repl()` remains
+out of scope (single scroll-region split per process).
 
 ## Layer 1 — declarative core
 
@@ -346,45 +408,71 @@ export def repl(
 
 ### Lifecycle
 
-1. **Init.** Take over the screen via `Screen` (raw mode, alt buffer,
-   cursor-hide). Assign the live `Screen` reference to the
-   module-level `_activeScreen` let in `std::ui` so the policy
-   handler can probe it (see "Policy handler integration" below).
+1. **Init.** Compute the bottom-region height N from the fixed-rows
+   layout (input + status + palette-when-open). Install the
+   terminal scroll region with `installRegion(N)` from
+   [`lib/stdlib/ui-region.ts`](../../packages/agency-lang/lib/stdlib/ui-region.ts).
+   Construct a `lib/tui/` `Screen` with `height: N` and the
+   `BottomRegionOutputTarget` (translates frame writes to the
+   bottom of the real terminal). Assign the live `Screen` reference
+   to the module-level `_activeScreen` let in `std::ui` so the
+   policy handler can probe it.
 2. **Hydrate history.** If `historyFile` is set, read + parse it.
-   Missing / malformed = empty history (warn to scroll area).
-3. **Render loop.** `runLoop` with `tickMs: 100`. State holds input
+   Missing / malformed = empty history (warn into the scroll region).
+3. **Seed scroll region.** Call `output()` once; write each returned
+   line to `process.stdout`. Cache the line count as
+   `outputLinesWritten`.
+4. **Render loop.** `runLoop` with `tickMs: 100`. State holds input
    buffer, cursor pos, history index, palette open/closed, palette
-   filter, palette selection.
-4. **Per-tick.** Re-call `output()` and `status()`; re-render.
-5. **Per-key.** Update state, then re-render. Keys are described in
-   the "Key bindings" section below.
-6. **On submit.** Append input to history, persist if `historyFile`
+   filter, palette selection. Also tracks `outputLinesWritten`.
+5. **Per-tick.** Call `output()`; if `lines.length > outputLinesWritten`,
+   stdout-write the new tail (`lines.slice(outputLinesWritten)`),
+   bump the counter. (Terminal's native scroll handles clipping.)
+   If `output()` ever shrinks (e.g. after `/clear`), reset the
+   counter and reissue `installRegion` + `\x1b[2J` to clear the
+   top region. Then re-render the bottom region by calling
+   `status()` and pushing a fresh frame through the `Screen`.
+6. **Per-key.** Update state, then re-render the bottom region.
+   Keys are described in the "Key bindings" section below.
+7. **On submit.** Append input to history, persist if `historyFile`
    set, clear input, call `onSubmit(line)`. If it returns `false`,
    exit the loop.
-7. **Teardown.** Restore terminal, reset `_activeScreen` back to
-   `null`. Runs in a `finally`-style block so Ctrl-C and exceptions
-   still restore the terminal.
+8. **Teardown.** Call `resetRegion()` to restore the terminal's
+   full scroll region; print a trailing newline so the next
+   shell prompt lands below the bottom region. Reset
+   `_activeScreen` back to `null`. Runs in a `finally`-style
+   block so Ctrl-C and exceptions still restore the terminal.
+
+`SIGWINCH` between ticks recomputes `scrollBottom = rows - N`,
+reissues `installRegion(N)`, and updates the `Screen`'s `height`.
+The next render uses the new dimensions.
 
 ### Rendered layout
 
 ```diagram
-╭───────────────────────────────────────────────╮
-│  scrolling output area  (← output())          │  flex: 1, scrollable
-│  ...                                          │
-│                                               │
-├───────────────────────────────────────────────┤
-│  /exit   — Exit the agent      (visible only  │  list, when paletteOpen
-│  /help   — Show help            when palette  │
-│  /clear  — Clear conversation   is triggered) │
-├───────────────────────────────────────────────┤
-│  agency-agent           $0.0234 · 1820ms      │  ← status(), height: 1
-├───────────────────────────────────────────────┤
-│  > hello world█                               │  ← textInput, height: 1
-╰───────────────────────────────────────────────╯
+                                                   ──┐
+  ↑ previous scroll lines (stay in scrollback)       │  Native terminal scroll
+  you: hello                                         │  region (rows 1..H-N).
+  agent: hi                                          │  Plain stdout writes;
+  you: how are you                                   │  copy/paste + native
+  ...                                                │  scrollback work.
+                                                   ──┤
+╭───────────────────────────────────────────────╮    │
+│  /exit   — Exit the agent     (visible only   │    │  Bottom region (rows
+│  /help   — Show help          when palette    │    │  H-N+1..H) rendered by
+│  /clear  — Clear conversation is triggered)   │    │  the lib/tui/ Screen
+├───────────────────────────────────────────────┤    │  with height=N. Updated
+│  agency-agent           $0.0234 · 1820ms      │    │  on every tick + every
+├───────────────────────────────────────────────┤    │  key.
+│  > hello world█                               │    │
+╰───────────────────────────────────────────────╯  ──┘
 ```
 
 When the palette is closed, the palette row is `visible: false` and
-takes no layout space.
+the bottom region is 2 rows (status + input). When the palette opens
+the row count grows to 2 + paletteRows; `installRegion` is reissued
+with the new N so the top scroll region shrinks accordingly. After
+the palette closes the region is restored to 2 rows.
 
 ### Key bindings (default)
 
@@ -619,6 +707,6 @@ to be written next).
 | Web/browser rendering               | Deferred; `lib/tui/render/html.ts` exists but isn't wired. |
 | Fuzzy palette search                | Deferred; substring match for v1.                 |
 | Multi-line input (Shift+Enter)      | Deferred; single line for v1.                     |
-| Persistent scroll position          | Deferred; always pinned to bottom in v1.          |
+| Persistent scroll position          | Solved by hybrid rendering: top region is the terminal's native scroll region; native scrollback preserved across the REPL lifetime and after exit. |
 | In-REPL `/help` content             | Static string baked into `repl()`; full help screen is a follow-up. |
 | `repl()` callable from a thread     | Single-instance only in v1 (uses a module-level `_activeScreen`). Multi-instance is a future redesign of the policy probe mechanism. |

@@ -17,6 +17,8 @@ import {
   type InputSource,
   type OutputTarget,
 } from "@/tui/index.js";
+import type { Frame } from "@/tui/frame.js";
+import { withBottomCursor } from "./ui-region.js";
 
 // Evaluated once at load time — the env var is set by the debugger CLI
 // before any compiled agency code runs and never changes.
@@ -608,4 +610,36 @@ export function _renderOnce(element: any): void {
 export async function _readKey(): Promise<TuiKeyEvent> {
   const screen = bridgeActiveScreen ?? makeBridgeScreen();
   return screen.nextKey();
+}
+
+/**
+ * Wraps any `OutputTarget` so frame writes land at the bottom of the
+ * real terminal — used by `repl()`'s hybrid rendering. The inner
+ * target is unaware it doesn't own the whole screen;
+ * `withBottomCursor` saves/moves/restores the cursor around each
+ * frame so plain stdout writes still scroll inside the top region.
+ */
+export class BottomRegionOutputTarget implements OutputTarget {
+  constructor(private inner: OutputTarget) {}
+
+  write(frame: Frame, label?: string): void {
+    withBottomCursor(() => {
+      this.inner.write(frame, label);
+    });
+  }
+
+  destroy(): void {
+    if (this.inner.destroy) this.inner.destroy();
+  }
+}
+
+/**
+ * Append a raw text line to the scroll region. Plain
+ * `process.stdout.write` — no ANSI; the scroll region installed by
+ * `installRegion` in `./ui-region.ts` does the scrolling. Used by
+ * `repl()` to stream `output()` lines into the terminal's native
+ * scrollback as new tail elements appear.
+ */
+export function _writeScrollLine(text: string): void {
+  process.stdout.write(text + "\n");
 }

@@ -1,0 +1,11 @@
+// Reproduces the exporting side of issue #232: a top-level
+// `static const` whose value is computed by a helper function.
+// Importers of this constant must observe the populated value, not
+// undefined, regardless of whether they read it from another
+// `static const` init expression or from a `def` body.
+
+def computeDir(): string {
+  return "/tmp/agency-fixture"
+}
+
+export static const AGENCY_DIR = computeDir()

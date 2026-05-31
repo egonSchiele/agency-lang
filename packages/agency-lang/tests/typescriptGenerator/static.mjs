@@ -22,6 +22,8 @@ import {
   Schema, __validateType, __validateChain, __validateChainRecursive,
   AgencyFunction as __AgencyFunction, UNSET as __UNSET,
   __call, __callMethod, __threads, __stateStack, getRuntimeContext, agencyStore,
+  __initVar,
+  __registerModule, __getReachableModules,
   functionRefReviver as __functionRefReviver,
   DeterministicClient as __DeterministicClient,
   createLogger as __createLogger,
@@ -133,16 +135,20 @@ function registerTools(tools: any[]) {
   }
 }
 
-let __staticInitPromise = null;
 let foo;
+async function __init_foo_compute(__ctx) {
+  foo = __deepFreeze(1);
+  return foo;
+}
+const __init_foo = __initVar("static.agency:foo", __init_foo_compute);
+export { __init_foo };
+const __MY_INIT_GETTERS = [__init_foo];
 async function __initializeStatic(__ctx) {
-  if (__staticInitPromise) {
-    return __staticInitPromise;
+  __ctx.globals.markInitialized("static.agency")
+  for (const init of __MY_INIT_GETTERS) {
+    await init(__ctx)
   }
-  __staticInitPromise = (async () => {
-    foo = __deepFreeze(1);
-  })();
-  return __staticInitPromise;
+  await __ctx.writeStaticStateToTrace(__globalCtx.getStaticVars())
 }
 function __getStaticVars() {
   return {
@@ -150,14 +156,22 @@ function __getStaticVars() {
   };
 }
 __globalCtx.getStaticVars = __getStaticVars;
+async function __runImperatives(__ctx) {
+
+}
 async function __initializeGlobals(__ctx) {
-  __ctx.globals.markInitialized("static.agency")
-  await __initializeStatic(__ctx)
-  await __ctx.writeStaticStateToTrace(__globalCtx.getStaticVars())
+  const __reachable = __getReachableModules();
+  for (const mod of __reachable) {
+    await mod.__initializeStatic(__ctx)
+  }
+  for (const mod of __reachable) {
+    await mod.__runImperatives(__ctx)
+  }
 }
 async function __registerTopLevelCallbacks(__ctx) {
   __ctx.topLevelCallbacks = [];
 }
+__registerModule({ __moduleId: "static.agency", __initializeStatic, __runImperatives });
 __functionRefReviver.registry = __toolRegistry;
 graph.node("main", async (__state: GraphState) => {
   const __setupData = setupNode({

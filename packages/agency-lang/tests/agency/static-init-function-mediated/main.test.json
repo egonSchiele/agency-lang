@@ -1,0 +1,15 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "description": "Function-mediated cross-module static: importing module's static const reads an exported `static const X = someFn()` from another module AND the source module's def-body read of X returns the populated value.",
+      "expectedOutput": "{\"full\":\"/lib/base/full\",\"echoed\":\"/lib/base\"}",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    }
+  ]
+}

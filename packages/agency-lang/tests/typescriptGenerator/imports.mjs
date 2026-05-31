@@ -37,6 +37,8 @@ import {
   Schema, __validateType, __validateChain, __validateChainRecursive,
   AgencyFunction as __AgencyFunction, UNSET as __UNSET,
   __call, __callMethod, __threads, __stateStack, getRuntimeContext, agencyStore,
+  __initVar,
+  __registerModule, __getReachableModules,
   functionRefReviver as __functionRefReviver,
   DeterministicClient as __DeterministicClient,
   createLogger as __createLogger,
@@ -150,12 +152,33 @@ function registerTools(tools: any[]) {
 
 __registerTool(foo);
 __registerTool(foo);
-async function __initializeGlobals(__ctx) {
+const __MY_INIT_GETTERS = [];
+async function __initializeStatic(__ctx) {
   __ctx.globals.markInitialized("imports.agency")
+  for (const init of __MY_INIT_GETTERS) {
+    await init(__ctx)
+  }
+}
+function __getStaticVars() {
+  return {};
+}
+__globalCtx.getStaticVars = __getStaticVars;
+async function __runImperatives(__ctx) {
+
+}
+async function __initializeGlobals(__ctx) {
+  const __reachable = __getReachableModules();
+  for (const mod of __reachable) {
+    await mod.__initializeStatic(__ctx)
+  }
+  for (const mod of __reachable) {
+    await mod.__runImperatives(__ctx)
+  }
 }
 async function __registerTopLevelCallbacks(__ctx) {
   __ctx.topLevelCallbacks = [];
 }
+__registerModule({ __moduleId: "imports.agency", __initializeStatic, __runImperatives });
 __functionRefReviver.registry = __toolRegistry;
 
 

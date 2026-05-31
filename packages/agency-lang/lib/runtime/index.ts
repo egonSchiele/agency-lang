@@ -26,6 +26,13 @@ export {
   __ctx,
   type AgencyStore,
 } from "./asyncContext.js";
+export { __initVar } from "./initVar.js";
+export {
+  __registerModule,
+  __getReachableModules,
+  __resetModuleRegistry,
+  type ModuleInitHandle,
+} from "./initOrchestrator.js";
 export { StateStack, State } from "./state/stateStack.js";
 export { GlobalStore } from "./state/globalStore.js";
 export { MessageThread } from "./state/messageThread.js";

@@ -1,0 +1,15 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "description": "Diamond import graph: main → {left, right} → root. Both branches' getter cascade hits __init_ROOT; __initVar memoization keeps the compute body single-execution.",
+      "expectedOutput": "\"/var/root/left|/var/root/right\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    }
+  ]
+}

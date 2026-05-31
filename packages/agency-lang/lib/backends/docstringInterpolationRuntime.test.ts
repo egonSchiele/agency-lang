@@ -48,12 +48,17 @@ describe("doc string interpolation — runtime resolution", () => {
     );
 
     // Eager init is still emitted so the global is populated before
-    // the description template literal evaluates. The previously
+    // the description template literal evaluates. Post-#232, we call
+    // `__runImperatives` directly (not the two-phase
+    // `__initializeGlobals` shim) so the synchronous `globals.set`
+    // imperatives run sync before the description literal evaluates;
+    // the shim's first statement awaits `__initializeStatic`, which
+    // would suspend before any `globals.set` ran. The previously
     // emitted `const __ctx = __globalCtx;` top-level rebind was
     // removed — it would now shadow the `__ctx` runtime import (which
     // is a function in the post-ALS migration) and break every
     // accessor call.
-    expect(compiled).toContain("__initializeGlobals(__globalCtx);");
+    expect(compiled).toContain("__runImperatives(__globalCtx);");
   });
 
   it("evaluates the tool description to the interpolated global value at runtime", async () => {

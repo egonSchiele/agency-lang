@@ -22,6 +22,8 @@ import {
   Schema, __validateType, __validateChain, __validateChainRecursive,
   AgencyFunction as __AgencyFunction, UNSET as __UNSET,
   __call, __callMethod, __threads, __stateStack, getRuntimeContext, agencyStore,
+  __initVar,
+  __registerModule, __getReachableModules,
   functionRefReviver as __functionRefReviver,
   DeterministicClient as __DeterministicClient,
   createLogger as __createLogger,
@@ -60,7 +62,7 @@ const __globalCtx = new RuntimeContext({
   }
 });
 const graph = __globalCtx.graph;
-__initializeGlobals(__globalCtx);
+__runImperatives(__globalCtx);
 
 // Handler result builtins and interrupt response constructors (unified types)
 export function approve(value?: any) { return { type: "approve" as const, value }; }
@@ -134,13 +136,33 @@ function registerTools(tools: any[]) {
   }
 }
 
-async function __initializeGlobals(__ctx) {
+const __MY_INIT_GETTERS = [];
+async function __initializeStatic(__ctx) {
   __ctx.globals.markInitialized("docstrings.agency")
+  for (const init of __MY_INIT_GETTERS) {
+    await init(__ctx)
+  }
+}
+function __getStaticVars() {
+  return {};
+}
+__globalCtx.getStaticVars = __getStaticVars;
+async function __runImperatives(__ctx) {
   __ctx.globals.set("docstrings.agency", "toolVersion", `2.0`)
+}
+async function __initializeGlobals(__ctx) {
+  const __reachable = __getReachableModules();
+  for (const mod of __reachable) {
+    await mod.__initializeStatic(__ctx)
+  }
+  for (const mod of __reachable) {
+    await mod.__runImperatives(__ctx)
+  }
 }
 async function __registerTopLevelCallbacks(__ctx) {
   __ctx.topLevelCallbacks = [];
 }
+__registerModule({ __moduleId: "docstrings.agency", __initializeStatic, __runImperatives });
 __functionRefReviver.registry = __toolRegistry;
 //  Test docstrings in functions
 async function __add_impl(a: any, b: any) {

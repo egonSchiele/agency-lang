@@ -1,0 +1,16 @@
+// `def`-mediated static init: a `static const` whose value comes from
+// a top-level function call. This is the agency-agent #232 shape —
+// `static const AGENCY_AGENT_DIR = computeAgentDir()` — and was
+// broken in two ways before the fix:
+//   1) Importer's static const reading this value saw undefined.
+//   2) The function body's lazy first-call init check could re-enter
+//      `__initializeGlobals` while the static was still computing
+//      (because nothing had been markInitialized yet), deadlocking
+//      on the in-flight `__init_AGENCY_DIR` promise.
+def computeBase(): string {
+  return "/lib/base"
+}
+
+export static const BASE = computeBase()
+
+export def echoBase(): string { return BASE }

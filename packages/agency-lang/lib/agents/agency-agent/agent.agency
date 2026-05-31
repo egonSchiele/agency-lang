@@ -7,6 +7,7 @@ import { cwd, env } from "std::system"
 
 import { codeSysPrompt, codeTools } from "./code.agency"
 import { researchSysPrompt, researchTools } from "./research.agency"
+import { AGENCY_AGENT_DIR } from "./shared.agency"
 
 
 /*
@@ -62,19 +63,11 @@ callback("onToolCallEnd") as data {
   }
 }
 
-// On-disk policy at `$HOME/.agency-agent/policy.json`. We duplicate the
-// home-dir computation here instead of importing `AGENCY_AGENT_DIR` from
-// `shared.agency` because Agency doesn't guarantee imported static-const
-// init runs before the importer reads it (upstream #232).
-const POLICY_FILE = "policy.json"
-def policyDir(): string {
-  const home = env("HOME")
-  if (home == null) {
-    return "./.agency-agent"
-  }
-  return "${home}/.agency-agent"
-}
-def policyPath(): string { return "${policyDir()}/${POLICY_FILE}" }
+// On-disk policy at `$HOME/.agency-agent/policy.json`. We compose the
+// path from `shared.agency`'s `AGENCY_AGENT_DIR` static const; the
+// cross-module init-order fix (#232) guarantees the value is populated
+// before this static const evaluates.
+export static const POLICY_PATH = "${AGENCY_AGENT_DIR}/policy.json"
 
 // Per-kind config driving the "approve-always-here" option. For each
 // kind we list the data fields the scoped rule should pin, plus a
@@ -141,7 +134,7 @@ node main() {
   // Bind the handler to a local var so `with handler` parses (the
   // `with` clause only accepts an identifier, not a call expression).
   const handler = cliPolicyHandler({
-    file: policyPath(),
+    file: POLICY_PATH,
     fields: ALWAYS_FIELDS,
   })
 

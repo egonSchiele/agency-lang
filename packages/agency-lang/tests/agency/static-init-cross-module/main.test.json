@@ -1,0 +1,15 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "description": "Regression for #232: importer's static const that reads an imported static const must see the populated value (not 'undefined/...').",
+      "expectedOutput": "\"/tmp/agency-fixture/policy.json\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,2 @@
+import { ROOT } from "./root.agency"
+export static const RIGHT = "${ROOT}/right"

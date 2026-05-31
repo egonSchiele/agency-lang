@@ -24,9 +24,43 @@ import { ts } from "../../ir/builders.js";
 export type PartitionDeps = {
   processNode: (node: AgencyNode) => TsNode;
   processNodeInGlobalInit: (node: AgencyNode) => TsNode;
+  /**
+   * Process the RHS of a `static const X = …` declaration in a
+   * static-init context. The callback is responsible for:
+   *  - Marking codegen state so reads of imported / same-module top
+   *    level statics inside the value expression are rewritten to
+   *    `await __init_<dep>(__ctx)` (the getter cascade that fixes the
+   *    cross-module init ordering bug #232).
+   *  - Restoring codegen state on return (try/finally).
+   * The `varName` arg is the var currently being initialized — used by
+   * the rewriter to avoid emitting a self-call for the trivially-cyclic
+   * (and therefore disallowed) case of `static const X = X + 1`.
+   */
+  processStaticInitValue: (varName: string, node: AgencyNode) => TsNode;
   buildHandlerArrow: (handlerName: string) => TsNode;
   isTopLevelDeclaration: (node: AgencyNode) => boolean;
   moduleId: string;
+};
+
+/**
+ * Compiled per-variable init spec. One produced per top-level
+ * `static const`. The codegen turns this into:
+ *
+ *   let X;            // or `export let X;` if `exported`
+ *   const __init_X = __initVar("<moduleId>:X", async (__ctx) => {
+ *     ...computeBody  // typically: X = __deepFreeze(<rewritten rhs>); return X;
+ *   });
+ *
+ * The compute body owns both the assignment to the module-level `let`
+ * AND the `return` of the value (so callers of `__init_X` get the
+ * populated value back). Putting the assignment + return inside the
+ * same closure means concurrent callers all observe the same final
+ * value because `__initVar` memoizes on its compute's promise.
+ */
+export type InitVarSpec = {
+  varName: string;
+  exported: boolean;
+  computeBody: TsNode[];
 };
 
 export type ProgramPartition = {
@@ -34,8 +68,13 @@ export type ProgramPartition = {
   staticVarNames: Set<string>;
   /** Subset of `staticVarNames` that are `export`-ed. */
   exportedStaticVarNames: Set<string>;
-  /** Statements that initialize static variables, run once. */
-  staticInitStatements: TsNode[];
+  /**
+   * Per-variable init specs in source declaration order. Source order
+   * does NOT determine init order at runtime — the getter cascade does
+   * — but it's the order they'll appear in `__MY_INIT_GETTERS`, which
+   * pins iteration order for trace/checkpoint replay determinism.
+   */
+  staticInitVars: InitVarSpec[];
   /** Statements that initialize global variables / run top-level code per execution. */
   globalInitStatements: TsNode[];
   /** Top-level declarations (functions, graph nodes, type aliases, classes). */
@@ -81,7 +120,7 @@ export function partitionProgram(
 ): ProgramPartition {
   const staticVarNames = new Set<string>();
   const exportedStaticVarNames = new Set<string>();
-  const staticInitStatements: TsNode[] = [];
+  const staticInitVars: InitVarSpec[] = [];
   const globalInitStatements: TsNode[] = [];
   const topLevelStatements: TsNode[] = [];
   const topLevelCallbackStatements: TsNode[] = [];
@@ -98,16 +137,23 @@ export function partitionProgram(
       staticVarNames.add(stmt.variableName);
       if (stmt.exported) exportedStaticVarNames.add(stmt.variableName);
 
-      const valueNode = deps.processNodeInGlobalInit(stmt.value);
+      // Process the rhs inside a static-init context so reads of
+      // imported / same-module top-level statics get rewritten to
+      // `await __init_<dep>(__ctx)` (the getter cascade — see
+      // `processStaticInitValue` docstring above).
+      const valueNode = deps.processStaticInitValue(stmt.variableName, stmt.value);
       const frozenAssign = ts.assign(
         ts.id(stmt.variableName),
         ts.call(ts.id("__deepFreeze"), [valueNode]),
       );
-      staticInitStatements.push(
-        handlerName
-          ? ts.withHandler(deps.buildHandlerArrow(handlerName), frozenAssign)
-          : frozenAssign,
-      );
+      const assignStmt = handlerName
+        ? ts.withHandler(deps.buildHandlerArrow(handlerName), frozenAssign)
+        : frozenAssign;
+      staticInitVars.push({
+        varName: stmt.variableName,
+        exported: !!stmt.exported,
+        computeBody: [assignStmt, ts.return(ts.id(stmt.variableName))],
+      });
       continue;
     }
 
@@ -168,7 +214,7 @@ export function partitionProgram(
   return {
     staticVarNames,
     exportedStaticVarNames,
-    staticInitStatements,
+    staticInitVars,
     globalInitStatements,
     topLevelStatements,
     topLevelCallbackStatements,
@@ -245,7 +291,12 @@ export type AssembleSectionsOpts = {
   typeAliases: TsNode[];
   staticVarNames: Set<string>;
   exportedStaticVarNames: Set<string>;
-  staticInitStatements: TsNode[];
+  /**
+   * Per-variable static init specs. Each spec becomes one `let X;` +
+   * `const __init_X = __initVar(...)` pair plus an entry in
+   * `__MY_INIT_GETTERS`. See {@link InitVarSpec} for the contract.
+   */
+  staticInitVars: InitVarSpec[];
   globalInitStatements: TsNode[];
   topLevelCallbackStatements: TsNode[];
   generatedStatements: TsNode[];
@@ -264,8 +315,13 @@ export type AssembleSectionsOpts = {
  *   generated builtins (template)
  *   tool registrations
  *   type aliases
- *   static-var declarations + __initializeStatic + __getStaticVars (if any)
- *   __initializeGlobals
+ *   static-var let decls + per-var __init_X getters + __MY_INIT_GETTERS
+ *     + __initializeStatic + __getStaticVars (always emitted; the
+ *     no-statics case degrades to empty array + no-op for-loop)
+ *   __runImperatives
+ *   __initializeGlobals (backward-compat shim)
+ *   __registerTopLevelCallbacks
+ *   module self-registration with the init orchestrator
  *   generated statements
  *   postprocess
  *   __sourceMap export
@@ -295,13 +351,31 @@ export function assembleSections(opts: AssembleSectionsOpts): TsNode {
     sections.push(alias);
   }
 
-  if (opts.staticVarNames.size > 0) {
-    sections.push(...buildStaticVarSetup(opts));
-  }
+  // Always emit (the no-statics case folds to `__MY_INIT_GETTERS = []`
+  // + an empty for-loop). Skipping the `if (size > 0)` guard avoids a
+  // useless special case and lets the entry orchestrator iterate
+  // unconditionally.
+  sections.push(...buildStaticVarSetup(opts));
+
+  sections.push(buildRunImperativesFn(opts));
 
   sections.push(buildInitializeGlobalsFn(opts));
 
   sections.push(buildRegisterTopLevelCallbacksFn(opts));
+
+  // Self-register with the cross-module orchestrator. This runs at
+  // module-load time (a side effect of being ES-imported). ES module
+  // loading is post-order DFS over static imports, so deps register
+  // before their importers — exactly the order we want
+  // `__getReachableModules` to yield for the entry-time orchestration.
+  // The exported __moduleId / __initializeStatic / __runImperatives
+  // are the only Agency-side contract the orchestrator depends on.
+  sections.push(
+    ts.raw(
+      `__registerModule({ __moduleId: ${JSON.stringify(opts.moduleId)}, ` +
+      `__initializeStatic, __runImperatives });`,
+    ),
+  );
 
   sections.push(ts.statements(opts.generatedStatements));
 
@@ -317,52 +391,163 @@ export function assembleSections(opts: AssembleSectionsOpts): TsNode {
 }
 
 /**
- * Emit:
- *   let __staticInitPromise = null
- *   [export] let x        ←─── one per static var
+ * Emit (per the cross-module init-order design — see
+ * `docs/superpowers/plans/2026-05-30-cross-module-init-order.md`):
+ *
+ *   [export] let x;          ←─── one per static var
+ *   const __init_x = __initVar("modId:x", async (__ctx) => {
+ *     x = __deepFreeze(<rewritten rhs>);
+ *     return x;
+ *   });
+ *   ...
+ *   export { __init_x, ... };  ←─── exported so cross-module init
+ *                                   reads can `import { __init_x }`
+ *                                   without leaking the value let
+ *                                   binding name itself.
+ *
+ *   // IMPORTANT: sequential `for await` — DO NOT switch to
+ *   // Promise.all (breaks trace/checkpoint replay determinism).
+ *   const __MY_INIT_GETTERS = [__init_x, ...];
  *   async function __initializeStatic(__ctx) {
- *     if (__staticInitPromise) return __staticInitPromise
- *     __staticInitPromise = (async () => { …staticInitStatements })()
- *     return __staticInitPromise
+ *     for (const init of __MY_INIT_GETTERS) await init(__ctx);
+ *     await __ctx.writeStaticStateToTrace(__getStaticVars());
  *   }
  *   function __getStaticVars() { return { x, … } }
  *   __globalCtx.getStaticVars = __getStaticVars;
+ *
+ * Always emitted; modules with zero statics still produce an empty
+ * `__MY_INIT_GETTERS` and a no-op `__initializeStatic` so the
+ * orchestrator can iterate without a presence check (drops the prior
+ * `if (staticVarNames.size > 0)` guard).
  */
 function buildStaticVarSetup(opts: AssembleSectionsOpts): TsNode[] {
   const out: TsNode[] = [];
-  const staticLetDecls = [...opts.staticVarNames].map((name) =>
-    opts.exportedStaticVarNames.has(name)
-      ? ts.export(ts.letDecl(name))
-      : ts.letDecl(name),
+  const ctxParam = ts.id("__ctx");
+
+  // `let X` (or `export let X`) for every static. Source order; matches
+  // the order they appear in `staticInitVars`.
+  const staticLetDecls = opts.staticInitVars.map((iv) =>
+    iv.exported ? ts.export(ts.letDecl(iv.varName)) : ts.letDecl(iv.varName),
+  );
+  if (staticLetDecls.length > 0) {
+    out.push(ts.statements(staticLetDecls));
+  }
+
+  // Per-var getter pair:
+  //   async function __init_X_compute(__ctx) { ...computeBody }
+  //   const __init_X = __initVar("modId:X", __init_X_compute);
+  //
+  // We use a NAMED function declaration for the compute (not an
+  // anonymous arrow) so V8's stack traces show `__init_X_compute`
+  // frames at every level of a cyclic / cascading init chain. The
+  // `__initVar` error message says "every frame named `__init_*` is
+  // a participating variable" — that promise only holds if the
+  // closures are actually named, which an anonymous arrow inside the
+  // `__initVar` call expression is not.
+  //
+  // The compute body owns both assignment to the module-level `let X`
+  // and returning the value, so callers awaiting __init_X get the
+  // final populated value.
+  const initVarDecls: TsNode[] = [];
+  for (const iv of opts.staticInitVars) {
+    initVarDecls.push(
+      ts.functionDecl(
+        `__init_${iv.varName}_compute`,
+        [{ name: "__ctx" }],
+        ts.statements(iv.computeBody),
+        { async: true },
+      ),
+    );
+    initVarDecls.push(
+      ts.constDecl(
+        `__init_${iv.varName}`,
+        ts.call(ts.id("__initVar"), [
+          ts.str(`${opts.moduleId}:${iv.varName}`),
+          ts.id(`__init_${iv.varName}_compute`),
+        ]),
+      ),
+    );
+  }
+  if (initVarDecls.length > 0) {
+    out.push(ts.statements(initVarDecls));
+  }
+
+  // Export the `__init_X` getters so importers can call them in their
+  // own init contexts. Done as a single `export { ... }` statement to
+  // keep the diff in generated output small and to avoid colliding
+  // with same-name `__init_X` symbols on the importing side (they
+  // import via named-aliased binding).
+  if (opts.staticInitVars.length > 0) {
+    const exportList = opts.staticInitVars
+      .map((iv) => `__init_${iv.varName}`)
+      .join(", ");
+    out.push(ts.raw(`export { ${exportList} };`));
+  }
+
+  // `__MY_INIT_GETTERS = [__init_A, __init_B, ...]`. Source-order
+  // pinning — does NOT affect correctness (the cascade handles deps)
+  // but does affect WHICH chain gets kicked off first by the
+  // orchestrator. Deterministic order keeps trace/checkpoint replays
+  // stable.
+  out.push(
+    ts.constDecl(
+      "__MY_INIT_GETTERS",
+      ts.arr(opts.staticInitVars.map((iv) => ts.id(`__init_${iv.varName}`))),
+    ),
   );
 
-  out.push(ts.statements([
-    ts.letDecl("__staticInitPromise", ts.raw("null")),
-    ...staticLetDecls,
-  ]));
-
-  // Promise-based guard: concurrent callers await the same init promise.
+  // `__initializeStatic`: sequential for-await over __MY_INIT_GETTERS.
+  // IMPORTANT: keep this sequential — `Promise.all` would break trace
+  // and checkpoint replay determinism (the order in which dep chains
+  // get fired off varies otherwise).
+  //
+  // markInitialized is called BEFORE iterating the getters so that
+  // function-mediated init reads work: a `static const X = computeX()`
+  // where `computeX` is a top-level `def` would otherwise re-enter
+  // `__initializeGlobals` via the lazy first-call init check at
+  // `typescriptBuilder.ts:~1660` and deadlock on the in-flight
+  // __init_X promise. Marking up front matches the pre-#232 design's
+  // semantics: "this module's init has started; don't re-enter it
+  // from below". The orchestrator guarantees Phase 2 (`__runImperatives`)
+  // runs for every reachable module so global-init side effects still
+  // happen even though the lazy-init check now short-circuits.
+  const initStaticBody: TsNode[] = [
+    ts.methodCall(
+      ts.prop(ctxParam, "globals"),
+      "markInitialized",
+      [ts.str(opts.moduleId)],
+    ),
+    ts.forOf(
+      "init",
+      ts.id("__MY_INIT_GETTERS"),
+      ts.await(ts.call(ts.id("init"), [ctxParam])),
+    ),
+  ];
+  // Trace capture (once per module per fresh init cycle, as before).
+  // `__initVar` memoization makes subsequent calls cheap, but we still
+  // want one trace event per module to record the populated static
+  // state.
+  if (opts.staticInitVars.length > 0) {
+    initStaticBody.push(
+      ts.awaitMethodCall(ctxParam, "writeStaticStateToTrace", [
+        ts.methodCall(ts.runtime.globalCtx, "getStaticVars"),
+      ]),
+    );
+  }
   out.push(
     ts.functionDecl(
       "__initializeStatic",
       [{ name: "__ctx" }],
-      ts.statements([
-        ts.if(
-          ts.id("__staticInitPromise"),
-          ts.return(ts.id("__staticInitPromise")),
-        ),
-        ts.assign(
-          ts.id("__staticInitPromise"),
-          ts.iife({ async: true, body: opts.staticInitStatements }),
-        ),
-        ts.return(ts.id("__staticInitPromise")),
-      ]),
+      ts.statements(initStaticBody),
       { async: true },
     ),
   );
 
+  // `__getStaticVars` + `__globalCtx.getStaticVars` registration:
+  // unchanged from the previous design. Used by the trace writer to
+  // snapshot top-level statics on each init cycle.
   const staticVarObj = ts.obj(
-    [...opts.staticVarNames].map((n) => ts.set(n, ts.id(n))),
+    opts.staticInitVars.map((iv) => ts.set(iv.varName, ts.id(iv.varName))),
   );
   out.push(ts.statements([
     ts.functionDecl("__getStaticVars", [], ts.return(staticVarObj)),
@@ -377,12 +562,74 @@ function buildStaticVarSetup(opts: AssembleSectionsOpts): TsNode[] {
 
 /**
  * Emit:
- *   async function __initializeGlobals(__ctx) {
- *     __ctx.globals.markInitialized(moduleId)
- *     [await __initializeStatic(__ctx)]  ← only if there are static vars
- *     [await __ctx.writeStaticStateToTrace(__globalCtx.getStaticVars())]
- *     …globalInitStatements
+ *   async function __runImperatives(__ctx) {
+ *     if (__ctx.globals.isInitialized(moduleId)) return;
+ *     __ctx.globals.markInitialized(moduleId);
+ *     …globalInitStatements   // top-level let X = expr → globals.set,
+ *                             //   bare top-level calls, etc.
  *   }
+ *
+ * This is the second phase of init. Static-var population is in
+ * `__initializeStatic`; imperative side effects live here so the
+ * orchestrator can fan static init across every reachable module
+ * BEFORE any imperative observes a potentially-undefined cross-module
+ * static read. (See the inline phase-invariant comment in
+ * `buildInitializeGlobalsFn` below.)
+ *
+ * Idempotent via `globals.isInitialized` — safe to call multiple times
+ * on the same execution context. The first call wins; subsequent calls
+ * return early without re-running side effects.
+ */
+function buildRunImperativesFn(opts: AssembleSectionsOpts): TsNode {
+  // No isInitialized check / mark here: `__initializeStatic` marks
+  // this module as initialized at its top (see `buildStaticVarSetup`),
+  // which is what gates the lazy first-call init at function entry.
+  // The orchestrator that drives __runImperatives is single-flight
+  // per execCtx (only `__initializeGlobals` calls it, and that fires
+  // at most once per execCtx — see the doc on `buildInitializeGlobalsFn`).
+  void opts.moduleId; // satisfies eslint; opts.moduleId not needed here
+  return ts.functionDecl(
+    "__runImperatives",
+    [{ name: "__ctx" }],
+    ts.statements(opts.globalInitStatements),
+    { async: true },
+  );
+}
+
+/**
+ * Emit:
+ *   async function __initializeGlobals(__ctx) {
+ *     // === Init phase invariant ===
+ *     // Phase 1 (all modules' __initializeStatic) MUST fully complete
+ *     // before Phase 2 (all modules' __runImperatives) begins on ANY
+ *     // module. Top-level imperatives may read static/global values
+ *     // declared in OTHER modules; those must be populated before any
+ *     // imperative anywhere observes them. Interleaving phases per
+ *     // module (or inlining a Phase-2 step into Phase 1) WILL
+ *     // re-introduce the cross-module-undefined bug this subsystem
+ *     // exists to prevent (#232).
+ *     // ============================
+ *     const reachable = __getReachableModules();
+ *     for (const mod of reachable) await mod.__initializeStatic(__ctx);
+ *     for (const mod of reachable) await mod.__runImperatives(__ctx);
+ *   }
+ *
+ * Kept as a single function so the existing callers continue to work
+ * unchanged:
+ *   - The lazy first-call init at `typescriptBuilder.ts:~1502`
+ *     (`if (!__ctx.globals.isInitialized(...)) await __initializeGlobals(...)`)
+ *     fires when any node in this module starts.
+ *   - `runtime/interrupts.ts` and `runtime/rewind.ts` call
+ *     `__initializeGlobals` on resume; `__initVar` memoization +
+ *     `globals.isInitialized` idempotency make this free on second+
+ *     invocations.
+ *   - The eager docstring-interpolation path at `typescriptBuilder.ts:~3326`
+ *     also still works — the shim runs both phases.
+ *
+ * `__initializeGlobals` does NOT mark this module as initialized
+ * directly; that happens inside each module's `__runImperatives` so
+ * fresh callers driving in via another entry point get the same
+ * idempotency.
  */
 function buildInitializeGlobalsFn(opts: AssembleSectionsOpts): TsNode {
   // Inside this function body `__ctx` is the parameter (no ALS frame
@@ -391,28 +638,32 @@ function buildInitializeGlobalsFn(opts: AssembleSectionsOpts): TsNode {
   // would read from ALS instead of the parameter).
   const ctxParam = ts.id("__ctx");
   const body: TsNode[] = [
-    // Mark this module as initialized BEFORE running init statements.
-    // This prevents infinite recursion when a global init expression
-    // calls a function defined in the same module (which would trigger
-    // __initializeGlobals again via the isInitialized check).
-    ts.methodCall(
-      ts.prop(ctxParam, "globals"),
-      "markInitialized",
-      [ts.str(opts.moduleId)],
+    ts.constDecl("__reachable", ts.call(ts.id("__getReachableModules"), [])),
+    // Phase 1: every reachable module's static phase. Each module's
+    // __initializeStatic iterates __MY_INIT_GETTERS sequentially; the
+    // per-var getters cascade through their deps via inline awaits.
+    // Memoization in __initVar makes redundant calls free.
+    ts.forOf(
+      "mod",
+      ts.id("__reachable"),
+      ts.awaitMethodCall(ts.id("mod"), "__initializeStatic", [ctxParam]),
+    ),
+    // Phase 2: every reachable module's top-level imperative
+    // statements, in import order. IMPORTANT: sequential for-await —
+    // DO NOT switch to Promise.all (breaks trace/checkpoint replay
+    // determinism, AND breaks the phase invariant if any Promise.all
+    // entry resolves before another).
+    ts.forOf(
+      "mod",
+      ts.id("__reachable"),
+      ts.awaitMethodCall(ts.id("mod"), "__runImperatives", [ctxParam]),
     ),
   ];
-
-  if (opts.staticVarNames.size > 0) {
-    body.push(
-      ts.awaitCall(ts.id("__initializeStatic"), [ctxParam]),
-      ts.awaitMethodCall(ctxParam, "writeStaticStateToTrace", [
-        ts.methodCall(ts.runtime.globalCtx, "getStaticVars"),
-      ]),
-    );
-  }
-
-  body.push(...opts.globalInitStatements);
-
+  // Reference opts.moduleId / opts.staticInitVars to keep eslint happy
+  // about the unused parameter (the moduleId is consumed indirectly
+  // via __runImperatives' own markInitialized call).
+  void opts.moduleId;
+  void opts.staticInitVars;
   return ts.functionDecl(
     "__initializeGlobals",
     [{ name: "__ctx" }],

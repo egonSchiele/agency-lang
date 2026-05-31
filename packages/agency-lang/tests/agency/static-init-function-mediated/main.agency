@@ -1,0 +1,13 @@
+import { BASE, echoBase } from "./lib.agency"
+
+// Static-const read of the imported function-mediated static. With
+// the cross-module init fix, BASE is populated via the cascade
+// (__init_BASE → compute → __call(computeBase) → "/lib/base") before
+// this static const evaluates.
+static const FULL = "${BASE}/full"
+
+// And confirm a def in the importing module that reads BASE through
+// the imported `echoBase()` function gets the same populated value.
+node main() {
+  return { full: FULL, echoed: echoBase() }
+}

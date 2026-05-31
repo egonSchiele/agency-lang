@@ -32,16 +32,17 @@ describe("issue #229: top-level bare `with` modifier", () => {
     expect(() => compileSource(src)).not.toThrow();
   });
 
-  it("emits a pushHandler/popHandler wrapper inside __initializeGlobals", () => {
+  it("emits a pushHandler/popHandler wrapper inside __runImperatives", () => {
     const src = `def foo(): number { return 42 }\n` +
       `foo() with approve\n` +
       `node main() { print("ok") }\n`;
     const out = compileSource(src);
     // The wrapper uses the same `withHandler` lowering as static/global
     // init handlers. Verify both halves of the wrapper appear inside
-    // `__initializeGlobals` and that the wrapped call to `foo` sits
-    // between them.
-    const initStart = out.indexOf("async function __initializeGlobals");
+    // `__runImperatives` (the post-#232 second phase of init that
+    // contains module-level imperative side effects) and that the
+    // wrapped call to `foo` sits between them.
+    const initStart = out.indexOf("async function __runImperatives");
     expect(initStart).toBeGreaterThan(-1);
     const initBody = out.slice(initStart);
     const push = initBody.indexOf("pushHandler");

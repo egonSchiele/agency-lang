@@ -1,0 +1,13 @@
+import { LEFT } from "./left.agency"
+import { RIGHT } from "./right.agency"
+
+// Read both branches of the diamond in a static-init context to
+// exercise the cross-module getter cascade twice on the same `ROOT`.
+// __initVar memoization guarantees `ROOT`'s compute body runs exactly
+// once even though both __init_LEFT and __init_RIGHT each await
+// __init_ROOT.
+static const COMBINED = "${LEFT}|${RIGHT}"
+
+node main() {
+  return COMBINED
+}

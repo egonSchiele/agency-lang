@@ -1,0 +1,15 @@
+// Same-module init cycle. `a` reads `b`, `b` reads `a`. The cascade
+// re-enters `__init_a` synchronously while the original call is still
+// in its sync prefix → `__initVar`'s `running` flag is true → throw.
+//
+// We can't easily build a cross-module cycle test in Agency because
+// the compile pipeline doesn't support circular .agency imports
+// (the second-compiled file's reference to the first one fails to
+// resolve). The same-module cycle exercises the same `__initVar`
+// re-entry detection logic.
+static const a = b + 1
+static const b = a + 1
+
+node main() {
+  return a
+}

@@ -105,6 +105,20 @@ export type CompilationUnit = {
   safeFunctions: Record<string, boolean>;
   importedFunctions: Record<string, ImportedFunctionSignature>;
   /**
+   * Local names brought in via `import { X } from "./mod.agency"` that
+   * the source module exports as `static const X = …`. Keyed by the
+   * local (alias-aware) name, value carries the original module path
+   * string from the importStatement (so the codegen can translate to
+   * a compiled .js import via `toCompiledImportPath`).
+   *
+   * The typescript builder consults this map when generating
+   * static/global init expressions: a reference to a key in this map
+   * inside a static-init context is rewritten to
+   * `await __init_<X>(__ctx)` so the source module's getter cascade
+   * runs before the read.
+   */
+  importedConstants: Record<string, { modulePath: string }>;
+  /**
    * Local names brought in by non-Agency `import { … } from "some.js"`
    * statements. We don't have signatures for these (they're JS), so they
    * live in their own bag and the typechecker treats them as untyped
@@ -152,6 +166,7 @@ export function buildCompilationUnit(
     importedNodes: [],
     importStatements: [],
     importedFunctions: {},
+    importedConstants: {},
     jsImportedNames: {},
     safeFunctions: {},
     sourceText,
@@ -257,6 +272,12 @@ export function buildCompilationUnit(
         }
         if (r.symbol.kind === "function" && r.symbol.safe) {
           unit.safeFunctions[r.localName] = true;
+        }
+        if (r.symbol.kind === "constant") {
+          // Remember the import path string from the stmt so the
+          // codegen can build an `import { __init_X } from "..."` on
+          // demand. Same alias-aware localName the user wrote.
+          unit.importedConstants[r.localName] = { modulePath: stmt.modulePath };
         }
         if (r.symbol.kind === "type") {
           unit.typeAliases.add(

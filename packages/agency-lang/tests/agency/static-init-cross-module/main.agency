@@ -1,0 +1,12 @@
+// Regression test for issue #232: a `static const` in this module
+// reads an imported `static const` from another module. The expected
+// value is "/tmp/agency-fixture/policy.json"; before the fix this
+// resolved to "undefined/policy.json" because the importer's static
+// init ran before the dep's.
+import { AGENCY_DIR } from "./shared.agency"
+
+export static const POLICY_DIR = "${AGENCY_DIR}/policy.json"
+
+node main() {
+  return POLICY_DIR
+}

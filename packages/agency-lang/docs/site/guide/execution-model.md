@@ -59,3 +59,27 @@ Static variables:
 - Are **shared across all runs** — every call to the agent sees the same value
 
 If you need mutable state that is shared across runs, implement it in TypeScript and import the functions into your Agency code.
+
+### Cross-module init order
+
+You can read an imported `static const` (or top-level `let` / `const`) from another module's `static const` initializer — the value is guaranteed populated before your initializer evaluates, regardless of which module the entry point lives in:
+
+```ts
+// shared.agency
+export static const BASE_DIR = "${env("HOME")}/.myapp"
+```
+
+```ts
+// agent.agency
+import { BASE_DIR } from "./shared.agency"
+
+// BASE_DIR is populated before this evaluates — no need to defer the
+// read into a `def`.
+static const POLICY_PATH = "${BASE_DIR}/policy.json"
+```
+
+Each top-level static compiles to a memoized async getter; cross-module reads in initializer expressions become awaited calls to the source module's getter, so dependencies resolve on demand. Function-call-mediated reads work too: if a `def` reads a top-level static or global, the value is guaranteed populated before any `def` is invoked.
+
+If two modules' top-level values depend on each other in a true cycle (`a` depends on `b`, `b` depends on `a`), the runtime detects the cycle the first time it's traversed and throws an `Init cycle on <module>:<var>` error. The JS stack trace's `__init_<var>_compute` frames spell out the dependency chain. To break the cycle, move one of the values into a `def` (which runs after init completes), or restructure so one side stops being a top-level read.
+
+Imperative top-level statements in different modules still run in module-import order. If you need a specific imperative-side-effect ordering, restructure to a `static const` plus a `def` call.

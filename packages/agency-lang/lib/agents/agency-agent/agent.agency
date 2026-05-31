@@ -1,22 +1,12 @@
+import { route } from "std::agent"
 import { today } from "std::date"
-import {
-  Policy,
-  PolicyRule,
-  checkPolicy,
-  validatePolicy,
-  writePolicyFile,
-} from "std::policy"
+import { AlwaysFields, cliPolicyHandler } from "std::policy"
 import { exists } from "std::shell"
 import { highlight } from "std::syntax"
 import { cwd, env } from "std::system"
 
-import { runCode } from "./code.agency"
-import { runResearch } from "./research.agency"
-import {
-  AgentContext,
-  AGENCY_AGENT_DIR,
-  consumeHandoff,
-} from "./shared.agency"
+import { codeSysPrompt, codeTools } from "./code.agency"
+import { researchSysPrompt, researchTools } from "./research.agency"
 
 
 /*
@@ -27,13 +17,18 @@ import {
  *   - `code.agency`     — writes, edits, typechecks, runs code
  *   - `research.agency` — looks up docs, fetches URLs, browses web
  *
- * Routing: we don't categorize on every turn. The current
- * specialist's LLM gets a `handoff(category, reason)` tool. If it
- * can handle the message, it just answers. If clearly out of scope,
- * it calls `handoff()` and this loop re-runs the user's message in
- * the new category. See `shared.agency` for the design rationale and
- * `docs/superpowers/ideas/2026-05-30-routing-stickiness.md` for the
- * alternatives we deliberately deferred.
+ * The standard library does the heavy lifting:
+ *   - `std::agent.route` runs the per-turn hop loop, owns the
+ *     handoff signal, and force-answers when the hop limit is hit.
+ *   - `std::policy.cliPolicyHandler` provides the interactive
+ *     approve/reject/always menu and persists "always" decisions to
+ *     `~/.agency-agent/policy.json`.
+ *
+ * This file's responsibilities collapse to:
+ *   1. Banner + REPL loop.
+ *   2. Per-kind ALWAYS_FIELDS map for the policy handler's
+ *      "approve-always-here" option.
+ *   3. Wire the two specialists into one `RouterConfig`.
  *
  * Other features:
  * - Doc-as-skills: bundles `docs/site/guide` etc. (copied to
@@ -44,12 +39,6 @@ import {
  *   source it generates to verify the code before showing it.
  * - File I/O tools: `read`, `write`, `edit` for actually creating /
  *   editing `.agency` files.
- * - Interactive policy: every interrupt the LLM raises pops a
- *   prompt with approve / reject / always-approve / always-reject.
- *   "Always" decisions are recorded in a per-run Policy and
- *   replayed automatically for the rest of the session via
- *   `checkPolicy`.
- *
  */
 
 // Verbose tool-call tracing, opt-in via `AGENT_DEBUG=1`.
@@ -87,77 +76,30 @@ def policyDir(): string {
 }
 def policyPath(): string { return "${policyDir()}/${POLICY_FILE}" }
 
-def loadPolicy(): Policy {
-  """
-  Read and validate the on-disk policy. Returns `{}` if the file is
-  absent, unreadable, malformed, or fails validation; warns the user
-  for malformed cases so they know a decision didn't carry over.
-  """
-  const dir = policyDir()
-  const path = policyPath()
-  if (!exists(POLICY_FILE, dir)) {
-    return {}
-  }
-  const readResult = read(POLICY_FILE, dir) with approve
-  if (isFailure(readResult)) {
-    print(color.yellow("Could not read ${path}: ${readResult.error}"))
-    return {}
-  }
-  const parsed = try parseJSON(readResult.value)
-  if (isFailure(parsed)) {
-    print(
-      color.yellow(
-      "Malformed JSON in ${path}; ignoring and starting fresh.",
-    ),
-    )
-    return {}
-  }
-  const valid = validatePolicy(parsed.value)
-  if (!valid.success) {
-    print(
-      color.yellow(
-      "Invalid policy in ${path} (${valid.error}); ignoring and starting fresh.",
-    ),
-    )
-    return {}
-  }
-  return parsed.value
-}
-
-def savePolicy() {
-  """
-  Persist the current in-memory policy to disk. Called from
-  `recordAlways` / `recordAlwaysScoped` so every "always" decision
-  immediately survives a restart. Failures are warnings, not
-  errors — losing one decision is better than crashing the REPL.
-  """
-  const path = policyPath()
-  const result = try writePolicyFile(path, policy) with approve
-  if (isFailure(result)) {
-    print(color.yellow("Could not save policy to ${path}: ${result.error}"))
-  }
-}
-
-// Persistent policy, hydrated from disk by `ensurePolicyLoaded()` at the
-// top of `node main`. Module-level `let` so handlers and helpers can read
-// and mutate it; `policyLoaded` guards against re-entry while the load is
-// in flight (see `ensurePolicyLoaded`).
-let policy: Policy = {}
-let policyLoaded: boolean = false
-
-def ensurePolicyLoaded() {
-  """
-  Idempotent hydrate of `policy` from disk.
-
-  `policyLoaded` MUST flip to `true` BEFORE `loadPolicy()` runs. The read
-  inside `loadPolicy` raises an interrupt whose chain dispatch visits
-  every handler — including `defaultHandler`, which calls back into here.
-  Without the early flip, that re-entry recurses forever.
-  """
-  if (!policyLoaded) {
-    policyLoaded = true
-    policy = loadPolicy() with approve
-  }
+// Per-kind config driving the "approve-always-here" option. For each
+// kind we list the data fields the scoped rule should pin, plus a
+// flag that turns a directory value into a brace-expanded glob so the
+// rule matches `dir` AND `dir/**`. Kinds not present in this map
+// don't offer the option — the user falls back to (a)/(r)/(aa)/(rr).
+const ALWAYS_FIELDS: AlwaysFields = {
+  "std::read": [{ field: "dir", wildcardSubpaths: true }],
+  "std::write": [{ field: "dir", wildcardSubpaths: true }],
+  "std::edit": [{ field: "dir", wildcardSubpaths: true }],
+  "std::ls": [{ field: "dir", wildcardSubpaths: true }],
+  "std::glob": [{ field: "dir", wildcardSubpaths: true }],
+  "std::grep": [{ field: "dir", wildcardSubpaths: true }],
+  "std::copy": [
+    { field: "src", wildcardSubpaths: true },
+    { field: "dest", wildcardSubpaths: true },
+  ],
+  "std::move": [
+    { field: "src", wildcardSubpaths: true },
+    { field: "dest", wildcardSubpaths: true },
+  ],
+  "std::exec": [
+    { field: "command", wildcardSubpaths: false },
+    { field: "subcommand", wildcardSubpaths: false },
+  ]
 }
 
 def loadAgentsMd(dir: string): string {
@@ -178,337 +120,6 @@ def loadAgentsMd(dir: string): string {
   return "\n\n<project_context>\n${result.value}\n</project_context>"
 }
 
-type Decision =
-  | "approve"
-  | "reject"
-  | "approve-always"
-  | "approve-always-here"
-  | "reject-always"
-
-// Per-kind config driving the "approve-always-here" option. For each
-// kind we list the data fields the scoped rule should pin, plus a
-// flag that turns a directory value into a brace-expanded glob so the
-// rule matches `dir` AND `dir/**`. Kinds not present in this map
-// don't offer the option — the user falls back to (a)/(r)/(aa)/(rr).
-type FieldSpec = {
-  field: string;
-  wildcardSubpaths: boolean
-}
-
-const ALWAYS_FIELDS: Record<string, FieldSpec[]> = {
-  "std::read": [{
-    field: "dir",
-    wildcardSubpaths: true
-  }],
-  "std::write": [{
-    field: "dir",
-    wildcardSubpaths: true
-  }],
-  "std::edit": [{
-    field: "dir",
-    wildcardSubpaths: true
-  }],
-  "std::ls": [{
-    field: "dir",
-    wildcardSubpaths: true
-  }],
-  "std::glob": [{
-    field: "dir",
-    wildcardSubpaths: true
-  }],
-  "std::grep": [{
-    field: "dir",
-    wildcardSubpaths: true
-  }],
-  "std::copy": [
-    {
-    field: "src",
-    wildcardSubpaths: true
-  },
-    {
-    field: "dest",
-    wildcardSubpaths: true
-  },
-  ],
-  "std::move": [
-    {
-    field: "src",
-    wildcardSubpaths: true
-  },
-    {
-    field: "dest",
-    wildcardSubpaths: true
-  },
-  ],
-  "std::exec": [
-    {
-    field: "command",
-    wildcardSubpaths: false
-  },
-    {
-    field: "subcommand",
-    wildcardSubpaths: false
-  },
-  ]
-}
-
-def buildScopedMatch(intr): Record<string, string> {
-  """
-  Build the `match` map for an "approve-always-here" rule by reading
-  the field spec for `intr.kind` and pulling the corresponding values
-  out of `intr.data`. Returns `{}` when no spec applies — callers
-  should treat that as "scoped option not available" and skip writing.
-  """
-  const specs = ALWAYS_FIELDS[intr.kind]
-  if (specs == null) {
-    return {}
-  }
-  // Special case: a bare exec (no args, so `subcommand` is empty)
-  // means the user wants the catch-all for this command. Pinning
-  // `subcommand: ""` would only match other bare invocations, which
-  // is rarely useful — so collapse to just the command field.
-  let effective = specs
-  if (intr.kind == "std::exec" && intr.data.subcommand == "") {
-    effective = [{
-      field: "command",
-      wildcardSubpaths: false
-    }]
-  }
-  let matchObj: Record<string, string> = {}
-  for (spec in effective) {
-    const raw = intr.data[spec.field]
-    let pattern = raw
-    if (spec.wildcardSubpaths) {
-      // picomatch brace-expands "${raw}{,/**}" into "${raw}" OR
-      // "${raw}/**" — matches the exact dir and any subdir.
-      pattern = "${raw}{,/**}"
-    }
-    matchObj[spec.field] = pattern
-  }
-  return matchObj
-}
-
-def describeScopedMatch(intr): string {
-  """
-  Human-readable summary of what `buildScopedMatch(intr)` would pin —
-  used in the prompt so the user sees the exact rule they're about to
-  agree to. Returns an empty string when the kind isn't scoped.
-  """
-  const matchObj = buildScopedMatch(intr)
-  const ks = keys(matchObj)
-  if (ks.length == 0) {
-    return ""
-  }
-  // Dir-keyed kinds get a friendlier phrasing than the raw pattern.
-  // Backticks are used so we can embed literal `"` characters around
-  // values without fighting the parser's string-escape rules.
-  const dirKinds = ["std::read", "std::write", "std::edit", "std::ls", "std::glob", "std::grep"]
-  if (dirKinds.includes(intr.kind)) {
-    return "dir='${intr.data.dir}' or any subdir"
-  }
-  if (intr.kind == "std::copy" || intr.kind == "std::move") {
-    return "src='${intr.data.src}' or any subdir, dest='${intr.data.dest}' or any subdir"
-  }
-  // std::exec — render command and (if non-empty) subcommand.
-  if (intr.kind == "std::exec") {
-    if (intr.data.subcommand == "") {
-      return "command='${intr.data.command}'"
-    }
-    return "command='${intr.data.command}', subcommand='${intr.data.subcommand}'"
-  }
-  // Generic fallback for any future kind added to ALWAYS_FIELDS.
-  let parts: string[] = []
-  for (k in ks) {
-    parts.push("${k}='${matchObj[k]}'")
-  }
-  return parts.join(", ")
-}
-
-def askUser(intr: any): Decision {
-  """
-  Pretty-print an interrupt and ask the user how to respond. Returns
-  one of the Decision strings. The "(ap)" option is only shown when
-  the kind has an entry in ALWAYS_FIELDS, and the prompt echoes the
-  exact match rule the user would commit to.
-  """
-  print(color.yellow("───────────────────────────────────────────"))
-  print(color.yellow("Tool wants to run: ${intr.kind}"))
-  print(color.yellow("Reason: ${intr.message}"))
-  print("Data:")
-  printJSON(intr.data)
-  print(color.yellow("───────────────────────────────────────────"))
-
-  const scopedHint = describeScopedMatch(intr)
-  const scopedAvailable = scopedHint != ""
-
-  print("What would you like to do?")
-  print("  (a)  approve once")
-  print("  (r)  reject once")
-  print("  (aa) approve always (every ${intr.kind})")
-  if (scopedAvailable) {
-    print("  (ap) approve always here (${scopedHint})")
-  }
-  print("  (rr) reject always")
-
-  let answer = ""
-  let valid = false
-  while (!valid) {
-    answer = input("> ")
-    if (answer == "a" || answer == "r" || answer == "aa" || answer == "rr") {
-      valid = true
-    } else if (answer == "ap" && scopedAvailable) {
-      valid = true
-    } else if (answer == "ap") {
-      print(
-        color.yellow(
-        "(ap) isn't available for ${intr.kind} — pick one of (a)/(r)/(aa)/(rr).",
-      ),
-      )
-    }
-  }
-  if (answer == "a") {
-    return "approve"
-  }
-  if (answer == "r") {
-    return "reject"
-  }
-  if (answer == "aa") {
-    return "approve-always"
-  }
-  if (answer == "ap") {
-    return "approve-always-here"
-  }
-  return "reject-always"
-}
-
-def recordAlways(kind: string, action: string) {
-  """
-  Add an unconditional rule for `kind` to the running policy. First-
-  match-wins inside `checkPolicy`, so prepending a new entry would
-  also work, but a single bare rule covers every future interrupt of
-  this kind cleanly.
-  """
-  const next: Policy = {
-    ...policy,
-    [kind]: [{
-      action: action
-    }]
-  }
-  policy = next
-  savePolicy()
-  print(
-    color.cyan("→ Recorded policy: ${kind} = ${action} (won't ask again)"),
-  )
-}
-
-def recordAlwaysScoped(intr) {
-  """
-  Add a scoped approve rule pinned to whichever fields ALWAYS_FIELDS
-  says are meaningful for this kind. Prepended to any existing rules
-  so the new (more specific) decision takes precedence in the
-  first-match-wins evaluation order.
-  """
-  const match = buildScopedMatch(intr)
-  // NOTE: Agency compiles `!=` to `!==`, so an UNDEFINED `existing`
-  // would slip past `!= null` and assign `undefined` to `rules`,
-  // which would then crash the spread below. Default-via-`||` to a
-  // fresh array so the spread always works.
-  const existing = policy[intr.kind] || []
-  const next: Policy = {
-    ...policy,
-    [intr.kind]: [{
-      match: match,
-      action: "approve"
-    }, ...existing]
-  }
-  policy = next
-  savePolicy()
-  print(
-    color.cyan(
-    "→ Recorded policy: ${intr.kind} = approve where ${describeScopedMatch(intr)}",
-  ),
-  )
-}
-
-def defaultHandler(intr) {
-  // Hydrate the persistent policy on first invocation. See the
-  // `let policy` declaration for the init-ordering rationale.
-  ensurePolicyLoaded()
-  // Consult the running policy first. If a previous "always"
-  // decision covers this kind, use it without bothering the user.
-  const decision = checkPolicy(policy, intr)
-  if (decision.type == "approve") {
-    print(color.cyan("→ policy auto-approved ${intr.kind}"))
-    return approve()
-  }
-  if (decision.type == "reject") {
-    print(color.cyan("→ policy auto-rejected ${intr.kind}"))
-    return reject()
-  }
-  // checkPolicy returned propagate — no rule for this kind yet,
-  // so ask the user and possibly record a new rule.
-  const answer = askUser(intr)
-  if (answer == "approve-always") {
-    recordAlways(intr.kind, "approve")
-    return approve()
-  }
-  if (answer == "approve-always-here") {
-    recordAlwaysScoped(intr)
-    return approve()
-  }
-  if (answer == "reject-always") {
-    recordAlways(intr.kind, "reject")
-    return reject()
-  }
-  if (answer == "approve") {
-    return approve()
-  }
-  // Interactive reject: give the user a chance to tell the LLM what
-  // was wrong with the suggestion. The reason becomes the tool's
-  // return value on the LLM side, so the model sees concrete
-  // feedback ("the path is wrong" / "use a different API") instead
-  // of an opaque rejection it can't learn from.
-  const reason = input("Why are you rejecting? (press enter to skip) ")
-  if (reason == "") {
-    return reject()
-  }
-  return reject(reason)
-}
-
-// Cap on handoffs per user turn. Stops ping-pong (A→B→A→B…) when the two
-// LLMs disagree about scope; in practice every handoff terminates after 1.
-const MAX_HOPS = 3
-
-def runForCategory(
-  category: string,
-  userMsg: string,
-  ctx: AgentContext,
-  allowHandoff: boolean = true,
-): string {
-  """
-  Dispatch one user turn to the chosen specialist's thread. `summarize:
-  true` triggers the eager close-time summarize hook so `listThreads()`
-  is cheap on future runs.
-
-  @param category - Which specialist's thread to run in
-  @param userMsg - The user's input message for this turn
-  @param ctx - Per-call invariants (env, projectContext)
-  @param allowHandoff - When false, strips the `handoff` tool so the
-    subagent has to answer. Used by the hop-limit fallback.
-  """
-  let reply = ""
-  if (category == "code") {
-    thread(session: "code", label: "code", summarize: true) {
-      reply = runCode(userMsg, ctx, allowHandoff)
-    }
-  } else {
-    thread(session: "research", label: "research", summarize: true) {
-      reply = runResearch(userMsg, ctx, allowHandoff)
-    }
-  }
-  return reply
-}
-
 node main() {
   print(color.cyan("╭───────────────────────────────────────────────╮"))
   print(color.cyan("│         Welcome to the Agency Agent           │"))
@@ -517,79 +128,41 @@ node main() {
   print(color.cyan("╰───────────────────────────────────────────────╯"))
   print("Type 'exit' to quit.\n")
 
-  // Pre-load the policy BEFORE `defaultHandler` is installed below. If we
-  // loaded lazily from inside `defaultHandler`, the policy file's own read
-  // would re-enter `defaultHandler` (the chain visits every handler) with
-  // `policy` still `{}`, prompting the user for a file we're trying to
-  // auto-approve. The outer `with approve` is redundant with the one
-  // inside `loadPolicy` but silences the typechecker warning.
-  ensurePolicyLoaded() with approve
-
   // Grounding: the LLM should not have to ask the user where it is
   // or what day it is. Both are appended once per run so they ride
   // with the first system message in each specialist's thread.
-  const env = "\n\nCurrent date: ${today()}\nCurrent working directory: ${cwd()}"
-
+  //
   // Project context: if the user keeps an AGENTS.md at the workspace
   // root (Anthropic / Pi / Aider all read it), inline it so the LLM
   // automatically follows the project's conventions.
   const projectContext = loadAgentsMd(cwd()) with approve
-  const ctx: AgentContext = {
-    env: env,
-    projectContext: projectContext
-  }
+  const context = "\n\nCurrent date: ${today()}\nCurrent working directory: ${cwd()}${projectContext}"
 
-  // Starting category. The code subagent is the better default for
-  // an agent named "Agency Agent" — most users open it to work on
-  // code. The handoff machinery will route to research on the first
-  // research-shaped message.
-  //
-  // Typed as `string` (not `Category`) because the routing loop
-  // re-assigns it from `consumeHandoff()`'s string return value
-  // (see the sentinel-string rationale in `shared.agency`). The
-  // contents are still always a valid Category — `handoff()` is the
-  // only writer of the source state and takes a Category-typed
-  // parameter.
-  let category: string = "code"
+  // Bind the handler to a local var so `with handler` parses (the
+  // `with` clause only accepts an identifier, not a call expression).
+  const handler = cliPolicyHandler({
+    file: policyPath(),
+    fields: ALWAYS_FIELDS,
+  })
 
   let userMsg = input("What would you like to do? ")
   while (userMsg != "exit" && userMsg != "quit") {
     handle {
-      // Chain handoffs (with a hop limit) so a single user turn can
-      // re-route once if the current specialist decides it's the wrong
-      // one. The common case is zero handoffs — the agent answers and
-      // we fall through. One handoff is the cross-specialist case
-      // ("can you look up X in docs?" while in code → handoff to
-      // research). Two+ would be ping-pong, which the limit kills.
-      let hop = 0
-      let done = false
-      while (!done && hop < MAX_HOPS) {
-        const reply = runForCategory(category, userMsg, ctx)
-        const target = consumeHandoff()
-        if (target == "") {
-          // Subagents are prompted to reply in Markdown. Render
-          // headings/bullets/bold/code-fences instead of dumping the
-          // raw source — see `code.agency` / `research.agency` for
-          // the prompt and the system-prompt instruction.
-          print(highlight("\n${reply}\n", language: "markdown"))
-          done = true
-        } else {
-          print(color.cyan("→ handing off to ${target}"))
-          category = target
-          hop = hop + 1
-        }
-      }
-      if (!done) {
-        print(
-          color.yellow("(handoff hop limit reached; answering in ${category})"),
-        )
-        // Force the agent to actually answer instead of handing off
-        // yet again — `allowHandoff: false` strips `handoff` from the
-        // tool set, so the LLM has no escape hatch this turn.
-        const finalReply = runForCategory(category, userMsg, ctx, false)
-        print(highlight("\n${finalReply}\n", language: "markdown"))
-      }
-    } with defaultHandler
+      const reply = route({
+        start: "code",
+        agents: {
+          code:     { systemPrompt: codeSysPrompt,     tools: codeTools,     memory: true },
+          research: { systemPrompt: researchSysPrompt, tools: researchTools, memory: true },
+        },
+        maxHops: 3,
+        context: context,
+      }, userMsg)
+      // Subagents are prompted to reply in Markdown. Render
+      // headings/bullets/bold/code-fences instead of dumping the
+      // raw source — see `code.agency` / `research.agency` for the
+      // system-prompt instruction.
+      print(highlight("\n${reply}\n", language: "markdown"))
+    } with handler
     userMsg = input("\nNext request (or 'exit'): ")
   }
   print(color.cyan("\nGoodbye!"))

@@ -2,25 +2,18 @@
  * Code subagent — handles anything that touches code or the file
  * system: writing, editing, typechecking, running shell commands.
  *
- * Tools: setCwd + the full Workspace bundle + typecheck + highlight +
- * print + remember/recall + handoff. NO docs / web / wikipedia —
- * the agent must `handoff(reason)` (PFA-bound to research only) when
- * it needs those.
- *
- * The Workspace state lives here (not in `shared.agency`) because
- * only the code subagent uses file-system tools. `setCwd` re-anchors
- * the bundle so a directory change in one turn persists to the next.
- *
- * See `shared.agency` for the multi-agent design rationale.
+ * Exports `codeSysPrompt` + `codeTools` consumed by the router in
+ * `agent.agency`. The router injects the `handoff` tool itself, so
+ * we do NOT add it here. The Workspace state lives here (not in
+ * `shared.agency`) because only the code subagent uses file-system
+ * tools. `setCwd` re-anchors the bundle so a directory change in one
+ * turn persists to the next.
  */
 import { typecheck } from "std::agency"
 import { Workspace, openDir } from "std::fs"
-import { setMemoryId, remember, recall } from "std::memory"
+import { remember, recall } from "std::memory"
 import { highlight } from "std::syntax"
 import { cwd } from "std::system"
-import { systemMessage } from "std::thread"
-
-import { Category, AgentContext, handoff } from "./shared.agency"
 
 
 // File-system tools handed to the LLM as a single bundle anchored to
@@ -31,13 +24,6 @@ import { Category, AgentContext, handoff } from "./shared.agency"
 // `let` so the rebuilt bundle is visible to the next turn (Agency
 // stores module-level lets in the GlobalStore).
 let workspace: Workspace = openDir(cwd())
-
-// First-entry detection for the code session. Flipped to false the
-// first time `runCode` seeds its system message; subsequent turns
-// (including interrupt resumes) see it as false and skip the seed.
-// Lives in the GlobalStore (module-level `let`) so it survives the
-// `llm()` tool-call boundary and persists across user turns.
-let codeFirstEntry: boolean = true
 
 export def setCwd(dir: string): string {
   """
@@ -56,7 +42,7 @@ export def setCwd(dir: string): string {
   return "Working directory set to: ${dir}"
 }
 
-const codeSysPrompt = """
+export static const codeSysPrompt = """
 You are the **code specialist** of a multi-thread Agency-language
 assistant. You handle anything that touches code or the file system:
 writing, editing, running, and typechecking Agency or shell code.
@@ -126,59 +112,18 @@ fences. Code fences are especially important — they're how code in
 your reply gets per-language coloring.
 """
 
-export def runCode(
-  userMsg: string,
-  ctx: AgentContext,
-  allowHandoff: boolean = true,
-): string {
-  """
-  Run a single turn in the code subagent. The caller is responsible
-  for the surrounding `thread(session: "code") { ... }` block; this
-  function just (a) seeds the code system message on first entry,
-  (b) scopes memory to the `"code"` knowledge graph, and (c) runs
-  the LLM call with the code tool set.
-
-  Returns the LLM's text reply. If the LLM called `handoff()` mid-
-  turn, the reply is the LLM's post-handoff filler text and the
-  caller MUST check `consumeHandoff()` to discover whether to
-  re-route.
-
-  @param userMsg - The user's input message for this turn
-  @param ctx - Per-call invariants (env, projectContext) for the system message
-  @param allowHandoff - When false, the `handoff` tool is omitted from the
-    tool set so the agent is forced to answer this turn. Used by the
-    REPL's hop-limit fallback to break a re-routing chain.
-  """
-  setMemoryId("code")
-  if (codeFirstEntry) {
-    systemMessage(codeSysPrompt + ctx.env + ctx.projectContext)
-    codeFirstEntry = false
-  }
-  // Build the tool set conditionally. `handoff` is PFA-bound to
-  // `validCategories: ["research"]` — the runtime check in
-  // `shared.agency` rejects any other target, so the LLM cannot
-  // hand off to itself. When `allowHandoff` is false (hop-limit
-  // fallback), drop `handoff` entirely.
-  let tools = [
-    setCwd,
-    workspace.read,
-    workspace.write,
-    workspace.edit.partial(printDiff: true),
-    workspace.ls,
-    workspace.glob,
-    workspace.grep,
-    workspace.bash,
-    typecheck,
-    highlight.partial(language: "ts"),
-    print,
-    remember,
-    recall,
-  ]
-  if (allowHandoff) {
-    tools.push(handoff.partial(validCategories: ["research"]))
-  }
-  return llm(userMsg, {
-    memory: true,
-    tools: tools
-  })
-}
+export static const codeTools: any[] = [
+  setCwd,
+  workspace.read,
+  workspace.write,
+  workspace.edit.partial(printDiff: true),
+  workspace.ls,
+  workspace.glob,
+  workspace.grep,
+  workspace.bash,
+  typecheck,
+  highlight.partial(language: "ts"),
+  print,
+  remember,
+  recall,
+]

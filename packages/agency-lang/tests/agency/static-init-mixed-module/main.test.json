@@ -1,0 +1,15 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "description": "Mixed module: static const + top-level const (global) + top-level callback registration. Verifies the Phase 1 / Phase 2 split: all statics + globals populated before any callback registration runs, and callback bodies (fired in node execution) observe populated globals.",
+      "expectedOutput": "{\"static_val\":\"/base/static\",\"global_val\":\"/base/static/global\",\"seen\":\"/base/static/global\"}",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    }
+  ]
+}

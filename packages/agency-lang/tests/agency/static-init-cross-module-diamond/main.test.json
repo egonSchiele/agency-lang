@@ -3,8 +3,8 @@
     {
       "nodeName": "main",
       "input": "",
-      "description": "Diamond import graph: main → {left, right} → root. Both branches' getter cascade hits __init_ROOT; __initVar memoization keeps the compute body single-execution.",
-      "expectedOutput": "\"/var/root/left|/var/root/right\"",
+      "description": "Diamond import graph: main → {left, right} → root. Both branches' getter cascade hits __init_ROOT; __initVar memoization keeps the compute body single-execution (verified by the shared JS-side `bump()` counter: if memoization broke, ROOT would be \"root-call-2\" somewhere in the output).",
+      "expectedOutput": "\"root-call-1/left|root-call-1/right\"",
       "evaluationCriteria": [
         {
           "type": "exact"

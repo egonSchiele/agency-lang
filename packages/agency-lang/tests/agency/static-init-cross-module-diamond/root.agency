@@ -1,11 +1,9 @@
+import { bump } from "./counter.js"
+
 // Root of a diamond import graph used by left.agency, right.agency,
 // and main.agency. Verifies that a shared dep's static const is
 // init'd exactly once when reached by both branches of the diamond.
-//
-// (The plan's original "mutual" test case had `foo` and `bar`
-// importing each other, but Agency doesn't currently support
-// circular .agency imports — the compile pipeline fails resolving
-// the second-compiled file's reference to the first one. The
-// diamond shape exercises the same getter-cascade memoization
-// without needing cyclic imports.)
-export static const ROOT = "/var/root"
+// The shared `bump()` call returns a monotonically increasing integer
+// from a JS-side module counter; if `__init_ROOT_compute` ran twice,
+// the value would be 2 (and the test's exact-match would fail).
+export static const ROOT = "root-call-${bump()}"

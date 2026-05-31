@@ -1,0 +1,39 @@
+import { BASE } from "./lib.agency"
+
+// Mixed module exercising the partition between Phase 1 (static init)
+// and Phase 2 (top-level imperatives / callback registration).
+//
+//   STATIC_VAL   — static const, reads cross-module BASE          (Phase 1)
+//   GLOBAL_VAL   — top-level const → global, reads STATIC_VAL     (Phase 1)
+//   seenValue    — global mutated by a callback registration      (Phase 1 decl, Phase 2 set when cb fires)
+//
+// The orchestration invariant: every reachable module's Phase 1
+// fully completes before any module's Phase 2 begins. The callback
+// registration itself runs in Phase 2; the callback *body* fires
+// later (when `helper()` is invoked from `main`) — by then all
+// statics and globals are guaranteed populated.
+
+static const STATIC_VAL = "${BASE}/static"
+const GLOBAL_VAL = "${STATIC_VAL}/global"
+
+let seenValue = ""
+
+def helper(): string { return "h" }
+
+callback("onFunctionStart") as data {
+  // First fire wins; subsequent fires get suppressed by the guard.
+  // We only care that *some* invocation observes GLOBAL_VAL as
+  // populated, not that EVERY invocation does.
+  if (seenValue == "") {
+    seenValue = GLOBAL_VAL
+  }
+}
+
+node main() {
+  helper()
+  return {
+    static_val: STATIC_VAL,
+    global_val: GLOBAL_VAL,
+    seen: seenValue,
+  }
+}

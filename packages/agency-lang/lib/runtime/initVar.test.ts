@@ -60,6 +60,14 @@ describe("__initVar", () => {
     expect(await getA(undefined)).toBe(3);
   });
 
+  // This test covers both same-module AND cross-module cycle
+  // detection — the runtime mechanism is identical regardless of
+  // whether the two getters were declared in one file or imported
+  // across files. (A cross-module integration fixture can't be
+  // written in Agency: circular .agency imports compile but crash at
+  // module load with a TDZ error from `__registerTool(...)`,
+  // unrelated to our fix. Same-module cycles via static-init-cycle/
+  // exercise the codegen + runtime path end-to-end.)
   it("detects a cycle between two vars and the error names the var", async () => {
     // Forward decls so the closures can refer to each other.
     let getA: (ctx: undefined) => Promise<number> = null as any;

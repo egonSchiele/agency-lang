@@ -483,6 +483,23 @@ export class TypeScriptBuilder {
       this.importStatements.push(
         ts.raw(`import { __init_${name} } from ${JSON.stringify(compiledPath)};`),
       );
+      // Backward-compat guard: ES modules return `undefined` for any
+      // imported name the source module doesn't export. Without this
+      // check, the first cross-module init read at runtime would
+      // crash with a generic `TypeError: __init_X is not a function`.
+      // Module-load check fires fast at import time instead, with a
+      // pointer to the likely cause (a `pkg::` or relative import
+      // compiled by an older agency-lang that pre-dates the
+      // cross-module init export shape).
+      this.importStatements.push(
+        ts.raw(
+          `if (typeof __init_${name} !== "function") throw new Error(` +
+            `${JSON.stringify(compiledPath)} + ` +
+            `${JSON.stringify(
+              ` was compiled with an older agency-lang version and is missing the cross-module init export for "${name}". Rebuild the imported module with the current toolchain (\`make\`).`,
+            )});`,
+        ),
+      );
     }
 
     return assembleSections({

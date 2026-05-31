@@ -1,0 +1,2 @@
+// Source module — exports a `static const` used by the mixed module.
+export static const BASE = "/base"

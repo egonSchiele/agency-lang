@@ -1,0 +1,13 @@
+import { X } from "./bar.agency"
+
+// Top-level `const Y` in the importer (NOT `static const`) reads a
+// cross-module value. Y becomes a *global* on the importer side —
+// codegen lowers reads to `__ctx.globals.get(...)` and the init
+// writes via `__ctx.globals.set(...)`. The cross-module init fix
+// has to make sure the cascade hits this global-flavored init path
+// the same way it hits a same-module-static path.
+const Y = "${X}/y"
+
+node main() {
+  return Y
+}

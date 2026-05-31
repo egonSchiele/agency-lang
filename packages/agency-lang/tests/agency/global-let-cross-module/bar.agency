@@ -1,0 +1,6 @@
+// Source-module side of the global-let cross-module test. Exports a
+// `static const` (the only top-level value Agency permits exporting).
+// The importing module's top-level `const Y = X` is a *global* on
+// the importer side — codegen routes Y through __ctx.globals.set/get,
+// distinct from X's module-level `let` binding.
+export static const X = "/global/x"

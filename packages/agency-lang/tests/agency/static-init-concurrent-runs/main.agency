@@ -1,0 +1,11 @@
+import { bump } from "./counter.js"
+
+// Single `static const` whose value records the JS-side counter at
+// init time. Used by `static-init-concurrent-runs.test.ts` to verify
+// that concurrent `main()` invocations (and sequential repeats) all
+// share the same memoized init — the counter must read 1, not 2+.
+static const RECORDED = "init-call-${bump()}"
+
+node main() {
+  return RECORDED
+}

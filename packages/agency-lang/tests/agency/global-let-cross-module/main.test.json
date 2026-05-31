@@ -1,0 +1,15 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "description": "Importer's top-level `const Y` (a *global*) reads an imported `static const X`. Y's compute goes through __ctx.globals.set; the read in `node main` goes through __ctx.globals.get. Exercises the cross-module init cascade through the global-flavored codegen path.",
+      "expectedOutput": "\"/global/x/y\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    }
+  ]
+}

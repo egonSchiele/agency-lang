@@ -1,0 +1,23 @@
+import { column, row } from "std::ui"
+
+node main(): string {
+  const c = column(flex: 3, width: 50, height: 20, padding: 2,
+                   border: true, borderColor: "red", label: "title",
+                   bg: "black", fg: "white", visible: false) as _ {}
+  const s = c.style
+  if (s.flex != 3)            { return "FAIL: flex" }
+  if (s.width != 50)          { return "FAIL: width" }
+  if (s.height != 20)         { return "FAIL: height" }
+  if (s.padding != 2)         { return "FAIL: padding" }
+  if (s.border != true)       { return "FAIL: border" }
+  if (s.borderColor != "red") { return "FAIL: borderColor" }
+  if (s.label != "title")     { return "FAIL: label" }
+  if (s.bg != "black")        { return "FAIL: bg" }
+  if (s.fg != "white")        { return "FAIL: fg" }
+  if (s.visible != false)     { return "FAIL: visible" }
+
+  // Make sure `flex: 0` is preserved (not collapsed to null).
+  const r = row(flex: 0) as _ {}
+  if (r.style.flex != 0) { return "FAIL: flex zero collapsed" }
+  return "pass"
+}

@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "\"pass\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "style props on column/row propagate to the rendered Element"
+    }
+  ]
+}

@@ -20,6 +20,7 @@ import {
   type OutputTarget,
 } from "@/tui/index.js";
 import type { Frame } from "@/tui/frame.js";
+import { toANSI } from "@/tui/render/ansi.js";
 import { withBottomCursor, installRegion, resetRegion } from "./ui-region.js";
 import { __call } from "../runtime/call.js";
 
@@ -668,23 +669,31 @@ export async function _readKey(): Promise<TuiKeyEvent> {
 }
 
 /**
- * Wraps any `OutputTarget` so frame writes land at the bottom of the
- * real terminal — used by `repl()`'s hybrid rendering. The inner
- * target is unaware it doesn't own the whole screen;
- * `withBottomCursor` saves/moves/restores the cursor around each
- * frame so plain stdout writes still scroll inside the top region.
+ * `OutputTarget` for `repl()`'s hybrid rendering. Renders each frame
+ * directly inside the terminal's reserved bottom region:
+ * `withBottomCursor` saves the cursor, positions it at the start of
+ * the bottom region, writes the frame ANSI (no `CURSOR_HOME` prefix,
+ * no alt-screen entry — both would defeat the hybrid scrollback
+ * goal), and restores the cursor so subsequent plain stdout writes
+ * still scroll inside the top region.
+ *
+ * Does NOT wrap an inner OutputTarget. The bridge's default
+ * `TerminalOutput` enters the alt-screen and prepends `CURSOR_HOME`
+ * to every write, which is exactly what hybrid mode must avoid; this
+ * target sidesteps both by talking to `process.stdout` itself via
+ * `toANSI`. `destroy()` is a no-op: this target owns no resources
+ * (the scroll region itself is torn down by `_resetScrollRegion`).
  */
 export class BottomRegionOutputTarget implements OutputTarget {
-  constructor(private inner: OutputTarget) {}
-
-  write(frame: Frame, label?: string): void {
+  write(frame: Frame, _label?: string): void {
     withBottomCursor(() => {
-      this.inner.write(frame, label);
+      process.stdout.write(toANSI(frame));
     });
   }
 
   destroy(): void {
-    if (this.inner.destroy) this.inner.destroy();
+    // No-op: nothing owned. Region teardown is handled by
+    // `_resetScrollRegion` in the Agency-side `repl()` finally block.
   }
 }
 
@@ -722,13 +731,23 @@ export function _resetScrollRegion(): void {
   resetRegion();
 }
 
-/** Hybrid-mode variant of `_runLoop`. Wraps the active output target
- *  in `BottomRegionOutputTarget` so TUI frames land in the bottom
- *  region of the real terminal, and bounds the `Screen` to a
- *  `bottomRows`-row viewport. The scroll region itself is installed
- *  by `repl()` via `_installScrollRegion` before this call and torn
- *  down via `_resetScrollRegion` afterwards (including on exception
- *  paths via the Agency `handle` block). */
+/** Hybrid-mode variant of `_runLoop`. Drives the `repl()` widget's
+ *  bounded `Screen` (bottom `bottomRows` rows only); frames render
+ *  into the terminal's reserved bottom region while plain stdout
+ *  writes keep scrolling in the top region. The scroll region itself
+ *  is installed by `repl()` via `_installScrollRegion` before this
+ *  call and torn down via `_resetScrollRegion` afterwards (including
+ *  on exception paths via the Agency `handle` block).
+ *
+ *  Output target selection:
+ *  - **Test mode** (`bridgeOutputTarget` is a `FrameRecorder`,
+ *    injected by `_setScriptedKeys` -> `ensureBridgeState`):
+ *    frames go straight into the recorder so tests can inspect them.
+ *  - **Real terminal mode**: a fresh `BottomRegionOutputTarget`
+ *    writes ANSI to stdout via `withBottomCursor`, bypassing the
+ *    default `TerminalOutput` (which would enter the alt screen and
+ *    prepend `CURSOR_HOME` — both fatal to hybrid scrollback).
+ */
 export async function _runLoopHybrid(
   initialState: any,
   renderFn: unknown,
@@ -737,16 +756,14 @@ export async function _runLoopHybrid(
   tickMs: number,
   bottomRows: number,
 ): Promise<any> {
-  // Resolve the underlying input + output (consuming test-mode
-  // injection), then build a Screen bounded to `bottomRows` whose
-  // OutputTarget is wrapped in `BottomRegionOutputTarget`. The wrap
-  // positions every frame at the bottom of the real terminal so
-  // ordinary stdout writes still scroll inside the top region.
   ensureBridgeState();
-  const wrappedOutput = new BottomRegionOutputTarget(bridgeOutputTarget!);
+  const hybridOutput: OutputTarget =
+    bridgeOutputTarget instanceof FrameRecorder
+      ? bridgeOutputTarget
+      : new BottomRegionOutputTarget();
   const hybridScreen = new Screen({
     input: bridgeInputSource!,
-    output: wrappedOutput,
+    output: hybridOutput,
     width: bridgeWidth,
     height: bottomRows,
   });
@@ -761,11 +778,12 @@ export async function _runLoopHybrid(
     });
   } finally {
     bridgeActiveScreen = null;
-    // `Screen.destroy` would also destroy the input source; we want
-    // the bridge's input/output to survive in case the same process
-    // later calls back into `_runLoop` (e.g. agency-agent test
-    // harnesses that run multiple REPL turns). Just clear the
-    // wrapper's own listeners.
-    if (wrappedOutput.destroy) wrappedOutput.destroy();
+    // Deliberately NOT calling `Screen.destroy` or any
+    // `bridgeOutputTarget.destroy`: the bridge's input/output must
+    // survive across loop entries so multi-turn REPL sessions and
+    // test harnesses can re-enter `_runLoop` / `_runLoopHybrid`
+    // without re-initializing terminal state. `BottomRegionOutputTarget`
+    // owns no resources; the scroll region is torn down by
+    // `_resetScrollRegion` in the Agency-side `repl()`.
   }
 }

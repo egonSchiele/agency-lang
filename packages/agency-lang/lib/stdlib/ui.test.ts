@@ -88,53 +88,20 @@ describe("std::ui bridge — BottomRegionOutputTarget", () => {
     resetRegion();
   });
 
-  it("wraps the inner write in save+move+restore", () => {
-    const innerWrites: string[] = [];
-    const inner = {
-      write(_frame: any) {
-        innerWrites.push("INNER_FRAME");
-      },
-    };
+  it("wraps the frame write in save+move+restore and emits ANSI", () => {
     installRegion(3); // scrollBottom = 21 → bottom region starts at row 22
     stdoutWrites.length = 0;
-    const target = new BottomRegionOutputTarget(inner as any);
-    target.write({} as any);
+    const target = new BottomRegionOutputTarget();
+    // toANSI expects a Frame; pass an empty cells grid to keep it minimal.
+    target.write({ width: 0, height: 0, cells: [] } as any);
     const out = stdoutWrites.join("");
     expect(out).toContain("\x1b[s"); // save cursor
     expect(out).toContain("\x1b[22;1H"); // move to bottom region
     expect(out).toContain("\x1b[u"); // restore cursor
-    expect(innerWrites).toEqual(["INNER_FRAME"]);
   });
 
-  it("forwards the label argument to the inner target", () => {
-    const labels: (string | undefined)[] = [];
-    const inner = {
-      write(_frame: any, label?: string) {
-        labels.push(label);
-      },
-    };
-    installRegion(3);
-    const target = new BottomRegionOutputTarget(inner as any);
-    target.write({} as any, "my-label");
-    expect(labels).toEqual(["my-label"]);
-  });
-
-  it("forwards destroy() to the inner target if present", () => {
-    let destroyed = false;
-    const inner = {
-      write(_f: any) {},
-      destroy() {
-        destroyed = true;
-      },
-    };
-    const target = new BottomRegionOutputTarget(inner as any);
-    target.destroy();
-    expect(destroyed).toBe(true);
-  });
-
-  it("destroy() tolerates inner targets without a destroy method", () => {
-    const inner = { write(_f: any) {} };
-    const target = new BottomRegionOutputTarget(inner as any);
+  it("destroy() is a no-op (owns no resources)", () => {
+    const target = new BottomRegionOutputTarget();
     expect(() => target.destroy()).not.toThrow();
   });
 });

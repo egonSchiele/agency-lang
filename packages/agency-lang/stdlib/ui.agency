@@ -332,7 +332,9 @@ export def column(
   block: (Builder) => void = null
 ): Element {
   const kids: any[] = []
-  block(_makeBuilder(kids))
+  // `block` is optional — guard so empty containers (and parser
+  // mis-binds that leave `block` null) don't crash at runtime.
+  if (block != null) { block(_makeBuilder(kids)) }
   return {
     type: "box",
     style: _mkBoxStyle(flexDirection: "column", flex: flex, width: width,
@@ -361,7 +363,7 @@ export def row(
   block: (Builder) => void = null
 ): Element {
   const kids: any[] = []
-  block(_makeBuilder(kids))
+  if (block != null) { block(_makeBuilder(kids)) }
   return {
     type: "box",
     style: _mkBoxStyle(flexDirection: "row", flex: flex, width: width,
@@ -390,7 +392,7 @@ export def box(
   block: (Builder) => void = null
 ): Element {
   const kids: any[] = []
-  block(_makeBuilder(kids))
+  if (block != null) { block(_makeBuilder(kids)) }
   return {
     type: "box",
     style: _mkBoxStyle(flexDirection: "", flex: flex, width: width,
@@ -665,7 +667,7 @@ def _replView(s: ReplState): Element {
   // `block` param null at runtime.
   return column(visible: true) as col {
     col.list(items: palItems, selectedIndex: s.paletteCursor,
-             visible: s.paletteOpen, height: 5, border: true)
+             visible: s.paletteOpen, height: _PALETTE_ROWS, border: true)
     col.row(bg: "blue", fg: "white", height: 1) as st {
       st.line(stat.left)
       st.box(flex: 1) as _ {}
@@ -854,9 +856,19 @@ export def repl(
     status: status,
     onSubmit: onSubmit
   }
-  _installScrollRegion(_BASE_BOTTOM_ROWS)
+  // Reserve enough rows for the *maximum* bottom-region layout
+  // (status + input + open palette) so the palette fits when opened
+  // without clipping the input or status. The palette element renders
+  // `visible: false` when closed and the layout treats invisible
+  // children as zero-height (see `lib/tui/test/layout.test.ts`), so
+  // the extra rows are just empty space above the status bar when
+  // the palette isn't open. A future revision could resize the
+  // scroll region dynamically when the palette toggles, but Screen
+  // doesn't yet support mid-loop height changes.
+  const totalRows = _BASE_BOTTOM_ROWS + _PALETTE_ROWS
+  _installScrollRegion(totalRows)
   const seeded = _appendNewScrollLines(initial)
   _runLoopHybrid(seeded, _replView, _replReduce, _replIsDone,
-                 tickMs, _BASE_BOTTOM_ROWS)
+                 tickMs, totalRows)
   _resetScrollRegion()
 }

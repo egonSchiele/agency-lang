@@ -53,10 +53,10 @@ export class Screen {
      * When omitted, the loop is pure event-driven: it blocks on
      * `nextKey()` and re-renders only after each keypress.
      *
-     * Note: the losing side of the race leaves a pending
-     * `nextKey()` promise; the next loop iteration awaits the same
-     * promise. `ScriptedInput` (multi-waiter queue) and
-     * `TerminalInput` (readline) both tolerate this safely.
+     * The tick-side branch reuses a single in-flight `nextKey()`
+     * promise across iterations so a key the user types during a
+     * tick race is consumed by the next race rather than queued
+     * behind abandoned waiters.
      */
     tickMs?: number;
   }): Promise<S> {
@@ -67,18 +67,29 @@ export class Screen {
     // still pass sync functions; the awaits become trivial.
     let state = opts.initialState;
     this.render(await opts.render(state), opts.label);
+    // Single in-flight `nextKey()` shared across tick iterations.
+    // Calling `this.nextKey()` once per tick would enqueue a fresh
+    // waiter on the underlying input source's FIFO queue every time
+    // a tick wins the race; the next keypress would then resolve the
+    // oldest waiter (an abandoned tick-race promise) instead of the
+    // one the current `Promise.race` is awaiting, requiring one
+    // keypress per accumulated tick before the loop starts reacting.
+    let pendingKeyPromise: Promise<{ kind: "key"; ev: KeyEvent }> | null = null;
     while (!(await opts.isDone(state))) {
       if (opts.tickMs !== undefined) {
+        if (pendingKeyPromise === null) {
+          pendingKeyPromise = this.nextKey().then(
+            (ev) => ({ kind: "key" as const, ev }),
+          );
+        }
         const tickPromise = new Promise<{ kind: "tick" }>((resolve) =>
           setTimeout(() => resolve({ kind: "tick" }), opts.tickMs),
         );
-        const keyPromise = this.nextKey().then(
-          (ev) => ({ kind: "key" as const, ev }),
-        );
         const result = await Promise.race<
           { kind: "tick" } | { kind: "key"; ev: KeyEvent }
-        >([keyPromise, tickPromise]);
+        >([pendingKeyPromise, tickPromise]);
         if (result.kind === "key") {
+          pendingKeyPromise = null;
           state = await opts.handleKey(state, result.ev);
         }
       } else {

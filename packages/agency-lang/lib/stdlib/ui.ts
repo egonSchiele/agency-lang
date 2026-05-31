@@ -12,6 +12,8 @@ import {
   Screen,
   TerminalInput,
   TerminalOutput,
+  ScriptedInput,
+  FrameRecorder,
   type Element as TuiElement,
   type KeyEvent as TuiKeyEvent,
   type InputSource,
@@ -19,6 +21,7 @@ import {
 } from "@/tui/index.js";
 import type { Frame } from "@/tui/frame.js";
 import { withBottomCursor } from "./ui-region.js";
+import { __call } from "../runtime/call.js";
 
 // Evaluated once at load time — the env var is set by the debugger CLI
 // before any compiled agency code runs and never changes.
@@ -525,7 +528,41 @@ let bridgeWidth = 80;
 let bridgeHeight = 24;
 let bridgeActiveScreen: Screen | null = null;
 
+// Test-mode injection points. Agency tests call `_setScriptedKeys` (and
+// optionally `_setQuitAfterMs`) before entering a loop, and the next
+// `makeBridgeScreen` call consumes them — installing a `ScriptedInput`
+// seeded with the keys and a `FrameRecorder` output, then clearing the
+// pending values so subsequent loops fall back to defaults.
+let pendingScriptedKeys: TuiKeyEvent[] | null = null;
+let pendingQuitAfterMs: number | null = null;
+
+export function _setScriptedKeys(keys: TuiKeyEvent[]): void {
+  pendingScriptedKeys = keys;
+}
+
+export function _setQuitAfterMs(ms: number): void {
+  pendingQuitAfterMs = ms;
+}
+
 function makeBridgeScreen(): Screen {
+  if (pendingScriptedKeys) {
+    const scriptedInput = new ScriptedInput(pendingScriptedKeys);
+    bridgeInputSource = scriptedInput;
+    bridgeOutputTarget = new FrameRecorder();
+    bridgeWidth = 80;
+    bridgeHeight = 24;
+    pendingScriptedKeys = null;
+
+    // Optional: feed a `q` key after N ms to break out of a tickMs loop
+    // that scripted keys alone wouldn't terminate. Tests for runLoop's
+    // tick behavior set this so the loop ends without needing a
+    // scripted-keys timeline that matches the tick cadence.
+    if (pendingQuitAfterMs !== null) {
+      const ms = pendingQuitAfterMs;
+      setTimeout(() => scriptedInput.feedKey({ key: "q" }), ms);
+      pendingQuitAfterMs = null;
+    }
+  }
   if (!bridgeInputSource) bridgeInputSource = new TerminalInput();
   if (!bridgeOutputTarget) bridgeOutputTarget = new TerminalOutput();
   if (process.stdout.isTTY) {
@@ -573,11 +610,20 @@ export function _hasActiveScreen(): boolean {
  *  external state (e.g. an LLM call's elapsed time) keeps updating
  *  even with no key input.
  */
+/** Adapt either a plain JS function or an AgencyFunction-like callback
+ *  passed across the bridge into an async callable. Uses `__call` so
+ *  AgencyFunction values dispatch through the runtime's normal call
+ *  path (preserving handlers, ALS context, retry semantics) rather
+ *  than being invoked as raw JS. */
+async function callBridgeFn<T>(fn: unknown, ...args: unknown[]): Promise<T> {
+  return (await __call(fn, { type: "positional", args })) as T;
+}
+
 export async function _runLoop(
   initialState: any,
-  renderFn: (state: any) => any,
-  handleKeyFn: (state: any, ev: TuiKeyEvent) => any,
-  isDoneFn: (state: any) => boolean,
+  renderFn: unknown,
+  handleKeyFn: unknown,
+  isDoneFn: unknown,
   tickMs?: number,
 ): Promise<any> {
   const screen = makeBridgeScreen();
@@ -585,9 +631,9 @@ export async function _runLoop(
   try {
     return await screen.runLoop({
       initialState,
-      render: (s) => renderFn(s) as TuiElement,
-      handleKey: (s, ev) => handleKeyFn(s, ev),
-      isDone: (s) => isDoneFn(s),
+      render: async (s) => await callBridgeFn<TuiElement>(renderFn, s),
+      handleKey: async (s, ev) => await callBridgeFn(handleKeyFn, s, ev),
+      isDone: async (s) => await callBridgeFn<boolean>(isDoneFn, s),
       tickMs,
     });
   } finally {

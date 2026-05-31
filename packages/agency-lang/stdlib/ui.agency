@@ -1,5 +1,5 @@
 import { _initUI, _destroyUI, _log, _status, _chat, _code, _diff, _separator, _startSpinner, _stopSpinner, _emptyLine, _prompt } from "agency-lang/stdlib-lib/ui.js"
-import { _runLoop, _renderOnce, _readKey, _hasActiveScreen } from "agency-lang/stdlib-lib/ui.js"
+import { _runLoop, _renderOnce, _readKey, _hasActiveScreen, _setScriptedKeys, _setQuitAfterMs } from "agency-lang/stdlib-lib/ui.js"
 export def initUI(title: string) {
   """
   Initialize a terminal UI with a scrollable output area and a fixed input bar at the bottom. Call this once at the start of your agent. The title is shown in the scrollable output area on init; use status() to populate the status bar.
@@ -146,8 +146,8 @@ export type Element = {
  */
 export type KeyEvent = {
   key: string;
-  shift: boolean;
-  ctrl: boolean
+  shift?: boolean;
+  ctrl?: boolean
 }
 
 /**
@@ -518,4 +518,79 @@ def _addTextInput(
                          fg: fg, bg: bg)
   kids.push(elem)
   return elem
+}
+
+// ---- Render & event loop ----
+
+/**
+ * Render a single Element tree to the screen and return immediately.
+ * For static UI or first-paint scenarios. For interactive UI, use
+ * `runLoop`.
+ */
+export def renderOnce(tree: Element) {
+  _renderOnce(tree)
+}
+
+/**
+ * Read one key from the terminal. Blocks until a key is pressed.
+ * Use sparingly; prefer `runLoop` for anything beyond a single
+ * blocking prompt.
+ */
+export def readKey(): KeyEvent {
+  return _readKey()
+}
+
+/**
+ * Elm/Ink-style state machine driver. Renders the initial state,
+ * waits for each `KeyEvent`, runs `handleKey` to produce the next
+ * state, re-renders, exits when `isDone` returns `true`. Returns
+ * the final state.
+ *
+ * When `tickMs` is set, the loop also re-renders periodically even
+ * if no key is pressed. This is what makes a live status line tick.
+ * `handleKey` does NOT fire on ticks — `render` does (re-evaluates
+ * any impure state your view reads).
+ *
+ * @param initialState - The opening state record
+ * @param render       - Pure (state) -> Element. Re-runs every tick / key.
+ * @param handleKey    - Pure (state, key) -> state. Runs only on real keys.
+ * @param isDone       - Pure (state) -> boolean. Loop exits when true.
+ * @param tickMs       - Milliseconds between forced re-renders (omit for event-driven only)
+ */
+export def runLoop(
+  initialState: any,
+  render: any,
+  handleKey: any,
+  isDone: any,
+  tickMs?: number
+): any {
+  return _runLoop(initialState, render, handleKey, isDone, tickMs)
+}
+
+// ---- Test-mode injection (internal) ----
+//
+// Tests call these helpers to drive runLoop / repl without a real
+// TTY. `_runLoop` consumes the pending keys on its next invocation
+// and installs a ScriptedInput + FrameRecorder under the hood.
+
+/**
+ * Seed the next `runLoop` (or `repl`) entry with a scripted key
+ * sequence. Internal — used by tests in `tests/agency/ui-*`.
+ *
+ * @param keys - Array of `KeyEvent` records consumed in order
+ */
+export def setScriptedKeys(keys: KeyEvent[]) {
+  _setScriptedKeys(keys)
+}
+
+/**
+ * Schedule a `q` keypress N milliseconds after the next `runLoop`
+ * starts. Internal — used by the tickMs coverage test so a
+ * tick-driven loop terminates without a key-timeline that matches
+ * the tick cadence.
+ *
+ * @param ms - Milliseconds before the synthetic `q` arrives
+ */
+export def setQuitAfterMs(ms: number) {
+  _setQuitAfterMs(ms)
 }

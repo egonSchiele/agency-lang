@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "\"pass\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "runLoop drives the scripted-key state machine to the expected final state"
+    }
+  ]
+}

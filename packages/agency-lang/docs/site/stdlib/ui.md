@@ -53,8 +53,8 @@ export type Element = {
  */
 export type KeyEvent = {
   key: string;
-  shift: boolean;
-  ctrl: boolean
+  shift?: boolean;
+  ctrl?: boolean
 }
 ```
 
@@ -714,3 +714,111 @@ _addTextInput(kids: any[], value: string, flex: number, width: number, height: n
 **Returns:** [Element](#element)
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L508))
+
+### renderOnce
+
+```ts
+renderOnce(tree: Element)
+```
+
+* Render a single Element tree to the screen and return immediately.
+ * For static UI or first-paint scenarios. For interactive UI, use
+ * `runLoop`.
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| tree | [Element](#element) |  |
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L530))
+
+### readKey
+
+```ts
+readKey(): KeyEvent
+```
+
+* Read one key from the terminal. Blocks until a key is pressed.
+ * Use sparingly; prefer `runLoop` for anything beyond a single
+ * blocking prompt.
+
+**Returns:** [KeyEvent](#keyevent)
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L539))
+
+### runLoop
+
+```ts
+runLoop(initialState: any, render: any, handleKey: any, isDone: any, tickMs: number): any
+```
+
+* Elm/Ink-style state machine driver. Renders the initial state,
+ * waits for each `KeyEvent`, runs `handleKey` to produce the next
+ * state, re-renders, exits when `isDone` returns `true`. Returns
+ * the final state.
+ *
+ * When `tickMs` is set, the loop also re-renders periodically even
+ * if no key is pressed. This is what makes a live status line tick.
+ * `handleKey` does NOT fire on ticks — `render` does (re-evaluates
+ * any impure state your view reads).
+ *
+ * @param initialState - The opening state record
+ * @param render       - Pure (state) -> Element. Re-runs every tick / key.
+ * @param handleKey    - Pure (state, key) -> state. Runs only on real keys.
+ * @param isDone       - Pure (state) -> boolean. Loop exits when true.
+ * @param tickMs       - Milliseconds between forced re-renders (omit for event-driven only)
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| initialState | `any` |  |
+| render | `any` |  |
+| handleKey | `any` |  |
+| isDone | `any` |  |
+| tickMs | `number` | null |
+
+**Returns:** `any`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L560))
+
+### setScriptedKeys
+
+```ts
+setScriptedKeys(keys: KeyEvent[])
+```
+
+* Seed the next `runLoop` (or `repl`) entry with a scripted key
+ * sequence. Internal — used by tests in `tests/agency/ui-*`.
+ *
+ * @param keys - Array of `KeyEvent` records consumed in order
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| keys | `KeyEvent[]` |  |
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L582))
+
+### setQuitAfterMs
+
+```ts
+setQuitAfterMs(ms: number)
+```
+
+* Schedule a `q` keypress N milliseconds after the next `runLoop`
+ * starts. Internal — used by the tickMs coverage test so a
+ * tick-driven loop terminates without a key-timeline that matches
+ * the tick cadence.
+ *
+ * @param ms - Milliseconds before the synthetic `q` arrives
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| ms | `number` |  |
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L594))

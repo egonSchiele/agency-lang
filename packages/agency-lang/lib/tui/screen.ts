@@ -39,9 +39,9 @@ export class Screen {
 
   async runLoop<S>(opts: {
     initialState: S;
-    render: (state: S) => Element;
-    handleKey: (state: S, event: KeyEvent) => S;
-    isDone: (state: S) => boolean;
+    render: (state: S) => Element | Promise<Element>;
+    handleKey: (state: S, event: KeyEvent) => S | Promise<S>;
+    isDone: (state: S) => boolean | Promise<boolean>;
     label?: string;
     /**
      * If set, the loop races each `nextKey()` against a `setTimeout`
@@ -60,9 +60,14 @@ export class Screen {
      */
     tickMs?: number;
   }): Promise<S> {
+    // The render / handleKey / isDone callbacks may be async — the
+    // declarative bridge in `lib/stdlib/ui.ts` adapts Agency callback
+    // values into async wrappers (Agency functions invoke through the
+    // runtime call path which returns a Promise). Pure-TS callers can
+    // still pass sync functions; the awaits become trivial.
     let state = opts.initialState;
-    this.render(opts.render(state), opts.label);
-    while (!opts.isDone(state)) {
+    this.render(await opts.render(state), opts.label);
+    while (!(await opts.isDone(state))) {
       if (opts.tickMs !== undefined) {
         const tickPromise = new Promise<{ kind: "tick" }>((resolve) =>
           setTimeout(() => resolve({ kind: "tick" }), opts.tickMs),
@@ -74,13 +79,13 @@ export class Screen {
           { kind: "tick" } | { kind: "key"; ev: KeyEvent }
         >([keyPromise, tickPromise]);
         if (result.kind === "key") {
-          state = opts.handleKey(state, result.ev);
+          state = await opts.handleKey(state, result.ev);
         }
       } else {
         const event = await this.nextKey();
-        state = opts.handleKey(state, event);
+        state = await opts.handleKey(state, event);
       }
-      this.render(opts.render(state), opts.label);
+      this.render(await opts.render(state), opts.label);
     }
     return state;
   }

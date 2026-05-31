@@ -43,12 +43,43 @@ export class Screen {
     handleKey: (state: S, event: KeyEvent) => S;
     isDone: (state: S) => boolean;
     label?: string;
+    /**
+     * If set, the loop races each `nextKey()` against a `setTimeout`
+     * of `tickMs` milliseconds. On a tick, it re-renders with the
+     * current state (no transition). On a key, it runs `handleKey`
+     * then re-renders. Used by `repl()` to keep a live status line
+     * ticking while no keys arrive (e.g. during a long LLM call).
+     *
+     * When omitted, the loop is pure event-driven: it blocks on
+     * `nextKey()` and re-renders only after each keypress.
+     *
+     * Note: the losing side of the race leaves a pending
+     * `nextKey()` promise; the next loop iteration awaits the same
+     * promise. `ScriptedInput` (multi-waiter queue) and
+     * `TerminalInput` (readline) both tolerate this safely.
+     */
+    tickMs?: number;
   }): Promise<S> {
     let state = opts.initialState;
     this.render(opts.render(state), opts.label);
     while (!opts.isDone(state)) {
-      const event = await this.nextKey();
-      state = opts.handleKey(state, event);
+      if (opts.tickMs !== undefined) {
+        const tickPromise = new Promise<{ kind: "tick" }>((resolve) =>
+          setTimeout(() => resolve({ kind: "tick" }), opts.tickMs),
+        );
+        const keyPromise = this.nextKey().then(
+          (ev) => ({ kind: "key" as const, ev }),
+        );
+        const result = await Promise.race<
+          { kind: "tick" } | { kind: "key"; ev: KeyEvent }
+        >([keyPromise, tickPromise]);
+        if (result.kind === "key") {
+          state = opts.handleKey(state, result.ev);
+        }
+      } else {
+        const event = await this.nextKey();
+        state = opts.handleKey(state, event);
+      }
       this.render(opts.render(state), opts.label);
     }
     return state;

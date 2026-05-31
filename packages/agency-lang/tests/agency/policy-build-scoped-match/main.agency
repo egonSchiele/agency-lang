@@ -1,11 +1,11 @@
-import { buildScopedMatch, FieldSpec, AlwaysFields } from "std::policy"
+import { buildScopedMatch, ScopedField, ScopedRuleFields } from "std::policy"
 
 node main() {
-  const fields: AlwaysFields = {
-    "std::read": [{ field: "dir", wildcardSubpaths: true }],
+  const fields: ScopedRuleFields = {
+    "std::read": [{ field: "dir", matchSubpaths: true }],
     "std::exec": [
-      { field: "command", wildcardSubpaths: false },
-      { field: "subcommand", wildcardSubpaths: false },
+      { field: "command", matchSubpaths: false },
+      { field: "subcommand", matchSubpaths: false },
     ],
   }
   const readIntr = {
@@ -13,7 +13,7 @@ node main() {
     data: { dir: "/Users/x/project", filename: "foo.ts" }
   }
   const m1 = buildScopedMatch(readIntr, fields)
-  // wildcardSubpaths brace-expands the value
+  // matchSubpaths brace-expands the value
   if (m1.dir != "{/Users/x/project,/Users/x/project/**}") {
     return "FAIL: brace-expansion wrong, got ${m1.dir}"
   }

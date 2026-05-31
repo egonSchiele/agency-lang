@@ -1,7 +1,7 @@
-import { cliPolicyHandler, AlwaysFields, flushPolicy } from "std::policy"
+import { cliPolicyHandler, ScopedRuleFields, flushPolicy } from "std::policy"
 
-const FIELDS: AlwaysFields = {
-  "std::read": [{ field: "dir", wildcardSubpaths: true }],
+const FIELDS: ScopedRuleFields = {
+  "std::read": [{ field: "dir", matchSubpaths: true }],
 }
 
 node main(args: { policyFile: string }): string {

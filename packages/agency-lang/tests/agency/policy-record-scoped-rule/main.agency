@@ -1,8 +1,8 @@
-import { recordScopedRule, checkPolicy, AlwaysFields } from "std::policy"
+import { recordScopedRule, checkPolicy, ScopedRuleFields } from "std::policy"
 
 node main() {
-  const fields: AlwaysFields = {
-    "std::read": [{ field: "dir", wildcardSubpaths: true }],
+  const fields: ScopedRuleFields = {
+    "std::read": [{ field: "dir", matchSubpaths: true }],
   }
   const intr = {
     kind: "std::read",

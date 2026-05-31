@@ -1,6 +1,6 @@
 import { route } from "std::agent"
 import { today } from "std::date"
-import { AlwaysFields, cliPolicyHandler } from "std::policy"
+import { ScopedRuleFields, cliPolicyHandler } from "std::policy"
 import { exists } from "std::shell"
 import { highlight } from "std::syntax"
 import { cwd, env } from "std::system"
@@ -81,24 +81,24 @@ def policyPath(): string { return "${policyDir()}/${POLICY_FILE}" }
 // flag that turns a directory value into a brace-expanded glob so the
 // rule matches `dir` AND `dir/**`. Kinds not present in this map
 // don't offer the option — the user falls back to (a)/(r)/(aa)/(rr).
-const ALWAYS_FIELDS: AlwaysFields = {
-  "std::read": [{ field: "dir", wildcardSubpaths: true }],
-  "std::write": [{ field: "dir", wildcardSubpaths: true }],
-  "std::edit": [{ field: "dir", wildcardSubpaths: true }],
-  "std::ls": [{ field: "dir", wildcardSubpaths: true }],
-  "std::glob": [{ field: "dir", wildcardSubpaths: true }],
-  "std::grep": [{ field: "dir", wildcardSubpaths: true }],
+const ALWAYS_FIELDS: ScopedRuleFields = {
+  "std::read": [{ field: "dir", matchSubpaths: true }],
+  "std::write": [{ field: "dir", matchSubpaths: true }],
+  "std::edit": [{ field: "dir", matchSubpaths: true }],
+  "std::ls": [{ field: "dir", matchSubpaths: true }],
+  "std::glob": [{ field: "dir", matchSubpaths: true }],
+  "std::grep": [{ field: "dir", matchSubpaths: true }],
   "std::copy": [
-    { field: "src", wildcardSubpaths: true },
-    { field: "dest", wildcardSubpaths: true },
+    { field: "src", matchSubpaths: true },
+    { field: "dest", matchSubpaths: true },
   ],
   "std::move": [
-    { field: "src", wildcardSubpaths: true },
-    { field: "dest", wildcardSubpaths: true },
+    { field: "src", matchSubpaths: true },
+    { field: "dest", matchSubpaths: true },
   ],
   "std::exec": [
-    { field: "command", wildcardSubpaths: false },
-    { field: "subcommand", wildcardSubpaths: false },
+    { field: "command", matchSubpaths: false },
+    { field: "subcommand", matchSubpaths: false },
   ]
 }
 

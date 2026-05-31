@@ -1,0 +1,16 @@
+import { route } from "std::agent"
+
+def codeOnly(): string { return "edited" }
+def researchOnly(): string { return "found" }
+
+node main(): string {
+  const reply = route({
+    start: "code",
+    agents: {
+      code:     { systemPrompt: "code agent", tools: [codeOnly] },
+      research: { systemPrompt: "research agent", tools: [researchOnly] },
+    },
+    maxHops: 2,
+  }, "ping pong")
+  return reply
+}

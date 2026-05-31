@@ -1,3 +1,6 @@
+import { setMemoryId } from "std::memory"
+import { systemMessage } from "std::thread"
+
 type Todo = {
   id: string;
   text: string;
@@ -29,4 +32,140 @@ export def question(prompt: string): string {
     prompt: prompt
   })
   return answer
+}
+
+// ---- Router types ----
+
+export type AgentSpec = {
+  systemPrompt: string;
+  tools: any[];
+  memory?: boolean
+}
+
+export type RouterConfig = {
+  start: string;
+  agents: Record<string, AgentSpec>;
+  maxHops: number;
+  context?: string
+}
+
+// Per-program handoff signal. Module-level let lives in the
+// GlobalStore, so concurrent agent runs in separate RuntimeContexts
+// don't collide. Parallel runners INSIDE one run would race; not
+// supported for v1.
+let _handoffTarget: string = ""
+
+// Tracks which thread sessions have already had their system message
+// seeded in the current program. Prevents re-seeding on every turn of
+// a REPL loop. Module-level let, so it rehydrates across checkpoints.
+let _firstEntry: Record<string, boolean> = {}
+
+export safe def handoff(
+  category: string,
+  reason: string,
+  validCategories: string[],
+): string {
+  """
+  Re-route the user's current message to a different specialist.
+  After you call this, your turn closes and the original message
+  is re-routed to the chosen specialist. Anything you say after
+  `handoff()` is discarded — return immediately.
+
+  Bias toward staying: most follow-ups are continuations of the
+  current topic. Only call this when the message clearly needs
+  a different specialist's tools.
+
+  @param category - The specialist to re-route to
+  @param reason - Brief explanation (recorded for debugging)
+  @param validCategories - PFA-bound by `route()` — do not set manually
+  """
+  if (!validCategories.includes(category)) {
+    const validList = validCategories.join(", ")
+    return "Error: '${category}' is not a valid handoff target. Valid: ${validList}. If the request is in scope for you, just answer it."
+  }
+  _handoffTarget = category
+  return "Handoff scheduled — return now without further reply."
+}
+
+export safe def consumeHandoff(): string {
+  """
+  Read and clear the pending handoff target. Returns "" when no
+  handoff was requested. Used internally by `route()`; exposed for
+  tests + advanced users writing custom dispatch loops.
+  """
+  const result = _handoffTarget
+  _handoffTarget = ""
+  return result
+}
+
+def runOneTurn(
+  category: string,
+  userMsg: string,
+  config: RouterConfig,
+  allowHandoff: boolean,
+): string {
+  """
+  Single iteration of route()'s hop loop. Owns the thread block,
+  memory scoping, first-entry system-message seeding, and tool-array
+  assembly. Returns the LLM's reply (string).
+  """
+  let reply = ""
+  thread(session: category, label: category, summarize: true) {
+    const spec = config.agents[category]
+    if (spec.memory == true) { setMemoryId(category) }
+    if (!_firstEntry[category]) {
+      _firstEntry[category] = true
+      // Concat with `||` so an unset optional `context` becomes "".
+      systemMessage(spec.systemPrompt + (config.context || ""))
+    }
+    let tools: any[] = [...spec.tools]
+    if (allowHandoff) {
+      let validTargets: string[] = []
+      for (c in keys(config.agents)) {
+        if (c != category) { validTargets.push(c) }
+      }
+      tools.push(handoff.partial(validCategories: validTargets))
+    }
+    reply = llm(userMsg, {
+      memory: spec.memory == true,
+      tools: tools
+    })
+  }
+  return reply
+}
+
+export def route(config: RouterConfig, userMsg: string): string {
+  """
+  Run one user turn through a multi-specialist agent. Owns the hop
+  loop, handoff signal, and force-answer fallback. The router
+  injects a `handoff(category, reason)` tool into each specialist's
+  toolset so the LLM can re-route the message when it's out of scope.
+  When `maxHops` is reached, the handoff tool is stripped from the
+  last call so the LLM is forced to answer.
+
+  @param config - Start category, per-category agent specs, max hops, optional context string
+  @param userMsg - The user's input message for this turn
+  """
+  if (config.agents[config.start] == undefined) {
+    return "Error: start category '${config.start}' not in agents map"
+  }
+  let category = config.start
+  let hop = 0
+  let reply = ""
+  let done = false
+  while (!done && hop < config.maxHops) {
+    reply = runOneTurn(category, userMsg, config, true)
+    const target = consumeHandoff()
+    if (target == "") {
+      done = true
+    } else {
+      category = target
+      hop = hop + 1
+    }
+  }
+  if (!done) {
+    // Hop limit reached — force an answer by stripping the handoff tool.
+    reply = runOneTurn(category, userMsg, config, false)
+  }
+  return reply
 }

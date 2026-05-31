@@ -1,0 +1,18 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "\"fallback answer\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "Hop limit reached: fallback mode runs once more with handoff tool stripped.",
+      "llmMocks": [
+        { "toolCall": { "name": "handoff", "args": { "category": "research", "reason": "ping" } } },
+        { "return": "discarded code reply" },
+        { "toolCall": { "name": "handoff", "args": { "category": "code", "reason": "pong" } } },
+        { "return": "discarded research reply" },
+        { "return": "fallback answer" }
+      ]
+    }
+  ]
+}

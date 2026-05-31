@@ -1,0 +1,15 @@
+import { route } from "std::agent"
+
+def hello(): string { return "hi" }
+
+node main() {
+  const reply = route({
+    start: "only",
+    agents: {
+      only: { systemPrompt: "say hello", tools: [hello] }
+    },
+    maxHops: 3,
+  }, "hi there")
+  if (reply == "") { return "FAIL: empty reply" }
+  return "pass"
+}

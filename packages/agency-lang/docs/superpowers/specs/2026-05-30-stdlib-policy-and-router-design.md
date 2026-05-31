@@ -67,7 +67,8 @@ The change splits into two independent stdlib additions:
 
 1. **Extensions to `stdlib/policy.agency`** — pure recording primitives
    plus a CLI sugar handler.
-2. **New `stdlib/router.agency`** — declarative multi-agent router.
+2. **Router added to `stdlib/agent.agency`** — declarative multi-agent
+   router exported from the existing `std::agent` module.
 
 ### 1. Policy extensions
 
@@ -255,7 +256,13 @@ If users hit the other edge cases — concurrent agent instances
 writing the same file, atomic-write requirements, etc. — they also
 fall back to the pure primitives.
 
-### 2. Router: `stdlib/router.agency` (new file)
+### 2. Router: extension of `stdlib/agent.agency`
+
+Lives alongside `todoWrite`, `todoList`, and `question` in the existing
+`stdlib/agent.agency` module. The router is one *coordination strategy*
+for building agents; future strategies (supervisor/worker, parallel
+dispatch, pipeline, single-agent loop) will sit alongside it under the
+same `std::agent` namespace. No new module file.
 
 #### 2.1 Types
 
@@ -369,7 +376,7 @@ After:
 
 ```ts
 // agent.agency, in full (sketch)
-import { route } from "std::router"
+import { route } from "std::agent"
 import { cliPolicyHandler } from "std::policy"
 import { codeSysPrompt, codeTools } from "./code.agency"
 import { researchSysPrompt, researchTools } from "./research.agency"
@@ -407,8 +414,8 @@ an exported tools array. No `runCode`/`runResearch`, no
 `allowHandoff`, no `handoff.partial`, no first-entry flag.
 
 `shared.agency` deletes the handoff plumbing entirely (now in
-`stdlib/router.agency`). `AgentContext` becomes just `context: string`
-on the router call site.
+`std::agent`). `AgentContext` becomes just `context: string` on the
+router call site.
 
 `defaultHandler`, `loadPolicy`, `savePolicy`, `policyDir`,
 `policyPath`, `ensurePolicyLoaded`, `recordAlways`,
@@ -478,16 +485,18 @@ the design.
   (it's a module-level `let`, so it goes through GlobalStore — same
   as today's `codeFirstEntry`). Worth a focused test.
 - **Coupling of `_handoffTarget` to the router**: moving the slot
-  from `shared.agency` into `stdlib/router.agency` means any
-  non-router consumer of `handoff()` breaks. Mitigation: the
-  `handoff` tool also moves into the router, and nothing outside
-  the agent currently calls it. Greenfield change.
+  from `shared.agency` into `std::agent` means any non-router
+  consumer of `handoff()` breaks. Mitigation: the `handoff` tool
+  also moves into `std::agent`, and nothing outside the agent
+  currently calls it. Greenfield change.
 
 ## File summary
 
 - **Modify**: `stdlib/policy.agency` (+ types, + primitives, +
   CLI helper).
-- **New**: `stdlib/router.agency`.
+- **Modify**: `stdlib/agent.agency` (+ `route` + `handoff` +
+  `AgentSpec` / `RouterConfig` types + internal handoff-target
+  plumbing).
 - **Modify**: `lib/agents/agency-agent/agent.agency`,
   `shared.agency`, `code.agency`, `research.agency` — collapse onto
   the new stdlib (this is the regression test, not the change

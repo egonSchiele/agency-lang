@@ -3,30 +3,22 @@
  * up Agency syntax in the bundled docs, searching Wikipedia,
  * fetching URLs, browsing the web, or recalling stored facts.
  *
- * Tools: docSkill / cliSkill / appendixSkill + wikipedia* + fetch* +
- * browserUse + remember/recall + highlight + print + handoff. NO
- * file write / edit / typecheck / bash — the agent must
- * `handoff(reason)` (PFA-bound to code only) when the user asks for
- * code changes.
- *
- * The bundled-docs Skills live here (not in `shared.agency`) because
- * only the research subagent uses them. `static const` caches the
- * Skill across runs.
- *
- * See `shared.agency` for the multi-agent design rationale.
+ * Exports `researchSysPrompt` + `researchTools` consumed by the
+ * router in `agent.agency`. The router injects the `handoff` tool
+ * itself, so we do NOT add it here. The bundled-docs Skills live
+ * here (not in `shared.agency`) because only the research subagent
+ * uses them. `static const` caches the Skill across runs.
  */
 import { fetch, fetchJSON, fetchMarkdown } from "std::http"
 import { browserUse } from "std::browser"
-import { setMemoryId, remember, recall } from "std::memory"
+import { remember, recall } from "std::memory"
 import { skillsDir } from "std::skills"
 import { highlight } from "std::syntax"
-import { systemMessage } from "std::thread"
 import {
   search as wikipediaSearch,
   summary as wikipediaSummary,
   article as wikipediaArticle,
 } from "std::wikipedia"
-import { Category, AgentContext, handoff } from "./shared.agency"
 
 // Bundled docs live one level above the agent's compiled JS. Built
 // once at module load — `skillsDir` reads + parses every `.md`
@@ -43,11 +35,7 @@ static const docSkill = skillsDir("../docs/guide") with approve
 static const cliSkill = skillsDir("../docs/cli") with approve
 static const appendixSkill = skillsDir("../docs/appendix") with approve
 
-// First-entry detection for the research session. See the matching
-// comment in `code.agency` for the rationale.
-let researchFirstEntry: boolean = true
-
-const researchSysPrompt = """
+export static const researchSysPrompt = """
 You are the **research specialist** of a multi-thread Agency-language
 assistant. You answer questions that need reading: Agency-language
 syntax / semantics / built-ins, CLI usage, external docs, Wikipedia
@@ -114,58 +102,19 @@ replies appear with colored headings, bold/italic styling, link
 underlining, and properly highlighted code fences.
 """
 
-export def runResearch(
-  userMsg: string,
-  ctx: AgentContext,
-  allowHandoff: boolean = true,
-): string {
-  """
-  Run a single turn in the research subagent. The caller is
-  responsible for the surrounding `thread(session: "research") { ... }`
-  block; this function just (a) seeds the research system message
-  on first entry, (b) scopes memory to the `"research"` knowledge
-  graph, and (c) runs the LLM call with the research tool set.
-
-  Returns the LLM's text reply. If the LLM called `handoff()` mid-
-  turn, the reply is the LLM's post-handoff filler text and the
-  caller MUST check `consumeHandoff()` to discover whether to
-  re-route.
-
-  @param userMsg - The user's input message for this turn
-  @param ctx - Per-call invariants (env, projectContext) for the system message
-  @param allowHandoff - When false, the `handoff` tool is omitted from the
-    tool set so the agent is forced to answer this turn. Used by the
-    REPL's hop-limit fallback to break a re-routing chain.
-  """
-  setMemoryId("research")
-  if (researchFirstEntry) {
-    systemMessage(researchSysPrompt + ctx.env + ctx.projectContext)
-    researchFirstEntry = false
-  }
-  // See the comment in `code.agency`: `handoff` is PFA-bound to
-  // `validCategories: ["code"]` so the LLM can't hand off to itself,
-  // and omitted entirely when `allowHandoff` is false.
-  let tools = [
-    docSkill,
-    cliSkill,
-    appendixSkill,
-    wikipediaSearch,
-    wikipediaSummary,
-    wikipediaArticle,
-    fetch,
-    fetchJSON,
-    fetchMarkdown,
-    browserUse,
-    remember,
-    recall,
-    highlight.partial(language: "ts"),
-    print,
-  ]
-  if (allowHandoff) {
-    tools.push(handoff.partial(validCategories: ["code"]))
-  }
-  return llm(userMsg, {
-    memory: true,
-    tools: tools
-  })
-}
+export static const researchTools: any[] = [
+  docSkill,
+  cliSkill,
+  appendixSkill,
+  wikipediaSearch,
+  wikipediaSummary,
+  wikipediaArticle,
+  fetch,
+  fetchJSON,
+  fetchMarkdown,
+  browserUse,
+  remember,
+  recall,
+  highlight.partial(language: "ts"),
+  print,
+]

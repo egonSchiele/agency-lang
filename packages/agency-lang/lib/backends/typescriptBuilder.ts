@@ -2985,7 +2985,10 @@ export class TypeScriptBuilder {
     }
   }
 
-  private buildHandlerArrow(handlerName: string): TsNode {
+  private buildHandlerArrow(
+    handlerName: string,
+    handlerScope?: ScopeType,
+  ): TsNode {
     if (this.names.isDirectCallFunction(handlerName)) {
       // Built-in handler (approve/reject/propagate): call with no args
       return ts.arrowFn(
@@ -2997,13 +3000,19 @@ export class TypeScriptBuilder {
 
     const args = [ts.id("__data")];
 
-    // User-defined function handler: use __call
+    // User-defined function handler: use __call. Resolve the callee
+    // through scopedVar when scope info is available so locals
+    // (`__stack.locals.NAME`), globals, statics, etc. are dereferenced
+    // correctly instead of being emitted as bare JS identifiers.
     const descriptor = ts.obj({
       type: ts.str("positional"),
       args: ts.arr(args),
     });
     const configObj = this.buildStateConfig();
-    const callArgs: TsNode[] = [ts.id(handlerName), descriptor];
+    const callee = handlerScope
+      ? ts.scopedVar(handlerName, handlerScope, this.moduleId)
+      : ts.id(handlerName);
+    const callArgs: TsNode[] = [callee, descriptor];
     if (configObj) callArgs.push(configObj);
     const callExpr = ts.call(ts.id("__call"), callArgs);
     return ts.arrowFn(
@@ -3036,7 +3045,10 @@ export class TypeScriptBuilder {
         { async: true },
       );
     } else {
-      handler = this.buildHandlerArrow(node.handler.functionName);
+      handler = this.buildHandlerArrow(
+        node.handler.functionName,
+        node.handler.scope,
+      );
     }
 
     // Body: process each statement with substep tracking

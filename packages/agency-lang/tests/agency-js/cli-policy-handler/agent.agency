@@ -1,0 +1,28 @@
+import { cliPolicyHandler, ScopedRuleFields, flushPolicy } from "std::policy"
+
+const FIELDS: ScopedRuleFields = {
+  "std::read": [{ field: "dir", matchSubpaths: true }],
+}
+
+node main(args: { policyFile: string }): string {
+  const handler = cliPolicyHandler({ file: args.policyFile, fields: FIELDS })
+  handle {
+    // Three interrupts of distinct shapes; consume 3 scripted answers.
+    interrupt myapp::deploy("first", { env: "prod" })
+    interrupt std::read("second", { dir: "/tmp/x", filename: "f" })
+    interrupt myapp::other("third", { foo: 1 })
+  } with handler
+
+  // Force-flush so the policy file is on disk before turn 2.
+  flushPolicy() with approve
+
+  handle {
+    // These must NOT prompt — "aa" rule covers myapp::deploy,
+    // "ap" rule covers std::read subpaths. If a 4th prompt fires
+    // the test hangs (or throws — depends on override behavior).
+    interrupt myapp::deploy("auto1", { env: "prod" })
+    interrupt std::read("auto2", { dir: "/tmp/x/sub", filename: "g" })
+  } with handler
+
+  return "pass"
+}

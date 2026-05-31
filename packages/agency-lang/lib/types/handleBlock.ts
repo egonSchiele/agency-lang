@@ -1,4 +1,4 @@
-import type { AgencyNode } from "../types.js";
+import type { AgencyNode, ScopeType } from "../types.js";
 import type { BaseNode } from "./base.js";
 import type { FunctionParameter } from "./function.js";
 
@@ -7,5 +7,5 @@ export type HandleBlock = BaseNode & {
   body: AgencyNode[];
   handler:
     | { kind: "inline"; param: FunctionParameter; body: AgencyNode[] }
-    | { kind: "functionRef"; functionName: string };
+    | { kind: "functionRef"; functionName: string; scope?: ScopeType };
 };

@@ -1,0 +1,14 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "\"pass\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "Single-agent run with no handoff returns the LLM's reply.",
+      "llmMocks": [
+        { "return": "hello back" }
+      ]
+    }
+  ]
+}

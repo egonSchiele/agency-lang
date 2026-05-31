@@ -1,0 +1,16 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "\"final research answer\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "Two-agent run: code agent hands off to research, research replies.",
+      "llmMocks": [
+        { "toolCall": { "name": "handoff", "args": { "category": "research", "reason": "needs lookup" } } },
+        { "return": "ok handing off" },
+        { "return": "final research answer" }
+      ]
+    }
+  ]
+}

@@ -23,6 +23,7 @@ import {
   AgencyFunction as __AgencyFunction, UNSET as __UNSET,
   __call, __callMethod, __threads, __stateStack, getRuntimeContext, agencyStore,
   __initVar,
+  __requireInitVar,
   __registerModule, __getReachableModules,
   functionRefReviver as __functionRefReviver,
   DeterministicClient as __DeterministicClient,
@@ -135,6 +136,9 @@ function registerTools(tools: any[]) {
   }
 }
 
+
+
+export {  };
 const __MY_INIT_GETTERS = [];
 async function __initializeStatic(__ctx) {
   __ctx.globals.markInitialized("withParam.agency")

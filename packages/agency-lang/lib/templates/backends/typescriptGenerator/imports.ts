@@ -28,6 +28,7 @@ import {
   AgencyFunction as __AgencyFunction, UNSET as __UNSET,
   __call, __callMethod, __threads, __stateStack, getRuntimeContext, agencyStore,
   __initVar,
+  __requireInitVar,
   __registerModule, __getReachableModules,
   functionRefReviver as __functionRefReviver,
   DeterministicClient as __DeterministicClient,

@@ -109,6 +109,7 @@ import { StepPathTracker } from "./typescriptBuilder/stepPathTracker.js";
 import { NameClassifier } from "./typescriptBuilder/nameClassifier.js";
 import { PipeChainEmitter } from "./typescriptBuilder/pipeChainEmitter.js";
 import { AssignmentEmitter } from "./typescriptBuilder/assignmentEmitter.js";
+import { InitGetterRewriter } from "./typescriptBuilder/initGetterRewriter.js";
 import {
   assembleSections,
   partitionProgram,
@@ -168,27 +169,6 @@ function markTopLevelScopedVars<T extends TsNode>(node: T): T {
  * without a `kind` discriminator but still hold nested TsNode
  * children (e.g. `parts[i].expr` for templateLit).
  */
-/**
- * Local mirror of sectionAssembler's `unwrapStaticAssignment` for the
- * pre-scan in `build()`. Returns the var name if `node` is a top-level
- * `static const X = …` (optionally wrapped in `with handler`),
- * otherwise null. Kept here to avoid exporting the partition's
- * internal helper.
- */
-function unwrapStaticAssignmentNameForBuilder(node: AgencyNode): string | null {
-  if (node.type === "assignment" && node.scope === "static") {
-    return node.variableName;
-  }
-  if (
-    node.type === "withModifier" &&
-    node.statement.type === "assignment" &&
-    node.statement.scope === "static"
-  ) {
-    return node.statement.variableName;
-  }
-  return null;
-}
-
 function walkMarkTopLevel(value: unknown): unknown {
   if (Array.isArray(value)) {
     return value.map(walkMarkTopLevel);
@@ -246,43 +226,29 @@ export class TypeScriptBuilder {
   private insideGlobalInit: boolean = false;
   /**
    * Set while processing the RHS of a top-level `static const X = …`.
-   * Reads of imported top-level statics (or same-module statics) are
-   * rewritten to `await __init_<dep>(__ctx)` so the source module's
-   * getter cascade fires before the value is observed — the runtime
-   * mechanism that fixes #232. See `generateLiteral`'s `variableName`
-   * case for the rewrite site.
+   * Gates the `InitGetterRewriter` (otherwise reads from inside `def`
+   * bodies — where statics are guaranteed populated by the orchestrator
+   * — would also get the `await __init_X(__ctx)` wrap).
    */
   private insideStaticInit: boolean = false;
   /**
-   * The var currently being initialized in a static-init context.
-   * Used to avoid emitting `await __init_X(__ctx)` for a literal
-   * self-reference inside `static const X = …`. (Such self-refs
-   * either reduce to `undefined` at runtime today or are picked up
-   * as cycles by `__initVar`; either way, suppressing the rewrite
-   * for the trivially-same name keeps codegen well-defined.)
+   * The var currently being initialized in a static-init context, or
+   * null. Passed to `InitGetterRewriter.rewrite` so a literal
+   * self-reference (`static const X = X + 1`) is left alone (cycle
+   * detection in `__initVar` will catch the recursive case anyway).
    */
   private currentStaticInitVar: string | null = null;
   /**
-   * Names of `__init_X` getters that we need to `import { ... }` from
-   * other Agency modules because at least one cross-module read in a
-   * static-init context was rewritten to use them. Keyed by the local
-   * (alias-aware) name `X`; value is the source modulePath string as
-   * it appeared in the original `import` statement (so we can re-use
-   * `toCompiledImportPath` later).
+   * Single owner of the cross-module / same-module init-getter
+   * rewrite logic. Encapsulates: the rewrite-eligibility predicates,
+   * the `__init_X` naming convention, and the recorded cross-module
+   * deps that the import-emission loop in `build()` consumes.
    *
-   * Populated lazily by `generateLiteral` and consumed by
-   * `processImportStatement`, which appends `__init_X` to the
-   * generated `import { X, … }` list when it emits the statement.
+   * The builder feeds it inputs (`setOwnStaticVarNames`, passes
+   * `importedConstants` per rewrite call) but never inspects its
+   * internals — see `lib/backends/typescriptBuilder/initGetterRewriter.ts`.
    */
-  private crossModuleInitGetters: Map<string, string> = new Map();
-  /**
-   * Names of same-module statics — populated by `partitionProgram`
-   * after the pre-pass. Used by `generateLiteral` to decide whether
-   * a scope:"static" reference inside a static-init context should
-   * be rewritten to `await __init_X(__ctx)`. (Cross-module references
-   * use `compilationUnit.importedConstants` instead.)
-   */
-  private ownStaticVarNames: Set<string> = new Set();
+  private initGetters: InitGetterRewriter = new InitGetterRewriter();
 
   /*
   We break up every function and node body into steps,
@@ -444,18 +410,12 @@ export class TypeScriptBuilder {
     // Generate tool registry (empty — AgencyFunction.create() populates it)
     this.generatedStatements.push(this.generateToolRegistry());
 
-    // Pre-scan top-level static var names so `processStaticInitValue`
-    // can rewrite same-module forward references (e.g. `static const
-    // A = B + 1` where B is declared further down). The set is built
-    // again by `partitionProgram`, but partition processes value
-    // expressions inline — we need the set populated BEFORE that
-    // walk starts, or forward refs won't rewrite.
-    for (const node of program.nodes) {
-      const unwrapped = unwrapStaticAssignmentNameForBuilder(node);
-      if (unwrapped) this.ownStaticVarNames.add(unwrapped);
-    }
-
-    // Sort program nodes into static-init / global-init / top-level buckets.
+    // Sort program nodes into static-init / global-init / top-level
+    // buckets. partition collects same-module static-var names in its
+    // first pass and surfaces them via `ownStaticVarNames` BEFORE
+    // calling `processStaticInitValue` on any RHS — so forward
+    // references between statics (`static const A = B + 1` where B is
+    // declared below) rewrite correctly into init-getter calls.
     const partition = partitionProgram(program, {
       processNode: (n) => this.processNode(n),
       processNodeInGlobalInit: (n) => this.processNodeInGlobalInit(n),
@@ -464,41 +424,33 @@ export class TypeScriptBuilder {
       buildHandlerArrow: (h) => this.buildHandlerArrow(h),
       isTopLevelDeclaration: (n) => this.names.isTopLevelDeclaration(n),
       moduleId: this.moduleId,
+      onStaticVarNamesCollected: (names) =>
+        this.initGetters.setOwnStaticVarNames(names),
     });
     this.generatedStatements.push(...partition.topLevelStatements);
 
-    // Emit additional `import { __init_X } from "<dep>"` statements
-    // for every cross-module top-level static read that
-    // `generateLiteral` rewrote into a `__init_X` call. Done AFTER
-    // partition so we've fully populated `crossModuleInitGetters`
-    // before emitting. Separate `import` statements (rather than
+    // Emit one `import { __init_X } from "<dep>"` plus a
+    // `__requireInitVar(...)` module-load guard for every cross-module
+    // getter `generateLiteral` recorded on the rewriter during the
+    // partition pass. Separate `import` statements (rather than
     // appending to the existing `import { X } from "./mod.js"`) keep
-    // the emit path simple: no need to walk and mutate previously
-    // constructed TsNode import statements.
-    for (const [name, modulePath] of this.crossModuleInitGetters) {
+    // the emit path simple — no walk-and-mutate of constructed import
+    // TsNodes.
+    for (const [name, modulePath] of this.initGetters.crossModuleGetters()) {
       const compiledPath = toCompiledImportPath(
         modulePath,
         this.outputFile ?? path.resolve(this.moduleId),
       );
+      const getterName = InitGetterRewriter.getterName(name);
       this.importStatements.push(
-        ts.raw(`import { __init_${name} } from ${JSON.stringify(compiledPath)};`),
+        ts.raw(`import { ${getterName} } from ${JSON.stringify(compiledPath)};`),
       );
-      // Backward-compat guard: ES modules return `undefined` for any
-      // imported name the source module doesn't export. Without this
-      // check, the first cross-module init read at runtime would
-      // crash with a generic `TypeError: __init_X is not a function`.
-      // Module-load check fires fast at import time instead, with a
-      // pointer to the likely cause (a `pkg::` or relative import
-      // compiled by an older agency-lang that pre-dates the
-      // cross-module init export shape).
       this.importStatements.push(
-        ts.raw(
-          `if (typeof __init_${name} !== "function") throw new Error(` +
-            `${JSON.stringify(compiledPath)} + ` +
-            `${JSON.stringify(
-              ` was compiled with an older agency-lang version and is missing the cross-module init export for "${name}". Rebuild the imported module with the current toolchain (\`make\`).`,
-            )});`,
-        ),
+        ts.call(ts.id("__requireInitVar"), [
+          ts.id(getterName),
+          ts.str(name),
+          ts.str(compiledPath),
+        ]),
       );
     }
 
@@ -893,43 +845,20 @@ export class TypeScriptBuilder {
           literal.scope === "imported" || !literal.scope;
         const isBuiltinVar = BUILTIN_VARIABLES.includes(literal.value);
         const isLoopVar = this.loopVars.includes(literal.value);
-        // Rewrite reads of top-level static deps (this module's or an
-        // imported module's) into `await __init_<dep>(__ctx)` when we
-        // are emitting the RHS of a `static const`. This is the
-        // single mechanism that fixes #232 — see `__initVar` /
-        // `processStaticInitValue` docstrings for the bigger picture.
-        // The current-var guard suppresses self-reference rewrites
-        // (`static const X = X + 1`); those would cycle anyway, but
-        // emitting `__init_X` for the very binding being created
-        // would also forward-reference an undeclared symbol.
-        if (
-          this.insideStaticInit &&
-          !isBuiltinVar &&
-          !isLoopVar &&
-          literal.value !== this.currentStaticInitVar
-        ) {
-          if (literal.scope === "imported" || !literal.scope) {
-            const importedConst =
-              this.compilationUnit.importedConstants[literal.value];
-            if (importedConst) {
-              // Remember to add `__init_X` to the `import { ... }`
-              // statement when we emit imports.
-              this.crossModuleInitGetters.set(
-                literal.value,
-                importedConst.modulePath,
-              );
-              return ts.await(
-                ts.call(ts.id(`__init_${literal.value}`), [ts.id("__ctx")]),
-              );
-            }
-          } else if (
-            literal.scope === "static" &&
-            this.ownStaticVarNames.has(literal.value)
-          ) {
-            return ts.await(
-              ts.call(ts.id(`__init_${literal.value}`), [ts.id("__ctx")]),
-            );
-          }
+        // Inside a `static const X = …` RHS, top-level static reads
+        // need to await the source module's `__init_*` getter so the
+        // cross-module init cascade fires before the value is
+        // observed. The rewriter owns the rules + naming; the builder
+        // just asks "should this read rewrite?" and emits whatever
+        // the rewriter returns. Builtins and loop vars never rewrite
+        // — they can't be top-level statics.
+        if (this.insideStaticInit && !isBuiltinVar && !isLoopVar) {
+          const rewritten = this.initGetters.rewrite(
+            literal,
+            this.compilationUnit.importedConstants,
+            this.currentStaticInitVar,
+          );
+          if (rewritten) return rewritten;
         }
         if (importedOrUnknownScope || isBuiltinVar || isLoopVar) {
           return ts.id(literal.value);

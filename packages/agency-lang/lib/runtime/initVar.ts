@@ -31,6 +31,32 @@
  * logic lives. Codegen produces pure data (a compute closure +
  * the var name for error reporting); the runtime owns the "how."
  */
+/**
+ * Validate that a cross-module `__init_X` import resolved to a real
+ * getter function. Emitted by codegen once per cross-module init
+ * import; runs at module load time so the failure mode is "module
+ * fails to load with a clear pointer at the broken dep" rather than
+ * "node runs partway, then crashes with `TypeError: __init_X is not
+ * a function` at first use."
+ *
+ * Triggered when the source module was compiled by an older
+ * agency-lang that pre-dates the cross-module init export shape, or
+ * when a `pkg::` import points to an Agency package whose published
+ * `.js` files are stale.
+ */
+export function __requireInitVar(
+  fn: unknown,
+  varName: string,
+  modulePath: string,
+): void {
+  if (typeof fn === "function") return;
+  throw new Error(
+    `${modulePath} was compiled with an older agency-lang version and ` +
+      `is missing the cross-module init export for "${varName}". ` +
+      "Rebuild the imported module with the current toolchain (`make`).",
+  );
+}
+
 export function __initVar<T, Ctx>(
   varName: string,
   compute: (ctx: Ctx) => Promise<T>,

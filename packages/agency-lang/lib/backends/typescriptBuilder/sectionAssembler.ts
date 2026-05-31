@@ -1,6 +1,7 @@
 import type { AgencyNode, AgencyProgram } from "../../types.js";
 import type { TsNode } from "../../ir/tsIR.js";
 import { ts } from "../../ir/builders.js";
+import { InitGetterRewriter } from "./initGetterRewriter.js";
 
 /**
  * Two helpers for the orchestration phase of `TypeScriptBuilder.build()`:
@@ -40,6 +41,15 @@ export type PartitionDeps = {
   buildHandlerArrow: (handlerName: string) => TsNode;
   isTopLevelDeclaration: (node: AgencyNode) => boolean;
   moduleId: string;
+  /**
+   * Invoked once with the set of every same-module top-level static
+   * var name BEFORE any RHS is processed via `processStaticInitValue`.
+   * Lets the caller register names with its init-getter rewriter so
+   * forward references (`static const A = B + 1` where B is declared
+   * later) rewrite correctly. Optional: callers that don't need the
+   * rewrite (e.g. one-shot inspection of partition output) can omit it.
+   */
+  onStaticVarNamesCollected?: (names: ReadonlySet<string>) => void;
 };
 
 /**
@@ -125,6 +135,18 @@ export function partitionProgram(
   const topLevelStatements: TsNode[] = [];
   const topLevelCallbackStatements: TsNode[] = [];
 
+  // First pass: collect every same-module top-level static var name
+  // and surface them via the optional callback BEFORE any RHS is
+  // processed. Required so `processStaticInitValue` rewrites forward
+  // references between statics correctly (`static const A = B + 1`
+  // where B is declared further down). Cheap — only inspects each
+  // node's shape, never recurses into expressions.
+  for (const node of program.nodes) {
+    const staticAssign = unwrapStaticAssignment(node);
+    if (staticAssign) staticVarNames.add(staticAssign.stmt.variableName);
+  }
+  deps.onStaticVarNamesCollected?.(staticVarNames);
+
   for (const node of program.nodes) {
     if (isTopLevelCallbackCall(node)) {
       topLevelCallbackStatements.push(deps.processNodeInGlobalInit(node));
@@ -134,7 +156,9 @@ export function partitionProgram(
     const staticAssign = unwrapStaticAssignment(node);
     if (staticAssign) {
       const { stmt, handlerName } = staticAssign;
-      staticVarNames.add(stmt.variableName);
+      // `staticVarNames` was already populated in the first pass —
+      // skipping the redundant `.add()` here keeps the data flow
+      // obvious (one writer per set).
       if (stmt.exported) exportedStaticVarNames.add(stmt.variableName);
 
       // Process the rhs inside a static-init context so reads of
@@ -425,13 +449,12 @@ function buildStaticVarSetup(opts: AssembleSectionsOpts): TsNode[] {
   const ctxParam = ts.id("__ctx");
 
   // `let X` (or `export let X`) for every static. Source order; matches
-  // the order they appear in `staticInitVars`.
+  // the order they appear in `staticInitVars`. Always emitted (an
+  // empty `ts.statements([])` is a no-op — no special case needed).
   const staticLetDecls = opts.staticInitVars.map((iv) =>
     iv.exported ? ts.export(ts.letDecl(iv.varName)) : ts.letDecl(iv.varName),
   );
-  if (staticLetDecls.length > 0) {
-    out.push(ts.statements(staticLetDecls));
-  }
+  out.push(ts.statements(staticLetDecls));
 
   // Per-var getter pair:
   //   async function __init_X_compute(__ctx) { ...computeBody }
@@ -447,42 +470,35 @@ function buildStaticVarSetup(opts: AssembleSectionsOpts): TsNode[] {
   //
   // The compute body owns both assignment to the module-level `let X`
   // and returning the value, so callers awaiting __init_X get the
-  // final populated value.
+  // final populated value. Naming goes through `InitGetterRewriter`
+  // so the convention has one owner.
   const initVarDecls: TsNode[] = [];
   for (const iv of opts.staticInitVars) {
     initVarDecls.push(
       ts.functionDecl(
-        `__init_${iv.varName}_compute`,
+        InitGetterRewriter.computeName(iv.varName),
         [{ name: "__ctx" }],
         ts.statements(iv.computeBody),
         { async: true },
       ),
-    );
-    initVarDecls.push(
       ts.constDecl(
-        `__init_${iv.varName}`,
+        InitGetterRewriter.getterName(iv.varName),
         ts.call(ts.id("__initVar"), [
           ts.str(`${opts.moduleId}:${iv.varName}`),
-          ts.id(`__init_${iv.varName}_compute`),
+          ts.id(InitGetterRewriter.computeName(iv.varName)),
         ]),
       ),
     );
   }
-  if (initVarDecls.length > 0) {
-    out.push(ts.statements(initVarDecls));
-  }
+  out.push(ts.statements(initVarDecls));
 
   // Export the `__init_X` getters so importers can call them in their
-  // own init contexts. Done as a single `export { ... }` statement to
-  // keep the diff in generated output small and to avoid colliding
-  // with same-name `__init_X` symbols on the importing side (they
-  // import via named-aliased binding).
-  if (opts.staticInitVars.length > 0) {
-    const exportList = opts.staticInitVars
-      .map((iv) => `__init_${iv.varName}`)
-      .join(", ");
-    out.push(ts.raw(`export { ${exportList} };`));
-  }
+  // own init contexts. Empty `export { };` is valid ES — no guard
+  // needed.
+  const exportList = opts.staticInitVars
+    .map((iv) => InitGetterRewriter.getterName(iv.varName))
+    .join(", ");
+  out.push(ts.raw(`export { ${exportList} };`));
 
   // `__MY_INIT_GETTERS = [__init_A, __init_B, ...]`. Source-order
   // pinning — does NOT affect correctness (the cascade handles deps)
@@ -492,7 +508,11 @@ function buildStaticVarSetup(opts: AssembleSectionsOpts): TsNode[] {
   out.push(
     ts.constDecl(
       "__MY_INIT_GETTERS",
-      ts.arr(opts.staticInitVars.map((iv) => ts.id(`__init_${iv.varName}`))),
+      ts.arr(
+        opts.staticInitVars.map((iv) =>
+          ts.id(InitGetterRewriter.getterName(iv.varName)),
+        ),
+      ),
     ),
   );
 

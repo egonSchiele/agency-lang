@@ -26,7 +26,7 @@ export {
   __ctx,
   type AgencyStore,
 } from "./asyncContext.js";
-export { __initVar } from "./initVar.js";
+export { __initVar, __requireInitVar } from "./initVar.js";
 export {
   __registerModule,
   __getReachableModules,

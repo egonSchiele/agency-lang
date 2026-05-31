@@ -1,123 +1,85 @@
-import { _initUI, _destroyUI, _log, _status, _chat, _code, _diff, _separator, _startSpinner, _stopSpinner, _emptyLine, _prompt } from "agency-lang/stdlib-lib/ui.js"
 import { _runLoop, _renderOnce, _readKey, _hasActiveScreen, _setScriptedKeys, _setQuitAfterMs } from "agency-lang/stdlib-lib/ui.js"
 import { _installScrollRegion, _resetScrollRegion, _writeScrollLine, _runLoopHybrid, _promptFromChoices } from "agency-lang/stdlib-lib/ui.js"
-export def initUI(title: string) {
-  """
-  Initialize a terminal UI with a scrollable output area and a fixed input bar at the bottom. Call this once at the start of your agent. The title is shown in the scrollable output area on init; use status() to populate the status bar.
-  """
-  _initUI(title)
-}
 
-export def destroyUI() {
-  """
-  Tear down the terminal UI and restore normal terminal behavior. Called automatically on exit, but you can call it early if needed.
-  """
-  _destroyUI()
-}
+/** @module
+  ## Overview
 
-export safe def log(message: string) {
-  """
-  Print a message to the scrollable output area. Supports ANSI colors.
-  """
-  _log(message)
-}
+  Declarative terminal UI for interactive CLI agents. Two layers
+  cooperate so you can pick the level of abstraction that fits the
+  task:
 
-export safe def status(left: string, right: string = "") {
-  """
-  Update the status bar. The left text appears on the left side, the right text on the right.
+  - **Layer 1 — Builders + runLoop.** Pure-function builders
+    (`column`, `row`, `box`, `line`, `text`, `list`, `textInput`)
+    assemble an `Element` tree; `runLoop` owns the render → key →
+    re-render cycle and returns the final state when `isDone`
+    returns true.
+  - **Layer 2 — `repl()`.** A drop-in widget for chat-style agents.
+    Bundles a scrollable transcript, a live status line, a slash
+    command palette, and a history-aware input bar. Backed by
+    Layer 1; integrates with `std::policy.cliPolicyHandler` so
+    interrupt prompts render through the active screen instead of
+    fighting with the input bar.
 
-  @param left - Text for the left side
-  @param right - Text for the right side
-  """
-  _status(left, right)
-}
+  Both layers are testable: `setScriptedKeys` feeds a deterministic
+  sequence into the loop so unit tests don't need a TTY.
 
-export safe def chat(role: string = "", message: string = "") {
-  """
-  Print a chat message with a colored role prefix. Built-in colors: "user" (cyan), "agent" (white). Other roles appear dim.
+  ## Usage: Layer 1 (custom widgets)
 
-  @param role - The speaker role
-  @param message - The message text
-  """
-  _chat(role, message)
-}
+  ```ts
+  import { runLoop, column, line, KeyEvent, Element } from "std::ui"
 
-export safe def code(filename: string, content: string) {
-  """
-  Display a code block with a filename header and line numbers, inside a bordered box.
+  type S = { n: number; done: boolean }
 
-  @param filename - The filename to display
-  @param content - The code content
-  """
-  _code(filename, content)
-}
+  def view(s: S): Element {
+    return column() as col {
+      col.line("count = ${s.n}", bold: true)
+      col.line("(↑ / ↓ to change, q to quit)")
+    }
+  }
 
-export safe def diff(filename: string, content: string) {
-  """
-  Display a diff with colored +/- lines, inside a bordered box with the filename as a header.
+  def reduce(s: S, k: KeyEvent): S {
+    if (k.key == "up")   { return { ...s, n: s.n + 1 } }
+    if (k.key == "down") { return { ...s, n: s.n - 1 } }
+    if (k.key == "q")    { return { ...s, done: true } }
+    return s
+  }
 
-  @param filename - The filename to display
-  @param content - The diff content
-  """
-  _diff(filename, content)
-}
+  def isDone(s: S): boolean { return s.done }
 
-export safe def separator(label: string = "") {
-  """
-  Print a horizontal line with an optional label. Useful for visually grouping output sections.
-  """
-  _separator(label)
-}
+  node main(): number {
+    const final = runLoop(initialState: { n: 0, done: false },
+                          render: view, handleKey: reduce, isDone: isDone)
+    return final.n
+  }
+  ```
 
-export safe def startSpinner(text: string = "working") {
-  """
-  Show an animated spinner in the input bar with a label. Useful while the agent is thinking or running a long operation.
-  """
-  _startSpinner(text)
-}
+  ## Usage: Layer 2 (chat-style agent REPL)
 
-export safe def stopSpinner() {
-  """
-  Stop the spinner and clear the input bar.
-  """
-  _stopSpinner()
-}
+  ```ts
+  import { repl } from "std::ui"
+  import { cliPolicyHandler } from "std::policy"
 
-export def prompt(question: string): string {
-  """
-  Prompt the user for text input in the fixed input bar at the bottom of the screen. The question appears as a hint. Returns the user's input as a string.
+  let transcript: string[] = []
 
-  Cancellation: a blocked prompt is released on Ctrl-C, race-loser, or time-guard abort, surfacing as an AgencyCancelledError.
-  """
-  return _prompt(question)
-}
-
-export def getConfirmation(question: string): boolean {
-  """
-  Ask the user a yes/no question in the input bar. Returns true if the user answers yes (y/yes), false otherwise. Useful inside handler blocks to approve or reject interrupts interactively.
-  """
-  let answer = _prompt(question + " (y/n)").trim().toLowerCase()
-  if (answer == "y" || answer == "yes") {
+  def out(): string[]                          { return transcript }
+  def stat(): { left: string, right: string }  { return { left: "agent", right: "" } }
+  def onSub(msg: string): boolean {
+    if (msg == "/exit") { return false }
+    transcript.push("you: ${msg}")
+    // ...call your model / route / tools here...
+    transcript.push("agent: <reply>")
     return true
   }
-  return false
-}
 
-export def emptyLine() {
-  """
-  Print an empty line. Useful for adding spacing in the output.
-  """
-  _emptyLine()
-}
-
-// ---------------------------------------------------------------------------
-// New declarative API (Layer 1 + Layer 2).
-//
-// The old imperative exports above remain during the migration; PR #3
-// removes them along with their TS-side helpers. Everything below this
-// line is the new replacement API documented in
-// docs/superpowers/specs/2026-05-30-stdlib-ui-redesign-design.md.
-// ---------------------------------------------------------------------------
+  node main() {
+    const handler = cliPolicyHandler({ file: ".policy.json", fields: {} })
+    handle {
+      repl(output: out, status: stat, onSubmit: onSub,
+           paletteCommands: { "/exit": "Exit" })
+    } with handler
+  }
+  ```
+*/
 
 /**
  * Opaque tree node. Produced only by the builder functions below;

@@ -1,0 +1,19 @@
+import { text, line } from "std::ui"
+
+node main(): string {
+  // text(): no style, just content.
+  const t = text("hello")
+  if (t.type != "text")     { return "FAIL: text type" }
+  if (t.content != "hello") { return "FAIL: text content" }
+
+  // line(): defaults height: 1; style merged with named args.
+  const l = line("hi", fg: "red", height: 2)
+  if (l.type != "text")     { return "FAIL: line type" }
+  if (l.style.height != 2)  { return "FAIL: line height" }
+  if (l.style.fg != "red")  { return "FAIL: line fg" }
+
+  // line() with default height.
+  const l2 = line("hi")
+  if (l2.style.height != 1) { return "FAIL: default height" }
+  return "pass"
+}

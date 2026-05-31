@@ -39,9 +39,9 @@ export class Screen {
 
   async runLoop<S>(opts: {
     initialState: S;
-    render: (state: S) => Element;
-    handleKey: (state: S, event: KeyEvent) => S;
-    isDone: (state: S) => boolean;
+    render: (state: S) => Element | Promise<Element>;
+    handleKey: (state: S, event: KeyEvent) => S | Promise<S>;
+    isDone: (state: S) => boolean | Promise<boolean>;
     label?: string;
     /**
      * If set, the loop races each `nextKey()` against a `setTimeout`
@@ -53,34 +53,50 @@ export class Screen {
      * When omitted, the loop is pure event-driven: it blocks on
      * `nextKey()` and re-renders only after each keypress.
      *
-     * Note: the losing side of the race leaves a pending
-     * `nextKey()` promise; the next loop iteration awaits the same
-     * promise. `ScriptedInput` (multi-waiter queue) and
-     * `TerminalInput` (readline) both tolerate this safely.
+     * The tick-side branch reuses a single in-flight `nextKey()`
+     * promise across iterations so a key the user types during a
+     * tick race is consumed by the next race rather than queued
+     * behind abandoned waiters.
      */
     tickMs?: number;
   }): Promise<S> {
+    // The render / handleKey / isDone callbacks may be async — the
+    // declarative bridge in `lib/stdlib/ui.ts` adapts Agency callback
+    // values into async wrappers (Agency functions invoke through the
+    // runtime call path which returns a Promise). Pure-TS callers can
+    // still pass sync functions; the awaits become trivial.
     let state = opts.initialState;
-    this.render(opts.render(state), opts.label);
-    while (!opts.isDone(state)) {
+    this.render(await opts.render(state), opts.label);
+    // Single in-flight `nextKey()` shared across tick iterations.
+    // Calling `this.nextKey()` once per tick would enqueue a fresh
+    // waiter on the underlying input source's FIFO queue every time
+    // a tick wins the race; the next keypress would then resolve the
+    // oldest waiter (an abandoned tick-race promise) instead of the
+    // one the current `Promise.race` is awaiting, requiring one
+    // keypress per accumulated tick before the loop starts reacting.
+    let pendingKeyPromise: Promise<{ kind: "key"; ev: KeyEvent }> | null = null;
+    while (!(await opts.isDone(state))) {
       if (opts.tickMs !== undefined) {
+        if (pendingKeyPromise === null) {
+          pendingKeyPromise = this.nextKey().then(
+            (ev) => ({ kind: "key" as const, ev }),
+          );
+        }
         const tickPromise = new Promise<{ kind: "tick" }>((resolve) =>
           setTimeout(() => resolve({ kind: "tick" }), opts.tickMs),
         );
-        const keyPromise = this.nextKey().then(
-          (ev) => ({ kind: "key" as const, ev }),
-        );
         const result = await Promise.race<
           { kind: "tick" } | { kind: "key"; ev: KeyEvent }
-        >([keyPromise, tickPromise]);
+        >([pendingKeyPromise, tickPromise]);
         if (result.kind === "key") {
-          state = opts.handleKey(state, result.ev);
+          pendingKeyPromise = null;
+          state = await opts.handleKey(state, result.ev);
         }
       } else {
         const event = await this.nextKey();
-        state = opts.handleKey(state, event);
+        state = await opts.handleKey(state, event);
       }
-      this.render(opts.render(state), opts.label);
+      this.render(await opts.render(state), opts.label);
     }
     return state;
   }

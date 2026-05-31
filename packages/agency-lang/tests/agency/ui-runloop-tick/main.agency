@@ -1,0 +1,27 @@
+import { runLoop, column, KeyEvent, Element, setScriptedKeys } from "std::ui"
+
+// `isDone` reads this counter; the view bumps it every render. After
+// enough tick-driven renders, `isDone` returns true and the loop exits
+// cleanly without needing a synthetic keypress (which would require
+// multi-waiter aware nextKey() handling — see screen.ts).
+let renderCount: number = 0
+type S = { done: boolean }
+
+def view(s: S): Element {
+  renderCount = renderCount + 1
+  return column() as col { col.line("render ${renderCount}") }
+}
+
+def reduce(s: S, k: KeyEvent): S { return s }
+
+def isDone(s: S): boolean { return renderCount >= 4 }
+
+node main(): string {
+  // No scripted keys — the loop relies entirely on tickMs to advance.
+  // tickMs=20 means 4 renders take ~60ms.
+  setScriptedKeys([])
+  runLoop(initialState: { done: false },
+          render: view, handleKey: reduce, isDone: isDone, tickMs: 20)
+  if (renderCount < 4) { return "FAIL: only ${renderCount} renders" }
+  return "pass"
+}

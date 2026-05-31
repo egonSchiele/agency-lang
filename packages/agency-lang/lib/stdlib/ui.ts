@@ -12,13 +12,17 @@ import {
   Screen,
   TerminalInput,
   TerminalOutput,
+  ScriptedInput,
+  FrameRecorder,
   type Element as TuiElement,
   type KeyEvent as TuiKeyEvent,
   type InputSource,
   type OutputTarget,
 } from "@/tui/index.js";
 import type { Frame } from "@/tui/frame.js";
-import { withBottomCursor } from "./ui-region.js";
+import { toANSI } from "@/tui/render/ansi.js";
+import { withBottomCursor, installRegion, resetRegion } from "./ui-region.js";
+import { __call } from "../runtime/call.js";
 
 // Evaluated once at load time — the env var is set by the debugger CLI
 // before any compiled agency code runs and never changes.
@@ -525,16 +529,59 @@ let bridgeWidth = 80;
 let bridgeHeight = 24;
 let bridgeActiveScreen: Screen | null = null;
 
-function makeBridgeScreen(): Screen {
+// Test-mode injection points. Agency tests call `_setScriptedKeys` (and
+// optionally `_setQuitAfterMs`) before entering a loop, and the next
+// `makeBridgeScreen` call consumes them — installing a `ScriptedInput`
+// seeded with the keys and a `FrameRecorder` output, then clearing the
+// pending values so subsequent loops fall back to defaults.
+let pendingScriptedKeys: TuiKeyEvent[] | null = null;
+let pendingQuitAfterMs: number | null = null;
+
+export function _setScriptedKeys(keys: TuiKeyEvent[]): void {
+  pendingScriptedKeys = keys;
+}
+
+export function _setQuitAfterMs(ms: number): void {
+  pendingQuitAfterMs = ms;
+}
+
+/** Consume any pending test-mode injection and fall back to real
+ *  terminal I/O when production. Sets `bridgeInputSource`,
+ *  `bridgeOutputTarget`, `bridgeWidth`, `bridgeHeight`. Shared by
+ *  `makeBridgeScreen` and `_runLoopHybrid` so both paths see the
+ *  same scripted-input behavior. */
+function ensureBridgeState(): void {
+  if (pendingScriptedKeys) {
+    const scriptedInput = new ScriptedInput(pendingScriptedKeys);
+    bridgeInputSource = scriptedInput;
+    bridgeOutputTarget = new FrameRecorder();
+    bridgeWidth = 80;
+    bridgeHeight = 24;
+    pendingScriptedKeys = null;
+
+    // Optional: feed a `q` key after N ms to break out of a tickMs loop
+    // that scripted keys alone wouldn't terminate. Tests for runLoop's
+    // tick behavior set this so the loop ends without needing a
+    // scripted-keys timeline that matches the tick cadence.
+    if (pendingQuitAfterMs !== null) {
+      const ms = pendingQuitAfterMs;
+      setTimeout(() => scriptedInput.feedKey({ key: "q" }), ms);
+      pendingQuitAfterMs = null;
+    }
+  }
   if (!bridgeInputSource) bridgeInputSource = new TerminalInput();
   if (!bridgeOutputTarget) bridgeOutputTarget = new TerminalOutput();
   if (process.stdout.isTTY) {
     bridgeWidth = process.stdout.columns || bridgeWidth;
     bridgeHeight = process.stdout.rows || bridgeHeight;
   }
+}
+
+function makeBridgeScreen(): Screen {
+  ensureBridgeState();
   return new Screen({
-    input: bridgeInputSource,
-    output: bridgeOutputTarget,
+    input: bridgeInputSource!,
+    output: bridgeOutputTarget!,
     width: bridgeWidth,
     height: bridgeHeight,
   });
@@ -573,11 +620,20 @@ export function _hasActiveScreen(): boolean {
  *  external state (e.g. an LLM call's elapsed time) keeps updating
  *  even with no key input.
  */
+/** Adapt either a plain JS function or an AgencyFunction-like callback
+ *  passed across the bridge into an async callable. Uses `__call` so
+ *  AgencyFunction values dispatch through the runtime's normal call
+ *  path (preserving handlers, ALS context, retry semantics) rather
+ *  than being invoked as raw JS. */
+async function callBridgeFn<T>(fn: unknown, ...args: unknown[]): Promise<T> {
+  return (await __call(fn, { type: "positional", args })) as T;
+}
+
 export async function _runLoop(
   initialState: any,
-  renderFn: (state: any) => any,
-  handleKeyFn: (state: any, ev: TuiKeyEvent) => any,
-  isDoneFn: (state: any) => boolean,
+  renderFn: unknown,
+  handleKeyFn: unknown,
+  isDoneFn: unknown,
   tickMs?: number,
 ): Promise<any> {
   const screen = makeBridgeScreen();
@@ -585,9 +641,9 @@ export async function _runLoop(
   try {
     return await screen.runLoop({
       initialState,
-      render: (s) => renderFn(s) as TuiElement,
-      handleKey: (s, ev) => handleKeyFn(s, ev),
-      isDone: (s) => isDoneFn(s),
+      render: async (s) => await callBridgeFn<TuiElement>(renderFn, s),
+      handleKey: async (s, ev) => await callBridgeFn(handleKeyFn, s, ev),
+      isDone: async (s) => await callBridgeFn<boolean>(isDoneFn, s),
       tickMs,
     });
   } finally {
@@ -613,23 +669,31 @@ export async function _readKey(): Promise<TuiKeyEvent> {
 }
 
 /**
- * Wraps any `OutputTarget` so frame writes land at the bottom of the
- * real terminal — used by `repl()`'s hybrid rendering. The inner
- * target is unaware it doesn't own the whole screen;
- * `withBottomCursor` saves/moves/restores the cursor around each
- * frame so plain stdout writes still scroll inside the top region.
+ * `OutputTarget` for `repl()`'s hybrid rendering. Renders each frame
+ * directly inside the terminal's reserved bottom region:
+ * `withBottomCursor` saves the cursor, positions it at the start of
+ * the bottom region, writes the frame ANSI (no `CURSOR_HOME` prefix,
+ * no alt-screen entry — both would defeat the hybrid scrollback
+ * goal), and restores the cursor so subsequent plain stdout writes
+ * still scroll inside the top region.
+ *
+ * Does NOT wrap an inner OutputTarget. The bridge's default
+ * `TerminalOutput` enters the alt-screen and prepends `CURSOR_HOME`
+ * to every write, which is exactly what hybrid mode must avoid; this
+ * target sidesteps both by talking to `process.stdout` itself via
+ * `toANSI`. `destroy()` is a no-op: this target owns no resources
+ * (the scroll region itself is torn down by `_resetScrollRegion`).
  */
 export class BottomRegionOutputTarget implements OutputTarget {
-  constructor(private inner: OutputTarget) {}
-
-  write(frame: Frame, label?: string): void {
+  write(frame: Frame, _label?: string): void {
     withBottomCursor(() => {
-      this.inner.write(frame, label);
+      process.stdout.write(toANSI(frame));
     });
   }
 
   destroy(): void {
-    if (this.inner.destroy) this.inner.destroy();
+    // No-op: nothing owned. Region teardown is handled by
+    // `_resetScrollRegion` in the Agency-side `repl()` finally block.
   }
 }
 
@@ -642,4 +706,84 @@ export class BottomRegionOutputTarget implements OutputTarget {
  */
 export function _writeScrollLine(text: string): void {
   process.stdout.write(text + "\n");
+}
+
+// ---------------------------------------------------------------------------
+// Hybrid mode — bridge primitives for `repl()`.
+//
+// `repl()` installs a terminal scroll region so the top of the screen
+// keeps native scrollback + mouse-select + copy/paste, and only the
+// bottom N rows are owned by the bounded TUI. The Agency-side widget
+// composes these primitives into a lifecycle that survives exceptions.
+// ---------------------------------------------------------------------------
+
+/** Install a `bottomRows`-row reserved region at the bottom of the
+ *  terminal. The top `H - bottomRows` rows scroll natively. No-op on
+ *  non-TTY. Idempotent — call again to resize the region. */
+export function _installScrollRegion(bottomRows: number): void {
+  installRegion(bottomRows);
+}
+
+/** Tear down the reserved region. Restores the default scroll region
+ *  (the whole terminal) and prints a trailing newline so the next
+ *  shell prompt lands below the bottom region. */
+export function _resetScrollRegion(): void {
+  resetRegion();
+}
+
+/** Hybrid-mode variant of `_runLoop`. Drives the `repl()` widget's
+ *  bounded `Screen` (bottom `bottomRows` rows only); frames render
+ *  into the terminal's reserved bottom region while plain stdout
+ *  writes keep scrolling in the top region. The scroll region itself
+ *  is installed by `repl()` via `_installScrollRegion` before this
+ *  call and torn down via `_resetScrollRegion` afterwards (including
+ *  on exception paths via the Agency `handle` block).
+ *
+ *  Output target selection:
+ *  - **Test mode** (`bridgeOutputTarget` is a `FrameRecorder`,
+ *    injected by `_setScriptedKeys` -> `ensureBridgeState`):
+ *    frames go straight into the recorder so tests can inspect them.
+ *  - **Real terminal mode**: a fresh `BottomRegionOutputTarget`
+ *    writes ANSI to stdout via `withBottomCursor`, bypassing the
+ *    default `TerminalOutput` (which would enter the alt screen and
+ *    prepend `CURSOR_HOME` — both fatal to hybrid scrollback).
+ */
+export async function _runLoopHybrid(
+  initialState: any,
+  renderFn: unknown,
+  handleKeyFn: unknown,
+  isDoneFn: unknown,
+  tickMs: number,
+  bottomRows: number,
+): Promise<any> {
+  ensureBridgeState();
+  const hybridOutput: OutputTarget =
+    bridgeOutputTarget instanceof FrameRecorder
+      ? bridgeOutputTarget
+      : new BottomRegionOutputTarget();
+  const hybridScreen = new Screen({
+    input: bridgeInputSource!,
+    output: hybridOutput,
+    width: bridgeWidth,
+    height: bottomRows,
+  });
+  bridgeActiveScreen = hybridScreen;
+  try {
+    return await hybridScreen.runLoop({
+      initialState,
+      render: async (s) => await callBridgeFn<TuiElement>(renderFn, s),
+      handleKey: async (s, ev) => await callBridgeFn(handleKeyFn, s, ev),
+      isDone: async (s) => await callBridgeFn<boolean>(isDoneFn, s),
+      tickMs,
+    });
+  } finally {
+    bridgeActiveScreen = null;
+    // Deliberately NOT calling `Screen.destroy` or any
+    // `bridgeOutputTarget.destroy`: the bridge's input/output must
+    // survive across loop entries so multi-turn REPL sessions and
+    // test harnesses can re-enter `_runLoop` / `_runLoopHybrid`
+    // without re-initializing terminal state. `BottomRegionOutputTarget`
+    // owns no resources; the scroll region is torn down by
+    // `_resetScrollRegion` in the Agency-side `repl()`.
+  }
 }

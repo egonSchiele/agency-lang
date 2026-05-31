@@ -1,4 +1,6 @@
 import { _initUI, _destroyUI, _log, _status, _chat, _code, _diff, _separator, _startSpinner, _stopSpinner, _emptyLine, _prompt } from "agency-lang/stdlib-lib/ui.js"
+import { _runLoop, _renderOnce, _readKey, _hasActiveScreen, _setScriptedKeys, _setQuitAfterMs } from "agency-lang/stdlib-lib/ui.js"
+import { _installScrollRegion, _resetScrollRegion, _writeScrollLine, _runLoopHybrid } from "agency-lang/stdlib-lib/ui.js"
 export def initUI(title: string) {
   """
   Initialize a terminal UI with a scrollable output area and a fixed input bar at the bottom. Call this once at the start of your agent. The title is shown in the scrollable output area on init; use status() to populate the status bar.
@@ -106,4 +108,767 @@ export def emptyLine() {
   Print an empty line. Useful for adding spacing in the output.
   """
   _emptyLine()
+}
+
+// ---------------------------------------------------------------------------
+// New declarative API (Layer 1 + Layer 2).
+//
+// The old imperative exports above remain during the migration; PR #3
+// removes them along with their TS-side helpers. Everything below this
+// line is the new replacement API documented in
+// docs/superpowers/specs/2026-05-30-stdlib-ui-redesign-design.md.
+// ---------------------------------------------------------------------------
+
+/**
+ * Opaque tree node. Produced only by the builder functions below;
+ * consumed only by `runLoop` and `renderOnce`. Users do not
+ * construct one directly.
+ */
+export type Element = {
+  type: string;
+  style?: any;
+  content?: string;
+  children?: any[];
+  items?: string[];
+  selectedIndex?: number;
+  value?: string
+}
+
+/**
+ * Keystroke delivered to `handleKey` blocks.
+ *
+ * `key` is either a named special key — `"up"`, `"down"`, `"left"`,
+ * `"right"`, `"enter"`, `"escape"`, `"backspace"`, `"tab"`,
+ * `"home"`, `"end"`, `"pageup"`, `"pagedown"`, `"delete"`,
+ * `"insert"` — or a single printable character (e.g. `"q"`, `"/"`,
+ * `" "`). Mirrors the encoding in `lib/tui/input/terminal.ts`.
+ *
+ * `shift` / `ctrl` indicate held modifier keys at keypress time.
+ */
+export type KeyEvent = {
+  key: string;
+  shift?: boolean;
+  ctrl?: boolean
+}
+
+/**
+ * Builder receiver passed to every container block. Method calls
+ * append child elements to the enclosing parent in source order.
+ *
+ * Container methods (`row`, `column`, `box`) take a trailing block
+ * that receives a fresh Builder for the new child's contents. Leaf
+ * methods (`line`, `text`, `list`, `textInput`) don't.
+ *
+ * The methods are typed `any` because each one accepts a different
+ * named-arg signature; full signatures are documented on the
+ * top-level builders (`column`, `row`, etc.).
+ */
+export type Builder = {
+  row: any;
+  column: any;
+  box: any;
+  line: any;
+  text: any;
+  list: any;
+  textInput: any
+}
+
+// ---- Leaf builders ----
+
+/**
+ * A plain text element. No layout sizing — embed inside a `box` or
+ * `column` for layout. Prefer `line` when you want a single-row
+ * height-1 element.
+ *
+ * @param content - The text to render
+ */
+export def text(content: string): Element {
+  return { type: "text", content: content }
+}
+
+/**
+ * A single-line text element with `height: 1`. The default keeps it
+ * from stretching via flex when placed inside a `column`. Caller-
+ * provided style is merged on top.
+ *
+ * @param content - The text to render
+ */
+export def line(
+  content: string,
+  flex?: number,
+  width?: number,
+  height?: number,
+  fg: string = "",
+  bg: string = "",
+  bold: boolean = false
+): Element {
+  let h: number = 1
+  if (height != null) { h = height }
+  let style: any = { height: h }
+  if (flex != null)  { style.flex = flex }
+  if (width != null) { style.width = width }
+  if (fg != "")      { style.fg = fg }
+  if (bg != "")      { style.bg = bg }
+  if (bold)          { style.bold = true }
+  return { type: "text", content: content, style: style }
+}
+
+/**
+ * A scrollable selectable list. `selectedIndex` highlights one row;
+ * out-of-range values are clamped by the renderer.
+ *
+ * @param items - The strings to display, one per row
+ * @param selectedIndex - 0-based row to highlight (default 0)
+ */
+export def list(
+  items: string[],
+  selectedIndex: number = 0,
+  flex?: number,
+  width?: number,
+  height?: number,
+  border: boolean = false,
+  borderColor: string = "",
+  visible: boolean = true
+): Element {
+  let style: any = {}
+  if (flex != null)      { style.flex = flex }
+  if (width != null)     { style.width = width }
+  if (height != null)    { style.height = height }
+  if (border)            { style.border = true }
+  if (borderColor != "") { style.borderColor = borderColor }
+  if (!visible)          { style.visible = false }
+  return { type: "list", style: style, items: items, selectedIndex: selectedIndex }
+}
+
+/**
+ * A single-line text input. The renderer displays `value` with a
+ * cursor; key handling is the caller's responsibility (use `runLoop`'s
+ * `handleKey` to append characters / handle backspace).
+ *
+ * @param value - Current contents of the buffer
+ */
+export def textInput(
+  value: string = "",
+  flex?: number,
+  width?: number,
+  height?: number,
+  fg: string = "",
+  bg: string = ""
+): Element {
+  let style: any = {}
+  if (flex != null)   { style.flex = flex }
+  if (width != null)  { style.width = width }
+  if (height != null) { style.height = height }
+  if (fg != "")       { style.fg = fg }
+  if (bg != "")       { style.bg = bg }
+  return { type: "textInput", style: style, value: value }
+}
+
+// ---- Container builders ----
+//
+// Each container opens a fresh children array, builds a `Builder`
+// whose method fields are PFAs of internal `_addX` functions with
+// the array pre-bound, runs the block to populate the children, and
+// returns the Element with the populated children. Records are
+// reference types in Agency and `.partial()` binds the reference
+// (not a copy), so mutations to `kids` inside `_addX` are visible to
+// the enclosing container.
+
+def _mkBoxStyle(
+  flexDirection: string,
+  flex?: number,
+  width?: number,
+  height?: number,
+  padding?: number,
+  border: boolean = false,
+  borderColor: string = "",
+  label: string = "",
+  bg: string = "",
+  fg: string = "",
+  visible: boolean = true
+): any {
+  let style: any = {}
+  if (flexDirection != "")  { style.flexDirection = flexDirection }
+  if (flex != null)         { style.flex = flex }
+  if (width != null)        { style.width = width }
+  if (height != null)       { style.height = height }
+  if (padding != null)      { style.padding = padding }
+  if (border)               { style.border = true }
+  if (borderColor != "")    { style.borderColor = borderColor }
+  if (label != "")          { style.label = label }
+  if (bg != "")             { style.bg = bg }
+  if (fg != "")             { style.fg = fg }
+  if (!visible)             { style.visible = false }
+  return style
+}
+
+def _makeBuilder(kids: any[]): Builder {
+  return {
+    row:       _addRow.partial(kids: kids),
+    column:    _addColumn.partial(kids: kids),
+    box:       _addBox.partial(kids: kids),
+    line:      _addLine.partial(kids: kids),
+    text:      _addText.partial(kids: kids),
+    list:      _addList.partial(kids: kids),
+    textInput: _addTextInput.partial(kids: kids)
+  }
+}
+
+/**
+ * A vertical container. Children stack top-to-bottom. The trailing
+ * block receives a fresh `Builder` to populate the column.
+ */
+export def column(
+  flex?: number,
+  width?: number,
+  height?: number,
+  padding?: number,
+  border: boolean = false,
+  borderColor: string = "",
+  label: string = "",
+  bg: string = "",
+  fg: string = "",
+  visible: boolean = true,
+  block: (Builder) => void = null
+): Element {
+  const kids: any[] = []
+  // `block` is optional — guard so empty containers (and parser
+  // mis-binds that leave `block` null) don't crash at runtime.
+  if (block != null) { block(_makeBuilder(kids)) }
+  return {
+    type: "box",
+    style: _mkBoxStyle(flexDirection: "column", flex: flex, width: width,
+                       height: height, padding: padding, border: border,
+                       borderColor: borderColor, label: label, bg: bg,
+                       fg: fg, visible: visible),
+    children: kids
+  }
+}
+
+/**
+ * A horizontal container. Children stack left-to-right. The trailing
+ * block receives a fresh `Builder` to populate the row.
+ */
+export def row(
+  flex?: number,
+  width?: number,
+  height?: number,
+  padding?: number,
+  border: boolean = false,
+  borderColor: string = "",
+  label: string = "",
+  bg: string = "",
+  fg: string = "",
+  visible: boolean = true,
+  block: (Builder) => void = null
+): Element {
+  const kids: any[] = []
+  if (block != null) { block(_makeBuilder(kids)) }
+  return {
+    type: "box",
+    style: _mkBoxStyle(flexDirection: "row", flex: flex, width: width,
+                       height: height, padding: padding, border: border,
+                       borderColor: borderColor, label: label, bg: bg,
+                       fg: fg, visible: visible),
+    children: kids
+  }
+}
+
+/**
+ * A direction-neutral container. Use when you want to apply styling
+ * (border, padding, background) without setting `flexDirection`.
+ */
+export def box(
+  flex?: number,
+  width?: number,
+  height?: number,
+  padding?: number,
+  border: boolean = false,
+  borderColor: string = "",
+  label: string = "",
+  bg: string = "",
+  fg: string = "",
+  visible: boolean = true,
+  block: (Builder) => void = null
+): Element {
+  const kids: any[] = []
+  if (block != null) { block(_makeBuilder(kids)) }
+  return {
+    type: "box",
+    style: _mkBoxStyle(flexDirection: "", flex: flex, width: width,
+                       height: height, padding: padding, border: border,
+                       borderColor: borderColor, label: label, bg: bg,
+                       fg: fg, visible: visible),
+    children: kids
+  }
+}
+
+// ---- Internal: Builder method bodies ----
+
+def _addRow(
+  kids: any[],
+  flex?: number,
+  width?: number,
+  height?: number,
+  padding?: number,
+  border: boolean = false,
+  borderColor: string = "",
+  label: string = "",
+  bg: string = "",
+  fg: string = "",
+  visible: boolean = true,
+  block: (Builder) => void = null
+): Element {
+  const elem = row(flex: flex, width: width, height: height, padding: padding,
+                   border: border, borderColor: borderColor, label: label,
+                   bg: bg, fg: fg, visible: visible, block: block)
+  kids.push(elem)
+  return elem
+}
+
+def _addColumn(
+  kids: any[],
+  flex?: number,
+  width?: number,
+  height?: number,
+  padding?: number,
+  border: boolean = false,
+  borderColor: string = "",
+  label: string = "",
+  bg: string = "",
+  fg: string = "",
+  visible: boolean = true,
+  block: (Builder) => void = null
+): Element {
+  const elem = column(flex: flex, width: width, height: height, padding: padding,
+                      border: border, borderColor: borderColor, label: label,
+                      bg: bg, fg: fg, visible: visible, block: block)
+  kids.push(elem)
+  return elem
+}
+
+def _addBox(
+  kids: any[],
+  flex?: number,
+  width?: number,
+  height?: number,
+  padding?: number,
+  border: boolean = false,
+  borderColor: string = "",
+  label: string = "",
+  bg: string = "",
+  fg: string = "",
+  visible: boolean = true,
+  block: (Builder) => void = null
+): Element {
+  const elem = box(flex: flex, width: width, height: height, padding: padding,
+                   border: border, borderColor: borderColor, label: label,
+                   bg: bg, fg: fg, visible: visible, block: block)
+  kids.push(elem)
+  return elem
+}
+
+def _addLine(
+  kids: any[],
+  content: string,
+  flex?: number,
+  width?: number,
+  height?: number,
+  fg: string = "",
+  bg: string = "",
+  bold: boolean = false
+): Element {
+  const elem = line(content: content, flex: flex, width: width, height: height,
+                    fg: fg, bg: bg, bold: bold)
+  kids.push(elem)
+  return elem
+}
+
+def _addText(kids: any[], content: string): Element {
+  const elem = text(content)
+  kids.push(elem)
+  return elem
+}
+
+def _addList(
+  kids: any[],
+  items: string[],
+  selectedIndex: number = 0,
+  flex?: number,
+  width?: number,
+  height?: number,
+  border: boolean = false,
+  borderColor: string = "",
+  visible: boolean = true
+): Element {
+  const elem = list(items: items, selectedIndex: selectedIndex,
+                    flex: flex, width: width, height: height,
+                    border: border, borderColor: borderColor, visible: visible)
+  kids.push(elem)
+  return elem
+}
+
+def _addTextInput(
+  kids: any[],
+  value: string = "",
+  flex?: number,
+  width?: number,
+  height?: number,
+  fg: string = "",
+  bg: string = ""
+): Element {
+  const elem = textInput(value: value, flex: flex, width: width, height: height,
+                         fg: fg, bg: bg)
+  kids.push(elem)
+  return elem
+}
+
+// ---- Render & event loop ----
+
+/**
+ * Render a single Element tree to the screen and return immediately.
+ * For static UI or first-paint scenarios. For interactive UI, use
+ * `runLoop`.
+ */
+export def renderOnce(tree: Element) {
+  _renderOnce(tree)
+}
+
+/**
+ * Read one key from the terminal. Blocks until a key is pressed.
+ * Use sparingly; prefer `runLoop` for anything beyond a single
+ * blocking prompt.
+ */
+export def readKey(): KeyEvent {
+  return _readKey()
+}
+
+/**
+ * Elm/Ink-style state machine driver. Renders the initial state,
+ * waits for each `KeyEvent`, runs `handleKey` to produce the next
+ * state, re-renders, exits when `isDone` returns `true`. Returns
+ * the final state.
+ *
+ * When `tickMs` is set, the loop also re-renders periodically even
+ * if no key is pressed. This is what makes a live status line tick.
+ * `handleKey` does NOT fire on ticks — `render` does (re-evaluates
+ * any impure state your view reads).
+ *
+ * @param initialState - The opening state record
+ * @param render       - Pure (state) -> Element. Re-runs every tick / key.
+ * @param handleKey    - Pure (state, key) -> state. Runs only on real keys.
+ * @param isDone       - Pure (state) -> boolean. Loop exits when true.
+ * @param tickMs       - Milliseconds between forced re-renders (omit for event-driven only)
+ */
+export def runLoop(
+  initialState: any,
+  render: any,
+  handleKey: any,
+  isDone: any,
+  tickMs?: number
+): any {
+  return _runLoop(initialState, render, handleKey, isDone, tickMs)
+}
+
+// ---- Test-mode injection (internal) ----
+//
+// Tests call these helpers to drive runLoop / repl without a real
+// TTY. `_runLoop` consumes the pending keys on its next invocation
+// and installs a ScriptedInput + FrameRecorder under the hood.
+
+/**
+ * Seed the next `runLoop` (or `repl`) entry with a scripted key
+ * sequence. Internal — used by tests in `tests/agency/ui-*`.
+ *
+ * @param keys - Array of `KeyEvent` records consumed in order
+ */
+export def setScriptedKeys(keys: KeyEvent[]) {
+  _setScriptedKeys(keys)
+}
+
+/**
+ * Schedule a `q` keypress N milliseconds after the next `runLoop`
+ * starts. Internal — used by the tickMs coverage test so a
+ * tick-driven loop terminates without a key-timeline that matches
+ * the tick cadence.
+ *
+ * @param ms - Milliseconds before the synthetic `q` arrives
+ */
+export def setQuitAfterMs(ms: number) {
+  _setQuitAfterMs(ms)
+}
+
+// ---------------------------------------------------------------------------
+// Layer 2 — repl() widget
+//
+// An opinionated REPL with a status line, scroll output (via the
+// terminal's native scroll region in hybrid mode), a command palette
+// triggered by `/`, and a persistent input history. Built entirely on
+// top of Layer 1 + the hybrid-mode primitives from `lib/stdlib/ui.ts`.
+// ---------------------------------------------------------------------------
+
+// Bottom-region row counts. Base = status (1) + input (1). When the
+// palette is open we add `_PALETTE_ROWS` and re-issue the scroll
+// region from within `_replReduce` so the layout doesn't overlap the
+// scrolled output. v1 is fixed; future versions may compute these
+// from actual rendered content.
+const _BASE_BOTTOM_ROWS: number = 2
+const _PALETTE_ROWS: number = 5
+
+type ReplState = {
+  buffer: string;
+  history: string[];
+  historyIdx: number;
+  paletteOpen: boolean;
+  paletteFilter: string;
+  paletteCursor: number;
+  done: boolean;
+  outputLinesWritten: number;
+  prompt: string;
+  paletteCommands: any;
+  historyFile: string;
+  historyMax: number;
+  output: any;
+  status: any;
+  onSubmit: any
+}
+
+// Returns the keys of paletteCommands whose name contains the
+// (lowercased) filter substring. Lists in insertion order.
+def _filteredPaletteKeys(s: ReplState): string[] {
+  const cmds = s.paletteCommands
+  let allKeys: string[] = []
+  for (entry in entries(cmds)) {
+    allKeys.push(entry.key)
+  }
+  if (s.paletteFilter == "") { return allKeys }
+  let out: string[] = []
+  const filt = s.paletteFilter.toLowerCase()
+  for (k in allKeys) {
+    if (k.toLowerCase().includes(filt)) { out.push(k) }
+  }
+  return out
+}
+
+// View: the bottom region only. Output lines live in the terminal's
+// native scroll region; we append new tails via `_writeScrollLine`
+// inside `_replReduce` rather than rendering them into this tree.
+def _replView(s: ReplState): Element {
+  const stat = s.status()
+  const palKeys = _filteredPaletteKeys(s)
+  let palItems: string[] = []
+  for (k in palKeys) {
+    const desc = s.paletteCommands[k]
+    palItems.push("${k}  - ${desc}")
+  }
+  // Note: every container call here MUST pass at least one named arg.
+  // The agency parser otherwise compiles `column() as col { ... }` as a
+  // positional call where the block lands in `flex`, leaving the
+  // `block` param null at runtime.
+  return column(visible: true) as col {
+    col.list(items: palItems, selectedIndex: s.paletteCursor,
+             visible: s.paletteOpen, height: _PALETTE_ROWS, border: true)
+    col.row(bg: "blue", fg: "white", height: 1) as st {
+      st.line(stat.left)
+      st.box(flex: 1) as _ {}
+      st.line(stat.right)
+    }
+    col.row(height: 1) as ir {
+      ir.line(s.prompt)
+      ir.textInput(value: s.buffer, flex: 1)
+    }
+  }
+}
+
+// Stream new tail of `output()` (lines added since last call) to the
+// terminal scroll region. Returns updated state with the counter
+// advanced. If `output()` shrunk (consumer cleared its own buffer)
+// we just reset the counter and let the next call resume cleanly.
+def _appendNewScrollLines(s: ReplState): ReplState {
+  const lines = s.output()
+  const n = lines.length
+  if (n < s.outputLinesWritten) {
+    return { ...s, outputLinesWritten: n }
+  }
+  if (n > s.outputLinesWritten) {
+    let i = s.outputLinesWritten
+    while (i < n) {
+      _writeScrollLine(lines[i])
+      i = i + 1
+    }
+    return { ...s, outputLinesWritten: n }
+  }
+  return s
+}
+
+def _persistHistory(s: ReplState): boolean {
+  // History persistence is intentionally skipped at v1 to avoid
+  // pulling in std::shell from the stdlib (which would create a
+  // dependency cycle in some configurations). The history-up/down
+  // navigation works without persistence; reload-across-sessions is
+  // a v2 feature.
+  return true
+}
+
+def _replReduce(s: ReplState, k: KeyEvent): ReplState {
+  // Palette controls take priority when the palette is open.
+  if (s.paletteOpen) {
+    const palKeys = _filteredPaletteKeys(s)
+    if (k.key == "escape") {
+      return { ...s, paletteOpen: false, paletteFilter: "", paletteCursor: 0 }
+    }
+    if (k.key == "up") {
+      let c = s.paletteCursor - 1
+      if (c < 0) { c = 0 }
+      return { ...s, paletteCursor: c }
+    }
+    if (k.key == "down") {
+      let c = s.paletteCursor + 1
+      const maxC = palKeys.length - 1
+      if (c > maxC) { c = maxC }
+      if (c < 0)    { c = 0 }
+      return { ...s, paletteCursor: c }
+    }
+    if (k.key == "enter" || k.key == "tab") {
+      if (palKeys.length == 0) {
+        return { ...s, paletteOpen: false, paletteFilter: "" }
+      }
+      return {
+        ...s,
+        buffer: palKeys[s.paletteCursor],
+        paletteOpen: false,
+        paletteFilter: "",
+        paletteCursor: 0
+      }
+    }
+    if (k.key == "backspace") {
+      if (s.paletteFilter == "") {
+        return { ...s, paletteOpen: false }
+      }
+      const f = s.paletteFilter
+      return {
+        ...s,
+        paletteFilter: f.slice(0, f.length - 1),
+        paletteCursor: 0
+      }
+    }
+    if (k.key.length == 1) {
+      return { ...s, paletteFilter: s.paletteFilter + k.key, paletteCursor: 0 }
+    }
+    return s
+  }
+
+  // Palette closed: normal editing.
+  if (k.ctrl && k.key == "c") {
+    return { ...s, done: true }
+  }
+  if (k.key == "/" && s.buffer == "") {
+    return { ...s, paletteOpen: true, paletteFilter: "", paletteCursor: 0 }
+  }
+  if (k.key == "up" && s.historyIdx > 0) {
+    const i = s.historyIdx - 1
+    return { ...s, historyIdx: i, buffer: s.history[i] }
+  }
+  if (k.key == "down" && s.historyIdx < s.history.length) {
+    const i = s.historyIdx + 1
+    let buf = ""
+    if (i < s.history.length) { buf = s.history[i] }
+    return { ...s, historyIdx: i, buffer: buf }
+  }
+  if (k.key == "backspace") {
+    if (s.buffer == "") { return s }
+    return { ...s, buffer: s.buffer.slice(0, s.buffer.length - 1) }
+  }
+  if (k.key == "enter") {
+    const submitted = s.buffer
+    let nextHist = s.history
+    if (submitted != "") {
+      nextHist = [...s.history, submitted]
+      if (nextHist.length > s.historyMax) {
+        nextHist = nextHist.slice(nextHist.length - s.historyMax, nextHist.length)
+      }
+    }
+    const keepGoing = s.onSubmit(submitted)
+    const drained = _appendNewScrollLines({
+      ...s,
+      buffer: "",
+      history: nextHist,
+      historyIdx: nextHist.length,
+      done: !keepGoing
+    })
+    return drained
+  }
+  if (k.key.length == 1) {
+    return { ...s, buffer: s.buffer + k.key }
+  }
+  return s
+}
+
+def _replIsDone(s: ReplState): boolean { return s.done }
+
+/**
+ * Drop-in REPL widget for interactive CLI agents. Bundles a scroll
+ * output area (via the terminal's native scroll region), a status
+ * line, a command palette (triggered by `/`), and an input line
+ * with history navigation.
+ *
+ * Lifecycle: installs a scroll region on entry, runs the bounded
+ * `runLoop` with `tickMs` so the status line stays live during a
+ * turn, tears down the region on exit (clean exit, onSubmit -> false,
+ * or exception). The handler block ensures the region is reset even
+ * if an exception escapes the loop.
+ *
+ * @param output - Re-evaluated every render; new tail lines stream to scrollback
+ * @param status - Re-evaluated every render; populates the status line
+ * @param onSubmit - Called with the submitted line; return `false` to exit
+ * @param prompt - String shown before the input buffer (default `"> "`)
+ * @param historyFile - Reserved for future use (history persistence is v2)
+ * @param historyMax - Trim oldest entries beyond this count
+ * @param paletteCommands - Map of `/cmd` -> description, iterated in order
+ * @param tickMs - Render cadence in milliseconds (default 100)
+ */
+export def repl(
+  output: any,
+  status: any,
+  onSubmit: any,
+  prompt: string = "> ",
+  historyFile: string = "",
+  historyMax: number = 1000,
+  paletteCommands: any = null,
+  tickMs: number = 100
+) {
+  let cmds = paletteCommands
+  if (cmds == null) { cmds = {} }
+  const initial: ReplState = {
+    buffer: "",
+    history: [],
+    historyIdx: 0,
+    paletteOpen: false,
+    paletteFilter: "",
+    paletteCursor: 0,
+    done: false,
+    outputLinesWritten: 0,
+    prompt: prompt,
+    paletteCommands: cmds,
+    historyFile: historyFile,
+    historyMax: historyMax,
+    output: output,
+    status: status,
+    onSubmit: onSubmit
+  }
+  // Reserve enough rows for the *maximum* bottom-region layout
+  // (status + input + open palette) so the palette fits when opened
+  // without clipping the input or status. The palette element renders
+  // `visible: false` when closed and the layout treats invisible
+  // children as zero-height (see `lib/tui/test/layout.test.ts`), so
+  // the extra rows are just empty space above the status bar when
+  // the palette isn't open. A future revision could resize the
+  // scroll region dynamically when the palette toggles, but Screen
+  // doesn't yet support mid-loop height changes.
+  const totalRows = _BASE_BOTTOM_ROWS + _PALETTE_ROWS
+  _installScrollRegion(totalRows)
+  const seeded = _appendNewScrollLines(initial)
+  _runLoopHybrid(seeded, _replView, _replReduce, _replIsDone,
+                 tickMs, totalRows)
+  _resetScrollRegion()
 }

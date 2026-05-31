@@ -1,0 +1,30 @@
+import { runLoop, column, line, KeyEvent, Element, setScriptedKeys } from "std::ui"
+
+type S = { n: number; done: boolean }
+
+def view(s: S): Element {
+  return column() as col { col.line("n=${s.n}") }
+}
+
+def reduce(s: S, k: KeyEvent): S {
+  if (k.key == "q")    { return { ...s, done: true } }
+  if (k.key == "down") { return { ...s, n: s.n + 1 } }
+  return s
+}
+
+def isDone(s: S): boolean { return s.done }
+
+node main(): string {
+  // Scripted keys: 3x down then q. Final n should be 3.
+  setScriptedKeys([
+    { key: "down" },
+    { key: "down" },
+    { key: "down" },
+    { key: "q"    }
+  ])
+  const final = runLoop(initialState: { n: 0, done: false },
+                        render: view, handleKey: reduce, isDone: isDone)
+  if (final.n != 3) { return "FAIL: final n" }
+  if (!final.done)  { return "FAIL: not done" }
+  return "pass"
+}

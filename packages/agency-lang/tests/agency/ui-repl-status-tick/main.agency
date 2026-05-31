@@ -1,0 +1,22 @@
+import { repl, setScriptedKeys } from "std::ui"
+
+let statusCalls: number = 0
+
+def out(): string[] { return [] }
+def stat(): { left: string; right: string } {
+  statusCalls = statusCalls + 1
+  return { left: "left", right: "right" }
+}
+def onSub(s: string): boolean { return false }
+
+node main(): string {
+  // Single enter — triggers initial render + one post-key re-render.
+  // Each render re-evaluates status(), so statusCalls should be >= 2.
+  // This covers the re-evaluation contract; the tickMs-driven branch
+  // of the same code path is exercised by tests/agency/ui-runloop-tick.
+  setScriptedKeys([{ key: "enter" }])
+  repl(prompt: "> ", output: out, status: stat,
+       paletteCommands: {}, onSubmit: onSub)
+  if (statusCalls < 2) { return "FAIL: only ${statusCalls} status calls" }
+  return "pass"
+}

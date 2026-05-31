@@ -1,5 +1,104 @@
 # ui
 
+## Types
+
+### Element
+
+* Opaque tree node. Produced only by the builder functions below;
+ * consumed only by `runLoop` and `renderOnce`. Users do not
+ * construct one directly.
+
+```ts
+/**
+ * Opaque tree node. Produced only by the builder functions below;
+ * consumed only by `runLoop` and `renderOnce`. Users do not
+ * construct one directly.
+ */
+export type Element = {
+  type: string;
+  style?: any;
+  content?: string;
+  children?: any[];
+  items?: string[];
+  selectedIndex?: number;
+  value?: string
+}
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L126))
+
+### KeyEvent
+
+* Keystroke delivered to `handleKey` blocks.
+ *
+ * `key` is either a named special key — `"up"`, `"down"`, `"left"`,
+ * `"right"`, `"enter"`, `"escape"`, `"backspace"`, `"tab"`,
+ * `"home"`, `"end"`, `"pageup"`, `"pagedown"`, `"delete"`,
+ * `"insert"` — or a single printable character (e.g. `"q"`, `"/"`,
+ * `" "`). Mirrors the encoding in `lib/tui/input/terminal.ts`.
+ *
+ * `shift` / `ctrl` indicate held modifier keys at keypress time.
+
+```ts
+/**
+ * Keystroke delivered to `handleKey` blocks.
+ *
+ * `key` is either a named special key — `"up"`, `"down"`, `"left"`,
+ * `"right"`, `"enter"`, `"escape"`, `"backspace"`, `"tab"`,
+ * `"home"`, `"end"`, `"pageup"`, `"pagedown"`, `"delete"`,
+ * `"insert"` — or a single printable character (e.g. `"q"`, `"/"`,
+ * `" "`). Mirrors the encoding in `lib/tui/input/terminal.ts`.
+ *
+ * `shift` / `ctrl` indicate held modifier keys at keypress time.
+ */
+export type KeyEvent = {
+  key: string;
+  shift: boolean;
+  ctrl: boolean
+}
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L147))
+
+### Builder
+
+* Builder receiver passed to every container block. Method calls
+ * append child elements to the enclosing parent in source order.
+ *
+ * Container methods (`row`, `column`, `box`) take a trailing block
+ * that receives a fresh Builder for the new child's contents. Leaf
+ * methods (`line`, `text`, `list`, `textInput`) don't.
+ *
+ * The methods are typed `any` because each one accepts a different
+ * named-arg signature; full signatures are documented on the
+ * top-level builders (`column`, `row`, etc.).
+
+```ts
+/**
+ * Builder receiver passed to every container block. Method calls
+ * append child elements to the enclosing parent in source order.
+ *
+ * Container methods (`row`, `column`, `box`) take a trailing block
+ * that receives a fresh Builder for the new child's contents. Leaf
+ * methods (`line`, `text`, `list`, `textInput`) don't.
+ *
+ * The methods are typed `any` because each one accepts a different
+ * named-arg signature; full signatures are documented on the
+ * top-level builders (`column`, `row`, etc.).
+ */
+export type Builder = {
+  row: any;
+  column: any;
+  box: any;
+  line: any;
+  text: any;
+  list: any;
+  textInput: any
+}
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L165))
+
 ## Functions
 
 ### initUI
@@ -16,7 +115,7 @@ Initialize a terminal UI with a scrollable output area and a fixed input bar at 
 |---|---|---|
 | title | `string` |  |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L2))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L3))
 
 ### destroyUI
 
@@ -26,7 +125,7 @@ destroyUI()
 
 Tear down the terminal UI and restore normal terminal behavior. Called automatically on exit, but you can call it early if needed.
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L9))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L10))
 
 ### log
 
@@ -42,7 +141,7 @@ Print a message to the scrollable output area. Supports ANSI colors.
 |---|---|---|
 | message | `string` |  |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L16))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L17))
 
 ### status
 
@@ -62,7 +161,7 @@ Update the status bar. The left text appears on the left side, the right text on
 | left | `string` |  |
 | right | `string` | "" |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L23))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L24))
 
 ### chat
 
@@ -82,7 +181,7 @@ Print a chat message with a colored role prefix. Built-in colors: "user" (cyan),
 | role | `string` | "" |
 | message | `string` | "" |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L33))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L34))
 
 ### code
 
@@ -102,7 +201,7 @@ Display a code block with a filename header and line numbers, inside a bordered 
 | filename | `string` |  |
 | content | `string` |  |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L43))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L44))
 
 ### diff
 
@@ -122,7 +221,7 @@ Display a diff with colored +/- lines, inside a bordered box with the filename a
 | filename | `string` |  |
 | content | `string` |  |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L53))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L54))
 
 ### separator
 
@@ -138,7 +237,7 @@ Print a horizontal line with an optional label. Useful for visually grouping out
 |---|---|---|
 | label | `string` | "" |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L63))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L64))
 
 ### startSpinner
 
@@ -154,7 +253,7 @@ Show an animated spinner in the input bar with a label. Useful while the agent i
 |---|---|---|
 | text | `string` | "working" |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L70))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L71))
 
 ### stopSpinner
 
@@ -164,7 +263,7 @@ stopSpinner()
 
 Stop the spinner and clear the input bar.
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L77))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L78))
 
 ### prompt
 
@@ -184,7 +283,7 @@ Prompt the user for text input in the fixed input bar at the bottom of the scree
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L84))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L85))
 
 ### getConfirmation
 
@@ -202,7 +301,7 @@ Ask the user a yes/no question in the input bar. Returns true if the user answer
 
 **Returns:** `boolean`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L93))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L94))
 
 ### emptyLine
 
@@ -212,4 +311,4 @@ emptyLine()
 
 Print an empty line. Useful for adding spacing in the output.
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L104))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L105))

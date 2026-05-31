@@ -1,4 +1,5 @@
 import { _initUI, _destroyUI, _log, _status, _chat, _code, _diff, _separator, _startSpinner, _stopSpinner, _emptyLine, _prompt } from "agency-lang/stdlib-lib/ui.js"
+import { _runLoop, _renderOnce, _readKey, _hasActiveScreen } from "agency-lang/stdlib-lib/ui.js"
 export def initUI(title: string) {
   """
   Initialize a terminal UI with a scrollable output area and a fixed input bar at the bottom. Call this once at the start of your agent. The title is shown in the scrollable output area on init; use status() to populate the status bar.
@@ -106,4 +107,67 @@ export def emptyLine() {
   Print an empty line. Useful for adding spacing in the output.
   """
   _emptyLine()
+}
+
+// ---------------------------------------------------------------------------
+// New declarative API (Layer 1 + Layer 2).
+//
+// The old imperative exports above remain during the migration; PR #3
+// removes them along with their TS-side helpers. Everything below this
+// line is the new replacement API documented in
+// docs/superpowers/specs/2026-05-30-stdlib-ui-redesign-design.md.
+// ---------------------------------------------------------------------------
+
+/**
+ * Opaque tree node. Produced only by the builder functions below;
+ * consumed only by `runLoop` and `renderOnce`. Users do not
+ * construct one directly.
+ */
+export type Element = {
+  type: string;
+  style?: any;
+  content?: string;
+  children?: any[];
+  items?: string[];
+  selectedIndex?: number;
+  value?: string
+}
+
+/**
+ * Keystroke delivered to `handleKey` blocks.
+ *
+ * `key` is either a named special key — `"up"`, `"down"`, `"left"`,
+ * `"right"`, `"enter"`, `"escape"`, `"backspace"`, `"tab"`,
+ * `"home"`, `"end"`, `"pageup"`, `"pagedown"`, `"delete"`,
+ * `"insert"` — or a single printable character (e.g. `"q"`, `"/"`,
+ * `" "`). Mirrors the encoding in `lib/tui/input/terminal.ts`.
+ *
+ * `shift` / `ctrl` indicate held modifier keys at keypress time.
+ */
+export type KeyEvent = {
+  key: string;
+  shift: boolean;
+  ctrl: boolean
+}
+
+/**
+ * Builder receiver passed to every container block. Method calls
+ * append child elements to the enclosing parent in source order.
+ *
+ * Container methods (`row`, `column`, `box`) take a trailing block
+ * that receives a fresh Builder for the new child's contents. Leaf
+ * methods (`line`, `text`, `list`, `textInput`) don't.
+ *
+ * The methods are typed `any` because each one accepts a different
+ * named-arg signature; full signatures are documented on the
+ * top-level builders (`column`, `row`, etc.).
+ */
+export type Builder = {
+  row: any;
+  column: any;
+  box: any;
+  line: any;
+  text: any;
+  list: any;
+  textInput: any
 }

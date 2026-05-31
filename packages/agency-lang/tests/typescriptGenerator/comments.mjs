@@ -24,7 +24,7 @@ import {
   __call, __callMethod, __threads, __stateStack, getRuntimeContext, agencyStore,
   __initVar,
   __requireInitVar,
-  __registerModule, __getReachableModules,
+  __registerModule, __getRegisteredModules,
   functionRefReviver as __functionRefReviver,
   DeterministicClient as __DeterministicClient,
   createLogger as __createLogger,
@@ -155,11 +155,11 @@ async function __runImperatives(__ctx) {
   __ctx.globals.set("comments.agency", "y", `hello`)
 }
 async function __initializeGlobals(__ctx) {
-  const __reachable = __getReachableModules();
-  for (const mod of __reachable) {
+  const __registered = __getRegisteredModules();
+  for (const mod of __registered) {
     await mod.__initializeStatic(__ctx)
   }
-  for (const mod of __reachable) {
+  for (const mod of __registered) {
     await mod.__runImperatives(__ctx)
   }
 }

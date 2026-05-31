@@ -391,7 +391,7 @@ export function assembleSections(opts: AssembleSectionsOpts): TsNode {
   // module-load time (a side effect of being ES-imported). ES module
   // loading is post-order DFS over static imports, so deps register
   // before their importers — exactly the order we want
-  // `__getReachableModules` to yield for the entry-time orchestration.
+  // `__getRegisteredModules` to yield for the entry-time orchestration.
   // The exported __moduleId / __initializeStatic / __runImperatives
   // are the only Agency-side contract the orchestrator depends on.
   sections.push(
@@ -583,8 +583,6 @@ function buildStaticVarSetup(opts: AssembleSectionsOpts): TsNode[] {
 /**
  * Emit:
  *   async function __runImperatives(__ctx) {
- *     if (__ctx.globals.isInitialized(moduleId)) return;
- *     __ctx.globals.markInitialized(moduleId);
  *     …globalInitStatements   // top-level let X = expr → globals.set,
  *                             //   bare top-level calls, etc.
  *   }
@@ -596,17 +594,15 @@ function buildStaticVarSetup(opts: AssembleSectionsOpts): TsNode[] {
  * static read. (See the inline phase-invariant comment in
  * `buildInitializeGlobalsFn` below.)
  *
- * Idempotent via `globals.isInitialized` — safe to call multiple times
- * on the same execution context. The first call wins; subsequent calls
- * return early without re-running side effects.
+ * NO idempotency guard inside this function — `markInitialized` lives
+ * at the top of `__initializeStatic` instead (so the lazy first-call
+ * check at function entry short-circuits without ever calling
+ * `__runImperatives` twice for the same execCtx). The orchestrator
+ * (`__initializeGlobals`) is the single-flight caller, and it fires
+ * at most once per execCtx — re-entering `__runImperatives` outside
+ * that orchestrator would re-run side effects.
  */
 function buildRunImperativesFn(opts: AssembleSectionsOpts): TsNode {
-  // No isInitialized check / mark here: `__initializeStatic` marks
-  // this module as initialized at its top (see `buildStaticVarSetup`),
-  // which is what gates the lazy first-call init at function entry.
-  // The orchestrator that drives __runImperatives is single-flight
-  // per execCtx (only `__initializeGlobals` calls it, and that fires
-  // at most once per execCtx — see the doc on `buildInitializeGlobalsFn`).
   void opts.moduleId; // satisfies eslint; opts.moduleId not needed here
   return ts.functionDecl(
     "__runImperatives",
@@ -629,9 +625,9 @@ function buildRunImperativesFn(opts: AssembleSectionsOpts): TsNode {
  *     // re-introduce the cross-module-undefined bug this subsystem
  *     // exists to prevent (#232).
  *     // ============================
- *     const reachable = __getReachableModules();
- *     for (const mod of reachable) await mod.__initializeStatic(__ctx);
- *     for (const mod of reachable) await mod.__runImperatives(__ctx);
+ *     const registered = __getRegisteredModules();
+ *     for (const mod of registered) await mod.__initializeStatic(__ctx);
+ *     for (const mod of registered) await mod.__runImperatives(__ctx);
  *   }
  *
  * Kept as a single function so the existing callers continue to work
@@ -647,8 +643,13 @@ function buildRunImperativesFn(opts: AssembleSectionsOpts): TsNode {
  *     also still works — the shim runs both phases.
  *
  * `__initializeGlobals` does NOT mark this module as initialized
- * directly; that happens inside each module's `__runImperatives` so
- * fresh callers driving in via another entry point get the same
+ * directly. Per-module marking happens at the TOP of each module's
+ * `__initializeStatic` (see `buildStaticVarSetup`) — placed there so
+ * that function-mediated init reads (a `static const X = computeX()`
+ * where `computeX` is a top-level `def`) cannot re-enter
+ * `__initializeGlobals` via the lazy first-call check and deadlock
+ * on the in-flight `__init_X` promise. Marking up front also gives
+ * fresh callers driving in via any entry point the same per-module
  * idempotency.
  */
 function buildInitializeGlobalsFn(opts: AssembleSectionsOpts): TsNode {
@@ -658,24 +659,24 @@ function buildInitializeGlobalsFn(opts: AssembleSectionsOpts): TsNode {
   // would read from ALS instead of the parameter).
   const ctxParam = ts.id("__ctx");
   const body: TsNode[] = [
-    ts.constDecl("__reachable", ts.call(ts.id("__getReachableModules"), [])),
-    // Phase 1: every reachable module's static phase. Each module's
+    ts.constDecl("__registered", ts.call(ts.id("__getRegisteredModules"), [])),
+    // Phase 1: every registered module's static phase. Each module's
     // __initializeStatic iterates __MY_INIT_GETTERS sequentially; the
     // per-var getters cascade through their deps via inline awaits.
     // Memoization in __initVar makes redundant calls free.
     ts.forOf(
       "mod",
-      ts.id("__reachable"),
+      ts.id("__registered"),
       ts.awaitMethodCall(ts.id("mod"), "__initializeStatic", [ctxParam]),
     ),
-    // Phase 2: every reachable module's top-level imperative
+    // Phase 2: every registered module's top-level imperative
     // statements, in import order. IMPORTANT: sequential for-await —
     // DO NOT switch to Promise.all (breaks trace/checkpoint replay
     // determinism, AND breaks the phase invariant if any Promise.all
     // entry resolves before another).
     ts.forOf(
       "mod",
-      ts.id("__reachable"),
+      ts.id("__registered"),
       ts.awaitMethodCall(ts.id("mod"), "__runImperatives", [ctxParam]),
     ),
   ];

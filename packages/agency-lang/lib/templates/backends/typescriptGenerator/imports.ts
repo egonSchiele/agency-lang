@@ -29,7 +29,7 @@ import {
   __call, __callMethod, __threads, __stateStack, getRuntimeContext, agencyStore,
   __initVar,
   __requireInitVar,
-  __registerModule, __getReachableModules,
+  __registerModule, __getRegisteredModules,
   functionRefReviver as __functionRefReviver,
   DeterministicClient as __DeterministicClient,
   createLogger as __createLogger,

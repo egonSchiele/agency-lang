@@ -29,7 +29,7 @@ export {
 export { __initVar, __requireInitVar } from "./initVar.js";
 export {
   __registerModule,
-  __getReachableModules,
+  __getRegisteredModules,
   __resetModuleRegistry,
   type ModuleInitHandle,
 } from "./initOrchestrator.js";

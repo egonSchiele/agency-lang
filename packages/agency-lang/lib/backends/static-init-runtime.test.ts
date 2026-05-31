@@ -3,6 +3,7 @@ import path from "path";
 import fs from "fs";
 import { pathToFileURL } from "url";
 import { compile } from "@/cli/commands.js";
+import { __resetModuleRegistry } from "@/runtime/initOrchestrator.js";
 
 // Project-local scratch dir — must live inside the workspace so the
 // generated `.js` files can resolve `agency-lang/stdlib/index.js`
@@ -43,6 +44,14 @@ async function loadFreshModule(tmpDir: string): Promise<{
   const stale = path.join(tmpDir, "main.js");
   if (fs.existsSync(stale)) fs.rmSync(stale);
   compile({}, path.join(tmpDir, "main.agency"));
+  // Reset the process-global init orchestrator registry IMMEDIATELY
+  // before importing this fixture. The registry accumulates module
+  // handles across every dynamic import in this vitest worker;
+  // without clearing it, `__getRegisteredModules()` inside the
+  // fresh module's `__initializeGlobals` would also iterate handles
+  // from prior fixtures and re-run their `__initializeStatic` /
+  // `__runImperatives`, polluting counters and traces.
+  __resetModuleRegistry();
   const mod: any = await import(pathToFileURL(path.join(tmpDir, "main.js")).href);
   const counterMod: any = await import(
     pathToFileURL(path.join(tmpDir, "counter.js")).href
@@ -152,6 +161,9 @@ describe("cross-module init — backward-compat guard for pre-fix .js modules", 
 
     let caught: Error | null = null;
     try {
+      // See note in `loadFreshModule` re: clearing the process-global
+      // init registry before importing a fresh fixture.
+      __resetModuleRegistry();
       await import(pathToFileURL(path.join(tmpDir, "main.js")).href);
     } catch (e) {
       caught = e as Error;
@@ -189,6 +201,9 @@ describe("cross-module init — trace captures populated static state", () => {
       if (fs.existsSync(p)) fs.rmSync(p);
     }
     compile({}, path.join(tmpDir, "main.agency"));
+    // See note in `loadFreshModule` re: clearing the process-global
+    // init registry before importing a fresh fixture.
+    __resetModuleRegistry();
     const mod: any = await import(
       pathToFileURL(path.join(tmpDir, "main.js")).href
     );

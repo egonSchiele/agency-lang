@@ -708,6 +708,60 @@ export function _writeScrollLine(text: string): void {
   process.stdout.write(text + "\n");
 }
 
+/**
+ * Prompt the user for one of `choices` while a REPL owns the screen.
+ * Writes `text` (multi-line) to the scroll region, then reads keys
+ * from the active screen's input source — accumulating printable
+ * characters into a buffer that's committed on Enter. Loops until
+ * the typed answer is one of `choices`. Backspace edits the buffer.
+ *
+ * Caller must verify `_hasActiveScreen()` first; this throws if no
+ * REPL is active because the fallback path (raw stdin) lives in the
+ * Agency-side wrapper `_routePrompt`.
+ *
+ * NB: when the REPL is running with `tickMs`, its `runLoop` may have
+ * a leaked `nextKey()` promise registered from the most recent tick.
+ * Since this function is called synchronously from inside `onSubmit`
+ * (between `nextKey` awaits), the leaked waiter only matters if a
+ * key is typed *while* a tick was racing, in which case that key
+ * may be claimed by the loop instead of the prompt. Acceptable for
+ * v1; production use should pause the loop while prompting.
+ */
+export async function _promptFromChoices(
+  text: string,
+  choices: string[],
+): Promise<string> {
+  const screen = bridgeActiveScreen;
+  if (!screen) {
+    throw new Error(
+      "_promptFromChoices: no active screen — callers must guard with _hasActiveScreen()",
+    );
+  }
+  for (const ln of text.split("\n")) {
+    process.stdout.write(ln + "\n");
+  }
+  while (true) {
+    let buf = "";
+    // Show what the user has typed so far on its own scroll-region line.
+    process.stdout.write("> ");
+    while (true) {
+      const ev = await screen.nextKey();
+      if (ev.key === "enter") break;
+      if (ev.key === "backspace") {
+        buf = buf.slice(0, -1);
+        continue;
+      }
+      if (ev.key.length === 1) {
+        buf += ev.key;
+      }
+    }
+    process.stdout.write(buf + "\n");
+    const answer = buf.trim();
+    if (choices.includes(answer)) return answer;
+    process.stdout.write(`(one of ${choices.join("/")})\n`);
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Hybrid mode — bridge primitives for `repl()`.
 //

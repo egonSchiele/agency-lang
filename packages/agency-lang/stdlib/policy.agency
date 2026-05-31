@@ -5,6 +5,7 @@ import {
  } from "agency-lang/stdlib-lib/policy.js"
 import { exists } from "std::shell"
 import { dirname, basename } from "std::path"
+import { _routePrompt } from "std::ui"
 
 /** @module
   ## Overview
@@ -507,31 +508,32 @@ def askUser(intr: any): Decision {
   let kindFields: ScopedField[] = []
   if (_opts.fields[intr.kind] != undefined) { kindFields = _opts.fields[intr.kind] }
   const scopedAvailable = kindFields.length > 0
-  print("\n⚠ Interrupt: ${intr.kind}")
-  print("  ${intr.message}")
-  print("  data: ${JSON.stringify(intr.data)}")
-  print("  (a)  approve once")
-  print("  (r)  reject once")
-  print("  (aa) approve always (every future ${intr.kind})")
-  if (scopedAvailable) {
-    print("  (ap) approve always here (${describeScopedMatch(intr)})")
-  }
-  print("  (rr) reject always")
 
-  let result: Decision = "reject"
-  let valid = false
-  while (!valid) {
-    const answer = input("> ")
-    if (answer == "a")  { result = "approve"; valid = true }
-    else if (answer == "r")  { result = "reject"; valid = true }
-    else if (answer == "aa") { result = "approve-always"; valid = true }
-    else if (answer == "rr") { result = "reject-always"; valid = true }
-    else if (answer == "ap" && scopedAvailable) { result = "approve-always-here"; valid = true }
-    else if (answer == "ap") {
-      print("(ap) isn't available for ${intr.kind} — pick one of (a)/(r)/(aa)/(rr).")
-    }
+  // Build the menu as a single string so the active-REPL renderer can
+  // emit it to the scroll region in one call, and the raw-input
+  // fallback can `print` it once.
+  let menuLines: string[] = []
+  menuLines.push("\n⚠ Interrupt: ${intr.kind}")
+  menuLines.push("  ${intr.message}")
+  menuLines.push("  data: ${JSON.stringify(intr.data)}")
+  menuLines.push("  (a)  approve once")
+  menuLines.push("  (r)  reject once")
+  menuLines.push("  (aa) approve always (every future ${intr.kind})")
+  if (scopedAvailable) {
+    menuLines.push("  (ap) approve always here (${describeScopedMatch(intr)})")
   }
-  return result
+  menuLines.push("  (rr) reject always")
+  const menuText = menuLines.join("\n")
+
+  let choices: string[] = ["a", "r", "aa", "rr"]
+  if (scopedAvailable) { choices = ["a", "r", "aa", "ap", "rr"] }
+
+  const answer = _routePrompt(menuText, choices)
+  if (answer == "a")  { return "approve" }
+  if (answer == "r")  { return "reject" }
+  if (answer == "aa") { return "approve-always" }
+  if (answer == "ap") { return "approve-always-here" }
+  return "reject-always"
 }
 
 /**

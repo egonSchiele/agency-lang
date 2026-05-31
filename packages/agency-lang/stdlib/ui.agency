@@ -1,6 +1,6 @@
 import { _initUI, _destroyUI, _log, _status, _chat, _code, _diff, _separator, _startSpinner, _stopSpinner, _emptyLine, _prompt } from "agency-lang/stdlib-lib/ui.js"
 import { _runLoop, _renderOnce, _readKey, _hasActiveScreen, _setScriptedKeys, _setQuitAfterMs } from "agency-lang/stdlib-lib/ui.js"
-import { _installScrollRegion, _resetScrollRegion, _writeScrollLine, _runLoopHybrid } from "agency-lang/stdlib-lib/ui.js"
+import { _installScrollRegion, _resetScrollRegion, _writeScrollLine, _runLoopHybrid, _promptFromChoices } from "agency-lang/stdlib-lib/ui.js"
 export def initUI(title: string) {
   """
   Initialize a terminal UI with a scrollable output area and a fixed input bar at the bottom. Call this once at the start of your agent. The title is shown in the scrollable output area on init; use status() to populate the status bar.
@@ -614,6 +614,36 @@ export def setQuitAfterMs(ms: number) {
 // from actual rendered content.
 const _BASE_BOTTOM_ROWS: number = 2
 const _PALETTE_ROWS: number = 5
+
+/**
+ * Private — used by other stdlib modules (notably `std::policy`)
+ * to route a prompt through the active REPL when one exists, or
+ * fall back to raw `print` + `input` otherwise.
+ *
+ * Not part of the public API; the underscore prefix is convention,
+ * but the export is required so cross-module imports work.
+ *
+ * @param text - The menu/question text shown to the user
+ * @param choices - The set of strings the user's answer must match
+ */
+export def _routePrompt(text: string, choices: string[]): string {
+  if (_hasActiveScreen()) {
+    return _promptFromChoices(text, choices)
+  }
+  print(text)
+  const optsHint = "(one of " + choices.join("/") + ")"
+  let answer = ""
+  let valid = false
+  while (!valid) {
+    answer = input("> ").trim()
+    if (choices.includes(answer)) {
+      valid = true
+    } else {
+      print(optsHint)
+    }
+  }
+  return answer
+}
 
 type ReplState = {
   buffer: string;

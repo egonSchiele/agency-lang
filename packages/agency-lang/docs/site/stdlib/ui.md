@@ -188,7 +188,6 @@ type ReplState = {
   paletteFilter: string;
   paletteCursor: number;
   done: boolean;
-  outputLinesWritten: number;
   prompt: string;
   paletteCommands: any;
   historyFile: string;
@@ -199,7 +198,7 @@ type ReplState = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L610))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L612))
 
 ## Functions
 
@@ -738,7 +737,7 @@ _routePrompt(text: string, choices: string[]): string
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L591))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L593))
 
 ### _filteredPaletteKeys
 
@@ -754,7 +753,7 @@ _filteredPaletteKeys(s: ReplState): string[]
 
 **Returns:** `string[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L630))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L631))
 
 ### _replView
 
@@ -770,23 +769,7 @@ _replView(s: ReplState): Element
 
 **Returns:** [Element](#element)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L648))
-
-### _appendNewScrollLines
-
-```ts
-_appendNewScrollLines(s: ReplState): ReplState
-```
-
-**Parameters:**
-
-| Name | Type | Default |
-|---|---|---|
-| s | [ReplState](#replstate) |  |
-
-**Returns:** [ReplState](#replstate)
-
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L679))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L651))
 
 ### _persistHistory
 
@@ -802,7 +785,7 @@ _persistHistory(s: ReplState): boolean
 
 **Returns:** `boolean`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L696))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L689))
 
 ### _replReduce
 
@@ -819,7 +802,7 @@ _replReduce(s: ReplState, k: KeyEvent): ReplState
 
 **Returns:** [ReplState](#replstate)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L705))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L698))
 
 ### _replIsDone
 
@@ -835,7 +818,7 @@ _replIsDone(s: ReplState): boolean
 
 **Returns:** `boolean`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L799))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L793))
 
 ### repl
 
@@ -843,18 +826,25 @@ _replIsDone(s: ReplState): boolean
 repl(output: any, status: any, onSubmit: any, prompt: string, historyFile: string, historyMax: number, paletteCommands: any, tickMs: number)
 ```
 
-* Drop-in REPL widget for interactive CLI agents. Bundles a scroll
- * output area (via the terminal's native scroll region), a status
- * line, a command palette (triggered by `/`), and an input line
- * with history navigation.
+* Drop-in REPL widget for interactive CLI agents. Bundles a
+ * scrollable output area, a live status line, a slash-command
+ * palette (triggered by `/`), and an input line with history
+ * navigation.
  *
- * Lifecycle: installs a scroll region on entry, runs the bounded
- * `runLoop` with `tickMs` so the status line stays live during a
- * turn, tears down the region on exit (clean exit, onSubmit -> false,
- * or exception). The handler block ensures the region is reset even
- * if an exception escapes the loop.
+ * Owns the full terminal via `runLoop` (alt-screen). The output
+ * callback is re-evaluated every render and shown as an auto-
+ * scrolling list at the top of the column; new lines pushed by
+ * `onSubmit` appear on the next frame. Tradeoff vs. the previous
+ * hybrid scroll-region design: no native scrollback / copy-paste
+ * while the REPL is running, no transcript persists in the
+ * terminal after exit — in return the layout and lifecycle are
+ * simple enough to be obviously correct.
  *
- * @param output - Re-evaluated every render; new tail lines stream to scrollback
+ * Lifecycle: `runLoop` enters and exits alt-screen automatically;
+ * its `TerminalOutput` installs SIGINT/SIGTERM/exit handlers that
+ * restore the terminal even on abrupt termination.
+ *
+ * @param output - Re-evaluated every render; lines render in the scrollable area
  * @param status - Re-evaluated every render; populates the status line
  * @param onSubmit - Called with the submitted line; return `false` to exit
  * @param prompt - String shown before the input buffer (default `"> "`)
@@ -876,4 +866,4 @@ repl(output: any, status: any, onSubmit: any, prompt: string, historyFile: strin
 | paletteCommands | `any` | null |
 | tickMs | `number` | 100 |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L822))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L823))

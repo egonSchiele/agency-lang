@@ -1,5 +1,5 @@
 import { _runLoop, _renderOnce, _readKey, _hasActiveScreen, _setScriptedKeys, _setQuitAfterMs } from "agency-lang/stdlib-lib/ui.js"
-import { _installScrollRegion, _resetScrollRegion, _writeScrollLine, _runLoopHybrid, _promptFromChoices } from "agency-lang/stdlib-lib/ui.js"
+import { _promptFromChoices } from "agency-lang/stdlib-lib/ui.js"
 
 /** @module
   ## Overview
@@ -563,18 +563,20 @@ export def setQuitAfterMs(ms: number) {
 // ---------------------------------------------------------------------------
 // Layer 2 — repl() widget
 //
-// An opinionated REPL with a status line, scroll output (via the
-// terminal's native scroll region in hybrid mode), a command palette
-// triggered by `/`, and a persistent input history. Built entirely on
-// top of Layer 1 + the hybrid-mode primitives from `lib/stdlib/ui.ts`.
+// An opinionated REPL with a status line, scrollable output area, a
+// command palette triggered by `/`, and a persistent input history.
+// Owns the full terminal (alt-screen via `_runLoop`) — output lines
+// render into a flex:1 list region at the top of the column rather
+// than streaming into the native scroll region. Tradeoff: no native
+// scrollback / copy-paste while the REPL is running, but the layout
+// and lifecycle are dramatically simpler than the previous hybrid
+// scroll-region approach.
 // ---------------------------------------------------------------------------
 
-// Bottom-region row counts. Base = status (1) + input (1). When the
-// palette is open we add `_PALETTE_ROWS` and re-issue the scroll
-// region from within `_replReduce` so the layout doesn't overlap the
-// scrolled output. v1 is fixed; future versions may compute these
-// from actual rendered content.
-const _BASE_BOTTOM_ROWS: number = 2
+// Fixed height of the command palette list when open. The output
+// list above it absorbs all remaining vertical space via flex:1, so
+// opening the palette steals exactly this many rows from the output
+// view and closing it returns them.
 const _PALETTE_ROWS: number = 5
 
 /**
@@ -615,7 +617,6 @@ type ReplState = {
   paletteFilter: string;
   paletteCursor: number;
   done: boolean;
-  outputLinesWritten: number;
   prompt: string;
   paletteCommands: any;
   historyFile: string;
@@ -642,9 +643,11 @@ def _filteredPaletteKeys(s: ReplState): string[] {
   return out
 }
 
-// View: the bottom region only. Output lines live in the terminal's
-// native scroll region; we append new tails via `_writeScrollLine`
-// inside `_replReduce` rather than rendering them into this tree.
+// View: the full terminal. `s.output()` is re-evaluated every render
+// and shown as an auto-scrolling list at the top (flex:1 absorbs all
+// remaining vertical space). Palette + status + input pin to the
+// bottom because none of them are flex; standard `flex-start` column
+// layout packs flex:1 first, then the fixed-height tail items.
 def _replView(s: ReplState): Element {
   const stat = s.status()
   const palKeys = _filteredPaletteKeys(s)
@@ -653,16 +656,19 @@ def _replView(s: ReplState): Element {
     const desc = s.paletteCommands[k]
     palItems.push("${k}  - ${desc}")
   }
+  const outLines = s.output()
+  // selectedIndex == items.length is one past the last item, so no
+  // row is highlighted (`isSelected = itemIdx === selectedIndex`
+  // never matches), while the renderer's auto-scroll
+  // (`scrollOffset = selectedIndex - innerHeight + 1`) still keeps
+  // the latest lines in view as the list grows.
+  const followIdx = outLines.length
   // Note: every container call here MUST pass at least one named arg.
   // The agency parser otherwise compiles `column() as col { ... }` as a
   // positional call where the block lands in `flex`, leaving the
   // `block` param null at runtime.
   return column(visible: true) as col {
-    // Spacer absorbs all unused vertical space so the status + input
-    // hug the bottom of the reserved region. When the palette opens
-    // the list takes its rows and this spacer shrinks; when closed
-    // the spacer fills the gap.
-    col.box(flex: 1) as _ {}
+    col.list(items: outLines, selectedIndex: followIdx, flex: 1)
     col.list(items: palItems, selectedIndex: s.paletteCursor,
              visible: s.paletteOpen, height: _PALETTE_ROWS, border: true)
     col.row(bg: "blue", fg: "white", height: 1) as st {
@@ -678,27 +684,6 @@ def _replView(s: ReplState): Element {
       ir.textInput(value: s.buffer, flex: 1)
     }
   }
-}
-
-// Stream new tail of `output()` (lines added since last call) to the
-// terminal scroll region. Returns updated state with the counter
-// advanced. If `output()` shrunk (consumer cleared its own buffer)
-// we just reset the counter and let the next call resume cleanly.
-def _appendNewScrollLines(s: ReplState): ReplState {
-  const lines = s.output()
-  const n = lines.length
-  if (n < s.outputLinesWritten) {
-    return { ...s, outputLinesWritten: n }
-  }
-  if (n > s.outputLinesWritten) {
-    let i = s.outputLinesWritten
-    while (i < n) {
-      _writeScrollLine(lines[i])
-      i = i + 1
-    }
-    return { ...s, outputLinesWritten: n }
-  }
-  return s
 }
 
 def _persistHistory(s: ReplState): boolean {
@@ -789,14 +774,15 @@ def _replReduce(s: ReplState, k: KeyEvent): ReplState {
       }
     }
     const keepGoing = s.onSubmit(submitted)
-    const drained = _appendNewScrollLines({
+    // Any output appended by onSubmit shows up on the next render
+    // because `_replView` re-evaluates `s.output()` every frame.
+    return {
       ...s,
       buffer: "",
       history: nextHist,
       historyIdx: nextHist.length,
       done: !keepGoing
-    })
-    return drained
+    }
   }
   if (k.key.length == 1) {
     return { ...s, buffer: s.buffer + k.key }
@@ -807,18 +793,25 @@ def _replReduce(s: ReplState, k: KeyEvent): ReplState {
 def _replIsDone(s: ReplState): boolean { return s.done }
 
 /**
- * Drop-in REPL widget for interactive CLI agents. Bundles a scroll
- * output area (via the terminal's native scroll region), a status
- * line, a command palette (triggered by `/`), and an input line
- * with history navigation.
+ * Drop-in REPL widget for interactive CLI agents. Bundles a
+ * scrollable output area, a live status line, a slash-command
+ * palette (triggered by `/`), and an input line with history
+ * navigation.
  *
- * Lifecycle: installs a scroll region on entry, runs the bounded
- * `runLoop` with `tickMs` so the status line stays live during a
- * turn, tears down the region on exit (clean exit, onSubmit -> false,
- * or exception). The handler block ensures the region is reset even
- * if an exception escapes the loop.
+ * Owns the full terminal via `runLoop` (alt-screen). The output
+ * callback is re-evaluated every render and shown as an auto-
+ * scrolling list at the top of the column; new lines pushed by
+ * `onSubmit` appear on the next frame. Tradeoff vs. the previous
+ * hybrid scroll-region design: no native scrollback / copy-paste
+ * while the REPL is running, no transcript persists in the
+ * terminal after exit — in return the layout and lifecycle are
+ * simple enough to be obviously correct.
  *
- * @param output - Re-evaluated every render; new tail lines stream to scrollback
+ * Lifecycle: `runLoop` enters and exits alt-screen automatically;
+ * its `TerminalOutput` installs SIGINT/SIGTERM/exit handlers that
+ * restore the terminal even on abrupt termination.
+ *
+ * @param output - Re-evaluated every render; lines render in the scrollable area
  * @param status - Re-evaluated every render; populates the status line
  * @param onSubmit - Called with the submitted line; return `false` to exit
  * @param prompt - String shown before the input buffer (default `"> "`)
@@ -847,7 +840,6 @@ export def repl(
     paletteFilter: "",
     paletteCursor: 0,
     done: false,
-    outputLinesWritten: 0,
     prompt: prompt,
     paletteCommands: cmds,
     historyFile: historyFile,
@@ -856,19 +848,5 @@ export def repl(
     status: status,
     onSubmit: onSubmit
   }
-  // Reserve enough rows for the *maximum* bottom-region layout
-  // (status + input + open palette) so the palette fits when opened
-  // without clipping the input or status. The palette element renders
-  // `visible: false` when closed and the layout treats invisible
-  // children as zero-height (see `lib/tui/test/layout.test.ts`), so
-  // the extra rows are just empty space above the status bar when
-  // the palette isn't open. A future revision could resize the
-  // scroll region dynamically when the palette toggles, but Screen
-  // doesn't yet support mid-loop height changes.
-  const totalRows = _BASE_BOTTOM_ROWS + _PALETTE_ROWS
-  _installScrollRegion(totalRows)
-  const seeded = _appendNewScrollLines(initial)
-  _runLoopHybrid(seeded, _replView, _replReduce, _replIsDone,
-                 tickMs, totalRows)
-  _resetScrollRegion()
+  _runLoop(initial, _replView, _replReduce, _replIsDone, tickMs)
 }

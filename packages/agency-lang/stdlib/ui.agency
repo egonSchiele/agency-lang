@@ -658,12 +658,20 @@ def _replView(s: ReplState): Element {
   // positional call where the block lands in `flex`, leaving the
   // `block` param null at runtime.
   return column(visible: true) as col {
+    // Spacer absorbs all unused vertical space so the status + input
+    // hug the bottom of the reserved region. When the palette opens
+    // the list takes its rows and this spacer shrinks; when closed
+    // the spacer fills the gap.
+    col.box(flex: 1) as _ {}
     col.list(items: palItems, selectedIndex: s.paletteCursor,
              visible: s.paletteOpen, height: _PALETTE_ROWS, border: true)
     col.row(bg: "blue", fg: "white", height: 1) as st {
-      st.line(stat.left)
-      st.box(flex: 1) as _ {}
-      st.line(stat.right)
+      // bg/fg are passed on each line because child elements don't
+      // inherit parent style — line()'s blank padding would otherwise
+      // overwrite the row's blue background with uncolored cells.
+      st.line(stat.left, bg: "blue", fg: "white")
+      st.box(flex: 1, bg: "blue") as _ {}
+      st.line(stat.right, bg: "blue", fg: "white")
     }
     col.row(height: 1) as ir {
       ir.line(s.prompt)

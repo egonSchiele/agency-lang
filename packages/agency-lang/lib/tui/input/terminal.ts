@@ -87,6 +87,14 @@ export class TerminalInput implements InputSource {
         this.handleSuspendKeypress();
         return;
       }
+      // Same story for Ctrl+C (0x03): raw mode swallows the SIGINT
+      // translation. Re-raise SIGINT so the process exits even when an
+      // in-progress handleKey callback is blocking the run loop. We also
+      // pass the keypress through so Agency-side handlers can react
+      // (the SIGINT only takes effect after the current tick yields).
+      if (str.length === 1 && str.charCodeAt(0) === 0x03) {
+        process.kill(process.pid, "SIGINT");
+      }
       const key = parseKeypress(str);
       const waiter = this.keyWaiters.shift();
       if (waiter) {

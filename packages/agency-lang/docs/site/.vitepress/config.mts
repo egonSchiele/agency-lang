@@ -50,6 +50,7 @@ export default defineConfig({
             { text: "Error Handling", link: "/guide/error-handling" },
             { text: "Blocks", link: "/guide/blocks" },
             { text: "Execution Model", link: "/guide/execution-model" },
+            { text: "Global vs Static Variables", link: "/guide/global-vs-static" },
             { text: "Testing", link: "/guide/testing" },
             { text: "Observability", link: "/guide/observability" },
           ],

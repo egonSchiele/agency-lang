@@ -45,6 +45,8 @@ export {
   updateTokenStats,
 } from "./utils.js";
 
+export { __UNINIT_STATIC, __readStatic } from "./staticInit.js";
+
 export { functionRefReviver } from "./revivers/index.js";
 export { AgencyFunction, UNSET } from "./agencyFunction.js";
 export type { FuncParam, CallType, ToolDefinition, AgencyFunctionOpts } from "./agencyFunction.js";

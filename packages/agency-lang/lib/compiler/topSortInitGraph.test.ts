@@ -153,6 +153,48 @@ describe("topSortInitGraph", () => {
     }
   });
 
+  it("returns only in-cycle nodes when a cycle node also depends on a drained DAG tail", () => {
+    // Graph shape (X → Y means "X depends on Y"):
+    //
+    //   c1 → d1 → d2     (DAG tail — Kahn drains d2, then d1)
+    //   c1 ↔ c2          (2-cycle — neither gets drained)
+    //
+    // `c1.deps = [d1, c2]` — the tail dep is listed FIRST so the
+    // pre-fix code, which selects `deps.find(d => inDegree[d] > 0)`
+    // against the PRE-Kahn inDegree map, picks `d1` (whose pre-Kahn
+    // in-degree is 1) over `c2`. The walk then wanders into the
+    // already-drained DAG portion (`d1 → d2`), exits the cycle, hits a
+    // dead end, and returns `[c1, d1, d2]` as a "cycle" — including
+    // two nodes that are not in any cycle at all.
+    //
+    // Post-fix `traceCycleFrom` consults the POST-Kahn `remaining`
+    // map. `d1.remaining === 0` (Kahn drained it), so the walk picks
+    // `c2` instead and the returned cycle is `[c1, c2]` — only the
+    // genuinely in-cycle nodes.
+    const g = makeGraph({
+      nodes: [
+        { module: "m", name: "c1" },
+        { module: "m", name: "c2" },
+        { module: "m", name: "d1" },
+        { module: "m", name: "d2" },
+      ],
+      edges: [
+        ["m::c1", "m::d1"],
+        ["m::c1", "m::c2"],
+        ["m::c2", "m::c1"],
+        ["m::d1", "m::d2"],
+      ],
+    });
+    const r = topSortInitGraph(g);
+    expect(r.kind).toBe("cycle");
+    if (r.kind !== "cycle") return;
+    const names = r.cycle.map((n) => n.varName);
+    expect(names).not.toContain("d1");
+    expect(names).not.toContain("d2");
+    const sorted = [...names].sort();
+    expect(sorted).toEqual(["c1", "c2"]);
+  });
+
   it("includes nodes from independent components in the output", () => {
     const g = makeGraph({
       nodes: [

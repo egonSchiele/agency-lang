@@ -773,7 +773,16 @@ repl(output: any, status: any, onSubmit: any, prompt: string, historyFile: strin
  * @param historyFile - Reserved for future use (history persistence is v2)
  * @param historyMax - Trim oldest entries beyond this count
  * @param paletteCommands - Map of `/cmd` -> description, iterated in order
- * @param tickMs - Render cadence in milliseconds (default 100)
+ * @param tickMs - Render cadence in ms. Default `null` = no ticking
+ *   (event-driven; status only re-renders on key events). Setting a
+ *   positive value enables live status updates between keys but
+ *   leaks per-render runtime checkpoints (every Agency function
+ *   call pins a checkpoint at entry that never auto-evicts —
+ *   lib/templates/backends/typescriptGenerator/resultCheckpointSetup
+ *   — and a tickMs loop runs the render callback `1000 / tickMs`
+ *   times per second). Until that runtime leak is fixed, prefer the
+ *   default. The `tickMs` parameter is kept so callers running
+ *   short-lived widgets can still opt in.
 
 **Parameters:**
 
@@ -786,6 +795,6 @@ repl(output: any, status: any, onSubmit: any, prompt: string, historyFile: strin
 | historyFile | `string` | "" |
 | historyMax | `number` | 1000 |
 | paletteCommands | `any` | null |
-| tickMs | `number` | 100 |
+| tickMs | `number` | null |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L1075))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L1084))

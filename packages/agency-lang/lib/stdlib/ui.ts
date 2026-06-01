@@ -139,8 +139,16 @@ export async function _runLoop(
   renderFn: unknown,
   handleKeyFn: unknown,
   isDoneFn: unknown,
-  tickMs?: number,
+  tickMs?: number | null,
 ): Promise<any> {
+  // Coerce `null` / `0` / negative to undefined so Screen.runLoop's
+  // `if (opts.tickMs !== undefined)` guard treats them as "no tick".
+  // The Agency wrapper passes a default of `null` to mean "off" — JS
+  // `null !== undefined` is true, which would otherwise enter the
+  // tick branch and call `setTimeout(..., null)` (effectively 0ms,
+  // a tight loop). See runLoop default in stdlib/ui.agency.
+  const effectiveTickMs =
+    tickMs !== undefined && tickMs !== null && tickMs > 0 ? tickMs : undefined;
   const screen = makeBridgeScreen();
   bridgeActiveScreen = screen;
   try {
@@ -149,7 +157,7 @@ export async function _runLoop(
       render: async (s) => await callBridgeFn<TuiElement>(renderFn, s),
       handleKey: async (s, ev) => await callBridgeFn(handleKeyFn, s, ev),
       isDone: async (s) => await callBridgeFn<boolean>(isDoneFn, s),
-      tickMs,
+      tickMs: effectiveTickMs,
     });
   } finally {
     bridgeActiveScreen = null;

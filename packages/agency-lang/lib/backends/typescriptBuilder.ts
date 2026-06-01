@@ -773,10 +773,12 @@ export class TypeScriptBuilder {
           // never statics. Compiler-emitted boilerplate (e.g.
           // `__registerTool(name)`) builds its source with `ts.raw`, not
           // through this case, so it is unaffected.
+          //
+          // `scope === "imported"` is mutually exclusive with builtin
+          // and loop-var names at the source level, so we only need to
+          // check the import side.
           if (
             literal.scope === "imported" &&
-            !isBuiltinVar &&
-            !isLoopVar &&
             this.names.isAgencyImport(literal.value)
           ) {
             return ts.call(ts.id("__readStatic"), [

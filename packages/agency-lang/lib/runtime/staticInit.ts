@@ -56,8 +56,14 @@ export function __readStatic<T>(
   moduleId: string,
 ): T {
   if ((value as unknown) === UNINIT_STATIC_SYMBOL) {
+    // PR 2's per-variable dep graph will thread the source module id
+    // through to every wrap site. Until then, some cross-module wraps
+    // emit an empty string here; substitute a placeholder so the
+    // message stays readable ("from <unknown module>" rather than
+    // "from  before…").
+    const where = moduleId ? moduleId : "<unknown module>";
     throw new Error(
-      `Tried to read static \`${name}\` from ${moduleId} before its ` +
+      `Tried to read static \`${name}\` from ${where} before its ` +
         `initializer ran.\n\n` +
         `This usually means one of:\n` +
         `  • A circular import where module init order is not well-defined.\n` +

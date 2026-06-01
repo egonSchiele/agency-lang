@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "description": "Diamond import: shared dep initializes once, both arms see the same value.",
+      "expectedOutput": "\"sharedLsharedR\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

@@ -1,0 +1,9 @@
+// Single-file two-static cycle. Both initializers reference each other
+// directly, so the topsort has no valid order and emits a compile-time
+// "Circular static dependency" error naming both decls.
+static const a = b + "!"
+static const b = a + "?"
+
+node main() {
+  return a
+}

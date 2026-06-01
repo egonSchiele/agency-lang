@@ -1,0 +1,11 @@
+// Two same-file statics where `dependent` consumes `base`. With PR 2's
+// per-variable topological sort, both are initialized once and in the
+// correct order. The node returns the composed value so the test
+// asserts both statics resolved without hitting the PR-1
+// read-before-init trap.
+static const base = "hello"
+static const dependent = base + "!"
+
+node main() {
+  return dependent
+}

@@ -1,0 +1,10 @@
+// Triangle cycle, file 3 of 3. Closes the loop by depending back on
+// `a.x`. Carries the `node main()` entry so the vitest runner can
+// compile a single file and exercise the cycle detector.
+import { x } from "./a.agency"
+
+export static const z = x + "."
+
+node main() {
+  return z
+}

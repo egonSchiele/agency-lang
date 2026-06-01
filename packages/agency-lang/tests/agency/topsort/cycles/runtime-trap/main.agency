@@ -1,0 +1,18 @@
+// Runtime read-before-init trap (PR 1) fires here. `a`'s initializer
+// calls `readB()` which reads `b`; the dep graph cannot see edges
+// through function bodies, so the compile-time topsort happily
+// schedules `a` before `b` based on source order, and at runtime `b`
+// is still `__UNINIT_STATIC` when `readB` accesses it.
+//
+// The vitest runner asserts the trap message names `b` and points at
+// this file (PR-1 + PR-2's resolver thread-through).
+static const a = readB()
+static const b = "b-value"
+
+def readB(): string {
+  return b
+}
+
+node main() {
+  return a
+}

@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "description": "Re-export chain (3 hops) initializes every wrapper static in order.",
+      "expectedOutput": "\"deep!\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

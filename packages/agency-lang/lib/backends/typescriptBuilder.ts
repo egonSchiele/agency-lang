@@ -242,6 +242,33 @@ export class TypeScriptBuilder {
   private compilationUnit: CompilationUnit;
   private moduleId: string;
   private outputFile: string | undefined;
+  /**
+   * Optional per-module init plan + cross-module alias resolver produced
+   * by `compileClosure`. When present, drives:
+   *   - the order of local static/global assignments (topsort-ordered
+   *     rather than source-ordered), and
+   *   - the per-phase `await __awaitStaticInit(...)` /
+   *     `__awaitGlobalsInit(...)` prelude emitted in this module's
+   *     init functions, and
+   *   - the PR-1 trap message: `__readStatic` is called with the
+   *     SOURCE moduleId of an imported binding, not the placeholder
+   *     "<unknown module>" used before.
+   *
+   * When absent (callers that haven't migrated to compileClosure, or
+   * single-file unit tests), codegen falls back to source order and
+   * omits the cross-module awaits — the lazy per-function
+   * `isInitialized` guards plus the runtime trap remain the safety net.
+   */
+  private initPlan?: {
+    registryModuleId: string;
+    staticLocalOrder: string[];
+    staticAwaitModules: { localImport: string; sourceModuleId: string }[];
+    globalLocalOrder: string[];
+    globalAwaitModules: { localImport: string; sourceModuleId: string }[];
+    resolveImportedName: (
+      localName: string,
+    ) => { sourceModuleId: string; sourceName: string } | null;
+  };
 
   /**
    * @param config - Agency compiler configuration (model defaults, logging, etc.)
@@ -252,12 +279,15 @@ export class TypeScriptBuilder {
    * @param outputFile - Absolute path where the generated code will be written.
    *   Used to compute relative import paths for stdlib. If not provided, falls
    *   back to resolving moduleId against cwd.
+   * @param initPlan - Optional per-module init plan + resolver from
+   *   `compileClosure`. See the field docstring above.
    */
   constructor(
     config: AgencyConfig | undefined,
     info: CompilationUnit,
     moduleId: string,
     outputFile?: string,
+    initPlan?: TypeScriptBuilder["initPlan"],
   ) {
     this.agencyConfig = mergeDeep(this.configDefaults(), config || {});
     this.compilationUnit = info;
@@ -280,6 +310,7 @@ export class TypeScriptBuilder {
     });
     this.moduleId = moduleId;
     this.outputFile = outputFile;
+    this.initPlan = initPlan;
   }
 
   private configDefaults(): Partial<AgencyConfig> {
@@ -385,12 +416,17 @@ export class TypeScriptBuilder {
     this.generatedStatements.push(this.generateToolRegistry());
 
     // Sort program nodes into static-init / global-init / top-level buckets.
+    // When an InitPlan is available, partition emits local assignments in
+    // topsort order instead of source order; otherwise falls back to
+    // source order (legacy path).
     const partition = partitionProgram(program, {
       processNode: (n) => this.processNode(n),
       processNodeInGlobalInit: (n) => this.processNodeInGlobalInit(n),
       buildHandlerArrow: (h) => this.buildHandlerArrow(h),
       isTopLevelDeclaration: (n) => this.names.isTopLevelDeclaration(n),
       moduleId: this.moduleId,
+      staticOrder: this.initPlan?.staticLocalOrder,
+      globalOrder: this.initPlan?.globalLocalOrder,
     });
     this.generatedStatements.push(...partition.topLevelStatements);
 
@@ -410,6 +446,11 @@ export class TypeScriptBuilder {
       generatedStatements: this.generatedStatements,
       postprocess: this.postprocess(),
       sourceMapJson: JSON.stringify(this._sourceMapBuilder.build()),
+      staticAwaitModules: this.initPlan?.staticAwaitModules,
+      globalAwaitModules: this.initPlan?.globalAwaitModules,
+      registryModuleId: this.initPlan?.registryModuleId,
+      staticLocalOrder: this.initPlan?.staticLocalOrder,
+      globalLocalOrder: this.initPlan?.globalLocalOrder,
     });
   }
 
@@ -781,10 +822,18 @@ export class TypeScriptBuilder {
             literal.scope === "imported" &&
             this.names.isAgencyImport(literal.value)
           ) {
+            // Thread the SOURCE module path through to the trap message
+            // when we know it (always, when compileClosure built our
+            // InitPlan). Without the plan, the empty string falls back
+            // to the runtime trap's "<unknown module>" placeholder —
+            // less helpful but never silently wrong.
+            const sourceModuleId =
+              this.initPlan?.resolveImportedName(literal.value)
+                ?.sourceModuleId ?? "";
             return ts.call(ts.id("__readStatic"), [
               ts.id(literal.value),
               ts.str(literal.value),
-              ts.str(""),
+              ts.str(sourceModuleId),
             ]);
           }
           return ts.id(literal.value);

@@ -1,0 +1,12 @@
+// Cross-module dep: the local static `composed` reads an imported
+// static from `cross-file-helper.agency`. PR 2's compile-time closure
+// walk + per-module init plan guarantees `cross-file-helper`'s
+// `__initializeStatic` runs (and completes) before this module's runs,
+// even though both are independently registered modules.
+import { greeting } from "./cross-file-helper.agency"
+
+static const composed = greeting + " world"
+
+node main() {
+  return composed
+}

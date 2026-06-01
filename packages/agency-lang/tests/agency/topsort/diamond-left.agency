@@ -1,0 +1,6 @@
+// Left arm of the diamond. Depends on `prefix` from
+// `diamond-shared.agency`; computed value is consumed by
+// `diamond-main.agency`.
+import { prefix } from "./diamond-shared.agency"
+
+export static const leftValue = prefix + "L"

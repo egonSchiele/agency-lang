@@ -1,0 +1,5 @@
+// Provides a single exported static that `global-reads-static-main`'s
+// non-static (Phase B) initializer consumes. This is the cross-phase
+// allowance: globals reading statics is OK because all statics are
+// fully initialized before any global init runs.
+export static const staticValue = "from-static"

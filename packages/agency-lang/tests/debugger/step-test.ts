@@ -20,6 +20,7 @@ import {
   deepClone as __deepClone,
   deepFreeze as __deepFreeze,
   __UNINIT_STATIC, __readStatic,
+  __registerStaticInit, __registerGlobalsInit, __awaitStaticInit, __awaitGlobalsInit,
   head, tail, empty,
   success, failure, isSuccess, isFailure, __pipeBind, __tryCall, __catchResult,
   Schema, __validateType, __validateChain, __validateChainRecursive,
@@ -156,6 +157,7 @@ __registerTool(callback);
 async function __initializeGlobals(__ctx) {
   __ctx.globals.markInitialized("tests/debugger/step-test.agency")
 }
+__registerGlobalsInit("tests/debugger/step-test.agency", __initializeGlobals);
 async function __registerTopLevelCallbacks(__ctx) {
   __ctx.topLevelCallbacks = [];
 }

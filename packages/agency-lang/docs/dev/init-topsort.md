@@ -19,7 +19,7 @@ combines:
     surfaces cycles as compile errors),
   - a **per-module init plan** the codegen consumes to drive
     centralized init (`__initializeStatic`, `__initializeGlobals`),
-  - a **runtime registry** (`initRegistry`) that lets one module's
+  - a **runtime registry** (`crossModuleInitRegistry`) that lets one module's
     init `await` another's.
 
 If you are looking for the original "what is `__initializeGlobals`
@@ -61,7 +61,7 @@ it.
               │
               ▼  generated module on disk
 ╭───────────────────────────╮
-│ Runtime                   │  lib/runtime/initRegistry.ts
+│ Runtime                   │  lib/runtime/crossModuleInitRegistry.ts
 │  __registerStaticInit(...)│  modules register themselves at JS-load
 │  __awaitStaticInit(...)   │  init bodies await each other
 ╰───────────────────────────╯
@@ -308,7 +308,7 @@ sites use the same helper so the registry keys still match exactly
 within a single compilation pass. Once the literals are baked in,
 the value of `process.cwd()` at runtime is irrelevant.
 
-## Runtime registry (`lib/runtime/initRegistry.ts`)
+## Runtime registry (`lib/runtime/crossModuleInitRegistry.ts`)
 
 The runtime side is small. Two registries (`staticInits`,
 `globalsInits`) keyed by moduleId, plus four functions:
@@ -438,5 +438,5 @@ strips comments).
 | `lib/backends/typescriptGenerator.ts` | Projects `CompiledClosure` to `InitPlanForModule` for one file. |
 | `lib/backends/typescriptBuilder/sectionAssembler.ts` | `partitionProgram`, `reorderTagged`, `buildStaticVarSetup`, `buildInitializeGlobalsFn`, `displayModuleId`, banner. |
 | `lib/backends/typescriptBuilder.ts` | Orchestrates per-module codegen; passes the plan into the section assembler. |
-| `lib/runtime/initRegistry.ts` | Process-global registry of per-module init functions. Register + await. |
+| `lib/runtime/crossModuleInitRegistry.ts` | Process-global registry of per-module init functions. Register + await. |
 | `lib/preprocessors/resolveReExports.ts` | Synthesizes wrapper statics so re-export chains show up in the dep graph. |

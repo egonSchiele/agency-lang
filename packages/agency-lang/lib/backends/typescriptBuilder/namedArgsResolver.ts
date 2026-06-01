@@ -57,9 +57,10 @@ export function resolveNamedArgs(
   }
 
   // Collect named args, checking for duplicates and unknown names.
-  const nonVariadicParams = paramList.filter(
-    (p) => !p.variadic && p.typeHint?.type !== "blockType",
-  );
+  // Variadic params can't be passed by name (a splat fills them). Block-typed
+  // params CAN — they may be passed by name as a function reference, mirroring
+  // the runtime resolver in `agencyFunction.ts`.
+  const nonVariadicParams = paramList.filter((p) => !p.variadic);
   const namedArgMap = new Map<string, Expression>();
   for (let i = namedStartIdx; i < args.length; i++) {
     const arg = args[i] as NamedArgument;

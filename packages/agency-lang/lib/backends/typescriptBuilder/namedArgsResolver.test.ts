@@ -79,17 +79,26 @@ describe("resolveNamedArgs", () => {
     expect(result).toEqual([num(1)]);
   });
 
-  it("ignores block-type and variadic params when matching named args", () => {
+  it("ignores variadic params when matching named args, but accepts block-type params by name", () => {
     const blockParam = param("blk", {
       typeHint: { type: "blockType" } as unknown as FunctionParameter["typeHint"],
     });
     const variadicParam = param("rest", { variadic: true });
+    // Variadic param is skipped — can't be filled by name.
     const result = resolveNamedArgs(
       call([named("a", num(1))]),
-      [param("a"), blockParam, variadicParam],
+      [param("a"), variadicParam],
       true,
     );
     expect(result).toEqual([num(1)]);
+
+    // Block-type param can be filled by name (function reference).
+    const withBlockNamed = resolveNamedArgs(
+      call([named("a", num(1)), named("blk", num(2))]),
+      [param("a"), blockParam],
+      true,
+    );
+    expect(withBlockNamed).toEqual([num(1), num(2)]);
   });
 
   it("throws on non-Agency function call with named args", () => {

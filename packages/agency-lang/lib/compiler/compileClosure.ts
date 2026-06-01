@@ -320,11 +320,14 @@ function phasePlanFor(
   for (const key of order) {
     const node = graph.nodes[key];
     if (!node || node.moduleId !== moduleId) continue;
-    // Skip synthetic bare-statement nodes — they're emitted inline by
-    // the existing sectionAssembler path; the plan currently only
-    // sequences named decls.
-    if (node.varName.startsWith("__bareStmt_")) continue;
-    localOrder.push(node.varName);
+    // Synthetic bare-statement nodes never enter `localOrder` — the
+    // section assembler emits them inline at their source position.
+    // They STILL must contribute their cross-module edges to
+    // `awaitModules`: a bare `show(helper.helperGlobal)` needs
+    // `helper.agency`'s globals init awaited before it runs, same as
+    // any named decl that references an imported global.
+    const isBare = node.varName.startsWith("__bareStmt_");
+    if (!isBare) localOrder.push(node.varName);
     for (const depKey of graph.edges[key] ?? []) {
       const depNode = graph.nodes[depKey];
       if (!depNode || depNode.moduleId === moduleId) continue;

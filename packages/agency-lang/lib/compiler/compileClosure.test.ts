@@ -139,4 +139,37 @@ describe("buildCompiledClosure", () => {
     expect(c.plans[fooPath]!.static.awaitModules).toEqual([reexportPath]);
     expect(c.plans[reexportPath]!.static.awaitModules).toEqual([barPath]);
   });
+
+  it("bare top-level stmts contribute cross-module awaits to the global plan", () => {
+    // Regression: phasePlanFor used to drop edges out of synthetic
+    // __bareStmt_ nodes entirely, so a bare call referencing an
+    // imported global produced no `await __awaitGlobalsInit(helper, ...)`
+    // — the bare body could run before the helper module's
+    // __initializeGlobals had populated `helperGlobal`. We still keep
+    // bare nodes out of `localOrder` (codegen emits them inline) but
+    // we must follow their edges for the cross-module await.
+    //
+    // Uses a namespace import so the underlying bareStmt edge actually
+    // makes it into the dep graph: named imports of non-static
+    // globals aren't in the symbol table, so this is the only way to
+    // get a cross-module global-to-global edge today (until that
+    // resolver gap closes).
+    const mainPath = write(
+      "main.agency",
+      'import * as helper from "./helper.agency"\n' +
+        'def show(s: string) {}\n' +
+        'show(helper.helperGlobal)\n' +
+        'node main() { return "ok" }\n',
+    );
+    const helperPath = write(
+      "helper.agency",
+      'export const helperGlobal = "G"\n',
+    );
+
+    const c = buildCompiledClosure(mainPath, {});
+    expect(c.plans[mainPath]!.global.awaitModules).toEqual([helperPath]);
+    // localOrder still doesn't include bare slots — codegen emits them
+    // inline via the section assembler.
+    expect(c.plans[mainPath]!.global.localOrder).toEqual([]);
+  });
 });

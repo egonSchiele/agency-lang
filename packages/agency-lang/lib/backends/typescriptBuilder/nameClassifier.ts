@@ -76,6 +76,19 @@ export class NameClassifier {
   }
 
   /**
+   * True if `name` was brought in by an `import { … } from "<some>.agency"`
+   * statement (as opposed to a `.js`/`.ts` import). Used by the codegen to
+   * decide whether a read of `name` in user code should be wrapped with
+   * `__readStatic` — agency imports could be `static const` values which
+   * hold the `__UNINIT_STATIC` sentinel before their initializer runs.
+   * Non-static agency imports (functions, nodes) will never equal the
+   * sentinel, so the wrap is a no-op for them.
+   */
+  isAgencyImport(name: string): boolean {
+    return this.agencyImportNames.has(name);
+  }
+
+  /**
    * True if `functionName` is one of the plain-JS helpers that bypass the
    * `__call` dispatcher (`approve`, `reject`, `success`, `failure`, …).
    */

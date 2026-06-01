@@ -17,6 +17,7 @@ import {
   GuardExceededError,
   deepClone as __deepClone,
   deepFreeze as __deepFreeze,
+  __UNINIT_STATIC, __readStatic,
   head, tail, empty,
   success, failure, isSuccess, isFailure, __pipeBind, __tryCall, __catchResult,
   Schema, __validateType, __validateChain, __validateChainRecursive,
@@ -134,7 +135,7 @@ function registerTools(tools: any[]) {
 }
 
 let __staticInitPromise = null;
-let foo;
+let foo = __UNINIT_STATIC;
 async function __initializeStatic(__ctx) {
   if (__staticInitPromise) {
     return __staticInitPromise;
@@ -188,7 +189,7 @@ await callHook({
       await runner.step(1, async (runner) => {
 runner.halt({
           messages: __threads(),
-          data: foo
+          data: __readStatic(foo, "foo", "static.agency")
         })
 return;
       });

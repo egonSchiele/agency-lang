@@ -330,10 +330,18 @@ export function assembleSections(opts: AssembleSectionsOpts): TsNode {
  */
 function buildStaticVarSetup(opts: AssembleSectionsOpts): TsNode[] {
   const out: TsNode[] = [];
+  // Initialize each static `let` to the sentinel `__UNINIT_STATIC`
+  // so that any read of the variable before its initializer has run
+  // is caught by the `__readStatic` wrapper (emitted around static
+  // reads by the pretty-printer). Without this initializer the
+  // binding would be `undefined`, which collides with legitimate user
+  // values and produced silent bugs like `fooStatic = barStatic + "!"`
+  // evaluating to `"undefined!"` when bar's init had not yet run.
+  const sentinel = ts.id("__UNINIT_STATIC");
   const staticLetDecls = [...opts.staticVarNames].map((name) =>
     opts.exportedStaticVarNames.has(name)
-      ? ts.export(ts.letDecl(name))
-      : ts.letDecl(name),
+      ? ts.export(ts.letDecl(name, sentinel))
+      : ts.letDecl(name, sentinel),
   );
 
   out.push(ts.statements([

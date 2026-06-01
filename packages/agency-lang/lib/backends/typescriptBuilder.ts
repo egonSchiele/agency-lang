@@ -761,6 +761,32 @@ export class TypeScriptBuilder {
         const isBuiltinVar = BUILTIN_VARIABLES.includes(literal.value);
         const isLoopVar = this.loopVars.includes(literal.value);
         if (importedOrUnknownScope || isBuiltinVar || isLoopVar) {
+          // Agency imports may resolve to a `static const` in the source
+          // module, whose value is `__UNINIT_STATIC` until its initializer
+          // has run. Wrap reads in `__readStatic` so an early access
+          // throws a clear error instead of silently propagating the
+          // sentinel (which would surface as a confusing JS engine error
+          // like "Cannot convert a Symbol value to a string"). For
+          // non-static agency imports (functions, nodes) the wrap is a
+          // no-op because the binding never equals the sentinel. JS
+          // imports, builtins, and loop vars are not wrapped — they're
+          // never statics. Compiler-emitted boilerplate (e.g.
+          // `__registerTool(name)`) builds its source with `ts.raw`, not
+          // through this case, so it is unaffected.
+          //
+          // `scope === "imported"` is mutually exclusive with builtin
+          // and loop-var names at the source level, so we only need to
+          // check the import side.
+          if (
+            literal.scope === "imported" &&
+            this.names.isAgencyImport(literal.value)
+          ) {
+            return ts.call(ts.id("__readStatic"), [
+              ts.id(literal.value),
+              ts.str(literal.value),
+              ts.str(""),
+            ]);
+          }
           return ts.id(literal.value);
         }
         return ts.scopedVar(literal.value, literal.scope!, this.moduleId);

@@ -1,3 +1,8 @@
+## Unreleased
+
+### Language
+- Static variables now throw a clear runtime error when read before their initializer has run (previously returned `undefined` silently). The error names the variable and suggests common fixes (circular imports, indirect reads through function calls). Coverage includes both same-module and cross-module reads — an `import { x } from "./y.agency"` where `x` is a `static const` is wrapped in the trap at every user-code read site. The wrap is transparent for initialized values — binary operations, template interpolations, indexing, etc. continue to work unchanged. PR 1 of a 6-PR series; subsequent PRs add topological initialization order across modules (eliminating most cases where the trap would fire) and the `agency explain-init` CLI.
+
 ## May 28 2026 — v0.3
 
 ### Language

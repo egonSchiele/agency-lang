@@ -74,6 +74,7 @@ callback("onToolCallEnd") as data {
 // init runs before the importer reads it (upstream #232).
 const POLICY_FILE = "policy.json"
 const HISTORY_FILE = "history"
+
 def policyDir(): string {
   const home = env("HOME")
   if (home == null) {
@@ -81,8 +82,14 @@ def policyDir(): string {
   }
   return "${home}/.agency-agent"
 }
-def policyPath(): string { return "${policyDir()}/${POLICY_FILE}" }
-def historyPath(): string { return "${policyDir()}/${HISTORY_FILE}" }
+
+def policyPath(): string {
+  return "${policyDir()}/${POLICY_FILE}"
+}
+
+def historyPath(): string {
+  return "${policyDir()}/${HISTORY_FILE}"
+}
 
 // Per-kind config driving the "approve-always-here" option. For each
 // kind we list the data fields the scoped rule should pin, plus a
@@ -90,23 +97,59 @@ def historyPath(): string { return "${policyDir()}/${HISTORY_FILE}" }
 // rule matches `dir` AND `dir/**`. Kinds not present in this map
 // don't offer the option — the user falls back to (a)/(r)/(aa)/(rr).
 const ALWAYS_FIELDS: ScopedRuleFields = {
-  "std::read": [{ field: "dir", matchSubpaths: true }],
-  "std::write": [{ field: "dir", matchSubpaths: true }],
-  "std::edit": [{ field: "dir", matchSubpaths: true }],
-  "std::ls": [{ field: "dir", matchSubpaths: true }],
-  "std::glob": [{ field: "dir", matchSubpaths: true }],
-  "std::grep": [{ field: "dir", matchSubpaths: true }],
+  "std::read": [{
+    field: "dir",
+    matchSubpaths: true
+  }],
+  "std::write": [{
+    field: "dir",
+    matchSubpaths: true
+  }],
+  "std::edit": [{
+    field: "dir",
+    matchSubpaths: true
+  }],
+  "std::ls": [{
+    field: "dir",
+    matchSubpaths: true
+  }],
+  "std::glob": [{
+    field: "dir",
+    matchSubpaths: true
+  }],
+  "std::grep": [{
+    field: "dir",
+    matchSubpaths: true
+  }],
   "std::copy": [
-    { field: "src", matchSubpaths: true },
-    { field: "dest", matchSubpaths: true },
+    {
+    field: "src",
+    matchSubpaths: true
+  },
+    {
+    field: "dest",
+    matchSubpaths: true
+  },
   ],
   "std::move": [
-    { field: "src", matchSubpaths: true },
-    { field: "dest", matchSubpaths: true },
+    {
+    field: "src",
+    matchSubpaths: true
+  },
+    {
+    field: "dest",
+    matchSubpaths: true
+  },
   ],
   "std::exec": [
-    { field: "command", matchSubpaths: false },
-    { field: "subcommand", matchSubpaths: false },
+    {
+    field: "command",
+    matchSubpaths: false
+  },
+    {
+    field: "subcommand",
+    matchSubpaths: false
+  },
   ]
 }
 
@@ -144,8 +187,12 @@ def _push(line: string) {
 // Slash-command + user-message dispatcher invoked by `repl()` for
 // every Enter keystroke. Return `false` to terminate the loop.
 def _runTurn(msg: string): boolean {
-  if (msg == "") { return true }
-  if (msg == "/exit" || msg == "/quit") { return false }
+  if (msg == "") {
+    return true
+  }
+  if (msg == "/exit" || msg == "/quit") {
+    return false
+  }
   if (msg == "/clear") {
     _outputLines = []
     return true
@@ -155,35 +202,48 @@ def _runTurn(msg: string): boolean {
     return true
   }
   _push(color.cyan("you: ${msg}"))
-  const reply = route({
+  const reply = route(
+    {
     start: "code",
     agents: {
-      code:     { systemPrompt: codeSysPrompt,     tools: codeTools,     memory: true },
-      research: { systemPrompt: researchSysPrompt, tools: researchTools, memory: true },
+      code: {
+        systemPrompt: codeSysPrompt,
+        tools: codeTools,
+        memory: true
+      },
+      research: {
+        systemPrompt: researchSysPrompt,
+        tools: researchTools,
+        memory: true
+      }
     },
     maxHops: 3,
-    context: _context,
-  }, msg)
+    context: _context
+  },
+    msg,
+  )
   _push(highlight("\n${reply}\n", language: "markdown"))
   return true
 }
 
-def _buildStatus(): { left: string, right: string } {
+def _buildStatus(): { left: string; right: string } {
   return {
     left: "agency-agent",
     right: "$${getCost()}"
   }
 }
 
-def _listOutput(): string[] { return _outputLines }
+def _listOutput(): string[] {
+  return _outputLines
+}
 
 node main() {
-  print(color.cyan("╭───────────────────────────────────────────────╮"))
-  print(color.cyan("│         Welcome to the Agency Agent           │"))
-  print(color.cyan("│  I help you write Agency code, look up docs,  │"))
-  print(color.cyan("│       and research things from the web.       │"))
-  print(color.cyan("╰───────────────────────────────────────────────╯"))
-  print("Type '/exit' to quit. Type '/' to open the command palette.\n")
+  _push(color.cyan("╭───────────────────────────────────────────────╮"))
+  _push(color.cyan("│         Welcome to the Agency Agent           │"))
+  _push(color.cyan("│  I help you write Agency code, look up docs,  │"))
+  _push(color.cyan("│       and research things from the web.       │"))
+  _push(color.cyan("╰───────────────────────────────────────────────╯"))
+  _push("Type '/exit' to quit. Type '/' to open the command palette.\n")
 
   // Grounding: the LLM should not have to ask the user where it is
   // or what day it is. Both are appended once per run so they ride
@@ -199,7 +259,7 @@ node main() {
   // `with` clause only accepts an identifier, not a call expression).
   const handler = cliPolicyHandler({
     file: policyPath(),
-    fields: ALWAYS_FIELDS,
+    fields: ALWAYS_FIELDS
   })
 
   // The `repl()` widget owns the runloop; every Enter dispatches into
@@ -215,10 +275,10 @@ node main() {
       historyFile: historyPath(),
       historyMax: 1000,
       paletteCommands: {
-        "/exit":  "Exit the agent",
-        "/clear": "Clear the conversation transcript",
-        "/help":  "Show available slash commands",
-      },
+      "/exit": "Exit the agent",
+      "/clear": "Clear the conversation transcript",
+      "/help": "Show available slash commands"
+    },
     )
   } with handler
 

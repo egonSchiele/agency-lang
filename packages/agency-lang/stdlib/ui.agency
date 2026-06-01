@@ -1,7 +1,14 @@
-import { _runLoop, _renderOnce, _readKey, _hasActiveScreen, _setScriptedKeys, _setQuitAfterMs } from "agency-lang/stdlib-lib/ui.js"
+import {
+  _runLoop,
+  _renderOnce,
+  _readKey,
+  _hasActiveScreen,
+  _setScriptedKeys,
+  _setQuitAfterMs,
+ } from "agency-lang/stdlib-lib/ui.js"
 import { _promptFromChoices } from "agency-lang/stdlib-lib/ui.js"
 
-/** @module
+/**
   ## Overview
 
   Declarative terminal UI for interactive CLI agents. Two layers
@@ -145,7 +152,10 @@ export type Builder = {
  * @param content - The text to render
  */
 export def text(content: string): Element {
-  return { type: "text", content: content }
+  return {
+    type: "text",
+    content: content
+  }
 }
 
 /**
@@ -157,22 +167,40 @@ export def text(content: string): Element {
  */
 export def line(
   content: string,
-  flex?: number,
-  width?: number,
-  height?: number,
+  flex: number = null,
+  width: number = null,
+  height: number = null,
   fg: string = "",
   bg: string = "",
-  bold: boolean = false
+  bold: boolean = false,
 ): Element {
   let h: number = 1
-  if (height != null) { h = height }
-  let style: any = { height: h }
-  if (flex != null)  { style.flex = flex }
-  if (width != null) { style.width = width }
-  if (fg != "")      { style.fg = fg }
-  if (bg != "")      { style.bg = bg }
-  if (bold)          { style.bold = true }
-  return { type: "text", content: content, style: style }
+  if (height != null) {
+    h = height
+  }
+  let style: any = {
+    height: h
+  }
+  if (flex != null) {
+    style.flex = flex
+  }
+  if (width != null) {
+    style.width = width
+  }
+  if (fg != "") {
+    style.fg = fg
+  }
+  if (bg != "") {
+    style.bg = bg
+  }
+  if (bold) {
+    style.bold = true
+  }
+  return {
+    type: "text",
+    content: content,
+    style: style
+  }
 }
 
 /**
@@ -185,21 +213,38 @@ export def line(
 export def list(
   items: string[],
   selectedIndex: number = 0,
-  flex?: number,
-  width?: number,
-  height?: number,
+  flex: number = null,
+  width: number = null,
+  height: number = null,
   border: boolean = false,
   borderColor: string = "",
-  visible: boolean = true
+  visible: boolean = true,
 ): Element {
   let style: any = {}
-  if (flex != null)      { style.flex = flex }
-  if (width != null)     { style.width = width }
-  if (height != null)    { style.height = height }
-  if (border)            { style.border = true }
-  if (borderColor != "") { style.borderColor = borderColor }
-  if (!visible)          { style.visible = false }
-  return { type: "list", style: style, items: items, selectedIndex: selectedIndex }
+  if (flex != null) {
+    style.flex = flex
+  }
+  if (width != null) {
+    style.width = width
+  }
+  if (height != null) {
+    style.height = height
+  }
+  if (border) {
+    style.border = true
+  }
+  if (borderColor != "") {
+    style.borderColor = borderColor
+  }
+  if (!visible) {
+    style.visible = false
+  }
+  return {
+    type: "list",
+    style: style,
+    items: items,
+    selectedIndex: selectedIndex
+  }
 }
 
 /**
@@ -211,19 +256,33 @@ export def list(
  */
 export def textInput(
   value: string = "",
-  flex?: number,
-  width?: number,
-  height?: number,
+  flex: number = null,
+  width: number = null,
+  height: number = null,
   fg: string = "",
-  bg: string = ""
+  bg: string = "",
 ): Element {
   let style: any = {}
-  if (flex != null)   { style.flex = flex }
-  if (width != null)  { style.width = width }
-  if (height != null) { style.height = height }
-  if (fg != "")       { style.fg = fg }
-  if (bg != "")       { style.bg = bg }
-  return { type: "textInput", style: style, value: value }
+  if (flex != null) {
+    style.flex = flex
+  }
+  if (width != null) {
+    style.width = width
+  }
+  if (height != null) {
+    style.height = height
+  }
+  if (fg != "") {
+    style.fg = fg
+  }
+  if (bg != "") {
+    style.bg = bg
+  }
+  return {
+    type: "textInput",
+    style: style,
+    value: value
+  }
 }
 
 // ---- Container builders ----
@@ -238,40 +297,62 @@ export def textInput(
 
 def _mkBoxStyle(
   flexDirection: string,
-  flex?: number,
-  width?: number,
-  height?: number,
-  padding?: number,
+  flex: number = null,
+  width: number = null,
+  height: number = null,
+  padding: number = null,
   border: boolean = false,
   borderColor: string = "",
   label: string = "",
   bg: string = "",
   fg: string = "",
-  visible: boolean = true
+  visible: boolean = true,
 ): any {
   let style: any = {}
-  if (flexDirection != "")  { style.flexDirection = flexDirection }
-  if (flex != null)         { style.flex = flex }
-  if (width != null)        { style.width = width }
-  if (height != null)       { style.height = height }
-  if (padding != null)      { style.padding = padding }
-  if (border)               { style.border = true }
-  if (borderColor != "")    { style.borderColor = borderColor }
-  if (label != "")          { style.label = label }
-  if (bg != "")             { style.bg = bg }
-  if (fg != "")             { style.fg = fg }
-  if (!visible)             { style.visible = false }
+  if (flexDirection != "") {
+    style.flexDirection = flexDirection
+  }
+  if (flex != null) {
+    style.flex = flex
+  }
+  if (width != null) {
+    style.width = width
+  }
+  if (height != null) {
+    style.height = height
+  }
+  if (padding != null) {
+    style.padding = padding
+  }
+  if (border) {
+    style.border = true
+  }
+  if (borderColor != "") {
+    style.borderColor = borderColor
+  }
+  if (label != "") {
+    style.label = label
+  }
+  if (bg != "") {
+    style.bg = bg
+  }
+  if (fg != "") {
+    style.fg = fg
+  }
+  if (!visible) {
+    style.visible = false
+  }
   return style
 }
 
 def _makeBuilder(kids: any[]): Builder {
   return {
-    row:       _addRow.partial(kids: kids),
-    column:    _addColumn.partial(kids: kids),
-    box:       _addBox.partial(kids: kids),
-    line:      _addLine.partial(kids: kids),
-    text:      _addText.partial(kids: kids),
-    list:      _addList.partial(kids: kids),
+    row: _addRow.partial(kids: kids),
+    column: _addColumn.partial(kids: kids),
+    box: _addBox.partial(kids: kids),
+    line: _addLine.partial(kids: kids),
+    text: _addText.partial(kids: kids),
+    list: _addList.partial(kids: kids),
     textInput: _addTextInput.partial(kids: kids)
   }
 }
@@ -281,28 +362,39 @@ def _makeBuilder(kids: any[]): Builder {
  * block receives a fresh `Builder` to populate the column.
  */
 export def column(
-  flex?: number,
-  width?: number,
-  height?: number,
-  padding?: number,
+  flex: number = null,
+  width: number = null,
+  height: number = null,
+  padding: number = null,
   border: boolean = false,
   borderColor: string = "",
   label: string = "",
   bg: string = "",
   fg: string = "",
   visible: boolean = true,
-  block: (Builder) => void = null
+  block: (Builder) => void = null,
 ): Element {
   const kids: any[] = []
   // `block` is optional — guard so empty containers (and parser
   // mis-binds that leave `block` null) don't crash at runtime.
-  if (block != null) { block(_makeBuilder(kids)) }
+  if (block != null) {
+    block(_makeBuilder(kids))
+  }
   return {
     type: "box",
-    style: _mkBoxStyle(flexDirection: "column", flex: flex, width: width,
-                       height: height, padding: padding, border: border,
-                       borderColor: borderColor, label: label, bg: bg,
-                       fg: fg, visible: visible),
+    style: _mkBoxStyle(
+      flexDirection: "column",
+      flex: flex,
+      width: width,
+      height: height,
+      padding: padding,
+      border: border,
+      borderColor: borderColor,
+      label: label,
+      bg: bg,
+      fg: fg,
+      visible: visible,
+    ),
     children: kids
   }
 }
@@ -312,26 +404,37 @@ export def column(
  * block receives a fresh `Builder` to populate the row.
  */
 export def row(
-  flex?: number,
-  width?: number,
-  height?: number,
-  padding?: number,
+  flex: number = null,
+  width: number = null,
+  height: number = null,
+  padding: number = null,
   border: boolean = false,
   borderColor: string = "",
   label: string = "",
   bg: string = "",
   fg: string = "",
   visible: boolean = true,
-  block: (Builder) => void = null
+  block: (Builder) => void = null,
 ): Element {
   const kids: any[] = []
-  if (block != null) { block(_makeBuilder(kids)) }
+  if (block != null) {
+    block(_makeBuilder(kids))
+  }
   return {
     type: "box",
-    style: _mkBoxStyle(flexDirection: "row", flex: flex, width: width,
-                       height: height, padding: padding, border: border,
-                       borderColor: borderColor, label: label, bg: bg,
-                       fg: fg, visible: visible),
+    style: _mkBoxStyle(
+      flexDirection: "row",
+      flex: flex,
+      width: width,
+      height: height,
+      padding: padding,
+      border: border,
+      borderColor: borderColor,
+      label: label,
+      bg: bg,
+      fg: fg,
+      visible: visible,
+    ),
     children: kids
   }
 }
@@ -341,26 +444,37 @@ export def row(
  * (border, padding, background) without setting `flexDirection`.
  */
 export def box(
-  flex?: number,
-  width?: number,
-  height?: number,
-  padding?: number,
+  flex: number = null,
+  width: number = null,
+  height: number = null,
+  padding: number = null,
   border: boolean = false,
   borderColor: string = "",
   label: string = "",
   bg: string = "",
   fg: string = "",
   visible: boolean = true,
-  block: (Builder) => void = null
+  block: (Builder) => void = null,
 ): Element {
   const kids: any[] = []
-  if (block != null) { block(_makeBuilder(kids)) }
+  if (block != null) {
+    block(_makeBuilder(kids))
+  }
   return {
     type: "box",
-    style: _mkBoxStyle(flexDirection: "", flex: flex, width: width,
-                       height: height, padding: padding, border: border,
-                       borderColor: borderColor, label: label, bg: bg,
-                       fg: fg, visible: visible),
+    style: _mkBoxStyle(
+      flexDirection: "",
+      flex: flex,
+      width: width,
+      height: height,
+      padding: padding,
+      border: border,
+      borderColor: borderColor,
+      label: label,
+      bg: bg,
+      fg: fg,
+      visible: visible,
+    ),
     children: kids
   }
 }
@@ -369,63 +483,93 @@ export def box(
 
 def _addRow(
   kids: any[],
-  flex?: number,
-  width?: number,
-  height?: number,
-  padding?: number,
+  flex: number = null,
+  width: number = null,
+  height: number = null,
+  padding: number = null,
   border: boolean = false,
   borderColor: string = "",
   label: string = "",
   bg: string = "",
   fg: string = "",
   visible: boolean = true,
-  block: (Builder) => void = null
+  block: (Builder) => void = null,
 ): Element {
-  const elem = row(flex: flex, width: width, height: height, padding: padding,
-                   border: border, borderColor: borderColor, label: label,
-                   bg: bg, fg: fg, visible: visible, block: block)
+  const elem = row(
+    flex: flex,
+    width: width,
+    height: height,
+    padding: padding,
+    border: border,
+    borderColor: borderColor,
+    label: label,
+    bg: bg,
+    fg: fg,
+    visible: visible,
+    block: block,
+  )
   kids.push(elem)
   return elem
 }
 
 def _addColumn(
   kids: any[],
-  flex?: number,
-  width?: number,
-  height?: number,
-  padding?: number,
+  flex: number = null,
+  width: number = null,
+  height: number = null,
+  padding: number = null,
   border: boolean = false,
   borderColor: string = "",
   label: string = "",
   bg: string = "",
   fg: string = "",
   visible: boolean = true,
-  block: (Builder) => void = null
+  block: (Builder) => void = null,
 ): Element {
-  const elem = column(flex: flex, width: width, height: height, padding: padding,
-                      border: border, borderColor: borderColor, label: label,
-                      bg: bg, fg: fg, visible: visible, block: block)
+  const elem = column(
+    flex: flex,
+    width: width,
+    height: height,
+    padding: padding,
+    border: border,
+    borderColor: borderColor,
+    label: label,
+    bg: bg,
+    fg: fg,
+    visible: visible,
+    block: block,
+  )
   kids.push(elem)
   return elem
 }
 
 def _addBox(
   kids: any[],
-  flex?: number,
-  width?: number,
-  height?: number,
-  padding?: number,
+  flex: number = null,
+  width: number = null,
+  height: number = null,
+  padding: number = null,
   border: boolean = false,
   borderColor: string = "",
   label: string = "",
   bg: string = "",
   fg: string = "",
   visible: boolean = true,
-  block: (Builder) => void = null
+  block: (Builder) => void = null,
 ): Element {
-  const elem = box(flex: flex, width: width, height: height, padding: padding,
-                   border: border, borderColor: borderColor, label: label,
-                   bg: bg, fg: fg, visible: visible, block: block)
+  const elem = box(
+    flex: flex,
+    width: width,
+    height: height,
+    padding: padding,
+    border: border,
+    borderColor: borderColor,
+    label: label,
+    bg: bg,
+    fg: fg,
+    visible: visible,
+    block: block,
+  )
   kids.push(elem)
   return elem
 }
@@ -433,15 +577,22 @@ def _addBox(
 def _addLine(
   kids: any[],
   content: string,
-  flex?: number,
-  width?: number,
-  height?: number,
+  flex: number = null,
+  width: number = null,
+  height: number = null,
   fg: string = "",
   bg: string = "",
-  bold: boolean = false
+  bold: boolean = false,
 ): Element {
-  const elem = line(content: content, flex: flex, width: width, height: height,
-                    fg: fg, bg: bg, bold: bold)
+  const elem = line(
+    content: content,
+    flex: flex,
+    width: width,
+    height: height,
+    fg: fg,
+    bg: bg,
+    bold: bold,
+  )
   kids.push(elem)
   return elem
 }
@@ -456,16 +607,23 @@ def _addList(
   kids: any[],
   items: string[],
   selectedIndex: number = 0,
-  flex?: number,
-  width?: number,
-  height?: number,
+  flex: number = null,
+  width: number = null,
+  height: number = null,
   border: boolean = false,
   borderColor: string = "",
-  visible: boolean = true
+  visible: boolean = true,
 ): Element {
-  const elem = list(items: items, selectedIndex: selectedIndex,
-                    flex: flex, width: width, height: height,
-                    border: border, borderColor: borderColor, visible: visible)
+  const elem = list(
+    items: items,
+    selectedIndex: selectedIndex,
+    flex: flex,
+    width: width,
+    height: height,
+    border: border,
+    borderColor: borderColor,
+    visible: visible,
+  )
   kids.push(elem)
   return elem
 }
@@ -473,14 +631,20 @@ def _addList(
 def _addTextInput(
   kids: any[],
   value: string = "",
-  flex?: number,
-  width?: number,
-  height?: number,
+  flex: number = null,
+  width: number = null,
+  height: number = null,
   fg: string = "",
-  bg: string = ""
+  bg: string = "",
 ): Element {
-  const elem = textInput(value: value, flex: flex, width: width, height: height,
-                         fg: fg, bg: bg)
+  const elem = textInput(
+    value: value,
+    flex: flex,
+    width: width,
+    height: height,
+    fg: fg,
+    bg: bg,
+  )
   kids.push(elem)
   return elem
 }
@@ -527,7 +691,7 @@ export def runLoop(
   render: any,
   handleKey: any,
   isDone: any,
-  tickMs?: number
+  tickMs: number = null,
 ): any {
   return _runLoop(initialState, render, handleKey, isDone, tickMs)
 }
@@ -595,7 +759,7 @@ export def _routePrompt(text: string, choices: string[]): string {
     return _promptFromChoices(text, choices)
   }
   print(text)
-  const optsHint = "(one of " + choices.join("/") + ")"
+  const optsHint = "(one of ${choices.join("/")})"
   let answer = ""
   let valid = false
   while (!valid) {
@@ -634,11 +798,15 @@ def _filteredPaletteKeys(s: ReplState): string[] {
   for (entry in entries(cmds)) {
     allKeys.push(entry.key)
   }
-  if (s.paletteFilter == "") { return allKeys }
+  if (s.paletteFilter == "") {
+    return allKeys
+  }
   let out: string[] = []
   const filt = s.paletteFilter.toLowerCase()
   for (k in allKeys) {
-    if (k.toLowerCase().includes(filt)) { out.push(k) }
+    if (k.toLowerCase().includes(filt)) {
+      out.push(k)
+    }
   }
   return out
 }
@@ -669,19 +837,26 @@ def _replView(s: ReplState): Element {
   // `block` param null at runtime.
   return column(visible: true) as col {
     col.list(items: outLines, selectedIndex: followIdx, flex: 1)
-    col.list(items: palItems, selectedIndex: s.paletteCursor,
-             visible: s.paletteOpen, height: _PALETTE_ROWS, border: true)
-    col.row(bg: "blue", fg: "white", height: 1) as st {
+    col.list(
+      items: palItems,
+      selectedIndex: s.paletteCursor,
+      visible: s.paletteOpen,
+      height: _PALETTE_ROWS,
+      border: true,
+    )
+    col.row(bg: "blue", fg: "black", height: 1) as statusline {
       // bg/fg are passed on each line because child elements don't
       // inherit parent style — line()'s blank padding would otherwise
       // overwrite the row's blue background with uncolored cells.
-      st.line(stat.left, bg: "blue", fg: "white")
-      st.box(flex: 1, bg: "blue") as _ {}
-      st.line(stat.right, bg: "blue", fg: "white")
+      statusline.line(stat.left, bg: "blue", fg: "black")
+      statusline.box(flex: 1, bg: "blue") as _ {
+
+      }
+      statusline.line(stat.right, bg: "blue", fg: "black")
     }
-    col.row(height: 1) as ir {
-      ir.line(s.prompt)
-      ir.textInput(value: s.buffer, flex: 1)
+    col.row(height: 1) as inputrow {
+      inputrow.line(s.prompt)
+      inputrow.textInput(value: s.buffer, flex: 1)
     }
   }
 }
@@ -700,23 +875,44 @@ def _replReduce(s: ReplState, k: KeyEvent): ReplState {
   if (s.paletteOpen) {
     const palKeys = _filteredPaletteKeys(s)
     if (k.key == "escape") {
-      return { ...s, paletteOpen: false, paletteFilter: "", paletteCursor: 0 }
+      return {
+        ...s,
+        paletteOpen: false,
+        paletteFilter: "",
+        paletteCursor: 0
+      }
     }
     if (k.key == "up") {
       let c = s.paletteCursor - 1
-      if (c < 0) { c = 0 }
-      return { ...s, paletteCursor: c }
+      if (c < 0) {
+        c = 0
+      }
+      return {
+        ...s,
+        paletteCursor: c
+      }
     }
     if (k.key == "down") {
       let c = s.paletteCursor + 1
       const maxC = palKeys.length - 1
-      if (c > maxC) { c = maxC }
-      if (c < 0)    { c = 0 }
-      return { ...s, paletteCursor: c }
+      if (c > maxC) {
+        c = maxC
+      }
+      if (c < 0) {
+        c = 0
+      }
+      return {
+        ...s,
+        paletteCursor: c
+      }
     }
     if (k.key == "enter" || k.key == "tab") {
       if (palKeys.length == 0) {
-        return { ...s, paletteOpen: false, paletteFilter: "" }
+        return {
+          ...s,
+          paletteOpen: false,
+          paletteFilter: ""
+        }
       }
       return {
         ...s,
@@ -728,7 +924,10 @@ def _replReduce(s: ReplState, k: KeyEvent): ReplState {
     }
     if (k.key == "backspace") {
       if (s.paletteFilter == "") {
-        return { ...s, paletteOpen: false }
+        return {
+          ...s,
+          paletteOpen: false
+        }
       }
       const f = s.paletteFilter
       return {
@@ -738,31 +937,58 @@ def _replReduce(s: ReplState, k: KeyEvent): ReplState {
       }
     }
     if (k.key.length == 1) {
-      return { ...s, paletteFilter: s.paletteFilter + k.key, paletteCursor: 0 }
+      return {
+        ...s,
+        paletteFilter: s.paletteFilter + k.key,
+        paletteCursor: 0
+      }
     }
     return s
   }
 
   // Palette closed: normal editing.
   if (k.ctrl && k.key == "c") {
-    return { ...s, done: true }
+    return {
+      ...s,
+      done: true
+    }
   }
   if (k.key == "/" && s.buffer == "") {
-    return { ...s, paletteOpen: true, paletteFilter: "", paletteCursor: 0 }
+    return {
+      ...s,
+      paletteOpen: true,
+      paletteFilter: "",
+      paletteCursor: 0
+    }
   }
   if (k.key == "up" && s.historyIdx > 0) {
     const i = s.historyIdx - 1
-    return { ...s, historyIdx: i, buffer: s.history[i] }
+    return {
+      ...s,
+      historyIdx: i,
+      buffer: s.history[i]
+    }
   }
   if (k.key == "down" && s.historyIdx < s.history.length) {
     const i = s.historyIdx + 1
     let buf = ""
-    if (i < s.history.length) { buf = s.history[i] }
-    return { ...s, historyIdx: i, buffer: buf }
+    if (i < s.history.length) {
+      buf = s.history[i]
+    }
+    return {
+      ...s,
+      historyIdx: i,
+      buffer: buf
+    }
   }
   if (k.key == "backspace") {
-    if (s.buffer == "") { return s }
-    return { ...s, buffer: s.buffer.slice(0, s.buffer.length - 1) }
+    if (s.buffer == "") {
+      return s
+    }
+    return {
+      ...s,
+      buffer: s.buffer.slice(0, s.buffer.length - 1)
+    }
   }
   if (k.key == "enter") {
     const submitted = s.buffer
@@ -785,12 +1011,17 @@ def _replReduce(s: ReplState, k: KeyEvent): ReplState {
     }
   }
   if (k.key.length == 1) {
-    return { ...s, buffer: s.buffer + k.key }
+    return {
+      ...s,
+      buffer: s.buffer + k.key
+    }
   }
   return s
 }
 
-def _replIsDone(s: ReplState): boolean { return s.done }
+def _replIsDone(s: ReplState): boolean {
+  return s.done
+}
 
 /**
  * Drop-in REPL widget for interactive CLI agents. Bundles a
@@ -828,10 +1059,12 @@ export def repl(
   historyFile: string = "",
   historyMax: number = 1000,
   paletteCommands: any = null,
-  tickMs: number = 100
+  tickMs: number = 100,
 ) {
   let cmds = paletteCommands
-  if (cmds == null) { cmds = {} }
+  if (cmds == null) {
+    cmds = {}
+  }
   const initial: ReplState = {
     buffer: "",
     history: [],

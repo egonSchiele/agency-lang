@@ -10,7 +10,6 @@
     "logLevel": "warn",
     "defaultModel": "gpt-4o-mini"
   },
-  "traceDir": "traces",
   "typechecker": {
     "enabled": true
   },

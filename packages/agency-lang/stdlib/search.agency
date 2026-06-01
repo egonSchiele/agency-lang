@@ -1,0 +1,46 @@
+import { _search } from "agency-lang/stdlib-lib/search.js"
+
+type SearchResult = {
+  title: string;
+  url: string;
+  description: string
+}
+
+/*
+  Usage from Agency code:
+  import { search } from "std::search"
+
+  node main() {
+    const results = search("agency language programming")
+    print(results)
+  }
+*/
+export safe def search(
+  query: string,
+  count: number = 5,
+  apiKey: string = "",
+  country: string = "",
+  searchLang: string = "",
+  safesearch: string = "",
+  freshness: string = ""
+): SearchResult[] {
+  """
+  Search the web. Returns a list of results with title, url, and description. Set BRAVE_API_KEY env var or pass apiKey directly. Backed by the Brave Search API (https://brave.com/search/api/).
+
+  @param query - The search query
+  @param count - Number of results to return (default 5)
+  @param apiKey - Brave Search API key (defaults to BRAVE_API_KEY env var)
+  @param country - Two-letter country code to localize results (e.g. "US")
+  @param searchLang - Language code for results (e.g. "en")
+  @param safesearch - Safe search level ("off", "moderate", "strict")
+  @param freshness - Time-based filter ("pd" past day, "pw" past week, "pm" past month, "py" past year)
+  """
+  return _search(query, {
+    count: count,
+    apiKey: apiKey,
+    country: country,
+    searchLang: searchLang,
+    safesearch: safesearch,
+    freshness: freshness
+  })
+}

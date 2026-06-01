@@ -6,7 +6,7 @@ Agency packages are npm packages that include `.agency` source files alongside c
 
 ## Reference Implementation
 
-Use `packages/brave-search/` as the canonical reference. It's a minimal, well-structured example.
+Use `packages/web-fetch/` as the canonical reference. It's a minimal, well-structured example.
 
 ## Directory Structure
 
@@ -215,7 +215,7 @@ The `index.js` file is the compiled output of `index.agency` and must be committ
 
 ```bash
 cd packages/agency-lang
-pnpm run compile ../brave-search/index.agency
+pnpm run compile ../web-fetch/index.agency
 ```
 
 This outputs the compiled JS. Redirect to `index.js` in the package directory. The compiled file is large and full of runtime boilerplate - don't edit it by hand.
@@ -236,8 +236,8 @@ import { myFunction } from "@agency-lang/<package-name>"
 
 1. Create `packages/<name>/` directory
 2. Create `package.json` (use template above, add SDK dependency)
-3. Create `tsconfig.json` (copy from brave-search)
-4. Create `makefile` (copy from brave-search)
+3. Create `tsconfig.json` (copy from web-fetch)
+4. Create `makefile` (copy from web-fetch)
 5. Write `src/<impl>.ts` - the core TypeScript implementation
 6. Write `src/<impl>.test.ts` - unit tests with mocked fetch
 7. Write `index.agency` - thin Agency wrapper with doc comments

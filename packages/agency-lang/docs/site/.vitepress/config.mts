@@ -217,6 +217,7 @@ export default defineConfig({
             { text: "path", link: "/stdlib/path" },
             { text: "policy", link: "/stdlib/policy" },
             { text: "schemas", link: "/stdlib/schemas" },
+            { text: "search", link: "/stdlib/search" },
             { text: "shell", link: "/stdlib/shell" },
             { text: "skills", link: "/stdlib/skills" },
             { text: "sms", link: "/stdlib/sms" },
@@ -239,7 +240,6 @@ export default defineConfig({
           text: "Packages",
           items: [
             { text: "Overview", link: "/packages/" },
-            { text: "brave-search", link: "/packages/brave-search/" },
             { text: "web-fetch", link: "/packages/web-fetch/" },
             { text: "mcp", link: "/packages/mcp/" },
           ],

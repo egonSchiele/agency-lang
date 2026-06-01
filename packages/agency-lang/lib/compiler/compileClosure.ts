@@ -141,12 +141,14 @@ export function buildCompiledClosure(
     staticGraph,
     staticOrder,
     "static",
+    symbolTable,
   );
   assertNoIntraFileUseBeforeDef(
     Object.keys(programs),
     globalGraph,
     globalOrder,
     "global",
+    symbolTable,
   );
 
   const plans = buildPlans(
@@ -284,10 +286,11 @@ function agencyImportTarget(node: AgencyNode): string | null {
  *     by the section assembler to their source position; topsort never
  *     moves them, so they can't trigger a false positive.
  *   - re-export wrapper statics (synthesized by `resolveReExports` —
- *     their `initExpr` is a bare reference to `_reexport_<name>`):
- *     these have no user-controlled source position the user could
- *     reorder, and the section assembler is free to slot them in
- *     dep-first order without surprising anyone.
+ *     `static const x = _reexport_x`): identified via the
+ *     `reExportedFrom` marker SymbolTable sets when the importing
+ *     module's `export { x } from "..."` was resolved. The wrapper has
+ *     no user-controlled source position the user could reorder, and
+ *     the section assembler is free to slot it in dep-first order.
  *
  * Applies separately to the static and global graphs (same as cycle
  * detection): a static use-before-def and a global use-before-def are
@@ -298,6 +301,7 @@ function assertNoIntraFileUseBeforeDef(
   graph: InitDepGraph,
   order: string[],
   phaseName: "static" | "global",
+  symbolTable: SymbolTable,
 ): void {
   for (const moduleId of moduleIds) {
     let prev: InitVarNode | null = null;
@@ -305,7 +309,7 @@ function assertNoIntraFileUseBeforeDef(
       const node = graph.nodes[key];
       if (!node || node.moduleId !== moduleId) continue;
       if (node.varName.startsWith("__bareStmt_")) continue;
-      if (isReExportWrapper(node)) continue;
+      if (isReExportWrapper(node, symbolTable)) continue;
       const curLine = node.loc?.line ?? 0;
       const prevLine = prev?.loc?.line ?? 0;
       if (prev && curLine < prevLine) {
@@ -327,18 +331,21 @@ function assertNoIntraFileUseBeforeDef(
 
 /**
  * True for the synthetic constant wrappers `resolveReExports` emits at
- * re-exporting modules: `static const x = _reexport_x`. Detected by the
- * shape of the right-hand side — a bare `variableName` whose value
- * starts with the reserved `_reexport_` prefix. User code cannot
- * legitimately produce that shape.
+ * re-exporting modules (`static const x = _reexport_x`). The check
+ * goes through `SymbolTable` rather than the wrapper's right-hand-side
+ * shape because `_reexport_` is not a reserved language prefix — user
+ * code could in principle write `static const x = _reexport_y`. The
+ * `reExportedFrom` marker is set authoritatively by SymbolTable.build
+ * for every symbol that entered the file via an `export ... from "..."`
+ * statement, so it always identifies the same set of wrappers
+ * `resolveReExports` later synthesizes.
  */
-function isReExportWrapper(node: InitVarNode): boolean {
-  const expr = node.initExpr as { type?: string; value?: unknown };
-  return (
-    expr.type === "variableName" &&
-    typeof expr.value === "string" &&
-    expr.value.startsWith("_reexport_")
-  );
+function isReExportWrapper(
+  node: InitVarNode,
+  symbolTable: SymbolTable,
+): boolean {
+  const sym = symbolTable.getFile(node.moduleId)?.[node.varName];
+  return !!sym?.reExportedFrom;
 }
 
 /**

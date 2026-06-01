@@ -1,0 +1,15 @@
+// Bare top-level statements must stay interleaved at their source
+// position relative to named init statements. Without the interleave
+// fix in `reorderTagged`, the partition emits all named global
+// assignments first and then groups bare calls at the end, so `g`
+// snapshots `log` BEFORE `add("-a")` has run.
+//
+// Correct order:    log = "S", add("-a") → log = "S-a", g = "S-a",
+//                   add("-b") → log = "S-a-b". main → "S-a"
+// Bug order:        log = "S", g = "S", add("-a"), add("-b"). main → "S"
+let log = "S"
+def add(s: string) { log = log + s }
+add("-a")
+const g = log
+add("-b")
+node main() { return g }

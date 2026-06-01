@@ -200,10 +200,13 @@ export function partitionProgram(
 
 /**
  * Apply the topsort plan's `localOrder` to tagged init statements.
- * Named statements (statics, globals) are pulled out and re-emitted in
- * plan order; unnamed bare statements are interleaved at the position
- * they originally appeared, preserving source-order semantics for
- * side-effecty calls that have no var to depend on.
+ *
+ * Bare (unnamed) statements are anchored to their source position —
+ * each occupies exactly the slot where it originally appeared. Named
+ * statements are reordered per the plan, with the k-th name in
+ * `localOrder` filling the k-th named slot in source order. This
+ * preserves side-effect ordering for patterns like `foo(); const x =
+ * ...; bar();` while still letting topsort sequence the named decls.
  *
  * No plan → source order, unchanged.
  */
@@ -218,15 +221,20 @@ function reorderTagged(
   for (const { varName, node } of tagged) {
     if (varName) byName[varName] = node;
   }
+  // Walk tagged once. Bare slots emit their own node immediately.
+  // Named slots are placeholders to be filled from `order` in
+  // top-to-bottom order — only names that have a matching tagged
+  // node count, so cross-module-only names in `order` are skipped.
+  const planNamesInTagged = order.filter((n) => byName[n]);
   const out: TsNode[] = [];
-  // Named statements first, in plan order.
-  for (const name of order) {
-    if (byName[name]) out.push(byName[name]);
-  }
-  // Then bare statements (no varName) in their original source order
-  // so any side effect ordering relative to other bares is preserved.
+  let namedSlotIdx = 0;
   for (const { varName, node } of tagged) {
-    if (!varName) out.push(node);
+    if (varName) {
+      const fillName = planNamesInTagged[namedSlotIdx++];
+      if (fillName) out.push(byName[fillName]!);
+    } else {
+      out.push(node);
+    }
   }
   return out;
 }

@@ -29,6 +29,10 @@ const FIXTURES_ROOT = path.resolve(
   __dirname,
   "../../tests/agency/topsort/cycles",
 );
+const USE_BEFORE_DEF_ROOT = path.resolve(
+  __dirname,
+  "../../tests/agency/topsort/use-before-def",
+);
 
 type CompileOutcome =
   | { kind: "ok"; mod: any }
@@ -139,6 +143,37 @@ describe("tests/agency/topsort/cycles fixtures", () => {
     expect(outcome.message).toMatch(/\bx\b/);
     expect(outcome.message).toMatch(/\by\b/);
     expect(outcome.message).toMatch(/\bz\b/);
+  });
+
+  it("same-file use-before-def (statics) → compile error names both decl lines", async () => {
+    // `dependent` references `base` but is declared earlier in source.
+    // Pre-Task-4 the silent topsort rewrote them; post-Task-4 the
+    // compiler points at both lines and tells the user to reorder.
+    const outcome = await runFixture(
+      path.join(USE_BEFORE_DEF_ROOT, "static-pair"),
+      "main.agency",
+    );
+    expect(outcome.kind).toBe("compileError");
+    if (outcome.kind !== "compileError") return;
+    expect(outcome.message).toMatch(/declared later in the same file/);
+    expect(outcome.message).toMatch(/dependent/);
+    expect(outcome.message).toMatch(/base/);
+    expect(outcome.message).toMatch(/Reorder the declarations/);
+  });
+
+  it("same-file use-before-def (globals) → compile error names both decl lines", async () => {
+    // Same shape as the static-pair fixture, but in the global init
+    // graph. The check must run separately per phase, mirroring how
+    // cycle detection is per-phase.
+    const outcome = await runFixture(
+      path.join(USE_BEFORE_DEF_ROOT, "global-pair"),
+      "main.agency",
+    );
+    expect(outcome.kind).toBe("compileError");
+    if (outcome.kind !== "compileError") return;
+    expect(outcome.message).toMatch(/declared later in the same file/);
+    expect(outcome.message).toMatch(/dependent/);
+    expect(outcome.message).toMatch(/base/);
   });
 
   it("runtime trap: indirect static read fires PR-1 trap with source moduleId", async () => {

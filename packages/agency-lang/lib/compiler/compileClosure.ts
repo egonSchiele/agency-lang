@@ -130,6 +130,25 @@ export function buildCompiledClosure(
   const staticOrder = sortOrThrow(staticGraph, "static");
   const globalOrder = sortOrThrow(globalGraph, "global");
 
+  // Reject intra-file use-before-def in either phase. Same-file named
+  // decls whose plan order disagrees with source order would otherwise
+  // be silently reordered by the section assembler — that is a
+  // surprising behavior for users reading top-to-bottom. Cross-file
+  // reorder is still allowed (there is no canonical "source order"
+  // across files).
+  assertNoIntraFileUseBeforeDef(
+    Object.keys(programs),
+    staticGraph,
+    staticOrder,
+    "static",
+  );
+  assertNoIntraFileUseBeforeDef(
+    Object.keys(programs),
+    globalGraph,
+    globalOrder,
+    "global",
+  );
+
   const plans = buildPlans(
     Object.keys(programs),
     staticGraph,
@@ -250,6 +269,76 @@ function agencyImportTarget(node: AgencyNode): string | null {
   if (node.type === "importNodeStatement") return node.agencyFile;
   if (node.type === "exportFromStatement") return node.modulePath;
   return null;
+}
+
+/**
+ * Reject same-file, named, user-authored decls whose plan order
+ * disagrees with source order. Walks each module's projection of the
+ * plan order in order; the first pair `(prev, cur)` where
+ * `cur.loc.line < prev.loc.line` is the use-before-def. The earlier
+ * line in source consumed a value defined at the later line — silent
+ * reordering would hide that.
+ *
+ * Excluded from the check:
+ *   - bare statements (synthetic `__bareStmt_*` names): they're anchored
+ *     by the section assembler to their source position; topsort never
+ *     moves them, so they can't trigger a false positive.
+ *   - re-export wrapper statics (synthesized by `resolveReExports` —
+ *     their `initExpr` is a bare reference to `_reexport_<name>`):
+ *     these have no user-controlled source position the user could
+ *     reorder, and the section assembler is free to slot them in
+ *     dep-first order without surprising anyone.
+ *
+ * Applies separately to the static and global graphs (same as cycle
+ * detection): a static use-before-def and a global use-before-def are
+ * independent violations.
+ */
+function assertNoIntraFileUseBeforeDef(
+  moduleIds: string[],
+  graph: InitDepGraph,
+  order: string[],
+  phaseName: "static" | "global",
+): void {
+  for (const moduleId of moduleIds) {
+    let prev: InitVarNode | null = null;
+    for (const key of order) {
+      const node = graph.nodes[key];
+      if (!node || node.moduleId !== moduleId) continue;
+      if (node.varName.startsWith("__bareStmt_")) continue;
+      if (isReExportWrapper(node)) continue;
+      const curLine = node.loc?.line ?? 0;
+      const prevLine = prev?.loc?.line ?? 0;
+      if (prev && curLine < prevLine) {
+        // `prev` is the dep (defined later in source, earlier in plan).
+        // `node` is the consumer (defined earlier in source, later in
+        // plan). The user-facing message attributes the violation to
+        // the consumer, since that's the line the user can directly
+        // see is "wrong."
+        const fileName = path.basename(moduleId);
+        throw new CompileClosureError(
+          `Error: ${capitalize(phaseName)} '${node.varName}' (${fileName}:${curLine}) references '${prev.varName}' (${fileName}:${prevLine}) which is declared later in the same file.\n` +
+            `Reorder the declarations so '${prev.varName}' appears before '${node.varName}'.`,
+        );
+      }
+      prev = node;
+    }
+  }
+}
+
+/**
+ * True for the synthetic constant wrappers `resolveReExports` emits at
+ * re-exporting modules: `static const x = _reexport_x`. Detected by the
+ * shape of the right-hand side — a bare `variableName` whose value
+ * starts with the reserved `_reexport_` prefix. User code cannot
+ * legitimately produce that shape.
+ */
+function isReExportWrapper(node: InitVarNode): boolean {
+  const expr = node.initExpr as { type?: string; value?: unknown };
+  return (
+    expr.type === "variableName" &&
+    typeof expr.value === "string" &&
+    expr.value.startsWith("_reexport_")
+  );
 }
 
 /**

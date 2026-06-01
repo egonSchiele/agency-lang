@@ -221,10 +221,19 @@ export function partitionProgram(
  *
  * Bare (unnamed) statements are anchored to their source position —
  * each occupies exactly the slot where it originally appeared. Named
- * statements are reordered per the plan, with the k-th name in
+ * statements are placed per the plan, with the k-th name in
  * `localOrder` filling the k-th named slot in source order. This
  * preserves side-effect ordering for patterns like `foo(); const x =
  * ...; bar();` while still letting topsort sequence the named decls.
+ *
+ * **Invariant (post-Task-4 of the agent-init PR2 stragglers PR):** for
+ * user-authored same-file named decls, the plan order is guaranteed by
+ * `assertNoIntraFileUseBeforeDef` to match source order — so this loop
+ * is a no-op reorder for them. The reorder branch still does real
+ * work for re-export wrapper statics synthesized by `resolveReExports`
+ * (`static const x = _reexport_x`): wrappers have no user-controlled
+ * source position, so the section assembler may freely slot them in
+ * dep-first order.
  *
  * No plan → source order, unchanged.
  */

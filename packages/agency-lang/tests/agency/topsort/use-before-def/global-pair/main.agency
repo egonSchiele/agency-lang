@@ -1,0 +1,9 @@
+// Two same-file globals where `dependent` is declared BEFORE `base`,
+// but `dependent`'s initializer references `base`. Same use-before-def
+// rule as the static-pair fixture, applied to the global init graph.
+const dependent = base + "!"
+const base = "hello"
+
+node main() {
+  return dependent
+}

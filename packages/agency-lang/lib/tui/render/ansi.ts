@@ -47,35 +47,43 @@ function cellEscapes(cell: Cell): string {
   return seq;
 }
 
-export function toANSI(frame: Frame): string {
-  const grid = flatten(frame, frame.width, frame.height);
+export function cellsToANSI(cells: Cell[]): string {
+  const parts: string[] = [];
+  let i = 0;
+  while (i < cells.length) {
+    const cell = cells[i];
+    const esc = cellEscapes(cell);
+
+    // Collect run of cells with same style
+    const runChars: string[] = [cell.char];
+    let j = i + 1;
+    while (j < cells.length && sameStyle(cells[j], cell)) {
+      runChars.push(cells[j].char);
+      j++;
+    }
+    const run = runChars.join("");
+
+    if (esc) {
+      parts.push(esc, run, RESET);
+    } else {
+      parts.push(run);
+    }
+    i = j;
+  }
+  return parts.join("");
+}
+
+export function gridToANSI(grid: Cell[][]): string {
   const lines: string[] = [];
 
   for (const row of grid) {
-    const parts: string[] = [];
-    let i = 0;
-    while (i < row.length) {
-      const cell = row[i];
-      const esc = cellEscapes(cell);
-
-      // Collect run of cells with same style
-      const runChars: string[] = [cell.char];
-      let j = i + 1;
-      while (j < row.length && sameStyle(row[j], cell)) {
-        runChars.push(row[j].char);
-        j++;
-      }
-      const run = runChars.join("");
-
-      if (esc) {
-        parts.push(esc, run, RESET);
-      } else {
-        parts.push(run);
-      }
-      i = j;
-    }
-    lines.push(parts.join(""));
+    lines.push(cellsToANSI(row));
   }
 
   return lines.join("\n");
+}
+
+export function toANSI(frame: Frame): string {
+  const grid = flatten(frame, frame.width, frame.height);
+  return gridToANSI(grid);
 }

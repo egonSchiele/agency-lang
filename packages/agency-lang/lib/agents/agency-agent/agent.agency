@@ -228,8 +228,8 @@ def _runTurn(msg: string): boolean {
 
 def _buildStatus(): { left: string; right: string } {
   return {
-    left: "agency-agent",
-    right: "$${getCost()}"
+    left: " agency-agent",
+    right: "$${getCost()} "
   }
 }
 
@@ -238,6 +238,7 @@ def _listOutput(): string[] {
 }
 
 node main() {
+  _push(color.cyan(""))
   _push(color.cyan("╭───────────────────────────────────────────────╮"))
   _push(color.cyan("│         Welcome to the Agency Agent           │"))
   _push(color.cyan("│  I help you write Agency code, look up docs,  │"))

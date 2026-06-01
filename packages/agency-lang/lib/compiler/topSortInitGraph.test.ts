@@ -194,4 +194,56 @@ describe("topSortInitGraph", () => {
     if (r1.kind !== "ok" || r2.kind !== "ok") return;
     expect(r1.order).toEqual(r2.order);
   });
+
+  it("topsorts a 50-module x 3-vars-each acyclic graph under 100ms", () => {
+    // PR-2 perf smoke: confirms the per-round `ready.sort(byHint)` cost
+    // is acceptable for realistic project sizes. Deterministically
+    // generated (seeded RNG) so results are stable in CI.
+    const MODULES = 50;
+    const VARS_PER_MODULE = 3;
+    const RAND_SEED = 0x9e3779b9;
+    let seed = RAND_SEED;
+    const rand = (): number => {
+      // Mulberry32 — small, deterministic, fine for "pick a smaller
+      // module index" decisions inside a perf fixture.
+      seed = (seed + 0x6d2b79f5) | 0;
+      let t = seed;
+      t = Math.imul(t ^ (t >>> 15), t | 1);
+      t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+
+    const nodes: { module: string; name: string; hint: number }[] = [];
+    const edges: [string, string][] = [];
+    for (let m = 0; m < MODULES; m++) {
+      const mod = `m${m}`;
+      for (let v = 0; v < VARS_PER_MODULE; v++) {
+        nodes.push({
+          module: mod,
+          name: `v${v}`,
+          hint: m * 1_000_000 + v,
+        });
+        // Each var randomly depends on 0–2 earlier-module vars; this
+        // keeps the graph acyclic by construction (deps point to lower
+        // module indices only).
+        if (m === 0) continue;
+        const depCount = Math.floor(rand() * 3);
+        for (let d = 0; d < depCount; d++) {
+          const depMod = Math.floor(rand() * m);
+          const depVar = Math.floor(rand() * VARS_PER_MODULE);
+          edges.push([`${mod}::v${v}`, `m${depMod}::v${depVar}`]);
+        }
+      }
+    }
+    const g = makeGraph({ nodes, edges });
+
+    const start = performance.now();
+    const r = topSortInitGraph(g);
+    const elapsedMs = performance.now() - start;
+
+    expect(r.kind).toBe("ok");
+    if (r.kind !== "ok") return;
+    expect(r.order.length).toBe(MODULES * VARS_PER_MODULE);
+    expect(elapsedMs).toBeLessThan(100);
+  });
 });

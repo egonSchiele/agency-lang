@@ -10,6 +10,7 @@ import {
   makeKey,
   StaticReferencesGlobalError,
 } from "./initDepGraph.js";
+import { resolveReExports } from "../preprocessors/resolveReExports.js";
 
 function parse(source: string): AgencyProgram {
   const result = parseAgency(source, {}, false);
@@ -35,15 +36,23 @@ function writeFixture(
   abs: (rel: string) => string;
 } {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "init-dep-graph-test-"));
-  const programs: Record<string, AgencyProgram> = {};
+  const raw: Record<string, AgencyProgram> = {};
   for (const [relPath, source] of Object.entries(files)) {
     const absPath = path.join(dir, relPath);
     fs.mkdirSync(path.dirname(absPath), { recursive: true });
     fs.writeFileSync(absPath, source, "utf-8");
-    programs[absPath] = parse(source);
+    raw[absPath] = parse(source);
   }
   const entry = path.join(dir, Object.keys(files)[0]);
   const symbolTable = SymbolTable.build(entry, {});
+  // Mirror what `compileClosure.parseClosure` does: expand each
+  // program through `resolveReExports` so the dep graph sees the
+  // synthesized wrapper statics at re-exporters. Without this the
+  // unit tests would diverge from production behavior.
+  const programs: Record<string, AgencyProgram> = {};
+  for (const [absPath, program] of Object.entries(raw)) {
+    programs[absPath] = resolveReExports(program, symbolTable, absPath);
+  }
   return {
     dir,
     programs,
@@ -120,7 +129,13 @@ describe("buildInitDepGraphs", () => {
     }
   });
 
-  it("resolves re-exported statics to their ultimate source module", () => {
+  it("cascades re-exported statics one hop at a time", () => {
+    // `resolveReExports` synthesizes a wrapper `static const barStatic`
+    // in reexport.agency. The dep graph resolves imports one hop at a
+    // time, so:
+    //   foo.fooStatic → reexport.barStatic (wrapper) → bar.barStatic
+    // Each link is its own edge in the static graph, which makes the
+    // runtime cascade walk every wrapper's `__initializeStatic` in turn.
     const { dir, programs, symbolTable, abs } = writeFixture({
       "foo.agency":
         `import { barStatic } from "./reexport.agency"\n` +
@@ -136,11 +151,12 @@ describe("buildInitDepGraphs", () => {
         abs("foo.agency"),
       );
       const keyFoo = makeKey(abs("foo.agency"), "fooStatic");
+      const keyReexport = makeKey(abs("reexport.agency"), "barStatic");
       const keyBar = makeKey(abs("bar.agency"), "barStatic");
-      expect(
-        staticGraph.nodes[makeKey(abs("reexport.agency"), "barStatic")],
-      ).toBeUndefined();
-      expect(staticGraph.edges[keyFoo]).toEqual([keyBar]);
+      expect(staticGraph.nodes[keyReexport]).toBeDefined();
+      expect(staticGraph.edges[keyFoo]).toEqual([keyReexport]);
+      expect(staticGraph.edges[keyReexport]).toEqual([keyBar]);
+      expect(staticGraph.edges[keyBar]).toEqual([]);
     } finally {
       fs.rmSync(dir, { recursive: true, force: true });
     }

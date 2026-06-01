@@ -165,12 +165,18 @@ export function makeImportAliasResolver(
     for (const node of program.nodes) {
       if (node.type !== "importStatement") continue;
       if (!isAgencyImport(node.modulePath)) continue;
+      // Resolve ONE hop only. We intentionally don't follow re-export
+      // chains all the way to the ultimate source here — each
+      // intermediate re-exporter has a synthesized wrapper static
+      // (`static const x = _reexport_x`) emitted by `resolveReExports`
+      // that needs to be initialized at runtime, and one-hop edges let
+      // the dep graph cascade through every wrapper automatically:
+      // foo → reexport_a → reexport_b → bar.
       for (const resolved of symbolTable.resolveImport(node, moduleId)) {
-        map[resolved.localName] = followReExportChain(
-          resolved.file,
-          resolved.originalName,
-          symbolTable,
-        );
+        map[resolved.localName] = {
+          sourceModuleId: resolved.file,
+          sourceName: resolved.originalName,
+        };
       }
     }
     return map;
@@ -183,30 +189,6 @@ export function makeImportAliasResolver(
       return moduleCache[localName] ?? null;
     },
   };
-}
-
-/**
- * Walk `reExportedFrom` chains until we hit a symbol that lives in the
- * file that defines it. Returns `(definingModuleId, originalNameThere)`.
- * Falls back to `(startFile, startName)` if the chain can't be walked.
- */
-function followReExportChain(
-  startFile: string,
-  startName: string,
-  symbolTable: SymbolTable,
-): { sourceModuleId: string; sourceName: string } {
-  let curFile = startFile;
-  let curName = startName;
-  // Defensive cap; SymbolTable rejects re-export cycles when it builds.
-  for (let i = 0; i < 64; i++) {
-    const sym = symbolTable.getFile(curFile)?.[curName];
-    if (!sym || !sym.reExportedFrom) {
-      return { sourceModuleId: curFile, sourceName: curName };
-    }
-    curFile = sym.reExportedFrom.sourceFile;
-    curName = sym.reExportedFrom.originalName;
-  }
-  return { sourceModuleId: curFile, sourceName: curName };
 }
 
 /**
@@ -451,8 +433,13 @@ function rejectStaticReferencesGlobal(
  * inside nested name-binding constructs (`function`, `graphNode`) by
  * checking the ancestor stack — those bodies don't execute during the
  * outer initializer evaluation.
+ *
+ * Exported so callers outside this module (e.g. `compileClosure`) can
+ * reuse the same free-identifier discipline when computing additional
+ * cross-phase await dependencies that aren't representable as edges in
+ * either single-phase graph.
  */
-function collectFreeIdentifiers(expr: Expression | AgencyNode): string[] {
+export function collectFreeIdentifiers(expr: Expression | AgencyNode): string[] {
   const out: string[] = [];
   for (const { node, ancestors } of walkNodes([expr as AgencyNode])) {
     if (node.type !== "variableName") continue;

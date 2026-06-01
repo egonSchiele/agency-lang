@@ -22,8 +22,11 @@ import type { AgencyProgram, AgencyNode } from "../types.js";
 import { AgencyConfig } from "../config.js";
 import { parseAgency } from "../parser.js";
 import { SymbolTable } from "../symbolTable.js";
+import { resolveReExports } from "../preprocessors/resolveReExports.js";
 import {
   buildInitDepGraphs,
+  collectFreeIdentifiers,
+  makeKey,
   type ImportAliasResolver,
   type InitDepGraph,
   type InitVarNode,
@@ -96,8 +99,15 @@ export function buildCompiledClosure(
   config: AgencyConfig,
 ): CompiledClosure {
   const entryModuleId = path.resolve(entryFile);
-  const programs = parseClosure(entryModuleId, config);
+  // SymbolTable must come first: it's the source of truth for re-export
+  // relationships, and parseClosure needs it to expand each parsed file
+  // via `resolveReExports` so the dep graph sees synthesized wrapper
+  // statics (`static const x = _reexport_x`) at re-exporters. Without
+  // that, re-export chains like a→b→c produce wrappers in a.js / b.js
+  // whose `__initializeStatic` never gets awaited because the dep graph
+  // collapses straight to c.
   const symbolTable = SymbolTable.build(entryModuleId, config);
+  const programs = parseClosure(entryModuleId, config, symbolTable);
 
   let staticGraph: InitDepGraph;
   let globalGraph: InitDepGraph;
@@ -126,6 +136,7 @@ export function buildCompiledClosure(
     staticOrder,
     globalGraph,
     globalOrder,
+    resolver,
   );
 
   return {
@@ -151,8 +162,16 @@ export function buildCompiledClosure(
 function parseClosure(
   entryModuleId: string,
   config: AgencyConfig,
+  symbolTable: SymbolTable,
 ): Record<string, AgencyProgram> {
-  const out: Record<string, AgencyProgram> = {};
+  // Two-phase: parse raw to discover the closure (raw still carries
+  // `exportFromStatement` nodes that the closure walker needs to follow
+  // re-export chains), then expand each parsed program with
+  // `resolveReExports` so the dep-graph builder sees synthesized wrapper
+  // statics. Order matters — `resolveReExports` strips
+  // `exportFromStatement` nodes, so doing it before closure-walking
+  // would lose re-export edges.
+  const raw: Record<string, AgencyProgram> = {};
   const visited: Record<string, true> = {};
   const queue: string[] = [entryModuleId];
   const stdlibDir = getStdlibDir();
@@ -176,11 +195,16 @@ function parseClosure(
         `Failed to parse ${moduleId}: ${result.message ?? "unknown parse error"}`,
       );
     }
-    out[moduleId] = result.result;
+    raw[moduleId] = result.result;
 
     for (const target of agencyImportTargets(result.result, moduleId)) {
       if (!visited[target]) queue.push(target);
     }
+  }
+
+  const out: Record<string, AgencyProgram> = {};
+  for (const [moduleId, program] of Object.entries(raw)) {
+    out[moduleId] = resolveReExports(program, symbolTable, moduleId);
   }
   return out;
 }
@@ -266,13 +290,20 @@ function buildPlans(
   staticOrder: string[],
   globalGraph: InitDepGraph,
   globalOrder: string[],
+  resolver: ImportAliasResolver,
 ): Record<string, ModuleInitPlan> {
   const plans: Record<string, ModuleInitPlan> = {};
   for (const moduleId of moduleIds) {
     plans[moduleId] = {
       moduleId,
       static: phasePlanFor(moduleId, staticGraph, staticOrder),
-      global: phasePlanFor(moduleId, globalGraph, globalOrder),
+      global: globalPhasePlanFor(
+        moduleId,
+        globalGraph,
+        globalOrder,
+        staticGraph,
+        resolver,
+      ),
     };
   }
   return plans;
@@ -303,6 +334,55 @@ function phasePlanFor(
 
   return {
     localOrder,
+    awaitModules: Object.keys(awaitModulesSet).sort(),
+  };
+}
+
+/**
+ * Build the Phase B (global) plan for one module.
+ *
+ * Starts from the standard edge-derived `awaitModules` (other modules'
+ * GLOBAL inits that this module's globals depend on) and then augments
+ * with cross-phase deps: any module whose STATIC this module's globals
+ * read. The global graph deliberately drops static refs as edges (cycle
+ * detection lives in single-phase graphs), but at runtime those statics
+ * must still be initialized before this module's globals run — so the
+ * generated `__initializeGlobals` needs an `await __awaitStaticInit(...)`
+ * for each such source module. Without this, a `const g = importedStatic`
+ * pattern hits the PR-1 read-before-init trap.
+ *
+ * Same-module statics need no await — `buildInitializeGlobalsFn` already
+ * emits an `await __initializeStatic(__ctx)` for the local module before
+ * any global init runs.
+ */
+function globalPhasePlanFor(
+  moduleId: string,
+  globalGraph: InitDepGraph,
+  globalOrder: string[],
+  staticGraph: InitDepGraph,
+  resolver: ImportAliasResolver,
+): ModuleInitPhasePlan {
+  const base = phasePlanFor(moduleId, globalGraph, globalOrder);
+  const awaitModulesSet: Record<string, true> = {};
+  for (const m of base.awaitModules) awaitModulesSet[m] = true;
+
+  for (const key of Object.keys(globalGraph.nodes)) {
+    const node = globalGraph.nodes[key];
+    if (!node || node.moduleId !== moduleId) continue;
+    for (const refName of collectFreeIdentifiers(node.initExpr)) {
+      if (refName === node.varName) continue;
+      const aliased = resolver.resolve(refName, moduleId);
+      const refKey = aliased
+        ? makeKey(aliased.sourceModuleId, aliased.sourceName)
+        : makeKey(moduleId, refName);
+      const staticNode = staticGraph.nodes[refKey];
+      if (!staticNode || staticNode.moduleId === moduleId) continue;
+      awaitModulesSet[staticNode.moduleId] = true;
+    }
+  }
+
+  return {
+    localOrder: base.localOrder,
     awaitModules: Object.keys(awaitModulesSet).sort(),
   };
 }

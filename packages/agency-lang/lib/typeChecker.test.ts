@@ -5941,8 +5941,10 @@ describe("TypeChecker", () => {
       expect(typeCheck(program).errors).toEqual([]);
     });
 
-    it("named arg targeting a block-typed param is rejected as unknown", () => {
-      // def f(cb: () => void) {}; f(cb: ...)  ← block-typed params can't be named
+    it("named arg targeting a block-typed param is accepted (function reference)", () => {
+      // def f(cb: () => void) {}; f(cb: someFn)  ← block-typed params may be
+      // passed by name as a function reference (or via the trailing block
+      // syntax). The structural check should not reject the name as unknown.
       const blockT: VariableType = {
         type: "blockType",
         params: [],
@@ -5958,16 +5960,23 @@ describe("TypeChecker", () => {
             body: [],
           },
           {
+            type: "function",
+            functionName: "g",
+            parameters: [],
+            returnType: { type: "primitiveType", value: "void" },
+            body: [],
+          },
+          {
             type: "functionCall",
             functionName: "f",
             arguments: [
-              { type: "namedArgument", name: "cb", value: { type: "string", segments: [{ type: "text", value: "x" }] } },
+              { type: "namedArgument", name: "cb", value: { type: "variableName", value: "g" } },
             ],
           },
         ],
       };
       const errors = typeCheck(program).errors;
-      expect(errors.some((e) => /Unknown named argument 'cb'/.test(e.message))).toBe(true);
+      expect(errors.some((e) => /Unknown named argument 'cb'/.test(e.message))).toBe(false);
     });
 
     it("variable as llm() second argument typechecks without excess-property errors", () => {

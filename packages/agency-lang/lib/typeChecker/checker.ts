@@ -153,6 +153,13 @@ function checkFunctionCallsInScope(
   for (const { node, ancestors, scopes } of walkNodes(info.body)) {
     if (!isInScope(scopes, info)) continue;
     if (node.type === "functionCall") {
+      // Skip method calls (`x.foo()`) — `walkNodes` descends into
+      // `valueAccess.chain[].functionCall`, but the call refers to a
+      // member of the receiver, not a global function. Resolving its
+      // name against `functionDefs` would falsely flag arity / unknown
+      // errors when a same-named global exists.
+      const parent = ancestors[ancestors.length - 1];
+      if (parent?.type === "valueAccess") continue;
       checkSingleFunctionCall(node, info.scope, ctx);
     }
   }
@@ -396,11 +403,12 @@ function checkNamedArgStructure(
     }
   }
 
-  // Pass 2: validate each named arg against the nameable params (variadic
-  // and block-typed params can't be passed by name — same as the backend).
-  const nameableParams = params.filter(
-    (p) => !p.variadic && p.typeHint?.type !== "blockType",
-  );
+  // Pass 2: validate each named arg against the nameable params. Variadic
+  // params can't be passed by name (a splat is the only way to fill one).
+  // Block-typed params CAN be passed by name — either as a function
+  // reference (`block: fn`) or via the trailing block syntax (`as { ... }`).
+  // The runtime resolver rejects supplying both for the same param.
+  const nameableParams = params.filter((p) => !p.variadic);
   const seen = new Set<string>();
   for (let i = namedStartIdx; i < call.arguments.length; i++) {
     const arg = call.arguments[i];

@@ -1,0 +1,7 @@
+// Right arm of the diamond. Depends on `prefix` from
+// `diamond-shared.agency` (same source as `diamond-left.agency` —
+// the diamond shape). The shared dep must initialize exactly once
+// across both arms.
+import { prefix } from "./diamond-shared.agency"
+
+export static const rightValue = prefix + "R"

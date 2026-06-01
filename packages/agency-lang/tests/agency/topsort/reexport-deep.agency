@@ -1,0 +1,4 @@
+// Ultimate source of the re-export chain. `reexport-mid.agency`
+// re-exports from here; `reexport-top.agency` re-exports from there;
+// `reexport-main.agency` imports through the chain.
+export static const deepValue = "deep"

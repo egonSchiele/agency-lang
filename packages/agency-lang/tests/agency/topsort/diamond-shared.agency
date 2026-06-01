@@ -1,0 +1,4 @@
+// Bottom of the diamond. Both `diamond-left.agency` and
+// `diamond-right.agency` import `prefix` from here; the topsort makes
+// `prefix` initialize once before either dependent runs.
+export static const prefix = "shared"

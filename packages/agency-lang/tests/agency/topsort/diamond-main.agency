@@ -1,0 +1,13 @@
+// Top of the diamond: imports from both arms, each of which depends on
+// the shared bottom node `diamond-shared.agency`. The interesting
+// property under test is that PR 2 produces a single canonical init
+// order across the whole closure so `prefix` runs once and both
+// `leftValue` / `rightValue` see the same value.
+import { leftValue } from "./diamond-left.agency"
+import { rightValue } from "./diamond-right.agency"
+
+static const combined = leftValue + rightValue
+
+node main() {
+  return combined
+}

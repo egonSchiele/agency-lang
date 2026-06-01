@@ -1,0 +1,4 @@
+// Helper consumed by `cross-file-main.agency`. Exposes a single static
+// whose initializer is a literal — the simplest possible cross-module
+// dep target.
+export static const greeting = "hello"

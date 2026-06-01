@@ -1,0 +1,5 @@
+// Middle hop: re-export of `deepValue` from `reexport-deep.agency`.
+// `resolveReExports` synthesizes a wrapper static here that the dep
+// graph treats as its own node — the cascade in PR 2 walks every
+// wrapper, not just the ultimate source.
+export { deepValue } from "./reexport-deep.agency"

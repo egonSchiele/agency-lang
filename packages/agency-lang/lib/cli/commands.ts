@@ -215,15 +215,26 @@ export function compile(
   // recursive children reuse the cached closure to get per-module init
   // plans without re-parsing.
   //
+  // "Outermost call" = no `options.symbolTable` (passed by recursive
+  // children). When the outermost call's entry file changes (e.g. the
+  // `agency test` runner iterates several .test.json fixtures in one
+  // process), the cached closure no longer covers the new entry's
+  // imports so we rebuild and drop the stale `compiledFiles` set.
+  // Without that drop, downstream codegen would look up plans for
+  // modules that aren't in the closure and emit an empty init plan.
+  //
   // Stdlib files compile under their own entry (e.g., when a user runs
   // `agency compile std/...`) but most user code reaches them via
   // `import "std::..."`, which the closure walker intentionally skips.
   // Avoid building a closure rooted at a stdlib file — its imports are
   // structured differently and we don't need the analysis there.
-  if (
-    !currentClosure &&
-    !absoluteInputFile.startsWith(getStdlibDir() + path.sep)
-  ) {
+  const isOutermostCall = !options?.symbolTable;
+  const isStdlibEntry = absoluteInputFile.startsWith(getStdlibDir() + path.sep);
+  const closureCoversEntry =
+    currentClosure?.programs[absoluteInputFile] !== undefined;
+  if (isOutermostCall && !isStdlibEntry && !closureCoversEntry) {
+    currentClosure = null;
+    compiledFiles.clear();
     try {
       currentClosure = buildCompiledClosure(absoluteInputFile, config);
     } catch (e) {

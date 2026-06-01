@@ -1,0 +1,6 @@
+// Top hop: re-export of `deepValue` from `reexport-mid.agency`. The
+// full chain is reexport-main → reexport-top → reexport-mid →
+// reexport-deep; PR 2 must walk every intermediate wrapper so the
+// `import { deepValue }` in `reexport-main.agency` binds to a
+// fully-initialized value.
+export { deepValue } from "./reexport-mid.agency"

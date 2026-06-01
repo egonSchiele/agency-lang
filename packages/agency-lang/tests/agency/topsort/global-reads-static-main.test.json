@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "description": "Global initializer reads an imported static (cross-phase OK).",
+      "expectedOutput": "\"from-static!\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

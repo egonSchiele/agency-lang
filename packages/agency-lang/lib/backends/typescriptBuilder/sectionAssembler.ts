@@ -27,6 +27,19 @@ export type PartitionDeps = {
   buildHandlerArrow: (handlerName: string) => TsNode;
   isTopLevelDeclaration: (node: AgencyNode) => boolean;
   moduleId: string;
+  /**
+   * Optional per-phase initialization plan from `compileClosure`. When
+   * present, local var assignments are emitted in `localOrder` rather
+   * than source order, ensuring cross-module dependencies (Example 1
+   * from `agent-init-design.md`) resolve before reads. Bare top-level
+   * statements stay in source order.
+   *
+   * When absent (legacy callers that bypass `compileClosure`), partition
+   * falls back to source order. The lazy isInitialized guards remain the
+   * safety net for that path.
+   */
+  staticOrder?: string[];
+  globalOrder?: string[];
 };
 
 export type ProgramPartition = {
@@ -81,8 +94,12 @@ export function partitionProgram(
 ): ProgramPartition {
   const staticVarNames = new Set<string>();
   const exportedStaticVarNames = new Set<string>();
-  const staticInitStatements: TsNode[] = [];
-  const globalInitStatements: TsNode[] = [];
+  // Tag each init statement with its var name (null = bare/anonymous)
+  // so the partition can optionally reorder per the topsort plan
+  // without re-walking the AST. Bare statements keep source order
+  // because they have no name to key on.
+  const staticInitTagged: { varName: string | null; node: TsNode }[] = [];
+  const globalInitTagged: { varName: string | null; node: TsNode }[] = [];
   const topLevelStatements: TsNode[] = [];
   const topLevelCallbackStatements: TsNode[] = [];
 
@@ -103,11 +120,12 @@ export function partitionProgram(
         ts.id(stmt.variableName),
         ts.call(ts.id("__deepFreeze"), [valueNode]),
       );
-      staticInitStatements.push(
-        handlerName
+      staticInitTagged.push({
+        varName: stmt.variableName,
+        node: handlerName
           ? ts.withHandler(deps.buildHandlerArrow(handlerName), frozenAssign)
           : frozenAssign,
-      );
+      });
       continue;
     }
 
@@ -126,11 +144,12 @@ export function partitionProgram(
         valueNode,
         ts.id("__ctx"),
       );
-      globalInitStatements.push(
-        handlerName
+      globalInitTagged.push({
+        varName: stmt.variableName,
+        node: handlerName
           ? ts.withHandler(deps.buildHandlerArrow(handlerName), setNode)
           : setNode,
-      );
+      });
       continue;
     }
 
@@ -150,9 +169,10 @@ export function partitionProgram(
     // side effect, not re-executed on interrupt resume.
     if (node.type === "withModifier") {
       const innerStmt = deps.processNodeInGlobalInit(node.statement);
-      globalInitStatements.push(
-        ts.withHandler(deps.buildHandlerArrow(node.handlerName), innerStmt),
-      );
+      globalInitTagged.push({
+        varName: null,
+        node: ts.withHandler(deps.buildHandlerArrow(node.handlerName), innerStmt),
+      });
       continue;
     }
 
@@ -161,18 +181,54 @@ export function partitionProgram(
     } else {
       // Top-level statements (function calls, etc.) need __ctx access,
       // so they live inside __initializeGlobals.
-      globalInitStatements.push(deps.processNodeInGlobalInit(node));
+      globalInitTagged.push({
+        varName: null,
+        node: deps.processNodeInGlobalInit(node),
+      });
     }
   }
 
   return {
     staticVarNames,
     exportedStaticVarNames,
-    staticInitStatements,
-    globalInitStatements,
+    staticInitStatements: reorderTagged(staticInitTagged, deps.staticOrder),
+    globalInitStatements: reorderTagged(globalInitTagged, deps.globalOrder),
     topLevelStatements,
     topLevelCallbackStatements,
   };
+}
+
+/**
+ * Apply the topsort plan's `localOrder` to tagged init statements.
+ * Named statements (statics, globals) are pulled out and re-emitted in
+ * plan order; unnamed bare statements are interleaved at the position
+ * they originally appeared, preserving source-order semantics for
+ * side-effecty calls that have no var to depend on.
+ *
+ * No plan → source order, unchanged.
+ */
+function reorderTagged(
+  tagged: { varName: string | null; node: TsNode }[],
+  order: string[] | undefined,
+): TsNode[] {
+  if (!order || order.length === 0) {
+    return tagged.map((t) => t.node);
+  }
+  const byName: Record<string, TsNode> = {};
+  for (const { varName, node } of tagged) {
+    if (varName) byName[varName] = node;
+  }
+  const out: TsNode[] = [];
+  // Named statements first, in plan order.
+  for (const name of order) {
+    if (byName[name]) out.push(byName[name]);
+  }
+  // Then bare statements (no varName) in their original source order
+  // so any side effect ordering relative to other bares is preserved.
+  for (const { varName, node } of tagged) {
+    if (!varName) out.push(node);
+  }
+  return out;
 }
 
 /**
@@ -252,6 +308,28 @@ export type AssembleSectionsOpts = {
   postprocess: TsNode[];
   /** JSON-stringified source map, embedded into the generated module. */
   sourceMapJson: string;
+  /**
+   * Per-phase cross-module dependencies sourced from the topsort plan.
+   * For each entry, the generated `__initializeStatic` /
+   * `__initializeGlobals` body awaits the corresponding function on
+   * that source module before running its own assignments. Together with
+   * `reorderTagged` (which orders local statements by topsort) this is
+   * what makes Example 1 (`fooStatic = barStatic + "!"`) yield "hello!"
+   * instead of throwing the read-before-init trap.
+   *
+   * Empty / absent when the legacy callers bypass `compileClosure`.
+   */
+  staticAwaitModules?: { localImport: string; sourceModuleId: string }[];
+  globalAwaitModules?: { localImport: string; sourceModuleId: string }[];
+  /**
+   * Absolute moduleId used as the registry key for
+   * `__registerStaticInit` / `__registerGlobalsInit`. Falls back to
+   * `moduleId` when the plan didn't supply one (legacy callers); in
+   * that case cross-module awaits won't find this module's init in the
+   * registry, but the lazy isInitialized guard still keeps things
+   * correct for same-module flows.
+   */
+  registryModuleId?: string;
 };
 
 /**
@@ -295,11 +373,32 @@ export function assembleSections(opts: AssembleSectionsOpts): TsNode {
     sections.push(alias);
   }
 
+  // Registry id is the absolute path; matches the `sourceModuleId`
+  // other modules' `awaitModules` carry. Fall back to `opts.moduleId`
+  // (cwd-relative) when no plan provided — that path won't get
+  // cross-module awaits, but local init still works.
+  const registryId = opts.registryModuleId ?? opts.moduleId;
+
   if (opts.staticVarNames.size > 0) {
     sections.push(...buildStaticVarSetup(opts));
+    // Register this module's static-init under its absolute moduleId
+    // so other modules can `await __awaitStaticInit(...)` it. Only
+    // needed when the module actually has statics — otherwise nobody
+    // will look it up.
+    sections.push(
+      ts.raw(
+        `__registerStaticInit(${JSON.stringify(registryId)}, __initializeStatic);`,
+      ),
+    );
   }
 
   sections.push(buildInitializeGlobalsFn(opts));
+  // Same idea for globals init.
+  sections.push(
+    ts.raw(
+      `__registerGlobalsInit(${JSON.stringify(registryId)}, __initializeGlobals);`,
+    ),
+  );
 
   sections.push(buildRegisterTopLevelCallbacksFn(opts));
 
@@ -350,6 +449,16 @@ function buildStaticVarSetup(opts: AssembleSectionsOpts): TsNode[] {
   ]));
 
   // Promise-based guard: concurrent callers await the same init promise.
+  // Body starts with awaits on any modules whose statics are
+  // referenced by this module's static initializers — topsort guarantees
+  // those dependencies have no cycles, so the await chain terminates.
+  // Local assignments then run in topsort-order (sectionAssembler's
+  // `reorderTagged` did that ordering during partition).
+  const awaitPrelude = (opts.staticAwaitModules ?? []).map((m) =>
+    ts.raw(
+      `await __awaitStaticInit(${JSON.stringify(m.sourceModuleId)}, __ctx);`,
+    ),
+  );
   out.push(
     ts.functionDecl(
       "__initializeStatic",
@@ -361,7 +470,10 @@ function buildStaticVarSetup(opts: AssembleSectionsOpts): TsNode[] {
         ),
         ts.assign(
           ts.id("__staticInitPromise"),
-          ts.iife({ async: true, body: opts.staticInitStatements }),
+          ts.iife({
+            async: true,
+            body: [...awaitPrelude, ...opts.staticInitStatements],
+          }),
         ),
         ts.return(ts.id("__staticInitPromise")),
       ]),
@@ -416,6 +528,16 @@ function buildInitializeGlobalsFn(opts: AssembleSectionsOpts): TsNode {
       ts.awaitMethodCall(ctxParam, "writeStaticStateToTrace", [
         ts.methodCall(ts.runtime.globalCtx, "getStaticVars"),
       ]),
+    );
+  }
+
+  // Await per-phase imported modules' globals init. Same logic as the
+  // static prelude — topsort guarantees no cycles among the awaits.
+  for (const m of opts.globalAwaitModules ?? []) {
+    body.push(
+      ts.raw(
+        `await __awaitGlobalsInit(${JSON.stringify(m.sourceModuleId)}, __ctx);`,
+      ),
     );
   }
 

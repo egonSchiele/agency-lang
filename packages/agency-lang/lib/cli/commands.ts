@@ -1,12 +1,18 @@
 import { generateAgency } from "@/backends/agencyGenerator.js";
 import { AgencyConfig, loadConfigSafe } from "@/config.js";
 import { AgencyProgram, generateTypeScript } from "@/index.js";
+import { initPlanForModule } from "@/backends/typescriptGenerator.js";
 import { resolveImports } from "@/preprocessors/importResolver.js";
 import { resolveReExports } from "@/preprocessors/resolveReExports.js";
 import { liftCallbackBlocks } from "@/preprocessors/liftCallbacks.js";
 import { buildCompilationUnit } from "@/compilationUnit.js";
 import { SymbolTable } from "@/symbolTable.js";
 import { formatErrors, typeCheck } from "@/typeChecker/index.js";
+import {
+  buildCompiledClosure,
+  CompileClosureError,
+  type CompiledClosure,
+} from "@/compiler/compileClosure.js";
 import { spawn } from "child_process";
 import { transformSync } from "esbuild";
 import * as fs from "fs";
@@ -168,9 +174,15 @@ export function readFile(inputFile: string): string {
 }
 
 const compiledFiles: Set<string> = new Set();
+// Cached `CompiledClosure` for the current compile session. Built once
+// at the outermost `compile()` call (when no per-file recursion is in
+// progress) and reused by every per-file emit. Cleared by
+// `resetCompilationCache()`.
+let currentClosure: CompiledClosure | null = null;
 
 export function resetCompilationCache(): void {
   compiledFiles.clear();
+  currentClosure = null;
 }
 
 export function compile(
@@ -197,6 +209,31 @@ export function compile(
   }
 
   const absoluteInputFile = path.resolve(inputFile);
+
+  // Build the import-closure analysis once per compile session — at the
+  // outermost call, before any recursive per-file compile() runs. The
+  // recursive children reuse the cached closure to get per-module init
+  // plans without re-parsing.
+  //
+  // Stdlib files compile under their own entry (e.g., when a user runs
+  // `agency compile std/...`) but most user code reaches them via
+  // `import "std::..."`, which the closure walker intentionally skips.
+  // Avoid building a closure rooted at a stdlib file — its imports are
+  // structured differently and we don't need the analysis there.
+  if (
+    !currentClosure &&
+    !absoluteInputFile.startsWith(getStdlibDir() + path.sep)
+  ) {
+    try {
+      currentClosure = buildCompiledClosure(absoluteInputFile, config);
+    } catch (e) {
+      if (e instanceof CompileClosureError) {
+        console.error(e.message);
+        process.exit(1);
+      }
+      throw e;
+    }
+  }
   const ext = options?.ts ? ".ts" : ".js";
   // Anchor the replacement to the extension so that an absolute path
   // containing ".agency" as a substring in a parent directory (e.g.
@@ -298,12 +335,19 @@ export function compile(
 
   const moduleId = path.relative(process.cwd(), absoluteInputFile);
   const absoluteOutputFile = path.resolve(outputFile);
+  // Per-module init plan view — derived from the cached closure if we
+  // built one. Modules not in the closure (e.g., out-of-tree stdlib
+  // compiles) fall through to the legacy path with no plan.
+  const initPlan = currentClosure
+    ? initPlanForModule(currentClosure, absoluteInputFile)
+    : undefined;
   const generatedCode = generateTypeScript(
     liftedProgram,
     config,
     info,
     moduleId,
     absoluteOutputFile,
+    initPlan,
   );
   if (options?.ts) {
     fs.writeFileSync(outputFile, "// @ts-nocheck\n" + generatedCode, "utf-8");

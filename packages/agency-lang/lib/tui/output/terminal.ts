@@ -10,6 +10,11 @@ const CURSOR_HOME = "\x1b[H";
 
 export class TerminalOutput implements OutputTarget {
   private inAltScreen = false;
+  // Cache of the last rendered frame ANSI so we can skip the write
+  // entirely when a tick re-renders unchanged content. Without this,
+  // a tickMs of 100 redraws the full screen 10x/sec — visible as
+  // flicker on slower terminals even though every redraw is identical.
+  private lastAnsi: string | null = null;
   // Tracks whether our SIGTSTP listener is currently installed. We
   // remove it during the suspend handoff and re-install it on resume,
   // and SIGCONT can be delivered independently of our SIGTSTP path
@@ -53,6 +58,13 @@ export class TerminalOutput implements OutputTarget {
       this.init();
     }
     const ansi = toANSI(frame);
+    // Skip identical re-paints. Repaints that produce the same ANSI
+    // (the common case under tickMs: e.g. status bar shows the same
+    // cost every tick) get dropped here, eliminating flicker without
+    // changing render semantics. `lastAnsi` is invalidated on
+    // suspend/resume so the next frame redraws unconditionally.
+    if (ansi === this.lastAnsi) return;
+    this.lastAnsi = ansi;
     process.stdout.write(CURSOR_HOME + ansi);
   }
 
@@ -61,6 +73,7 @@ export class TerminalOutput implements OutputTarget {
       process.stdout.write(SHOW_CURSOR + EXIT_ALT_SCREEN);
       this.inAltScreen = false;
     }
+    this.lastAnsi = null;
     this.removeSignalHandlers();
   }
 
@@ -69,6 +82,7 @@ export class TerminalOutput implements OutputTarget {
       process.stdout.write(SHOW_CURSOR + EXIT_ALT_SCREEN);
       this.inAltScreen = false;
     }
+    this.lastAnsi = null;
   }
 
   resume(): void {
@@ -76,6 +90,7 @@ export class TerminalOutput implements OutputTarget {
       process.stdout.write(ENTER_ALT_SCREEN + HIDE_CURSOR);
       this.inAltScreen = true;
     }
+    this.lastAnsi = null;
   }
 
   private removeSignalHandlers(): void {

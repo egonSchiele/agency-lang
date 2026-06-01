@@ -831,6 +831,16 @@ def _replView(s: ReplState): Element {
   // (`scrollOffset = selectedIndex - innerHeight + 1`) still keeps
   // the latest lines in view as the list grows.
   const followIdx = outLines.length
+  // line() with no width defaults to flex:1, which would split a
+  // row's width equally with the textInput / spacer (Layout pass 1
+  // in lib/tui/layout.ts treats no-width-no-flex children as
+  // flex:1). Pin each label to its content width so the prompt
+  // hugs the left edge of the input row, status.left hugs the left
+  // of the status bar, and status.right is shoved flush right by
+  // the flex:1 spacer.
+  const promptW = s.prompt.length
+  const leftW = stat.left.length
+  const rightW = stat.right.length
   // Note: every container call here MUST pass at least one named arg.
   // The agency parser otherwise compiles `column() as col { ... }` as a
   // positional call where the block lands in `flex`, leaving the
@@ -844,18 +854,22 @@ def _replView(s: ReplState): Element {
       height: _PALETTE_ROWS,
       border: true,
     )
-    col.row(bg: "blue", fg: "black", height: 1) as statusline {
-      // bg/fg are passed on each line because child elements don't
-      // inherit parent style — line()'s blank padding would otherwise
-      // overwrite the row's blue background with uncolored cells.
-      statusline.line(stat.left, bg: "blue", fg: "black")
-      statusline.box(flex: 1, bg: "blue") as _ {
-
-      }
-      statusline.line(stat.right, bg: "blue", fg: "black")
+    col.row(bg: "white", fg: "black", height: 1) as statusline {
+      // bg/fg are repeated on each child because child elements
+      // don't inherit parent style — line()'s blank padding would
+      // otherwise overwrite the row's background with uncolored
+      // cells. White-on-black gives high contrast for a thin status
+      // strip; bold makes the labels readable at small font sizes.
+      statusline.line(
+        stat.left, width: leftW, bg: "white", fg: "black", bold: true
+      )
+      statusline.box(flex: 1, bg: "white") as _ {}
+      statusline.line(
+        stat.right, width: rightW, bg: "white", fg: "black", bold: true
+      )
     }
     col.row(height: 1) as inputrow {
-      inputrow.line(s.prompt)
+      inputrow.line(s.prompt, width: promptW)
       inputrow.textInput(value: s.buffer, flex: 1)
     }
   }

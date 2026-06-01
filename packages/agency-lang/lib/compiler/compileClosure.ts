@@ -174,30 +174,16 @@ function parseClosure(
   const raw: Record<string, AgencyProgram> = {};
   const visited: Record<string, true> = {};
   const queue: string[] = [entryModuleId];
-  const stdlibDir = getStdlibDir();
-  const stdlibIndex = path.join(stdlibDir, "index.agency");
 
   while (queue.length > 0) {
     const moduleId = queue.shift()!;
     if (visited[moduleId]) continue;
     visited[moduleId] = true;
 
-    if (!fs.existsSync(moduleId)) {
-      throw new CompileClosureError(
-        `Error: Input file '${moduleId}' not found`,
-      );
-    }
-    const source = fs.readFileSync(moduleId, "utf-8");
-    const applyTemplate = moduleId !== stdlibIndex;
-    const result = parseAgency(source, config, applyTemplate);
-    if (!result.success) {
-      throw new CompileClosureError(
-        `Failed to parse ${moduleId}: ${result.message ?? "unknown parse error"}`,
-      );
-    }
-    raw[moduleId] = result.result;
+    const { program, importTargets } = loadModule(moduleId, config);
+    raw[moduleId] = program;
 
-    for (const target of agencyImportTargets(result.result, moduleId)) {
+    for (const target of importTargets) {
       if (!visited[target]) queue.push(target);
     }
   }
@@ -207,6 +193,41 @@ function parseClosure(
     out[moduleId] = resolveReExports(program, symbolTable, moduleId);
   }
   return out;
+}
+
+/**
+ * Read + parse one .agency module and report its agency-import
+ * targets. Module-private: kept inside `compileClosure.ts` until a
+ * second caller appears (PR 5's `agency explain-init` is the planned
+ * client). Exporting prematurely would freeze the signature before the
+ * second caller has a chance to drive its shape.
+ *
+ * The stdlib `index.agency` carve-out (skip template application)
+ * lives here because it's a per-file decision both phases of closure
+ * walking — and any future one-off loader — need.
+ */
+function loadModule(
+  moduleId: string,
+  config: AgencyConfig,
+): { program: AgencyProgram; importTargets: string[] } {
+  if (!fs.existsSync(moduleId)) {
+    throw new CompileClosureError(
+      `Error: Input file '${moduleId}' not found`,
+    );
+  }
+  const source = fs.readFileSync(moduleId, "utf-8");
+  const stdlibIndex = path.join(getStdlibDir(), "index.agency");
+  const applyTemplate = moduleId !== stdlibIndex;
+  const result = parseAgency(source, config, applyTemplate);
+  if (!result.success) {
+    throw new CompileClosureError(
+      `Failed to parse ${moduleId}: ${result.message ?? "unknown parse error"}`,
+    );
+  }
+  return {
+    program: result.result,
+    importTargets: agencyImportTargets(result.result, moduleId),
+  };
 }
 
 function agencyImportTargets(

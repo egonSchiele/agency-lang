@@ -130,6 +130,27 @@ export function buildCompiledClosure(
   const staticOrder = sortOrThrow(staticGraph, "static");
   const globalOrder = sortOrThrow(globalGraph, "global");
 
+  // Reject intra-file use-before-def in either phase. Same-file named
+  // decls whose plan order disagrees with source order would otherwise
+  // be silently reordered by the section assembler — that is a
+  // surprising behavior for users reading top-to-bottom. Cross-file
+  // reorder is still allowed (there is no canonical "source order"
+  // across files).
+  assertNoIntraFileUseBeforeDef(
+    Object.keys(programs),
+    staticGraph,
+    staticOrder,
+    "static",
+    symbolTable,
+  );
+  assertNoIntraFileUseBeforeDef(
+    Object.keys(programs),
+    globalGraph,
+    globalOrder,
+    "global",
+    symbolTable,
+  );
+
   const plans = buildPlans(
     Object.keys(programs),
     staticGraph,
@@ -174,30 +195,16 @@ function parseClosure(
   const raw: Record<string, AgencyProgram> = {};
   const visited: Record<string, true> = {};
   const queue: string[] = [entryModuleId];
-  const stdlibDir = getStdlibDir();
-  const stdlibIndex = path.join(stdlibDir, "index.agency");
 
   while (queue.length > 0) {
     const moduleId = queue.shift()!;
     if (visited[moduleId]) continue;
     visited[moduleId] = true;
 
-    if (!fs.existsSync(moduleId)) {
-      throw new CompileClosureError(
-        `Error: Input file '${moduleId}' not found`,
-      );
-    }
-    const source = fs.readFileSync(moduleId, "utf-8");
-    const applyTemplate = moduleId !== stdlibIndex;
-    const result = parseAgency(source, config, applyTemplate);
-    if (!result.success) {
-      throw new CompileClosureError(
-        `Failed to parse ${moduleId}: ${result.message ?? "unknown parse error"}`,
-      );
-    }
-    raw[moduleId] = result.result;
+    const { program, importTargets } = loadModule(moduleId, config);
+    raw[moduleId] = program;
 
-    for (const target of agencyImportTargets(result.result, moduleId)) {
+    for (const target of importTargets) {
       if (!visited[target]) queue.push(target);
     }
   }
@@ -207,6 +214,41 @@ function parseClosure(
     out[moduleId] = resolveReExports(program, symbolTable, moduleId);
   }
   return out;
+}
+
+/**
+ * Read + parse one .agency module and report its agency-import
+ * targets. Module-private: kept inside `compileClosure.ts` until a
+ * second caller appears (PR 5's `agency explain-init` is the planned
+ * client). Exporting prematurely would freeze the signature before the
+ * second caller has a chance to drive its shape.
+ *
+ * The stdlib `index.agency` carve-out (skip template application)
+ * lives here because it's a per-file decision both phases of closure
+ * walking — and any future one-off loader — need.
+ */
+function loadModule(
+  moduleId: string,
+  config: AgencyConfig,
+): { program: AgencyProgram; importTargets: string[] } {
+  if (!fs.existsSync(moduleId)) {
+    throw new CompileClosureError(
+      `Error: Input file '${moduleId}' not found`,
+    );
+  }
+  const source = fs.readFileSync(moduleId, "utf-8");
+  const stdlibIndex = path.join(getStdlibDir(), "index.agency");
+  const applyTemplate = moduleId !== stdlibIndex;
+  const result = parseAgency(source, config, applyTemplate);
+  if (!result.success) {
+    throw new CompileClosureError(
+      `Failed to parse ${moduleId}: ${result.message ?? "unknown parse error"}`,
+    );
+  }
+  return {
+    program: result.result,
+    importTargets: agencyImportTargets(result.result, moduleId),
+  };
 }
 
 function agencyImportTargets(
@@ -229,6 +271,81 @@ function agencyImportTarget(node: AgencyNode): string | null {
   if (node.type === "importNodeStatement") return node.agencyFile;
   if (node.type === "exportFromStatement") return node.modulePath;
   return null;
+}
+
+/**
+ * Reject same-file, named, user-authored decls whose plan order
+ * disagrees with source order. Walks each module's projection of the
+ * plan order in order; the first pair `(prev, cur)` where
+ * `cur.loc.line < prev.loc.line` is the use-before-def. The earlier
+ * line in source consumed a value defined at the later line — silent
+ * reordering would hide that.
+ *
+ * Excluded from the check:
+ *   - bare statements (synthetic `__bareStmt_*` names): they're anchored
+ *     by the section assembler to their source position; topsort never
+ *     moves them, so they can't trigger a false positive.
+ *   - re-export wrapper statics (synthesized by `resolveReExports` —
+ *     `static const x = _reexport_x`): identified via the
+ *     `reExportedFrom` marker SymbolTable sets when the importing
+ *     module's `export { x } from "..."` was resolved. The wrapper has
+ *     no user-controlled source position the user could reorder, and
+ *     the section assembler is free to slot it in dep-first order.
+ *
+ * Applies separately to the static and global graphs (same as cycle
+ * detection): a static use-before-def and a global use-before-def are
+ * independent violations.
+ */
+function assertNoIntraFileUseBeforeDef(
+  moduleIds: string[],
+  graph: InitDepGraph,
+  order: string[],
+  phaseName: "static" | "global",
+  symbolTable: SymbolTable,
+): void {
+  for (const moduleId of moduleIds) {
+    let prev: InitVarNode | null = null;
+    for (const key of order) {
+      const node = graph.nodes[key];
+      if (!node || node.moduleId !== moduleId) continue;
+      if (node.varName.startsWith("__bareStmt_")) continue;
+      if (isReExportWrapper(node, symbolTable)) continue;
+      const curLine = node.loc?.line ?? 0;
+      const prevLine = prev?.loc?.line ?? 0;
+      if (prev && curLine < prevLine) {
+        // `prev` is the dep (defined later in source, earlier in plan).
+        // `node` is the consumer (defined earlier in source, later in
+        // plan). The user-facing message attributes the violation to
+        // the consumer, since that's the line the user can directly
+        // see is "wrong."
+        const fileName = path.basename(moduleId);
+        throw new CompileClosureError(
+          `Error: ${capitalize(phaseName)} '${node.varName}' (${fileName}:${curLine}) references '${prev.varName}' (${fileName}:${prevLine}) which is declared later in the same file.\n` +
+            `Reorder the declarations so '${prev.varName}' appears before '${node.varName}'.`,
+        );
+      }
+      prev = node;
+    }
+  }
+}
+
+/**
+ * True for the synthetic constant wrappers `resolveReExports` emits at
+ * re-exporting modules (`static const x = _reexport_x`). The check
+ * goes through `SymbolTable` rather than the wrapper's right-hand-side
+ * shape because `_reexport_` is not a reserved language prefix — user
+ * code could in principle write `static const x = _reexport_y`. The
+ * `reExportedFrom` marker is set authoritatively by SymbolTable.build
+ * for every symbol that entered the file via an `export ... from "..."`
+ * statement, so it always identifies the same set of wrappers
+ * `resolveReExports` later synthesizes.
+ */
+function isReExportWrapper(
+  node: InitVarNode,
+  symbolTable: SymbolTable,
+): boolean {
+  const sym = symbolTable.getFile(node.moduleId)?.[node.varName];
+  return !!sym?.reExportedFrom;
 }
 
 /**

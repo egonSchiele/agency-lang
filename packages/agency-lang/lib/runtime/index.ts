@@ -51,7 +51,7 @@ export {
   __registerGlobalsInit,
   __awaitStaticInit,
   __awaitGlobalsInit,
-} from "./initRegistry.js";
+} from "./crossModuleInitRegistry.js";
 
 export { functionRefReviver } from "./revivers/index.js";
 export { AgencyFunction, UNSET } from "./agencyFunction.js";

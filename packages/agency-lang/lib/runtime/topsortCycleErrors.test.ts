@@ -30,6 +30,17 @@ const FIXTURES_ROOT = path.resolve(
   "../../tests/agency/topsort/cycles",
 );
 
+// Use-before-def fixtures are generated inline (per-test) into
+// `.agency-tmp/` because they are not runnable by `agency test` — only
+// this vitest exercises them, so they do not belong under
+// `tests/agency/`. Each test writes its files in `beforeEach`, runs
+// the same `runFixture` helper as the cycle cases, and the tmp dir is
+// wiped in `afterEach` along with the `.js` outputs.
+const USE_BEFORE_DEF_TMP = path.resolve(
+  __dirname,
+  "../../.agency-tmp/use-before-def",
+);
+
 type CompileOutcome =
   | { kind: "ok"; mod: any }
   | { kind: "compileError"; message: string };
@@ -52,7 +63,29 @@ afterEach(() => {
       // best-effort
     }
   }
+  // Wipe the per-test use-before-def tmpdir so each test starts from
+  // an empty disk and stale `.js` outputs from a crashed previous run
+  // can't shadow the next compile.
+  fs.rmSync(USE_BEFORE_DEF_TMP, { recursive: true, force: true });
 });
+
+/**
+ * Materialize a `.agency-tmp/use-before-def/<name>` directory from an
+ * inline `{ filename: contents }` map, returning the absolute path.
+ * Used by the use-before-def cases so each fixture lives in the test
+ * file rather than under `tests/agency/`.
+ */
+function writeUseBeforeDefFixture(
+  name: string,
+  files: Record<string, string>,
+): string {
+  const dir = path.join(USE_BEFORE_DEF_TMP, name);
+  fs.mkdirSync(dir, { recursive: true });
+  for (const [rel, contents] of Object.entries(files)) {
+    fs.writeFileSync(path.join(dir, rel), contents);
+  }
+  return dir;
+}
 
 /**
  * Compile `entry` via the real CLI compile path. Intercepts the
@@ -139,6 +172,49 @@ describe("tests/agency/topsort/cycles fixtures", () => {
     expect(outcome.message).toMatch(/\bx\b/);
     expect(outcome.message).toMatch(/\by\b/);
     expect(outcome.message).toMatch(/\bz\b/);
+  });
+
+  it("same-file use-before-def (statics) → compile error names both decl lines", async () => {
+    // `dependent` references `base` but is declared earlier in source.
+    // Pre-Task-4 the silent topsort rewrote them; post-Task-4 the
+    // compiler points at both lines and tells the user to reorder.
+    const dir = writeUseBeforeDefFixture("static-pair", {
+      "main.agency":
+        'static const dependent = base + "!"\n' +
+        'static const base = "hello"\n' +
+        "\n" +
+        "node main() {\n" +
+        "  return dependent\n" +
+        "}\n",
+    });
+    const outcome = await runFixture(dir, "main.agency");
+    expect(outcome.kind).toBe("compileError");
+    if (outcome.kind !== "compileError") return;
+    expect(outcome.message).toMatch(/declared later in the same file/);
+    expect(outcome.message).toMatch(/dependent/);
+    expect(outcome.message).toMatch(/base/);
+    expect(outcome.message).toMatch(/Reorder the declarations/);
+  });
+
+  it("same-file use-before-def (globals) → compile error names both decl lines", async () => {
+    // Same shape as the static-pair fixture, but in the global init
+    // graph. The check must run separately per phase, mirroring how
+    // cycle detection is per-phase.
+    const dir = writeUseBeforeDefFixture("global-pair", {
+      "main.agency":
+        'const dependent = base + "!"\n' +
+        'const base = "hello"\n' +
+        "\n" +
+        "node main() {\n" +
+        "  return dependent\n" +
+        "}\n",
+    });
+    const outcome = await runFixture(dir, "main.agency");
+    expect(outcome.kind).toBe("compileError");
+    if (outcome.kind !== "compileError") return;
+    expect(outcome.message).toMatch(/declared later in the same file/);
+    expect(outcome.message).toMatch(/dependent/);
+    expect(outcome.message).toMatch(/base/);
   });
 
   it("runtime trap: indirect static read fires PR-1 trap with source moduleId", async () => {

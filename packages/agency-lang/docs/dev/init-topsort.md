@@ -19,7 +19,7 @@ combines:
     surfaces cycles as compile errors),
   - a **per-module init plan** the codegen consumes to drive
     centralized init (`__initializeStatic`, `__initializeGlobals`),
-  - a **runtime registry** (`initRegistry`) that lets one module's
+  - a **runtime registry** (`crossModuleInitRegistry`) that lets one module's
     init `await` another's.
 
 If you are looking for the original "what is `__initializeGlobals`
@@ -61,7 +61,7 @@ it.
               │
               ▼  generated module on disk
 ╭───────────────────────────╮
-│ Runtime                   │  lib/runtime/initRegistry.ts
+│ Runtime                   │  lib/runtime/crossModuleInitRegistry.ts
 │  __registerStaticInit(...)│  modules register themselves at JS-load
 │  __awaitStaticInit(...)   │  init bodies await each other
 ╰───────────────────────────╯
@@ -145,17 +145,12 @@ static (`static const x = _reexport_x`) emitted by
 emerges from one-hop edges; do not follow the chain to the ultimate
 source in the resolver.
 
-### Known gap: non-static `export const`
-
-`SymbolTable` registers `assignment` symbols only for
-`export && static && const`. Cross-module references to exported
-globals (`export const x = "g"`) are invisible to the resolver
-today. Those refs work at runtime via the lazy `if
-(!ctx.globals.isInitialized(...)) __initializeGlobals(...)` guard
-emitted at every function-entry, but they do not participate in
-plan-driven awaits. Closing this gap is future work — it would let
-named-import bare statements contribute cross-module awaits to the
-global plan (today only namespace imports can).
+Resolver coverage is complete for the supported export surface. In
+Agency, globals cannot be exported at all — only statics can. Users
+that want to expose mutable state across modules export a function
+that reads or mutates the global, and the global itself stays local
+to its defining module. There is therefore no "non-static export
+const" case the resolver needs to handle.
 
 ## collectFreeIdentifiers (`FreeRef`)
 
@@ -308,7 +303,7 @@ sites use the same helper so the registry keys still match exactly
 within a single compilation pass. Once the literals are baked in,
 the value of `process.cwd()` at runtime is irrelevant.
 
-## Runtime registry (`lib/runtime/initRegistry.ts`)
+## Runtime registry (`lib/runtime/crossModuleInitRegistry.ts`)
 
 The runtime side is small. Two registries (`staticInits`,
 `globalsInits`) keyed by moduleId, plus four functions:
@@ -438,5 +433,5 @@ strips comments).
 | `lib/backends/typescriptGenerator.ts` | Projects `CompiledClosure` to `InitPlanForModule` for one file. |
 | `lib/backends/typescriptBuilder/sectionAssembler.ts` | `partitionProgram`, `reorderTagged`, `buildStaticVarSetup`, `buildInitializeGlobalsFn`, `displayModuleId`, banner. |
 | `lib/backends/typescriptBuilder.ts` | Orchestrates per-module codegen; passes the plan into the section assembler. |
-| `lib/runtime/initRegistry.ts` | Process-global registry of per-module init functions. Register + await. |
+| `lib/runtime/crossModuleInitRegistry.ts` | Process-global registry of per-module init functions. Register + await. |
 | `lib/preprocessors/resolveReExports.ts` | Synthesizes wrapper statics so re-export chains show up in the dep graph. |

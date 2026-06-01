@@ -33,11 +33,16 @@ export type TopSortResult =
 
 export function topSortInitGraph(graph: InitDepGraph): TopSortResult {
   const { reverse, inDegree } = reverseEdges(graph);
-  const order = kahn(graph, reverse, inDegree);
+  const { order, remaining } = kahn(graph, reverse, inDegree);
   if (order.length === Object.keys(graph.nodes).length) {
     return { kind: "ok", order };
   }
-  return { kind: "cycle", cycle: traceCycleFrom(graph, inDegree) };
+  // Pass the post-Kahn `remaining` map to the cycle tracer so it
+  // restricts the starter and step selection to nodes that genuinely
+  // still have unsatisfied deps (i.e., are in or feed into a cycle).
+  // Using the pre-Kahn `inDegree` would let the trace wander into
+  // already-drained DAG tails and return a non-cycle path as a "cycle."
+  return { kind: "cycle", cycle: traceCycleFrom(graph, remaining) };
 }
 
 /**
@@ -72,7 +77,7 @@ function kahn(
   graph: InitDepGraph,
   reverse: Record<InitVarKey, InitVarKey[]>,
   inDegree: Record<InitVarKey, number>,
-): InitVarKey[] {
+): { order: InitVarKey[]; remaining: Record<InitVarKey, number> } {
   const hintOf = (k: InitVarKey): number =>
     graph.nodes[k]?.sequenceHint ?? Number.POSITIVE_INFINITY;
   const byHint = (a: InitVarKey, b: InitVarKey): number => {
@@ -82,8 +87,10 @@ function kahn(
     return a < b ? -1 : a > b ? 1 : 0; // lex tiebreak — never reached if hints differ
   };
 
-  // Important: in-degree mutates as we drain; copy so the caller can
-  // re-use it for cycle reporting.
+  // `remaining` is the per-node unsatisfied-deps count as Kahn drains
+  // the graph. Returned alongside `order` so the caller can hand it
+  // to `traceCycleFrom`: on a cycle, every drained node ends at 0 and
+  // only cycle-side nodes retain a positive count.
   const remaining = { ...inDegree };
   const ready = Object.keys(remaining).filter((k) => remaining[k] === 0);
   ready.sort(byHint);
@@ -98,7 +105,7 @@ function kahn(
     }
     ready.sort(byHint);
   }
-  return order;
+  return { order, remaining };
 }
 
 /**
@@ -106,12 +113,18 @@ function kahn(
  * has confirmed a cycle exists (some node has remaining in-degree > 0).
  * Walks one outgoing edge at a time, preferring deps still in the
  * cycle, until we revisit a node — that closes the loop.
+ *
+ * `remaining` is the POST-Kahn in-degree map. Both the starter pick
+ * and the next-step selection consult it so they only consider nodes
+ * Kahn could not drain — i.e., nodes in or feeding into a cycle.
+ * Restricting selection this way keeps the walk inside the cycle and
+ * out of the DAG portion already drained by Kahn.
  */
 function traceCycleFrom(
   graph: InitDepGraph,
-  inDegree: Record<InitVarKey, number>,
+  remaining: Record<InitVarKey, number>,
 ): InitVarNode[] {
-  const start = Object.keys(inDegree).find((k) => inDegree[k] > 0);
+  const start = Object.keys(remaining).find((k) => remaining[k] > 0);
   if (!start) return [];
 
   const path: InitVarKey[] = [];
@@ -126,7 +139,7 @@ function traceCycleFrom(
     positionOnPath[cur] = path.length;
     path.push(cur);
     const deps = graph.edges[cur] ?? [];
-    const next = deps.find((d) => inDegree[d] > 0) ?? deps[0];
+    const next = deps.find((d) => remaining[d] > 0) ?? deps[0];
     if (!next) break;
     cur = next;
   }

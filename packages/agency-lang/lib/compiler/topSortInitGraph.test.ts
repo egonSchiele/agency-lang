@@ -4,14 +4,22 @@ import { makeKey } from "./initDepGraph.js";
 import { topSortInitGraph } from "./topSortInitGraph.js";
 
 /**
- * Build a minimal InitDepGraph from plain JS — no file system, no
- * parser. Each node is identified by `${moduleId}::${varName}`. The
- * helper short-circuits boilerplate so tests read as graph descriptions.
+ * Build a minimal `InitDepGraph` from plain JS — no file system, no
+ * parser. Each node is keyed by `${moduleId}::${varName}`. Optional
+ * `hint` lets a test pin a node's `sequenceHint` directly, which is
+ * the field the topsort uses to break ties between var-edge-unrelated
+ * nodes. `kind` defaults to `"static"`; the topsort is graph-agnostic
+ * — it runs the same way for the static and global graphs.
  */
 function makeGraph(opts: {
-  nodes: { module: string; name: string; kind?: "static" | "global"; line?: number }[];
-  edges?: [string, string][];   // [key, dep] pairs
-  fileImports?: Record<string, string[]>;
+  nodes: {
+    module: string;
+    name: string;
+    kind?: "static" | "global";
+    line?: number;
+    hint?: number;
+  }[];
+  edges?: [string, string][];
 }): InitDepGraph {
   const nodes: Record<string, InitVarNode> = {};
   for (const n of opts.nodes) {
@@ -22,6 +30,7 @@ function makeGraph(opts: {
       initExpr: { type: "number", value: "0", loc: { line: 0, col: 0 } } as any,
       loc: { line: n.line ?? 0, col: 0 },
       exported: false,
+      sequenceHint: n.hint ?? 0,
     };
   }
   const edges: Record<string, string[]> = {};
@@ -29,12 +38,11 @@ function makeGraph(opts: {
   for (const [a, b] of opts.edges ?? []) {
     edges[a] = [...(edges[a] ?? []), b];
   }
-  return { nodes, edges, fileImports: opts.fileImports ?? {} };
+  return { nodes, edges };
 }
 
 describe("topSortInitGraph", () => {
   it("sorts a linear chain in dep-first order", () => {
-    // a → b → c  (a depends on b, b depends on c)
     const g = makeGraph({
       nodes: [
         { module: "m", name: "a" },
@@ -53,7 +61,6 @@ describe("topSortInitGraph", () => {
   });
 
   it("sorts a diamond — common ancestor first, root last", () => {
-    // a depends on b and c; both depend on d.
     const g = makeGraph({
       nodes: [
         { module: "m", name: "a" },
@@ -73,27 +80,19 @@ describe("topSortInitGraph", () => {
     if (r.kind !== "ok") return;
     expect(r.order[0]).toBe("m::d");
     expect(r.order[3]).toBe("m::a");
-    // b and c can come in either order, but both must come after d
-    // and before a.
     expect(r.order.indexOf("m::b")).toBeGreaterThan(0);
     expect(r.order.indexOf("m::b")).toBeLessThan(3);
     expect(r.order.indexOf("m::c")).toBeGreaterThan(0);
     expect(r.order.indexOf("m::c")).toBeLessThan(3);
   });
 
-  it("uses file-import order as a tiebreaker (example 2 case)", () => {
-    // foo and bar each have a static; no var-level edge between
-    // them. foo's module imports bar's module. Expected: bar
-    // initializes before foo.
+  it("uses sequenceHint as the tiebreaker between unordered nodes", () => {
+    // Two nodes with no var-edges between them; lower `hint` wins.
     const g = makeGraph({
       nodes: [
-        { module: "/foo.agency", name: "fooStatic" },
-        { module: "/bar.agency", name: "barStatic" },
+        { module: "/foo.agency", name: "fooStatic", hint: 1_000_000 },
+        { module: "/bar.agency", name: "barStatic", hint: 0 },
       ],
-      fileImports: {
-        "/foo.agency": ["/bar.agency"],
-        "/bar.agency": [],
-      },
     });
     const r = topSortInitGraph(g);
     expect(r.kind).toBe("ok");
@@ -105,7 +104,6 @@ describe("topSortInitGraph", () => {
   });
 
   it("reports a direct cycle as a CycleError", () => {
-    // foo → bar → foo
     const g = makeGraph({
       nodes: [
         { module: "/foo.agency", name: "fooStatic" },
@@ -123,8 +121,9 @@ describe("topSortInitGraph", () => {
     expect(names).toEqual(["barStatic", "fooStatic"]);
   });
 
-  it("reports a 3-cycle naming all participants", () => {
-    // a → b → c → a
+  it("reports a 3-cycle naming all participants in cycle order", () => {
+    // a → b → c → a. Whichever node we start from, the returned cycle
+    // should include all 3 names.
     const g = makeGraph({
       nodes: [
         { module: "m", name: "a" },
@@ -140,12 +139,21 @@ describe("topSortInitGraph", () => {
     const r = topSortInitGraph(g);
     expect(r.kind).toBe("cycle");
     if (r.kind !== "cycle") return;
-    const names = r.cycle.map((n) => n.varName).sort();
-    expect(names).toEqual(["a", "b", "c"]);
+    expect(r.cycle.length).toBe(3);
+    const sortedNames = r.cycle.map((n) => n.varName).sort();
+    expect(sortedNames).toEqual(["a", "b", "c"]);
+    // The cycle should be consecutive: each node's deps should include
+    // the next node, and the last should depend on the first.
+    for (let i = 0; i < r.cycle.length; i++) {
+      const cur = r.cycle[i];
+      const next = r.cycle[(i + 1) % r.cycle.length];
+      const curKey = makeKey(cur.moduleId, cur.varName);
+      const nextKey = makeKey(next.moduleId, next.varName);
+      expect(g.edges[curKey]).toContain(nextKey);
+    }
   });
 
   it("includes nodes from independent components in the output", () => {
-    // Two disjoint chains: a→b and c→d. Both should appear.
     const g = makeGraph({
       nodes: [
         { module: "m", name: "a" },
@@ -164,5 +172,26 @@ describe("topSortInitGraph", () => {
     expect(r.order.length).toBe(4);
     expect(r.order.indexOf("m::b")).toBeLessThan(r.order.indexOf("m::a"));
     expect(r.order.indexOf("m::d")).toBeLessThan(r.order.indexOf("m::c"));
+  });
+
+  it("produces the same order across repeated sorts (deterministic)", () => {
+    // Hint-distinct nodes with cross-component deps; rerunning the sort
+    // should never change the output. Guards against accidental
+    // Map/Set iteration-order leaks creeping back in.
+    const g = makeGraph({
+      nodes: [
+        { module: "m1", name: "x", hint: 5 },
+        { module: "m2", name: "y", hint: 1 },
+        { module: "m3", name: "z", hint: 3 },
+        { module: "m4", name: "w", hint: 4 },
+      ],
+      edges: [["m1::x", "m2::y"]],
+    });
+    const r1 = topSortInitGraph(g);
+    const r2 = topSortInitGraph(g);
+    expect(r1.kind).toBe("ok");
+    expect(r2.kind).toBe("ok");
+    if (r1.kind !== "ok" || r2.kind !== "ok") return;
+    expect(r1.order).toEqual(r2.order);
   });
 });

@@ -1,30 +1,49 @@
 /**
- * Per-variable initialization dependency graph.
+ * Per-variable initialization dependency graphs.
  *
- * Walks every top-level `static const` and (non-static) `const` / `let` /
- * bare assignment in the entry module's full import closure. For each
- * declaration it creates a node keyed by `${moduleId}::${varName}` and
- * adds an edge from that node to every other init-var node referenced
- * by its initializer expression.
+ * Walks every top-level declaration + bare statement in a set of
+ * pre-collected agency programs (the entry's full import closure) and
+ * produces two independent dep graphs:
  *
- * Cross-module references are resolved via the import statements in the
- * referencing module: a local name `x` brought in by
- * `import { x } from "./bar.agency"` resolves to bar's `x` node.
- * Re-exports (`export { x } from "y"`) are followed transitively until
- * the ultimate source module — the canonical init node for a re-exported
- * binding lives in its source module, never in the re-exporter.
+ *   - `staticGraph` — one node per top-level `static const`, edges from
+ *     each node to every other init-var node its initializer references.
+ *     Sorted by `topSortInitGraph` to drive Phase A (once per process).
+ *   - `globalGraph` — one node per non-static `const` / `let` /
+ *     unscoped assignment, plus one node per bare top-level statement
+ *     (function call etc., keyed by a synthetic `__bareStmt_…` name).
+ *     Drives Phase B (every run).
  *
- * Function references (`def foo`, `node foo`) are intentionally NOT
- * treated as edges: the dep graph orders *values*, not callable code.
+ * Edges are derived only from *direct* free-variable references in the
+ * initializer expression. Function references (`def foo`, `node foo`)
+ * are NOT edges — the dep graph orders *values*, not callable code.
  * The runtime read-before-init trap (PR 1) catches the residual case
  * where an initializer indirectly reads an unset static through a
  * function call.
  *
- * Task 2 (`topSortInitGraph.ts`) consumes this graph; Task 3 hooks the
- * combined builder + sort into the compile flow.
+ * Cross-module references are resolved through the shared
+ * {@link ImportAliasResolver}, which walks `export { x } from "y"`
+ * chains to the ultimate source. The same resolver is reused by the
+ * codegen wrap site (Task 4) to thread the source `moduleId` into the
+ * PR-1 trap message — there is exactly one re-export resolver in the
+ * codebase.
+ *
+ * **Closed interface:** consumers see only `nodes + edges` per graph;
+ * file-import depth and source line are baked into each node's
+ * `sequenceHint` at build time so the topsort has one ordering rule.
+ *
+ * **Closure walking is NOT done here.** The caller (Task 3's
+ * `compileClosure`) is responsible for parsing every reachable module
+ * once and passing the full `programs` map in. Keeps this module pure
+ * and testable.
+ *
+ * Phase coupling rules enforced by this builder:
+ *   - A static initializer that references a global → throws
+ *     `StaticReferencesGlobalError` (the global doesn't exist yet at
+ *     Phase A).
+ *   - A global initializer that references a static → allowed,
+ *     no edge (statics are already initialized at Phase B time).
  */
 
-import * as path from "path";
 import type { AgencyProgram, AgencyNode, Expression } from "../types.js";
 import type { Assignment } from "../types.js";
 import type { SourceLocation } from "../types/base.js";
@@ -33,25 +52,38 @@ import {
   isAgencyImport,
   resolveAgencyImportPath,
 } from "../importPaths.js";
+import { walkNodes } from "../utils/node.js";
 
 export type InitVarKind = "static" | "global";
 
 /**
- * One node in the init dep graph — corresponds to a single top-level
- * `static const`, `const`, `let`, or unscoped assignment in some module.
+ * One node in an init dep graph — corresponds to a single top-level
+ * declaration (or, for the global graph only, a single bare top-level
+ * statement).
  *
- * `moduleId` is the absolute path of the source file the var was declared
- * in (NOT the file that imports it). For re-exports, the canonical node
- * lives in the originating source module — re-exporters do not get their
- * own node.
+ * `moduleId` is the absolute path of the source file the var was
+ * declared in (NOT the file that imports it). For re-exports, the
+ * canonical node lives in the originating source module — re-exporters
+ * do not get their own node.
+ *
+ * `sequenceHint` packs `(fileImportDepth, sourceLine)` into one number
+ * so the topsort can break ties deterministically with a single key.
+ * Lower wins (initializes earlier).
  */
 export type InitVarNode = {
   moduleId: string;
   varName: string;
   kind: InitVarKind;
-  initExpr: Expression;
+  /** For bare statements (global graph only) this is the wrapping
+   * statement node; for assignments it's the right-hand side. */
+  initExpr: Expression | AgencyNode;
   loc?: SourceLocation;
   exported: boolean;
+  sequenceHint: number;
+  /** Set when the source wrapped the decl/statement in `with approve`.
+   * `handle { ... }` blocks are NOT legal at module top level, so this
+   * single optional flag covers the full top-level handler surface. */
+  withApprove?: boolean;
 };
 
 /** Composite key for indexing init-var nodes: `${moduleId}::${varName}`. */
@@ -62,209 +94,110 @@ export function makeKey(moduleId: string, varName: string): InitVarKey {
 }
 
 /**
- * Edges go from a node to every node its initializer references. The
- * topsort uses these to compute initialization order; cycles produce a
- * `CycleError` from Task 2.
- *
- * `fileImports` is the module-level import DAG (each module → list of
- * agency modules it imports directly). Used by the topsort as a
- * deterministic tiebreaker for nodes the var-edge graph leaves unordered
- * (motivating case: `fooStatic = getBarStatic() + "!"` — no direct var
- * edge, but bar must init before foo because foo imports bar).
+ * Edges go from a node to every other node its initializer references.
+ * `topSortInitGraph` uses these to compute initialization order; cycles
+ * produce a `CycleError`.
  */
 export type InitDepGraph = {
   nodes: Record<InitVarKey, InitVarNode>;
   edges: Record<InitVarKey, InitVarKey[]>;
-  fileImports: Record<string, string[]>;
+};
+
+export type BuildInitDepGraphsResult = {
+  staticGraph: InitDepGraph;
+  globalGraph: InitDepGraph;
+  /** Reused by codegen (Task 4) for PR-1 thread-through. */
+  resolver: ImportAliasResolver;
 };
 
 /**
- * Build a per-variable init dep graph from the closure of `entryModuleId`.
- *
- * `programs` maps absolute module paths to their parsed AST. The caller
- * is responsible for parsing every reachable file before calling this —
- * we don't re-parse to keep the function pure and testable.
- *
- * `symbolTable` is consulted to resolve `export { x } from "y"`
- * re-exports transitively. If omitted, re-exports aren't followed
- * (re-exporter shows up as an unrecognized local name and is silently
- * skipped) — this is fine for tests that don't involve re-exports.
+ * Compile-time error: a `static` initializer references a `global`. The
+ * global doesn't exist yet at Phase A time, so this is unsatisfiable.
  */
-export function buildInitDepGraph(
-  programs: Record<string, AgencyProgram>,
-  symbolTable: SymbolTable | undefined,
-  entryModuleId: string,
-): InitDepGraph {
-  const reachable = walkClosure(entryModuleId, programs);
-
-  // 1. Collect every top-level init-var node from every reachable module.
-  //    `static` here is recognized via the parser-set `node.static` flag —
-  //    NOT `node.scope === "static"`, which is only assigned later by the
-  //    typescriptPreprocessor (which runs per-module during codegen).
-  const nodes: Record<InitVarKey, InitVarNode> = {};
-  for (const moduleId of reachable) {
-    const program = programs[moduleId];
-    if (!program) continue;
-    for (const node of program.nodes) {
-      const v = unwrapTopLevelInitVar(node);
-      if (!v) continue;
-      nodes[makeKey(moduleId, v.variableName)] = {
-        moduleId,
-        varName: v.variableName,
-        kind: v.static ? "static" : "global",
-        initExpr: v.value as Expression,
-        loc: v.loc,
-        exported: !!v.exported,
-      };
-    }
+export class StaticReferencesGlobalError extends Error {
+  constructor(
+    public readonly staticNode: InitVarNode,
+    public readonly globalNode: InitVarNode,
+  ) {
+    super(
+      `Static '${staticNode.varName}' (${staticNode.moduleId}:${staticNode.loc?.line ?? "?"}) ` +
+        `references global '${globalNode.varName}' (${globalNode.moduleId}:${globalNode.loc?.line ?? "?"}). ` +
+        `Static initializers run before any global init — they cannot read globals.`,
+    );
+    this.name = "StaticReferencesGlobalError";
   }
-
-  // 2. Build a per-module import-alias map so we can resolve a referenced
-  //    local name back to its (sourceModuleId, sourceVarName). The
-  //    alias map follows `import { x as y }` and chases re-export chains
-  //    to the ultimate source.
-  const aliasMaps: Record<string, Record<string, { sourceModuleId: string; sourceName: string }>> = {};
-  const fileImports: Record<string, string[]> = {};
-  for (const moduleId of reachable) {
-    const program = programs[moduleId];
-    if (!program) {
-      aliasMaps[moduleId] = {};
-      fileImports[moduleId] = [];
-      continue;
-    }
-    aliasMaps[moduleId] = buildAliasMap(program, moduleId, symbolTable);
-    fileImports[moduleId] = collectFileImports(program, moduleId);
-  }
-
-  // 3. For each init-var node, walk its initializer and add an edge to
-  //    every referenced init-var node we recognize.
-  const edges: Record<InitVarKey, InitVarKey[]> = {};
-  for (const [key, node] of Object.entries(nodes)) {
-    const aliasMap = aliasMaps[node.moduleId] ?? {};
-    const refs = collectFreeIdentifiers(node.initExpr);
-    const depKeys: string[] = [];
-    const seen: Record<string, true> = {};
-    for (const refName of refs) {
-      // Skip self-references (a static can't depend on itself).
-      if (refName === node.varName) continue;
-
-      // Same-module reference? Check our own nodes table first.
-      const localKey = makeKey(node.moduleId, refName);
-      if (nodes[localKey] && !seen[localKey]) {
-        seen[localKey] = true;
-        depKeys.push(localKey);
-        continue;
-      }
-
-      // Cross-module reference via an import alias.
-      const aliased = aliasMap[refName];
-      if (aliased) {
-        const remoteKey = makeKey(aliased.sourceModuleId, aliased.sourceName);
-        if (nodes[remoteKey] && !seen[remoteKey]) {
-          seen[remoteKey] = true;
-          depKeys.push(remoteKey);
-        }
-      }
-    }
-    edges[key] = depKeys;
-  }
-
-  return { nodes, edges, fileImports };
 }
 
 /**
- * Walk the import closure from `entryModuleId`, returning every reachable
- * module path. Follows both `import` and `export ... from` statements.
- * Non-agency imports (stdlib, pkg::, .js, .ts) are skipped.
+ * Resolves a locally-bound name (used inside an initializer in some
+ * module) to the `(moduleId, name)` pair that defines the value, walking
+ * `export { x } from "y"` chains to the ultimate source.
+ *
+ * Built once per `compileClosure` call; cached internally so a name
+ * lookup is O(1) after first use per module.
  */
-function walkClosure(
-  entryModuleId: string,
+export type ImportAliasResolver = {
+  resolve(
+    localName: string,
+    inModuleId: string,
+  ): { sourceModuleId: string; sourceName: string } | null;
+};
+
+export function makeImportAliasResolver(
   programs: Record<string, AgencyProgram>,
-): string[] {
-  const out: string[] = [];
-  const visited: Record<string, true> = {};
-  const queue: string[] = [entryModuleId];
-  while (queue.length > 0) {
-    const moduleId = queue.shift()!;
-    if (visited[moduleId]) continue;
-    visited[moduleId] = true;
-    out.push(moduleId);
-    const program = programs[moduleId];
-    if (!program) continue;
-    for (const node of program.nodes) {
-      const imported = getAgencyImportTarget(node);
-      if (!imported) continue;
-      const absPath = resolveAgencyImportPath(imported, moduleId);
-      if (!visited[absPath]) queue.push(absPath);
-    }
-  }
-  return out;
-}
-
-function getAgencyImportTarget(node: AgencyNode): string | null {
-  if (node.type === "importStatement" && isAgencyImport(node.modulePath)) {
-    return node.modulePath;
-  }
-  if (node.type === "importNodeStatement") {
-    return node.agencyFile;
-  }
-  if (node.type === "exportFromStatement" && isAgencyImport(node.modulePath)) {
-    return node.modulePath;
-  }
-  return null;
-}
-
-/**
- * For every named import in `program`, build a map from the local name
- * (the name used in this module) to the ultimate source (moduleId,
- * originalName), chasing `export { x } from "y"` chains via the
- * SymbolTable's `reExportedFrom` metadata.
- */
-function buildAliasMap(
-  program: AgencyProgram,
-  moduleId: string,
   symbolTable: SymbolTable | undefined,
-): Record<string, { sourceModuleId: string; sourceName: string }> {
-  const out: Record<string, { sourceModuleId: string; sourceName: string }> = {};
-  for (const node of program.nodes) {
-    if (node.type !== "importStatement") continue;
-    if (!isAgencyImport(node.modulePath)) continue;
-    const importedFrom = resolveAgencyImportPath(node.modulePath, moduleId);
-    for (const named of node.importedNames) {
-      if (named.type !== "namedImport") continue;
-      for (const originalName of named.importedNames) {
-        const localName = named.aliases[originalName] ?? originalName;
-        const resolved = resolveThroughReExports(
-          importedFrom,
-          originalName,
+): ImportAliasResolver {
+  const cache: Record<
+    string,
+    Record<string, { sourceModuleId: string; sourceName: string }>
+  > = {};
+
+  function buildFor(moduleId: string): Record<
+    string,
+    { sourceModuleId: string; sourceName: string }
+  > {
+    const map: Record<
+      string,
+      { sourceModuleId: string; sourceName: string }
+    > = {};
+    const program = programs[moduleId];
+    if (!program || !symbolTable) return map;
+    for (const node of program.nodes) {
+      if (node.type !== "importStatement") continue;
+      if (!isAgencyImport(node.modulePath)) continue;
+      for (const resolved of symbolTable.resolveImport(node, moduleId)) {
+        map[resolved.localName] = followReExportChain(
+          resolved.file,
+          resolved.originalName,
           symbolTable,
         );
-        out[localName] = resolved;
       }
     }
+    return map;
   }
-  return out;
+
+  return {
+    resolve(localName, inModuleId) {
+      const moduleCache =
+        cache[inModuleId] ?? (cache[inModuleId] = buildFor(inModuleId));
+      return moduleCache[localName] ?? null;
+    },
+  };
 }
 
 /**
- * Walk re-export chains until we hit a symbol that lives in the file
- * that defines it. Returns `(definingModuleId, originalNameThere)`.
- *
- * Falls back to `(importedFrom, originalName)` if the chain can't be
- * walked (no symbol table, missing symbol, etc.).
+ * Walk `reExportedFrom` chains until we hit a symbol that lives in the
+ * file that defines it. Returns `(definingModuleId, originalNameThere)`.
+ * Falls back to `(startFile, startName)` if the chain can't be walked.
  */
-function resolveThroughReExports(
+function followReExportChain(
   startFile: string,
   startName: string,
-  symbolTable: SymbolTable | undefined,
+  symbolTable: SymbolTable,
 ): { sourceModuleId: string; sourceName: string } {
-  if (!symbolTable) {
-    return { sourceModuleId: startFile, sourceName: startName };
-  }
   let curFile = startFile;
   let curName = startName;
-  // Cap iterations defensively; the SymbolTable already rejects re-export
-  // cycles when it builds, so this should never spin in practice.
+  // Defensive cap; SymbolTable rejects re-export cycles when it builds.
   for (let i = 0; i < 64; i++) {
     const sym = symbolTable.getFile(curFile)?.[curName];
     if (!sym || !sym.reExportedFrom) {
@@ -276,135 +209,355 @@ function resolveThroughReExports(
   return { sourceModuleId: curFile, sourceName: curName };
 }
 
-function collectFileImports(
-  program: AgencyProgram,
-  moduleId: string,
-): string[] {
-  const out: string[] = [];
-  const seen: Record<string, true> = {};
-  for (const node of program.nodes) {
-    const target = getAgencyImportTarget(node);
-    if (!target) continue;
-    const abs = resolveAgencyImportPath(target, moduleId);
-    if (!seen[abs]) {
-      seen[abs] = true;
-      out.push(abs);
+/**
+ * Build the two phase-separated dep graphs from the entry's full
+ * pre-parsed import closure.
+ *
+ * `programs` maps absolute module paths to their parsed AST and MUST
+ * already contain every module reachable from `entryModuleId`. We do
+ * not re-walk imports — the entry point (`compileClosure`) owns that.
+ *
+ * `symbolTable`, when provided, enables re-export chain resolution.
+ * Without it, re-exporters appear as unresolved local names and produce
+ * no edge — fine for the simplest unit tests but pulls the
+ * `importedAlias` codegen path into the same starvation case the
+ * PR-1 trap covers, so production callers should always pass one.
+ */
+export function buildInitDepGraphs(
+  programs: Record<string, AgencyProgram>,
+  symbolTable: SymbolTable | undefined,
+  entryModuleId: string,
+): BuildInitDepGraphsResult {
+  const resolver = makeImportAliasResolver(programs, symbolTable);
+  const sequenceHints = computeSequenceHintBase(programs, entryModuleId);
+
+  // ── 1. Collect every node, routing each into the static or global graph.
+  const staticNodes: Record<InitVarKey, InitVarNode> = {};
+  const globalNodes: Record<InitVarKey, InitVarNode> = {};
+
+  for (const moduleId of Object.keys(programs)) {
+    const program = programs[moduleId];
+    if (!program) continue;
+    const depthBase = sequenceHints[moduleId] ?? 0;
+
+    for (const node of program.nodes) {
+      const varNode = nodeFromTopLevel(node, moduleId, depthBase);
+      if (!varNode) continue;
+      const target = varNode.kind === "static" ? staticNodes : globalNodes;
+      target[makeKey(varNode.moduleId, varNode.varName)] = varNode;
     }
   }
-  return out;
+
+  // ── 2. Compute edges within each graph by walking each node's
+  //       initializer expression for free identifier references.
+  const staticEdges = computeEdges(staticNodes, resolver);
+  const globalEdges = computeEdgesGlobal(
+    globalNodes,
+    staticNodes,
+    resolver,
+  );
+
+  // ── 3. Phase-coupling validation: a static reading a global is a
+  //       compile error. (Global reading static is fine — handled in
+  //       computeEdgesGlobal which skips static refs as deps.)
+  rejectStaticReferencesGlobal(staticNodes, globalNodes, resolver);
+
+  return {
+    staticGraph: { nodes: staticNodes, edges: staticEdges },
+    globalGraph: { nodes: globalNodes, edges: globalEdges },
+    resolver,
+  };
 }
 
+// ── Node extraction ──
+
 /**
- * Unwrap a top-level node into an Assignment if it represents a value-init
- * declaration the dep graph should track. Skips non-assignments and
- * assignments that are statements inside blocks (those aren't top-level).
- *
- * Bare top-level statements (function calls etc) are NOT tracked here —
- * they're sequenced by source order within their module and don't have
- * a name to depend on. Task 3 attaches them to the init plan separately.
+ * Convert a top-level program node into an `InitVarNode` if it's
+ * something that participates in either init graph. Returns `null` for
+ * top-level constructs that don't (functions, graph nodes, imports,
+ * type aliases, comments, …).
  */
-function unwrapTopLevelInitVar(node: AgencyNode): Assignment | null {
-  // Top-level assignments come out of the parser without a `scope` field
-  // set (scope is assigned by a later preprocessor pass). All of them
-  // are candidates for the init graph: `static`-prefixed ones become
-  // Phase A; the rest become Phase B globals.
-  if (node.type === "assignment") return node;
-  if (node.type === "withModifier" && node.statement.type === "assignment") {
-    return node.statement;
+function nodeFromTopLevel(
+  node: AgencyNode,
+  moduleId: string,
+  depthBase: number,
+): InitVarNode | null {
+  const { stmt, withApprove } = unwrapWithApprove(node);
+
+  if (stmt.type === "assignment") {
+    const line = stmt.loc?.line ?? 0;
+    return {
+      moduleId,
+      varName: stmt.variableName,
+      kind: stmt.static ? "static" : "global",
+      initExpr: stmt.value as Expression,
+      loc: stmt.loc,
+      exported: !!stmt.exported,
+      sequenceHint: depthBase + line,
+      ...(withApprove && { withApprove: true }),
+    };
   }
+
+  // Bare top-level statements (function calls, etc.) participate in the
+  // GLOBAL graph only. PR 3's `static` keyword unlocks static bare
+  // statements; until then statics are decl-only.
+  if (isBareTopLevelStatement(stmt)) {
+    const line = stmt.loc?.line ?? 0;
+    return {
+      moduleId,
+      varName: `__bareStmt_${moduleId}_${line}`,
+      kind: "global",
+      initExpr: stmt,
+      loc: stmt.loc,
+      exported: false,
+      sequenceHint: depthBase + line,
+      ...(withApprove && { withApprove: true }),
+    };
+  }
+
   return null;
 }
 
 /**
- * Walk an expression and collect every free identifier reference
- * (variable-name literals). Does NOT descend into nested function /
- * lambda bodies — those bind their own scope and won't trigger init
- * ordering for the outer initializer.
+ * Unwrap a `<stmt> with approve` modifier into its inner statement +
+ * the flag. Returns the original node unchanged if there's no modifier.
+ * `handle { ... }` blocks are rejected by the parser at top level, so
+ * the only modifier shape we need to handle is `withModifier`.
+ */
+function unwrapWithApprove(node: AgencyNode): {
+  stmt: AgencyNode;
+  withApprove: boolean;
+} {
+  if (node.type === "withModifier") {
+    return { stmt: node.statement, withApprove: true };
+  }
+  return { stmt: node, withApprove: false };
+}
+
+/**
+ * True for nodes that are bare top-level statements with side effects we
+ * need to sequence (function calls, interrupts, etc.). Excludes
+ * declarations, imports, comments, and other non-running constructs.
+ */
+function isBareTopLevelStatement(node: AgencyNode): boolean {
+  switch (node.type) {
+    case "functionCall":
+    case "interruptStatement":
+      return true;
+    default:
+      return false;
+  }
+}
+
+// ── Edge computation ──
+
+function computeEdges(
+  nodes: Record<InitVarKey, InitVarNode>,
+  resolver: ImportAliasResolver,
+): Record<InitVarKey, InitVarKey[]> {
+  const edges: Record<InitVarKey, InitVarKey[]> = {};
+  for (const [key, node] of Object.entries(nodes)) {
+    edges[key] = depsFor(node, nodes, resolver);
+  }
+  return edges;
+}
+
+/**
+ * Global-graph edges: a global node depends on another global node it
+ * references. References to STATIC nodes are intentionally NOT edges —
+ * statics are fully initialized before any global init runs (cross-phase
+ * allowance, not a cross-graph edge).
+ */
+function computeEdgesGlobal(
+  globalNodes: Record<InitVarKey, InitVarNode>,
+  staticNodes: Record<InitVarKey, InitVarNode>,
+  resolver: ImportAliasResolver,
+): Record<InitVarKey, InitVarKey[]> {
+  const edges: Record<InitVarKey, InitVarKey[]> = {};
+  for (const [key, node] of Object.entries(globalNodes)) {
+    edges[key] = depsFor(node, globalNodes, resolver, staticNodes);
+  }
+  return edges;
+}
+
+/**
+ * For one node, find every other node in `lookupSet` its initializer
+ * directly references and return their keys (no duplicates, no
+ * self-edges). `skipSet`, if provided, is the set of nodes whose
+ * references should be silently skipped (used to skip static refs when
+ * computing global edges).
+ */
+function depsFor(
+  node: InitVarNode,
+  lookupSet: Record<InitVarKey, InitVarNode>,
+  resolver: ImportAliasResolver,
+  skipSet?: Record<InitVarKey, InitVarNode>,
+): InitVarKey[] {
+  const seen: Record<InitVarKey, true> = {};
+  const out: InitVarKey[] = [];
+  for (const refName of collectFreeIdentifiers(node.initExpr)) {
+    if (refName === node.varName) continue;
+    const refKey = resolveRefKey(refName, node.moduleId, resolver);
+    if (!refKey) continue;
+    if (skipSet?.[refKey]) continue;
+    if (!lookupSet[refKey] || seen[refKey]) continue;
+    seen[refKey] = true;
+    out.push(refKey);
+  }
+  return out;
+}
+
+/**
+ * Resolve a free identifier (used inside `inModuleId`'s code) to a
+ * canonical `${moduleId}::${name}` key. Same-module references resolve
+ * directly; cross-module references go through the alias resolver.
+ * Returns `null` for names not bound by either path.
+ */
+function resolveRefKey(
+  refName: string,
+  inModuleId: string,
+  resolver: ImportAliasResolver,
+): InitVarKey | null {
+  const aliased = resolver.resolve(refName, inModuleId);
+  if (aliased) {
+    return makeKey(aliased.sourceModuleId, aliased.sourceName);
+  }
+  return makeKey(inModuleId, refName);
+}
+
+// ── Phase-coupling validation ──
+
+function rejectStaticReferencesGlobal(
+  staticNodes: Record<InitVarKey, InitVarNode>,
+  globalNodes: Record<InitVarKey, InitVarNode>,
+  resolver: ImportAliasResolver,
+): void {
+  for (const node of Object.values(staticNodes)) {
+    for (const refName of collectFreeIdentifiers(node.initExpr)) {
+      if (refName === node.varName) continue;
+      const refKey = resolveRefKey(refName, node.moduleId, resolver);
+      if (!refKey) continue;
+      const offender = globalNodes[refKey];
+      if (offender) throw new StaticReferencesGlobalError(node, offender);
+    }
+  }
+}
+
+// ── Free-identifier collection ──
+
+/**
+ * Collect every free `variableName` reference in `expr`, declaratively,
+ * via the shared `walkNodes` walker. Skips identifiers that appear
+ * inside nested name-binding constructs (`function`, `graphNode`) by
+ * checking the ancestor stack — those bodies don't execute during the
+ * outer initializer evaluation.
  */
 function collectFreeIdentifiers(expr: Expression | AgencyNode): string[] {
   const out: string[] = [];
-  const visit = (n: any): void => {
-    if (!n || typeof n !== "object") return;
-    if (Array.isArray(n)) {
-      for (const c of n) visit(c);
-      return;
+  for (const { node, ancestors } of walkNodes([expr as AgencyNode])) {
+    if (node.type !== "variableName") continue;
+    if (
+      ancestors.some(
+        (a) => a.type === "function" || a.type === "graphNode",
+      )
+    ) {
+      continue;
     }
-    switch (n.type) {
-      case "variableName":
-        out.push(n.value);
-        return;
-      case "function":
-      case "graphNode":
-        // Lambdas / nested defs: their body is closed over but doesn't
-        // execute during outer initializer evaluation. Skip.
-        return;
-      case "valueAccess":
-        visit(n.base);
-        for (const el of n.chain) {
-          if (el.kind === "index") visit(el.index);
-          else if (el.kind === "slice") {
-            if (el.start) visit(el.start);
-            if (el.end) visit(el.end);
-          } else if (el.kind === "methodCall") visit(el.functionCall);
-        }
-        return;
-      case "functionCall":
-        // Function name itself MAY be a top-level def; but as noted in
-        // the file header we don't add edges for callable references —
-        // only value references. Skip the name; recurse into args.
-        for (const arg of n.arguments) {
-          if (arg.type === "splat") visit(arg.value);
-          else if (arg.type === "namedArgument") visit(arg.value);
-          else visit(arg);
-        }
-        return;
-      case "binOpExpression":
-        visit(n.left);
-        visit(n.right);
-        return;
-      case "agencyArray":
-        for (const item of n.items) {
-          if (item?.type === "splat") visit(item.value);
-          else visit(item);
-        }
-        return;
-      case "agencyObject":
-        for (const e of n.entries) {
-          if (e?.type === "splat") visit(e.value);
-          else {
-            if (e.computedKey) visit(e.computedKey);
-            visit(e.value);
-          }
-        }
-        return;
-      case "string":
-      case "multiLineString":
-        for (const seg of n.segments) {
-          if (seg.type === "interpolation") visit(seg.expression);
-        }
-        return;
-      case "newExpression":
-        for (const arg of n.arguments) {
-          if (arg.type === "splat") visit(arg.value);
-          else if (arg.type === "namedArgument") visit(arg.value);
-          else visit(arg);
-        }
-        return;
-      case "tryExpression":
-        visit(n.expression);
-        return;
-      case "isExpression":
-        visit(n.value);
-        return;
-    }
-    // Generic fallback: walk every own property to catch any expression
-    // shape we didn't enumerate above. Safe because the early returns
-    // above handled name-binding cases (function, graphNode).
-    for (const key of Object.keys(n)) {
-      if (key === "type" || key === "loc") continue;
-      visit(n[key]);
-    }
-  };
-  visit(expr);
+    out.push(node.value);
+  }
   return out;
+}
+
+// ── Sequence-hint computation ──
+
+/**
+ * Compute each module's `(fileImportDepth × 1e6)` base value. Leaves of
+ * the file-import DAG get 0; modules importing them get higher values;
+ * file-import cycles (allowed by design — the router pattern) tolerated
+ * by assigning leftover modules the tail of the ordering. Each node's
+ * final `sequenceHint = depthBase + sourceLine` is computed by the
+ * caller. Lower hint → initializes earlier.
+ */
+function computeSequenceHintBase(
+  programs: Record<string, AgencyProgram>,
+  entryModuleId: string,
+): Record<string, number> {
+  // file-import DAG: module → modules it agency-imports.
+  const fileImports: Record<string, string[]> = {};
+  const modules = new Set<string>([entryModuleId]);
+  for (const moduleId of Object.keys(programs)) modules.add(moduleId);
+  for (const moduleId of modules) {
+    fileImports[moduleId] = agencyImportTargets(
+      programs[moduleId],
+      moduleId,
+    ).filter((m) => modules.has(m));
+  }
+
+  // Kahn over the reversed DAG: leaves (no imports) come first.
+  const inDeg: Record<string, number> = {};
+  const dependents: Record<string, string[]> = {};
+  for (const m of modules) {
+    inDeg[m] = 0;
+    dependents[m] = [];
+  }
+  for (const m of modules) {
+    for (const imp of fileImports[m]) {
+      dependents[imp].push(m);
+      inDeg[m]++;
+    }
+  }
+
+  const depth: Record<string, number> = {};
+  let counter = 0;
+  const ready = [...modules].filter((m) => inDeg[m] === 0).sort();
+  while (ready.length > 0) {
+    const m = ready.shift()!;
+    depth[m] = counter++;
+    for (const dep of dependents[m]) {
+      inDeg[dep]--;
+      if (inDeg[dep] === 0) {
+        ready.push(dep);
+        ready.sort();
+      }
+    }
+  }
+  // file-import cycle leftovers → tail of the ordering, deterministically.
+  for (const m of [...modules].sort()) {
+    if (depth[m] === undefined) depth[m] = counter++;
+  }
+
+  const SCALE = 1_000_000;
+  const out: Record<string, number> = {};
+  for (const m of modules) out[m] = depth[m] * SCALE;
+  return out;
+}
+
+function agencyImportTargets(
+  program: AgencyProgram | undefined,
+  moduleId: string,
+): string[] {
+  if (!program) return [];
+  const out: string[] = [];
+  for (const node of program.nodes) {
+    const target = agencyImportTarget(node);
+    if (!target) continue;
+    out.push(resolveAgencyImportPath(target, moduleId));
+  }
+  return out;
+}
+
+function agencyImportTarget(node: AgencyNode): string | null {
+  if (node.type === "importStatement" && isAgencyImport(node.modulePath)) {
+    return node.modulePath;
+  }
+  if (node.type === "importNodeStatement") {
+    return node.agencyFile;
+  }
+  if (
+    node.type === "exportFromStatement" &&
+    isAgencyImport(node.modulePath)
+  ) {
+    return node.modulePath;
+  }
+  return null;
 }

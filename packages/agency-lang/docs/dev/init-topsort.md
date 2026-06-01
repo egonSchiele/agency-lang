@@ -145,17 +145,12 @@ static (`static const x = _reexport_x`) emitted by
 emerges from one-hop edges; do not follow the chain to the ultimate
 source in the resolver.
 
-### Known gap: non-static `export const`
-
-`SymbolTable` registers `assignment` symbols only for
-`export && static && const`. Cross-module references to exported
-globals (`export const x = "g"`) are invisible to the resolver
-today. Those refs work at runtime via the lazy `if
-(!ctx.globals.isInitialized(...)) __initializeGlobals(...)` guard
-emitted at every function-entry, but they do not participate in
-plan-driven awaits. Closing this gap is future work — it would let
-named-import bare statements contribute cross-module awaits to the
-global plan (today only namespace imports can).
+Resolver coverage is complete for the supported export surface. In
+Agency, globals cannot be exported at all — only statics can. Users
+that want to expose mutable state across modules export a function
+that reads or mutates the global, and the global itself stays local
+to its defining module. There is therefore no "non-static export
+const" case the resolver needs to handle.
 
 ## collectFreeIdentifiers (`FreeRef`)
 

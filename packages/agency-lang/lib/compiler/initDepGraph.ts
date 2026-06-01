@@ -133,6 +133,11 @@ export class StaticReferencesGlobalError extends Error {
  * module) to the `(moduleId, name)` pair that defines the value, walking
  * `export { x } from "y"` chains to the ultimate source.
  *
+ * `resolveNamespace` covers the `import * as bar from "./bar.agency"`
+ * shape: given the local prefix `bar`, returns the source module so
+ * `bar.barStatic` can be resolved as `(bar.agency, barStatic)`. Returns
+ * null when no namespace import bound that prefix in this module.
+ *
  * Built once per `compileClosure` call; cached internally so a name
  * lookup is O(1) after first use per module.
  */
@@ -141,6 +146,10 @@ export type ImportAliasResolver = {
     localName: string,
     inModuleId: string,
   ): { sourceModuleId: string; sourceName: string } | null;
+  resolveNamespace(
+    prefix: string,
+    inModuleId: string,
+  ): { sourceModuleId: string } | null;
 };
 
 export function makeImportAliasResolver(
@@ -151,6 +160,7 @@ export function makeImportAliasResolver(
     string,
     Record<string, { sourceModuleId: string; sourceName: string }>
   > = {};
+  const nsCache: Record<string, Record<string, { sourceModuleId: string }>> = {};
 
   function buildFor(moduleId: string): Record<
     string,
@@ -182,11 +192,36 @@ export function makeImportAliasResolver(
     return map;
   }
 
+  function buildNamespaceFor(
+    moduleId: string,
+  ): Record<string, { sourceModuleId: string }> {
+    const map: Record<string, { sourceModuleId: string }> = {};
+    const program = programs[moduleId];
+    if (!program) return map;
+    for (const node of program.nodes) {
+      if (node.type !== "importStatement") continue;
+      if (!isAgencyImport(node.modulePath)) continue;
+      for (const nameType of node.importedNames) {
+        if (nameType.type !== "namespaceImport") continue;
+        map[nameType.importedNames] = {
+          sourceModuleId: resolveAgencyImportPath(node.modulePath, moduleId),
+        };
+      }
+    }
+    return map;
+  }
+
   return {
     resolve(localName, inModuleId) {
       const moduleCache =
         cache[inModuleId] ?? (cache[inModuleId] = buildFor(inModuleId));
       return moduleCache[localName] ?? null;
+    },
+    resolveNamespace(prefix, inModuleId) {
+      const moduleCache =
+        nsCache[inModuleId] ??
+        (nsCache[inModuleId] = buildNamespaceFor(inModuleId));
+      return moduleCache[prefix] ?? null;
     },
   };
 }
@@ -377,9 +412,9 @@ function depsFor(
 ): InitVarKey[] {
   const seen: Record<InitVarKey, true> = {};
   const out: InitVarKey[] = [];
-  for (const refName of collectFreeIdentifiers(node.initExpr)) {
-    if (refName === node.varName) continue;
-    const refKey = resolveRefKey(refName, node.moduleId, resolver);
+  for (const ref of collectFreeIdentifiers(node.initExpr)) {
+    if (ref.kind === "name" && ref.name === node.varName) continue;
+    const refKey = resolveFreeRef(ref, node.moduleId, resolver);
     if (!refKey) continue;
     if (skipSet?.[refKey]) continue;
     if (!lookupSet[refKey] || seen[refKey]) continue;
@@ -390,21 +425,29 @@ function depsFor(
 }
 
 /**
- * Resolve a free identifier (used inside `inModuleId`'s code) to a
- * canonical `${moduleId}::${name}` key. Same-module references resolve
- * directly; cross-module references go through the alias resolver.
- * Returns `null` for names not bound by either path.
+ * Resolve a free reference (simple name or namespace member) used
+ * inside `inModuleId`'s code to a canonical `${moduleId}::${name}`
+ * key. Same-module references resolve directly; cross-module
+ * references go through the alias resolver; `bar.barStatic`-style
+ * accesses go through the namespace resolver. Returns `null` for
+ * names not bound by any of those paths.
  */
-function resolveRefKey(
-  refName: string,
+function resolveFreeRef(
+  ref: FreeRef,
   inModuleId: string,
   resolver: ImportAliasResolver,
 ): InitVarKey | null {
-  const aliased = resolver.resolve(refName, inModuleId);
-  if (aliased) {
-    return makeKey(aliased.sourceModuleId, aliased.sourceName);
+  if (ref.kind === "name") {
+    const aliased = resolver.resolve(ref.name, inModuleId);
+    if (aliased) return makeKey(aliased.sourceModuleId, aliased.sourceName);
+    return makeKey(inModuleId, ref.name);
   }
-  return makeKey(inModuleId, refName);
+  // member access: `prefix.member`. Only register an edge if the
+  // prefix matches a namespace import — otherwise it could be a
+  // local variable / object access we have no business sequencing.
+  const ns = resolver.resolveNamespace(ref.prefix, inModuleId);
+  if (!ns) return null;
+  return makeKey(ns.sourceModuleId, ref.member);
 }
 
 // ── Phase-coupling validation ──
@@ -415,9 +458,9 @@ function rejectStaticReferencesGlobal(
   resolver: ImportAliasResolver,
 ): void {
   for (const node of Object.values(staticNodes)) {
-    for (const refName of collectFreeIdentifiers(node.initExpr)) {
-      if (refName === node.varName) continue;
-      const refKey = resolveRefKey(refName, node.moduleId, resolver);
+    for (const ref of collectFreeIdentifiers(node.initExpr)) {
+      if (ref.kind === "name" && ref.name === node.varName) continue;
+      const refKey = resolveFreeRef(ref, node.moduleId, resolver);
       if (!refKey) continue;
       const offender = globalNodes[refKey];
       if (offender) throw new StaticReferencesGlobalError(node, offender);
@@ -428,21 +471,44 @@ function rejectStaticReferencesGlobal(
 // ── Free-identifier collection ──
 
 /**
- * Collect every free `variableName` reference in `expr`, declaratively,
- * via the shared `walkNodes` walker. Skips identifiers that appear
- * inside nested name-binding constructs (`function`, `graphNode`) by
- * checking the ancestor stack — those bodies don't execute during the
- * outer initializer evaluation.
+ * A single free reference inside an initializer expression:
+ *   - `name`: a bare identifier like `barStatic` (resolved via the
+ *     `resolve` alias map).
+ *   - `member`: a two-part reference of the form `prefix.member`
+ *     where `prefix` is bound by a local declaration. The dep graph
+ *     treats it as an edge target only when `prefix` was bound by a
+ *     namespace import (`import * as bar from "./bar.agency"`), in
+ *     which case it resolves to `(bar.agency, member)` — the same
+ *     edge a named import would have produced. Local-variable
+ *     member accesses (`person.name`) produce no edge.
+ */
+export type FreeRef =
+  | { kind: "name"; name: string }
+  | { kind: "member"; prefix: string; member: string };
+
+/**
+ * Collect every free reference in `expr`, declaratively, via the
+ * shared `walkNodes` walker. Skips identifiers that appear inside
+ * nested name-binding constructs (`function`, `graphNode`) by checking
+ * the ancestor stack — those bodies don't execute during the outer
+ * initializer evaluation.
+ *
+ * Surfaces both bare identifiers (`barStatic`) and `prefix.member`
+ * patterns (`bar.barStatic`) so the dep graph can resolve namespace
+ * imports as cross-module edges. When a variableName is the base of
+ * a `prefix.member`-shape valueAccess we skip its standalone yield;
+ * the member form supersedes it.
  *
  * Exported so callers outside this module (e.g. `compileClosure`) can
- * reuse the same free-identifier discipline when computing additional
+ * reuse the same free-reference discipline when computing additional
  * cross-phase await dependencies that aren't representable as edges in
  * either single-phase graph.
  */
-export function collectFreeIdentifiers(expr: Expression | AgencyNode): string[] {
-  const out: string[] = [];
+export function collectFreeIdentifiers(
+  expr: Expression | AgencyNode,
+): FreeRef[] {
+  const out: FreeRef[] = [];
   for (const { node, ancestors } of walkNodes([expr as AgencyNode])) {
-    if (node.type !== "variableName") continue;
     if (
       ancestors.some(
         (a) => a.type === "function" || a.type === "graphNode",
@@ -450,7 +516,31 @@ export function collectFreeIdentifiers(expr: Expression | AgencyNode): string[] 
     ) {
       continue;
     }
-    out.push(node.value);
+    if (
+      node.type === "valueAccess" &&
+      node.base.type === "variableName" &&
+      node.chain[0]?.kind === "property"
+    ) {
+      out.push({
+        kind: "member",
+        prefix: (node.base as { value: string }).value,
+        member: node.chain[0].name,
+      });
+      continue;
+    }
+    if (node.type !== "variableName") continue;
+    // Skip variableName when it's the base of a `prefix.member`
+    // valueAccess — already emitted above as a `member` ref.
+    const parent = ancestors[ancestors.length - 1];
+    if (
+      parent &&
+      parent.type === "valueAccess" &&
+      (parent as { base: AgencyNode }).base === node &&
+      (parent as { chain: { kind: string }[] }).chain[0]?.kind === "property"
+    ) {
+      continue;
+    }
+    out.push({ kind: "name", name: node.value });
   }
   return out;
 }

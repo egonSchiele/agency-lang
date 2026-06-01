@@ -369,12 +369,19 @@ function globalPhasePlanFor(
   for (const key of Object.keys(globalGraph.nodes)) {
     const node = globalGraph.nodes[key];
     if (!node || node.moduleId !== moduleId) continue;
-    for (const refName of collectFreeIdentifiers(node.initExpr)) {
-      if (refName === node.varName) continue;
-      const aliased = resolver.resolve(refName, moduleId);
-      const refKey = aliased
-        ? makeKey(aliased.sourceModuleId, aliased.sourceName)
-        : makeKey(moduleId, refName);
+    for (const ref of collectFreeIdentifiers(node.initExpr)) {
+      let refKey: string;
+      if (ref.kind === "name") {
+        if (ref.name === node.varName) continue;
+        const aliased = resolver.resolve(ref.name, moduleId);
+        refKey = aliased
+          ? makeKey(aliased.sourceModuleId, aliased.sourceName)
+          : makeKey(moduleId, ref.name);
+      } else {
+        const ns = resolver.resolveNamespace(ref.prefix, moduleId);
+        if (!ns) continue;
+        refKey = makeKey(ns.sourceModuleId, ref.member);
+      }
       const staticNode = staticGraph.nodes[refKey];
       if (!staticNode || staticNode.moduleId === moduleId) continue;
       awaitModulesSet[staticNode.moduleId] = true;

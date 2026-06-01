@@ -401,6 +401,55 @@ describe("buildInitDepGraphs", () => {
     }
   });
 
+  it("adds a cross-module edge for a namespace-imported static (bar.x)", () => {
+    // Regression: `import * as bar from "./bar.agency"` was invisible
+    // to the init dep graph — `bar.barStatic` did not produce an
+    // edge, so foo's static initializer could run before bar's
+    // __initializeStatic. The fix resolves `(bar, "barStatic")` via
+    // the namespace alias resolver and registers the same cross-
+    // module edge a named import would have produced.
+    const { dir, programs, symbolTable, abs } = writeFixture({
+      "foo.agency":
+        `import * as bar from "./bar.agency"\n` +
+        `static const fooStatic = bar.barStatic + "!"\n` +
+        `node main() { return fooStatic }\n`,
+      "bar.agency": `export static const barStatic = "hello"\n`,
+    });
+    try {
+      const { staticGraph } = buildInitDepGraphs(
+        programs,
+        symbolTable,
+        abs("foo.agency"),
+      );
+      const keyFoo = makeKey(abs("foo.agency"), "fooStatic");
+      const keyBar = makeKey(abs("bar.agency"), "barStatic");
+      expect(staticGraph.edges[keyFoo]).toEqual([keyBar]);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects a namespace-imported global referenced from a static initializer", () => {
+    // Same cross-phase rule as for named imports: a `static const`
+    // initializer cannot read a `global` const, even through a
+    // namespace alias. Without surfacing namespace refs, this would
+    // silently compile and trip the runtime read-before-init trap at
+    // first call instead of failing at compile time.
+    const { dir, programs, symbolTable, abs } = writeFixture({
+      "foo.agency":
+        `import * as bar from "./bar.agency"\n` +
+        `static const fooStatic = bar.barGlobal + "!"\n`,
+      "bar.agency": `export const barGlobal = "G"\n`,
+    });
+    try {
+      expect(() =>
+        buildInitDepGraphs(programs, symbolTable, abs("foo.agency")),
+      ).toThrow(StaticReferencesGlobalError);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it("collects free-var refs from string interpolation, spreads, new, splats", () => {
     const { dir, programs, symbolTable, abs } = writeFixture({
       "entry.agency":

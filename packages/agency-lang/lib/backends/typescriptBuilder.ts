@@ -449,6 +449,8 @@ export class TypeScriptBuilder {
       staticAwaitModules: this.initPlan?.staticAwaitModules,
       globalAwaitModules: this.initPlan?.globalAwaitModules,
       registryModuleId: this.initPlan?.registryModuleId,
+      staticLocalOrder: this.initPlan?.staticLocalOrder,
+      globalLocalOrder: this.initPlan?.globalLocalOrder,
     });
   }
 

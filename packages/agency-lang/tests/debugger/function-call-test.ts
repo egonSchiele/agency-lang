@@ -157,7 +157,7 @@ __registerTool(callback);
 async function __initializeGlobals(__ctx) {
   __ctx.globals.markInitialized("tests/debugger/function-call-test.agency")
 }
-__registerGlobalsInit("/Users/adityabhargava/agency-lang/packages/agency-lang/.worktrees/agent-init-pr2-per-var-topsort/packages/agency-lang/tests/debugger/function-call-test.agency", __initializeGlobals);
+__registerGlobalsInit("tests/debugger/function-call-test.agency", __initializeGlobals);
 async function __registerTopLevelCallbacks(__ctx) {
   __ctx.topLevelCallbacks = [];
 }

@@ -1,6 +1,24 @@
+import * as path from "path";
 import type { AgencyNode, AgencyProgram } from "../../types.js";
 import type { TsNode } from "../../ir/tsIR.js";
 import { ts } from "../../ir/builders.js";
+
+/**
+ * Convert an absolute module path to one rooted at the codegen cwd
+ * for readability in the generated registry-key string literals.
+ * Falls back to the original string when `abs` is already relative
+ * (legacy callers that supply a relative `moduleId` directly).
+ *
+ * Safety: `register*Init` and `await*Init` both flow through this
+ * function before becoming string literals in the emitted JS, so
+ * registry keys still match exactly within a single compilation
+ * pass — the value of `process.cwd()` at runtime is irrelevant once
+ * the literals are baked in.
+ */
+function displayModuleId(abs: string): string {
+  if (!path.isAbsolute(abs)) return abs;
+  return path.relative(process.cwd(), abs);
+}
 
 /**
  * Two helpers for the orchestration phase of `TypeScriptBuilder.build()`:
@@ -338,6 +356,14 @@ export type AssembleSectionsOpts = {
    * correct for same-module flows.
    */
   registryModuleId?: string;
+  /**
+   * Plan-driven local init orders. Used purely for the human-readable
+   * banner comments above `__initializeStatic` / `__initializeGlobals`
+   * — the actual order is already baked into `staticInitStatements` /
+   * `globalInitStatements` by `reorderTagged` during partition.
+   */
+  staticLocalOrder?: string[];
+  globalLocalOrder?: string[];
 };
 
 /**
@@ -389,13 +415,13 @@ export function assembleSections(opts: AssembleSectionsOpts): TsNode {
 
   if (opts.staticVarNames.size > 0) {
     sections.push(...buildStaticVarSetup(opts));
-    // Register this module's static-init under its absolute moduleId
-    // so other modules can `await __awaitStaticInit(...)` it. Only
-    // needed when the module actually has statics — otherwise nobody
-    // will look it up.
+    // Register this module's static-init under its (cwd-relative)
+    // moduleId so other modules can `await __awaitStaticInit(...)` it.
+    // Only needed when the module actually has statics — otherwise
+    // nobody will look it up.
     sections.push(
       ts.raw(
-        `__registerStaticInit(${JSON.stringify(registryId)}, __initializeStatic);`,
+        `__registerStaticInit(${JSON.stringify(displayModuleId(registryId))}, __initializeStatic);`,
       ),
     );
   }
@@ -404,7 +430,7 @@ export function assembleSections(opts: AssembleSectionsOpts): TsNode {
   // Same idea for globals init.
   sections.push(
     ts.raw(
-      `__registerGlobalsInit(${JSON.stringify(registryId)}, __initializeGlobals);`,
+      `__registerGlobalsInit(${JSON.stringify(displayModuleId(registryId))}, __initializeGlobals);`,
     ),
   );
 
@@ -421,6 +447,36 @@ export function assembleSections(opts: AssembleSectionsOpts): TsNode {
   );
 
   return ts.statements(sections);
+}
+
+/**
+ * Build the leading banner-comment block for `__initializeStatic` /
+ * `__initializeGlobals`. Surfaces, in two human-readable lines, the
+ * plan-driven decisions baked into the function body: which other
+ * modules' init must complete before this one (cross-module awaits),
+ * and the order this module's own decls are assigned in (local
+ * order). Both lists are shown cwd-relative for readability.
+ *
+ * Lets a reviewer skim a generated module and see exactly what the
+ * topsort decided without re-deriving it from the body.
+ */
+function buildInitBanner(
+  phase: "static" | "global",
+  localOrder: string[],
+  awaitModules: string[],
+): TsNode[] {
+  if (localOrder.length === 0 && awaitModules.length === 0) return [];
+  const awaitsLine =
+    awaitModules.length > 0
+      ? awaitModules.map(displayModuleId).join(", ")
+      : "(none)";
+  const localLine =
+    localOrder.length > 0 ? localOrder.join(" → ") : "(none)";
+  return [
+    ts.comment(`Init plan (${phase} phase):`),
+    ts.comment(`  awaits (cross-module): ${awaitsLine}`),
+    ts.comment(`  local order:           ${localLine}`),
+  ];
 }
 
 /**
@@ -464,7 +520,7 @@ function buildStaticVarSetup(opts: AssembleSectionsOpts): TsNode[] {
   // `reorderTagged` did that ordering during partition).
   const awaitPrelude = (opts.staticAwaitModules ?? []).map((m) =>
     ts.raw(
-      `await __awaitStaticInit(${JSON.stringify(m.sourceModuleId)}, __ctx);`,
+      `await __awaitStaticInit(${JSON.stringify(displayModuleId(m.sourceModuleId))}, __ctx);`,
     ),
   );
   out.push(
@@ -472,6 +528,11 @@ function buildStaticVarSetup(opts: AssembleSectionsOpts): TsNode[] {
       "__initializeStatic",
       [{ name: "__ctx" }],
       ts.statements([
+        ...buildInitBanner(
+          "static",
+          opts.staticLocalOrder ?? [],
+          (opts.staticAwaitModules ?? []).map((m) => m.sourceModuleId),
+        ),
         ts.if(
           ts.id("__staticInitPromise"),
           ts.return(ts.id("__staticInitPromise")),
@@ -519,6 +580,11 @@ function buildInitializeGlobalsFn(opts: AssembleSectionsOpts): TsNode {
   // would read from ALS instead of the parameter).
   const ctxParam = ts.id("__ctx");
   const body: TsNode[] = [
+    ...buildInitBanner(
+      "global",
+      opts.globalLocalOrder ?? [],
+      (opts.globalAwaitModules ?? []).map((m) => m.sourceModuleId),
+    ),
     // Mark this module as initialized BEFORE running init statements.
     // This prevents infinite recursion when a global init expression
     // calls a function defined in the same module (which would trigger
@@ -544,7 +610,7 @@ function buildInitializeGlobalsFn(opts: AssembleSectionsOpts): TsNode {
   for (const m of opts.globalAwaitModules ?? []) {
     body.push(
       ts.raw(
-        `await __awaitGlobalsInit(${JSON.stringify(m.sourceModuleId)}, __ctx);`,
+        `await __awaitGlobalsInit(${JSON.stringify(displayModuleId(m.sourceModuleId))}, __ctx);`,
       ),
     );
   }

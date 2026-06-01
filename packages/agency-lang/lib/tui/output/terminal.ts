@@ -7,6 +7,14 @@ const EXIT_ALT_SCREEN = "\x1b[?1049l";
 const HIDE_CURSOR = "\x1b[?25l";
 const SHOW_CURSOR = "\x1b[?25h";
 const CURSOR_HOME = "\x1b[H";
+// Synchronized output (BSU/ESU, DCS 2026): tells supporting
+// terminals to buffer drawing operations between BSU and ESU and
+// apply them atomically. Eliminates the cell-by-cell repaint flicker
+// otherwise visible during a full-screen render. Terminals without
+// support (older xterm etc.) silently ignore the sequences.
+// Spec: https://gist.github.com/christianparpart/d8a62cc1ab659194337d73e399004036
+const BEGIN_SYNC = "\x1b[?2026h";
+const END_SYNC = "\x1b[?2026l";
 
 export class TerminalOutput implements OutputTarget {
   private inAltScreen = false;
@@ -65,7 +73,10 @@ export class TerminalOutput implements OutputTarget {
     // suspend/resume so the next frame redraws unconditionally.
     if (ansi === this.lastAnsi) return;
     this.lastAnsi = ansi;
-    process.stdout.write(CURSOR_HOME + ansi);
+    // Wrap the full-frame write in BSU/ESU so supporting terminals
+    // apply the new frame atomically instead of streaming the
+    // repaint cell-by-cell (which the eye perceives as flicker).
+    process.stdout.write(BEGIN_SYNC + CURSOR_HOME + ansi + END_SYNC);
   }
 
   destroy(): void {

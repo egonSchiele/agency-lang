@@ -707,7 +707,7 @@ _persistHistory(s: ReplState): boolean
 
 **Returns:** `boolean`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L878))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L885))
 
 ### _replReduce
 
@@ -724,7 +724,7 @@ _replReduce(s: ReplState, k: KeyEvent): ReplState
 
 **Returns:** [ReplState](#replstate)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L887))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L894))
 
 ### _replIsDone
 
@@ -740,7 +740,7 @@ _replIsDone(s: ReplState): boolean
 
 **Returns:** `boolean`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L1036))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L1043))
 
 ### repl
 
@@ -788,4 +788,4 @@ repl(output: any, status: any, onSubmit: any, prompt: string, historyFile: strin
 | paletteCommands | `any` | null |
 | tickMs | `number` | 100 |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L1068))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L1075))

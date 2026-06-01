@@ -854,18 +854,25 @@ def _replView(s: ReplState): Element {
       height: _PALETTE_ROWS,
       border: true,
     )
-    col.row(bg: "white", fg: "black", height: 1) as statusline {
+    col.row(bg: "#ffffff", fg: "#000000", height: 1) as statusline {
+      // Use hex colors (`#fff` / `#000`) instead of the named
+      // `white` / `black` because the named palette maps to the
+      // terminal theme: on dark themes `black` is rendered as a
+      // dim gray foreground that disappears against `white`. Hex
+      // forces the renderer to emit true 24-bit colors via the
+      // SGR 38;2;r;g;b / 48;2;r;g;b sequences (see
+      // lib/tui/render/ansi.ts `colorEscape`).
+      //
       // bg/fg are repeated on each child because child elements
       // don't inherit parent style — line()'s blank padding would
       // otherwise overwrite the row's background with uncolored
-      // cells. White-on-black gives high contrast for a thin status
-      // strip; bold makes the labels readable at small font sizes.
+      // cells.
       statusline.line(
-        stat.left, width: leftW, bg: "white", fg: "black", bold: true
+        stat.left, width: leftW, bg: "#ffffff", fg: "#000000", bold: true
       )
-      statusline.box(flex: 1, bg: "white") as _ {}
+      statusline.box(flex: 1, bg: "#ffffff") as _ {}
       statusline.line(
-        stat.right, width: rightW, bg: "white", fg: "black", bold: true
+        stat.right, width: rightW, bg: "#ffffff", fg: "#000000", bold: true
       )
     }
     col.row(height: 1) as inputrow {

@@ -529,10 +529,13 @@ def askUser(intr: any): Decision {
   if (scopedAvailable) { choices = ["a", "r", "aa", "ap", "rr"] }
 
   const answer = _routePrompt(menuText, choices)
-  if (answer == "a")  { return "approve" }
-  if (answer == "r")  { return "reject" }
-  if (answer == "aa") { return "approve-always" }
-  if (answer == "ap") { return "approve-always-here" }
+  match (answer) {
+    "a"  => return "approve"
+    "r"  => return "reject"
+    "aa" => return "approve-always"
+    "ap" => return "approve-always-here"
+    _    => return "reject-always"
+  }
   return "reject-always"
 }
 

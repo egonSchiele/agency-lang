@@ -3,7 +3,6 @@ import {
   Screen,
   TerminalInput,
   TerminalOutput,
-  ScriptedInput,
   FrameRecorder,
   type Element as TuiElement,
   type KeyEvent as TuiKeyEvent,
@@ -14,6 +13,7 @@ import type { Frame } from "@/tui/frame.js";
 import { toANSI } from "@/tui/render/ansi.js";
 import { withBottomCursor, installRegion, resetRegion } from "./ui-region.js";
 import { __call } from "../runtime/call.js";
+import { isFailure } from "../runtime/result.js";
 
 // ---------------------------------------------------------------------------
 // Declarative TS bridge for `std::ui`. Exposes the existing
@@ -34,60 +34,10 @@ let bridgeWidth = 80;
 let bridgeHeight = 24;
 let bridgeActiveScreen: Screen | null = null;
 
-type ActiveReplState = {
-  done?: boolean;
-  submit?: {
-    busy?: boolean;
-    label?: string;
-    startedAtMs?: number;
-  };
-  transcript: {
-    messages: string[];
-  };
-};
-
-let activeReplState: ActiveReplState | null = null;
-
-// Test-mode injection points. Agency tests call `_setScriptedKeys` (and
-// optionally `_setQuitAfterMs`) before entering a loop, and the next
-// `makeBridgeScreen` call consumes them — installing a `ScriptedInput`
-// seeded with the keys and a `FrameRecorder` output, then clearing the
-// pending values so subsequent loops fall back to defaults.
-let pendingScriptedKeys: TuiKeyEvent[] | null = null;
-let pendingQuitAfterMs: number | null = null;
-
-export function _setScriptedKeys(keys: TuiKeyEvent[]): void {
-  pendingScriptedKeys = keys;
-}
-
-export function _setQuitAfterMs(ms: number): void {
-  pendingQuitAfterMs = ms;
-}
-
 /** Consume any pending test-mode injection and fall back to real
  *  terminal I/O when production. Sets `bridgeInputSource`,
- *  `bridgeOutputTarget`, `bridgeWidth`, `bridgeHeight`. Shared by
- *  `makeBridgeScreen` and `_runLoopHybrid` so both paths see the
- *  same scripted-input behavior. */
+ *  `bridgeOutputTarget`, `bridgeWidth`, `bridgeHeight`. */
 function ensureBridgeState(): void {
-  if (pendingScriptedKeys) {
-    const scriptedInput = new ScriptedInput(pendingScriptedKeys);
-    bridgeInputSource = scriptedInput;
-    bridgeOutputTarget = new FrameRecorder();
-    bridgeWidth = 80;
-    bridgeHeight = 24;
-    pendingScriptedKeys = null;
-
-    // Optional: feed a `q` key after N ms to break out of a tickMs loop
-    // that scripted keys alone wouldn't terminate. Tests for runLoop's
-    // tick behavior set this so the loop ends without needing a
-    // scripted-keys timeline that matches the tick cadence.
-    if (pendingQuitAfterMs !== null) {
-      const ms = pendingQuitAfterMs;
-      setTimeout(() => scriptedInput.feedKey({ key: "q" }), ms);
-      pendingQuitAfterMs = null;
-    }
-  }
   if (!bridgeInputSource) bridgeInputSource = new TerminalInput();
   if (!bridgeOutputTarget) bridgeOutputTarget = new TerminalOutput();
   if (process.stdout.isTTY) {
@@ -156,29 +106,125 @@ async function callBridgeFn<T>(fn: unknown, ...args: unknown[]): Promise<T> {
   return (await __call(fn, { type: "positional", args })) as T;
 }
 
-export function _activateReplState(state: ActiveReplState): void {
-  activeReplState = state;
+/** Shape of the `state` arg `_beginSubmit` mutates while the async
+ *  onSubmit settles. Defined locally because the Agency `ReplState`
+ *  is record-typed and the bridge only cares about these three
+ *  fields. */
+type SubmitTargetState = {
+  done?: boolean;
+  submit?: {
+    busy?: boolean;
+    label?: string;
+    startedAtMs?: number;
+  };
+  transcript: {
+    messages: string[];
+  };
+};
+
+// ---------------------------------------------------------------------------
+// Console capture
+//
+// While a `repl()` is running it owns the alt-screen; any `console.log`
+// / `console.error` / raw `process.stdout.write` from underlying code
+// would otherwise be invisible. `_installConsoleCapture` overrides
+// those sinks so the text is appended to the REPL transcript instead.
+// The Agency-side `repl()` passes its `transcript.messages` array
+// straight in — since records share by reference, pushing to that
+// array is observable to the next render.
+// ---------------------------------------------------------------------------
+
+type ConsoleSinks = {
+  log: typeof console.log;
+  warn: typeof console.warn;
+  error: typeof console.error;
+  info: typeof console.info;
+  debug: typeof console.debug;
+  stdoutWrite: typeof process.stdout.write;
+  stderrWrite: typeof process.stderr.write;
+};
+
+let captureTarget: string[] | null = null;
+let savedConsoleSinks: ConsoleSinks | null = null;
+
+function formatConsoleArgs(args: unknown[]): string {
+  return args
+    .map((arg) =>
+      typeof arg === "string"
+        ? arg
+        : arg instanceof Error
+          ? arg.stack ?? arg.message
+          : (() => {
+              try {
+                return JSON.stringify(arg);
+              } catch {
+                return String(arg);
+              }
+            })(),
+    )
+    .join(" ");
 }
 
-export function _deactivateReplState(): void {
-  activeReplState = null;
-}
-
-function requireActiveReplState(): ActiveReplState {
-  if (!activeReplState) {
-    throw new Error("pushMessage() requires an active repl()");
+function pushCaptured(prefix: string, text: string): void {
+  if (!captureTarget) return;
+  // Split on newlines so multi-line writes become one transcript row
+  // per line. Trailing empty strings from a final `\n` are dropped so
+  // we don't render blank rows.
+  const lines = text.split("\n");
+  if (lines.length > 0 && lines[lines.length - 1] === "") lines.pop();
+  for (const line of lines) {
+    captureTarget.push(prefix ? `${prefix} ${line}` : line);
   }
-  return activeReplState;
 }
 
-export function _pushMessage(message: string): void {
-  const state = requireActiveReplState();
-  state.transcript.messages.push(message);
+export function _installConsoleCapture(messages: string[]): void {
+  if (savedConsoleSinks) return; // idempotent: nested installs leave the outer one in place
+  captureTarget = messages;
+  savedConsoleSinks = {
+    log: console.log,
+    warn: console.warn,
+    error: console.error,
+    info: console.info,
+    debug: console.debug,
+    stdoutWrite: process.stdout.write.bind(process.stdout),
+    stderrWrite: process.stderr.write.bind(process.stderr),
+  };
+
+  console.log = (...args: unknown[]) =>
+    pushCaptured("", formatConsoleArgs(args));
+  console.info = (...args: unknown[]) =>
+    pushCaptured("", formatConsoleArgs(args));
+  console.debug = (...args: unknown[]) =>
+    pushCaptured("", formatConsoleArgs(args));
+  console.warn = (...args: unknown[]) =>
+    pushCaptured("{yellow warn}", formatConsoleArgs(args));
+  console.error = (...args: unknown[]) =>
+    pushCaptured("{red error}", formatConsoleArgs(args));
+
+  // Reroute raw stdout/stderr writes too. The Screen's renderer uses
+  // `bridgeOutputTarget.write(...)` directly (it does not go through
+  // `process.stdout.write`), so REPL rendering keeps working.
+  (process.stdout as any).write = ((chunk: any, ..._rest: any[]) => {
+    pushCaptured("", String(chunk));
+    return true;
+  }) as any;
+  (process.stderr as any).write = ((chunk: any, ..._rest: any[]) => {
+    pushCaptured("{red stderr}", String(chunk));
+    return true;
+  }) as any;
 }
 
-export function _clearMessages(): void {
-  const state = requireActiveReplState();
-  state.transcript.messages = [];
+export function _uninstallConsoleCapture(): void {
+  if (!savedConsoleSinks) return;
+  console.log = savedConsoleSinks.log;
+  console.warn = savedConsoleSinks.warn;
+  console.error = savedConsoleSinks.error;
+  console.info = savedConsoleSinks.info;
+  console.debug = savedConsoleSinks.debug;
+  (process.stdout as any).write = savedConsoleSinks.stdoutWrite;
+  (process.stderr as any).write = savedConsoleSinks.stderrWrite;
+  savedConsoleSinks = null;
+  captureTarget = null;
 }
 
 export function _nowMs(): number {
@@ -196,11 +242,10 @@ export function _spinnerFrame(startedAtMs: number, nowMs = Date.now()): string {
 }
 
 export function _beginSubmit(
-  state: ActiveReplState,
+  state: SubmitTargetState,
   submitted: string,
   onSubmit: unknown,
 ): void {
-  _activateReplState(state);
   state.transcript.messages.push(`{bright-blue You} ${submitted}`);
   if (state.submit) {
     state.submit.busy = true;
@@ -214,6 +259,29 @@ export function _beginSubmit(
         const reply = await callBridgeFn<unknown>(onSubmit, submitted);
         if (reply === false) {
           state.done = true;
+          return;
+        }
+        // Surface Failure-typed returns explicitly. Agency functions
+        // catch JS exceptions in `safe` mode and return a Failure
+        // value instead of throwing; without this branch the failure
+        // would fall through the `typeof === "string"` guard and
+        // silently disappear behind the alt screen — exactly the
+        // class of bug that hid the early `spec.tools` spread error.
+        if (isFailure(reply)) {
+          const err = (reply as any).error;
+          const message =
+            err instanceof Error
+              ? err.message
+              : typeof err === "string"
+                ? err
+                : (() => {
+                    try {
+                      return JSON.stringify(err);
+                    } catch {
+                      return String(err);
+                    }
+                  })();
+          state.transcript.messages.push(`{red Error} ${message}`);
           return;
         }
         if (typeof reply === "string" && reply.length > 0) {
@@ -406,8 +474,8 @@ export function _resetScrollRegion(): void {
  *
  *  Output target selection:
  *  - **Test mode** (`bridgeOutputTarget` is a `FrameRecorder`,
- *    injected by `_setScriptedKeys` -> `ensureBridgeState`):
- *    frames go straight into the recorder so tests can inspect them.
+ *    injected by `_setOutputTarget`): frames go straight into the
+ *    recorder so tests can inspect them.
  *  - **Real terminal mode**: a fresh `BottomRegionOutputTarget`
  *    writes ANSI to stdout via `withBottomCursor`, bypassing the
  *    default `TerminalOutput` (which would enter the alt screen and

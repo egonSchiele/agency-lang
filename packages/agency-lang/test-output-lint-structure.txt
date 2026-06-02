@@ -1,0 +1,4 @@
+
+> agency-lang@0.3.0 lint:structure /Users/adityabhargava/agency-lang/packages/agency-lang/.worktrees/ui-pr3-migrate/packages/agency-lang
+> eslint lib/
+

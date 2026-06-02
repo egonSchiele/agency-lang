@@ -3,21 +3,17 @@ import {
   _renderOnce,
   _readKey,
   _hasActiveScreen,
-  _setScriptedKeys,
-  _setQuitAfterMs,
-  _activateReplState,
-  _deactivateReplState,
-  _pushMessage,
-  _clearMessages,
-  _recordedFrameTexts,
   _beginSubmit,
   _elapsedSeconds,
   _spinnerFrame,
   _nowMs,
+  _installConsoleCapture,
+  _uninstallConsoleCapture,
  } from "agency-lang/stdlib-lib/ui.js"
 import { _promptFromChoices } from "agency-lang/stdlib-lib/ui.js"
+import { filter, map } from "std::array"
 
-/**
+/** @module
   ## Overview
 
   Declarative terminal UI for interactive CLI agents. Two layers
@@ -37,9 +33,6 @@ import { _promptFromChoices } from "agency-lang/stdlib-lib/ui.js"
     buffer into the output pane. Backed by Layer 1; integrates with
     `std::policy.cliPolicyHandler` so interrupt prompts render
     through the active screen instead of fighting with the input bar.
-
-  Both layers are testable: `setScriptedKeys` feeds a deterministic
-  sequence into the loop so unit tests don't need a TTY.
 
   ## Usage: Layer 1 (custom widgets)
 
@@ -169,6 +162,19 @@ export def text(content: string): Element {
   }
 }
 
+// Shared helper for the leaf and container builders: copy `value`
+// into `style[key]` only when it carries a non-default value. The
+// "default" for our builder API is `null` (numbers / optionals),
+// `""` (strings), or `false` (booleans), so any of those is treated
+// as "leave the style untouched and let the renderer apply its own
+// default."
+def _setStyleIfSet(style: any, key: string, value: any) {
+  if (value == null) { return }
+  if (value == "") { return }
+  if (value == false) { return }
+  style[key] = value
+}
+
 /**
  * A single-line text element with `height: 1`. The default keeps it
  * from stretching via flex when placed inside a `column`. Caller-
@@ -178,9 +184,9 @@ export def text(content: string): Element {
  */
 export def line(
   content: string,
-  flex: number = null,
-  width: number = null,
-  height: number = null,
+  flex?: number,
+  width?: number,
+  height?: number,
   fg: string = "",
   bg: string = "",
   bold: boolean = false,
@@ -192,21 +198,11 @@ export def line(
   let style: any = {
     height: h
   }
-  if (flex != null) {
-    style.flex = flex
-  }
-  if (width != null) {
-    style.width = width
-  }
-  if (fg != "") {
-    style.fg = fg
-  }
-  if (bg != "") {
-    style.bg = bg
-  }
-  if (bold) {
-    style.bold = true
-  }
+  _setStyleIfSet(style, "flex", flex)
+  _setStyleIfSet(style, "width", width)
+  _setStyleIfSet(style, "fg", fg)
+  _setStyleIfSet(style, "bg", bg)
+  _setStyleIfSet(style, "bold", bold)
   return {
     type: "text",
     content: content,
@@ -224,29 +220,19 @@ export def line(
 export def list(
   items: string[],
   selectedIndex: number = 0,
-  flex: number = null,
-  width: number = null,
-  height: number = null,
+  flex?: number,
+  width?: number,
+  height?: number,
   border: boolean = false,
   borderColor: string = "",
   visible: boolean = true,
 ): Element {
   let style: any = {}
-  if (flex != null) {
-    style.flex = flex
-  }
-  if (width != null) {
-    style.width = width
-  }
-  if (height != null) {
-    style.height = height
-  }
-  if (border) {
-    style.border = true
-  }
-  if (borderColor != "") {
-    style.borderColor = borderColor
-  }
+  _setStyleIfSet(style, "flex", flex)
+  _setStyleIfSet(style, "width", width)
+  _setStyleIfSet(style, "height", height)
+  _setStyleIfSet(style, "border", border)
+  _setStyleIfSet(style, "borderColor", borderColor)
   if (!visible) {
     style.visible = false
   }
@@ -267,28 +253,18 @@ export def list(
  */
 export def textInput(
   value: string = "",
-  flex: number = null,
-  width: number = null,
-  height: number = null,
+  flex?: number,
+  width?: number,
+  height?: number,
   fg: string = "",
   bg: string = "",
 ): Element {
   let style: any = {}
-  if (flex != null) {
-    style.flex = flex
-  }
-  if (width != null) {
-    style.width = width
-  }
-  if (height != null) {
-    style.height = height
-  }
-  if (fg != "") {
-    style.fg = fg
-  }
-  if (bg != "") {
-    style.bg = bg
-  }
+  _setStyleIfSet(style, "flex", flex)
+  _setStyleIfSet(style, "width", width)
+  _setStyleIfSet(style, "height", height)
+  _setStyleIfSet(style, "fg", fg)
+  _setStyleIfSet(style, "bg", bg)
   return {
     type: "textInput",
     style: style,
@@ -308,10 +284,10 @@ export def textInput(
 
 def _mkBoxStyle(
   flexDirection: string,
-  flex: number = null,
-  width: number = null,
-  height: number = null,
-  padding: number = null,
+  flex?: number,
+  width?: number,
+  height?: number,
+  padding?: number,
   border: boolean = false,
   borderColor: string = "",
   label: string = "",
@@ -320,36 +296,16 @@ def _mkBoxStyle(
   visible: boolean = true,
 ): any {
   let style: any = {}
-  if (flexDirection != "") {
-    style.flexDirection = flexDirection
-  }
-  if (flex != null) {
-    style.flex = flex
-  }
-  if (width != null) {
-    style.width = width
-  }
-  if (height != null) {
-    style.height = height
-  }
-  if (padding != null) {
-    style.padding = padding
-  }
-  if (border) {
-    style.border = true
-  }
-  if (borderColor != "") {
-    style.borderColor = borderColor
-  }
-  if (label != "") {
-    style.label = label
-  }
-  if (bg != "") {
-    style.bg = bg
-  }
-  if (fg != "") {
-    style.fg = fg
-  }
+  _setStyleIfSet(style, "flexDirection", flexDirection)
+  _setStyleIfSet(style, "flex", flex)
+  _setStyleIfSet(style, "width", width)
+  _setStyleIfSet(style, "height", height)
+  _setStyleIfSet(style, "padding", padding)
+  _setStyleIfSet(style, "border", border)
+  _setStyleIfSet(style, "borderColor", borderColor)
+  _setStyleIfSet(style, "label", label)
+  _setStyleIfSet(style, "bg", bg)
+  _setStyleIfSet(style, "fg", fg)
   if (!visible) {
     style.visible = false
   }
@@ -373,10 +329,10 @@ def _makeBuilder(kids: any[]): Builder {
  * block receives a fresh `Builder` to populate the column.
  */
 export def column(
-  flex: number = null,
-  width: number = null,
-  height: number = null,
-  padding: number = null,
+  flex?: number,
+  width?: number,
+  height?: number,
+  padding?: number,
   border: boolean = false,
   borderColor: string = "",
   label: string = "",
@@ -415,10 +371,10 @@ export def column(
  * block receives a fresh `Builder` to populate the row.
  */
 export def row(
-  flex: number = null,
-  width: number = null,
-  height: number = null,
-  padding: number = null,
+  flex?: number,
+  width?: number,
+  height?: number,
+  padding?: number,
   border: boolean = false,
   borderColor: string = "",
   label: string = "",
@@ -455,10 +411,10 @@ export def row(
  * (border, padding, background) without setting `flexDirection`.
  */
 export def box(
-  flex: number = null,
-  width: number = null,
-  height: number = null,
-  padding: number = null,
+  flex?: number,
+  width?: number,
+  height?: number,
+  padding?: number,
   border: boolean = false,
   borderColor: string = "",
   label: string = "",
@@ -494,10 +450,10 @@ export def box(
 
 def _addRow(
   kids: any[],
-  flex: number = null,
-  width: number = null,
-  height: number = null,
-  padding: number = null,
+  flex?: number,
+  width?: number,
+  height?: number,
+  padding?: number,
   border: boolean = false,
   borderColor: string = "",
   label: string = "",
@@ -525,10 +481,10 @@ def _addRow(
 
 def _addColumn(
   kids: any[],
-  flex: number = null,
-  width: number = null,
-  height: number = null,
-  padding: number = null,
+  flex?: number,
+  width?: number,
+  height?: number,
+  padding?: number,
   border: boolean = false,
   borderColor: string = "",
   label: string = "",
@@ -556,10 +512,10 @@ def _addColumn(
 
 def _addBox(
   kids: any[],
-  flex: number = null,
-  width: number = null,
-  height: number = null,
-  padding: number = null,
+  flex?: number,
+  width?: number,
+  height?: number,
+  padding?: number,
   border: boolean = false,
   borderColor: string = "",
   label: string = "",
@@ -588,9 +544,9 @@ def _addBox(
 def _addLine(
   kids: any[],
   content: string,
-  flex: number = null,
-  width: number = null,
-  height: number = null,
+  flex?: number,
+  width?: number,
+  height?: number,
   fg: string = "",
   bg: string = "",
   bold: boolean = false,
@@ -618,9 +574,9 @@ def _addList(
   kids: any[],
   items: string[],
   selectedIndex: number = 0,
-  flex: number = null,
-  width: number = null,
-  height: number = null,
+  flex?: number,
+  width?: number,
+  height?: number,
   border: boolean = false,
   borderColor: string = "",
   visible: boolean = true,
@@ -642,9 +598,9 @@ def _addList(
 def _addTextInput(
   kids: any[],
   value: string = "",
-  flex: number = null,
-  width: number = null,
-  height: number = null,
+  flex?: number,
+  width?: number,
+  height?: number,
   fg: string = "",
   bg: string = "",
 ): Element {
@@ -702,37 +658,9 @@ export def runLoop(
   render: any,
   handleKey: any,
   isDone: any,
-  tickMs: number = null,
+  tickMs?: number,
 ): any {
   return _runLoop(initialState, render, handleKey, isDone, tickMs)
-}
-
-// ---- Test-mode injection (internal) ----
-//
-// Tests call these helpers to drive runLoop / repl without a real
-// TTY. `_runLoop` consumes the pending keys on its next invocation
-// and installs a ScriptedInput + FrameRecorder under the hood.
-
-/**
- * Seed the next `runLoop` (or `repl`) entry with a scripted key
- * sequence. Internal — used by tests in `tests/agency/ui-*`.
- *
- * @param keys - Array of `KeyEvent` records consumed in order
- */
-export def setScriptedKeys(keys: KeyEvent[]) {
-  _setScriptedKeys(keys)
-}
-
-/**
- * Schedule a `q` keypress N milliseconds after the next `runLoop`
- * starts. Internal — used by the tickMs coverage test so a
- * tick-driven loop terminates without a key-timeline that matches
- * the tick cadence.
- *
- * @param ms - Milliseconds before the synthetic `q` arrives
- */
-export def setQuitAfterMs(ms: number) {
-  _setQuitAfterMs(ms)
 }
 
 // ---------------------------------------------------------------------------
@@ -754,18 +682,16 @@ export def setQuitAfterMs(ms: number) {
 // view and closing it returns them.
 const _PALETTE_ROWS: number = 5
 
-/**
- * Private — used by other stdlib modules (notably `std::policy`)
- * to route a prompt through the active REPL when one exists, or
- * fall back to raw `print` + `input` otherwise.
- *
- * Not part of the public API; the underscore prefix is convention,
- * but the export is required so cross-module imports work.
- *
- * @param text - The menu/question text shown to the user
- * @param choices - The set of strings the user's answer must match
- */
 export def _routePrompt(text: string, choices: string[]): string {
+  """
+  Route a prompt through the active REPL when one exists, or fall
+  back to raw `print` + `input` otherwise. Used by other stdlib
+  modules (notably `std::policy`) to surface interactive prompts
+  without fighting with the input bar.
+
+  @param text - The menu/question text shown to the user
+  @param choices - The set of strings the user's answer must match
+  """
   if (_hasActiveScreen()) {
     return _promptFromChoices(text, choices)
   }
@@ -824,57 +750,63 @@ type ReplState = {
   done: boolean
 }
 
-/**
- * Append a styled message to the active `repl()` transcript.
- *
- * The message is rendered immediately on the next frame. The string
- * may include `std::ui` style markup or text returned by helpers
- * such as `color(...)`; `pushMessage` stores it unchanged.
- *
- * @param message - Styled or plain text to append to the transcript
- */
+// Holds the currently-running repl()'s state record. Module-level
+// `let` lives in the per-program GlobalStore, so concurrent agents
+// in different RuntimeContexts each have their own slot.
+// `pushMessage`/`clearMessages` operate on this; `repl()` sets and
+// clears it around `_runLoop`.
+let _activeRepl: any = null
+
 export def pushMessage(message: string) {
-  _pushMessage(message)
+  """
+  Append a styled message to the active repl() transcript. The
+  message renders on the next frame. The string may include std::ui
+  style markup or text returned by helpers such as color(...);
+  pushMessage stores it unchanged. No-op (with a warning printed to
+  stderr) when no repl() is active.
+
+  @param message - Styled or plain text to append to the transcript
+  """
+  if (_activeRepl == null) {
+    print("std::ui.pushMessage: no active repl(); dropping ${message}")
+    return
+  }
+  _activeRepl.transcript.messages.push(message)
 }
 
-/**
- * Remove all messages from the active `repl()` transcript.
- *
- * This is intended for tests and explicit "clear conversation"
- * commands inside interactive agents.
- */
 export def clearMessages() {
-  _clearMessages()
+  """
+  Remove all messages from the active repl() transcript. Intended
+  for explicit "clear conversation" commands inside interactive
+  agents. No-op (with a warning printed to stderr) when no repl() is
+  active.
+  """
+  if (_activeRepl == null) {
+    print("std::ui.clearMessages: no active repl(); ignoring call")
+    return
+  }
+  _activeRepl.transcript.messages = []
 }
 
-/**
- * Return the text snapshots recorded by scripted TUI tests.
- * Internal test helper used by Agency and agency-js integration
- * tests; real terminals return an empty array.
- */
-export def recordedFrameTexts(): string[] {
-  return _recordedFrameTexts()
-}
+def _entryKey(entry: any): string { return entry.key }
 
 // Returns the keys of palette commands whose name contains the
-// lowercased filter substring. Lists in insertion order.
+// lowercased filter substring. Lists in insertion order. Uses the
+// std::array filter()/map() instead of manual for-loops; the
+// substring guard is a PFA so `filter` can be called directly
+// without an inline lambda (Agency does not parse arrow expressions
+// in call position).
 def _filteredPaletteKeys(state: ReplState): string[] {
-  const paletteCommands = state.palette.commands
-  let allCommandNames: string[] = []
-  for (entry in entries(paletteCommands)) {
-    allCommandNames.push(entry.key)
-  }
+  const allCommandNames: string[] = map(entries(state.palette.commands), _entryKey)
   if (state.palette.filter == "") {
     return allCommandNames
   }
-  let matchingCommandNames: string[] = []
   const filterText = state.palette.filter.toLowerCase()
-  for (commandName in allCommandNames) {
-    if (commandName.toLowerCase().includes(filterText)) {
-      matchingCommandNames.push(commandName)
-    }
-  }
-  return matchingCommandNames
+  return filter(allCommandNames, _matchesFilter.partial(filterText: filterText))
+}
+
+def _matchesFilter(name: string, filterText: string): boolean {
+  return name.toLowerCase().includes(filterText)
 }
 
 def _busyLine(state: ReplState): string {
@@ -887,11 +819,13 @@ def _busyLine(state: ReplState): string {
   return "{bright-yellow ${spinnerFrame}} ${state.submit.label} ${elapsedSeconds}s"
 }
 
-// View: the full terminal. `state.transcript.messages` is the single
-// output buffer and is projected into an auto-scrolling list at the
-// top. Palette + status + input pin to the bottom because none of
-// them are flex; standard `flex-start` column layout packs flex:1
-// first, then the fixed-height tail items.
+/**
+ * View: the full terminal. `state.transcript.messages` is the single
+ * output buffer and is projected into an auto-scrolling list at the
+ * top. Palette + status + input pin to the bottom because none of
+ * them are flex; standard `flex-start` column layout packs flex:1
+ * first, then the fixed-height tail items.
+ */
 def _replView(state: ReplState): Element {
   const status = state.config.status()
   const paletteKeys = _filteredPaletteKeys(state)
@@ -1158,32 +1092,6 @@ def _replIsDone(state: ReplState): boolean {
   return state.done
 }
 
-/**
- * Drop-in REPL widget for interactive CLI agents. Bundles a
- * scrollable output area, a live status line, a slash-command
- * palette (triggered by `/`), and an input line with history
- * navigation.
- *
- * Owns the full terminal via `runLoop` (alt-screen) and owns one
- * transcript buffer. Submitted prompts, `pushMessage(...)`, and
- * string replies from `onSubmit` all append to that buffer; rendering
- * projects it into the auto-scrolling output pane at the top of the
- * column. Returning `false` from `onSubmit` exits the REPL.
- *
- * Lifecycle: `runLoop` enters and exits alt-screen automatically;
- * its `TerminalOutput` installs SIGINT/SIGTERM/exit handlers that
- * restore the terminal even on abrupt termination.
- *
- * @param status - Re-evaluated every render; populates the status line
- * @param onSubmit - Called with the submitted line; return a string to append or `false` to exit
- * @param prompt - String shown before the input buffer (default `"> "`)
- * @param historyFile - Reserved for future use (history persistence is v2)
- * @param historyMax - Trim oldest entries beyond this count
- * @param paletteCommands - Map of `/cmd` -> description, iterated in order
- * @param tickMs - Render cadence in ms. Default `null` chooses 100ms
- *   so spinner/timer and async transcript updates paint without
- *   waiting for another keypress.
- */
 export def repl(
   status: any,
   onSubmit: any,
@@ -1191,15 +1099,34 @@ export def repl(
   historyFile: string = "",
   historyMax: number = 1000,
   paletteCommands: any = null,
-  tickMs: number = null,
+  tickMs?: number,
 ) {
+  """
+  Drop-in REPL widget for interactive CLI agents. Bundles a
+  scrollable output area, a live status line, a slash-command
+  palette (triggered by `/`), and an input line with history
+  navigation. Owns the full terminal via runLoop (alt-screen) and
+  owns one transcript buffer. Submitted prompts, pushMessage(...),
+  and string replies from onSubmit all append to that buffer.
+  Returning false from onSubmit exits the REPL. While the REPL is
+  active, console.log / .warn / .error and raw stdout/stderr writes
+  from any code running underneath are captured and appended to the
+  transcript instead of being dropped behind the alt-screen.
+
+  @param status - Re-evaluated every render; populates the status line
+  @param onSubmit - Called with the submitted line; return a string to append or false to exit
+  @param prompt - String shown before the input buffer (default "> ")
+  @param historyFile - Reserved for future use (history persistence is v2)
+  @param historyMax - Trim oldest entries beyond this count
+  @param paletteCommands - Map of /cmd -> description, iterated in order
+  @param tickMs - Render cadence in ms. Default null = event-driven
+    (status only re-renders on key events). A positive value enables
+    live status / spinner updates between keys but currently leaks
+    one pinned runtime checkpoint per render, so prefer the default.
+  """
   let paletteCommandMap = paletteCommands
   if (paletteCommandMap == null) {
     paletteCommandMap = {}
-  }
-  let cadence = tickMs
-  if (cadence == null) {
-    cadence = 100
   }
   const initial: ReplState = {
     input: {
@@ -1230,7 +1157,13 @@ export def repl(
     },
     done: false,
   }
-  _activateReplState(initial)
-  _runLoop(initial, _replView, _replReduce, _replIsDone, cadence)
-  _deactivateReplState()
+  _activeRepl = initial
+  // The transcript is rendered live from `initial.transcript.messages`
+  // because nested records are shared by reference across reducer
+  // states (only the outer record is shallow-copied). Pass that array
+  // straight to the console-capture bridge so JS writes land on it.
+  _installConsoleCapture(initial.transcript.messages)
+  _runLoop(initial, _replView, _replReduce, _replIsDone, tickMs)
+  _uninstallConsoleCapture()
+  _activeRepl = null
 }

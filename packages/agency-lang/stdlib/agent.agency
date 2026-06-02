@@ -1,7 +1,7 @@
 import { setMemoryId } from "std::memory"
 import { systemMessage } from "std::thread"
 
-/**
+/** @module
   ## Overview
 
   Helpers for building user-facing agents. Three independent
@@ -237,7 +237,7 @@ def runOneTurn(
   assembly. Returns the LLM's reply (string).
   """
   let reply = ""
-  thread {
+  thread(session: category, label: category, summarize: true) {
     const spec = config.agents[category]
     if (spec.memory == true) {
       setMemoryId(category)
@@ -247,7 +247,7 @@ def runOneTurn(
       // Concat with `||` so an unset optional `context` becomes "".
       systemMessage(spec.systemPrompt + (config.context || ""))
     }
-    let tools: any[] = []
+    let tools: any[] = [...spec.tools]
     if (allowHandoff) {
       let validTargets: string[] = []
       for (c in keys(config.agents)) {

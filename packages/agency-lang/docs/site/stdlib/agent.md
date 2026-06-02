@@ -1,9 +1,5 @@
 # agent
 
-## Types
-
-### Todo
-
 ## Overview
 
   Helpers for building user-facing agents. Three independent
@@ -79,89 +75,17 @@
   (e.g. parallel runners inside one process) will race. Not
   supported in v1.
 
-````ts
-/**
-  ## Overview
+## Types
 
-  Helpers for building user-facing agents. Three independent
-  features live here:
+### Todo
 
-  - **`route`** — a multi-specialist dispatcher. Wire two or more
-    "specialist" agents (each with its own system prompt, tool set,
-    and optional memory scope) into one entry point. Each user
-    message stays in its current specialist unless the LLM calls
-    `handoff()` to re-route it. See below for usage.
-  - **`question`** — ask the user a question via an interrupt so
-    the host UI (CLI, web, etc.) can render the prompt.
-  - **`todoWrite` / `todoList`** — a tiny in-process todo list an
-    LLM can use to track multi-step work across turns.
-
-  ## Router usage
-
-  ```ts
-  import { route } from "std::agent"
-
-  // Two specialists, each with its own system prompt + tools.
-  const codeAgent = {
-    systemPrompt: "You write and edit code...",
-    tools: [readFile, writeFile, typecheck],
-    memory: true,
-  }
-  const researchAgent = {
-    systemPrompt: "You answer questions by reading docs...",
-    tools: [fetchUrl, wikipediaSearch],
-    memory: true,
-  }
-
-  node main() {
-    let msg = input("> ")
-    while (msg != "exit") {
-      const reply = route({
-        start: "code",
-        agents: { code: codeAgent, research: researchAgent },
-        maxHops: 3,
-      }, msg)
-      print(reply)
-      msg = input("> ")
-    }
-  }
-  ```
-
-  ### How handoff works
-
-  Inside `route`, each specialist's tool set is augmented with a
-  `handoff(category, reason)` tool. When the LLM calls it, the
-  current LLM call ends and `route` re-runs the same user message
-  in the named specialist's thread. The handoff cannot target the
-  current specialist (PFA prevents self-targets).
-
-  The cap `maxHops` bounds ping-pong: when reached, the next call
-  is made WITHOUT the handoff tool so the LLM is forced to answer.
-
-  ### Per-specialist state
-
-  Each specialist runs inside its own `thread(session: <category>)`
-  block, so conversation history is partitioned. When `memory: true`,
-  `setMemoryId(<category>)` is also called so `remember`/`recall`
-  inside the specialist's tools land in a per-specialist knowledge
-  graph. Enable the memory subsystem first via `enableMemory(...)`
-  in `std::memory`.
-
-  ### Limits
-
-  Router state (handoff signal, first-entry flags) lives in
-  module-level `let`s, which live in the per-program GlobalStore.
-  Concurrent calls to `route` in **separate** RuntimeContexts are
-  fine; concurrent calls in the **same** program / RuntimeContext
-  (e.g. parallel runners inside one process) will race. Not
-  supported in v1.
-*/
+```ts
 type Todo = {
   id: string;
   text: string;
   status: "pending" | "in_progress" | "completed"
 }
-````
+```
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/agent.agency#L81))
 

@@ -1,0 +1,14 @@
+
+> agency-lang@0.3.0 test:run /Users/adityabhargava/agency-lang/packages/agency-lang/.worktrees/ui-pr3-migrate/packages/agency-lang
+> vitest run lib/tui/test/terminalOutput.test.ts
+
+
+ RUN  v4.0.17 /Users/adityabhargava/agency-lang/packages/agency-lang/.worktrees/ui-pr3-migrate/packages/agency-lang
+
+ ✓ lib/tui/test/terminalOutput.test.ts (3 tests) 2ms
+
+ Test Files  1 passed (1)
+      Tests  3 passed (3)
+   Start at  13:38:54
+   Duration  128ms (transform 40ms, setup 21ms, import 29ms, tests 2ms, environment 0ms)
+

@@ -1,0 +1,31 @@
+
+> agency-lang@0.3.0 test:run /Users/adityabhargava/agency-lang/packages/agency-lang/.worktrees/ui-pr3-migrate/packages/agency-lang
+> vitest run lib/tui
+
+
+ RUN  v4.0.17 /Users/adityabhargava/agency-lang/packages/agency-lang/.worktrees/ui-pr3-migrate/packages/agency-lang
+
+ ✓ lib/tui/test/styleParser.test.ts (21 tests) 3ms
+ ✓ lib/tui/test/scripted.test.ts (4 tests) 14ms
+ ✓ lib/tui/test/screen.test.ts (2 tests) 6ms
+ ✓ lib/tui/test/runLoop.test.ts (2 tests) 5ms
+ ✓ lib/tui/test/renderer.test.ts (10 tests) 8ms
+ ✓ lib/tui/test/recorder.test.ts (5 tests) 6ms
+ ✓ lib/tui/screen.test.ts (2 tests) 125ms
+ ✓ lib/tui/test/layout.test.ts (21 tests) 4ms
+ ✓ lib/tui/scrollList.test.ts (6 tests) 3ms
+ ✓ lib/tui/scroll.test.ts (7 tests) 2ms
+ ✓ lib/tui/builders.test.ts (5 tests) 5ms
+ ✓ lib/tui/test/builders.test.ts (7 tests) 4ms
+ ✓ lib/tui/test/html.test.ts (6 tests) 2ms
+ ✓ lib/tui/test/frame.test.ts (5 tests) 2ms
+ ✓ lib/tui/input/format.test.ts (4 tests) 2ms
+ ✓ lib/tui/test/colors.test.ts (3 tests) 3ms
+ ✓ lib/tui/test/plaintext.test.ts (3 tests) 2ms
+ ✓ lib/tui/test/terminalOutput.test.ts (3 tests) 2ms
+
+ Test Files  18 passed (18)
+      Tests  116 passed (116)
+   Start at  13:40:02
+   Duration  617ms (transform 681ms, setup 333ms, import 883ms, tests 197ms, environment 1ms)
+

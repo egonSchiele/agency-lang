@@ -131,7 +131,8 @@ export type Element = {
 export type KeyEvent = {
   key: string;
   shift?: boolean;
-  ctrl?: boolean
+  ctrl?: boolean;
+  text?: string
 }
 ```
 
@@ -174,7 +175,7 @@ export type Builder = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L145))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L151))
 
 ### ReplInputState
 
@@ -189,7 +190,7 @@ type ReplInputState = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L842))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L848))
 
 ### ReplPaletteState
 
@@ -202,7 +203,7 @@ type ReplPaletteState = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L851))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L857))
 
 ### ReplTranscriptState
 
@@ -212,7 +213,7 @@ type ReplTranscriptState = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L858))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L864))
 
 ### ReplSubmitState
 
@@ -224,7 +225,7 @@ type ReplSubmitState = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L862))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L868))
 
 ### ReplConfigState
 
@@ -235,7 +236,7 @@ type ReplConfigState = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L868))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L874))
 
 ### ChoiceItem
 
@@ -255,7 +256,7 @@ export type ChoiceItem = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L878))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L884))
 
 ### ReplChoiceState
 
@@ -269,7 +270,7 @@ type ReplChoiceState = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L888))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L894))
 
 ### ReplState
 
@@ -285,7 +286,7 @@ type ReplState = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L896))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L902))
 
 ## Functions
 
@@ -316,7 +317,7 @@ Build a plain text element. No layout sizing — embed inside a `box`
 
 **Returns:** [Element](#element)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L164))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L170))
 
 ### _setStyleIfSet
 
@@ -332,7 +333,7 @@ _setStyleIfSet(style: any, key: string, value: any)
 | key | `string` |  |
 | value | `any` |  |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L185))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L191))
 
 ### line
 
@@ -379,7 +380,7 @@ Build a single-line text element with `height: 1`. The default keeps
 
 **Returns:** [Element](#element)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L199))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L205))
 
 ### list
 
@@ -422,7 +423,7 @@ Build a scrollable selectable list. `selectedIndex` highlights one
 
 **Returns:** [Element](#element)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L255))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L261))
 
 ### textInput
 
@@ -461,7 +462,7 @@ Build a single-line text input. The renderer displays `value` with
 
 **Returns:** [Element](#element)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L304))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L310))
 
 ### _mkBoxStyle
 
@@ -487,7 +488,7 @@ _mkBoxStyle(flexDirection: string, flex: number, width: number, height: number, 
 
 **Returns:** `any`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L348))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L354))
 
 ### _makeBuilder
 
@@ -503,7 +504,7 @@ _makeBuilder(kids: any[]): Builder
 
 **Returns:** [Builder](#builder)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L378))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L384))
 
 ### column
 
@@ -553,7 +554,7 @@ Build a vertical container. Children stack top-to-bottom. Pass a
 
 **Returns:** [Element](#element)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L394))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L400))
 
 ### row
 
@@ -599,7 +600,7 @@ Build a horizontal container. Children stack left-to-right. Pass a
 
 **Returns:** [Element](#element)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L458))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L464))
 
 ### box
 
@@ -646,7 +647,7 @@ Build a direction-neutral container. Use when you want to apply
 
 **Returns:** [Element](#element)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L516))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L522))
 
 ### _addRow
 
@@ -673,7 +674,7 @@ _addRow(kids: any[], flex: number, width: number, height: number, padding: numbe
 
 **Returns:** [Element](#element)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L573))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L579))
 
 ### _addColumn
 
@@ -700,7 +701,7 @@ _addColumn(kids: any[], flex: number, width: number, height: number, padding: nu
 
 **Returns:** [Element](#element)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L604))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L610))
 
 ### _addBox
 
@@ -727,7 +728,7 @@ _addBox(kids: any[], flex: number, width: number, height: number, padding: numbe
 
 **Returns:** [Element](#element)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L635))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L641))
 
 ### _addLine
 
@@ -751,7 +752,7 @@ _addLine(kids: any[], content: string, flex: number, width: number, height: numb
 
 **Returns:** [Element](#element)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L666))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L672))
 
 ### _addText
 
@@ -768,7 +769,7 @@ _addText(kids: any[], content: string): Element
 
 **Returns:** [Element](#element)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L691))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L697))
 
 ### _addList
 
@@ -792,7 +793,7 @@ _addList(kids: any[], items: string[], selectedIndex: number, flex: number, widt
 
 **Returns:** [Element](#element)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L697))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L703))
 
 ### _addTextInput
 
@@ -814,7 +815,7 @@ _addTextInput(kids: any[], value: string, flex: number, width: number, height: n
 
 **Returns:** [Element](#element)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L722))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L728))
 
 ### renderOnce
 
@@ -838,7 +839,7 @@ Render a single Element tree to the screen and return immediately.
 |---|---|---|
 | tree | [Element](#element) |  |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L750))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L756))
 
 ### readKey
 
@@ -858,7 +859,7 @@ Read one key from the terminal. Blocks until a key is pressed.
 
 **Returns:** [KeyEvent](#keyevent)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L766))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L772))
 
 ### runLoop
 
@@ -910,7 +911,7 @@ Elm/Ink-style state machine driver. Renders `initialState`, waits
 
 **Returns:** `any`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L794))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L800))
 
 ### pushMessage
 
@@ -933,7 +934,7 @@ Append a styled message to the active repl() transcript. The
 |---|---|---|
 | message | `string` |  |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L913))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L919))
 
 ### clearMessages
 
@@ -945,7 +946,7 @@ Remove all messages from the active repl() transcript. Intended
   for explicit "clear conversation" commands inside interactive
   agents. Silent no-op when no repl() is active.
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L934))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L940))
 
 ### chooseOption
 
@@ -979,7 +980,7 @@ Show a modal choice prompt over the active repl() and block until
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L951))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L957))
 
 ### _entryKey
 
@@ -995,7 +996,7 @@ _entryKey(entry: any): string
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L1004))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L1010))
 
 ### _filteredPaletteKeys
 
@@ -1011,7 +1012,7 @@ _filteredPaletteKeys(state: ReplState): string[]
 
 **Returns:** `string[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L1012))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L1018))
 
 ### _matchesFilter
 
@@ -1028,7 +1029,7 @@ _matchesFilter(name: string, filterText: string): boolean
 
 **Returns:** `boolean`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L1021))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L1027))
 
 ### _busyLine
 
@@ -1044,7 +1045,7 @@ _busyLine(state: ReplState): string
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L1025))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L1031))
 
 ### _choiceProjection
 
@@ -1060,7 +1061,7 @@ _choiceProjection(state: ReplState): any
 
 **Returns:** `any`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L1053))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L1059))
 
 ### _replView
 
@@ -1076,7 +1077,7 @@ _replView(state: ReplState): Element
 
 **Returns:** [Element](#element)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L1101))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L1107))
 
 ### _submitPrompt
 
@@ -1092,7 +1093,7 @@ _submitPrompt(state: ReplState): ReplState
 
 **Returns:** [ReplState](#replstate)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L1186))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L1192))
 
 ### _recallPreviousHistory
 
@@ -1108,7 +1109,7 @@ _recallPreviousHistory(state: ReplState): ReplState
 
 **Returns:** [ReplState](#replstate)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L1214))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L1220))
 
 ### _recallNextHistory
 
@@ -1124,7 +1125,7 @@ _recallNextHistory(state: ReplState): ReplState
 
 **Returns:** [ReplState](#replstate)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L1226))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L1232))
 
 ### _closePalette
 
@@ -1140,7 +1141,7 @@ _closePalette(state: ReplState): ReplState
 
 **Returns:** [ReplState](#replstate)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L1242))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L1248))
 
 ### _selectPaletteCommand
 
@@ -1157,7 +1158,7 @@ _selectPaletteCommand(state: ReplState, paletteKeys: string[]): ReplState
 
 **Returns:** [ReplState](#replstate)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L1254))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L1260))
 
 ### _movePaletteCursor
 
@@ -1175,7 +1176,7 @@ _movePaletteCursor(state: ReplState, paletteKeys: string[], delta: number): Repl
 
 **Returns:** [ReplState](#replstate)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L1273))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L1279))
 
 ### _removePaletteFilterCharacter
 
@@ -1191,7 +1192,7 @@ _removePaletteFilterCharacter(state: ReplState): ReplState
 
 **Returns:** [ReplState](#replstate)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L1295))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L1301))
 
 ### _appendPaletteFilterCharacter
 
@@ -1208,7 +1209,7 @@ _appendPaletteFilterCharacter(state: ReplState, character: string): ReplState
 
 **Returns:** [ReplState](#replstate)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L1306))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L1312))
 
 ### _replReducePaletteOpen
 
@@ -1225,7 +1226,7 @@ _replReducePaletteOpen(state: ReplState, keyEvent: KeyEvent): ReplState
 
 **Returns:** [ReplState](#replstate)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L1320))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L1326))
 
 ### _appendInputCharacter
 
@@ -1242,7 +1243,40 @@ _appendInputCharacter(state: ReplState, character: string): ReplState
 
 **Returns:** [ReplState](#replstate)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L1336))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L1342))
+
+### _appendPaste
+
+```ts
+_appendPaste(state: ReplState, pasted: string): ReplState
+```
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| state | [ReplState](#replstate) |  |
+| pasted | `string` |  |
+
+**Returns:** [ReplState](#replstate)
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L1357))
+
+### _clearInputBuffer
+
+```ts
+_clearInputBuffer(state: ReplState): ReplState
+```
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| state | [ReplState](#replstate) |  |
+
+**Returns:** [ReplState](#replstate)
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L1373))
 
 ### _removeInputCharacter
 
@@ -1258,7 +1292,7 @@ _removeInputCharacter(state: ReplState): ReplState
 
 **Returns:** [ReplState](#replstate)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L1346))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L1383))
 
 ### _openPalette
 
@@ -1274,7 +1308,7 @@ _openPalette(state: ReplState): ReplState
 
 **Returns:** [ReplState](#replstate)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L1356))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L1393))
 
 ### _filteredChoiceItems
 
@@ -1290,7 +1324,7 @@ _filteredChoiceItems(choice: ReplChoiceState): ChoiceItem[]
 
 **Returns:** `ChoiceItem[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L1370))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L1407))
 
 ### _matchesChoiceFilter
 
@@ -1307,7 +1341,7 @@ _matchesChoiceFilter(item: ChoiceItem, needle: string): boolean
 
 **Returns:** `boolean`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L1378))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L1415))
 
 ### _replReduceChoice
 
@@ -1324,7 +1358,7 @@ _replReduceChoice(state: ReplState, keyEvent: KeyEvent): ReplState
 
 **Returns:** [ReplState](#replstate)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L1391))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L1428))
 
 ### _syncChoiceFromBridge
 
@@ -1340,7 +1374,7 @@ _syncChoiceFromBridge(state: ReplState): ReplState
 
 **Returns:** [ReplState](#replstate)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L1459))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L1496))
 
 ### _replReduce
 
@@ -1357,7 +1391,7 @@ _replReduce(replState: ReplState, keyEvent: KeyEvent): ReplState
 
 **Returns:** [ReplState](#replstate)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L1479))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L1516))
 
 ### _replIsDone
 
@@ -1373,7 +1407,7 @@ _replIsDone(state: ReplState): boolean
 
 **Returns:** `boolean`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L1508))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L1550))
 
 ### repl
 
@@ -1415,4 +1449,4 @@ Drop-in REPL widget for interactive CLI agents. Bundles a
 | paletteCommands | `any` | null |
 | tickMs | `number` | null |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L1519))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L1561))

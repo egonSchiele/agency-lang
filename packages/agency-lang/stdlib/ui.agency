@@ -127,7 +127,13 @@ export type Element = {
 export type KeyEvent = {
   key: string;
   shift?: boolean;
-  ctrl?: boolean
+  ctrl?: boolean;
+  /**
+   * For `key: "paste"` events emitted while the terminal is in
+   * bracketed-paste mode, the full pasted text (e.g. the body of a
+   * Cmd+V on macOS). Undefined for normal keypresses.
+   */
+  text?: string
 }
 
 /**
@@ -1343,6 +1349,37 @@ def _appendInputCharacter(state: ReplState, character: string): ReplState {
   }
 }
 
+// Append pasted text to the input buffer wholesale. Newlines in the
+// paste are flattened to spaces so an accidentally-newline-bearing
+// paste doesn't immediately submit the prompt (the user can still
+// review and press Enter explicitly). Tab + other control bytes are
+// kept as-is — the renderer truncates them safely.
+def _appendPaste(state: ReplState, pasted: string): ReplState {
+  let normalized = pasted.replaceAll("\r\n", " ")
+  normalized = normalized.replaceAll("\n", " ")
+  normalized = normalized.replaceAll("\r", " ")
+  return {
+    ...state,
+    input: {
+      ...state.input,
+      buffer: state.input.buffer + normalized
+    }
+  }
+}
+
+// Clear the entire input buffer in one step. Bound to Ctrl+U to match
+// the bash readline / GNU Readline convention. Doesn't touch history
+// — the cleared content is gone, not pushed onto the history stack.
+def _clearInputBuffer(state: ReplState): ReplState {
+  return {
+    ...state,
+    input: {
+      ...state.input,
+      buffer: ""
+    }
+  }
+}
+
 def _removeInputCharacter(state: ReplState): ReplState {
   return {
     ...state,
@@ -1491,6 +1528,11 @@ def _replReduce(replState: ReplState, keyEvent: KeyEvent): ReplState {
 
   match (keyEvent) {
     { ctrl: true, key: "c" } => return { ...state, done: true }
+    { ctrl: true, key: "u" } => return _clearInputBuffer(state)
+    // Bracketed-paste payload from the terminal (e.g. Cmd+V on macOS).
+    // The full pasted body lives on `keyEvent.text` — see
+    // lib/tui/input/terminal.ts for how the markers are parsed.
+    { key: "paste" } => return _appendPaste(state, keyEvent.text ?? "")
     { key: "/" } if (state.input.buffer == "") => return _openPalette(state)
     { key: "up" } if (state.input.historyIdx > 0) => return _recallPreviousHistory(state)
     { key: "down" } if (state.input.historyIdx < state.input.history.length) => return _recallNextHistory(state)

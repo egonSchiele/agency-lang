@@ -36,6 +36,30 @@ There are many types of values that you just want to initialize once, and never 
 
 Unlike global variables, static variables *can* be imported from other files, because they don't lead to spaghetti code, as they can't be modified.
 
+### Cross-module dependencies
+
+When a static in one file reads a static from another, Agency computes the dependency at compile time and initializes the source first — automatically, in topological order. You don't need to declare the order; just `import` and use the value:
+
+```ts
+// b.agency
+export static const greeting = "hello"
+
+// a.agency
+import { greeting } from "./b.agency"
+static const banner = greeting + " world"   // b.greeting initialized before this runs
+```
+
+Cycles between two `static const` values across files are rejected at compile time with a clear `Circular static dependency` error naming both declarations. To resolve, break the cycle by extracting one value into a third file, or by computing it from a literal.
+
+### Circular imports
+
+Agency permits **file-level** import cycles (two files that import callable definitions from each other) but rejects **variable-level** cycles between statics. The two distinctions matter:
+
+- Functions and nodes don't participate in the value-initialization dep graph. Two routers can `import` callables from each other to wire up a graph at runtime — that's normal and allowed.
+- Two `static const` values that reference each other directly form a value-level cycle. Compile error.
+
+Run [`agency explain-init`](/cli/explain-init) to see which file-level cycles are present in your closure; they're listed under the "Cyclic imports detected (allowed)" section.
+
 ## `static` on a bare top-level statement
 
 The `static` prefix also works on a bare top-level statement (a function or method call with no declaration). Use it for once-per-process side effects that don't bind a value:

@@ -89,6 +89,10 @@ export type CompiledClosure = {
   resolver: ImportAliasResolver;
   /** Topsort-derived per-module init plans. Keyed by moduleId. */
   plans: Record<string, ModuleInitPlan>;
+  /** Closure-wide Phase A initialization order (keys into `staticGraph.nodes`). */
+  staticOrder: string[];
+  /** Closure-wide Phase B initialization order (keys into `globalGraph.nodes`). */
+  globalOrder: string[];
 };
 
 /**
@@ -174,7 +178,22 @@ export function buildCompiledClosure(
     globalGraph,
     resolver,
     plans,
+    staticOrder,
+    globalOrder,
   };
+}
+
+/**
+ * Public re-export of the file-level import-target helper. Used by
+ * `agency explain-init` to compute the file-import graph for SCC /
+ * cycle detection without re-implementing the stdlib / pkg / non-
+ * agency carve-outs.
+ */
+export function getAgencyImportTargets(
+  program: AgencyProgram,
+  moduleId: string,
+): string[] {
+  return agencyImportTargets(program, moduleId);
 }
 
 /**

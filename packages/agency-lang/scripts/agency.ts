@@ -16,6 +16,8 @@ import {
 } from "@/cli/installLocation.js";
 import { pack } from "@/cli/pack.js";
 import { evaluate } from "@/cli/evaluate.js";
+import { explainInit } from "@/cli/explainInit.js";
+import { CompileClosureError } from "@/compiler/compileClosure.js";
 import { fixtures, test, testTs, SlowTest } from "@/cli/test.js";
 import { generateReport, cleanCoverage } from "@/cli/coverage.js";
 import { createBundle, extractBundle } from "@/cli/bundle.js";
@@ -729,6 +731,24 @@ export function createProgram(deps: CliDependencies = {}): Command {
     .action(() => {
       const config = getConfig();
       agent(config);
+    });
+
+  program
+    .command("explain-init")
+    .description(
+      "Print the two-phase initialization plan for an Agency entry file",
+    )
+    .argument("<entry>", "Path to .agency entry file")
+    .action((entry: string) => {
+      try {
+        explainInit(getConfig(), entry);
+      } catch (err) {
+        if (err instanceof CompileClosureError) {
+          console.error(color.red(err.message));
+          process.exit(1);
+        }
+        throw err;
+      }
     });
 
   program

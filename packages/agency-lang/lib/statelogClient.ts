@@ -677,6 +677,35 @@ export class StatelogClient {
     );
   }
 
+  // --- Init phase boundaries ---
+
+  /**
+   * Mark the start or end of a Phase-A (statics-once-per-process) or
+   * Phase-B (globals-per-run) initialization block. Emitted around the
+   * closure-wide bootstrap in {@link runNode} so observability tools
+   * can attribute startup time to each phase.
+   *
+   * `modules` (when provided) is the list of source moduleIds whose
+   * init runs in this block. Optional because the cheap-to-emit
+   * boundary events do not require the dep-graph context.
+   */
+  async initPhase({
+    phase,
+    boundary,
+    modules,
+  }: {
+    phase: "a" | "b";
+    boundary: "start" | "end";
+    modules?: string[];
+  }): Promise<void> {
+    await this.post({
+      type: `phase${phase.toUpperCase()}${boundary === "start" ? "Start" : "End"}`,
+      phase,
+      boundary,
+      modules,
+    });
+  }
+
   // --- Interrupt lifecycle ---
 
   async interruptThrown({

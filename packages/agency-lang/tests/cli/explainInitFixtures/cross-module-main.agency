@@ -1,0 +1,10 @@
+// Cross-module fixture: this entry's static depends on a static from
+// `cross-module-helper.agency`. Tests that the dep graph + Phase A
+// printout pick up the dep across files.
+import { greeting } from "./cross-module-helper.agency"
+
+static const composed = greeting + " world"
+
+node main() {
+  return composed
+}

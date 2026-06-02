@@ -1,0 +1,9 @@
+import { fromA } from "./cyclic-a.agency"
+
+export def fromB(): string {
+  return "b"
+}
+
+def alsoUseA(): string {
+  return fromA()
+}

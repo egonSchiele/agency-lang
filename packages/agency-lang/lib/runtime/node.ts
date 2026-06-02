@@ -206,10 +206,23 @@ export async function runNode({
   //     pattern that reads an imported static only from a function
   //     body needs the foreign module's init to have run, and the
   //     compile-time dep graph won't see that reference.
+  // Phase A boundary: `__initAllRegistered` drives every closure
+  // module's `__initializeGlobals`, which in turn awaits its own
+  // `__initializeStatic`. By the time the call returns, every
+  // registered module's statics AND globals have been initialized on
+  // this execCtx. The phase-A boundary brackets the static portion
+  // (idempotent across runs); the phase-B boundary then brackets the
+  // entry's redundant `initializeGlobals` for symmetry — per-run
+  // global work is mostly a no-op in current codegen but the event
+  // still marks the point where per-run state would re-initialize.
+  await execCtx.statelogClient.initPhase({ phase: "a", boundary: "start" });
   await runInBootstrapFrame(execCtx, () => __initAllRegistered(execCtx), { moduleDir });
+  await execCtx.statelogClient.initPhase({ phase: "a", boundary: "end" });
+  await execCtx.statelogClient.initPhase({ phase: "b", boundary: "start" });
   if (initializeGlobals) {
     await runInBootstrapFrame(execCtx, () => initializeGlobals(execCtx), { moduleDir });
   }
+  await execCtx.statelogClient.initPhase({ phase: "b", boundary: "end" });
   // Top-level callbacks are re-registered every fresh run AFTER global
   // init so any module-level vars they reference (via `__ctx.globals`)
   // are already set up. The registration sequence mirrors what

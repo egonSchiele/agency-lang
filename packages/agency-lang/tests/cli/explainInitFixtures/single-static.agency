@@ -1,0 +1,12 @@
+// Single-file fixture: one static const, one global const, one bare
+// static statement, one bare per-run statement. Smallest case that
+// exercises both phases.
+static const greeting = "hello"
+static const banner = greeting + "!"
+
+const log = []
+log.push("per-run startup")
+
+node main() {
+  return log
+}

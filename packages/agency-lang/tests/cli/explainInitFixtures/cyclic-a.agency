@@ -1,0 +1,12 @@
+// File-level cycle: `cyclic-a.agency` ⇄ `cyclic-b.agency`. No var-
+// level cycle because each side imports only functions (callable code
+// — the dep graph orders values, not callables).
+import { fromB } from "./cyclic-b.agency"
+
+export def fromA(): string {
+  return "a-" + fromB()
+}
+
+node main() {
+  return fromA()
+}

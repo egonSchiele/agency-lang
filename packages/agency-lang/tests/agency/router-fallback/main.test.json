@@ -5,7 +5,8 @@
       "input": "",
       "expectedOutput": "\"fallback answer\"",
       "evaluationCriteria": [{ "type": "exact" }],
-      "description": "Hop limit reached: fallback mode runs once more with handoff tool stripped.",
+      "useTestLLMProvider": true,
+      "description": "Hop limit reached: fallback mode runs once more with handoff tool stripped. Pinned to the deterministic LLM provider (even on the post-merge real-LLM CI run) because this test verifies router control flow — hop counting, the maxHops boundary, and the forced-answer fallback that strips the handoff tool — none of which a real LLM would reliably reproduce turn-for-turn. The mock sequence ping-pongs handoffs research↔code to burn the hop budget, then the final 'fallback answer' is only emitted by the stripped-tool fallback call.",
       "llmMocks": [
         { "toolCall": { "name": "handoff", "args": { "category": "research", "reason": "ping" } } },
         { "return": "discarded code reply" },

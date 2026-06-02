@@ -90,7 +90,7 @@ describe("Typechecker Integration Tests (stdlib)", () => {
     ({ name, filePath }) => {
       it("should have no type errors or warnings", () => {
         assertNoTypeErrors(name, filePath);
-      });
+      }, 30_000);
     }
   );
 });

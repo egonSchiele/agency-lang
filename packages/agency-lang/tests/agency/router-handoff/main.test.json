@@ -5,7 +5,8 @@
       "input": "",
       "expectedOutput": "\"final research answer\"",
       "evaluationCriteria": [{ "type": "exact" }],
-      "description": "Two-agent run: code agent hands off to research, research replies.",
+      "useTestLLMProvider": true,
+      "description": "Two-agent run: code agent hands off to research, research replies. Pinned to the deterministic LLM provider (even on the post-merge real-LLM CI run) because this test verifies router dispatch wiring — handoff tool detection, consumeHandoff signal handling, per-category thread(session:) switching, and reply propagation — none of which a real LLM would reliably reproduce (it might not call handoff at all, or call it with different args). The exact-match on 'final research answer' is what proves the second specialist actually ran.",
       "llmMocks": [
         { "toolCall": { "name": "handoff", "args": { "category": "research", "reason": "needs lookup" } } },
         { "return": "ok handing off" },

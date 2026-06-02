@@ -155,10 +155,11 @@ async function callBridgeFn<T>(fn: unknown, ...args: unknown[]): Promise<T> {
 
 /** Shape of the `state` arg `_beginSubmit` mutates while the async
  *  onSubmit settles. Defined locally because the Agency `ReplState`
- *  is record-typed and the bridge only cares about these three
- *  fields. */
+ *  is record-typed and the bridge only cares about these two fields.
+ *  The exit-on-`false`-return path uses the `_signalReplExit` bridge
+ *  flag rather than mutating `state.done` here — see that function's
+ *  comment for why. */
 type SubmitTargetState = {
-  done?: boolean;
   submit?: {
     busy?: boolean;
     label?: string;
@@ -244,9 +245,9 @@ export function _installConsoleCapture(messages: string[]): void {
   console.debug = (...args: unknown[]) =>
     pushCaptured("", formatConsoleArgs(args));
   console.warn = (...args: unknown[]) =>
-    pushCaptured("{yellow warn}", formatConsoleArgs(args));
+    pushCaptured("{yellow-fg}warn{/yellow-fg}", formatConsoleArgs(args));
   console.error = (...args: unknown[]) =>
-    pushCaptured("{red error}", formatConsoleArgs(args));
+    pushCaptured("{red-fg}error{/red-fg}", formatConsoleArgs(args));
 
   // Deliberately NOT overriding `process.stdout.write` / `process.stderr.write`.
   // An earlier revision did, but `lib/tui/output/terminal.ts`'s renderer
@@ -283,12 +284,45 @@ export function _spinnerFrame(startedAtMs: number, nowMs = Date.now()): string {
   return frames[tick % frames.length];
 }
 
+// Module-level "exit signaled" flag for `repl()`. `_beginSubmit`
+// flips this when `onSubmit` returns `false`; the Agency
+// `_replIsDone` reads it via `_peekReplExitSignal()`. We cannot
+// mutate `state.done = true` directly because `done` is a primitive
+// boolean — `{...state, ...}` in subsequent reducer calls copies it
+// at the time of spread, so a later mutation on the stale record is
+// invisible to the current loop state.
+let replExitSignaled = false;
+
+/** Signal that the active `repl()` should exit on its next isDone
+ *  check. Called from `_beginSubmit` when `onSubmit` returns `false`,
+ *  and from any future "force exit" plumbing. Wakes the loop so
+ *  `_replIsDone` runs immediately. */
+export function _signalReplExit(): void {
+  replExitSignaled = true;
+  _triggerRender();
+}
+
+/** Read the exit signal without clearing it. The Agency `_replIsDone`
+ *  calls this on every tick; once true the loop terminates and the
+ *  flag is reset by `_runReplLoop` in its finally block so the next
+ *  REPL invocation starts fresh. */
+export function _peekReplExitSignal(): boolean {
+  return replExitSignaled;
+}
+
+/** Reset the exit signal. Called by `_runReplLoop` before and after
+ *  the loop runs, so a leftover signal from a prior REPL session
+ *  doesn't cause the next one to exit on first frame. */
+export function _resetReplExitSignal(): void {
+  replExitSignaled = false;
+}
+
 export function _beginSubmit(
   state: SubmitTargetState,
   submitted: string,
   onSubmit: unknown,
 ): void {
-  state.transcript.messages.push(`{bright-blue You} ${submitted}`);
+  state.transcript.messages.push(`{bright-blue-fg}You{/bright-blue-fg} ${submitted}`);
   if (state.submit) {
     state.submit.busy = true;
     state.submit.label = "Thinking";
@@ -300,10 +334,12 @@ export function _beginSubmit(
       try {
         const reply = await callBridgeFn<unknown>(onSubmit, submitted);
         if (reply === false) {
-          state.done = true;
-          // Wake the loop so isDone() runs and it exits — otherwise
-          // the user sees a hung REPL after `/exit`.
-          _triggerRender();
+          // Signal exit via the bridge instead of mutating
+          // `state.done`. The reducer can't see mutations on this
+          // stale `state` record once subsequent keys have produced
+          // new states (e.g. a modal that opened and closed during
+          // onSubmit). See `_signalReplExit` comment above.
+          _signalReplExit();
           return;
         }
         // Surface Failure-typed returns explicitly. Agency functions
@@ -326,7 +362,7 @@ export function _beginSubmit(
                       return String(err);
                     }
                   })();
-          state.transcript.messages.push(`{red Error} ${message}`);
+          state.transcript.messages.push(`{red-fg}Error{/red-fg} ${message}`);
           return;
         }
         if (typeof reply === "string" && reply.length > 0) {
@@ -334,7 +370,7 @@ export function _beginSubmit(
         }
       } catch (error: unknown) {
         const message = error instanceof Error ? error.message : String(error);
-        state.transcript.messages.push(`{red Error} ${message}`);
+        state.transcript.messages.push(`{red-fg}Error{/red-fg} ${message}`);
       } finally {
         if (state.submit) {
           state.submit.busy = false;
@@ -401,11 +437,21 @@ export async function _runReplLoop(
   tickMs: number | null | undefined,
   transcriptMessages: string[],
 ): Promise<any> {
+  // Reset the exit signal so a leftover flag from a previous REPL
+  // doesn't immediately terminate this one.
+  _resetReplExitSignal();
   _installConsoleCapture(transcriptMessages);
   try {
     return await _runLoop(initialState, renderFn, handleKeyFn, isDoneFn, tickMs);
   } finally {
     _uninstallConsoleCapture();
+    // Clear the exit signal so it can't leak across REPL invocations
+    // in the same process (e.g. nested test runs).
+    _resetReplExitSignal();
+    // Cancel any choice prompt left dangling by an exception path so
+    // the awaiting Agency caller sees a rejection instead of a hang.
+    // No-op when no prompt is open.
+    _cancelChoice("REPL loop exited before choice was made");
   }
 }
 
@@ -465,58 +511,115 @@ export function _writeScrollLine(text: string): void {
   process.stdout.write(text + "\n");
 }
 
+// ---------------------------------------------------------------------------
+// Choice prompts (modal-style overlay inside an active `repl()`)
+//
+// `_openChoicePrompt` mutates the live REPL state record so the
+// renderer paints the modal on the next frame, then returns a Promise
+// that resolves when the Agency-side reducer calls back via
+// `_resolveChoice` (Enter pressed) or rejects via `_cancelChoice`
+// (Escape pressed / loop torn down). This sidesteps every problem the
+// old raw-stdout version had: keys come through `Screen.runLoop` (no
+// race with the REPL's `nextKey()` waiter), and we never write outside
+// the alt-screen.
+//
+// The slot is module-level — at most one prompt is open at a time.
+// Concurrent callers should serialize themselves.
+// ---------------------------------------------------------------------------
+
+type ChoiceItem = { key: string; label: string };
+type ChoiceRequest = {
+  title: string;
+  body: string;
+  items: ChoiceItem[];
+};
+
+let pendingChoice: {
+  resolve: (answer: string) => void;
+  reject: (err: Error) => void;
+} | null = null;
+// Module-level snapshot of the *request* (title, body, items) for
+// the currently-open prompt. The Agency reducer pulls this on every
+// tick to keep its `state.choice` synced — we cannot mutate the
+// live reducer state from TS because reducers return fresh records
+// on every keypress. `null` when no prompt is open.
+let pendingChoiceRequest: ChoiceRequest | null = null;
+
 /**
- * Prompt the user for one of `choices` while a REPL owns the screen.
- * Writes `text` (multi-line) to the scroll region, then reads keys
- * from the active screen's input source — accumulating printable
- * characters into a buffer that's committed on Enter. Loops until
- * the typed answer is one of `choices`. Backspace edits the buffer.
+ * Open a modal choice prompt over the currently-running REPL. Stores
+ * the request in a module-level slot that the Agency reducer reads
+ * via `_peekPendingChoiceRequest()` on every tick (so a fresh frame
+ * sees the modal even though reducers return new state records),
+ * then returns a Promise that the Agency reducer resolves via
+ * `_resolveChoice(answer)` (Enter) or rejects via `_cancelChoice`
+ * (Escape, or REPL torn down).
  *
- * Caller must verify `_hasActiveScreen()` first; this throws if no
- * REPL is active because the fallback path (raw stdin) lives in the
- * Agency-side wrapper `_routePrompt`.
- *
- * NB: when the REPL is running with `tickMs`, its `runLoop` may have
- * a leaked `nextKey()` promise registered from the most recent tick.
- * Since this function is called synchronously from inside `onSubmit`
- * (between `nextKey` awaits), the leaked waiter only matters if a
- * key is typed *while* a tick was racing, in which case that key
- * may be claimed by the loop instead of the prompt. Acceptable for
- * v1; production use should pause the loop while prompting.
+ * Rejects if another prompt is already open — the caller should
+ * serialize.
  */
-export async function _promptFromChoices(
-  text: string,
-  choices: string[],
-): Promise<string> {
-  const screen = bridgeActiveScreen;
-  if (!screen) {
-    throw new Error(
-      "_promptFromChoices: no active screen — callers must guard with _hasActiveScreen()",
+export function _openChoicePrompt(request: ChoiceRequest): Promise<string> {
+  if (pendingChoice) {
+    return Promise.reject(
+      new Error(
+        "_openChoicePrompt: a choice prompt is already open; serialize callers",
+      ),
     );
   }
-  for (const ln of text.split("\n")) {
-    process.stdout.write(ln + "\n");
-  }
-  while (true) {
-    let buf = "";
-    // Show what the user has typed so far on its own scroll-region line.
-    process.stdout.write("> ");
-    while (true) {
-      const ev = await screen.nextKey();
-      if (ev.key === "enter") break;
-      if (ev.key === "backspace") {
-        buf = buf.slice(0, -1);
-        continue;
-      }
-      if (ev.key.length === 1) {
-        buf += ev.key;
-      }
-    }
-    process.stdout.write(buf + "\n");
-    const answer = buf.trim();
-    if (choices.includes(answer)) return answer;
-    process.stdout.write(`(one of ${choices.join("/")})\n`);
-  }
+  pendingChoiceRequest = {
+    title: request.title,
+    body: request.body,
+    items: request.items,
+  };
+  return new Promise<string>((resolve, reject) => {
+    pendingChoice = { resolve, reject };
+    // Wake the loop so the modal paints immediately rather than
+    // waiting for the next user keypress. The reducer's TS-sync step
+    // runs on this synthetic key event and initializes state.choice.
+    _triggerRender();
+  });
+}
+
+/**
+ * Read the pending choice request without consuming it. Returns
+ * `null` when no prompt is open. The Agency reducer calls this on
+ * every keystroke to sync `state.choice` with the TS-side request:
+ * if TS has a request but state.choice is null, the reducer
+ * initializes it; if TS has no request but state.choice is set,
+ * the reducer clears it.
+ */
+export function _peekPendingChoiceRequest(): ChoiceRequest | null {
+  return pendingChoiceRequest;
+}
+
+/** Resolve the pending choice promise with `answer` and clear both
+ *  the promise slot and the request slot. Called by the Agency
+ *  reducer when Enter is pressed on a filtered, non-empty list.
+ *  No-op when no prompt is open. */
+export function _resolveChoice(answer: string): void {
+  if (!pendingChoice) return;
+  const { resolve } = pendingChoice;
+  pendingChoice = null;
+  pendingChoiceRequest = null;
+  resolve(answer);
+}
+
+/** Reject the pending choice promise with `reason` and clear both
+ *  the promise slot and the request slot. Called by the Agency
+ *  reducer on Escape, or by `_runReplLoop` in its finally block to
+ *  break out of any prompt left hanging by an exception. No-op when
+ *  no prompt is open. */
+export function _cancelChoice(reason: string): void {
+  if (!pendingChoice) return;
+  const { reject } = pendingChoice;
+  pendingChoice = null;
+  pendingChoiceRequest = null;
+  reject(new Error(reason || "choice prompt cancelled"));
+}
+
+/** Test/debug hook. Returns true while a choice prompt is awaiting a
+ *  reducer callback. */
+export function _hasPendingChoice(): boolean {
+  return pendingChoice !== null;
 }
 
 // ---------------------------------------------------------------------------

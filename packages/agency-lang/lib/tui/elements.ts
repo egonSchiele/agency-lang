@@ -48,6 +48,7 @@ export type Style = {
   fg?: Color;              // foreground color
   bg?: Color;              // background color
   bold?: boolean;
+  fill?: string;           // pad cell character (defaults to space); use "─" to draw a horizontal rule
 
   // Scrolling
   scrollable?: boolean;    // enable scroll viewport

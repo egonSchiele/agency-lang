@@ -1,6 +1,7 @@
 import { AgencyConfig } from "@/config.js";
 import { compile, compiledOutputNodeArgs } from "./commands.js";
 import { spawn } from "child_process";
+import * as fs from "fs";
 import * as path from "path";
 
 const currentDir = path.dirname(new URL(import.meta.url).pathname);
@@ -12,11 +13,17 @@ export function runBundledAgent(
 ): void {
   const agentDir = path.resolve(currentDir, `../agents/${agentName}`);
   const agencyFile = path.join(agentDir, "agent.agency");
+  const precompiledFile = path.join(agentDir, "agent.js");
 
-  // The compiled agent.js already includes a top-level invocation of `main()`,
-  // so we run it directly. (Older code expected a hand-written run.js wrapper
-  // that no longer exists.)
-  const runFile = compile(config, agencyFile);
+  // Prefer the precompiled agent.js produced by `make agents` so users
+  // don't pay the compile cost on every invocation. Falls back to a
+  // fresh compile if the bundle hasn't been built yet.
+  let runFile: string | null;
+  if (fs.existsSync(precompiledFile)) {
+    runFile = precompiledFile;
+  } else {
+    runFile = compile(config, agencyFile);
+  }
   if (runFile === null) {
     console.error(`Failed to compile agent ${agentName}.`);
     process.exit(1);

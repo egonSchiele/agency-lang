@@ -1520,9 +1520,11 @@ export class TypeScriptBuilder {
   }
 `;
     });
+    // moduleId/scopeName used to be threaded into the result-entry
+    // `createPinned` call. That call is now skipped (see template); the
+    // template only consumes `paramsStr` for the arg-override block.
+    void functionName;
     const str = renderResultCheckpointSetup.default({
-      moduleId: JSON.stringify(this.moduleId),
-      scopeName: JSON.stringify(functionName),
       paramsStr,
     });
 

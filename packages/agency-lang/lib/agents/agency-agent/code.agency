@@ -15,7 +15,6 @@ import { remember, recall } from "std::memory"
 import { highlight } from "std::syntax"
 import { cwd } from "std::system"
 
-
 // File-system tools handed to the LLM as a single bundle anchored to
 // one directory. `openDir(dir)` returns a Workspace whose `read` /
 // `write` / `edit` / `ls` / `glob` / `grep` / `bash` all resolve
@@ -23,7 +22,7 @@ import { cwd } from "std::system"
 // subtree. `setCwd` rebuilds the bundle to re-anchor. Module-level
 // `let` so the rebuilt bundle is visible to the next turn (Agency
 // stores module-level lets in the GlobalStore).
-let workspace: Workspace = openDir(cwd())
+static const workspace: Workspace = openDir(cwd())
 
 export def setCwd(dir: string): string {
   """
@@ -38,7 +37,7 @@ export def setCwd(dir: string): string {
   if (dir == "cwd") {
     dir = cwd()
   }
-  workspace = openDir(dir)
+  //workspace = openDir(dir)
   return "Working directory set to: ${dir}"
 }
 

@@ -537,12 +537,17 @@ describe("buildInitDepGraphs", () => {
     // through `getBarGlobal`'s body). Post-PR-2.5
     // `rejectStaticReferencesGlobal` runs the same depth-1 walk and
     // catches it at compile time.
+    //
+    // `barGlobal` is intentionally unexported: only `static const`
+    // declarations can be exported in Agency. The function that reads
+    // it is exported instead, which is the realistic pattern users
+    // hit and the one this rule needs to catch.
     const { dir, programs, symbolTable, abs } = writeFixture({
       "foo.agency":
         `import { getBarGlobal } from "./bar.agency"\n` +
         `static const fooStatic = getBarGlobal() + "!"\n`,
       "bar.agency":
-        `export const barGlobal = "G"\n` +
+        `const barGlobal = "G"\n` +
         `export def getBarGlobal(): string { return barGlobal }\n`,
     });
     try {
@@ -688,6 +693,87 @@ describe("buildInitDepGraphs", () => {
       const k = (n: string) => makeKey(abs("entry.agency"), n);
       expect(staticGraph.edges[k("derived")]).toContain(k("base"));
       expect(staticGraph.edges[k("derived")]).toContain(k("items"));
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("depth-1: re-exported function expansion still finds the source-module dep", () => {
+    // The function `getBar` is re-exported once. Pre-fix, the depth-1
+    // lookup stopped at the re-exporter's synthesized wrapper
+    // (`return _reexport_getBar(...)`), whose body the free-ref walker
+    // can't see through — so no edge was added and the runtime trap
+    // would be the only safety net even though it's a single direct
+    // call in user source. The fix follows the SymbolTable's
+    // `reExportedFrom` chain to the ultimate `def` and walks that
+    // real body, contributing the cross-module edge to the source
+    // module's static.
+    const { dir, programs, symbolTable, abs } = writeFixture({
+      "foo.agency":
+        `import { getBar } from "./mid.agency"\n` +
+        `static const fooStatic = getBar() + "!"\n` +
+        `node main() { return fooStatic }\n`,
+      "mid.agency": `export { getBar } from "./bar.agency"\n`,
+      "bar.agency":
+        `export static const barStatic = "hello"\n` +
+        `export def getBar(): string { return barStatic }\n`,
+    });
+    try {
+      const { staticGraph } = buildInitDepGraphs(
+        programs,
+        symbolTable,
+        abs("foo.agency"),
+      );
+      const keyFoo = makeKey(abs("foo.agency"), "fooStatic");
+      const keyBar = makeKey(abs("bar.agency"), "barStatic");
+      expect(staticGraph.edges[keyFoo]).toContain(keyBar);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("depth-1: parameter that shadows a top-level decl does NOT create a spurious edge", () => {
+    // `readArg`'s body reads its own parameter `barStatic`, NOT the
+    // top-level static of the same name. Without parameter-shadow
+    // filtering in `collectFunctionBodyFreeRefs`, the inner ref would
+    // resolve to the top-level binding and add a phantom edge from
+    // `derived` to `barStatic` — which happens to be benign here
+    // (barStatic IS a static), but the same bug surfaces as a false
+    // `StaticReferencesGlobalError` if the shadowed name is a global.
+    const { dir, programs, symbolTable, abs } = writeFixture({
+      "entry.agency":
+        `static const barStatic = "real"\n` +
+        `def readArg(barStatic: string): string { return barStatic }\n` +
+        `static const derived = readArg("arg") + "!"\n`,
+    });
+    try {
+      const { staticGraph } = buildInitDepGraphs(
+        programs,
+        symbolTable,
+        abs("entry.agency"),
+      );
+      const k = (n: string) => makeKey(abs("entry.agency"), n);
+      expect(staticGraph.edges[k("derived")]).toEqual([]);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("depth-1: parameter shadowing a global does NOT cause a false static-references-global error", () => {
+    // The dangerous case: a function parameter shadows a top-level
+    // GLOBAL. Without filtering, walking the function body would
+    // resolve `g` to the top-level global and `rejectStaticReferencesGlobal`
+    // would throw, even though the body only reads the parameter.
+    const { dir, programs, symbolTable, abs } = writeFixture({
+      "entry.agency":
+        `const g = "global"\n` +
+        `def readG(g: string): string { return g }\n` +
+        `static const s = readG("arg") + "!"\n`,
+    });
+    try {
+      expect(() =>
+        buildInitDepGraphs(programs, symbolTable, abs("entry.agency")),
+      ).not.toThrow();
     } finally {
       fs.rmSync(dir, { recursive: true, force: true });
     }

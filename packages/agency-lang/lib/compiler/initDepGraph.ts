@@ -161,6 +161,7 @@ export type FunctionDefLookup = {
 export function makeFunctionDefLookup(
   programs: Record<string, AgencyProgram>,
   resolver: ImportAliasResolver,
+  symbolTable: SymbolTable | undefined,
 ): FunctionDefLookup {
   const localDefsByModule: Record<
     string,
@@ -184,6 +185,46 @@ export function makeFunctionDefLookup(
     return map;
   }
 
+  /**
+   * Follow a re-export chain to the module that owns the real `def`.
+   *
+   * `ImportAliasResolver.resolve` only walks one hop because the
+   * synthesized wrapper *static* at each re-exporter needs its own
+   * `__initializeStatic` to run — collapsing the chain in the
+   * resolver would lose those wrappers. **Functions don't have that
+   * constraint:** `resolveReExports` emits a wrapper function whose
+   * body is just `return _reexport_<orig>(...args)`, which the
+   * depth-1 free-identifier walker cannot see through (function-call
+   * names are not surfaced as free refs). Following the chain here
+   * gives the depth-1 expansion the *real* body to walk, so a single
+   * direct call in user source contributes the right edges even when
+   * the call resolves through one or more re-export hops.
+   *
+   * Defensive cap (`MAX_HOPS`) protects against an unforeseen
+   * cyclic SymbolTable entry — `SymbolTable.build` rejects ambiguous
+   * re-exports but a future bug there shouldn't hang this loop.
+   */
+  function resolveToUltimateDef(
+    moduleId: string,
+    name: string,
+  ): { moduleId: string; def: FunctionDefinition } | null {
+    const MAX_HOPS = 32;
+    let curModule = moduleId;
+    let curName = name;
+    for (let i = 0; i < MAX_HOPS; i++) {
+      const sym = symbolTable?.getFile(curModule)?.[curName];
+      if (sym && sym.reExportedFrom) {
+        curModule = sym.reExportedFrom.sourceFile;
+        curName = sym.reExportedFrom.originalName;
+        continue;
+      }
+      const def = localDefsFor(curModule)[curName];
+      if (!def) return null;
+      return { moduleId: curModule, def };
+    }
+    return null;
+  }
+
   const cache: Record<
     string,
     Record<string, { moduleId: string; def: FunctionDefinition }>
@@ -198,9 +239,7 @@ export function makeFunctionDefLookup(
     for (const [name, def] of Object.entries(localDefsFor(inModuleId))) {
       map[name] = { moduleId: inModuleId, def };
     }
-    // Named imports of functions defined in other modules. The resolver
-    // already followed re-export chains; for each resolved name, see if
-    // the target module has a local function def of that name.
+    // Named imports of functions defined in other modules.
     const program = programs[inModuleId];
     if (program) {
       for (const node of program.nodes) {
@@ -215,13 +254,12 @@ export function makeFunctionDefLookup(
               (nameType.aliases && nameType.aliases[original]) ?? original;
             const aliased = resolver.resolve(localAlias, inModuleId);
             if (!aliased) continue;
-            const targetDef =
-              localDefsFor(aliased.sourceModuleId)[aliased.sourceName];
-            if (!targetDef) continue;
-            map[localAlias] = {
-              moduleId: aliased.sourceModuleId,
-              def: targetDef,
-            };
+            const ultimate = resolveToUltimateDef(
+              aliased.sourceModuleId,
+              aliased.sourceName,
+            );
+            if (!ultimate) continue;
+            map[localAlias] = ultimate;
           }
         }
       }
@@ -238,9 +276,7 @@ export function makeFunctionDefLookup(
     findNamespaceMember(prefix, member, inModuleId) {
       const ns = resolver.resolveNamespace(prefix, inModuleId);
       if (!ns) return null;
-      const def = localDefsFor(ns.sourceModuleId)[member];
-      if (!def) return null;
-      return { moduleId: ns.sourceModuleId, def };
+      return resolveToUltimateDef(ns.sourceModuleId, member);
     },
   };
 }
@@ -381,7 +417,7 @@ export function buildInitDepGraphs(
   entryModuleId: string,
 ): BuildInitDepGraphsResult {
   const resolver = makeImportAliasResolver(programs, symbolTable);
-  const functionDefs = makeFunctionDefLookup(programs, resolver);
+  const functionDefs = makeFunctionDefLookup(programs, resolver, symbolTable);
   const sequenceHints = computeSequenceHintBase(programs, entryModuleId);
 
   // ── 1. Collect every node, routing each into the static or global graph.
@@ -741,14 +777,24 @@ export function collectDirectCalls(
  * still skips any further nested `function` / `graphNode` bodies — the
  * depth-1 boundary holds.
  *
- * Function parameter names appear in the result as `{kind: "name"}`
- * refs that don't resolve to any top-level decl, so they fall out
- * harmlessly when `resolveFreeRef`'s caller misses them in `lookupSet`.
+ * **Parameter-shadow filtering.** Drops refs whose name (or `prefix`,
+ * for member refs) matches one of the function's parameter names.
+ * Otherwise a parameter that happens to share a name with a top-level
+ * decl (e.g. `def readG(g: string) { return g }` when a top-level
+ * `g` exists) would resolve through the import alias resolver to the
+ * top-level binding and produce a spurious init edge or false
+ * `StaticReferencesGlobalError`.
  */
 export function collectFunctionBodyFreeRefs(def: FunctionDefinition): FreeRef[] {
+  const paramNames: Record<string, true> = {};
+  for (const param of def.parameters) paramNames[param.name] = true;
   const out: FreeRef[] = [];
   for (const stmt of def.body) {
-    out.push(...collectFreeIdentifiers(stmt));
+    for (const ref of collectFreeIdentifiers(stmt)) {
+      if (ref.kind === "name" && paramNames[ref.name]) continue;
+      if (ref.kind === "member" && paramNames[ref.prefix]) continue;
+      out.push(ref);
+    }
   }
   return out;
 }

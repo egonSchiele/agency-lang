@@ -10,7 +10,13 @@ import {
   _nowMs,
   _triggerRender,
  } from "agency-lang/stdlib-lib/ui.js"
-import { _promptFromChoices } from "agency-lang/stdlib-lib/ui.js"
+import {
+  _openChoicePrompt,
+  _peekPendingChoiceRequest,
+  _resolveChoice,
+  _cancelChoice,
+  _peekReplExitSignal,
+} from "agency-lang/stdlib-lib/ui.js"
 import { filter, map } from "std::array"
 
 /** @module
@@ -121,7 +127,13 @@ export type Element = {
 export type KeyEvent = {
   key: string;
   shift?: boolean;
-  ctrl?: boolean
+  ctrl?: boolean;
+  /**
+   * For `key: "paste"` events emitted while the terminal is in
+   * bracketed-paste mode, the full pasted text (e.g. the body of a
+   * Cmd+V on macOS). Undefined for normal keypresses.
+   */
+  text?: string
 }
 
 /**
@@ -198,12 +210,17 @@ export def line(
   fg: string = "",
   bg: string = "",
   bold: boolean = false,
+  fill: string = "",
 ): Element {
   """
   Build a single-line text element with `height: 1`. The default keeps
   it from stretching via flex when placed inside a `column`. Style
   fields (`fg`, `bg`, `bold`) and layout fields (`flex`, `width`,
   `height`) merge on top of the height-1 default.
+
+  Set `fill` to a single character (e.g. `"─"`) to repeat that
+  character across the unused width, turning an empty-content line
+  into a horizontal rule.
 
   @param content - The text to render
   @param flex - Flex grow factor; omit for natural width
@@ -212,6 +229,7 @@ export def line(
   @param fg - Foreground color (named or hex like "#fff")
   @param bg - Background color (named or hex like "#000")
   @param bold - Render the text bold
+  @param fill - Character used to pad unused cells (default: space)
   """
   let h: number = 1
   if (height != null) {
@@ -225,6 +243,7 @@ export def line(
   _setStyleIfSet(style, "fg", fg)
   _setStyleIfSet(style, "bg", bg)
   _setStyleIfSet(style, "bold", bold)
+  _setStyleIfSet(style, "fill", fill)
   return {
     type: "text",
     content: content,
@@ -659,6 +678,7 @@ def _addLine(
   fg: string = "",
   bg: string = "",
   bold: boolean = false,
+  fill: string = "",
 ): Element {
   const elem = line(
     content: content,
@@ -668,6 +688,7 @@ def _addLine(
     fg: fg,
     bg: bg,
     bold: bold,
+    fill: fill,
   )
   kids.push(elem)
   return elem
@@ -822,33 +843,7 @@ export def runLoop(
 // view and closing it returns them.
 const _PALETTE_ROWS: number = 5
 
-export def _routePrompt(text: string, choices: string[]): string {
-  """
-  Route a prompt through the active REPL when one exists, or fall
-  back to raw `print` + `input` otherwise. Used by other stdlib
-  modules (notably `std::policy`) to surface interactive prompts
-  without fighting with the input bar.
 
-  @param text - The menu/question text shown to the user
-  @param choices - The set of strings the user's answer must match
-  """
-  if (_hasActiveScreen()) {
-    return _promptFromChoices(text, choices)
-  }
-  print(text)
-  const optsHint = "(one of ${choices.join("/")})"
-  let answer = ""
-  let valid = false
-  while (!valid) {
-    answer = input("> ").trim()
-    if (choices.includes(answer)) {
-      valid = true
-    } else {
-      print(optsHint)
-    }
-  }
-  return answer
-}
 
 type ReplInputState = {
   buffer: string;
@@ -881,12 +876,36 @@ type ReplConfigState = {
   onSubmit: any
 }
 
+/**
+ * One option in a `chooseOption()` modal. `key` is the value the
+ * Promise resolves to when the user picks this row; `label` is the
+ * human-readable text rendered in the modal.
+ */
+export type ChoiceItem = {
+  key: string;
+  label: string
+}
+
+// Internal: snapshot of an open choice modal. Lives on `ReplState`
+// so the reducer/view can see it on every frame. The TS bridge
+// (`_openChoicePrompt`) sets this slot and `_replReduce` clears it
+// after Enter/Escape; the deferred Promise it returns is what the
+// Agency caller awaits.
+type ReplChoiceState = {
+  title: string;
+  body: string;
+  items: ChoiceItem[];
+  filter: string;
+  cursor: number
+}
+
 type ReplState = {
   input: ReplInputState;
   palette: ReplPaletteState;
   transcript: ReplTranscriptState;
   submit: ReplSubmitState;
   config: ReplConfigState;
+  choice: ReplChoiceState | null;
   done: boolean
 }
 
@@ -935,6 +954,59 @@ export def clearMessages() {
   _triggerRender()
 }
 
+export def chooseOption(
+  title: string,
+  body: string,
+  items: ChoiceItem[],
+): string {
+  """
+  Show a modal choice prompt over the active repl() and block until
+  the user picks one. Returns the picked item's `key`. The modal
+  takes over key input — the REPL's input bar, palette, and history
+  navigation are inactive until the user confirms (Enter) or cancels
+  (Escape). The filter input narrows the visible items by substring
+  match on either `key` or `label`.
+
+  When no repl() is currently running, falls back to a plain
+  `print` + `input` loop that reprompts until the user types one of
+  the valid `key`s. Used by std::policy to surface its approve/reject
+  menus through the active REPL without fighting with the input bar.
+
+  @param title - Modal heading (e.g. "Approve interrupt: shell::exec")
+  @param body - Multi-line context shown above the choices (or "")
+  @param items - The set of {key, label} choices to pick from
+  """
+  if (_activeRepl != null) {
+    return _openChoicePrompt({
+      title: title,
+      body: body,
+      items: items
+    })
+  }
+  // No-REPL fallback: print the title + body once, then loop on
+  // `input()` until the answer matches one of the item keys. Same
+  // contract as the pre-modal `_routePrompt` had.
+  if (title != "") { print(title) }
+  if (body != "")  { print(body) }
+  let validKeys: string[] = []
+  for (item in items) {
+    print("  ${item.key}  ${item.label}")
+    validKeys.push(item.key)
+  }
+  const optsHint = "(one of ${validKeys.join("/")})"
+  let answer = ""
+  let valid = false
+  while (!valid) {
+    answer = input("> ").trim()
+    if (validKeys.includes(answer)) {
+      valid = true
+    } else {
+      print(optsHint)
+    }
+  }
+  return answer
+}
+
 def _entryKey(entry: any): string { return entry.key }
 
 // Returns the keys of palette commands whose name contains the
@@ -963,7 +1035,7 @@ def _busyLine(state: ReplState): string {
   const nowMs = _nowMs()
   const elapsedSeconds = _elapsedSeconds(state.submit.startedAtMs, nowMs)
   const spinnerFrame = _spinnerFrame(state.submit.startedAtMs, nowMs)
-  return "{bright-yellow ${spinnerFrame}} ${state.submit.label} ${elapsedSeconds}s"
+  return "{bright-yellow-fg}${spinnerFrame}{/bright-yellow-fg} ${state.submit.label} ${elapsedSeconds}s"
 }
 
 /**
@@ -973,8 +1045,80 @@ def _busyLine(state: ReplState): string {
  * them are flex; standard `flex-start` column layout packs flex:1
  * first, then the fixed-height tail items.
  */
+// Maximum height of an open choice modal. Generous enough to fit a
+// short body + a typical 4-6 choice list + footer without scrolling;
+// the wrapping transcript list shrinks accordingly because it owns
+// the `flex: 1` slot.
+const _CHOICE_ROWS: number = 15
+
+// Maximum row height of the input bar. The bar grows with the
+// buffer's `\n` count up to this cap so a long paste cannot starve
+// the transcript above. Past the cap the renderer shows the trailing
+// window (cursor stays on the last visible row, earlier rows scroll
+// off the top).
+const _INPUT_MAX_ROWS: number = 6
+
+// Build the per-render projection of the choice modal state. Pulled
+// out of `_replView` so the view function stays linear and so the
+// projection (body lines, formatted item labels, clamped cursor) can
+// be unit-tested separately. When no modal is open, returns safe
+// defaults that render as an invisible empty box.
+def _choiceProjection(state: ReplState): any {
+  // Pull the value out into a local typed `any` so member accesses
+  // type-check (the Agency typechecker does not narrow union types
+  // across runtime null guards). The `null` branch returns before
+  // any member access happens.
+  const choice: any = state.choice
+  if (choice == null) {
+    return {
+      visible: false,
+      title: "",
+      bodyLines: [],
+      itemLabels: [],
+      cursor: 0,
+      filterText: ""
+    }
+  }
+  const filteredItems = _filteredChoiceItems(choice)
+  let cursor = choice.cursor
+  const maxCursor = filteredItems.length - 1
+  if (cursor > maxCursor) { cursor = maxCursor }
+  if (cursor < 0)         { cursor = 0 }
+  // Pad short keys so the labels line up — most choice menus mix
+  // single-char keys (`a`) with two-char keys (`aa`). 4 wide gives
+  // room for up to three-char keys (`yes`) with a trailing space.
+  let itemLabels: string[] = []
+  for (item in filteredItems) {
+    let pad = ""
+    let n = item.key.length
+    while (n < 4) {
+      pad = pad + " "
+      n = n + 1
+    }
+    itemLabels.push("${item.key}${pad}${item.label}")
+  }
+  let bodyLines: string[] = []
+  if (choice.body != "") {
+    bodyLines = choice.body.split("\n")
+  }
+  return {
+    visible: true,
+    title: choice.title,
+    bodyLines: bodyLines,
+    itemLabels: itemLabels,
+    cursor: cursor,
+    filterText: choice.filter
+  }
+}
+
 def _replView(state: ReplState): Element {
-  const status = state.config.status()
+  const status: { left: string, right: string, context?: string } = state.config.status()
+  // `status.context` is optional — callers that pre-date the second
+  // status line return just `{left, right}`, so guard for null/empty.
+  let contextLine: string = ""
+  if (status.context != null) {
+    contextLine = status.context
+  }
   const paletteKeys = _filteredPaletteKeys(state)
   let paletteItems: string[] = []
   for (commandName in paletteKeys) {
@@ -995,11 +1139,35 @@ def _replView(state: ReplState): Element {
   const leftStatusWidth = status.left.length
   const rightStatusWidth = status.right.length
 
+  const choiceView = _choiceProjection(state)
+
   // Note: every container call here MUST pass at least one named arg.
   // The agency parser otherwise compiles `column() as mainCol { ... }`
   // as a positional call where the block lands in `flex`.
   return column(visible: true) as mainCol {
     mainCol.list(items: visibleMessages, selectedIndex: followIndex, flex: 1)
+    // Choice modal: bordered column above the status line. Keys are
+    // routed to `_replReduceChoice` when this is open, so the input
+    // bar / palette / history navigation can't fire. When closed the
+    // column collapses to zero rows via `visible: false`.
+    mainCol.column(
+      visible: choiceView.visible,
+      height: _CHOICE_ROWS,
+      border: true,
+      borderColor: "yellow",
+      label: choiceView.title,
+    ) as choiceBox {
+      for (bodyLine in choiceView.bodyLines) {
+        choiceBox.line(bodyLine)
+      }
+      choiceBox.line("> ${choiceView.filterText}", bold: true)
+      choiceBox.list(
+        items: choiceView.itemLabels,
+        selectedIndex: choiceView.cursor,
+        flex: 1,
+      )
+      choiceBox.line("↑↓ select · enter confirm · esc cancel", fg: "gray")
+    }
     mainCol.list(
       items: paletteItems,
       selectedIndex: state.palette.cursor,
@@ -1007,31 +1175,42 @@ def _replView(state: ReplState): Element {
       height: _PALETTE_ROWS,
       border: true,
     )
-    mainCol.row(bg: "#ffffff", fg: "#000000", height: 1) as statusLine {
-      // Use hex colors (`#fff` / `#000`) instead of named `white` /
-      // `black` because named colors map to the terminal theme.
-      // bg/fg are repeated on each child because child elements don't
-      // inherit parent style.
-      statusLine.line(
-        status.left,
-        width: leftStatusWidth,
-        bg: "#ffffff",
-        fg: "#000000",
-        bold: true,
-      )
-      statusLine.box(flex: 1, bg: "#ffffff") as _ {}
-      statusLine.line(
-        status.right,
-        width: rightStatusWidth,
-        bg: "#ffffff",
-        fg: "#000000",
-        bold: true,
-      )
+    // Bottom region: thin rule above and below the input bar, then
+    // two info lines beneath that. The first info line shows fixed
+    // `status.left` / `status.right` content; the second is reserved
+    // for context-specific hints (e.g. mode toggles, key reminders)
+    // populated via the optional `status.context` field returned by
+    // the caller's status callback.
+    mainCol.line("", fill: "─", fg: "gray")
+    // The input row grows vertically with the buffer: one row per
+    // `\n`-delimited line, minimum one, capped at `_INPUT_MAX_ROWS`
+    // so a long paste cannot starve the transcript above. When the
+    // buffer exceeds the cap the renderer shows the trailing window
+    // (cursor stays on the last visible row, earlier rows scroll off
+    // the top). `line()` children inside the row keep `height: 1`
+    // and pin to the top via the default `alignItems: "stretch"` +
+    // `crossOffset: 0` layout, so the prompt only appears on the
+    // first row even as the textInput expands to cover the whole
+    // height.
+    const _bufferLines = state.input.buffer.split("\n")
+    let inputHeight = _bufferLines.length
+    if (inputHeight < 1) {
+      inputHeight = 1
     }
-    mainCol.row(height: 1) as inputRow {
+    if (inputHeight > _INPUT_MAX_ROWS) {
+      inputHeight = _INPUT_MAX_ROWS
+    }
+    mainCol.row(height: inputHeight) as inputRow {
       inputRow.line(state.input.prompt, width: promptWidth)
       inputRow.textInput(value: state.input.buffer, flex: 1)
     }
+    mainCol.line("", fill: "─", fg: "gray")
+    mainCol.row(height: 1) as statusLine {
+      statusLine.line(status.left, width: leftStatusWidth)
+      statusLine.box(flex: 1) as _ {}
+      statusLine.line(status.right, width: rightStatusWidth)
+    }
+    mainCol.line(contextLine, fg: "gray")
   }
 }
 
@@ -1195,6 +1374,50 @@ def _appendInputCharacter(state: ReplState, character: string): ReplState {
   }
 }
 
+// Extract the text payload from a `key: "paste"` `KeyEvent`,
+// defaulting to the empty string when the terminal sent a paste
+// marker with no body. Pulled out so the `_appendPaste` call site
+// can stay a single expression inside a match arm — the typechecker
+// doesn't narrow `keyEvent.text` to `string` across the arm's
+// `if (keyEvent.text != null)` guard, and `keyEvent.text ?? ""`
+// synths as `number` (no special case for `??` in synthType yet).
+def _pasteText(keyEvent: any): string {
+  if (keyEvent.text == null) {
+    return ""
+  }
+  return keyEvent.text
+}
+
+// Append pasted text to the input buffer wholesale. Newlines are
+// preserved as `\n` (the input box grows to fit), so a paste of a
+// multi-line snippet shows up exactly as it was on the clipboard.
+// Windows-style `\r\n` and bare `\r` are folded to `\n` so the
+// renderer + reducer only have to think about one line terminator.
+def _appendPaste(state: ReplState, pasted: string): ReplState {
+  let normalized = pasted.replaceAll("\r\n", "\n")
+  normalized = normalized.replaceAll("\r", "\n")
+  return {
+    ...state,
+    input: {
+      ...state.input,
+      buffer: state.input.buffer + normalized
+    }
+  }
+}
+
+// Clear the entire input buffer in one step. Bound to Ctrl+U to match
+// the bash readline / GNU Readline convention. Doesn't touch history
+// — the cleared content is gone, not pushed onto the history stack.
+def _clearInputBuffer(state: ReplState): ReplState {
+  return {
+    ...state,
+    input: {
+      ...state.input,
+      buffer: ""
+    }
+  }
+}
+
 def _removeInputCharacter(state: ReplState): ReplState {
   return {
     ...state,
@@ -1217,17 +1440,145 @@ def _openPalette(state: ReplState): ReplState {
   }
 }
 
-def _replReduce(state: ReplState, keyEvent: KeyEvent): ReplState {
+// Filter the choice items by the (lowercased) typed filter substring.
+// Lists in insertion order. With an empty filter, returns all items.
+def _filteredChoiceItems(choice: ReplChoiceState): ChoiceItem[] {
+  if (choice.filter == "") {
+    return choice.items
+  }
+  const needle = choice.filter.toLowerCase()
+  return filter(choice.items, _matchesChoiceFilter.partial(needle: needle))
+}
+
+def _matchesChoiceFilter(item: ChoiceItem, needle: string): boolean {
+  return item.label.toLowerCase().includes(needle)
+    || item.key.toLowerCase().includes(needle)
+}
+
+// Reducer branch for the choice modal. Routes keystrokes:
+//   ↑/↓        — move cursor within the filtered set
+//   printable  — append to filter, reset cursor to 0
+//   backspace  — pop from filter (or close prompt if filter is empty)
+//   enter      — resolve the deferred Promise with the picked key,
+//                clear the slot
+//   escape     — reject the deferred Promise, clear the slot
+// All other keys (including the synthetic render-trigger) are no-ops.
+def _replReduceChoice(state: ReplState, keyEvent: KeyEvent): ReplState {
+  // Pull the value out into a local typed `any` so member accesses
+  // type-check (the Agency typechecker does not narrow union types
+  // across runtime null guards). The caller `_replReduce` already
+  // ensured `state.choice != null` before dispatching here.
+  const choice: any = state.choice
+  const visibleItems = _filteredChoiceItems(choice)
+  if (keyEvent.key == "escape") {
+    _cancelChoice("user cancelled")
+    return { ...state, choice: null }
+  }
+  if (keyEvent.key == "enter") {
+    if (visibleItems.length == 0) {
+      return state
+    }
+    let cursor = choice.cursor
+    if (cursor >= visibleItems.length) {
+      cursor = visibleItems.length - 1
+    }
+    _resolveChoice(visibleItems[cursor].key)
+    return { ...state, choice: null }
+  }
+  if (keyEvent.key == "up") {
+    let cursor = choice.cursor - 1
+    if (cursor < 0) { cursor = 0 }
+    return { ...state, choice: { ...choice, cursor: cursor } }
+  }
+  if (keyEvent.key == "down") {
+    let cursor = choice.cursor + 1
+    const maxCursor = visibleItems.length - 1
+    if (cursor > maxCursor) { cursor = maxCursor }
+    if (cursor < 0)         { cursor = 0 }
+    return { ...state, choice: { ...choice, cursor: cursor } }
+  }
+  if (keyEvent.key == "backspace") {
+    const currentFilter = choice.filter
+    if (currentFilter == "") {
+      return state
+    }
+    return {
+      ...state,
+      choice: {
+        ...choice,
+        filter: currentFilter[:currentFilter.length - 1],
+        cursor: 0
+      }
+    }
+  }
+  if (keyEvent.key.length == 1) {
+    return {
+      ...state,
+      choice: {
+        ...choice,
+        filter: choice.filter + keyEvent.key,
+        cursor: 0
+      }
+    }
+  }
+  return state
+}
+
+// Sync the modal slot from the TS bridge. The bridge owns the
+// pending-request slot because reducer states are returned as new
+// records on every keypress — TS cannot mutate them directly. The
+// reducer copies the bridge's request into `state.choice` once
+// (when a prompt opens) and clears it once (when a prompt is
+// resolved/cancelled externally or torn down by _runReplLoop).
+// Cursor/filter state lives on the agency side after that.
+def _syncChoiceFromBridge(state: ReplState): ReplState {
+  const tsRequest: any = _peekPendingChoiceRequest()
+  if (tsRequest != null && state.choice == null) {
+    return {
+      ...state,
+      choice: {
+        title: tsRequest.title,
+        body: tsRequest.body,
+        items: tsRequest.items,
+        filter: "",
+        cursor: 0
+      }
+    }
+  }
+  if (tsRequest == null && state.choice != null) {
+    return { ...state, choice: null }
+  }
+  return state
+}
+
+def _replReduce(replState: ReplState, keyEvent: KeyEvent): ReplState {
+  const state = _syncChoiceFromBridge(replState)
+  // Choice modal takes priority — locks out the input bar, palette,
+  // and history navigation until the user picks (Enter) or cancels
+  // (Escape). Ctrl-C still exits the whole REPL via the catch-all
+  // path below; we don't special-case it here.
+  if (state.choice != null) {
+    return _replReduceChoice(state, keyEvent)
+  }
   if (state.palette.open) {
     return _replReducePaletteOpen(state, keyEvent)
   }
 
   match (keyEvent) {
     { ctrl: true, key: "c" } => return { ...state, done: true }
+    { ctrl: true, key: "u" } => return _clearInputBuffer(state)
+    // Bracketed-paste payload from the terminal (e.g. Cmd+V on
+    // macOS). `_pasteText` coerces the optional `keyEvent.text` to a
+    // plain string so the match arm stays a single expression.
+    { key: "paste" } => return _appendPaste(state, _pasteText(keyEvent))
     { key: "/" } if (state.input.buffer == "") => return _openPalette(state)
     { key: "up" } if (state.input.historyIdx > 0) => return _recallPreviousHistory(state)
     { key: "down" } if (state.input.historyIdx < state.input.history.length) => return _recallNextHistory(state)
     { key: "backspace" } if (state.input.buffer != "") => return _removeInputCharacter(state)
+    // Shift+Enter inserts a literal newline. Must come before the
+    // plain `enter` arms — match arms with more specific predicates
+    // win, but only when listed before the more general one.
+    { key: "enter", shift: true } => return _appendInputCharacter(state, "\n")
     // Empty-buffer Enter is a no-op: skip writing a blank "You" row
     // and entering the busy/Thinking state for an empty prompt.
     { key: "enter" } if (state.input.buffer == "") => return state
@@ -1239,6 +1590,13 @@ def _replReduce(state: ReplState, keyEvent: KeyEvent): ReplState {
 }
 
 def _replIsDone(state: ReplState): boolean {
+  // Bridge signal (set by `_beginSubmit` when onSubmit returns false)
+  // takes priority. We can't rely on mutating `state.done` from TS
+  // because reducer states are returned as fresh records and `done`
+  // is a primitive — see `_signalReplExit` in lib/stdlib/ui.ts.
+  if (_peekReplExitSignal()) {
+    return true
+  }
   return state.done
 }
 
@@ -1305,6 +1663,7 @@ export def repl(
       status: status,
       onSubmit: onSubmit
     },
+    choice: null,
     done: false,
   }
   _activeRepl = initial

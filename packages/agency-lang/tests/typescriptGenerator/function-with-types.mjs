@@ -162,10 +162,19 @@ let __functionCompleted = false;
   __stack.args["y"] = y;
   __self.__retryable = __self.__retryable ?? true;
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "function-with-types.agency", scopeName: "add", threads: __setupData.threads });
-  let __resultCheckpointId = -1;
-if (__ctx.stateStack.currentNodeId()) {
-  __resultCheckpointId = __ctx.checkpoints.createPinned(__stateStack(), __ctx, { moduleId: "function-with-types.agency", scopeName: "add", stepPath: "", label: "result-entry" });
-}
+  // `__resultCheckpointId` is referenced by interruptAssignment /
+// interruptReturn templates when an interrupt rejects and `runner.halt`
+// builds a Failure carrying the entry checkpoint for `result.retry(...)`.
+// We keep the variable declared (sentinel -1) but skip the createPinned
+// call: pinning at every function entry causes pinned checkpoints to
+// accumulate without bound (evictIfNeeded only evicts unpinned), and the
+// JSON deep-clone of stateStack + globals on each call is a measurable
+// per-keystroke cost inside std::ui's repl loop. The cost of always
+// pinning outweighs the retry-on-failure feature, so it is disabled.
+// `ctx.checkpoints.get(-1)` returns undefined, so the failure path
+// gracefully omits the embedded checkpoint and retry simply becomes a
+// no-op rather than failing.
+let __resultCheckpointId = -1;
 if (__ctx._pendingArgOverrides) {
   const __overrides = __ctx._pendingArgOverrides;
   __ctx._pendingArgOverrides = undefined;
@@ -320,10 +329,19 @@ let __functionCompleted = false;
   __stack.args["name"] = name;
   __self.__retryable = __self.__retryable ?? true;
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "function-with-types.agency", scopeName: "greet", threads: __setupData.threads });
-  let __resultCheckpointId = -1;
-if (__ctx.stateStack.currentNodeId()) {
-  __resultCheckpointId = __ctx.checkpoints.createPinned(__stateStack(), __ctx, { moduleId: "function-with-types.agency", scopeName: "greet", stepPath: "", label: "result-entry" });
-}
+  // `__resultCheckpointId` is referenced by interruptAssignment /
+// interruptReturn templates when an interrupt rejects and `runner.halt`
+// builds a Failure carrying the entry checkpoint for `result.retry(...)`.
+// We keep the variable declared (sentinel -1) but skip the createPinned
+// call: pinning at every function entry causes pinned checkpoints to
+// accumulate without bound (evictIfNeeded only evicts unpinned), and the
+// JSON deep-clone of stateStack + globals on each call is a measurable
+// per-keystroke cost inside std::ui's repl loop. The cost of always
+// pinning outweighs the retry-on-failure feature, so it is disabled.
+// `ctx.checkpoints.get(-1)` returns undefined, so the failure path
+// gracefully omits the embedded checkpoint and retry simply becomes a
+// no-op rather than failing.
+let __resultCheckpointId = -1;
 if (__ctx._pendingArgOverrides) {
   const __overrides = __ctx._pendingArgOverrides;
   __ctx._pendingArgOverrides = undefined;
@@ -466,10 +484,19 @@ let __functionCompleted = false;
   __stack.args["label"] = label;
   __self.__retryable = __self.__retryable ?? true;
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "function-with-types.agency", scopeName: "mixed", threads: __setupData.threads });
-  let __resultCheckpointId = -1;
-if (__ctx.stateStack.currentNodeId()) {
-  __resultCheckpointId = __ctx.checkpoints.createPinned(__stateStack(), __ctx, { moduleId: "function-with-types.agency", scopeName: "mixed", stepPath: "", label: "result-entry" });
-}
+  // `__resultCheckpointId` is referenced by interruptAssignment /
+// interruptReturn templates when an interrupt rejects and `runner.halt`
+// builds a Failure carrying the entry checkpoint for `result.retry(...)`.
+// We keep the variable declared (sentinel -1) but skip the createPinned
+// call: pinning at every function entry causes pinned checkpoints to
+// accumulate without bound (evictIfNeeded only evicts unpinned), and the
+// JSON deep-clone of stateStack + globals on each call is a measurable
+// per-keystroke cost inside std::ui's repl loop. The cost of always
+// pinning outweighs the retry-on-failure feature, so it is disabled.
+// `ctx.checkpoints.get(-1)` returns undefined, so the failure path
+// gracefully omits the embedded checkpoint and retry simply becomes a
+// no-op rather than failing.
+let __resultCheckpointId = -1;
 if (__ctx._pendingArgOverrides) {
   const __overrides = __ctx._pendingArgOverrides;
   __ctx._pendingArgOverrides = undefined;
@@ -621,10 +648,19 @@ let __functionCompleted = false;
   __stack.args["items"] = items;
   __self.__retryable = __self.__retryable ?? true;
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "function-with-types.agency", scopeName: "processArray", threads: __setupData.threads });
-  let __resultCheckpointId = -1;
-if (__ctx.stateStack.currentNodeId()) {
-  __resultCheckpointId = __ctx.checkpoints.createPinned(__stateStack(), __ctx, { moduleId: "function-with-types.agency", scopeName: "processArray", stepPath: "", label: "result-entry" });
-}
+  // `__resultCheckpointId` is referenced by interruptAssignment /
+// interruptReturn templates when an interrupt rejects and `runner.halt`
+// builds a Failure carrying the entry checkpoint for `result.retry(...)`.
+// We keep the variable declared (sentinel -1) but skip the createPinned
+// call: pinning at every function entry causes pinned checkpoints to
+// accumulate without bound (evictIfNeeded only evicts unpinned), and the
+// JSON deep-clone of stateStack + globals on each call is a measurable
+// per-keystroke cost inside std::ui's repl loop. The cost of always
+// pinning outweighs the retry-on-failure feature, so it is disabled.
+// `ctx.checkpoints.get(-1)` returns undefined, so the failure path
+// gracefully omits the embedded checkpoint and retry simply becomes a
+// no-op rather than failing.
+let __resultCheckpointId = -1;
 if (__ctx._pendingArgOverrides) {
   const __overrides = __ctx._pendingArgOverrides;
   __ctx._pendingArgOverrides = undefined;
@@ -766,10 +802,19 @@ let __functionCompleted = false;
   __stack.args["value"] = value;
   __self.__retryable = __self.__retryable ?? true;
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "function-with-types.agency", scopeName: "flexible", threads: __setupData.threads });
-  let __resultCheckpointId = -1;
-if (__ctx.stateStack.currentNodeId()) {
-  __resultCheckpointId = __ctx.checkpoints.createPinned(__stateStack(), __ctx, { moduleId: "function-with-types.agency", scopeName: "flexible", stepPath: "", label: "result-entry" });
-}
+  // `__resultCheckpointId` is referenced by interruptAssignment /
+// interruptReturn templates when an interrupt rejects and `runner.halt`
+// builds a Failure carrying the entry checkpoint for `result.retry(...)`.
+// We keep the variable declared (sentinel -1) but skip the createPinned
+// call: pinning at every function entry causes pinned checkpoints to
+// accumulate without bound (evictIfNeeded only evicts unpinned), and the
+// JSON deep-clone of stateStack + globals on each call is a measurable
+// per-keystroke cost inside std::ui's repl loop. The cost of always
+// pinning outweighs the retry-on-failure feature, so it is disabled.
+// `ctx.checkpoints.get(-1)` returns undefined, so the failure path
+// gracefully omits the embedded checkpoint and retry simply becomes a
+// no-op rather than failing.
+let __resultCheckpointId = -1;
 if (__ctx._pendingArgOverrides) {
   const __overrides = __ctx._pendingArgOverrides;
   __ctx._pendingArgOverrides = undefined;

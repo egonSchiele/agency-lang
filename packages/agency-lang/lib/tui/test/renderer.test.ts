@@ -140,4 +140,92 @@ describe("render", () => {
     const child = frame.children![0];
     expect(contentText(child)).toBe("abc       ");
   });
+
+  it("parses styled-text markup inside list items", () => {
+    // Before the fix, list rows ran raw chars into cells so
+    // `{red-fg}You{/red-fg}` rendered as the literal markup. After
+    // the fix the tag chars are gone and the inner text gets the
+    // span's color.
+    const items = ["{red-fg}You{/red-fg} hi"];
+    // Use follow-tail (selectedIndex == items.length) so the row
+    // isn't repainted with selection chrome — we want to inspect
+    // the spans' own colors.
+    const el = list({ width: 20, height: 1, key: "tx" }, items, items.length);
+    const frame = renderElement(el, 80, 24);
+    const txt = contentText(frame);
+    expect(txt.trim()).toBe("You hi");
+    // The "Y" cell should carry the parsed fg color.
+    expect(frame.content![0][0].char).toBe("Y");
+    expect(frame.content![0][0].fg).toBe("red");
+    // The space and "h" cells should NOT carry that color.
+    expect(frame.content![0][3].fg).toBeUndefined();
+    expect(frame.content![0][4].char).toBe("h");
+  });
+
+  it("splits multi-line list items into one visual row per source line", () => {
+    // A transcript entry like `highlight("\nreply\n", "markdown")`
+    // produces a multi-line string; each `\n`-separated line should
+    // get its own row instead of being smashed onto one.
+    const items = ["one\ntwo\nthree"];
+    const el = list({ width: 10, height: 3, key: "ml" }, items, items.length);
+    const frame = renderElement(el, 80, 24);
+    expect(frame.content![0].slice(0, 3).map((c) => c.char).join("")).toBe(
+      "one",
+    );
+    expect(frame.content![1].slice(0, 3).map((c) => c.char).join("")).toBe(
+      "two",
+    );
+    expect(frame.content![2].slice(0, 5).map((c) => c.char).join("")).toBe(
+      "three",
+    );
+  });
+
+  it("fill style pads empty text cells with the fill character", () => {
+    // Empty content + fill: "─" should produce a full-width horizontal rule.
+    const el = box({ width: 8, height: 1 }, {
+      type: "text",
+      content: "",
+      style: { fill: "─" },
+    } as any);
+    const frame = renderElement(el, 80, 24);
+    const ruleRow = frame.children![0].content![0].map((c) => c.char).join("");
+    expect(ruleRow).toBe("────────");
+  });
+
+  it("fill style pads end-of-line cells when content is shorter than width", () => {
+    const el = box({ width: 10, height: 1 }, {
+      type: "text",
+      content: "hi",
+      style: { fill: "─" },
+    } as any);
+    const frame = renderElement(el, 80, 24);
+    const row = frame.children![0].content![0].map((c) => c.char).join("");
+    expect(row).toBe("hi────────");
+  });
+
+  it("textInput renders multi-line value as one visual row per \\n", () => {
+    const el = box({ width: 8, height: 3 }, textInput({}, "ab\ncde"));
+    const frame = renderElement(el, 80, 24);
+    const grid = frame.children![0].content!;
+    expect(grid[0].slice(0, 2).map((c) => c.char).join("")).toBe("ab");
+    // Cursor sits at end of the last line, not the first.
+    expect(grid[0][2].char).toBe(" ");
+    expect(grid[1].slice(0, 3).map((c) => c.char).join("")).toBe("cde");
+    expect(grid[1][3].char).toBe("█");
+  });
+
+  it("follow-tail keeps the last visual row of a multi-line item in view", () => {
+    // A 3-row tall item followed by selectedIndex = length should
+    // show the LAST visual row, not blank rows or the first row.
+    const items = ["one\ntwo\nthree", "tail"];
+    const el = list({ width: 10, height: 2, key: "ft" }, items, items.length);
+    const frame = renderElement(el, 80, 24);
+    // visual rows: 0:one 1:two 2:three 3:tail. height 2 → show rows 2 and 3.
+    expect(frame.content![0].slice(0, 5).map((c) => c.char).join("")).toBe(
+      "three",
+    );
+    expect(frame.content![1].slice(0, 4).map((c) => c.char).join("")).toBe(
+      "tail",
+    );
+  });
 });

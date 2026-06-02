@@ -63,12 +63,16 @@ export type ResumableScopeOpts = {
    *  stack at runtime. Override when you want a TS helper to appear
    *  under a distinct module label in the debugger. */
   moduleId?: string;
-  /** Default: true. Pins a `result-entry` checkpoint at scope entry
-   *  so the calling Agency function's `result.retry()` rewinds to
-   *  this scope's start, exactly as it would for a generated
-   *  function body. Set false for TS helpers whose results should
-   *  not participate in retry. Not related to the debugger — for
-   *  that, see `agency.callsite()` and the per-step ALS frame. */
+  /** Default: false. When true, pins a `result-entry` checkpoint at
+   *  scope entry so the calling Agency function's `result.retry()`
+   *  rewinds to this scope's start, exactly as it would for a
+   *  generated function body. Disabled by default because pinned
+   *  checkpoints accumulate without bound (evictIfNeeded only evicts
+   *  unpinned) and the per-entry JSON deep-clone of stateStack +
+   *  globals is a real per-keystroke cost. Pair this with the
+   *  resultCheckpointSetup template which has the same behavior for
+   *  compiled Agency function bodies. Not related to the debugger —
+   *  for that, see `agency.callsite()` and the per-step ALS frame. */
   pinResultCheckpoint?: boolean;
 };
 
@@ -108,7 +112,7 @@ export async function withResumableScope<T>(
   body: (s: ResumableScope) => Promise<T>,
 ): Promise<T> {
   const moduleId = opts.moduleId ?? "<ts-helper>";
-  const pin = opts.pinResultCheckpoint ?? true;
+  const pin = opts.pinResultCheckpoint ?? false;
 
   const runtime = getRuntimeContext();
   const ctx = runtime.ctx;

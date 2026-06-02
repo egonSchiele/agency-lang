@@ -88,9 +88,19 @@ describe("Typechecker Integration Tests (stdlib)", () => {
   describe.each(stdlibFiles)(
     "stdlib: $name",
     ({ name, filePath }) => {
-      it("should have no type errors or warnings", () => {
-        assertNoTypeErrors(name, filePath);
-      }, 30_000);
+      // The larger stdlib modules (notably `policy` and `ui`) can
+      // exceed the 5s default when the full vitest suite is running
+      // in parallel and the typechecker is CPU-starved. Bumping the
+      // per-it timeout — run in isolation each finishes in ~2-4s, so
+      // 30s is comfortable headroom without masking a real
+      // regression.
+      it(
+        "should have no type errors or warnings",
+        () => {
+          assertNoTypeErrors(name, filePath);
+        },
+        30000,
+      );
     }
   );
 });

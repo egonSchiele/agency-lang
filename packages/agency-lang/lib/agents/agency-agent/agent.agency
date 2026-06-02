@@ -216,10 +216,11 @@ def _runTurn(msg: string): boolean {
   return true
 }
 
-def _buildStatus(): { left: string; right: string } {
+def _buildStatus(): { left: string; right: string; context: string } {
   return {
-    left: " agency-agent",
-    right: "$${getCost()} "
+    left: "agency-agent",
+    right: "$${getCost()}",
+    context: "/help for commands · /exit to quit"
   }
 }
 

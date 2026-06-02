@@ -155,6 +155,9 @@ __registerTool(entries);
 __registerTool(emit);
 __registerTool(callback);
 async function __initializeGlobals(__ctx) {
+  if (__ctx.globals.isInitialized("tests/debugger/interrupt-test.agency")) {
+    return;
+  }
   __ctx.globals.markInitialized("tests/debugger/interrupt-test.agency")
 }
 __registerGlobalsInit("tests/debugger/interrupt-test.agency", __initializeGlobals);

@@ -29,7 +29,7 @@ import { ScriptedInput } from "@/tui/input/scripted.js";
 import { FrameRecorder } from "@/tui/output/recorder.js";
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore – compiled-by-make Agency module; no .d.ts is emitted
-import { repl } from "../../stdlib/ui.js";
+import { repl, chooseOption } from "../../stdlib/ui.js";
 
 function makeTestCtx(): RuntimeContext<any> {
   return new RuntimeContext({
@@ -121,6 +121,72 @@ describe("std::ui — REPL state machine (Agency-driven)", () => {
     expect(submits).toEqual(["/exit"]);
   });
 
+  it("Ctrl+U clears the input buffer without affecting history", async () => {
+    // Type "junk", Ctrl+U to wipe it, then type "ok" + Enter. The
+    // only submit observed should be "ok"; "junk" never reaches
+    // onSubmit and never lands in history.
+    const submits: string[] = [];
+    await invokeRepl(
+      [
+        { key: "j" }, { key: "u" }, { key: "n" }, { key: "k" },
+        { key: "u", ctrl: true },
+        { key: "o" }, { key: "k" }, { key: "enter" },
+      ],
+      {
+        onSubmit: (p: string) => {
+          submits.push(p);
+          return false;
+        },
+      },
+    );
+    expect(submits).toEqual(["ok"]);
+  });
+
+  it("a bracketed paste lands in the buffer wholesale and submits intact", async () => {
+    // The terminal-input layer turns a real bracketed paste into a
+    // single `{ key: "paste", text }` event. The reducer must append
+    // the whole payload at once — including newlines — rather than
+    // treating embedded `\n` as Enter.
+    const submits: string[] = [];
+    await invokeRepl(
+      [
+        { key: "paste", text: "hello\nworld" } as any,
+        { key: "enter" },
+      ],
+      {
+        onSubmit: (p: string) => {
+          submits.push(p);
+          return false;
+        },
+      },
+    );
+    expect(submits).toEqual(["hello\nworld"]);
+  });
+
+  it("Shift+Enter inserts a newline into the buffer instead of submitting", async () => {
+    // `{ key: "enter", shift: true }` is the canonical shape produced
+    // by the terminal layer for Alt/Option+Enter (the portable
+    // fallback when the terminal can't send a distinct Shift+Enter
+    // code). It should add `\n` to the buffer; plain Enter still
+    // submits the multi-line result.
+    const submits: string[] = [];
+    await invokeRepl(
+      [
+        { key: "a" },
+        { key: "enter", shift: true } as any,
+        { key: "b" },
+        { key: "enter" },
+      ],
+      {
+        onSubmit: (p: string) => {
+          submits.push(p);
+          return false;
+        },
+      },
+    );
+    expect(submits).toEqual(["a\nb"]);
+  });
+
   it("ignores Enter on an empty buffer (no submit, no transcript noise)", async () => {
     // Pressing Enter on an empty input should NOT call onSubmit.
     // We then type "ok" and press Enter to exit — exactly one submit
@@ -140,6 +206,153 @@ describe("std::ui — REPL state machine (Agency-driven)", () => {
       },
     );
     expect(submits).toEqual(["ok"]);
+  });
+
+  it("chooseOption opens a modal, navigates, and resolves with the picked key", async () => {
+    // We feed the modal-driving keys AFTER chooseOption has opened
+    // the prompt. The submit-trigger keys are pre-queued; the modal
+    // keys are fed from inside onSubmit so they don't race past the
+    // not-yet-open modal.
+    const picks: string[] = [];
+    const scripted = new ScriptedInput([
+      { key: "g" }, { key: "o" }, { key: "enter" },
+    ]);
+    _setInputSource(scripted);
+    _setOutputTarget(new FrameRecorder());
+    _setSize(80, 24);
+    const ctx = makeTestCtx();
+    try {
+      await runInTestContext(ctx, new StateStack(), new ThreadStore(), () =>
+        __call(repl, {
+          type: "named",
+          positionalArgs: [],
+          namedArgs: {
+            status: () => ({ left: "", right: "" }),
+            onSubmit: async (_p: string) => {
+              // Schedule modal keys after onSubmit has started; they'll
+              // land in the input queue only once `_openChoicePrompt`
+              // has flipped the bridge slot.
+              setTimeout(() => {
+                scripted.feedKey({ key: "down" });
+                scripted.feedKey({ key: "enter" });
+              }, 0);
+              const answer = await __call(chooseOption, {
+                type: "named",
+                positionalArgs: [],
+                namedArgs: {
+                  title: "Pick one",
+                  body: "context",
+                  items: [
+                    { key: "a", label: "alpha" },
+                    { key: "b", label: "beta" },
+                  ],
+                },
+              });
+              picks.push(answer as string);
+              return false;
+            },
+            paletteCommands: {},
+          },
+        }),
+      );
+    } finally {
+      _setInputSource(null);
+      _setOutputTarget(null);
+      _uninstallConsoleCapture();
+    }
+    expect(picks).toEqual(["b"]);
+  });
+
+  it("chooseOption resolves with the first item on plain Enter", async () => {
+    const picks: string[] = [];
+    const scripted = new ScriptedInput([
+      { key: "g" }, { key: "enter" },
+    ]);
+    _setInputSource(scripted);
+    _setOutputTarget(new FrameRecorder());
+    _setSize(80, 24);
+    const ctx = makeTestCtx();
+    try {
+      await runInTestContext(ctx, new StateStack(), new ThreadStore(), () =>
+        __call(repl, {
+          type: "named",
+          positionalArgs: [],
+          namedArgs: {
+            status: () => ({ left: "", right: "" }),
+            onSubmit: async (_p: string) => {
+              setTimeout(() => scripted.feedKey({ key: "enter" }), 0);
+              const answer = await __call(chooseOption, {
+                type: "named",
+                positionalArgs: [],
+                namedArgs: {
+                  title: "T",
+                  body: "",
+                  items: [
+                    { key: "yes", label: "Yes" },
+                    { key: "no", label: "No" },
+                  ],
+                },
+              });
+              picks.push(answer as string);
+              return false;
+            },
+            paletteCommands: {},
+          },
+        }),
+      );
+    } finally {
+      _setInputSource(null);
+      _setOutputTarget(null);
+      _uninstallConsoleCapture();
+    }
+    expect(picks).toEqual(["yes"]);
+  });
+
+  it("chooseOption escape cancels the modal as a Failure return", async () => {
+    // Agency wraps thrown errors from async functions into a Failure
+    // record (not a JS exception), so `await chooseOption(...)` returns
+    // a `{ success: false, error }` value when the user hits Escape.
+    const replies: any[] = [];
+    const scripted = new ScriptedInput([
+      { key: "g" }, { key: "enter" },
+    ]);
+    _setInputSource(scripted);
+    _setOutputTarget(new FrameRecorder());
+    _setSize(80, 24);
+    const ctx = makeTestCtx();
+    try {
+      await runInTestContext(ctx, new StateStack(), new ThreadStore(), () =>
+        __call(repl, {
+          type: "named",
+          positionalArgs: [],
+          namedArgs: {
+            status: () => ({ left: "", right: "" }),
+            onSubmit: async (_p: string) => {
+              setTimeout(() => scripted.feedKey({ key: "escape" }), 0);
+              const answer = await __call(chooseOption, {
+                type: "named",
+                positionalArgs: [],
+                namedArgs: {
+                  title: "T",
+                  body: "",
+                  items: [{ key: "a", label: "A" }],
+                },
+              });
+              replies.push(answer);
+              return false;
+            },
+            paletteCommands: {},
+          },
+        }),
+      );
+    } finally {
+      _setInputSource(null);
+      _setOutputTarget(null);
+      _uninstallConsoleCapture();
+    }
+    expect(replies.length).toBe(1);
+    expect(replies[0]?.success).toBe(false);
+    expect(String(replies[0]?.error ?? "")).toMatch(/cancel/i);
   });
 
   it("exits when onSubmit returns false", async () => {

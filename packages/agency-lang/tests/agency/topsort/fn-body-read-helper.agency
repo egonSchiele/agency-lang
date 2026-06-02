@@ -1,0 +1,8 @@
+// Helper for `fn-body-read-main.agency` — exposes one static const.
+// Used to verify the closure-wide runtime bootstrap: nothing in the
+// main file references `greeting` from another *initializer*, only
+// from inside a `def` body, so the compile-time per-variable dep
+// graph never sees an edge. Before the closure-wide bootstrap landed,
+// this module's `__initializeStatic` was never triggered and the
+// read in main hit the PR-1 read-before-init trap.
+export static const greeting = "hello"

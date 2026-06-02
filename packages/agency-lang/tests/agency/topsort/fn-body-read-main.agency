@@ -1,0 +1,16 @@
+// Regression for the agency-agent shape: an imported `static const`
+// is read ONLY from inside a function body, never from another
+// static / global initializer. The compile-time per-variable init
+// dep graph in `compileClosure` only walks initializer expressions,
+// so without the closure-wide runtime bootstrap added in this PR
+// the helper module's `__initializeStatic` would never fire and the
+// read inside `render()` would hit the PR-1 read-before-init trap.
+import { greeting } from "./fn-body-read-helper.agency"
+
+def render(): string {
+  return greeting + "!"
+}
+
+node main() {
+  return render()
+}

@@ -678,5 +678,38 @@ export function isAssignable(
     return true;
   }
 
+  // functionRefType -> blockType: a named `def` reference is compatible
+  // with a parameter declared as a lambda type when arities match,
+  // parameters are contravariant, and the return type is covariant —
+  // the same rules `blockType -> blockType` uses.
+  //
+  // Without this rule, every call site that passes a `def` to a higher-
+  // order built-in like `map(arr, helper)` (where the parameter is
+  // typed `(any) => any`) would emit a false-positive warning, even
+  // when the helper's signature is structurally compatible.
+  if (
+    resolvedSource.type === "functionRefType" &&
+    resolvedTarget.type === "blockType"
+  ) {
+    const sourceVariadic = resolvedSource.params.some((p) => p.variadic);
+    if (sourceVariadic) return false;
+    const sourceParams = resolvedSource.params.filter((p) => !p.variadic);
+    if (sourceParams.length !== resolvedTarget.params.length) return false;
+    for (let i = 0; i < sourceParams.length; i++) {
+      const sourceHint = sourceParams[i].typeHint;
+      const targetHint = resolvedTarget.params[i].typeAnnotation;
+      if (!sourceHint || !targetHint) continue;
+      if (!isAssignable(targetHint, sourceHint, typeAliases)) return false;
+    }
+    if (resolvedSource.returnType && resolvedTarget.returnType) {
+      return isAssignable(
+        resolvedSource.returnType,
+        resolvedTarget.returnType,
+        typeAliases,
+      );
+    }
+    return true;
+  }
+
   return false;
 }

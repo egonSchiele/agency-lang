@@ -25,6 +25,38 @@ const CSI = `${ESC}[`;
 let installedBottomRows = 0;
 let scrollBottom = 0;
 let resizeListener: (() => void) | null = null;
+let cleanupInstalled = false;
+
+// Emergency cleanup invoked from "exit" and SIGINT/SIGTERM handlers
+// when the process is being torn down without the Agency-side
+// `repl()` getting a chance to run its `finally` block (e.g. user
+// hits Ctrl+C during a long-running tool call). Restores the scroll
+// region and stdin raw mode so the shell prompt comes back clean.
+function emergencyReset(): void {
+  if (installedBottomRows > 0 && process.stdout.isTTY) {
+    process.stdout.write(`${CSI}r`);
+    process.stdout.write("\n");
+  }
+  if (process.stdin.isTTY && process.stdin.isRaw) {
+    process.stdin.setRawMode(false);
+  }
+  installedBottomRows = 0;
+  scrollBottom = 0;
+}
+
+function ensureCleanupInstalled(): void {
+  if (cleanupInstalled) return;
+  cleanupInstalled = true;
+  process.on("exit", emergencyReset);
+  process.on("SIGINT", () => {
+    emergencyReset();
+    process.exit(130);
+  });
+  process.on("SIGTERM", () => {
+    emergencyReset();
+    process.exit(143);
+  });
+}
 
 /**
  * Row (1-indexed) where the scroll region ends and the bottom region
@@ -47,6 +79,7 @@ export function installRegion(bottomRows: number): void {
     scrollBottom = 0;
     return;
   }
+  ensureCleanupInstalled();
   const rows = process.stdout.rows ?? 24;
   scrollBottom = Math.max(1, rows - bottomRows);
   process.stdout.write(`${CSI}1;${scrollBottom}r`);

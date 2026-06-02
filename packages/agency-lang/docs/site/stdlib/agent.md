@@ -361,4 +361,4 @@ Run one user turn through a multi-specialist agent. Owns the hop
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/agent.agency#L291))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/agent.agency#L295))

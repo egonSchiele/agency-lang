@@ -239,7 +239,9 @@ def runOneTurn(
   let reply = ""
   thread(session: category, label: category, summarize: true) {
     const spec = config.agents[category]
-    if (spec.memory == true) { setMemoryId(category) }
+    if (spec.memory == true) {
+      setMemoryId(category)
+    }
     if (!_firstEntry[category]) {
       _firstEntry[category] = true
       // Concat with `||` so an unset optional `context` becomes "".
@@ -249,7 +251,9 @@ def runOneTurn(
     if (allowHandoff) {
       let validTargets: string[] = []
       for (c in keys(config.agents)) {
-        if (c != category) { validTargets.push(c) }
+        if (c != category) {
+          validTargets.push(c)
+        }
       }
       tools.push(handoff.partial(validCategories: validTargets))
     }

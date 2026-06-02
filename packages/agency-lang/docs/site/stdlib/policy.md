@@ -127,7 +127,7 @@ Key of an interrupt's `data` object (e.g. `"dir"`, `"command"`).
 export type InterruptDataKey = string
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/policy.agency#L128))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/policy.agency#L129))
 
 ### InterruptDataVal
 
@@ -146,7 +146,7 @@ export type InterruptDataKey = string
 export type InterruptDataVal = string
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/policy.agency#L136))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/policy.agency#L137))
 
 ### InterruptKind
 
@@ -161,7 +161,7 @@ export type InterruptDataVal = string
 export type InterruptKind = string
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/policy.agency#L142))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/policy.agency#L143))
 
 ### PolicyRule
 
@@ -183,7 +183,7 @@ export type PolicyRule = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/policy.agency#L150))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/policy.agency#L151))
 
 ### Policy
 
@@ -202,7 +202,7 @@ export type PolicyRule = {
 export type Policy = Record<InterruptKind, PolicyRule[]>
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/policy.agency#L161))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/policy.agency#L162))
 
 ### Decision
 
@@ -234,7 +234,7 @@ export type Decision =
   | "reject-always"
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/policy.agency#L173))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/policy.agency#L174))
 
 ### ScopedField
 
@@ -266,7 +266,7 @@ export type ScopedField = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/policy.agency#L191))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/policy.agency#L192))
 
 ### ScopedRuleFields
 
@@ -309,7 +309,7 @@ export type ScopedField = {
 export type ScopedRuleFields = Record<InterruptKind, ScopedField[]>
 ````
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/policy.agency#L214))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/policy.agency#L215))
 
 ## Functions
 
@@ -337,7 +337,7 @@ Evaluate a policy against an interrupt. Returns approve(), reject(), or propagat
 | policy | `Record<string, any>` |  |
 | interrupt | `Record<string, any>` |  |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/policy.agency#L233))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/policy.agency#L234))
 
 ### validatePolicy
 
@@ -361,7 +361,7 @@ Validate that a policy object is well-formed. Returns { success: true } if valid
 |---|---|---|
 | policy | `Record<string, any>` |  |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/policy.agency#L252))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/policy.agency#L253))
 
 ### buildScopedMatch
 
@@ -407,7 +407,7 @@ Given the per-kind ScopedField[] config, build a match object pinned
 
 **Returns:** `Record<string, string>`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/policy.agency#L285))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/policy.agency#L286))
 
 ### recordRule
 
@@ -453,7 +453,7 @@ Return a new policy with a catch-all rule for `kind` appended.
 
 **Returns:** [Policy](#policy)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/policy.agency#L330))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/policy.agency#L331))
 
 ### recordScopedRule
 
@@ -489,7 +489,7 @@ Return a new policy with a scoped approve rule prepended for the
 
 **Returns:** [Policy](#policy)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/policy.agency#L367))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/policy.agency#L368))
 
 ### parsePolicyFile
 
@@ -521,7 +521,7 @@ Read + parse + validate a policy file from disk. Returns {} on any
 
 **Returns:** [Policy](#policy)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/policy.agency#L397))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/policy.agency#L398))
 
 ### writePolicyFile
 
@@ -552,7 +552,7 @@ Validate and write a policy to a JSON file. Throws if the policy is invalid. Set
 | policy | [Policy](#policy) |  |
 | allowedPaths | `string[]` | [] |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/policy.agency#L436))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/policy.agency#L437))
 
 ### maybeLoad
 
@@ -560,7 +560,7 @@ Validate and write a policy to a JSON file. Throws if the policy is invalid. Set
 maybeLoad()
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/policy.agency#L451))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/policy.agency#L452))
 
 ### maybeFlush
 
@@ -568,7 +568,7 @@ maybeLoad()
 maybeFlush()
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/policy.agency#L463))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/policy.agency#L464))
 
 ### flushPolicy
 
@@ -586,7 +586,7 @@ flushPolicy()
  * `std::write` via `with approve` (you opted in by installing the
  * handler).
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/policy.agency#L481))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/policy.agency#L482))
 
 ### describeScopedMatch
 
@@ -602,7 +602,7 @@ describeScopedMatch(intr: any): string
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/policy.agency#L491))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/policy.agency#L492))
 
 ### askUser
 
@@ -618,7 +618,7 @@ askUser(intr: any): Decision
 
 **Returns:** [Decision](#decision)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/policy.agency#L504))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/policy.agency#L505))
 
 ### _handler
 
@@ -639,7 +639,7 @@ _handler(intr: any): any
 
 **Returns:** `any`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/policy.agency#L543))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/policy.agency#L547))
 
 ### cliPolicyHandler
 
@@ -719,4 +719,4 @@ CLI sugar for an interactive policy handler. Owns load + save +
 
 **Returns:** `any`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/policy.agency#L627))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/policy.agency#L631))

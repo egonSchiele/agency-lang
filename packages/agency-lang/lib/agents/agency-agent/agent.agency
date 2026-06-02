@@ -4,6 +4,8 @@ import { ScopedRuleFields, cliPolicyHandler } from "std::policy"
 import { exists } from "std::shell"
 import { highlight } from "std::syntax"
 import { cwd, env } from "std::system"
+import { getCost } from "std::thread"
+import { clearMessages, pushMessage, repl } from "std::ui"
 
 import { codeSysPrompt, codeTools } from "./code.agency"
 import { researchSysPrompt, researchTools } from "./research.agency"
@@ -23,9 +25,13 @@ import { researchSysPrompt, researchTools } from "./research.agency"
  *   - `std::policy.cliPolicyHandler` provides the interactive
  *     approve/reject/always menu and persists "always" decisions to
  *     `~/.agency-agent/policy.json`.
+ *   - `std::ui.repl` provides the terminal UI: a bordered scroll
+ *     output area, status line (cost + label), command palette
+ *     opened with `/`, and history-aware input bar.
  *
  * This file's responsibilities collapse to:
- *   1. Banner + REPL loop.
+ *   1. Per-turn callback (`_runTurn`) wiring the user message into
+ *      route() and printing the reply into the scroll output.
  *   2. Per-kind ALWAYS_FIELDS map for the policy handler's
  *      "approve-always-here" option.
  *   3. Wire the two specialists into one `RouterConfig`.
@@ -67,6 +73,8 @@ callback("onToolCallEnd") as data {
 // `shared.agency` because Agency doesn't guarantee imported static-const
 // init runs before the importer reads it (upstream #232).
 const POLICY_FILE = "policy.json"
+const HISTORY_FILE = "history"
+
 def policyDir(): string {
   const home = env("HOME")
   if (home == null) {
@@ -74,7 +82,14 @@ def policyDir(): string {
   }
   return "${home}/.agency-agent"
 }
-def policyPath(): string { return "${policyDir()}/${POLICY_FILE}" }
+
+def policyPath(): string {
+  return "${policyDir()}/${POLICY_FILE}"
+}
+
+def historyPath(): string {
+  return "${policyDir()}/${HISTORY_FILE}"
+}
 
 // Per-kind config driving the "approve-always-here" option. For each
 // kind we list the data fields the scoped rule should pin, plus a
@@ -82,23 +97,59 @@ def policyPath(): string { return "${policyDir()}/${POLICY_FILE}" }
 // rule matches `dir` AND `dir/**`. Kinds not present in this map
 // don't offer the option — the user falls back to (a)/(r)/(aa)/(rr).
 const ALWAYS_FIELDS: ScopedRuleFields = {
-  "std::read": [{ field: "dir", matchSubpaths: true }],
-  "std::write": [{ field: "dir", matchSubpaths: true }],
-  "std::edit": [{ field: "dir", matchSubpaths: true }],
-  "std::ls": [{ field: "dir", matchSubpaths: true }],
-  "std::glob": [{ field: "dir", matchSubpaths: true }],
-  "std::grep": [{ field: "dir", matchSubpaths: true }],
+  "std::read": [{
+    field: "dir",
+    matchSubpaths: true
+  }],
+  "std::write": [{
+    field: "dir",
+    matchSubpaths: true
+  }],
+  "std::edit": [{
+    field: "dir",
+    matchSubpaths: true
+  }],
+  "std::ls": [{
+    field: "dir",
+    matchSubpaths: true
+  }],
+  "std::glob": [{
+    field: "dir",
+    matchSubpaths: true
+  }],
+  "std::grep": [{
+    field: "dir",
+    matchSubpaths: true
+  }],
   "std::copy": [
-    { field: "src", matchSubpaths: true },
-    { field: "dest", matchSubpaths: true },
+    {
+    field: "src",
+    matchSubpaths: true
+  },
+    {
+    field: "dest",
+    matchSubpaths: true
+  },
   ],
   "std::move": [
-    { field: "src", matchSubpaths: true },
-    { field: "dest", matchSubpaths: true },
+    {
+    field: "src",
+    matchSubpaths: true
+  },
+    {
+    field: "dest",
+    matchSubpaths: true
+  },
   ],
   "std::exec": [
-    { field: "command", matchSubpaths: false },
-    { field: "subcommand", matchSubpaths: false },
+    {
+    field: "command",
+    matchSubpaths: false
+  },
+    {
+    field: "subcommand",
+    matchSubpaths: false
+  },
   ]
 }
 
@@ -120,14 +171,59 @@ def loadAgentsMd(dir: string): string {
   return "\n\n<project_context>\n${result.value}\n</project_context>"
 }
 
-node main() {
-  print(color.cyan("╭───────────────────────────────────────────────╮"))
-  print(color.cyan("│         Welcome to the Agency Agent           │"))
-  print(color.cyan("│  I help you write Agency code, look up docs,  │"))
-  print(color.cyan("│       and research things from the web.       │"))
-  print(color.cyan("╰───────────────────────────────────────────────╯"))
-  print("Type 'exit' to quit.\n")
+// Per-turn grounding context. Captured at startup and re-used so the
+// LLM doesn't have to re-ground each turn. Initialized in `main()`.
+let _context: string = ""
 
+// Slash-command + user-message dispatcher invoked by `repl()` for
+// every Enter keystroke. Return `false` to terminate the loop.
+def _runTurn(msg: string): boolean {
+  if (msg == "") {
+    return true
+  }
+  if (msg == "/exit" || msg == "/quit") {
+    return false
+  }
+  if (msg == "/clear") {
+    clearMessages()
+    return true
+  }
+  if (msg == "/help") {
+    pushMessage("Commands: /exit, /clear, /help")
+    return true
+  }
+  const reply = route(
+    {
+    start: "code",
+    agents: {
+      code: {
+        systemPrompt: codeSysPrompt,
+        tools: codeTools,
+        memory: true
+      },
+      research: {
+        systemPrompt: researchSysPrompt,
+        tools: researchTools,
+        memory: true
+      }
+    },
+    maxHops: 3,
+    context: _context
+  },
+    msg,
+  )
+  pushMessage(highlight("\n${reply}\n", language: "markdown"))
+  return true
+}
+
+def _buildStatus(): { left: string; right: string } {
+  return {
+    left: " agency-agent",
+    right: "$${getCost()} "
+  }
+}
+
+node main() {
   // Grounding: the LLM should not have to ask the user where it is
   // or what day it is. Both are appended once per run so they ride
   // with the first system message in each specialist's thread.
@@ -136,35 +232,33 @@ node main() {
   // root (Anthropic / Pi / Aider all read it), inline it so the LLM
   // automatically follows the project's conventions.
   const projectContext = loadAgentsMd(cwd()) with approve
-  const context = "\n\nCurrent date: ${today()}\nCurrent working directory: ${cwd()}${projectContext}"
+  _context = "\n\nCurrent date: ${today()}\nCurrent working directory: ${cwd()}${projectContext}"
 
   // Bind the handler to a local var so `with handler` parses (the
   // `with` clause only accepts an identifier, not a call expression).
   const handler = cliPolicyHandler({
     file: policyPath(),
-    fields: ALWAYS_FIELDS,
+    fields: ALWAYS_FIELDS
   })
 
-  let userMsg = input("What would you like to do? ")
-  while (userMsg != "exit" && userMsg != "quit") {
-    handle {
-      const reply = route({
-        start: "code",
-        agents: {
-          code:     { systemPrompt: codeSysPrompt,     tools: codeTools,     memory: true },
-          research: { systemPrompt: researchSysPrompt, tools: researchTools, memory: true },
-        },
-        maxHops: 3,
-        context: context,
-      }, userMsg)
-      // Subagents are prompted to reply in Markdown. Render
-      // headings/bullets/bold/code-fences instead of dumping the
-      // raw source — see `code.agency` / `research.agency` for the
-      // system-prompt instruction.
-      print(highlight("\n${reply}\n", language: "markdown"))
-    } with handler
-    userMsg = input("\nNext request (or 'exit'): ")
-  }
+  // The `repl()` widget owns the runloop; every Enter dispatches into
+  // `_runTurn` which calls `route()`. Interrupts raised inside
+  // route() propagate to the policy handler installed by the enclosing
+  // `handle` block via the AsyncLocalStorage handler stack.
+  handle {
+    repl(
+      status: _buildStatus,
+      onSubmit: _runTurn,
+      prompt: "> ",
+      historyFile: historyPath(),
+      historyMax: 1000,
+      paletteCommands: {
+      "/exit": "Exit the agent",
+      "/clear": "Clear the conversation transcript",
+      "/help": "Show available slash commands"
+    },
+    )
+  } with handler
+
   print(color.cyan("\nGoodbye!"))
-  return "done"
 }

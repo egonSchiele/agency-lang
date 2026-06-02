@@ -16,7 +16,7 @@ if (!process.env.CI && process.env.AGENCY_SANDBOX_TESTS !== "1") {
 // Agency tests (.agency + .test.json) — run each file individually so one failure
 // doesn't block the rest, and we can allow specific tests to fail (e.g. wikipedia).
 const agencyTests = [
-  "fs", "shell", "pure", "date", "policy", "ui", "strategy",
+  "fs", "shell", "pure", "date", "policy", "strategy",
 ];
 
 for (const name of agencyTests) {

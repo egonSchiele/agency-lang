@@ -1,18 +1,8 @@
-import * as readline from "readline";
 import process from "process";
-import { color } from "../utils/termcolors.js";
-import { syntaxHighlight } from "./syntax.js";
-import { __internal_input } from "./builtins.js";
-import { AgencyCancelledError } from "../runtime/errors.js";
-import { getRuntimeContext } from "../runtime/asyncContext.js";
-import type { RuntimeContext } from "../runtime/state/context.js";
-import type { StateStack } from "../runtime/state/stateStack.js";
-import type { ThreadStore } from "../runtime/state/threadStore.js";
 import {
   Screen,
   TerminalInput,
   TerminalOutput,
-  ScriptedInput,
   FrameRecorder,
   type Element as TuiElement,
   type KeyEvent as TuiKeyEvent,
@@ -23,499 +13,13 @@ import type { Frame } from "@/tui/frame.js";
 import { toANSI } from "@/tui/render/ansi.js";
 import { withBottomCursor, installRegion, resetRegion } from "./ui-region.js";
 import { __call } from "../runtime/call.js";
-
-// Evaluated once at load time — the env var is set by the debugger CLI
-// before any compiled agency code runs and never changes.
-const isDebuggerMode = !!process.env.AGENCY_DEBUGGER;
-
-/* CSI stands for Control Sequence Introducer — it's the escape sequence \x1B[ (ESC followed by [)
-used in ANSI terminal control codes. It's the prefix for commands that control cursor position,
-text color, clearing the screen, and other terminal formatting operations.
-*/
-
-const ESC = "\x1b";
-const CSI = `${ESC}[`;
-
-function moveTo(row: number, col: number): string {
-  return `${CSI}${row};${col}H`;
-}
-
-function clearLine(): string {
-  return `${CSI}2K`;
-}
-
-// These let you move the cursor around to draw/update part of the screen,
-// then jump back to where you were.
-function saveCursor(): string {
-  return `${CSI}s`;
-}
-
-function restoreCursor(): string {
-  return `${CSI}u`;
-}
-
-function setScrollRegion(top: number, bottom: number): string {
-  return `${CSI}${top};${bottom}r`;
-}
-
-function resetScrollRegion(): string {
-  return `${CSI}r`;
-}
-
-export function _emptyLine(): void {
-  if (isDebuggerMode) {
-    console.log("");
-    return;
-  }
-  if (!initialized) return;
-  writeInScrollRegion("");
-  renderFixedArea();
-}
+import { isFailure } from "../runtime/result.js";
 
 // ---------------------------------------------------------------------------
-// State
-// ---------------------------------------------------------------------------
-
-let initialized = false;
-let cols = 80;
-let rows = 24;
-
-let appTitle = "";
-
-// Status bar content
-let statusLeft = "";
-let statusRight = "";
-
-// Input bar content
-let inputContent = "";
-let hintContent = "";
-
-// Spinner
-const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
-let spinnerInterval: ReturnType<typeof setInterval> | null = null;
-let spinnerIdx = 0;
-
-// Readline
-let activeRl: readline.Interface | null = null;
-
-// Event handlers (stored for cleanup)
-let resizeHandler: (() => void) | null = null;
-let exitHandler: (() => void) | null = null;
-let sigintHandler: (() => void) | null = null;
-
-// ---------------------------------------------------------------------------
-// Fixed area — the single place that defines the bottom of the screen
-// ---------------------------------------------------------------------------
-
-// The index (within the fixed lines array) where the input prompt lives.
-// Set by buildFixedLines() so _prompt() can position the cursor correctly.
-let inputLineIndex = 0;
-
-// Returns an array of strings, one per line. The length of this array
-// determines how many rows are reserved at the bottom. Change this function
-// to add, remove, or restyle lines without touching anything else.
-function buildFixedLines(): string[] {
-  const lines: string[] = [];
-
-  lines.push("");
-  lines.push("");
-  // prompt
-  lines.push(color.dim("─".repeat(cols)));
-  inputLineIndex = lines.length;
-  lines.push(`${color.bold("❯")} ${inputContent}`);
-  lines.push(color.dim("─".repeat(cols)));
-
-  // status bar
-  const left = truncate(
-    statusLeft || hintContent,
-    Math.floor(((cols - 4) * 2) / 3),
-  );
-  const right = truncate(statusRight, Math.floor((cols - 4) / 3));
-  const padding = Math.max(0, cols - left.length - right.length - 2);
-  lines.push(color.cyan(`${left} ${" ".repeat(padding)} ${right}`));
-  lines.push("");
-
-  return lines;
-}
-
-function fixedLineCount(): number {
-  return buildFixedLines().length;
-}
-
-// The row where the fixed area starts (1-indexed)
-function fixedAreaStart(): number {
-  return rows - fixedLineCount() + 1;
-}
-
-// The last row of the scroll region (one above the fixed area)
-function scrollBottom(): number {
-  return fixedAreaStart() - 1;
-}
-
-// Renders the entire fixed area at the bottom of the screen.
-// This is the ONLY function that writes to the fixed rows.
-function renderFixedArea() {
-  const lines = buildFixedLines();
-  const startRow = fixedAreaStart();
-  let out = saveCursor();
-  for (let i = 0; i < lines.length; i++) {
-    out += moveTo(startRow + i, 1) + clearLine() + lines[i];
-  }
-  out += restoreCursor();
-  process.stdout.write(out);
-}
-
-function clearFixedArea() {
-  const startRow = fixedAreaStart();
-  const count = fixedLineCount();
-  let out = saveCursor();
-  for (let i = 0; i < count; i++) {
-    out += moveTo(startRow + i, 1) + clearLine();
-  }
-  out += restoreCursor();
-  process.stdout.write(out);
-}
-
-// ---------------------------------------------------------------------------
-// Terminal helpers
-// ---------------------------------------------------------------------------
-
-function updateSize() {
-  cols = process.stdout.columns || 80;
-  // Ensure at least enough rows for the fixed area plus one scroll line
-  const minRows = fixedLineCount() + 1;
-  rows = Math.max(process.stdout.rows || 24, minRows);
-}
-
-function truncate(str: string, maxLen: number): string {
-  if (maxLen <= 0) return "";
-  if (str.length <= maxLen) return str;
-  return str.slice(0, maxLen - 1) + "…";
-}
-
-function applyScrollRegion() {
-  process.stdout.write(setScrollRegion(1, scrollBottom()));
-}
-
-function writeInScrollRegion(text: string) {
-  process.stdout.write(
-    saveCursor() + moveTo(scrollBottom(), 1) + "\n" + text + restoreCursor(),
-  );
-}
-
-function writeBox(
-  filename: string,
-  lines: string[],
-  renderLine: (line: string, index: number) => string,
-): void {
-  writeInScrollRegion(
-    color.dim(
-      `┌─ ${filename} ${"─".repeat(Math.max(0, cols - filename.length - 6))}`,
-    ),
-  );
-  for (let i = 0; i < lines.length; i++) {
-    writeInScrollRegion(renderLine(lines[i], i));
-  }
-  writeInScrollRegion(color.dim(`└${"─".repeat(Math.max(0, cols - 2))}`));
-  renderFixedArea();
-}
-
-// ---------------------------------------------------------------------------
-// Lifecycle
-// ---------------------------------------------------------------------------
-
-export function _initUI(title: string): void {
-  if (isDebuggerMode) return;
-  if (initialized) return;
-  initialized = true;
-
-  appTitle = title;
-  statusLeft = "";
-  statusRight = "";
-  inputContent = "";
-  hintContent = "";
-
-  updateSize();
-  applyScrollRegion();
-  process.stdout.write(moveTo(1, 1));
-  renderFixedArea();
-  _separator(appTitle);
-
-  resizeHandler = () => {
-    updateSize();
-    applyScrollRegion();
-    renderFixedArea();
-  };
-  exitHandler = () => {
-    if (initialized) _destroyUI();
-  };
-  sigintHandler = () => {
-    if (initialized) _destroyUI();
-    process.exit(0);
-  };
-
-  process.stdout.on("resize", resizeHandler);
-  process.on("exit", exitHandler);
-  process.on("SIGINT", sigintHandler);
-}
-
-export function _destroyUI(): void {
-  if (isDebuggerMode) return;
-  if (!initialized) return;
-  initialized = false;
-
-  if (spinnerInterval) {
-    clearInterval(spinnerInterval);
-    spinnerInterval = null;
-  }
-  if (activeRl) {
-    activeRl.close();
-    activeRl = null;
-  }
-  if (resizeHandler) {
-    process.stdout.removeListener("resize", resizeHandler);
-    resizeHandler = null;
-  }
-  if (exitHandler) {
-    process.removeListener("exit", exitHandler);
-    exitHandler = null;
-  }
-  if (sigintHandler) {
-    process.removeListener("SIGINT", sigintHandler);
-    sigintHandler = null;
-  }
-
-  process.stdout.write(resetScrollRegion());
-  clearFixedArea();
-  process.stdout.write(moveTo(rows, 1) + "\n");
-
-  statusLeft = "";
-  statusRight = "";
-  inputContent = "";
-  hintContent = "";
-}
-
-// ---------------------------------------------------------------------------
-// Public API — scrollable output
-// ---------------------------------------------------------------------------
-
-export function _log(message: string): void {
-  if (isDebuggerMode) {
-    console.log(message);
-    return;
-  }
-  if (!initialized) return;
-  writeInScrollRegion(message);
-  renderFixedArea();
-}
-
-export function _chat(role: string, message: string): void {
-  if (isDebuggerMode) {
-    console.log(`${role}: ${message}`);
-    return;
-  }
-  if (!initialized) return;
-  const colorFn =
-    role === "user"
-      ? color.cyan.bold
-      : role === "agent"
-        ? color.white.bold
-        : color.dim;
-  const prefix = colorFn(role);
-  const lines = message.split("\n");
-  writeInScrollRegion(`${prefix}: ${lines[0]}`);
-  for (let i = 1; i < lines.length; i++) {
-    writeInScrollRegion(`  ${lines[i]}`);
-  }
-  renderFixedArea();
-}
-
-export function _code(filename: string, content: string): void {
-  if (isDebuggerMode) {
-    console.log(`[${filename}]\n${content}`);
-    return;
-  }
-  if (!initialized) return;
-  writeBox(filename, content.split("\n"), (line, i) => {
-    const lineNum = String(i + 1).padStart(4, " ");
-    return `${color.dim(`│${lineNum}`)} ${line}`;
-  });
-}
-
-const languageMap: Record<string, string> = {
-  agency: "typescript",
-  ts: "typescript",
-  js: "javascript",
-  py: "python",
-  java: "java",
-  rb: "ruby",
-  go: "go",
-  rs: "rust",
-};
-
-export function _diff(filename: string, _content: string): void {
-  if (isDebuggerMode) {
-    console.log(`[${filename}]\n${_content}`);
-    return;
-  }
-  if (!initialized) return;
-  const ext = filename.split(".").slice(-1)[0];
-  const language = languageMap[ext];
-  let content = _content;
-  if (language) {
-    content = syntaxHighlight(content, language);
-  }
-  writeBox(filename, content.split("\n"), (line) => {
-    if (line.startsWith("+")) {
-      return color.bgGreen(`│ ${line}`);
-    } else if (line.startsWith("-")) {
-      return color.bgRed(`│ ${line}`);
-    }
-    return `│ ${line}`;
-  });
-}
-
-export function _separator(label: string): void {
-  if (isDebuggerMode) {
-    console.log(label ? `── ${label} ──` : "────");
-    return;
-  }
-  if (!initialized) return;
-  if (label) {
-    const padding = Math.max(0, cols - label.length - 4);
-    writeInScrollRegion(color.dim(`── ${label} ${"─".repeat(padding)}`));
-  } else {
-    writeInScrollRegion(color.dim("─".repeat(cols)));
-  }
-  renderFixedArea();
-}
-
-// ---------------------------------------------------------------------------
-// Public API — fixed area updates
-// ---------------------------------------------------------------------------
-
-export function _status(left: string, right: string): void {
-  if (isDebuggerMode) return;
-  if (!initialized) return;
-  statusLeft = left;
-  statusRight = right;
-  renderFixedArea();
-}
-
-export function _startSpinner(text: string): void {
-  if (isDebuggerMode) return;
-  if (!initialized || spinnerInterval) return;
-  spinnerIdx = 0;
-  const update = () => {
-    const frame = SPINNER_FRAMES[spinnerIdx % SPINNER_FRAMES.length];
-    inputContent = `${color.cyan(frame)} ${text}`;
-    renderFixedArea();
-    spinnerIdx++;
-  };
-  update();
-  spinnerInterval = setInterval(update, 80);
-}
-
-export function _stopSpinner(): void {
-  if (isDebuggerMode) return;
-  if (spinnerInterval) {
-    clearInterval(spinnerInterval);
-    spinnerInterval = null;
-  }
-  if (initialized) {
-    inputContent = "";
-    renderFixedArea();
-  }
-}
-
-/**
- * Show the readline prompt and close it on abort. Without abort
- * handling, a blocked `prompt("?")` after Ctrl-C or a race-loser
- * abort would hold stdin until the user hits Enter. On abort we
- * close the active readline interface (releasing stdin), reset the
- * input/hint state, and reject with `AgencyCancelledError`.
- *
- * In debugger mode delegates to the builtin `_input` (which supports
- * the `__agencyInputOverride` hook and works inside handler bodies
- * where interrupts are forbidden).
- */
-function promptImpl(
-  ctx: RuntimeContext<any>,
-  stack: StateStack,
-  threads: ThreadStore,
-  question: string,
-): Promise<string> {
-  if (isDebuggerMode) return __internal_input(ctx, stack, threads, question);
-  if (!initialized) {
-    return Promise.resolve("");
-  }
-  _stopSpinner();
-
-  const signal = ctx.getAbortSignal(stack);
-  if (signal.aborted) {
-    return Promise.reject(new AgencyCancelledError("prompt cancelled"));
-  }
-
-  return new Promise<string>((resolve, reject) => {
-    // Update hint, clear input, position cursor on the input row
-    hintContent = question;
-    inputContent = "";
-    renderFixedArea();
-
-    // Position cursor after the prompt character for typing
-    process.stdout.write(moveTo(fixedAreaStart() + inputLineIndex, 4));
-
-    const rl = readline.createInterface({
-      input: process.stdin,
-      output: process.stdout,
-      terminal: true,
-      prompt: "",
-    });
-    activeRl = rl;
-
-    const onAbort = () => {
-      try { rl.close(); } catch {}
-      activeRl = null;
-      inputContent = "";
-      hintContent = "";
-      if (initialized) renderFixedArea();
-      reject(new AgencyCancelledError("prompt cancelled"));
-    };
-    signal.addEventListener("abort", onAbort, { once: true });
-
-    rl.on("line", (answer: string) => {
-      signal.removeEventListener("abort", onAbort);
-      rl.close();
-      activeRl = null;
-      inputContent = "";
-      hintContent = "";
-      renderFixedArea();
-      resolve(answer);
-    });
-  });
-}
-
-/** Deprecated context-injected wrapper kept during the ALS migration;
- *  see `_prompt`. */
-export function __internal_prompt(
-  ctx: RuntimeContext<any>,
-  stack: StateStack,
-  threads: ThreadStore,
-  question: string,
-): Promise<string> {
-  return promptImpl(ctx, stack, threads, question);
-}
-
-/** ALS-reading replacement for `__internal_prompt`. */
-export function _prompt(question: string): Promise<string> {
-  const { ctx, stack, threads } = getRuntimeContext();
-  return promptImpl(ctx, stack, threads, question);
-}
-
-// ---------------------------------------------------------------------------
-// New declarative bridge — exposes lib/tui/ to the rewritten std::ui in
-// Agency. The old imperative API above is kept in place during the
-// migration (PR #3 removes it).
+// Declarative TS bridge for `std::ui`. Exposes the existing
+// `lib/tui/` engine (Screen, builders, input sources) to the Agency
+// stdlib wrapper. The Agency side (`stdlib/ui.agency`) wraps these
+// `_`-prefixed exports as the public `runLoop`, `repl`, etc.
 //
 // The bridge holds module-level handles for the input source, output
 // target, and viewport size. Tests inject scripted variants via
@@ -523,52 +27,17 @@ export function _prompt(question: string): Promise<string> {
 // defaults to `TerminalInput` / `TerminalOutput` at the actual TTY size.
 // ---------------------------------------------------------------------------
 
+
 let bridgeInputSource: InputSource | null = null;
 let bridgeOutputTarget: OutputTarget | null = null;
 let bridgeWidth = 80;
 let bridgeHeight = 24;
 let bridgeActiveScreen: Screen | null = null;
 
-// Test-mode injection points. Agency tests call `_setScriptedKeys` (and
-// optionally `_setQuitAfterMs`) before entering a loop, and the next
-// `makeBridgeScreen` call consumes them — installing a `ScriptedInput`
-// seeded with the keys and a `FrameRecorder` output, then clearing the
-// pending values so subsequent loops fall back to defaults.
-let pendingScriptedKeys: TuiKeyEvent[] | null = null;
-let pendingQuitAfterMs: number | null = null;
-
-export function _setScriptedKeys(keys: TuiKeyEvent[]): void {
-  pendingScriptedKeys = keys;
-}
-
-export function _setQuitAfterMs(ms: number): void {
-  pendingQuitAfterMs = ms;
-}
-
 /** Consume any pending test-mode injection and fall back to real
  *  terminal I/O when production. Sets `bridgeInputSource`,
- *  `bridgeOutputTarget`, `bridgeWidth`, `bridgeHeight`. Shared by
- *  `makeBridgeScreen` and `_runLoopHybrid` so both paths see the
- *  same scripted-input behavior. */
+ *  `bridgeOutputTarget`, `bridgeWidth`, `bridgeHeight`. */
 function ensureBridgeState(): void {
-  if (pendingScriptedKeys) {
-    const scriptedInput = new ScriptedInput(pendingScriptedKeys);
-    bridgeInputSource = scriptedInput;
-    bridgeOutputTarget = new FrameRecorder();
-    bridgeWidth = 80;
-    bridgeHeight = 24;
-    pendingScriptedKeys = null;
-
-    // Optional: feed a `q` key after N ms to break out of a tickMs loop
-    // that scripted keys alone wouldn't terminate. Tests for runLoop's
-    // tick behavior set this so the loop ends without needing a
-    // scripted-keys timeline that matches the tick cadence.
-    if (pendingQuitAfterMs !== null) {
-      const ms = pendingQuitAfterMs;
-      setTimeout(() => scriptedInput.feedKey({ key: "q" }), ms);
-      pendingQuitAfterMs = null;
-    }
-  }
   if (!bridgeInputSource) bridgeInputSource = new TerminalInput();
   if (!bridgeOutputTarget) bridgeOutputTarget = new TerminalOutput();
   if (process.stdout.isTTY) {
@@ -598,6 +67,14 @@ export function _setOutputTarget(out: OutputTarget | null): void {
   bridgeOutputTarget = out;
 }
 
+export function _recordedFrameTexts(): string[] {
+  if (!(bridgeOutputTarget instanceof FrameRecorder)) {
+    return [];
+  }
+  const recorder = bridgeOutputTarget;
+  return recorder.frames.map((_entry, index) => recorder.textAt(index));
+}
+
 /** Test/runtime injection point for the viewport size. */
 export function _setSize(w: number, h: number): void {
   bridgeWidth = w;
@@ -609,6 +86,32 @@ export function _setSize(w: number, h: number): void {
  *  whether a REPL owns the screen and route prompts accordingly. */
 export function _hasActiveScreen(): boolean {
   return bridgeActiveScreen !== null;
+}
+
+// Sentinel key used by `_triggerRender` to wake the active runLoop
+// without simulating a real keypress. `_replReduce` (and any well-
+// behaved REPL reducer) treats unknown single-character / multi-char
+// keys as no-ops and returns the state unchanged, so the loop's
+// `nextKey` resolves, `handleKey` runs (and is a no-op), and the
+// view repaints with whatever state the caller mutated.
+const RENDER_TRIGGER_KEY: TuiKeyEvent = { key: "__render__" };
+
+/**
+ * Wake the active runLoop so it repaints immediately. Used by
+ * `_beginSubmit` (the async-callback path) and by Agency-side
+ * `pushMessage` so transcript updates show up without waiting for
+ * the user to press another key. No-op when no input source supports
+ * synthetic injection (we keep the check defensive since custom
+ * `InputSource`s aren't required to implement `feedKey`).
+ */
+export function _triggerRender(): void {
+  if (!bridgeActiveScreen) return;
+  const source = bridgeInputSource as
+    | (InputSource & { feedKey?: (key: TuiKeyEvent) => void })
+    | null;
+  if (source && typeof source.feedKey === "function") {
+    source.feedKey(RENDER_TRIGGER_KEY);
+  }
 }
 
 /** Drives a state-machine loop with the declarative TUI engine.
@@ -629,13 +132,218 @@ async function callBridgeFn<T>(fn: unknown, ...args: unknown[]): Promise<T> {
   return (await __call(fn, { type: "positional", args })) as T;
 }
 
+/** Shape of the `state` arg `_beginSubmit` mutates while the async
+ *  onSubmit settles. Defined locally because the Agency `ReplState`
+ *  is record-typed and the bridge only cares about these three
+ *  fields. */
+type SubmitTargetState = {
+  done?: boolean;
+  submit?: {
+    busy?: boolean;
+    label?: string;
+    startedAtMs?: number;
+  };
+  transcript: {
+    messages: string[];
+  };
+};
+
+// ---------------------------------------------------------------------------
+// Console capture
+//
+// While a `repl()` is running it owns the alt-screen; any `console.log`
+// / `console.error` / raw `process.stdout.write` from underlying code
+// would otherwise be invisible. `_installConsoleCapture` overrides
+// those sinks so the text is appended to the REPL transcript instead.
+// The Agency-side `repl()` passes its `transcript.messages` array
+// straight in — since records share by reference, pushing to that
+// array is observable to the next render.
+// ---------------------------------------------------------------------------
+
+type ConsoleSinks = {
+  log: typeof console.log;
+  warn: typeof console.warn;
+  error: typeof console.error;
+  info: typeof console.info;
+  debug: typeof console.debug;
+};
+
+let captureTarget: string[] | null = null;
+let savedConsoleSinks: ConsoleSinks | null = null;
+
+function formatConsoleArgs(args: unknown[]): string {
+  return args
+    .map((arg) =>
+      typeof arg === "string"
+        ? arg
+        : arg instanceof Error
+          ? arg.stack ?? arg.message
+          : (() => {
+              try {
+                return JSON.stringify(arg);
+              } catch {
+                return String(arg);
+              }
+            })(),
+    )
+    .join(" ");
+}
+
+function pushCaptured(prefix: string, text: string): void {
+  if (!captureTarget) return;
+  // Split on newlines so multi-line writes become one transcript row
+  // per line. Trailing empty strings from a final `\n` are dropped so
+  // we don't render blank rows.
+  const lines = text.split("\n");
+  if (lines.length > 0 && lines[lines.length - 1] === "") lines.pop();
+  if (lines.length === 0) return;
+  for (const line of lines) {
+    captureTarget.push(prefix ? `${prefix} ${line}` : line);
+  }
+  // Kick the event loop so the captured line shows up immediately
+  // instead of after the next keypress (REPL defaults to no tickMs).
+  _triggerRender();
+}
+
+export function _installConsoleCapture(messages: string[]): void {
+  if (savedConsoleSinks) return; // idempotent: nested installs leave the outer one in place
+  captureTarget = messages;
+  savedConsoleSinks = {
+    log: console.log,
+    warn: console.warn,
+    error: console.error,
+    info: console.info,
+    debug: console.debug,
+  };
+
+  console.log = (...args: unknown[]) =>
+    pushCaptured("", formatConsoleArgs(args));
+  console.info = (...args: unknown[]) =>
+    pushCaptured("", formatConsoleArgs(args));
+  console.debug = (...args: unknown[]) =>
+    pushCaptured("", formatConsoleArgs(args));
+  console.warn = (...args: unknown[]) =>
+    pushCaptured("{yellow warn}", formatConsoleArgs(args));
+  console.error = (...args: unknown[]) =>
+    pushCaptured("{red error}", formatConsoleArgs(args));
+
+  // Deliberately NOT overriding `process.stdout.write` / `process.stderr.write`.
+  // An earlier revision did, but `lib/tui/output/terminal.ts`'s renderer
+  // also writes ANSI frames through `process.stdout.write` — capturing
+  // those would swallow rendering output and spam ANSI escapes into the
+  // transcript. The stdlib's own `print()` already routes through
+  // `console.log`, so all Agency-side output still gets captured. Raw
+  // `process.stdout.write` callers (if any) will be silenced behind the
+  // alt screen, which is the same behavior any TUI app gives them.
+}
+
+export function _uninstallConsoleCapture(): void {
+  if (!savedConsoleSinks) return;
+  console.log = savedConsoleSinks.log;
+  console.warn = savedConsoleSinks.warn;
+  console.error = savedConsoleSinks.error;
+  console.info = savedConsoleSinks.info;
+  console.debug = savedConsoleSinks.debug;
+  savedConsoleSinks = null;
+  captureTarget = null;
+}
+
+export function _nowMs(): number {
+  return Date.now();
+}
+
+export function _elapsedSeconds(startedAtMs: number, nowMs = Date.now()): number {
+  return Math.max(0, Math.floor((nowMs - startedAtMs) / 1000));
+}
+
+export function _spinnerFrame(startedAtMs: number, nowMs = Date.now()): string {
+  const frames = ["|", "/", "-", "\\"];
+  const tick = Math.floor(Math.max(0, nowMs - startedAtMs) / 250);
+  return frames[tick % frames.length];
+}
+
+export function _beginSubmit(
+  state: SubmitTargetState,
+  submitted: string,
+  onSubmit: unknown,
+): void {
+  state.transcript.messages.push(`{bright-blue You} ${submitted}`);
+  if (state.submit) {
+    state.submit.busy = true;
+    state.submit.label = "Thinking";
+    state.submit.startedAtMs = Date.now();
+  }
+
+  setTimeout(() => {
+    void (async () => {
+      try {
+        const reply = await callBridgeFn<unknown>(onSubmit, submitted);
+        if (reply === false) {
+          state.done = true;
+          // Wake the loop so isDone() runs and it exits — otherwise
+          // the user sees a hung REPL after `/exit`.
+          _triggerRender();
+          return;
+        }
+        // Surface Failure-typed returns explicitly. Agency functions
+        // catch JS exceptions in `safe` mode and return a Failure
+        // value instead of throwing; without this branch the failure
+        // would fall through the `typeof === "string"` guard and
+        // silently disappear behind the alt screen — exactly the
+        // class of bug that hid the early `spec.tools` spread error.
+        if (isFailure(reply)) {
+          const err = (reply as any).error;
+          const message =
+            err instanceof Error
+              ? err.message
+              : typeof err === "string"
+                ? err
+                : (() => {
+                    try {
+                      return JSON.stringify(err);
+                    } catch {
+                      return String(err);
+                    }
+                  })();
+          state.transcript.messages.push(`{red Error} ${message}`);
+          return;
+        }
+        if (typeof reply === "string" && reply.length > 0) {
+          state.transcript.messages.push(reply);
+        }
+      } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : String(error);
+        state.transcript.messages.push(`{red Error} ${message}`);
+      } finally {
+        if (state.submit) {
+          state.submit.busy = false;
+          state.submit.label = "";
+        }
+        // Repaint so the reply / cleared spinner / cleared busy flag
+        // are visible immediately. The REPL defaults to no tickMs to
+        // avoid the per-render checkpoint leak; without this kick the
+        // user would have to press a key to see the response.
+        _triggerRender();
+      }
+    })();
+  }, 0);
+}
+
 export async function _runLoop(
   initialState: any,
   renderFn: unknown,
   handleKeyFn: unknown,
   isDoneFn: unknown,
-  tickMs?: number,
+  tickMs?: number | null,
 ): Promise<any> {
+  // Coerce `null` / `0` / negative to undefined so Screen.runLoop's
+  // `if (opts.tickMs !== undefined)` guard treats them as "no tick".
+  // The Agency wrapper passes a default of `null` to mean "off" — JS
+  // `null !== undefined` is true, which would otherwise enter the
+  // tick branch and call `setTimeout(..., null)` (effectively 0ms,
+  // a tight loop). See runLoop default in stdlib/ui.agency.
+  const effectiveTickMs =
+    tickMs !== undefined && tickMs !== null && tickMs > 0 ? tickMs : undefined;
   const screen = makeBridgeScreen();
   bridgeActiveScreen = screen;
   try {
@@ -644,11 +352,39 @@ export async function _runLoop(
       render: async (s) => await callBridgeFn<TuiElement>(renderFn, s),
       handleKey: async (s, ev) => await callBridgeFn(handleKeyFn, s, ev),
       isDone: async (s) => await callBridgeFn<boolean>(isDoneFn, s),
-      tickMs,
+      tickMs: effectiveTickMs,
     });
   } finally {
     bridgeActiveScreen = null;
     screen.destroy();
+  }
+}
+
+/**
+ * REPL-only wrapper around `_runLoop` that guarantees the
+ * console-capture install is reversed even if the loop (or any
+ * Agency callback it invokes) throws. Agency has no `finally`, so
+ * the cleanup pair `_installConsoleCapture` / `_uninstallConsoleCapture`
+ * has to live on the TS side of the bridge to keep stdout / console
+ * from staying monkeypatched after a failed REPL.
+ *
+ * `transcriptMessages` is the same array `repl()` renders from; we
+ * pass it through to `_installConsoleCapture` so console / print
+ * output appends to the live transcript.
+ */
+export async function _runReplLoop(
+  initialState: any,
+  renderFn: unknown,
+  handleKeyFn: unknown,
+  isDoneFn: unknown,
+  tickMs: number | null | undefined,
+  transcriptMessages: string[],
+): Promise<any> {
+  _installConsoleCapture(transcriptMessages);
+  try {
+    return await _runLoop(initialState, renderFn, handleKeyFn, isDoneFn, tickMs);
+  } finally {
+    _uninstallConsoleCapture();
   }
 }
 
@@ -708,6 +444,60 @@ export function _writeScrollLine(text: string): void {
   process.stdout.write(text + "\n");
 }
 
+/**
+ * Prompt the user for one of `choices` while a REPL owns the screen.
+ * Writes `text` (multi-line) to the scroll region, then reads keys
+ * from the active screen's input source — accumulating printable
+ * characters into a buffer that's committed on Enter. Loops until
+ * the typed answer is one of `choices`. Backspace edits the buffer.
+ *
+ * Caller must verify `_hasActiveScreen()` first; this throws if no
+ * REPL is active because the fallback path (raw stdin) lives in the
+ * Agency-side wrapper `_routePrompt`.
+ *
+ * NB: when the REPL is running with `tickMs`, its `runLoop` may have
+ * a leaked `nextKey()` promise registered from the most recent tick.
+ * Since this function is called synchronously from inside `onSubmit`
+ * (between `nextKey` awaits), the leaked waiter only matters if a
+ * key is typed *while* a tick was racing, in which case that key
+ * may be claimed by the loop instead of the prompt. Acceptable for
+ * v1; production use should pause the loop while prompting.
+ */
+export async function _promptFromChoices(
+  text: string,
+  choices: string[],
+): Promise<string> {
+  const screen = bridgeActiveScreen;
+  if (!screen) {
+    throw new Error(
+      "_promptFromChoices: no active screen — callers must guard with _hasActiveScreen()",
+    );
+  }
+  for (const ln of text.split("\n")) {
+    process.stdout.write(ln + "\n");
+  }
+  while (true) {
+    let buf = "";
+    // Show what the user has typed so far on its own scroll-region line.
+    process.stdout.write("> ");
+    while (true) {
+      const ev = await screen.nextKey();
+      if (ev.key === "enter") break;
+      if (ev.key === "backspace") {
+        buf = buf.slice(0, -1);
+        continue;
+      }
+      if (ev.key.length === 1) {
+        buf += ev.key;
+      }
+    }
+    process.stdout.write(buf + "\n");
+    const answer = buf.trim();
+    if (choices.includes(answer)) return answer;
+    process.stdout.write(`(one of ${choices.join("/")})\n`);
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Hybrid mode — bridge primitives for `repl()`.
 //
@@ -741,8 +531,8 @@ export function _resetScrollRegion(): void {
  *
  *  Output target selection:
  *  - **Test mode** (`bridgeOutputTarget` is a `FrameRecorder`,
- *    injected by `_setScriptedKeys` -> `ensureBridgeState`):
- *    frames go straight into the recorder so tests can inspect them.
+ *    injected by `_setOutputTarget`): frames go straight into the
+ *    recorder so tests can inspect them.
  *  - **Real terminal mode**: a fresh `BottomRegionOutputTarget`
  *    writes ANSI to stdout via `withBottomCursor`, bypassing the
  *    default `TerminalOutput` (which would enter the alt screen and

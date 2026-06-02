@@ -211,6 +211,27 @@ function formatConsoleArgs(args: unknown[]): string {
     .join(" ");
 }
 
+/**
+ * Cap a captured `warn` / `error` payload at a small number of lines.
+ * The runtime's catch-and-convert path logs the underlying exception's
+ * full stack as a second `__log.error(...)` call, which is great for
+ * headless debugging but a wall of red lines inside a TUI. Two visible
+ * lines keep the message and one stack frame; everything past that
+ * collapses to an ellipsis placeholder the user can ignore. Plain
+ * `log` / `info` / `debug` capture is left alone — those are caller-
+ * authored output that's meant to be shown in full.
+ */
+const TUI_LOG_MAX_LINES = 2;
+function truncateForTui(text: string): string {
+  const lines = text.split("\n");
+  if (lines.length <= TUI_LOG_MAX_LINES) return text;
+  const omitted = lines.length - TUI_LOG_MAX_LINES;
+  return (
+    lines.slice(0, TUI_LOG_MAX_LINES).join("\n") +
+    `\n{gray-fg}… ${omitted} more line${omitted === 1 ? "" : "s"} omitted{/gray-fg}`
+  );
+}
+
 function pushCaptured(prefix: string, text: string): void {
   if (!captureTarget) return;
   // Split on newlines so multi-line writes become one transcript row
@@ -245,9 +266,9 @@ export function _installConsoleCapture(messages: string[]): void {
   console.debug = (...args: unknown[]) =>
     pushCaptured("", formatConsoleArgs(args));
   console.warn = (...args: unknown[]) =>
-    pushCaptured("{yellow-fg}warn{/yellow-fg}", formatConsoleArgs(args));
+    pushCaptured("{yellow-fg}warn{/yellow-fg}", truncateForTui(formatConsoleArgs(args)));
   console.error = (...args: unknown[]) =>
-    pushCaptured("{red-fg}error{/red-fg}", formatConsoleArgs(args));
+    pushCaptured("{red-fg}error{/red-fg}", truncateForTui(formatConsoleArgs(args)));
 
   // Deliberately NOT overriding `process.stdout.write` / `process.stderr.write`.
   // An earlier revision did, but `lib/tui/output/terminal.ts`'s renderer

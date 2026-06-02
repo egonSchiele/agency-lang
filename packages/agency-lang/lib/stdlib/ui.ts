@@ -88,6 +88,32 @@ export function _hasActiveScreen(): boolean {
   return bridgeActiveScreen !== null;
 }
 
+// Sentinel key used by `_triggerRender` to wake the active runLoop
+// without simulating a real keypress. `_replReduce` (and any well-
+// behaved REPL reducer) treats unknown single-character / multi-char
+// keys as no-ops and returns the state unchanged, so the loop's
+// `nextKey` resolves, `handleKey` runs (and is a no-op), and the
+// view repaints with whatever state the caller mutated.
+const RENDER_TRIGGER_KEY: TuiKeyEvent = { key: "__render__" };
+
+/**
+ * Wake the active runLoop so it repaints immediately. Used by
+ * `_beginSubmit` (the async-callback path) and by Agency-side
+ * `pushMessage` so transcript updates show up without waiting for
+ * the user to press another key. No-op when no input source supports
+ * synthetic injection (we keep the check defensive since custom
+ * `InputSource`s aren't required to implement `feedKey`).
+ */
+export function _triggerRender(): void {
+  if (!bridgeActiveScreen) return;
+  const source = bridgeInputSource as
+    | (InputSource & { feedKey?: (key: TuiKeyEvent) => void })
+    | null;
+  if (source && typeof source.feedKey === "function") {
+    source.feedKey(RENDER_TRIGGER_KEY);
+  }
+}
+
 /** Drives a state-machine loop with the declarative TUI engine.
  *  Renders the initial state, awaits each key, runs `handleKey`,
  *  re-renders, exits when `isDone` returns true. Returns the final
@@ -172,9 +198,13 @@ function pushCaptured(prefix: string, text: string): void {
   // we don't render blank rows.
   const lines = text.split("\n");
   if (lines.length > 0 && lines[lines.length - 1] === "") lines.pop();
+  if (lines.length === 0) return;
   for (const line of lines) {
     captureTarget.push(prefix ? `${prefix} ${line}` : line);
   }
+  // Kick the event loop so the captured line shows up immediately
+  // instead of after the next keypress (REPL defaults to no tickMs).
+  _triggerRender();
 }
 
 export function _installConsoleCapture(messages: string[]): void {
@@ -204,14 +234,21 @@ export function _installConsoleCapture(messages: string[]): void {
   // Reroute raw stdout/stderr writes too. The Screen's renderer uses
   // `bridgeOutputTarget.write(...)` directly (it does not go through
   // `process.stdout.write`), so REPL rendering keeps working.
-  (process.stdout as any).write = ((chunk: any, ..._rest: any[]) => {
-    pushCaptured("", String(chunk));
-    return true;
-  }) as any;
-  (process.stderr as any).write = ((chunk: any, ..._rest: any[]) => {
-    pushCaptured("{red stderr}", String(chunk));
-    return true;
-  }) as any;
+  //
+  // Preserve the full `write(chunk, [encoding], [callback])` signature
+  // so any caller that waits on the callback for backpressure / flush
+  // semantics keeps working — we synchronously invoke the callback
+  // (the capture is in-memory and never blocks) so we never hang.
+  const makeWrite = (prefix: string) =>
+    ((chunk: any, encodingOrCb?: any, cb?: any) => {
+      pushCaptured(prefix, String(chunk));
+      const callback =
+        typeof encodingOrCb === "function" ? encodingOrCb : cb;
+      if (typeof callback === "function") callback();
+      return true;
+    }) as any;
+  (process.stdout as any).write = makeWrite("");
+  (process.stderr as any).write = makeWrite("{red stderr}");
 }
 
 export function _uninstallConsoleCapture(): void {
@@ -259,6 +296,9 @@ export function _beginSubmit(
         const reply = await callBridgeFn<unknown>(onSubmit, submitted);
         if (reply === false) {
           state.done = true;
+          // Wake the loop so isDone() runs and it exits — otherwise
+          // the user sees a hung REPL after `/exit`.
+          _triggerRender();
           return;
         }
         // Surface Failure-typed returns explicitly. Agency functions
@@ -295,6 +335,11 @@ export function _beginSubmit(
           state.submit.busy = false;
           state.submit.label = "";
         }
+        // Repaint so the reply / cleared spinner / cleared busy flag
+        // are visible immediately. The REPL defaults to no tickMs to
+        // avoid the per-render checkpoint leak; without this kick the
+        // user would have to press a key to see the response.
+        _triggerRender();
       }
     })();
   }, 0);

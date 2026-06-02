@@ -9,6 +9,7 @@ import {
   _nowMs,
   _installConsoleCapture,
   _uninstallConsoleCapture,
+  _triggerRender,
  } from "agency-lang/stdlib-lib/ui.js"
 import { _promptFromChoices } from "agency-lang/stdlib-lib/ui.js"
 import { filter, map } from "std::array"
@@ -762,30 +763,33 @@ export def pushMessage(message: string) {
   Append a styled message to the active repl() transcript. The
   message renders on the next frame. The string may include std::ui
   style markup or text returned by helpers such as color(...);
-  pushMessage stores it unchanged. No-op (with a warning printed to
-  stderr) when no repl() is active.
+  pushMessage stores it unchanged. When no repl() is active the call
+  falls back to print(), so the message is still surfaced — just
+  without REPL framing.
 
   @param message - Styled or plain text to append to the transcript
   """
   if (_activeRepl == null) {
-    print("std::ui.pushMessage: no active repl(); dropping ${message}")
+    print(message)
     return
   }
   _activeRepl.transcript.messages.push(message)
+  // Repl loop is event-driven by default; kick it so the new line
+  // shows up immediately rather than after the next keystroke.
+  _triggerRender()
 }
 
 export def clearMessages() {
   """
   Remove all messages from the active repl() transcript. Intended
   for explicit "clear conversation" commands inside interactive
-  agents. No-op (with a warning printed to stderr) when no repl() is
-  active.
+  agents. Silent no-op when no repl() is active.
   """
   if (_activeRepl == null) {
-    print("std::ui.clearMessages: no active repl(); ignoring call")
     return
   }
   _activeRepl.transcript.messages = []
+  _triggerRender()
 }
 
 def _entryKey(entry: any): string { return entry.key }
@@ -1081,6 +1085,9 @@ def _replReduce(state: ReplState, keyEvent: KeyEvent): ReplState {
     { key: "up" } if (state.input.historyIdx > 0) => return _recallPreviousHistory(state)
     { key: "down" } if (state.input.historyIdx < state.input.history.length) => return _recallNextHistory(state)
     { key: "backspace" } if (state.input.buffer != "") => return _removeInputCharacter(state)
+    // Empty-buffer Enter is a no-op: skip writing a blank "You" row
+    // and entering the busy/Thinking state for an empty prompt.
+    { key: "enter" } if (state.input.buffer == "") => return state
     { key: "enter" } => return _submitPrompt(state)
     { key } if (key.length == 1) => return _appendInputCharacter(state, key)
     _ => return state

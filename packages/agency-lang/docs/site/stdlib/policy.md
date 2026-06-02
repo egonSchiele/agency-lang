@@ -639,7 +639,7 @@ _handler(intr: any): any
 
 **Returns:** `any`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/policy.agency#L548))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/policy.agency#L547))
 
 ### cliPolicyHandler
 
@@ -719,4 +719,4 @@ CLI sugar for an interactive policy handler. Owns load + save +
 
 **Returns:** `any`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/policy.agency#L632))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/policy.agency#L631))

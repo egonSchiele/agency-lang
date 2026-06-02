@@ -536,7 +536,6 @@ def askUser(intr: any): Decision {
     "ap" => return "approve-always-here"
     _    => return "reject-always"
   }
-  return "reject-always"
 }
 
 /**

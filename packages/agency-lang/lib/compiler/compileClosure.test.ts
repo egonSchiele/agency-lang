@@ -86,8 +86,11 @@ describe("buildCompiledClosure", () => {
       err = e;
     }
     expect(err).toBeInstanceOf(CompileClosureError);
+    // PR 4 reformatted the message: `static const 'name'` and
+    // `global 'name'` (instead of generic "Static 'name'") so
+    // the surface mirrors the source-level keyword.
     expect((err as Error).message).toMatch(
-      /Static '?s'?.*references global '?g'?/,
+      /static const '?s'?.*references global '?g'?/,
     );
   });
 

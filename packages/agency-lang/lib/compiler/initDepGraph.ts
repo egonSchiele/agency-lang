@@ -284,19 +284,38 @@ export function makeFunctionDefLookup(
 /**
  * Compile-time error: a `static` initializer references a `global`. The
  * global doesn't exist yet at Phase A time, so this is unsatisfiable.
+ *
+ * Surface format prefers human-readable names: `static const x` is shown
+ * as `static const 'x'`, while a `static <bare>` whose synthetic varName
+ * starts with `__bareStmt_` is shown as `static <bare statement>`. Line
+ * numbers fall back to `?` only when neither the static wrapper nor the
+ * dep node has a usable `loc`.
  */
 export class StaticReferencesGlobalError extends Error {
   constructor(
     public readonly staticNode: InitVarNode,
     public readonly globalNode: InitVarNode,
   ) {
+    const staticDesc = describeInitNode(staticNode);
+    const globalDesc = describeInitNode(globalNode, "global");
     super(
-      `Static '${staticNode.varName}' (${staticNode.moduleId}:${staticNode.loc?.line ?? "?"}) ` +
-        `references global '${globalNode.varName}' (${globalNode.moduleId}:${globalNode.loc?.line ?? "?"}). ` +
-        `Static initializers run before any global init — they cannot read globals.`,
+      `${staticDesc} references ${globalDesc}. ` +
+        `Static initializers run during Phase A (process startup), ` +
+        `before any global is initialized in Phase B — so the global ` +
+        `does not exist yet. Either mark the global as \`static\`, or ` +
+        `move the read out of the static initializer.`,
     );
     this.name = "StaticReferencesGlobalError";
   }
+}
+
+function describeInitNode(node: InitVarNode, kindLabel?: string): string {
+  const where = `${node.moduleId}:${node.loc?.line ?? "?"}`;
+  if (node.varName.startsWith("__bareStmt_")) {
+    return `static bare statement at ${where}`;
+  }
+  const label = kindLabel ?? (node.kind === "static" ? "static const" : "global");
+  return `${label} '${node.varName}' (${where})`;
 }
 
 /**
@@ -480,7 +499,11 @@ function nodeFromTopLevel(
   depthBase: number,
 ): InitVarNode | null {
   const { stmt: afterApprove, withApprove } = unwrapWithApprove(node);
-  const { stmt, isStaticBare } = unwrapStaticStatement(afterApprove);
+  const {
+    stmt,
+    isStaticBare,
+    wrapperLoc: staticWrapperLoc,
+  } = unwrapStaticStatement(afterApprove);
 
   if (stmt.type === "assignment") {
     const line = stmt.loc?.line ?? 0;
@@ -507,15 +530,23 @@ function nodeFromTopLevel(
   // readable cycle / debug output. `line_col` (not just `line`)
   // because `foo(); bar()` on a single source line would otherwise
   // collide and one node would overwrite the other in the dep graph.
+  //
+  // For a `static <bare>`, prefer the wrapper's loc (the `static`
+  // keyword itself) over the inner statement's loc. The inner
+  // sub-parsers (functionCallParser, valueAccessParser, …) do not
+  // emit `loc` themselves — only the outer `withLoc(staticStatement)`
+  // does — so falling back to the inner would yield a missing line
+  // number in compile-time error messages.
   if (isStaticBare || isBareTopLevelStatement(stmt)) {
-    const line = stmt.loc?.line ?? 0;
-    const col = stmt.loc?.col ?? 0;
+    const effectiveLoc = staticWrapperLoc ?? stmt.loc;
+    const line = effectiveLoc?.line ?? 0;
+    const col = effectiveLoc?.col ?? 0;
     return {
       moduleId,
       varName: `__bareStmt_${line}_${col}`,
       kind: isStaticBare ? "static" : "global",
       initExpr: stmt,
-      loc: stmt.loc,
+      loc: effectiveLoc,
       exported: false,
       sequenceHint: depthBase + line,
       ...(withApprove && { withApprove: true }),
@@ -546,15 +577,27 @@ function unwrapWithApprove(node: AgencyNode): {
  * `staticStatement` at module top level wrapping a bare expression
  * (function call, value access, interrupt) — never an assignment, never
  * recursively — so a single unwrap is enough.
+ *
+ * Returns the wrapper's own `loc` separately so callers can prefer
+ * it for diagnostics. The inner statement's sub-parsers
+ * (functionCallParser, valueAccessParser, interruptStatementParser)
+ * do not emit `loc` themselves — only the outer `withLoc(...)` on
+ * `staticStatementParser` does — so the wrapper loc is the authoritative
+ * source location for the whole `static <expr>` form.
  */
 function unwrapStaticStatement(node: AgencyNode): {
   stmt: AgencyNode;
   isStaticBare: boolean;
+  wrapperLoc: AgencyNode["loc"];
 } {
   if (node.type === "staticStatement") {
-    return { stmt: node.statement, isStaticBare: true };
+    return {
+      stmt: node.statement,
+      isStaticBare: true,
+      wrapperLoc: node.loc,
+    };
   }
-  return { stmt: node, isStaticBare: false };
+  return { stmt: node, isStaticBare: false, wrapperLoc: undefined };
 }
 
 /**

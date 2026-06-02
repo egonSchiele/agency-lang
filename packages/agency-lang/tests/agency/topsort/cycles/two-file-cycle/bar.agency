@@ -1,0 +1,10 @@
+// Other half of the two-file static cycle (see `foo.agency`). Carries
+// the `node main()` entry so the vitest runner can name a single file
+// to `compileSource`.
+import { fooValue } from "./foo.agency"
+
+export static const barValue = fooValue + "?"
+
+node main() {
+  return barValue
+}

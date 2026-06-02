@@ -17,6 +17,8 @@ import {
   GuardExceededError,
   deepClone as __deepClone,
   deepFreeze as __deepFreeze,
+  __UNINIT_STATIC, __readStatic,
+  __registerStaticInit, __registerGlobalsInit, __awaitStaticInit, __awaitGlobalsInit,
   head, tail, empty,
   success, failure, isSuccess, isFailure, __pipeBind, __tryCall, __catchResult,
   Schema, __validateType, __validateChain, __validateChainRecursive,
@@ -136,6 +138,7 @@ function registerTools(tools: any[]) {
 async function __initializeGlobals(__ctx) {
   __ctx.globals.markInitialized("euler-0003.agency")
 }
+__registerGlobalsInit("euler-0003.agency", __initializeGlobals);
 async function __registerTopLevelCallbacks(__ctx) {
   __ctx.topLevelCallbacks = [];
 }

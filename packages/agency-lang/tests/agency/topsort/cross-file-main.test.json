@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "description": "Cross-module static dep resolves through the centralized init plan.",
+      "expectedOutput": "\"hello world\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

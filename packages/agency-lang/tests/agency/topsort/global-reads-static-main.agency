@@ -1,0 +1,13 @@
+// Cross-phase test: a non-static (Phase B / global) initializer reads
+// an imported static (Phase A). This is the allowed direction — and
+// the case where PR 2's `globalPhasePlanFor` needs to add the source
+// module's static init to the global plan's await prelude. Without
+// that fix the read would hit the PR-1 read-before-init trap on
+// `staticValue` from the helper module.
+import { staticValue } from "./global-reads-static-helper.agency"
+
+const composed = staticValue + "!"
+
+node main() {
+  return composed
+}

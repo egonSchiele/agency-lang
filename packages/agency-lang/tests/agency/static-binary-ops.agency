@@ -1,0 +1,22 @@
+static const n = 5
+static const greeting = "hello"
+static const items = [1, 2, 3]
+static const cfg = { port: 8080 }
+
+node main() {
+  const a = n + 1
+  const b = `${greeting} world`
+  const c = items.length
+  const d = cfg.port * 2
+  const e = n * n
+  const f = greeting + "!"
+
+  return {
+    a: a,
+    b: b,
+    c: c,
+    d: d,
+    e: e,
+    f: f
+  }
+}

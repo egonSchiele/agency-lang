@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "description": "Bare top-level statements interleave with named global init statements in source order.",
+      "expectedOutput": "\"S-a\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

@@ -17,6 +17,8 @@ import {
   GuardExceededError,
   deepClone as __deepClone,
   deepFreeze as __deepFreeze,
+  __UNINIT_STATIC, __readStatic,
+  __registerStaticInit, __registerGlobalsInit, __awaitStaticInit, __awaitGlobalsInit,
   head, tail, empty,
   success, failure, isSuccess, isFailure, __pipeBind, __tryCall, __catchResult,
   Schema, __validateType, __validateChain, __validateChainRecursive,
@@ -134,7 +136,7 @@ function registerTools(tools: any[]) {
 }
 
 let __staticInitPromise = null;
-let foo;
+let foo = __UNINIT_STATIC;
 async function __initializeStatic(__ctx) {
   if (__staticInitPromise) {
     return __staticInitPromise;
@@ -150,11 +152,13 @@ function __getStaticVars() {
   };
 }
 __globalCtx.getStaticVars = __getStaticVars;
+__registerStaticInit("static.agency", __initializeStatic);
 async function __initializeGlobals(__ctx) {
   __ctx.globals.markInitialized("static.agency")
   await __initializeStatic(__ctx)
   await __ctx.writeStaticStateToTrace(__globalCtx.getStaticVars())
 }
+__registerGlobalsInit("static.agency", __initializeGlobals);
 async function __registerTopLevelCallbacks(__ctx) {
   __ctx.topLevelCallbacks = [];
 }
@@ -188,7 +192,7 @@ await callHook({
       await runner.step(1, async (runner) => {
 runner.halt({
           messages: __threads(),
-          data: foo
+          data: __readStatic(foo, "foo", "static.agency")
         })
 return;
       });

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { braveSearch } from "./braveSearch.js";
+import { _search } from "./search.js";
 
 const FAKE_KEY = "test-brave-api-key";
 
@@ -12,7 +12,7 @@ function mockFetchResponse(body: unknown, status = 200) {
   });
 }
 
-describe("braveSearch", () => {
+describe("_search", () => {
   const originalFetch = globalThis.fetch;
   const originalEnv = process.env.BRAVE_API_KEY;
 
@@ -33,12 +33,12 @@ describe("braveSearch", () => {
     const mockFetch = mockFetchResponse({ web: { results: [] } });
     globalThis.fetch = mockFetch;
 
-    await braveSearch("test query");
+    await _search("test query");
 
     const [url] = mockFetch.mock.calls[0];
     const parsed = new URL(url);
     expect(parsed.origin + parsed.pathname).toBe(
-      "https://api.search.brave.com/res/v1/web/search"
+      "https://api.search.brave.com/res/v1/web/search",
     );
     expect(parsed.searchParams.get("q")).toBe("test query");
     expect(parsed.searchParams.get("count")).toBe("5");
@@ -48,7 +48,7 @@ describe("braveSearch", () => {
     const mockFetch = mockFetchResponse({ web: { results: [] } });
     globalThis.fetch = mockFetch;
 
-    await braveSearch("test");
+    await _search("test");
 
     const [, init] = mockFetch.mock.calls[0];
     expect(init.headers["X-Subscription-Token"]).toBe(FAKE_KEY);
@@ -58,13 +58,13 @@ describe("braveSearch", () => {
     const mockFetch = mockFetchResponse({ web: { results: [] } });
     globalThis.fetch = mockFetch;
 
-    await braveSearch("test", { apiKey: "override-key" });
+    await _search("test", { apiKey: "override-key" });
 
     const [, init] = mockFetch.mock.calls[0];
     expect(init.headers["X-Subscription-Token"]).toBe("override-key");
   });
 
-  it("maps response to BraveSearchResult array", async () => {
+  it("maps response to SearchResult array", async () => {
     globalThis.fetch = mockFetchResponse({
       web: {
         results: [
@@ -78,7 +78,7 @@ describe("braveSearch", () => {
       },
     });
 
-    const results = await braveSearch("test");
+    const results = await _search("test");
 
     expect(results).toEqual([
       {
@@ -91,31 +91,29 @@ describe("braveSearch", () => {
 
   it("returns empty array when no web results", async () => {
     globalThis.fetch = mockFetchResponse({ web: { results: [] } });
-    const results = await braveSearch("test");
+    const results = await _search("test");
     expect(results).toEqual([]);
   });
 
   it("returns empty array when web field is missing", async () => {
     globalThis.fetch = mockFetchResponse({});
-    const results = await braveSearch("test");
+    const results = await _search("test");
     expect(results).toEqual([]);
   });
 
   it("throws when no API key is available", async () => {
     delete process.env.BRAVE_API_KEY;
-    await expect(braveSearch("test")).rejects.toThrow(
-      "BRAVE_API_KEY"
-    );
+    await expect(_search("test")).rejects.toThrow("BRAVE_API_KEY");
   });
 
   it("throws on non-200 response with status and body", async () => {
     globalThis.fetch = mockFetchResponse(
       { message: "Rate limit exceeded" },
-      429
+      429,
     );
 
-    await expect(braveSearch("test")).rejects.toThrow(
-      "Brave Search API error (429)"
+    await expect(_search("test")).rejects.toThrow(
+      "Brave Search API error (429)",
     );
   });
 
@@ -123,7 +121,7 @@ describe("braveSearch", () => {
     const mockFetch = mockFetchResponse({ web: { results: [] } });
     globalThis.fetch = mockFetch;
 
-    await braveSearch("test", {
+    await _search("test", {
       count: 10,
       country: "US",
       searchLang: "en",
@@ -144,7 +142,7 @@ describe("braveSearch", () => {
     const mockFetch = mockFetchResponse({ web: { results: [] } });
     globalThis.fetch = mockFetch;
 
-    await braveSearch("test", { country: "", freshness: "" });
+    await _search("test", { country: "", freshness: "" });
 
     const [url] = mockFetch.mock.calls[0];
     const parsed = new URL(url);

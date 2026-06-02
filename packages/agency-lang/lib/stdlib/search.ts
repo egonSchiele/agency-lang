@@ -1,12 +1,12 @@
 const BRAVE_SEARCH_URL = "https://api.search.brave.com/res/v1/web/search";
 
-export type BraveSearchResult = {
+export type SearchResult = {
   title: string;
   url: string;
   description: string;
 };
 
-export type BraveSearchOptions = {
+export type SearchOptions = {
   apiKey?: string;
   count?: number;
   country?: string;
@@ -15,15 +15,15 @@ export type BraveSearchOptions = {
   freshness?: string;
 };
 
-export async function braveSearch(
+export async function _search(
   query: string,
-  options?: BraveSearchOptions
-): Promise<BraveSearchResult[]> {
+  options?: SearchOptions,
+): Promise<SearchResult[]> {
   // Note: using || (not ??) so empty strings from Agency defaults fall through to env var
   const apiKey = options?.apiKey || process.env.BRAVE_API_KEY;
   if (!apiKey) {
     throw new Error(
-      "Missing Brave Search API key. Set BRAVE_API_KEY env var or pass apiKey option."
+      "Missing Brave Search API key. Set BRAVE_API_KEY env var or pass apiKey option.",
     );
   }
 
@@ -32,13 +32,15 @@ export async function braveSearch(
   url.searchParams.set("count", String(options?.count ?? 5));
 
   if (options?.country) url.searchParams.set("country", options.country);
-  if (options?.searchLang) url.searchParams.set("search_lang", options.searchLang);
-  if (options?.safesearch) url.searchParams.set("safesearch", options.safesearch);
+  if (options?.searchLang)
+    url.searchParams.set("search_lang", options.searchLang);
+  if (options?.safesearch)
+    url.searchParams.set("safesearch", options.safesearch);
   if (options?.freshness) url.searchParams.set("freshness", options.freshness);
 
   const response = await fetch(url, {
     headers: {
-      "Accept": "application/json",
+      Accept: "application/json",
       "X-Subscription-Token": apiKey,
     },
   });

@@ -1,32 +1,3 @@
-## Unreleased
-
-### Breaking changes
-- `std::ui` has been completely redesigned around a declarative API.
-  The previous imperative exports — `initUI`, `destroyUI`, `log`,
-  `status`, `chat`, `code`, `diff`, `separator`, `startSpinner`,
-  `stopSpinner`, `prompt`, `getConfirmation`, `emptyLine` — have
-  been removed without compatibility shims. Replace with:
-  - **Layer 1 (custom widgets)** — `column`, `row`, `box`, `line`,
-    `text`, `list`, `textInput` builders plus `runLoop` /
-    `renderOnce` / `readKey` for driving the render loop.
-  - **Layer 2 (chat-style REPL)** — the new `repl()` widget bundles
-    a transcript pane, status line, slash command palette, and an
-    input bar with history. It integrates with
-    `std::policy.cliPolicyHandler` so interrupt prompts render
-    through the active screen via the new `_routePrompt` shim.
-  See `docs/site/stdlib/ui.md` for the new API surface.
-
-### Stdlib
-- `std::policy.askUser` now routes its (a)/(r)/(aa)/(ap)/(rr) menu
-  through `std::ui._routePrompt`, so an active `repl()` REPL
-  renders the prompt in its scroll region instead of fighting with
-  the input bar.
-
-### Agents
-- `agency-agent`'s interactive loop is rebuilt on top of the new
-  `repl()` widget. Slash commands (`/exit`, `/clear`, `/help`) are
-  driven by the palette; cost appears live in the status line.
-
 ## May 28 2026 — v0.3
 
 ### Language

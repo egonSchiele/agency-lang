@@ -1,0 +1,15 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "description": "Static vars work transparently in binary ops, templates, indexing, property access after the __readStatic wrap is applied to every read",
+      "expectedOutput": "{\"a\":6,\"b\":\"hello world\",\"c\":3,\"d\":16160,\"e\":25,\"f\":\"hello!\"}",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    }
+  ]
+}

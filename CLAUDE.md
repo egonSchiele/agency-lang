@@ -96,6 +96,7 @@ Pipeline and architecture:
 - `docs/dev/checkpointing.md` — Snapshotting execution state for retry loops and rollback
 - `docs/dev/threads.md` — ThreadStore and MessageThread system for LLM conversation history
 - `docs/dev/globalstore.md` — Global variable management with module isolation and serialization
+- `docs/dev/init-topsort.md` — Per-variable init dep graph, topological sort, per-module init plans, runtime init registry
 - `docs/dev/smoltalk.md` — External LLM client library for structured output requests
 - `docs/dev/statelog.md` — Observability and tracing system for execution events
 - `docs/dev/config.md` — AgencyConfig options for compiler and runtime configuration

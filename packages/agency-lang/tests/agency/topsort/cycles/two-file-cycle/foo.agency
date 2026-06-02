@@ -1,0 +1,7 @@
+// Two-file cycle: `foo.fooValue` depends on `bar.barValue`, which
+// depends back on `foo.fooValue`. Either file is a valid entry — the
+// dep graph spans the closure either way and produces the same cycle
+// diagnostic with both decls named.
+import { barValue } from "./bar.agency"
+
+export static const fooValue = barValue + "!"

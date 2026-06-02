@@ -1,0 +1,13 @@
+// Entry of the re-export chain test. The `import { deepValue }` is the
+// only direct import from `reexport-top.agency`; the full chain to
+// `reexport-deep.agency` is reached transitively via the closure
+// walker. `composed` consumes the chained value at the top-level
+// static layer so a missing cascade hop would surface as a
+// read-before-init trap rather than a quietly-wrong value.
+import { deepValue } from "./reexport-top.agency"
+
+static const composed = deepValue + "!"
+
+node main() {
+  return composed
+}

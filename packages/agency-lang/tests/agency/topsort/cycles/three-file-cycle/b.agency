@@ -1,0 +1,5 @@
+// Triangle cycle, file 2 of 3. Middle link: depends on `c.z`, named by
+// `a.agency`.
+import { z } from "./c.agency"
+
+export static const y = z + "?"

@@ -17,6 +17,8 @@ import {
   GuardExceededError,
   deepClone as __deepClone,
   deepFreeze as __deepFreeze,
+  __UNINIT_STATIC, __readStatic,
+  __registerStaticInit, __registerGlobalsInit, __awaitStaticInit, __awaitGlobalsInit,
   head, tail, empty,
   success, failure, isSuccess, isFailure, __pipeBind, __tryCall, __catchResult,
   Schema, __validateType, __validateChain, __validateChainRecursive,
@@ -144,6 +146,7 @@ async function __initializeGlobals(__ctx) {
     args: [`world`, `Hi`]
   })
 }
+__registerGlobalsInit("defaultValues.agency", __initializeGlobals);
 async function __registerTopLevelCallbacks(__ctx) {
   __ctx.topLevelCallbacks = [];
 }

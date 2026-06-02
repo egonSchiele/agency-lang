@@ -4,12 +4,17 @@
  */
 import { AgencyConfig } from "@/config.js";
 import { AgencyProgram, generateTypeScript } from "@/index.js";
+import { initPlanForModule } from "@/backends/typescriptGenerator.js";
 import { resolveImports } from "@/preprocessors/importResolver.js";
 import { resolveReExports } from "@/preprocessors/resolveReExports.js";
 import { liftCallbackBlocks } from "@/preprocessors/liftCallbacks.js";
 import { buildCompilationUnit } from "@/compilationUnit.js";
 import { SymbolTable } from "@/symbolTable.js";
 import { formatErrors, typeCheck } from "@/typeChecker/index.js";
+import {
+  buildCompiledClosure,
+  CompileClosureError,
+} from "./compileClosure.js";
 import { transformSync } from "esbuild";
 import { nanoid } from "nanoid";
 import * as fs from "fs";
@@ -163,14 +168,30 @@ export function compileSource(
       );
     });
 
+    // 6b. Build the closure analysis to detect cycles + populate the
+    // per-module init plan (topsort ordering + cross-module awaits).
+    // CompileClosureError surfaces as a `CompileFailure` per this
+    // module's contract — no `process.exit`.
+    let closure;
+    try {
+      closure = buildCompiledClosure(syntheticPath, config);
+    } catch (e) {
+      if (e instanceof CompileClosureError) {
+        return { success: false, errors: [e.message] };
+      }
+      throw e;
+    }
+
     // 7. Generate TypeScript
     const outputPath = path.join(os.tmpdir(), `${moduleId}.js`);
+    const initPlan = initPlanForModule(closure, syntheticPath);
     const generatedCode = generateTypeScript(
       liftedProgram,
       config,
       info,
       moduleId,
       outputPath,
+      initPlan,
     );
 
     // 8. Transpile TS → JS

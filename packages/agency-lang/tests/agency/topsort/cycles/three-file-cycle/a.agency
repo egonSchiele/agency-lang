@@ -1,0 +1,7 @@
+// Triangle cycle, file 1 of 3. `a.x` depends on `b.y`, `b.y` on `c.z`,
+// `c.z` on `a.x`. The cycle reporter walks the full triangle and names
+// all three decls in the diagnostic so the user can break the loop
+// without re-running with a different entry.
+import { y } from "./b.agency"
+
+export static const x = y + "!"

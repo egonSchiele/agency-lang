@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "description": "Same-file statics: dependent reads base, both initialize cleanly.",
+      "expectedOutput": "\"hello!\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

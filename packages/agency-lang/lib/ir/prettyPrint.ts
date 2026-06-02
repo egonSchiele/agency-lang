@@ -282,6 +282,22 @@ export function printTs(node: TsNode, indent = 0): string {
         const ctxRef = node.topLevel ? "__globalCtx" : "getRuntimeContext().ctx";
         return `${ctxRef}.globals.get(${JSON.stringify(node.moduleId)}, ${JSON.stringify(node.name)})`;
       }
+      if (node.scope === "static") {
+        // Wrap static reads in `__readStatic` so that reading a static
+        // before its initializer has run throws a clear, actionable
+        // error (the `let` binding holds the sentinel
+        // `__UNINIT_STATIC` until then). The wrapper is transparent
+        // for initialized values — `__readStatic(x, ...)` returns `x`
+        // unchanged — so binary operations, template interpolations,
+        // indexing, etc. continue to work without any other change.
+        //
+        // `moduleId` may be undefined for static-scoped scopedVars
+        // produced in contexts where it wasn't propagated; fall back
+        // to the empty string in that case so the error message still
+        // points at the variable name.
+        const moduleIdLit = JSON.stringify(node.moduleId ?? "");
+        return `__readStatic(${node.name}, ${JSON.stringify(node.name)}, ${moduleIdLit})`;
+      }
       const prefix = scopeToPrefix(node.scope);
       if (prefix === "") return node.name;
       return `${prefix}.${node.name}`;

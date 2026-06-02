@@ -208,8 +208,10 @@ describe("agent-init-design.md worked examples", () => {
     );
     expect(outcome.kind).toBe("compileError");
     if (outcome.kind !== "compileError") return;
+    // PR 4 reformatted the message: lowercase `static const '<name>'`
+    // mirrors the source-level keyword (see compileClosure.test.ts).
     expect(outcome.message).toMatch(
-      /Static '?s'?.*references global '?g'?/,
+      /static const '?s'?.*references global '?g'?/,
     );
   });
 

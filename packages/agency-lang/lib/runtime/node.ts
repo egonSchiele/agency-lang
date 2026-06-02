@@ -12,6 +12,7 @@ import {
 } from "./errors.js";
 import { State, StateStack } from "./state/stateStack.js";
 import { ThreadStore } from "./state/threadStore.js";
+import { __initAllRegistered } from "./crossModuleInitRegistry.js";
 import { resolveTraceFilePath } from "./trace/traceWriter.js";
 import { GraphState, RunNodeResult } from "./types.js";
 import { createReturnObject } from "./utils.js";
@@ -180,6 +181,19 @@ export async function runNode({
   if (initializeGlobals) {
     await runInBootstrapFrame(execCtx, () => initializeGlobals(execCtx), { moduleDir });
   }
+  // Closure-wide bootstrap: initialize every other JS-loaded Agency
+  // module that the entry's own init didn't transitively reach.
+  // Reads of imported `static const` values from inside function /
+  // node bodies don't show up in the compile-time per-variable dep
+  // graph (it only sees initializer expressions), so without this
+  // loop a `node main() { route({ systemPrompt: foreignStatic }) }`
+  // pattern would hit the `__UNINIT_STATIC` trap because the foreign
+  // module's init was never triggered. Each module's
+  // `__initializeGlobals` is idempotent per execCtx (early-return on
+  // `globals.isInitialized(...)`) and Phase A is process-idempotent
+  // via `__staticInitPromise`, so calling already-initialized
+  // modules here is a cheap no-op.
+  await runInBootstrapFrame(execCtx, () => __initAllRegistered(execCtx), { moduleDir });
   // Top-level callbacks are re-registered every fresh run AFTER global
   // init so any module-level vars they reference (via `__ctx.globals`)
   // are already set up. The registration sequence mirrors what

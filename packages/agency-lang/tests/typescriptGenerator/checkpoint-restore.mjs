@@ -136,6 +136,9 @@ function registerTools(tools: any[]) {
 }
 
 async function __initializeGlobals(__ctx) {
+  if (__ctx.globals.isInitialized("checkpoint-restore.agency")) {
+    return;
+  }
   __ctx.globals.markInitialized("checkpoint-restore.agency")
 }
 __registerGlobalsInit("checkpoint-restore.agency", __initializeGlobals);

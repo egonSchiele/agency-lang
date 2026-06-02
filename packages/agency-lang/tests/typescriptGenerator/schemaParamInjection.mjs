@@ -136,6 +136,9 @@ function registerTools(tools: any[]) {
 }
 
 async function __initializeGlobals(__ctx) {
+  if (__ctx.globals.isInitialized("schemaParamInjection.agency")) {
+    return;
+  }
   __ctx.globals.markInitialized("schemaParamInjection.agency")
 }
 __registerGlobalsInit("schemaParamInjection.agency", __initializeGlobals);

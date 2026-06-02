@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "description": "Imported static read only from a function body initializes via the closure-wide runtime bootstrap (regression: agency-agent shape).",
+      "expectedOutput": "\"hello!\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

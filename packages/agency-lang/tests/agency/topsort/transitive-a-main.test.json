@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "description": "Transitive A→B→C: A reads C's static via a helper from B; A never imports C. Closure-wide bootstrap initializes the full transitive closure, not just direct imports.",
+      "expectedOutput": "\"deep\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

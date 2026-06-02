@@ -136,6 +136,9 @@ function registerTools(tools: any[]) {
 }
 
 async function __initializeGlobals(__ctx) {
+  if (__ctx.globals.isInitialized("graph-node-with-types.agency")) {
+    return;
+  }
   __ctx.globals.markInitialized("graph-node-with-types.agency")
 }
 __registerGlobalsInit("graph-node-with-types.agency", __initializeGlobals);

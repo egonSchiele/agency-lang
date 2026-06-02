@@ -153,6 +153,9 @@ function registerTools(tools: any[]) {
 __registerTool(foo);
 __registerTool(foo);
 async function __initializeGlobals(__ctx) {
+  if (__ctx.globals.isInitialized("imports.agency")) {
+    return;
+  }
   __ctx.globals.markInitialized("imports.agency")
 }
 __registerGlobalsInit("imports.agency", __initializeGlobals);

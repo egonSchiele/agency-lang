@@ -1,0 +1,10 @@
+// Variant of `fn-body-read-main.agency` where the imported static is
+// read directly from `node main()` instead of from a `def` body
+// called by main. Asserts that the closure-wide bootstrap completes
+// before the node body itself runs — not just before nested function
+// calls inside the node body.
+import { value } from "./node-body-read-helper.agency"
+
+node main() {
+  return value + 1
+}

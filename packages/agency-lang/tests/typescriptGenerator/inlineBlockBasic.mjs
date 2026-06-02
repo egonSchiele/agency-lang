@@ -136,6 +136,9 @@ function registerTools(tools: any[]) {
 }
 
 async function __initializeGlobals(__ctx) {
+  if (__ctx.globals.isInitialized("inlineBlockBasic.agency")) {
+    return;
+  }
   __ctx.globals.markInitialized("inlineBlockBasic.agency")
 }
 __registerGlobalsInit("inlineBlockBasic.agency", __initializeGlobals);

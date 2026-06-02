@@ -2,20 +2,21 @@
 // `route()` (no LLM call) and drive the repl() widget with a
 // scripted key sequence to confirm:
 //   - Plain user messages flow through `onSubmit` and land in the
-//     transcript via `output()`.
+//     transcript via `pushMessage()`.
 //   - The slash-command palette opens on "/", filters as the user
 //     types, and Enter selects the highlighted entry into the
 //     input buffer (without submitting).
 //   - A submitted "/exit" causes onSubmit to return false, which
 //     terminates the loop cleanly.
-import { repl, setScriptedKeys } from "std::ui"
+import { pushMessage, repl, setScriptedKeys } from "std::ui"
 
 let lines: string[] = []
-def out(): string[] { return lines }
-def stat(): { left: string, right: string } { return { left: "smoke", right: "" } }
-def onSub(msg: string): boolean {
-  if (msg == "/exit") { return false }
-  lines.push("echo: ${msg}")
+def status(): { left: string, right: string } { return { left: "smoke", right: "" } }
+def onSubmitPrompt(prompt: string): boolean {
+  if (prompt == "/exit") { return false }
+  const message = "echo: ${prompt}"
+  lines.push(message)
+  pushMessage(message)
   return true
 }
 
@@ -30,8 +31,8 @@ node main(): string {
     { key: "/" }, { key: "e" }, { key: "x" }, { key: "i" }, { key: "t" },
     { key: "enter" }, { key: "enter" }
   ])
-  repl(prompt: "> ", output: out, status: stat,
-       paletteCommands: { "/exit": "Exit" }, onSubmit: onSub)
+  repl(prompt: "> ", status: status,
+       paletteCommands: { "/exit": "Exit" }, onSubmit: onSubmitPrompt)
   if (lines.length != 1)      { return "FAIL: ${lines.length} lines" }
   if (lines[0] != "echo: hi") { return "FAIL: ${lines[0]}" }
   return "pass"

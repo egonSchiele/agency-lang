@@ -5,7 +5,7 @@ import { exists } from "std::shell"
 import { highlight } from "std::syntax"
 import { cwd, env } from "std::system"
 import { getCost } from "std::thread"
-import { repl } from "std::ui"
+import { clearMessages, pushMessage, repl } from "std::ui"
 
 import { codeSysPrompt, codeTools } from "./code.agency"
 import { researchSysPrompt, researchTools } from "./research.agency"
@@ -171,18 +171,9 @@ def loadAgentsMd(dir: string): string {
   return "\n\n<project_context>\n${result.value}\n</project_context>"
 }
 
-// Mutable transcript shown in the REPL scroll area. Each turn the
-// repl widget streams the new tail of this list to the terminal's
-// native scrollback. We retain the full transcript so `/clear`
-// resets it cleanly.
-let _outputLines: string[] = []
 // Per-turn grounding context. Captured at startup and re-used so the
 // LLM doesn't have to re-ground each turn. Initialized in `main()`.
 let _context: string = ""
-
-def _push(line: string) {
-  _outputLines.push(line)
-}
 
 // Slash-command + user-message dispatcher invoked by `repl()` for
 // every Enter keystroke. Return `false` to terminate the loop.
@@ -194,14 +185,13 @@ def _runTurn(msg: string): boolean {
     return false
   }
   if (msg == "/clear") {
-    _outputLines = []
+    clearMessages()
     return true
   }
   if (msg == "/help") {
-    _push("Commands: /exit, /clear, /help")
+    pushMessage("Commands: /exit, /clear, /help")
     return true
   }
-  _push(color.cyan("you: ${msg}"))
   const reply = route(
     {
     start: "code",
@@ -222,7 +212,7 @@ def _runTurn(msg: string): boolean {
   },
     msg,
   )
-  _push(highlight("\n${reply}\n", language: "markdown"))
+  pushMessage(highlight("\n${reply}\n", language: "markdown"))
   return true
 }
 
@@ -233,19 +223,7 @@ def _buildStatus(): { left: string; right: string } {
   }
 }
 
-def _listOutput(): string[] {
-  return _outputLines
-}
-
 node main() {
-  _push(color.cyan(""))
-  _push(color.cyan("╭───────────────────────────────────────────────╮"))
-  _push(color.cyan("│         Welcome to the Agency Agent           │"))
-  _push(color.cyan("│  I help you write Agency code, look up docs,  │"))
-  _push(color.cyan("│       and research things from the web.       │"))
-  _push(color.cyan("╰───────────────────────────────────────────────╯"))
-  _push("Type '/exit' to quit. Type '/' to open the command palette.\n")
-
   // Grounding: the LLM should not have to ask the user where it is
   // or what day it is. Both are appended once per run so they ride
   // with the first system message in each specialist's thread.
@@ -269,7 +247,6 @@ node main() {
   // `handle` block via the AsyncLocalStorage handler stack.
   handle {
     repl(
-      output: _listOutput,
       status: _buildStatus,
       onSubmit: _runTurn,
       prompt: "> ",

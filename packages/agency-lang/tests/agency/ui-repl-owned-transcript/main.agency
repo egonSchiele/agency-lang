@@ -1,0 +1,36 @@
+import { pushMessage, repl, recordedFrameTexts, setScriptedKeys } from "std::ui"
+
+def status(): { left: string; right: string } {
+  return { left: "ready", right: "" }
+}
+
+def onSubmitPrompt(submittedPrompt: string): any {
+  pushMessage("{green Agent} reply to ${submittedPrompt}")
+  return false
+}
+
+def containsFrameText(frameTexts: string[], expectedText: string): boolean {
+  for (frameText in frameTexts) {
+    if (frameText.includes(expectedText)) {
+      return true
+    }
+  }
+  return false
+}
+
+node main(): string {
+  setScriptedKeys([
+    { key: "h" },
+    { key: "i" },
+    { key: "enter" }
+  ])
+  repl(status: status, onSubmit: onSubmitPrompt, paletteCommands: {})
+  const frames = recordedFrameTexts()
+  if (!containsFrameText(frames, "{bright-blue You} hi")) {
+    return "FAIL: submitted prompt was not rendered"
+  }
+  if (!containsFrameText(frames, "{green Agent} reply to hi")) {
+    return "FAIL: agent reply was not rendered"
+  }
+  return "pass"
+}

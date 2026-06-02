@@ -34,6 +34,20 @@ let bridgeWidth = 80;
 let bridgeHeight = 24;
 let bridgeActiveScreen: Screen | null = null;
 
+type ActiveReplState = {
+  done?: boolean;
+  submit?: {
+    busy?: boolean;
+    label?: string;
+    startedAtMs?: number;
+  };
+  transcript: {
+    messages: string[];
+  };
+};
+
+let activeReplState: ActiveReplState | null = null;
+
 // Test-mode injection points. Agency tests call `_setScriptedKeys` (and
 // optionally `_setQuitAfterMs`) before entering a loop, and the next
 // `makeBridgeScreen` call consumes them — installing a `ScriptedInput`
@@ -103,6 +117,14 @@ export function _setOutputTarget(out: OutputTarget | null): void {
   bridgeOutputTarget = out;
 }
 
+export function _recordedFrameTexts(): string[] {
+  if (!(bridgeOutputTarget instanceof FrameRecorder)) {
+    return [];
+  }
+  const recorder = bridgeOutputTarget;
+  return recorder.frames.map((_entry, index) => recorder.textAt(index));
+}
+
 /** Test/runtime injection point for the viewport size. */
 export function _setSize(w: number, h: number): void {
   bridgeWidth = w;
@@ -132,6 +154,82 @@ export function _hasActiveScreen(): boolean {
  *  than being invoked as raw JS. */
 async function callBridgeFn<T>(fn: unknown, ...args: unknown[]): Promise<T> {
   return (await __call(fn, { type: "positional", args })) as T;
+}
+
+export function _activateReplState(state: ActiveReplState): void {
+  activeReplState = state;
+}
+
+export function _deactivateReplState(): void {
+  activeReplState = null;
+}
+
+function requireActiveReplState(): ActiveReplState {
+  if (!activeReplState) {
+    throw new Error("pushMessage() requires an active repl()");
+  }
+  return activeReplState;
+}
+
+export function _pushMessage(message: string): void {
+  const state = requireActiveReplState();
+  state.transcript.messages.push(message);
+}
+
+export function _clearMessages(): void {
+  const state = requireActiveReplState();
+  state.transcript.messages = [];
+}
+
+export function _nowMs(): number {
+  return Date.now();
+}
+
+export function _elapsedSeconds(startedAtMs: number, nowMs = Date.now()): number {
+  return Math.max(0, Math.floor((nowMs - startedAtMs) / 1000));
+}
+
+export function _spinnerFrame(startedAtMs: number, nowMs = Date.now()): string {
+  const frames = ["|", "/", "-", "\\"];
+  const tick = Math.floor(Math.max(0, nowMs - startedAtMs) / 250);
+  return frames[tick % frames.length];
+}
+
+export function _beginSubmit(
+  state: ActiveReplState,
+  submitted: string,
+  onSubmit: unknown,
+): void {
+  _activateReplState(state);
+  state.transcript.messages.push(`{bright-blue You} ${submitted}`);
+  if (state.submit) {
+    state.submit.busy = true;
+    state.submit.label = "Thinking";
+    state.submit.startedAtMs = Date.now();
+  }
+
+  setTimeout(() => {
+    void (async () => {
+      try {
+        const reply = await callBridgeFn<unknown>(onSubmit, submitted);
+        if (reply === false) {
+          state.done = true;
+          return;
+        }
+        if (typeof reply === "string" && reply.length > 0) {
+          state.transcript.messages.push(reply);
+        }
+      } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : String(error);
+        state.transcript.messages.push(`{red Error} ${message}`);
+      } finally {
+        if (state.submit) {
+          state.submit.busy = false;
+          state.submit.label = "";
+        }
+      }
+    })();
+  }, 0);
 }
 
 export async function _runLoop(

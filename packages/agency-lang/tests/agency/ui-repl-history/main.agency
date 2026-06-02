@@ -2,12 +2,11 @@ import { repl, setScriptedKeys } from "std::ui"
 
 let submits: string[] = []
 
-def out(): string[] { return [] }
-def stat(): { left: string; right: string } {
+def status(): { left: string; right: string } {
   return { left: "", right: "" }
 }
-def onSub(s: string): boolean {
-  submits.push(s)
+def onSubmitPrompt(submittedPrompt: string): boolean {
+  submits.push(submittedPrompt)
   // Exit after 3 submits.
   return submits.length < 3
 }
@@ -22,8 +21,8 @@ node main(): string {
     { key: "b" }, { key: "enter" },
     { key: "up" }, { key: "enter" }
   ])
-  repl(prompt: "> ", output: out, status: stat,
-       paletteCommands: {}, onSubmit: onSub)
+  repl(prompt: "> ", status: status,
+       paletteCommands: {}, onSubmit: onSubmitPrompt)
   if (submits.length != 3) { return "FAIL: count" }
   if (submits[0] != "a")   { return "FAIL: [0]" }
   if (submits[1] != "b")   { return "FAIL: [1]" }

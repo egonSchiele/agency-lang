@@ -3042,12 +3042,27 @@ export const modifiedAssignmentParser: Parser<Assignment> = withLoc((input: stri
  * it runs once per process instead of once per agent run. Mirrors the
  * existing `static const`.
  *
- * Tried in the top-level alternatives list AFTER `modifiedAssignmentParser`
- * so `static const x = 1` and `static let x = 1` are handled there —
- * this parser explicitly declines on `const` / `let` (and on a bare
- * `static` with nothing after) so the modifiedAssignmentParser's
- * "static requires 'const'" error stays the canonical one for the
- * `static let` case.
+ * Probe-and-commit design (matches `reservedClassParser`'s handling
+ * of `class`): when the input doesn't start with `static`, we decline
+ * silently (`failure("", input)`) so we don't pollute unrelated
+ * top-level parse failures. Once the `static` keyword is consumed we
+ * commit fatally to any subsequent error, because the alternatives
+ * list would otherwise let `or(...)` backtrack and reinterpret
+ * `static` as a bare identifier, producing nonsense AST.
+ *
+ * Routing on what follows `static`:
+ *   - `const` → silently decline so `modifiedAssignmentParser` (tried
+ *     before this one in the top-level list) owns `static const`.
+ *   - `let`   → fatal: tell the user to use `static const` or
+ *     `static <expr>`. `modifiedAssignmentParser` rejects this too but
+ *     only recoverably, so without a fatal commit here the error
+ *     would be lost to backtracking.
+ *   - `<ident>\s*=` → fatal: `static foo = 1` would otherwise be
+ *     half-eaten as `staticStatement(foo)` and then fail at `=` with
+ *     a confusing message; reject it explicitly with the same
+ *     actionable guidance as `static let`.
+ *   - anything else → try `interruptStatement | functionCall |
+ *     valueAccess` and fatally surface any inner-parse failure.
  *
  * Wraps the inner statement in a `StaticStatement` AST node; the
  * section assembler (`partitionProgram`) unwraps the wrapper and
@@ -3060,30 +3075,48 @@ const STATIC_LET_MESSAGE =
   "once-per-process binding, or `static <expr>` (e.g. `static foo()`) " +
   "for a once-per-process side effect.";
 
+const STATIC_ASSIGN_MESSAGE =
+  "`static <name> = ...` is not allowed. Use `static const <name> = ...` " +
+  "for a once-per-process binding, or `static <expr>` (e.g. `static foo()`) " +
+  "for a once-per-process side effect.";
+
+const STATIC_INNER_MESSAGE =
+  "`static` at top level must be followed by `const <name> = ...` " +
+  "or an expression statement (e.g., `static foo()` or " +
+  "`static logger.flush()`).";
+
 export const staticStatementParser: Parser<StaticStatement> = withLoc(
   (input: string) => {
     const kwResult = seqC(str("static"), spaces)(input);
     if (!kwResult.success) {
-      return failure("expected 'static'", input);
+      // Probe failed — decline silently so we don't contribute a
+      // misleading "expected 'static'" message to unrelated top-level
+      // parse failures. Matches `reservedClassParser`'s convention.
+      return failure("", input);
     }
     const rest = kwResult.rest;
-    // `static let` — commit to a fatal error so the user-facing
-    // message survives `or`'s backtracking. `modifiedAssignmentParser`
-    // also rejects this shape, but its `failure(...)` is recoverable,
-    // which lets later alternatives reinterpret `static` as a bare
-    // identifier and produce nonsense AST. The probe-and-commit
-    // pattern (matching `reservedClassParser`'s handling of `class`)
-    // is the right tool here.
+    // `static const` belongs to `modifiedAssignmentParser`. Decline
+    // silently so its success path runs (it's tried before this
+    // parser in the top-level alternatives list).
+    if (/^const\b/.test(rest)) {
+      return failure("", input);
+    }
     if (/^let\b/.test(rest)) {
       return parseError(
         STATIC_LET_MESSAGE,
         fail("static let"),
       )(input) as ParserResult<StaticStatement>;
     }
-    // `static const` belongs to `modifiedAssignmentParser`. Decline
-    // silently so its success path runs.
-    if (/^const\b/.test(rest)) {
-      return failure("not a static expression statement", input);
+    // `static <ident> = ...` would otherwise be half-eaten as a bare
+    // statement whose inner is a variableName, and the trailing `=`
+    // would surface as a confusing "unexpected token" downstream.
+    // Reject up-front so the user gets the actionable "use `static
+    // const`" guidance instead.
+    if (/^[A-Za-z_][A-Za-z0-9_]*\s*=(?!=)/.test(rest)) {
+      return parseError(
+        STATIC_ASSIGN_MESSAGE,
+        fail("static <name> ="),
+      )(input) as ParserResult<StaticStatement>;
     }
     const innerParser = or(
       interruptStatementParser,
@@ -3092,12 +3125,13 @@ export const staticStatementParser: Parser<StaticStatement> = withLoc(
     );
     const innerResult = innerParser(rest);
     if (!innerResult.success) {
-      return failure(
-        "`static` at top level must be followed by `const <name> = ...` " +
-          "or an expression statement (e.g., `static foo()` or " +
-          "`static logger.flush()`).",
-        input,
-      );
+      // Fatal: once we've consumed `static`, any subsequent failure
+      // must surface — recoverable failure would let `or(...)`
+      // reinterpret `static` as an identifier and yield nonsense AST.
+      return parseError(
+        STATIC_INNER_MESSAGE,
+        fail("static <expr>"),
+      )(input) as ParserResult<StaticStatement>;
     }
     return success(
       { type: "staticStatement", statement: innerResult.result as AgencyNode },

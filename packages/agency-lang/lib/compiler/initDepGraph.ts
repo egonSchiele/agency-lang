@@ -501,11 +501,18 @@ function nodeFromTopLevel(
   // with `static` at the source. Without `static` they live in the
   // GLOBAL graph (Phase B, every run); with `static` they live in
   // the STATIC graph (Phase A, once per process).
+  //
+  // `varName` is synthetic — the actual InitVarKey is already
+  // `${moduleId}::${varName}`, so we keep the name module-local for
+  // readable cycle / debug output. `line_col` (not just `line`)
+  // because `foo(); bar()` on a single source line would otherwise
+  // collide and one node would overwrite the other in the dep graph.
   if (isStaticBare || isBareTopLevelStatement(stmt)) {
     const line = stmt.loc?.line ?? 0;
+    const col = stmt.loc?.col ?? 0;
     return {
       moduleId,
-      varName: `__bareStmt_${moduleId}_${line}`,
+      varName: `__bareStmt_${line}_${col}`,
       kind: isStaticBare ? "static" : "global",
       initExpr: stmt,
       loc: stmt.loc,

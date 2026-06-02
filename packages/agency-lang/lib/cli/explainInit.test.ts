@@ -33,12 +33,12 @@ describe("explainInit", () => {
   it("single-file static + global mix", () => {
     expect(explain("single-static.agency")).toMatchInlineSnapshot(`
       "Phase A (once per process):
-        single-static.agency:3   greeting
-        single-static.agency:4   banner
+        single-static.agency:4   greeting
+        single-static.agency:5   banner
 
       Phase B (every run):
-        single-static.agency:6   log
-        single-static.agency:7   <bare statement>
+        single-static.agency:7   log
+        single-static.agency:8   <bare statement>
 
       Variable dependency graph:
         single-static.greeting   (no deps)
@@ -53,8 +53,8 @@ describe("explainInit", () => {
   it("cross-module static dep", () => {
     expect(explain("cross-module-main.agency")).toMatchInlineSnapshot(`
       "Phase A (once per process):
-        cross-module-helper.agency:0   greeting
-        cross-module-main.agency:5   composed
+        cross-module-helper.agency:1   greeting
+        cross-module-main.agency:6   composed
 
       Phase B (every run):
         (nothing)

@@ -76,7 +76,10 @@ function appendPhase(
     const node = graph.nodes[key];
     if (!node) continue;
     const file = path.basename(node.moduleId);
-    const line = node.loc?.line ?? "?";
+    // `loc.line` is 0-indexed internally (see docs/dev/locations.md).
+    // Convert to 1-indexed for display so CLI output lines up with
+    // editor cursor reports and other agency CLI commands.
+    const line = node.loc?.line !== undefined ? node.loc.line + 1 : "?";
     const label = node.varName.startsWith("__bareStmt_")
       ? "<bare statement>"
       : node.varName;

@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "description": "Depth-1: a static initializer reads a cross-module static through a function call; dep graph schedules the helper's static init first.",
+      "expectedOutput": "\"hello!\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

@@ -1,0 +1,16 @@
+// PR-2.5 depth-1 expansion: `fooStatic`'s initializer calls
+// `getBarStatic` in `helper.agency`, whose body reads `barStatic`.
+// Without depth-1 expansion, the static dep graph would have no edge
+// from `fooStatic` to `barStatic`, helper.__initializeStatic would not
+// run before main's, and the PR-1 runtime trap would fire when
+// `getBarStatic` accessed `barStatic` during main's static init.
+//
+// With depth-1, the dep graph sees the cross-module read, schedules
+// helper.barStatic first, and the assertion below passes.
+import { getBarStatic } from "./helper.agency"
+
+static const fooStatic = getBarStatic() + "!"
+
+node main() {
+  return fooStatic
+}

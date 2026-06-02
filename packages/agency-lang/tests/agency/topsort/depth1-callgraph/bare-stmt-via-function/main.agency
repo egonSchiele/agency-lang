@@ -1,0 +1,19 @@
+// PR-2.5 depth-1 expansion for bare top-level statements: the bare
+// call `record(getBarGlobal())` reaches into `helper.getBarGlobal`,
+// whose body reads `helper.barGlobal`. Depth-1 expansion makes the
+// dep graph aware that `helper.agency`'s globals must finish init
+// before this bare statement runs, and emits the corresponding
+// `__awaitGlobalsInit("helper.agency")` at the head of main's
+// `__initializeGlobals`. Without it the lazy global guard would still
+// resolve the read at runtime, but only with extra Promise machinery
+// — the explicit await is the correctness contract.
+import { getBarGlobal } from "./helper.agency"
+
+let log = ""
+def record(s: string) { log = log + s }
+
+record(getBarGlobal())
+
+node main() {
+  return log
+}

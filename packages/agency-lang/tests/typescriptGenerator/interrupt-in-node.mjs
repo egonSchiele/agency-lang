@@ -136,6 +136,9 @@ function registerTools(tools: any[]) {
 }
 
 async function __initializeGlobals(__ctx) {
+  if (__ctx.globals.isInitialized("interrupt-in-node.agency")) {
+    return;
+  }
   __ctx.globals.markInitialized("interrupt-in-node.agency")
 }
 __registerGlobalsInit("interrupt-in-node.agency", __initializeGlobals);

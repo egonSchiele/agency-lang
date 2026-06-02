@@ -154,6 +154,9 @@ function __getStaticVars() {
 __globalCtx.getStaticVars = __getStaticVars;
 __registerStaticInit("static.agency", __initializeStatic);
 async function __initializeGlobals(__ctx) {
+  if (__ctx.globals.isInitialized("static.agency")) {
+    return;
+  }
   __ctx.globals.markInitialized("static.agency")
   await __initializeStatic(__ctx)
   await __ctx.writeStaticStateToTrace(__globalCtx.getStaticVars())

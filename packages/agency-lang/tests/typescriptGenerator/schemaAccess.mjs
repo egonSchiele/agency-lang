@@ -136,6 +136,9 @@ function registerTools(tools: any[]) {
 }
 
 async function __initializeGlobals(__ctx) {
+  if (__ctx.globals.isInitialized("schemaAccess.agency")) {
+    return;
+  }
   __ctx.globals.markInitialized("schemaAccess.agency")
 }
 __registerGlobalsInit("schemaAccess.agency", __initializeGlobals);

@@ -136,6 +136,9 @@ function registerTools(tools: any[]) {
 }
 
 async function __initializeGlobals(__ctx) {
+  if (__ctx.globals.isInitialized("stringConcat.agency")) {
+    return;
+  }
   __ctx.globals.markInitialized("stringConcat.agency")
 }
 __registerGlobalsInit("stringConcat.agency", __initializeGlobals);

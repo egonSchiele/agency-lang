@@ -136,6 +136,9 @@ function registerTools(tools: any[]) {
 }
 
 async function __initializeGlobals(__ctx) {
+  if (__ctx.globals.isInitialized("pipe-operator.agency")) {
+    return;
+  }
   __ctx.globals.markInitialized("pipe-operator.agency")
 }
 __registerGlobalsInit("pipe-operator.agency", __initializeGlobals);

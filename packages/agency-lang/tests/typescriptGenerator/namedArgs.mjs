@@ -136,6 +136,9 @@ function registerTools(tools: any[]) {
 }
 
 async function __initializeGlobals(__ctx) {
+  if (__ctx.globals.isInitialized("namedArgs.agency")) {
+    return;
+  }
   __ctx.globals.markInitialized("namedArgs.agency")
   await __call(greet, {
     type: "named",

@@ -136,6 +136,9 @@ function registerTools(tools: any[]) {
 }
 
 async function __initializeGlobals(__ctx) {
+  if (__ctx.globals.isInitialized("streaming.agency")) {
+    return;
+  }
   __ctx.globals.markInitialized("streaming.agency")
 }
 __registerGlobalsInit("streaming.agency", __initializeGlobals);

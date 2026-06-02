@@ -612,6 +612,20 @@ function buildInitializeGlobalsFn(opts: AssembleSectionsOpts): TsNode {
       opts.globalLocalOrder ?? [],
       (opts.globalAwaitModules ?? []).map((m) => m.sourceModuleId),
     ),
+    // Idempotence guard: Phase B runs once per execCtx. The closure-
+    // wide bootstrap loop in `runNode` iterates every registered
+    // module, and other modules' `__initializeGlobals` prelude also
+    // `await __awaitGlobalsInit(...)` for any module they depend on
+    // — without this guard those overlapping calls would each re-run
+    // the body, double-executing top-level globals and bare
+    // statements. Same per-execCtx flag that the per-function lazy
+    // guard already checks; safe and cheap.
+    ts.if(
+      ts.methodCall(ts.prop(ctxParam, "globals"), "isInitialized", [
+        ts.str(opts.moduleId),
+      ]),
+      ts.return(),
+    ),
     // Mark this module as initialized BEFORE running init statements.
     // This prevents infinite recursion when a global init expression
     // calls a function defined in the same module (which would trigger

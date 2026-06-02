@@ -136,6 +136,9 @@ function registerTools(tools: any[]) {
 }
 
 async function __initializeGlobals(__ctx) {
+  if (__ctx.globals.isInitialized("threadsAndSubthreads.agency")) {
+    return;
+  }
   __ctx.globals.markInitialized("threadsAndSubthreads.agency")
 }
 __registerGlobalsInit("threadsAndSubthreads.agency", __initializeGlobals);

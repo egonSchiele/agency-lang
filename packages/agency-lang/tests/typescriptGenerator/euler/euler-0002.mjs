@@ -136,6 +136,9 @@ function registerTools(tools: any[]) {
 }
 
 async function __initializeGlobals(__ctx) {
+  if (__ctx.globals.isInitialized("euler-0002.agency")) {
+    return;
+  }
   __ctx.globals.markInitialized("euler-0002.agency")
 }
 __registerGlobalsInit("euler-0002.agency", __initializeGlobals);

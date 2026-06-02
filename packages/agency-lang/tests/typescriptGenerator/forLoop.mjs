@@ -136,6 +136,9 @@ function registerTools(tools: any[]) {
 }
 
 async function __initializeGlobals(__ctx) {
+  if (__ctx.globals.isInitialized("forLoop.agency")) {
+    return;
+  }
   __ctx.globals.markInitialized("forLoop.agency")
 }
 __registerGlobalsInit("forLoop.agency", __initializeGlobals);

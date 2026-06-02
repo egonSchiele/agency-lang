@@ -136,6 +136,9 @@ function registerTools(tools: any[]) {
 }
 
 async function __initializeGlobals(__ctx) {
+  if (__ctx.globals.isInitialized("nestedTypeAlias.agency")) {
+    return;
+  }
   __ctx.globals.markInitialized("nestedTypeAlias.agency")
 }
 __registerGlobalsInit("nestedTypeAlias.agency", __initializeGlobals);

@@ -136,6 +136,9 @@ function registerTools(tools: any[]) {
 }
 
 async function __initializeGlobals(__ctx) {
+  if (__ctx.globals.isInitialized("arrayAndObject.agency")) {
+    return;
+  }
   __ctx.globals.markInitialized("arrayAndObject.agency")
   __ctx.globals.set("arrayAndObject.agency", "nums", [1, 2, 3, 4, 5])
   await __call(print, {

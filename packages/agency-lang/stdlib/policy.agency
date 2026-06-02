@@ -5,7 +5,7 @@ import {
  } from "agency-lang/stdlib-lib/policy.js"
 import { exists } from "std::shell"
 import { dirname, basename } from "std::path"
-import { _routePrompt } from "std::ui"
+import { chooseOption, ChoiceItem } from "std::ui"
 
 /** @module
   ## Overview
@@ -500,8 +500,9 @@ def describeScopedMatch(intr: any): string {
 
 // Present the (a)/(r)/(aa)/(ap)/(rr) menu for one interrupt and
 // return the user's choice as a `Decision`. `(ap)` is offered only
-// when `_opts.fields` has an entry for `intr.kind`. Loops until the
-// user enters a valid response.
+// when `_opts.fields` has an entry for `intr.kind`. Renders as a
+// modal over the active repl(); falls back to plain print + input
+// when no REPL is running (e.g. headless agent runs).
 def askUser(intr: any): Decision {
   // `!= null` compiles to `!== null` (Agency strict equality), so an
   // undefined entry would slip through. Use the explicit existence check.
@@ -509,26 +510,23 @@ def askUser(intr: any): Decision {
   if (_opts.fields[intr.kind] != undefined) { kindFields = _opts.fields[intr.kind] }
   const scopedAvailable = kindFields.length > 0
 
-  // Build the menu as a single string so the active-REPL renderer can
-  // emit it to the scroll region in one call, and the raw-input
-  // fallback can `print` it once.
-  let menuLines: string[] = []
-  menuLines.push("\n⚠ Interrupt: ${intr.kind}")
-  menuLines.push("  ${intr.message}")
-  menuLines.push("  data: ${JSON.stringify(intr.data)}")
-  menuLines.push("  (a)  approve once")
-  menuLines.push("  (r)  reject once")
-  menuLines.push("  (aa) approve always (every future ${intr.kind})")
+  const title = "⚠ Interrupt: ${intr.kind}"
+  const body = "${intr.message}\ndata: ${JSON.stringify(intr.data)}"
+
+  let items: ChoiceItem[] = [
+    { key: "a",  label: "approve once" },
+    { key: "r",  label: "reject once" },
+    { key: "aa", label: "approve always (every future ${intr.kind})" }
+  ]
   if (scopedAvailable) {
-    menuLines.push("  (ap) approve always here (${describeScopedMatch(intr)})")
+    items.push({
+      key: "ap",
+      label: "approve always here (${describeScopedMatch(intr)})"
+    })
   }
-  menuLines.push("  (rr) reject always")
-  const menuText = menuLines.join("\n")
+  items.push({ key: "rr", label: "reject always" })
 
-  let choices: string[] = ["a", "r", "aa", "rr"]
-  if (scopedAvailable) { choices = ["a", "r", "aa", "ap", "rr"] }
-
-  const answer = _routePrompt(menuText, choices)
+  const answer = chooseOption(title, body, items)
   match (answer) {
     "a"  => return "approve"
     "r"  => return "reject"

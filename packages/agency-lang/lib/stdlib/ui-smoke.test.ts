@@ -29,7 +29,7 @@ import { ScriptedInput } from "@/tui/input/scripted.js";
 import { FrameRecorder } from "@/tui/output/recorder.js";
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore – compiled-by-make Agency module; no .d.ts is emitted
-import { repl } from "../../stdlib/ui.js";
+import { repl, chooseOption } from "../../stdlib/ui.js";
 
 function makeTestCtx(): RuntimeContext<any> {
   return new RuntimeContext({
@@ -140,6 +140,153 @@ describe("std::ui — REPL state machine (Agency-driven)", () => {
       },
     );
     expect(submits).toEqual(["ok"]);
+  });
+
+  it("chooseOption opens a modal, navigates, and resolves with the picked key", async () => {
+    // We feed the modal-driving keys AFTER chooseOption has opened
+    // the prompt. The submit-trigger keys are pre-queued; the modal
+    // keys are fed from inside onSubmit so they don't race past the
+    // not-yet-open modal.
+    const picks: string[] = [];
+    const scripted = new ScriptedInput([
+      { key: "g" }, { key: "o" }, { key: "enter" },
+    ]);
+    _setInputSource(scripted);
+    _setOutputTarget(new FrameRecorder());
+    _setSize(80, 24);
+    const ctx = makeTestCtx();
+    try {
+      await runInTestContext(ctx, new StateStack(), new ThreadStore(), () =>
+        __call(repl, {
+          type: "named",
+          positionalArgs: [],
+          namedArgs: {
+            status: () => ({ left: "", right: "" }),
+            onSubmit: async (_p: string) => {
+              // Schedule modal keys after onSubmit has started; they'll
+              // land in the input queue only once `_openChoicePrompt`
+              // has flipped the bridge slot.
+              setTimeout(() => {
+                scripted.feedKey({ key: "down" });
+                scripted.feedKey({ key: "enter" });
+              }, 0);
+              const answer = await __call(chooseOption, {
+                type: "named",
+                positionalArgs: [],
+                namedArgs: {
+                  title: "Pick one",
+                  body: "context",
+                  items: [
+                    { key: "a", label: "alpha" },
+                    { key: "b", label: "beta" },
+                  ],
+                },
+              });
+              picks.push(answer as string);
+              return false;
+            },
+            paletteCommands: {},
+          },
+        }),
+      );
+    } finally {
+      _setInputSource(null);
+      _setOutputTarget(null);
+      _uninstallConsoleCapture();
+    }
+    expect(picks).toEqual(["b"]);
+  });
+
+  it("chooseOption resolves with the first item on plain Enter", async () => {
+    const picks: string[] = [];
+    const scripted = new ScriptedInput([
+      { key: "g" }, { key: "enter" },
+    ]);
+    _setInputSource(scripted);
+    _setOutputTarget(new FrameRecorder());
+    _setSize(80, 24);
+    const ctx = makeTestCtx();
+    try {
+      await runInTestContext(ctx, new StateStack(), new ThreadStore(), () =>
+        __call(repl, {
+          type: "named",
+          positionalArgs: [],
+          namedArgs: {
+            status: () => ({ left: "", right: "" }),
+            onSubmit: async (_p: string) => {
+              setTimeout(() => scripted.feedKey({ key: "enter" }), 0);
+              const answer = await __call(chooseOption, {
+                type: "named",
+                positionalArgs: [],
+                namedArgs: {
+                  title: "T",
+                  body: "",
+                  items: [
+                    { key: "yes", label: "Yes" },
+                    { key: "no", label: "No" },
+                  ],
+                },
+              });
+              picks.push(answer as string);
+              return false;
+            },
+            paletteCommands: {},
+          },
+        }),
+      );
+    } finally {
+      _setInputSource(null);
+      _setOutputTarget(null);
+      _uninstallConsoleCapture();
+    }
+    expect(picks).toEqual(["yes"]);
+  });
+
+  it("chooseOption escape cancels the modal as a Failure return", async () => {
+    // Agency wraps thrown errors from async functions into a Failure
+    // record (not a JS exception), so `await chooseOption(...)` returns
+    // a `{ success: false, error }` value when the user hits Escape.
+    const replies: any[] = [];
+    const scripted = new ScriptedInput([
+      { key: "g" }, { key: "enter" },
+    ]);
+    _setInputSource(scripted);
+    _setOutputTarget(new FrameRecorder());
+    _setSize(80, 24);
+    const ctx = makeTestCtx();
+    try {
+      await runInTestContext(ctx, new StateStack(), new ThreadStore(), () =>
+        __call(repl, {
+          type: "named",
+          positionalArgs: [],
+          namedArgs: {
+            status: () => ({ left: "", right: "" }),
+            onSubmit: async (_p: string) => {
+              setTimeout(() => scripted.feedKey({ key: "escape" }), 0);
+              const answer = await __call(chooseOption, {
+                type: "named",
+                positionalArgs: [],
+                namedArgs: {
+                  title: "T",
+                  body: "",
+                  items: [{ key: "a", label: "A" }],
+                },
+              });
+              replies.push(answer);
+              return false;
+            },
+            paletteCommands: {},
+          },
+        }),
+      );
+    } finally {
+      _setInputSource(null);
+      _setOutputTarget(null);
+      _uninstallConsoleCapture();
+    }
+    expect(replies.length).toBe(1);
+    expect(replies[0]?.success).toBe(false);
+    expect(String(replies[0]?.error ?? "")).toMatch(/cancel/i);
   });
 
   it("exits when onSubmit returns false", async () => {

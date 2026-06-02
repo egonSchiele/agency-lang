@@ -479,7 +479,8 @@ function nodeFromTopLevel(
   moduleId: string,
   depthBase: number,
 ): InitVarNode | null {
-  const { stmt, withApprove } = unwrapWithApprove(node);
+  const { stmt: afterApprove, withApprove } = unwrapWithApprove(node);
+  const { stmt, isStaticBare } = unwrapStaticStatement(afterApprove);
 
   if (stmt.type === "assignment") {
     const line = stmt.loc?.line ?? 0;
@@ -495,15 +496,24 @@ function nodeFromTopLevel(
     };
   }
 
-  // Bare top-level statements (function calls, etc.) participate in the
-  // GLOBAL graph only. PR 3's `static` keyword unlocks static bare
-  // statements; until then statics are decl-only.
-  if (isBareTopLevelStatement(stmt)) {
+  // Bare top-level statements (function calls, etc.) participate in
+  // one of the two graphs depending on whether they were prefixed
+  // with `static` at the source. Without `static` they live in the
+  // GLOBAL graph (Phase B, every run); with `static` they live in
+  // the STATIC graph (Phase A, once per process).
+  //
+  // `varName` is synthetic — the actual InitVarKey is already
+  // `${moduleId}::${varName}`, so we keep the name module-local for
+  // readable cycle / debug output. `line_col` (not just `line`)
+  // because `foo(); bar()` on a single source line would otherwise
+  // collide and one node would overwrite the other in the dep graph.
+  if (isStaticBare || isBareTopLevelStatement(stmt)) {
     const line = stmt.loc?.line ?? 0;
+    const col = stmt.loc?.col ?? 0;
     return {
       moduleId,
-      varName: `__bareStmt_${moduleId}_${line}`,
-      kind: "global",
+      varName: `__bareStmt_${line}_${col}`,
+      kind: isStaticBare ? "static" : "global",
       initExpr: stmt,
       loc: stmt.loc,
       exported: false,
@@ -532,14 +542,37 @@ function unwrapWithApprove(node: AgencyNode): {
 }
 
 /**
+ * Unwrap a `static <bare-statement>` wrapper. The parser only emits
+ * `staticStatement` at module top level wrapping a bare expression
+ * (function call, value access, interrupt) — never an assignment, never
+ * recursively — so a single unwrap is enough.
+ */
+function unwrapStaticStatement(node: AgencyNode): {
+  stmt: AgencyNode;
+  isStaticBare: boolean;
+} {
+  if (node.type === "staticStatement") {
+    return { stmt: node.statement, isStaticBare: true };
+  }
+  return { stmt: node, isStaticBare: false };
+}
+
+/**
  * True for nodes that are bare top-level statements with side effects we
  * need to sequence (function calls, interrupts, etc.). Excludes
  * declarations, imports, comments, and other non-running constructs.
+ *
+ * `valueAccess` is admitted because the `static` parser accepts forms
+ * like `static logger.flush()` whose method call lives inside a value
+ * access chain — without this branch the wrapped statement would
+ * produce no init node and the dep graph would lose visibility of its
+ * cross-module reads.
  */
 function isBareTopLevelStatement(node: AgencyNode): boolean {
   switch (node.type) {
     case "functionCall":
     case "interruptStatement":
+    case "valueAccess":
       return true;
     default:
       return false;

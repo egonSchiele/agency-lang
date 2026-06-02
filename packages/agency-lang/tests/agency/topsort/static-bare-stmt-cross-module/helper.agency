@@ -1,0 +1,6 @@
+// Helper for `static-bare-stmt-cross-module`. Exports a static that
+// the importing module's `static recordSetup()` reads indirectly
+// through a function call. If PR 2.5's depth-1 expansion missed the
+// dep edge, `recordSetup` would see `initialized` as uninitialized
+// and PR 1's read-before-init trap would fire instead of "yes".
+export static const initialized = "yes"

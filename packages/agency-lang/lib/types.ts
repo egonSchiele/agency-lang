@@ -29,6 +29,7 @@ import { AwaitPending } from "./types/awaitPending.js";
 import { HandleBlock } from "./types/handleBlock.js";
 import { DebuggerStatement } from "./types/debuggerStatement.js";
 import { WithModifier } from "./types/withModifier.js";
+import { StaticStatement } from "./types/staticStatement.js";
 import { Tag } from "./types/tag.js";
 import { TryExpression } from "./types/tryExpression.js";
 import { NewExpression } from "./types/newExpression.js";
@@ -66,6 +67,7 @@ export * from "./types/keyword.js";
 export * from "./types/debuggerStatement.js";
 export * from "./types/blockArgument.js";
 export * from "./types/withModifier.js";
+export * from "./types/staticStatement.js";
 export * from "./types/base.js";
 export * from "./types/tag.js";
 export type { TryExpression } from "./types/tryExpression.js";
@@ -242,6 +244,7 @@ export type AgencyNode =
   | AwaitPending
   | HandleBlock
   | WithModifier
+  | StaticStatement
   | DebuggerStatement
   | Tag
   | TryExpression

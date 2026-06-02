@@ -136,6 +136,9 @@ function registerTools(tools: any[]) {
 }
 
 async function __initializeGlobals(__ctx) {
+  if (__ctx.globals.isInitialized("rewindCheckpoint.agency")) {
+    return;
+  }
   __ctx.globals.markInitialized("rewindCheckpoint.agency")
 }
 __registerGlobalsInit("rewindCheckpoint.agency", __initializeGlobals);

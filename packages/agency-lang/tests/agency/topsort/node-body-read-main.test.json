@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "description": "Imported static read directly from a node body (no intermediate def) initializes via the closure-wide runtime bootstrap.",
+      "expectedOutput": "43",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

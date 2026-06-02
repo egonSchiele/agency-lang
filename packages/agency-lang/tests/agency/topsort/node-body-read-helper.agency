@@ -1,0 +1,6 @@
+// Helper for `node-body-read-main.agency`. Same shape as
+// `fn-body-read-helper.agency` but consumed from a `node` body
+// instead of a `def` body in the importer — confirms the closure-
+// wide bootstrap fires before *any* user code runs, not just before
+// nested function calls.
+export static const value = 42

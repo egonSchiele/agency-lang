@@ -77,3 +77,43 @@ export async function __awaitGlobalsInit(
   if (!fn) return;
   await fn(ctx);
 }
+
+/**
+ * Closure-wide bootstrap: ensure every JS-loaded Agency module has had
+ * Phase A (statics) and Phase B (globals) initialized on this ctx
+ * before user code runs.
+ *
+ * Called once from {@link runNode} on every fresh agent run, right
+ * after the entry module's own `initializeGlobals` runs. Iteration
+ * order doesn't matter for correctness — each module's
+ * `__initializeGlobals` has its own `await __awaitGlobalsInit(...)`
+ * prelude for its dep modules, and Phase A is deduped per process
+ * via the `__staticInitPromise` guard in each module, Phase B per
+ * execCtx via the `globals.isInitialized(...)` early-return baked
+ * into `__initializeGlobals`. So even if we visit a module before
+ * one of its deps, the dep gets pulled in first by the nested await
+ * chain and the duplicate visit becomes a no-op.
+ *
+ * Why this exists: the per-variable dep graph in `compileClosure`
+ * only sees references in *initializer expressions*. A `static const`
+ * read from inside a function/node body doesn't show up there, so
+ * if the entry module never directly references one of its
+ * dependencies' statics in an initializer, that dependency's init
+ * would never get triggered — and the read inside the function body
+ * would hit `__UNINIT_STATIC` and throw at runtime. This loop closes
+ * that hole by treating "imported into the closure" as enough reason
+ * to initialize.
+ */
+export async function __initAllRegistered(ctx: unknown): Promise<void> {
+  // Statics first across the whole closure, then globals. Each
+  // module's `__initializeGlobals` would do its own static init
+  // anyway, but doing it as a separate pass here keeps "Phase A
+  // completes before any Phase B starts" visible at the runtime
+  // boundary instead of relying on per-module ordering.
+  for (const moduleId of Object.keys(staticInits)) {
+    await staticInits[moduleId](ctx);
+  }
+  for (const moduleId of Object.keys(globalsInits)) {
+    await globalsInits[moduleId](ctx);
+  }
+}

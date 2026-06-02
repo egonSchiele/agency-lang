@@ -136,6 +136,9 @@ function registerTools(tools: any[]) {
 }
 
 async function __initializeGlobals(__ctx) {
+  if (__ctx.globals.isInitialized("noResponseFormat.agency")) {
+    return;
+  }
   __ctx.globals.markInitialized("noResponseFormat.agency")
 }
 __registerGlobalsInit("noResponseFormat.agency", __initializeGlobals);

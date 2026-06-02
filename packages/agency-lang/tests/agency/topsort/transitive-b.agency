@@ -1,0 +1,8 @@
+// Middle module in the A → B → C chain. Imports a static from C and
+// re-exposes it via a `def` whose body reads the static. The body
+// read is the only path from A to C; A never imports C directly.
+import { x } from "./transitive-c.agency"
+
+export def getX(): string {
+  return x
+}

@@ -136,6 +136,9 @@ function registerTools(tools: any[]) {
 }
 
 async function __initializeGlobals(__ctx) {
+  if (__ctx.globals.isInitialized("sourceMap.agency")) {
+    return;
+  }
   __ctx.globals.markInitialized("sourceMap.agency")
 }
 __registerGlobalsInit("sourceMap.agency", __initializeGlobals);

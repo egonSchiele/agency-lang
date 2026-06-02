@@ -136,6 +136,9 @@ function registerTools(tools: any[]) {
 }
 
 async function __initializeGlobals(__ctx) {
+  if (__ctx.globals.isInitialized("comments.agency")) {
+    return;
+  }
   __ctx.globals.markInitialized("comments.agency")
   __ctx.globals.set("comments.agency", "x", 42)
   __ctx.globals.set("comments.agency", "y", `hello`)

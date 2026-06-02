@@ -136,6 +136,9 @@ function registerTools(tools: any[]) {
 }
 
 async function __initializeGlobals(__ctx) {
+  if (__ctx.globals.isInitialized("function.agency")) {
+    return;
+  }
   __ctx.globals.markInitialized("function.agency")
 }
 __registerGlobalsInit("function.agency", __initializeGlobals);

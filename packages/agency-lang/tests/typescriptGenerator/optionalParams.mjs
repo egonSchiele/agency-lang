@@ -136,6 +136,9 @@ function registerTools(tools: any[]) {
 }
 
 async function __initializeGlobals(__ctx) {
+  if (__ctx.globals.isInitialized("optionalParams.agency")) {
+    return;
+  }
   __ctx.globals.markInitialized("optionalParams.agency")
   await __call(greet, {
     type: "positional",

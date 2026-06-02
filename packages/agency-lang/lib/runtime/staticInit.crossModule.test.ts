@@ -66,3 +66,61 @@ describe("cross-module static dep resolves correctly via PR-2 topsort", () => {
     expect(result.data).toBe("hello!");
   });
 });
+
+/**
+ * Regression: an imported `static const` that's only ever read from
+ * inside a function/node body (never from another static initializer)
+ * must still be initialized before `node main()` runs.
+ *
+ * The compile-time per-variable dep graph walks initializer
+ * expressions; reads inside function bodies don't contribute deps. Yet
+ * `runNode` must guarantee Phase A is complete for the entire JS-loaded
+ * closure before user code starts — otherwise the PR-1
+ * `__UNINIT_STATIC` trap fires the first time the node runs (mirroring
+ * the agency-agent bug where `agent.agency` imported `codeSysPrompt`
+ * from `code.agency` and only read it inside `_runTurn`).
+ *
+ * The closure-wide bootstrap in `runNode` (calls `__initAllRegistered`)
+ * is what makes this work.
+ */
+describe("imported static used only from a function body initializes via closure bootstrap", () => {
+  const fixturesRoot = path.resolve(
+    __dirname,
+    "../../.agency-tmp/static-cross-module-fn-body",
+  );
+  const mainAgency = path.join(fixturesRoot, "main.agency");
+  const dataAgency = path.join(fixturesRoot, "data.agency");
+  const mainJs = mainAgency.replace(/\.agency$/, ".js");
+
+  beforeAll(() => {
+    fs.mkdirSync(fixturesRoot, { recursive: true });
+    fs.writeFileSync(
+      dataAgency,
+      'export static const greeting = "hello"\n',
+    );
+    fs.writeFileSync(
+      mainAgency,
+      'import { greeting } from "./data.agency";\n' +
+        '\n' +
+        'def render(): string {\n' +
+        '  return greeting + "!"\n' +
+        '}\n' +
+        '\n' +
+        'node main() {\n' +
+        '  return render()\n' +
+        '}\n',
+    );
+    resetCompilationCache();
+    compile({}, mainAgency);
+  });
+
+  afterAll(() => {
+    fs.rmSync(fixturesRoot, { recursive: true, force: true });
+  });
+
+  it("does not throw the read-before-init trap and returns 'hello!'", async () => {
+    const mod = await import(pathToFileURL(mainJs).href);
+    const result = await mod.main();
+    expect(result.data).toBe("hello!");
+  });
+});

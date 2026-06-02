@@ -136,6 +136,9 @@ function registerTools(tools: any[]) {
 }
 
 async function __initializeGlobals(__ctx) {
+  if (__ctx.globals.isInitialized("interpolation.agency")) {
+    return;
+  }
   __ctx.globals.markInitialized("interpolation.agency")
 }
 __registerGlobalsInit("interpolation.agency", __initializeGlobals);

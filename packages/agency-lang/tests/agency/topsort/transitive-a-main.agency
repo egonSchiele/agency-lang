@@ -1,0 +1,21 @@
+// Entry module of the transitive A → B → C chain.
+//
+// Imports `getX` from `transitive-b.agency` but NEVER imports
+// `transitive-c.agency` directly. `getX`'s body reads C's static.
+//
+// Before the closure-wide runtime bootstrap landed, the
+// compile-time per-variable dep graph saw zero edges into either B
+// or C from this file's *initializers* (there are none), so neither
+// helper module's `__initializeStatic` ever ran and the read of
+// C's `x` inside `getX` hit the PR-1 read-before-init trap on the
+// first call to `getX()`.
+//
+// With the bootstrap, the runtime walks the full JS-loaded import
+// registry before invoking `main`, so every module's statics
+// initialize regardless of whether the entry's initializers
+// referenced them.
+import { getX } from "./transitive-b.agency"
+
+node main() {
+  return getX()
+}

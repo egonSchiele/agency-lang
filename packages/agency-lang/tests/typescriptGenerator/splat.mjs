@@ -136,6 +136,9 @@ function registerTools(tools: any[]) {
 }
 
 async function __initializeGlobals(__ctx) {
+  if (__ctx.globals.isInitialized("splat.agency")) {
+    return;
+  }
   __ctx.globals.markInitialized("splat.agency")
   __ctx.globals.set("splat.agency", "arr1", [1, 2])
   __ctx.globals.set("splat.agency", "arr2", [3, 4])

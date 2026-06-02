@@ -136,6 +136,9 @@ function registerTools(tools: any[]) {
 }
 
 async function __initializeGlobals(__ctx) {
+  if (__ctx.globals.isInitialized("variadic.agency")) {
+    return;
+  }
   __ctx.globals.markInitialized("variadic.agency")
   await __call(log, {
     type: "positional",

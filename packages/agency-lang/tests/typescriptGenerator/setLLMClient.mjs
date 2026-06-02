@@ -137,6 +137,9 @@ function registerTools(tools: any[]) {
 }
 
 async function __initializeGlobals(__ctx) {
+  if (__ctx.globals.isInitialized("setLLMClient.agency")) {
+    return;
+  }
   __ctx.globals.markInitialized("setLLMClient.agency")
   __ctx.globals.set("setLLMClient.agency", "client", await __call(SimpleOpenAIClient, {
     type: "positional",

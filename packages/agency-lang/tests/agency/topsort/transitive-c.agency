@@ -1,0 +1,8 @@
+// Deepest module in the A → B → C chain used by
+// `transitive-a-main.agency`. Owns the static that's read through a
+// two-hop indirection. Crucially `transitive-a-main.agency` never
+// imports this file directly — it only imports `getX` from
+// `transitive-b.agency`. Confirms the runtime bootstrap reaches the
+// full transitive import closure, not just the entry's direct
+// imports.
+export static const x = "deep"

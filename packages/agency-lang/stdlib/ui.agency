@@ -1175,7 +1175,18 @@ def _replView(state: ReplState): Element {
     // populated via the optional `status.context` field returned by
     // the caller's status callback.
     mainCol.line("", fill: "─", fg: "gray")
-    mainCol.row(height: 1) as inputRow {
+    // The input row grows vertically with the buffer: one row per
+    // `\n`-delimited line, minimum one. `line()` children inside the
+    // row keep `height: 1` and pin to the top via the default
+    // `alignItems: "stretch"` + `crossOffset: 0` layout, so the
+    // prompt only appears on the first row even as the textInput
+    // expands to cover the whole height.
+    const _bufferLines = state.input.buffer.split("\n")
+    let inputHeight = _bufferLines.length
+    if (inputHeight < 1) {
+      inputHeight = 1
+    }
+    mainCol.row(height: inputHeight) as inputRow {
       inputRow.line(state.input.prompt, width: promptWidth)
       inputRow.textInput(value: state.input.buffer, flex: 1)
     }
@@ -1349,15 +1360,14 @@ def _appendInputCharacter(state: ReplState, character: string): ReplState {
   }
 }
 
-// Append pasted text to the input buffer wholesale. Newlines in the
-// paste are flattened to spaces so an accidentally-newline-bearing
-// paste doesn't immediately submit the prompt (the user can still
-// review and press Enter explicitly). Tab + other control bytes are
-// kept as-is — the renderer truncates them safely.
+// Append pasted text to the input buffer wholesale. Newlines are
+// preserved as `\n` (the input box grows to fit), so a paste of a
+// multi-line snippet shows up exactly as it was on the clipboard.
+// Windows-style `\r\n` and bare `\r` are folded to `\n` so the
+// renderer + reducer only have to think about one line terminator.
 def _appendPaste(state: ReplState, pasted: string): ReplState {
-  let normalized = pasted.replaceAll("\r\n", " ")
-  normalized = normalized.replaceAll("\n", " ")
-  normalized = normalized.replaceAll("\r", " ")
+  let normalized = pasted.replaceAll("\r\n", "\n")
+  normalized = normalized.replaceAll("\r", "\n")
   return {
     ...state,
     input: {
@@ -1537,6 +1547,10 @@ def _replReduce(replState: ReplState, keyEvent: KeyEvent): ReplState {
     { key: "up" } if (state.input.historyIdx > 0) => return _recallPreviousHistory(state)
     { key: "down" } if (state.input.historyIdx < state.input.history.length) => return _recallNextHistory(state)
     { key: "backspace" } if (state.input.buffer != "") => return _removeInputCharacter(state)
+    // Shift+Enter inserts a literal newline. Must come before the
+    // plain `enter` arms — match arms with more specific predicates
+    // win, but only when listed before the more general one.
+    { key: "enter", shift: true } => return _appendInputCharacter(state, "\n")
     // Empty-buffer Enter is a no-op: skip writing a blank "You" row
     // and entering the busy/Thinking state for an empty prompt.
     { key: "enter" } if (state.input.buffer == "") => return state

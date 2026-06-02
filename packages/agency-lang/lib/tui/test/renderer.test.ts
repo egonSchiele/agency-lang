@@ -203,6 +203,17 @@ describe("render", () => {
     expect(row).toBe("hi────────");
   });
 
+  it("textInput renders multi-line value as one visual row per \\n", () => {
+    const el = box({ width: 8, height: 3 }, textInput({}, "ab\ncde"));
+    const frame = renderElement(el, 80, 24);
+    const grid = frame.children![0].content!;
+    expect(grid[0].slice(0, 2).map((c) => c.char).join("")).toBe("ab");
+    // Cursor sits at end of the last line, not the first.
+    expect(grid[0][2].char).toBe(" ");
+    expect(grid[1].slice(0, 3).map((c) => c.char).join("")).toBe("cde");
+    expect(grid[1][3].char).toBe("█");
+  });
+
   it("follow-tail keeps the last visual row of a multi-line item in view", () => {
     // A 3-row tall item followed by selectedIndex = length should
     // show the LAST visual row, not blank rows or the first row.

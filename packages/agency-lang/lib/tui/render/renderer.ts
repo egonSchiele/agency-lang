@@ -262,22 +262,39 @@ function renderListContent(
 function renderTextInputContent(
   value: string | undefined,
   innerWidth: number,
+  innerHeight: number,
   fg?: string,
   bg?: string,
 ): Cell[][] {
-  const text = (value ?? "").slice(0, innerWidth);
-  const row: Cell[] = [];
-  for (const ch of text) {
-    row.push({ char: ch, fg, bg });
+  // Multi-line input: each `\n` in `value` starts a new visual row.
+  // Long single lines are clipped at `innerWidth` (no soft wrap).
+  // Cursor sits at the end of the last line; if that line is already
+  // at `innerWidth`, the cursor is omitted rather than overflowing.
+  const text = value ?? "";
+  const lines = text.split("\n");
+  const grid: Cell[][] = [];
+  const lastIdx = lines.length - 1;
+
+  for (let lineIdx = 0; lineIdx < lines.length; lineIdx++) {
+    const clipped = lines[lineIdx].slice(0, innerWidth);
+    const row: Cell[] = [];
+    for (const ch of clipped) {
+      row.push({ char: ch, fg, bg });
+    }
+    if (lineIdx === lastIdx && row.length < innerWidth) {
+      row.push({ char: "█", fg, bg });
+    }
+    while (row.length < innerWidth) {
+      row.push(emptyCell(bg));
+    }
+    grid.push(row);
   }
-  // Cursor position
-  if (row.length < innerWidth) {
-    row.push({ char: "█", fg, bg });
+
+  while (grid.length < innerHeight) {
+    grid.push(makeRow(innerWidth, bg));
   }
-  while (row.length < innerWidth) {
-    row.push(emptyCell(bg));
-  }
-  return [row];
+
+  return grid;
 }
 
 export function render(positioned: PositionedElement, parentScrollOffset = 0): Frame {
@@ -337,6 +354,7 @@ export function render(positioned: PositionedElement, parentScrollOffset = 0): F
     innerContent = renderTextInputContent(
       positioned.value,
       innerWidth,
+      innerHeight,
       style.fg,
       style.bg,
     );

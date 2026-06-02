@@ -4,8 +4,18 @@ import type { KeyEvent, InputSource } from "./types.js";
 const KEY_MAP: Record<string, KeyEvent> = {
   // Special keys
   "\x1b": { key: "escape" },
+  // Plain Enter submits. `\n` (LF) and `\x1b\r` / `\x1b\n` (Alt/Option+
+  // Enter, "Meta+Enter") are treated as Shift+Enter so users on
+  // terminals that don't transmit a distinct Shift+Enter code can
+  // still insert a newline. Alt+Enter is the most portable fallback —
+  // both Terminal.app and iTerm2 deliver it as `\x1b\r` out of the
+  // box; users who configure their terminal to send `\n` for
+  // Shift+Enter (iTerm2's "Report modifiers using CSI u" or similar)
+  // get the same behavior automatically.
   "\r": { key: "enter" },
-  "\n": { key: "enter" },
+  "\n": { key: "enter", shift: true },
+  "\x1b\r": { key: "enter", shift: true },
+  "\x1b\n": { key: "enter", shift: true },
   "\x7f": { key: "backspace" },
   "\t": { key: "tab" },
   // Arrow keys (CSI)

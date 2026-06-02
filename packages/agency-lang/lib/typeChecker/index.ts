@@ -41,6 +41,7 @@ import {
 import { checkUndefinedFunctions } from "./undefinedFunctionDiagnostic.js";
 import { checkUndefinedVariables } from "./undefinedVariableDiagnostic.js";
 import { RESERVED_FUNCTION_NAMES } from "./resolveCall.js";
+import { validateStaticInit } from "./validateStaticInit.js";
 import { walkNodes } from "../utils/node.js";
 
 export type { TypeCheckError, TypeCheckResult } from "./types.js";
@@ -301,6 +302,15 @@ export class TypeChecker {
 
     // 8. Check for undefined variable references (config-controlled severity).
     checkUndefinedVariables(scopes, ctx);
+
+    // 9. Validate static initializers + `static <bare>` statements.
+    // Direct-only checks against the Phase A surface — per-run-only
+    // primitive calls (e.g. `llm()`, `interrupt()`) and obvious
+    // post-declaration mutations of statics. Cross-module global
+    // reads from statics are caught earlier by `compileClosure`'s
+    // `rejectStaticReferencesGlobal`, which has access to the full
+    // import closure.
+    validateStaticInit(this.program, this.errors);
 
     return {
       errors: this.applySuppressions(this.deduplicateErrors()),

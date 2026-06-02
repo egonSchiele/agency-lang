@@ -100,10 +100,55 @@ references**. The edge set is derived by walking the initializer
 expression for free identifiers and resolving each one through the
 shared `ImportAliasResolver`.
 
-**Functions are never edges.** Only values participate. A static
-initializer that calls a function defined elsewhere produces no edge
-to that function's locals; the runtime trap (PR 1) is the safety
-net for unset statics read indirectly.
+**Functions are never edges themselves.** Only values are nodes in
+the graph. A bare reference to a function name never produces an
+edge to a function node — function defs aren't tracked.
+
+### Depth-1 function-body expansion
+
+When a free identifier in an init expression is a **direct call** of
+a top-level Agency function — bare (`getBar()`) or namespace-prefixed
+(`bar.getBar()`) — the dep graph walks that function's body once and
+treats every top-level value the body reads as an additional
+dependency of the enclosing init node. Inner references are resolved
+in the function's home module, not the caller's, so an import the
+function depends on contributes the correct cross-module edge.
+
+The boundary is exactly one function-body hop:
+
+  - Depth-2+ chains are not followed. The runtime trap (PR 1) is the
+    safety net.
+  - Function values stored in variables aren't traced. `const f =
+    getBar; const foo = f()` produces no expansion, because the call
+    site doesn't directly name `getBar`.
+  - Method calls on user objects (`obj.method()`) and stdlib/built-in
+    functions are silently skipped — we have no Agency AST to walk.
+
+`collectFreeIdentifiers` already skips identifiers inside nested
+`function` / `graphNode` bodies via the ancestor stack, so when we
+walk a function body for depth-1 expansion the walker naturally stops
+at any further nested closures. That gives us the depth-1 boundary
+for free — no additional bookkeeping required.
+
+The new piece in the source is the `FunctionDefLookup`
+(`lib/compiler/initDepGraph.ts`), which resolves bare or
+namespace-prefixed call names to the `(moduleId, FunctionDefinition)`
+pair that backs them. `collectDirectCalls` walks an init expression
+for call sites and consults the lookup; the body walk reuses
+`collectFreeIdentifiers` via `collectFunctionBodyFreeRefs`.
+
+The depth-1 expansion runs in three places, all in lockstep:
+
+  - `depsFor` — adds edges to both static and global graphs.
+  - `rejectStaticReferencesGlobal` — surfaces the cross-phase
+    violation when a single hop reveals a static reading a global.
+  - `globalPhasePlanFor` — augments the cross-phase `awaitModules`
+    set so a global reading a cross-module static through one
+    function call still emits the right `await __awaitStaticInit`.
+
+Conditional reads inside the called function are treated as
+always-reads — a safe over-approximation that may add a small number
+of extra `await`s but cannot change correctness.
 
 ### Cross-phase rules
 
@@ -369,10 +414,11 @@ match production behavior.
 
 ## Read-before-init trap (PR 1) — the safety net
 
-The dep graph orders **values**, not **callable code**. A
-static initializer that calls a function which transitively reads
-another static produces no edge in the graph, because function
-bodies don't execute during outer-initializer evaluation.
+The dep graph orders **values**, not **callable code**. With
+depth-1 function-body expansion (PR 2.5), one-hop function calls
+do contribute edges, but anything beyond that boundary — depth-2+
+call chains, function values stored in variables, methods on user
+objects, stdlib functions — produces no edge in the graph.
 
 The runtime read-before-init trap (`__readStatic`, PR 1) catches
 this case. Every static read in generated code is wrapped in
@@ -381,7 +427,8 @@ the `__UNINIT_STATIC` sentinel, the trap throws with a helpful
 message pointing at the source module of the unset static. The
 test suite exercises this in
 `lib/runtime/topsortCycleErrors.test.ts` (the `runtime-trap`
-fixture).
+fixture, deliberately written with a two-hop chain so depth-1
+analysis can't see it).
 
 ## Multi-entry compile cache
 
@@ -427,7 +474,7 @@ strips comments).
 
 | File | Purpose |
 | --- | --- |
-| `lib/compiler/initDepGraph.ts` | Build per-variable graphs from parsed programs. `FreeRef` + `ImportAliasResolver`. |
+| `lib/compiler/initDepGraph.ts` | Build per-variable graphs from parsed programs. `FreeRef` + `ImportAliasResolver` + `FunctionDefLookup` (depth-1 expansion). |
 | `lib/compiler/topSortInitGraph.ts` | Kahn's + cycle tracing. One ordering key (`sequenceHint`). |
 | `lib/compiler/compileClosure.ts` | One-stop entry: parse closure → graphs → topsort → per-module `ModuleInitPlan`. |
 | `lib/backends/typescriptGenerator.ts` | Projects `CompiledClosure` to `InitPlanForModule` for one file. |

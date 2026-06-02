@@ -25,8 +25,11 @@ import { SymbolTable } from "../symbolTable.js";
 import { resolveReExports } from "../preprocessors/resolveReExports.js";
 import {
   buildInitDepGraphs,
+  collectDirectCalls,
   collectFreeIdentifiers,
+  collectFunctionBodyFreeRefs,
   makeKey,
+  type FunctionDefLookup,
   type ImportAliasResolver,
   type InitDepGraph,
   type InitVarNode,
@@ -112,11 +115,13 @@ export function buildCompiledClosure(
   let staticGraph: InitDepGraph;
   let globalGraph: InitDepGraph;
   let resolver: ImportAliasResolver;
+  let functionDefs: FunctionDefLookup;
   try {
     const r = buildInitDepGraphs(programs, symbolTable, entryModuleId);
     staticGraph = r.staticGraph;
     globalGraph = r.globalGraph;
     resolver = r.resolver;
+    functionDefs = r.functionDefs;
   } catch (e) {
     // Re-throw analysis-time validation errors (currently only
     // `StaticReferencesGlobalError`) under the closure-error banner so
@@ -158,6 +163,7 @@ export function buildCompiledClosure(
     globalGraph,
     globalOrder,
     resolver,
+    functionDefs,
   );
 
   return {
@@ -408,6 +414,7 @@ function buildPlans(
   globalGraph: InitDepGraph,
   globalOrder: string[],
   resolver: ImportAliasResolver,
+  functionDefs: FunctionDefLookup,
 ): Record<string, ModuleInitPlan> {
   const plans: Record<string, ModuleInitPlan> = {};
   for (const moduleId of moduleIds) {
@@ -420,6 +427,7 @@ function buildPlans(
         globalOrder,
         staticGraph,
         resolver,
+        functionDefs,
       ),
     };
   }
@@ -481,30 +489,60 @@ function globalPhasePlanFor(
   globalOrder: string[],
   staticGraph: InitDepGraph,
   resolver: ImportAliasResolver,
+  functionDefs: FunctionDefLookup,
 ): ModuleInitPhasePlan {
   const base = phasePlanFor(moduleId, globalGraph, globalOrder);
   const awaitModulesSet: Record<string, true> = {};
   for (const m of base.awaitModules) awaitModulesSet[m] = true;
 
+  // Same per-ref scan as before, but with PR-2.5 depth-1 expansion:
+  // when a free ref names a top-level Agency function, walk that
+  // function's body once and resolve its inner refs in the function's
+  // home module. Any cross-module static the function reads through a
+  // single hop contributes an await here.
+  const recordStatic = (refKey: string): void => {
+    const staticNode = staticGraph.nodes[refKey];
+    if (!staticNode || staticNode.moduleId === moduleId) return;
+    awaitModulesSet[staticNode.moduleId] = true;
+  };
+  const resolveAndRecord = (
+    ref: { kind: "name"; name: string } | { kind: "member"; prefix: string; member: string },
+    inModuleId: string,
+  ): void => {
+    if (ref.kind === "name") {
+      const aliased = resolver.resolve(ref.name, inModuleId);
+      recordStatic(
+        aliased
+          ? makeKey(aliased.sourceModuleId, aliased.sourceName)
+          : makeKey(inModuleId, ref.name),
+      );
+      return;
+    }
+    const ns = resolver.resolveNamespace(ref.prefix, inModuleId);
+    if (!ns) return;
+    recordStatic(makeKey(ns.sourceModuleId, ref.member));
+  };
+
   for (const key of Object.keys(globalGraph.nodes)) {
     const node = globalGraph.nodes[key];
     if (!node || node.moduleId !== moduleId) continue;
     for (const ref of collectFreeIdentifiers(node.initExpr)) {
-      let refKey: string;
-      if (ref.kind === "name") {
-        if (ref.name === node.varName) continue;
-        const aliased = resolver.resolve(ref.name, moduleId);
-        refKey = aliased
-          ? makeKey(aliased.sourceModuleId, aliased.sourceName)
-          : makeKey(moduleId, ref.name);
-      } else {
-        const ns = resolver.resolveNamespace(ref.prefix, moduleId);
-        if (!ns) continue;
-        refKey = makeKey(ns.sourceModuleId, ref.member);
+      if (ref.kind === "name" && ref.name === node.varName) continue;
+      resolveAndRecord(ref, moduleId);
+    }
+    // Depth-1: each direct call (bare or namespace) in this global's
+    // initializer contributes the body's free refs, resolved in the
+    // callee's home module. Mirrors `depsFor`'s expansion so a global
+    // that reads a cross-module static through one function hop still
+    // awaits the source module's static init.
+    for (const fnMatch of collectDirectCalls(
+      node.initExpr,
+      moduleId,
+      functionDefs,
+    )) {
+      for (const innerRef of collectFunctionBodyFreeRefs(fnMatch.def)) {
+        resolveAndRecord(innerRef, fnMatch.moduleId);
       }
-      const staticNode = staticGraph.nodes[refKey];
-      if (!staticNode || staticNode.moduleId === moduleId) continue;
-      awaitModulesSet[staticNode.moduleId] = true;
     }
   }
 

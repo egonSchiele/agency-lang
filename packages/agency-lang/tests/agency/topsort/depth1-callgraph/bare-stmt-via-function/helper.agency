@@ -1,0 +1,9 @@
+// Helper for the depth-1 bare-stmt-via-function fixture.
+// Note: globals (`const`/`let`) can't be exported in Agency — only
+// statics can. The depth-1 expansion still finds this read by walking
+// `getBarGlobal`'s body in helper.agency's own namespace.
+const barGlobal = "hello"
+
+export def getBarGlobal(): string {
+  return barGlobal
+}

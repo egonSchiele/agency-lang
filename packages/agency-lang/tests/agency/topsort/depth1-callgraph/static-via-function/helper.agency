@@ -1,0 +1,7 @@
+// Helper for the depth-1 static-via-function fixture. Exports a
+// static value and a function that reads it.
+export static const barStatic = "hello"
+
+export def getBarStatic(): string {
+  return barStatic
+}

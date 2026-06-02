@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "description": "Depth-1: a bare top-level call reaches into a function that reads a global in another module. The dep graph awaits that module's global init before the bare statement runs.",
+      "expectedOutput": "\"hello\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

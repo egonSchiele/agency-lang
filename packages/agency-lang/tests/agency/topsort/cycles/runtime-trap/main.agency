@@ -1,15 +1,21 @@
-// Runtime read-before-init trap (PR 1) fires here. `a`'s initializer
-// calls `readB()` which reads `b`; the dep graph cannot see edges
-// through function bodies, so the compile-time topsort happily
-// schedules `a` before `b` based on source order, and at runtime `b`
-// is still `__UNINIT_STATIC` when `readB` accesses it.
+// Runtime read-before-init trap (PR 1) fires here. PR-2.5 made the
+// compile-time analysis depth-1: a static initializer that calls a
+// function whose body reads another static *directly* is now caught at
+// compile time. To still exercise the runtime trap we use a depth-2
+// chain — `a` → `outerReadB` → `innerReadB` → `b`. The compiler walks
+// one function deep, so it sees `outerReadB`'s body (which only calls
+// `innerReadB`), and the read of `b` is hidden behind that second hop.
 //
 // The vitest runner asserts the trap message names `b` and points at
 // this file (PR-1 + PR-2's resolver thread-through).
-static const a = readB()
+static const a = outerReadB()
 static const b = "b-value"
 
-def readB(): string {
+def outerReadB(): string {
+  return innerReadB()
+}
+
+def innerReadB(): string {
   return b
 }
 

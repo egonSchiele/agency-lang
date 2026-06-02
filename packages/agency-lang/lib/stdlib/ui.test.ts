@@ -14,6 +14,12 @@ import {
   _uninstallConsoleCapture,
   BottomRegionOutputTarget,
   _writeScrollLine,
+  _openChoicePrompt,
+  _resolveChoice,
+  _cancelChoice,
+  _hasPendingChoice,
+  _peekReplExitSignal,
+  _resetReplExitSignal,
 } from "./ui.js";
 import { installRegion, resetRegion } from "./ui-region.js";
 import { ScriptedInput } from "@/tui/input/scripted.js";
@@ -24,6 +30,7 @@ afterEach(() => {
   _setInputSource(null);
   _setOutputTarget(null);
   _uninstallConsoleCapture();
+  _resetReplExitSignal();
 });
 
 describe("std::ui bridge — _runLoop", () => {
@@ -161,7 +168,7 @@ describe("std::ui bridge — _beginSubmit", () => {
 
     _beginSubmit(state, "hello", () => submitPromise);
 
-    expect(state.transcript.messages).toEqual(["{bright-blue You} hello"]);
+    expect(state.transcript.messages).toEqual(["{bright-blue-fg}You{/bright-blue-fg} hello"]);
     expect(state.submit.busy).toBe(true);
     expect(state.submit.label).toBe("Thinking");
 
@@ -171,22 +178,27 @@ describe("std::ui bridge — _beginSubmit", () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
 
     expect(state.transcript.messages).toEqual([
-      "{bright-blue You} hello",
+      "{bright-blue-fg}You{/bright-blue-fg} hello",
       "agent reply",
     ]);
     expect(state.submit.busy).toBe(false);
   });
 
-  it("exits the REPL when the callback returns false", async () => {
+  it("exits the REPL by setting the bridge exit signal when the callback returns false", async () => {
     const state = makeState();
+    _resetReplExitSignal();
+    expect(_peekReplExitSignal()).toBe(false);
     _beginSubmit(state, "bye", () => false);
     // Resolve microtasks for the setTimeout(0) + the inner async IIFE.
     await new Promise((resolve) => setTimeout(resolve, 0));
     await new Promise((resolve) => setTimeout(resolve, 0));
-    expect(state.done).toBe(true);
+    // The bridge flag is set instead of state.done — see
+    // `_signalReplExit` in lib/stdlib/ui.ts for why mutating
+    // `state.done` directly is unsafe across reducer-state turnover.
+    expect(_peekReplExitSignal()).toBe(true);
   });
 
-  it("surfaces thrown JS errors as {red Error} transcript entries", async () => {
+  it("surfaces thrown JS errors as {red-fg}Error{/red-fg} transcript entries", async () => {
     const state = makeState();
     _beginSubmit(state, "boom", () => {
       throw new Error("kaboom");
@@ -194,8 +206,8 @@ describe("std::ui bridge — _beginSubmit", () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(state.transcript.messages).toEqual([
-      "{bright-blue You} boom",
-      "{red Error} kaboom",
+      "{bright-blue-fg}You{/bright-blue-fg} boom",
+      "{red-fg}Error{/red-fg} kaboom",
     ]);
     expect(state.submit.busy).toBe(false);
   });
@@ -206,8 +218,8 @@ describe("std::ui bridge — _beginSubmit", () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(state.transcript.messages).toEqual([
-      "{bright-blue You} fail",
-      "{red Error} spec.tools cannot be spread",
+      "{bright-blue-fg}You{/bright-blue-fg} fail",
+      "{red-fg}Error{/red-fg} spec.tools cannot be spread",
     ]);
     expect(state.submit.busy).toBe(false);
   });
@@ -236,8 +248,8 @@ describe("std::ui bridge — console capture", () => {
     }
     expect(transcript).toEqual([
       "first",
-      "{yellow warn} watch out",
-      "{red error} nope",
+      "{yellow-fg}warn{/yellow-fg} watch out",
+      "{red-fg}error{/red-fg} nope",
       "hi",
     ]);
   });
@@ -265,6 +277,49 @@ describe("std::ui bridge — console capture", () => {
     }
     expect(transcript).toEqual([]);
     expect(realWrites).toEqual(["not captured\n"]);
+  });
+
+  it("truncates a captured multi-line error to the first couple of lines", async () => {
+    // A `__log.error(stack)` from the runtime's catch-and-convert path
+    // can be a multi-page stack trace. With the truncation in place
+    // the transcript shows the error head plus a gray placeholder
+    // for the rest — keeps the TUI legible without dropping evidence
+    // that something went wrong.
+    const { truncateForTui } = await import("./ui.js");
+    const stack = [
+      "Error: kaboom",
+      "    at fn (file.ts:1:1)",
+      "    at caller (file.ts:2:2)",
+      "    at next (file.ts:3:3)",
+    ].join("\n");
+    const out = truncateForTui(stack);
+    const lines = out.split("\n");
+    expect(lines[0]).toBe("Error: kaboom");
+    expect(lines[1]).toBe("    at fn (file.ts:1:1)");
+    expect(lines[2]).toContain("2 more lines omitted");
+  });
+
+  it("leaves short messages untouched", async () => {
+    const { truncateForTui } = await import("./ui.js");
+    expect(truncateForTui("just one line")).toBe("just one line");
+    expect(truncateForTui("line one\nline two")).toBe("line one\nline two");
+  });
+
+  it("captured console.error of a multi-line payload renders truncated", () => {
+    // End-to-end of the truncation through the console capture so a
+    // regression in the prefix-join path doesn't slip past.
+    const transcript: string[] = [];
+    _installConsoleCapture(transcript);
+    try {
+      console.error("head\nframe1\nframe2\nframe3");
+    } finally {
+      _uninstallConsoleCapture();
+    }
+    // Captured as one entry per line of the truncated payload, each
+    // prefixed by the `error` tag.
+    expect(transcript[0]).toBe("{red-fg}error{/red-fg} head");
+    expect(transcript[1]).toContain("frame1");
+    expect(transcript[transcript.length - 1]).toContain("omitted");
   });
 
   it("restores the original console sinks on uninstall", () => {
@@ -388,5 +443,93 @@ describe("std::ui bridge — _writeScrollLine", () => {
   it("writes the text followed by a newline (no ANSI)", () => {
     _writeScrollLine("hello world");
     expect(stdoutWrites.join("")).toBe("hello world\n");
+  });
+});
+
+describe("std::ui bridge — choice prompts", () => {
+  afterEach(() => {
+    // Drain any pending prompt so a failed test doesn't leak state
+    // into the next one (the slot is module-level).
+    if (_hasPendingChoice()) _cancelChoice("test cleanup");
+  });
+
+  it("stores the request and resolves with the chosen key", async () => {
+    const promise = _openChoicePrompt({
+      title: "Pick one",
+      body: "context",
+      items: [
+        { key: "a", label: "Approve" },
+        { key: "r", label: "Reject" },
+      ],
+    });
+    expect(_hasPendingChoice()).toBe(true);
+    _resolveChoice("a");
+    await expect(promise).resolves.toBe("a");
+    expect(_hasPendingChoice()).toBe(false);
+  });
+
+  it("rejects with the supplied reason on cancel", async () => {
+    const promise = _openChoicePrompt({
+      title: "T",
+      body: "",
+      items: [{ key: "y", label: "yes" }],
+    });
+    _cancelChoice("user cancelled");
+    await expect(promise).rejects.toThrow("user cancelled");
+    expect(_hasPendingChoice()).toBe(false);
+  });
+
+  it("rejects when another prompt is already open", async () => {
+    const first = _openChoicePrompt({
+      title: "first",
+      body: "",
+      items: [{ key: "a", label: "A" }],
+    });
+    await expect(
+      _openChoicePrompt({
+        title: "second",
+        body: "",
+        items: [{ key: "b", label: "B" }],
+      }),
+    ).rejects.toThrow(/already open/);
+    _cancelChoice("cleanup");
+    await expect(first).rejects.toThrow();
+  });
+
+  it("_resolveChoice and _cancelChoice are no-ops with no pending prompt", () => {
+    expect(() => _resolveChoice("anything")).not.toThrow();
+    expect(() => _cancelChoice("anything")).not.toThrow();
+    expect(_hasPendingChoice()).toBe(false);
+  });
+
+  it("_runReplLoop cancels a dangling choice prompt on exit", async () => {
+    _setInputSource(new ScriptedInput([{ key: "q" }]));
+    _setOutputTarget(new FrameRecorder());
+    _setSize(40, 5);
+    const transcript: string[] = [];
+    // Open a prompt as soon as the first render runs — by the time
+    // the loop exits (key "q"), the prompt is still dangling and
+    // should be rejected by the finally block in _runReplLoop.
+    let dangling: Promise<string> | null = null;
+    await _runReplLoop(
+      { done: false },
+      (_s: any) => {
+        if (!dangling) {
+          dangling = _openChoicePrompt({
+            title: "t",
+            body: "",
+            items: [{ key: "a", label: "A" }],
+          });
+        }
+        return { type: "text", content: "x" };
+      },
+      (_s: any, ev: any) => ({ done: ev.key === "q" }),
+      (s: any) => s.done,
+      null,
+      transcript,
+    );
+    expect(dangling).not.toBeNull();
+    await expect(dangling).rejects.toThrow(/REPL loop exited/);
+    expect(_hasPendingChoice()).toBe(false);
   });
 });

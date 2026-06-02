@@ -618,7 +618,7 @@ askUser(intr: any): Decision
 
 **Returns:** [Decision](#decision)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/policy.agency#L505))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/policy.agency#L506))
 
 ### _handler
 
@@ -639,7 +639,7 @@ _handler(intr: any): any
 
 **Returns:** `any`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/policy.agency#L547))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/policy.agency#L545))
 
 ### cliPolicyHandler
 
@@ -719,4 +719,4 @@ CLI sugar for an interactive policy handler. Owns load + save +
 
 **Returns:** `any`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/policy.agency#L631))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/policy.agency#L629))

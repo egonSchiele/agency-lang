@@ -17,10 +17,28 @@ export type Logger = {
 export function createLogger(level: LogLevel = "info"): Logger {
   const threshold = LEVEL_ORDER[level];
 
+  // Route through `console.*` rather than `process.stderr.write`.
+  // Reason: when an `std::ui.repl()` is active it owns the alt-screen
+  // and installs a console capture (`_installConsoleCapture` in
+  // lib/stdlib/ui.ts) that funnels console output into the transcript
+  // list. Raw `stderr.write` would bypass that, hit the terminal
+  // directly, and tear the rendered frame — exactly the breakage seen
+  // when a Wikipedia search failure raised a stack trace mid-REPL.
+  // Outside a REPL, `console.error` still writes to stderr by
+  // default, so headless behavior is unchanged.
   function log(msgLevel: LogLevel, message: string): void {
     if (LEVEL_ORDER[msgLevel] < threshold) return;
     const timestamp = new Date().toISOString().replace("T", " ").replace("Z", "");
-    process.stderr.write(`[${timestamp}] ${msgLevel.toUpperCase()} ${message}\n`);
+    const formatted = `[${timestamp}] ${msgLevel.toUpperCase()} ${message}`;
+    if (msgLevel === "error") {
+      console.error(formatted);
+    } else if (msgLevel === "warn") {
+      console.warn(formatted);
+    } else if (msgLevel === "debug") {
+      console.debug(formatted);
+    } else {
+      console.info(formatted);
+    }
   }
 
   return {

@@ -229,12 +229,32 @@ describe("withResumableScope — callsite + options", () => {
     expect(moduleId).toBe("my.module");
   });
 
-  it("pinResultCheckpoint: true (default) creates a result-entry checkpoint findable via getResultCheckpoint()", async () => {
+  it("pinResultCheckpoint: false (default) skips createPinned", async () => {
+    // Default flipped from true to false: pinned checkpoints
+    // accumulated unbounded inside `repl()` loops and the per-entry
+    // JSON clone of stateStack + globals was a measurable
+    // per-keystroke cost. `result.retry()` becomes a no-op for
+    // scopes that don't explicitly opt in (the runtime sees an
+    // undefined entry checkpoint and silently skips the rewind).
     const ctx = makeMockCtx();
     const spy = vi.spyOn(ctx.checkpoints, "createPinned");
     await agency.withTestContext(
       { ctx, stack: ctx.stateStack, threads: new ThreadStore() },
-      () => agency.withResumableScope({ name: "pin" }, async () => "x"),
+      () => agency.withResumableScope({ name: "noPin" }, async () => "x"),
+    );
+    expect(spy).not.toHaveBeenCalled();
+  });
+
+  it("pinResultCheckpoint: true opt-in creates a result-entry checkpoint findable via getResultCheckpoint()", async () => {
+    const ctx = makeMockCtx();
+    const spy = vi.spyOn(ctx.checkpoints, "createPinned");
+    await agency.withTestContext(
+      { ctx, stack: ctx.stateStack, threads: new ThreadStore() },
+      () =>
+        agency.withResumableScope(
+          { name: "pin", pinResultCheckpoint: true },
+          async () => "x",
+        ),
     );
     expect(spy).toHaveBeenCalledTimes(1);
     expect(spy.mock.calls[0][2]).toMatchObject({
@@ -255,20 +275,6 @@ describe("withResumableScope — callsite + options", () => {
         cp.pinned && cp.label === RESULT_ENTRY_LABEL,
     );
     expect(resultEntry).toBeDefined();
-  });
-
-  it("pinResultCheckpoint: false skips createPinned", async () => {
-    const ctx = makeMockCtx();
-    const spy = vi.spyOn(ctx.checkpoints, "createPinned");
-    await agency.withTestContext(
-      { ctx, stack: ctx.stateStack, threads: new ThreadStore() },
-      () =>
-        agency.withResumableScope(
-          { name: "p", pinResultCheckpoint: false },
-          async () => "x",
-        ),
-    );
-    expect(spy).not.toHaveBeenCalled();
   });
 });
 

@@ -26,6 +26,8 @@ stdlib:
 
 agents:
 	pnpm run agency compile dist/lib/agents/review/ && \
+	pnpm run agency compile dist/lib/agents/policy/ && \
+	pnpm run agency compile dist/lib/agents/agency-agent/ && \
 	pnpm run agency compile dist/lib/agents/judge.agency
 
 test:

@@ -47,6 +47,7 @@
 import type { AgencyProgram, AgencyNode, Expression } from "../types.js";
 import type { Assignment } from "../types.js";
 import type { SourceLocation } from "../types/base.js";
+import type { FunctionDefinition } from "../types/function.js";
 import type { SymbolTable } from "../symbolTable.js";
 import {
   isAgencyImport,
@@ -108,7 +109,141 @@ export type BuildInitDepGraphsResult = {
   globalGraph: InitDepGraph;
   /** Reused by codegen (Task 4) for PR-1 thread-through. */
   resolver: ImportAliasResolver;
+  /** Look-up `(name | namespace.member) → top-level FunctionDefinition`,
+   * scoped to the importing module. PR-2.5 uses it to drive depth-1
+   * expansion of init-expression deps through direct function calls. */
+  functionDefs: FunctionDefLookup;
 };
+
+/**
+ * Resolves a name used inside one module to the top-level Agency
+ * function definition that backs it. Returns the function's home
+ * `moduleId` alongside the AST so callers can resolve free identifiers
+ * *inside* the function body against the function's own import surface
+ * — not the caller's.
+ *
+ * `find` handles bare-name calls (`getBar()`). `findNamespaceMember`
+ * handles namespace-prefixed calls (`bar.getBar()`).
+ *
+ * Returns `null` for names that don't resolve to an Agency function we
+ * have AST for — stdlib calls, function values stored in variables,
+ * unknown names, etc. The depth-1 expansion treats those as "no
+ * expansion", and the runtime read-before-init trap (PR 1) remains the
+ * safety net for anything the static analysis can't see.
+ *
+ * Built once per `compileClosure` call; cached per importing module so
+ * a lookup is O(1) after first use per module.
+ */
+export type FunctionDefLookup = {
+  find(
+    name: string,
+    inModuleId: string,
+  ): { moduleId: string; def: FunctionDefinition } | null;
+  findNamespaceMember(
+    prefix: string,
+    member: string,
+    inModuleId: string,
+  ): { moduleId: string; def: FunctionDefinition } | null;
+};
+
+/**
+ * Build a `FunctionDefLookup` over the entry's full import closure.
+ *
+ * Two layers of cache:
+ *   - `localDefsByModule[moduleId]` — name → FunctionDefinition for all
+ *     top-level `def` statements declared in that module. Populated
+ *     lazily; same shape used as the destination of both bare-name and
+ *     namespace-member lookups.
+ *   - `cache[inModuleId]` — name → resolved `(moduleId, def)` for the
+ *     importing module's view (local defs + named-import aliases of
+ *     functions declared elsewhere). Populated lazily on first lookup.
+ */
+export function makeFunctionDefLookup(
+  programs: Record<string, AgencyProgram>,
+  resolver: ImportAliasResolver,
+): FunctionDefLookup {
+  const localDefsByModule: Record<
+    string,
+    Record<string, FunctionDefinition>
+  > = {};
+
+  function localDefsFor(
+    moduleId: string,
+  ): Record<string, FunctionDefinition> {
+    const cached = localDefsByModule[moduleId];
+    if (cached) return cached;
+    const map: Record<string, FunctionDefinition> = {};
+    const program = programs[moduleId];
+    if (program) {
+      for (const node of program.nodes) {
+        if (node.type !== "function") continue;
+        map[node.functionName] = node;
+      }
+    }
+    localDefsByModule[moduleId] = map;
+    return map;
+  }
+
+  const cache: Record<
+    string,
+    Record<string, { moduleId: string; def: FunctionDefinition }>
+  > = {};
+
+  function buildFor(
+    inModuleId: string,
+  ): Record<string, { moduleId: string; def: FunctionDefinition }> {
+    const map: Record<string, { moduleId: string; def: FunctionDefinition }> =
+      {};
+    // Local defs win — same-file `def foo` is reachable as bare `foo`.
+    for (const [name, def] of Object.entries(localDefsFor(inModuleId))) {
+      map[name] = { moduleId: inModuleId, def };
+    }
+    // Named imports of functions defined in other modules. The resolver
+    // already followed re-export chains; for each resolved name, see if
+    // the target module has a local function def of that name.
+    const program = programs[inModuleId];
+    if (program) {
+      for (const node of program.nodes) {
+        if (node.type !== "importStatement") continue;
+        if (!isAgencyImport(node.modulePath)) continue;
+        for (const nameType of node.importedNames) {
+          if (nameType.type !== "namedImport") continue;
+          for (const original of nameType.importedNames) {
+            // Walk through the local alias the importer uses, not the
+            // original name — that's how the importer references it.
+            const localAlias =
+              (nameType.aliases && nameType.aliases[original]) ?? original;
+            const aliased = resolver.resolve(localAlias, inModuleId);
+            if (!aliased) continue;
+            const targetDef =
+              localDefsFor(aliased.sourceModuleId)[aliased.sourceName];
+            if (!targetDef) continue;
+            map[localAlias] = {
+              moduleId: aliased.sourceModuleId,
+              def: targetDef,
+            };
+          }
+        }
+      }
+    }
+    return map;
+  }
+
+  return {
+    find(name, inModuleId) {
+      const moduleCache =
+        cache[inModuleId] ?? (cache[inModuleId] = buildFor(inModuleId));
+      return moduleCache[name] ?? null;
+    },
+    findNamespaceMember(prefix, member, inModuleId) {
+      const ns = resolver.resolveNamespace(prefix, inModuleId);
+      if (!ns) return null;
+      const def = localDefsFor(ns.sourceModuleId)[member];
+      if (!def) return null;
+      return { moduleId: ns.sourceModuleId, def };
+    },
+  };
+}
 
 /**
  * Compile-time error: a `static` initializer references a `global`. The
@@ -246,6 +381,7 @@ export function buildInitDepGraphs(
   entryModuleId: string,
 ): BuildInitDepGraphsResult {
   const resolver = makeImportAliasResolver(programs, symbolTable);
+  const functionDefs = makeFunctionDefLookup(programs, resolver);
   const sequenceHints = computeSequenceHintBase(programs, entryModuleId);
 
   // ── 1. Collect every node, routing each into the static or global graph.
@@ -266,23 +402,31 @@ export function buildInitDepGraphs(
   }
 
   // ── 2. Compute edges within each graph by walking each node's
-  //       initializer expression for free identifier references.
-  const staticEdges = computeEdges(staticNodes, resolver);
+  //       initializer expression for free identifier references —
+  //       plus PR-2.5 depth-1 expansion through direct function calls.
+  const staticEdges = computeEdges(staticNodes, resolver, functionDefs);
   const globalEdges = computeEdgesGlobal(
     globalNodes,
     staticNodes,
     resolver,
+    functionDefs,
   );
 
   // ── 3. Phase-coupling validation: a static reading a global is a
   //       compile error. (Global reading static is fine — handled in
   //       computeEdgesGlobal which skips static refs as deps.)
-  rejectStaticReferencesGlobal(staticNodes, globalNodes, resolver);
+  rejectStaticReferencesGlobal(
+    staticNodes,
+    globalNodes,
+    resolver,
+    functionDefs,
+  );
 
   return {
     staticGraph: { nodes: staticNodes, edges: staticEdges },
     globalGraph: { nodes: globalNodes, edges: globalEdges },
     resolver,
+    functionDefs,
   };
 }
 
@@ -371,10 +515,11 @@ function isBareTopLevelStatement(node: AgencyNode): boolean {
 function computeEdges(
   nodes: Record<InitVarKey, InitVarNode>,
   resolver: ImportAliasResolver,
+  functionDefs: FunctionDefLookup,
 ): Record<InitVarKey, InitVarKey[]> {
   const edges: Record<InitVarKey, InitVarKey[]> = {};
   for (const [key, node] of Object.entries(nodes)) {
-    edges[key] = depsFor(node, nodes, resolver);
+    edges[key] = depsFor(node, nodes, resolver, functionDefs);
   }
   return edges;
 }
@@ -389,37 +534,76 @@ function computeEdgesGlobal(
   globalNodes: Record<InitVarKey, InitVarNode>,
   staticNodes: Record<InitVarKey, InitVarNode>,
   resolver: ImportAliasResolver,
+  functionDefs: FunctionDefLookup,
 ): Record<InitVarKey, InitVarKey[]> {
   const edges: Record<InitVarKey, InitVarKey[]> = {};
   for (const [key, node] of Object.entries(globalNodes)) {
-    edges[key] = depsFor(node, globalNodes, resolver, staticNodes);
+    edges[key] = depsFor(
+      node,
+      globalNodes,
+      resolver,
+      functionDefs,
+      staticNodes,
+    );
   }
   return edges;
 }
 
 /**
  * For one node, find every other node in `lookupSet` its initializer
- * directly references and return their keys (no duplicates, no
- * self-edges). `skipSet`, if provided, is the set of nodes whose
- * references should be silently skipped (used to skip static refs when
- * computing global edges).
+ * references — either directly or via a depth-1 call into a top-level
+ * Agency function whose body reads the target.
+ *
+ * `skipSet`, if provided, is the set of nodes whose references should
+ * be silently skipped (used to skip static refs when computing global
+ * edges).
+ *
+ * **Depth-1 expansion:** when a free reference in the init expression
+ * resolves to a top-level function definition (via `functionDefs`), we
+ * walk that function's body for free identifiers and resolve each one
+ * in the *function's* home module. The runtime read-before-init trap
+ * (PR 1) still covers depth-2+, function values, and any other case
+ * the static analysis can't see.
+ *
+ * `collectFreeIdentifiers` already skips identifiers inside nested
+ * `function` / `graphNode` bodies — that gives us the depth-1
+ * boundary for free. Blocks (`map(arr) as x { ... }`) are NOT skipped:
+ * they're not nested functions, they're inline code that runs in the
+ * outer function's scope, so any free refs inside a block body inside
+ * the called function still contribute deps.
  */
 function depsFor(
   node: InitVarNode,
   lookupSet: Record<InitVarKey, InitVarNode>,
   resolver: ImportAliasResolver,
+  functionDefs: FunctionDefLookup,
   skipSet?: Record<InitVarKey, InitVarNode>,
 ): InitVarKey[] {
   const seen: Record<InitVarKey, true> = {};
   const out: InitVarKey[] = [];
-  for (const ref of collectFreeIdentifiers(node.initExpr)) {
-    if (ref.kind === "name" && ref.name === node.varName) continue;
-    const refKey = resolveFreeRef(ref, node.moduleId, resolver);
-    if (!refKey) continue;
-    if (skipSet?.[refKey]) continue;
-    if (!lookupSet[refKey] || seen[refKey]) continue;
+  const addRef = (refKey: InitVarKey | null): void => {
+    if (!refKey) return;
+    if (skipSet?.[refKey]) return;
+    if (!lookupSet[refKey] || seen[refKey]) return;
     seen[refKey] = true;
     out.push(refKey);
+  };
+  for (const ref of collectFreeIdentifiers(node.initExpr)) {
+    if (ref.kind === "name" && ref.name === node.varName) continue;
+    addRef(resolveFreeRef(ref, node.moduleId, resolver));
+  }
+  // Depth-1 expansion: for every direct call in the init expression
+  // that resolves to a top-level Agency function we have AST for,
+  // contribute the deps from one walk of the function's body. Inner
+  // refs resolve in the function's home module.
+  for (const fnMatch of collectDirectCalls(
+    node.initExpr,
+    node.moduleId,
+    functionDefs,
+  )) {
+    for (const innerRef of collectFunctionBodyFreeRefs(fnMatch.def)) {
+      addRef(resolveFreeRef(innerRef, fnMatch.moduleId, resolver));
+    }
   }
   return out;
 }
@@ -456,16 +640,117 @@ function rejectStaticReferencesGlobal(
   staticNodes: Record<InitVarKey, InitVarNode>,
   globalNodes: Record<InitVarKey, InitVarNode>,
   resolver: ImportAliasResolver,
+  functionDefs: FunctionDefLookup,
 ): void {
   for (const node of Object.values(staticNodes)) {
-    for (const ref of collectFreeIdentifiers(node.initExpr)) {
-      if (ref.kind === "name" && ref.name === node.varName) continue;
-      const refKey = resolveFreeRef(ref, node.moduleId, resolver);
-      if (!refKey) continue;
+    const check = (refKey: InitVarKey | null): void => {
+      if (!refKey) return;
       const offender = globalNodes[refKey];
       if (offender) throw new StaticReferencesGlobalError(node, offender);
+    };
+    for (const ref of collectFreeIdentifiers(node.initExpr)) {
+      if (ref.kind === "name" && ref.name === node.varName) continue;
+      check(resolveFreeRef(ref, node.moduleId, resolver));
+    }
+    // Depth-1: any direct call (bare or namespace) into a top-level
+    // Agency function whose body reads a global also makes the
+    // enclosing static reference that global. Same rejection rule
+    // applies.
+    for (const fnMatch of collectDirectCalls(
+      node.initExpr,
+      node.moduleId,
+      functionDefs,
+    )) {
+      for (const innerRef of collectFunctionBodyFreeRefs(fnMatch.def)) {
+        check(resolveFreeRef(innerRef, fnMatch.moduleId, resolver));
+      }
     }
   }
+}
+
+/**
+ * Walk an init expression for **direct call sites** — both bare-name
+ * calls (`getBar()`) and namespace-method calls (`bar.getBar()`) — and
+ * return the FunctionDefinitions they resolve to, paired with the
+ * function's home module. Used by the depth-1 expansion to discover
+ * which functions to look inside.
+ *
+ * Skips identifiers inside nested `function` / `graphNode` bodies via
+ * the same ancestor check `collectFreeIdentifiers` uses, so when we
+ * are already mid-walk of one function's body we don't accidentally
+ * descend into another function defined alongside it.
+ *
+ * `collectFreeIdentifiers` cannot do this job because `walkNodes`'s
+ * `functionCall` branch deliberately does not yield the function name
+ * as a `variableName` (the call's identifier isn't a value
+ * reference). Method-call chain elements (`obj.method()`) likewise
+ * don't surface as `member` free refs — they're `methodCall` chain
+ * entries, not `property` chain entries.
+ */
+export function collectDirectCalls(
+  expr: Expression | AgencyNode,
+  inModuleId: string,
+  functionDefs: FunctionDefLookup,
+): { moduleId: string; def: FunctionDefinition }[] {
+  const out: { moduleId: string; def: FunctionDefinition }[] = [];
+  for (const { node, ancestors } of walkNodes([expr as AgencyNode])) {
+    if (
+      ancestors.some(
+        (a) => a.type === "function" || a.type === "graphNode",
+      )
+    ) {
+      continue;
+    }
+    if (node.type === "functionCall") {
+      // Skip a functionCall that lives inside a valueAccess methodCall
+      // chain (`x.foo()`) — handled by the valueAccess branch below
+      // where we have the namespace prefix to drive the lookup.
+      const parent = ancestors[ancestors.length - 1];
+      const isMethodCall =
+        parent &&
+        parent.type === "valueAccess" &&
+        (parent as { chain: { kind: string; functionCall?: unknown }[] }).chain.some(
+          (c) => c.kind === "methodCall" && (c as { functionCall: unknown }).functionCall === node,
+        );
+      if (isMethodCall) continue;
+      const match = functionDefs.find(node.functionName, inModuleId);
+      if (match) out.push(match);
+      continue;
+    }
+    if (node.type === "valueAccess" && node.base.type === "variableName") {
+      const prefix = (node.base as { value: string }).value;
+      for (const elem of node.chain) {
+        if (elem.kind !== "methodCall") continue;
+        const match = functionDefs.findNamespaceMember(
+          prefix,
+          elem.functionCall.functionName,
+          inModuleId,
+        );
+        if (match) out.push(match);
+      }
+    }
+  }
+  return out;
+}
+
+/**
+ * Collect every free identifier in a function body, treating each top-
+ * level statement of the body independently so the function's *own*
+ * `function` node isn't on the ancestor stack (which would cause
+ * `collectFreeIdentifiers` to skip everything by design). The result
+ * still skips any further nested `function` / `graphNode` bodies — the
+ * depth-1 boundary holds.
+ *
+ * Function parameter names appear in the result as `{kind: "name"}`
+ * refs that don't resolve to any top-level decl, so they fall out
+ * harmlessly when `resolveFreeRef`'s caller misses them in `lookupSet`.
+ */
+export function collectFunctionBodyFreeRefs(def: FunctionDefinition): FreeRef[] {
+  const out: FreeRef[] = [];
+  for (const stmt of def.body) {
+    out.push(...collectFreeIdentifiers(stmt));
+  }
+  return out;
 }
 
 // ── Free-identifier collection ──

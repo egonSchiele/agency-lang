@@ -218,16 +218,18 @@ describe("tests/agency/topsort/cycles fixtures", () => {
   });
 
   it("runtime trap: indirect static read fires PR-1 trap with source moduleId", async () => {
-    // This fixture compiles cleanly (the dep graph can't see edges
-    // through function bodies) but the trap fires at agent-run time
-    // when `a`'s initializer calls `readB()` and reads `b` before
+    // This fixture compiles cleanly (PR-2.5's depth-1 expansion stops
+    // at one function-body hop, and the chain here is
+    // `a → outerReadB → innerReadB → b` — two hops away). The trap
+    // fires at agent-run time when `a`'s initializer calls
+    // `outerReadB()` which calls `innerReadB()` which reads `b` before
     // `b`'s init has run.
     //
-    // `readB` is an AgencyFunction, so the trap thrown inside its
-    // Runner step is caught and converted to a `failure(...)` result.
-    // `a` then holds the failure; `node main() { return a }` surfaces
-    // it as `result.data.error` — that's where the trap message
-    // arrives in user-visible form.
+    // The leaf reader is an AgencyFunction, so the trap thrown inside
+    // its Runner step is caught and converted to a `failure(...)`
+    // result. `a` then holds the failure; `node main() { return a }`
+    // surfaces it as `result.data.error` — that's where the trap
+    // message arrives in user-visible form.
     const outcome = await runFixture(
       path.join(FIXTURES_ROOT, "runtime-trap"),
       "main.agency",
@@ -243,5 +245,56 @@ describe("tests/agency/topsort/cycles fixtures", () => {
     expect(result.data?.error).toMatch(
       /tests\/agency\/topsort\/cycles\/runtime-trap\/main\.agency/,
     );
+  });
+
+  it("PR-2.5: static reading a global through one function call → compile error", async () => {
+    // Depth-1 expansion makes the static→global rejection see through
+    // a single function hop. Without it, the violation only surfaced
+    // as undefined behavior at runtime; with it, the compiler catches
+    // it with the same `Static '…' references global '…'` message used
+    // for direct refs.
+    const dir = writeUseBeforeDefFixture("static-reads-global-via-fn", {
+      "main.agency":
+        'const g = "hello"\n' +
+        "def readG(): string { return g }\n" +
+        'static const s = readG() + "!"\n' +
+        "\n" +
+        "node main() {\n" +
+        "  return s\n" +
+        "}\n",
+    });
+    const outcome = await runFixture(dir, "main.agency");
+    expect(outcome.kind).toBe("compileError");
+    if (outcome.kind !== "compileError") return;
+    expect(outcome.message).toMatch(/Static '.*' .*references global/);
+    expect(outcome.message).toMatch(/\bs\b/);
+    expect(outcome.message).toMatch(/\bg\b/);
+  });
+
+  it("PR-2.5: static reading a cross-module static through one function call → no trap", async () => {
+    // The exact case the runtime trap fired for pre-PR-2.5. With
+    // depth-1 the dep graph adds an edge from `s` to helper's
+    // `barStatic`, topsort schedules helper's static init first, and
+    // the program returns the composed value cleanly.
+    const dir = writeUseBeforeDefFixture("static-reads-static-via-fn", {
+      "main.agency":
+        'import { readBar } from "./helper.agency"\n' +
+        'static const s = readBar() + "!"\n' +
+        "\n" +
+        "node main() {\n" +
+        "  return s\n" +
+        "}\n",
+      "helper.agency":
+        'export static const barStatic = "hello"\n' +
+        "export def readBar(): string { return barStatic }\n",
+    });
+    const outcome = await runFixture(dir, "main.agency");
+    if (outcome.kind !== "ok") {
+      throw new Error(
+        `expected fixture to compile cleanly, got compile error:\n${outcome.message}`,
+      );
+    }
+    const result = await outcome.mod.main();
+    expect(result.data).toBe("hello!");
   });
 });

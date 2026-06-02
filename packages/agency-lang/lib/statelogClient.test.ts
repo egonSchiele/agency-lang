@@ -694,6 +694,27 @@ describe("StatelogClient", () => {
       expect(evt.data.functionName).toBe("doStuff");
       expect(evt.data.retryable).toBe(true);
     });
+
+    it("initPhase emits phaseAStart / phaseAEnd / phaseBStart / phaseBEnd in order", async () => {
+      const file = tmpLogFile("initphase");
+      tmpDirs.push(path.dirname(file));
+      const c = fileClient(file);
+      await c.initPhase({ phase: "a", boundary: "start", modules: ["m1"] });
+      await c.initPhase({ phase: "a", boundary: "end" });
+      await c.initPhase({ phase: "b", boundary: "start" });
+      await c.initPhase({ phase: "b", boundary: "end" });
+      const evts = readEvents(file).map((e) => e.data.type);
+      expect(evts).toEqual([
+        "phaseAStart",
+        "phaseAEnd",
+        "phaseBStart",
+        "phaseBEnd",
+      ]);
+      const first = readEvents(file)[0];
+      expect(first.data.phase).toBe("a");
+      expect(first.data.boundary).toBe("start");
+      expect(first.data.modules).toEqual(["m1"]);
+    });
   });
 
   describe("runMetadata follow-up on agentStart", () => {

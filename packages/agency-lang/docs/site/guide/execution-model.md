@@ -96,6 +96,33 @@ Global variables make it easy to store state, but can lead to spaghetti code. If
 
 Agency bans exporting global variables. You cannot export a global variable. You can export functions that set and set those variables, though. This makes code easier to reason about.
 
+## Two phases of initialization
+
+When an agent runs, Agency initializes module-level code in two distinct phases:
+
+- **Phase A — once per process.** All `static const` declarations and bare top-level statements prefixed with `static`. Initializers in this phase run the first time any node in the closure is invoked. After that, they're cached for the lifetime of the process — every subsequent run sees the same values, never re-running the initializer.
+- **Phase B — every run.** All non-static top-level `const` / `let` declarations and bare top-level statements. These run at the start of every single agent invocation, which is what gives each run the fresh, isolated state shown above.
+
+Putting it together for a single file that uses both:
+
+```ts
+static const apiUrl = env("API_URL")   // Phase A — runs once
+static loadCacheFromDisk()              // Phase A — runs once
+
+const requestLog = []                   // Phase B — runs every time
+log("agent starting")                   // Phase B — runs every time
+
+node main(name: string) {
+  const r = llm(`${apiUrl}: greet ${name}`)
+  requestLog.push(r)
+  return requestLog
+}
+```
+
+If you invoke `main` five times, the first call runs Phase A + Phase B; the next four runs only run Phase B. `requestLog` is fresh each time; `apiUrl` is shared.
+
+For a complete reference, see [What runs when](/guide/what-runs-when) and the [`agency explain-init`](/cli/explain-init) command, which prints the exact two-phase plan for any entry file.
+
 ## State in TypeScript
 This isolated state model only applies to state defined in agency. Any state that you define in TypeScript will not get this kind of state isolation, unless you explicitly code it to. In the agent code above, if the `log` array lived in TypeScript code, then the requests wouldn't have state isolation:
 

@@ -51,6 +51,7 @@ export default defineConfig({
             { text: "Blocks", link: "/guide/blocks" },
             { text: "Execution Model", link: "/guide/execution-model" },
             { text: "Global vs Static Variables", link: "/guide/global-vs-static" },
+            { text: "What Runs When", link: "/guide/what-runs-when" },
             { text: "Testing", link: "/guide/testing" },
             { text: "Observability", link: "/guide/observability" },
           ],
@@ -124,6 +125,7 @@ export default defineConfig({
             { text: "Blocks", link: "/guide/blocks" },
             { text: "Fork", link: "/guide/fork" },
             { text: "Execution Model", link: "/guide/execution-model" },
+            { text: "What Runs When", link: "/guide/what-runs-when" },
             {
               text: "Imports and Packages",
               link: "/guide/imports-and-packages",
@@ -173,6 +175,7 @@ export default defineConfig({
             { text: "coverage", link: "/cli/coverage" },
             { text: "debug", link: "/cli/debug" },
             { text: "doc", link: "/cli/doc" },
+            { text: "explain-init", link: "/cli/explain-init" },
             { text: "format", link: "/cli/format" },
             { text: "lsp / mcp", link: "/cli/editor-integration" },
             { text: "optimize", link: "/cli/optimize" },

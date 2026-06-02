@@ -178,22 +178,38 @@ export async function runNode({
   //    global-init code does not depend on this frame's `ctx` either.
   //    The frame is mostly here to satisfy the "every helper must see
   //    *some* frame" contract.
+  // Closure-wide bootstrap MUST run BEFORE the entry's own
+  // `initializeGlobals`. Reasoning:
+  //
+  //   • A global-init expression in the entry can call a function /
+  //     node whose body reads an imported `static const`. Those
+  //     function-body reads don't show up in the compile-time
+  //     per-variable dep graph (which only walks initializer
+  //     expressions), so the foreign module's `__initializeGlobals`
+  //     would not have been pulled in by the dep-driven prelude. If
+  //     we ran the entry's globals init first, the read could hit
+  //     `__UNINIT_STATIC` and throw — the exact failure mode this
+  //     change exists to prevent.
+  //
+  //   • Running `__initAllRegistered` first guarantees every
+  //     JS-loaded module's statics and globals have been initialized
+  //     before any user code (including global-init expressions)
+  //     runs. The subsequent `initializeGlobals(execCtx)` call is
+  //     then a no-op for current codegen (per-execCtx early-return
+  //     guard in `__initializeGlobals`) and double-call protected
+  //     for any non-conforming compiled output by the registry-level
+  //     `globals.isInitialized` check baked into
+  //     `__initAllRegistered` itself.
+  //
+  //   • Same closure-bootstrap rationale: a
+  //     `node main() { route({ systemPrompt: foreignStatic }) }`
+  //     pattern that reads an imported static only from a function
+  //     body needs the foreign module's init to have run, and the
+  //     compile-time dep graph won't see that reference.
+  await runInBootstrapFrame(execCtx, () => __initAllRegistered(execCtx), { moduleDir });
   if (initializeGlobals) {
     await runInBootstrapFrame(execCtx, () => initializeGlobals(execCtx), { moduleDir });
   }
-  // Closure-wide bootstrap: initialize every other JS-loaded Agency
-  // module that the entry's own init didn't transitively reach.
-  // Reads of imported `static const` values from inside function /
-  // node bodies don't show up in the compile-time per-variable dep
-  // graph (it only sees initializer expressions), so without this
-  // loop a `node main() { route({ systemPrompt: foreignStatic }) }`
-  // pattern would hit the `__UNINIT_STATIC` trap because the foreign
-  // module's init was never triggered. Each module's
-  // `__initializeGlobals` is idempotent per execCtx (early-return on
-  // `globals.isInitialized(...)`) and Phase A is process-idempotent
-  // via `__staticInitPromise`, so calling already-initialized
-  // modules here is a cheap no-op.
-  await runInBootstrapFrame(execCtx, () => __initAllRegistered(execCtx), { moduleDir });
   // Top-level callbacks are re-registered every fresh run AFTER global
   // init so any module-level vars they reference (via `__ctx.globals`)
   // are already set up. The registration sequence mirrors what

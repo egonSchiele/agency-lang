@@ -79,20 +79,53 @@ export async function __awaitGlobalsInit(
 }
 
 /**
- * Closure-wide bootstrap: ensure every JS-loaded Agency module has had
- * Phase A (statics) and Phase B (globals) initialized on this ctx
- * before user code runs.
+ * Shape of the `ctx` argument we care about here: enough to consult
+ * the global store's per-execCtx "this module's globals already
+ * initialized" flag. Keeps the registry independent of the full
+ * RuntimeContext type (which lives elsewhere and would create a
+ * circular import).
+ */
+type CtxWithGlobals = {
+  globals?: {
+    isInitialized(moduleId: string): boolean;
+  };
+};
+
+/**
+ * Closure-wide bootstrap: ensure every JS-loaded Agency module has
+ * been initialized on this ctx before user code runs.
  *
- * Called once from {@link runNode} on every fresh agent run, right
- * after the entry module's own `initializeGlobals` runs. Iteration
- * order doesn't matter for correctness — each module's
- * `__initializeGlobals` has its own `await __awaitGlobalsInit(...)`
- * prelude for its dep modules, and Phase A is deduped per process
- * via the `__staticInitPromise` guard in each module, Phase B per
- * execCtx via the `globals.isInitialized(...)` early-return baked
- * into `__initializeGlobals`. So even if we visit a module before
- * one of its deps, the dep gets pulled in first by the nested await
- * chain and the duplicate visit becomes a no-op.
+ * Called from {@link runNode} on every fresh agent run, BEFORE the
+ * entry module's own `initializeGlobals`. Iterates only the
+ * `globalsInits` registry — each module's `__initializeGlobals`
+ * internally does `markInitialized(moduleId)` first, then
+ * `await __initializeStatic(__ctx)`, then its global-init
+ * statements. Driving Phase A through `__initializeGlobals` (rather
+ * than calling `__initializeStatic` directly here) is required for
+ * correctness: every Agency function body has a per-function lazy
+ * prelude that calls `__initializeGlobals(__ctx)` if its own module
+ * isn't marked yet. If we called `__initializeStatic` first without
+ * marking the module, that prelude would re-enter
+ * `__initializeGlobals` from inside the IIFE that owns the pending
+ * `__staticInitPromise` — and the inner `await __initializeStatic`
+ * would receive the still-pending IIFE promise. Net result: a
+ * subtle deadlock-or-skip ordering bug where statics end up with
+ * the wrong values. Going through `__initializeGlobals` guarantees
+ * `markInitialized` runs before the IIFE starts, so the per-function
+ * prelude sees `isInitialized=true` and skips re-entry.
+ *
+ * Iteration order doesn't matter for correctness:
+ *   • Phase A is deduped per process via the `__staticInitPromise`
+ *     guard in each module's emitted `__initializeStatic`.
+ *   • Phase B is deduped per execCtx via the
+ *     `ctx.globals.isInitialized(...)` early-return baked into
+ *     `__initializeGlobals` (current codegen) AND the same check
+ *     here at the registry call site (safety net for compiled
+ *     output that doesn't include its own per-execCtx guard).
+ *   • Each module's `__initializeGlobals` has its own
+ *     `await __awaitGlobalsInit(...)` prelude for its dep modules,
+ *     so any cross-module dep edges from the compile-time dep graph
+ *     are honored even if we visit a module before one of its deps.
  *
  * Why this exists: the per-variable dep graph in `compileClosure`
  * only sees references in *initializer expressions*. A `static const`
@@ -105,15 +138,15 @@ export async function __awaitGlobalsInit(
  * to initialize.
  */
 export async function __initAllRegistered(ctx: unknown): Promise<void> {
-  // Statics first across the whole closure, then globals. Each
-  // module's `__initializeGlobals` would do its own static init
-  // anyway, but doing it as a separate pass here keeps "Phase A
-  // completes before any Phase B starts" visible at the runtime
-  // boundary instead of relying on per-module ordering.
-  for (const moduleId of Object.keys(staticInits)) {
-    await staticInits[moduleId](ctx);
-  }
+  const globals = (ctx as CtxWithGlobals).globals;
   for (const moduleId of Object.keys(globalsInits)) {
+    // Skip modules already initialized on this execCtx. Without this
+    // guard, an older / non-conforming `__initializeGlobals` (one
+    // missing the codegen-emitted early-return guard) would re-run
+    // its body and double-execute every top-level global / bare
+    // statement. The codegen-emitted guard makes this redundant for
+    // current output; the registry-level check is the safety net.
+    if (globals?.isInitialized(moduleId)) continue;
     await globalsInits[moduleId](ctx);
   }
 }

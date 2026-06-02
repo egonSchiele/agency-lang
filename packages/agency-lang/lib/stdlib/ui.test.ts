@@ -279,6 +279,49 @@ describe("std::ui bridge — console capture", () => {
     expect(realWrites).toEqual(["not captured\n"]);
   });
 
+  it("truncates a captured multi-line error to the first couple of lines", async () => {
+    // A `__log.error(stack)` from the runtime's catch-and-convert path
+    // can be a multi-page stack trace. With the truncation in place
+    // the transcript shows the error head plus a gray placeholder
+    // for the rest — keeps the TUI legible without dropping evidence
+    // that something went wrong.
+    const { truncateForTui } = await import("./ui.js");
+    const stack = [
+      "Error: kaboom",
+      "    at fn (file.ts:1:1)",
+      "    at caller (file.ts:2:2)",
+      "    at next (file.ts:3:3)",
+    ].join("\n");
+    const out = truncateForTui(stack);
+    const lines = out.split("\n");
+    expect(lines[0]).toBe("Error: kaboom");
+    expect(lines[1]).toBe("    at fn (file.ts:1:1)");
+    expect(lines[2]).toContain("2 more lines omitted");
+  });
+
+  it("leaves short messages untouched", async () => {
+    const { truncateForTui } = await import("./ui.js");
+    expect(truncateForTui("just one line")).toBe("just one line");
+    expect(truncateForTui("line one\nline two")).toBe("line one\nline two");
+  });
+
+  it("captured console.error of a multi-line payload renders truncated", () => {
+    // End-to-end of the truncation through the console capture so a
+    // regression in the prefix-join path doesn't slip past.
+    const transcript: string[] = [];
+    _installConsoleCapture(transcript);
+    try {
+      console.error("head\nframe1\nframe2\nframe3");
+    } finally {
+      _uninstallConsoleCapture();
+    }
+    // Captured as one entry per line of the truncated payload, each
+    // prefixed by the `error` tag.
+    expect(transcript[0]).toBe("{red-fg}error{/red-fg} head");
+    expect(transcript[1]).toContain("frame1");
+    expect(transcript[transcript.length - 1]).toContain("omitted");
+  });
+
   it("restores the original console sinks on uninstall", () => {
     const origLog = console.log;
     const origWarn = console.warn;

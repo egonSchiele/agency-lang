@@ -67,7 +67,7 @@ const ESCAPE_SEQUENCES = Object.keys(KEY_MAP)
   .filter((seq) => seq.startsWith("\x1b") && seq.length > 1)
   .sort((a, b) => b.length - a.length);
 
-function parseKeypress(data: string): KeyEvent {
+export function parseKeypress(data: string): KeyEvent {
   const mapped = KEY_MAP[data];
   if (mapped) return mapped;
 
@@ -102,7 +102,7 @@ type BracketedRead =
   | { kind: "partial"; body: string }
   | { kind: "complete"; body: string; end: number };
 
-function readBracketed(
+export function readBracketed(
   str: string,
   pos: number,
   open: string,
@@ -126,7 +126,7 @@ function readBracketed(
  * `pos`. Returns the mapped `KeyEvent` plus the byte count consumed,
  * or `null` if either `str[pos] !== ESC` or no entry matches.
  */
-function readEscapeSequence(
+export function readEscapeSequence(
   str: string,
   pos: number,
 ): { event: KeyEvent; consumed: number } | null {

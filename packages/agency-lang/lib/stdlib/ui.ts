@@ -222,7 +222,7 @@ function formatConsoleArgs(args: unknown[]): string {
  * authored output that's meant to be shown in full.
  */
 const TUI_LOG_MAX_LINES = 2;
-function truncateForTui(text: string): string {
+export function truncateForTui(text: string): string {
   const lines = text.split("\n");
   if (lines.length <= TUI_LOG_MAX_LINES) return text;
   const omitted = lines.length - TUI_LOG_MAX_LINES;

@@ -209,7 +209,7 @@ describe("agent-init-design.md worked examples", () => {
     expect(outcome.kind).toBe("compileError");
     if (outcome.kind !== "compileError") return;
     expect(outcome.message).toMatch(
-      /Static '?s'?.*references global '?g'?/,
+      /static const '?s'?.*references global '?g'?/,
     );
   });
 

@@ -1360,6 +1360,20 @@ def _appendInputCharacter(state: ReplState, character: string): ReplState {
   }
 }
 
+// Extract the text payload from a `key: "paste"` `KeyEvent`,
+// defaulting to the empty string when the terminal sent a paste
+// marker with no body. Pulled out so the `_appendPaste` call site
+// can stay a single expression inside a match arm — the typechecker
+// doesn't narrow `keyEvent.text` to `string` across the arm's
+// `if (keyEvent.text != null)` guard, and `keyEvent.text ?? ""`
+// synths as `number` (no special case for `??` in synthType yet).
+def _pasteText(keyEvent: any): string {
+  if (keyEvent.text == null) {
+    return ""
+  }
+  return keyEvent.text
+}
+
 // Append pasted text to the input buffer wholesale. Newlines are
 // preserved as `\n` (the input box grows to fit), so a paste of a
 // multi-line snippet shows up exactly as it was on the clipboard.
@@ -1539,10 +1553,10 @@ def _replReduce(replState: ReplState, keyEvent: KeyEvent): ReplState {
   match (keyEvent) {
     { ctrl: true, key: "c" } => return { ...state, done: true }
     { ctrl: true, key: "u" } => return _clearInputBuffer(state)
-    // Bracketed-paste payload from the terminal (e.g. Cmd+V on macOS).
-    // The full pasted body lives on `keyEvent.text` — see
-    // lib/tui/input/terminal.ts for how the markers are parsed.
-    { key: "paste" } => return _appendPaste(state, keyEvent.text ?? "")
+    // Bracketed-paste payload from the terminal (e.g. Cmd+V on
+    // macOS). `_pasteText` coerces the optional `keyEvent.text` to a
+    // plain string so the match arm stays a single expression.
+    { key: "paste" } => return _appendPaste(state, _pasteText(keyEvent))
     { key: "/" } if (state.input.buffer == "") => return _openPalette(state)
     { key: "up" } if (state.input.historyIdx > 0) => return _recallPreviousHistory(state)
     { key: "down" } if (state.input.historyIdx < state.input.history.length) => return _recallNextHistory(state)

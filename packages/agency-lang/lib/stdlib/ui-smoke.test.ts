@@ -121,6 +121,72 @@ describe("std::ui — REPL state machine (Agency-driven)", () => {
     expect(submits).toEqual(["/exit"]);
   });
 
+  it("Ctrl+U clears the input buffer without affecting history", async () => {
+    // Type "junk", Ctrl+U to wipe it, then type "ok" + Enter. The
+    // only submit observed should be "ok"; "junk" never reaches
+    // onSubmit and never lands in history.
+    const submits: string[] = [];
+    await invokeRepl(
+      [
+        { key: "j" }, { key: "u" }, { key: "n" }, { key: "k" },
+        { key: "u", ctrl: true },
+        { key: "o" }, { key: "k" }, { key: "enter" },
+      ],
+      {
+        onSubmit: (p: string) => {
+          submits.push(p);
+          return false;
+        },
+      },
+    );
+    expect(submits).toEqual(["ok"]);
+  });
+
+  it("a bracketed paste lands in the buffer wholesale and submits intact", async () => {
+    // The terminal-input layer turns a real bracketed paste into a
+    // single `{ key: "paste", text }` event. The reducer must append
+    // the whole payload at once — including newlines — rather than
+    // treating embedded `\n` as Enter.
+    const submits: string[] = [];
+    await invokeRepl(
+      [
+        { key: "paste", text: "hello\nworld" } as any,
+        { key: "enter" },
+      ],
+      {
+        onSubmit: (p: string) => {
+          submits.push(p);
+          return false;
+        },
+      },
+    );
+    expect(submits).toEqual(["hello\nworld"]);
+  });
+
+  it("Shift+Enter inserts a newline into the buffer instead of submitting", async () => {
+    // `{ key: "enter", shift: true }` is the canonical shape produced
+    // by the terminal layer for Alt/Option+Enter (the portable
+    // fallback when the terminal can't send a distinct Shift+Enter
+    // code). It should add `\n` to the buffer; plain Enter still
+    // submits the multi-line result.
+    const submits: string[] = [];
+    await invokeRepl(
+      [
+        { key: "a" },
+        { key: "enter", shift: true } as any,
+        { key: "b" },
+        { key: "enter" },
+      ],
+      {
+        onSubmit: (p: string) => {
+          submits.push(p);
+          return false;
+        },
+      },
+    );
+    expect(submits).toEqual(["a\nb"]);
+  });
+
   it("ignores Enter on an empty buffer (no submit, no transcript noise)", async () => {
     // Pressing Enter on an empty input should NOT call onSubmit.
     // We then type "ok" and press Enter to exit — exactly one submit

@@ -266,7 +266,7 @@ describe("tests/agency/topsort/cycles fixtures", () => {
     const outcome = await runFixture(dir, "main.agency");
     expect(outcome.kind).toBe("compileError");
     if (outcome.kind !== "compileError") return;
-    expect(outcome.message).toMatch(/Static '.*' .*references global/);
+    expect(outcome.message).toMatch(/static const '.*' .*references global/);
     expect(outcome.message).toMatch(/\bs\b/);
     expect(outcome.message).toMatch(/\bg\b/);
   });

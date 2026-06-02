@@ -66,6 +66,37 @@ describe("render", () => {
     expect(row1[0].bg).toBeDefined();
   });
 
+  it("follows the tail (no highlight) when selectedIndex == items.length", () => {
+    // `repl()` passes `selectedIndex = items.length` to mean
+    // "auto-scroll to the most recent item without drawing the
+    // selection chrome on any row". Verify the renderer:
+    //   1. Shows the last `innerHeight` items (not blank rows)
+    //   2. Does not highlight any of them
+    const items = ["one", "two", "three", "four", "five"];
+    const el = list(
+      { width: 10, height: 2, key: "tail" },
+      items,
+      items.length,
+    );
+    const frame = renderElement(el, 80, 24);
+    expect(frame.content![0][0].char).toBe("f"); // "four"
+    expect(frame.content![1][0].char).toBe("f"); // "five"
+    // Selected rows would get bg "blue" + fg "white"; following the
+    // tail must leave them untouched.
+    expect(frame.content![0][0].bg).not.toBe("blue");
+    expect(frame.content![1][0].bg).not.toBe("blue");
+  });
+
+  it("renders the last item with height 1 when following the tail", () => {
+    // The previous behavior set scrollOffset to selectedIndex - height + 1
+    // = items.length, which then rendered row[items.length] (past the end)
+    // as a blank row. Verify the clamp keeps the last item visible.
+    const items = ["a", "b", "c"];
+    const el = list({ width: 5, height: 1, key: "tiny" }, items, items.length);
+    const frame = renderElement(el, 80, 24);
+    expect(frame.content![0][0].char).toBe("c");
+  });
+
   it("renders a textInput with its value", () => {
     const el = textInput({ width: 15, height: 1, key: "input" }, "hello");
     const frame = renderElement(el, 80, 24);

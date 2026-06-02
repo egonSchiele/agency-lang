@@ -189,7 +189,7 @@ type ReplInputState = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L713))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L853))
 
 ### ReplPaletteState
 
@@ -202,7 +202,7 @@ type ReplPaletteState = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L722))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L862))
 
 ### ReplTranscriptState
 
@@ -212,7 +212,7 @@ type ReplTranscriptState = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L729))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L869))
 
 ### ReplSubmitState
 
@@ -224,7 +224,7 @@ type ReplSubmitState = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L733))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L873))
 
 ### ReplConfigState
 
@@ -235,7 +235,7 @@ type ReplConfigState = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L739))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L879))
 
 ### ReplState
 
@@ -250,7 +250,7 @@ type ReplState = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L744))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L884))
 
 ## Functions
 
@@ -259,6 +259,13 @@ type ReplState = {
 ```ts
 text(content: string): Element
 ```
+
+Build a plain text element. No layout sizing — embed inside a `box`
+  or `column` for layout. Prefer `line` when you want a single-row
+  height-1 element. Returns an opaque tree node; pass it to `runLoop`,
+  `renderOnce`, or a `Builder` method.
+
+  @param content - The text to render
 
 * A plain text element. No layout sizing — embed inside a `box` or
  * `column` for layout. Prefer `line` when you want a single-row
@@ -290,13 +297,26 @@ _setStyleIfSet(style: any, key: string, value: any)
 | key | `string` |  |
 | value | `any` |  |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L171))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L179))
 
 ### line
 
 ```ts
 line(content: string, flex: number, width: number, height: number, fg: string, bg: string, bold: boolean): Element
 ```
+
+Build a single-line text element with `height: 1`. The default keeps
+  it from stretching via flex when placed inside a `column`. Style
+  fields (`fg`, `bg`, `bold`) and layout fields (`flex`, `width`,
+  `height`) merge on top of the height-1 default.
+
+  @param content - The text to render
+  @param flex - Flex grow factor; omit for natural width
+  @param width - Fixed character width; omit for natural width
+  @param height - Override the default height of 1
+  @param fg - Foreground color (named or hex like "#fff")
+  @param bg - Background color (named or hex like "#000")
+  @param bold - Render the text bold
 
 * A single-line text element with `height: 1`. The default keeps it
  * from stretching via flex when placed inside a `column`. Caller-
@@ -318,13 +338,27 @@ line(content: string, flex: number, width: number, height: number, fg: string, b
 
 **Returns:** [Element](#element)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L185))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L193))
 
 ### list
 
 ```ts
 list(items: string[], selectedIndex: number, flex: number, width: number, height: number, border: boolean, borderColor: string, visible: boolean): Element
 ```
+
+Build a scrollable selectable list. `selectedIndex` highlights one
+  row; out-of-range values are clamped by the renderer. When `height`
+  is smaller than `items.length`, the list auto-scrolls so the
+  selected row stays visible.
+
+  @param items - The strings to display, one per row
+  @param selectedIndex - 0-based row to highlight (default 0)
+  @param flex - Flex grow factor when nested inside a column/row
+  @param width - Fixed character width
+  @param height - Fixed row count (otherwise uses available space)
+  @param border - Draw a single-line border around the list
+  @param borderColor - Color name or hex for the border
+  @param visible - Set false to render the element as zero-height
 
 * A scrollable selectable list. `selectedIndex` highlights one row;
  * out-of-range values are clamped by the renderer.
@@ -347,13 +381,25 @@ list(items: string[], selectedIndex: number, flex: number, width: number, height
 
 **Returns:** [Element](#element)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L220))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L242))
 
 ### textInput
 
 ```ts
 textInput(value: string, flex: number, width: number, height: number, fg: string, bg: string): Element
 ```
+
+Build a single-line text input. The renderer displays `value` with
+  a cursor; key handling is the caller's responsibility — use
+  `runLoop`'s `handleKey` to append printable characters and process
+  backspace / enter as the state machine sees fit.
+
+  @param value - Current contents of the buffer
+  @param flex - Flex grow factor (typical: 1 inside a row)
+  @param width - Fixed character width (omit to flex)
+  @param height - Fixed row count (defaults to 1)
+  @param fg - Foreground color (named or hex)
+  @param bg - Background color (named or hex)
 
 * A single-line text input. The renderer displays `value` with a
  * cursor; key handling is the caller's responsibility (use `runLoop`'s
@@ -374,7 +420,7 @@ textInput(value: string, flex: number, width: number, height: number, fg: string
 
 **Returns:** [Element](#element)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L254))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L291))
 
 ### _mkBoxStyle
 
@@ -400,7 +446,7 @@ _mkBoxStyle(flexDirection: string, flex: number, width: number, height: number, 
 
 **Returns:** `any`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L285))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L335))
 
 ### _makeBuilder
 
@@ -416,13 +462,34 @@ _makeBuilder(kids: any[]): Builder
 
 **Returns:** [Builder](#builder)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L315))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L365))
 
 ### column
 
 ```ts
 column(flex: number, width: number, height: number, padding: number, border: boolean, borderColor: string, label: string, bg: string, fg: string, visible: boolean, block: (Builder) => void): Element
 ```
+
+Build a vertical container. Children stack top-to-bottom. Pass a
+  trailing `as name { ... }` block to receive a fresh `Builder` that
+  appends children in source order. Container chaining is the primary
+  way to compose multi-section layouts.
+
+  Use named args for any layout/styling option (the parser otherwise
+  treats `column() as col { ... }` positionally and the block lands
+  in `flex`).
+
+  @param flex - Flex grow factor when nested inside a parent
+  @param width - Fixed character width
+  @param height - Fixed row count
+  @param padding - Inner padding (cells on all sides)
+  @param border - Draw a single-line border
+  @param borderColor - Color name or hex for the border
+  @param label - Optional title rendered into the top border
+  @param bg - Background color (named or hex)
+  @param fg - Foreground color (named or hex)
+  @param visible - Set false to render as zero-height
+  @param block - Builder callback; appended children populate the column
 
 * A vertical container. Children stack top-to-bottom. The trailing
  * block receives a fresh `Builder` to populate the column.
@@ -445,13 +512,30 @@ column(flex: number, width: number, height: number, padding: number, border: boo
 
 **Returns:** [Element](#element)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L331))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L381))
 
 ### row
 
 ```ts
 row(flex: number, width: number, height: number, padding: number, border: boolean, borderColor: string, label: string, bg: string, fg: string, visible: boolean, block: (Builder) => void): Element
 ```
+
+Build a horizontal container. Children stack left-to-right. Pass a
+  trailing `as name { ... }` block to receive a `Builder` for the
+  row's contents. All other arguments mirror `column`; see that
+  function for full parameter docs.
+
+  @param flex - Flex grow factor when nested inside a parent
+  @param width - Fixed character width
+  @param height - Fixed row count
+  @param padding - Inner padding (cells on all sides)
+  @param border - Draw a single-line border
+  @param borderColor - Color name or hex for the border
+  @param label - Optional title rendered into the top border
+  @param bg - Background color (named or hex)
+  @param fg - Foreground color (named or hex)
+  @param visible - Set false to render as zero-height
+  @param block - Builder callback; appended children populate the row
 
 * A horizontal container. Children stack left-to-right. The trailing
  * block receives a fresh `Builder` to populate the row.
@@ -474,13 +558,31 @@ row(flex: number, width: number, height: number, padding: number, border: boolea
 
 **Returns:** [Element](#element)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L373))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L445))
 
 ### box
 
 ```ts
 box(flex: number, width: number, height: number, padding: number, border: boolean, borderColor: string, label: string, bg: string, fg: string, visible: boolean, block: (Builder) => void): Element
 ```
+
+Build a direction-neutral container. Use when you want to apply
+  styling (border, padding, background) without forcing a row/column
+  layout, e.g. as a flex spacer (`box(flex: 1) as _ {}`). All other
+  arguments mirror `column`; see that function for full parameter
+  docs.
+
+  @param flex - Flex grow factor when nested inside a parent
+  @param width - Fixed character width
+  @param height - Fixed row count
+  @param padding - Inner padding (cells on all sides)
+  @param border - Draw a single-line border
+  @param borderColor - Color name or hex for the border
+  @param label - Optional title rendered into the top border
+  @param bg - Background color (named or hex)
+  @param fg - Foreground color (named or hex)
+  @param visible - Set false to render as zero-height
+  @param block - Builder callback; appended children populate the box
 
 * A direction-neutral container. Use when you want to apply styling
  * (border, padding, background) without setting `flexDirection`.
@@ -503,7 +605,7 @@ box(flex: number, width: number, height: number, padding: number, border: boolea
 
 **Returns:** [Element](#element)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L413))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L503))
 
 ### _addRow
 
@@ -530,7 +632,7 @@ _addRow(kids: any[], flex: number, width: number, height: number, padding: numbe
 
 **Returns:** [Element](#element)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L451))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L560))
 
 ### _addColumn
 
@@ -557,7 +659,7 @@ _addColumn(kids: any[], flex: number, width: number, height: number, padding: nu
 
 **Returns:** [Element](#element)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L482))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L591))
 
 ### _addBox
 
@@ -584,7 +686,7 @@ _addBox(kids: any[], flex: number, width: number, height: number, padding: numbe
 
 **Returns:** [Element](#element)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L513))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L622))
 
 ### _addLine
 
@@ -607,7 +709,7 @@ _addLine(kids: any[], content: string, flex: number, width: number, height: numb
 
 **Returns:** [Element](#element)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L544))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L653))
 
 ### _addText
 
@@ -624,7 +726,7 @@ _addText(kids: any[], content: string): Element
 
 **Returns:** [Element](#element)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L567))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L676))
 
 ### _addList
 
@@ -648,7 +750,7 @@ _addList(kids: any[], items: string[], selectedIndex: number, flex: number, widt
 
 **Returns:** [Element](#element)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L573))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L682))
 
 ### _addTextInput
 
@@ -670,13 +772,19 @@ _addTextInput(kids: any[], value: string, flex: number, width: number, height: n
 
 **Returns:** [Element](#element)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L598))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L707))
 
 ### renderOnce
 
 ```ts
 renderOnce(tree: Element)
 ```
+
+Render a single Element tree to the screen and return immediately.
+  Useful for static UI or first-paint scenarios. For interactive UI,
+  use `runLoop` instead.
+
+  @param tree - Opaque tree node built via the `column`/`row`/`box`/`line`/`text`/`list`/`textInput` builders
 
 * Render a single Element tree to the screen and return immediately.
  * For static UI or first-paint scenarios. For interactive UI, use
@@ -688,7 +796,7 @@ renderOnce(tree: Element)
 |---|---|---|
 | tree | [Element](#element) |  |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L626))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L735))
 
 ### readKey
 
@@ -696,19 +804,41 @@ renderOnce(tree: Element)
 readKey(): KeyEvent
 ```
 
+Read one key from the terminal. Blocks until a key is pressed.
+  Use sparingly — prefer `runLoop` for anything beyond a single
+  one-shot blocking prompt. Returns a `KeyEvent` whose `key` field
+  is either a named special key (`"up"`, `"enter"`, `"escape"`, ...)
+  or a single printable character.
+
 * Read one key from the terminal. Blocks until a key is pressed.
  * Use sparingly; prefer `runLoop` for anything beyond a single
  * blocking prompt.
 
 **Returns:** [KeyEvent](#keyevent)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L635))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L751))
 
 ### runLoop
 
 ```ts
 runLoop(initialState: any, render: any, handleKey: any, isDone: any, tickMs: number): any
 ```
+
+Elm/Ink-style state machine driver. Renders `initialState`, waits
+  for each `KeyEvent`, runs `handleKey` to produce the next state,
+  re-renders, exits when `isDone` returns true. Returns the final
+  state.
+
+  When `tickMs` is set, the loop also re-renders periodically even
+  if no key is pressed — what makes a live status line tick.
+  `handleKey` does NOT fire on ticks; only `render` does (so it can
+  re-read any impure state your view depends on).
+
+  @param initialState - The opening state record
+  @param render - Pure (state) -> Element; re-runs every tick / key
+  @param handleKey - Pure (state, key) -> state; runs on real keys only
+  @param isDone - Pure (state) -> boolean; loop exits when true
+  @param tickMs - Milliseconds between forced re-renders (omit for event-driven only)
 
 * Elm/Ink-style state machine driver. Renders the initial state,
  * waits for each `KeyEvent`, runs `handleKey` to produce the next
@@ -738,7 +868,7 @@ runLoop(initialState: any, render: any, handleKey: any, isDone: any, tickMs: num
 
 **Returns:** `any`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L656))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L779))
 
 ### _routePrompt
 
@@ -763,7 +893,7 @@ Route a prompt through the active REPL when one exists, or fall
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L685))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L825))
 
 ### pushMessage
 
@@ -786,7 +916,7 @@ Append a styled message to the active repl() transcript. The
 |---|---|---|
 | message | `string` |  |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L760))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L900))
 
 ### clearMessages
 
@@ -798,7 +928,7 @@ Remove all messages from the active repl() transcript. Intended
   for explicit "clear conversation" commands inside interactive
   agents. Silent no-op when no repl() is active.
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L781))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L921))
 
 ### _entryKey
 
@@ -814,7 +944,7 @@ _entryKey(entry: any): string
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L798))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L938))
 
 ### _filteredPaletteKeys
 
@@ -830,7 +960,7 @@ _filteredPaletteKeys(state: ReplState): string[]
 
 **Returns:** `string[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L806))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L946))
 
 ### _matchesFilter
 
@@ -847,7 +977,7 @@ _matchesFilter(name: string, filterText: string): boolean
 
 **Returns:** `boolean`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L815))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L955))
 
 ### _busyLine
 
@@ -863,7 +993,7 @@ _busyLine(state: ReplState): string
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L819))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L959))
 
 ### _replView
 
@@ -885,7 +1015,7 @@ _replView(state: ReplState): Element
 
 **Returns:** [Element](#element)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L836))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L976))
 
 ### _submitPrompt
 
@@ -901,7 +1031,7 @@ _submitPrompt(state: ReplState): ReplState
 
 **Returns:** [ReplState](#replstate)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L898))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L1038))
 
 ### _recallPreviousHistory
 
@@ -917,7 +1047,7 @@ _recallPreviousHistory(state: ReplState): ReplState
 
 **Returns:** [ReplState](#replstate)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L926))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L1066))
 
 ### _recallNextHistory
 
@@ -933,7 +1063,7 @@ _recallNextHistory(state: ReplState): ReplState
 
 **Returns:** [ReplState](#replstate)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L938))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L1078))
 
 ### _closePalette
 
@@ -949,7 +1079,7 @@ _closePalette(state: ReplState): ReplState
 
 **Returns:** [ReplState](#replstate)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L954))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L1094))
 
 ### _selectPaletteCommand
 
@@ -966,7 +1096,7 @@ _selectPaletteCommand(state: ReplState, paletteKeys: string[]): ReplState
 
 **Returns:** [ReplState](#replstate)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L966))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L1106))
 
 ### _movePaletteCursor
 
@@ -984,7 +1114,7 @@ _movePaletteCursor(state: ReplState, paletteKeys: string[], delta: number): Repl
 
 **Returns:** [ReplState](#replstate)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L985))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L1125))
 
 ### _removePaletteFilterCharacter
 
@@ -1000,7 +1130,7 @@ _removePaletteFilterCharacter(state: ReplState): ReplState
 
 **Returns:** [ReplState](#replstate)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L1007))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L1147))
 
 ### _appendPaletteFilterCharacter
 
@@ -1017,7 +1147,7 @@ _appendPaletteFilterCharacter(state: ReplState, character: string): ReplState
 
 **Returns:** [ReplState](#replstate)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L1018))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L1158))
 
 ### _replReducePaletteOpen
 
@@ -1034,7 +1164,7 @@ _replReducePaletteOpen(state: ReplState, keyEvent: KeyEvent): ReplState
 
 **Returns:** [ReplState](#replstate)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L1032))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L1172))
 
 ### _appendInputCharacter
 
@@ -1051,7 +1181,7 @@ _appendInputCharacter(state: ReplState, character: string): ReplState
 
 **Returns:** [ReplState](#replstate)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L1048))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L1188))
 
 ### _removeInputCharacter
 
@@ -1067,7 +1197,7 @@ _removeInputCharacter(state: ReplState): ReplState
 
 **Returns:** [ReplState](#replstate)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L1058))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L1198))
 
 ### _openPalette
 
@@ -1083,7 +1213,7 @@ _openPalette(state: ReplState): ReplState
 
 **Returns:** [ReplState](#replstate)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L1068))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L1208))
 
 ### _replReduce
 
@@ -1100,7 +1230,7 @@ _replReduce(state: ReplState, keyEvent: KeyEvent): ReplState
 
 **Returns:** [ReplState](#replstate)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L1080))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L1220))
 
 ### _replIsDone
 
@@ -1116,7 +1246,7 @@ _replIsDone(state: ReplState): boolean
 
 **Returns:** `boolean`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L1101))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L1241))
 
 ### repl
 
@@ -1158,4 +1288,4 @@ Drop-in REPL widget for interactive CLI agents. Bundles a
 | paletteCommands | `any` | null |
 | tickMs | `number` | null |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L1105))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L1245))

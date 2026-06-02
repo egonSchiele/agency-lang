@@ -156,6 +156,14 @@ export type Builder = {
  * @param content - The text to render
  */
 export def text(content: string): Element {
+  """
+  Build a plain text element. No layout sizing — embed inside a `box`
+  or `column` for layout. Prefer `line` when you want a single-row
+  height-1 element. Returns an opaque tree node; pass it to `runLoop`,
+  `renderOnce`, or a `Builder` method.
+
+  @param content - The text to render
+  """
   return {
     type: "text",
     content: content
@@ -191,6 +199,20 @@ export def line(
   bg: string = "",
   bold: boolean = false,
 ): Element {
+  """
+  Build a single-line text element with `height: 1`. The default keeps
+  it from stretching via flex when placed inside a `column`. Style
+  fields (`fg`, `bg`, `bold`) and layout fields (`flex`, `width`,
+  `height`) merge on top of the height-1 default.
+
+  @param content - The text to render
+  @param flex - Flex grow factor; omit for natural width
+  @param width - Fixed character width; omit for natural width
+  @param height - Override the default height of 1
+  @param fg - Foreground color (named or hex like "#fff")
+  @param bg - Background color (named or hex like "#000")
+  @param bold - Render the text bold
+  """
   let h: number = 1
   if (height != null) {
     h = height
@@ -227,6 +249,21 @@ export def list(
   borderColor: string = "",
   visible: boolean = true,
 ): Element {
+  """
+  Build a scrollable selectable list. `selectedIndex` highlights one
+  row; out-of-range values are clamped by the renderer. When `height`
+  is smaller than `items.length`, the list auto-scrolls so the
+  selected row stays visible.
+
+  @param items - The strings to display, one per row
+  @param selectedIndex - 0-based row to highlight (default 0)
+  @param flex - Flex grow factor when nested inside a column/row
+  @param width - Fixed character width
+  @param height - Fixed row count (otherwise uses available space)
+  @param border - Draw a single-line border around the list
+  @param borderColor - Color name or hex for the border
+  @param visible - Set false to render the element as zero-height
+  """
   let style: any = {}
   _setStyleIfSet(style, "flex", flex)
   _setStyleIfSet(style, "width", width)
@@ -259,6 +296,19 @@ export def textInput(
   fg: string = "",
   bg: string = "",
 ): Element {
+  """
+  Build a single-line text input. The renderer displays `value` with
+  a cursor; key handling is the caller's responsibility — use
+  `runLoop`'s `handleKey` to append printable characters and process
+  backspace / enter as the state machine sees fit.
+
+  @param value - Current contents of the buffer
+  @param flex - Flex grow factor (typical: 1 inside a row)
+  @param width - Fixed character width (omit to flex)
+  @param height - Fixed row count (defaults to 1)
+  @param fg - Foreground color (named or hex)
+  @param bg - Background color (named or hex)
+  """
   let style: any = {}
   _setStyleIfSet(style, "flex", flex)
   _setStyleIfSet(style, "width", width)
@@ -341,6 +391,28 @@ export def column(
   visible: boolean = true,
   block: (Builder) => void = null,
 ): Element {
+  """
+  Build a vertical container. Children stack top-to-bottom. Pass a
+  trailing `as name { ... }` block to receive a fresh `Builder` that
+  appends children in source order. Container chaining is the primary
+  way to compose multi-section layouts.
+
+  Use named args for any layout/styling option (the parser otherwise
+  treats `column() as col { ... }` positionally and the block lands
+  in `flex`).
+
+  @param flex - Flex grow factor when nested inside a parent
+  @param width - Fixed character width
+  @param height - Fixed row count
+  @param padding - Inner padding (cells on all sides)
+  @param border - Draw a single-line border
+  @param borderColor - Color name or hex for the border
+  @param label - Optional title rendered into the top border
+  @param bg - Background color (named or hex)
+  @param fg - Foreground color (named or hex)
+  @param visible - Set false to render as zero-height
+  @param block - Builder callback; appended children populate the column
+  """
   const kids: any[] = []
   // `block` is optional — guard so empty containers (and parser
   // mis-binds that leave `block` null) don't crash at runtime.
@@ -383,6 +455,24 @@ export def row(
   visible: boolean = true,
   block: (Builder) => void = null,
 ): Element {
+  """
+  Build a horizontal container. Children stack left-to-right. Pass a
+  trailing `as name { ... }` block to receive a `Builder` for the
+  row's contents. All other arguments mirror `column`; see that
+  function for full parameter docs.
+
+  @param flex - Flex grow factor when nested inside a parent
+  @param width - Fixed character width
+  @param height - Fixed row count
+  @param padding - Inner padding (cells on all sides)
+  @param border - Draw a single-line border
+  @param borderColor - Color name or hex for the border
+  @param label - Optional title rendered into the top border
+  @param bg - Background color (named or hex)
+  @param fg - Foreground color (named or hex)
+  @param visible - Set false to render as zero-height
+  @param block - Builder callback; appended children populate the row
+  """
   const kids: any[] = []
   if (block != null) {
     block(_makeBuilder(kids))
@@ -423,6 +513,25 @@ export def box(
   visible: boolean = true,
   block: (Builder) => void = null,
 ): Element {
+  """
+  Build a direction-neutral container. Use when you want to apply
+  styling (border, padding, background) without forcing a row/column
+  layout, e.g. as a flex spacer (`box(flex: 1) as _ {}`). All other
+  arguments mirror `column`; see that function for full parameter
+  docs.
+
+  @param flex - Flex grow factor when nested inside a parent
+  @param width - Fixed character width
+  @param height - Fixed row count
+  @param padding - Inner padding (cells on all sides)
+  @param border - Draw a single-line border
+  @param borderColor - Color name or hex for the border
+  @param label - Optional title rendered into the top border
+  @param bg - Background color (named or hex)
+  @param fg - Foreground color (named or hex)
+  @param visible - Set false to render as zero-height
+  @param block - Builder callback; appended children populate the box
+  """
   const kids: any[] = []
   if (block != null) {
     block(_makeBuilder(kids))
@@ -624,6 +733,13 @@ def _addTextInput(
  * `runLoop`.
  */
 export def renderOnce(tree: Element) {
+  """
+  Render a single Element tree to the screen and return immediately.
+  Useful for static UI or first-paint scenarios. For interactive UI,
+  use `runLoop` instead.
+
+  @param tree - Opaque tree node built via the `column`/`row`/`box`/`line`/`text`/`list`/`textInput` builders
+  """
   _renderOnce(tree)
 }
 
@@ -633,6 +749,13 @@ export def renderOnce(tree: Element) {
  * blocking prompt.
  */
 export def readKey(): KeyEvent {
+  """
+  Read one key from the terminal. Blocks until a key is pressed.
+  Use sparingly — prefer `runLoop` for anything beyond a single
+  one-shot blocking prompt. Returns a `KeyEvent` whose `key` field
+  is either a named special key (`"up"`, `"enter"`, `"escape"`, ...)
+  or a single printable character.
+  """
   return _readKey()
 }
 
@@ -660,6 +783,23 @@ export def runLoop(
   isDone: any,
   tickMs?: number,
 ): any {
+  """
+  Elm/Ink-style state machine driver. Renders `initialState`, waits
+  for each `KeyEvent`, runs `handleKey` to produce the next state,
+  re-renders, exits when `isDone` returns true. Returns the final
+  state.
+
+  When `tickMs` is set, the loop also re-renders periodically even
+  if no key is pressed — what makes a live status line tick.
+  `handleKey` does NOT fire on ticks; only `render` does (so it can
+  re-read any impure state your view depends on).
+
+  @param initialState - The opening state record
+  @param render - Pure (state) -> Element; re-runs every tick / key
+  @param handleKey - Pure (state, key) -> state; runs on real keys only
+  @param isDone - Pure (state) -> boolean; loop exits when true
+  @param tickMs - Milliseconds between forced re-renders (omit for event-driven only)
+  """
   return _runLoop(initialState, render, handleKey, isDone, tickMs)
 }
 

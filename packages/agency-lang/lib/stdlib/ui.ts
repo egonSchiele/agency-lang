@@ -56,17 +56,37 @@ function makeBridgeScreen(): Screen {
   });
 }
 
-/** Test/runtime injection point for the input source used by the
- *  declarative bridge. */
+// ---------------------------------------------------------------------------
+// Test-only injection points
+//
+// `_setInputSource` / `_setOutputTarget` / `_setSize` /
+// `_recordedFrameTexts` are NOT part of the public Agency UI API.
+// They exist so vitest suites can stub the declarative bridge with
+// a `ScriptedInput` + `FrameRecorder` and drive `_runLoop` directly
+// without touching a real terminal. Production code paths never
+// import them — `ensureBridgeState` falls back to `TerminalInput` /
+// `TerminalOutput` when nothing was injected.
+//
+// If you find yourself reaching for one of these outside of a
+// `*.test.ts` file, prefer adding a new public Agency-side wrapper
+// instead so the contract stays inside the stdlib surface.
+// ---------------------------------------------------------------------------
+
+/** TEST ONLY — inject an `InputSource` (e.g. `ScriptedInput`) for the
+ *  declarative bridge. Pass `null` to clear between tests. */
 export function _setInputSource(src: InputSource | null): void {
   bridgeInputSource = src;
 }
 
-/** Test/runtime injection point for the output target. */
+/** TEST ONLY — inject an `OutputTarget` (e.g. `FrameRecorder`) for the
+ *  declarative bridge. Pass `null` to clear between tests. */
 export function _setOutputTarget(out: OutputTarget | null): void {
   bridgeOutputTarget = out;
 }
 
+/** TEST ONLY — extract the recorded frames from the injected
+ *  `FrameRecorder` as plain-text per-frame strings. Returns `[]`
+ *  when no recorder is installed (production path). */
 export function _recordedFrameTexts(): string[] {
   if (!(bridgeOutputTarget instanceof FrameRecorder)) {
     return [];
@@ -75,7 +95,8 @@ export function _recordedFrameTexts(): string[] {
   return recorder.frames.map((_entry, index) => recorder.textAt(index));
 }
 
-/** Test/runtime injection point for the viewport size. */
+/** TEST ONLY — set the viewport (width / height) the bridge passes
+ *  to `Screen`. Production reads `process.stdout.columns` / `.rows`. */
 export function _setSize(w: number, h: number): void {
   bridgeWidth = w;
   bridgeHeight = h;

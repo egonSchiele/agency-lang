@@ -135,10 +135,21 @@ function renderListContent(
   fg?: string,
   bg?: string,
 ): Cell[][] {
-  // Auto-scroll to keep selected item visible
+  // `selectedIndex >= items.length` is the "follow tail" sentinel:
+  // auto-scroll so the most recent items are visible, but don't
+  // draw any selection chrome (no row is actually the cursor). Used
+  // by `repl()` to keep the latest transcript line in view as the
+  // list grows without highlighting it.
+  const followTail =
+    selectedIndex !== undefined && selectedIndex >= items.length;
+  // Auto-scroll to keep selected item visible. Clamp the scroll
+  // target to the last actual item so tiny inner heights (e.g. 1
+  // row) still render the last item instead of running off the end
+  // and drawing a blank grid.
   let scrollOffset = 0;
   if (selectedIndex !== undefined && selectedIndex >= innerHeight) {
-    scrollOffset = selectedIndex - innerHeight + 1;
+    const target = Math.min(selectedIndex, items.length - 1);
+    scrollOffset = Math.max(0, target - innerHeight + 1);
   }
 
   const grid: Cell[][] = [];
@@ -149,7 +160,7 @@ function renderListContent(
       continue;
     }
 
-    const isSelected = itemIdx === selectedIndex;
+    const isSelected = !followTail && itemIdx === selectedIndex;
     const itemBg = isSelected ? "blue" : bg;
     const itemFg = isSelected ? "white" : fg;
     const text = items[itemIdx].slice(0, innerWidth);

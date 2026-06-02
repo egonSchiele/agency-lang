@@ -166,8 +166,6 @@ type ConsoleSinks = {
   error: typeof console.error;
   info: typeof console.info;
   debug: typeof console.debug;
-  stdoutWrite: typeof process.stdout.write;
-  stderrWrite: typeof process.stderr.write;
 };
 
 let captureTarget: string[] | null = null;
@@ -216,8 +214,6 @@ export function _installConsoleCapture(messages: string[]): void {
     error: console.error,
     info: console.info,
     debug: console.debug,
-    stdoutWrite: process.stdout.write.bind(process.stdout),
-    stderrWrite: process.stderr.write.bind(process.stderr),
   };
 
   console.log = (...args: unknown[]) =>
@@ -231,24 +227,14 @@ export function _installConsoleCapture(messages: string[]): void {
   console.error = (...args: unknown[]) =>
     pushCaptured("{red error}", formatConsoleArgs(args));
 
-  // Reroute raw stdout/stderr writes too. The Screen's renderer uses
-  // `bridgeOutputTarget.write(...)` directly (it does not go through
-  // `process.stdout.write`), so REPL rendering keeps working.
-  //
-  // Preserve the full `write(chunk, [encoding], [callback])` signature
-  // so any caller that waits on the callback for backpressure / flush
-  // semantics keeps working — we synchronously invoke the callback
-  // (the capture is in-memory and never blocks) so we never hang.
-  const makeWrite = (prefix: string) =>
-    ((chunk: any, encodingOrCb?: any, cb?: any) => {
-      pushCaptured(prefix, String(chunk));
-      const callback =
-        typeof encodingOrCb === "function" ? encodingOrCb : cb;
-      if (typeof callback === "function") callback();
-      return true;
-    }) as any;
-  (process.stdout as any).write = makeWrite("");
-  (process.stderr as any).write = makeWrite("{red stderr}");
+  // Deliberately NOT overriding `process.stdout.write` / `process.stderr.write`.
+  // An earlier revision did, but `lib/tui/output/terminal.ts`'s renderer
+  // also writes ANSI frames through `process.stdout.write` — capturing
+  // those would swallow rendering output and spam ANSI escapes into the
+  // transcript. The stdlib's own `print()` already routes through
+  // `console.log`, so all Agency-side output still gets captured. Raw
+  // `process.stdout.write` callers (if any) will be silenced behind the
+  // alt screen, which is the same behavior any TUI app gives them.
 }
 
 export function _uninstallConsoleCapture(): void {
@@ -258,8 +244,6 @@ export function _uninstallConsoleCapture(): void {
   console.error = savedConsoleSinks.error;
   console.info = savedConsoleSinks.info;
   console.debug = savedConsoleSinks.debug;
-  (process.stdout as any).write = savedConsoleSinks.stdoutWrite;
-  (process.stderr as any).write = savedConsoleSinks.stderrWrite;
   savedConsoleSinks = null;
   captureTarget = null;
 }
@@ -373,6 +357,34 @@ export async function _runLoop(
   } finally {
     bridgeActiveScreen = null;
     screen.destroy();
+  }
+}
+
+/**
+ * REPL-only wrapper around `_runLoop` that guarantees the
+ * console-capture install is reversed even if the loop (or any
+ * Agency callback it invokes) throws. Agency has no `finally`, so
+ * the cleanup pair `_installConsoleCapture` / `_uninstallConsoleCapture`
+ * has to live on the TS side of the bridge to keep stdout / console
+ * from staying monkeypatched after a failed REPL.
+ *
+ * `transcriptMessages` is the same array `repl()` renders from; we
+ * pass it through to `_installConsoleCapture` so console / print
+ * output appends to the live transcript.
+ */
+export async function _runReplLoop(
+  initialState: any,
+  renderFn: unknown,
+  handleKeyFn: unknown,
+  isDoneFn: unknown,
+  tickMs: number | null | undefined,
+  transcriptMessages: string[],
+): Promise<any> {
+  _installConsoleCapture(transcriptMessages);
+  try {
+    return await _runLoop(initialState, renderFn, handleKeyFn, isDoneFn, tickMs);
+  } finally {
+    _uninstallConsoleCapture();
   }
 }
 

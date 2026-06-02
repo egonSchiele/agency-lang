@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import {
   _runLoop,
+  _runReplLoop,
   _setInputSource,
   _setOutputTarget,
   _setSize,
@@ -241,49 +242,85 @@ describe("std::ui bridge — console capture", () => {
     ]);
   });
 
-  it("routes raw process.stdout / .stderr writes into the transcript", () => {
+  it("does NOT intercept raw process.stdout / .stderr writes", () => {
+    // Console capture only patches the high-level `console.*` methods.
+    // Raw stdout/stderr writes pass straight through to the terminal —
+    // we deliberately don't capture them because the TUI renderer
+    // (`lib/tui/output/terminal.ts`) writes its ANSI frames through
+    // `process.stdout.write`, and intercepting those would swallow
+    // rendering output / spam ANSI into the transcript.
     const transcript: string[] = [];
-    _installConsoleCapture(transcript);
-    try {
-      process.stdout.write("line 1\n");
-      process.stdout.write("line 2\nline 3\n");
-      process.stderr.write("oops\n");
-    } finally {
-      _uninstallConsoleCapture();
-    }
-    expect(transcript).toEqual([
-      "line 1",
-      "line 2",
-      "line 3",
-      "{red stderr} oops",
-    ]);
-  });
-
-  it("restores the original sinks on uninstall", () => {
-    // `console.log` is restored by reference, so a strict identity
-    // check is enough. `process.stdout.write` is re-installed via a
-    // pre-bound copy (we have to `.bind()` to avoid losing `this`),
-    // so test for behavior instead: after uninstall, writes should
-    // again hit the real stdout, not the captured array.
-    const origLog = console.log;
-    const transcript: string[] = [];
-    _installConsoleCapture(transcript);
-    _uninstallConsoleCapture();
-    expect(console.log).toBe(origLog);
-
-    const captured: string[] = [];
+    const realWrites: string[] = [];
     const origWrite = process.stdout.write.bind(process.stdout);
     process.stdout.write = ((s: any) => {
-      captured.push(String(s));
+      realWrites.push(String(s));
       return true;
     }) as any;
+    _installConsoleCapture(transcript);
     try {
-      process.stdout.write("post-uninstall write");
+      process.stdout.write("not captured\n");
     } finally {
+      _uninstallConsoleCapture();
       process.stdout.write = origWrite;
     }
-    expect(captured).toEqual(["post-uninstall write"]);
-    expect(transcript).toEqual([]); // capture array is no longer in use
+    expect(transcript).toEqual([]);
+    expect(realWrites).toEqual(["not captured\n"]);
+  });
+
+  it("restores the original console sinks on uninstall", () => {
+    const origLog = console.log;
+    const origWarn = console.warn;
+    const origError = console.error;
+    const transcript: string[] = [];
+    _installConsoleCapture(transcript);
+    expect(console.log).not.toBe(origLog); // patched
+    _uninstallConsoleCapture();
+    expect(console.log).toBe(origLog);
+    expect(console.warn).toBe(origWarn);
+    expect(console.error).toBe(origError);
+  });
+});
+
+describe("std::ui bridge — _runReplLoop cleanup", () => {
+  it("uninstalls console capture even when the inner loop throws", async () => {
+    _setInputSource(new ScriptedInput([{ key: "q" }]));
+    _setOutputTarget(new FrameRecorder());
+    _setSize(40, 5);
+    const origLog = console.log;
+    const transcript: string[] = [];
+    await expect(
+      _runReplLoop(
+        { done: false },
+        (_s: any) => ({ type: "text", content: "x" }),
+        () => {
+          throw new Error("boom");
+        },
+        (s: any) => s.done,
+        null,
+        transcript,
+      ),
+    ).rejects.toThrow("boom");
+    // Critical safety property: console must be restored even on the
+    // error path. A leak here would leave process-wide console.log
+    // pointing at a detached transcript array for the rest of the run.
+    expect(console.log).toBe(origLog);
+  });
+
+  it("uninstalls console capture on normal completion", async () => {
+    _setInputSource(new ScriptedInput([{ key: "q" }]));
+    _setOutputTarget(new FrameRecorder());
+    _setSize(40, 5);
+    const origLog = console.log;
+    const transcript: string[] = [];
+    await _runReplLoop(
+      { done: false },
+      (_s: any) => ({ type: "text", content: "x" }),
+      (_s: any, ev: any) => ({ done: ev.key === "q" }),
+      (s: any) => s.done,
+      null,
+      transcript,
+    );
+    expect(console.log).toBe(origLog);
   });
 });
 

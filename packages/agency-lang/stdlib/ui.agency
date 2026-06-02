@@ -1,5 +1,6 @@
 import {
   _runLoop,
+  _runReplLoop,
   _renderOnce,
   _readKey,
   _hasActiveScreen,
@@ -7,8 +8,6 @@ import {
   _elapsedSeconds,
   _spinnerFrame,
   _nowMs,
-  _installConsoleCapture,
-  _uninstallConsoleCapture,
   _triggerRender,
  } from "agency-lang/stdlib-lib/ui.js"
 import { _promptFromChoices } from "agency-lang/stdlib-lib/ui.js"
@@ -788,7 +787,11 @@ export def clearMessages() {
   if (_activeRepl == null) {
     return
   }
-  _activeRepl.transcript.messages = []
+  // Mutate the existing array instead of replacing it. The
+  // TS-side console capture holds a reference to this same array
+  // (passed in by `repl()`); reassigning would leave subsequent
+  // console.log writes appending to the old, detached array.
+  _activeRepl.transcript.messages.splice(0, _activeRepl.transcript.messages.length)
   _triggerRender()
 }
 
@@ -1165,12 +1168,16 @@ export def repl(
     done: false,
   }
   _activeRepl = initial
-  // The transcript is rendered live from `initial.transcript.messages`
-  // because nested records are shared by reference across reducer
-  // states (only the outer record is shallow-copied). Pass that array
-  // straight to the console-capture bridge so JS writes land on it.
-  _installConsoleCapture(initial.transcript.messages)
-  _runLoop(initial, _replView, _replReduce, _replIsDone, tickMs)
-  _uninstallConsoleCapture()
+  // `_runReplLoop` is the TS wrapper that installs the console
+  // capture, runs the loop, and ALWAYS uninstalls in a finally
+  // block — even if the loop or any user callback throws. Agency
+  // has no `try`/`finally`, so doing the install/uninstall here
+  // directly would leave `console.log` / `process.stdout` rerouted
+  // for the rest of the process on the error path. The transcript
+  // array is shared by reference across reducer states (only the
+  // outer record is shallow-copied), so console output lands on
+  // the same array the renderer reads from.
+  _runReplLoop(initial, _replView, _replReduce, _replIsDone, tickMs,
+               initial.transcript.messages)
   _activeRepl = null
 }

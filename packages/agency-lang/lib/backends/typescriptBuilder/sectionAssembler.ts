@@ -194,6 +194,19 @@ export function partitionProgram(
       continue;
     }
 
+    // `static <expression-statement>` at module top level (PR 3). The
+    // wrapper is purely a routing marker — unwrap to the inner
+    // statement and route it into `staticInitTagged` so it runs once
+    // per process in Phase A instead of once per agent run in Phase
+    // B. Downstream codegen never sees the wrapper.
+    if (node.type === "staticStatement") {
+      staticInitTagged.push({
+        varName: null,
+        node: deps.processNodeInGlobalInit(node.statement),
+      });
+      continue;
+    }
+
     if (deps.isTopLevelDeclaration(node)) {
       topLevelStatements.push(deps.processNode(node));
     } else {
@@ -422,12 +435,17 @@ export function assembleSections(opts: AssembleSectionsOpts): TsNode {
   // cross-module awaits, but local init still works.
   const registryId = opts.registryModuleId ?? opts.moduleId;
 
-  if (opts.staticVarNames.size > 0) {
+  // Emit `__initializeStatic` whenever this module has either named
+  // static vars OR bare `static <expr>` statements (PR 3). Bare static
+  // statements need the same Promise-based once-per-process guard, and
+  // other modules whose globals depend on this module's statics still
+  // need an `__awaitStaticInit(...)` entry to wait on — even if the
+  // dependency is only a side effect, not a value.
+  if (
+    opts.staticVarNames.size > 0 ||
+    opts.staticInitStatements.length > 0
+  ) {
     sections.push(...buildStaticVarSetup(opts));
-    // Register this module's static-init under its (cwd-relative)
-    // moduleId so other modules can `await __awaitStaticInit(...)` it.
-    // Only needed when the module actually has statics — otherwise
-    // nobody will look it up.
     sections.push(
       ts.raw(
         `__registerStaticInit(${JSON.stringify(displayModuleId(registryId))}, __initializeStatic);`,
@@ -605,9 +623,20 @@ function buildInitializeGlobalsFn(opts: AssembleSectionsOpts): TsNode {
     ),
   ];
 
+  // Always run this module's static init before its global init when
+  // the module emitted an `__initializeStatic` at all (named static
+  // vars OR bare `static <expr>` statements). The Promise-based guard
+  // in `__initializeStatic` makes the call cheap on the second-plus
+  // run; the first run is what bare static statements rely on for
+  // their once-per-process semantics.
+  if (
+    opts.staticVarNames.size > 0 ||
+    opts.staticInitStatements.length > 0
+  ) {
+    body.push(ts.awaitCall(ts.id("__initializeStatic"), [ctxParam]));
+  }
   if (opts.staticVarNames.size > 0) {
     body.push(
-      ts.awaitCall(ts.id("__initializeStatic"), [ctxParam]),
       ts.awaitMethodCall(ctxParam, "writeStaticStateToTrace", [
         ts.methodCall(ts.runtime.globalCtx, "getStaticVars"),
       ]),

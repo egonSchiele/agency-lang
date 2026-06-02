@@ -1,0 +1,21 @@
+// PR 3 — `static <expr>` at module top level.
+// Example 6 from the agent-init design doc: running main multiple
+// times in one process fires `static logEvent("startup")` exactly
+// once (Phase A), and the unprefixed `logEvent("run")` exactly per
+// run (Phase B).
+import { getMutable, setMutable } from "../../helpers/mutableVar.js"
+
+def logEvent(label: string) {
+  const key = label + "Count"
+  setMutable(key, getMutable(key, 0) + 1)
+}
+
+static logEvent("startup")
+logEvent("run")
+
+node main() {
+  return {
+    startup: getMutable("startupCount", 0),
+    run: getMutable("runCount", 0)
+  }
+}

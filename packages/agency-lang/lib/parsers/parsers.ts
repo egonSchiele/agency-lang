@@ -137,6 +137,7 @@ import { DefaultCase, MatchBlockCase } from "../types/matchBlock.js";
 import { MessageThread } from "@/types/messageThread.js";
 import { HandleBlock } from "@/types/handleBlock.js";
 import { WithModifier } from "@/types/withModifier.js";
+import { StaticStatement } from "@/types/staticStatement.js";
 import {
   ArrayPattern,
   BindingPattern,
@@ -3034,6 +3035,76 @@ export const modifiedAssignmentParser: Parser<Assignment> = withLoc((input: stri
   if (isStatic) out.static = true;
   return success(out, result.rest);
 });
+
+/**
+ * `static <expression-statement>` at module top level. Routes a bare
+ * statement (function call, value access, interrupt) into Phase A so
+ * it runs once per process instead of once per agent run. Mirrors the
+ * existing `static const`.
+ *
+ * Tried in the top-level alternatives list AFTER `modifiedAssignmentParser`
+ * so `static const x = 1` and `static let x = 1` are handled there —
+ * this parser explicitly declines on `const` / `let` (and on a bare
+ * `static` with nothing after) so the modifiedAssignmentParser's
+ * "static requires 'const'" error stays the canonical one for the
+ * `static let` case.
+ *
+ * Wraps the inner statement in a `StaticStatement` AST node; the
+ * section assembler (`partitionProgram`) unwraps the wrapper and
+ * routes the inner statement into `staticInitTagged`. After partition
+ * the wrapper never appears again — downstream codegen sees only the
+ * inner statement.
+ */
+const STATIC_LET_MESSAGE =
+  "`static let` is not allowed. Use `static const <name> = ...` for a " +
+  "once-per-process binding, or `static <expr>` (e.g. `static foo()`) " +
+  "for a once-per-process side effect.";
+
+export const staticStatementParser: Parser<StaticStatement> = withLoc(
+  (input: string) => {
+    const kwResult = seqC(str("static"), spaces)(input);
+    if (!kwResult.success) {
+      return failure("expected 'static'", input);
+    }
+    const rest = kwResult.rest;
+    // `static let` — commit to a fatal error so the user-facing
+    // message survives `or`'s backtracking. `modifiedAssignmentParser`
+    // also rejects this shape, but its `failure(...)` is recoverable,
+    // which lets later alternatives reinterpret `static` as a bare
+    // identifier and produce nonsense AST. The probe-and-commit
+    // pattern (matching `reservedClassParser`'s handling of `class`)
+    // is the right tool here.
+    if (/^let\b/.test(rest)) {
+      return parseError(
+        STATIC_LET_MESSAGE,
+        fail("static let"),
+      )(input) as ParserResult<StaticStatement>;
+    }
+    // `static const` belongs to `modifiedAssignmentParser`. Decline
+    // silently so its success path runs.
+    if (/^const\b/.test(rest)) {
+      return failure("not a static expression statement", input);
+    }
+    const innerParser = or(
+      interruptStatementParser,
+      functionCallParser,
+      valueAccessParser,
+    );
+    const innerResult = innerParser(rest);
+    if (!innerResult.success) {
+      return failure(
+        "`static` at top level must be followed by `const <name> = ...` " +
+          "or an expression statement (e.g., `static foo()` or " +
+          "`static logger.flush()`).",
+        input,
+      );
+    }
+    return success(
+      { type: "staticStatement", statement: innerResult.result as AgencyNode },
+      innerResult.rest,
+    );
+  },
+);
 
 // Doc strings are parsed identically to multi-line strings. Trimming of
 // the leading/trailing indentation is applied at the points that

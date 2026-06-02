@@ -1,0 +1,31 @@
+// PR 3 cross-module ordering: a `static <bare-statement>` whose
+// function body reads a static imported from another module.
+//
+// `static recordSetup()` is a Phase-A bare call. PR 2.5's depth-1
+// expansion looks inside `recordSetup`'s body, finds the imported
+// `initialized` from `./helper.agency`, and adds a cross-module
+// static dep edge. PR 2's topsort + per-module init plan then runs
+// `helper.agency`'s `__initializeStatic` first, so `initialized` has
+// its real value (`"yes"`) by the time this module's bare static call
+// reads it.
+//
+// Side-channel: the bare static call writes its observed order into
+// `tests/helpers/mutableVar.js` (JS module-level state), and `main()`
+// reads it back at run time. Statics are deep-frozen and globals
+// don't exist yet at Phase A, so a JS-level mutable is the only
+// observation surface available here.
+import { getMutable, setMutable } from "../../../helpers/mutableVar.js"
+import { initialized } from "./helper.agency"
+
+def recordSetup() {
+  setMutable(
+    "order",
+    getMutable("order", "") + "main-static-bare;helper-was=" + initialized + ";"
+  )
+}
+
+static recordSetup()
+
+node main() {
+  return getMutable("order", "")
+}

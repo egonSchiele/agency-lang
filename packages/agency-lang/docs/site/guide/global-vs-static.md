@@ -35,3 +35,20 @@ Static variables:
 There are many types of values that you just want to initialize once, and never modify again: prompts, constants like `PI` or `VERSION`, config settings, etc. `static` variables are perfect for these use cases.
 
 Unlike global variables, static variables *can* be imported from other files, because they don't lead to spaghetti code, as they can't be modified.
+
+## `static` on a bare top-level statement
+
+The `static` prefix also works on a bare top-level statement (a function or method call with no declaration). Use it for once-per-process side effects that don't bind a value:
+
+```ts
+static logger.flush()       // runs once, the first time this module is touched
+static initTelemetry()      // ditto
+
+node main() {
+  // ...
+}
+```
+
+Plain (unprefixed) top-level calls run on every agent execution, the same way per-run global initializers do. The `static` form runs once per process instead — same Phase A semantics as `static const`, just without binding the result to a name.
+
+`static let` is not supported. Use `static const <name> = ...` for a once-per-process binding, or `static <expr>` for a once-per-process side effect.

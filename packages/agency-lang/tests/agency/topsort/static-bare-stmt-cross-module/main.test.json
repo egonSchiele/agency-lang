@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "description": "PR 3: a `static <bare-statement>` at module top level runs in Phase A. Combined with PR 2.5 depth-1 expansion, its function body's read of a cross-module static is treated as a dep edge — so the helper module's static init completes before this module's bare static call fires.",
+      "expectedOutput": "\"main-static-bare;helper-was=yes;\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

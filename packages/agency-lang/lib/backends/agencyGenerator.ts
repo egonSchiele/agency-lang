@@ -439,6 +439,8 @@ export class AgencyGenerator {
         return this.processHandleBlock(node);
       case "withModifier":
         return `${this.processNode(node.statement)} with ${node.handlerName}`;
+      case "staticStatement":
+        return `static ${this.processNode(node.statement)}`;
       case "skill":
         return this.processSkill(node);
       case "binOpExpression":

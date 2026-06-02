@@ -168,7 +168,7 @@ describe("std::ui bridge — _beginSubmit", () => {
 
     _beginSubmit(state, "hello", () => submitPromise);
 
-    expect(state.transcript.messages).toEqual(["{bright-blue You} hello"]);
+    expect(state.transcript.messages).toEqual(["{bright-blue-fg}You{/bright-blue-fg} hello"]);
     expect(state.submit.busy).toBe(true);
     expect(state.submit.label).toBe("Thinking");
 
@@ -178,7 +178,7 @@ describe("std::ui bridge — _beginSubmit", () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
 
     expect(state.transcript.messages).toEqual([
-      "{bright-blue You} hello",
+      "{bright-blue-fg}You{/bright-blue-fg} hello",
       "agent reply",
     ]);
     expect(state.submit.busy).toBe(false);
@@ -198,7 +198,7 @@ describe("std::ui bridge — _beginSubmit", () => {
     expect(_peekReplExitSignal()).toBe(true);
   });
 
-  it("surfaces thrown JS errors as {red Error} transcript entries", async () => {
+  it("surfaces thrown JS errors as {red-fg}Error{/red-fg} transcript entries", async () => {
     const state = makeState();
     _beginSubmit(state, "boom", () => {
       throw new Error("kaboom");
@@ -206,8 +206,8 @@ describe("std::ui bridge — _beginSubmit", () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(state.transcript.messages).toEqual([
-      "{bright-blue You} boom",
-      "{red Error} kaboom",
+      "{bright-blue-fg}You{/bright-blue-fg} boom",
+      "{red-fg}Error{/red-fg} kaboom",
     ]);
     expect(state.submit.busy).toBe(false);
   });
@@ -218,8 +218,8 @@ describe("std::ui bridge — _beginSubmit", () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(state.transcript.messages).toEqual([
-      "{bright-blue You} fail",
-      "{red Error} spec.tools cannot be spread",
+      "{bright-blue-fg}You{/bright-blue-fg} fail",
+      "{red-fg}Error{/red-fg} spec.tools cannot be spread",
     ]);
     expect(state.submit.busy).toBe(false);
   });
@@ -248,8 +248,8 @@ describe("std::ui bridge — console capture", () => {
     }
     expect(transcript).toEqual([
       "first",
-      "{yellow warn} watch out",
-      "{red error} nope",
+      "{yellow-fg}warn{/yellow-fg} watch out",
+      "{red-fg}error{/red-fg} nope",
       "hi",
     ]);
   });

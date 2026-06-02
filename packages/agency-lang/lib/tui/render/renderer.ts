@@ -127,6 +127,49 @@ function renderTextContent(
   return grid;
 }
 
+// Render one item's text into one or more cell rows. Splits the
+// item on `\n` so a multi-line transcript entry (e.g. a markdown
+// reply) gets its own visual row per source line, parses styled-text
+// markup so spans like `{bright-blue-fg}You{/bright-blue-fg}` render
+// with color, and applies selection chrome to every produced row.
+//
+// Returned rows are NOT yet padded to `innerWidth`; the caller pads
+// them so selection chrome (`itemBg`) extends across the full row.
+function renderListItemRows(
+  rawText: string,
+  innerWidth: number,
+  itemFg: string | undefined,
+  itemBg: string | undefined,
+): Cell[][] {
+  const lines = rawText.split("\n");
+  const rows: Cell[][] = [];
+  for (const line of lines) {
+    const spans = parseStyledText(line);
+    const row: Cell[] = [];
+    let clipped = false;
+    outer: for (const span of spans) {
+      for (const ch of span.text) {
+        if (row.length >= innerWidth) {
+          clipped = true;
+          break outer;
+        }
+        row.push({
+          char: ch,
+          fg: span.fg ?? itemFg,
+          bg: span.bg ?? itemBg,
+          bold: span.bold,
+        });
+      }
+    }
+    if (clipped && row.length > 0) {
+      const last = row[row.length - 1];
+      row[row.length - 1] = { ...last, char: "…" };
+    }
+    rows.push(row);
+  }
+  return rows;
+}
+
 function renderListContent(
   items: string[],
   selectedIndex: number | undefined,
@@ -135,6 +178,22 @@ function renderListContent(
   fg?: string,
   bg?: string,
 ): Cell[][] {
+  // Expand each item into one-or-more visual rows up front so
+  // auto-scroll can target visual rows (not item indices) — a
+  // single long markdown reply might span 10 rows and we still
+  // want to keep the latest visual row in view.
+  type VisualRow = { itemIdx: number; row: Cell[] };
+  const visual: VisualRow[] = [];
+  for (let itemIdx = 0; itemIdx < items.length; itemIdx++) {
+    // We defer fg/bg selection chrome until we know which itemIdx
+    // is selected; for now render with neutral fg/bg and re-tint
+    // the cells later if the row's owning item is selected.
+    const rows = renderListItemRows(items[itemIdx], innerWidth, fg, bg);
+    for (const row of rows) {
+      visual.push({ itemIdx, row });
+    }
+  }
+
   // `selectedIndex >= items.length` is the "follow tail" sentinel:
   // auto-scroll so the most recent items are visible, but don't
   // draw any selection chrome (no row is actually the cursor). Used
@@ -142,36 +201,47 @@ function renderListContent(
   // list grows without highlighting it.
   const followTail =
     selectedIndex !== undefined && selectedIndex >= items.length;
-  // Auto-scroll to keep selected item visible. Clamp the scroll
-  // target to the last actual item so tiny inner heights (e.g. 1
-  // row) still render the last item instead of running off the end
-  // and drawing a blank grid.
+
+  // Auto-scroll: find the first visual row that belongs to the
+  // selected item (or the last visual row in follow-tail mode) and
+  // scroll just enough to keep it in the viewport.
   let scrollOffset = 0;
-  if (selectedIndex !== undefined && selectedIndex >= innerHeight) {
-    const target = Math.min(selectedIndex, items.length - 1);
-    scrollOffset = Math.max(0, target - innerHeight + 1);
+  if (followTail) {
+    scrollOffset = Math.max(0, visual.length - innerHeight);
+  } else if (selectedIndex !== undefined) {
+    // Find the LAST visual row owned by the selected item so multi-
+    // line items scroll to reveal their whole body when picked.
+    let lastRow = -1;
+    for (let i = 0; i < visual.length; i++) {
+      if (visual[i].itemIdx === selectedIndex) lastRow = i;
+    }
+    if (lastRow >= innerHeight) {
+      scrollOffset = Math.max(0, lastRow - innerHeight + 1);
+    }
   }
 
   const grid: Cell[][] = [];
   for (let i = 0; i < innerHeight; i++) {
-    const itemIdx = i + scrollOffset;
-    if (itemIdx >= items.length) {
+    const visualIdx = i + scrollOffset;
+    if (visualIdx >= visual.length) {
       grid.push(makeRow(innerWidth, bg));
       continue;
     }
-
+    const { itemIdx, row } = visual[visualIdx];
     const isSelected = !followTail && itemIdx === selectedIndex;
     const itemBg = isSelected ? "blue" : bg;
     const itemFg = isSelected ? "white" : fg;
-    const text = items[itemIdx].slice(0, innerWidth);
-    const row: Cell[] = [];
-    for (const ch of text) {
-      row.push({ char: ch, fg: itemFg, bg: itemBg });
+    // Re-tint cells for selected rows so the highlight extends
+    // across the whole row even when the original spans had their
+    // own colors. Untouched rows keep their per-span colors.
+    let outRow: Cell[] = row;
+    if (isSelected) {
+      outRow = row.map((c) => ({ ...c, fg: itemFg, bg: itemBg }));
     }
-    while (row.length < innerWidth) {
-      row.push(emptyCell(itemBg));
+    while (outRow.length < innerWidth) {
+      outRow.push(emptyCell(itemBg));
     }
-    grid.push(row);
+    grid.push(outRow);
   }
 
   return grid;

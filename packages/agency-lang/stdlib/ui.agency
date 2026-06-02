@@ -1020,7 +1020,7 @@ def _busyLine(state: ReplState): string {
   const nowMs = _nowMs()
   const elapsedSeconds = _elapsedSeconds(state.submit.startedAtMs, nowMs)
   const spinnerFrame = _spinnerFrame(state.submit.startedAtMs, nowMs)
-  return "{bright-yellow ${spinnerFrame}} ${state.submit.label} ${elapsedSeconds}s"
+  return "{bright-yellow-fg}${spinnerFrame}{/bright-yellow-fg} ${state.submit.label} ${elapsedSeconds}s"
 }
 
 /**

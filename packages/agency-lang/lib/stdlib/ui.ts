@@ -245,9 +245,9 @@ export function _installConsoleCapture(messages: string[]): void {
   console.debug = (...args: unknown[]) =>
     pushCaptured("", formatConsoleArgs(args));
   console.warn = (...args: unknown[]) =>
-    pushCaptured("{yellow warn}", formatConsoleArgs(args));
+    pushCaptured("{yellow-fg}warn{/yellow-fg}", formatConsoleArgs(args));
   console.error = (...args: unknown[]) =>
-    pushCaptured("{red error}", formatConsoleArgs(args));
+    pushCaptured("{red-fg}error{/red-fg}", formatConsoleArgs(args));
 
   // Deliberately NOT overriding `process.stdout.write` / `process.stderr.write`.
   // An earlier revision did, but `lib/tui/output/terminal.ts`'s renderer
@@ -322,7 +322,7 @@ export function _beginSubmit(
   submitted: string,
   onSubmit: unknown,
 ): void {
-  state.transcript.messages.push(`{bright-blue You} ${submitted}`);
+  state.transcript.messages.push(`{bright-blue-fg}You{/bright-blue-fg} ${submitted}`);
   if (state.submit) {
     state.submit.busy = true;
     state.submit.label = "Thinking";
@@ -362,7 +362,7 @@ export function _beginSubmit(
                       return String(err);
                     }
                   })();
-          state.transcript.messages.push(`{red Error} ${message}`);
+          state.transcript.messages.push(`{red-fg}Error{/red-fg} ${message}`);
           return;
         }
         if (typeof reply === "string" && reply.length > 0) {
@@ -370,7 +370,7 @@ export function _beginSubmit(
         }
       } catch (error: unknown) {
         const message = error instanceof Error ? error.message : String(error);
-        state.transcript.messages.push(`{red Error} ${message}`);
+        state.transcript.messages.push(`{red-fg}Error{/red-fg} ${message}`);
       } finally {
         if (state.submit) {
           state.submit.busy = false;

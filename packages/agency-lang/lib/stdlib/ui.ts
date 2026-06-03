@@ -13,6 +13,7 @@ import type { Frame } from "@/tui/frame.js";
 import { toANSI } from "@/tui/render/ansi.js";
 import { withBottomCursor, installRegion, resetRegion } from "./ui-region.js";
 import { __call } from "../runtime/call.js";
+import { __ctx } from "../runtime/asyncContext.js";
 import { isFailure } from "../runtime/result.js";
 
 // ---------------------------------------------------------------------------
@@ -28,11 +29,84 @@ import { isFailure } from "../runtime/result.js";
 // ---------------------------------------------------------------------------
 
 
+// `bridgeInputSource` / `bridgeOutputTarget` / `bridgeWidth` /
+// `bridgeHeight` are intentionally process-wide: there is exactly one
+// TTY per process, and the test injection points (`_setInputSource`
+// etc.) need a stable target. `bridgeActiveScreen` is also process-
+// wide because only one alt-screen can paint at a time. None of these
+// are concurrency hazards in practice — concurrent Agency runs that
+// each call `repl()` would already serialize on the single TTY.
 let bridgeInputSource: InputSource | null = null;
 let bridgeOutputTarget: OutputTarget | null = null;
 let bridgeWidth = 80;
 let bridgeHeight = 24;
 let bridgeActiveScreen: Screen | null = null;
+
+// ---------------------------------------------------------------------------
+// Per-RuntimeContext UI state.
+//
+// Anything that's "per-REPL session" (choice prompt awaiting a user
+// pick, the exit signal set when onSubmit returns false, the
+// transcript array the console capture writes into) lives here instead
+// of as a module-level singleton. That way concurrent Agency
+// executions in the same process — e.g. an agent orchestrating
+// subagents that each spin up their own repl(), or vitest cases
+// running in parallel — each get their own slot via ALS lookup and
+// don't clobber each other's pending promises / exit signals /
+// transcripts.
+//
+// `fallbackUiState` is used when no ALS frame is active, which only
+// happens for the unit-level tests in `ui.test.ts` that drive the
+// helpers directly without `runInTestContext`. Production code always
+// runs inside an Agency execution frame so `__ctx()` returns the
+// per-run RuntimeContext and the WeakMap branch wins.
+// ---------------------------------------------------------------------------
+
+type ChoiceItem = { key: string; label: string };
+type ChoiceRequest = {
+  title: string;
+  body: string;
+  items: ChoiceItem[];
+  // When true, the modal accepts free-form text in addition to the
+  // declared item keys: if the user's typed filter matches no items
+  // and they press Enter, the prompt resolves with the filter text
+  // (instead of being a no-op). Used by std::policy so a typed
+  // rejection reason is captured in one step instead of two.
+  allowFreeText: boolean;
+};
+
+type UiContextState = {
+  pendingChoice: {
+    resolve: (answer: string) => void;
+    reject: (err: Error) => void;
+  } | null;
+  pendingChoiceRequest: ChoiceRequest | null;
+  replExitSignaled: boolean;
+  captureTarget: string[] | null;
+};
+
+function makeUiContextState(): UiContextState {
+  return {
+    pendingChoice: null,
+    pendingChoiceRequest: null,
+    replExitSignaled: false,
+    captureTarget: null,
+  };
+}
+
+const uiStateByCtx = new WeakMap<object, UiContextState>();
+const fallbackUiState: UiContextState = makeUiContextState();
+
+function getUiState(): UiContextState {
+  const ctx = __ctx();
+  if (!ctx) return fallbackUiState;
+  let s = uiStateByCtx.get(ctx);
+  if (!s) {
+    s = makeUiContextState();
+    uiStateByCtx.set(ctx, s);
+  }
+  return s;
+}
 
 /** Consume any pending test-mode injection and fall back to real
  *  terminal I/O when production. Sets `bridgeInputSource`,
@@ -190,7 +264,13 @@ type ConsoleSinks = {
   debug: typeof console.debug;
 };
 
-let captureTarget: string[] | null = null;
+// `savedConsoleSinks` is process-wide because `console.*` itself is a
+// process-wide singleton — we can only save/restore the originals
+// once. The actual capture *target* (the transcript array we push
+// rows into) lives in the per-context `UiContextState` so concurrent
+// REPLs each write into their own transcript. The installed
+// overrides route to `getUiState().captureTarget`, so dispatch
+// follows the active ALS frame automatically.
 let savedConsoleSinks: ConsoleSinks | null = null;
 
 function formatConsoleArgs(args: unknown[]): string {
@@ -233,7 +313,8 @@ export function truncateForTui(text: string): string {
 }
 
 function pushCaptured(prefix: string, text: string): void {
-  if (!captureTarget) return;
+  const target = getUiState().captureTarget;
+  if (!target) return;
   // Split on newlines so multi-line writes become one transcript row
   // per line. Trailing empty strings from a final `\n` are dropped so
   // we don't render blank rows.
@@ -241,7 +322,7 @@ function pushCaptured(prefix: string, text: string): void {
   if (lines.length > 0 && lines[lines.length - 1] === "") lines.pop();
   if (lines.length === 0) return;
   for (const line of lines) {
-    captureTarget.push(prefix ? `${prefix} ${line}` : line);
+    target.push(prefix ? `${prefix} ${line}` : line);
   }
   // Kick the event loop so the captured line shows up immediately
   // instead of after the next keypress (REPL defaults to no tickMs).
@@ -249,8 +330,14 @@ function pushCaptured(prefix: string, text: string): void {
 }
 
 export function _installConsoleCapture(messages: string[]): void {
-  if (savedConsoleSinks) return; // idempotent: nested installs leave the outer one in place
-  captureTarget = messages;
+  // The capture target is per-context — set it whether or not we're
+  // the first installer. (Re-install in a nested REPL inside the same
+  // ALS frame is a no-op; a nested REPL in a *different* ALS frame
+  // gets its own slot.) The console overrides themselves are a
+  // process singleton, installed once and routed to whichever
+  // context is currently active.
+  getUiState().captureTarget = messages;
+  if (savedConsoleSinks) return;
   savedConsoleSinks = {
     log: console.log,
     warn: console.warn,
@@ -281,6 +368,9 @@ export function _installConsoleCapture(messages: string[]): void {
 }
 
 export function _uninstallConsoleCapture(): void {
+  // Clear the per-context target first so a stale ALS frame can't keep
+  // routing captured writes into a buffer the caller has dropped.
+  getUiState().captureTarget = null;
   if (!savedConsoleSinks) return;
   console.log = savedConsoleSinks.log;
   console.warn = savedConsoleSinks.warn;
@@ -288,7 +378,6 @@ export function _uninstallConsoleCapture(): void {
   console.info = savedConsoleSinks.info;
   console.debug = savedConsoleSinks.debug;
   savedConsoleSinks = null;
-  captureTarget = null;
 }
 
 export function _nowMs(): number {
@@ -305,21 +394,22 @@ export function _spinnerFrame(startedAtMs: number, nowMs = Date.now()): string {
   return frames[tick % frames.length];
 }
 
-// Module-level "exit signaled" flag for `repl()`. `_beginSubmit`
+// Per-context "exit signaled" flag for `repl()`. `_beginSubmit`
 // flips this when `onSubmit` returns `false`; the Agency
 // `_replIsDone` reads it via `_peekReplExitSignal()`. We cannot
 // mutate `state.done = true` directly because `done` is a primitive
 // boolean — `{...state, ...}` in subsequent reducer calls copies it
 // at the time of spread, so a later mutation on the stale record is
-// invisible to the current loop state.
-let replExitSignaled = false;
+// invisible to the current loop state. Lives on `UiContextState` so
+// concurrent REPLs in different ALS frames don't trip each other's
+// exit flag.
 
 /** Signal that the active `repl()` should exit on its next isDone
  *  check. Called from `_beginSubmit` when `onSubmit` returns `false`,
  *  and from any future "force exit" plumbing. Wakes the loop so
  *  `_replIsDone` runs immediately. */
 export function _signalReplExit(): void {
-  replExitSignaled = true;
+  getUiState().replExitSignaled = true;
   _triggerRender();
 }
 
@@ -328,14 +418,14 @@ export function _signalReplExit(): void {
  *  flag is reset by `_runReplLoop` in its finally block so the next
  *  REPL invocation starts fresh. */
 export function _peekReplExitSignal(): boolean {
-  return replExitSignaled;
+  return getUiState().replExitSignaled;
 }
 
 /** Reset the exit signal. Called by `_runReplLoop` before and after
  *  the loop runs, so a leftover signal from a prior REPL session
  *  doesn't cause the next one to exit on first frame. */
 export function _resetReplExitSignal(): void {
-  replExitSignaled = false;
+  getUiState().replExitSignaled = false;
 }
 
 export function _beginSubmit(
@@ -533,6 +623,82 @@ export function _writeScrollLine(text: string): void {
 }
 
 // ---------------------------------------------------------------------------
+// Styled fallback for `chooseOption()` — the line-mode / no-REPL path.
+//
+// When no `repl()` owns the screen (line mode, scripted runs), the
+// Agency-side `chooseOption()` calls `_printChoicePromptFallback`
+// here to render the interrupt menu as a visually-separated block
+// before kicking off the `input()` retry loop. The TUI's modal
+// renderer (`_openChoicePrompt`) is unaffected — this is purely the
+// fallback path that prior to this used four plain `print()` calls.
+//
+// TTY detection: piped output (e.g. `agency-agent | tee log.txt`)
+// gets the original plain rendering so log files stay free of ANSI
+// escape sequences.
+// ---------------------------------------------------------------------------
+
+/**
+ * Render an interrupt-style choice prompt to stdout: blank line,
+ * dim-gray background block with bold yellow `⚠ Title`, body lines,
+ * and aligned `key  label` rows; blank line trailing. The `input("> ")`
+ * loop that captures the answer stays on the Agency side.
+ *
+ * On a non-TTY stdout, falls through to plain `console.log` lines
+ * matching the pre-styling output so piped logs stay clean.
+ */
+export function _printChoicePromptFallback(
+  title: string,
+  body: string,
+  items: ChoiceItem[],
+): void {
+  const out = process.stdout;
+  if (!out.isTTY) {
+    if (title) console.log(title);
+    if (body) console.log(body);
+    for (const it of items) {
+      console.log(`  ${it.key}  ${it.label}`);
+    }
+    return;
+  }
+  const BG = "\x1b[48;5;236m";
+  const RESET = "\x1b[0m";
+  const EOL = "\x1b[K"; // clear-to-end-of-line; keeps current bg
+  const WARN = "\x1b[1;33m"; // bold yellow
+  const KEY = "\x1b[1;96m"; // bold bright cyan, for the choice keys
+  const row = (content: string): string =>
+    `${BG}  ${content}${EOL}${RESET}`;
+  const blank = (): string => `${BG} ${EOL}${RESET}`;
+
+  out.write("\n");
+  out.write(blank() + "\n");
+  if (title) {
+    out.write(row(`${WARN}⚠  ${title}${RESET}${BG}`) + "\n");
+  }
+  if (body) {
+    if (title) out.write(blank() + "\n");
+    for (const line of body.split("\n")) {
+      out.write(row(line) + "\n");
+    }
+  }
+  if (items.length > 0) {
+    out.write(blank() + "\n");
+    // Pad keys so labels align in a column.
+    let maxKey = 0;
+    for (const it of items) {
+      if (it.key.length > maxKey) maxKey = it.key.length;
+    }
+    for (const it of items) {
+      const padded = it.key.padEnd(maxKey, " ");
+      out.write(
+        row(`${KEY}${padded}${RESET}${BG}  ${it.label}`) + "\n",
+      );
+    }
+  }
+  out.write(blank() + "\n");
+  out.write("\n");
+}
+
+// ---------------------------------------------------------------------------
 // Choice prompts (modal-style overlay inside an active `repl()`)
 //
 // `_openChoicePrompt` mutates the live REPL state record so the
@@ -544,55 +710,40 @@ export function _writeScrollLine(text: string): void {
 // race with the REPL's `nextKey()` waiter), and we never write outside
 // the alt-screen.
 //
-// The slot is module-level — at most one prompt is open at a time.
-// Concurrent callers should serialize themselves.
+// The slot lives on the per-context `UiContextState` (see top of
+// file). At most one prompt is open per context at a time;
+// concurrent REPLs in different ALS frames each get their own slot.
 // ---------------------------------------------------------------------------
-
-type ChoiceItem = { key: string; label: string };
-type ChoiceRequest = {
-  title: string;
-  body: string;
-  items: ChoiceItem[];
-};
-
-let pendingChoice: {
-  resolve: (answer: string) => void;
-  reject: (err: Error) => void;
-} | null = null;
-// Module-level snapshot of the *request* (title, body, items) for
-// the currently-open prompt. The Agency reducer pulls this on every
-// tick to keep its `state.choice` synced — we cannot mutate the
-// live reducer state from TS because reducers return fresh records
-// on every keypress. `null` when no prompt is open.
-let pendingChoiceRequest: ChoiceRequest | null = null;
 
 /**
  * Open a modal choice prompt over the currently-running REPL. Stores
- * the request in a module-level slot that the Agency reducer reads
- * via `_peekPendingChoiceRequest()` on every tick (so a fresh frame
- * sees the modal even though reducers return new state records),
- * then returns a Promise that the Agency reducer resolves via
- * `_resolveChoice(answer)` (Enter) or rejects via `_cancelChoice`
+ * the request in the active context's UI-state slot that the Agency
+ * reducer reads via `_peekPendingChoiceRequest()` on every tick (so a
+ * fresh frame sees the modal even though reducers return new state
+ * records), then returns a Promise that the Agency reducer resolves
+ * via `_resolveChoice(answer)` (Enter) or rejects via `_cancelChoice`
  * (Escape, or REPL torn down).
  *
- * Rejects if another prompt is already open — the caller should
- * serialize.
+ * Rejects if another prompt is already open in this context — the
+ * caller should serialize.
  */
 export function _openChoicePrompt(request: ChoiceRequest): Promise<string> {
-  if (pendingChoice) {
+  const ui = getUiState();
+  if (ui.pendingChoice) {
     return Promise.reject(
       new Error(
         "_openChoicePrompt: a choice prompt is already open; serialize callers",
       ),
     );
   }
-  pendingChoiceRequest = {
+  ui.pendingChoiceRequest = {
     title: request.title,
     body: request.body,
     items: request.items,
+    allowFreeText: request.allowFreeText === true,
   };
   return new Promise<string>((resolve, reject) => {
-    pendingChoice = { resolve, reject };
+    ui.pendingChoice = { resolve, reject };
     // Wake the loop so the modal paints immediately rather than
     // waiting for the next user keypress. The reducer's TS-sync step
     // runs on this synthetic key event and initializes state.choice.
@@ -609,7 +760,7 @@ export function _openChoicePrompt(request: ChoiceRequest): Promise<string> {
  * the reducer clears it.
  */
 export function _peekPendingChoiceRequest(): ChoiceRequest | null {
-  return pendingChoiceRequest;
+  return getUiState().pendingChoiceRequest;
 }
 
 /** Resolve the pending choice promise with `answer` and clear both
@@ -617,10 +768,11 @@ export function _peekPendingChoiceRequest(): ChoiceRequest | null {
  *  reducer when Enter is pressed on a filtered, non-empty list.
  *  No-op when no prompt is open. */
 export function _resolveChoice(answer: string): void {
-  if (!pendingChoice) return;
-  const { resolve } = pendingChoice;
-  pendingChoice = null;
-  pendingChoiceRequest = null;
+  const ui = getUiState();
+  if (!ui.pendingChoice) return;
+  const { resolve } = ui.pendingChoice;
+  ui.pendingChoice = null;
+  ui.pendingChoiceRequest = null;
   resolve(answer);
 }
 
@@ -630,17 +782,18 @@ export function _resolveChoice(answer: string): void {
  *  break out of any prompt left hanging by an exception. No-op when
  *  no prompt is open. */
 export function _cancelChoice(reason: string): void {
-  if (!pendingChoice) return;
-  const { reject } = pendingChoice;
-  pendingChoice = null;
-  pendingChoiceRequest = null;
+  const ui = getUiState();
+  if (!ui.pendingChoice) return;
+  const { reject } = ui.pendingChoice;
+  ui.pendingChoice = null;
+  ui.pendingChoiceRequest = null;
   reject(new Error(reason || "choice prompt cancelled"));
 }
 
 /** Test/debug hook. Returns true while a choice prompt is awaiting a
  *  reducer callback. */
 export function _hasPendingChoice(): boolean {
-  return pendingChoice !== null;
+  return getUiState().pendingChoice !== null;
 }
 
 // ---------------------------------------------------------------------------

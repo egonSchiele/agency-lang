@@ -1,4 +1,8 @@
-import { _parseMarkdown } from "agency-lang/stdlib-lib/markdown.js"
+import {
+  _parseMarkdown,
+  _walkMarkdown,
+  _renderMarkdownForCli,
+} from "agency-lang/stdlib-lib/markdown.js"
 
 /** @module
   Parse Markdown text into a structured AST.
@@ -267,4 +271,45 @@ export safe def frontmatter(input: string): Result {
     }
   }
   return failure("no frontmatter")
+}
+
+export safe def walk(blocks: any[], block: (any) => any): any[] {
+  """
+  Walk a Markdown AST top-down, calling `block` on every block and inline
+  node. The block receives the node as an object and returns a (possibly
+  new) node — children of the returned node are then walked recursively.
+  Returns the transformed array of block nodes. The input AST is not
+  mutated.
+
+  Typically used with the trailing-block syntax:
+
+  ```ts
+  const result = parse(input)
+  const transformed = walk(result.blocks) as node {
+    if (node.type == "code-block") {
+      return { ...node, content: highlight(node.content, node.language) }
+    }
+    return node
+  }
+  ```
+
+  @param blocks - The array of block nodes returned by `parse(...).blocks`
+  @param block - Callback invoked with each node; returns the replacement node
+  """
+  return _walkMarkdown(blocks, block)
+}
+
+export safe def renderForCli(blocks: any[]): string {
+  """
+  Render a Markdown AST (array of block nodes) to an ANSI-styled string
+  suitable for direct printing in a terminal. Links use OSC 8 escapes so
+  capable terminals render them as clickable hyperlinks.
+
+  Code-block bodies are emitted verbatim, so pre-process them with `walk`
+  if you want syntax highlighting inside the fences (this is what
+  `highlight(code, "markdown")` does internally).
+
+  @param blocks - The array of block nodes to render
+  """
+  return _renderMarkdownForCli(blocks)
 }

@@ -16,6 +16,7 @@ import {
   _resolveChoice,
   _cancelChoice,
   _peekReplExitSignal,
+  _printChoicePromptFallback,
 } from "agency-lang/stdlib-lib/ui.js"
 import { filter, map } from "std::array"
 
@@ -896,7 +897,8 @@ type ReplChoiceState = {
   body: string;
   items: ChoiceItem[];
   filter: string;
-  cursor: number
+  cursor: number;
+  allowFreeText: boolean
 }
 
 type ReplState = {
@@ -958,6 +960,7 @@ export def chooseOption(
   title: string,
   body: string,
   items: ChoiceItem[],
+  allowFreeText: boolean = false,
 ): string {
   """
   Show a modal choice prompt over the active repl() and block until
@@ -972,25 +975,38 @@ export def chooseOption(
   the valid `key`s. Used by std::policy to surface its approve/reject
   menus through the active REPL without fighting with the input bar.
 
+  When `allowFreeText` is true and the user's typed input doesn't
+  match any item key, the prompt resolves with the typed text
+  instead of reprompting. In the TUI modal this fires on Enter when
+  the typed filter narrows the visible items to zero; in line-mode
+  fallback it fires on any non-empty input that isn't a known key.
+  Empty input still reprompts. Callers (notably std::policy) use this
+  to collapse "pick reject + then type reason" into a single step.
+
   @param title - Modal heading (e.g. "Approve interrupt: shell::exec")
   @param body - Multi-line context shown above the choices (or "")
   @param items - The set of {key, label} choices to pick from
+  @param allowFreeText - Accept free-form text in addition to item keys
   """
   if (_activeRepl != null) {
     return _openChoicePrompt({
       title: title,
       body: body,
-      items: items
+      items: items,
+      allowFreeText: allowFreeText
     })
   }
-  // No-REPL fallback: print the title + body once, then loop on
-  // `input()` until the answer matches one of the item keys. Same
-  // contract as the pre-modal `_routePrompt` had.
-  if (title != "") { print(title) }
-  if (body != "")  { print(body) }
+  // No-REPL fallback: render the prompt block via the styled bridge
+  // helper, then loop on `input()` until the answer matches one of
+  // the item keys. The bridge call replaces what used to be a
+  // sequence of plain `print()` lines; it draws a dim background
+  // block with bold-yellow title + cyan keys when stdout is a TTY,
+  // and falls back to the original plain-print rendering when piped
+  // (so log files stay free of ANSI). The retry loop and answer
+  // contract are unchanged.
+  _printChoicePromptFallback(title, body, items)
   let validKeys: string[] = []
   for (item in items) {
-    print("  ${item.key}  ${item.label}")
     validKeys.push(item.key)
   }
   const optsHint = "(one of ${validKeys.join("/")})"
@@ -999,6 +1015,12 @@ export def chooseOption(
   while (!valid) {
     answer = input("> ").trim()
     if (validKeys.includes(answer)) {
+      valid = true
+    } else if (allowFreeText && answer != "") {
+      // Free-text path: any non-empty input that doesn't match a key
+      // is returned verbatim so the caller can treat it as a reason
+      // (or similar). Empty input still reprompts so accidental Enter
+      // doesn't get interpreted as a free-text answer.
       valid = true
     } else {
       print(optsHint)
@@ -1476,6 +1498,15 @@ def _replReduceChoice(state: ReplState, keyEvent: KeyEvent): ReplState {
   }
   if (keyEvent.key == "enter") {
     if (visibleItems.length == 0) {
+      // Free-text path: when the typed filter matches no items and
+      // the caller opted in via `allowFreeText`, Enter resolves with
+      // the filter text verbatim instead of being a no-op. Empty
+      // filter still no-ops so an accidental Enter on an empty prompt
+      // doesn't resolve with "".
+      if (choice.allowFreeText && choice.filter != "") {
+        _resolveChoice(choice.filter)
+        return { ...state, choice: null }
+      }
       return state
     }
     let cursor = choice.cursor
@@ -1540,6 +1571,7 @@ def _syncChoiceFromBridge(state: ReplState): ReplState {
         title: tsRequest.title,
         body: tsRequest.body,
         items: tsRequest.items,
+        allowFreeText: tsRequest.allowFreeText == true,
         filter: "",
         cursor: 0
       }

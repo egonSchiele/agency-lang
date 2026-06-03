@@ -1,13 +1,14 @@
+import { dirname, basename } from "std::path"
+import { exists } from "std::shell"
+import { chooseOption, ChoiceItem } from "std::ui"
+
 import {
   _checkPolicy,
   _validatePolicy,
   _writePolicyFile,
  } from "agency-lang/stdlib-lib/policy.js"
-import { exists } from "std::shell"
-import { dirname, basename } from "std::path"
-import { chooseOption, ChoiceItem } from "std::ui"
 
-/** @module
+/**
   ## Overview
 
   A `Policy` is an ordered list of rules per interrupt kind that decides,
@@ -216,7 +217,10 @@ export type ScopedRuleFields = Record<InterruptKind, ScopedField[]>
 
 // Internal state for `cliPolicyHandler`. Singleton — calling
 // `cliPolicyHandler` more than once silently overwrites these.
-let _opts: { file: string, fields: ScopedRuleFields } = { file: "", fields: {} }
+let _opts: { file: string; fields: ScopedRuleFields } = {
+  file: "",
+  fields: {}
+}
 let _policy: Policy = {}
 let _loaded: boolean = false
 let _pendingSave: boolean = false
@@ -293,11 +297,15 @@ export def buildScopedMatch(
   isn't in the fields map. Pure.
   """
   let specs: ScopedField[] = []
-  if (fields[intr.kind] != undefined) { specs = fields[intr.kind] }
+  if (fields[intr.kind] != undefined) {
+    specs = fields[intr.kind]
+  }
   let match: Record<string, string> = {}
   for (spec in specs) {
     const value = intr.data[spec.field]
-    if (value == null) { continue }
+    if (value == null) {
+      continue
+    }
     if (spec.matchSubpaths) {
       match[spec.field] = "{${value},${value}/**}"
     } else {
@@ -345,7 +353,9 @@ export def recordRule(
   const existing = policy[kind] || []
   const next: Policy = {
     ...policy,
-    [kind]: [...existing, { action: action }]
+    [kind]: [...existing, {
+      action: action
+    }]
   }
   return next
 }
@@ -379,7 +389,10 @@ export def recordScopedRule(
   const existing = policy[intr.kind] || []
   const next: Policy = {
     ...policy,
-    [intr.kind]: [{ match: match, action: "approve" }, ...existing]
+    [intr.kind]: [{
+      match: match,
+      action: "approve"
+    }, ...existing]
   }
   return next
 }
@@ -405,7 +418,9 @@ export def parsePolicyFile(path: string): Policy {
   """
   const dir = dirname(path)
   const name = basename(path)
-  if (!exists(name, dir)) { return {} }
+  if (!exists(name, dir)) {
+    return {}
+  }
   const readResult = read(name, dir)
   if (isFailure(readResult)) {
     print("Could not read ${path}: ${readResult.error}")
@@ -418,7 +433,9 @@ export def parsePolicyFile(path: string): Policy {
   }
   const valid = validatePolicy(parsed.value)
   if (!valid.success) {
-    print("Invalid policy in ${path} (${valid.error}); ignoring and starting fresh.")
+    print(
+      "Invalid policy in ${path} (${valid.error}); ignoring and starting fresh.",
+    )
     return {}
   }
   return parsed.value
@@ -434,7 +451,11 @@ export def parsePolicyFile(path: string): Policy {
  * when the path is trusted; otherwise restrict it to a known
  * directory like `["${env("HOME")}/.myapp"]`.
  */
-export def writePolicyFile(path: string, policy: Policy, allowedPaths: string[] = []) {
+export def writePolicyFile(
+  path: string,
+  policy: Policy,
+  allowedPaths: string[] = [],
+) {
   """
   Validate and write a policy to a JSON file. Throws if the policy is invalid. Set allowedPaths to restrict where the policy file may be written.
 
@@ -451,7 +472,8 @@ export def writePolicyFile(path: string, policy: Policy, allowedPaths: string[] 
 // docs/site/guide/handlers.md §"Fixing it".
 def maybeLoad() {
   if (!_loaded) {
-    _loaded = true                              // flip FIRST
+    _loaded = true
+    // flip FIRST
     _policy = parsePolicyFile(_opts.file) with approve
   }
 }
@@ -463,7 +485,8 @@ def maybeLoad() {
 // may not flush — `flushPolicy()` is the escape hatch for that.
 def maybeFlush() {
   if (_pendingSave) {
-    _pendingSave = false                                // flip FIRST
+    _pendingSave = false
+    // flip FIRST
     writePolicyFile(_opts.file, _policy, []) with approve
   }
 }
@@ -492,47 +515,87 @@ export def flushPolicy() {
 def describeScopedMatch(intr: any): string {
   const match = buildScopedMatch(intr, _opts.fields)
   const ks = keys(match)
-  if (ks.length == 0) { return "(no scoped fields)" }
+  if (ks.length == 0) {
+    return "(no scoped fields)"
+  }
   let parts: string[] = []
-  for (k in ks) { parts.push("${k}=${match[k]}") }
+  for (k in ks) {
+    parts.push("${k}=${match[k]}")
+  }
   return parts.join(", ")
 }
 
+/**
+ * Result returned by `askUser`. When the user picks a known key,
+ * `action` is the corresponding `Decision` and `reason` is null.
+ * When `allowFreeText` lets the user type a free-form rejection
+ * reason, `action` is `"reject"` and `reason` is the typed text —
+ * the handler uses it as the reject reason directly, skipping the
+ * follow-up "Why are you rejecting?" prompt.
+ */
+type AskUserResult = {
+  action: Decision;
+  reason: string | null
+}
+
 // Present the (a)/(r)/(aa)/(ap)/(rr) menu for one interrupt and
-// return the user's choice as a `Decision`. `(ap)` is offered only
-// when `_opts.fields` has an entry for `intr.kind`. Renders as a
+// return the user's choice as an `AskUserResult`. `(ap)` is offered
+// only when `_opts.fields` has an entry for `intr.kind`. Renders as a
 // modal over the active repl(); falls back to plain print + input
 // when no REPL is running (e.g. headless agent runs).
-def askUser(intr: any): Decision {
+//
+// `allowFreeText: true` is passed to `chooseOption` so the user can
+// type a rejection reason instead of picking a key — that single
+// keystroke flow replaces the old two-step "(r), then type reason".
+def askUser(intr: any): AskUserResult {
   // `!= null` compiles to `!== null` (Agency strict equality), so an
   // undefined entry would slip through. Use the explicit existence check.
   let kindFields: ScopedField[] = []
-  if (_opts.fields[intr.kind] != undefined) { kindFields = _opts.fields[intr.kind] }
+  if (_opts.fields[intr.kind] != undefined) {
+    kindFields = _opts.fields[intr.kind]
+  }
   const scopedAvailable = kindFields.length > 0
 
-  const title = "⚠ Interrupt: ${intr.kind}"
+  const title = "Interrupt: ${intr.kind}"
   const body = "${intr.message}\ndata: ${JSON.stringify(intr.data)}"
 
   let items: ChoiceItem[] = [
-    { key: "a",  label: "approve once" },
-    { key: "r",  label: "reject once" },
-    { key: "aa", label: "approve always (every future ${intr.kind})" }
+    {
+    key: "a",
+    label: "approve once"
+  },
+    {
+    key: "r",
+    label: "reject once"
+  },
+    {
+    key: "aa",
+    label: "approve always (every future ${intr.kind})"
+  },
   ]
   if (scopedAvailable) {
-    items.push({
+    items.push(
+      {
       key: "ap",
       label: "approve always here (${describeScopedMatch(intr)})"
-    })
+    },
+    )
   }
-  items.push({ key: "rr", label: "reject always" })
+  items.push({
+    key: "rr",
+    label: "reject always"
+  })
 
-  const answer = chooseOption(title, body, items)
-  match (answer) {
-    "a"  => return "approve"
-    "r"  => return "reject"
-    "aa" => return "approve-always"
-    "ap" => return "approve-always-here"
-    _    => return "reject-always"
+  const answer = chooseOption(title, body, items, allowFreeText: true)
+  match(answer) {
+    "a" => return { action: "approve", reason: null }
+    "r" => return { action: "reject", reason: null }
+    "aa" => return { action: "approve-always", reason: null }
+    "ap" => return { action: "approve-always-here", reason: null }
+    "rr" => return { action: "reject-always", reason: null }
+    // Any other input came through the `allowFreeText` path: treat
+    // it as a one-off reject with the typed text as the reason.
+    _ => return { action: "reject", reason: answer }
   }
 }
 
@@ -547,31 +610,46 @@ export def _handler(intr: any): any {
   maybeLoad()
 
   const decision = checkPolicy(_policy, intr)
-  if (decision.type == "approve") { return approve() }
-  if (decision.type == "reject")  { return reject() }
+  if (decision.type == "approve") {
+    return approve()
+  }
+  if (decision.type == "reject") {
+    return reject()
+  }
 
   const answer = askUser(intr)
-  if (answer == "approve-always") {
+  if (answer.action == "approve-always") {
     _policy = recordRule(_policy, intr.kind, "approve")
     _pendingSave = true
     return approve()
   }
-  if (answer == "approve-always-here") {
+  if (answer.action == "approve-always-here") {
     _policy = recordScopedRule(_policy, intr, _opts.fields)
     _pendingSave = true
     return approve()
   }
-  if (answer == "reject-always") {
+  if (answer.action == "reject-always") {
     _policy = recordRule(_policy, intr.kind, "reject")
     _pendingSave = true
     return reject()
   }
-  if (answer == "approve") { return approve() }
+  if (answer.action == "approve") {
+    return approve()
+  }
 
-  // Interactive reject: ask for an optional reason so the LLM sees
-  // concrete feedback as the tool's return value.
+  // Free-text path: the user typed a rejection reason at the choice
+  // prompt instead of picking a key. Use it directly so the LLM sees
+  // their feedback without a second prompt.
+  if (answer.reason != null) {
+    return reject(answer.reason)
+  }
+
+  // Interactive reject (user picked "r"): ask for an optional reason
+  // so the LLM sees concrete feedback as the tool's return value.
   const reason = input("Why are you rejecting? (press enter to skip) ")
-  if (reason == "") { return reject() }
+  if (reason == "") {
+    return reject()
+  }
   return reject(reason)
 }
 
@@ -626,10 +704,9 @@ export def _handler(intr: any): any {
  * @param opts.fields - Per-kind config controlling the (ap) prompt
  *   option. Kinds not present here don't offer (ap).
  */
-export def cliPolicyHandler(opts: {
-  file: string,
-  fields: ScopedRuleFields,
-}): any {
+export def cliPolicyHandler(
+  opts: { file: string; fields: ScopedRuleFields },
+): any {
   """
   CLI sugar for an interactive policy handler. Owns load + save +
   prompt + record + return approve/reject. Install on the outermost
@@ -639,8 +716,8 @@ export def cliPolicyHandler(opts: {
   Users of this helper should bind the returned handler to a variable
   before using it with `handle ... with`, e.g.:
 
-      const handler = cliPolicyHandler({ file: ..., fields: ... })
-      handle { ... } with handler
+  const handler = cliPolicyHandler({ file: ..., fields: ... })
+  handle { ... } with handler
 
   @param opts.file - Path to the on-disk policy file
   @param opts.fields - Per-kind config controlling the "approve-always-here" option

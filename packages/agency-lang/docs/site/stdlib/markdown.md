@@ -41,7 +41,7 @@ export type InlineText = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/markdown.agency#L35))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/markdown.agency#L39))
 
 ### InlineSoftBreak
 
@@ -54,7 +54,7 @@ export type InlineSoftBreak = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/markdown.agency#L41))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/markdown.agency#L45))
 
 ### InlineHardBreak
 
@@ -67,7 +67,7 @@ export type InlineHardBreak = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/markdown.agency#L46))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/markdown.agency#L50))
 
 ### InlineBold
 
@@ -81,7 +81,7 @@ export type InlineBold = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/markdown.agency#L51))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/markdown.agency#L55))
 
 ### InlineItalic
 
@@ -95,7 +95,7 @@ export type InlineItalic = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/markdown.agency#L57))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/markdown.agency#L61))
 
 ### InlineBoldItalic
 
@@ -109,7 +109,7 @@ export type InlineBoldItalic = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/markdown.agency#L63))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/markdown.agency#L67))
 
 ### InlineStrike
 
@@ -123,7 +123,7 @@ export type InlineStrike = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/markdown.agency#L69))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/markdown.agency#L73))
 
 ### InlineCode
 
@@ -137,7 +137,7 @@ export type InlineCode = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/markdown.agency#L75))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/markdown.agency#L79))
 
 ### InlineLink
 
@@ -153,7 +153,7 @@ export type InlineLink = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/markdown.agency#L81))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/markdown.agency#L85))
 
 ### Image
 
@@ -169,7 +169,7 @@ export type Image = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/markdown.agency#L89))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/markdown.agency#L93))
 
 ### InlineRefLink
 
@@ -184,7 +184,7 @@ export type InlineRefLink = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/markdown.agency#L97))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/markdown.agency#L101))
 
 ### InlineRefImage
 
@@ -199,7 +199,7 @@ export type InlineRefImage = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/markdown.agency#L104))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/markdown.agency#L108))
 
 ### InlineFootnoteRef
 
@@ -216,7 +216,7 @@ export type InlineFootnoteRef = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/markdown.agency#L112))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/markdown.agency#L116))
 
 ### InlineHTML
 
@@ -230,7 +230,7 @@ export type InlineHTML = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/markdown.agency#L119))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/markdown.agency#L123))
 
 ### Paragraph
 
@@ -244,7 +244,7 @@ export type Paragraph = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/markdown.agency#L127))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/markdown.agency#L131))
 
 ### Heading
 
@@ -259,7 +259,7 @@ export type Heading = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/markdown.agency#L133))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/markdown.agency#L137))
 
 ### CodeBlock
 
@@ -276,7 +276,7 @@ export type CodeBlock = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/markdown.agency#L141))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/markdown.agency#L145))
 
 ### BlockQuote
 
@@ -292,7 +292,7 @@ export type BlockQuote = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/markdown.agency#L149))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/markdown.agency#L153))
 
 ### ListItem
 
@@ -315,7 +315,7 @@ export type ListItem = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/markdown.agency#L159))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/markdown.agency#L163))
 
 ### List
 
@@ -333,7 +333,7 @@ export type List = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/markdown.agency#L167))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/markdown.agency#L171))
 
 ### HorizontalRule
 
@@ -346,7 +346,7 @@ export type HorizontalRule = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/markdown.agency#L175))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/markdown.agency#L179))
 
 ### Alignment
 
@@ -359,7 +359,7 @@ Per-column alignment for a Markdown table. `null` means no explicit
 export type Alignment = "left" | "right" | "center" | null
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/markdown.agency#L181))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/markdown.agency#L185))
 
 ### Table
 
@@ -375,7 +375,7 @@ export type Table = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/markdown.agency#L184))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/markdown.agency#L188))
 
 ### LinkDef
 
@@ -393,7 +393,7 @@ export type LinkDef = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/markdown.agency#L193))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/markdown.agency#L197))
 
 ### FootnoteDef
 
@@ -408,7 +408,7 @@ export type FootnoteDef = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/markdown.agency#L201))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/markdown.agency#L205))
 
 ### HTMLBlock
 
@@ -422,7 +422,7 @@ export type HTMLBlock = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/markdown.agency#L208))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/markdown.agency#L212))
 
 ### Frontmatter
 
@@ -440,7 +440,7 @@ export type Frontmatter = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/markdown.agency#L216))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/markdown.agency#L220))
 
 ### ParseResult
 
@@ -460,7 +460,7 @@ export type ParseResult = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/markdown.agency#L224))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/markdown.agency#L228))
 
 ## Functions
 
@@ -490,7 +490,7 @@ Parse a Markdown string into a structured AST. Returns an object with
 
 **Returns:** [ParseResult](#parseresult)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/markdown.agency#L231))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/markdown.agency#L235))
 
 ### frontmatter
 
@@ -516,4 +516,68 @@ Extract just the YAML-style frontmatter block from a Markdown string.
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/markdown.agency#L248))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/markdown.agency#L252))
+
+### walk
+
+```ts
+walk(blocks: any[], block: (any) => any): any[]
+```
+
+Walk a Markdown AST top-down, calling `block` on every block and inline
+  node. The block receives the node as an object and returns a (possibly
+  new) node — children of the returned node are then walked recursively.
+  Returns the transformed array of block nodes. The input AST is not
+  mutated.
+
+  Typically used with the trailing-block syntax:
+
+  ```ts
+  const result = parse(input)
+  const transformed = walk(result.blocks) as node {
+    if (node.type == "code-block") {
+      return { ...node, content: highlight(node.content, node.language) }
+    }
+    return node
+  }
+  ```
+
+  @param blocks - The array of block nodes returned by `parse(...).blocks`
+  @param block - Callback invoked with each node; returns the replacement node
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| blocks | `any[]` |  |
+| block | `(any) => any` |  |
+
+**Returns:** `any[]`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/markdown.agency#L276))
+
+### renderForCli
+
+```ts
+renderForCli(blocks: any[]): string
+```
+
+Render a Markdown AST (array of block nodes) to an ANSI-styled string
+  suitable for direct printing in a terminal. Links use OSC 8 escapes so
+  capable terminals render them as clickable hyperlinks.
+
+  Code-block bodies are emitted verbatim, so pre-process them with `walk`
+  if you want syntax highlighting inside the fences (this is what
+  `highlight(code, "markdown")` does internally).
+
+  @param blocks - The array of block nodes to render
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| blocks | `any[]` |  |
+
+**Returns:** `string`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/markdown.agency#L302))

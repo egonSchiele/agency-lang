@@ -96,11 +96,127 @@ const COLOR_RESET = "\x1b[0m";
 const DIM = "\x1b[2m";
 const CLEAR_LINE = "\r\x1b[K";
 
+const SPINNERS = {
+  "line": {
+    "interval": 130,
+    "frames": [
+      "-",
+      "\\",
+      "|",
+      "/"
+    ]
+  },
+  "rollingLine": {
+    "interval": 80,
+    "frames": [
+      "/  ",
+      " - ",
+      " \\ ",
+      "  |",
+      "  |",
+      " \\ ",
+      " - ",
+      "/  "
+    ]
+  },
+
+  "star": {
+    "interval": 70,
+    "frames": [
+      "✶",
+      "✸",
+      "✹",
+      "✺",
+      "✹",
+      "✷"
+    ]
+  },
+  "star2": {
+    "interval": 80,
+    "frames": [
+      "+",
+      "x",
+      "*"
+    ]
+  },
+  "bouncingBar": {
+    "interval": 80,
+    "frames": [
+      "[    ]",
+      "[=   ]",
+      "[==  ]",
+      "[=== ]",
+      "[====]",
+      "[ ===]",
+      "[  ==]",
+      "[   =]",
+      "[    ]",
+      "[   =]",
+      "[  ==]",
+      "[ ===]",
+      "[====]",
+      "[=== ]",
+      "[==  ]",
+      "[=   ]"
+    ]
+  },
+  "bouncingBall": {
+    "interval": 80,
+    "frames": [
+      "( ●    )",
+      "(  ●   )",
+      "(   ●  )",
+      "(    ● )",
+      "(     ●)",
+      "(    ● )",
+      "(   ●  )",
+      "(  ●   )",
+      "( ●    )",
+      "(●     )"
+    ]
+  },
+  "pong": {
+    "interval": 80,
+    "frames": [
+      "▐⠂       ▌",
+      "▐⠈       ▌",
+      "▐ ⠂      ▌",
+      "▐ ⠠      ▌",
+      "▐  ⡀     ▌",
+      "▐  ⠠     ▌",
+      "▐   ⠂    ▌",
+      "▐   ⠈    ▌",
+      "▐    ⠂   ▌",
+      "▐    ⠠   ▌",
+      "▐     ⡀  ▌",
+      "▐     ⠠  ▌",
+      "▐      ⠂ ▌",
+      "▐      ⠈ ▌",
+      "▐       ⠂▌",
+      "▐       ⠠▌",
+      "▐       ⡀▌",
+      "▐      ⠠ ▌",
+      "▐      ⠂ ▌",
+      "▐     ⠈  ▌",
+      "▐     ⠂  ▌",
+      "▐    ⠠   ▌",
+      "▐    ⡀   ▌",
+      "▐   ⠠    ▌",
+      "▐   ⠂    ▌",
+      "▐  ⠈     ▌",
+      "▐  ⠂     ▌",
+      "▐ ⠠      ▌",
+      "▐ ⡀      ▌",
+      "▐⠠       ▌"
+    ]
+  },
+}
+
 // Same braille frames the TUI's `_spinnerFrame` uses. Kept inline
 // (not imported) so the line-mode bridge doesn't depend on the TUI
 // bridge module.
-const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
-const SPINNER_INTERVAL_MS = 100;
+const SPINNER_FRAMES = SPINNERS.line.frames;
+const SPINNER_INTERVAL_MS = SPINNERS.line.interval;
 
 /**
  * Start a single-line "Thinking Ns" spinner. Returns a stop function
@@ -118,7 +234,7 @@ const SPINNER_INTERVAL_MS = 100;
  * runs don't get spinner frames in their logs.
  */
 function startSpinner(useTTY: boolean): () => void {
-  if (!useTTY) return () => {};
+  if (!useTTY) return () => { };
   const startedAt = Date.now();
   let stopped = false;
   // Capture the *real* write before patching so the spinner itself
@@ -290,7 +406,7 @@ function installSlashHints(
   prompt: string,
   useTTY: boolean,
 ): () => void {
-  if (!useTTY || entries.length === 0) return () => {};
+  if (!useTTY || entries.length === 0) return () => { };
   const visiblePromptLen = visibleLength(prompt);
 
   let renderedRows = 0;

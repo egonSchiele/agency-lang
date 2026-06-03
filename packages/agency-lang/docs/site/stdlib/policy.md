@@ -1,5 +1,121 @@
 # policy
 
+## Overview
+
+  A `Policy` is an ordered list of rules per interrupt kind that decides,
+  without prompting the user, whether to approve or reject each interrupt
+  an agent raises. Rules use glob patterns ("match objects") against the
+  interrupt's `data` fields. Evaluation is first-match-wins.
+
+  This module gives you two layers:
+
+  1. **Pure primitives** for building / loading / validating policies
+     and writing your own handler:
+     `checkPolicy`, `validatePolicy`, `parsePolicyFile`,
+     `writePolicyFile`, `recordRule`, `recordScopedRule`,
+     `buildScopedMatch`.
+
+  2. **CLI sugar** — `cliPolicyHandler` — drops in as a handler for
+     interactive agents. It loads `policy.json` on first use, prompts
+     the user with (a)/(r)/(aa)/(ap)/(rr) for each new interrupt
+     kind, records "always" decisions to disk, and replays matching
+     rules on subsequent interrupts so the user is only asked once
+     per pattern.
+
+  ## Usage: the CLI handler (most common)
+
+  ```ts
+  import { cliPolicyHandler, ScopedRuleFields } from "std::policy"
+
+  // Per-kind config controlling the "approve always here (ap)" option.
+  // For every kind you list, the (ap) prompt offers to pin the listed
+  // data fields. `matchSubpaths: true` brace-expands the value so
+  // `/tmp/x` also matches `/tmp/x/anything`.
+  const FIELDS: ScopedRuleFields = {
+    "std::read":  [{ field: "dir", matchSubpaths: true }],
+    "std::write": [{ field: "dir", matchSubpaths: true }],
+    "std::exec":  [
+      { field: "command",    matchSubpaths: false },
+      { field: "subcommand", matchSubpaths: false },
+    ],
+  }
+
+  node main() {
+    // Bind to a local variable so `handle ... with handler` parses
+    // (the `with` clause only accepts an identifier).
+    const handler = cliPolicyHandler({
+      file: "${env("HOME")}/.myapp/policy.json",
+      fields: FIELDS,
+    })
+    handle {
+      // Every interrupt the inner code raises is filtered through the
+      // policy. New kinds prompt the user; "aa" / "ap" decisions are
+      // persisted so the next run starts pre-approved.
+      llm("hi", { tools: [...] })
+    } with handler
+  }
+  ```
+
+  ## Usage: writing your own handler
+
+  If you want different UI (a web prompt, a Slack bot, a non-interactive
+  CI mode), build on the pure primitives:
+
+  ```ts
+  import { Policy, checkPolicy, recordRule } from "std::policy"
+
+  let myPolicy: Policy = {}
+
+  def myHandler(intr) {
+    const decision = checkPolicy(myPolicy, intr)
+    if (decision.type == "approve") { return approve() }
+    if (decision.type == "reject")  { return reject() }
+    // decision.type == "propagate" -- no rule matches. Ask your UI:
+    const choice = askUserSomehow(intr)
+    if (choice == "always-approve") {
+      myPolicy = recordRule(myPolicy, intr.kind, "approve")
+      return approve()
+    }
+    return choice == "approve" ? approve() : reject()
+  }
+  ```
+
+  ## How "matches" work
+
+  Each rule has an optional `match` map. The values are glob patterns
+  (via picomatch); evaluation passes when every key in `match` exists
+  in `intr.data` and its value matches the pattern. A rule with no
+  `match` is a catch-all for that kind.
+
+  Example: this rule auto-approves reads under `/tmp` (and any subdir):
+
+  ```ts
+  {
+    "std::read": [
+      { match: { dir: "{/tmp,/tmp/**}" }, action: "approve" }
+    ]
+  }
+  ```
+
+  `buildScopedMatch` constructs these match maps from a
+  `ScopedRuleFields` config — that's all the "scoped" helpers do.
+
+  ## Precedence trap
+
+  `recordRule` **appends** a catch-all rule. Because evaluation is
+  first-match-wins, a new approve rule will be ignored if an earlier
+  catch-all already covers the kind:
+
+  ```ts
+  let p = recordRule({}, "std::read", "reject")
+  p = recordRule(p, "std::read", "approve")  // dead — the reject wins
+  ```
+
+  `recordScopedRule` **prepends**, so a freshly-recorded scoped rule
+  always wins over an older catch-all. If you're letting users
+  flip decisions, either inspect the existing rules and replace
+  them, or start from an empty `Policy`.
+
 ## Types
 
 ### InterruptDataKey

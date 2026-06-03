@@ -9,7 +9,7 @@ import {
  } from "agency-lang/stdlib-lib/policy.js"
 
 
-/**
+/** @module
   ## Overview
 
   A `Policy` is an ordered list of rules per interrupt kind that decides,

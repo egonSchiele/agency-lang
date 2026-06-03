@@ -1,3 +1,5 @@
+import { filter, map } from "std::array"
+
 import {
   _runLoop,
   _runReplLoop,
@@ -16,10 +18,10 @@ import {
   _resolveChoice,
   _cancelChoice,
   _peekReplExitSignal,
-} from "agency-lang/stdlib-lib/ui.js"
-import { filter, map } from "std::array"
+  _printChoicePromptFallback,
+ } from "agency-lang/stdlib-lib/ui.js"
 
-/** @module
+/**
   ## Overview
 
   Declarative terminal UI for interactive CLI agents. Two layers
@@ -128,11 +130,6 @@ export type KeyEvent = {
   key: string;
   shift?: boolean;
   ctrl?: boolean;
-  /**
-   * For `key: "paste"` events emitted while the terminal is in
-   * bracketed-paste mode, the full pasted text (e.g. the body of a
-   * Cmd+V on macOS). Undefined for normal keypresses.
-   */
   text?: string
 }
 
@@ -189,9 +186,15 @@ export def text(content: string): Element {
 // as "leave the style untouched and let the renderer apply its own
 // default."
 def _setStyleIfSet(style: any, key: string, value: any) {
-  if (value == null) { return }
-  if (value == "") { return }
-  if (value == false) { return }
+  if (value == null) {
+    return
+  }
+  if (value == "") {
+    return
+  }
+  if (value == false) {
+    return
+  }
   style[key] = value
 }
 
@@ -204,9 +207,9 @@ def _setStyleIfSet(style: any, key: string, value: any) {
  */
 export def line(
   content: string,
-  flex?: number,
-  width?: number,
-  height?: number,
+  flex: number = null,
+  width: number = null,
+  height: number = null,
   fg: string = "",
   bg: string = "",
   bold: boolean = false,
@@ -261,9 +264,9 @@ export def line(
 export def list(
   items: string[],
   selectedIndex: number = 0,
-  flex?: number,
-  width?: number,
-  height?: number,
+  flex: number = null,
+  width: number = null,
+  height: number = null,
   border: boolean = false,
   borderColor: string = "",
   visible: boolean = true,
@@ -309,9 +312,9 @@ export def list(
  */
 export def textInput(
   value: string = "",
-  flex?: number,
-  width?: number,
-  height?: number,
+  flex: number = null,
+  width: number = null,
+  height: number = null,
   fg: string = "",
   bg: string = "",
 ): Element {
@@ -353,10 +356,10 @@ export def textInput(
 
 def _mkBoxStyle(
   flexDirection: string,
-  flex?: number,
-  width?: number,
-  height?: number,
-  padding?: number,
+  flex: number = null,
+  width: number = null,
+  height: number = null,
+  padding: number = null,
   border: boolean = false,
   borderColor: string = "",
   label: string = "",
@@ -398,10 +401,10 @@ def _makeBuilder(kids: any[]): Builder {
  * block receives a fresh `Builder` to populate the column.
  */
 export def column(
-  flex?: number,
-  width?: number,
-  height?: number,
-  padding?: number,
+  flex: number = null,
+  width: number = null,
+  height: number = null,
+  padding: number = null,
   border: boolean = false,
   borderColor: string = "",
   label: string = "",
@@ -462,10 +465,10 @@ export def column(
  * block receives a fresh `Builder` to populate the row.
  */
 export def row(
-  flex?: number,
-  width?: number,
-  height?: number,
-  padding?: number,
+  flex: number = null,
+  width: number = null,
+  height: number = null,
+  padding: number = null,
   border: boolean = false,
   borderColor: string = "",
   label: string = "",
@@ -520,10 +523,10 @@ export def row(
  * (border, padding, background) without setting `flexDirection`.
  */
 export def box(
-  flex?: number,
-  width?: number,
-  height?: number,
-  padding?: number,
+  flex: number = null,
+  width: number = null,
+  height: number = null,
+  padding: number = null,
   border: boolean = false,
   borderColor: string = "",
   label: string = "",
@@ -578,10 +581,10 @@ export def box(
 
 def _addRow(
   kids: any[],
-  flex?: number,
-  width?: number,
-  height?: number,
-  padding?: number,
+  flex: number = null,
+  width: number = null,
+  height: number = null,
+  padding: number = null,
   border: boolean = false,
   borderColor: string = "",
   label: string = "",
@@ -609,10 +612,10 @@ def _addRow(
 
 def _addColumn(
   kids: any[],
-  flex?: number,
-  width?: number,
-  height?: number,
-  padding?: number,
+  flex: number = null,
+  width: number = null,
+  height: number = null,
+  padding: number = null,
   border: boolean = false,
   borderColor: string = "",
   label: string = "",
@@ -640,10 +643,10 @@ def _addColumn(
 
 def _addBox(
   kids: any[],
-  flex?: number,
-  width?: number,
-  height?: number,
-  padding?: number,
+  flex: number = null,
+  width: number = null,
+  height: number = null,
+  padding: number = null,
   border: boolean = false,
   borderColor: string = "",
   label: string = "",
@@ -672,9 +675,9 @@ def _addBox(
 def _addLine(
   kids: any[],
   content: string,
-  flex?: number,
-  width?: number,
-  height?: number,
+  flex: number = null,
+  width: number = null,
+  height: number = null,
   fg: string = "",
   bg: string = "",
   bold: boolean = false,
@@ -704,9 +707,9 @@ def _addList(
   kids: any[],
   items: string[],
   selectedIndex: number = 0,
-  flex?: number,
-  width?: number,
-  height?: number,
+  flex: number = null,
+  width: number = null,
+  height: number = null,
   border: boolean = false,
   borderColor: string = "",
   visible: boolean = true,
@@ -728,9 +731,9 @@ def _addList(
 def _addTextInput(
   kids: any[],
   value: string = "",
-  flex?: number,
-  width?: number,
-  height?: number,
+  flex: number = null,
+  width: number = null,
+  height: number = null,
   fg: string = "",
   bg: string = "",
 ): Element {
@@ -802,7 +805,7 @@ export def runLoop(
   render: any,
   handleKey: any,
   isDone: any,
-  tickMs?: number,
+  tickMs: number = null,
 ): any {
   """
   Elm/Ink-style state machine driver. Renders `initialState`, waits
@@ -842,8 +845,6 @@ export def runLoop(
 // opening the palette steals exactly this many rows from the output
 // view and closing it returns them.
 const _PALETTE_ROWS: number = 5
-
-
 
 type ReplInputState = {
   buffer: string;
@@ -896,7 +897,8 @@ type ReplChoiceState = {
   body: string;
   items: ChoiceItem[];
   filter: string;
-  cursor: number
+  cursor: number;
+  allowFreeText: boolean
 }
 
 type ReplState = {
@@ -958,6 +960,7 @@ export def chooseOption(
   title: string,
   body: string,
   items: ChoiceItem[],
+  allowFreeText: boolean = false,
 ): string {
   """
   Show a modal choice prompt over the active repl() and block until
@@ -972,25 +975,40 @@ export def chooseOption(
   the valid `key`s. Used by std::policy to surface its approve/reject
   menus through the active REPL without fighting with the input bar.
 
+  When `allowFreeText` is true and the user's typed input doesn't
+  match any item key, the prompt resolves with the typed text
+  instead of reprompting. In the TUI modal this fires on Enter when
+  the typed filter narrows the visible items to zero; in line-mode
+  fallback it fires on any non-empty input that isn't a known key.
+  Empty input still reprompts. Callers (notably std::policy) use this
+  to collapse "pick reject + then type reason" into a single step.
+
   @param title - Modal heading (e.g. "Approve interrupt: shell::exec")
   @param body - Multi-line context shown above the choices (or "")
   @param items - The set of {key, label} choices to pick from
+  @param allowFreeText - Accept free-form text in addition to item keys
   """
   if (_activeRepl != null) {
-    return _openChoicePrompt({
+    return _openChoicePrompt(
+      {
       title: title,
       body: body,
-      items: items
-    })
+      items: items,
+      allowFreeText: allowFreeText
+    },
+    )
   }
-  // No-REPL fallback: print the title + body once, then loop on
-  // `input()` until the answer matches one of the item keys. Same
-  // contract as the pre-modal `_routePrompt` had.
-  if (title != "") { print(title) }
-  if (body != "")  { print(body) }
+  // No-REPL fallback: render the prompt block via the styled bridge
+  // helper, then loop on `input()` until the answer matches one of
+  // the item keys. The bridge call replaces what used to be a
+  // sequence of plain `print()` lines; it draws a dim background
+  // block with bold-yellow title + cyan keys when stdout is a TTY,
+  // and falls back to the original plain-print rendering when piped
+  // (so log files stay free of ANSI). The retry loop and answer
+  // contract are unchanged.
+  _printChoicePromptFallback(title, body, items)
   let validKeys: string[] = []
   for (item in items) {
-    print("  ${item.key}  ${item.label}")
     validKeys.push(item.key)
   }
   const optsHint = "(one of ${validKeys.join("/")})"
@@ -1000,6 +1018,12 @@ export def chooseOption(
     answer = input("> ").trim()
     if (validKeys.includes(answer)) {
       valid = true
+    } else if (allowFreeText && answer != "") {
+      // Free-text path: any non-empty input that doesn't match a key
+      // is returned verbatim so the caller can treat it as a reason
+      // (or similar). Empty input still reprompts so accidental Enter
+      // doesn't get interpreted as a free-text answer.
+      valid = true
     } else {
       print(optsHint)
     }
@@ -1007,7 +1031,9 @@ export def chooseOption(
   return answer
 }
 
-def _entryKey(entry: any): string { return entry.key }
+def _entryKey(entry: any): string {
+  return entry.key
+}
 
 // Returns the keys of palette commands whose name contains the
 // lowercased filter substring. Lists in insertion order. Uses the
@@ -1082,8 +1108,12 @@ def _choiceProjection(state: ReplState): any {
   const filteredItems = _filteredChoiceItems(choice)
   let cursor = choice.cursor
   const maxCursor = filteredItems.length - 1
-  if (cursor > maxCursor) { cursor = maxCursor }
-  if (cursor < 0)         { cursor = 0 }
+  if (cursor > maxCursor) {
+    cursor = maxCursor
+  }
+  if (cursor < 0) {
+    cursor = 0
+  }
   // Pad short keys so the labels line up — most choice menus mix
   // single-char keys (`a`) with two-char keys (`aa`). 4 wide gives
   // room for up to three-char keys (`yes`) with a trailing space.
@@ -1112,13 +1142,10 @@ def _choiceProjection(state: ReplState): any {
 }
 
 def _replView(state: ReplState): Element {
-  const status: { left: string, right: string, context?: string } = state.config.status()
+  const status: { left: string; right: string; context: string | undefined } = state.config.status()
   // `status.context` is optional — callers that pre-date the second
-  // status line return just `{left, right}`, so guard for null/empty.
-  let contextLine: string = ""
-  if (status.context != null) {
-    contextLine = status.context
-  }
+  // status line return just `{left, right}`, so default to "".
+  const contextLine: string = status.context ?? ""
   const paletteKeys = _filteredPaletteKeys(state)
   let paletteItems: string[] = []
   for (commandName in paletteKeys) {
@@ -1207,7 +1234,9 @@ def _replView(state: ReplState): Element {
     mainCol.line("", fill: "─", fg: "gray")
     mainCol.row(height: 1) as statusLine {
       statusLine.line(status.left, width: leftStatusWidth)
-      statusLine.box(flex: 1) as _ {}
+      statusLine.box(flex: 1) as _ {
+
+      }
       statusLine.line(status.right, width: rightStatusWidth)
     }
     mainCol.line(contextLine, fg: "gray")
@@ -1350,7 +1379,7 @@ def _appendPaletteFilterCharacter(
 
 def _replReducePaletteOpen(state: ReplState, keyEvent: KeyEvent): ReplState {
   const paletteKeys = _filteredPaletteKeys(state)
-  match (keyEvent) {
+  match(keyEvent) {
     { key: "escape" } => return _closePalette(state)
     { key: "up" } => return _movePaletteCursor(state, paletteKeys, -1)
     { key: "down" } => return _movePaletteCursor(state, paletteKeys, 1)
@@ -1451,8 +1480,7 @@ def _filteredChoiceItems(choice: ReplChoiceState): ChoiceItem[] {
 }
 
 def _matchesChoiceFilter(item: ChoiceItem, needle: string): boolean {
-  return item.label.toLowerCase().includes(needle)
-    || item.key.toLowerCase().includes(needle)
+  return item.label.toLowerCase().includes(needle) || item.key.toLowerCase().includes(needle)
 }
 
 // Reducer branch for the choice modal. Routes keystrokes:
@@ -1472,10 +1500,25 @@ def _replReduceChoice(state: ReplState, keyEvent: KeyEvent): ReplState {
   const visibleItems = _filteredChoiceItems(choice)
   if (keyEvent.key == "escape") {
     _cancelChoice("user cancelled")
-    return { ...state, choice: null }
+    return {
+      ...state,
+      choice: null
+    }
   }
   if (keyEvent.key == "enter") {
     if (visibleItems.length == 0) {
+      // Free-text path: when the typed filter matches no items and
+      // the caller opted in via `allowFreeText`, Enter resolves with
+      // the filter text verbatim instead of being a no-op. Empty
+      // filter still no-ops so an accidental Enter on an empty prompt
+      // doesn't resolve with "".
+      if (choice.allowFreeText && choice.filter != "") {
+        _resolveChoice(choice.filter)
+        return {
+          ...state,
+          choice: null
+        }
+      }
       return state
     }
     let cursor = choice.cursor
@@ -1483,19 +1526,40 @@ def _replReduceChoice(state: ReplState, keyEvent: KeyEvent): ReplState {
       cursor = visibleItems.length - 1
     }
     _resolveChoice(visibleItems[cursor].key)
-    return { ...state, choice: null }
+    return {
+      ...state,
+      choice: null
+    }
   }
   if (keyEvent.key == "up") {
     let cursor = choice.cursor - 1
-    if (cursor < 0) { cursor = 0 }
-    return { ...state, choice: { ...choice, cursor: cursor } }
+    if (cursor < 0) {
+      cursor = 0
+    }
+    return {
+      ...state,
+      choice: {
+        ...choice,
+        cursor: cursor
+      }
+    }
   }
   if (keyEvent.key == "down") {
     let cursor = choice.cursor + 1
     const maxCursor = visibleItems.length - 1
-    if (cursor > maxCursor) { cursor = maxCursor }
-    if (cursor < 0)         { cursor = 0 }
-    return { ...state, choice: { ...choice, cursor: cursor } }
+    if (cursor > maxCursor) {
+      cursor = maxCursor
+    }
+    if (cursor < 0) {
+      cursor = 0
+    }
+    return {
+      ...state,
+      choice: {
+        ...choice,
+        cursor: cursor
+      }
+    }
   }
   if (keyEvent.key == "backspace") {
     const currentFilter = choice.filter
@@ -1540,13 +1604,17 @@ def _syncChoiceFromBridge(state: ReplState): ReplState {
         title: tsRequest.title,
         body: tsRequest.body,
         items: tsRequest.items,
+        allowFreeText: tsRequest.allowFreeText == true,
         filter: "",
         cursor: 0
       }
     }
   }
   if (tsRequest == null && state.choice != null) {
-    return { ...state, choice: null }
+    return {
+      ...state,
+      choice: null
+    }
   }
   return state
 }
@@ -1564,24 +1632,19 @@ def _replReduce(replState: ReplState, keyEvent: KeyEvent): ReplState {
     return _replReducePaletteOpen(state, keyEvent)
   }
 
-  match (keyEvent) {
-    { ctrl: true, key: "c" } => return { ...state, done: true }
+  match(keyEvent) {
+    { ctrl: true, key: "c" } => return {
+      ...state,
+      done: true
+    }
     { ctrl: true, key: "u" } => return _clearInputBuffer(state)
-    // Bracketed-paste payload from the terminal (e.g. Cmd+V on
-    // macOS). `_pasteText` coerces the optional `keyEvent.text` to a
-    // plain string so the match arm stays a single expression.
-    { key: "paste" } => return _appendPaste(state, _pasteText(keyEvent))
+    // Bracketed-paste payload from the terminal (e.g. Cmd+V on    // macOS). `_pasteText` coerces the optional `keyEvent.text` to a    // plain string so the match arm stays a single expression.    { key: "paste" } => return _appendPaste(state, _pasteText(keyEvent))
     { key: "/" } if (state.input.buffer == "") => return _openPalette(state)
     { key: "up" } if (state.input.historyIdx > 0) => return _recallPreviousHistory(state)
     { key: "down" } if (state.input.historyIdx < state.input.history.length) => return _recallNextHistory(state)
     { key: "backspace" } if (state.input.buffer != "") => return _removeInputCharacter(state)
-    // Shift+Enter inserts a literal newline. Must come before the
-    // plain `enter` arms — match arms with more specific predicates
-    // win, but only when listed before the more general one.
-    { key: "enter", shift: true } => return _appendInputCharacter(state, "\n")
-    // Empty-buffer Enter is a no-op: skip writing a blank "You" row
-    // and entering the busy/Thinking state for an empty prompt.
-    { key: "enter" } if (state.input.buffer == "") => return state
+    // Shift+Enter inserts a literal newline. Must come before the    // plain `enter` arms — match arms with more specific predicates    // win, but only when listed before the more general one.    { key: "enter", shift: true } => return _appendInputCharacter(state, "\n")
+    // Empty-buffer Enter is a no-op: skip writing a blank "You" row    // and entering the busy/Thinking state for an empty prompt.    { key: "enter" } if (state.input.buffer == "") => return state
     { key: "enter" } => return _submitPrompt(state)
     { key } if (key.length == 1) => return _appendInputCharacter(state, key)
     _ => return state
@@ -1607,7 +1670,7 @@ export def repl(
   historyFile: string = "",
   historyMax: number = 1000,
   paletteCommands: any = null,
-  tickMs?: number,
+  tickMs: number = null,
 ) {
   """
   Drop-in REPL widget for interactive CLI agents. Bundles a
@@ -1628,9 +1691,9 @@ export def repl(
   @param historyMax - Trim oldest entries beyond this count
   @param paletteCommands - Map of /cmd -> description, iterated in order
   @param tickMs - Render cadence in ms. Default null = event-driven
-    (status only re-renders on key events). A positive value enables
-    live status / spinner updates between keys but currently leaks
-    one pinned runtime checkpoint per render, so prefer the default.
+  (status only re-renders on key events). A positive value enables
+  live status / spinner updates between keys but currently leaks
+  one pinned runtime checkpoint per render, so prefer the default.
   """
   let paletteCommandMap = paletteCommands
   if (paletteCommandMap == null) {
@@ -1664,7 +1727,7 @@ export def repl(
       onSubmit: onSubmit
     },
     choice: null,
-    done: false,
+    done: false
   }
   _activeRepl = initial
   // `_runReplLoop` is the TS wrapper that installs the console
@@ -1676,7 +1739,13 @@ export def repl(
   // array is shared by reference across reducer states (only the
   // outer record is shallow-copied), so console output lands on
   // the same array the renderer reads from.
-  _runReplLoop(initial, _replView, _replReduce, _replIsDone, tickMs,
-               initial.transcript.messages)
+  _runReplLoop(
+    initial,
+    _replView,
+    _replReduce,
+    _replIsDone,
+    tickMs,
+    initial.transcript.messages,
+  )
   _activeRepl = null
 }

@@ -1,5 +1,6 @@
 import { highlight, Theme } from "cli-highlight";
 import { color } from "@/utils/termcolors.js";
+import { _parseMarkdown, _renderMarkdownForCli } from "./markdown.js";
 
 // VS Code Dark+ color palette
 const blue = color.hex("#569CD6");
@@ -65,6 +66,9 @@ const vscodeDarkTheme = {
 } as unknown as Theme;
 
 export function syntaxHighlight(code: string, _language: string): string {
+  if (_language === "markdown" || _language === "md") {
+    return highlightMarkdown(code);
+  }
   try {
     const language = _language === "agency" ? "ts" : _language;
     const highlightedCode = highlight(code, {
@@ -77,4 +81,62 @@ export function syntaxHighlight(code: string, _language: string): string {
     console.error(`Error highlighting code: ${error}`);
     return code; // Return unhighlighted code on error
   }
+}
+
+/** For Markdown, plain `cli-highlight` only colors the syntax markers
+ *  (fences, `#`, `*`) and leaves code-block bodies as a single style.
+ *  Instead, parse the document, recursively highlight each fenced code
+ *  block in its own language, then render the whole AST through the CLI
+ *  renderer so the prose, links, headings, etc. get their own styling.
+ *
+ *  Falls back to the raw input when the parser cannot consume the
+ *  whole document. The tarsec Markdown parser has edge cases where it
+ *  reports `success: true` but leaves a large `rest` unconsumed —
+ *  e.g. a heading immediately followed by a list item with no blank
+ *  line between them. Rendering only `parsed.blocks` in that case
+ *  silently drops everything after the bail point, which appeared to
+ *  the user as the agent's reply being truncated mid-sentence. Trade
+ *  the highlighting for the full text whenever the parser doesn't
+ *  consume everything — losing color is better than losing content. */
+function highlightMarkdown(code: string): string {
+  const parsed = _parseMarkdown(code);
+  if (!parsed.success) {
+    console.error(
+      `[std::syntax.highlight] Markdown parse failed; returning raw text. ` +
+        `error=${JSON.stringify(parsed.error)}`,
+    );
+    return code;
+  }
+  // Defensive: any unconsumed input means the parser bailed mid-
+  // document. The blocks it did produce are still valid, but
+  // rendering only those would drop the unparsed tail. Log a
+  // diagnostic with the first non-consumed bytes so a future report
+  // of "the response was cut off" is one grep away from the trigger.
+  if (parsed.rest.length > 0) {
+    const preview = parsed.rest.slice(0, 80).replace(/\n/g, "\\n");
+    console.error(
+      `[std::syntax.highlight] Markdown parser left ${parsed.rest.length} ` +
+        `chars unconsumed; returning raw text to avoid truncating output. ` +
+        `Trigger preview: ${JSON.stringify(preview)}`,
+    );
+    return code;
+  }
+  const transformed = parsed.blocks.map((b: unknown) => {
+    if (
+      b != null &&
+      typeof b === "object" &&
+      (b as Record<string, unknown>).type === "code-block"
+    ) {
+      const block = b as { content?: string; language?: string | null };
+      return {
+        ...block,
+        content: syntaxHighlight(
+          block.content ?? "",
+          block.language ?? "plaintext",
+        ),
+      };
+    }
+    return b;
+  });
+  return _renderMarkdownForCli(transformed);
 }

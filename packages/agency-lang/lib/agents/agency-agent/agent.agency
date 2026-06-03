@@ -1,15 +1,24 @@
 import { route } from "std::agent"
+import { clearMessages, pushMessage, repl } from "std::cli"
 import { today } from "std::date"
 import { ScopedRuleFields, cliPolicyHandler } from "std::policy"
 import { exists } from "std::shell"
 import { highlight } from "std::syntax"
 import { cwd, env } from "std::system"
 import { getCost } from "std::thread"
-import { clearMessages, pushMessage, repl } from "std::ui"
 
 import { codeSysPrompt, codeTools } from "./code.agency"
+import { figs, title } from "./images/images.agency"
 import { researchSysPrompt, researchTools } from "./research.agency"
 
+
+// UI mode select — one-line swap between the alt-screen TUI and the
+// line-mode REPL. Both modules expose the same `repl` / `pushMessage`
+// / `clearMessages` surface (line mode re-exports `pushMessage` and
+// `clearMessages` from `std::ui`). Trial both and decide. See
+// `docs/superpowers/ideas/2026-06-02-line-mode-agent.md`.
+//
+//import { clearMessages, pushMessage, repl } from "std::ui"
 
 /*
  * Agency Agent — helps users create and modify Agency code.
@@ -52,15 +61,22 @@ const AGENT_DEBUG = env("AGENT_DEBUG") == "1"
 
 callback("onToolCallStart") as data {
   if (AGENT_DEBUG) {
-    print(
-      color.yellow("tool call: ${data.toolName}(${JSON.stringify(data.args)})"),
-    )
+    pushMessage(color.yellow("⏺ ${data.toolName}(${formatArgs(data.args)})"))
   }
+}
+
+def formatArgs(args: Record<string, any>): string {
+  const parts = []
+  for (key in args) {
+    const value = args[key]
+    parts.push("${key}: ${JSON.stringify(value)}")
+  }
+  return parts.join(", ")
 }
 
 callback("onToolCallEnd") as data {
   if (AGENT_DEBUG) {
-    print(
+    pushMessage(
       color.yellow(
       "tool return: ${data.toolName} -> ${JSON.stringify(data.result)} ${data.timeTaken}ms",
     ),
@@ -212,7 +228,7 @@ def _runTurn(msg: string): boolean {
   },
     msg,
   )
-  pushMessage(highlight("\n${reply}\n", language: "markdown"))
+  pushMessage(highlight("${reply}\n", language: "markdown"))
   return true
 }
 
@@ -224,7 +240,16 @@ def _buildStatus(): { left: string; right: string; context: string } {
   }
 }
 
+def sample(arr: any[]): any {
+  return arr[Math.floor(Math.random() * arr.length)]
+}
+
 node main() {
+  // Splash: a small Unicode-block panel printed once before the REPL
+  // takes over the screen. See `images/images.agency`.
+  print(sample(figs))
+  print(color.cyan(title))
+
   // Grounding: the LLM should not have to ask the user where it is
   // or what day it is. Both are appended once per run so they ride
   // with the first system message in each specialist's thread.

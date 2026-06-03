@@ -368,4 +368,195 @@ describe("std::ui — REPL state machine (Agency-driven)", () => {
     );
     expect(onSubmitCalls).toBe(1);
   });
+
+  it("chooseOption(allowFreeText: true) resolves with the filter text when no item matches", async () => {
+    // The user types a free-form rejection reason at the choice
+    // prompt instead of picking a key. With `allowFreeText: true`,
+    // pressing Enter on a filter that matches zero items resolves
+    // with that filter text — used by std::policy to collapse the
+    // "pick (r), then type reason" two-step into a single keystroke.
+    const picks: string[] = [];
+    const scripted = new ScriptedInput([
+      { key: "g" }, { key: "enter" },
+    ]);
+    _setInputSource(scripted);
+    _setOutputTarget(new FrameRecorder());
+    _setSize(80, 24);
+    const ctx = makeTestCtx();
+    try {
+      await runInTestContext(ctx, new StateStack(), new ThreadStore(), () =>
+        __call(repl, {
+          type: "named",
+          positionalArgs: [],
+          namedArgs: {
+            status: () => ({ left: "", right: "" }),
+            onSubmit: async (_p: string) => {
+              setTimeout(() => {
+                // Filter "no way" — no substring overlap with "alpha"
+                // or "beta", so visibleItems becomes empty. Enter
+                // should resolve with the filter text verbatim.
+                for (const ch of "no way") {
+                  scripted.feedKey({ key: ch });
+                }
+                scripted.feedKey({ key: "enter" });
+              }, 0);
+              const answer = await __call(chooseOption, {
+                type: "named",
+                positionalArgs: [],
+                namedArgs: {
+                  title: "Pick one",
+                  body: "context",
+                  items: [
+                    { key: "a", label: "alpha" },
+                    { key: "b", label: "beta" },
+                  ],
+                  allowFreeText: true,
+                },
+              });
+              picks.push(answer as string);
+              return false;
+            },
+            paletteCommands: {},
+          },
+        }),
+      );
+    } finally {
+      _setInputSource(null);
+      _setOutputTarget(null);
+      _uninstallConsoleCapture();
+    }
+    expect(picks).toEqual(["no way"]);
+  });
+
+  it("chooseOption(allowFreeText: true) still picks a matched item when one is visible", async () => {
+    // Sanity check: free-text mode doesn't override the normal
+    // key-pick path. A filter that narrows to a single item resolves
+    // with that item's key on Enter, exactly like the default mode.
+    const picks: string[] = [];
+    const scripted = new ScriptedInput([
+      { key: "g" }, { key: "enter" },
+    ]);
+    _setInputSource(scripted);
+    _setOutputTarget(new FrameRecorder());
+    _setSize(80, 24);
+    const ctx = makeTestCtx();
+    try {
+      await runInTestContext(ctx, new StateStack(), new ThreadStore(), () =>
+        __call(repl, {
+          type: "named",
+          positionalArgs: [],
+          namedArgs: {
+            status: () => ({ left: "", right: "" }),
+            onSubmit: async (_p: string) => {
+              setTimeout(() => {
+                // "be" narrows to just the "beta" item.
+                scripted.feedKey({ key: "b" });
+                scripted.feedKey({ key: "e" });
+                scripted.feedKey({ key: "enter" });
+              }, 0);
+              const answer = await __call(chooseOption, {
+                type: "named",
+                positionalArgs: [],
+                namedArgs: {
+                  title: "Pick one",
+                  body: "",
+                  items: [
+                    { key: "a", label: "alpha" },
+                    { key: "b", label: "beta" },
+                  ],
+                  allowFreeText: true,
+                },
+              });
+              picks.push(answer as string);
+              return false;
+            },
+            paletteCommands: {},
+          },
+        }),
+      );
+    } finally {
+      _setInputSource(null);
+      _setOutputTarget(null);
+      _uninstallConsoleCapture();
+    }
+    expect(picks).toEqual(["b"]);
+  });
+});
+
+describe("std::ui — chooseOption line-mode fallback", () => {
+  it("returns free text verbatim when allowFreeText is true and input is not a known key", async () => {
+    // No active repl() → chooseOption hits the `print + input` loop.
+    // Inject `__agencyInputOverride` to feed a free-form rejection
+    // reason; with `allowFreeText: true` it should be returned
+    // verbatim instead of reprompting.
+    const fed: string[] = [];
+    (globalThis as any).__agencyInputOverride = async (_prompt: string) => {
+      const text = "please don't delete that file";
+      fed.push(text);
+      return text;
+    };
+    const ctx = makeTestCtx();
+    try {
+      const answer = await runInTestContext(
+        ctx,
+        new StateStack(),
+        new ThreadStore(),
+        () =>
+          __call(chooseOption, {
+            type: "named",
+            positionalArgs: [],
+            namedArgs: {
+              title: "Pick one",
+              body: "",
+              items: [
+                { key: "a", label: "approve" },
+                { key: "r", label: "reject" },
+              ],
+              allowFreeText: true,
+            },
+          }),
+      );
+      expect(answer).toBe("please don't delete that file");
+      expect(fed).toEqual(["please don't delete that file"]);
+    } finally {
+      delete (globalThis as any).__agencyInputOverride;
+    }
+  });
+
+  it("reprompts until a known key is entered when allowFreeText is false (default)", async () => {
+    // Default behavior unchanged: a non-key answer loops; only an
+    // exact key match terminates the prompt.
+    const answers = ["nope", "still no", "a"];
+    let calls = 0;
+    (globalThis as any).__agencyInputOverride = async (_prompt: string) => {
+      const next = answers[calls];
+      calls += 1;
+      return next;
+    };
+    const ctx = makeTestCtx();
+    try {
+      const answer = await runInTestContext(
+        ctx,
+        new StateStack(),
+        new ThreadStore(),
+        () =>
+          __call(chooseOption, {
+            type: "named",
+            positionalArgs: [],
+            namedArgs: {
+              title: "Pick one",
+              body: "",
+              items: [
+                { key: "a", label: "approve" },
+                { key: "r", label: "reject" },
+              ],
+            },
+          }),
+      );
+      expect(answer).toBe("a");
+      expect(calls).toBe(3);
+    } finally {
+      delete (globalThis as any).__agencyInputOverride;
+    }
+  });
 });

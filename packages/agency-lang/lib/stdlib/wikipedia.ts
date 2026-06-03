@@ -1,9 +1,15 @@
+const WIKI_HEADERS = {
+  "User-Agent":
+    "agency-lang (https://github.com/egonschiele/agency-lang; contact via repo issues)",
+  Accept: "application/json",
+};
+
 export async function _search(
   query: string,
   limit: number = 5,
 ): Promise<{ title: string; description: string; excerpt: string }[]> {
   const url = `https://en.wikipedia.org/w/rest.php/v1/search/page?q=${encodeURIComponent(query)}&limit=${limit}`;
-  const response = await fetch(url);
+  const response = await fetch(url, { headers: WIKI_HEADERS });
   if (!response.ok) {
     throw new Error(
       `Wikipedia search failed for "${query}": ${response.status} ${response.statusText}`,
@@ -27,7 +33,7 @@ export async function _summary(title: string): Promise<{
 }> {
   const encoded = encodeURIComponent(title.replace(/ /g, "_"));
   const url = `https://en.wikipedia.org/api/rest_v1/page/summary/${encoded}`;
-  const response = await fetch(url);
+  const response = await fetch(url, { headers: WIKI_HEADERS });
   if (!response.ok) {
     throw new Error(
       `Wikipedia summary failed for "${title}": ${response.status} ${response.statusText}`,
@@ -46,7 +52,7 @@ export async function _article(
   title: string,
 ): Promise<{ title: string; text: string; url: string }> {
   const url = `https://en.wikipedia.org/w/api.php?action=query&prop=extracts&explaintext=true&titles=${encodeURIComponent(title)}&format=json`;
-  const response = await fetch(url);
+  const response = await fetch(url, { headers: WIKI_HEADERS });
   if (!response.ok) {
     throw new Error(
       `Wikipedia article failed for "${title}": ${response.status} ${response.statusText}`,

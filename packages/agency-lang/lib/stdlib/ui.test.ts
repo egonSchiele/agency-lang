@@ -20,11 +20,16 @@ import {
   _hasPendingChoice,
   _peekReplExitSignal,
   _resetReplExitSignal,
+  _signalReplExit,
 } from "./ui.js";
 import { installRegion, resetRegion } from "./ui-region.js";
 import { ScriptedInput } from "@/tui/input/scripted.js";
 import { FrameRecorder } from "@/tui/output/recorder.js";
 import { failure } from "../runtime/result.js";
+import { RuntimeContext } from "../runtime/state/context.js";
+import { StateStack } from "../runtime/state/stateStack.js";
+import { ThreadStore } from "../runtime/state/threadStore.js";
+import { runInTestContext } from "../runtime/asyncContext.js";
 
 afterEach(() => {
   _setInputSource(null);
@@ -503,6 +508,120 @@ describe("std::ui bridge — choice prompts", () => {
     expect(() => _resolveChoice("anything")).not.toThrow();
     expect(() => _cancelChoice("anything")).not.toThrow();
     expect(_hasPendingChoice()).toBe(false);
+  });
+
+  it("isolates choice prompts and exit signals across concurrent RuntimeContexts", async () => {
+    // Drive two concurrent ALS frames (simulating two Agency runs in
+    // the same process — e.g. an agent orchestrating a subagent that
+    // also calls repl()). Each one opens a choice prompt and signals
+    // exit; we then verify the state slots don't bleed across frames.
+    function makeCtx(): RuntimeContext<any> {
+      return new RuntimeContext({
+        statelogConfig: {
+          host: "https://example.com",
+          apiKey: "k",
+          projectId: "p",
+          debugMode: false,
+        },
+        smoltalkDefaults: {},
+        dirname: "/tmp",
+      });
+    }
+    const ctxA = makeCtx();
+    const ctxB = makeCtx();
+    const stackA = new StateStack();
+    const stackB = new StateStack();
+    const threadsA = new ThreadStore();
+    const threadsB = new ThreadStore();
+
+    // In ctxA, open a prompt and signal exit.
+    let promiseA: Promise<string> | null = null;
+    await runInTestContext(ctxA, stackA, threadsA, async () => {
+      promiseA = _openChoicePrompt({
+        title: "A",
+        body: "",
+        items: [{ key: "a", label: "A" }],
+      });
+      expect(_hasPendingChoice()).toBe(true);
+      _signalReplExit();
+      expect(_peekReplExitSignal()).toBe(true);
+    });
+
+    // ctxB should see NEITHER the prompt nor the exit signal.
+    await runInTestContext(ctxB, stackB, threadsB, async () => {
+      expect(_hasPendingChoice()).toBe(false);
+      expect(_peekReplExitSignal()).toBe(false);
+
+      // ctxB opens its own prompt and signal — should not affect A.
+      const promiseB = _openChoicePrompt({
+        title: "B",
+        body: "",
+        items: [{ key: "b", label: "B" }],
+      });
+      _signalReplExit();
+      _resolveChoice("b");
+      await expect(promiseB).resolves.toBe("b");
+      _resetReplExitSignal();
+    });
+
+    // ctxA's prompt and exit signal are still pending — resolve them.
+    await runInTestContext(ctxA, stackA, threadsA, async () => {
+      expect(_hasPendingChoice()).toBe(true);
+      expect(_peekReplExitSignal()).toBe(true);
+      _resolveChoice("a");
+      _resetReplExitSignal();
+    });
+    await expect(promiseA).resolves.toBe("a");
+  });
+
+  it("keeps console capture overrides installed while another context still has it", async () => {
+    // Regression: _installConsoleCapture / _uninstallConsoleCapture
+    // used to install/restore console.* on the FIRST install / FIRST
+    // uninstall, regardless of how many contexts were capturing. Two
+    // concurrent REPLs could end up with the second one silently
+    // losing its transcript the moment the first one exited.
+    function makeCtx(): RuntimeContext<any> {
+      return new RuntimeContext({
+        statelogConfig: {
+          host: "https://example.com",
+          apiKey: "k",
+          projectId: "p",
+          debugMode: false,
+        },
+        smoltalkDefaults: {},
+        dirname: "/tmp",
+      });
+    }
+    const ctxA = makeCtx();
+    const ctxB = makeCtx();
+    const stackA = new StateStack();
+    const stackB = new StateStack();
+    const threadsA = new ThreadStore();
+    const threadsB = new ThreadStore();
+
+    const a: string[] = [];
+    const b: string[] = [];
+
+    await runInTestContext(ctxA, stackA, threadsA, async () => {
+      _installConsoleCapture(a);
+    });
+    await runInTestContext(ctxB, stackB, threadsB, async () => {
+      _installConsoleCapture(b);
+    });
+
+    // ctxA exits its REPL first — ctxB should still be capturing.
+    await runInTestContext(ctxA, stackA, threadsA, async () => {
+      _uninstallConsoleCapture();
+    });
+
+    // From ctxB, a console.log should still land in b.
+    await runInTestContext(ctxB, stackB, threadsB, async () => {
+      console.log("hi from B");
+      _uninstallConsoleCapture();
+    });
+
+    expect(b).toContain("hi from B");
+    expect(a).toEqual([]);
   });
 
   it("_runReplLoop cancels a dangling choice prompt on exit", async () => {

@@ -346,7 +346,7 @@ export class AgencyGenerator {
     }
   }
 
-  protected preprocessAST(): void {}
+  protected preprocessAST(): void { }
 
   protected generateBuiltins(): string {
     return "";
@@ -368,7 +368,7 @@ export class AgencyGenerator {
     this.functionDefinitions[node.functionName] = node;
   }
 
-  protected processGraphNodeName(node: GraphNodeDefinition): void {}
+  protected processGraphNodeName(node: GraphNodeDefinition): void { }
 
   public processNode(node: AgencyNode): string {
     const result = this.processNodeInner(node);
@@ -817,8 +817,8 @@ export class AgencyGenerator {
     const returnTypeBang = node.returnTypeValidated ? "!" : "";
     const returnTypeStr = node.returnType
       ? ": " +
-        variableTypeToString(node.returnType, this.typeAliases, true) +
-        returnTypeBang
+      variableTypeToString(node.returnType, this.typeAliases, true) +
+      returnTypeBang
       : "";
 
     const prefixes: string[] = [];
@@ -1139,6 +1139,9 @@ export class AgencyGenerator {
 
   protected processMultiLineComment(node: AgencyMultiLineComment): string {
     if (node.isDoc) {
+      if (node.isModuleDoc) {
+        return this.indentStr(`/** @module\n${node.content}***/`);
+      }
       return this.indentStr(`/**${node.content}*/`);
     }
     return this.indentStr(`/*${node.content}*/`);
@@ -1276,8 +1279,8 @@ export class AgencyGenerator {
     const returnTypeBang = node.returnTypeValidated ? "!" : "";
     const returnTypeStr = node.returnType
       ? ": " +
-        variableTypeToString(node.returnType, this.typeAliases, true) +
-        returnTypeBang
+      variableTypeToString(node.returnType, this.typeAliases, true) +
+      returnTypeBang
       : "";
     const exportPrefix = node.exported ? "export " : "";
     const prefix = `${exportPrefix}node ${nodeName}`;

@@ -1,0 +1,109 @@
+import { _runLineRepl } from "agency-lang/stdlib-lib/cli.js"
+
+/**
+  ## Module: std::cli (line-mode REPL)
+
+  Line-mode sibling of `std::ui`. Provides `repl`, `pushMessage`, and
+  `clearMessages` — driven by Node's `readline` instead of the
+  alt-screen TUI engine.
+
+  The user-facing trade is documented in the spec at
+  `docs/superpowers/ideas/2026-06-02-line-mode-agent.md`:
+
+  - **Lost**: pinned status line, live spinner, modal choice prompts,
+    in-app scroll. The screen is the host terminal's scrollback —
+    every prompt and reply is a fresh line appended to it.
+  - **Gained for free**: native scrollback + search + copy/paste +
+    mouse-select + `Cmd`/`Ctrl`-click on links, readline's full line
+    editor and history, bracketed paste — all delivered by the
+    terminal and `readline`, no TUI re-implementation.
+
+  Picking a mode is a one-line `import` change. The agent has:
+
+  ```ts
+  // TUI mode (today's default)
+  import { repl } from "std::ui"
+
+  // Line mode
+  import { repl } from "std::cli"
+  ```
+
+  `pushMessage` and `clearMessages` are re-exported directly from
+  `std::ui` — the line-mode REPL never sets `_activeRepl`, so those
+  functions' existing `_activeRepl == null` fallback branches *are*
+  the line-mode behavior (straight `print`, silent no-op).
+
+  `chooseOption` is intentionally NOT re-exported here (see the note
+  on the `export` statement below). Consumers that need it — notably
+  `std::policy` — should `import { chooseOption } from "std::ui"`
+  directly. Its own `_activeRepl == null` fallback is the line-mode
+  behavior, so it works seamlessly with `std::cli`'s `repl()`.
+*/
+
+// Re-export the line-mode-compatible parts of `std::ui`. The line
+// mode REPL never sets `_activeRepl`, so each of these falls through
+// to its line-friendly branch:
+//   - pushMessage   → straight print()
+//   - clearMessages → silent no-op
+// `chooseOption` is *not* re-exported here because its compiled
+// schema references the `ChoiceItem` type alias from `std::ui` and
+// re-exporting through the value pathway doesn't bring the type
+// along (the generated `cli.js` references `ChoiceItem` unqualified
+// and crashes at load time). Consumers — notably `std::policy` —
+// already import `chooseOption` directly from `std::ui`, and the
+// fallback path inside `chooseOption` (active when `_activeRepl` is
+// null) is exactly the line-mode behavior. So nothing actually
+// needed to be re-exported here for line mode to work.
+export { pushMessage, clearMessages } from "std::ui"
+
+export def repl(
+  status: any,
+  onSubmit: any,
+  prompt: string = "> ",
+  historyFile: string = "",
+  historyMax: number = 1000,
+  paletteCommands: any = null,
+) {
+  """
+  Line-mode REPL. Same call signature as `std::ui.repl` so swapping
+  modes is a one-line import change in the calling agent.
+
+  Per iteration: print `prompt`, await one line of input (via Node's
+  `readline` — full line editing, history, bracketed paste), call
+  `onSubmit(line)`. If `onSubmit` returns `false`, exit. If it
+  returns a non-empty string, print the string to stdout. Anything
+  else (e.g. the agent's `_runTurn` returning `true` after calling
+  `pushMessage`) is silently ignored — the reply already reached
+  stdout via the underlying `print` path.
+
+  Exits on `onSubmit` returning `false`, on Ctrl+D (EOF) at the
+  prompt, or on Ctrl+C at an idle prompt.
+
+  Round-one limitations (intentional, see the spec):
+  - `status` is accepted for signature parity but not yet rendered.
+  WL2 will turn it into a per-turn footer.
+  - `paletteCommands` is accepted but no tab completion yet (WL6).
+  - No spinner during the busy window (WL3).
+  - No Ctrl+C cancel of an in-flight turn (WL7).
+
+  @param status - Callback returning {left, right, context}; reserved
+  for the WL2 per-turn footer
+  @param onSubmit - Called with the submitted line; return `false` to
+  exit or a string to print
+  @param prompt - String shown before the input buffer (default "> ")
+  @param historyFile - Path to a newline-separated history file;
+  loaded at start and saved on exit. Empty string disables
+  persistence.
+  @param historyMax - Trim history to this many most-recent entries
+  @param paletteCommands - Map of /cmd -> description; reserved for
+  WL6 tab completion
+  """
+  _runLineRepl(
+    status,
+    onSubmit,
+    prompt,
+    historyFile,
+    historyMax,
+    paletteCommands,
+  )
+}

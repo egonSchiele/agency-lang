@@ -9,16 +9,17 @@
  * here (not in `shared.agency`) because only the research subagent
  * uses them. `static const` caches the Skill across runs.
  */
+import { todoWrite, todoList } from "std::agent"
 import { fetch, fetchJSON, fetchMarkdown } from "std::http"
-import { browserUse } from "std::browser"
 import { remember, recall } from "std::memory"
+import { search } from "std::search"
 import { skillsDir } from "std::skills"
 import { highlight } from "std::syntax"
 import {
   search as wikipediaSearch,
   summary as wikipediaSummary,
   article as wikipediaArticle,
-} from "std::wikipedia"
+ } from "std::wikipedia"
 
 // Bundled docs live one level above the agent's compiled JS. Built
 // once at module load — `skillsDir` reads + parses every `.md`
@@ -72,9 +73,7 @@ When you need information:
       README and get it as readable Markdown.
     * `fetchJSON(url)` / `fetch(url)` for any specific URL where
       you already know the endpoint.
-    * `browserUse(task)` only when you actually need an open-ended
-      web search or a page that requires JavaScript / a login flow.
-      It is the heaviest option and costs money per call.
+    * `search(query)` when you need an open-ended web search.
   Cite the source URL in your reply whenever you used one of these.
 
 - You have a persistent knowledge graph scoped to research work.
@@ -85,6 +84,16 @@ When you need information:
   `remember` transient details. Relevant facts are also
   auto-injected before each turn, so often you don't need to call
   `recall` explicitly.
+
+- **For research tasks that span more than two sources**
+  (e.g. "compare how A, B, and C handle X", "summarize these four
+  docs", "find every place the docs mention Y"), call `todoWrite`
+  first to lay out the lookups, and mark each item completed the
+  moment that source is read. Use this frequently — it gives the
+  user visibility into progress and protects against silently
+  dropping a source. Mark items completed one at a time, NEVER
+  batch the completions at the end. Skip the list for single-source
+  questions.
 
 When showing code snippets in your reply, call
 `print(highlight(code))` for any multi-line block — `highlight`
@@ -112,9 +121,11 @@ export static const researchTools: any[] = [
   fetch,
   fetchJSON,
   fetchMarkdown,
-  browserUse,
+  search,
   remember,
   recall,
   highlight.partial(language: "ts"),
   print,
+  todoWrite,
+  todoList,
 ]

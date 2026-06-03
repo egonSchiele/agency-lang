@@ -1,0 +1,7 @@
+The skill files in this directory are derived from the Superpowers plugin
+by Jesse Vincent (https://github.com/obra/superpowers), MIT-licensed.
+
+Only the YAML frontmatter has been adapted (`name:` → `title:`) so the
+agency-lang `skillsDir(...)` helper picks up the title field; the skill
+bodies are reproduced verbatim. See the upstream LICENSE for the full
+MIT terms.

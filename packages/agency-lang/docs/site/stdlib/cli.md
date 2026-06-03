@@ -24,22 +24,22 @@ Line-mode REPL. Same call signature as `std::ui.repl` so swapping
 
   Round-one limitations (intentional, see the spec):
   - `status` is accepted for signature parity but not yet rendered.
-    WL2 will turn it into a per-turn footer.
+  WL2 will turn it into a per-turn footer.
   - `paletteCommands` is accepted but no tab completion yet (WL6).
   - No spinner during the busy window (WL3).
   - No Ctrl+C cancel of an in-flight turn (WL7).
 
   @param status - Callback returning {left, right, context}; reserved
-    for the WL2 per-turn footer
+  for the WL2 per-turn footer
   @param onSubmit - Called with the submitted line; return `false` to
-    exit or a string to print
+  exit or a string to print
   @param prompt - String shown before the input buffer (default "> ")
   @param historyFile - Path to a newline-separated history file;
-    loaded at start and saved on exit. Empty string disables
-    persistence.
+  loaded at start and saved on exit. Empty string disables
+  persistence.
   @param historyMax - Trim history to this many most-recent entries
   @param paletteCommands - Map of /cmd -> description; reserved for
-    WL6 tab completion
+  WL6 tab completion
 
 **Parameters:**
 
@@ -52,4 +52,4 @@ Line-mode REPL. Same call signature as `std::ui.repl` so swapping
 | historyMax | `number` | 1000 |
 | paletteCommands | `any` | null |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/cli.agency#L55))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/cli.agency#L59))

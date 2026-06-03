@@ -574,6 +574,56 @@ describe("std::ui bridge — choice prompts", () => {
     await expect(promiseA).resolves.toBe("a");
   });
 
+  it("keeps console capture overrides installed while another context still has it", async () => {
+    // Regression: _installConsoleCapture / _uninstallConsoleCapture
+    // used to install/restore console.* on the FIRST install / FIRST
+    // uninstall, regardless of how many contexts were capturing. Two
+    // concurrent REPLs could end up with the second one silently
+    // losing its transcript the moment the first one exited.
+    function makeCtx(): RuntimeContext<any> {
+      return new RuntimeContext({
+        statelogConfig: {
+          host: "https://example.com",
+          apiKey: "k",
+          projectId: "p",
+          debugMode: false,
+        },
+        smoltalkDefaults: {},
+        dirname: "/tmp",
+      });
+    }
+    const ctxA = makeCtx();
+    const ctxB = makeCtx();
+    const stackA = new StateStack();
+    const stackB = new StateStack();
+    const threadsA = new ThreadStore();
+    const threadsB = new ThreadStore();
+
+    const a: string[] = [];
+    const b: string[] = [];
+
+    await runInTestContext(ctxA, stackA, threadsA, async () => {
+      _installConsoleCapture(a);
+    });
+    await runInTestContext(ctxB, stackB, threadsB, async () => {
+      _installConsoleCapture(b);
+    });
+
+    // ctxA exits its REPL first — ctxB should still be capturing.
+    await runInTestContext(ctxA, stackA, threadsA, async () => {
+      _uninstallConsoleCapture();
+    });
+
+    // From ctxB, a console.log should still land in b.
+    await runInTestContext(ctxB, stackB, threadsB, async () => {
+      console.log("hi from B");
+      _uninstallConsoleCapture();
+    });
+
+    expect(b).toContain("hi from B");
+    expect(a).toEqual([]);
+  });
+
   it("_runReplLoop cancels a dangling choice prompt on exit", async () => {
     _setInputSource(new ScriptedInput([{ key: "q" }]));
     _setOutputTarget(new FrameRecorder());

@@ -72,7 +72,9 @@ type ChoiceRequest = {
   // and they press Enter, the prompt resolves with the filter text
   // (instead of being a no-op). Used by std::policy so a typed
   // rejection reason is captured in one step instead of two.
-  allowFreeText: boolean;
+  // Optional: existing internal callers (tests, legacy paths) still
+  // construct ChoiceRequest without it, and `false` is the safe default.
+  allowFreeText?: boolean;
 };
 
 type UiContextState = {
@@ -271,7 +273,16 @@ type ConsoleSinks = {
 // REPLs each write into their own transcript. The installed
 // overrides route to `getUiState().captureTarget`, so dispatch
 // follows the active ALS frame automatically.
+//
+// Install / uninstall is reference-counted because multiple concurrent
+// contexts may each call `repl()` (and therefore _installConsoleCapture)
+// on the same process. Without a refcount, the first uninstall would
+// restore `console.*` to its originals and any still-active context
+// would silently lose its capture (the overrides are gone but its
+// `captureTarget` is still set). The counter is process-wide for the
+// same reason `savedConsoleSinks` is.
 let savedConsoleSinks: ConsoleSinks | null = null;
+let captureInstallCount = 0;
 
 function formatConsoleArgs(args: unknown[]): string {
   return args
@@ -337,6 +348,7 @@ export function _installConsoleCapture(messages: string[]): void {
   // process singleton, installed once and routed to whichever
   // context is currently active.
   getUiState().captureTarget = messages;
+  captureInstallCount += 1;
   if (savedConsoleSinks) return;
   savedConsoleSinks = {
     log: console.log,
@@ -371,6 +383,11 @@ export function _uninstallConsoleCapture(): void {
   // Clear the per-context target first so a stale ALS frame can't keep
   // routing captured writes into a buffer the caller has dropped.
   getUiState().captureTarget = null;
+  if (captureInstallCount > 0) captureInstallCount -= 1;
+  // Keep the overrides installed while any other context is still
+  // capturing. Restoring the originals here would silently blank that
+  // other context's transcript.
+  if (captureInstallCount > 0) return;
   if (!savedConsoleSinks) return;
   console.log = savedConsoleSinks.log;
   console.warn = savedConsoleSinks.warn;

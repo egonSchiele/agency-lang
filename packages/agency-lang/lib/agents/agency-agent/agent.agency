@@ -60,7 +60,9 @@ import { researchSysPrompt, researchTools } from "./research.agency"
 const AGENT_DEBUG = env("AGENT_DEBUG") == "1"
 
 callback("onToolCallStart") as data {
-  pushMessage(color.yellow("⏺ ${data.toolName}(${formatArgs(data.args)})"))
+  if (AGENT_DEBUG) {
+    pushMessage(color.yellow("⏺ ${data.toolName}(${formatArgs(data.args)})"))
+  }
 }
 
 def formatArgs(args: Record<string, any>): string {

@@ -139,9 +139,23 @@ const QUOTE = color.hex("#6A9955");
 const BULLET = color.hex("#D7BA7D");
 const FAINT = color.dim;
 
+// Strip ASCII control chars (and DEL) from a URL. Markdown is often
+// LLM- or user-authored, so a link target like
+// `https://x\x07injected\x1b[31mred` could close the OSC 8 escape
+// early and inject terminal control codes. We strip rather than
+// reject so a benign URL with a stray tab still renders; if every
+// character was a control char the result is empty.
+const URL_CONTROL_RE = /[\x00-\x1f\x7f]/g;
+
+function sanitizeOsc8Url(url: string): string {
+  return url.replace(URL_CONTROL_RE, "");
+}
+
 function osc8(url: string, text: string): string {
+  const safe = sanitizeOsc8Url(url);
+  if (safe.length === 0) return text;
   // BEL-terminated form is the most broadly supported variant.
-  return `\x1b]8;;${url}\x07${text}\x1b]8;;\x07`;
+  return `\x1b]8;;${safe}\x07${text}\x1b]8;;\x07`;
 }
 
 function isInlineType(t: unknown): boolean {

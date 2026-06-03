@@ -3,9 +3,9 @@ import { _runLineRepl } from "agency-lang/stdlib-lib/cli.js"
 /**
   ## Module: std::cli (line-mode REPL)
 
-  Line-mode sibling of `std::ui`. Same surface (`repl`,
-  `pushMessage`, `clearMessages`, `chooseOption`) but the REPL is
-  driven by Node's `readline` instead of the alt-screen TUI engine.
+  Line-mode sibling of `std::ui`. Provides `repl`, `pushMessage`, and
+  `clearMessages` — driven by Node's `readline` instead of the
+  alt-screen TUI engine.
 
   The user-facing trade is documented in the spec at
   `docs/superpowers/ideas/2026-06-02-line-mode-agent.md`:
@@ -28,12 +28,16 @@ import { _runLineRepl } from "agency-lang/stdlib-lib/cli.js"
   import { repl } from "std::cli"
   ```
 
-  `chooseOption`, `pushMessage`, and `clearMessages` are re-exported
-  directly from `std::ui` — the line-mode REPL never sets
-  `_activeRepl`, so those functions' existing
-  `_activeRepl == null` fallback branches *are* the line-mode
-  behavior (print + input loop, straight `print`, silent no-op).
-  Re-exporting keeps `std::cli` a true drop-in.
+  `pushMessage` and `clearMessages` are re-exported directly from
+  `std::ui` — the line-mode REPL never sets `_activeRepl`, so those
+  functions' existing `_activeRepl == null` fallback branches *are*
+  the line-mode behavior (straight `print`, silent no-op).
+
+  `chooseOption` is intentionally NOT re-exported here (see the note
+  on the `export` statement below). Consumers that need it — notably
+  `std::policy` — should `import { chooseOption } from "std::ui"`
+  directly. Its own `_activeRepl == null` fallback is the line-mode
+  behavior, so it works seamlessly with `std::cli`'s `repl()`.
 */
 
 // Re-export the line-mode-compatible parts of `std::ui`. The line
@@ -77,22 +81,29 @@ export def repl(
 
   Round-one limitations (intentional, see the spec):
   - `status` is accepted for signature parity but not yet rendered.
-    WL2 will turn it into a per-turn footer.
+  WL2 will turn it into a per-turn footer.
   - `paletteCommands` is accepted but no tab completion yet (WL6).
   - No spinner during the busy window (WL3).
   - No Ctrl+C cancel of an in-flight turn (WL7).
 
   @param status - Callback returning {left, right, context}; reserved
-    for the WL2 per-turn footer
+  for the WL2 per-turn footer
   @param onSubmit - Called with the submitted line; return `false` to
-    exit or a string to print
+  exit or a string to print
   @param prompt - String shown before the input buffer (default "> ")
   @param historyFile - Path to a newline-separated history file;
-    loaded at start and saved on exit. Empty string disables
-    persistence.
+  loaded at start and saved on exit. Empty string disables
+  persistence.
   @param historyMax - Trim history to this many most-recent entries
   @param paletteCommands - Map of /cmd -> description; reserved for
-    WL6 tab completion
+  WL6 tab completion
   """
-  _runLineRepl(status, onSubmit, prompt, historyFile, historyMax, paletteCommands)
+  _runLineRepl(
+    status,
+    onSubmit,
+    prompt,
+    historyFile,
+    historyMax,
+    paletteCommands,
+  )
 }

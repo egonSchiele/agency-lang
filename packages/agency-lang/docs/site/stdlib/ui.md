@@ -1400,3 +1400,11 @@ Drop-in REPL widget for interactive CLI agents. Bundles a
 | tickMs | `number` | null |
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L1673))
+
+### clearScreen
+
+```ts
+clearScreen()
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L1760))

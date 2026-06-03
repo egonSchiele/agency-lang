@@ -107,3 +107,8 @@ export def repl(
     paletteCommands,
   )
 }
+
+export def clearScreen() {
+  // ANSI escape code to clear the screen and move the cursor to the top-left.
+  print("\x1b[2J\x1b[H")
+}

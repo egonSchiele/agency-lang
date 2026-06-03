@@ -53,3 +53,11 @@ Line-mode REPL. Same call signature as `std::ui.repl` so swapping
 | paletteCommands | `any` | null |
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/cli.agency#L59))
+
+### clearScreen
+
+```ts
+clearScreen()
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/cli.agency#L111))

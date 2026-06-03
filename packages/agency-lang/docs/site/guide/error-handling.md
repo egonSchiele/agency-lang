@@ -134,97 +134,10 @@ const result = success(10) |> half |> divide.partial(b: 3)
 
 The `.partial()` call binds the `b` parameter to 3, producing a function that takes a single argument (the piped value).
 
-## Checkpoints
-If you're still holding out for a good reason to use the `Result` type, this may be the one. Every failure also contains a checkpoint. The checkpoint is from the start of the function where the failure occurred. The failure also contains the function name and the arguments it was called with.
-
-Let's go back to the `half` chain now and examine the failure a little more closely.
-
-```ts
-const result = success(10) |> half |> half |> half
-  if (isFailure(result)) {
-    print(result.functionName)
-    print(result.args)
-  }
-```
-
-prints
-
-```
-half
-{ x: 5 }
-```
-
-you can now use the checkpoint to rewind time and rerun the function with new arguments:
-
-```ts
-const result = success(10) |> half |> half |> half
-  if (isFailure(result)) {
-    restore(result.checkpoint, { 
-      args: { 
-        x: 8
-      }
-    })
-  }
-  print(result)
-```
-
-If the result is a failure we set the args to `8` and try again. Notice that we're not capturing the return value of the `restore` function, because there is nothing to return. `restore` isn't calling the function again, it's actually rewinding time and replaying. Let's add two `print` statements so we can clearly see what's going on. Here's the complete code, if you want to run it yourself:
-
-```ts
-def divide(a: number, b: number): Result {
-  if (b == 0) {
-    return failure("Can't divide by zero!")
-  }
-  return success(a / b)
-}
-
-def half(x: number): Result {
-  // new print statement
-  print("Halving ${x}")
-  if (x % 2 != 0) {
-    return failure("Number must be even to be halved, got ${x}")
-  }
-  return divide(x, 2)
-}
-
-node main() {
-  const result = success(10) |> half |> half |> half
-  if (isFailure(result)) {
-    // new print statement
-    print("Restoring...")
-    restore(result.checkpoint, { 
-      args: { 
-        x: 8
-      }
-    })
-  }
-  print(result)
-}
-```
-
-This prints:
-
-```
-Halving 10
-Halving 5
-Restoring...
-Halving 8
-Halving 4
-{ success: true, value: 2 }
-```
-
-So we
-1. called one half function
-2. failed on the second half function
-3. tried it again with 8 and succeeded
-4. ran the last half function and succeeded
-5. got the return value of 2.
-
-Checkpoints are pretty cool, especially when dealing with LLMs when there can be all sorts of transient failures. Having a mechanism to retry is super useful.
 
 ## The `try` keyword
 
-Bit of an anti-climax after that awesome section on checkpoints, but here we go. Agency has a `try` keyword. Even though Agency doesn't throw errors, you might call some TypeScript code that throws an error. The `try` keyword will catch the error and convert it to a failure for you:
+Agency has a `try` keyword. Even though Agency doesn't throw errors, you might call some TypeScript code that throws an error. The `try` keyword will catch the error and convert it to a failure for you:
 
 ```ts
 // foo throws an error

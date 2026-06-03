@@ -1,6 +1,7 @@
 import { route } from "std::agent"
 import { clearMessages, pushMessage, repl } from "std::cli"
 import { today } from "std::date"
+import { box, render } from "std::layout"
 import { ScopedRuleFields, cliPolicyHandler } from "std::policy"
 import { exists } from "std::shell"
 import { highlight } from "std::syntax"
@@ -247,7 +248,7 @@ def _buildStatus(): { left: string; right: string; context: string } {
   return {
     left: "",
     right: roundedCost(),
-    context: "/help for commands · /exit to quit"
+    context: ""
   }
 }
 
@@ -255,11 +256,28 @@ def sample(arr: any[]): any {
   return arr[Math.floor(Math.random() * arr.length)]
 }
 
+def printHeader() {
+  const fig = sample(figs)
+  const data = box(title: "Agency", padding: 1, borderColor: "cyan", titleColor: "cyan") as b {
+    b.row(gap: 1) as r {
+      r.column() as left {
+        left.text("Welcome to the Agency Agent!", bold: true)
+        left.text("Ask me to write code, look up docs, or just chat.")
+        left.hline()
+        left.text("Getting Started", bold: true, fgColor: "cyan")
+        left.text("/help for commands · /exit to quit", dim: true)
+      }
+      r.vline()
+      r.column() as right {
+        right.raw(fig)
+      }
+    }
+  }
+  print(render(data, color: true))
+}
+
 node main() {
-  // Splash: a small Unicode-block panel printed once before the REPL
-  // takes over the screen. See `images/images.agency`.
-  print(sample(figs))
-  print(color.cyan(title))
+  printHeader()
 
   // Grounding: the LLM should not have to ask the user where it is
   // or what day it is. Both are appended once per run so they ride

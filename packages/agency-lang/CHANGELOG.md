@@ -1,8 +1,52 @@
-## Unreleased
+## Jun 3 2026 — v0.4
+
+Breaking change: - **Disable per-function checkpoint** (perf). Was creating ~3 checkpoints per keystroke in the agent. Will return as opt-in eventually.
+
+### Language / Typechecker
+- Initialize static and global variables in the right order by running a topological sort to compute dependencies.
+- `static` keyword now applies to bare top-level statements too.
+- All statics and globals now initialize before any user code runs
+- Typechecker no longer complains when a block arg is passed as a named arg.
+- Allow bare top-level `<expr> with handler`.
+- Interrupts inside handler functions are now disallowed at compile time.
+- Fix infinite handler loops (an interrupt inside a handler function was triggering the same handler again).
+- New `memory { ... }` blocks.
 
 ### Stdlib
-- `std::ui` redesigned around a declarative builder + runLoop API (BREAKING — the imperative `initUI`/`destroyUI`/`log`/`status`/`chat`/`code`/`diff`/`separator`/`startSpinner`/`stopSpinner`/`prompt`/`getConfirmation`/`emptyLine` surface and the matching TS bridge are removed). The replacement is `repl(status: ..., onSubmit: ..., paletteCommands: ...)`, a drop-in interactive REPL with auto-scrolling transcript, status line, slash-command palette, history navigation, and console-capture integration. Reusable pieces: `column`/`row`/`box`/`line`/`text`/`list`/`textInput` builders, `runLoop(initial, view, reduce, isDone)` for custom state machines, `renderOnce`, and `pushMessage`/`clearMessages` to talk to the active REPL transcript from anywhere. `std::policy.askUser` is now routed through the active REPL when one is running and falls back to raw `input()` otherwise.
-- Static variables now throw a clear runtime error when read before their initializer has run (previously returned `undefined` silently). The error names the variable and module and suggests common fixes (circular imports, indirect reads through function calls). The wrap is transparent for initialized values — binary operations, template interpolations, indexing, etc. continue to work unchanged. PR 1 of a 6-PR series; subsequent PRs add topological initialization order across modules and the `agency explain-init` CLI.
+- `std::ui` redesigned around a declarative builder + `runLoop` API
+- `std::layout` — string layout utilities (boxes, rows, columns, padding, alignment).
+- `std::markdown` — new module with `walk()` (map over AST) and `renderForCli()` (CLI-friendly markdown)
+- `std::skills::readSkills` — load skills from a directory.
+- Brave search moved into its own stdlib module.
+- `~` expansion in stdlib path resolution.
+- `shell::exec` accepts a `subcommand` so users can approve just one subcommand of a CLI.
+- `printDiff()` and `edit(printDiff: true)` for colored diffs.
+- Threads: continue prior threads and look up information across threads; eager summarize now works.
+- Wikipedia: set a user agent (fixes 429); switched to the new REST endpoint.
+- Moved some policy and agent functionality from the agency agent into the stdlib.
+
+### Agency Agent
+- Re-architected into a multi-agent architecture.
+- Switched to **line mode** (TUI code left in place for now)
+- Precompile bundled agents for faster startup.
+- Markdown rendering with syntax-highlighted code blocks.
+- Free-text response to an interrupt is treated as a rejection with the text as the reason.
+- Built-in [superpowers](https://github.com/obra/superpowers) skill; coding agent prompt improved + given todo tools; research agent uses Brave search instead of browseruse.
+- Quadrant-art images at session start.
+
+Lots of improvements to the TUI version too, even though it is no longer the default:
+- Redesigned status line (user input above, status takes two rows).
+- Keyboard shortcuts (clear line, paste), multi-line input (shift+enter and multi-line paste).
+- Fast-typing fix: previously dropped keystrokes when multiple chars arrived in one data event.
+- Error handling inside the REPL: logger writes through `console` (not raw stderr) so the REPL's console capture isn't bypassed; error messages truncated to 5 lines.
+
+### Runtime / codegen / CLI
+- **Disable per-function checkpoint** (perf). Was creating ~3 checkpoints per keystroke in the agent and never freeing them — 2.5GB after a few turns. Will return as opt-in.
+- `agency literate weave` command.
+- Bundle agency docs files so agents can read them; frontmatter added to all docs.
+- Upgrade tarsec
+
+---
 
 ## May 28 2026 — v0.3
 

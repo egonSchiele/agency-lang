@@ -1,0 +1,42 @@
+import { box, row, column, text, vline } from "std::layout"
+
+// Child types appear in source order — defends against accidental
+// re-ordering inside _makeBuilder / container constructors.
+node testOrdering() {
+  const tree = row() as r {
+    r.text("a")
+    r.space(1)
+    r.text("b")
+    r.vline()
+    r.text("c")
+  }
+  let types: string[] = []
+  for (c in tree.children) {
+    types.push(c.type)
+  }
+  return types
+}
+
+// Block populates `children`. The builder appends in call order; the
+// resulting `children` length matches the number of builder calls.
+node testChildrenCount() {
+  const tree = box() as b {
+    b.text("x")
+    b.text("y")
+    b.text("z")
+  }
+  return tree.children.length
+}
+
+// Nested containers are real subtrees, not flattened. Walking down
+// `box → row → column → text` finds the leaf content.
+node testThreeDeep() {
+  const tree = box() as b {
+    b.row() as r {
+      r.column() as c {
+        c.text("leaf")
+      }
+    }
+  }
+  return tree.children[0].children[0].children[0].attrs.content
+}

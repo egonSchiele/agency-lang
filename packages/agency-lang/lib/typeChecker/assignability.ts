@@ -417,6 +417,23 @@ export function isAssignable(
   const resolvedSource = safeResolveType(source, typeAliases);
   const resolvedTarget = safeResolveType(target, typeAliases);
 
+  // Two unresolved type alias references with the same name are
+  // treated as equal. `resolveType` leaves unknown aliases as
+  // `typeAliasVariable` nodes (rather than throwing or falling back
+  // to `any`); without this rule, `f(x: Foo): void` and a caller
+  // passing a `Foo`-typed value would both resolve to the same
+  // unresolved alias yet fail assignability with the confusing
+  // message "Foo is not assignable to Foo". The real diagnostic
+  // ("type alias not defined") is emitted by validateTypeReferences.
+  if (
+    resolvedSource.type === "typeAliasVariable" &&
+    resolvedTarget.type === "typeAliasVariable" &&
+    resolvedSource.aliasName === resolvedTarget.aliasName &&
+    !typeAliases[resolvedSource.aliasName]
+  ) {
+    return true;
+  }
+
   // primitiveType("any") behaves the same as the "any" sentinel
   if (
     (resolvedSource.type === "primitiveType" && resolvedSource.value === "any") ||

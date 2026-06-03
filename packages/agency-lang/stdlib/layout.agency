@@ -1,0 +1,497 @@
+import { _render } from "agency-lang/stdlib-lib/layout.js"
+
+/** @module
+
+
+
+
+
+  ## Module: std::layout
+
+  Declarative text layout for terminal output. Build a tree of
+  containers and leaves; call `render` to get an ANSI-styled
+  multi-line string ready for `print`.
+
+  Two construction styles, same result:
+
+  - **Trailing block** (ergonomic for Agency authors):
+
+    ```ts
+    import { box, render } from "std::layout"
+
+    const panel = box(title: "Hello", padding: 1) as b {
+      b.text("Welcome!", bold: true)
+      b.text("How are you?")
+    }
+    print(render(panel))
+    ```
+
+  - **Children array** (suitable for LLM tool calls / JSON
+    construction):
+
+    ```ts
+    import { box, text, render } from "std::layout"
+
+    const panel = box(
+      title: "Hello",
+      padding: 1,
+      children: [
+        text("Welcome!", bold: true),
+        text("How are you?"),
+      ],
+    )
+    print(render(panel))
+    ```
+
+  Both styles produce the same `LayoutNode` tree.
+
+  ### See also
+
+  `std::ui` exports `box`, `row`, `column` for interactive TUI
+  widgets. The names overlap; import one or the other (or both with
+  aliases). `std::layout` is for static text output — splash screens,
+  summary panels, side-by-side columns. `std::ui` is for live
+  redrawing UIs with input handling.
+***********/
+
+/**
+ * Every layout node has the same shape. Containers carry their
+ * content in `children`; leaves have `children: []`.
+ */
+export type LayoutNode = {
+  type: string;
+  attrs: any;
+  children: any[]
+}
+
+/**
+ * Methods inside a container's trailing `as name { ... }` block. Each
+ * method constructs a leaf or container and pushes it onto the
+ * surrounding container's `children` array.
+ */
+export type LayoutBuilder = {
+  text: any;
+  raw: any;
+  space: any;
+  hline: any;
+  vline: any;
+  row: any;
+  column: any;
+  box: any
+}
+
+export type Alignment = "start" | "center" | "end"
+
+export type BorderStyle = "rounded" | "heavy" | "double" | "light"
+
+// ------------------------------------------------------------------
+// Top-level leaf constructors. Each returns a LayoutNode without
+// touching any parent — safe to call from anywhere (Agency code, LLM
+// tool calls, ad-hoc construction).
+// ------------------------------------------------------------------
+
+/**
+ * A styled run of text. `content` may contain `\n`; each line becomes
+ * a row of the rendered Block.
+ *
+ * @param content - The text to display
+ * @param fgColor - Foreground color (named like "red", "orange" or hex like "#cc7a4a")
+ * @param bgColor - Background color
+ * @param bold - Bold weight
+ * @param italic - Italic style
+ * @param dim - Reduced intensity
+ * @param underline - Underline decoration
+ * @param align - For multi-line content, how shorter lines sit
+ *   relative to the longest line. No effect on single-line text.
+ *   Parent containers control the leaf's position among siblings;
+ *   this controls the internal layout of the leaf's own lines.
+ */
+export safe def text(
+  content: string,
+  fgColor: string = "",
+  bgColor: string = "",
+  bold: boolean = false,
+  italic: boolean = false,
+  dim: boolean = false,
+  underline: boolean = false,
+  align: Alignment = "start",
+): LayoutNode {
+  return {
+    type: "text",
+    attrs: {
+      content: content,
+      fgColor: fgColor,
+      bgColor: bgColor,
+      bold: bold,
+      italic: italic,
+      dim: dim,
+      underline: underline,
+      align: align
+    },
+    children: []
+  }
+}
+
+/**
+ * A pre-styled string. The content is rendered as-is and is **not**
+ * wrapped in any outer styling — if the embedded string carries its
+ * own ANSI sequences, nesting it inside a styled `text` or a styled
+ * `box` will not re-apply styling after the inner sequences reset.
+ * Use this for ASCII art, comic panels, or strings whose styling is
+ * already baked in.
+ *
+ * @param content - Raw string content (may contain ANSI / newlines)
+ * @param align - For multi-line content, how shorter lines sit
+ *   relative to the longest line. No effect on single-line raw.
+ */
+export safe def raw(content: string, align: Alignment = "start"): LayoutNode {
+  return {
+    type: "raw",
+    attrs: {
+      content: content,
+      align: align
+    },
+    children: []
+  }
+}
+
+/**
+ * Blank space. Inside a `row`, inserts `count` columns; inside a
+ * `column`, inserts `count` rows. Additive with the parent's `gap`.
+ *
+ * @param count - Number of cells of blank space
+ */
+export safe def space(count: number = 1): LayoutNode {
+  return {
+    type: "space",
+    attrs: {
+      count: count
+    },
+    children: []
+  }
+}
+
+/**
+ * A horizontal rule. Inside a `column`, omit `length` and the line
+ * automatically spans the column's width.
+ *
+ * @param char - The character to repeat (defaults to `─`)
+ * @param length - Explicit length; leave as 0 for parent-resolved
+ * @param fgColor - Color of the line
+ * @param bold - Bold weight
+ * @param dim - Reduced intensity
+ */
+export safe def hline(
+  char: string = "─",
+  length: number = 0,
+  fgColor: string = "",
+  bold: boolean = false,
+  dim: boolean = false,
+): LayoutNode {
+  return {
+    type: "hline",
+    attrs: {
+      char: char,
+      length: length,
+      fgColor: fgColor,
+      bold: bold,
+      dim: dim
+    },
+    children: []
+  }
+}
+
+/**
+ * A vertical rule. Inside a `row`, omit `length` and the line
+ * automatically spans the row's height.
+ *
+ * @param char - The character to repeat (defaults to `│`)
+ * @param length - Explicit length; leave as 0 for parent-resolved
+ * @param fgColor - Color of the line
+ * @param bold - Bold weight
+ * @param dim - Reduced intensity
+ */
+export safe def vline(
+  char: string = "│",
+  length: number = 0,
+  fgColor: string = "",
+  bold: boolean = false,
+  dim: boolean = false,
+): LayoutNode {
+  return {
+    type: "vline",
+    attrs: {
+      char: char,
+      length: length,
+      fgColor: fgColor,
+      bold: bold,
+      dim: dim
+    },
+    children: []
+  }
+}
+
+// ------------------------------------------------------------------
+// Builder helpers. Each `_add*` constructs the corresponding node via
+// the top-level constructor above, then pushes it onto `kids`. They
+// exist solely so `_makeBuilder` can `.partial(kids: kids)` them.
+// ------------------------------------------------------------------
+
+def _addText(
+  kids: any[],
+  content: string,
+  fgColor: string = "",
+  bgColor: string = "",
+  bold: boolean = false,
+  italic: boolean = false,
+  dim: boolean = false,
+  underline: boolean = false,
+  align: Alignment = "start",
+): LayoutNode {
+  const n = text(
+    content: content,
+    fgColor: fgColor,
+    bgColor: bgColor,
+    bold: bold,
+    italic: italic,
+    dim: dim,
+    underline: underline,
+    align: align,
+  )
+  kids.push(n)
+  return n
+}
+
+def _addRaw(
+  kids: any[],
+  content: string,
+  align: Alignment = "start",
+): LayoutNode {
+  const n = raw(content: content, align: align)
+  kids.push(n)
+  return n
+}
+
+def _addSpace(kids: any[], count: number = 1): LayoutNode {
+  const n = space(count: count)
+  kids.push(n)
+  return n
+}
+
+def _addHline(
+  kids: any[],
+  char: string = "─",
+  length: number = 0,
+  fgColor: string = "",
+  bold: boolean = false,
+  dim: boolean = false,
+): LayoutNode {
+  const n = hline(char: char, length: length, fgColor: fgColor, bold: bold, dim: dim)
+  kids.push(n)
+  return n
+}
+
+def _addVline(
+  kids: any[],
+  char: string = "│",
+  length: number = 0,
+  fgColor: string = "",
+  bold: boolean = false,
+  dim: boolean = false,
+): LayoutNode {
+  const n = vline(char: char, length: length, fgColor: fgColor, bold: bold, dim: dim)
+  kids.push(n)
+  return n
+}
+
+def _addRow(
+  kids: any[],
+  gap: number = 0,
+  align: Alignment = "start",
+  children: LayoutNode[] = null,
+  block: (LayoutBuilder) => void = null,
+): LayoutNode {
+  const n = row(gap: gap, align: align, children: children, block: block)
+  kids.push(n)
+  return n
+}
+
+def _addColumn(
+  kids: any[],
+  gap: number = 0,
+  align: Alignment = "start",
+  children: LayoutNode[] = null,
+  block: (LayoutBuilder) => void = null,
+): LayoutNode {
+  const n = column(gap: gap, align: align, children: children, block: block)
+  kids.push(n)
+  return n
+}
+
+def _addBox(
+  kids: any[],
+  title: string = "",
+  titleColor: string = "",
+  borderStyle: BorderStyle = "rounded",
+  borderColor: string = "",
+  padding: number = 1,
+  children: LayoutNode[] = null,
+  block: (LayoutBuilder) => void = null,
+): LayoutNode {
+  const n = box(
+    title: title,
+    titleColor: titleColor,
+    borderStyle: borderStyle,
+    borderColor: borderColor,
+    padding: padding,
+    children: children,
+    block: block,
+  )
+  kids.push(n)
+  return n
+}
+
+def _makeBuilder(kids: any[]): LayoutBuilder {
+  return {
+    text: _addText.partial(kids: kids),
+    raw: _addRaw.partial(kids: kids),
+    space: _addSpace.partial(kids: kids),
+    hline: _addHline.partial(kids: kids),
+    vline: _addVline.partial(kids: kids),
+    row: _addRow.partial(kids: kids),
+    column: _addColumn.partial(kids: kids),
+    box: _addBox.partial(kids: kids)
+  }
+}
+
+// ------------------------------------------------------------------
+// Container constructors. Each accepts either `children: [...]`, a
+// trailing `block: builder => void`, both (children prepended, block
+// appends after), or neither (empty container).
+// ------------------------------------------------------------------
+
+/**
+ * A horizontal container. Children render left-to-right.
+ *
+ * @param gap - Cells of blank space between siblings
+ * @param align - Cross-axis (vertical) alignment of shorter children
+ * @param children - Pre-built children (LLM / JSON construction)
+ * @param block - Trailing builder block; appended after `children`
+ */
+export def row(
+  gap: number = 0,
+  align: Alignment = "start",
+  children: LayoutNode[] = null,
+  block: (LayoutBuilder) => void = null,
+): LayoutNode {
+  const kids: any[] = []
+  if (children != null) {
+    for (c in children) {
+      kids.push(c)
+    }
+  }
+  if (block != null) {
+    block(_makeBuilder(kids))
+  }
+  return {
+    type: "row",
+    attrs: {
+      gap: gap,
+      align: align
+    },
+    children: kids
+  }
+}
+
+/**
+ * A vertical container. Children render top-to-bottom.
+ *
+ * @param gap - Blank rows between siblings
+ * @param align - Cross-axis (horizontal) alignment of narrower children
+ * @param children - Pre-built children
+ * @param block - Trailing builder block
+ */
+export def column(
+  gap: number = 0,
+  align: Alignment = "start",
+  children: LayoutNode[] = null,
+  block: (LayoutBuilder) => void = null,
+): LayoutNode {
+  const kids: any[] = []
+  if (children != null) {
+    for (c in children) {
+      kids.push(c)
+    }
+  }
+  if (block != null) {
+    block(_makeBuilder(kids))
+  }
+  return {
+    type: "column",
+    attrs: {
+      gap: gap,
+      align: align
+    },
+    children: kids
+  }
+}
+
+/**
+ * A bordered panel. When given more than one child (or built via a
+ * block with multiple builder calls), the children are stacked in an
+ * implicit `column`.
+ *
+ * @param title - Text embedded in the top border (no truncation; box
+ *   grows to fit). Empty string for no title.
+ * @param titleColor - Color of the title text
+ * @param borderStyle - One of `"rounded"`, `"heavy"`, `"double"`, `"light"`
+ * @param borderColor - Color of the border characters
+ * @param padding - Cells of padding between border and content
+ * @param children - Pre-built children
+ * @param block - Trailing builder block
+ */
+export def box(
+  title: string = "",
+  titleColor: string = "",
+  borderStyle: BorderStyle = "rounded",
+  borderColor: string = "",
+  padding: number = 1,
+  children: LayoutNode[] = null,
+  block: (LayoutBuilder) => void = null,
+): LayoutNode {
+  const kids: any[] = []
+  if (children != null) {
+    for (c in children) {
+      kids.push(c)
+    }
+  }
+  if (block != null) {
+    block(_makeBuilder(kids))
+  }
+  return {
+    type: "box",
+    attrs: {
+      title: title,
+      titleColor: titleColor,
+      borderStyle: borderStyle,
+      borderColor: borderColor,
+      padding: padding
+    },
+    children: kids
+  }
+}
+
+/**
+ * Render a layout tree to a string.
+ *
+ * @param node - Root of the layout tree
+ * @param color - `"auto"` (default) emits ANSI sequences only when stdout
+ *   is a TTY. `true` always emits them. `false` strips all styling for
+ *   plain ASCII output (logs, non-TTY consumers).
+ */
+export safe def render(
+  node: LayoutNode,
+  color: "auto" | boolean = "auto",
+): string {
+  return _render(node, color)
+}

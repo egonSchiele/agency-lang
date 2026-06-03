@@ -29,6 +29,18 @@ export async function __call(
     throw new Error(`Cannot call non-function value: ${String(target)}`);
   }
   if (descriptor.type === "named") {
+    // A trailing `as x { ... }` block desugars to a "named" descriptor
+    // carrying `blockArg`. JS callables can't receive trailing blocks
+    // at all, so this would otherwise surface as the generic
+    // "named arguments not supported" message — confusing because the
+    // user didn't write any named args. Detect and report the actual
+    // problem first.
+    if (descriptor.blockArg !== undefined) {
+      throw new Error(
+        `Cannot pass a trailing block to non-Agency function '${target.name || "(anonymous)"}'. ` +
+        `Trailing 'as x { ... }' blocks are only valid on Agency-defined functions.`,
+      );
+    }
     throw new Error(
       `Named arguments are not supported for non-Agency function '${target.name || "(anonymous)"}'`,
     );
@@ -81,6 +93,15 @@ export async function __callMethod(
     throw new Error(`Cannot call non-function value at property '${String(prop)}': ${String(target)}`);
   }
   if (descriptor.type === "named") {
+    // See the matching branch in `__call` above. A trailing block on
+    // a JS method desugars to a "named" descriptor with `blockArg`;
+    // detect that case so the user gets the actual diagnostic.
+    if (descriptor.blockArg !== undefined) {
+      throw new Error(
+        `Cannot pass a trailing block to non-Agency function '${String(prop)}'. ` +
+        `Trailing 'as x { ... }' blocks are only valid on Agency-defined functions.`,
+      );
+    }
     throw new Error(
       `Named arguments are not supported for non-Agency function '${String(prop)}'`,
     );

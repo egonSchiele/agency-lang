@@ -2121,7 +2121,13 @@ export class TypeScriptBuilder {
     const args = node.arguments;
     const hasNamedArgs = args.some((a) => a.type === "namedArgument");
 
-    if (hasNamedArgs) {
+    // A trailing block must always bind to the function's last
+    // (block-typed) parameter, not be positionally appended after
+    // omitted optional args. Emit a "named" descriptor so the
+    // runtime's blockArg binding (resolveNamed) kicks in — otherwise
+    // `f() as { ... }` would push the block at index 0 and bind it
+    // to the first parameter.
+    if (hasNamedArgs || node.block) {
       // Named call: { type: "named", positionalArgs: [...], namedArgs: {...} }
       const positionalNodes: TsNode[] = [];
       const namedEntries: Record<string, TsNode> = {};

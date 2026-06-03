@@ -60,16 +60,23 @@ import { researchSysPrompt, researchTools } from "./research.agency"
 const AGENT_DEBUG = env("AGENT_DEBUG") == "1"
 
 callback("onToolCallStart") as data {
-  if (AGENT_DEBUG) {
-    pushMessage(color.yellow("⏺ ${data.toolName}(${formatArgs(data.args)})"))
+  //if (AGENT_DEBUG) {
+  pushMessage(color.yellow("⏺ ${data.toolName}(${formatArgs(data.args)})"))
+  //}
+}
+
+def truncate(str: string, maxLength: number): string {
+  if (str.length <= maxLength) {
+    return str
   }
+  return str.slice(0, maxLength) + "..."
 }
 
 def formatArgs(args: Record<string, any>): string {
   const parts = []
   for (key in args) {
     const value = args[key]
-    parts.push("${key}: ${JSON.stringify(value)}")
+    parts.push("${key}: ${truncate(JSON.stringify(value), 50)}")
   }
   return parts.join(", ")
 }
@@ -232,10 +239,14 @@ def _runTurn(msg: string): boolean {
   return true
 }
 
+def roundedCost(): string {
+  return "$${getCost().toFixed(4)}"
+}
+
 def _buildStatus(): { left: string; right: string; context: string } {
   return {
-    left: "agency-agent",
-    right: "$${getCost()}",
+    left: "",
+    right: roundedCost(),
     context: "/help for commands · /exit to quit"
   }
 }

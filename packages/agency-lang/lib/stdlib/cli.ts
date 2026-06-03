@@ -9,7 +9,7 @@ import {
 import { dirname } from "path";
 import { __call } from "../runtime/call.js";
 import { getRuntimeContext } from "../runtime/asyncContext.js";
-
+import { RESET, styles } from "@/utils/termcolors.js"
 // ---------------------------------------------------------------------------
 // TS bridge for `std::cli` — the line-mode REPL.
 //
@@ -91,9 +91,9 @@ function saveHistory(file: string, history: string[], max: number): void {
 // uses for user messages in `lib/stdlib/ui.ts`, so line mode and TUI
 // mode look like the same agent. Only applied when stdout is a TTY
 // so piped output (e.g. `agency ... | tee log.txt`) stays clean.
-const USER_INPUT_COLOR = "\x1b[94m";
-const COLOR_RESET = "\x1b[0m";
-const DIM = "\x1b[2m";
+const USER_INPUT_COLOR = styles.cyan
+const COLOR_RESET = RESET;
+const DIM = styles.dim;
 const CLEAR_LINE = "\r\x1b[K";
 
 const SPINNERS = {
@@ -371,9 +371,9 @@ const MAX_HINT_ROWS = 8;
 // blue background; 97 = bright white foreground; 1 = bold. Combined
 // with the `▶ ` prefix this stands out clearly even on terminals
 // that render dim text faintly.
-const SELECTED_HINT_BG = "\x1b[44m";
-const SELECTED_HINT_FG = "\x1b[97m";
-const BOLD = "\x1b[1m";
+const SELECTED_HINT_BG = styles.bgCyan;
+const SELECTED_HINT_FG = styles.black;
+const BOLD = styles.bold
 
 /**
  * Live slash-command popup with arrow-key navigation.

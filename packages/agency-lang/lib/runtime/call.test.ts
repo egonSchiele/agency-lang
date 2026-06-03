@@ -47,6 +47,24 @@ describe("__call", () => {
     ).rejects.toThrow("Named arguments are not supported");
   });
 
+  it("throws a trailing-block-specific error for `as { ... }` on a TS function", async () => {
+    // A trailing `as x { ... }` block desugars to a "named" descriptor
+    // carrying `blockArg` (with no other named args). The error must
+    // name the actual problem (trailing block on JS function), not the
+    // generic "named arguments not supported" which would confuse a
+    // user who never wrote any named args.
+    const fn = (cb: () => void) => cb();
+    const blockArg = makeAgencyFn(async () => "block-ran");
+    await expect(
+      __call(fn, {
+        type: "named",
+        positionalArgs: [],
+        namedArgs: {},
+        blockArg,
+      }),
+    ).rejects.toThrow("Cannot pass a trailing block to non-Agency function");
+  });
+
   it("throws on non-callable target", async () => {
     await expect(
       __call(42, { type: "positional", args: [] }),
@@ -96,6 +114,22 @@ describe("__callMethod", () => {
     await expect(
       __callMethod(obj, "fn", { type: "named", positionalArgs: [], namedArgs: { a: 1 } }),
     ).rejects.toThrow("Named arguments are not supported");
+  });
+
+  it("throws a trailing-block-specific error for `as { ... }` on a TS method", async () => {
+    // Same regression as `__call` above, but reached through a method
+    // dispatch. Without the dedicated check the user sees the generic
+    // named-args error and has no idea why.
+    const obj = { fn: (cb: () => void) => cb() };
+    const blockArg = makeAgencyFn(async () => "block-ran");
+    await expect(
+      __callMethod(obj, "fn", {
+        type: "named",
+        positionalArgs: [],
+        namedArgs: {},
+        blockArg,
+      }),
+    ).rejects.toThrow("Cannot pass a trailing block to non-Agency function");
   });
 
   it("dispatches .preapprove() with no args", async () => {

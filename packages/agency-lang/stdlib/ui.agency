@@ -42,6 +42,13 @@ import {
     `std::policy.cliPolicyHandler` so interrupt prompts render
     through the active screen instead of fighting with the input bar.
 
+  ### See also
+
+  `std::layout` is the sibling module for *static* terminal output —
+  splash screens, summary panels, side-by-side columns. It exports
+  `box`, `row`, `column`, and several leaves with the same names as
+  this module; if you import from both, alias one set on import.
+
   ## Usage: Layer 1 (custom widgets)
 
   ```ts

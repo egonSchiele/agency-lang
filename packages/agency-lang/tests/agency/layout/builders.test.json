@@ -1,0 +1,64 @@
+{
+  "tests": [
+    {
+      "nodeName": "testText",
+      "input": "",
+      "expectedOutput": "{\"type\":\"text\",\"attrs\":{\"content\":\"hi\",\"fgColor\":\"\",\"bgColor\":\"\",\"bold\":false,\"italic\":false,\"dim\":false,\"underline\":false,\"align\":\"start\"},\"children\":[]}",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "testTextStyled",
+      "input": "",
+      "expectedOutput": "{\"type\":\"text\",\"attrs\":{\"content\":\"bold red\",\"fgColor\":\"red\",\"bgColor\":\"\",\"bold\":true,\"italic\":false,\"dim\":false,\"underline\":false,\"align\":\"start\"},\"children\":[]}",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "testRaw",
+      "input": "",
+      "expectedOutput": "{\"type\":\"raw\",\"attrs\":{\"content\":\"\\u001b[31mpre-styled\\u001b[0m\",\"align\":\"start\"},\"children\":[]}",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "testSpace",
+      "input": "",
+      "expectedOutput": "{\"type\":\"space\",\"attrs\":{\"count\":3},\"children\":[]}",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "testHline",
+      "input": "",
+      "expectedOutput": "{\"type\":\"hline\",\"attrs\":{\"char\":\"─\",\"length\":0,\"fgColor\":\"\",\"bold\":false,\"dim\":false},\"children\":[]}",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "testHlineExplicit",
+      "input": "",
+      "expectedOutput": "{\"type\":\"hline\",\"attrs\":{\"char\":\"=\",\"length\":5,\"fgColor\":\"blue\",\"bold\":false,\"dim\":false},\"children\":[]}",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "testVline",
+      "input": "",
+      "expectedOutput": "{\"type\":\"vline\",\"attrs\":{\"char\":\"│\",\"length\":0,\"fgColor\":\"\",\"bold\":false,\"dim\":false},\"children\":[]}",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "testRow",
+      "input": "",
+      "expectedOutput": "{\"type\":\"row\",\"attrs\":{\"gap\":0,\"align\":\"start\"},\"children\":[]}",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "testColumn",
+      "input": "",
+      "expectedOutput": "{\"type\":\"column\",\"attrs\":{\"gap\":2,\"align\":\"center\"},\"children\":[]}",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "testBox",
+      "input": "",
+      "expectedOutput": "{\"type\":\"box\",\"attrs\":{\"title\":\"T\",\"titleColor\":\"\",\"borderStyle\":\"rounded\",\"borderColor\":\"\",\"padding\":2},\"children\":[]}",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

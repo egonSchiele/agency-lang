@@ -1,0 +1,67 @@
+// Regression: a trailing block argument must bind to the function's
+// last (block-typed) parameter, NOT positionally fill the first
+// optional parameter that was omitted at the call site.
+//
+// Before the fix, `column() as g { ... }` desugared to a positional
+// call where the block landed in slot 0, binding to `gap`. The real
+// `block` parameter stayed `null` so the block body never executed.
+
+def column(
+  gap: number = 0,
+  block: (number) => void = null,
+): number {
+  if (block != null) {
+    block(gap)
+  }
+  return gap
+}
+
+def row(
+  gap: number = 0,
+  align: string = "start",
+  block: (number) => void = null,
+): string {
+  if (block != null) {
+    block(gap)
+  }
+  return align
+}
+
+node testNoArgs() {
+  // `column() as g { ... }` — all leading params omitted, only the
+  // trailing block. Must bind to `block`, not `gap`.
+  let captured = -1
+  column() as g {
+    captured = g
+  }
+  return captured  // 0, the default for `gap`
+}
+
+node testNoArgsMultipleOptional() {
+  // Same shape with two leading optional params before `block`.
+  let captured = -1
+  row() as g {
+    captured = g
+  }
+  return captured  // 0
+}
+
+node testOneArgThenBlock() {
+  // One positional arg supplied; block still binds to `block`,
+  // not to the next omitted optional (`align`).
+  let captured = -1
+  row(7) as g {
+    captured = g
+  }
+  return captured  // 7
+}
+
+node testNamedArgThenBlock() {
+  // Named arg + trailing block — the named-arg path already worked,
+  // included here to lock in the behaviour stays consistent.
+  let captured = -1
+  row(gap: 3) as g {
+    captured = g
+  }
+  return captured  // 3
+}

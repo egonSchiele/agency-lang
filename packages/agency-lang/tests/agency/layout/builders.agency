@@ -1,0 +1,46 @@
+import { box, row, column, text, raw, space, hline, vline } from "std::layout"
+
+// Each test exercises one top-level constructor and returns the node
+// so the .test.json fixture can assert its `type` and the keys of its
+// `attrs`. We compare against full attr objects (defaults populated)
+// to lock down the data shape.
+
+node testText() {
+  return text("hi")
+}
+
+node testTextStyled() {
+  return text("bold red", fgColor: "red", bold: true)
+}
+
+node testRaw() {
+  return raw("[31mpre-styled[0m")
+}
+
+node testSpace() {
+  return space(3)
+}
+
+node testHline() {
+  return hline()
+}
+
+node testHlineExplicit() {
+  return hline(char: "=", length: 5, fgColor: "blue")
+}
+
+node testVline() {
+  return vline()
+}
+
+node testRow() {
+  return row()
+}
+
+node testColumn() {
+  return column(gap: 2, align: "center")
+}
+
+node testBox() {
+  return box(title: "T", padding: 2)
+}

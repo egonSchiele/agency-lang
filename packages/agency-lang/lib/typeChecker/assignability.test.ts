@@ -116,3 +116,56 @@ describe("functionRefType assignability", () => {
     expect(isAssignable(fnRef, other, {})).toBe(false);
   });
 });
+
+describe("unresolved typeAliasVariable assignability", () => {
+  // Regression: if a user references an undeclared type name (typo,
+  // forgotten import, missing export) on both sides of an assignment,
+  // `isAssignable` used to fall through to its `return false` tail
+  // and emit the confusing diagnostic "Foo is not assignable to Foo".
+  // Two unresolved aliases with the same name are now treated as
+  // equal; the real diagnostic ("type alias not defined") is the
+  // job of validateTypeReferences.
+  const undefinedFoo: VariableType = {
+    type: "typeAliasVariable",
+    aliasName: "Foo",
+  };
+  const undefinedFooAgain: VariableType = {
+    type: "typeAliasVariable",
+    aliasName: "Foo",
+  };
+  const undefinedBar: VariableType = {
+    type: "typeAliasVariable",
+    aliasName: "Bar",
+  };
+
+  it("same-name unresolved aliases are assignable to each other", () => {
+    expect(isAssignable(undefinedFoo, undefinedFooAgain, {})).toBe(true);
+  });
+
+  it("different-name unresolved aliases are NOT assignable", () => {
+    expect(isAssignable(undefinedFoo, undefinedBar, {})).toBe(false);
+  });
+
+  it("does not affect aliases that ARE defined", () => {
+    // A normal defined alias resolves to its body and goes through the
+    // structural-equality path, not the unresolved-equality short-circuit.
+    const aliases = {
+      Color: {
+        body: {
+          type: "stringLiteralType" as const,
+          value: "red",
+        } as VariableType,
+      },
+    };
+    const colorRef: VariableType = {
+      type: "typeAliasVariable",
+      aliasName: "Color",
+    };
+    // "red" is assignable to "red" (resolves through alias body)
+    expect(isAssignable(colorRef, colorRef, aliases)).toBe(true);
+    // The new short-circuit must NOT fire here: source resolves to
+    // stringLiteralType, target stays as the unresolved Foo. They are
+    // not the same type, so the result is `false`.
+    expect(isAssignable(colorRef, undefinedFoo, aliases)).toBe(false);
+  });
+});

@@ -1,0 +1,22 @@
+{
+  "tests": [
+    {
+      "nodeName": "testOrdering",
+      "input": "",
+      "expectedOutput": "[\"text\",\"space\",\"text\",\"vline\",\"text\"]",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "testChildrenCount",
+      "input": "",
+      "expectedOutput": "3",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "testThreeDeep",
+      "input": "",
+      "expectedOutput": "\"leaf\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

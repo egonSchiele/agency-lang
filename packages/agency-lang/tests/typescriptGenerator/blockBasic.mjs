@@ -333,8 +333,10 @@ await callHook({
       });
       await runner.step(1, async (runner) => {
 __stack.locals.results = await __call(twice, {
-          type: "positional",
-          args: [__AgencyFunction.create({ name: "__block_0", module: "blockBasic.agency", fn: async () => {
+          type: "named",
+          positionalArgs: [],
+          namedArgs: {},
+          blockArg: __AgencyFunction.create({ name: "__block_0", module: "blockBasic.agency", fn: async () => {
             const __bsetup = setupFunction();
 const __bstack = __bsetup.stack;
 const __self = __bstack.locals;
@@ -349,7 +351,7 @@ return runner.halted ? runner.haltResult : undefined;
 } finally {
 __ctx.stateStack.pop();
 }
-          }, params: [], toolDefinition: null }, __toolRegistry)]
+          }, params: [], toolDefinition: null }, __toolRegistry)
         });
 if (hasInterrupts(__stack.locals.results)) {
           await getRuntimeContext().ctx.pendingPromises.awaitAll()

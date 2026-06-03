@@ -1,0 +1,58 @@
+import { box, row, column, text, hline, vline, render } from "std::layout"
+
+// Showcases the std::layout module on a single splash-style panel.
+// Run with: pnpm run agency examples/layoutDemo.agency
+
+node main() {
+  // 1) Plain bordered box with a title.
+  const greeting = box(title: "Welcome", titleColor: "orange") as b {
+    b.text("Hello from std::layout!", bold: true)
+  }
+  print(render(greeting))
+  print("")
+
+  // 2) Two-column layout with a vline separator.
+  const twoCol = box(title: "Tips", padding: 1) as outer {
+    outer.row(gap: 2) as r {
+      r.column() as left {
+        left.text("Commands:", bold: true, fgColor: "orange")
+        left.text("/help — show help")
+        left.text("/exit — quit")
+      }
+      r.vline()
+      r.column() as right {
+        right.text("Shortcuts:", bold: true, fgColor: "orange")
+        right.text("Ctrl-C — interrupt")
+        right.text("Ctrl-D — submit")
+      }
+    }
+  }
+  print(render(twoCol))
+  print("")
+
+  // 3) Column with an hline separator and a heavy-bordered footer.
+  const sections = column(gap: 0) as c {
+    c.text("Section A", bold: true)
+    c.text("alpha alpha alpha")
+    c.hline()
+    c.text("Section B", bold: true)
+    c.text("beta beta")
+    c.hline(char: "═")
+    c.text("Section C", bold: true)
+    c.text("gamma")
+  }
+  print(render(sections))
+  print("")
+
+  // 4) Heavy border style.
+  const heavy = box(
+    title: "ALERT",
+    titleColor: "red",
+    borderStyle: "heavy",
+    borderColor: "red",
+    padding: 1,
+  ) as b {
+    b.text("System status nominal.", dim: true)
+  }
+  print(render(heavy))
+}

@@ -1,0 +1,32 @@
+{
+  "tests": [
+    {
+      "nodeName": "testNoArgs",
+      "input": "",
+      "expectedOutput": "0",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "trailing block with no positional args binds to block param, not gap"
+    },
+    {
+      "nodeName": "testNoArgsMultipleOptional",
+      "input": "",
+      "expectedOutput": "0",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "trailing block skips multiple omitted optional params"
+    },
+    {
+      "nodeName": "testOneArgThenBlock",
+      "input": "",
+      "expectedOutput": "7",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "trailing block with one positional arg binds to last param, not next optional"
+    },
+    {
+      "nodeName": "testNamedArgThenBlock",
+      "input": "",
+      "expectedOutput": "3",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "named arg plus trailing block continues to work"
+    }
+  ]
+}

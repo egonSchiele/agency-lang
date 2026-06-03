@@ -352,8 +352,10 @@ __stack.locals.items = [1, 2, 3];
       });
       await runner.step(2, async (runner) => {
 __stack.locals.doubled = await __call(mapItems, {
-          type: "positional",
-          args: [__stack.locals.items, __AgencyFunction.create({ name: "__block_0", module: "blockParams.agency", fn: async (x: any) => {
+          type: "named",
+          positionalArgs: [__stack.locals.items],
+          namedArgs: {},
+          blockArg: __AgencyFunction.create({ name: "__block_0", module: "blockParams.agency", fn: async (x: any) => {
             const __bsetup = setupFunction();
 const __bstack = __bsetup.stack;
 const __self = __bstack.locals;
@@ -370,7 +372,7 @@ return runner.halted ? runner.haltResult : undefined;
 } finally {
 __ctx.stateStack.pop();
 }
-          }, params: [{ name: "x", hasDefault: false, defaultValue: undefined, variadic: false }], toolDefinition: null }, __toolRegistry)]
+          }, params: [{ name: "x", hasDefault: false, defaultValue: undefined, variadic: false }], toolDefinition: null }, __toolRegistry)
         });
 if (hasInterrupts(__stack.locals.doubled)) {
           await getRuntimeContext().ctx.pendingPromises.awaitAll()

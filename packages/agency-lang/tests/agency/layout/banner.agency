@@ -1,0 +1,22 @@
+import { box, row, column, text, vline, render } from "std::layout"
+
+// Build a small splash-style layout and return the rendered string.
+// Forces color: false so the fixture stays plain ASCII regardless of
+// where the test runs.
+node testBanner() {
+  const splash = box(title: "Hello", padding: 1) as outer {
+    outer.row(gap: 2) as r {
+      r.column() as left {
+        left.text("Welcome!", bold: true)
+        left.text("Have fun.")
+      }
+      r.vline()
+      r.column() as right {
+        right.text("Tips:")
+        right.text("- /help")
+        right.text("- /exit")
+      }
+    }
+  }
+  return render(splash, color: false)
+}

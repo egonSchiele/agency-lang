@@ -1,0 +1,30 @@
+import { box, row, column, text, vline, render } from "std::layout"
+
+// Same banner as banner.agency, but constructed using `children: [...]`
+// arrays + top-level constructors instead of trailing `as name { ... }`
+// blocks. Demonstrates the LLM-callable / JSON construction path
+// produces the same rendered string.
+node testBannerViaChildren() {
+  const splash = box(
+    title: "Hello",
+    padding: 1,
+    children: [
+      row(
+        gap: 2,
+        children: [
+          column(children: [
+            text("Welcome!", bold: true),
+            text("Have fun."),
+          ]),
+          vline(),
+          column(children: [
+            text("Tips:"),
+            text("- /help"),
+            text("- /exit"),
+          ]),
+        ],
+      ),
+    ],
+  )
+  return render(splash, color: false)
+}

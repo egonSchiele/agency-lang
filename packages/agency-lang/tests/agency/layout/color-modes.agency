@@ -1,0 +1,32 @@
+import { box, text, render } from "std::layout"
+
+// Build a styled tree once, render with color: true and color: false,
+// then assert structural properties that prove `false` strips styling
+// while preserving content + visual width.
+
+def _styledTree(): any {
+  return box(title: "T", titleColor: "blue", borderColor: "red") as b {
+    b.text("hi", fgColor: "red", bold: true)
+  }
+}
+
+// `color: true` output must contain SGR start sequences.
+node testColorTrueHasSGR(): boolean {
+  const out = render(_styledTree(), color: true)
+  //  is ESC. The simplest fingerprint of SGR is "[".
+  return out.indexOf("[") >= 0
+}
+
+// `color: false` output must be free of CSI sequences.
+node testColorFalseStripsSGR(): boolean {
+  const out = render(_styledTree(), color: false)
+  return out.indexOf("[") == -1
+}
+
+// Stripping does not remove printed characters. The plain text
+// content is still present in the colored output too.
+node testContentPresentInBoth(): boolean {
+  const c = render(_styledTree(), color: true)
+  const p = render(_styledTree(), color: false)
+  return (c.indexOf("hi") >= 0) && (p.indexOf("hi") >= 0)
+}

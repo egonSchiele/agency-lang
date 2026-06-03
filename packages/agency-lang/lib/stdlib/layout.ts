@@ -65,21 +65,42 @@ function colorToRgb(c: string): [number, number, number] | null {
   return rgb ?? null;
 }
 
-function sgr(style: Style): string {
-  const parts: number[] = [];
-  if (style.bold)      parts.push(1);
-  if (style.dim)       parts.push(2);
-  if (style.italic)    parts.push(3);
-  if (style.underline) parts.push(4);
-  const fg = style.fgColor ? colorToRgb(style.fgColor) : null;
-  if (fg) parts.push(38, 2, fg[0], fg[1], fg[2]);
-  const bg = style.bgColor ? colorToRgb(style.bgColor) : null;
-  if (bg) parts.push(48, 2, bg[0], bg[1], bg[2]);
-  if (parts.length === 0) return "";
-  return `\x1b[${parts.join(";")}m`;
-}
+// SGR (Select Graphic Rendition) parameter numbers from the ANSI/ECMA-48
+// spec. Each one toggles a single styling attribute when emitted between
+// CSI (`\x1b[`) and the `m` terminator. `SGR_FG_24BIT` and `SGR_BG_24BIT`
+// are extended sequences: prefix code, color-space `2` (24-bit RGB),
+// then three R/G/B bytes.
+const SGR = {
+  RESET:     0,
+  BOLD:      1,
+  DIM:       2,
+  ITALIC:    3,
+  UNDERLINE: 4,
+  FG_24BIT:  38,
+  BG_24BIT:  48,
+  RGB_SPACE: 2,
+} as const;
 
-const RESET = "\x1b[0m";
+const CSI    = "\x1b[";
+const SGR_END = "m";
+const RESET  = `${CSI}${SGR.RESET}${SGR_END}`;
+
+function sgr(style: Style): string {
+  const codes: number[] = [];
+  if (style.bold)      codes.push(SGR.BOLD);
+  if (style.dim)       codes.push(SGR.DIM);
+  if (style.italic)    codes.push(SGR.ITALIC);
+  if (style.underline) codes.push(SGR.UNDERLINE);
+
+  const fgRgb = style.fgColor ? colorToRgb(style.fgColor) : null;
+  if (fgRgb) codes.push(SGR.FG_24BIT, SGR.RGB_SPACE, ...fgRgb);
+
+  const bgRgb = style.bgColor ? colorToRgb(style.bgColor) : null;
+  if (bgRgb) codes.push(SGR.BG_24BIT, SGR.RGB_SPACE, ...bgRgb);
+
+  if (codes.length === 0) return "";
+  return `${CSI}${codes.join(";")}${SGR_END}`;
+}
 
 export class Block {
   readonly lines: readonly string[];
@@ -205,79 +226,122 @@ function resolveBorderStyle(s: string | undefined): BorderStyle {
 }
 
 export type BorderOpts = {
-  borderStyle?: string;
+  // Typed as the literal union so callers passing untyped JSON still
+  // type-check through the surface; `resolveBorderStyle` provides the
+  // runtime guard for values that slip in via `as` casts.
+  borderStyle?: BorderStyle;
   borderColor?: string;
   padding?: number;
   title?: string;
   titleColor?: string;
 };
 
-export function bordered(block: Block, opts: BorderOpts): Block {
-  const ch = BORDER_CHARS[resolveBorderStyle(opts.borderStyle)];
-  const padding = opts.padding ?? 0;
-  const inner = padding > 0
-    ? pad(
-        block,
-        block.width + 2 * padding,
-        block.height + 2 * padding,
-        "center",
-        "center",
-      )
-    : block;
-  let w = inner.width;
+// Minimum inner width required to fit a title embedded in the top edge.
+// The top edge is `tl + h + " Title " + h*N + tr` — so we need at least
+// one `h` before the title, the title text plus two spaces of padding,
+// and one `h` after. That's `1 + (titleLen + 2) + 1 = titleLen + 4`.
+const TITLE_BORDER_OVERHEAD = 4;
 
-  const titleText = opts.title ?? "";
-  // Top edge is `tl + h*N + " Title " + h*M + tr`. We want at least one `h`
-  // on each side of the title, so the inner width `w` must be ≥
-  // visualWidth(title) + 4 (`h` + ` title ` + `h`).
-  if (titleText !== "") {
-    const minW = visualWidth(titleText) + 4;
-    if (minW > w) {
-      const hAlign: Align = padding > 0 ? "center" : "start";
-      const grown = pad(inner, minW, inner.height, hAlign, "start");
-      return _frame(grown, ch, grown.width, opts, titleText);
-    }
-  }
-  return _frame(inner, ch, w, opts, titleText);
+function minWidthForTitle(titleText: string): number {
+  return visualWidth(titleText) + TITLE_BORDER_OVERHEAD;
 }
 
-function _frame(
+// Grow `inner` horizontally so a title can fit. Padded children stay
+// centred; unpadded children stay left-aligned (their visual anchor).
+function growToFitTitle(inner: Block, titleText: string, padding: number): Block {
+  const needed = minWidthForTitle(titleText);
+  if (needed <= inner.width) return inner;
+  const hAlign: Align = padding > 0 ? "center" : "start";
+  return pad(inner, needed, inner.height, hAlign, "start");
+}
+
+function withPaddingApplied(block: Block, padding: number): Block {
+  if (padding <= 0) return block;
+  return pad(
+    block,
+    block.width  + 2 * padding,
+    block.height + 2 * padding,
+    "center",
+    "center",
+  );
+}
+
+export function bordered(block: Block, opts: BorderOpts): Block {
+  const borderChars = BORDER_CHARS[resolveBorderStyle(opts.borderStyle)];
+  const padding     = opts.padding ?? 0;
+  const titleText   = opts.title   ?? "";
+
+  const padded = withPaddingApplied(block, padding);
+  const inner  = titleText !== "" ? growToFitTitle(padded, titleText, padding) : padded;
+
+  return frameWithBorder(inner, borderChars, inner.width, opts, titleText);
+}
+
+// Apply a styled-string wrapper: returns a function that wraps any
+// substring with the given SGR start + RESET. When the start sequence
+// is empty (no styling configured), wrapping is a no-op — no spurious
+// `\x1b[m` (which is a RESET on some terminals).
+function styledWrapper(style: Style): (s: string) => string {
+  const startSeq = sgr(style);
+  if (startSeq === "") return (s) => s;
+  return (s) => startSeq + s + RESET;
+}
+
+// Render the title segment that gets embedded in the top edge:
+// `<title-style-start> Title <title-style-end>`. Returns both the
+// segment string and its visual width (caller uses the width to know
+// how much horizontal `h` it has to draw after the title).
+function renderTitleSegment(
+  titleText: string,
+  titleStyle: Style,
+): { segment: string; width: number } {
+  const wrap = styledWrapper(titleStyle);
+  const segment = wrap(` ${titleText} `);
+  return { segment, width: visualWidth(segment) };
+}
+
+// Build the top edge of a bordered box, either plain or with a title
+// embedded after one `h` segment (Claude-Code style).
+function buildTopEdge(
+  ch: BorderChars,
+  innerWidth: number,
+  wrapBorder: (s: string) => string,
+  titleText: string,
+  titleStyle: Style,
+): string {
+  if (titleText === "") {
+    return wrapBorder(ch.tl + ch.h.repeat(innerWidth) + ch.tr);
+  }
+  const { segment, width: titleWidth } = renderTitleSegment(titleText, titleStyle);
+  // Layout: `tl + h + <title> + h*remaining + tr`. The leading single
+  // `h` separates the corner from the title; `remaining` fills the
+  // rest. innerWidth covers everything between the corners.
+  const remaining = Math.max(0, innerWidth - 1 - titleWidth);
+  return (
+    wrapBorder(ch.tl + ch.h) +
+    segment +
+    wrapBorder(ch.h.repeat(remaining) + ch.tr)
+  );
+}
+
+function frameWithBorder(
   inner: Block,
   ch: BorderChars,
-  w: number,
+  innerWidth: number,
   opts: BorderOpts,
   titleText: string,
 ): Block {
-  const borderStyle: Style = opts.borderColor
-    ? { fgColor: opts.borderColor }
-    : {};
-  const titleStyle: Style = opts.titleColor
-    ? { fgColor: opts.titleColor }
-    : {};
-  const borderStart = sgr(borderStyle);
-  const borderEnd   = borderStart === "" ? "" : RESET;
-  const wrap = (s: string) => borderStart + s + borderEnd;
+  const borderStyle: Style = opts.borderColor ? { fgColor: opts.borderColor } : {};
+  const titleStyle:  Style = opts.titleColor  ? { fgColor: opts.titleColor  } : {};
+  const wrapBorder = styledWrapper(borderStyle);
 
-  let top: string;
-  if (titleText === "") {
-    top = wrap(ch.tl + ch.h.repeat(w) + ch.tr);
-  } else {
-    const titleStart = sgr(titleStyle);
-    const titleEnd   = titleStart === "" ? "" : RESET;
-    const titleSegment = titleStart + " " + titleText + " " + titleEnd;
-    const titleW = visualWidth(titleSegment);
-    // Layout: tl ─ <title> ──...── tr
-    const after = w - 1 - titleW;
-    top =
-      wrap(ch.tl + ch.h) +
-      titleSegment +
-      wrap(ch.h.repeat(Math.max(0, after)) + ch.tr);
-  }
-  const bottom = wrap(ch.bl + ch.h.repeat(w) + ch.br);
-  const sides = inner.lines.map(l =>
-    wrap(ch.v) + padLine(l, w, "start") + wrap(ch.v),
+  const topEdge    = buildTopEdge(ch, innerWidth, wrapBorder, titleText, titleStyle);
+  const bottomEdge = wrapBorder(ch.bl + ch.h.repeat(innerWidth) + ch.br);
+  const bodyRows   = inner.lines.map((line) =>
+    wrapBorder(ch.v) + padLine(line, innerWidth, "start") + wrapBorder(ch.v),
   );
-  return Block.of([top, ...sides, bottom]);
+
+  return Block.of([topEdge, ...bodyRows, bottomEdge]);
 }
 
 // --- Node tree + renderers ----------------------------------------
@@ -346,102 +410,144 @@ const RENDERERS: Record<NodeType, (n: LayoutNode) => Block> = {
 };
 
 function composeBox(node: LayoutNode): Block {
+  // Single-child box uses that child directly; multi-child (or empty)
+  // wraps in an implicit column. `composeColumn([])` already returns
+  // `Block.empty()`, so no separate empty-children branch is needed.
   const inner: LayoutNode = node.children.length === 1
     ? node.children[0]
     : { type: "column", attrs: {}, children: node.children };
-  const innerBlock = node.children.length === 0
-    ? Block.empty()
-    : RENDERERS[inner.type](inner);
-  return bordered(innerBlock, {
+  return bordered(renderNode(inner), {
     title:       node.attrs.title       as string | undefined,
     titleColor:  node.attrs.titleColor  as string | undefined,
-    borderStyle: node.attrs.borderStyle as string | undefined,
+    borderStyle: node.attrs.borderStyle as BorderStyle | undefined,
     borderColor: node.attrs.borderColor as string | undefined,
     padding:     node.attrs.padding     as number | undefined,
   });
 }
 
-function composeRow(node: LayoutNode): Block {
-  if (node.children.length === 0) return Block.empty();
-  const resolved = resolveDynamicChildren(node.children, "row");
-  const gap   = (node.attrs.gap   as number) ?? 0;
-  const align = (node.attrs.align as Align)  ?? "start";
-  const blocks = resolved.map(c => RENDERERS[c.type](c));
-  const h = blocks.reduce((m, b) => Math.max(m, b.height), 0);
-  const aligned = blocks.map(b => pad(b, b.width, h, "start", align));
-  const gapBlock = gap > 0
-    ? Block.of(" ".repeat(gap))
-    : null;
-  return aligned.reduce<Block>((acc, b, i) => {
-    if (i === 0) return b;
-    return gapBlock ? beside(beside(acc, gapBlock), b) : beside(acc, b);
-  }, Block.empty());
+// --- Axis composition ----------------------------------------------
+//
+// `row` and `column` are symmetric: each lays its children out along a
+// "main axis" (left-to-right / top-to-bottom) and aligns short children
+// in the "cross axis" (vertical / horizontal). The differences are all
+// captured in `AXIS_OPS` below; the actual compose / render logic is
+// shared.
+
+type Axis = "row" | "column";
+
+// Per-axis bundle of "how does this axis differ from the other one":
+//   * which leaf node type stretches (vline in row, hline in column)
+//   * how to measure cross-axis size from a block
+//   * how to align a block in the cross axis
+//   * the join operator to concatenate aligned blocks
+//   * how to render a `space(n)` leaf to a Block on this axis
+type AxisOps = {
+  stretchyType: "vline" | "hline";
+  crossSize:    (b: Block) => number;
+  alignCross:   (b: Block, cross: number, align: Align) => Block;
+  join:         (a: Block, b: Block) => Block;
+  spaceBlock:   (count: number) => Block;
+};
+
+const AXIS_OPS: Record<Axis, AxisOps> = {
+  row: {
+    stretchyType: "vline",
+    crossSize:    (b) => b.height,
+    alignCross:   (b, h, align) => pad(b, b.width, h, "start", align),
+    join:         beside,
+    spaceBlock:   (count) => Block.of(" ".repeat(count)),
+  },
+  column: {
+    stretchyType: "hline",
+    crossSize:    (b) => b.width,
+    alignCross:   (b, w, align) => pad(b, w, b.height, align, "start"),
+    join:         above,
+    spaceBlock:   (count) => Block.of(Array(count).fill("")),
+  },
+};
+
+function maxOf<T>(items: T[], pick: (item: T) => number, floor: number): number {
+  return items.reduce((acc, item) => Math.max(acc, pick(item)), floor);
 }
 
-function composeColumn(node: LayoutNode): Block {
-  if (node.children.length === 0) return Block.empty();
-  const resolved = resolveDynamicChildren(node.children, "column");
-  const gap   = (node.attrs.gap   as number) ?? 0;
-  const align = (node.attrs.align as Align)  ?? "start";
-  const blocks = resolved.map(c => RENDERERS[c.type](c));
-  const w = blocks.reduce((m, b) => Math.max(m, b.width), 0);
-  const aligned = blocks.map(b => pad(b, w, b.height, align, "start"));
-  const gapBlock = gap > 0
-    ? Block.of(Array(gap).fill(""))
-    : null;
-  return aligned.reduce<Block>((acc, b, i) => {
-    if (i === 0) return b;
-    return gapBlock ? above(above(acc, gapBlock), b) : above(acc, b);
-  }, Block.empty());
+function isStretchyLine(child: LayoutNode, axis: Axis): boolean {
+  if (child.type !== AXIS_OPS[axis].stretchyType) return false;
+  const explicitLength = child.attrs.length;
+  return explicitLength == null || explicitLength === 0;
 }
 
-function resolveDynamicChildren(
-  children: LayoutNode[],
-  axis: "row" | "column",
-): LayoutNode[] {
-  // First pass — render every concrete (non-dynamic) child to measure the
-  // cross-axis size needed by stretchy lines.
-  const isDynamic = (c: LayoutNode): boolean => {
-    if (c.type === "space") return true;
-    if (axis === "row"    && c.type === "vline" &&
-        (c.attrs.length == null || c.attrs.length === 0)) return true;
-    if (axis === "column" && c.type === "hline" &&
-        (c.attrs.length == null || c.attrs.length === 0)) return true;
-    return false;
-  };
-  const concreteBlocks = children
-    .filter(c => !isDynamic(c))
-    .map(c => RENDERERS[c.type](c));
-  const cross = axis === "row"
-    ? Math.max(1, ...concreteBlocks.map(b => b.height))
-    : Math.max(1, ...concreteBlocks.map(b => b.width));
+function isDynamic(child: LayoutNode, axis: Axis): boolean {
+  return child.type === "space" || isStretchyLine(child, axis);
+}
 
-  return children.map(c => {
-    if (axis === "row" && c.type === "vline" &&
-        (c.attrs.length == null || c.attrs.length === 0)) {
-      return { ...c, attrs: { ...c.attrs, length: cross } };
-    }
-    if (axis === "column" && c.type === "hline" &&
-        (c.attrs.length == null || c.attrs.length === 0)) {
-      return { ...c, attrs: { ...c.attrs, length: cross } };
-    }
-    if (c.type === "space") {
-      const n = (c.attrs.count as number) ?? 1;
-      return axis === "row"
-        ? {
-            type: "raw" as NodeType,
-            attrs: { content: " ".repeat(n) },
-            children: [],
-          }
-        : {
-            type: "raw" as NodeType,
-            attrs: { content: Array(n).fill("").join("\n") },
-            children: [],
-          };
-    }
-    return c;
+function renderDynamicChild(
+  child: LayoutNode,
+  axis: Axis,
+  crossSize: number,
+): Block {
+  if (isStretchyLine(child, axis)) {
+    return renderNode({ ...child, attrs: { ...child.attrs, length: crossSize } });
+  }
+  // `space(count)`: `count` columns wide inside a row, `count` empty
+  // rows inside a column.
+  const count = (child.attrs.count as number) ?? 1;
+  return AXIS_OPS[axis].spaceBlock(count);
+}
+
+// Render every child of an axis container exactly once, resolving
+// stretchy lines and `space` nodes against the cross-axis size of the
+// concrete siblings.
+function renderChildrenAlongAxis(children: LayoutNode[], axis: Axis): Block[] {
+  // First pass: render every concrete child; leave `null` placeholders
+  // for the dynamic ones (we need their indices to keep source order).
+  const concreteBlocks: (Block | null)[] = children.map((child) =>
+    isDynamic(child, axis) ? null : renderNode(child),
+  );
+
+  // Measure cross-axis size from the concrete blocks only. Floor at 1
+  // so an all-dynamic row (e.g. `row { r.vline() }`) still renders.
+  const measured = concreteBlocks.filter((b): b is Block => b !== null);
+  const crossSize = maxOf(measured, AXIS_OPS[axis].crossSize, 1);
+
+  // Second pass: fill in the dynamic blocks using the measured size.
+  return children.map((child, index) => {
+    const pre = concreteBlocks[index];
+    if (pre !== null) return pre;
+    return renderDynamicChild(child, axis, crossSize);
   });
 }
+
+// Interleave a gap block between consecutive children (skipped when
+// `gapBlock` is null). Used by `composeAxis` to add `row`/`column` `gap`.
+function joinWithGap(
+  blocks: Block[],
+  gapBlock: Block | null,
+  join: (a: Block, b: Block) => Block,
+): Block {
+  return blocks.reduce<Block>((accumulated, block, index) => {
+    if (index === 0) return block;
+    const withGap = gapBlock ? join(accumulated, gapBlock) : accumulated;
+    return join(withGap, block);
+  }, Block.empty());
+}
+
+function composeAxis(node: LayoutNode, axis: Axis): Block {
+  if (node.children.length === 0) return Block.empty();
+
+  const gapCells   = (node.attrs.gap   as number) ?? 0;
+  const childAlign = (node.attrs.align as Align)  ?? "start";
+  const ops        = AXIS_OPS[axis];
+
+  const rendered  = renderChildrenAlongAxis(node.children, axis);
+  const crossSize = maxOf(rendered, ops.crossSize, 0);
+  const aligned   = rendered.map((b) => ops.alignCross(b, crossSize, childAlign));
+
+  const gapBlock = gapCells > 0 ? ops.spaceBlock(gapCells) : null;
+  return joinWithGap(aligned, gapBlock, ops.join);
+}
+
+function composeRow(node: LayoutNode):    Block { return composeAxis(node, "row"); }
+function composeColumn(node: LayoutNode): Block { return composeAxis(node, "column"); }
 
 export function renderNode(node: LayoutNode): Block {
   const renderer = RENDERERS[node.type];
@@ -455,10 +561,29 @@ export function render(node: LayoutNode): string {
   return renderNode(node).toString();
 }
 
+// "auto" color resolution follows the de-facto ecosystem convention:
+//   * `NO_COLOR` set (any value)         → disable, no matter what.
+//   * `FORCE_COLOR` set to a truthy value → enable, no matter what.
+//   * otherwise                           → enable iff stdout is a TTY.
+//
+// `process.stdout.isTTY` alone is unreliable when Agency runs through
+// nested spawns (`pnpm run agency …` spawns the CLI which spawns the
+// compiled script); some intermediate hops can drop the TTY flag even
+// when the user is at an interactive terminal. The env-var fallbacks
+// give the user explicit overrides.
+function _autoUseColor(): boolean {
+  if (process.env.NO_COLOR !== undefined && process.env.NO_COLOR !== "") {
+    return false;
+  }
+  const force = process.env.FORCE_COLOR;
+  if (force !== undefined && force !== "" && force !== "0" && force !== "false") {
+    return true;
+  }
+  return process.stdout.isTTY === true;
+}
+
 export function _render(node: LayoutNode, color: "auto" | boolean): string {
-  const useColor = color === "auto"
-    ? process.stdout.isTTY === true
-    : color === true;
+  const useColor = color === "auto" ? _autoUseColor() : color === true;
   const out = render(node);
   return useColor ? out : stripAnsi(out);
 }

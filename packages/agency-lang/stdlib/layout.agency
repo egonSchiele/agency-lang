@@ -1,6 +1,11 @@
 import { _render } from "agency-lang/stdlib-lib/layout.js"
 
 /** @module
+
+
+
+
+
   ## Module: std::layout
 
   Declarative text layout for terminal output. Build a tree of
@@ -47,7 +52,7 @@ import { _render } from "agency-lang/stdlib-lib/layout.js"
   aliases). `std::layout` is for static text output — splash screens,
   summary panels, side-by-side columns. `std::ui` is for live
   redrawing UIs with input handling.
-*/
+***********/
 
 /**
  * Every layout node has the same shape. Containers carry their
@@ -56,7 +61,7 @@ import { _render } from "agency-lang/stdlib-lib/layout.js"
 export type LayoutNode = {
   type: string;
   attrs: any;
-  children: any[];
+  children: any[]
 }
 
 /**
@@ -65,15 +70,19 @@ export type LayoutNode = {
  * surrounding container's `children` array.
  */
 export type LayoutBuilder = {
-  text:   any;
-  raw:    any;
-  space:  any;
-  hline:  any;
-  vline:  any;
-  row:    any;
+  text: any;
+  raw: any;
+  space: any;
+  hline: any;
+  vline: any;
+  row: any;
   column: any;
-  box:    any;
+  box: any
 }
+
+export type Alignment = "start" | "center" | "end"
+
+export type BorderStyle = "rounded" | "heavy" | "double" | "light"
 
 // ------------------------------------------------------------------
 // Top-level leaf constructors. Each returns a LayoutNode without
@@ -102,7 +111,7 @@ export safe def text(
   italic: boolean = false,
   dim: boolean = false,
   underline: boolean = false,
-  align: "start" | "center" | "end" = "start",
+  align: Alignment = "start",
 ): LayoutNode {
   return {
     type: "text",
@@ -114,9 +123,9 @@ export safe def text(
       italic: italic,
       dim: dim,
       underline: underline,
-      align: align,
+      align: align
     },
-    children: [],
+    children: []
   }
 }
 
@@ -131,14 +140,14 @@ export safe def text(
  * @param content - Raw string content (may contain ANSI / newlines)
  * @param align - Horizontal alignment within the rendered Block
  */
-export safe def raw(
-  content: string,
-  align: "start" | "center" | "end" = "start",
-): LayoutNode {
+export safe def raw(content: string, align: Alignment = "start"): LayoutNode {
   return {
     type: "raw",
-    attrs: { content: content, align: align },
-    children: [],
+    attrs: {
+      content: content,
+      align: align
+    },
+    children: []
   }
 }
 
@@ -149,7 +158,13 @@ export safe def raw(
  * @param count - Number of cells of blank space
  */
 export safe def space(count: number = 1): LayoutNode {
-  return { type: "space", attrs: { count: count }, children: [] }
+  return {
+    type: "space",
+    attrs: {
+      count: count
+    },
+    children: []
+  }
 }
 
 /**
@@ -176,9 +191,9 @@ export safe def hline(
       length: length,
       fgColor: fgColor,
       bold: bold,
-      dim: dim,
+      dim: dim
     },
-    children: [],
+    children: []
   }
 }
 
@@ -206,9 +221,9 @@ export safe def vline(
       length: length,
       fgColor: fgColor,
       bold: bold,
-      dim: dim,
+      dim: dim
     },
-    children: [],
+    children: []
   }
 }
 
@@ -227,7 +242,7 @@ def _addText(
   italic: boolean = false,
   dim: boolean = false,
   underline: boolean = false,
-  align: "start" | "center" | "end" = "start",
+  align: Alignment = "start",
 ): LayoutNode {
   const n = text(
     content: content,
@@ -246,7 +261,7 @@ def _addText(
 def _addRaw(
   kids: any[],
   content: string,
-  align: "start" | "center" | "end" = "start",
+  align: Alignment = "start",
 ): LayoutNode {
   const n = raw(content: content, align: align)
   kids.push(n)
@@ -267,9 +282,7 @@ def _addHline(
   bold: boolean = false,
   dim: boolean = false,
 ): LayoutNode {
-  const n = hline(
-    char: char, length: length, fgColor: fgColor, bold: bold, dim: dim,
-  )
+  const n = hline(char: char, length: length, fgColor: fgColor, bold: bold, dim: dim)
   kids.push(n)
   return n
 }
@@ -282,9 +295,7 @@ def _addVline(
   bold: boolean = false,
   dim: boolean = false,
 ): LayoutNode {
-  const n = vline(
-    char: char, length: length, fgColor: fgColor, bold: bold, dim: dim,
-  )
+  const n = vline(char: char, length: length, fgColor: fgColor, bold: bold, dim: dim)
   kids.push(n)
   return n
 }
@@ -292,9 +303,9 @@ def _addVline(
 def _addRow(
   kids: any[],
   gap: number = 0,
-  align: "start" | "center" | "end" = "start",
-  children?: LayoutNode[],
-  block?: (LayoutBuilder) => void,
+  align: Alignment = "start",
+  children: LayoutNode[] = null,
+  block: (LayoutBuilder) => void = null,
 ): LayoutNode {
   const n = row(gap: gap, align: align, children: children, block: block)
   kids.push(n)
@@ -304,9 +315,9 @@ def _addRow(
 def _addColumn(
   kids: any[],
   gap: number = 0,
-  align: "start" | "center" | "end" = "start",
-  children?: LayoutNode[],
-  block?: (LayoutBuilder) => void,
+  align: Alignment = "start",
+  children: LayoutNode[] = null,
+  block: (LayoutBuilder) => void = null,
 ): LayoutNode {
   const n = column(gap: gap, align: align, children: children, block: block)
   kids.push(n)
@@ -317,11 +328,11 @@ def _addBox(
   kids: any[],
   title: string = "",
   titleColor: string = "",
-  borderStyle: "rounded" | "heavy" | "double" | "light" = "rounded",
+  borderStyle: BorderStyle = "rounded",
   borderColor: string = "",
-  padding: number = 0,
-  children?: LayoutNode[],
-  block?: (LayoutBuilder) => void,
+  padding: number = 1,
+  children: LayoutNode[] = null,
+  block: (LayoutBuilder) => void = null,
 ): LayoutNode {
   const n = box(
     title: title,
@@ -338,14 +349,14 @@ def _addBox(
 
 def _makeBuilder(kids: any[]): LayoutBuilder {
   return {
-    text:   _addText.partial(kids: kids),
-    raw:    _addRaw.partial(kids: kids),
-    space:  _addSpace.partial(kids: kids),
-    hline:  _addHline.partial(kids: kids),
-    vline:  _addVline.partial(kids: kids),
-    row:    _addRow.partial(kids: kids),
+    text: _addText.partial(kids: kids),
+    raw: _addRaw.partial(kids: kids),
+    space: _addSpace.partial(kids: kids),
+    hline: _addHline.partial(kids: kids),
+    vline: _addVline.partial(kids: kids),
+    row: _addRow.partial(kids: kids),
     column: _addColumn.partial(kids: kids),
-    box:    _addBox.partial(kids: kids),
+    box: _addBox.partial(kids: kids)
   }
 }
 
@@ -365,9 +376,9 @@ def _makeBuilder(kids: any[]): LayoutBuilder {
  */
 export def row(
   gap: number = 0,
-  align: "start" | "center" | "end" = "start",
-  children?: LayoutNode[],
-  block?: (LayoutBuilder) => void,
+  align: Alignment = "start",
+  children: LayoutNode[] = null,
+  block: (LayoutBuilder) => void = null,
 ): LayoutNode {
   const kids: any[] = []
   if (children != null) {
@@ -380,8 +391,11 @@ export def row(
   }
   return {
     type: "row",
-    attrs: { gap: gap, align: align },
-    children: kids,
+    attrs: {
+      gap: gap,
+      align: align
+    },
+    children: kids
   }
 }
 
@@ -395,9 +409,9 @@ export def row(
  */
 export def column(
   gap: number = 0,
-  align: "start" | "center" | "end" = "start",
-  children?: LayoutNode[],
-  block?: (LayoutBuilder) => void,
+  align: Alignment = "start",
+  children: LayoutNode[] = null,
+  block: (LayoutBuilder) => void = null,
 ): LayoutNode {
   const kids: any[] = []
   if (children != null) {
@@ -410,8 +424,11 @@ export def column(
   }
   return {
     type: "column",
-    attrs: { gap: gap, align: align },
-    children: kids,
+    attrs: {
+      gap: gap,
+      align: align
+    },
+    children: kids
   }
 }
 
@@ -432,11 +449,11 @@ export def column(
 export def box(
   title: string = "",
   titleColor: string = "",
-  borderStyle: "rounded" | "heavy" | "double" | "light" = "rounded",
+  borderStyle: BorderStyle = "rounded",
   borderColor: string = "",
   padding: number = 1,
-  children?: LayoutNode[],
-  block?: (LayoutBuilder) => void,
+  children: LayoutNode[] = null,
+  block: (LayoutBuilder) => void = null,
 ): LayoutNode {
   const kids: any[] = []
   if (children != null) {
@@ -454,9 +471,9 @@ export def box(
       titleColor: titleColor,
       borderStyle: borderStyle,
       borderColor: borderColor,
-      padding: padding,
+      padding: padding
     },
-    children: kids,
+    children: kids
   }
 }
 

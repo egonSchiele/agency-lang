@@ -1,4 +1,4 @@
-import { describe, expect, test } from "vitest";
+import { afterEach, beforeEach, describe, expect, test } from "vitest";
 import {
   Block,
   LayoutNode,
@@ -10,6 +10,7 @@ import {
   renderNode,
   styled,
   _internal,
+  _render,
 } from "./layout.js";
 
 function node(
@@ -471,5 +472,68 @@ describe("above", () => {
   });
   test("empty top → bottom", () => {
     expect(above(Block.empty(), Block.of("hi")).toString()).toBe("hi");
+  });
+});
+
+describe('_render color: "auto"', () => {
+  // Regression: "auto" mode used to depend solely on
+  // `process.stdout.isTTY`, which is unreliable through nested
+  // `spawn` chains. `_render` now also honours the de-facto
+  // `NO_COLOR` / `FORCE_COLOR` env vars (set → override the TTY check).
+  //
+  // We save and restore the env across each test so the suite stays
+  // hermetic — other tests shouldn't see leaked overrides.
+  const savedNoColor    = process.env.NO_COLOR;
+  const savedForceColor = process.env.FORCE_COLOR;
+  const styled: LayoutNode = node("text", {
+    content: "hi", fgColor: "red", bold: true,
+  });
+
+  beforeEach(() => {
+    delete process.env.NO_COLOR;
+    delete process.env.FORCE_COLOR;
+  });
+  afterEach(() => {
+    if (savedNoColor    === undefined) delete process.env.NO_COLOR;
+    else process.env.NO_COLOR = savedNoColor;
+    if (savedForceColor === undefined) delete process.env.FORCE_COLOR;
+    else process.env.FORCE_COLOR = savedForceColor;
+  });
+
+  test("NO_COLOR strips SGR even if TTY would have allowed it", () => {
+    process.env.NO_COLOR = "1";
+    expect(_render(styled, "auto")).not.toMatch(/\x1b\[/);
+  });
+
+  test("FORCE_COLOR=1 emits SGR even when stdout is not a TTY", () => {
+    process.env.FORCE_COLOR = "1";
+    expect(_render(styled, "auto")).toMatch(/\x1b\[/);
+  });
+
+  test("FORCE_COLOR=0 does NOT force enable (treated as falsy)", () => {
+    process.env.FORCE_COLOR = "0";
+    // Test runner stdout is not a TTY; "0" should not flip that.
+    expect(_render(styled, "auto")).not.toMatch(/\x1b\[/);
+  });
+
+  test("FORCE_COLOR='false' does NOT force enable", () => {
+    process.env.FORCE_COLOR = "false";
+    expect(_render(styled, "auto")).not.toMatch(/\x1b\[/);
+  });
+
+  test("NO_COLOR wins over FORCE_COLOR (precedence)", () => {
+    process.env.NO_COLOR    = "1";
+    process.env.FORCE_COLOR = "1";
+    expect(_render(styled, "auto")).not.toMatch(/\x1b\[/);
+  });
+
+  test('explicit color: true ignores env vars', () => {
+    process.env.NO_COLOR = "1";
+    expect(_render(styled, true)).toMatch(/\x1b\[/);
+  });
+
+  test('explicit color: false ignores env vars', () => {
+    process.env.FORCE_COLOR = "1";
+    expect(_render(styled, false)).not.toMatch(/\x1b\[/);
   });
 });

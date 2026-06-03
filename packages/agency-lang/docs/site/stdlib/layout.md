@@ -46,6 +46,7 @@
   aliases). `std::layout` is for static text output — splash screens,
   summary panels, side-by-side columns. `std::ui` is for live
   redrawing UIs with input handling.
+**********
 
 ## Types
 
@@ -66,7 +67,7 @@ export type LayoutNode = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/layout.agency#L56))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/layout.agency#L61))
 
 ### LayoutBuilder
 
@@ -92,14 +93,30 @@ export type LayoutBuilder = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/layout.agency#L67))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/layout.agency#L72))
+
+### Alignment
+
+```ts
+export type Alignment = "start" | "center" | "end"
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/layout.agency#L83))
+
+### BorderStyle
+
+```ts
+export type BorderStyle = "rounded" | "heavy" | "double" | "light"
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/layout.agency#L85))
 
 ## Functions
 
 ### text
 
 ```ts
-text(content: string, fgColor: string, bgColor: string, bold: boolean, italic: boolean, dim: boolean, underline: boolean, align: "start" | "center" | "end"): LayoutNode
+text(content: string, fgColor: string, bgColor: string, bold: boolean, italic: boolean, dim: boolean, underline: boolean, align: Alignment): LayoutNode
 ```
 
 * A styled run of text. `content` may contain `\n`; each line becomes
@@ -125,16 +142,16 @@ text(content: string, fgColor: string, bgColor: string, bold: boolean, italic: b
 | italic | `boolean` | false |
 | dim | `boolean` | false |
 | underline | `boolean` | false |
-| align | `"start" \| "center" \| "end"` | "start" |
+| align | [Alignment](markdown.md#alignment) | "start" |
 
 **Returns:** [LayoutNode](#layoutnode)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/layout.agency#L97))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/layout.agency#L106))
 
 ### raw
 
 ```ts
-raw(content: string, align: "start" | "center" | "end"): LayoutNode
+raw(content: string, align: Alignment): LayoutNode
 ```
 
 * A pre-styled string. The content is rendered as-is and is **not**
@@ -152,11 +169,11 @@ raw(content: string, align: "start" | "center" | "end"): LayoutNode
 | Name | Type | Default |
 |---|---|---|
 | content | `string` |  |
-| align | `"start" \| "center" \| "end"` | "start" |
+| align | [Alignment](markdown.md#alignment) | "start" |
 
 **Returns:** [LayoutNode](#layoutnode)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/layout.agency#L134))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/layout.agency#L143))
 
 ### space
 
@@ -177,7 +194,7 @@ space(count: number): LayoutNode
 
 **Returns:** [LayoutNode](#layoutnode)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/layout.agency#L151))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/layout.agency#L160))
 
 ### hline
 
@@ -206,7 +223,7 @@ hline(char: string, length: number, fgColor: string, bold: boolean, dim: boolean
 
 **Returns:** [LayoutNode](#layoutnode)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/layout.agency#L165))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/layout.agency#L180))
 
 ### vline
 
@@ -235,12 +252,12 @@ vline(char: string, length: number, fgColor: string, bold: boolean, dim: boolean
 
 **Returns:** [LayoutNode](#layoutnode)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/layout.agency#L195))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/layout.agency#L210))
 
 ### _addText
 
 ```ts
-_addText(kids: any[], content: string, fgColor: string, bgColor: string, bold: boolean, italic: boolean, dim: boolean, underline: boolean, align: "start" | "center" | "end"): LayoutNode
+_addText(kids: any[], content: string, fgColor: string, bgColor: string, bold: boolean, italic: boolean, dim: boolean, underline: boolean, align: Alignment): LayoutNode
 ```
 
 **Parameters:**
@@ -255,16 +272,16 @@ _addText(kids: any[], content: string, fgColor: string, bgColor: string, bold: b
 | italic | `boolean` | false |
 | dim | `boolean` | false |
 | underline | `boolean` | false |
-| align | `"start" \| "center" \| "end"` | "start" |
+| align | [Alignment](markdown.md#alignment) | "start" |
 
 **Returns:** [LayoutNode](#layoutnode)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/layout.agency#L221))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/layout.agency#L236))
 
 ### _addRaw
 
 ```ts
-_addRaw(kids: any[], content: string, align: "start" | "center" | "end"): LayoutNode
+_addRaw(kids: any[], content: string, align: Alignment): LayoutNode
 ```
 
 **Parameters:**
@@ -273,11 +290,11 @@ _addRaw(kids: any[], content: string, align: "start" | "center" | "end"): Layout
 |---|---|---|
 | kids | `any[]` |  |
 | content | `string` |  |
-| align | `"start" \| "center" \| "end"` | "start" |
+| align | [Alignment](markdown.md#alignment) | "start" |
 
 **Returns:** [LayoutNode](#layoutnode)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/layout.agency#L246))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/layout.agency#L261))
 
 ### _addSpace
 
@@ -294,7 +311,7 @@ _addSpace(kids: any[], count: number): LayoutNode
 
 **Returns:** [LayoutNode](#layoutnode)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/layout.agency#L256))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/layout.agency#L271))
 
 ### _addHline
 
@@ -315,7 +332,7 @@ _addHline(kids: any[], char: string, length: number, fgColor: string, bold: bool
 
 **Returns:** [LayoutNode](#layoutnode)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/layout.agency#L262))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/layout.agency#L277))
 
 ### _addVline
 
@@ -336,12 +353,12 @@ _addVline(kids: any[], char: string, length: number, fgColor: string, bold: bool
 
 **Returns:** [LayoutNode](#layoutnode)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/layout.agency#L277))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/layout.agency#L290))
 
 ### _addRow
 
 ```ts
-_addRow(kids: any[], gap: number, align: "start" | "center" | "end", children: LayoutNode[], block: (LayoutBuilder) => void): LayoutNode
+_addRow(kids: any[], gap: number, align: Alignment, children: LayoutNode[], block: (LayoutBuilder) => void): LayoutNode
 ```
 
 **Parameters:**
@@ -350,18 +367,18 @@ _addRow(kids: any[], gap: number, align: "start" | "center" | "end", children: L
 |---|---|---|
 | kids | `any[]` |  |
 | gap | `number` | 0 |
-| align | `"start" \| "center" \| "end"` | "start" |
+| align | [Alignment](markdown.md#alignment) | "start" |
 | children | `LayoutNode[]` | null |
 | block | `(LayoutBuilder) => void` | null |
 
 **Returns:** [LayoutNode](#layoutnode)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/layout.agency#L292))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/layout.agency#L303))
 
 ### _addColumn
 
 ```ts
-_addColumn(kids: any[], gap: number, align: "start" | "center" | "end", children: LayoutNode[], block: (LayoutBuilder) => void): LayoutNode
+_addColumn(kids: any[], gap: number, align: Alignment, children: LayoutNode[], block: (LayoutBuilder) => void): LayoutNode
 ```
 
 **Parameters:**
@@ -370,18 +387,18 @@ _addColumn(kids: any[], gap: number, align: "start" | "center" | "end", children
 |---|---|---|
 | kids | `any[]` |  |
 | gap | `number` | 0 |
-| align | `"start" \| "center" \| "end"` | "start" |
+| align | [Alignment](markdown.md#alignment) | "start" |
 | children | `LayoutNode[]` | null |
 | block | `(LayoutBuilder) => void` | null |
 
 **Returns:** [LayoutNode](#layoutnode)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/layout.agency#L304))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/layout.agency#L315))
 
 ### _addBox
 
 ```ts
-_addBox(kids: any[], title: string, titleColor: string, borderStyle: "rounded" | "heavy" | "double" | "light", borderColor: string, padding: number, children: LayoutNode[], block: (LayoutBuilder) => void): LayoutNode
+_addBox(kids: any[], title: string, titleColor: string, borderStyle: BorderStyle, borderColor: string, padding: number, children: LayoutNode[], block: (LayoutBuilder) => void): LayoutNode
 ```
 
 **Parameters:**
@@ -391,15 +408,15 @@ _addBox(kids: any[], title: string, titleColor: string, borderStyle: "rounded" |
 | kids | `any[]` |  |
 | title | `string` | "" |
 | titleColor | `string` | "" |
-| borderStyle | `"rounded" \| "heavy" \| "double" \| "light"` | "rounded" |
+| borderStyle | [BorderStyle](#borderstyle) | "rounded" |
 | borderColor | `string` | "" |
-| padding | `number` | 0 |
+| padding | `number` | 1 |
 | children | `LayoutNode[]` | null |
 | block | `(LayoutBuilder) => void` | null |
 
 **Returns:** [LayoutNode](#layoutnode)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/layout.agency#L316))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/layout.agency#L327))
 
 ### _makeBuilder
 
@@ -415,12 +432,12 @@ _makeBuilder(kids: any[]): LayoutBuilder
 
 **Returns:** [LayoutBuilder](#layoutbuilder)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/layout.agency#L339))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/layout.agency#L350))
 
 ### row
 
 ```ts
-row(gap: number, align: "start" | "center" | "end", children: LayoutNode[], block: (LayoutBuilder) => void): LayoutNode
+row(gap: number, align: Alignment, children: LayoutNode[], block: (LayoutBuilder) => void): LayoutNode
 ```
 
 * A horizontal container. Children render left-to-right.
@@ -435,18 +452,18 @@ row(gap: number, align: "start" | "center" | "end", children: LayoutNode[], bloc
 | Name | Type | Default |
 |---|---|---|
 | gap | `number` | 0 |
-| align | `"start" \| "center" \| "end"` | "start" |
+| align | [Alignment](markdown.md#alignment) | "start" |
 | children | `LayoutNode[]` | null |
 | block | `(LayoutBuilder) => void` | null |
 
 **Returns:** [LayoutNode](#layoutnode)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/layout.agency#L366))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/layout.agency#L377))
 
 ### column
 
 ```ts
-column(gap: number, align: "start" | "center" | "end", children: LayoutNode[], block: (LayoutBuilder) => void): LayoutNode
+column(gap: number, align: Alignment, children: LayoutNode[], block: (LayoutBuilder) => void): LayoutNode
 ```
 
 * A vertical container. Children render top-to-bottom.
@@ -461,18 +478,18 @@ column(gap: number, align: "start" | "center" | "end", children: LayoutNode[], b
 | Name | Type | Default |
 |---|---|---|
 | gap | `number` | 0 |
-| align | `"start" \| "center" \| "end"` | "start" |
+| align | [Alignment](markdown.md#alignment) | "start" |
 | children | `LayoutNode[]` | null |
 | block | `(LayoutBuilder) => void` | null |
 
 **Returns:** [LayoutNode](#layoutnode)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/layout.agency#L396))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/layout.agency#L410))
 
 ### box
 
 ```ts
-box(title: string, titleColor: string, borderStyle: "rounded" | "heavy" | "double" | "light", borderColor: string, padding: number, children: LayoutNode[], block: (LayoutBuilder) => void): LayoutNode
+box(title: string, titleColor: string, borderStyle: BorderStyle, borderColor: string, padding: number, children: LayoutNode[], block: (LayoutBuilder) => void): LayoutNode
 ```
 
 * A bordered panel. When given more than one child (or built via a
@@ -494,7 +511,7 @@ box(title: string, titleColor: string, borderStyle: "rounded" | "heavy" | "doubl
 |---|---|---|
 | title | `string` | "" |
 | titleColor | `string` | "" |
-| borderStyle | `"rounded" \| "heavy" \| "double" \| "light"` | "rounded" |
+| borderStyle | [BorderStyle](#borderstyle) | "rounded" |
 | borderColor | `string` | "" |
 | padding | `number` | 1 |
 | children | `LayoutNode[]` | null |
@@ -502,7 +519,7 @@ box(title: string, titleColor: string, borderStyle: "rounded" | "heavy" | "doubl
 
 **Returns:** [LayoutNode](#layoutnode)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/layout.agency#L432))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/layout.agency#L449))
 
 ### render
 
@@ -526,4 +543,4 @@ render(node: LayoutNode, color: "auto" | boolean): string
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/layout.agency#L471))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/layout.agency#L488))

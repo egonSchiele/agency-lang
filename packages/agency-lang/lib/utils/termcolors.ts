@@ -1,8 +1,8 @@
 // ANSI escape codes
-const RESET = "\x1b[0m";
+export const RESET = "\x1b[0m";
 
 // Text color codes
-const colors = {
+export const colors = {
   black: "\x1b[30m",
   red: "\x1b[31m",
   green: "\x1b[32m",
@@ -22,7 +22,7 @@ const colors = {
 } as const;
 
 // Background color codes
-const bgColors = {
+export const bgColors = {
   bgBlack: "\x1b[40m",
   bgRed: "\x1b[41m",
   bgGreen: "\x1b[42m",
@@ -42,7 +42,7 @@ const bgColors = {
 } as const;
 
 // Text modifier codes
-const modifiers = {
+export const modifiers = {
   bold: "\x1b[1m",
   dim: "\x1b[2m",
   italic: "\x1b[3m",
@@ -50,7 +50,7 @@ const modifiers = {
 } as const;
 
 // Combine all style codes
-const styles = { ...colors, ...bgColors, ...modifiers } as const;
+export const styles = { ...colors, ...bgColors, ...modifiers } as const;
 
 type StyleName = keyof typeof styles;
 

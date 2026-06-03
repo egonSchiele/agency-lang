@@ -101,7 +101,10 @@ export type BorderStyle = "rounded" | "heavy" | "double" | "light"
  * @param italic - Italic style
  * @param dim - Reduced intensity
  * @param underline - Underline decoration
- * @param align - Horizontal alignment within the rendered Block
+ * @param align - For multi-line content, how shorter lines sit
+ *   relative to the longest line. No effect on single-line text.
+ *   Parent containers control the leaf's position among siblings;
+ *   this controls the internal layout of the leaf's own lines.
  */
 export safe def text(
   content: string,
@@ -138,7 +141,8 @@ export safe def text(
  * already baked in.
  *
  * @param content - Raw string content (may contain ANSI / newlines)
- * @param align - Horizontal alignment within the rendered Block
+ * @param align - For multi-line content, how shorter lines sit
+ *   relative to the longest line. No effect on single-line raw.
  */
 export safe def raw(content: string, align: Alignment = "start"): LayoutNode {
   return {

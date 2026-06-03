@@ -204,6 +204,42 @@ describe("bordered (no title)", () => {
       bordered(Block.of(["aa", "b"]), { borderStyle: "light" }).toString(),
     ).toBe(["┌──┐", "│aa│", "│b │", "└──┘"].join("\n"));
   });
+  test("unknown borderStyle falls back to light + warns once", () => {
+    const warns: string[] = [];
+    const orig = console.warn;
+    console.warn = (msg: string) => { warns.push(msg); };
+    try {
+      const out = bordered(Block.of("a"), { borderStyle: "round" as any }).toString();
+      // Falls back to "light" — `┌─┐` corner row.
+      expect(out.split("\n")[0]).toBe("┌─┐");
+      // Subsequent calls with the same unknown style don't warn again
+      // (per resolveBorderStyle's `warnedUnknownStyles` set).
+      bordered(Block.of("a"), { borderStyle: "round" as any });
+      expect(warns.length).toBe(1);
+      expect(warns[0]).toMatch(/unknown borderStyle/);
+    } finally {
+      console.warn = orig;
+    }
+  });
+  test("__proto__ borderStyle does not crash and falls back", () => {
+    // Without an own-property check, `"__proto__" in BORDER_CHARS` is true
+    // → returns `Object.prototype` → renderer crashes on `ch.tl`. This
+    // test pins the "must fall back" contract.
+    const orig = console.warn;
+    console.warn = () => {};
+    try {
+      expect(() =>
+        bordered(Block.of("a"), { borderStyle: "__proto__" as any }),
+      ).not.toThrow();
+      const out = bordered(Block.of("a"), {
+        borderStyle: "__proto__" as any,
+      }).toString();
+      // Output should use the light fallback, not produce garbage.
+      expect(out.split("\n")[0]).toBe("┌─┐");
+    } finally {
+      console.warn = orig;
+    }
+  });
 });
 
 describe("bordered (with title)", () => {
@@ -270,6 +306,31 @@ describe("leaf renderers", () => {
   test("text — empty string still one row", () => {
     expect(renderNode(node("text", { content: "" })).height).toBe(1);
   });
+  // align must reach the rendered Block so ragged multi-line text can
+  // be centered/right-aligned within its own width. Uses content with
+  // an even amount of extra space ("aaa" vs "b" → 2 extra) so the
+  // center result is unambiguous; the convention in `padLine` for odd
+  // extra is left-biased ("b " for width 2), matching the existing
+  // `pad` test at the top of this file.
+  test("text — align=center pads each line to block width", () => {
+    expect(render(node("text", { content: "aaa\nb", align: "center" })))
+      .toBe("aaa\n b ");
+  });
+  test("text — align=end right-aligns ragged lines", () => {
+    expect(render(node("text", { content: "aa\nb", align: "end" })))
+      .toBe("aa\n b");
+  });
+  test("text — align=start leaves ragged lines unpadded (height preserved)", () => {
+    // start-align is the default; padding adds trailing spaces so all
+    // lines have the same width. Tightens contract that even start
+    // alignment normalises width.
+    const b = renderNode(node("text", { content: "aa\nb", align: "start" }));
+    expect(b.lines).toEqual(["aa", "b "]);
+  });
+  test("raw — align=center pads to block width", () => {
+    expect(render(node("raw", { content: "aaa\nb", align: "center" })))
+      .toBe("aaa\n b ");
+  });
   test("raw — no styling applied", () => {
     // raw content with embedded SGR survives untouched.
     const styled = "\x1b[31mred\x1b[0m";
@@ -332,6 +393,13 @@ describe("row renderer", () => {
   test("empty container → empty block", () => {
     expect(render(node("row"))).toBe("");
   });
+  test("align=end bottom-aligns shorter children", () => {
+    const tree = node("row", { align: "end" }, [
+      node("text", { content: "a\nb\nc" }),
+      node("text", { content: "x" }),
+    ]);
+    expect(render(tree)).toBe("a \nb \ncx");
+  });
 });
 
 describe("column renderer", () => {
@@ -363,6 +431,16 @@ describe("column renderer", () => {
       node("text", { content: "b" }),
     ]);
     expect(render(tree)).toBe("a\n \nb");
+  });
+  test("empty container → empty block", () => {
+    expect(render(node("column"))).toBe("");
+  });
+  test("align=end right-aligns narrower children", () => {
+    const tree = node("column", { align: "end" }, [
+      node("text", { content: "abcd" }),
+      node("text", { content: "x" }),
+    ]);
+    expect(render(tree)).toBe("abcd\n   x");
   });
 });
 
@@ -417,6 +495,23 @@ describe("stretchy line + space resolution", () => {
     ]);
     expect(render(tree)).toBe("│");
   });
+  test("vline with explicit length is NOT clobbered by row's measured height", () => {
+    // Sibling text is 3 lines tall, but the vline's explicit length 1
+    // must win — resolveDynamicChildren only fills in bare lines.
+    const tree = node("row", {}, [
+      node("text", { content: "a\nb\nc" }),
+      node("vline", { char: "│", length: 1 }),
+    ]);
+    // Row height is still 3 (driven by the text); the short vline gets
+    // bottom-padded by row alignment (default "start" = top).
+    expect(render(tree)).toBe("a│\nb \nc ");
+  });
+  test("hline in a row (wrong axis) still throws — not auto-stretched", () => {
+    // hline only auto-stretches inside a column; in a row, an unsized
+    // hline is a bug and must surface, not silently render as nothing.
+    const tree = node("row", {}, [node("hline", { char: "─" })]);
+    expect(() => render(tree)).toThrow(/must be resolved/);
+  });
 });
 
 describe("box renderer", () => {
@@ -457,6 +552,17 @@ describe("box renderer", () => {
       node("text", { content: "a" }),
     ]);
     expect(render(tree)).toBe(["╔═╗", "║a║", "╚═╝"].join("\n"));
+  });
+  test("empty box renders a 1x1 frame (no children)", () => {
+    // Empty children → composeBox falls back to Block.empty(); bordered
+    // wraps it in a frame. Width 0 means `tl + tr` on the top edge.
+    const out = render(node("box", {}, []));
+    // The frame should at least not crash and produce a well-formed
+    // rectangle. Widths must all match.
+    const widths = out.split("\n").map(_internal.visualWidth);
+    expect(new Set(widths).size).toBe(1);
+    // And it must start with the rounded top-left corner.
+    expect(out.startsWith("╭")).toBe(true);
   });
 });
 

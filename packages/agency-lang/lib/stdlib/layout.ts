@@ -215,7 +215,11 @@ const BORDER_CHARS: Record<BorderStyle, BorderChars> = {
 const warnedUnknownStyles = new Set<string>();
 function resolveBorderStyle(s: string | undefined): BorderStyle {
   if (s == null || s === "") return "rounded";
-  if (s in BORDER_CHARS) return s as BorderStyle;
+  // `Object.hasOwn` (not `in`) so we don't traverse the prototype
+  // chain — otherwise `"__proto__" in BORDER_CHARS` is truthy and
+  // would hand back `Object.prototype` to the renderer, which crashes
+  // on the missing `.tl` / `.tr` fields.
+  if (Object.hasOwn(BORDER_CHARS, s)) return s as BorderStyle;
   if (!warnedUnknownStyles.has(s)) {
     warnedUnknownStyles.add(s);
     console.warn(
@@ -367,14 +371,27 @@ function styleOf(attrs: Record<string, unknown>): Style {
   return s;
 }
 
+// Build the text/raw block for a leaf with `content` (possibly
+// multi-line). `align` controls how short lines sit relative to the
+// longest line of the block. For single-line content this is a no-op
+// (width = own width). The block is always returned as a tidy
+// rectangle (every line padded to the same width) so downstream
+// `beside` / `above` composition is well-behaved.
+function alignedTextBlock(content: string, align: Align): Block {
+  const block = Block.of(content);
+  return pad(block, block.width, block.height, align, "start");
+}
+
 const RENDERERS: Record<NodeType, (n: LayoutNode) => Block> = {
   text: (n) => {
     const content = (n.attrs.content as string) ?? "";
-    return styled(Block.of(content), styleOf(n.attrs));
+    const align   = (n.attrs.align as Align) ?? "start";
+    return styled(alignedTextBlock(content, align), styleOf(n.attrs));
   },
   raw: (n) => {
     const content = (n.attrs.content as string) ?? "";
-    return Block.of(content);
+    const align   = (n.attrs.align as Align) ?? "start";
+    return alignedTextBlock(content, align);
   },
   space: (_n) => {
     throw new Error(

@@ -30,7 +30,6 @@ node main() {
   print(render(twoCol))
   print("")
 
-  // 3) Column with an hline separator and a heavy-bordered footer.
   const sections = column(gap: 0) as c {
     c.text("Section A", bold: true)
     c.text("alpha alpha alpha")

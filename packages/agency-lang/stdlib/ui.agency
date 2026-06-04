@@ -1646,13 +1646,21 @@ def _replReduce(replState: ReplState, keyEvent: KeyEvent): ReplState {
       done: true
     }
     { ctrl: true, key: "u" } => return _clearInputBuffer(state)
-    // Bracketed-paste payload from the terminal (e.g. Cmd+V on    // macOS). `_pasteText` coerces the optional `keyEvent.text` to a    // plain string so the match arm stays a single expression.    { key: "paste" } => return _appendPaste(state, _pasteText(keyEvent))
+    // Bracketed-paste payload from the terminal (e.g. Cmd+V on
+    // macOS). `_pasteText` coerces the optional `keyEvent.text` to a
+    // plain string so the match arm stays a single expression.
+    { key: "paste" } => return _appendPaste(state, _pasteText(keyEvent))
     { key: "/" } if (state.input.buffer == "") => return _openPalette(state)
     { key: "up" } if (state.input.historyIdx > 0) => return _recallPreviousHistory(state)
     { key: "down" } if (state.input.historyIdx < state.input.history.length) => return _recallNextHistory(state)
     { key: "backspace" } if (state.input.buffer != "") => return _removeInputCharacter(state)
-    // Shift+Enter inserts a literal newline. Must come before the    // plain `enter` arms — match arms with more specific predicates    // win, but only when listed before the more general one.    { key: "enter", shift: true } => return _appendInputCharacter(state, "\n")
-    // Empty-buffer Enter is a no-op: skip writing a blank "You" row    // and entering the busy/Thinking state for an empty prompt.    { key: "enter" } if (state.input.buffer == "") => return state
+    // Shift+Enter inserts a literal newline. Must come before the
+    // plain `enter` arms — match arms with more specific predicates
+    // win, but only when listed before the more general one.
+    { key: "enter", shift: true } => return _appendInputCharacter(state, "\n")
+    // Empty-buffer Enter is a no-op: skip writing a blank "You" row
+    // and entering the busy/Thinking state for an empty prompt.
+    { key: "enter" } if (state.input.buffer == "") => return state
     { key: "enter" } => return _submitPrompt(state)
     { key } if (key.length == 1) => return _appendInputCharacter(state, key)
     _ => return state

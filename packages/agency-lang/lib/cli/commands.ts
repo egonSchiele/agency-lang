@@ -5,7 +5,7 @@ import { initPlanForModule } from "@/backends/typescriptGenerator.js";
 import { resolveImports } from "@/preprocessors/importResolver.js";
 import { resolveReExports } from "@/preprocessors/resolveReExports.js";
 import { liftCallbackBlocks } from "@/preprocessors/liftCallbacks.js";
-import { buildCompilationUnit } from "@/compilationUnit.js";
+import { buildCompilationUnit, CompilationUnit } from "@/compilationUnit.js";
 import { SymbolTable } from "@/symbolTable.js";
 import { formatErrors, typeCheck } from "@/typeChecker/index.js";
 import {
@@ -185,6 +185,77 @@ export function resetCompilationCache(): void {
   currentClosure = null;
 }
 
+/**
+ * Build the import-closure analysis once per compile session — at the
+ * outermost call, before any recursive per-file compile() runs. The
+ * recursive children reuse the cached closure to get per-module init
+ * plans without re-parsing.
+ *
+ * "Outermost call" = no `options.symbolTable` (passed by recursive
+ * children). When the outermost call's entry file changes (e.g. the
+ * `agency test` runner iterates several .test.json fixtures in one
+ * process), the cached closure no longer covers the new entry's
+ * imports so we rebuild and drop the stale `compiledFiles` set.
+ * Without that drop, downstream codegen would look up plans for
+ * modules that aren't in the closure and emit an empty init plan.
+ *
+ * Stdlib files compile under their own entry (e.g., when a user runs
+ * `agency compile std/...`) but most user code reaches them via
+ * `import "std::..."`, which the closure walker intentionally skips.
+ * Avoid building a closure rooted at a stdlib file — its imports are
+ * structured differently and we don't need the analysis there.
+ */
+function ensureCompiledClosure(
+  absoluteInputFile: string,
+  config: AgencyConfig,
+  hasSymbolTable: boolean,
+  verbose: boolean,
+): void {
+  const isOutermostCall = !hasSymbolTable;
+  const isStdlibEntry = absoluteInputFile.startsWith(getStdlibDir() + path.sep);
+  const closureCoversEntry =
+    currentClosure?.programs[absoluteInputFile] !== undefined;
+  if (!isOutermostCall || isStdlibEntry || closureCoversEntry) return;
+
+  currentClosure = null;
+  compiledFiles.clear();
+  try {
+    const ccStartTime = performance.now();
+    currentClosure = buildCompiledClosure(absoluteInputFile, config);
+    const ccEndTime = performance.now();
+    logTime({ label: "Built compile closure", start: ccStartTime, end: ccEndTime, verbose });
+  } catch (e) {
+    if (e instanceof CompileClosureError) {
+      console.error(e.message);
+      process.exit(1);
+    }
+    throw e;
+  }
+}
+
+function runTypecheck(
+  liftedProgram: AgencyProgram,
+  config: AgencyConfig,
+  info: CompilationUnit,
+  absoluteInputFile: string,
+  verbose: boolean,
+): void {
+  const tc = config.typechecker;
+  if (!tc?.enabled && !tc?.strict) return;
+  const tcStartTime = performance.now();
+  const { errors } = typeCheck(liftedProgram, config, info);
+  const tcEndTime = performance.now();
+  logTime({ label: `Type checked ${absoluteInputFile}`, start: tcStartTime, end: tcEndTime, verbose });
+  if (errors.length === 0) return;
+  if (tc?.strict) {
+    console.error(formatErrors(errors));
+    const hasFatal = errors.some((e) => (e.severity ?? "error") === "error");
+    if (hasFatal) process.exit(1);
+  } else {
+    console.warn(formatErrors(errors, "warning"));
+  }
+}
+
 export function compile(
   config: AgencyConfig,
   inputFile: string,
@@ -211,45 +282,8 @@ export function compile(
   const compileStartTime = performance.now();
   const absoluteInputFile = path.resolve(inputFile);
 
-  // Build the import-closure analysis once per compile session — at the
-  // outermost call, before any recursive per-file compile() runs. The
-  // recursive children reuse the cached closure to get per-module init
-  // plans without re-parsing.
-  //
-  // "Outermost call" = no `options.symbolTable` (passed by recursive
-  // children). When the outermost call's entry file changes (e.g. the
-  // `agency test` runner iterates several .test.json fixtures in one
-  // process), the cached closure no longer covers the new entry's
-  // imports so we rebuild and drop the stale `compiledFiles` set.
-  // Without that drop, downstream codegen would look up plans for
-  // modules that aren't in the closure and emit an empty init plan.
-  //
-  // Stdlib files compile under their own entry (e.g., when a user runs
-  // `agency compile std/...`) but most user code reaches them via
-  // `import "std::..."`, which the closure walker intentionally skips.
-  // Avoid building a closure rooted at a stdlib file — its imports are
-  // structured differently and we don't need the analysis there.
-  const isOutermostCall = !options?.symbolTable;
-  const isStdlibEntry = absoluteInputFile.startsWith(getStdlibDir() + path.sep);
-  const closureCoversEntry =
-    currentClosure?.programs[absoluteInputFile] !== undefined;
-  if (isOutermostCall && !isStdlibEntry && !closureCoversEntry) {
-    currentClosure = null;
-    compiledFiles.clear();
-    try {
-      const ccStartTime = performance.now();
-      currentClosure = buildCompiledClosure(absoluteInputFile, config);
-      const ccEndTime = performance.now();
-      logTime({ label: "Built compile closure", start: ccStartTime, end: ccEndTime, verbose });
+  ensureCompiledClosure(absoluteInputFile, config, !!options?.symbolTable, verbose);
 
-    } catch (e) {
-      if (e instanceof CompileClosureError) {
-        console.error(e.message);
-        process.exit(1);
-      }
-      throw e;
-    }
-  }
   const ext = options?.ts ? ".ts" : ".js";
   // Anchor the replacement to the extension so that an absolute path
   // containing ".agency" as a substring in a parent directory (e.g.
@@ -307,22 +341,7 @@ export function compile(
   const compilationUnitEndTime = performance.now();
   logTime({ label: `Built compilation unit for ${absoluteInputFile}`, start: compilationUnitStartTime, end: compilationUnitEndTime, verbose });
 
-  const tc = config.typechecker;
-  if (tc?.enabled || tc?.strict) {
-    const tcStartTime = performance.now();
-    const { errors } = typeCheck(liftedProgram, config, info);
-    const tcEndTime = performance.now();
-    logTime({ label: `Type checked ${absoluteInputFile}`, start: tcStartTime, end: tcEndTime, verbose });
-    if (errors.length > 0) {
-      if (tc?.strict) {
-        console.error(formatErrors(errors));
-        const hasFatal = errors.some((e) => (e.severity ?? "error") === "error");
-        if (hasFatal) process.exit(1);
-      } else {
-        console.warn(formatErrors(errors, "warning"));
-      }
-    }
-  }
+  runTypecheck(liftedProgram, config, info, absoluteInputFile, verbose);
 
   const imports = getImports(resolvedProgram);
 

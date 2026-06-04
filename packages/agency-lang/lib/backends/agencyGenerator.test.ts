@@ -633,3 +633,83 @@ describe("AgencyGenerator - string escape round-tripping", () => {
   });
 });
 
+describe("AgencyGenerator - string delimiter round-tripping", () => {
+  // Emit, parse, and check that (a) the emitted source is exactly the
+  // input source (no delimiter rewrite, no needless escapes) and (b)
+  // the re-parsed text value matches the original.
+  const cases = [
+    {
+      name: "backtick string containing double quote",
+      source: '`she said "hi"`',
+      value: 'she said "hi"',
+    },
+    {
+      name: "double-quoted string containing backtick",
+      source: '"she said `hi`"',
+      value: "she said `hi`",
+    },
+    {
+      name: "single-quoted string containing the other two delimiters",
+      source: '\'she said "hi" and `hi`\'',
+      value: 'she said "hi" and `hi`',
+    },
+    {
+      name: "backtick string with an escaped backtick",
+      source: "`with a \\` escaped backtick`",
+      value: "with a ` escaped backtick",
+    },
+    {
+      name: "single-quoted string with an escaped single quote",
+      source: "'it\\'s fine'",
+      value: "it's fine",
+    },
+  ];
+
+  cases.forEach(({ name, source, value }) => {
+    it(`round-trips: ${name}`, () => {
+      const input = `let s = ${source}`;
+
+      const r1 = parseAgency(input, {}, false);
+      expect(r1.success, "first parse").toBe(true);
+      if (!r1.success) return;
+
+      const gen = new AgencyGenerator();
+      const emitted = gen.generate(r1.result).output;
+
+      // The emitted assignment line should contain the original source
+      // verbatim — the formatter must not rewrite the delimiter.
+      expect(emitted).toContain(source);
+
+      const r2 = parseAgency(emitted, {}, false);
+      expect(r2.success, `second parse of ${JSON.stringify(emitted)}`).toBe(true);
+      if (!r2.success) return;
+
+      const stringOf = (program: { nodes: unknown[] }): string | null => {
+        const assignment = program.nodes.find(
+          (n: any) => n?.type === "assignment",
+        ) as { value?: { type?: string; segments?: { type: string; value?: string }[] } } | undefined;
+        if (assignment?.value?.type !== "string") return null;
+        const segs = assignment.value.segments ?? [];
+        if (segs.length === 0) return "";
+        if (segs.length !== 1 || segs[0].type !== "text") return null;
+        return segs[0].value ?? "";
+      };
+
+      expect(stringOf(r1.result), "first-parse value").toBe(value);
+      expect(stringOf(r2.result), "round-tripped value").toBe(value);
+    });
+  });
+
+  it("synthesized literals (no delimiter field) format as \"...\"", () => {
+    const gen = new AgencyGenerator();
+    const synth = {
+      type: "string" as const,
+      segments: [{ type: "text" as const, value: "hello" }],
+    };
+    // Reach into the same path the public emitter would. processNode is
+    // the generic dispatch in AgencyGenerator.
+    const out = (gen as any).processNode(synth);
+    expect(out).toBe('"hello"');
+  });
+});
+

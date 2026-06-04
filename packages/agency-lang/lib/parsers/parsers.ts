@@ -329,7 +329,7 @@ export const stringTextSegmentParser: Parser<TextSegment> = map(
 // preserved verbatim — both the backslash and the character — so existing
 // strings containing literal `\` followed by non-escape characters are
 // unaffected. This is the same behavior as Python's regular strings.
-const stringTextSegmentParserFor = (delim: '"' | "`"): Parser<TextSegment> =>
+const stringTextSegmentParserFor = (delim: '"' | "'" | "`"): Parser<TextSegment> =>
   (input: string): ParserResult<TextSegment> => {
     let i = 0;
     let value = "";
@@ -350,6 +350,7 @@ const stringTextSegmentParserFor = (delim: '"' | "`"): Parser<TextSegment> =>
         switch (next) {
           case "\\": value += "\\"; break;
           case '"':  value += '"';  break;
+          case "'":  value += "'";  break;
           case "`":  value += "`";  break;
           case "n":  value += "\n"; break;
           case "t":  value += "\t"; break;
@@ -544,21 +545,23 @@ export const regexLiteralParser: Parser<RegexLiteral> = label("a regex", (input:
 
 // `_stringParser` is written as a plain function (rather than `seqC`) so it
 // can capture the opening delimiter and require the *same* character to
-// close. This is what allows the other quote character to appear unescaped
-// inside the string — e.g. backticks inside `"…"`, or double quotes inside
-// `` `…` ``.
+// close. This is what allows the other quote characters to appear unescaped
+// inside the string — e.g. backticks and single quotes inside `"…"`, etc.
 //
 // `simpleStringParser` (no interpolation) just reuses tarsec's `quotedString`
-// (which already enforces matching open/close delimiters) and filters out
-// single-quoted strings, since Agency only uses `"` and `` ` `` for string
-// literals.
+// (which already enforces matching open/close delimiters and supports `"`,
+// `'`, and `` ` `` natively). We capture the opening char before delegating
+// so the returned node remembers which delimiter the user wrote.
 export const simpleStringParser: Parser<StringLiteral> = (input: string) => {
-  if (input[0] !== '"' && input[0] !== "`") {
-    return failure(`expected '"' or '\`'`, input);
+  const first = input[0];
+  if (first !== '"' && first !== "'" && first !== "`") {
+    return failure(`expected '"', "'", or '\`'`, input);
   }
+  const delim = first as '"' | "'" | "`";
   return map(quotedString, (s) => ({
     type: "string" as const,
     segments: [{ type: "text" as const, value: s.slice(1, -1) }],
+    delimiter: delim,
   }))(input);
 };
 
@@ -637,9 +640,9 @@ function makeInterpolatedStringParser(
   segmentParser: Parser<InterpolationSegment>,
 ): Parser<StringLiteral> {
   return (input: string) => {
-    const open = oneOf('"`')(input);
+    const open = oneOf("\"'`")(input);
     if (!open.success) return open as ParserResult<StringLiteral>;
-    const delim = open.result as '"' | "`";
+    const delim = open.result as '"' | "'" | "`";
     const segments = many(
       or(stringTextSegmentParserFor(delim), segmentParser),
     )(open.rest);
@@ -647,7 +650,7 @@ function makeInterpolatedStringParser(
     const close = char(delim)(segments.rest);
     if (!close.success) return failure(`expected closing ${delim}`, input);
     return success(
-      { type: "string" as const, segments: segments.result },
+      { type: "string" as const, segments: segments.result, delimiter: delim },
       close.rest,
     );
   };
@@ -673,9 +676,16 @@ export const stringParser: Parser<StringLiteral> = label("a string", (input: str
   }
 
   const segments: (TextSegment | InterpolationSegment)[] = [];
+  let delimiter: '"' | "'" | "`" | undefined;
   parsed.forEach((part) => {
     if (part.type === "string") {
       segments.push(...part.segments);
+      // For `"a" + 'b' + ...`-style concatenation, keep the delimiter
+      // of the first string piece. The formatter sees one merged
+      // StringLiteral anyway, so we have to pick one.
+      if (delimiter === undefined && part.delimiter !== undefined) {
+        delimiter = part.delimiter;
+      }
     } else {
       segments.push({
         type: "interpolation",
@@ -690,6 +700,7 @@ export const stringParser: Parser<StringLiteral> = label("a string", (input: str
     {
       type: "string" as const,
       segments,
+      ...(delimiter !== undefined ? { delimiter } : {}),
     },
     result.rest,
   );

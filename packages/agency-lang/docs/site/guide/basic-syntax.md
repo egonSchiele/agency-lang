@@ -114,11 +114,12 @@ arr[:3] = [10, 20, 30] // arr is now [10, 20, 30, 4, 5]
 
 ### String literals
 
-Strings are delimited by `"` or `` ` ``. The other quote character can appear unescaped inside, so you rarely need to escape anything:
+Strings are delimited by `"`, `'`, or `` ` ``. All three are equivalent — same escape rules, same `${...}` interpolation. The two delimiters you didn't pick can appear unescaped inside, so you rarely need to escape anything:
 
 ```ts
 const s1 = "she said `hi`"
 const s2 = `she said "hi"`
+const s3 = 'she said "hi" and `bye`'
 ```
 
 For cases where the same quote character must appear inside the string, use a backslash escape. The recognized escapes are:
@@ -127,6 +128,7 @@ For cases where the same quote character must appear inside the string, use a ba
 |--------|--------------------|
 | `\\`   | literal backslash  |
 | `\"`   | literal `"`        |
+| `\'`   | literal `'`        |
 | `` \` `` | literal `` ` ``  |
 | `\n`   | newline            |
 | `\t`   | tab                |
@@ -134,7 +136,7 @@ For cases where the same quote character must appear inside the string, use a ba
 | `\0`   | null character     |
 | `\${`  | literal `${` (no interpolation) |
 
-Any other backslash sequence is left as-is — `"a\zb"` is the four-character string `a\zb`, not an error. Interpolation works inside both quote styles with `${expression}`:
+Any other backslash sequence is left as-is — `"a\zb"` is the four-character string `a\zb`, not an error. Interpolation works inside all three quote styles with `${expression}`:
 
 ```ts
 const name = "world"

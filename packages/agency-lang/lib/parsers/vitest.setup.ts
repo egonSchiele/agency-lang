@@ -1,9 +1,15 @@
 import { expect } from "vitest";
 
 /**
- * Recursively strip `loc` fields and newline nodes from an object.
+ * Recursively strip `loc` fields, `delimiter` fields, and newline nodes
+ * from an object.
  * - `loc` fields are stripped because source location tracking adds them
  *   to all AST nodes, but existing test expectations don't include them.
+ * - `delimiter` is stripped from string AST nodes for the same reason:
+ *   the parser now records which quote the user wrote so the formatter
+ *   can round-trip it, but existing test expectations predate the field.
+ *   Tests that specifically care about the delimiter should check it
+ *   directly rather than via `toEqualWithoutLoc`.
  * - NewLine nodes (`{ type: "newLine" }`) are stripped from arrays because
  *   removing .trim() from normalizeCode causes the parser to produce extra
  *   newline nodes that weren't present when whitespace was pre-stripped.
@@ -31,6 +37,7 @@ function normalize(obj: unknown): unknown {
   const result: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(obj)) {
     if (key === "loc") continue;
+    if (key === "delimiter") continue;
     result[key] = normalize(value);
   }
   return result;

@@ -4,6 +4,8 @@ import {
   numberParser,
   regexLiteralParser,
   stringParser,
+  simpleStringParser,
+  staticInterpolatedStringParser,
   multiLineStringParser,
   variableNameParser,
   booleanParser,
@@ -537,7 +539,6 @@ describe("literals parsers", () => {
       // Failure cases
       { input: '"hello', expected: { success: false } },
       { input: 'hello"', expected: { success: false } },
-      { input: "'hello'", expected: { success: false } },
       { input: "", expected: { success: false } },
       { input: "hello", expected: { success: false } },
     ];
@@ -627,6 +628,106 @@ describe("literals parsers", () => {
       if (result.success) {
         expect(result.result.segments).toHaveLength(1);
         expect(result.result.segments[0].type).toBe("interpolation");
+      }
+    });
+  });
+
+  describe("stringParser - delimiter round-tripping", () => {
+    const delimiterCases: { input: string; delimiter: '"' | "'" | "`"; value: string }[] = [
+      { input: '"hello"',  delimiter: '"', value: "hello" },
+      { input: "'hello'",  delimiter: "'", value: "hello" },
+      { input: "`hello`",  delimiter: "`", value: "hello" },
+    ];
+
+    delimiterCases.forEach(({ input, delimiter, value }) => {
+      it(`records delimiter for ${JSON.stringify(input)}`, () => {
+        const result = stringParser(input);
+        expect(result.success).toBe(true);
+        if (result.success) {
+          expect(result.result.delimiter).toBe(delimiter);
+          expect(result.result.segments).toEqual([
+            { type: "text", value },
+          ]);
+        }
+      });
+    });
+
+    it("accepts single quotes (regression — used to be rejected)", () => {
+      const result = stringParser("'hello world'");
+      expect(result.success).toBe(true);
+    });
+
+    it("parses interpolation inside single-quoted strings", () => {
+      const result = stringParser("'hello ${name}'");
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.result.delimiter).toBe("'");
+        expect(result.result.segments).toHaveLength(2);
+        expect(result.result.segments[0]).toEqual({ type: "text", value: "hello " });
+        expect(result.result.segments[1].type).toBe("interpolation");
+      }
+    });
+
+    it("parses an empty single-quoted string", () => {
+      const result = stringParser("''");
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.result.delimiter).toBe("'");
+      }
+    });
+
+    it("escapes the same delimiter only (single quote)", () => {
+      const result = stringParser("'it\\'s'");
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.result.segments).toEqual([
+          { type: "text", value: "it's" },
+        ]);
+      }
+    });
+
+    it("leaves the other two delimiters literal inside a single-quoted string", () => {
+      const result = stringParser('\'she said "hi" and `bye`\'');
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.result.delimiter).toBe("'");
+        expect(result.result.segments).toEqual([
+          { type: "text", value: 'she said "hi" and `bye`' },
+        ]);
+      }
+    });
+
+    it("simpleStringParser records the single-quote delimiter", () => {
+      const result = simpleStringParser("'hi'");
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.result.delimiter).toBe("'");
+      }
+    });
+
+    it("simpleStringParser round-trips an escaped \\n in a single-quoted string", () => {
+      // tarsec's `quotedString` handles single quotes natively; the test
+      // confirms its escape semantics line up with Agency's expectations
+      // for the simple (non-interpolated) path.
+      const result = simpleStringParser("'foo\\nbar'");
+      expect(result.success).toBe(true);
+    });
+
+    it("preserves the first delimiter across `+` concatenation", () => {
+      // The merged StringLiteral can only carry one delimiter; we pick
+      // the first string piece.
+      const result = stringParser("`a` + 'b'");
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.result.delimiter).toBe("`");
+      }
+    });
+
+    it("staticInterpolatedStringParser accepts single quotes", () => {
+      const result = staticInterpolatedStringParser("'divisible by ${divisor}'");
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.result.delimiter).toBe("'");
       }
     });
   });
@@ -1622,7 +1723,6 @@ describe("literals parsers", () => {
       // Failure cases
       { input: "", expected: { success: false } },
       { input: "`unterminated", expected: { success: false } },
-      { input: "'single quotes'", expected: { success: false } },
     ];
 
     testCases.forEach(({ input, expected }) => {

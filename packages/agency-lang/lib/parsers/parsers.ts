@@ -314,13 +314,13 @@ export const stringTextSegmentParser: Parser<TextSegment> = map(
 );
 
 // Delimiter-aware text segment: stops only on the matching closing quote
-// (the one that opened the string) or `${`. Lets the *other* quote character
-// appear unescaped inside, just like single quotes already do — e.g. a
-// double-quoted string can contain backticks, and vice versa.
+// (the one that opened the string) or `${`. Lets the *other two* quote
+// characters appear unescaped inside — e.g. a double-quoted string can
+// contain backticks and single quotes, and so on.
 //
 // Supports the following backslash escapes:
 //   \\ → \    \n → newline   \t → tab    \r → carriage return
-//   \" → "    \` → `         \0 → null
+//   \" → "    \' → '         \` → `      \0 → null
 //   \${ → ${ (the only `\$` escape — writes a literal `${` without
 //   starting interpolation; bare `\$` is preserved verbatim so existing
 //   strings like regex patterns are not silently changed).

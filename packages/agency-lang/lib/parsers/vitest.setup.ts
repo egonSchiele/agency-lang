@@ -54,9 +54,9 @@ expect.extend({
       pass,
       message: () => {
         if (pass) {
-          return `expected values not to be equal (ignoring loc fields and newline nodes)`;
+          return `expected values not to be equal (ignoring loc, delimiter, and newline nodes)`;
         }
-        return `expected values to be equal (ignoring loc fields and newline nodes)\n\nReceived: ${JSON.stringify(normalizedReceived, null, 2)}\n\nExpected: ${JSON.stringify(normalizeExpected, null, 2)}`;
+        return `expected values to be equal (ignoring loc, delimiter, and newline nodes)\n\nReceived: ${JSON.stringify(normalizedReceived, null, 2)}\n\nExpected: ${JSON.stringify(normalizeExpected, null, 2)}`;
       },
     };
   },

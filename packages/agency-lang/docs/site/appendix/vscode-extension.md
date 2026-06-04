@@ -1,5 +1,6 @@
 ---
 title: VSCode Extension
+name: VSCode Extension
 description: Brief install instructions for the Agency VS Code extension, which provides syntax highlighting and editor integration via the Agency language server.
 ---
 

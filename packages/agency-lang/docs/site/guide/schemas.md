@@ -1,5 +1,6 @@
 ---
 title: Schemas
+name: Schemas
 description: Shows how Agency converts types into runtime Zod schemas via the `schema()` function and the bang (`!`) shorthand for validating values and function parameters.
 ---
 

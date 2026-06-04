@@ -1,5 +1,6 @@
 ---
 title: Testing
+name: Testing
 description: Introduces Agency's built-in testing framework, covering fixture generation, exact-match versus LLM-as-judge fixtures, and running tests with the `test` command.
 ---
 

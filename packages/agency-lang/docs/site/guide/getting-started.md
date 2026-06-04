@@ -1,5 +1,6 @@
 ---
 title: The Agency Programming Language
+name: The Agency Programming Language
 description: Introduction to the Agency language guide, covering installation, a quick "hello world" example, and how to navigate the rest of the documentation.
 ---
 

@@ -1,3 +1,8 @@
+---
+title: "cli"
+name: "cli"
+---
+
 # cli
 
 ## Functions

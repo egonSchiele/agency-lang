@@ -1,5 +1,6 @@
 ---
 title: Types
+name: Types
 description: Reference for Agency's TypeScript-like type system — including primitives, unions, arrays, objects, and built-in generics — and how types automatically generate Zod schemas for structured LLM outputs.
 ---
 

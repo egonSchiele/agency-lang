@@ -1,20 +1,25 @@
+---
+title: "skills"
+name: "skills"
+---
+
 # skills
 
-## Functions
+## Types
 
-### readSkills
+### SkillEntry
 
 ```ts
-readSkills(dir: string)
+type SkillEntry = {
+  name: string;
+  description: string;
+  location: string
+}
 ```
 
-**Parameters:**
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/skills.agency#L5))
 
-| Name | Type | Default |
-|---|---|---|
-| dir | `string` |  |
-
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/skills.agency#L8))
+## Functions
 
 ### xmlEscape
 
@@ -36,20 +41,34 @@ Escape `&`, `<`, `>`, `"`, `'` so the result is safe to embed inside
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/skills.agency#L13))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/skills.agency#L11))
 
-### describeSkill
+### renderEntry
 
 ```ts
-describeSkill(filename: string, fm: Result): string
+renderEntry(entry: SkillEntry): string
 ```
 
-Render one `<skill>` XML block for the skills tool description given
-  a filename and the frontmatter Result returned from `frontmatter(...)`.
-  Falls back gracefully when the file has no frontmatter or is missing
-  one of title/description. All interpolated values are XML-escaped so
-  metacharacters in user-authored titles / descriptions / filenames
-  cannot break the surrounding markup.
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| entry | [SkillEntry](#skillentry) |  |
+
+**Returns:** `string`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/skills.agency#L28))
+
+### flatEntry
+
+```ts
+flatEntry(filename: string, fm: Result): SkillEntry
+```
+
+Build a SkillEntry for one file in the legacy flat-markdown layout.
+  `name` prefers frontmatter `name`, then `title` (so VitePress-style
+  docs still work), then the filename. `description` defaults to "".
+  Files without parseable frontmatter render as "(no frontmatter)".
 
 **Parameters:**
 
@@ -58,38 +77,60 @@ Render one `<skill>` XML block for the skills tool description given
 | filename | `string` |  |
 | fm | `Result` |  |
 
-**Returns:** `string`
+**Returns:** [SkillEntry](#skillentry)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/skills.agency#L30))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/skills.agency#L35))
+
+### standardEntry
+
+```ts
+standardEntry(skillPath: string, fm: Result): SkillEntry
+```
+
+Build a SkillEntry for one skill in the standard SKILL.md layout.
+  `skillPath` is "<skill-dir>/SKILL.md" relative to the skills root;
+  `name` defaults to the skill's directory name when not in frontmatter.
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| skillPath | `string` |  |
+| fm | `Result` |  |
+
+**Returns:** [SkillEntry](#skillentry)
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/skills.agency#L51))
 
 ### skillsDir
 
 ```ts
-skillsDir(dir: string)
+skillsDir(dir: string, layout: "flat" | "standard")
 ```
 
-Build a skills tool for an LLM. Scans `dir` for Markdown files
-  (`.md` and `.markdown`), reads each one's frontmatter title and
-  description, and returns the `read` function partially applied with
-  `dir: dir`. The returned tool's description lists every available
-  skill so the LLM knows which filename to pass.
+Build a skills tool for an LLM over a directory of skills.
 
-  @param dir - Directory containing skill Markdown files
+  @param dir - Directory containing the skills.
+  @param layout - "standard" for subdirectory-per-skill with SKILL.md,
+                  "flat" for a directory of loose Markdown files.
 
-* Build a tool that lets an LLM read any Markdown skill file in `dir`.
+* Build a tool that lets an LLM read skill files in `dir`. Supports two
+ * layouts:
+ *   - "standard": each subdirectory of `dir` is one skill with a
+ *     `SKILL.md` entrypoint. Frontmatter `name` / `description` are
+ *     read; `name` defaults to the subdirectory name.
+ *   - "flat": each `.md` / `.markdown` file directly under `dir` is one
+ *     skill. Frontmatter `name` (or `title`) and `description` are read.
  *
- * `skillsDir` globs `dir` for `.md` / `.markdown` files, reads each
- * one's frontmatter, and returns `read` partially applied with
- * `dir: dir` and a tool description that lists each skill's filename,
- * title, and description.
- *
- * The LLM only needs to supply a `filename` argument; the description
- * tells it which filenames are available and what each one contains.
+ * The returned tool is `read` partially applied with `dir: dir`. Its
+ * description lists every available skill so the LLM knows which
+ * `location` to pass back as `filename`.
 
 **Parameters:**
 
 | Name | Type | Default |
 |---|---|---|
 | dir | `string` |  |
+| layout | `"flat" \| "standard"` |  |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/skills.agency#L68))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/skills.agency#L80))

@@ -1,3 +1,8 @@
+---
+title: "syntax"
+name: "syntax"
+---
+
 # syntax
 
 ## Types

@@ -1,3 +1,8 @@
+---
+title: "thread"
+name: "thread"
+---
+
 # thread
 
 ## Types

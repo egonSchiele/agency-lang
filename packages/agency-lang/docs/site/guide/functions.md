@@ -1,5 +1,6 @@
 ---
 title: Functions
+name: Functions
 description: Covers function declarations in Agency, including docstrings (used as LLM tool descriptions), default and variadic arguments, named parameters, and block syntax.
 ---
 

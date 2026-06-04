@@ -1,5 +1,6 @@
 ---
 title: Error handling
+name: Error handling
 description: Describes Agency's exception-free approach to errors using the `Result` type, with `success`/`failure` constructors and patterns for unwrapping results.
 ---
 

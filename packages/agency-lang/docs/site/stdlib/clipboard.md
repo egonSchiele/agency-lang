@@ -1,3 +1,8 @@
+---
+title: "clipboard"
+name: "clipboard"
+---
+
 # clipboard
 
 ## Functions

@@ -1,5 +1,6 @@
 ---
 title: Blocks
+name: Blocks
 description: Explains Agency's block syntax, used in place of lambdas for higher-order functions like `map`, including custom block-taking functions and inline block syntax.
 ---
 

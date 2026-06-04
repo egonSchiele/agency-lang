@@ -1,3 +1,8 @@
+---
+title: "keyring"
+name: "keyring"
+---
+
 # keyring
 
 ## Usage

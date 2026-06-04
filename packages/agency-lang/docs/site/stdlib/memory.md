@@ -1,3 +1,8 @@
+---
+title: "memory"
+name: "memory"
+---
+
 # memory
 
 ## Types

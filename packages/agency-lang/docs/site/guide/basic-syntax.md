@@ -1,5 +1,6 @@
 ---
 title: Basic syntax
+name: Basic syntax
 description: Overview of Agency's TypeScript-derived syntax, covering primitive types, variables, arrays, objects, functions, and other core language constructs.
 ---
 

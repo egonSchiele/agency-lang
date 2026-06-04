@@ -1,3 +1,8 @@
+---
+title: "search"
+name: "search"
+---
+
 # search
 
 ## Types

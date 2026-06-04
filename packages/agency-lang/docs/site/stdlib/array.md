@@ -1,3 +1,8 @@
+---
+title: "array"
+name: "array"
+---
+
 # array
 
 ## Functions

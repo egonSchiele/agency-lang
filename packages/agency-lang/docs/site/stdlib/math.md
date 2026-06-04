@@ -1,3 +1,8 @@
+---
+title: "math"
+name: "math"
+---
+
 # math
 
 ## Functions

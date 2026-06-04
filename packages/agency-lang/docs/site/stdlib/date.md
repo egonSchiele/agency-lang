@@ -1,3 +1,8 @@
+---
+title: "date"
+name: "date"
+---
+
 # date
 
 ## Date and Time Utilities

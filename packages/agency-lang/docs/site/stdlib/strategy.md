@@ -1,3 +1,8 @@
+---
+title: "strategy"
+name: "strategy"
+---
+
 # strategy
 
 ## Functions

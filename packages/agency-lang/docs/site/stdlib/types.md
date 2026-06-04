@@ -1,3 +1,8 @@
+---
+title: "types"
+name: "types"
+---
+
 # types
 
 Pre-baked type aliases that combine `@validate(...)` and `@jsonSchema(...)`

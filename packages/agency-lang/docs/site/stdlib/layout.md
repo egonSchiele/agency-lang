@@ -1,3 +1,8 @@
+---
+title: "layout"
+name: "layout"
+---
+
 # layout
 
 ## Module: std::layout

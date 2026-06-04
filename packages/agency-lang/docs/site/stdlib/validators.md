@@ -1,3 +1,8 @@
+---
+title: "validators"
+name: "validators"
+---
+
 # validators
 
 Validator functions intended for use with `@validate(...)` annotations.

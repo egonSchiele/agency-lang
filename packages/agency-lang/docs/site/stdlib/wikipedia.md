@@ -1,3 +1,8 @@
+---
+title: "wikipedia"
+name: "wikipedia"
+---
+
 # wikipedia
 
 ## Types

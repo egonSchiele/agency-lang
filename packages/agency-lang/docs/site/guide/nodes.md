@@ -1,5 +1,6 @@
 ---
 title: Nodes
+name: Nodes
 description: Describes nodes — Agency's entry points into agents — and how they differ from functions, including the permanent transition behavior and the special role of the `main` node.
 ---
 

@@ -1,5 +1,6 @@
 ---
 title: MCP Servers
+name: MCP Servers
 description: How to connect your Agency agents to external Model Context Protocol (MCP) servers via the `@agency-lang/mcp` package to use their tools.
 ---
 

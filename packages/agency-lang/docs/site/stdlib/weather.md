@@ -1,3 +1,8 @@
+---
+title: "weather"
+name: "weather"
+---
+
 # weather
 
 ## Types

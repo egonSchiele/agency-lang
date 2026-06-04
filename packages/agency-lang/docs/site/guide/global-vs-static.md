@@ -1,3 +1,9 @@
+---
+title: Global vs Static Variables
+name: Global vs Static Variables
+description: Per-run isolation of global variables vs static variables that initialize once and persist across runs.
+---
+
 # Global vs Static Variables
 
 As you just learned, each run gets its own copy of any global variables. One consequence of that fact is that each run also has to initialize all of its global variables each time. This is okay when initialization is cheap, like for an empty array.

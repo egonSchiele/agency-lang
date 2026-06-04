@@ -204,21 +204,34 @@ describe("validateSchema", () => {
       ).toThrow(/v1 does not support negatable booleans/);
     });
 
-    it("short -h with non-boolean type when auto-help is active", () => {
+    it("short -h on any user flag when auto-help is active", () => {
+      // Non-boolean
       expect(() =>
         validateSchema({
           flags: { host: { type: "string", short: "h" } },
         }),
-      ).toThrow(/uses short -h with non-boolean type; conflicts with auto-help/);
+      ).toThrow(/collides with the auto-injected --help/);
+      // Boolean too — would shadow auto-help silently otherwise.
+      expect(() =>
+        validateSchema({
+          flags: { headless: { type: "boolean", short: "h" } },
+        }),
+      ).toThrow(/collides with the auto-injected --help/);
     });
 
-    it("short -V with non-boolean type when auto-version is active", () => {
+    it("short -V on any user flag when auto-version is active", () => {
       expect(() =>
         validateSchema({
           version: "1.0",
           flags: { verbose: { type: "string", short: "V" } },
         }),
-      ).toThrow(/uses short -V with non-boolean type; conflicts with auto-version/);
+      ).toThrow(/collides with the auto-injected --version/);
+      expect(() =>
+        validateSchema({
+          version: "1.0",
+          flags: { verbose: { type: "boolean", short: "V" } },
+        }),
+      ).toThrow(/collides with the auto-injected --version/);
     });
 
     it("group references unknown flag", () => {
@@ -434,6 +447,62 @@ describe("preScanArgv", () => {
       ok: true,
       value: undefined,
     });
+  });
+
+  it("rejects repeated single-value flag (string)", () => {
+    const result = preScanArgv(
+      ["--name", "alice", "--name", "bob"],
+      schema,
+    );
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error).toEqual({ kind: "duplicateFlag", flag: "name" });
+    }
+  });
+
+  it("rejects repeated single-value flag (number)", () => {
+    const result = preScanArgv(["--port", "80", "--port", "8080"], schema);
+    expect(result.ok).toBe(false);
+    if (!result.ok && result.error.kind === "duplicateFlag") {
+      expect(result.error.flag).toBe("port");
+    }
+  });
+
+  it("rejects repeated single-value flag via short alias", () => {
+    const result = preScanArgv(["-n", "alice", "-n", "bob"], schema);
+    expect(result.ok).toBe(false);
+    if (!result.ok && result.error.kind === "duplicateFlag") {
+      expect(result.error.flag).toBe("name");
+    }
+  });
+
+  it("rejects mixed long/short repeated flag", () => {
+    const result = preScanArgv(["-n", "alice", "--name", "bob"], schema);
+    expect(result.ok).toBe(false);
+    if (!result.ok && result.error.kind === "duplicateFlag") {
+      expect(result.error.flag).toBe("name");
+    }
+  });
+
+  it("rejects --name=foo --name=bar via equals form", () => {
+    const result = preScanArgv(["--name=foo", "--name=bar"], schema);
+    expect(result.ok).toBe(false);
+    if (!result.ok && result.error.kind === "duplicateFlag") {
+      expect(result.error.flag).toBe("name");
+    }
+  });
+
+  it("accepts repeated boolean flag (harmless)", () => {
+    expect(
+      preScanArgv(["--verbose", "--verbose"], schema),
+    ).toEqual({ ok: true, value: undefined });
+  });
+
+  it("duplicate check stops at --", () => {
+    // Anything after -- is a positional, not a flag.
+    expect(
+      preScanArgv(["--name", "alice", "--", "--name", "bob"], schema),
+    ).toEqual({ ok: true, value: undefined });
   });
 });
 
@@ -1105,6 +1174,19 @@ describe("_parseArgsWith (end-to-end)", () => {
     );
     expect(bad.capture.code).toBe(2);
     expect(bad.capture.stderr).toContain("expected one of: json, yaml");
+  });
+
+  it("repeated single-value flag exits 2 with reformatted message", () => {
+    const { capture } = withMockedProcess(() =>
+      _parseArgsWith(
+        ["--out", "x", "--name", "a", "--name", "b"],
+        greetSchema,
+      ),
+    );
+    expect(capture.code).toBe(2);
+    expect(capture.stderr).toContain(
+      "flag --name was provided more than once",
+    );
   });
 
   it("schema bug throws synchronously (before any argv touched)", () => {

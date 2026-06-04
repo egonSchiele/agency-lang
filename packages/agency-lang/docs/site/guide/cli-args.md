@@ -65,7 +65,7 @@ Call `parseArgs` as the **first thing** in `main`, before installing handlers, b
 
 ## What the schema accepts
 
-Each flag has a `type` (`"string"`, `"number"`, or `"boolean"`) and optional metadata. Long flag names must match `/^[a-z0-9][a-z0-9-]*/` — lowercase with dashes.
+Each flag has a `type` (`"string"`, `"number"`, or `"boolean"`) and optional metadata. Long flag names must match `/^[a-z0-9][a-z0-9-]*$/` — lowercase with dashes.
 
 ```ts
 type FlagSpec = {

@@ -206,29 +206,35 @@ const SCHEMA_RULES: SchemaRule[] = [
     },
   },
   {
-    name: "h short collision is boolean only (compatible with auto-help)",
+    // When auto-help is active, NOTHING else can claim -h — even
+    // another boolean flag would silently collide with the injected
+    // --help (duplicate shortAlias in flagsByShort / buildNodeOptions).
+    // The user must declare their own `help` flag to override auto-help.
+    name: "no -h short collision when auto-help is active",
     check: (s) => {
       const userDeclaresHelp = "help" in s.flags;
       if (userDeclaresHelp) return null;
       const bad = Object.entries(s.flags).find(
-        ([, spec]) => spec.short === "h" && spec.type !== "boolean",
+        ([, spec]) => spec.short === "h",
       );
       return bad
-        ? `flag --${bad[0]} uses short -h with non-boolean type; conflicts with auto-help. Declare your own boolean "help" flag if you want to override it.`
+        ? `flag --${bad[0]} uses short -h, which collides with the auto-injected --help. Declare your own "help" flag in the schema to override auto-help.`
         : null;
     },
   },
   {
-    name: "V short collision is boolean only (compatible with auto-version)",
+    // Same rule as -h: when auto-version is active, no other flag can
+    // claim -V. User must declare their own `version` flag to override.
+    name: "no -V short collision when auto-version is active",
     check: (s) => {
       if (s.version === undefined) return null;
       const userDeclaresVersion = "version" in s.flags;
       if (userDeclaresVersion) return null;
       const bad = Object.entries(s.flags).find(
-        ([, spec]) => spec.short === "V" && spec.type !== "boolean",
+        ([, spec]) => spec.short === "V",
       );
       return bad
-        ? `flag --${bad[0]} uses short -V with non-boolean type; conflicts with auto-version.`
+        ? `flag --${bad[0]} uses short -V, which collides with the auto-injected --version. Declare your own "version" flag in the schema to override auto-version.`
         : null;
     },
   },
@@ -417,14 +423,55 @@ export function preScanArgv(
   argv: string[],
   schema: NormalizedSchema,
 ): ParseResult<void> {
+  // Tracks single-value (string/number) flags we've already seen, so
+  // a second occurrence trips the duplicateFlag rule below. Booleans
+  // are excluded — repeating `--verbose --verbose` is harmless and
+  // node:util.parseArgs accepts it without warning.
+  const seen: Record<string, boolean> = {};
+
   for (let i = 0; i < argv.length; i++) {
-    if (argv[i] === "--") break; // honor end-of-options
+    const token = argv[i];
+    if (token === "--") break; // honor end-of-options
+
     for (const rule of ARGV_RULES) {
-      const err = rule(argv[i], argv[i + 1], schema);
+      const err = rule(token, argv[i + 1], schema);
       if (err !== null) return { ok: false, error: err };
+    }
+
+    const flagName = flagNameOf(token, schema);
+    if (flagName !== null) {
+      const flag = schema.flagsByName[flagName];
+      if (flag !== undefined && flag.type !== "boolean") {
+        if (seen[flagName] === true) {
+          return {
+            ok: false,
+            error: { kind: "duplicateFlag", flag: flagName },
+          };
+        }
+        seen[flagName] = true;
+      }
     }
   }
   return { ok: true, value: undefined };
+}
+
+// Extract the long flag name a token is referring to, if any.
+// Handles `--name`, `--name=value`, `-n`, and `-nvalue` (attached
+// short value). Returns null for non-flag tokens (positionals,
+// `-`, etc.). Resolves short aliases to their declared long names.
+function flagNameOf(token: string, schema: NormalizedSchema): string | null {
+  if (token.startsWith("--")) {
+    if (token === "--") return null;
+    const body = token.slice(2);
+    const eq = body.indexOf("=");
+    return eq === -1 ? body : body.slice(0, eq);
+  }
+  if (token.startsWith("-") && token.length >= 2 && token !== "-") {
+    const shortLetter = token[1];
+    const flag = schema.flagsByShort[shortLetter];
+    return flag !== undefined ? flag.name : null;
+  }
+  return null;
 }
 
 // =============================================================================

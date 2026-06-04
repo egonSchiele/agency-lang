@@ -208,6 +208,7 @@ export function compile(
     return null;
   }
 
+  const compileStartTime = performance.now();
   const absoluteInputFile = path.resolve(inputFile);
 
   // Build the import-closure analysis once per compile session — at the
@@ -236,7 +237,11 @@ export function compile(
     currentClosure = null;
     compiledFiles.clear();
     try {
+      const ccStartTime = performance.now();
       currentClosure = buildCompiledClosure(absoluteInputFile, config);
+      const ccEndTime = performance.now();
+      logTime({ label: "Built compile closure", start: ccStartTime, end: ccEndTime, verbose });
+
     } catch (e) {
       if (e instanceof CompileClosureError) {
         console.error(e.message);
@@ -271,9 +276,14 @@ export function compile(
     absoluteInputFile === path.join(getStdlibDir(), "index.agency");
   const parsedProgram = parse(contents, config, !isStdlibIndex);
 
+  const symbolTableStartTime = performance.now();
   const symbolTable =
     options?.symbolTable ?? SymbolTable.build(absoluteInputFile, config);
 
+  const symbolTableEndTime = performance.now();
+  logTime({ label: `Built symbol table for ${absoluteInputFile}`, start: symbolTableStartTime, end: symbolTableEndTime, verbose });
+
+  const compilationUnitStartTime = performance.now();
   const reExportedProgram = resolveReExports(
     parsedProgram,
     symbolTable,
@@ -294,10 +304,15 @@ export function compile(
     absoluteInputFile,
     contents,
   );
+  const compilationUnitEndTime = performance.now();
+  logTime({ label: `Built compilation unit for ${absoluteInputFile}`, start: compilationUnitStartTime, end: compilationUnitEndTime, verbose });
 
   const tc = config.typechecker;
   if (tc?.enabled || tc?.strict) {
+    const tcStartTime = performance.now();
     const { errors } = typeCheck(liftedProgram, config, info);
+    const tcEndTime = performance.now();
+    logTime({ label: `Type checked ${absoluteInputFile}`, start: tcStartTime, end: tcEndTime, verbose });
     if (errors.length > 0) {
       if (tc?.strict) {
         console.error(formatErrors(errors));
@@ -352,6 +367,7 @@ export function compile(
   const initPlan = currentClosure
     ? initPlanForModule(currentClosure, absoluteInputFile)
     : undefined;
+  const codegenStartTime = performance.now();
   const generatedCode = generateTypeScript(
     liftedProgram,
     config,
@@ -360,18 +376,24 @@ export function compile(
     absoluteOutputFile,
     initPlan,
   );
+  const codegenEndTime = performance.now();
+  logTime({ label: `Generated code for ${absoluteInputFile}`, start: codegenStartTime, end: codegenEndTime, verbose });
   if (options?.ts) {
     fs.writeFileSync(outputFile, "// @ts-nocheck\n" + generatedCode, "utf-8");
   } else {
+    const esbuildStartTime = performance.now();
     const result = transformSync(generatedCode, {
       loader: "ts",
       format: "esm",
       supported: { "top-level-await": true },
     });
     fs.writeFileSync(outputFile, result.code, "utf-8");
+    const esbuildEndTime = performance.now();
+    logTime({ label: `Transformed code for ${absoluteInputFile} with esbuild`, start: esbuildStartTime, end: esbuildEndTime, verbose });
   }
-
-  console.log(`${inputFile} → ${outputFile}`);
+  const compileEndTime = performance.now();
+  const timeTaken = `${(compileEndTime - compileStartTime).toFixed(2)}ms`
+  console.log(`${inputFile} → ${outputFile} (in ${timeTaken})`);
   return outputFile;
 }
 
@@ -453,4 +475,10 @@ export function run(
       process.exit(code || 1);
     }
   });
+}
+
+function logTime({ label, start, end, verbose }: { label: string, start: number, end: number, verbose: boolean }): void {
+  if (verbose) {
+    console.log(`${label} in ${(end - start).toFixed(2)}ms`);
+  }
 }

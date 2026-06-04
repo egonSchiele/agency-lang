@@ -1357,7 +1357,7 @@ _replIsDone(state: ReplState): boolean
 
 **Returns:** `boolean`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L1662))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L1670))
 
 ### repl
 
@@ -1399,7 +1399,7 @@ Drop-in REPL widget for interactive CLI agents. Bundles a
 | paletteCommands | `any` | null |
 | tickMs | `number` | null |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L1673))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L1681))
 
 ### clearScreen
 
@@ -1407,4 +1407,4 @@ Drop-in REPL widget for interactive CLI agents. Bundles a
 clearScreen()
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L1760))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/stdlib/ui.agency#L1768))

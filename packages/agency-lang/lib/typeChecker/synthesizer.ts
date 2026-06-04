@@ -189,6 +189,7 @@ function synthBinOp(
   const op = expr.operator;
   if (op === "catch") return synthCatch(expr, scope, ctx);
   if (op === "|>") return synthPipe(expr, scope, ctx);
+  if (op === "??") return synthNullishCoalesce(expr, scope, ctx);
 
   // Dimension mismatch check: only when both sides are direct unit literals
   if (DIMENSION_CHECK_OPS.has(op) &&
@@ -213,6 +214,40 @@ function synthBinOp(
     }
   }
   return NUMBER_T;
+}
+
+/**
+ * `lhs ?? rhs` returns lhs if it is non-null/undefined, otherwise rhs.
+ * Strip `null` / `undefined` from a nullable LHS union, so
+ * `(string | undefined) ?? ""` synths as `string`. If the resulting
+ * non-nullable type collapses to nothing (LHS was `null | undefined`)
+ * or LHS is `any`, fall back to the RHS type.
+ */
+function synthNullishCoalesce(
+  expr: AgencyNode & { type: "binOpExpression" },
+  scope: Scope,
+  ctx: TypeCheckerContext,
+): VariableType | "any" {
+  const left = synthType(expr.left, scope, ctx);
+  if (left === "any") return synthType(expr.right, scope, ctx);
+  const stripped = stripNullable(left);
+  if (stripped === undefined) return synthType(expr.right, scope, ctx);
+  return stripped;
+}
+
+function isNullishPrimitive(t: VariableType): boolean {
+  return (
+    t.type === "primitiveType" && (t.value === "null" || t.value === "undefined")
+  );
+}
+
+function stripNullable(t: VariableType): VariableType | undefined {
+  if (isNullishPrimitive(t)) return undefined;
+  if (t.type !== "unionType") return t;
+  const kept = t.types.filter((m) => !isNullishPrimitive(m));
+  if (kept.length === 0) return undefined;
+  if (kept.length === 1) return kept[0];
+  return { ...t, types: kept };
 }
 
 /**
